@@ -95,17 +95,29 @@ func (tt *testTMUX) newPane(t *testing.T, cmd string) *Pane {
 	return NewPane(tt.sock, id)
 }
 
-// deadPane creates a session whose command exits immediately, so by the time
-// we use it the pane is gone.
+// deadPane returns a Pane whose pane has been killed while its tmux server
+// stays alive (a second window keeps the server running). This distinguishes
+// ErrPaneNotFound from a server that has exited entirely.
 func (tt *testTMUX) deadPane(t *testing.T) *Pane {
 	t.Helper()
 	name := fmt.Sprintf("tbdead%d", atomic.AddUint64(&testSeq, 1))
-	if _, err := tt.run("new-session", "-d", "-x", "80", "-y", "24", "-s", name, "-c", t.TempDir(), "true"); err != nil {
+	// Window 0 persists so the server survives the kill below.
+	if _, err := tt.run("new-session", "-d", "-x", "80", "-y", "24", "-s", name, "-c", t.TempDir(), "cat"); err != nil {
 		t.Fatalf("new-session %s: %v", name, err)
 	}
-	// The pane dies when its command exits; give tmux a moment to reap it.
-	time.Sleep(400 * time.Millisecond)
-	return NewPane(tt.sock, "%0")
+	// Window 1 is the pane we are going to kill.
+	if _, err := tt.run("new-window", "-t", name, "-c", t.TempDir(), "cat"); err != nil {
+		t.Fatalf("new-window %s: %v", name, err)
+	}
+	out, err := tt.run("list-panes", "-t", name+":1.0", "-F", "#{pane_id}")
+	if err != nil {
+		t.Fatalf("resolve kill-target pane: %v", err)
+	}
+	id := strings.TrimSpace(out)
+	if _, err := tt.run("kill-pane", "-t", id); err != nil {
+		t.Fatalf("kill-pane %s: %v", id, err)
+	}
+	return NewPane(tt.sock, id)
 }
 
 // waitForStream drains ch until it has seen want as a substring or the
@@ -309,7 +321,10 @@ func mustSnapshot(t *testing.T, p *Pane) []byte {
 func TestRunTmuxTimeout(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "slow-tmux")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 5\n"), 0o755); err != nil {
+	// A self-contained busy loop: a forked child (like `sleep`) would inherit
+	// the stdout pipe and keep cmd.Run() blocked past the deadline, masking
+	// the timeout with a pipe-close wait.
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nwhile :; do :; done\n"), 0o755); err != nil {
 		t.Fatalf("write fake tmux: %v", err)
 	}
 	old := tmuxBin
