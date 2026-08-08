@@ -1,0 +1,1 @@
+{"task_id":"test-gate","status":"pass","acceptance_results":[{"cmd":"bash -lc bash tools/gate/run.sh --self-test","exit":0}],"result_id":"res_ee0c96268388","notes":"全量门三面并行+用例棘轮（server185/app289 起点）+四归因模板+6 场景自测。实跑如实报 server 编译红（ws-api 在途代码，预期瞬态）——门的诚实性首战即证。曾假忙碌停摆 87 分钟，nudge 救活后交件（看门狗 v2 的立项案例）。"}
