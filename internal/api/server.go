@@ -296,6 +296,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.serveConn(conn)
 }
 
+
 // handleUpload serves POST /upload (docs/protocol.md §8). See upload.go.
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	s.serveUpload(w, r)
