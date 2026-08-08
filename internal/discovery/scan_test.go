@@ -185,6 +185,31 @@ func TestDiscoverSeparatesDistinctCWDs(t *testing.T) {
 	}
 }
 
+// TestDiscoverCarriesSocketThrough is the additive red test for the Socket
+// field: a pane discovered through a real isolated server must retain the
+// exact socket path it lives on, because the ws-api consumer addresses the
+// pane's bridge with it (bridge.NewPane(Socket, PaneID)). A pane whose socket
+// went blank between scan and model would be unmirrorable on a multi-server
+// host (requirement 001).
+func TestDiscoverCarriesSocketThrough(t *testing.T) {
+	root := testSocketRoot(t)
+	tmp := t.TempDir()
+	cwd := mkdirTmp(t, tmp, "ws-sock")
+	sock := startTestServer(t, root, "srv", cwd, "-s", "alpha")
+
+	model, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{testSocketDir(t, root)})
+	if err != nil {
+		t.Fatalf("DiscoverWithDirs: %v", err)
+	}
+	if len(model.Workspaces) != 1 || len(model.Workspaces[0].Panes) != 1 {
+		t.Fatalf("want exactly one pane, got %+v", model.Workspaces)
+	}
+	got := model.Workspaces[0].Panes[0].Socket
+	if got != sock {
+		t.Fatalf("pane Socket = %q, want %q (the isolated server socket)", got, sock)
+	}
+}
+
 // TestDiscoverToleratesDeadSocket is the red-line test: a stale socket (inode
 // present, no listener) mixed into the directory must be skipped and must not
 // abort the scan or affect the result.

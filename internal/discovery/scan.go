@@ -149,6 +149,12 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 			logger.Debug("discovery: skipping unparsable pane line", "socket", socketPath, "line", line)
 			continue
 		}
+		// The pane must know which server it lives on so a later consumer can
+		// address its bridge: PaneID is only unique within one tmux server,
+		// and this host runs many (requirement 001). Socket is set here, at
+		// the point the socket path is still in scope, and never dropped
+		// before the model is built.
+		p.Socket = socketPath
 		panes = append(panes, p)
 	}
 	return panes, nil

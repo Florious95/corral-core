@@ -6,6 +6,16 @@ import "sort"
 // one tmux pane inside a session — i.e. one Agent CLI running on the host. It
 // is a pure value describing a single terminal that can later be mirrored.
 type Pane struct {
+	// Socket is the absolute path of the tmux server socket this pane lives
+	// on (e.g. "/private/tmp/tmux-501/ta-…"). It MUST survive the scan into
+	// the model: the ws-api layer consumes it to address the pane's bridge
+	// (bridge.NewPane(Socket, PaneID)) and to build the stable ref, so a
+	// bare pane id alone is ambiguous when more than one tmux server runs on
+	// the host (requirement 001's private-socket scenario). Without it the
+	// mirrored pane cannot be located at subscribe/input/scrollback/resize
+	// time.
+	Socket string
+
 	// Session is the tmux session name the pane belongs to. It is a display
 	// label only and never participates in grouping (requirement 002).
 	Session string

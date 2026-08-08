@@ -83,3 +83,21 @@ func (r Registry) Detect(sample Sample) State {
 	}
 	return State{State: protocol.StateUnknown, Confidence: ConfidenceUnknown}
 }
+
+// DetectForKind routes a sample to the adapter for an identified agent kind. It
+// is the wrapper-scene entry point (task state-ident-wrapper): a wrapper pane
+// has no direct "claude"/"codex" pane_current_command, so Identify resolves the
+// kind first, then this dispatches to the same per-agent rule tables the
+// direct-pane path uses. An unknown kind degrades to StateUnknown, never an
+// error (requirement 008: undecidable must never affect mirroring or input).
+func (r Registry) DetectForKind(kind AgentKind, sample Sample) State {
+	cmd, ok := kind.Command()
+	if !ok {
+		return State{State: protocol.StateUnknown, Confidence: ConfidenceUnknown}
+	}
+	return r.Detect(Sample{
+		PaneCommand:   cmd,
+		RecentOutput:  sample.RecentOutput,
+		LastOutputAge: sample.LastOutputAge,
+	})
+}
