@@ -15,6 +15,7 @@
 | 009 | [团队模型编排策略](entries/009-团队模型编排策略.md) | 已裁定 | teammate 用第三方 API；难点模块开 Fable 5 短命席位 |
 | 010 | [最终验收与运行方式](entries/010-最终验收与运行方式.md) | 已裁定 | 验收=生产级安卓APP+主机后台进程；无人值守；代码必须注释；leader 只编排 |
 | 011 | [技术路线裁定](entries/011-技术路线裁定.md) | 已裁定 | Go 服务端；Kotlin+Compose；WS 协议；QR 路线(a)；前台服务；monorepo |
+| 012 | [工作区聚合状态规则](entries/012-工作区聚合状态规则.md) | 已裁定 | 聚合状态服务端权威算；blocked>done>working>idle；unknown 不计入、全 unknown 才聚合；固化 protocol.md |
 
 ## 未决议题（契约级，施工前须定夺）
 

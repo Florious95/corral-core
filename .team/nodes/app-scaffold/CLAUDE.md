@@ -31,3 +31,10 @@
 - 失败重试预算 2；依赖下载类失败等 30s 再试。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+### app-scaffold 任务沉淀（2026-08-09）
+- **版本组合**（现场验证通过）：Gradle wrapper 8.14.3-all（本地缓存命中）+ AGP 8.13.0（缓存命中）+ Kotlin 2.2.0 + Kotlin compose 编译器插件 2.2.0 + Compose BOM 2025.12.01 + activity-compose 1.13.0 + core-ktx 1.18.0。
+- **compileSdk 需用 36**：基底写 35，但 BOM 2025.12.01 依赖链把 androidx.core 解析到 1.18.0，它要求 compileSdk 36+。实测 35 直接报错。本机已装 platforms 36，故 compileSdk=36、targetSdk=35（运行行为不变）。后续换更老 BOM 可回落 35。
+- **gradle wrapper 引导坑**：Gradle 9.5（brew）在空目录跑 `gradle wrapper` 会因缺 settings 文件报错。需先写最小 `settings.gradle.kts`（含 `rootProject.name`）再跑 wrapper。本机 brew gradle 为 9.5.0，与 wrapper 目标 8.14.3 无关（wrapper 只生成脚本）。
+- **manifest 图标资源**：自适应图标只需 `mipmap-anydpi-v26`（adaptive-icon）即可过编译，无需旧密度 PNG。
+- **APK 产物**：app/build/outputs/apk/debug/app-debug.apk（11.7MB）。验收 `bash -lc 'cd app && ./gradlew -q :app:assembleDebug'` 通过 exit 0。
