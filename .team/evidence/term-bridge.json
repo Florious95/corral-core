@@ -2,9 +2,14 @@
   "task_id": "term-bridge",
   "status": "pass",
   "acceptance_results": [
-    {"cmd": "bash -lc 'cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./internal/bridge/...'", "exit": 0}
+    {
+      "cmd": "bash -lc 'cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./internal/bridge/...'",
+      "exit": 0
+    }
   ],
   "produced_at_sha": "d9e0afc+2",
-  "result_id": "res_9f31b2a7c4d6",
-  "notes": "单 pane 终端桥：capture-pane -e 快照、pipe-pane FIFO 增量流、send-keys/paste-buffer 整条注入带回执（裸 pane id 精检，多行走 load-buffer+paste-buffer -d -p）、resize（window-size latest+resize-window，读回真实尺寸）、capture-pane -S/-E scrollback 分页。exec 统一走 tmux.go（ctx 超时+三类可判定错误）。12 集成测试全绿，go build/vet/-race 通过。测试铁律：隔离 socket 短路径（长测试名+临时目录路径会撞 tmux sun_path 104 字节上限致 File name too long）+ 净化 env 前缀，零泄漏。沉淀见节点 5 节。"
+  "result_id": "res_eab847a50740",
+  "notes": "单 pane 终端桥：capture-pane -e 快照、pipe-pane FIFO 增量流、send-keys/paste-buffer 整条注入带回执（裸 pane id 精检，多行走 load-buffer+paste-buffer -d -p）、resize（window-size latest+resize-window，读回真实尺寸）、capture-pane -S/-E scrollback 分页。exec 统一走 tmux.go（ctx 超时+三类可判定错误）。12 集成测试全绿，go build/vet/-race 通过。测试铁律：隔离 socket 短路径（长测试名+临时目录路径会撞 tmux sun_path 104 字节上限致 File name too long）+ 净化 env 前缀，零泄漏。沉淀见节点 5 节。",
+  "report_channel": "team-agent CLI collect 补录（task msg_6d90701265d8）：本 worker mcp-server 启动时 TEAM_AGENT_OWNER_TEAM_ID 为空，MCP report_result 被 scope_refused 拒；信封已入 leader 结果簿 res_eab847a50740。",
+  "leader_note": "MCP report_result 被拒（TEAM_AGENT_OWNER_TEAM_ID 空，已直报框架 leader msg_9668526a9ae8），result_id 无法核验；leader 复跑验收 -count=1 exit 0 后采信销账。"
 }
