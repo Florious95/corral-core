@@ -29,3 +29,9 @@
 - 注释红线、净化前缀照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+- 2026-08-09 交件：token 生成/持久化（`EnsureToken`，0600 原子落盘）+ QR（`skip2/go-qrcode` 新直接依赖，ANSI 半块自绘）+ LAN/tailnet 探测（`DetectAddresses`/`PrimaryHost`），cmd 接线打印 QR+指引。13（pairing）+7（cmd）测全绿，`go build ./...`/`go vet`/`go test ./...`/`-race` 全过。
+- 坑 1（探测排序）：`pickPrimary` 只认输入顺序，LAN 排序契约在 `DetectAddresses`——测试喂已排序序列。
+- 坑 2（降级可测性）：`PrintOnboarding` 探测与渲染耦合则回环-only 降级警告不可注入；拆出 `PrintOnboardingWith(o, addrs, primary, w)` 公开 seam 后，测试可强制 loopback-only 断言 ⚠ 警告。
+- 坑 3（token 不进日志）：cmd 启动日志只记 `token_source`（explicit|auto）+ 存储路径，绝不记值；`TestErrorsNeverContainToken` 带阳性对照（注入 token 验证检测器本身能抓到）。
+- 外部模块不能 import internal 包：跨模块演示 QR/降级输出需用 seam 或临时测试，不可临时建 external main。

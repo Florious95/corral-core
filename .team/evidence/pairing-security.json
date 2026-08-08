@@ -1,0 +1,1 @@
+{"task_id":"pairing-security","status":"pass","acceptance_results":[{"cmd":"bash -lc cd server && go test ./internal/pairing/...","exit":0},{"cmd":"bash tools/gate/run.sh","exit":0}],"result_id":"res_f466642fa188","notes":"token 生成/0600 原子持久化 + ANSI QR（skip2/go-qrcode Apache2）+ LAN/tailnet 探测 + cmd 接线；token 唯一出口红线由 TestErrorsNeverContainToken 阳性对照锁死；13+7 测。"}
