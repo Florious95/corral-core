@@ -19,6 +19,13 @@ package dev.agentmirror.app.conn
 /**
  * 连接层：与主机 sidecar 的 WebSocket 连接、会话枚举、帧协议编解码。
  *
- * 传输协议见需求 011 裁定：JSON 控制帧（列表/订阅/输入/resize/scrollback/状态）+
- * 二进制终端流帧。本包为占位骨架，由 conn 任务落位实现。
+ * 分层（自底向上）：
+ * 1. [FrameCodec] / [BinaryFrameCodec] —— 纯函数编解码：JSON 控制帧（信封 + 12 类帧
+ *    载荷，docs/protocol.md §4）+ 二进制流帧（§6，含 scrollback 12 字节收敛区间头）。
+ *    编解码都消费同一份契约夹具做字节级断言（server/internal/protocol/testdata/）。
+ * 2. [Connection] —— 单条 WS 生命周期状态机（握手 → 就绪 → 关闭）。
+ * 3. [ConnectionManager] —— 重连策略 + 订阅簿记：重连后自动重放 auth + 全部活跃
+ *    subscribe（004 无状态铁律的重放语义）；listing seq 不连续 → 自动重新 list。
+ *
+ * 上层（UI/service）只见 Flow/回调，不见 WS 细节。本层不持久任何会话状态。
  */
