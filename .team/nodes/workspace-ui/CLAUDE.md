@@ -26,3 +26,11 @@
 - 注释红线、净化前缀照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+- 2026-08-09 workspace-ui 交件：
+  - 实现 `WorkspaceViewModel`（纯 JVM，15 测）+ `WorkspaceScreen`/`StateBadge`（薄 Compose）+ 路由挂载（AgentMirrorApp）。
+  - 关键经验：delta 无 removed_workspaces 通道 ⇒ 会话全走的空工作区必须由本层剪除（渲染必需，非越权推导）。
+  - `added_sessions` 无对应 changed_workspaces 时可建新工作区，count/aggregate 用会话自身状态兜底占位，权威值到达即纠正（012 客户端只渲染）。
+  - `changed_sessions` 携不同 cwd = 会话迁居：先按 ref 从旧 cwd 移除再落新 cwd，避免 findRefHome 误判。
+  - 会话页占位路由放根包（AgentMirrorApp.kt 私有 composable），不越界写 session 包。
+  - 状态徽章五值（StateBadgeStyle）与 AgentState 双射，色板/文案单一事实源。
