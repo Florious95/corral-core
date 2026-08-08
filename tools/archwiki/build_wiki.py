@@ -66,7 +66,8 @@ def first_sentence(text, limit=140):
     if not text:
         return ""
     flat = " ".join(text.split())
-    for m in re.finditer(r"[.!?](?=\s|$)", flat):
+    # 中英句号都算句子边界；中文 doc 注释首句应停在「。」。
+    for m in re.finditer(r"[.!?。！？](?=\s|$)", flat):
         sentence = flat[: m.end()]
         if len(sentence) > 6:  # 跳过 "e.g." 这类缩写尾巴（首句不可能是 7 字符内）
             return sentence.strip()
@@ -288,12 +289,34 @@ _KT_EXPORT_DECL = re.compile(
 
 
 def _kotlin_kdocs(text):
-    """提取一段 Kotlin 源码内的全部 KDoc 块。"""
-    return [b for b in _KT_KDOC_BLOCK.findall(text) if b.strip()]
+    """提取一段 Kotlin 源码内的全部 KDoc 块（返回纯文本正文）。"""
+    return [_kdoc_text(b) for b in _KT_KDOC_BLOCK.findall(text) if b.strip()]
+
+
+def _kdoc_text(raw):
+    """把 KDoc 原始块剥成纯文本正文。
+
+    先整体剥掉首尾的 /** 与 */，再逐行剥行首 * 装饰。
+    兼容单行 KDoc（"/** 品牌色 */" → "品牌色"）与多行块。
+    """
+    body = raw.strip()
+    if body.startswith("/**"):
+        body = body[3:]
+    if body.endswith("*/"):
+        body = body[:-2]
+    out = []
+    for ln in body.splitlines():
+        s = ln.strip()
+        if s.startswith("*"):
+            s = s[1:].lstrip()
+        out.append(s)
+    return "\n".join(out).strip()
 
 
 def _kotlin_exports(text):
     """Kotlin 包导出面：无 private/internal/protected 修饰的顶层声明。
+
+    _KT_EXPORT_DECL 正则（含 \\s 空白类，raw 串编译）逐行匹配。
 
     逐行判断：@ 注解行跳过（归下一声明），修饰符遮挡的声明天然不匹配
     `^(?:public\s+)?(?:fun|...)` 模式（正则字面用 raw 串），从而被排除。
