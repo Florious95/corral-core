@@ -28,3 +28,20 @@
 - 红测先行；净化前缀照旧；注释红线照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+### 实测纪要（2026-08-09，本机真实 Claude Code pane 只读 capture 取样）
+
+- **OSC title 被 tmux 消费**：工作态的真实信号是 pane 标题里的 braille spinner（`tmux list-panes -F '#{pane_title}'`
+  可见 `✳`=idle / `⠐`=working），但 **capture-pane 拿不到标题** → 屏幕文本才是可靠载体。
+- **工作态真实标记**：底部动作条含 `esc to interrupt` + 停止按钮 `⏹ for agents`；空闲态动作条是
+  `bypass permissions on · N shell`（无 `esc to interrupt`）。Claude Code 空闲时也带 `● bypass permissions on`，
+  故 idle 规则必须显式排除 `esc to interrupt`，否则工作态误判 idle。
+- **pane_current_command 现实坑**：舰队 agent pane 的 `pane_current_command` 报 `bash`（wrapper shell），
+  非直接用户 pane 的 `claude`/`codex` 键。规则表按 command 键注册 → wrapper 场景天然降级 unknown（隔离铁律安全），
+  已在 report 中报 leader，后续可考虑按 pane 标题/环境变量补识别。
+- **ANSI 剥离 UTF-8 雷区**：8-bit C1 控制符 `0x9b/0x9d` 与 UTF-8 续字节共值——`❯`(U+276F) 的中字节就是 `0x9d`，
+  若按裸字节当 OSC 起点会吞掉整个 prompt。剥离器必须走 `utf8.DecodeRune`，仅当字节**非法/孤立**时才当 C1 控制符。
+- **Table-driven 匹配对 tail-window 友好**：herdr 的 manifest 按"屏幕区域"匹配，本项目只有尾部窗口，
+  改为"全文 contains / 行前缀 / spinner 行"三种模式，优先级降序首中即得，规则表是唯一维护面。
+- **done 沿触发**：`Track(prev, sample)` 纯函数，仅 `working→idle` 出 done；`working→unknown` 或
+  `blocked→idle` 不出（空白样本不是完成证据，blocked→idle 是用户作答）。上层状态机记忆 prev，服务端可无状态重放。

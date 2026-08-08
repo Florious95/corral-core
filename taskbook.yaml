@@ -218,6 +218,21 @@ tasks:
     evidence: ".team/evidence/app-tsnet.json"
     contention: contract   # Fable 5 攻坚候选
 
+  - id: state-ident-wrapper
+    goal: >
+      wrapper 场景的 agent 识别（state-parser 实测缺口：舰队 pane 的 pane_current_command=bash，
+      规则表按 command 键分派全部降级 unknown，blocked 推送对核心舰队场景失效）。
+      在 agentstate 增加有界识别器：进程树下钻（pane_pid → 后代进程 argv 匹配 claude/codex）
+      与/或 pane 标题启发式，输出 AgentKind 提示供注册表分派；识别器允许有界 IO（超时必回 unknown），
+      判定路径 Decide 保持纯函数零 IO。红线：只做加法性 API 变更（ws-api 在途消费现有 API），
+      每次落盘保持 go build ./... 绿。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/agentstate/...'"
+    deps: ["state-parser"]
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/state-ident-wrapper.json"
+    contention: impl
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
