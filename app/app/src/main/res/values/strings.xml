@@ -14,6 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <resources>
-    <!-- 应用显示名：暂名 "Agent Mirror"，naming 任务定名后统一替换。 -->
-    <string name="app_name">Agent Mirror</string>
+    <!-- 应用显示名：产品定名 AgentMirror（naming 裁定，2026-08-09）。 -->
+    <string name="app_name">AgentMirror</string>
 </resources>

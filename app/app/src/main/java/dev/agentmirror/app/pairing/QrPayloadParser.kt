@@ -1,0 +1,69 @@
+/*
+ * Copyright 2026 AgentMirror Project Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.agentmirror.app.pairing
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+/**
+ * QR JSON 解析与校验（对齐服务端 qr.go 契约）。
+ *
+ * - 未知 JSON 字段忽略（协议 §4.1 前向兼容，与 conn 层帧解码语义一致）；
+ * - 缺 v/url/token、坏版本、非法 ws 地址一律拒绝并给明确原因（003 明确报错）；
+ * - 错误文案为固定字符串，绝不内联 token 值（协议 §9 红线：token 不落日志）。
+ */
+object QrPayloadParser {
+
+    /** 线上载荷 schema 版本（qr.go PayloadVersion）。 */
+    const val PAYLOAD_VERSION = 1
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    /** 解析一行 QR 内容；失败抛 [QrParseException]（消息不携带 token）。 */
+    fun parse(raw: String): QrPayload {
+        val dto = try {
+            json.decodeFromString<QrDto>(raw)
+        } catch (_: Exception) {
+            throw QrParseException("二维码内容不是有效的配对信息")
+        }
+        if (dto.version != PAYLOAD_VERSION) {
+            throw QrParseException("不支持的配对信息版本：${dto.version}")
+        }
+        if (!isValidWsUrl(dto.url)) {
+            throw QrParseException("配对信息中的服务端地址不合法")
+        }
+        if (dto.token.isBlank()) {
+            throw QrParseException("配对信息缺少 token")
+        }
+        return QrPayload(
+            version = dto.version,
+            url = dto.url.trim(),
+            token = dto.token.trim(),
+            tsAuthKey = dto.tsAuthKey.orEmpty(),
+        )
+    }
+
+    /** 线上载荷 DTO（字段名与 qr.go 对齐，勿改名）。 */
+    @Serializable
+    private data class QrDto(
+        @SerialName("v") val version: Int,
+        @SerialName("url") val url: String = "",
+        @SerialName("token") val token: String = "",
+        @SerialName("ts_authkey") val tsAuthKey: String? = null,
+    )
+}

@@ -29,22 +29,30 @@ import dev.agentmirror.app.conn.WebSocketTransport
 /**
  * 前台服务的接线点（service 包之外唯一改动接口；UI/配对层注入）。
  *
- * - [transportFactory]：真实 WebSocket 传输工厂。conn 层只交付传输抽象
- *   （Transport.kt：OkHttp 真连接归 e2e），未注入真实工厂时用 [NoopTransportFactory]——
- *   每次拨号立即失败 → ConnectionManager 指数退避持续重连，服务生命周期与状态守望
- *   保持可运行、可测，不静默吞（失败经 onFailure 上浮到重连路径）。
+ * - [transportFactory]：真实 WebSocket 传输工厂。默认 [OkHttpTransportFactory]
+ *   （leader 裁定 A，清偿传输欠账①）：配对后注入 [setConfig] 并启动服务即走真实 OkHttp
+ *   连接；[NoopTransportFactory] 保留为测试与降级用（拨号立即失败 → conn 层退避重连，
+ *   生命周期可运行、不静默吞）。
  * - [uiConnector]：UI 侧监听桥。服务持有唯一 ConnectionManager（背景常驻连接），
- *   UI（WorkspaceViewModel / SessionViewModel 等）经此桥订阅同一连接，服务回调原样转投。
- *   未接线（null）时服务仅自管通知，不影响其他包。
+ *   UI（WorkspaceViewModel / SessionViewModel / PairingViewModel 等）经此桥订阅同一连接，
+ *   服务回调原样转投。多槽扇出：单屏在屏时挂一槽（SessionRoute 等），无需多屏同挂；
+ *   配对试连接是**独立** ConnectionManager，不走本桥。
+ * - [uploadBaseUrl]：图片上传基地址（协议 §8 同端口 `POST /upload`）。配对层成功后从
+ *   配对 ws url 推导 http(s) 基地址注入（清偿 session-ui 沉淀欠账②）；未注入时
+ *   [HttpUrlConnectionUploader] 明确报错「未配置上传地址」，不静默。
  */
 object ServiceWire {
-    /** 传输工厂（UI/配对层在启动服务前注入；默认占位工厂保证服务永远可跑）。 */
+    /** 传输工厂（UI/配对层在启动服务前注入；默认真实 OkHttp，服务永远可跑）。 */
     @Volatile
-    var transportFactory: TransportFactory = NoopTransportFactory
+    var transportFactory: TransportFactory = OkHttpTransportFactory
 
     /** UI 侧监听桥（UI 接线层注入；服务回调原样转投）。 */
     @Volatile
     var uiConnector: ConnectionManager.Listener? = null
+
+    /** 图片上传基地址（协议 §8 `POST /upload`；配对成功后由配对层注入，见 [deriveUploadBase]）。 */
+    @Volatile
+    var uploadBaseUrl: String? = null
 
     /** 配对后的连接配置（URL + token）。token 只上行一次、不回显、不落日志（红线）。 */
     @Volatile
