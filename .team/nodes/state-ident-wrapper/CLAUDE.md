@@ -25,3 +25,20 @@
 - 注释红线、净化前缀照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+### 实测纪要（2026-08-09，真实进程表 + 真实 wrapper 链取样）
+
+- **真实 argv 形状**：claude 是原生二进制，argv[0]=`claude`（`claude --dangerously-skip-permissions`）；
+  codex 是链 `sh → node /opt/homebrew/bin/codex … → …/vendor/aarch64-apple-darwin/bin/codex`。
+  匹配必须按"可执行 + node 包装器的直接启动目标"（argv[0:2] 路径基名）判定，**不能扫全串**：
+  ps 把 argv 重连成无引号空格串，`-c developer_instructions="… codex …"` 里的裸词会误报 codex（红测抓到，已修）。
+- **真实 wrapper 端到端命中**：临时测试在真实 ps 表上找到 wrapper 祖先（argv=`team-agent claude …`，
+  fields[1]=`claude`）并判出 AgentKindClaude——wrapper 场景真实闭环。
+- **快速路径**：直接 pane 的 `pane_current_command` 已命名 CLI 时 Identify 零 IO 直接判（PanePID=0 也安全）；
+  进程树路径单次 `ps -axo pid=,ppid=,command=`，500ms 预算，超时/解析失败/无 PID 一律 unknown。
+- **标题启发式只作旁证**：`pane_title` 基名匹配 claude/codex，仅在进程树判不出时兜底；
+  树匹配权威，标题冲突不覆盖（`TestIdentifyTreeBeatsTitle`）。
+- **加法契约已验**：`DetectForKind` 经 `AgentKind.Command()` 复用同一规则表，`DetectForKind==Detect(command)` 
+  有对等测试；旧 API（`Detect`/`DefaultRegistry`/`Track`）未动，ws-api 在途消费无破坏。
+- **后代遍历 BFS + 部分表容错**：ps 快照与 pane 可能竞态（进程中途退出→PPID 缺失），缺失父节点即止该支，
+  不清表；根 argv 不匹配（wrapper 启动文本可含 agent 路径，后代才决定）——`TestIdentifyFromTableIgnoresRootArgv`。
