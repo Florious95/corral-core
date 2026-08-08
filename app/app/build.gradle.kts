@@ -96,6 +96,10 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.1")
     implementation("androidx.camera:camera-view:1.4.1")
     implementation("com.google.zxing:core:3.5.3")
+    // 内嵌组网：tsnet 用户态节点 gomobile 绑定（本地构建产物，非 maven——
+    // libtailscale 无任何预构建 artifact，实测 Maven Central 0 命中；由 tools/tsnetbind
+    // 重建，见 libs/README.md）。tailscale 系 BSD-3，Apache-2.0 兼容，零 GMS。
+    implementation(files("libs/tsnetbind.aar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
