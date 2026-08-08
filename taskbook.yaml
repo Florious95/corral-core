@@ -267,7 +267,7 @@ tasks:
     acceptance:
       - "bash -lc 'test -s README.md && cd server && go build ./...'"
     deps: ["server-scaffold", "app-scaffold"]
-    write_scope: ["README.md", "server/", "app/"]
+    write_scope: ["README.md", "server/", "app/", "tools/archwiki/build_wiki.py  # 仅 MODULE_PREFIX 改名同步，leader 事后追认 2026-08-09"]
     evidence: ".team/evidence/naming.json"
     contention: impl
 
