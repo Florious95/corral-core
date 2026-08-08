@@ -1,7 +1,7 @@
 {
   "schema": "agentmirror-gate-report-v1",
-  "conclusion": "fail",
-  "generated_at": "2026-08-08T20:18:27+00:00",
+  "conclusion": "pass",
+  "generated_at": "2026-08-08T22:02:04+00:00",
   "baseline_accept": {
     "applied": false,
     "reason": null
@@ -9,45 +9,32 @@
   "suites": [
     {
       "name": "server",
-      "ok": false,
+      "ok": true,
       "skipped": false,
-      "cases": 185,
-      "duration_ms": 5012,
-      "failures": [
-        {
-          "test": "github.com/remote-agent/agentmirror/internal/api (package failure)",
-          "category": "unclassified"
-        },
-        {
-          "test": "go vet",
-          "category": "unclassified"
-        },
-        {
-          "test": "gofmt:internal/discovery/model_test.go",
-          "category": "unclassified"
-        }
-      ],
+      "cases": 206,
+      "duration_ms": 5902,
+      "failures": [],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": 110,
-        "current": 185,
-        "action": "up"
+        "baseline": 206,
+        "current": 206,
+        "action": "same"
       }
     },
     {
       "name": "app",
       "ok": true,
       "skipped": false,
-      "cases": 289,
-      "duration_ms": 6781,
+      "cases": 319,
+      "duration_ms": 2092,
       "failures": [],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": 0,
-        "current": 289,
-        "action": "up"
+        "baseline": 319,
+        "current": 319,
+        "action": "same"
       }
     },
     {
@@ -55,17 +42,17 @@
       "ok": true,
       "skipped": false,
       "cases": 1,
-      "duration_ms": 851,
+      "duration_ms": 884,
       "failures": [],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": null,
+        "baseline": 1,
         "current": 1,
-        "action": "init"
+        "action": "same"
       }
     }
   ],
   "issues": [],
-  "summary": "结论 fail：3 套件共 475 用例。红：本次非全绿，详见 suites/issues。"
+  "summary": "结论 pass：3 套件共 526 用例。绿。"
 }
