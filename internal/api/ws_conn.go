@@ -193,16 +193,19 @@ func (c *wsConn) handleFrame(data []byte) bool {
 		c.classifyCodecError(err)
 		return true
 	}
-	// Auth is the one frame allowed before authentication. Everything else
-	// requires a validated auth first (docs/protocol.md §3, §9).
+	// The auth frame is the one frame allowed before authentication. Every
+	// other frame requires a validated auth first (docs/protocol.md §3, §9);
+	// routing auth through the gate would reject the very frame that opens
+	// the connection.
+	if a, ok := typed.(protocol.Auth); ok {
+		return c.handleAuth(a)
+	}
 	if !c.authed.Load() {
 		c.sendError(protocol.ErrCodeUnauthorized, "not authenticated")
 		return true
 	}
 
 	switch t := typed.(type) {
-	case protocol.Auth:
-		return c.handleAuth(t)
 	case protocol.List:
 		c.handleList(t)
 	case protocol.Subscribe:

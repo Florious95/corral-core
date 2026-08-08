@@ -2,15 +2,16 @@ package api
 
 // ws_test.go provides the test harness shared by the api package tests: an
 // httptest server wired to the API handler, a real WebSocket client (coder/
-// websocket, the same library production uses), and a scripted Discoverer that
-// returns a fixed discovery.Model so tests exercise the full wiring without
-// touching any real tmux socket (term-bridge/discovery red line).
+// websocket, the same library production uses), and scripted Discoverers that
+// return fixed or mutable discovery.Models so tests exercise the full wiring
+// without touching any real tmux socket (term-bridge/discovery red line).
 
 import (
 	"context"
 	"log/slog"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +36,25 @@ func (d scriptedDiscoverer) Discover(context.Context) (*discovery.Model, error) 
 	return d.model, d.err
 }
 
+// mutableDiscoverer returns a model that can be swapped between scans, so a
+// test can drive the listing loop's diff to observe list_delta emissions.
+type mutableDiscoverer struct {
+	mu    sync.Mutex
+	model *discovery.Model
+}
+
+func (d *mutableDiscoverer) Discover(context.Context) (*discovery.Model, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.model, nil
+}
+
+func (d *mutableDiscoverer) set(m *discovery.Model) {
+	d.mu.Lock()
+	d.model = m
+	d.mu.Unlock()
+}
+
 // wsEnv is a test server + connected client pair.
 type wsEnv struct {
 	t    *testing.T
@@ -43,23 +63,26 @@ type wsEnv struct {
 	conn *websocket.Conn
 }
 
-// startWS starts a test API server over httptest with the given discoverer and
+// startWS starts a test API server over httptest with the given options and
 // connects one client. The test server is closed on cleanup.
-func startWS(t *testing.T, d Discoverer) *wsEnv {
+func startWS(t *testing.T, opts Options) *wsEnv {
 	t.Helper()
-	srv := NewServer(Options{
-		Token:        "test-token",
-		Discoverer:   d,
-		ListInterval: 50 * time.Millisecond,
-		Log:          discardLogger(),
-	})
+	if opts.Log == nil {
+		opts.Log = discardLogger()
+	}
+	if opts.ListInterval == 0 {
+		opts.ListInterval = 50 * time.Millisecond
+	}
+	srv := NewServer(opts)
 	hsrv := httptest.NewServer(srv.Handler())
 	t.Cleanup(func() {
 		hsrv.Close()
 		srv.Close()
 	})
 
-	url := "ws" + strings.TrimPrefix(hsrv.URL, "http")
+	// The WS endpoint is served at /ws on the test server; the dial URL must
+	// carry that path or the mux answers 404 (an empty path requests "/").
+	url := "ws" + strings.TrimPrefix(hsrv.URL, "http") + "/ws"
 	conn, _, err := websocket.Dial(context.Background(), url, nil)
 	if err != nil {
 		t.Fatalf("dial ws: %v", err)
@@ -84,6 +107,52 @@ func (e *wsEnv) readControl() protocol.Typed {
 		e.t.Fatalf("decode frame %q: %v", data, err)
 	}
 	return typed
+}
+
+// readControlTimeout reads one control frame with a deadline, failing the test
+// if none arrives in time. Used to assert the absence of an unexpected reply.
+func (e *wsEnv) readControlTimeout(d time.Duration) protocol.Typed {
+	e.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	typ, data, err := e.conn.Read(ctx)
+	if err != nil {
+		e.t.Fatalf("read frame within %v: %v", d, err)
+	}
+	if typ != websocket.MessageText {
+		e.t.Fatalf("expected control frame, got message type %v", typ)
+	}
+	typed, err := protocol.UnmarshalFrame(data)
+	if err != nil {
+		e.t.Fatalf("decode frame %q: %v", data, err)
+	}
+	return typed
+}
+
+// readControlDraining reads control frames, skipping (draining) any binary
+// mirror frames that arrive first (e.g. the echo of an injected input). It
+// fails the test if no control frame arrives within 5s.
+func (e *wsEnv) readControlDraining() protocol.Typed {
+	e.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		typ, data, err := e.conn.Read(ctx)
+		cancel()
+		if err != nil {
+			e.t.Fatalf("read control (draining): %v", err)
+		}
+		if typ == websocket.MessageBinary {
+			continue // mirror echo; not the reply we want
+		}
+		typed, err := protocol.UnmarshalFrame(data)
+		if err != nil {
+			e.t.Fatalf("decode frame %q: %v", data, err)
+		}
+		return typed
+	}
+	e.t.Fatal("timed out waiting for a control frame")
+	return nil
 }
 
 // sendFrame marshals and sends one control frame.
@@ -119,7 +188,7 @@ func (e *wsEnv) auth() {
 	if ack.FrameType() != protocol.TypeAuthAck {
 		e.t.Fatalf("expected auth_ack, got %v", ack.FrameType())
 	}
-	aa := ack.(*protocol.AuthAck)
+	aa := ack.(protocol.AuthAck)
 	if !aa.OK {
 		e.t.Fatalf("auth rejected: %s", aa.Reason)
 	}
@@ -135,6 +204,21 @@ func testModel() *discovery.Model {
 				Panes: []discovery.Pane{
 					{Socket: "/tmp/sock1", Session: "alpha", PaneID: "%0", CWD: "/ws/a", Command: "claude", Width: 100, Height: 40},
 					{Socket: "/tmp/sock1", Session: "beta", PaneID: "%1", CWD: "/ws/a", Command: "codex", Width: 80, Height: 24},
+				},
+			},
+		},
+	}
+}
+
+// modelForSocket builds a model with a single pane on the given isolated
+// tmux socket (used by the real-tmux integration tests).
+func modelForSocket(sock string) *discovery.Model {
+	return &discovery.Model{
+		Workspaces: []discovery.Workspace{
+			{
+				CWD: "/ws/b",
+				Panes: []discovery.Pane{
+					{Socket: sock, Session: "integ", PaneID: "%0", CWD: "/ws/b", Command: "cat", Width: 80, Height: 24},
 				},
 			},
 		},

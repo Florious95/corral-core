@@ -92,19 +92,28 @@ func buildSnapshot(c *sessionCatalog, provider StateProvider, ctx context.Contex
 	}
 
 	ordered := make([]protocol.Workspace, 0, len(byCWD))
-	for _, ws := range byCWD {
-		// Compute the authoritative aggregate and count for the listing.
-		states := make([]protocol.AgentState, 0, len(ws.Sessions))
-		for _, s := range ws.Sessions {
-			states = append(states, s.State)
-		}
-		ws.SessionCount = len(ws.Sessions)
-		ws.AggregateState = aggregateState(states)
+	for cwd, ws := range byCWD {
+		// Compute the authoritative aggregate and count for the listing. This
+		// is the single place the 012 rule runs per workspace; the changed
+		// snapshots in diff use the same source.
+		ws.SessionCount, ws.AggregateState = wsAggregate(ws)
+		byCWD[cwd] = ws // write back so diff reads aggregated values
 		ordered = append(ordered, ws)
 	}
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Cwd < ordered[j].Cwd })
 
 	return &modelSnapshot{byRef: byRef, byCWD: byCWD, ordered: ordered}
+}
+
+// wsAggregate computes a workspace's session count and aggregate state from
+// its current member sessions (requirement 012). It is the single source of
+// the aggregation rule for both the full listing and delta emission.
+func wsAggregate(ws protocol.Workspace) (count int, agg protocol.AgentState) {
+	states := make([]protocol.AgentState, 0, len(ws.Sessions))
+	for _, s := range ws.Sessions {
+		states = append(states, s.State)
+	}
+	return len(ws.Sessions), aggregateState(states)
 }
 
 // listing returns the protocol.Listing payload for a request, in sorted

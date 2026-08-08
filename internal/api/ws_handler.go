@@ -51,6 +51,11 @@ func (c *wsConn) handleList(l protocol.List) {
 // is torn down and a fresh snapshot is replayed (requirement 004 reconnect
 // replay). A failure to subscribe is an error frame.
 func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
+	// Ensure the catalog is populated before resolving the ref, so a client
+	// that subscribes immediately after auth (before the listing loop's first
+	// tick) can still address the pane it was just shown.
+	c.s.ensureInitialScan(c.ctx)
+
 	br, _, ok := c.resolvePane(s.Ref)
 	if !ok {
 		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
@@ -117,6 +122,9 @@ func (c *wsConn) handleInput(i protocol.Input) {
 		ack(false, protocol.InputFailNotSubscribed)
 		return
 	}
+	// Catalog populated before resolving (a client can address a pane shown in
+	// a listing it received before the loop's first tick).
+	c.s.ensureInitialScan(c.ctx)
 	br, ok := c.resolveBridge(i.Ref)
 	if !ok {
 		ack(false, protocol.InputFailSessionNotFound)
@@ -146,6 +154,7 @@ func (c *wsConn) handleInput(i protocol.Input) {
 // the binary reply's 12-byte header so the client can anchor its scroll
 // viewport without guessing.
 func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
+	c.s.ensureInitialScan(c.ctx)
 	br, pane, ok := c.resolvePane(sc.Ref)
 	if !ok {
 		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
@@ -191,6 +200,7 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 // the pane wins). An unknown ref is an error; resize on an unsubscribed but
 // known session is a no-op, and there is no resize ack frame.
 func (c *wsConn) handleResize(r protocol.Resize) {
+	c.s.ensureInitialScan(c.ctx)
 	br, ok := c.resolveBridge(r.Ref)
 	if !ok {
 		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
