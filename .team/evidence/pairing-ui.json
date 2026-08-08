@@ -1,0 +1,28 @@
+{
+  "task_id": "pairing-ui",
+  "status": "pass",
+  "agent_id": "w-pairing-ui",
+  "accepted_at": "2026-08-09T00:00:00Z",
+  "acceptance_results": [
+    {
+      "cmd": "bash -lc 'cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'",
+      "exit": 0
+    }
+  ],
+  "tests": {
+    "PairingViewModelTest": 13,
+    "OkHttpWebSocketTransportTest": 5,
+    "QrPayloadParserTest": 5,
+    "full_app_suite": 153,
+    "gate": 594
+  },
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/pairing/ (PairingViewModel/PairingScreen/PairingRoute/QrPayloadParser/PairingConfigStore/PairingModels)",
+    "app/app/src/main/java/dev/agentmirror/app/service/OkHttpWebSocketTransport.kt",
+    "app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt (transportFactory=OkHttp default, uploadBaseUrl)",
+    "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt (首启路由：无配对→配对页/有→工作区/可重配)",
+    "app/app/build.gradle.kts (OkHttp/MockWebServer/CameraX 1.4.1/ZXing)",
+    "app/app/src/main/AndroidManifest.xml (CAMERA 权限)"
+  ],
+  "notes": "传输欠账①清偿（leader 裁定 A：OkHttpWebSocketTransport+OkHttpTransportFactory 注入 ServiceWire.transportFactory）；上传 baseUrl 欠账②清偿（deriveUploadBase ws→http 注入 uploadBaseUrl）；token 不进日志红线由 errorMessageNeverContainsTokenValue 阳性对照锁死；QR 契约对齐 server qr.go；红测五条全绿。全量门 594 用例 pass。"
+}

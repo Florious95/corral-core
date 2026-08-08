@@ -28,3 +28,13 @@
 - 注释红线、净化前缀照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+- **2026-08-09 pairing-ui 交付**：配对 UI（扫码+手填+TS token 占位）13 测全绿，全量 153 测 0 回归，全量门 594 用例 pass。
+  - `PairingViewModel`（纯 JVM）+ `PairingScreen`（Compose：CameraX 分析流 + ZXing 解码 + 手填表单 + TS token 占位禁用入口）+ `PairingRoute`（生产接线）+ `QrPayloadParser`（对齐 server qr.go 契约）+ `PairingConfigStore`（SharedPreferences 存 {url,token}，token 明文风险 TODO 待 Keystore）+ `deriveUploadBase`（ws→http，欠账②清偿）。
+  - **传输欠账①清偿（leader 裁定 A）**：service 包新增 `OkHttpWebSocketTransport` 实现 conn 的 `WebSocketTransport` 接口 + `OkHttpTransportFactory` 注入 `ServiceWire.transportFactory`（默认从 Noop 切 OkHttp）；Noop 保留为测试/降级。5 测（MockWebServer）：连接成功/auth 往返/binary 透传/服务端关闭/拨号失败。conn/ 包一行未动。
+  - **上传 baseUrl 欠账②清偿**：配对成功后 `ServiceWire.uploadBaseUrl = deriveUploadBase(wsUrl)`，SessionViewModel 上传地址从此不再 null。
+  - **uiConnector 单槽现状**：当前仅单屏在屏（SessionRoute 挂一槽），未升级多槽；若未来需多屏同挂再扩展（本轮无需，报 leader 已知）。
+  - **首启路由**：无配对配置→配对页（可跳过进空工作区）；有→直进工作区；重配入口从设置进（AgentMirrorApp 的 showPairing 开关）。
+  - **试配对架构**：配对用**独立** ConnectionManager（注入 ServiceWire.transportFactory 建），不碰 ServiceWire 常驻 manager；配对成功才 `setConfig`+注入 uploadBaseUrl+切路由。
+  - **陷阱记录**：①google maven **无 camera-bom**（1.4.x/1.3.x 全 404，BOM 从未随该系列发布），camera artifact POM 自带同版本互 pin，须显式按版本声明；②MockWebServer 4.12 无 `MockResponse.Builder`/`mockwebserver.WebSocketListener`，用 `MockResponse().withWebSocketUpgrade(okhttp3.WebSocketListener)`；③客户端 close() 后 MockWebServer 服务端必须 onClosing 回 close 完成握手，否则 onClosed 不触发且 tearDown 挂住；④VM 重置/重配对须先置 Idle 再停旧探针，否则旧 stop 的同步 STOPPED 回调误报"拒绝"；⑤naming 席位移行改 build.gradle.kts，落盘依赖后必须 `./gradlew -q :app:compileDebugKotlin` 自检（共享编译单元教训：依赖解析也要过）。
+  - **交接缺口（报 leader）**：ServiceWire 的 manager 仅在 `MirrorForegroundService.onCreate` 创建；配对成功注入 setConfig 后需由接线层/App 启动服务（或配对页直接 manager.start）常驻连接才建立——本轮 PairingRoute 只注入配置未启动服务，工作区页的 manager 由 fg-service 首次 onCreate 时建（当前 session-ui 的 SessionRoute 里 `ServiceWire.manager()` + `start()` 兜底）。
