@@ -1,0 +1,255 @@
+# 任务书 v1（五栏+争议度；谁来干/带什么干由基础设施推导，不在此声明）
+# 规范见 ~/.claude/skills/taskbook-orchestration/references/taskbook-schema.md
+# 需求权威：requirement-base/（001-011）；技术路线：entries/011
+project: 远程Agent安卓  # 产品命名任务见 naming
+repo: /Volumes/nvme/Projects/远程Agent安卓
+baseline:
+  sha: null   # 首次提交后由 leader 冻结
+  regression_anchor: "绿场起步：0 测试 0 失败；此后标尺=0 新回归"
+tasks:
+  # ---------- 环境 ----------
+  - id: env-android
+    goal: >
+      在本机建立可无人值守的安卓构建环境：安装 JDK 17+（brew）、Android platform-tools（adb）、
+      确认 cmdline-tools/sdkmanager 可用并接受 licenses。红线：只装缺的，不动已有 SDK 组件。
+    acceptance:
+      - "bash -lc 'java -version && ~/Library/Android/sdk/platform-tools/adb --version'"
+    deps: []
+    write_scope: ["无仓库写入；仅系统环境"]
+    evidence: ".team/evidence/env-android.json"
+    contention: impl
+
+  # ---------- 服务端（Go） ----------
+  - id: server-scaffold
+    goal: >
+      建立 server/ Go module 骨架（module 名 github.com/占位待 naming 定）：cmd/agentmirrord 入口、
+      internal/ 分层目录、结构化日志、配置加载、根 LICENSE(Apache-2.0)、server/README。
+      每个包和导出符号必须有说明注释（工程红线，见 010）。
+    acceptance:
+      - "bash -lc 'cd server && go build ./... && go vet ./...'"
+    deps: []
+    write_scope: ["server/", "LICENSE"]
+    evidence: ".team/evidence/server-scaffold.json"
+    contention: impl
+
+  - id: protocol-spec
+    goal: >
+      产出 WS 协议契约：docs/protocol.md + server/internal/protocol/ Go 类型。
+      覆盖：工作区/会话列表（两级模型见 002）、会话订阅（快照+增量流+scrollback 分页，见 006）、
+      输入注入、resize、agent 状态字段（working/idle/blocked/done/unknown，见 008）、
+      图片上传（multipart→落盘→返回主机路径，见 003）、配对鉴权帧（见 011）。
+      JSON 控制帧 + 二进制流帧。红线：状态字段与镜像通道解耦，unknown 不得阻塞镜像。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/protocol/...'"
+    deps: ["server-scaffold"]
+    write_scope: ["server/internal/protocol/", "docs/protocol.md"]
+    evidence: ".team/evidence/protocol-spec.json"
+    contention: contract   # 协议是全工程契约，产出后 leader 验收定稿
+
+  - id: tmux-discovery
+    goal: >
+      枚举主机上所有 tmux server（默认 socket 目录 /tmp/tmux-<uid>/、/private/tmp/tmux-<uid>/ 下全部
+      socket，含 team-agent 私有 socket，见 001），列出 session/pane 及其 cwd，按 cwd 聚合为两级模型
+      （见 002）。红测先行：fake 多 socket 场景单测。红线：对不可连 socket 容错跳过，不得让一个死
+      socket 拖垮扫描。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/discovery/...'"
+    deps: ["server-scaffold"]
+    write_scope: ["server/internal/discovery/"]
+    evidence: ".team/evidence/tmux-discovery.json"
+    contention: impl
+
+  - id: term-bridge
+    goal: >
+      单 pane 终端桥：capture-pane -e 首帧快照、pipe-pane 增量字节流、send-keys 整条注入（003 输入
+      范式）、resize（window-size latest + grouped session，见 005）、capture-pane -S 分页拉取
+      scrollback（见 006）。集成测试用真实 tmux（净化 env 前缀）。红线：注入必须有可判定回执。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/bridge/...'"
+    deps: ["server-scaffold"]
+    write_scope: ["server/internal/bridge/"]
+    evidence: ".team/evidence/term-bridge.json"
+    contention: impl
+
+  - id: ws-api
+    goal: >
+      按 protocol-spec 实现服务端 WS API 与图片上传端点，接线 discovery 与 bridge。
+      断连重连后订阅重放当前快照（003 状态零丢失）。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/api/...'"
+    deps: ["protocol-spec", "tmux-discovery", "term-bridge"]
+    write_scope: ["server/internal/api/", "server/cmd/"]
+    evidence: ".team/evidence/ws-api.json"
+    contention: impl
+
+  - id: state-parser
+    goal: >
+      per-agent 状态适配器（首批：Claude Code、Codex；架构预留扩展）：从 pane 输出/进程树判定
+      working/idle/blocked/done，判不出降级 unknown（008 隔离铁律）。研读 herdr（Apache 2.0）状态
+      检测实现并合规借鉴（保留声明、标注出处）。红线：状态层任何失败不得影响镜像与输入。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/agentstate/...'"
+    deps: ["term-bridge"]
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/state-parser.json"
+    contention: impl
+
+  - id: pairing-security
+    goal: >
+      配对与鉴权：服务端生成配对 token，终端打印二维码（QR 载 服务端地址+token，预留 TS authkey 字段，
+      路线(a) 见 011）；WS 握手校验 token；未配对连接一律拒绝。红线：token 不落日志。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/pairing/...'"
+    deps: ["ws-api"]
+    write_scope: ["server/internal/pairing/"]
+    evidence: ".team/evidence/pairing-security.json"
+    contention: impl
+
+  - id: tsnet-embed
+    goal: >
+      服务端内嵌 tsnet 监听（007）：配置 TS authkey 后同时在 LAN 与 tailnet 上服务；无 authkey 时纯
+      LAN 降级。单测覆盖配置分支；真实 tailnet 连通性列入 e2e-aging 手册。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/tsnetd/...'"
+    deps: ["server-scaffold"]
+    write_scope: ["server/internal/tsnetd/"]
+    evidence: ".team/evidence/tsnet-embed.json"
+    contention: impl
+
+  # ---------- 安卓（Kotlin + Compose） ----------
+  - id: app-scaffold
+    goal: >
+      app/ 安卓工程骨架：Kotlin + Jetpack Compose、gradle wrapper、包结构分层、Apache-2.0 头。
+      每个模块/类必须有说明注释（010 红线）。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:assembleDebug'"
+    deps: ["env-android"]
+    write_scope: ["app/"]
+    evidence: ".team/evidence/app-scaffold.json"
+    contention: impl
+
+  - id: term-core-android
+    goal: >
+      终端模拟内核（客户端最大契约，006/011）：先出候选对比一页纸（改造 Android-Terminal-Emulator /
+      ConnectBot vt320 / 自研；许可必须 Apache-2.0 兼容，Termux 核 GPLv3 禁用）落
+      docs/decisions/term-core.md，leader 验收后施工：ANSI/CSI 解析 + 网格 + 本地 scrollback buffer，
+      纯 JVM 可测（不依赖 Android 运行时）。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :terminal:test'"
+    deps: ["app-scaffold"]
+    write_scope: ["app/terminal/", "docs/decisions/term-core.md"]
+    evidence: ".team/evidence/term-core-android.json"
+    contention: contract   # Fable 5 攻坚候选
+
+  - id: term-view
+    goal: >
+      Canvas 终端渲染视图：60fps 本地滚动（006）、锁定视口+回到底部、捏合调字号→触发 resize（005）。
+      渲染正确性用截图/网格断言测试。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*TermView*\"'"
+    deps: ["term-core-android"]
+    write_scope: ["app/app/src/main/java/**/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/term-view.json"
+    contention: impl
+
+  - id: conn-layer
+    goal: >
+      连接层：WS 客户端、指数退避自动重连、重连即快照重放（003/004 无状态铁律：本层不持久任何会话
+      状态）、protocol-spec 帧编解码，纯 JVM 单测。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Conn*\"'"
+    deps: ["app-scaffold", "protocol-spec"]
+    write_scope: ["app/app/src/main/java/**/conn/", "app/app/src/test/"]
+    evidence: ".team/evidence/conn-layer.json"
+    contention: impl
+
+  - id: workspace-ui
+    goal: >
+      两级导航 UI（002）：一级工作目录列表（会话数徽章+聚合状态），二级会话列表（状态徽章，
+      unknown 灰显不阻塞）。Compose UI 测试。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Workspace*\"'"
+    deps: ["conn-layer"]
+    write_scope: ["app/app/src/main/java/**/workspace/", "app/app/src/test/"]
+    evidence: ".team/evidence/workspace-ui.json"
+    contention: impl
+
+  - id: session-ui
+    goal: >
+      会话页（003）：终端视图 + 底部本地输入条 + 发送 + 左侧加号（相册/拍照→上传→路径注入）。
+      发送回执可见；失败明确报错。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Session*\"'"
+    deps: ["term-view", "conn-layer"]
+    write_scope: ["app/app/src/main/java/**/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/session-ui.json"
+    contention: impl
+
+  - id: pairing-ui
+    goal: >
+      配对 UI：扫码（CameraX/ML Kit 或 ZXing，Apache-2.0 兼容）+ 手填地址/token 兜底 + TS token 填写
+      入口（App 内嵌 tailscale 接入为后续任务 app-tsnet，本任务先打通 LAN/已有 tailnet 直连配对）。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'"
+    deps: ["conn-layer", "pairing-security"]
+    write_scope: ["app/app/src/main/java/**/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/pairing-ui.json"
+    contention: impl
+
+  - id: fg-service
+    goal: >
+      前台服务（004/011）：常驻连接、blocked/done 状态变化发系统通知、断连静默重连；
+      无 Google 服务依赖。电量策略：仅在有活跃订阅时保持连接。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Service*\"'"
+    deps: ["conn-layer", "state-parser"]
+    write_scope: ["app/app/src/main/java/**/service/", "app/app/src/test/"]
+    evidence: ".team/evidence/fg-service.json"
+    contention: impl
+
+  - id: app-tsnet
+    goal: >
+      App 内嵌 tailscale（007/011，硬模块）：集成 libtailscale（Android gomobile 绑定），
+      填 TS token 即入网，与 pairing-ui 打通。若评估后风险过高，出一页纸降级方案报 leader 裁定。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Tsnet*\"'"
+    deps: ["app-scaffold", "pairing-security"]
+    write_scope: ["app/app/src/main/java/**/tsnet/", "app/app/src/test/", "docs/decisions/app-tsnet.md"]
+    evidence: ".team/evidence/app-tsnet.json"
+    contention: contract   # Fable 5 攻坚候选
+
+  # ---------- 横切 ----------
+  - id: arch-wiki
+    goal: >
+      架构维基自动化（010：注释自动衍生维基图 + 腐败识别）：从 Go/Kotlin 源码注释与 import 图现算
+      模块架构图（docs/wiki/ 生成物），判据从 T1 环依赖起步进门禁脚本（tools/archwiki/）。
+      红线：禁止任何需要人工另行维护的架构文档。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["server-scaffold", "app-scaffold"]
+    write_scope: ["tools/archwiki/", "docs/wiki/"]
+    evidence: ".team/evidence/arch-wiki.json"
+    contention: impl
+
+  - id: naming
+    goal: >
+      产品命名 + 仓库元信息：候选名查重（GitHub/商标常识面）、定名后统一 Go module 名、
+      Android applicationId、根 README（含架构总览与快速开始）。
+    acceptance:
+      - "bash -lc 'test -s README.md && cd server && go build ./...'"
+    deps: ["server-scaffold", "app-scaffold"]
+    write_scope: ["README.md", "server/", "app/"]
+    evidence: ".team/evidence/naming.json"
+    contention: impl
+
+  - id: e2e
+    goal: >
+      端到端验收（对齐 010 验收标准）：真实 tmux + 真实 Claude Code 会话 + 服务端 + 安卓模拟器实机
+      链路：两级列表→打开会话→首帧<200ms 断言→输入回显→图片路径注入→杀 App 重开恢复→断网重连恢复。
+      老化实验：20 轮杀进程/断连循环（006/004）。产出 e2e 脚本与报告。
+    acceptance:
+      - "bash -lc 'bash e2e/run.sh'"
+    deps: ["ws-api", "state-parser", "pairing-security", "session-ui", "workspace-ui", "pairing-ui", "fg-service"]
+    write_scope: ["e2e/"]
+    evidence: ".team/evidence/e2e.json"
+    contention: impl
