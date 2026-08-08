@@ -76,14 +76,16 @@ func subscribe(ctx context.Context, socket, target, fifo string, timeout time.Du
 
 	// Attach the pipe before the snapshot so no output can slip between
 	// this call and the snapshot the caller takes next.
-	cmd, stderr := newTmuxCommand(ctx, socket, "pipe-pane", "-o", "-t", target, "cat >> "+shellQuote(fifo))
+	cmd, stderr, derivedCtx, cancel := newTmuxCommand(ctx, socket, timeout, "pipe-pane", "-o", "-t", target, "cat >> "+shellQuote(fifo))
 	if err := cmd.Run(); err != nil {
+		cancel()
 		_ = os.Remove(fifo)
-		if ctx.Err() != nil {
+		if derivedCtx.Err() != nil {
 			return nil, nil, ErrTmuxTimeout
 		}
 		return nil, nil, classifyTmuxError(stderr.String())
 	}
+	cancel() // the attach command has finished; the deadline timer is done
 
 	ch := make(chan []byte, 16)
 	var cancelOnce sync.Once
@@ -114,7 +116,7 @@ func subscribe(ctx context.Context, socket, target, fifo string, timeout time.Du
 		}
 	}
 
-	cancel := func() {
+	detach := func() {
 		cancelOnce.Do(func() {
 			// Detach the pipe (no command argument) before the FIFO is
 			// removed, so the writer sees EOF and the relay exits.
@@ -124,5 +126,5 @@ func subscribe(ctx context.Context, socket, target, fifo string, timeout time.Du
 	}
 
 	go relay()
-	return ch, cancel, nil
+	return ch, detach, nil
 }

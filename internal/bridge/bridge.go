@@ -107,7 +107,8 @@ func (p *Pane) pasteMultiline(ctx context.Context, text string) error {
 // loadBuffer pipes text into a named tmux buffer. It is a plain stdin pipe to
 // tmux, not an exec-wrapped command, because the payload is the stdin stream.
 func (p *Pane) loadBuffer(ctx context.Context, name, text string) error {
-	cmd, stderr := newTmuxCommand(ctx, p.socket, "load-buffer", "-b", name, "-")
+	cmd, stderr, ctx, cancel := newTmuxCommand(ctx, p.socket, p.timeout, "load-buffer", "-b", name, "-")
+	defer cancel()
 	cmd.Stdin = strings.NewReader(text)
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {

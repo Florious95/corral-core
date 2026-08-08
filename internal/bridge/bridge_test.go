@@ -39,14 +39,24 @@ type testTMUX struct {
 
 // newTestTMUX starts nothing yet: it owns a unique absolute socket path and
 // the environment scrub, and guarantees the server is killed on cleanup.
+//
+// The socket lives in a short-temp dir, not t.TempDir(): t.TempDir() paths
+// are test-name-based and, combined with long test names, push the socket
+// past tmux's ~104-byte sun_path limit ("File name too long"). A short dir
+// name keeps every test well under the limit.
 func newTestTMUX(t *testing.T) *testTMUX {
 	t.Helper()
-	sock := filepath.Join(t.TempDir(), "sock")
+	dir, err := os.MkdirTemp("", "tb")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	sock := filepath.Join(dir, "sock")
 	tt := &testTMUX{t: t, sock: sock, env: scrubbedEnv()}
 	t.Cleanup(func() {
 		cmd := exec.Command("tmux", "-S", sock, "kill-server")
 		cmd.Env = tt.env
 		_ = cmd.Run() // best effort: an already-dead server is fine
+		_ = os.RemoveAll(dir)
 	})
 	return tt
 }
@@ -102,8 +112,8 @@ func (tt *testTMUX) deadPane(t *testing.T) *Pane {
 	t.Helper()
 	name := fmt.Sprintf("tbdead%d", atomic.AddUint64(&testSeq, 1))
 	// Window 0 persists so the server survives the kill below.
-	if _, err := tt.run("new-session", "-d", "-x", "80", "-y", "24", "-s", name, "-c", t.TempDir(), "cat"); err != nil {
-		t.Fatalf("new-session %s: %v", name, err)
+	if out, err := tt.run("new-session", "-d", "-x", "80", "-y", "24", "-s", name, "-c", t.TempDir(), "cat"); err != nil {
+		t.Fatalf("new-session %s (sock=%s): out=%q err=%v", name, tt.sock, out, err)
 	}
 	// Window 1 is the pane we are going to kill.
 	if _, err := tt.run("new-window", "-t", name, "-c", t.TempDir(), "cat"); err != nil {

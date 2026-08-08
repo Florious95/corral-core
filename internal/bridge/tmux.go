@@ -47,11 +47,14 @@ const defaultTimeout = 10 * time.Second
 // tmux default socket (`-L default`). All output is returned raw; the caller
 // interprets bytes, never this function.
 func runTmux(ctx context.Context, socket string, timeout time.Duration, args ...string) ([]byte, error) {
-	cmd, stderr := newTmuxCommand(ctx, socket, args...)
+	cmd, stderr, ctx, cancel := newTmuxCommand(ctx, socket, timeout, args...)
+	defer cancel() // stop the deadline timer once the command has finished
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
 	if err := cmd.Run(); err != nil {
+		// A deadline expiry is classified before any stderr inspection:
+		// a hung tmux may print nothing at all.
 		if ctx.Err() != nil {
 			return nil, ErrTmuxTimeout
 		}
@@ -60,21 +63,28 @@ func runTmux(ctx context.Context, socket string, timeout time.Duration, args ...
 	return stdout.Bytes(), nil
 }
 
-// newTmuxCommand builds an exec command for `tmux [-S socket] <args...>`
-// with stderr wired to a buffer the caller can read for error classification.
-// It does not set stdout so callers that stream stdin (load-buffer) can wire
-// their own. The socket is empty for the default tmux socket.
-func newTmuxCommand(ctx context.Context, socket string, args ...string) (*exec.Cmd, *bytes.Buffer) {
+// newTmuxCommand builds an exec command for `tmux [-S socket] <args...>`,
+// wrapping ctx in a deadline so a hung server can never block a caller. The
+// command's stderr is wired to a buffer the caller reads for error
+// classification; stdout is left unwired so callers that stream stdin
+// (load-buffer) can set it up themselves. The socket is empty for the tmux
+// default socket. The derived ctx and its cancel func are returned: callers
+// must defer cancel so the deadline timer is not leaked, and they inspect
+// ctx.Err() to distinguish a deadline expiry from a real tmux failure.
+func newTmuxCommand(ctx context.Context, socket string, timeout time.Duration, args ...string) (*exec.Cmd, *bytes.Buffer, context.Context, context.CancelFunc) {
 	var base []string
 	if socket == "" {
 		base = []string{"-L", "default"}
 	} else {
 		base = []string{"-S", socket}
 	}
+	// Apply the deadline here, before exec.CommandContext, so the spawned
+	// process is actually killed when the deadline passes.
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	cmd := exec.CommandContext(ctx, tmuxBin, append(base, args...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	return cmd, &stderr
+	return cmd, &stderr, ctx, cancel
 }
 
 // classifyTmuxError maps tmux stderr text onto the typed error taxonomy. Text
