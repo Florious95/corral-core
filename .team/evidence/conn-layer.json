@@ -1,0 +1,1 @@
+{"task_id":"conn-layer","status":"pass","acceptance_results":[{"cmd":"bash -lc cd app && ./gradlew -q :app:testDebugUnitTest --tests *Conn*","exit":0}],"result_id":"res_ea7dab6f4500","notes":"FrameCodec/Binary/Connection/ConnectionManager，80 JVM 测全绿；黄金夹具跨语言消费已核实（ConnCodecTest 直读 server testdata）；ErrorCode.UNKNOWN 前向兼容回退。"}
