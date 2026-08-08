@@ -1,0 +1,189 @@
+/*
+ * Copyright 2026 AgentMirror Project Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.agentmirror.app.termview
+
+import dev.agentmirror.terminal.Cell
+import dev.agentmirror.terminal.DamageListener
+import dev.agentmirror.terminal.ScreenSnapshot
+import dev.agentmirror.terminal.TerminalEmulator
+
+/**
+ * 终端视口状态机：跟随/锁定历史、可见行窗口、捏合行列数换算、脏区合并（渲染逻辑与 Android View 分离的可测核心）。
+ *
+ * 本地滚动（006）：滚动只改视口顶行（本地 scrollback 行号，零网络）。跟随底部时 [topLine] 为 null，
+ * 新输出到达窗口自动贴底；用户上滚即锁定历史，[topLine] 冻结为具体逻辑行号，锁定态新输出到达不动视口；
+ * 拖回底部或点"回到底部"恢复跟随。捏合字号（005）→ 像素尺寸换算 rows/cols → 经 [onResizeRequest]
+ * 上抛（协议 resize 帧由上层接线，conn/session 归属其他任务）。
+ */
+class TermViewPresenter(
+    private val emulator: TerminalEmulator,
+    private val onResizeRequest: (rows: Int, cols: Int) -> Unit,
+) {
+
+    /** 视口顶行（逻辑行，0=最老历史）：null=跟随底部；非 null=锁定历史，冻结不变。 */
+    private var topLine: Int? = null
+
+    /** 当前等宽字格像素尺寸（View 层测量/捏合后设置）。 */
+    var cellWidth: Int = DEFAULT_CELL_WIDTH
+        private set
+    var cellHeight: Int = DEFAULT_CELL_HEIGHT
+        private set
+
+    /** 视图像素尺寸，捏合行列数换算的基准。 */
+    private var viewportWidthPx: Int = 0
+    private var viewportHeightPx: Int = 0
+
+    /** 待重绘的逻辑行区间（内核屏幕脏行换算而来，尚未被 View 帧消费）。 */
+    private var pendingDamage: MutableList<IntRange>? = null
+
+    /** 本帧内核快照缓存：beginFrame 抓一次，避免 lineCells 对屏幕行逐行深拷贝。 */
+    private var frameSnapshot: ScreenSnapshot? = null
+
+    init {
+        // 接管内核脏区回调：屏幕脏行区间换算为逻辑行区间后缓存（60fps 增量刷新数据源）。
+        // 首帧必全绘由内核首次 feed/replay 的整屏脏区承载（内核构造后初始脏区=整屏，
+        // 首次 flushDamage 整屏上抛），Present 不再重复标全屏。
+        emulator.damageListener = DamageListener { markScreenRowsDirty(it) }
+    }
+
+    // ---- 视口状态机 ----
+
+    /** 是否跟随底部（视口钉在最新输出）。 */
+    val isFollowingBottom: Boolean get() = topLine == null
+
+    /** 是否锁定在历史中（"回到底部"按钮可见性）。 */
+    val showBackToBottom: Boolean get() = topLine != null
+
+    /** 总逻辑行数 = 本地 scrollback + 当前屏幕（渲染窗口的坐标空间上界）。 */
+    private val logicalCount: Int get() = emulator.scrollback.size + emulator.rows
+
+    /** 当前可见逻辑行区间（含端点，长度恒为屏幕行数，钳制在逻辑行空间内）。 */
+    val window: IntRange
+        get() {
+            val height = emulator.rows
+            val maxTop = (logicalCount - height).coerceAtLeast(0)
+            val top = (topLine ?: maxTop).coerceIn(0, maxTop)
+            val bottom = (top + height - 1).coerceAtMost((logicalCount - 1).coerceAtLeast(0))
+            return top..bottom
+        }
+
+    /**
+     * 手指拖动改视口（正 [deltaLines] = 向上滚看更早历史，负 = 向下滚）。
+     *
+     * 跟随态先锁定到当前底部再滚；拖回窗口顶 == 屏幕顶即触底，自动恢复跟随（006）。
+     */
+    fun onScrollBy(deltaLines: Int) {
+        val height = emulator.rows
+        val maxTop = (logicalCount - height).coerceAtLeast(0)
+        val current = topLine ?: maxTop
+        val next = (current - deltaLines).coerceIn(0, maxTop)
+        topLine = if (next >= maxTop) null else next
+    }
+
+    /** 回到底部：恢复跟随，视口钉回最新输出。 */
+    fun onScrollToBottom() {
+        topLine = null
+    }
+
+    // ---- 捏合 → 行列数换算（005：让 CLI 自己重画）----
+
+    /** 视图像素尺寸变化（旋转/窗口调整）：重算行列数，变化则上抛 resize 请求。 */
+    fun onViewportSizeChanged(widthPx: Int, heightPx: Int) {
+        viewportWidthPx = widthPx
+        viewportHeightPx = heightPx
+        recomputeGeometry()
+    }
+
+    /** 捏合改字号：重算行列数，与内核当前尺寸不一致则上抛 resize 请求。 */
+    fun onFontSizeChanged(newCellWidth: Int, newCellHeight: Int) {
+        cellWidth = newCellWidth
+        cellHeight = newCellHeight
+        recomputeGeometry()
+    }
+
+    /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */
+    private fun recomputeGeometry() {
+        if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return
+        val rows = viewportHeightPx / cellHeight
+        val cols = viewportWidthPx / cellWidth
+        if (rows != emulator.rows || cols != emulator.cols) {
+            onResizeRequest(rows, cols)
+        }
+    }
+
+    // ---- 帧消费：脏区合并 + 行数据 ----
+
+    /** 取当前待重绘的逻辑行区间（已合并、裁剪到窗口内）；取走即清空。 */
+    fun takeDamage(): List<IntRange> {
+        val raw = pendingDamage ?: return emptyList()
+        pendingDamage = null
+        val win = window
+        val clipped = raw.mapNotNull { r ->
+            val lo = maxOf(r.first, win.first)
+            val hi = minOf(r.last, win.last)
+            if (lo <= hi) lo..hi else null
+        }
+        return mergeRanges(clipped)
+    }
+
+    /** 帧开始：抓一次内核快照缓存，供本帧 [lineCells] 复用（屏幕行零重复拷贝）。 */
+    fun beginFrame() {
+        frameSnapshot = emulator.snapshot()
+    }
+
+    /** 取第 [row] 个逻辑行的单元格（scrollback 行零拷贝，屏幕行用帧缓存）。 */
+    fun lineCells(row: Int): List<Cell> {
+        val sb = emulator.scrollback.size
+        if (row < sb) return emulator.scrollback.line(row)
+        val snap = frameSnapshot ?: emulator.snapshot()
+        val index = row - sb
+        return if (index in snap.lines.indices) snap.lines[index] else emptyList()
+    }
+
+    // ---- 内部实现 ----
+
+    /** 内核屏幕脏行 [range] → 逻辑行区间缓存；锁定态窗口外损伤由 [takeDamage] 裁剪吸收。 */
+    private fun markScreenRowsDirty(range: IntRange) {
+        val sb = emulator.scrollback.size
+        val logical = (sb + range.first)..(sb + range.last)
+        (pendingDamage ?: mutableListOf<IntRange>().also { pendingDamage = it }).add(logical)
+    }
+
+    /** 把区间集合并成最小覆盖集（重叠或相邻 [a,b] 与 [b+1,c] 都合并，减少每帧 draw 调用数）。 */
+    private fun mergeRanges(ranges: List<IntRange>): List<IntRange> {
+        if (ranges.size < 2) return ranges
+        val sorted = ranges.sortedBy { it.first }
+        val out = ArrayList<IntRange>(sorted.size)
+        var cur = sorted[0]
+        for (r in sorted.drop(1)) {
+            if (r.first <= cur.last + 1) {
+                cur = cur.first..maxOf(cur.last, r.last)
+            } else {
+                out.add(cur)
+                cur = r
+            }
+        }
+        out.add(cur)
+        return out
+    }
+
+    private companion object {
+        /** 初始等宽字格像素（View 测量前的占位，典型 6x13 密集字形）。 */
+        const val DEFAULT_CELL_WIDTH = 10
+        const val DEFAULT_CELL_HEIGHT = 20
+    }
+}

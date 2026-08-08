@@ -1,0 +1,1 @@
+{"task_id":"term-view","status":"pass","acceptance_results":[{"cmd":"bash -lc cd app && ./gradlew -q :app:testDebugUnitTest --tests *TermView*","exit":0}],"result_id":"res_ea762e8b9b30","notes":"Presenter/View 两层：视口锁定/触底跟随/捏合换算/脏区合并/首帧全绘 10 测；Canvas 同色 run 合并+BCE+Choreographer。共享编译单元纪律经两次摩擦后确立。"}

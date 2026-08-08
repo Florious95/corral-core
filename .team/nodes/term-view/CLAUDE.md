@@ -29,3 +29,11 @@
 - 注释红线、净化前缀照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+### term-view 任务沉淀（2026-08-09）
+- **新纪律（leader 立）**：在途代码每次落盘必须保持整模块可编译——宁可先写 stub/TODO 占位，不许留编译破洞过夜（对 :app 内所有席位生效，因共享编译单元会反向阻塞他人验收）。
+- **conn 侧历史问题（非我引入，已报）**：kotlinx-serialization 1.9.0 把 JsonDecodingException 移入 internal 包，公开替代是 kotlinx.serialization.SerializationException（conn owner 已改用）；另有 conn 测试 ConnCodecTest.kt:330 引用不存在的 ErrorCode.UNKNOWN 待 conn owner 修。
+- **坑：验收命令 `:app:testDebugUnitTest --tests "*TermView*"` 会先编译整个 unit test source set**，conn 测试编译失败也会阻塞 term-view 验收；我的验收依赖 conn 测试源干净。
+- **内核初始脏区语义坑**：TerminalEmulator 构造后整屏脏区不主动上抛（damageListener 那时未设），首次 feed/replay 的 flushDamage 才整屏上抛 ⇒ 首帧全绘由"首次 feed 的整屏脏区"承载，Present 不得重复标全屏，否则与 feed 的残留整屏脏区重复成 [0..4]（merge 后仍是全屏，破坏增量断言）。
+- **验收结果**：TermViewPresenterTest 10 测全绿（2026-08-09，exit 0）。TermViewPresenter=纯 JVM 视口状态机（跟随/锁定/topLine 冻结、window 钳制、捏合换算、脏区合并、首帧全绘）；TermSurfaceView=薄层（Canvas run 合并画格、拖动/捏合手势、Choreographer 帧调度、回到底部按钮）。conn 层 SerializationException 修复 + ConnCodecTest ErrorCode.UNKNOWN 由 conn owner 落定，双阻塞解除。
+

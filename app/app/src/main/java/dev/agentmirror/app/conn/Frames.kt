@@ -95,7 +95,16 @@ sealed interface FramePayload {
                 is InputAckFrame -> json.encodeToJsonElement(InputAckFrame.serializer(), frame)
                 is ScrollbackFrame -> json.encodeToJsonElement(ScrollbackFrame.serializer(), frame)
                 is ResizeFrame -> json.encodeToJsonElement(ResizeFrame.serializer(), frame)
-                is ErrorFrame -> json.encodeToJsonElement(ErrorFrame.serializer(), frame)
+                is ErrorFrame -> {
+                    // ErrorCode.UNKNOWN 仅作客户端解码回退，永不上行（§7.2 + 本地纪律）。
+                    if (frame.code == ErrorCode.UNKNOWN) {
+                        throw FrameEncodeException(
+                            FrameError.INVALID_FIELD,
+                            "error code UNKNOWN is decode-fallback only, never sent upstream",
+                        )
+                    }
+                    json.encodeToJsonElement(ErrorFrame.serializer(), frame)
+                }
             }
         }
     }
@@ -241,7 +250,6 @@ data class InputAckFrame(
     override fun validate(): String? = when {
         reqId <= 0 -> "input_ack req_id must be >= 1"
         !ok && reason == null -> "failed input_ack must carry a reason"
-        !ok && reason == InputFailReason.UNKNOWN -> "unknown input fail reason"
         ok && reason != null -> "accepted input_ack must not carry a reason"
         else -> null
     }
@@ -286,6 +294,4 @@ data class ErrorFrame(
     @SerialName("reason") val reason: String = "",
 ) : FramePayload {
     override val frameType: String get() = FrameType.ERROR
-    override fun validate(): String? =
-        if (code == ErrorCode.UNKNOWN) "unknown error code" else null
 }
