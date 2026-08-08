@@ -42,4 +42,5 @@ rootProject.name = "agentmirror-app"
 // :app —— 主应用模块（本任务建立）
 include(":app")
 
-// 预留模块位：:terminal —— 终端内核模块，由 term-core-android 任务创建，本任务不建立空模块。
+// :terminal —— 终端模拟内核模块（纯 Kotlin/JVM，零 Android 依赖），term-core-android 任务建立。
+include(":terminal")
