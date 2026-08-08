@@ -1,0 +1,10 @@
+{
+  "name": "app",
+  "ok": false,
+  "skipped": false,
+  "cases": 5,
+  "failures": [
+    {"test": "dev.agentmirror.app.AppTest.breaks", "category": "unclassified"}
+  ],
+  "duration_ms": 800
+}
