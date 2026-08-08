@@ -1,0 +1,8 @@
+{
+  "name": "app",
+  "ok": true,
+  "skipped": false,
+  "cases": 5,
+  "failures": [],
+  "duration_ms": 600
+}
