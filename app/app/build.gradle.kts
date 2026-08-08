@@ -19,12 +19,17 @@
  *
  * 原生 Kotlin + Jetpack Compose（Material3），applicationId 暂用 dev.agentmirror.app
  * （naming 任务定名后统一替换）。依赖极简，仅 Compose BOM + activity-compose + material3 +
+ * kotlinx-serialization-json（conn 层控制帧编解码，Apache-2.0，见 docs/protocol.md §4）+
  * 测试基建（junit），后续模块由各自任务引入（见需求 011 技术路线裁定、004 无状态策略）。
+ *
+ * 注意：kotlinx-serialization 的 @Serializable 需要编译器插件（与 Kotlin 同版本 2.2.0），
+ * 插件是加该依赖的必要组成部分；除它外不引入任何额外构建逻辑。
  */
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.0"
 }
 
 android {
@@ -69,5 +74,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    // conn 层：协议控制帧 JSON 编解码（kotlinx-serialization-json，Apache-2.0）。
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     testImplementation("junit:junit:4.13.2")
 }
