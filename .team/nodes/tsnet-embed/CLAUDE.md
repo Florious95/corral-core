@@ -22,3 +22,11 @@
 - 测试净化前缀；注释红线照旧；"算不出/连不上"如实报 unknown 不猜。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+- 2026-08-09：`tsnet.Server.Close()` 在 server **从未启动**（未触发 `initOnce`/`start()`）时
+  直接 panic——`close()` 第 668 行访问 `s.sys.Bus` 而 `s.sys` 尚未赋值。构造态 server 只能靠
+  不调用 Close 来收尾，或跟踪 started 标志。本包用 `Group.started` 区分"构造 vs 已启动"，
+  Close 只在 started 时调 ts.Close（红线约束下 Close 恰好只会发生在启动失败路径）。
+- 2026-08-09：`go get tailscale.com` 会把 go 指令升到 `go1.26.5`（v1.102.2 要求 >= 1.26.5），
+  属 go.mod 必要变更；随后 `go mod tidy` 补齐约 230 行 go.sum（tsnet 依赖 gvisor、aws-sdk、wireguard-go 等）。
+  本包单测实现上未触发 tsnet 的 Up/网络路径，仅在 `TestLANListenerAccepts` 走真实 TCP 回环。
