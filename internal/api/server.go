@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/remote-agent/agentmirror/internal/bridge"
-	"github.com/remote-agent/agentmirror/internal/discovery"
 	"github.com/remote-agent/agentmirror/internal/protocol"
 )
 
@@ -226,7 +226,7 @@ func (s *Server) ensureInitialScan(ctx context.Context) {
 	if done {
 		return
 	}
-	if _, err := s.rebuildCatalog(ctx); err != nil {
+	if err := s.rebuildCatalog(ctx); err != nil {
 		s.log.Warn("listing: initial scan failed", "err", err)
 	}
 	s.snapMu.Lock()
@@ -266,7 +266,7 @@ func (s *Server) fanout(d *protocol.ListDelta) {
 	defer s.trackersMu.Unlock()
 	for c := range s.trackers {
 		select {
-		case c.send <- wsMsg{typ: wsText, data: body}:
+		case c.sendCh <- wsMsg{typ: wsText, data: body}:
 		default:
 			s.log.Debug("listing: dropping delta for slow connection")
 		}
@@ -288,12 +288,12 @@ func (s *Server) resolveBridge(ref string) (*bridge.Pane, bool) {
 // handleWS upgrades an HTTP request to the WebSocket API and serves the
 // connection until it closes.
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := ws.Accept(w, r, nil)
+	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		s.log.Warn("ws: accept failed", "err", err)
 		return
 	}
-	s.serveConn(r.Context(), conn)
+	s.serveConn(conn)
 }
 
 // handleUpload serves POST /upload (docs/protocol.md §8). See upload.go.

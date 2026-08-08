@@ -23,6 +23,31 @@ type Config struct {
 
 	// LogLevel is the slog severity level (debug|info|warn|error).
 	LogLevel string
+
+	// Token is the static pairing token every WebSocket connection must
+	// present in its auth frame (docs/protocol.md §9). It is consumed by the
+	// api.Options.Token seam; pairing-security later replaces static validation
+	// with a real pairing flow, at which point this field becomes the seed for
+	// the token store. The token is write-only: it is never echoed in any
+	// reply and never written to a log.
+	Token string
+
+	// UploadDir is where POST /upload writes images (docs/protocol.md §8),
+	// consumed by api.Options.UploadDir. Empty defaults to
+	// ~/Downloads/agentmirror-uploads.
+	UploadDir string
+
+	// MaxUploadBytes caps one uploaded image. Consumed by
+	// api.Options.MaxUploadBytes. Zero defaults to 20 MiB.
+	MaxUploadBytes int64
+
+	// MaxInputBytes caps the text of one input frame. Consumed by
+	// api.Options.MaxInputBytes. Zero defaults to 1 MiB.
+	MaxInputBytes int64
+
+	// ListInterval is how often the daemon re-scans tmux and pushes list_delta.
+	// Consumed by api.Options.ListInterval. Zero defaults to 2s.
+	ListInterval time.Duration
 }
 
 // resolution holds the three sources a setting may come from, in precedence

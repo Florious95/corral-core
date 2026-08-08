@@ -92,7 +92,7 @@ func buildSnapshot(c *sessionCatalog, provider StateProvider, ctx context.Contex
 	}
 
 	ordered := make([]protocol.Workspace, 0, len(byCWD))
-	for cwd, ws := range byCWD {
+	for _, ws := range byCWD {
 		// Compute the authoritative aggregate and count for the listing.
 		states := make([]protocol.AgentState, 0, len(ws.Sessions))
 		for _, s := range ws.Sessions {
@@ -151,7 +151,7 @@ func (m *modelSnapshot) diff(prev *modelSnapshot) *protocol.ListDelta {
 	for _, s := range d.AddedSessions {
 		affected[s.Cwd] = true
 	}
-	for ref := range d.RemovedRefs {
+	for _, ref := range d.RemovedRefs {
 		if p, ok := prev.byRef[ref]; ok {
 			affected[p.Cwd] = true
 		}
