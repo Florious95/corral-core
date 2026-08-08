@@ -214,7 +214,7 @@ tasks:
     acceptance:
       - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Tsnet*\"'"
     deps: ["app-scaffold", "pairing-security"]
-    write_scope: ["app/app/src/main/java/**/tsnet/", "app/app/src/test/", "docs/decisions/app-tsnet.md"]
+    write_scope: ["app/app/src/main/java/**/tsnet/", "app/app/src/test/", "docs/decisions/app-tsnet.md", "tools/tsnetbind/  # 基底预授权构建脚本", "app/app/libs/  # AAR 构建产物入库，leader 追认 2026-08-09", "app/app/build.gradle.kts  # 仅加依赖"]
     evidence: ".team/evidence/app-tsnet.json"
     contention: contract   # Fable 5 攻坚候选
 
