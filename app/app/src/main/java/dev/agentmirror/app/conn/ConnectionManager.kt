@@ -1,0 +1,351 @@
+/*
+ * Copyright 2026 AgentMirror Project Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.agentmirror.app.conn
+
+/**
+ * 连接层对外状态（docs/protocol.md §3 生命周期）。
+ */
+enum class ConnectionState {
+    /** 拨号中。 */
+    CONNECTING,
+
+    /** 已建立、auth 已发出，等待 auth_ack。 */
+    AUTHENTICATING,
+
+    /** 认证通过，可交换业务帧。 */
+    READY,
+
+    /** 掉线，正在退避等待重连。 */
+    RECONNECTING,
+
+    /** 永久关闭（auth 被拒 / 显式 stop）。 */
+    STOPPED,
+}
+
+/** 连接配置：目标 URL 与配对 token（token 只上行一次，不回显、不落日志）。 */
+data class ConnectionConfig(
+    val url: String,
+    val token: String,
+)
+
+/**
+ * 重连策略 + 订阅簿记（docs/protocol.md §3 重连语义、004 无状态铁律）。
+ *
+ * 掉线 → 指数退避重连（[ReconnectPolicy]）→ 重连 READY 后：
+ * 1. 重新 [list] 拉全量列表（无状态恢复，重建模型）；
+ * 2. 重放全部活跃 subscribe（当前屏快照重放）。
+ * listing seq 不连续或 list_delta 先于 listing 到达 ⇒ 自动重新 list。
+ *
+ * 本层不持久任何会话状态；[ConnectionManager] 持有的簿记仅是**连接存活期间**的重放
+ * 意图，随进程消失（004 无状态：链路的唯一状态是主机 tmux 这个事实源）。
+ *
+ * 上层只见 [Listener] 回调。调度由宿主驱动：生产用定时器周期调用 [pump]，
+ * 单测用假时钟推进（conn 知识基底 §1）。
+ */
+class ConnectionManager(
+    private val config: ConnectionConfig,
+    private val transportFactory: TransportFactory,
+    private val clock: Clock = Clock.Real,
+    private val policy: ReconnectPolicy = ReconnectPolicy(),
+    private val inputTimeoutMs: Long = 10_000,
+) {
+    /** 上层监听（单收件线程串行回调）。 */
+    interface Listener {
+        fun onStateChanged(state: ConnectionState)
+        fun onFrame(frame: FramePayload)
+        fun onBinary(frame: BinaryFrame)
+        fun onLocalDecodeError(code: FrameError, message: String)
+
+        /**
+         * 输入投递的判定结果（必达回执）。reason 非空当且仅当 ok=false。
+         * ok=false 的 reason 为 input_ack 的 reason.wire，或本地判定：
+         * "timeout"（超时无回执）/"connection lost: …"（掉线时未决输入）。
+         */
+        fun onInputResult(reqId: Long, ok: Boolean, reason: String?)
+
+        /** 掉线后即将重连：attempt 为下一次尝试序号（0 起），delayMs 为等待时长。 */
+        fun onReconnect(attempt: Int, delayMs: Long)
+    }
+
+    private var listener: Listener? = null
+
+    /** 当前状态；[ConnectionManager] 在同一收件线程串行使用，无需加锁。 */
+    private var state: ConnectionState = ConnectionState.STOPPED
+
+    private var connection: Connection? = null
+
+    /** 活跃订阅簿记：ref → (rows, cols)，重连后重放。 */
+    private val activeSubscriptions = LinkedHashMap<String, Pair<Int, Int>>()
+
+    /** 上次见过的 listing seq；list_delta 连续性据此判定。 */
+    private var lastSeenSeq: Long? = null
+
+    /** 下一次重连触发时刻（毫秒）；null = 无待执行重连。 */
+    private var pendingReconnectAt: Long? = null
+
+    /** 退避尝试计数；成功连接后重置。 */
+    private var attempt = 0
+
+    /** C→S 请求自增 req_id（list/input/scrollback 共用单调计数）。 */
+    private var nextReqId = 1L
+
+    /** 未决输入：req_id → 期限与完成标记。 */
+    private val pendingInputs = LinkedHashMap<Long, PendingInput>()
+
+    private class PendingInput(val deadlineMs: Long) {
+        var resolved: Boolean = false
+    }
+
+    /** 挂上上层监听。 */
+    fun setListener(listener: Listener?) {
+        this.listener = listener
+    }
+
+    /** 当前状态（测试与 UI 可读）。 */
+    fun state(): ConnectionState = state
+
+    /** 活跃订阅 ref 集合（测试断言重放依据）。 */
+    fun activeRefs(): Set<String> = activeSubscriptions.keys.toSet()
+
+    /**
+     * 启动：首次连接立即发起；已启动（非 STOPPED）时幂等。
+     */
+    fun start() {
+        if (state != ConnectionState.STOPPED) return
+        attempt = 0
+        lastSeenSeq = null
+        attemptConnect()
+    }
+
+    /**
+     * 永久关闭：取消待重连、关闭当前连接、未决输入一律判失败。
+     * 幂等；stop 后可重新 [start]（新的簿记起点）。
+     */
+    fun stop() {
+        pendingReconnectAt = null
+        connection?.close()
+        connection = null
+        failAllPending("connection stopped")
+        setState(ConnectionState.STOPPED)
+    }
+
+    /**
+     * 宿主驱动的时钟泵：nowMs 到达重连触发时刻即发起重连。
+     * 生产由定时器周期调用；单测由假时钟推进驱动（确定性）。
+     */
+    fun pump(nowMs: Long) {
+        val at = pendingReconnectAt ?: return
+        if (nowMs >= at) {
+            pendingReconnectAt = null
+            attemptConnect()
+        }
+    }
+
+    /**
+     * 输入超时裁决：超时无 input_ack 的未决输入判为明确失败（静默失效猎杀）。
+     * 由宿主周期调用（与 [pump] 同节奏）；单测用假时钟推进。
+     */
+    fun resolveExpiredInputs(nowMs: Long) {
+        val it = pendingInputs.iterator()
+        while (it.hasNext()) {
+            val (reqId, p) = it.next()
+            if (!p.resolved && nowMs >= p.deadlineMs) {
+                p.resolved = true
+                listener?.onInputResult(reqId, false, "timeout")
+                it.remove()
+            }
+        }
+    }
+
+    /**
+     * 网络可达性变化钩子：RECONNECTING 中立即重试，不等退避到点。
+     * Android 侧 ConnectivityManager 回调接这里（知识基底 §1 钩子接口）。
+     */
+    fun onNetworkAvailable() {
+        if (state == ConnectionState.RECONNECTING && pendingReconnectAt != null) {
+            pendingReconnectAt = null
+            attemptConnect()
+        }
+    }
+
+    /**
+     * 注入整条文本（input 以 input_ack 完结：必达回执）。text 为空 = 仅回车。
+     * @return false = 当前不可发送（未就绪/校验不过）；true = 已送出，结果以
+     * [Listener.onInputResult] 判定（超时 = 明确失败）。
+     */
+    fun sendInput(ref: String, text: String): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        val reqId = nextReqId++
+        val frame = InputFrame(reqId = reqId, ref = ref, text = text)
+        if (!conn.send(frame)) return false
+        pendingInputs[reqId] = PendingInput(clock.nowMs() + inputTimeoutMs)
+        return true
+    }
+
+    /** 订阅会话镜像；记簿待重放，已就绪则立发。 */
+    fun subscribe(ref: String, rows: Int, cols: Int): Boolean {
+        if (state == ConnectionState.STOPPED) return false
+        activeSubscriptions[ref] = rows to cols
+        val conn = connection ?: return true // 已记簿，重连后重放
+        if (!conn.isReady) return true
+        return conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols))
+    }
+
+    /** 退订（幂等）；同时移出重放簿记。 */
+    fun unsubscribe(ref: String): Boolean {
+        activeSubscriptions.remove(ref)
+        val conn = connection ?: return true
+        if (!conn.isReady) return true
+        return conn.send(UnsubscribeFrame(ref = ref))
+    }
+
+    /** 请求全量列表。 */
+    fun list(): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        return conn.send(ListFrame(reqId = nextReqId++))
+    }
+
+    /** 拉一页历史（from_line 按 tmux capture-pane 语义；count >= 1）。 */
+    fun scrollback(ref: String, fromLine: Int, count: Long): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        return conn.send(ScrollbackFrame(reqId = nextReqId++, ref = ref, fromLine = fromLine, count = count))
+    }
+
+    /** 上报手机行列数（只作用于已订阅会话）。 */
+    fun resize(ref: String, rows: Int, cols: Int): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        return conn.send(ResizeFrame(ref = ref, rows = rows, cols = cols))
+    }
+
+    // ---- 内部 ----
+
+    private fun attemptConnect() {
+        // 唯一入口是 start()（gate 在 start 里）或调度/网络钩子（此时 state 必非 STOPPED），
+        // 因此这里直接进入 CONNECTING，无需再判 STOPPED。
+        setState(ConnectionState.CONNECTING)
+        val conn = Connection(transportFactory.create(config.url), config.token, connListener)
+        connection = conn
+        conn.start()
+    }
+
+    private val connListener = object : Connection.Listener {
+        override fun onOpened() {
+            setState(ConnectionState.AUTHENTICATING)
+        }
+
+        override fun onReady() {
+            attempt = 0 // 成功后退避重置
+            setState(ConnectionState.READY)
+            // 无状态恢复：重建全量列表 + 重放全部活跃订阅（当前屏快照重放）。
+            sendList()
+            replaySubscriptions()
+        }
+
+        override fun onFrame(frame: FramePayload) {
+            when (frame) {
+                is ListingFrame -> {
+                    lastSeenSeq = frame.seq
+                    listener?.onFrame(frame)
+                }
+                is ListDeltaFrame -> {
+                    // lastSeenSeq 是可变属性，先捕获局部值再判连续（智能转换不可用）。
+                    val seen = lastSeenSeq
+                    val continuous = seen != null && frame.seq == seen + 1
+                    if (!continuous) {
+                        // seq 不连续 / delta 先于 listing ⇒ 必须重新 list 拉全量（§4.2）。
+                        sendList()
+                    } else {
+                        lastSeenSeq = frame.seq
+                        listener?.onFrame(frame)
+                    }
+                }
+                is InputAckFrame -> resolveInput(frame)
+                else -> listener?.onFrame(frame)
+            }
+        }
+
+        override fun onBinary(frame: BinaryFrame) {
+            listener?.onBinary(frame)
+        }
+
+        override fun onLocalDecodeError(code: FrameError, message: String) {
+            listener?.onLocalDecodeError(code, message)
+        }
+
+        override fun onClosed(permanent: Boolean, reason: String) {
+            if (permanent) {
+                failAllPending("connection rejected/closed: $reason")
+                connection = null
+                setState(ConnectionState.STOPPED)
+            } else {
+                failAllPending("connection lost: $reason")
+                connection = null
+                scheduleReconnect()
+            }
+        }
+    }
+
+    private fun sendList() {
+        connection?.send(ListFrame(reqId = nextReqId++))
+    }
+
+    private fun replaySubscriptions() {
+        val conn = connection ?: return
+        for ((ref, dims) in activeSubscriptions) {
+            conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
+        }
+    }
+
+    private fun scheduleReconnect() {
+        if (state == ConnectionState.STOPPED) return
+        setState(ConnectionState.RECONNECTING)
+        // delay 对应"下一次尝试"的序号 attempt（0 起），报告后再递增。
+        val delayMs = policy.nextDelayMs(attempt)
+        listener?.onReconnect(attempt, delayMs)
+        pendingReconnectAt = clock.nowMs() + delayMs
+        attempt++
+    }
+
+    private fun resolveInput(ack: InputAckFrame) {
+        val pending = pendingInputs.remove(ack.reqId) ?: return
+        pending.resolved = true
+        listener?.onInputResult(ack.reqId, ack.ok, ack.reason?.wire)
+    }
+
+    private fun failAllPending(reason: String) {
+        val it = pendingInputs.iterator()
+        while (it.hasNext()) {
+            val (reqId, p) = it.next()
+            if (!p.resolved) {
+                p.resolved = true
+                listener?.onInputResult(reqId, false, reason)
+            }
+            it.remove()
+        }
+    }
+
+    private fun setState(s: ConnectionState) {
+        if (state != s) {
+            state = s
+            listener?.onStateChanged(s)
+        }
+    }
+}
