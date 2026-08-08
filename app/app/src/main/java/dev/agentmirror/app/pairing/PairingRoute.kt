@@ -65,6 +65,16 @@ fun PairingRoute(
     )
 }
 
+/** ServiceWire.manager 需要的空壳监听：事件统一经 uiConnector 扇出到当前 UI VM（见 ServiceWire KDoc）。 */
+private object NoopConnListener : ConnectionManager.Listener {
+    override fun onStateChanged(state: ConnectionState) = Unit
+    override fun onFrame(frame: FramePayload) = Unit
+    override fun onBinary(frame: BinaryFrame) = Unit
+    override fun onLocalDecodeError(code: FrameError, message: String) = Unit
+    override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) = Unit
+    override fun onReconnect(attempt: Int, delayMs: Long) = Unit
+}
+
 /** 生产构造 [PairingViewModel]：真实存储 + 真实传输工厂（独立试配对连接，不碰常驻 manager）。 */
 private fun createPairingViewModel(configStore: PairingConfigStore): PairingViewModel {
     return PairingViewModel(
