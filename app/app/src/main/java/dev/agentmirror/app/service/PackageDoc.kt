@@ -19,6 +19,14 @@ package dev.agentmirror.app.service
 /**
  * 前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。
  *
- * 承载与主机 sidecar 的长连接生命周期，系统杀进程后由 Activity 重连恢复
- * （客户端无状态，冷启动 1 秒内恢复画面）。本包为占位骨架，由 service 任务落位实现。
+ * 分层（fg-service 知识基底 §1）：
+ * - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta
+ *   流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。
+ * - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent。
+ * - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定
+ *   [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。
+ * - [ServiceWire]：接线点——传输工厂（默认 [NoopTransportFactory]）、UI 监听桥、连接配置注入。
+ *
+ * 电量策略（004 裁定）：仅在有活跃订阅或用户开启后台守望时运行前台服务；服务被系统杀 →
+ * 冷启动重连即恢复（客户端无状态，没有丢失可言）。UI/配对层经 [ServiceWire] 控制启动/停止。
  */
