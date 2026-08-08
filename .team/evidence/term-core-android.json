@@ -1,0 +1,1 @@
+{"task_id":"term-core-android","status":"pass","acceptance_results":[{"cmd":"bash -lc cd app && ./gradlew -q :terminal:test","exit":0}],"result_id":"res_e927df601a30","notes":"自研最小 VT 引擎（Fable5 攻坚席）：AnsiParser/TerminalGrid/ScrollbackBuffer/TerminalEmulator，61 JVM 测全绿；选型裁定 docs/decisions/term-core.md（ConnectBot 核 GPL 血统出局，R-002）。"}

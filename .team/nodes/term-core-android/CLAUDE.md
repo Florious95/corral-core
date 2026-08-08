@@ -30,3 +30,10 @@
 - 测试净化前缀照旧；注释红线照旧（KDoc 首句一句话职责）。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+### term-core-android 任务沉淀（2026-08-09）
+- **选型关键事实**：任务书"ConnectBot 终端核 Apache-2.0"前提不成立——其核 `de.mud.terminal.vt320` 为 JTA 血统（GPLv2/LGPL-2.1），已核验并写入 docs/decisions/term-core.md；裁定自研，leader 已采纳并登修订记录。
+- **:terminal 插件声明坑**：`plugins { id("org.jetbrains.kotlin.jvm") }` **不能写版本号**——KGP 2.2.0 已在根 classpath（根脚本 kotlin.android apply false），子模块再写版本会报"already on classpath"。`jvmToolchain(17)` 经 JAVA_HOME 自动探测即可。
+- **接口形状**：`TerminalEmulator.feed`（增量）/`replaySnapshot`（清屏重建，scrollback 保留）/`prependHistory`（头插历史，alt 屏期间忽略）/`snapshot`+`damageListener`（脏行区间，构造后初始脏区=整屏，渲染层首帧必全绘）。擦除走 BCE（空白格带当前背景色）。
+- **测试坑**：Kotlin 字符串里裸 ESC/BEL 字节能编译但不可见易碎，一律 `\u001b`/`\u0007` 显式转义；测组合字符要确认源文件里是分解形式（e+U+0301）而非预组合 é。
+- 61 个 JVM 单测全绿；验收命令 exit 0（2026-08-09）。
