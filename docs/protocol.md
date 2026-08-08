@@ -220,14 +220,20 @@ C **必须**重新 `list` 拉全量（无状态恢复）。
 
 ### 6.3 scrollback 回复载荷
 
-kind=3 时 payload 前 4 字节为大端 `req_id`（对应请求，≥1），随后是 ANSI 字节：
+kind=3 时 payload 头部为 **12 字节元数据头**，描述**服务端实际返回的行区间**，
+随后是 ANSI 字节：
 
 ```
-[req_id: 4 bytes big-endian][ANSI 字节流]
+[req_id: 4BE 无符号][from_line: 4BE 有符号][line_count: 4BE 无符号][ANSI 字节流]
 ```
 
-实际返回的行区间由 `scrollback` 请求的 `from_line/count` 与 tmux 可用历史共同决定，
-由 S 收敛；协议不额外携带区间元数据（行数可从 ANSI 解析）。
+- `req_id` 对应请求（≥1）。
+- `from_line` / `line_count` 为**服务端收敛后的实际区间**（tmux capture-pane 语义：
+  0=当前屏顶，负值=屏上历史）。请求越界时 S 收敛到可用范围并在此**如实报告实际区间**，
+  客户端据此锚定本地滚动视口——无此元数据则客户端无法定位收敛后的页锚点，历史拼接会错位。
+
+例如请求 `from_line=-300, count=100` 而 tmux 仅有 50 行历史，回复为
+`from_line=-100, line_count=50`。
 
 ## 7. 枚举
 
@@ -273,7 +279,7 @@ kind=3 时 payload 前 4 字节为大端 `req_id`（对应请求，≥1），随
 - 未认证连接的任何操作一律 `error: unauthorized`。
 - 服务端日志不得记录帧 payload 中的敏感内容。
 
-## 10. 参考实现
+## 10. 参考实现与契约夹具
 
 - `server/internal/protocol/version.go` — 版本常量
 - `server/internal/protocol/frametype.go` — 帧类型判别符
@@ -282,3 +288,13 @@ kind=3 时 payload 前 4 字节为大端 `req_id`（对应请求，≥1），随
 - `server/internal/protocol/binary.go` — 二进制流帧编解码（EncodeBinary/DecodeBinary）
 - `server/internal/protocol/state.go` / `errors.go` — 状态枚举与错误码
 - `server/internal/protocol/*_test.go` — 帧往返与红测（红测先行）
+
+### 10.1 契约夹具（testdata/）——协议的一部分
+
+`server/internal/protocol/testdata/` 是**契约的一部分**（leader 裁定，计入验收）：
+
+- `*.json` — 每种控制帧类型一个 golden 样本（v1 线上字节）。
+- `*.bin` — 三种二进制流帧各一个样本；`*.bin.txt` 为字节注解。
+- 客户端（Kotlin conn-layer）与 Go 实现**消费同一份夹具**做编解码断言，拦协议漂移。
+- 本仓库往返单测（golden_test.go）要求每个样本**字节级稳定**（decode→re-encode 不变）。
+- **未经版本 bump 不得增删、重命名或重排这些文件**；新增帧类型必须同步补样本。

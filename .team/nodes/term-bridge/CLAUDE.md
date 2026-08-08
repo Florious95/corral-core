@@ -28,3 +28,21 @@
 - 测试净化前缀 + `-timeout 120s`。注释红线照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+### 实测纪要（2026-08-09，tmux 3.6a，隔离 socket 全部验证）
+
+- 目标一律用**裸 pane id `%N`**：`list-panes -t '%N' -F '#{pane_id}'` 精确解析单行；
+  若传 `session:window.pane`，tmux 会列出该 window 全部 pane（多行），精确存在性检查会误判 → 精检只认裸 id。
+- capture-pane/send-keys/pipe-pane/resize-window/display-message 均接受裸 id `-t '%0'`。
+- **错误分类关键文本**：pane/session/window 缺失 → stderr `can't find pane|session|window`，rc=1；
+  服务死 → `no server running` 或 `error connecting to <path> (No such file or directory)`，rc=1。
+- **pipe-pane 关闭语义**：`pipe-pane -t <pane>`（无命令）即断开；FIFO 读端已阻塞的 reader 会立刻收到 EOF，
+  但 EOF 后无新数据且二次 open 会永久阻塞（无 writer）→ 取消订阅必须先 detach pipe 再关读端。
+- **pipe-pane 幂等**：同 pane 重复 `pipe-pane -o -t` 直接替换旧 pipe，rc=0 不报错，无需先关。
+- **resize**：`set-option -w -t @<win> window-size latest` + `resize-window -t @<win> -x -y` 在 3.6a 生效，
+  display-message 读回 pane_width/pane_height 即真实尺寸（无 attach 客户端时不含状态行误差）。
+- **多行注入**：`load-buffer -b <name> <file>` + `paste-buffer -b <name> -t '%0' -d -p`（-d 用后即删，-p 括号粘贴），
+  然后单独 `send-keys Enter` 提交；单行走 `send-keys -l --`。
+- **绝对 socket 路径**：`tmux -S /abs/path/sock` 直接可用，测试无需 TMUX_TMPDIR 子目录。
+- 超时测试：`runTmux` 的 ctx deadline 会杀掉卡住的 tmux 子进程（exec.CommandContext），返回 ErrTmuxTimeout。
+
