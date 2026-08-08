@@ -9,7 +9,11 @@ v2 三条件，任一触发即退出（非零），由 leader 会话后台任务
   T1 假忙碌：在途席位 BUSY 但 last_output_at 停滞 > BUSY_STALE_SEC
   T2 空转欠账：在途席位连续 IDLE_SAMPLES 次非 BUSY（turn 结束却没交件/没上报）
   T3 全局停滞：全队 0 BUSY 且在途任务 > 0，连续 GLOBAL_SAMPLES 次
-6 小时心跳兜底退出（exit 0）。
+
+v3 增量（2026-08-09，session-ui 席位 API 流超时 70 分钟空耗案）：检测后先**自动处置**——
+对 T1/T2 席位直接 send 中性探针（"等裁定请回执，否则继续"），每席每任务预算 NUDGE_BUDGET 次；
+下一采样 last_output_at 前进 = 复活成功，计数清零；预算烧穿仍停摆才 exit 1 升级 leader。
+T3（系统性停滞）不自动处置，立即升级。探针文本中性化：不会被等裁定的席位误读为裁定。
 """
 import json, subprocess, time, sys, glob, os
 from datetime import datetime, timezone
@@ -20,11 +24,20 @@ BUSY_STALE_SEC = 900    # T1：BUSY 但无输出的停滞阈值（15 分钟）
 IDLE_SAMPLES = 2        # T2：连续非 BUSY 采样数（≈6 分钟）
 GLOBAL_SAMPLES = 3      # T3：全局 0 BUSY 采样数
 MAX_SAMPLES = 120       # 6 小时心跳
+NUDGE_BUDGET = 2        # v3：每席每任务自动探针预算，烧穿才升级 leader
 
 os.chdir(WS)
 idle_count: dict[str, int] = {}
+nudges: dict[str, int] = {}          # v3：seat -> 已发探针数（按 seat:task 键）
+last_seen_output: dict[str, str] = {}  # v3：seat -> 上次采样的 last_output_at（复活判定）
 global_count = 0
 log = open(".team/logs/watchdog.log", "a")
+
+def nudge(seat: str, task: str, why: str) -> None:
+    """v3 自动处置：中性探针（等裁定的席位回执说明即可，不会误读为裁定）。"""
+    text = (f"看门狗探针（{why}）：若你在等 leader 裁定请回执说明；否则从你的知识基底 "
+            f"{WS}/.team/nodes/{task}/CLAUDE.md 与已落盘成果继续推进任务 {task}，完成后 report_result。")
+    subprocess.run(["team-agent", "send", seat, text], capture_output=True, text=True, timeout=60)
 
 def sample():
     out = subprocess.run(["team-agent", "status", "--json"], capture_output=True, text=True, timeout=60).stdout
@@ -47,32 +60,48 @@ for i in range(MAX_SAMPLES):
         owe = inflight_seats()
         now = datetime.now(timezone.utc)
         busy_total = sum(1 for a in agents.values() if a.get("worker_state") == "BUSY")
-        alarms = []
+        escalations = []   # 升级 leader 的告警（预算烧穿/席位消失/T3）
         for seat, task in owe.items():
+            key = f"{seat}:{task}"
             a = agents.get(seat)
             if a is None:
-                alarms.append(f"T2 席位消失: {seat}(任务 {task})")
+                escalations.append(f"席位消失: {seat}(任务 {task})")
                 continue
             state = a.get("worker_state")
             last = a.get("last_output_at")
             age = (now - datetime.fromisoformat(last)).total_seconds() if last else None
+            # v3 复活判定：探针发出后 last_output_at 前进 → 计数清零
+            if nudges.get(key) and last and last != last_seen_output.get(key):
+                print(f"revived: {key} (nudge 后输出前进)", file=log, flush=True)
+                nudges[key] = 0
+                idle_count[seat] = 0
+            stall_why = None
             if state == "BUSY":
                 idle_count[seat] = 0
                 if age is not None and age > BUSY_STALE_SEC:
-                    alarms.append(f"T1 假忙碌: {seat}(任务 {task}) BUSY 但 {int(age)}s 无输出")
+                    stall_why = f"假忙碌 BUSY 无输出 {int(age)}s"
             else:
                 idle_count[seat] = idle_count.get(seat, 0) + 1
                 if idle_count[seat] >= IDLE_SAMPLES:
-                    alarms.append(f"T2 空转欠账: {seat}(任务 {task}) 连续 {idle_count[seat]} 采样非 BUSY")
+                    stall_why = f"空转欠账 连续 {idle_count[seat]} 采样非 BUSY"
+            if stall_why:
+                if nudges.get(key, 0) < NUDGE_BUDGET:
+                    nudges[key] = nudges.get(key, 0) + 1
+                    last_seen_output[key] = last or ""
+                    idle_count[seat] = 0  # 给探针一个观察窗
+                    nudge(seat, task, stall_why)
+                    print(f"nudge#{nudges[key]}: {key} ({stall_why})", file=log, flush=True)
+                else:
+                    escalations.append(f"预算烧穿({NUDGE_BUDGET} 探针无效): {seat}(任务 {task}) {stall_why}")
         if busy_total == 0 and owe:
             global_count += 1
             if global_count >= GLOBAL_SAMPLES:
-                alarms.append(f"T3 全局停滞: 0 BUSY 且在途 {list(owe.values())}")
+                escalations.append(f"T3 全局停滞: 0 BUSY 且在途 {list(owe.values())}")
         else:
             global_count = 0
-        print(f"{now:%H:%M:%S} busy={busy_total} inflight={list(owe.values())} idle={idle_count} g={global_count}", file=log, flush=True)
-        if alarms:
-            print("STALL_DETECTED\n" + "\n".join(alarms))
+        print(f"{now:%H:%M:%S} busy={busy_total} inflight={list(owe.values())} idle={idle_count} nudges={nudges} g={global_count}", file=log, flush=True)
+        if escalations:
+            print("STALL_ESCALATION\n" + "\n".join(escalations))
             sys.exit(1)
     except Exception as e:  # 采样失败不许静默死亡：记日志，连续失败也要能触发
         print(f"sample_error: {e}", file=log, flush=True)
