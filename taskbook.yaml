@@ -4,7 +4,7 @@
 project: 远程Agent安卓  # 产品命名任务见 naming
 repo: /Volumes/nvme/Projects/远程Agent安卓
 baseline:
-  sha: null   # 首次提交后由 leader 冻结
+  sha: 1d046caa87a5
   regression_anchor: "绿场起步：0 测试 0 失败；此后标尺=0 新回归"
 tasks:
   # ---------- 环境 ----------
