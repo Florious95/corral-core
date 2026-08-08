@@ -21,3 +21,14 @@
 - 失败重试预算 2；网络类失败等 30s 再试。
 
 ## 4. 沉淀区（唯一允许你追加写入的区域）
+
+### 2026-08-09 env-android 实际完成记录
+- 验收 `bash -lc 'java -version && ~/Library/Android/sdk/platform-tools/adb --version'` → exit 0。
+- **现场与派单修正**：platform-tools/adb(37.0.0)、platforms/android-34/35/36、build-tools 34/35、licenses(全部已接受) **实测已存在**，未安装任何 SDK 组件。sdkmanager 版本 10.0，可用。
+- **java 缺口解决**：`/usr/bin/java` 是 macOS stub（`/Library/Java/JavaVirtualMachines` 空），sudo 需密码 → 不可用 temurin cask。
+  实测 `openjdk@17`(17.0.19) 与 `openjdk@25`(25.0.2) **brew 已装但 keg-only 未 link**。
+  处理（未装任何东西，仅配置）：在 `~/.profile` 与 `~/.zprofile` 各追加
+  `export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home`
+  `export PATH="$JAVA_HOME/bin:$PATH"`
+- **重要坑**：即使 `brew link openjdk@17` 到 `/opt/homebrew/bin`，PATH 中 `/usr/bin` 在 `/opt/homebrew/bin` 之前，`/usr/bin/java` stub 仍会遮蔽 → **必须靠 PATH 前置**，link 无效。后续任务若需切 JDK 版本，改上述两处 export 即可。
+- 改动文件：`~/.profile`(+2行)、`~/.zprofile`(+2行)。无其他系统改动。
