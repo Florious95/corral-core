@@ -31,3 +31,15 @@
 - 注释红线、净化前缀照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+- **2026-08-09 session-ui 交付**：会话页 15 测（SessionViewModelTest）全绿，全量 129 测 0 回归。
+  - `SessionViewModel`（纯 JVM）+ `SessionScreen`（Compose 薄壳）+ `SessionRoute`（路由挂载）+
+    `HttpUrlConnectionUploader`（JDK HttpURLConnection multipart，:app 零 OkHttp 依赖）。
+  - 接线约束（现场发现）：共享 ConnectionManager 单例在 `ServiceWire`（fg-service），UI 侧经
+    `ServiceWire.uiConnector` 扇出；**SessionViewModel 绝不自行 setListener**（会顶掉服务层包装、
+    破坏 StateWatcher/通知）——事件由接线层经 uiConnector 路由，测试对自建 manager 显式 setListener。
+  - 上传地址（协议 §8 `POST /upload`）接线层未公开前 VM baseUrl 传 null，未配置时明确报错
+    「未配置上传地址」，不静默。
+  - 生命周期：进入即 subscribe（conn 层记簿，重连自动重放，004 无状态）；离开 route 调用
+    `dispose()` 退订；`createSessionViewModel` 里 `manager.start()`（幂等，前台服务未启时由 UI 启连）。
+  - 待接线层：真实传输工厂注入（ServiceWire.transportFactory）、上传 base URL 注入。
