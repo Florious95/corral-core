@@ -16,9 +16,15 @@ limitations under the License.
 
 <!--
   AgentMirror App 应用清单（骨架版）。
-  MainActivity 为 Compose 单 Activity 入口；前台服务与扫描配对等能力由后续任务补充。
+  MainActivity 为 Compose 单 Activity 入口；前台服务（fg-service 任务）与扫描配对等能力
+  由后续任务补充。前台服务类型 dataSync（fg-service 知识基底 §1：Android 14+ 必声）。
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 前台服务 + 通知：状态沿变化发系统通知、常驻通知栏（fg-service）。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -36,6 +42,16 @@ limitations under the License.
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          常驻连接前台服务（fg-service 任务）。startForeground 类型 dataSync：
+          Android 14+ 启动前台服务需对应权限（FOREGROUND_SERVICE_DATA_SYNC）。
+          onStartCommand START_STICKY：系统杀后重建，冷启动重连即恢复（004 无状态免疫）。
+        -->
+        <service
+            android:name=".service.MirrorForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
     </application>
 
