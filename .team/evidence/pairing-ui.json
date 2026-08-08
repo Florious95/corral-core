@@ -24,5 +24,7 @@
     "app/app/build.gradle.kts (OkHttp/MockWebServer/CameraX 1.4.1/ZXing)",
     "app/app/src/main/AndroidManifest.xml (CAMERA 权限)"
   ],
-  "notes": "传输欠账①清偿（leader 裁定 A：OkHttpWebSocketTransport+OkHttpTransportFactory 注入 ServiceWire.transportFactory）；上传 baseUrl 欠账②清偿（deriveUploadBase ws→http 注入 uploadBaseUrl）；token 不进日志红线由 errorMessageNeverContainsTokenValue 阳性对照锁死；QR 契约对齐 server qr.go；红测五条全绿。全量门 594 用例 pass。"
+  "notes": "传输欠账①清偿（leader 裁定 A：OkHttpWebSocketTransport+OkHttpTransportFactory 注入 ServiceWire.transportFactory）；上传 baseUrl 欠账②清偿（deriveUploadBase ws→http 注入 uploadBaseUrl）；token 不进日志红线由 errorMessageNeverContainsTokenValue 阳性对照锁死；QR 契约对齐 server qr.go；红测五条全绿。全量门 594 用例 pass。",
+  "leader_note": "leader 复跑验收 exit 0 确认；双欠账清偿（OkHttp 真实传输+上传 baseUrl）核实；收尾裁定（配对成功即 manager.start 幂等启连）已落地复验。",
+  "result_id": "res_f69830e81ba0"
 }
