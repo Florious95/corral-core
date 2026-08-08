@@ -16,12 +16,11 @@
 | 010 | [最终验收与运行方式](entries/010-最终验收与运行方式.md) | 已裁定 | 验收=生产级安卓APP+主机后台进程；无人值守；代码必须注释；leader 只编排 |
 | 011 | [技术路线裁定](entries/011-技术路线裁定.md) | 已裁定 | Go 服务端；Kotlin+Compose；WS 协议；QR 路线(a)；前台服务；monorepo |
 | 012 | [工作区聚合状态规则](entries/012-工作区聚合状态规则.md) | 已裁定 | 聚合状态服务端权威算；blocked>done>working>idle；unknown 不计入、全 unknown 才聚合；固化 protocol.md |
+| 013 | [测试体系与回归门禁](entries/013-测试体系与回归门禁.md) | 已裁定 | 五层测试体系；tools/gate/run.sh 全量门；0新回归标尺；测试数棘轮；失败四归因 |
 
 ## 未决议题（契约级，施工前须定夺）
 
-| 议题 | 关联条目 | 备注 |
-|---|---|---|
-| 终端内核具体来源（改造 Android-Terminal-Emulator / ConnectBot 系 / 自研） | 006, 011 | 已立项攻坚任务 term-core-android（contract），出对比裁定后施工 |
-
-其余原议题（App 技术栈 / 服务端语言 / 扫码路线 / 推送形态）已由 011 结清；
-iOS 推送中转随 010（验收仅安卓）移出当期。
+暂无挡道议题。已结清项：
+- **终端内核来源**：w-term-core 核验 ConnectBot 系实为 JTA 血统 GPLv2/LGPL-2.1，改造路线出局；裁定=自研最小 VT 引擎（纯 Kotlin/JVM），见 docs/decisions/term-core.md 与 R-002。
+- App 技术栈 / 服务端语言 / 扫码路线 / 推送形态：由 011 结清。
+- iOS 推送中转：随 010（验收仅安卓）移出当期。

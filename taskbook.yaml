@@ -219,6 +219,20 @@ tasks:
     contention: contract   # Fable 5 攻坚候选
 
   # ---------- 横切 ----------
+  - id: test-gate
+    goal: >
+      全量回归门（013 测试体系裁定的落地）：tools/gate/run.sh 并行跑 server 全量
+      （go test ./... + go vet + gofmt -l）、app 全量（gradlew test，含 :terminal:test 若存在）、
+      archwiki --check（若存在），输出机器可读 gate-report.json（套件/用例数/失败清单/四归因模板
+      product|harness|baseline|flaky）。基线 manifest：每套件用例数棘轮只增不减，减少即红。
+      --self-test 模式自带 fixture 验证门本身（含"用例数下降必须红"的红测）。
+    acceptance:
+      - "bash -lc 'bash tools/gate/run.sh --self-test'"
+    deps: ["server-scaffold", "app-scaffold"]
+    write_scope: ["tools/gate/"]
+    evidence: ".team/evidence/test-gate.json"
+    contention: impl
+
   - id: arch-wiki
     goal: >
       架构维基自动化（010：注释自动衍生维基图 + 腐败识别）：从 Go/Kotlin 源码注释与 import 图现算
