@@ -93,10 +93,20 @@ for i in range(MAX_SAMPLES):
                     print(f"nudge#{nudges[key]}: {key} ({stall_why})", file=log, flush=True)
                 else:
                     escalations.append(f"预算烧穿({NUDGE_BUDGET} 探针无效): {seat}(任务 {task}) {stall_why}")
-        if busy_total == 0 and owe:
+        # T3 修正（实战缺陷 2026-08-09）：短 turn 工作的席位在采样点常非 BUSY，但输出在前进；
+        # "有任一在途席位输出前进"即全局有进展，与 BUSY 同等清零 T3 计数。
+        progress = any(
+            (agents.get(s) or {}).get("last_output_at") not in (None, last_seen_output.get(f"{s}:{t}"))
+            for s, t in owe.items()
+        )
+        for s, t in owe.items():
+            a = agents.get(s)
+            if a and a.get("last_output_at"):
+                last_seen_output[f"{s}:{t}"] = a["last_output_at"]
+        if busy_total == 0 and owe and not progress:
             global_count += 1
             if global_count >= GLOBAL_SAMPLES:
-                escalations.append(f"T3 全局停滞: 0 BUSY 且在途 {list(owe.values())}")
+                escalations.append(f"T3 全局停滞: 0 BUSY 无输出前进 且在途 {list(owe.values())}")
         else:
             global_count = 0
         print(f"{now:%H:%M:%S} busy={busy_total} inflight={list(owe.values())} idle={idle_count} nudges={nudges} g={global_count}", file=log, flush=True)
