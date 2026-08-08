@@ -16,12 +16,22 @@
 
 package dev.agentmirror.app.conn
 
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+
 /**
  * error 帧的机器可读 code 闭集（docs/protocol.md §7.2）。
  *
- * 客户端 switch 该值决定恢复策略；未识别的 code 视为 [UNKNOWN]，
- * 但不阻塞连接——协议级错误帧本身是合法的 S→C 消息。
+ * 客户端 switch 该值决定恢复策略。按协议 §2 前向兼容原则，服务端未来可**增量新增**
+ * error code；客户端收到未识别 code 字符串时必须容忍而非崩溃——因此解码时未知串
+ * 经 [fromWire] 落回 [UNKNOWN]（一等公民本地回退，非错误）。
  */
+@Serializable(with = ErrorCodeSerializer::class)
 enum class ErrorCode(val wire: String) {
     /** 未认证即操作。 */
     UNAUTHORIZED("unauthorized"),
@@ -41,11 +51,16 @@ enum class ErrorCode(val wire: String) {
     /** 服务端内部错误。 */
     INTERNAL("internal"),
 
-    /** 未识别 code 的兜底值（非线上值）。 */
+    /**
+     * 未识别 code 的客户端解码回退值（协议正文无此值）。
+     *
+     * 仅用于本地解码回退，**永不上行发送**（编码路径拒绝携带该值，见
+     * FramePayload.encode 的 ErrorFrame 守卫）；KDoc 纪律：不可与线上值混用。
+     */
     UNKNOWN("unknown");
 
     companion object {
-        /** 按线上字符串解析；未识别值返回 [UNKNOWN]。 */
+        /** 按线上字符串解析；未识别值返回 [UNKNOWN]（前向兼容回退，不抛错）。 */
         fun fromWire(value: String): ErrorCode =
             entries.firstOrNull { it.wire == value } ?: UNKNOWN
     }
@@ -55,7 +70,10 @@ enum class ErrorCode(val wire: String) {
  * input_ack ok:false 时的机器可读 reason 闭集（docs/protocol.md §7.3）。
  *
  * reason 存在当且仅当 ok:false（一字段一义）；ok:true 时不得携带。
+ * 解码遇未识别 reason 抛 [SerializationException]，由 FramePayload.decode 捕获并转
+ * [FrameDecodeException] INVALID_FIELD（闭集，未知值按坏帧处理）。
  */
+@Serializable(with = InputFailReasonSerializer::class)
 enum class InputFailReason(val wire: String) {
     /** 目标会话已不存在。 */
     SESSION_NOT_FOUND("session_not_found"),
@@ -70,14 +88,58 @@ enum class InputFailReason(val wire: String) {
     TOO_LARGE("too_large"),
 
     /** 服务端内部错误。 */
-    INTERNAL("internal"),
-
-    /** 未识别 reason 的兜底值（非线上值）。 */
-    UNKNOWN("unknown");
+    INTERNAL("internal");
 
     companion object {
-        /** 按线上字符串解析；未识别值返回 [UNKNOWN]。 */
-        fun fromWire(value: String): InputFailReason =
-            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+        /** 按线上字符串解析；未识别值返回 null（解码器据此判坏帧）。 */
+        fun fromWire(value: String): InputFailReason? =
+            entries.firstOrNull { it.wire == value }
     }
+}
+
+/**
+ * 从 wire 字符串反序列化闭集枚举的通用实现；未知值抛 [FrameDecodeException]。
+ *
+ * 用于语义上"闭集、未知即坏帧"的枚举（input_ack reason）。error code 不走这里：
+ * 它按 §2 前向兼容回退 [ErrorCode.UNKNOWN]。
+ */
+private inline fun <reified E : Enum<E>> strictDeserialize(
+    decoder: Decoder,
+    error: FrameError,
+    fromWire: (String) -> E?,
+): E {
+    val v = decoder.decodeString()
+    return fromWire(v) ?: throw FrameDecodeException(
+        error,
+        "unknown ${E::class.simpleName} value: \"$v\"",
+    )
+}
+
+/** error 帧 code 序列化器：按线上字符串；解码未识别值回退 [ErrorCode.UNKNOWN]。 */
+internal object ErrorCodeSerializer : KSerializer<ErrorCode> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("ErrorCode", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: ErrorCode) {
+        encoder.encodeString(value.wire)
+    }
+
+    override fun deserialize(decoder: Decoder): ErrorCode {
+        // 前向兼容：未识别 code 字符串不抛错，落回 UNKNOWN（§2）。
+        val v = decoder.decodeString()
+        return ErrorCode.fromWire(v)
+    }
+}
+
+/** input_ack reason 序列化器：按线上字符串；未知值抛错。 */
+internal object InputFailReasonSerializer : KSerializer<InputFailReason> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("InputFailReason", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: InputFailReason) {
+        encoder.encodeString(value.wire)
+    }
+
+    override fun deserialize(decoder: Decoder): InputFailReason =
+        strictDeserialize(decoder, FrameError.INVALID_FIELD) { InputFailReason.fromWire(it) }
 }

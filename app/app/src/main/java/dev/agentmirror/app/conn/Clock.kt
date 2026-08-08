@@ -14,12 +14,20 @@
  * limitations under the License.
  */
 
-package dev.agentmirror.app.termview
+package dev.agentmirror.app.conn
 
 /**
- * 终端渲染：快照/增量渲染 + 本地滚动视口（60fps，需求 006）。
+ * 时间源抽象：重连退避与输入超时的唯一时间依据。
  *
- * [TermViewPresenter] 纯 JVM 视口状态机（跟随/锁定历史、可见行窗口、捏合行列数换算、
- * 脏区合并），单测全部打在它上；[TermSurfaceView] 薄 Android 层（Canvas 画格、拖动/捏合
- * 手势、Choreographer 帧调度）。内核为 :terminal 模块；resize 协议帧由上层接线（conn/session）。
+ * 生产用 [Real]（System.currentTimeMillis）；JVM 单测注入假时钟推进时间
+ * （conn 知识基底 §1：测试用假时钟），使退避序列确定性可断言。
  */
+interface Clock {
+    /** 当前单调时间毫秒。 */
+    fun nowMs(): Long
+
+    /** 真实时钟。 */
+    object Real : Clock {
+        override fun nowMs(): Long = System.currentTimeMillis()
+    }
+}

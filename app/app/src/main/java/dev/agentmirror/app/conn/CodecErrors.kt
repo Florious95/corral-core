@@ -21,13 +21,16 @@ import kotlinx.serialization.json.Json
 /**
  * 协议编解码用共享 Json 实例。
  *
- * [ignoreUnknownKeys] = true 是实现契约前向兼容的必要配置：信封与 payload 中
- * 的未知字段必须被忽略（docs/protocol.md §4.1），旧客户端必须能存活于新服务端。
+ * - [ignoreUnknownKeys] = true 是实现契约前向兼容的必要配置：信封与 payload 中
+ *   的未知字段必须被忽略（docs/protocol.md §4.1），旧客户端必须能存活于新服务端。
+ * - 不做 primitive coercion：类型不匹配的字段是坏帧（对齐 Go ErrBadPayload），
+ *   不能静默降级；缺必填字段（无默认值）抛 MissingFieldException ⇒ INVALID_FIELD，
+ *   带默认值的可选字段落默认值后由各帧 validate() 兜底（对齐 Go 零值 + Validate 两步）。
+ * - [encodeDefaults] = false：与默认值相同的字段不序列化（reason 空串等缺省即省略）。
  */
 internal val json: Json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = false
-    coerceInputValues = true
 }
 
 /**

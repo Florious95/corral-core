@@ -76,5 +76,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     // conn 层：协议控制帧 JSON 编解码（kotlinx-serialization-json，Apache-2.0）。
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    // 终端内核：ANSI/CSI 解析 + 字符网格 + 本地 scrollback（:terminal，term-core-android 任务交付，纯 JVM 零 Android 依赖）。
+    implementation(project(":terminal"))
     testImplementation("junit:junit:4.13.2")
 }
