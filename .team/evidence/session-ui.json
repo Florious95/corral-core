@@ -1,0 +1,1 @@
+{"task_id":"session-ui","status":"pass","acceptance_results":[{"cmd":"bash -lc cd app && ./gradlew -q :app:testDebugUnitTest --tests *Session*","exit":0}],"result_id":"res_f06dccad6ee0","notes":"会话页 15 测（红测先行 15红→15绿），全量 129 测 0 回归：镜像三通道/发送必达/附件上传注入/捏合 resize/连接状态条。接线缺口沉淀：ServiceWire.uiConnector 需多槽扇出+上传 baseUrl 注入，归 pairing-ui/e2e 接线。曾 API 流超时停摆 70 分钟，探针救活后交件。"}
