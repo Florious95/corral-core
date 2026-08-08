@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
-	"github.com/remote-agent/agentmirror/internal/bridge"
-	"github.com/remote-agent/agentmirror/internal/protocol"
 )
 
 // Server is the WS API service. It holds the shared session catalog and the

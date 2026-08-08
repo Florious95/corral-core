@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
-	"github.com/remote-agent/agentmirror/internal/discovery"
-	"github.com/remote-agent/agentmirror/internal/protocol"
 )
 
 // TestUnauthorizedBeforeAuth is the red-line test: any operation before a

@@ -1,6 +1,6 @@
 package agentstate
 
-import "github.com/remote-agent/agentmirror/internal/protocol"
+import "github.com/agentmirror/agentmirror/internal/protocol"
 
 // This file implements the first-batch adapters: Claude Code and Codex.
 //

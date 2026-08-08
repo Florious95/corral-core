@@ -1,4 +1,4 @@
-module github.com/remote-agent/agentmirror
+module github.com/agentmirror/agentmirror
 
 go 1.26.5
 

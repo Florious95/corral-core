@@ -9,8 +9,8 @@ package api
 import (
 	"context"
 
-	"github.com/remote-agent/agentmirror/internal/discovery"
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // StateProvider maps one discovered pane to its normalized agent state. The

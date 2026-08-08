@@ -9,8 +9,8 @@ package api
 import (
 	"sync"
 
-	"github.com/remote-agent/agentmirror/internal/bridge"
-	"github.com/remote-agent/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/discovery"
 )
 
 // sessionRef returns the stable, opaque session ref for a discovered pane.

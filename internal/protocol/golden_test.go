@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // testdata is part of the wire contract: the Kotlin conn-layer consumes the

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // TestBinaryRoundTrip drives each binary kind through encode→decode and

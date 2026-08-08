@@ -1,6 +1,6 @@
-// Command agentmirrord is the service-side daemon of remote-agent
-// agentmirror (working title): a sidecar that mirrors the user's existing
-// tmux sessions to the Android app over WebSocket.
+// Command agentmirrord is the service-side daemon of AgentMirror
+// (product github.com/agentmirror/agentmirror): a sidecar that mirrors the
+// user's existing tmux sessions to the Android app over WebSocket.
 //
 // Per the sidecar philosophy (requirement 001) the daemon never restarts or
 // reconfigures the host's tmux; it attaches to the tmux servers already
@@ -32,10 +32,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/remote-agent/agentmirror/internal/api"
-	"github.com/remote-agent/agentmirror/internal/config"
-	"github.com/remote-agent/agentmirror/internal/pairing"
-	"github.com/remote-agent/agentmirror/internal/tsnetd"
+	"github.com/agentmirror/agentmirror/internal/api"
+	"github.com/agentmirror/agentmirror/internal/config"
+	"github.com/agentmirror/agentmirror/internal/pairing"
+	"github.com/agentmirror/agentmirror/internal/tsnetd"
 )
 
 func main() {

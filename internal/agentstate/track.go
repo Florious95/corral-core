@@ -1,6 +1,6 @@
 package agentstate
 
-import "github.com/remote-agent/agentmirror/internal/protocol"
+import "github.com/agentmirror/agentmirror/internal/protocol"
 
 // Track computes the state to publish given the previously published state and
 // a fresh sample. It exists to implement the "done ≈ working→idle edge" part of

@@ -1,9 +1,8 @@
 # server — 服务端（Go）
 
-remote-agent agentmirror（暂名，naming 任务定名后统一替换）的服务端 sidecar 守护进程。
+AgentMirror（产品名，module `github.com/agentmirror/agentmirror`）的服务端 sidecar 守护进程。
 
-> **模块名暂用 `github.com/remote-agent/agentmirror`**。产品命名任务（naming）定名后统一替换
-> module 名与二进制名，本骨架不做假设。
+> 产品定名 **agentmirror**（naming 任务裁定，2026-08-09）。服务端二进制名 `agentmirrord`。
 
 ## 定位
 

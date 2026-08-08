@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // This file is the red-first spec for the wrapper-scene agent identifier

@@ -10,7 +10,7 @@ import (
 	"context"
 	"sort"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // statePriority ranks agent states by attention demand (requirement 012):

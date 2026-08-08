@@ -9,7 +9,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/remote-agent/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/discovery"
 )
 
 // Discoverer produces one fresh two-level tmux snapshot. It is the polling

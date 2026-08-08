@@ -3,7 +3,7 @@ package agentstate
 import (
 	"testing"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // TestANSIStripperRedlines locks in the ANSI stripping contract (requirement

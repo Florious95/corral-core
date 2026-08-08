@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // roundTrip marshals p, unmarshals the bytes, and returns the decoded frame.

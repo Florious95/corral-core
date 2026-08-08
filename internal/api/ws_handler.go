@@ -11,10 +11,10 @@ import (
 	"errors"
 	"math"
 
+	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
-	"github.com/remote-agent/agentmirror/internal/bridge"
-	"github.com/remote-agent/agentmirror/internal/discovery"
-	"github.com/remote-agent/agentmirror/internal/protocol"
 )
 
 // handleAuth validates the pairing token and answers auth_ack. On rejection the

@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
-	"github.com/remote-agent/agentmirror/internal/protocol"
 )
 
 // TestSubscribeSnapshotThenDelta is the core mirroring red test: subscribing

@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
-	"github.com/remote-agent/agentmirror/internal/bridge"
-	"github.com/remote-agent/agentmirror/internal/discovery"
-	"github.com/remote-agent/agentmirror/internal/protocol"
 )
 
 // connSeq assigns each connection a monotonically increasing id for logging.

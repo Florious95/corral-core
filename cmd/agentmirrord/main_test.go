@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/remote-agent/agentmirror/internal/config"
-	"github.com/remote-agent/agentmirror/internal/pairing"
+	"github.com/agentmirror/agentmirror/internal/config"
+	"github.com/agentmirror/agentmirror/internal/pairing"
 )
 
 // bufferLogger returns a logger writing to the returned buffer, so tests can

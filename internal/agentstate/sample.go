@@ -3,7 +3,7 @@ package agentstate
 import (
 	"time"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // Sample is the input contract for one state decision. It is produced by the

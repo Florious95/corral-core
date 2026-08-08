@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // The fixtures below are hand-built approximations of real pane output shapes

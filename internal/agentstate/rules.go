@@ -3,7 +3,7 @@ package agentstate
 import (
 	"strings"
 
-	"github.com/remote-agent/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // This file is the shared table-driven rule engine used by every adapter.
