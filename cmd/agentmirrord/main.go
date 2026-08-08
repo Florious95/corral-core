@@ -10,6 +10,8 @@
 // The daemon wires four pieces:
 //
 //   - config: flags/env → resolved settings (including the pairing token);
+//   - pairing: resolves/generates the token and prints the QR + plain-text
+//     onboarding guide to stdout (the token's two legal exits, §9);
 //   - tsnetd: the listener group — LAN always, tailnet when a TS authkey is
 //     configured (requirement 007);
 //   - api: the WS API server (internal/api) whose handler serves /ws and
@@ -21,7 +23,10 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,6 +34,7 @@ import (
 
 	"github.com/remote-agent/agentmirror/internal/api"
 	"github.com/remote-agent/agentmirror/internal/config"
+	"github.com/remote-agent/agentmirror/internal/pairing"
 	"github.com/remote-agent/agentmirror/internal/tsnetd"
 )
 
@@ -53,10 +59,22 @@ func run(args []string) int {
 	}
 
 	logger := newLogger(cfg.LogLevel)
+
+	// Resolve the pairing token before anything else: an explicit flag/env
+	// token wins, otherwise one is generated and persisted for reuse. Failure
+	// is fatal — booting with an empty token would accept an empty-token auth,
+	// which is the anonymous-bypass red line (§9). The value is never logged;
+	// only its source and store path are.
+	token, err := resolveToken(cfg, logger)
+	if err != nil {
+		logger.Error("failed to resolve pairing token", "err", err)
+		return 1
+	}
+
 	logger.Info("agentmirrord starting",
 		"listen", cfg.ListenAddr,
 		"qr_listen", cfg.QRListenAddr,
-		"token_configured", cfg.Token != "",
+		"token_source", tokenSource(cfg.Token),
 		"upload_dir", cfg.UploadDir,
 		"max_upload_mib", cfg.MaxUploadBytes/(1<<20),
 		"list_interval", cfg.ListInterval,
@@ -66,7 +84,7 @@ func run(args []string) int {
 	// it is passed into the validator seam and never logged or echoed here
 	// (docs/protocol.md §9).
 	apiServer := api.NewServer(api.Options{
-		Token:          cfg.Token,
+		Token:          token,
 		UploadDir:      cfg.UploadDir,
 		MaxUploadBytes: cfg.MaxUploadBytes,
 		MaxInputBytes:  int(cfg.MaxInputBytes),
@@ -88,6 +106,15 @@ func run(args []string) int {
 		return 1
 	}
 	defer group.Close()
+
+	// Print the QR + plain-text guide to stdout now that we know the listener
+	// set. This is the user-facing onboarding and the token's legal exit; a
+	// failure to print it must stop the daemon, because a token the user never
+	// sees leaves them unable to pair.
+	if err := printPairingGuide(os.Stdout, token, listenPort(cfg.ListenAddr), group.TailnetEnabled()); err != nil {
+		logger.Error("failed to print pairing guide", "err", err)
+		return 1
+	}
 
 	// Serve the API handler on every listener the group provides. The LAN
 	// listener is always present; the tailnet listener is added when enabled.
@@ -126,6 +153,74 @@ func run(args []string) int {
 		logger.Warn("shutdown", "err", err)
 	}
 	return 0
+}
+
+// resolveToken returns the effective pairing token for this daemon run: an
+// explicitly configured token (flag/env, config.Token) wins; otherwise a token
+// is auto-generated and persisted under the user config dir so restarts reuse
+// it (already-paired devices stay paired). See resolveTokenDir for the
+// directory override used by tests.
+func resolveToken(cfg config.Config, logger *slog.Logger) (string, error) {
+	return resolveTokenDir(cfg, logger, "")
+}
+
+// resolveTokenDir is resolveToken with an injectable store directory. With an
+// empty dirOverride it resolves the platform user config dir; tests pass a
+// temp dir to avoid touching the real store.
+func resolveTokenDir(cfg config.Config, logger *slog.Logger, dirOverride string) (string, error) {
+	if cfg.Token != "" {
+		logger.Info("pairing token source=explicit")
+		return cfg.Token, nil
+	}
+	dir := dirOverride
+	if dir == "" {
+		var err error
+		if dir, err = pairing.TokenDir(); err != nil {
+			return "", fmt.Errorf("resolve token dir: %w", err)
+		}
+	}
+	tok, err := pairing.EnsureToken("", dir)
+	if err != nil {
+		return "", err
+	}
+	// The store path is logged, never the token value (§9).
+	logger.Info("pairing token source=auto", "path", dir)
+	return tok, nil
+}
+
+// tokenSource labels the token's origin for the startup log line. The boolean
+// alone was ambiguous once auto-generation arrived; the label stays token-free.
+func tokenSource(explicit string) string {
+	if explicit != "" {
+		return "explicit"
+	}
+	return "auto"
+}
+
+// printPairingGuide writes the onboarding QR + guide to w. It is the thin
+// wiring seam around pairing.PrintOnboarding so tests can capture the output
+// without forking the daemon.
+func printPairingGuide(w io.Writer, token, port string, tailnet bool) error {
+	return pairing.PrintOnboarding(w, pairing.Onboarding{
+		Token:          token,
+		Port:           port,
+		TailnetEnabled: tailnet,
+	})
+}
+
+// printOnboardingSeam renders the guide for an injected address set, exposing
+// pairing's internal render path to tests that must force the degraded case.
+func printOnboardingSeam(w io.Writer, o pairing.Onboarding, addrs []pairing.Address, primary string) error {
+	return pairing.PrintOnboardingWith(o, addrs, primary, w)
+}
+
+// listenPort extracts the port number from a host:port listen address,
+// defaulting to the documented 9900 when the address has no parseable port.
+func listenPort(addr string) string {
+	if _, port, err := net.SplitHostPort(addr); err == nil {
+		return port
+	}
+	return "9900"
 }
 
 // newLogger builds the structured logger used by the whole daemon. level is
