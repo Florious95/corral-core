@@ -1,0 +1,1 @@
+{"task_id":"arch-wiki","status":"pass","acceptance_results":[{"cmd":"bash -lc python3 tools/archwiki/build_wiki.py --check","exit":0}],"result_id":"res_e8edcc529268","notes":"现算架构维基（18 包 mermaid 图+架构卡）；T1-1 环依赖/T1-2 缺注释进门禁，红测 fixture 10 项含空扫描必红与幂等；注释红线自此门禁化。"}
