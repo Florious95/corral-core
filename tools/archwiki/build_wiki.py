@@ -31,7 +31,7 @@ import sys
 # 常量：目录形状、判据标识
 # ---------------------------------------------------------------------------
 
-MODULE_PREFIX = "github.com/remote-agent/agentmirror"  # server/go.mod 的 module 行
+MODULE_PREFIX = "github.com/agentmirror/agentmirror"  # server/go.mod 的 module 行（naming 转正，2026-08-09）
 GO_SUBDIR = "server"          # Go module 在仓库内的相对目录
 KT_SEARCH = ("app/app/src/main/java",)  # Kotlin 源码根候选（相对仓库根）
 WIKI_SUBDIR = "docs/wiki"     # 生成物输出目录

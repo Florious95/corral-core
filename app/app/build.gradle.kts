@@ -17,8 +17,10 @@
 /**
  * AgentMirror 主应用模块（:app）。
  *
- * 原生 Kotlin + Jetpack Compose（Material3），applicationId 暂用 dev.agentmirror.app
- * （naming 任务定名后统一替换）。依赖极简，仅 Compose BOM + activity-compose + material3 +
+ * 原生 Kotlin + Jetpack Compose（Material3），applicationId 为 dev.agentmirror.app
+ * （014 裁定落账；naming 曾误改 com.agentmirror.app 已回炉改正，2026-08-09）。
+ * namespace 与 Kotlin 源码包路径一致（均为 dev.agentmirror.app），三方对齐。
+ * 依赖极简，仅 Compose BOM + activity-compose + material3 +
  * kotlinx-serialization-json（conn 层控制帧编解码，Apache-2.0，见 docs/protocol.md §4）+
  * 测试基建（junit），后续模块由各自任务引入（见需求 011 技术路线裁定、004 无状态策略）。
  *
@@ -33,11 +35,16 @@ plugins {
 }
 
 android {
+    // namespace = R 包与资源符号域。保留 dev.agentmirror.app（与源码包路径一致，
+    // 见文件头注释：迁包是源码级改动，不在 naming 单点范围）。
     namespace = "dev.agentmirror.app"
     // compileSdk 36：BOM 2025.12.01 依赖链（androidx.core 1.18.0）要求 API 36+，本机已装 platforms 36。
     // targetSdk 保持 35，不改变运行时行为。
     compileSdk = 36
     defaultConfig {
+        // applicationId = dev.agentmirror.app（014 落账裁定）：与 namespace、源码包三方对齐。
+        // 无 agentmirror.com 域名，com.* 名不副实；.dev 为开源惯例。naming 曾偏离改 com.*，
+        // leader 回炉裁定改回（2026-08-09）。
         applicationId = "dev.agentmirror.app"
         minSdk = 26
         targetSdk = 35
@@ -78,5 +85,17 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     // 终端内核：ANSI/CSI 解析 + 字符网格 + 本地 scrollback（:terminal，term-core-android 任务交付，纯 JVM 零 Android 依赖）。
     implementation(project(":terminal"))
+    // 配对：OkHttp WebSocket 真实传输（conn 层 WebSocketTransport 接口的 service 实现，
+    // 清偿传输欠账①，leader 裁定 A）+ MockWebServer 单测（均 Apache-2.0）。
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // 配对扫码：CameraX 相机分析流 + ZXing core（均 Apache-2.0，零 GMS 依赖，008 开源自托管精神）。
+    // 注意：google maven 无 androidx.camera:camera-bom（1.4.x/1.3.x 实测 404，BOM 从未随该系列发布），
+    // 各 camera artifact 的 POM 自带同版本依赖管理（1.4.1 互 pin），故显式按版本声明、不引 BOM。
+    implementation("androidx.camera:camera-core:1.4.1")
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
+    implementation("com.google.zxing:core:3.5.3")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

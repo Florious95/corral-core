@@ -17,6 +17,7 @@
 | 011 | [技术路线裁定](entries/011-技术路线裁定.md) | 已裁定 | Go 服务端；Kotlin+Compose；WS 协议；QR 路线(a)；前台服务；monorepo |
 | 012 | [工作区聚合状态规则](entries/012-工作区聚合状态规则.md) | 已裁定 | 聚合状态服务端权威算；blocked>done>working>idle；unknown 不计入、全 unknown 才聚合；固化 protocol.md |
 | 013 | [测试体系与回归门禁](entries/013-测试体系与回归门禁.md) | 已裁定 | 五层测试体系；tools/gate/run.sh 全量门；0新回归标尺；测试数棘轮；失败四归因 |
+| 014 | [产品定名](entries/014-产品定名.md) | 已裁定 | 定名 agentmirror；module/applicationId/二进制落地；被否候选留档 |
 
 ## 未决议题（契约级，施工前须定夺）
 

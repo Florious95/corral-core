@@ -16,18 +16,15 @@
 
 package dev.agentmirror.app
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import dev.agentmirror.app.pairing.PairingConfigStore
+import dev.agentmirror.app.pairing.PairingRoute
+import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.session.SessionRoute
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.workspace.WorkspaceScreen
@@ -36,25 +33,44 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
 /**
  * Compose 应用根组合。
  *
- * 依需求 004「客户端无状态」，本组件只做路由（两级导航：舰队 → 会话，见需求 001），
- * 不持有任何业务状态；[WorkspaceViewModel] 为根级单例（接线层在此挂载 conn 层回调）。
- * 点会话跳会话页：[SessionRoute]（session-ui 交付；共享连接经 ServiceWire 获取，
- * 连接未配置时给明确等待态）。
+ * 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。
+ * 首启路由（pairing-ui 知识基底 §1）：
+ * - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）；
+ * - 有配对配置 → 直进工作区列表；
+ * - 配对页可从设置/重配入口重进（重新配对）。
+ * 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。
  */
 @Composable
 fun AgentMirrorApp() {
     AgentMirrorTheme {
+        val context = LocalContext.current
+        // 配对配置存储（SharedPreferences）：首启判定 + 重配入口共用。
+        val configStore = remember { SharedPreferencesPairingConfigStore(context) }
+        var showPairing by remember { mutableStateOf(configStore.load() == null) }
         // 根级 ViewModel：接线层（service 任务）将把 ConnectionManager 回调接进来。
         val viewModel = remember { WorkspaceViewModel() }
         var activeSession by remember { mutableStateOf<Pair<String, String>?>(null) }
         val session = activeSession
-        if (session != null) {
-            // 会话页路由挂载（session-ui 交付；占位已被正式会话页替换）。
-            SessionRoute(ref = session.first, name = session.second) {
+
+        when {
+            // 会话页优先（在屏会话不被重配打断）。
+            session != null -> SessionRoute(ref = session.first, name = session.second) {
                 activeSession = null
             }
-        } else {
-            WorkspaceScreen(
+            // 配对页：首启无配置，或用户从设置/重配入口进入。
+            showPairing -> PairingRoute(
+                configStore = configStore,
+                onPaired = {
+                    // 配对成功：配置已落库 + ServiceWire 注入（见 PairingRoute），切工作区。
+                    showPairing = false
+                },
+                onSkip = {
+                    // 首启跳过：进空工作区（连接未配置 → 工作区顶栏显示连接中/重配入口）。
+                    showPairing = false
+                },
+            )
+            // 工作区：有配置直进；"重新配对"从设置入口进入（见 WorkspaceScreen 顶栏设置钮）。
+            else -> WorkspaceScreen(
                 viewModel = viewModel,
                 onOpenSession = { ref, name -> activeSession = ref to name },
             )

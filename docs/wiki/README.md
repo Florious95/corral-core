@@ -2,7 +2,7 @@
 
 > ⚠️ **生成物，勿手改。** 本文件由 `tools/archwiki/build_wiki.py` 从源码现算生成，改源码后重跑 `python3 tools/archwiki/build_wiki.py` 刷新；重跑无 diff（幂等）。人工改动会被覆盖。
 
-扫描 **18** 个包（Go 9 + Kotlin 9）、**2** 条包间依赖边。
+扫描 **18** 个包（Go 9 + Kotlin 9）、**18** 条包间依赖边。
 
 ## 判据结果
 
@@ -34,33 +34,49 @@ flowchart LR
     kt_dev_agentmirror_app_tsnet["dev.agentmirror.app.tsnet"]
     kt_dev_agentmirror_app_conn["dev.agentmirror.app.conn"]
     kt_dev_agentmirror_app_session["dev.agentmirror.app.session"]
+    go_cmd_agentmirrord --> go_internal_api
     go_cmd_agentmirrord --> go_internal_config
+    go_cmd_agentmirrord --> go_internal_pairing
+    go_cmd_agentmirrord --> go_internal_tsnetd
+    go_internal_agentstate --> go_internal_protocol
+    go_internal_api --> go_internal_bridge
+    go_internal_api --> go_internal_discovery
+    go_internal_api --> go_internal_protocol
+    kt_dev_agentmirror_app --> kt_dev_agentmirror_app_session
     kt_dev_agentmirror_app --> kt_dev_agentmirror_app_ui_theme
+    kt_dev_agentmirror_app --> kt_dev_agentmirror_app_workspace
+    kt_dev_agentmirror_app_pairing --> kt_dev_agentmirror_app_conn
+    kt_dev_agentmirror_app_workspace --> kt_dev_agentmirror_app_conn
+    kt_dev_agentmirror_app_service --> kt_dev_agentmirror_app
+    kt_dev_agentmirror_app_service --> kt_dev_agentmirror_app_conn
+    kt_dev_agentmirror_app_session --> kt_dev_agentmirror_app_conn
+    kt_dev_agentmirror_app_session --> kt_dev_agentmirror_app_service
+    kt_dev_agentmirror_app_session --> kt_dev_agentmirror_app_termview
 ```
 
 ## 包架构卡
 
 ### Go · cmd/agentmirrord
 
-- **职责**：Command agentmirrord is the service-side daemon of remote-agent agentmirror (working title): a sidecar that mirrors the user's existing tmux sessions to the Android app over WebSocket.
+- **职责**：Command agentmirrord is the service-side daemon of AgentMirror (product github.com/agentmirror/agentmirror): a sidecar that mirrors the user's existing tmux sessions to the Android app over WebSocket.
 - **导出面**：main
-- **依赖边**：internal/config
+- **依赖边**：internal/api, internal/config, internal/pairing, internal/tsnetd
 
 ### Go · internal/agentstate
 
 - **职责**：Package agentstate maps per-agent CLI output and process trees to a normalized state (working/idle/blocked/done), degrading to unknown when undecidable.
-- **导出面**：（无导出符号）
-- **依赖边**：（无）
+- **导出面**：Adapter, AgentKind, ClaudeCodeAdapter, CodexAdapter, Confidence, DefaultRegistry, Identify, IdentifyInput, Proc, Registry, Sample, State, Track
+- **依赖边**：internal/protocol
 
 ### Go · internal/api
 
-- **职责**：Package api implements the service-side WebSocket API and the image upload endpoint, wiring together discovery and bridge.
-- **导出面**：（无导出符号）
-- **依赖边**：（无）
+- **职责**：Package api implements the service-side WebSocket API and the image upload endpoint, wiring together discovery and bridge (task ws-api).
+- **导出面**：Discoverer, NewServer, Options, Server, StateProvider, TokenValidator
+- **依赖边**：internal/bridge, internal/discovery, internal/protocol
 
 ### Go · internal/bridge
 
-- **职责**：Package bridge exposes a single tmux pane as a terminal bridge: first-frame snapshot, incremental output stream, input injection, and resize.
+- **职责**：Package bridge exposes a single tmux pane as a terminal bridge: first-frame snapshot, incremental output stream, whole-message input injection with a decidable ack, resize, and scrollback paging.
 - **导出面**：ErrPaneNotFound, ErrServerUnreachable, ErrTmuxTimeout, NewPane, Pane
 - **依赖边**：（无）
 
@@ -79,7 +95,7 @@ flowchart LR
 ### Go · internal/pairing
 
 - **职责**：Package pairing implements token-based device pairing and QR-code onboarding for the Android app.
-- **导出面**：（无导出符号）
+- **导出面**：Address, DetectAddresses, EnsureToken, GenerateToken, KindLAN, KindLoopback, KindTailnet, LoadToken, NewPayload, Onboarding, Payload, PayloadVersion, PrimaryHost, PrintOnboarding, PrintOnboardingWith, RenderQR, SaveToken, TokenDir, WSURL
 - **依赖边**：（无）
 
 ### Go · internal/protocol
@@ -98,8 +114,8 @@ flowchart LR
 
 - **职责**：Compose 应用根组合。
 - **导出面**：AgentMirrorApp, MainActivity
-- **依赖边**：dev.agentmirror.app.ui.theme
-- **doc 全文**：Compose 应用根组合。 骨架期仅渲染占位文案；正式导航（两级导航：舰队 → 会话，见需求 001） 由 workspace 任务在 [AgentMirrorTheme] 内接管。
+- **依赖边**：dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace
+- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由（两级导航：舰队 → 会话，见需求 001）， 不持有任何业务状态；[WorkspaceViewModel] 为根级单例（接线层在此挂载 conn 层回调）。 点会话跳会话页：[SessionRoute]（session-ui 交付；共享连接经 ServiceWire 获取， 连接未配置时给明确等待态）。
 
 ### Kotlin · dev.agentmirror.app.ui.theme
 
@@ -110,30 +126,30 @@ flowchart LR
 ### Kotlin · dev.agentmirror.app.pairing
 
 - **职责**：配对：扫码连接（路线 a：QR 载服务端地址 + 配对 token，可选 TS authkey，需求 011）。
-- **导出面**：（无导出符号）
-- **依赖边**：（无）
+- **导出面**：Failed, PairingConfig, PairingConfigStore, PairingViewModel, QrParseException, QrPayload, QrPayloadParser, SharedPreferencesPairingConfigStore
+- **依赖边**：dev.agentmirror.app.conn
 - **doc 全文**：配对：扫码连接（路线 a：QR 载服务端地址 + 配对 token，可选 TS authkey，需求 011）。 负责相机扫码、地址解析与配对握手；替代"终端 App + Tailscale App + SSH 配置"三件套 （需求 001 单一 App 原则）。本包为占位骨架，由 pairing 任务落位实现。
 
 ### Kotlin · dev.agentmirror.app.workspace
 
-- **职责**：工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」。
-- **导出面**：（无导出符号）
-- **依赖边**：（无）
-- **doc 全文**：工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」。 首屏展示主机上全部 tmux 会话（舰队列表），下钻进入单个会话页。 本包为占位骨架，由 workspace 任务落位实现。
+- **职责**：工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」、002「两级分组」。
+- **导出面**：ConnectionUi, SessionUi, StateBadge, StateBadgeStyle, WorkspaceScreen, WorkspaceUi, WorkspaceUiState, WorkspaceViewModel
+- **依赖边**：dev.agentmirror.app.conn
+- **doc 全文**：工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」、002「两级分组」。 - [WorkspaceViewModel]：纯 JVM 视图模型，消费 conn 层 listing/list_delta 帧流 → UI 状态；聚合字段（session_count / aggregate_state）为服务端权威值，只渲染不重算（012）。 - [WorkspaceScreen] / [StateBadge]：薄 Compose 渲染层；状态徽章五值（008）。 二级导航进入会话页由根路由（AgentMirrorApp）占位跳转，会话页归 session-ui 任务。
 
 ### Kotlin · dev.agentmirror.app.termview
 
-- **职责**：终端渲染：VT 解析 + 快照/增量渲染（60fps 本地滚动，需求 006）。
-- **导出面**：（无导出符号）
+- **职责**：终端渲染：快照/增量渲染 + 本地滚动视口（60fps，需求 006）。
+- **导出面**：ANSI_COLORS, TermSurfaceView, TermViewPresenter
 - **依赖边**：（无）
-- **doc 全文**：终端渲染：VT 解析 + 快照/增量渲染（60fps 本地滚动，需求 006）。 终端内核（Apache-2.0 兼容来源）规划在 :terminal 模块，本包承载 Compose 侧 渲染画布与快照增量同步。本包为占位骨架，由 termview 任务落位实现。
+- **doc 全文**：终端渲染：快照/增量渲染 + 本地滚动视口（60fps，需求 006）。 [TermViewPresenter] 纯 JVM 视口状态机（跟随/锁定历史、可见行窗口、捏合行列数换算、 脏区合并），单测全部打在它上；[TermSurfaceView] 薄 Android 层（Canvas 画格、拖动/捏合 手势、Choreographer 帧调度）。内核为 :terminal 模块；resize 协议帧由上层接线（conn/session）。
 
 ### Kotlin · dev.agentmirror.app.service
 
 - **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。
-- **导出面**：（无导出符号）
-- **依赖边**：（无）
-- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 承载与主机 sidecar 的长连接生命周期，系统杀进程后由 Activity 重连恢复 （客户端无状态，冷启动 1 秒内恢复画面）。本包为占位骨架，由 service 任务落位实现。
+- **导出面**：MirrorForegroundService, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, ServiceWire, StateWatcher
+- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn
+- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 - [ServiceWire]：接线点——传输工厂（默认 [NoopTransportFactory]）、UI 监听桥、连接配置注入。 电量策略（004 裁定）：仅在有活跃订阅或用户开启后台守望时运行前台服务；服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。UI/配对层经 [ServiceWire] 控制启动/停止。
 
 ### Kotlin · dev.agentmirror.app.tsnet
 
@@ -145,13 +161,13 @@ flowchart LR
 ### Kotlin · dev.agentmirror.app.conn
 
 - **职责**：连接层：与主机 sidecar 的 WebSocket 连接、会话枚举、帧协议编解码。
-- **导出面**：（无导出符号）
+- **导出面**：AgentState, AuthAckFrame, AuthFrame, BinaryFrame, BinaryFrameCodec, BinaryKind, Clock, Connection, ConnectionConfig, ConnectionManager, ConnectionState, ErrorCode, ErrorFrame, FrameCodec, FrameDecodeException, FrameEncodeException, FrameError, InputAckFrame, InputFailReason, InputFrame, ListDeltaFrame, ListFrame, Listener, ListingFrame, ProtocolVersion, Real, ReconnectPolicy, ResizeFrame, ScrollbackFrame, Session, SubscribeFrame, TransportListener, UnsubscribeFrame, WebSocketTransport, Workspace
 - **依赖边**：（无）
-- **doc 全文**：连接层：与主机 sidecar 的 WebSocket 连接、会话枚举、帧协议编解码。 传输协议见需求 011 裁定：JSON 控制帧（列表/订阅/输入/resize/scrollback/状态）+ 二进制终端流帧。本包为占位骨架，由 conn 任务落位实现。
+- **doc 全文**：连接层：与主机 sidecar 的 WebSocket 连接、会话枚举、帧协议编解码。 分层（自底向上）： 1. [FrameCodec] / [BinaryFrameCodec] —— 纯函数编解码：JSON 控制帧（信封 + 12 类帧 载荷，docs/protocol.md §4）+ 二进制流帧（§6，含 scrollback 12 字节收敛区间头）。 编解码都消费同一份契约夹具做字节级断言（server/internal/protocol/testdata/）。 2. [Connection] —— 单条 WS 生命周期状态机（握手 → 就绪 → 关闭）。 3. [ConnectionManager] —— 重连策略 + 订阅簿记：重连后自动重放 auth + 全部活跃 subscribe（004 无状态铁律的重放语义）；listing seq 不连续 → 自动重新 list。 上层（UI/service）只见 Flow/回调，不见 WS 细节。本层不持久任何会话状态。
 
 ### Kotlin · dev.agentmirror.app.session
 
 - **职责**：会话页：单个 tmux 会话的交互界面。
-- **导出面**：（无导出符号）
-- **依赖边**：（无）
+- **导出面**：Attachment, Failed, Failure, HttpUrlConnectionUploader, SessionRoute, SessionScreen, SessionViewModel, Success
+- **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.service, dev.agentmirror.app.termview
 - **doc 全文**：会话页：单个 tmux 会话的交互界面。 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条。 本包为占位骨架，由 session 任务落位实现。
