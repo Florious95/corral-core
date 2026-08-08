@@ -34,13 +34,13 @@ func TestParsePaneLineValid(t *testing.T) {
 // ok=false (and never panic), so the scan can skip them.
 func TestParsePaneLineMalformed(t *testing.T) {
 	cases := []string{
-		"",                       // empty
-		"a|0|%0|cwd|cmd",         // too few fields
-		"a|0|%0|cwd|cmd|80x24|x", // too many fields
+		"",                            // empty
+		"a|0|%0|cwd|cmd",              // too few fields
+		"a|0|%0|cwd|cmd|80x24|x",      // too many fields
 		"a|notanint|%0|cwd|cmd|80x24", // non-integer window index
-		"a|0|%0|cwd|cmd|80",      // size missing "x"
-		"a|0|%0|cwd|cmd|ax24",    // non-integer width
-		"a|0|%0|cwd|cmd|80xb",    // non-integer height
+		"a|0|%0|cwd|cmd|80",           // size missing "x"
+		"a|0|%0|cwd|cmd|ax24",         // non-integer width
+		"a|0|%0|cwd|cmd|80xb",         // non-integer height
 	}
 	for _, line := range cases {
 		if p, ok := parsePaneLine(line); ok {

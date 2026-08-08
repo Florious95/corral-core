@@ -11,6 +11,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/remote-agent/agentmirror/internal/bridge"
@@ -34,6 +35,14 @@ type wsConn struct {
 	// the writer and every subscription's relay goroutine.
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// writeCtx is the writer's own context, cancelled by teardown only after
+	// the connection context. The writer must be able to flush frames that were
+	// queued before the connection cancelled (e.g. auth rejection's auth_ack +
+	// close): if teardown's cancel killed the in-flight write too, the client
+	// would block forever waiting for the ack it will never get.
+	writeCtx  context.Context
+	writeStop context.CancelFunc
 
 	// authed is set once the auth frame validates. Until then every frame
 	// except auth is refused with error: unauthorized.
@@ -59,14 +68,17 @@ type subscription struct {
 // serveConn owns the connection from accept to close.
 func (s *Server) serveConn(conn *websocket.Conn) {
 	ctx, cancel := context.WithCancel(context.Background())
+	writeCtx, writeStop := context.WithCancel(context.Background())
 	c := &wsConn{
-		s:      s,
-		id:     connSeq.Add(1),
-		conn:   conn,
-		ctx:    ctx,
-		cancel: cancel,
-		subs:   make(map[string]*subscription),
-		sendCh: make(chan wsMsg, 256),
+		s:         s,
+		id:        connSeq.Add(1),
+		conn:      conn,
+		ctx:       ctx,
+		cancel:    cancel,
+		writeCtx:  writeCtx,
+		writeStop: writeStop,
+		subs:      make(map[string]*subscription),
+		sendCh:    make(chan wsMsg, 256),
 	}
 	s.registerTracker(c)
 	go c.writeLoop()
@@ -93,11 +105,30 @@ func (c *wsConn) readLoop() {
 	}
 }
 
+// writeTimeout bounds one frame write. It exists because writes now run on
+// writeCtx, which (unlike the old c.ctx) is not cancelled by teardown — so a
+// peer that genuinely stops reading must not wedge the writer forever.
+const writeTimeout = 30 * time.Second
+
+// writeFrame writes one message, using writeCtx so teardown's cancel of c.ctx
+// cannot abort a reply that was already queued (auth rejection's auth_ack+close
+// is the canonical case), and a bounded timeout so a dead peer cannot wedge the
+// writer. It returns the underlying write error, if any.
+func (c *wsConn) writeFrame(m wsMsg) error {
+	wctx, cancel := context.WithTimeout(c.writeCtx, writeTimeout)
+	defer cancel()
+	return c.conn.Write(wctx, m.typ, m.data)
+}
+
 // writeLoop drains the send queue and writes each message. On a close message
-// it writes the close frame after any queued message and exits; on ctx
-// cancellation it closes abruptly. Writing errors end the loop (the read side
-// will notice the close and tear down).
+// it writes the close frame after any queued message and exits; on connection
+// ctx cancellation it flushes the frames already queued (non-blocking) then
+// closes abruptly, so a peer waiting on a reply — e.g. the auth_ack of a
+// rejection — always gets that reply or a close, never a hang. Writing errors
+// also close the underlying connection: without that the peer's Read would
+// block forever on a dead writer (the read side alone cannot detect it).
 func (c *wsConn) writeLoop() {
+	defer c.writeStop()
 	for {
 		select {
 		case m := <-c.sendCh:
@@ -105,10 +136,34 @@ func (c *wsConn) writeLoop() {
 				_ = c.conn.Close(m.code, m.reason)
 				return
 			}
-			if err := c.conn.Write(c.ctx, m.typ, m.data); err != nil {
+			if err := c.writeFrame(m); err != nil {
+				_ = c.conn.CloseNow()
 				return
 			}
 		case <-c.ctx.Done():
+			c.flushQueued()
+			return
+		}
+	}
+}
+
+// flushQueued drains the send channel without blocking after the connection
+// has been cancelled, delivering any reply that was queued before the cancel
+// (auth rejection's auth_ack+close is the canonical case) and then closing the
+// connection so the peer's Read returns instead of hanging.
+func (c *wsConn) flushQueued() {
+	for {
+		select {
+		case m := <-c.sendCh:
+			if m.close {
+				_ = c.conn.Close(m.code, m.reason)
+				return
+			}
+			if err := c.writeFrame(m); err != nil {
+				_ = c.conn.CloseNow()
+				return
+			}
+		default:
 			_ = c.conn.CloseNow()
 			return
 		}
@@ -116,7 +171,11 @@ func (c *wsConn) writeLoop() {
 }
 
 // teardown cancels the connection context and detaches every subscription's
-// pipe. It runs exactly once, from serveConn after the read loop exits.
+// pipe. It runs exactly once, from serveConn after the read loop exits. The
+// writer wakes on c.ctx.Done(), flushes frames queued before cancellation
+// (auth_ack + close on rejection) using its own live writeCtx, then cleans up
+// writeCtx itself; teardown must NOT cancel writeCtx here or the flush would
+// fail before the reply reached the wire.
 func (c *wsConn) teardown() {
 	c.cancel()
 	c.subsMu.Lock()
