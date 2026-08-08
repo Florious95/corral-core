@@ -1,0 +1,10 @@
+{
+  "task_id": "server-scaffold",
+  "status": "pass",
+  "acceptance_results": [
+    {"cmd": "bash -lc 'cd server && go build ./... && go vet ./...'", "exit": 0}
+  ],
+  "produced_at_sha": "6b55b3efe7f8+wt",
+  "result_id": "res_e76b397b2910",
+  "notes": "module github.com/remote-agent/agentmirror（暂名），零第三方依赖，8 包骨架各带 doc.go 职责注释，LICENSE Apache-2.0 落根。"
+}
