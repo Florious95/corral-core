@@ -1,0 +1,1 @@
+{"task_id":"tmux-discovery","status":"pass","acceptance_results":[{"cmd":"bash -lc cd server && go test ./internal/discovery/...","exit":0}],"result_id":"res_e84f50a494c0","notes":"全 socket 枚举+cwd 两级聚合+死 socket 容错，13 测全过（含双 socket 聚合红测、空模型阳性对照）。"}
