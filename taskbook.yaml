@@ -192,7 +192,7 @@ tasks:
     acceptance:
       - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'"
     deps: ["conn-layer", "pairing-security"]
-    write_scope: ["app/app/src/main/java/**/pairing/", "app/app/src/test/"]
+    write_scope: ["app/app/src/main/java/**/pairing/", "app/app/src/test/", "app/app/src/main/java/**/service/  # OkHttpWebSocketTransport 新增+ServiceWire 接线，leader 裁定 2026-08-09（全 app 无真实传输的债务清偿）"]
     evidence: ".team/evidence/pairing-ui.json"
     contention: impl
 
