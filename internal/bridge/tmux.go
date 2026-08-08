@@ -47,20 +47,9 @@ const defaultTimeout = 10 * time.Second
 // tmux default socket (`-L default`). All output is returned raw; the caller
 // interprets bytes, never this function.
 func runTmux(ctx context.Context, socket string, timeout time.Duration, args ...string) ([]byte, error) {
-	var base []string
-	if socket == "" {
-		base = []string{"-L", "default"}
-	} else {
-		base = []string{"-S", socket}
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, tmuxBin, append(base, args...)...)
-	var stdout, stderr bytes.Buffer
+	cmd, stderr := newTmuxCommand(ctx, socket, args...)
+	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
@@ -69,6 +58,23 @@ func runTmux(ctx context.Context, socket string, timeout time.Duration, args ...
 		return nil, classifyTmuxError(stderr.String())
 	}
 	return stdout.Bytes(), nil
+}
+
+// newTmuxCommand builds an exec command for `tmux [-S socket] <args...>`
+// with stderr wired to a buffer the caller can read for error classification.
+// It does not set stdout so callers that stream stdin (load-buffer) can wire
+// their own. The socket is empty for the default tmux socket.
+func newTmuxCommand(ctx context.Context, socket string, args ...string) (*exec.Cmd, *bytes.Buffer) {
+	var base []string
+	if socket == "" {
+		base = []string{"-L", "default"}
+	} else {
+		base = []string{"-S", socket}
+	}
+	cmd := exec.CommandContext(ctx, tmuxBin, append(base, args...)...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	return cmd, &stderr
 }
 
 // classifyTmuxError maps tmux stderr text onto the typed error taxonomy. Text

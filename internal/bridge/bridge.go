@@ -10,7 +10,6 @@ package bridge
 // requests. That is the hard red line of this task.
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -108,13 +107,13 @@ func (p *Pane) pasteMultiline(ctx context.Context, text string) error {
 // loadBuffer pipes text into a named tmux buffer. It is a plain stdin pipe to
 // tmux, not an exec-wrapped command, because the payload is the stdin stream.
 func (p *Pane) loadBuffer(ctx context.Context, name, text string) error {
-	cmd := newTmuxCommand(ctx, p.socket, "load-buffer", "-b", name, "-")
+	cmd, stderr := newTmuxCommand(ctx, p.socket, "load-buffer", "-b", name, "-")
 	cmd.Stdin = strings.NewReader(text)
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return ErrTmuxTimeout
 		}
-		return classifyTmuxError(errStderr(cmd))
+		return classifyTmuxError(stderr.String())
 	}
 	return nil
 }
@@ -193,7 +192,3 @@ func (p *Pane) Target() string { return p.target }
 
 // Pane.Timeout exposes the per-command timeout (used by the stream layer).
 func (p *Pane) Timeout() time.Duration { return p.timeout }
-
-// ensure bytes import stays referenced (requirePane uses bytes-free logic but
-// the package-level doc references raw bytes; keep the import honest).
-var _ = bytes.Contains
