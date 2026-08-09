@@ -62,6 +62,7 @@ var (
 		{"subscribe.json", protocol.Subscribe{Ref: "s1", Rows: 40, Cols: 100}},
 		{"unsubscribe.json", protocol.Unsubscribe{Ref: "s1"}},
 		{"input.json", protocol.Input{ReqID: 9, Ref: "s1", Text: "/model opus"}},
+		{"input_keys.json", protocol.Input{ReqID: 10, Ref: "s1", Keys: []protocol.Key{protocol.KeyEsc, protocol.KeyCtrlC, protocol.KeyTab}}},
 		{"input_ack_ok.json", protocol.InputAck{ReqID: 9, OK: true}},
 		{"input_ack_fail.json", protocol.InputAck{ReqID: 9, OK: false, Reason: protocol.InputFailInjectFailed}},
 		{"scrollback.json", protocol.Scrollback{ReqID: 5, Ref: "s1", FromLine: -300, Count: 100}},

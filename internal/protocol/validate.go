@@ -161,14 +161,24 @@ func (u Unsubscribe) Validate() error {
 	return nil
 }
 
-// Validate reports whether the input request is well-formed: a ReqID >= 1 and
-// a non-empty ref. Text may be empty (a bare Enter).
+// Validate reports whether the input request is well-formed: a ReqID >= 1, a
+// non-empty ref, and at most one of Text / Keys (a frame carrying both is a
+// protocol error; neither means a bare Enter, both are legal alone). Every key
+// must be in the closed Key set.
 func (i Input) Validate() error {
 	if i.ReqID == 0 {
 		return fmt.Errorf("%w: input req_id must be >= 1", ErrInvalidField)
 	}
 	if i.Ref == "" {
 		return fmt.Errorf("%w: input ref must be non-empty", ErrInvalidField)
+	}
+	if i.Text != "" && len(i.Keys) > 0 {
+		return fmt.Errorf("%w: input carries both text and keys; at most one is allowed", ErrInvalidField)
+	}
+	for _, k := range i.Keys {
+		if !k.IsValid() {
+			return fmt.Errorf("%w: unknown input key %q", ErrInvalidField, k)
+		}
 	}
 	return nil
 }

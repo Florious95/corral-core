@@ -328,6 +328,97 @@ func mustSnapshot(t *testing.T, p *Pane) []byte {
 	return snap
 }
 
+// TestSendKeysArgvExactShape pins the named-key translation to the exact argv
+// the tmux server receives, using a fake tmux that records the send-keys
+// command line. The bridge maps the wire key names (R-1 shortcut bar) to tmux
+// send-keys named keys and sends them in one invocation WITHOUT an Enter.
+func TestSendKeysArgvExactShape(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "argv.log")
+	script := filepath.Join(dir, "fake-tmux")
+	if err := os.WriteFile(script, []byte(`#!/bin/sh
+case "$3" in
+  list-panes) echo "%0"; exit 0;;
+  send-keys) shift 2; echo "$@" >> "$ARGS_LOG"; exit 0;;
+  *) exit 1;;
+esac
+`), 0o755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", logPath)
+
+	p := NewPane("/sock/x", "%0")
+	if err := p.SendKeys(context.Background(), "esc", "ctrl_c", "tab", "up", "down", "left", "right"); err != nil {
+		t.Fatalf("SendKeys: %v", err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read argv log: %v", err)
+	}
+	want := "send-keys -t %0 -- Escape C-c Tab Up Down Left Right"
+	if got := strings.TrimSpace(string(data)); got != want {
+		t.Errorf("send-keys argv = %q, want %q", got, want)
+	}
+}
+
+// TestSendKeysUnknownKeyRejects verifies an unknown key name fails BEFORE any
+// tmux invocation: the fake tmux exits 42, so any error other than the mapping
+// rejection would surface as a tmux failure. This is the bridge's own defensive
+// guard — the protocol layer already enforces the closed set.
+func TestSendKeysUnknownKeyRejects(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "fake-tmux")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 42\n"), 0o755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+
+	p := NewPane("/sock/x", "%0")
+	err := p.SendKeys(context.Background(), "esc", "home")
+	if !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("SendKeys unknown key: want ErrInvalidKey, got %v", err)
+	}
+}
+
+// TestSendKeysDeadPaneFails verifies the decidable-ack semantics of named-key
+// injection: a pane that no longer exists fails with ErrPaneNotFound, exactly
+// like Inject (requirement 003).
+func TestSendKeysDeadPaneFails(t *testing.T) {
+	tt := newTestTMUX(t)
+	p := tt.deadPane(t)
+
+	if err := p.SendKeys(context.Background(), "esc"); !errors.Is(err, ErrPaneNotFound) {
+		t.Fatalf("SendKeys on dead pane: want ErrPaneNotFound, got %v", err)
+	}
+}
+
+// TestSendKeysAcceptedOnLivePane is the real-tmux positive control: all seven
+// named keys are accepted by a live pane and the pane stays functional (a
+// subsequent normal inject still lands on screen).
+func TestSendKeysAcceptedOnLivePane(t *testing.T) {
+	tt := newTestTMUX(t)
+	p := tt.newPane(t, "bash")
+
+	if err := p.SendKeys(context.Background(), "esc", "ctrl_c", "tab", "up", "down", "left", "right"); err != nil {
+		t.Fatalf("SendKeys: %v", err)
+	}
+	// Positive control: the pane is still alive and accepts a normal inject.
+	if err := p.Inject(context.Background(), "echo KEYS_LIVE_99"); err != nil {
+		t.Fatalf("Inject after keys: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !bytes.Contains(mustSnapshot(t, p), []byte("KEYS_LIVE_99")) {
+		if time.Now().After(deadline) {
+			t.Fatal("echo after named keys never reached the screen")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func TestRunTmuxTimeout(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "slow-tmux")

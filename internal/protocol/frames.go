@@ -133,10 +133,17 @@ type Unsubscribe struct {
 // (Enter) after Text, matching "inject then Enter"; an empty Text is a bare
 // Enter and is allowed. The server MUST reply with InputAck so "sent with no
 // effect" cannot happen.
+//
+// Keys is the R-1 named-key alternative (requirement 017): when present, the
+// server sends the named special keys without appending an Enter — the
+// shortcut-bar semantics are "press that key once". Text and Keys are mutually
+// exclusive (a frame carrying both is a protocol error, docs/protocol.md §4.2);
+// neither present means a bare Enter, matching the pre-Keys behavior.
 type Input struct {
 	ReqID uint32 `json:"req_id"`
 	Ref   string `json:"ref"`
-	Text  string `json:"text"`
+	Text  string `json:"text,omitempty"`
+	Keys  []Key  `json:"keys,omitempty"`
 }
 
 // InputAck is the decidable receipt of an Input (S→C; requirement 003 send-

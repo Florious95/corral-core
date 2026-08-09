@@ -66,6 +66,7 @@ func TestControlFramesRoundTrip(t *testing.T) {
 		{"unsubscribe", protocol.Unsubscribe{Ref: "s1"}},
 		{"input", protocol.Input{ReqID: 9, Ref: "s1", Text: "/model opus"}},
 		{"input empty text", protocol.Input{ReqID: 10, Ref: "s1"}},
+		{"input keys", protocol.Input{ReqID: 10, Ref: "s1", Keys: []protocol.Key{protocol.KeyEsc, protocol.KeyUp, protocol.KeyTab}}},
 		{"input_ack ok", protocol.InputAck{ReqID: 9, OK: true}},
 		{"input_ack fail", protocol.InputAck{ReqID: 9, OK: false, Reason: protocol.InputFailInjectFailed}},
 		{"scrollback", protocol.Scrollback{ReqID: 5, Ref: "s1", FromLine: -300, Count: 100}},
@@ -111,6 +112,8 @@ func TestMarshalValidatesFirst(t *testing.T) {
 			Workspaces: []protocol.Workspace{{Cwd: "/x", SessionCount: 1, AggregateState: "zombie"}}}},
 		{"subscribe zero cols", protocol.Subscribe{Ref: "s1", Rows: 24, Cols: 0}},
 		{"input req 0", protocol.Input{ReqID: 0, Ref: "s1"}},
+		{"input both text and keys", protocol.Input{ReqID: 1, Ref: "s1", Text: "hi", Keys: []protocol.Key{protocol.KeyEsc}}},
+		{"input unknown key", protocol.Input{ReqID: 1, Ref: "s1", Keys: []protocol.Key{"home"}}},
 		{"input_ack fail no reason", protocol.InputAck{ReqID: 1, OK: false}},
 		{"input_ack ok with reason", protocol.InputAck{ReqID: 1, OK: true, Reason: protocol.InputFailInternal}},
 		{"input_ack unknown reason", protocol.InputAck{ReqID: 1, OK: false, Reason: "who knows"}},
@@ -146,6 +149,8 @@ func TestUnmarshalRedPaths(t *testing.T) {
 		{"workspace bad aggregate", `{"v":1,"type":"listing","payload":{"req_id":1,"seq":1,"workspaces":[{"cwd":"/x","session_count":1,"aggregate_state":"zombie"}]}}`, protocol.ErrInvalidState},
 		{"subscribe missing ref", `{"v":1,"type":"subscribe","payload":{"rows":24,"cols":80}}`, protocol.ErrInvalidField},
 		{"scrollback zero count", `{"v":1,"type":"scrollback","payload":{"req_id":1,"ref":"s1","from_line":0,"count":0}}`, protocol.ErrInvalidField},
+		{"input unknown named key", `{"v":1,"type":"input","payload":{"req_id":1,"ref":"s1","keys":["home"]}}`, protocol.ErrInvalidField},
+		{"input both text and keys", `{"v":1,"type":"input","payload":{"req_id":1,"ref":"s1","text":"hi","keys":["esc"]}}`, protocol.ErrInvalidField},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {

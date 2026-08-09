@@ -45,6 +45,106 @@ func TestSubscribeSnapshotThenDelta(t *testing.T) {
 	te.waitForMirror("MIRROR_MARK_77")
 }
 
+// TestInputKeysInjectsNamedKey is the R-1 named-key red test: an input frame
+// carrying Keys injects the named key into the pane — tmux renders the echoed
+// Escape as the caret-notation pair "^[" in the mirror stream — WITHOUT
+// appending an Enter, and acks ok. Before the handleInput keys branch existed,
+// a keys frame fell through to the bare-Enter text path (send-keys -l "" +
+// Enter), which echoes only a blank line (\r\n) and never "^[", so this test
+// is genuinely red against the old code.
+//
+// The drain reads frames until BOTH the input_ack (control) and the echoed "^["
+// (binary mirror) have been seen; either may arrive first, and mirror deltas
+// that carry unrelated pane output are accumulated.
+func TestInputKeysInjectsNamedKey(t *testing.T) {
+	te := startTmuxEnv(t, "cat")
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
+	_ = te.readBinaryFrame() // snapshot
+
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 44, Ref: te.ref(), Keys: []protocol.Key{protocol.KeyEsc}})
+
+	deadline := time.Now().Add(5 * time.Second)
+	var got bytes.Buffer
+	var ia protocol.InputAck
+	seenAck, seenEcho := false, false
+	for time.Now().Before(deadline) && (!seenAck || !seenEcho) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		typ, data, err := te.wsEnv.conn.Read(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("keys input read: %v (seenAck=%v seenEcho=%v got=%q)", err, seenAck, seenEcho, got.String())
+		}
+		if typ != websocket.MessageBinary {
+			typed, err := protocol.UnmarshalFrame(data)
+			if err != nil {
+				t.Fatalf("decode control %q: %v", data, err)
+			}
+			if ack, ok := typed.(protocol.InputAck); ok {
+				ia = ack
+				seenAck = true
+			}
+			continue
+		}
+		payload, err := protocol.DecodeBinary(data)
+		if err != nil {
+			t.Fatalf("decode mirror %q: %v", data, err)
+		}
+		got.Write(payload.Data)
+		if bytes.Contains(got.Bytes(), []byte("^[")) {
+			seenEcho = true
+		}
+	}
+	if !seenAck {
+		t.Fatal("input_ack for keys input never arrived")
+	}
+	if ia.ReqID != 44 {
+		t.Errorf("keys input_ack req_id = %d, want 44", ia.ReqID)
+	}
+	if !ia.OK {
+		t.Fatalf("keys input_ack not ok: %s", ia.Reason)
+	}
+	if !seenEcho {
+		t.Errorf("named-key Escape never echoed on screen; got %q (bare-Enter fallback would emit no \"^[\")", got.String())
+	}
+}
+
+// TestInputKeysUnsubscribedFailsWithReason verifies the named-key path shares
+// the text path's decidable failure taxonomy (requirement 003): a keys input on
+// an unsubscribed session fails with not_subscribed, never silence.
+func TestInputKeysUnsubscribedFailsWithReason(t *testing.T) {
+	te := startTmuxEnv(t, "cat")
+
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 7, Ref: te.ref(), Keys: []protocol.Key{protocol.KeyEsc}})
+	ack := te.wsEnv.readControl()
+	ia := ack.(protocol.InputAck)
+	if ia.OK {
+		t.Fatal("keys input on unsubscribed session must not be ok")
+	}
+	if ia.Reason != protocol.InputFailNotSubscribed {
+		t.Errorf("reason = %q, want %q", ia.Reason, protocol.InputFailNotSubscribed)
+	}
+}
+
+// TestInputKeysUnknownRefMatchesTextPrecedence verifies the named-key path
+// shares the text path's decidable failure precedence (requirement 003): an
+// unknown ref that was never subscribed fails with not_subscribed — the
+// subscribed() gate fires before ref resolution, exactly as for text input.
+// (The session_not_found branch fires only when a subscribed ref's pane
+// vanishes between listing and injection.)
+func TestInputKeysUnknownRefMatchesTextPrecedence(t *testing.T) {
+	te := startTmuxEnv(t, "cat")
+
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 8, Ref: "no-such-ref", Keys: []protocol.Key{protocol.KeyTab}})
+	ack := te.wsEnv.readControl()
+	ia := ack.(protocol.InputAck)
+	if ia.OK {
+		t.Fatal("keys input on unknown unsubscribed ref must not be ok")
+	}
+	if ia.Reason != protocol.InputFailNotSubscribed {
+		t.Errorf("reason = %q, want %q (same precedence as text path)", ia.Reason, protocol.InputFailNotSubscribed)
+	}
+}
+
 // TestInputAlwaysAcks is the send-must-arrive red test: every input gets an
 // input_ack (success or a machine-readable failure reason) — never silence.
 func TestInputAlwaysAcks(t *testing.T) {

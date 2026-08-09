@@ -113,10 +113,15 @@ func (c *wsConn) handleUnsubscribe(u protocol.Unsubscribe) {
 	c.subscribeCancel(u.Ref)
 }
 
-// handleInput injects one whole text line and MUST answer with input_ack
-// (requirement 003 send-must-arrive): ok:true once the bytes entered the pane,
-// or a machine-readable failure reason. Every failure class in §7.3 is
-// decidable and surfaced.
+// handleInput injects one whole text line OR a set of named special keys, and
+// MUST answer with input_ack (requirement 003 send-must-arrive): ok:true once
+// the input entered the pane, or a machine-readable failure reason. Every
+// failure class in §7.3 is decidable and surfaced.
+//
+// The Keys path (R-1 shortcut bar, requirement 017) sends named keys without
+// an Enter — "press that key once" — unlike the text path's "inject then
+// Enter". Text and Keys are mutually exclusive; the frame validator (Input.
+// Validate) already rejected a frame carrying both, so at most one branch runs.
 func (c *wsConn) handleInput(i protocol.Input) {
 	ack := func(ok bool, reason protocol.InputFailReason) {
 		c.send(&protocol.InputAck{ReqID: i.ReqID, OK: ok, Reason: reason})
@@ -132,6 +137,28 @@ func (c *wsConn) handleInput(i protocol.Input) {
 	br, ok := c.resolveBridge(i.Ref)
 	if !ok {
 		ack(false, protocol.InputFailSessionNotFound)
+		return
+	}
+	// Named-key injection: no size gate (the closed key set is tiny and fixed),
+	// no trailing Enter, same decidable ack.
+	if len(i.Keys) > 0 {
+		// bridge.SendKeys takes wire key names as strings; the protocol Key
+		// values are those exact strings (protocol.Key is a string kind).
+		names := make([]string, len(i.Keys))
+		for n, k := range i.Keys {
+			names[n] = string(k)
+		}
+		if err := br.SendKeys(c.ctx, names...); err != nil {
+			if errors.Is(err, bridge.ErrPaneNotFound) {
+				ack(false, protocol.InputFailSessionNotFound)
+			} else {
+				// Any tmux refusal (dead server, timeout, unknown) means the
+				// send-keys did not go in.
+				ack(false, protocol.InputFailInjectFailed)
+			}
+			return
+		}
+		ack(true, "")
 		return
 	}
 	if len(i.Text) > c.s.maxInput {

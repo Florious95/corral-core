@@ -35,6 +35,11 @@ var (
 	// ErrTmuxTimeout reports that a tmux invocation exceeded its deadline
 	// and was killed.
 	ErrTmuxTimeout = errors.New("tmux: command timed out")
+
+	// ErrInvalidKey reports that a named special key (R-1 shortcut bar) is not
+	// in the closed set SendKeys accepts. It fails BEFORE any tmux invocation
+	// so a mistyped name can never reach the server as a silent no-op.
+	ErrInvalidKey = errors.New("tmux: unknown named key")
 )
 
 // defaultTimeout bounds every tmux invocation. tmux control commands on a

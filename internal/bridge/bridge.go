@@ -88,6 +88,47 @@ func (p *Pane) Inject(ctx context.Context, text string) error {
 	return err
 }
 
+// namedKeys maps a wire special-key name (protocol.Key value, R-1 shortcut
+// bar) to the tmux send-keys named key. The closed set is enforced at the
+// protocol boundary; this table is the bridge's own defensive lookup, so an
+// unknown name is a hard error (ErrInvalidKey), never a silent no-op.
+var namedKeys = map[string]string{
+	"esc":    "Escape",
+	"ctrl_c": "C-c",
+	"tab":    "Tab",
+	"up":     "Up",
+	"down":   "Down",
+	"left":   "Left",
+	"right":  "Right",
+}
+
+// SendKeys sends named special keys to the pane (R-1 shortcut bar, requirement
+// 017). Each key is a wire key name ("esc", "ctrl_c", …) mapped to its tmux
+// send-keys named key; all keys are sent in one send-keys invocation, in order,
+// WITHOUT appending an Enter — the shortcut-bar semantics are "press that key
+// once", unlike Inject's "inject then Enter". It returns the same decidable
+// ack as Inject (requirement 003): a non-nil error means the keys did not go in
+// (unknown key name, pane gone, or server unreachable). An unknown key name
+// fails before any tmux call.
+func (p *Pane) SendKeys(ctx context.Context, keys ...string) error {
+	named := make([]string, 0, len(keys))
+	for _, k := range keys {
+		n, ok := namedKeys[k]
+		if !ok {
+			return fmt.Errorf("%w: %q", ErrInvalidKey, k)
+		}
+		named = append(named, n)
+	}
+	if err := p.requirePane(ctx); err != nil {
+		return err
+	}
+	// Go cannot splice a slice into a variadic call after fixed args, so build
+	// the full argv first: send-keys -t <pane> -- <named keys...>.
+	args := append([]string{"send-keys", "-t", p.target, "--"}, named...)
+	_, err := runTmux(ctx, p.socket, p.timeout, args...)
+	return err
+}
+
 // pasteMultiline injects a multi-line message via a named tmux buffer: it is
 // pasted verbatim (bracketed paste, so the target CLI treats it as one paste
 // rather than a burst of keystrokes) and the buffer is deleted on the spot.

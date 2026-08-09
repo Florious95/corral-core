@@ -10,6 +10,8 @@
 //   - Inject — send-keys -l (single line) or paste-buffer (multi-line), then
 //     Enter; returns a decidable ack, so "sent but no reply" is impossible
 //     (requirement 003);
+//   - SendKeys — named special keys (esc / ctrl_c / tab / arrows, R-1 shortcut
+//     bar) via one send-keys named-key invocation, no Enter appended;
 //   - Resize — window-size latest + resize-window (requirement 005).
 //
 // The mirror/inject red line is structural: a Pane only reads and writes the
