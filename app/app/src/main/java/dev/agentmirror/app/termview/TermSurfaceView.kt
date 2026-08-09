@@ -87,6 +87,10 @@ class TermSurfaceView @JvmOverloads constructor(
     private var cellW: Int = 0
     private var cellH: Int = 0
 
+    /** 行内文本基线相对行顶的偏移（= -ascent）。drawText 的 y 是基线、字形画在基线
+     *  上方，直接用行顶 y 画会把整行字形抬出行带（首行即被裁出画布顶，fix-term-residuals）。 */
+    private var baselinePx: Float = 0f
+
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean = true
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
@@ -185,7 +189,6 @@ class TermSurfaceView @JvmOverloads constructor(
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
         measureCells()
-        canvas.translate(0f, -lineHeightPx.toFloat())
         val win = p.window
         for (logical in win) {
             val rowY = (logical - win.first) * cellH
@@ -201,7 +204,6 @@ class TermSurfaceView @JvmOverloads constructor(
                 val pad = dp(10f)
                 val x = width - margin - tw - pad * 2
                 val y = height - margin - dp(40f)
-                canvas.translate(0f, lineHeightPx.toFloat())
                 canvas.drawRoundRect(x, y, x + tw + pad * 2, y + dp(40f), dp(8f), dp(8f), labelBgPaint)
                 canvas.drawText(label, x + pad, y + dp(28f), labelPaint)
             }
@@ -271,9 +273,9 @@ class TermSurfaceView @JvmOverloads constructor(
         for (seg in g.runBuilder.build(text, startCol)) {
             when (seg.slot) {
                 GlyphSlot.MONO -> {
-                    // 等宽原生段：batch 一次 drawText（textSize/颜色同前，保持既有栅格基线）。
+                    // 等宽原生段：batch 一次 drawText（基线 = 行顶 + baselinePx，字形恰落行带内）。
                     fgPaint.color = color
-                    canvas.drawText(seg.text, seg.startCol * cellW.toFloat(), rowY.toFloat(), fgPaint)
+                    canvas.drawText(seg.text, seg.startCol * cellW.toFloat(), rowY + baselinePx, fgPaint)
                 }
                 GlyphSlot.SYSTEM_FALLBACK -> {
                     g.systemPaint.color = color
@@ -317,7 +319,8 @@ class TermSurfaceView @JvmOverloads constructor(
             val cellPx = cellW * width
             val actual = paint.measureText(text, i, j)
             // 格内水平居中：字形实际宽度小于格宽时居中，大于则轻微左出（不破栅格）。
-            canvas.drawText(text, i, j, x + (cellPx - actual) / 2f, rowY.toFloat(), paint)
+            // 纵向与 batch ASCII 同基线（行顶 + baselinePx）。
+            canvas.drawText(text, i, j, x + (cellPx - actual) / 2f, rowY + baselinePx, paint)
             x += cellPx
             i = j
         }
@@ -333,6 +336,8 @@ class TermSurfaceView @JvmOverloads constructor(
         glyphs().setTextSize(size)
         val metrics = fgPaint.fontMetrics
         cellH = (metrics.descent - metrics.ascent).roundToInt()
+        // ascent 为负（基线上方高度）：基线偏移 = -ascent，保证首行字形完整落在 y∈[0,cellH)。
+        baselinePx = -metrics.ascent
         val textW = fgPaint.measureText("W")
         cellW = max(1, textW.roundToInt())
         lineHeightPx = p.cellHeight

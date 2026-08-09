@@ -84,4 +84,23 @@ class SnapshotReplayTest {
         assertEquals(2, t.snapshot().cursorX)
         assertEquals(1, t.snapshot().cursorY)
     }
+
+    @Test
+    fun replayCursorReanchorSuffixLandsFollowupDeltaAtRealRow() {
+        // 服务端快照尾部追加 CUP 游标重锚（fix-term-residuals 契约护栏）：重放后
+        // 游标必须落在面板真游标处；随后无绝对定位的增量（bash SIGWINCH 重绘
+        // "\r ESC[K 提示符"）才能打在正确行——否则打在快照末尾行（真机实证：
+        // 底行幽灵提示符残影）。
+        val t = TerminalEmulator(20, 24)
+        // 服务端裁尾空行后的快照：row0 内容 + 7 空行 + row8 提示符，尾部 CUP 到
+        // 1 基 (行9, 列11) = 0 基 (y=8, x=10)。
+        t.replaySnapshot("hello\n\n\n\n\n\n\n\nbash-3.2\$ ${E}[9;11H", 20, 24)
+        assertEquals(10, t.snapshot().cursorX)
+        assertEquals(8, t.snapshot().cursorY)
+        // SIGWINCH 重绘增量：必须重写第 8 行（0 基），底行保持空白。
+        t.feed("\r${E}[Kbash-3.2\$ ")
+        assertEquals("bash-3.2$", t.rowText(8).trimEnd())
+        assertEquals("", t.rowText(23))
+        assertEquals(8, t.snapshot().cursorY)
+    }
 }

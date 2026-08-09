@@ -93,6 +93,7 @@ C ◀── input_ack ─────── S       必达回执（成功/失败
 C ── scrollback ──────▶ S       按行区间拉历史
 C ◀── [binary] scrollback S     一页历史（ANSI 字节）
 C ── resize ──────────▶ S       上报手机行列数（CLI 自重画）
+C ◀── [binary] snapshot S       resize 生效后补发全屏快照（清残影，fix-term-residuals）
 C ── unsubscribe ─────▶ S       停止镜像
    （任一方向均可先关闭连接；关闭即隐式退订全部会话）
 ```
@@ -174,7 +175,11 @@ Enter 可能误触发 CLI 确认——这与 `text` 的"注入+回车"本质不�
 `count≥1`。S 收敛到可用范围，并在二进制 `scrollback` 回复中报告实际区间（见 §6.3）。
 
 **resize**——上报手机行列数；S resize 底层窗口（grouped session + `window-size latest`，
-谁最近操作听谁的，requirement 005）。只作用于已订阅会话。
+谁最近操作听谁的，requirement 005）。只作用于已订阅会话。resize 成功应用后 S **必须**
+向该连接补发一帧二进制 `snapshot`（语义同 subscribe 首帧：C 清屏重建，见 §6.2）。
+理由（fix-term-residuals）：SIGWINCH 后 CLI 的重画只以 `delta` 叠加在 C 的旧几何网格上，
+旧提示符残影无法确定性清除；快照重放是唯一收敛点。补发的 `snapshot` 同时充当事实回执，
+仍然没有独立的 resize ack 帧；未订阅会话的 resize 仍是 no-op、无任何回复。
 
 **error**——协议级失败（坏帧、未知类型、缺会话、版本不支持、内部错误）。`code` 枚举见 §7.1。
 
@@ -267,7 +272,7 @@ Enter 可能误触发 CLI 确认——这与 `text` 的"注入+回车"本质不�
 
 | kind | 方向 | 语义 |
 |---|---|---|
-| `1` snapshot | S→C | subscribe 生效后首帧全屏（capture-pane -e，含颜色转义） |
+| `1` snapshot | S→C | 全屏快照（capture-pane -e，含颜色转义）：subscribe 生效后首帧；resize 生效后补发。C 收到即清屏重建。S 裁去尾部空行并在字节尾追加游标重锚序列（CUP，1 基），使 C 重放后游标与面板真游标一致——否则随后不带绝对定位的 delta（如 bash SIGWINCH 重绘）会落在快照末尾行（残影根因之二，fix-term-residuals） |
 | `2` delta | S→C | 一段增量终端字节（pipe-pane），追加到当前屏 |
 | `3` scrollback | S→C | 一页历史（capture-pane -S），回答 scrollback 请求 |
 
