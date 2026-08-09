@@ -41,6 +41,15 @@
 - **席位恢复纪律**（A-24 实证，2026-08-09）：席位恢复失败达 2 轮（自动恢复/start-agent/reset 任意组合）
   即弃 id——remove 归档后换**处女 id** add-agent 重建带案重派，不再消耗轮次；死 id 的 runtime 残留
   （provider-config/env/events）保留供框架取证。停摆检测与自动探针由 `.team/watchdog.py` 值守（三条件+预算 2）
+- **派单必经净化包装器 `.team/ta`**（2026-08-10 人工侧通道级裁定，实证在脚本头注释）：codex 席位
+  在自身 shell 执行 `team-agent` 时会被 codex 注入其托管的死代理（`ec2-13-213-89-27…:8443`，
+  实测不可达），launcher 把它快照进新席位启动串 ⇒ **凡 codex 席位派出的席位全生命周期零 token**
+  （屏幕显示 Working 是假活）。所有 `add-agent/start-agent/reset-agent` 一律走 `.team/ta <子命令>`。
+- **新席位核真活性**：`status=工作` 不算数——必须取 `~/.codex/sessions/<当日>/` 最新 rollout jsonl，
+  确认其中出现 `reasoning`/`custom_tool_call` 记录，才算这个席位真的接通了模型。
+- **给席位发消息只走 `team-agent send`**，严禁 tmux `send-keys` 敲键盘（实证：键入文本会与框架注入
+  消息拼接成一条，并触发 steer 打断）。leader 的合法寻址是 `<team>/leader` 或
+  `<workspace>::<team>/leader`，裸 `leader` 会被拒（`state did not contain the requested team/name tuple`）。
 
 ## 工程红线
 
