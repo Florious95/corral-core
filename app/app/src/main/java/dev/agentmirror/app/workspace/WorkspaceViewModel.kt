@@ -17,7 +17,10 @@
 package dev.agentmirror.app.workspace
 
 import dev.agentmirror.app.conn.AgentState
+import dev.agentmirror.app.conn.BinaryFrame
+import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
+import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
@@ -92,7 +95,7 @@ data class WorkspaceUiState(
  */
 class WorkspaceViewModel(
     initialConnection: ConnectionUi = ConnectionUi.CONNECTING,
-) {
+) : ConnectionManager.Listener {
 
     private val _uiState = MutableStateFlow(WorkspaceUiState(connection = initialConnection))
 
@@ -109,20 +112,37 @@ class WorkspaceViewModel(
         val sessions: LinkedHashMap<String, SessionUi> = LinkedHashMap(),
     )
 
-    // ---- 输入侧（接线层回调入口）----
+    // ---- ConnectionManager.Listener（接线层经 ServiceWire.uiConnector 原样路由进来）----
+    // 与 SessionViewModel 同款接线语义：VM 实现 Listener 供接线层把 uiConnector 扇出的回调
+    // 原样路由进来；不自行 setListener（共享连接由 fg-service 持包装监听 + uiConnector 扇出）。
 
-    /** 连接状态回调入口：把 conn 层 ConnectionState 映射为 UI 四态。 */
-    fun onConnectionStateChanged(state: ConnectionState) {
-        _uiState.update { it.copy(connection = state.toUi()) }
-    }
+    /** 连接态回调（Listener 入口）：委托 [onConnectionStateChanged] 保持公开 API 不变。 */
+    override fun onStateChanged(state: ConnectionState) = onConnectionStateChanged(state)
 
-    /** 帧回调入口：只消费 listing / list_delta，其余帧忽略（本屏不关心）。 */
-    fun onFrame(frame: FramePayload) {
+    /** 帧回调（Listener 入口）：只消费 listing / list_delta，其余帧忽略（本屏不关心）。 */
+    override fun onFrame(frame: FramePayload) {
         when (frame) {
             is ListingFrame -> applyListing(frame)
             is ListDeltaFrame -> applyDelta(frame)
             else -> Unit // 无关帧（auth_ack/input_ack/error/…）不影响列表渲染。
         }
+    }
+
+    // 镜像/解码错误/输入回执/重连通知归会话页与服务层，工作区列表不消费（空实现防泄漏）。
+
+    override fun onBinary(frame: BinaryFrame) = Unit
+
+    override fun onLocalDecodeError(code: FrameError, message: String) = Unit
+
+    override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) = Unit
+
+    override fun onReconnect(attempt: Int, delayMs: Long) = Unit
+
+    // ---- 输入侧（接线层回调入口，公开 API）----
+
+    /** 连接状态回调入口：把 conn 层 ConnectionState 映射为 UI 四态。 */
+    fun onConnectionStateChanged(state: ConnectionState) {
+        _uiState.update { it.copy(connection = state.toUi()) }
     }
 
     // ---- listing：权威全量，整体替换 ----

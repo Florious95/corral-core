@@ -1,0 +1,20 @@
+{
+  "task_id": "fix-workspace-wiring",
+  "status": "pass",
+  "worker": "w-fix-wswire",
+  "date": "2026-08-09",
+  "summary": "e2e-harden 取证实锤缺陷①修复（配对成功后列表永不显示，真机 T1 直接阻断点）。WorkspaceViewModel 经 ServiceWire.uiConnector 完成接线：VM 从 AgentMirrorApp 根 remember 提升到 MainActivity（与 navState 同模式），Compose 工作区分支 DisposableEffect 挂载/卸载（与 SessionRoute 同构）；ServiceWire.uiConnector setter 增挂载补播——VM 晚于连接 READY 挂载时立即补投当前连接态（语义同 SessionViewModel.init 自读 manager.state()），否则错过已发生的 onStateChanged(READY) 顶栏永停「连接中…」。004 无状态守住：列表由 READY+全量 listing 恢复，不引入缓存。",
+  "red_tests": [
+    "WorkspaceWiringTest 3 条：挂载后收 READY+listing 渲染列表、晚挂载补播连接态、卸载后不再转投——修前 3 红（正是缺陷现场），修后 3 绿"
+  ],
+  "tests": {
+    "acceptance": "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Workspace*\"' -> exit 0（leader 复跑实证；Wiring 3 + WorkspaceViewModelTest 14 全绿）",
+    "e2e_layer2": "层2 硬化版真旅程（expected-fail 位应自动转真绿）——leader 复跑记录见 leader_note"
+  },
+  "write_scope_check": {
+    "in_scope": ["app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt", "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt", "app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceWiringTest.kt"],
+    "deviation": "两处越 scope 最小连带，leader 追认：①service/ServiceWire.kt uiConnector setter 补播（修复实质组成——不补播则晚挂载 VM 永错过 READY）；②MainActivity.kt VM 提升（Robolectric 可测性+与 navState 同模式一致性）。均注释论证充分，taskbook 行内注释留痕"
+  },
+  "note": "层2 真旅程段（点开会话→快照断言→输入回显→force-stop→恢复）依赖本修复自动转真绿（e2e-layer2-harden 交件时的设计）。缺陷②（配对超时泵）独立，见 fix-pairing-timeout-pump。",
+  "leader_note": "leader 复跑验收 exit 0；越权两处核 diff 追认。席位未写证据文件，leader 代写留痕。交件即退役。"
+}
