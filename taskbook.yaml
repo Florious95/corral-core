@@ -517,6 +517,21 @@ tasks:
     evidence: ".team/evidence/fix-pairing-candidates.json"
     contention: impl
 
+  - id: fix-term-render-debt
+    goal: >
+      P0（w-glyph-f5 界外实锤两条，2026-08-09，走查前置阻断）：①增量流不唤醒渲染帧循环——
+      clear+printf 后画面冻结、swipe 无效、重 attach 才刷新（postFrame 仅 presenter 注入与
+      damage 自续时触发，新数据到达无人唤醒；镜像画面不动=产品失格+红线5）；②行首 x 漂移——
+      每行起点接上一行末尾逐行右移（tmux capture 侧对齐正常，疑 :terminal feed 链 \n/\r 处理；
+      term-glyph-after.png 肉眼可见）。红测先行：①增量注入后 damageListener/帧调度必触发断言；
+      ②\r\n / 裸 \n 序列网格列归零断言（真实 capture 字节夹具）。验收含模拟器截图（行对齐）+
+      注入后无重 attach 画面更新实证。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'"]
+    deps: ["fix-term-glyph-render"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-render-debt.json"
+    contention: impl
+
   - id: fix-release-test-host
     goal: >
       基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
