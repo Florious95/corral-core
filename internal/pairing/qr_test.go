@@ -7,6 +7,7 @@ package pairing
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -41,7 +42,9 @@ func TestPayloadJSONContract(t *testing.T) {
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("unmarshal payload: %v", err)
 	}
-	if got != p {
+	// Payload now contains a []string Candidates field (fix-pairing-candidates),
+	// so equality must be reflect.DeepEqual rather than struct `==`.
+	if !reflect.DeepEqual(got, p) {
 		t.Errorf("round trip = %+v, want %+v", got, p)
 	}
 	if got.Version != PayloadVersion {

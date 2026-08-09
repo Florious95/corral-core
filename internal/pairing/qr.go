@@ -17,9 +17,10 @@ import (
 // PayloadVersion is the schema version of the QR JSON payload.
 const PayloadVersion = 1
 
-// Payload is the QR content: version, service ws URL, pairing token, and the
-// reserved Tailscale auth key. Field order and JSON names are part of the wire
-// contract with the Android app (pairing-ui task) — do not rename.
+// Payload is the QR content: version, service ws URL, pairing token, the
+// reserved Tailscale auth key, and the optional full candidate ws URL set
+// (task fix-pairing-candidates). Field order and JSON names are part of the
+// wire contract with the Android app (docs/protocol.md §2.1) — do not rename.
 type Payload struct {
 	// Version is the payload schema version (PayloadVersion).
 	Version int `json:"v"`
@@ -32,11 +33,25 @@ type Payload struct {
 	// lands it carries the tailnet auth key so a scan also groups the phone
 	// onto the tailnet. Empty for now.
 	TSAuthKey string `json:"ts_authkey"`
+	// Candidates is the OPTIONAL full candidate ws URL set for THIS host (its
+	// other NICs, LAN + tailnet, never loopback). It is forward compatible:
+	// omitempty keeps a no-candidate QR byte-identical to the pre-feature
+	// contract, so no version bump. When non-empty it leads with the primary
+	// URL (docs/protocol.md §2.1).
+	Candidates []string `json:"candidates,omitempty"`
 }
 
-// NewPayload builds the QR payload for one service URL and token.
+// NewPayload builds the QR payload for one service URL and token, with no
+// candidate set (forward-compatible default: the candidates key is omitted).
 func NewPayload(url, token string) Payload {
 	return Payload{Version: PayloadVersion, URL: url, Token: token}
+}
+
+// NewPayloadWithCandidates builds the QR payload for one service URL, token,
+// and the host's full candidate ws URL set (task fix-pairing-candidates). The
+// app tries the primary URL first, then each candidate on failure.
+func NewPayloadWithCandidates(url, token string, candidates []string) Payload {
+	return Payload{Version: PayloadVersion, URL: url, Token: token, Candidates: candidates}
 }
 
 // Marshal encodes the payload as the compact JSON line that goes into the QR.

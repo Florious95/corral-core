@@ -212,6 +212,47 @@ func WSURL(host, port string) string {
 	return "ws://" + net.JoinHostPort(host, port) + "/ws"
 }
 
+// buildCandidates returns the full candidate ws URL set for the QR payload
+// (docs/protocol.md §2.1, task fix-pairing-candidates): the primary host first
+// when it is a real (non-loopback) host — it may come from a -host/env override
+// absent from the probe table, and must still lead — then every non-loopback
+// detected address in detect order, deduplicated. Loopback is never a
+// candidate: a phone can never reach 127.0.0.1. A loopback-only primary
+// (degraded mode) yields an empty set, so that QR stays byte-identical to the
+// pre-feature contract.
+func buildCandidates(primary, port string, addrs []Address) []string {
+	seen := make(map[string]bool, len(addrs)+1)
+	out := make([]string, 0, len(addrs)+1)
+	add := func(host string) {
+		u := WSURL(host, port)
+		if !seen[u] {
+			seen[u] = true
+			out = append(out, u)
+		}
+	}
+	// The primary is a host string (IP or name); only a literal loopback IP is
+	// the degraded case. A hostname is never loopback, so it is always added.
+	if ip := net.ParseIP(primary); ip == nil || !ip.IsLoopback() {
+		add(primary)
+	}
+	for _, a := range addrs {
+		if a.Kind == KindLoopback {
+			continue
+		}
+		add(a.IP.String())
+	}
+	return out
+}
+
+// onboardingPayload builds the QR payload the guide renders: the primary ws
+// URL plus the host's full candidate set. Extracted as a seam so tests can
+// assert the QR carries candidates without scanning the half-block art.
+func onboardingPayload(o Onboarding, addrs []Address, primary string) Payload {
+	p := NewPayload(WSURL(primary, o.Port), o.Token)
+	p.Candidates = buildCandidates(primary, o.Port, addrs)
+	return p
+}
+
 // Onboarding carries what the daemon knows when it prints the pairing screen.
 type Onboarding struct {
 	// Token is the resolved pairing token to encode.
@@ -257,7 +298,10 @@ func PrintOnboardingAll(o Onboarding, addrs []Address, primary string, w io.Writ
 func printOnboarding(w io.Writer, o Onboarding, addrs []Address, primary string, listAll bool) error {
 	url := WSURL(primary, o.Port)
 
-	body, err := NewPayload(url, o.Token).Marshal()
+	// The QR payload now embeds the host's full candidate ws URL set so the App
+	// auto-tries each on primary failure (task fix-pairing-candidates, P0).
+	// A no-candidate (loopback-only degraded) payload stays byte-identical.
+	body, err := onboardingPayload(o, addrs, primary).Marshal()
 	if err != nil {
 		return fmt.Errorf("pairing: marshal onboarding payload: %w", err)
 	}
