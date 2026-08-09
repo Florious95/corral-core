@@ -1,1 +1,1 @@
-{"task_id": "test-app-dogfood", "dispatched_to": "w-dogfood", "base": ".team/nodes/test-app-dogfood/CLAUDE.md", "at": "2026-08-09"}
+{"task_id": "test-app-dogfood", "dispatched_to": "w-dogfood2", "base": ".team/nodes/test-app-dogfood/CLAUDE.md", "at": "2026-08-09", "note": "接力席：w-dogfood 三连 non_retryable invalid_request 死亡+A-24 拒启弃 id"}
