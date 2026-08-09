@@ -1,7 +1,7 @@
 {
   "schema": "agentmirror-gate-report-v1",
   "conclusion": "pass",
-  "generated_at": "2026-08-08T23:19:26+00:00",
+  "generated_at": "2026-08-09T01:38:21+00:00",
   "baseline_accept": {
     "applied": false,
     "reason": null
@@ -11,29 +11,29 @@
       "name": "server",
       "ok": true,
       "skipped": false,
-      "cases": 226,
-      "duration_ms": 6567,
+      "cases": 230,
+      "duration_ms": 8040,
       "failures": [],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
         "baseline": 226,
-        "current": 226,
-        "action": "same"
+        "current": 230,
+        "action": "up"
       }
     },
     {
       "name": "app",
       "ok": true,
       "skipped": false,
-      "cases": 399,
-      "duration_ms": 3675,
+      "cases": 407,
+      "duration_ms": 4951,
       "failures": [],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": 367,
-        "current": 399,
+        "baseline": 399,
+        "current": 407,
         "action": "up"
       }
     },
@@ -42,7 +42,7 @@
       "ok": true,
       "skipped": false,
       "cases": 1,
-      "duration_ms": 711,
+      "duration_ms": 984,
       "failures": [],
       "skip_reason": null,
       "detail": null,
@@ -54,5 +54,5 @@
     }
   ],
   "issues": [],
-  "summary": "结论 pass：3 套件共 626 用例。绿。"
+  "summary": "结论 pass：3 套件共 638 用例。绿。"
 }
