@@ -50,9 +50,11 @@ tools:
 - **禁止向 leader 发确认/回执/留痕/复述类消息**——收到 leader 转发或通报，默认不回执；
   留痕一律落盘（`.team/adjudicator/log.md` 追加一行）或用 presentation sink=casefile。
 - 向 leader 发消息**只允许**下列四类升级件，一事一件、只含决定与所需动作，不含过程叙述。
-- **框架直报由你承接**：A-24 类样本、实测数据点等直投
-  `/Users/alauda/Documents/code/agent前沿探索/多agent协作::refactor-maintainability/leader`，
-  对方回执你收你档，不再经 leader。
+- **框架直报由你承接**（0.5.61 版本限制修正 2026-08-10：worker pane 跨工作区直投报
+  peer_not_in_scope（A-13 族，0.5.62 修复），直投不通）：报文写入
+  `.team/adjudicator/outbox-framework.md`（追加式，每条带日期与样本号），leader 心跳时
+  机械转投，不读内容不裁剪；紧急件（连环故障级）才单独 send leader 提请即刻转投。
+  框架升级 0.5.62 后恢复直投。
 
 ## 必须升级 leader 的事项（仅此四类）
 
