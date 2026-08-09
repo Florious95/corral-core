@@ -36,6 +36,12 @@ data class QrPayload(
     val token: String,
     /** 保留字段：Tailscale auth key，app-tsnet 接入后扫码同时组网；本任务仅占位不消费。 */
     val tsAuthKey: String,
+    /**
+     * 全候选 ws URL（可选字段，契约 §2.1，fix-pairing-candidates）：
+     * 同一主机的多网卡/多可达地址（LAN + tailnet），主选 [url] 打头；无候选为空列表。
+     * 主选不可达时自动逐个试探（3s/个），全败后候选列表可见可点。
+     */
+    val candidates: List<String>,
 )
 
 /** 配对成功后的连接配置负载（持久化：url + token）。 */

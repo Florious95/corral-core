@@ -55,7 +55,22 @@ object QrPayloadParser {
             url = dto.url.trim(),
             token = dto.token.trim(),
             tsAuthKey = dto.tsAuthKey.orEmpty(),
+            candidates = normalizeCandidates(dto.candidates),
         )
+    }
+
+    /**
+     * 归一化候选列表（契约 §2.1）：保留顺序、去重；非 ws URL / 空项**跳过不报错**——
+     * 坏候选不拖垮整个 QR，主选 [QrPayload.url] 仍可配对。
+     */
+    private fun normalizeCandidates(raw: List<String>?): List<String> {
+        if (raw.isNullOrEmpty()) return emptyList()
+        val seen = LinkedHashSet<String>()
+        raw.forEach { c ->
+            val t = c.trim()
+            if (t.isNotEmpty() && isValidWsUrl(t)) seen += t
+        }
+        return seen.toList()
     }
 
     /** 线上载荷 DTO（字段名与 qr.go 对齐，勿改名）。 */
@@ -65,5 +80,6 @@ object QrPayloadParser {
         @SerialName("url") val url: String = "",
         @SerialName("token") val token: String = "",
         @SerialName("ts_authkey") val tsAuthKey: String? = null,
+        @SerialName("candidates") val candidates: List<String>? = null,
     )
 }
