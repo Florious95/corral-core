@@ -20,3 +20,18 @@
 - 最小修复；注释红线；净化前缀；交件前全量门自查（含 e2e 脚本语法 bash -n）。
 
 ## 4. 沉淀区（唯一允许你追加写入的区域）
+
+- **验收结论**：acceptance 命令绿；空闲 CPU 实测（缺陷同参 -list-interval 500ms、2 隔离 socket fleet、真机本机）：
+  有客户端(2 并发 auth 连接) 平均 10.6% CPU + 扫描日志增长（正常功能未被饿死）；
+  零客户端稳态 0% CPU、0 次 tmux 子进程派生、扫描日志不再增长。缺陷现场为 4 孤儿各 ~17.5%（合计 ~70% 空烧）。
+- **①空闲降耗**：`Server.listingLoop` 改为连接计数门控——`authed atomic.Int64`（handleAuth +1 / teardown -1），
+  零客户端时 loop park（不 tick、零子进程）；`wakeCh`(cap 1) 在 0→1 时唤醒立即全量扫描保首屏新鲜。
+  discovery 本就每 socket 一次 `tmux list-panes -a`（子进程派生已按 socket 合并，本件未改）。
+- **②单实例守卫**：flock 守卫（非 kill -0 方案）——`cmd/agentmirrord/pidfile.go` acquirePidfile，
+  flock 内核在进程死亡时自动释放，无陈旧锁/无 pid 复用误判；pidfile 放 pairing token 同级
+  （resolveStateDir 支持 `AGENTMIRROR_STATE_DIR` 覆盖，e2e/harness 与 layer2 均隔离使用）。
+  进程级实证：一启持锁→二启明确报错 exit=1→一启 SIGTERM 退出后三启成功。
+- **③e2e 泄漏修复**：layer2.sh trap cleanup 补 `kill + 轮询 wait + 超时强杀 + wait 收尸`；
+  run.sh 收尾 `pkill -f $E2E_ROOT/bin/agentmirrord` 兜底（仅清 e2e 自己的二进制，净化红线）。
+- **经验**：macOS 无 `timeout` 命令（用后台+kill）；zsh 里 `PPID` 是只读保留变量（probe 脚本换名）；
+  go module 根在 server/，仓库根直接 `go build` 会报 "cannot find main module"。
