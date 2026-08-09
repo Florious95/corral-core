@@ -37,6 +37,9 @@ type Env struct {
 	UploadURL string
 	// DaemonBin is the agentmirrord binary path (built by run.sh).
 	DaemonBin string
+	// StateDir is the daemon's single-instance state dir (isolated per test so
+	// concurrent instances never collide on the pidfile flock).
+	StateDir string
 
 	// daemon is the running agentmirrord process (nil when stopped).
 	daemon *exec.Cmd
@@ -69,6 +72,11 @@ func StartEnv(tb interface {
 		os.RemoveAll(root)
 		return nil, err
 	}
+	stateDir := filepath.Join(root, "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		os.RemoveAll(root)
+		return nil, err
+	}
 
 	e := &Env{
 		Root:      root,
@@ -76,6 +84,7 @@ func StartEnv(tb interface {
 		Token:     token,
 		UploadDir: uploads,
 		DaemonBin: daemonBin,
+		StateDir:  stateDir,
 		port:      port,
 		WSURL:     fmt.Sprintf("ws://127.0.0.1:%d/ws", port),
 		UploadURL: fmt.Sprintf("http://127.0.0.1:%d/upload", port),
@@ -136,6 +145,10 @@ func (e *Env) StartDaemon(ctx context.Context) error {
 		"TMUX_TMPDIR="+e.TmuxTmp,
 		"TMPDIR="+tmpRoot,
 		"AGENTMIRROR_TOKEN="+e.Token,
+		// Isolated single-instance state: each test's daemon locks its own
+		// pidfile flock, so concurrent e2e instances never collide (and the
+		// real user config dir is never touched).
+		"AGENTMIRROR_STATE_DIR="+e.StateDir,
 	)
 	logPath := filepath.Join(e.Root, "daemon.log")
 	f, err := os.Create(logPath)
@@ -253,7 +266,8 @@ func cleanEnv(env []string) []string {
 	for _, kv := range env {
 		if strings.HasPrefix(kv, "TMUX_TMPDIR=") ||
 			strings.HasPrefix(kv, "TMPDIR=") ||
-			strings.HasPrefix(kv, "AGENTMIRROR_TOKEN=") {
+			strings.HasPrefix(kv, "AGENTMIRROR_TOKEN=") ||
+			strings.HasPrefix(kv, "AGENTMIRROR_STATE_DIR=") {
 			continue // always overwritten below
 		}
 		out = append(out, kv)

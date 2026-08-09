@@ -305,6 +305,50 @@ tasks:
     evidence: ".team/evidence/fix-daemon-idle-cpu.json"
     contention: impl
 
+  # ---------- 场景审计波次（docs/scenario-coverage.md 为总图纸，2026-08-09）----------
+  - id: scenario-audit
+    goal: 用户场景全景覆盖审计（追认登记：Fable5 攻坚，交付 docs/scenario-coverage.md 总图纸）。
+    acceptance: ["bash -lc 'test -s docs/scenario-coverage.md'"]
+    deps: []
+    write_scope: ["docs/scenario-coverage.md"]
+    evidence: ".team/evidence/scenario-audit.json"
+    contention: contract
+
+  - id: fix-state-wiring
+    goal: >
+      修复实锤缺陷 D-1（审计 §0.4）：agentstate 从未装配进 daemon，生产全会话恒 unknown、blocked 通知
+      源头即断。main.go 组装 agentstate Registry+Identify → api.Options.StateProvider，打通
+      识别→listing→聚合→通知主链。红测先行：api 集成测试隔离 tmux 起假 claude 进程树，断言 listing
+      中该 pane state≠unknown 且聚合正确；层1 harness 增状态断言场景。
+    acceptance: ["bash -lc 'cd server && go test ./...'"]
+    deps: ["state-parser", "state-ident-wrapper", "ws-api"]
+    write_scope: ["server/cmd/", "server/internal/api/", "e2e/harness/"]
+    evidence: ".team/evidence/fix-state-wiring.json"
+    contention: impl
+
+  - id: fix-app-nav
+    goal: >
+      合并修复实锤缺陷 D-2+D-3（审计 §0.4，同写作用域）：①通知深链断链——MainActivity/AgentMirrorApp
+      消费 ACTION_OPEN_SESSION+EXTRA_SESSION_REF（含 onNewIntent），点通知直达对应会话页；
+      ②旋转/回收丢导航态——activeSession/showPairing 改 rememberSaveable。引入 Robolectric 基建
+      （后续 seams 任务共用）。红测先行（深链 intent 断言+重建保态断言，修前红）。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Nav*\"'"]
+    deps: ["fg-service", "session-ui"]
+    write_scope: ["app/app/src/main/", "app/app/src/test/", "app/app/build.gradle.kts"]
+    evidence: ".team/evidence/fix-app-nav.json"
+    contention: impl
+
+  - id: e2e-layer2-harden
+    goal: >
+      消除 e2e 账实落差（审计 §0.3-2，本任务同时是 taskbook#e2e goal 落差的修正案）：层2 判定语义化
+      （替换硬编码坐标与弱文本判定）；真旅程：列表含真实会话→点开→断言快照文本→输入回显→
+      am force-stop 真杀 App→重开断言恢复原画面。
+    acceptance: ["bash -lc 'bash e2e/run.sh --layer 2'"]
+    deps: ["e2e"]
+    write_scope: ["e2e/"]
+    evidence: ".team/evidence/e2e-layer2-harden.json"
+    contention: impl
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >

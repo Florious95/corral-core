@@ -1,0 +1,1 @@
+{"task_id":"scenario-audit","status":"pass","acceptance_results":[{"cmd":"test -s docs/scenario-coverage.md && pipes>100","exit":0}],"result_id":"res_0e62b27054a8","notes":"8 域 70+ 格四态矩阵+常识红线审计+8 needs-ruling（017 已裁）+16 补齐任务五栏形状+真机清单 T0-T20。三大结构盲区与 4 实锤缺陷（D-1 状态未装配/D-2 深链断/D-3 旋转丢态/D-4 空闲轮询）全部带代码坐标。Fable5 攻坚第三单。"}
