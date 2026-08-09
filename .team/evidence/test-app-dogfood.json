@@ -1,0 +1,303 @@
+{
+  "task_id": "test-app-dogfood",
+  "status": "done",
+  "seat": "w-dogfood2",
+  "seat_note": "真机模拟试用官接力席（Opus 5 识图席，一次性，交件即退役）。前席 w-dogfood 三连 provider 死亡退场，其落盘截图 01~17 全部有效，本席逐图亲自目检后接续，未重做测试设计。",
+  "at": "2026-08-10",
+  "base": ".team/nodes/test-app-dogfood/CLAUDE.md",
+  "artifacts": {
+    "testplan": "e2e/artifacts/dogfood/TESTPLAN.md",
+    "report": "e2e/artifacts/dogfood/REPORT.md",
+    "screenshots_dir": "e2e/artifacts/dogfood/",
+    "screenshots_count": 48,
+    "screenshots_by_seat": {
+      "w-dogfood_predecessor": "01~17 共 35 张（本席逐图目检复用，未重拍）",
+      "w-dogfood2_this_seat": "18~22 共 13 张（复验产出：19 重配对、20a~20e 滚动方向、21/21a/21b 发送对账、22a/22b 键条功能）"
+    },
+    "raw_evidence_note": "/tmp/dg1 下的 d1-samples.txt（D1 铁证 30点/6分钟）与 d16-samples.txt（D-16 铁证 20点/171秒）已全文转述进 REPORT，删除不影响结论可追溯。"
+  },
+  "acceptance": {
+    "argv": "bash -lc 'test -s e2e/artifacts/dogfood/TESTPLAN.md && test -s e2e/artifacts/dogfood/REPORT.md && ls e2e/artifacts/dogfood/*.png >/dev/null'",
+    "result": "PASS",
+    "verified_at": "2026-08-10"
+  },
+  "scenario_coverage": {
+    "designed_total": 43,
+    "not_executed": 15,
+    "exploratory_x_group": {
+      "designed": 7,
+      "executed": 0,
+      "note": "设计外探索项，不计入分母；一条未跑，如实列明"
+    },
+    "not_executed_list": [
+      "【裁定席点名6项】A10 blocked通知（016步7）",
+      "【裁定席点名6项】A11 杀App恢复（016步8）",
+      "【裁定席点名6项】A12 锁屏重连（016步9）",
+      "【裁定席点名6项】E5 daemon重启自愈",
+      "【裁定席点名6项】E6 断网自愈",
+      "【裁定席点名6项】B3 深色模式全屏走查",
+      "【另有9项同样完全未跑】A9a 上传失败可见",
+      "【另9项】A10a 通知全局开关（代码侧已判负→D-15，运行时未确认）",
+      "【另9项】B2 错误态之会话页断连屏面（配对失败态已验PASS）",
+      "【另9项】B7 反馈动效",
+      "【另9项】B8 徽章contentDescription运行时验证（代码侧已核PASS）",
+      "【另9项】C2 多行粘贴整段注入（代码侧已核）",
+      "【另9项】E1 捏合缩放",
+      "【另9项】E3 alt-screen TUI进出",
+      "【另9项】E7 输入即时性主观判定"
+    ],
+    "not_executed_reason": "全部需独占模拟器。设备为多席分时共用，TS 验证域连续三次接位（w-ts-verify → w-ts-verify2 → w-ts-verify3，前两位 provider 死亡）。本席每次接到要机请求均在同一轮内停止全部 adb 并回执让机，让机窗口转做纯宿主/纯代码可判用例。裁定席 msg_2c5f049a68b8 判定 TS 的 P0 优先，本案就地收口。事后 w-ts-verify3 回执（msg_50dc68d8f328）称其因安全预检 blocked 从未执行 adb，即最后一次让机后设备实际未被使用——未执行系排程结果，非设备真被占满。",
+    "verification_caveat": "按 016(d) 未验证清单口径：15 项完全未执行者一律不得计入已验收；C1/D5 亦不得按『已执行』解读，其缺口部分视同未验证。尤其 016 首触九步中的第 7/8/9 步（A10/A11/A12）不得写成通过或已验收。",
+    "design_time_exclusions": "TESTPLAN §8.1 的 U-1~U-7（真实相机扫码 / tailnet 实链路 / 真实 Agent CLI 比对 / 弱网丢包 / 厂商 ROM 杀后台 / 规模化舰队 / 生产私有 socket 舰队），设计阶段即声明不覆盖并附原因。",
+    "designed_total_note": "分母 43。TESTPLAN §10 原写「A组15…=41」与其 A 组表格实列 17 条（含 A9a）不符，属算术错误；已按裁定席 msg_2e00d012b430 只修 TESTPLAN §10 计数行（A组17、总计43）并加注『交件终审仅修算术、未改用例内容』。用例内容/编号/设计一字未动。",
+    "count_correction": "两轮纠正，均在交件后：①本席自查发现 executed=35/41 错（把用例之外的附加核查——复验专项3+017八项核查+已修项核查11+在途观察1+纪律自证1——混算进用例数），逐项清点得28；②裁定席 msg_2e00d012b430 指出 28 仍把局部执行冒充完整执行(C1只验2/7键、D5缺A9a)，最终定为三档 26/2/15。REPORT §5.0 有勘误专节记录两轮全过程。",
+    "defect_reverify_gaps": "D-01/D-02/D-08/D-14 四条复验未做；四条的缺陷判定均不依赖复验，复验只为加固证据（D-14 代码证据已双向确凿）。",
+    "fully_executed": 26,
+    "partially_executed": 2,
+    "touched_at_least_partly": 28,
+    "closure_check": "26 + 2 + 15 = 43 ✅",
+    "count_caveat": "不得单独写『已执行 28/43』——该写法会让 C1/D5 的覆盖缺口消失。对外一律用三档口径。",
+    "by_group": {
+      "A(17)": "完整12: A1 A2 A2a A3 A3a A3b A4 A5 A6 A7 A8 A9 | 局部0 | 未执行5: A9a A10 A10a A11 A12",
+      "B(8)": "完整4: B1 B4 B5 B6 | 局部0 | 未执行4: B2 B3 B7 B8",
+      "C(6)": "完整4: C3 C4 C5 C6 | 局部1: C1(7键只验2键) | 未执行1: C2",
+      "D(5)": "完整4: D1 D2 D3 D4 | 局部1: D5(缺A9a失败路径) | 未执行0 —— 唯一无完全未执行项的组",
+      "E(7)": "完整2: E2 E4 | 局部0 | 未执行5: E1 E3 E5 E6 E7"
+    },
+    "partially_executed_detail": [
+      {
+        "id": "C1",
+        "covered": "七键齐+顺序符017 R-1+48dp热区达标+七键均带content-desc+↑调历史/Ctrl-C打断两键功能实证",
+        "gap": "余下5键(Esc/Tab/↓/←/→)功能未逐一验证，覆盖2/7",
+        "rule": "已覆盖部分结论有效；缺口部分按016(d)视同未验证"
+      },
+      {
+        "id": "D5",
+        "covered": "地址不可达(3s出错+重试)/错token(明确拒绝且不泄值)/daemon二次启动(明确冲突原因)三条失败路径均PASS",
+        "gap": "A9a上传失败路径未跑(该项本身另列未执行)",
+        "rule": "同上"
+      }
+    ],
+    "a2_note": "A2 计入完整执行：其『真实相机扫码全链路』属设计阶段即声明的排除项(TESTPLAN U-1，模拟器无摄像头)，非执行缺口；A2 在设计范围内已完整执行并由此发现 D-01。"
+  },
+  "defects": {
+    "total": 13,
+    "p0": 0,
+    "p1": 6,
+    "p2": 7,
+    "withdrawn_by_this_seat": 2,
+    "observation_only": 1,
+    "regression_of_fixed_items": 0,
+    "in_flight_phenomena_not_counted": 1,
+    "p1_list": [
+      {
+        "id": "D-01",
+        "summary": "相机权限二次拒绝后「授予相机权限」按钮静默无响应，无跳转无提示",
+        "clause": "红线5 失败可见",
+        "evidence": "03/04.png"
+      },
+      {
+        "id": "D-02",
+        "summary": "点「+」直落系统相册，App 无附件菜单，017 R-8 拍照直传整条缺席",
+        "clause": "017 R-8 当期补实现",
+        "evidence": "14.png"
+      },
+      {
+        "id": "D-03",
+        "summary": "上传文件名传的是 MediaStore 数字 ID，扩展名全丢，注入 CLI 的路径下游 Agent 读图工具拒读",
+        "clause": "003 / 011 路径注入",
+        "root_cause": "SessionScreen.kt:421 val name = (uri.lastPathSegment ?: \"image\")；服务端 upload.go:163 sanitizeBaseName 保留 '.' 故无份",
+        "evidence": "15z.png + upload-dir 落盘对账"
+      },
+      {
+        "id": "D-04",
+        "summary": "终端滚动方向与全平台惯例相反：下拖看历史纹丝不动且零反馈，上滑才滚（原判 P0「滚动失效」经复验改判）",
+        "clause": "006 本地滚动 / 红线5",
+        "root_cause": "TermSurfaceView.kt:96-103 把 GestureDetector.distanceY（上滑为正）直喂 TermViewPresenter.kt:104（约定正值=看更早历史）；注释 '// 向上滚 = dy<0' 符号写反",
+        "evidence": "20a~20e.png，20a 与 20b 逐字节同图（MD5 d6e18f3b…）"
+      },
+      {
+        "id": "D-14",
+        "summary": "配对成功后再无任何重配入口（工作区顶栏空白），换主机只能清 App 数据；且代码注释谎称存在「顶栏设置钮」",
+        "clause": "017 R-3 当期设置页入口",
+        "root_cause": "AgentMirrorApp.kt:104 注释称「见 WorkspaceScreen 顶栏设置钮」，而 WorkspaceScreen.kt 全文无 TopAppBar/IconButton/Settings，该控件从未实现",
+        "evidence": "07b/19.png + 代码双向核查"
+      },
+      {
+        "id": "D-16",
+        "summary": "客户端在线且用户零操作时，主机 daemon 持续吃 14.8% CPU（27 pane 实测）；零客户端时为 0.0%，客户端断开后立刻回落 0.0%",
+        "clause": "004 电量策略；红线1 未覆盖但同源的在线态能耗",
+        "root_cause": "options.go:22 defaultListInterval=2s 全量 listing + state_wiring.go:64 defaultStateRefreshTTL=1s（短于轮询间隔，每轮必全部过期重采）；每次 refresh 经 state_wiring.go:264 capturePaneOutput 派生 tmux 进程，另含 Identify 自身 500ms ps 预算，即单次采样两次进程派生",
+        "evidence": "三点对照：d1-samples.txt 30点/360秒=0.0%；d16-samples.txt 20点/171秒=14.8%；断开后 20 秒=0.0%"
+      }
+    ],
+    "p2_list": [
+      {
+        "id": "D-07",
+        "summary": "配对 token 输入框明文上屏且无隐藏切换（失败文案本身未泄 token，此点是对的）"
+      },
+      {
+        "id": "D-08",
+        "summary": "连接成功后先闪「暂无工作区」空态再刷出列表，用空态冒充加载态，第一眼传达错误结论"
+      },
+      {
+        "id": "D-09",
+        "summary": "emoji 按单宽排版，双宽字形吃掉后随空格致相互紧贴（ZWJ/区域指示符未合成属终端字体普遍边界，不苛责）"
+      },
+      {
+        "id": "D-11",
+        "summary": "017 R-4「删 token 文件重启即全量吊销」未文档化；且 server/README.md 配置表只列 3 个 flag，实际必用的 -token/-upload-dir/-state-dir 全缺"
+      },
+      {
+        "id": "D-12",
+        "summary": "017 R-6 要求「锁中文并在 README 明示」，锁中文事实成立但 README 明示缺失"
+      },
+      {
+        "id": "D-13",
+        "summary": "上传目录无总量上限/无清理/无轮转说明，主机磁盘长期无界增长（单次上传 20MiB 上限与内存 60s prune 均达标）"
+      },
+      {
+        "id": "D-15",
+        "summary": "017 R-5 通知全局开关未实现，全仓零命中，且无设置页可承载（与 D-14 同根）"
+      }
+    ],
+    "withdrawn_list": [
+      {
+        "id": "D-05",
+        "was": "P1 触控目标远低于 48dp",
+        "verdict": "本席误判，主动撤销",
+        "why_wrong": "① 量错对象：按截图量的是视觉色块 102×69px，而触控目标指可点击热区；uiautomator 权威量测显示 clickable=true 节点为 126×126px = 恰好 48.0dp（实测密度 420dpi）。② 读码读反：断言「M3 的 Surface(onClick) 不自带 48dp 最小触控目标」是错的，Compose M3 的 LocalMinimumInteractiveComponentSize 对所有 onClick 组件一律强制，SessionScreen.kt 未写 sizeIn 是正确的。",
+        "lesson": "量触控目标须取 clickable=true 节点 bounds，不要量视觉色块，也不要量挂 content-desc 的内层 Text（本例差一层即得相反结论）"
+      },
+      {
+        "id": "D-10",
+        "was": "P0 候选 命令拼接/发送丢字",
+        "verdict": "复验不复现，主动撤销",
+        "why_wrong": "清干净 pane 后仅经 App 发一条命令，完整注入完整执行完整回显；原现象系前席 pane 内未被 Enter 消费的残留输入（终端正确行为）。首轮复验时 pane 里只执行了 echo、参数不翼而飞，追查发现是 adb shell input text 遇空格静默截断，须用 %s 代空格。",
+        "lesson": "测试工具自身的静默失真会制造假缺陷；真机席位应先用一条已知命令做手法自检再开跑"
+      }
+    ],
+    "observation_list": [
+      {
+        "id": "D-06",
+        "summary": "「空闲」与「未知」两态色相同构（灰点+灰底）",
+        "downgraded_why": "读码确认为有意设计——StateBadge.kt:61「色弱可辨不依赖色相：五态文案各异 + contentDescription」，条款 018-5 实为达成，故降级为观察项不计缺陷；仅保留建议（给 unknown 可区分形状，仍不依赖色相）"
+      }
+    ]
+  },
+  "systemic_findings": [
+    {
+      "title": "017「八项裁定」当期项过半欠账",
+      "detail": "达成 2（R-1 键条 / R-7 徽章 contentDescription）、代码在待运行时验 1（R-2 多行粘贴）、欠账 4（R-3→D-14 / R-4→D-11 / R-5→D-15 / R-8→D-02）、半欠账 1（R-6→D-12）。017 原文措辞为「任务书承诺不可赖账」。",
+      "actionable": "R-3 与 R-5 同挂「设置页」而设置页从未存在，补一个设置页可一次性还清两笔账，性价比最高。"
+    },
+    {
+      "title": "代码注释谎报不存在的 UI 控件，会污染现算架构维基",
+      "detail": "AgentMirrorApp.kt:104 确定性地描述了「WorkspaceScreen 顶栏设置钮」，而该控件从未实现。本工程 CLAUDE.md 定『架构维基从代码现算、禁止人工另维护』，注释即维基原料，谎报会让『账面已交付』固化进架构文档，后续席位再难发现。",
+      "proposed_rule": "「注释所述 UI 控件必须能在真机上指认」纳入验收自查。裁定席已裁：本轮可作死件/消费方验收自查；写入根 CLAUDE.md 工程红线属契约级变更，由裁定席在终审形成证据后升级 leader，不在本席直接改契约。"
+    },
+    {
+      "title": "P1 中三条属「链路名义打通、实际用不了」型，e2e 断言会全绿",
+      "detail": "D-02 拍照入口根本不存在 / D-03 传图路径下游拒读 / D-04 滚动方向反致历史事实上被藏；另 D-16 功能全对、日志干净、空闲态还特别漂亮，只有把两个状态分别定量采样再对照才现形。正是 R-003「e2e 绿≠生产级」与 016「自动化必要非充分」点名的那类缺口。"
+    }
+  ],
+  "main_line_016_first_touch": {
+    "note": "016(a) 首触九步逐步结论。按 016(d)，未跑步骤不得计入已验收。",
+    "step1_scan_pair": "降级验证（手填全通；扫码权限路径有缺陷 D-01；真实相机扫码属 TESTPLAN U-1 不测）",
+    "step2_workspace_list": "零阻断",
+    "step3_open_session": "零阻断（0.8s 与 3s 两图逐字节相同）",
+    "step4_cli_fidelity": "零阻断（仅 emoji 宽度小瑕 D-09）",
+    "step5_input_echo": "零阻断",
+    "step6_image_inject": "名义通、实际废（D-03）",
+    "step7_blocked_notify": "未验证",
+    "step8_kill_app_recover": "未验证",
+    "step9_lock_reconnect": "未验证",
+    "extra": "首触之外的观察：走完首触后用户会撞上 D-14『第二次触（换主机）没有出路』。裁定席已裁定此属 017 R-3 已裁定需求未实现，不修订 016、不算 requirement-base 盲区。"
+  },
+  "engineering_hygiene_redlines": {
+    "redline1_idle_economy": "PASS（铁证且可重复）：零客户端 30 点/360 秒 CPU time 一秒未增、子进程恒 0、RSS 主动回落；约 40 分钟后客户端再次断开时复测同样即刻回到 0.0%",
+    "redline2_single_instance": "PASS：同端口二次启动被显式拒绝且打印锁文件路径（single-instance guard refused startup / lock held: /tmp/dg1/state/agentmirrord.pid），原实例毫发无伤",
+    "redline2_zero_residue": "PASS：见 teardown_self_verification",
+    "redline3_bounded_resources": "部分 FAIL：内存 PASS（state_wiring.go pane 缓存 60s prune）、单次上传 PASS（20 MiB 上限 + MaxBytesReader）；上传目录 FAIL（无配额无清理无说明）→ D-13",
+    "redline4_reachability": "PASS（漂亮）：宿主实际存在 169.254.66.178（link-local）、198.18.0.1（utun4 CGNAT 保留段）、127.0.0.1，daemon 配对横幅三类不可达全部正确排除，只列两个真实 LAN 地址。R-003 缺陷 A 未回归",
+    "redline5_failure_visible": "部分 PASS：地址不可达 3 秒内出错+重试按钮、错 token 明确拒绝原因且不泄 token 值、daemon 二次启动明确冲突原因；唯一破口是 D-01 相机权限死按钮，另 D-04 下拖到底无边界反馈"
+  },
+  "fixed_items_regression_check": {
+    "checked": 11,
+    "regressed": 0,
+    "detail": "终端■豆腐块 / 背景色区块 CJK 黑块重叠 / 256 色 recap 文字隐形 / 键条「→」右缘裁半 / 键盘弹出大空白 / 首行裁切 / 冷启动永远『连接中』 / 传图报『未配置上传地址』 / 画面冻结 / resize 残影 —— 全部未复发；『锁屏后无限重连』因 A12 未跑而未核（列未验证）"
+  },
+  "teardown_self_verification": {
+    "executed": true,
+    "executed_with_zero_adb": true,
+    "zero_adb_reason": "设备当时在 w-ts-verify3 手上（裁定要求不中断不催促）；且本席从未修改过任何模拟器系统设置（font_scale/night/airplane 分属未跑的 X1/B3/E6），无可还原之物",
+    "results": {
+      "daemon_process_residue": "零",
+      "port_19983_listen_residue": "零",
+      "isolated_tmux_server_residue": "零",
+      "isolated_tmux_socket_file_residue": "零（首检发现 kill-server 后死 socket tmux-501/default 仍在，rm -rf /tmp/dg1/tmux 后复检通过）",
+      "orphan_processes": "零"
+    },
+    "isolation_counter_evidence": {
+      "production_tmux_sessions_before_after": "2 → 2，完全一致；生产 socket 目录 /private/tmp/tmux-501 未动",
+      "external_agentmirrord_processes": "2 个仍在运行，本席自始至终未对其发送任何信号",
+      "kill_scoping": "所有 kill 均按 /tmp/dg1/dogfood-daemon 绝对路径精确匹配，从未使用泛名 pkill（FIELD 记载的 w-fix-statewire 险案教训）"
+    },
+    "lesson": "tmux kill-server 成功后 socket 文件仍会残留；只检查『tmux ls 是否失败』会漏掉它，须多查一层文件系统"
+  },
+  "discipline": {
+    "write_scope": [
+      "e2e/artifacts/dogfood/"
+    ],
+    "product_code_writes": 0,
+    "self_evidence": "全程仅三类写操作：① Write/Edit → e2e/artifacts/dogfood/REPORT.md（唯一编辑过的仓内文件）；② adb exec-out screencap → 同目录 *.png；③ Write → /tmp/dg1/{h2,run-rest,teardown}.sh（仓外测试环境，不入产品树）。报告中所有 file:line 根因均由只读核查得出。同期 app/、server/ 的改动属并行席 w-ts-wire 的 TS 接线 write_scope。",
+    "production_isolation": "工作区列表确实枚举出用户生产会话（符合需求 001『私有 socket 必须枚举』，非缺陷）。本席只读枚举，全部交互严格限定在自建隔离会话 alpha-agent1/alpha-agent2/beta-agent1，对生产会话零点击零输入零 send-keys 零 attach 零 kill。",
+    "device_sharing": "模拟器多席分时共用。w-ts-wire、w-ts-verify、w-ts-verify2、w-ts-verify3 四次要机，本席每次均在收到请求的同一轮内停止全部 adb 交互并回执确认，零抢机零越界；让机窗口全部转为纯宿主/纯代码产出，未空转。",
+    "in_flight_case_handling": "feat-ts-wire 在途，配对页 TS 卡仅记现象、不列缺陷、不计数（1 条）。"
+  },
+  "corrections_made_under_adjudication": [
+    "采样入口引用由 bridge.go:51（会话订阅路径，引错）更正为 state_wiring.go:264 capturePaneOutput（listing 状态采样真入口）",
+    "删除『defaultStateSamplingBudget=3s 是频率限流、3s>2s 所以没限住』的错误论证——它实为 context.WithTimeout 的单次刷新超时上界（超时降级 unknown，008）；实现中真正的限流是 maxConc 并发上限，已公允记述",
+    "D-16 数值由中间快照 7 点/54 秒（14.9%）更新为最终样本 20 点/171 秒（14.8%），全文 9 处引用同步",
+    "『200 pane 吃满一核』明确标注为代码形状推算，非实测结论；实测只有 27 pane 一个点",
+    "D-16 证据边界收窄：已证实仅『零连接 0.0%』↔『连接+1 活跃订阅+零用户操作 14.8%』；列表页零订阅态与成本拆分均列未验证"
+  ],
+  "notes_for_next_seat": [
+    "D-16 补测很便宜：App 退列表页采样 60s → 进会话页采样 60s，两数一减即得『全量轮询 vs 单会话订阅推流』的成本拆分。",
+    "剩余 6 项需一个连续 8–12 分钟的独占设备窗口；脚本 /tmp/dg1/run-rest.sh 已按价值密度排序、每步独立落盘，中断不丢已完成证据。",
+    "量触控目标：取 uiautomator 中 clickable=true 的节点 bounds，勿量视觉色块与内层 Text 节点。",
+    "adb shell input text 遇空格静默截断，须用 %s 代空格；开跑前先用一条已知命令做手法自检。",
+    "终端滚动方向当前是反的（上滑看历史），写自动化脚本时注意，别把它当成滚动失效。"
+  ],
+  "post_delivery_corrections": [
+    {
+      "at": "2026-08-10 终审前",
+      "trigger": "裁定席 msg_2d37e4cd8ac8 指出 REPORT §5.2 标题与表内容自相矛盾",
+      "found": "顺藤查出更深的问题：executed=35 / not_executed=6 本身就是错的（用例与附加核查活动混算）。逐项清点得 executed=28 / not_executed=15 / 分母 43。",
+      "fixed": [
+        "REPORT 新增 §5.0 计数勘误专节",
+        "§5.1 改为逐组清点表（28项）",
+        "§5.2 重写为四层：a裁定点名6项 / b另9项完全未跑 / c已执行用例的局部缺口(不计入未执行) / d X组设计外 / e缺陷复验缺口",
+        "§7.3 删除逐字重复段",
+        "设备链补齐 w-ts-verify3 及其归还回执",
+        "§6 计数表与开头状态口径同步",
+        "evidence 同步以上全部数字"
+      ],
+      "round2": {
+        "trigger": "裁定席 msg_2e00d012b430",
+        "two_cuts": [
+          "TESTPLAN §10 算术错必须就地修（A=17/总计43）+加注，不得以『未改一字』为由保留错数而在 REPORT 另立正确数",
+          "executed=28 改为三档 fully=26 / partially=2(C1,D5) / not=15，禁止再写模糊的『已执行28/43』"
+        ],
+        "fixed": [
+          "TESTPLAN §10 计数行改为 A组17…=43 并加勘误注",
+          "REPORT §5.0 重写为两轮纠正记录+三档口径表",
+          "§5.1 改为逐组三分清点表",
+          "§5.2-c 改为『局部执行的2个用例』并移出 A2（附理由）",
+          "REPORT 顶部状态口径与 §6 计数表同步三档",
+          "evidence 改为三档 schema"
+        ]
+      }
+    }
+  ]
+}
