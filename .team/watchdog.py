@@ -31,6 +31,14 @@ BUSY。T1/T2 因此对这类停摆全盲（已直报框架 leader）。新增 T4
 tmux capture-pane 取 pane **正文**（剥尾部 UI 区 TAIL_STRIP 行），md5 连续
 HASH_SAMPLES 次不变即判停滞——真停摆时正文完全静止，UI 动画剥除后免疫噪声。
 只做 hash 不解析语义，不违"不读 worker 终端原文"纪律。复活判定同款：hash 变即清零。
+
+v4.3 增量（2026-08-09，用户实证误报过多案）：v4.1 把窗收紧后，"安静但在干活"的席位
+被成批误判——①长编译/长测试期间 pane 正文静止 6 分钟即中 T4；②刚结束 turn 等回执的
+席位采样点非 BUSY 3 分钟即中 T2，预算 2 次烧穿还假升级 leader。修法：新增客观活性信号
+**pane 进程子树累计 CPU 秒**（tmux pane_pid 起走子树求和）——CPU 前进>CPU_EPS 即在干活，
+清零 T2/T4 计数与探针账；真停摆（空提示符/死流）CPU 静止，照抓。窗口回调至中间值
+（IDLE 1→3、HASH 2→3，约 9 分钟出针）：误报的代价是探针噪声+假升级打断 leader，
+已被用户实证为真代价，不再视为"无害"。
 """
 import json, subprocess, time, sys, glob, os, hashlib, re
 from datetime import datetime, timezone
@@ -38,11 +46,12 @@ from datetime import datetime, timezone
 WS = "/Volumes/nvme/Projects/远程Agent安卓"
 INTERVAL = 180          # 采样间隔（秒）
 BUSY_STALE_SEC = 900    # T1：BUSY 但无输出的停滞阈值（15 分钟）
-IDLE_SAMPLES = 1        # T2：非 BUSY 采样数（v4.1 收紧 2→1：用户两次肉眼先于看门狗发现停摆；中性探针误发无害，漏发/慢发才是真代价。约 3 分钟内出针）
+IDLE_SAMPLES = 3        # T2：非 BUSY 采样数（v4.3 回调 1→3：v4.1 的"误发无害"被用户实证推翻——等回执的席位 3 分钟即中针+假升级；配合 CPU 活性信号，真停摆约 9 分钟出针）
 GLOBAL_SAMPLES = 3      # T3：全局 0 BUSY 采样数
 MAX_SAMPLES = 120       # 6 小时心跳
 NUDGE_BUDGET = 2        # v3：每席每任务自动探针预算，烧穿才升级 leader
-HASH_SAMPLES = 2        # T4：pane 正文 hash 连续不变的采样数（v4.1 收紧 3→2，≈6 分钟）
+HASH_SAMPLES = 3        # T4：pane 正文 hash 连续不变的采样数（v4.3 回调 2→3；长编译静默由 CPU 信号豁免）
+CPU_EPS = 1.0           # v4.3：采样间子树 CPU 前进超此秒数即判"在干活"
 TAIL_STRIP = 15         # T4：剥掉 pane 尾部 UI 区行数（输入框/状态栏/任务列表/spinner）
 
 
@@ -75,12 +84,41 @@ def pane_hash(sock: str, session: str, seat: str) -> str:
     body = "\n".join(r.stdout.rstrip().splitlines()[:-TAIL_STRIP])
     return hashlib.md5(re.sub(r"\d+", "#", body).encode()).hexdigest()
 
+
+def pane_cpu(sock: str, session: str, seat: str) -> float:
+    """v4.3 活性信号：pane 进程子树累计 CPU 秒。长编译/长测试期间正文静止但 CPU 在走，
+    据此把"安静干活"与"真停摆"分开。天数段(dd-)按 60 进位折算不精确，但只用于
+    采样间差值比较，单调性足够。取不到返回 -1（不参与判定）。"""
+    r = subprocess.run(["tmux", "-S", sock, "display", "-p", "-t", f"{session}:{seat}", "#{pane_pid}"],
+                       capture_output=True, text=True, timeout=10)
+    root = r.stdout.strip()
+    if r.returncode != 0 or not root.isdigit():
+        return -1.0
+    ps = subprocess.run(["ps", "-axo", "pid=,ppid=,time="], capture_output=True, text=True, timeout=10)
+    kids: dict[str, list[str]] = {}
+    times: dict[str, str] = {}
+    for line in ps.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3:
+            kids.setdefault(parts[1], []).append(parts[0])
+            times[parts[0]] = parts[2]
+    total, stack = 0.0, [root]
+    while stack:
+        p = stack.pop()
+        stack.extend(kids.get(p, []))
+        secs = 0.0
+        for part in times.get(p, "0").replace("-", ":").split(":"):
+            secs = secs * 60 + float(part)
+        total += secs
+    return total
+
 os.chdir(WS)
 idle_count: dict[str, int] = {}
 nudges: dict[str, int] = {}          # v3：seat -> 已发探针数（按 seat:task 键）
 last_seen_output: dict[str, str] = {}  # v3：seat -> 上次采样的 last_output_at（复活判定）
 pane_hashes: dict[str, str] = {}     # v4：seat -> 上次正文 hash
 hash_still: dict[str, int] = {}      # v4：seat -> 连续不变采样数
+pane_cpus: dict[str, float] = {}     # v4.3：seat -> 上次子树累计 CPU 秒
 global_count = 0
 log = open(".team/logs/watchdog.log", "a")
 
@@ -135,6 +173,17 @@ for i in range(MAX_SAMPLES):
                         print(f"revived: {key} (正文 hash 前进)", file=log, flush=True)
                         nudges[key] = 0
                 pane_hashes[seat] = h
+            # v4.3 活性豁免：子树 CPU 前进 = 在干活（长编译/长测试正文静止不误报）
+            cpu = pane_cpu(sock, session, seat) if sock else -1.0
+            if cpu >= 0:
+                prev_cpu = pane_cpus.get(seat)
+                if prev_cpu is not None and cpu - prev_cpu > CPU_EPS:
+                    hash_still[seat] = 0
+                    idle_count[seat] = 0
+                    if nudges.get(key):
+                        print(f"revived: {key} (CPU 前进 {cpu - prev_cpu:.1f}s)", file=log, flush=True)
+                        nudges[key] = 0
+                pane_cpus[seat] = cpu
             # v3 复活判定：探针发出后 last_output_at 前进 → 计数清零（信号已知可能失真，仅作辅助）
             if nudges.get(key) and last and last != last_seen_output.get(key):
                 pass  # v4 起不再凭此清零：last_output_at 被 UI 噪声污染，会把死席误判复活
