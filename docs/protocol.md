@@ -50,7 +50,7 @@ S ── list_delta ──────▶ C       会话新增/消失/状态变�
 C ── subscribe ───────▶ S       订阅一个会话镜像
 C ◀── [binary] snapshot S       首帧全屏快照（capture-pane -e，含颜色）
 C ◀── [binary] delta ── S       后续增量字节流（pipe-pane）
-C ── input ───────────▶ S       整条文本注入
+C ── input ───────────▶ S       整条文本/命名键注入
 C ◀── input_ack ─────── S       必达回执（成功/失败+原因）
 C ── scrollback ──────▶ S       按行区间拉历史
 C ◀── [binary] scrollback S     一页历史（ANSI 字节）
@@ -86,7 +86,7 @@ C ── unsubscribe ─────▶ S       停止镜像
 | `list_delta` | S→C | 列表增量推送 | `seq` + 四组字段（见 §5.2） |
 | `subscribe` | C→S | 订阅会话镜像 | `ref`、`rows`、`cols` |
 | `unsubscribe` | C→S | 停止镜像（幂等） | `ref` |
-| `input` | C→S | 整条文本注入 | `req_id`、`ref`、`text` |
+| `input` | C→S | 整条文本/命名键注入 | `req_id`、`ref`；`text` 与 `keys` 至多其一 |
 | `input_ack` | S→C | 注入回执（必达） | `req_id`、`ok`; 失败时 `reason` |
 | `scrollback` | C→S | 按行区间拉历史 | `req_id`、`ref`、`from_line`、`count` |
 | `resize` | C→S | 上报行列数 | `ref`、`rows`、`cols` |
@@ -113,6 +113,21 @@ C **必须**重新 `list` 拉全量（无状态恢复）。
 
 **input**——整条文本一次性注入并回车（send-keys 语义，非逐键，requirement 003）。
 `text` 为空 = 仅回车，允许。S **必须**回 `input_ack`（成功/失败+原因），杜绝"发了没反应"。
+
+**input.keys（R-1 快捷键条，017 裁定；可选字段，前向兼容增量，不 bump 版本）**——
+`input` 帧新增可选 `keys`：字符串数组，闭集 `esc` / `ctrl_c` / `tab` / `up` / `down` /
+`left` / `right`（对应 tmux 命名键 Escape / C-c / Tab / Up / Down / Left / Right）。
+**`text` 与 `keys` 互斥**：一帧至多携带其一——两者都有判协议错误（帧校验失败，S 回
+`error: bad_frame`，不执行注入、不回 `input_ack`）；两者皆无 = 仅回车（既有语义不变）。
+`keys` 注入**不附加回车**：快捷键条语义是"按一下那个键"，Esc/Ctrl-C/Tab/方向键后再补
+Enter 可能误触发 CLI 确认——这与 `text` 的"注入+回车"本质不同。旧客户端只发 `text`
+不发 `keys`，行为完全不变（send-keys 仍走既有路径）。
+
+**多行文本与 R-2 退化风险**——含换行的 `text` 由 S 走既有 `paste-buffer -p` 括号粘贴路径
+整段注入 + Enter，**App 不拆分**（R-2 裁定，017）。退化风险：目标 CLI 不支持 `?2004`
+（DECSET 括号粘贴模式）时，终端退化为**逐行执行**，多行内容可能被 CLI 逐行当作命令执行。
+此行为由 CLI 自身是否声明 `?2004` 决定，S 侧以 R-2 已测路径（`TestInjectMultiline`）为准；
+在支持括号粘贴的 CLI（Claude Code 等）上无感。
 
 **input_ack**——`req_id` 对应 `input.req_id`。`ok:true` 表示字节已进面板；`ok:false` 必须携带
 `reason`，枚举见 §7.2。`reason` 存在当且仅当 `ok:false`（一字段一义）。
@@ -293,7 +308,8 @@ kind=3 时 payload 头部为 **12 字节元数据头**，描述**服务端实际
 
 `server/internal/protocol/testdata/` 是**契约的一部分**（leader 裁定，计入验收）：
 
-- `*.json` — 每种控制帧类型一个 golden 样本（v1 线上字节）。
+- `*.json` — 每种控制帧类型一个 golden 样本（v1 线上字节）；`input` 有 text 与 keys
+  两个变体样本（`input.json` / `input_keys.json`，字段名与顺序冻结）。
 - `*.bin` — 三种二进制流帧各一个样本；`*.bin.txt` 为字节注解。
 - 客户端（Kotlin conn-layer）与 Go 实现**消费同一份夹具**做编解码断言，拦协议漂移。
 - 本仓库往返单测（golden_test.go）要求每个样本**字节级稳定**（decode→re-encode 不变）。
