@@ -290,6 +290,21 @@ tasks:
     evidence: ".team/evidence/fix-pairing-scan-flow.json"
     contention: impl
 
+  - id: fix-daemon-idle-cpu
+    goal: >
+      修复真机验收缺陷 C（用户实测：4 孤儿实例各吃 17.5% CPU 空转）。三件套：
+      ①空闲降耗：零已认证客户端时**暂停** discovery 轮询与状态采样（有客户端接入才恢复），目标空闲
+      CPU <1%；每次扫描的子进程派生数有界（合并 tmux 调用）。②单实例守卫：状态目录 pidfile+活性校验，
+      二启检测到活实例即明确报错退出（或 -takeover 显式接管），禁止静默并存。③e2e 泄漏修复：layer2
+      脚本 trap 补 daemon 清理（孤儿实证：父进程1、-list-interval 500ms、e2e/bin 路径）。
+      红测先行：零客户端时扫描器不 tick（fake clock 断言）、二启拒绝、e2e 脚本退出后无残留进程。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/api/... ./internal/discovery/... ./cmd/...'"
+    deps: ["ws-api"]
+    write_scope: ["server/internal/api/", "server/internal/discovery/", "server/cmd/", "e2e/layer2.sh", "e2e/run.sh"]
+    evidence: ".team/evidence/fix-daemon-idle-cpu.json"
+    contention: impl
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
