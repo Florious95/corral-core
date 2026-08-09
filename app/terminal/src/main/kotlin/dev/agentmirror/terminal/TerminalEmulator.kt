@@ -72,6 +72,16 @@ class TerminalEmulator(
     /** 历史是否可用：alternate screen（全屏 TUI）期间为 false（006 边界）。 */
     val historyAvailable: Boolean get() = !altActive
 
+    /**
+     * 快照重放进行中：LF 附带隐式回车（fix-term-render-debt 缺陷②）。
+     *
+     * 两条上游的行尾字节形态不同：feed 吃 pipe-pane 原始 pty 字节（经行规程 ONLCR，
+     * 行尾 CR LF，LF 保持严格 VT 语义只下移）；replaySnapshot 吃 capture-pane 输出
+     * （行间**裸 LF 无 CR**，tmux 行分隔约定）——不补 CR 则每行起点继承上一行末尾列，
+     * 即真机截图 term-glyph-after.png 的逐行右移。对已含 CR LF 的输入补 CR 幂等无害。
+     */
+    private var replayImplicitCr = false
+
     /** 当前列数。 */
     val cols: Int get() = grid().cols
 
@@ -82,7 +92,13 @@ class TerminalEmulator(
         main.onLineScrolledOut = { line -> scrollback.appendTail(line) }
     }
 
+    // 入口互斥（fix-term-render-debt 缺陷①连带）：帧唤醒落地后「WS 收件线程 feed」与
+    // 「主线程帧回调 snapshot」常态并发，网格行数组换行/滚动期间取快照会读到撕裂行；
+    // 五个公开入口（feed/replaySnapshot/resize/prependHistory/snapshot）以实例锁串行。
+    // 锁序：本锁 → presenter.damageLock（damageListener 在锁内回调），反向不存在，无死锁。
+
     /** 喂入增量字节流（pipe-pane 语义，可在任意字节处切断）。 */
+    @Synchronized
     fun feed(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset) {
         parser.feed(bytes, offset, length)
         flushDamage()
@@ -97,6 +113,7 @@ class TerminalEmulator(
      * 重连/订阅首帧/resize 后均走此入口（004 无状态：重连即重放）；样式、游标、
      * alternate screen、半截转义序列全部复位后再喂快照字节。
      */
+    @Synchronized
     fun replaySnapshot(bytes: ByteArray, cols: Int, rows: Int) {
         altActive = false
         alt = null
@@ -105,7 +122,17 @@ class TerminalEmulator(
         parser.reset()
         main.resize(cols, rows)
         main.reset()
-        parser.feed(bytes)
+        // capture-pane 输出以 LF **终结**最后一行（N 行 N 个 LF）：末 LF 是终结符不是
+        // 分隔符，不剥则底行触发 scrollUp——整屏上移一行且顶行错误滚入 scrollback
+        // （每次重 attach 重放都污染一行历史）。只剥恰好一个尾随 LF。
+        val length = if (bytes.isNotEmpty() && bytes[bytes.size - 1] == LF) bytes.size - 1 else bytes.size
+        // capture-pane 行间是裸 LF：重放期间 LF 隐式回车（见 replayImplicitCr KDoc）。
+        replayImplicitCr = true
+        try {
+            parser.feed(bytes, 0, length)
+        } finally {
+            replayImplicitCr = false
+        }
         flushDamage()
     }
 
@@ -114,6 +141,7 @@ class TerminalEmulator(
         replaySnapshot(text.toByteArray(Charsets.UTF_8), cols, rows)
 
     /** 换网格尺寸（只换尺寸不 reflow，内容以随后到达的服务端快照为准，005）。 */
+    @Synchronized
     fun resize(cols: Int, rows: Int) {
         main.resize(cols, rows)
         alt?.resize(cols, rows)
@@ -126,6 +154,7 @@ class TerminalEmulator(
      * [bytes] 按行解析（LF 分行，仅应用 SGR，其余序列忽略）；alternate screen
      * 期间历史不可用，调用被忽略。
      */
+    @Synchronized
     fun prependHistory(bytes: ByteArray) {
         if (altActive) return
         scrollback.prependHead(parseHistoryLines(bytes))
@@ -135,6 +164,7 @@ class TerminalEmulator(
     fun prependHistory(text: String) = prependHistory(text.toByteArray(Charsets.UTF_8))
 
     /** 取当前屏幕的不可变快照（渲染层消费）。 */
+    @Synchronized
     fun snapshot(): ScreenSnapshot {
         val g = grid()
         return ScreenSnapshot(
@@ -159,7 +189,11 @@ class TerminalEmulator(
         when (byte) {
             0x08 -> g.backspace()
             0x09 -> g.tab()
-            0x0A, 0x0B, 0x0C -> g.lineFeed(eraseStyle())
+            0x0A, 0x0B, 0x0C -> {
+                // 重放模式：capture-pane 裸 LF 补隐式 CR（缺陷②行首漂移）；增量流保持严格 VT。
+                if (replayImplicitCr) g.carriageReturn()
+                g.lineFeed(eraseStyle())
+            }
             0x0D -> g.carriageReturn()
             else -> {}
         }
@@ -294,6 +328,11 @@ class TerminalEmulator(
 
     /** DECSC/DECRC 保存的游标位置与样式。 */
     private data class SavedCursor(val x: Int, val y: Int, val style: TextStyle)
+
+    private companion object {
+        /** LF 字节（replaySnapshot 剥尾随行终结符用）。 */
+        const val LF = 0x0A.toByte()
+    }
 }
 
 /**

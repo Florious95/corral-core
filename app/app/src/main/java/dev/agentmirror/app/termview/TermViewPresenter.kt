@@ -37,6 +37,17 @@ class TermViewPresenter(
     /** 视口顶行（逻辑行，0=最老历史）：null=跟随底部；非 null=锁定历史，冻结不变。 */
     private var topLine: Int? = null
 
+    /**
+     * 帧请求回调（fix-term-render-debt 缺陷①）：任何"画面需要重画"的状态变化
+     * （新脏区到达/视口滚动/回到底部/字号变化）时触发，由 View 层接到 postFrame。
+     *
+     * 数据驱动唤醒是渲染循环的唯一入口：增量流在 WS 收件线程 feed 后经内核
+     * damageListener 到达这里，没有本回调就没人唤醒 Choreographer（真机实证
+     * 画面冻结、重 attach 才刷新）。禁止用定时器轮询替代（静默经济红线：
+     * 空闲必须零帧循环）。可能在任意线程被调（WS 收件线程/主线程），接收方自行跳线程。
+     */
+    var onFrameRequested: (() -> Unit)? = null
+
     /** 当前等宽字格像素尺寸（View 层测量/捏合后设置）。 */
     var cellWidth: Int = DEFAULT_CELL_WIDTH
         private set
@@ -47,8 +58,12 @@ class TermViewPresenter(
     private var viewportWidthPx: Int = 0
     private var viewportHeightPx: Int = 0
 
-    /** 待重绘的逻辑行区间（内核屏幕脏行换算而来，尚未被 View 帧消费）。 */
+    /** 待重绘的逻辑行区间（内核屏幕脏行换算而来，尚未被 View 帧消费）。
+     *  写侧在 WS 收件线程（feed→damageListener）、取侧在主线程帧回调，经 [damageLock] 互斥。 */
     private var pendingDamage: MutableList<IntRange>? = null
+
+    /** [pendingDamage] 的跨线程互斥锁（增量流唤醒后写/取真正并发，缺陷①修复连带）。 */
+    private val damageLock = Any()
 
     /** 本帧内核快照缓存：beginFrame 抓一次，避免 lineCells 对屏幕行逐行深拷贝。 */
     private var frameSnapshot: ScreenSnapshot? = null
@@ -92,11 +107,14 @@ class TermViewPresenter(
         val current = topLine ?: maxTop
         val next = (current - deltaLines).coerceIn(0, maxTop)
         topLine = if (next >= maxTop) null else next
+        // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
+        onFrameRequested?.invoke()
     }
 
     /** 回到底部：恢复跟随，视口钉回最新输出。 */
     fun onScrollToBottom() {
         topLine = null
+        onFrameRequested?.invoke()
     }
 
     // ---- 捏合 → 行列数换算（005：让 CLI 自己重画）----
@@ -113,6 +131,8 @@ class TermViewPresenter(
         cellWidth = newCellWidth
         cellHeight = newCellHeight
         recomputeGeometry()
+        // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
+        onFrameRequested?.invoke()
     }
 
     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */
@@ -129,8 +149,12 @@ class TermViewPresenter(
 
     /** 取当前待重绘的逻辑行区间（已合并、裁剪到窗口内）；取走即清空。 */
     fun takeDamage(): List<IntRange> {
-        val raw = pendingDamage ?: return emptyList()
-        pendingDamage = null
+        // 锁内只做取走置空（最小临界区），合并裁剪在锁外进行。
+        val raw = synchronized(damageLock) {
+            val taken = pendingDamage ?: return emptyList()
+            pendingDamage = null
+            taken
+        }
         val win = window
         val clipped = raw.mapNotNull { r ->
             val lo = maxOf(r.first, win.first)
@@ -156,11 +180,15 @@ class TermViewPresenter(
 
     // ---- 内部实现 ----
 
-    /** 内核屏幕脏行 [range] → 逻辑行区间缓存；锁定态窗口外损伤由 [takeDamage] 裁剪吸收。 */
+    /** 内核屏幕脏行 [range] → 逻辑行区间缓存；锁定态窗口外损伤由 [takeDamage] 裁剪吸收。
+     *  缓存后触发帧请求（缺陷①：增量流到达的唯一唤醒点，回调在锁外调避免持锁跳线程）。 */
     private fun markScreenRowsDirty(range: IntRange) {
         val sb = emulator.scrollback.size
         val logical = (sb + range.first)..(sb + range.last)
-        (pendingDamage ?: mutableListOf<IntRange>().also { pendingDamage = it }).add(logical)
+        synchronized(damageLock) {
+            (pendingDamage ?: mutableListOf<IntRange>().also { pendingDamage = it }).add(logical)
+        }
+        onFrameRequested?.invoke()
     }
 
     /** 把区间集合并成最小覆盖集（重叠或相邻 [a,b] 与 [b+1,c] 都合并，减少每帧 draw 调用数）。 */
