@@ -557,6 +557,40 @@ tasks:
     evidence: ".team/evidence/fix-term-bg-cjk.json"
     contention: impl
 
+  - id: feat-tsnet-wiring
+    goal: >
+      P0（用户验收标准原文即含 TS——单一 App 内嵌 tsnet 是三痛点之一，007/011 裁定；死件家族
+      第七例：tsnetd 服务端在、app-tsnet gomobile 绑定在，App 配对页 authkey 输入框是死占位
+      「即将推出」，连接层从未走 tsnet 拨号）：全链接线——①App：authkey 填入/QR 携带（011 预留
+      字段）→ 起内嵌 tsnet 节点 → ConnectionManager 拨号经 tsnet SOCKS5（有 tsnet 走隧道，无则
+      LAN 直连，运行时可判定）；连接状态区分展示 LAN/tailnet；authkey 安全存储不进日志。
+      ②服务端：daemon 起 tsnetd 双栈的操作路径文档化（authkey 环境变量/flag，README 补节）。
+      ③QR：candidates 与 tailnet 地址共存语义（tailnet 地址入候选）。红测先行（假 tsnet 接缝：
+      拨号路由选择/authkey 存取/QR 解析）；真实 tailnet 端到端留用户真机验收（需用户 authkey，
+      模拟器自验到 SOCKS5 拨号路由正确为止，未达部分显式列未验证清单）。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'", "bash -lc 'cd server && go test ./internal/tsnetd/... ./internal/pairing/...'"]
+    deps: ["app-tsnet", "tsnet-embed", "fix-pairing-candidates"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/", "app/app/src/test/", "server/internal/pairing/", "server/internal/tsnetd/", "server/cmd/", "docs/protocol.md", "server/README.md"]
+    evidence: ".team/evidence/feat-tsnet-wiring.json"
+    contention: contract
+
+  - id: feat-ts-wire
+    goal: >
+      P0（用户验收标准硬项，2026-08-09 回炉：配对页 TS 输入框是「即将推出」空壳）：TS 全链接线——
+      死件家族最大件，两端组件均已交付从未接通。①服务端：-ts-authkey（或环境变量）配置→tsnetd
+      真实起网→QR candidates 追加 tailnet 地址（100.x）→QR ts_authkey 字段按 011 载入（预授权
+      分发给 App）；②App：authkey（扫码带入或手填）→TsnetBackend 启动入网→连接层对 tailnet
+      地址经 TsnetDial（SOCKS5）拨号，LAN 地址直拨不回退；③「即将推出」占位文案删除，TS 态
+      可视（入网中/已入网/失败原因，018 标准5）；④验收边界：模拟器验 tsnet 起网+SOCKS 通道
+      建立+无 authkey 降级不回退（红测）；真实 tailnet 端到端连通需真实 authkey——交件后由
+      用户真机填 key 验证，未验部分显式进未验证清单。authkey 安全：不落日志不上屏明文（同
+      token 红线）。契约先行：docs/protocol.md QR payload 节 ts_authkey 语义补全。
+    acceptance: ["bash -lc 'cd server && go test ./internal/tsnetd/... ./internal/pairing/...'", "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["tsnet-embed", "app-tsnet", "fix-pairing-candidates"]
+    write_scope: ["server/internal/tsnetd/", "server/internal/pairing/", "server/cmd/", "docs/protocol.md", "app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-ts-wire.json"
+    contention: contract
+
   - id: fix-release-test-host
     goal: >
       基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
