@@ -72,6 +72,11 @@ for L in "${LAYERS[@]}"; do
   fi
 done
 
+# ---- 收尾兜底：任何层残留的 agentmirrord（孤儿/未杀干净）在此统一清理。 ----
+# taskbook #fix-daemon-idle-cpu e2e 泄漏修复：仅清 e2e/bin 的 daemon 二进制
+# （净化红线：绝不碰用户真实舰队里其他路径的 agentmirrord）。
+pkill -f "$E2E_ROOT/bin/agentmirrord" 2>/dev/null || true
+
 # ---- report.md 渲染（真实数字从 metrics JSON + 各层状态读）。 ----
 python3 "$E2E_ROOT/report_render.py" "$ART" "$PASS" > "$E2E_ROOT/report.md" 2>/dev/null \
   || { echo "report render failed" >&2; }

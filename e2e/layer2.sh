@@ -40,10 +40,20 @@ DAMON_BIN="$E2E_ROOT/bin/agentmirrord"
 E2E_PASS=1
 # 结果落盘：report_render 读 artifacts/layer2.json（非依赖 .fail 文件的「推断」）。
 echo '{"pass": false, "at": "'$(date +%Y-%m-%dT%H:%M:%S)'"}' > "$ART/layer2.json"
-# trap 收尾：杀自起 daemon（若还活着）；失败现场保留在 artifacts。
+# trap 收尾：杀自起 daemon（若还活着）并 wait 收尸，杜绝孤儿实例
+# （taskbook #fix-daemon-idle-cpu e2e 泄漏修复：实证残留父进程 1 的孤儿）。
 CLEANUP_PID=""
 cleanup() {
-  [ -n "$CLEANUP_PID" ] && kill "$CLEANUP_PID" 2>/dev/null || true
+  if [ -n "$CLEANUP_PID" ]; then
+    kill "$CLEANUP_PID" 2>/dev/null || true
+    # 等 daemon 真正退出（优雅关闭走 pidfile 释放路径）；超时兜底强杀。
+    for _ in $(seq 1 20); do
+      kill -0 "$CLEANUP_PID" 2>/dev/null || break
+      sleep 0.25
+    done
+    kill -9 "$CLEANUP_PID" 2>/dev/null || true
+    wait "$CLEANUP_PID" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
 
@@ -63,7 +73,8 @@ echo "=== [layer2] install $PKG"
 PORT=$(( ( RANDOM % 2000 ) + 9000 ))
 TOKEN="e2e-layer2-$(date +%s)"
 TMPD="$(mktemp -d /tmp/e2e-l2.XXXXXX)"
-TMUX_TMPDIR="$TMPD/tmux" AGENTMIRROR_TOKEN="$TOKEN" \
+mkdir -p "$TMPD/state"
+TMUX_TMPDIR="$TMPD/tmux" AGENTMIRROR_TOKEN="$TOKEN" AGENTMIRROR_STATE_DIR="$TMPD/state" \
   "$DAMON_BIN" -listen "0.0.0.0:$PORT" -upload-dir "$TMPD/uploads" \
   -log-level debug -list-interval 500ms >"$TMPD/daemon.log" 2>&1 &
 CLEANUP_PID=$!
