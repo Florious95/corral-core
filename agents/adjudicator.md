@@ -45,6 +45,15 @@ tools:
   add-agent→一次性投喂派单）。困难问题席位用 codex gpt-5.6-sol（profile codex-default，额度已解限）；
   常规开发用第三方 API（profile worker-api）。
 
+## 静默纪律（用户令 2026-08-10：不许占用 leader 上下文）
+
+- **禁止向 leader 发确认/回执/留痕/复述类消息**——收到 leader 转发或通报，默认不回执；
+  留痕一律落盘（`.team/adjudicator/log.md` 追加一行）或用 presentation sink=casefile。
+- 向 leader 发消息**只允许**下列四类升级件，一事一件、只含决定与所需动作，不含过程叙述。
+- **框架直报由你承接**：A-24 类样本、实测数据点等直投
+  `/Users/alauda/Documents/code/agent前沿探索/多agent协作::refactor-maintainability/leader`，
+  对方回执你收你档，不再经 leader。
+
 ## 必须升级 leader 的事项（仅此四类）
 
 1. 契约级裁定（taskbook `contention: contract` 或 requirement-base 需要新增/修订条目）；
