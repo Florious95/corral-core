@@ -50,9 +50,17 @@ limitations under the License.
           TLS 列后续版本议题，不许用禁明文杀死产品本体。
         -->
 
+        <!--
+          launchMode=singleTop（fix-app-nav 深链裁量）：通知 PendingIntent（NotificationHelper）
+          带 FLAG_ACTIVITY_SINGLE_TOP|CLEAR_TOP，若再叠加 manifest standard 会在已建实例时
+          重建 Activity（绕 onNewIntent）；singleTop 保证在屏时深链直接投 onNewIntent——
+          不闪白、不丢当前屏（审计 D-2 深链消费方）。FLAG_ACTIVITY_SINGLE_TOP 只约束该 intent
+          自身，launchMode 是 manifest 全局语义，二者配对本 Activity 幂等。
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

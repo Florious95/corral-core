@@ -18,9 +18,7 @@ package dev.agentmirror.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import dev.agentmirror.app.pairing.PairingConfigStore
 import dev.agentmirror.app.pairing.PairingRoute
@@ -39,40 +37,43 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
  * - 有配对配置 → 直进工作区列表；
  * - 配对页可从设置/重配入口重进（重新配对）。
  * 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。
+ *
+ * 导航态（activeSession/showPairing）由 [navState]（D-3 修复）注入：MainActivity 在
+ * onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。
  */
 @Composable
-fun AgentMirrorApp() {
+fun AgentMirrorApp(
+    navState: MainNavState,
+) {
     AgentMirrorTheme {
         val context = LocalContext.current
         // 配对配置存储（SharedPreferences）：首启判定 + 重配入口共用。
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
-        var showPairing by remember { mutableStateOf(configStore.load() == null) }
         // 根级 ViewModel：接线层（service 任务）将把 ConnectionManager 回调接进来。
         val viewModel = remember { WorkspaceViewModel() }
-        var activeSession by remember { mutableStateOf<Pair<String, String>?>(null) }
-        val session = activeSession
+        val session = navState.activeSession
 
         when {
             // 会话页优先（在屏会话不被重配打断）。
             session != null -> SessionRoute(ref = session.first, name = session.second) {
-                activeSession = null
+                navState.activeSession = null
             }
             // 配对页：首启无配置，或用户从设置/重配入口进入。
-            showPairing -> PairingRoute(
+            navState.showPairing -> PairingRoute(
                 configStore = configStore,
                 onPaired = {
                     // 配对成功：配置已落库 + ServiceWire 注入（见 PairingRoute），切工作区。
-                    showPairing = false
+                    navState.showPairing = false
                 },
                 onSkip = {
                     // 首启跳过：进空工作区（连接未配置 → 工作区顶栏显示连接中/重配入口）。
-                    showPairing = false
+                    navState.showPairing = false
                 },
             )
             // 工作区：有配置直进；"重新配对"从设置入口进入（见 WorkspaceScreen 顶栏设置钮）。
             else -> WorkspaceScreen(
                 viewModel = viewModel,
-                onOpenSession = { ref, name -> activeSession = ref to name },
+                onOpenSession = { ref, name -> navState.activeSession = ref to name },
             )
         }
     }
