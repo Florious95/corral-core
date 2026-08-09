@@ -123,10 +123,10 @@ func fakeProbe(name string, cidrs ...string) ifaceAddr {
 // tap/awdl/llw/bridge = virtual tunnel/group names, lo0 = loopback.
 var probeSet = []ifaceAddr{
 	fakeProbe("en0", "192.168.31.116/24", "fe80::1e0a:3a00:1/64"), // real LAN
-	fakeProbe("en1", "10.20.55.20/24"),                           // real LAN (second NIC)
-	fakeProbe("utun3", "198.18.0.1/15"),                          // proxy fake-IP TUN (real 198.18 defect)
-	fakeProbe("bridge0", "169.254.27.197/16"),                    // link-local
-	fakeProbe("awdl0", "fe80::100/64"),                           // AWDL, IPv6 only
+	fakeProbe("en1", "10.20.55.20/24"),                            // real LAN (second NIC)
+	fakeProbe("utun3", "198.18.0.1/15"),                           // proxy fake-IP TUN (real 198.18 defect)
+	fakeProbe("bridge0", "169.254.27.197/16"),                     // link-local
+	fakeProbe("awdl0", "fe80::100/64"),                            // AWDL, IPv6 only
 	fakeProbe("lo0", "127.0.0.1/8"),
 }
 
