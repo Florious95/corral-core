@@ -48,11 +48,16 @@ class TermSurfaceView @JvmOverloads constructor(
     defStyleAttr: Int = 0,
 ) : View(context, attrs, defStyleAttr) {
 
-    /** 视口状态机；由上层注入（与内核同构，渲染/手势全部委托给它）。 */
+    /** 视口状态机；由上层注入（与内核同构，渲染/手势全部委托给它）。
+     *  注入即接管其帧请求回调（缺陷①：增量流/滚动/字号变化经 presenter 唤醒本 View）。 */
     var presenter: TermViewPresenter? = null
         set(value) {
+            field?.onFrameRequested = null // 换 presenter 时摘旧钩，避免旧实例继续唤醒
             field = value
-            if (value != null) postFrame()
+            if (value != null) {
+                value.onFrameRequested = { requestFrameFromAnyThread() }
+                postFrame()
+            }
         }
 
     /** 像素高度对应一逻辑行的行高（视口向下滚动超过一行时对齐整格）。 */
@@ -110,20 +115,16 @@ class TermSurfaceView @JvmOverloads constructor(
         override fun doFrame(frameTimeNanos: Long) {
             framePending = false
             val p = presenter ?: return
-            val allDamage = buildList {
-                while (true) {
-                    val more = p.takeDamage()
-                    if (more.isEmpty()) break
-                    addAll(more)
-                }
-            }
+            // 排空脏区缓冲（防无界增长）后整帧重绘。不再自续下一帧：帧循环是纯数据
+            // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线；
+            // 旧版 showBackToBottom 自续 = 锁定历史时 60fps 空转，本案顺带拆除）。
+            while (p.takeDamage().isNotEmpty()) Unit
             p.beginFrame()
             invalidate()
-            if (allDamage.isNotEmpty() || p.showBackToBottom) postFrame()
         }
     }
 
-    /** 帧是否已排入 Choreographer（防重复排队；doFrame 时复位）。 */
+    /** 帧是否已排入 Choreographer（防重复排队；doFrame 时复位；仅主线程触碰）。 */
     private var framePending = false
 
     /** 请求一帧：脏数据或状态变化驱动（Choreographer 垂直同步对齐；重复请求被合并为一帧）。 */
@@ -131,6 +132,34 @@ class TermSurfaceView @JvmOverloads constructor(
         if (framePending) return
         framePending = true
         Choreographer.getInstance().postFrameCallback(frameCallback)
+    }
+
+    // ---- 跨线程帧唤醒（缺陷①：WS 收件线程 feed 后必须能唤醒主线程帧循环）----
+
+    /** 主线程 Handler：非主线程的帧请求经此跳线程（Choreographer 是 thread-local 的）。 */
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** 已有跨线程唤醒在途（合并突发增量的重复唤醒，稳态零新增分配）。 */
+    private val wakeQueued = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** 缓存的唤醒任务（避免每次增量到达都分配 Runnable——热路径纪律）。 */
+    private val wakeRunnable = Runnable {
+        wakeQueued.set(false)
+        postFrame()
+    }
+
+    /**
+     * 任意线程请求帧：主线程直达 [postFrame]；其他线程（WS 收件线程）经 [mainHandler]
+     * 跳到主线程，[wakeQueued] 保证同一时刻至多一个在途唤醒（背靠背增量合并为一帧）。
+     */
+    private fun requestFrameFromAnyThread() {
+        if (android.os.Looper.myLooper() === android.os.Looper.getMainLooper()) {
+            postFrame()
+            return
+        }
+        if (wakeQueued.compareAndSet(false, true)) {
+            mainHandler.post(wakeRunnable)
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
