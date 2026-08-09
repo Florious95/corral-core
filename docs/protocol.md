@@ -36,6 +36,44 @@
 - 新增帧类型 / 新增可选字段是**增量变更**，不 bump 版本；删除/重定义字段是破坏性变更，必须 bump。
 - 二进制流帧另有独立版本字节（现等于 `v`），仅当二进制帧格式本身需修复时才独立 bump。
 
+### 2.1 QR 配对载荷（onboarding payload，task fix-pairing-candidates）
+
+配对 onboarding 的载体是终端打印的二维码（requirement 011 路线 (a)），其内容是
+**单行 JSON**（服务端 `internal/pairing` 生成、App `pairing` 包解析）。字段名是 wire
+契约，不得改名；未知字段按 §4.1 前向兼容忽略：
+
+```jsonc
+{
+  "v": 1,            // 载荷 schema 版本（当前恒 1；未知版本 App 拒绝并提示）
+  "url": "ws://192.168.31.116:9900/ws",  // 主选 WebSocket 端点
+  "token": "…",      // 配对 token：扫码即走 §3 auth 上行；QR 是其合法出口之一（§9）
+  "ts_authkey": "",  // 保留：Tailscale auth key（app-tsnet 接入后填充），当前恒空
+  "candidates": [    // 可选：同一主机的全部候选 ws URL（含主选 url）
+    "ws://192.168.31.116:9900/ws",
+    "ws://10.20.55.20:9900/ws",
+    "ws://100.101.2.3:9900/ws"
+  ]
+}
+```
+
+- **`candidates` 是可选字段（0..n）**：同一主机的多网卡/多可达地址（fix-pairing-candidates
+  P0：多真实网卡下哪个地址对端可达机器不可判定，产品把候选全集给出逐试，不赌单一主选）。
+  **缺省或空数组 = 无候选，行为与旧版完全一致**——前向兼容增量，**不 bump 版本**；
+  旧 App 扫含 candidates 的新 QR、新 App 扫无 candidates 的旧 QR，都只试 `url`，行为不变。
+- **candidates 是同一主机的多地址，不是多主机档案**（017 R-3 后置：多主机支持走设置页
+  重配单档覆盖，本字段不承担多主机语义）。
+- 服务端生成：`candidates` = 全部可达地址的 ws URL（LAN + tailnet，按检测顺序；
+  **不含 loopback**——对手机不可达，仅作主选最后兜底；主选本身为 loopback 的降级
+  场景 candidates 为空，App 仅试主选，旧版行为不变）。
+- App 消费（配对失败即候选逐试）：
+  1. 主选 `url` 优先试；失败（拨号失败/不可达/超时）且 `candidates` 非空时自动逐试——
+     按数组顺序，跳过与已试相同、空、或非 ws 的项，每候选 **3s 超时**；
+  2. 任一候选 READY 即配对成功（持久化该候选 url + token）；
+  3. 全部候选失败才落最终失败态，并展示候选列表供一键重试（每项可点，失败可见 003）；
+  4. 手填表单地址支持从候选下拉选。
+- 解析宽容：`candidates` 中非 ws URL / 空项**跳过不报错**；`candidates` 类型错误（非数组）
+  视为无候选——坏候选不拖垮整个 QR，主选 `url` 仍可配对。
+
 ## 3. 生命周期
 
 ```
@@ -302,6 +340,7 @@ kind=3 时 payload 头部为 **12 字节元数据头**，描述**服务端实际
 - `server/internal/protocol/json.go` — JSON 编解码（MarshalFrame/UnmarshalFrame）
 - `server/internal/protocol/binary.go` — 二进制流帧编解码（EncodeBinary/DecodeBinary）
 - `server/internal/protocol/state.go` / `errors.go` — 状态枚举与错误码
+- `server/internal/pairing/qr.go` — QR 配对载荷（§2.1）：`Payload`/`NewPayload`/`Marshal`
 - `server/internal/protocol/*_test.go` — 帧往返与红测（红测先行）
 
 ### 10.1 契约夹具（testdata/）——协议的一部分
