@@ -221,17 +221,27 @@ data class UnsubscribeFrame(
     override fun validate(): String? = if (ref.isEmpty()) "unsubscribe ref must be non-empty" else null
 }
 
-/** 整条文本注入 C→S（send-keys 语义，非逐键）；text 为空 = 仅回车，允许。 */
+/**
+ * 整条文本注入 C→S（send-keys 语义，非逐键）；text 为空 = 仅回车，允许。
+ *
+ * keys（R-1 快捷键条，017 裁定，可选字段前向兼容增量不 bump 版本）：携带时发送命名
+ * 特殊键且**不附加回车**（快捷键条语义 = 按一下那个键）。text 与 keys 一帧至多其一，
+ * 两者都有判协议错误（契约 §4.2）；两者皆无 = 仅回车（既有语义不变）。
+ */
 @Serializable
 data class InputFrame(
     @SerialName("req_id") val reqId: Long,
     @SerialName("ref") val ref: String,
     @SerialName("text") val text: String = "",
+    @SerialName("keys") val keys: List<InputKey> = emptyList(),
 ) : FramePayload {
     override val frameType: String get() = FrameType.INPUT
     override fun validate(): String? = when {
         reqId <= 0 -> "input req_id must be >= 1"
         ref.isEmpty() -> "input ref must be non-empty"
+        // 契约 §4.2：text 与 keys 互斥，一帧至多其一（对齐 Go validate.go）。
+        text.isNotEmpty() && keys.isNotEmpty() ->
+            "input carries both text and keys; at most one is allowed"
         else -> null
     }
 }

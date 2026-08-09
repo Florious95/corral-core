@@ -28,6 +28,7 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ErrorFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.termview.TermViewPresenter
 import dev.agentmirror.terminal.TerminalEmulator
 
@@ -71,6 +72,15 @@ class SessionViewModel(
 
     /** 发送回执状态机（必达：ok 清框 / fail+超时保留内容并报错）。 */
     var inputStatus by mutableStateOf<InputStatus>(InputStatus.Idle)
+
+    /**
+     * 在途发送是否为快捷键（keys）而非草稿（text）。
+     *
+     * 草稿发送 ok 回执要清空输入框；快捷键发送（R-1，017）ok 回执**不动草稿**——
+     * 用户点 Esc/Ctrl-C 打断 agent 时往往正打着字。本标记在送出时置位、回执时消费，
+     * 区分同一发送闸（InputStatus.Sending）下的两种回执语义。
+     */
+    private var pendingSendIsKey = false
 
     /** 附件上传状态机（成功路径注入 / 失败明确报错）。 */
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
@@ -177,9 +187,12 @@ class SessionViewModel(
         // 发送态阻塞并发发送（UI 置灰），且 conn 层对每次投递只回执一次 ⇒ 在途回执即本页的。
         if (inputStatus !is InputStatus.Sending) return
         if (ok) {
-            // 003 发送必达：回执可见 + 清输入框。
+            // 003 发送必达：回执可见 + 清输入框。快捷键回执（R-1，017）不动草稿——
+            // 用户点 Esc/Ctrl-C 打断 agent 时往往正打着字（见 pendingSendIsKey）。
             inputStatus = InputStatus.Sent
-            textFieldValue = TextFieldValue("")
+            if (!pendingSendIsKey) {
+                textFieldValue = TextFieldValue("")
+            }
         } else {
             // 失败明确报错：输入框保留内容（可重发）。
             inputStatus = InputStatus.Failed(mapInputReason(reason))
@@ -200,7 +213,10 @@ class SessionViewModel(
 
     // ---- 用户动作 ----
 
-    /** 发送草稿：一次性注入并回车；回执经 [onInputResult] 判定（必达）。 */
+    /**
+     * 发送草稿：一次性注入并回车（R-2 多行不拆分：含 \n 的文本整段一条 input.text，
+     * 服务端 paste-buffer -p 括号粘贴路径处理）；回执经 [onInputResult] 判定（必达）。
+     */
     fun sendDraft() {
         if (inputStatus is InputStatus.Sending) return // 在途不回发
         // 本地先判定可发送性：未就绪立即明确报错（静默失效猎杀）。
@@ -210,6 +226,27 @@ class SessionViewModel(
         }
         val text = textFieldValue.text
         if (manager.sendInput(ref, text)) {
+            pendingSendIsKey = false
+            inputStatus = InputStatus.Sending
+        } else {
+            inputStatus = InputStatus.Failed("发送失败：连接不可用")
+        }
+    }
+
+    /**
+     * 点按快捷键条（R-1，017）：注入 keys 帧，**不附加回车**。
+     *
+     * 走既有 input→input_ack 决定性链路（003 发送必达：ack 失败/超时可见），与草稿共用
+     * 发送闸（在途不回发）；回执 ok 只显示已发送、不动草稿（用户在打字）。
+     */
+    fun sendKey(key: InputKey) {
+        if (inputStatus is InputStatus.Sending) return // 在途不回发
+        if (connectionState != ConnectionState.READY) {
+            inputStatus = InputStatus.Failed("连接未就绪，无法发送")
+            return
+        }
+        if (manager.sendInputKeys(ref, key)) {
+            pendingSendIsKey = true
             inputStatus = InputStatus.Sending
         } else {
             inputStatus = InputStatus.Failed("发送失败：连接不可用")

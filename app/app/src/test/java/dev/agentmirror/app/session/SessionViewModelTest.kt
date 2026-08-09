@@ -29,6 +29,7 @@ import dev.agentmirror.app.conn.FakeWebSocketTransport
 import dev.agentmirror.app.conn.FrameCodec
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.InputFrame
+import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.conn.ResizeFrame
 import dev.agentmirror.app.conn.ScrollbackFrame
 import dev.agentmirror.app.conn.TransportFactory
@@ -87,6 +88,7 @@ class SessionViewModelTest {
             transport.sentText.mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() }
 
         fun inputFrames(): List<InputFrame> = sentFrames().filterIsInstance<InputFrame>()
+        fun keyFrames(): List<InputFrame> = inputFrames().filter { it.keys.isNotEmpty() }
         fun scrollbackFrames(): List<ScrollbackFrame> = sentFrames().filterIsInstance<ScrollbackFrame>()
         fun resizeFrames(): List<ResizeFrame> = sentFrames().filterIsInstance<ResizeFrame>()
 
@@ -250,6 +252,75 @@ class SessionViewModelTest {
         h.vm.sendDraft()
         assertTrue(h.vm.inputStatus is InputStatus.Failed)
         assertTrue(h.inputFrames().isEmpty())
+    }
+
+    // ---- 快捷键条（R-1，017）：keys 帧 + 必达回执 ----
+
+    @Test
+    fun sendKeyEmitsKeysFrameWithoutText() {
+        // VM 层红测（R-1）：点按键条 → 发出的 input 帧 keys 字段正确且无 text（互斥）。
+        val h = Harness()
+        h.vm.sendKey(InputKey.ESC)
+        assertEquals(InputStatus.Sending, h.vm.inputStatus)
+        val keys = h.keyFrames()
+        assertEquals(1, keys.size)
+        assertEquals("s1", keys[0].ref)
+        assertEquals("", keys[0].text) // keys 帧不得携带 text（契约 §4.2 互斥）
+        assertEquals(listOf(InputKey.ESC), keys[0].keys)
+    }
+
+    @Test
+    fun sendKeyAckOkKeepsDraft() {
+        // keys 回执 ok：只显示已发送，不动草稿（用户点 Esc/Ctrl-C 打断时往往正打着字）。
+        val h = Harness()
+        h.vm.textFieldValue = TextFieldValue("ls -la")
+        h.vm.sendKey(InputKey.CTRL_C)
+        val sent = h.keyFrames().last()
+        h.ackOk(sent.reqId)
+        assertEquals(InputStatus.Sent, h.vm.inputStatus)
+        assertEquals("ls -la", h.vm.textFieldValue.text) // 草稿保留
+        // 未发出任何 text 帧。
+        assertTrue(h.inputFrames().none { it.keys.isEmpty() })
+    }
+
+    @Test
+    fun sendKeyFailureKeepsDraftAndShowsError() {
+        // keys 帧失败回执：输入框保留内容 + 明确报错（003 发送必达，不静默）。
+        val h = Harness()
+        h.vm.sendKey(InputKey.TAB)
+        val sent = h.keyFrames().last()
+        h.ackFail(sent.reqId, "session_not_found")
+        val st = h.vm.inputStatus
+        assertTrue(st is InputStatus.Failed)
+        assertTrue((st as InputStatus.Failed).message.contains("会话已不存在"))
+    }
+
+    @Test
+    fun sendKeyWhileDisconnectedFailsVisiblyWithoutFrame() {
+        // 未就绪点按：明确报错、不发帧。
+        val h = Harness()
+        h.transport.peerClose(1006, "dropped")
+        h.vm.sendKey(InputKey.UP)
+        assertTrue(h.vm.inputStatus is InputStatus.Failed)
+        assertTrue(h.keyFrames().isEmpty())
+    }
+
+    // ---- R-2 多行不拆分（017 裁定）----
+
+    @Test
+    fun multilineTextSentAsSingleFrame() {
+        // R-2：含 \n 的输入**不拆分**，整段一条 input.text 发送（服务端 paste-buffer -p
+        // 括号粘贴路径处理）。锁定防回归：禁止出现按行拆分的多次 send。
+        val h = Harness()
+        val multiline = "line one\nline two\nline three"
+        h.vm.textFieldValue = TextFieldValue(multiline)
+        h.vm.sendDraft()
+        val sent = h.inputFrames()
+        assertEquals(1, sent.size) // 单帧不拆分
+        assertEquals(multiline, sent[0].text) // 整段原样（含换行）
+        assertTrue(sent[0].keys.isEmpty())
+        h.ackOk(sent[0].reqId)
+        assertEquals(InputStatus.Sent, h.vm.inputStatus)
     }
 
     // ---- 附件管线（003 附加输入能力）----

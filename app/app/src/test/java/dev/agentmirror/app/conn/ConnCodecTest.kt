@@ -130,6 +130,18 @@ class ConnCodecTest {
     }
 
     @Test
+    fun testGoldenInputKeysFrame() {
+        // R-1 快捷键条夹具（017 裁定）：input_keys.json 是协议的一部分，与 Go 参考实现
+        // 共享字节级断言（leader 裁定 013），text 与 keys 互斥——本样本无 text。
+        val f = decode("input_keys.json") as InputFrame
+        assertEquals(10L, f.reqId)
+        assertEquals("s1", f.ref)
+        assertEquals("", f.text)
+        assertEquals(listOf(InputKey.ESC, InputKey.CTRL_C, InputKey.TAB), f.keys)
+        reencodeEquiv(f)
+    }
+
+    @Test
     fun testGoldenInputAckOk() {
         val f = decode("input_ack_ok.json") as InputAckFrame
         assertEquals(9L, f.reqId)
@@ -189,6 +201,7 @@ class ConnCodecTest {
             UnsubscribeFrame("s1"),
             InputFrame(9, "s1", "/model opus"),
             InputFrame(10, "s1"), // 空 text = 仅回车
+            InputFrame(11, "s1", keys = listOf(InputKey.ESC, InputKey.UP)), // keys 不附加回车
             InputAckFrame(9, ok = true),
             InputAckFrame(9, ok = false, reason = InputFailReason.INJECT_FAILED),
             ScrollbackFrame(5, "s1", -300, 100),
@@ -306,6 +319,34 @@ class ConnCodecTest {
     }
 
     @Test
+    fun testRedInputUnknownKey() {
+        // keys 是闭集（017 R-1 七键，新增须 bump 版本）：未知键按坏帧拒绝，对齐 Go
+        // json_test.go "input unknown key"（ErrInvalidField）。
+        assertDecodeFails(
+            FrameError.INVALID_FIELD,
+            """{"v":1,"type":"input","payload":{"req_id":10,"ref":"s1","keys":["home"]}}""",
+        )
+    }
+
+    @Test
+    fun testRedInputBothTextAndKeys() {
+        // 契约 §4.2：text 与 keys 互斥，两者都有判协议错误（对齐 Go validate.go）。
+        assertDecodeFails(
+            FrameError.INVALID_FIELD,
+            """{"v":1,"type":"input","payload":{"req_id":10,"ref":"s1","text":"hi","keys":["esc"]}}""",
+        )
+    }
+
+    @Test
+    fun testRedInputKeysNotArray() {
+        // keys 字段类型错（非数组）⇒ 坏帧。
+        assertDecodeFails(
+            FrameError.BAD_FRAME,
+            """{"v":1,"type":"input","payload":{"req_id":10,"ref":"s1","keys":"esc"}}""",
+        )
+    }
+
+    @Test
     fun testForwardCompatUnknownErrorCode() {
         // 协议 §2 前向兼容：服务端未来可增量新增 error code，客户端必须容忍未识别值。
         val f = FrameCodec.decode("""{"v":1,"type":"error","payload":{"code":"brand_new_code","reason":"x"}}""") as ErrorFrame
@@ -336,6 +377,7 @@ class ConnCodecTest {
             ListFrame(0),
             SubscribeFrame("s1", 0, 100),
             InputFrame(0, "s1"),
+            InputFrame(1, "s1", text = "hi", keys = listOf(InputKey.ESC)), // text 与 keys 互斥
             InputAckFrame(1, ok = false), // 缺 reason
             InputAckFrame(1, ok = true, reason = InputFailReason.INTERNAL), // ok 带 reason
             ScrollbackFrame(5, "s1", 0, 0),

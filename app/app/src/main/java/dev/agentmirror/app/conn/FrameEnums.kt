@@ -100,10 +100,11 @@ enum class InputFailReason(val wire: String) {
 /**
  * 从 wire 字符串反序列化闭集枚举的通用实现；未知值抛 [FrameDecodeException]。
  *
- * 用于语义上"闭集、未知即坏帧"的枚举（input_ack reason）。error code 不走这里：
- * 它按 §2 前向兼容回退 [ErrorCode.UNKNOWN]。
+ * 用于语义上"闭集、未知即坏帧"的枚举（input_ack reason、input keys）。error code
+ * 不走这里：它按 §2 前向兼容回退 [ErrorCode.UNKNOWN]。
+ * package 内可见：Keys.kt 的 [InputKey] 序列化器复用同一实现（闭集外即坏帧，对齐 Go）。
  */
-private inline fun <reified E : Enum<E>> strictDeserialize(
+internal inline fun <reified E : Enum<E>> strictDeserialize(
     decoder: Decoder,
     error: FrameError,
     fromWire: (String) -> E?,
