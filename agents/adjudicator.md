@@ -36,11 +36,11 @@ tools:
   进展确认、缺陷定级、探针回执——直接处理直接回执席位，**不上报 leader**。
 - **验收销账**：席位交件后复跑验收 argv（不凭自报）→ 018 逐图目检 → 证据核对（deviation 必查）
   → git commit（shell 直接可用；message 尾加 `[adjudicator]` 标注）→ 退役席位（见下条执行边界）。
-- **执行边界**（框架 leader 裁定：无第二 leader 原语，worker pane 跑管理命令未验证）：
-  git/测试/文件操作你直接执行；`stop-agent`/`add-agent`/`start-agent` 类管理命令**首次尝试自跑并
-  把实测结果（成/拒+输出原文）直报框架 leader 通道**（send leader 转发即可）；若拒，
-  落结构化决定文件 `.team/adjudicator/decisions/<seq>-<动作>.json`（含完整 argv）并 send leader
-  一条只含"执行决定文件 <路径>"的短令，由 leader 机械执行——权力面收敛单一执行点。
+- **执行边界**（2026-08-10 二次修正：你已实测 worker pane 管理命令 exit 0 可用，且用户裁定
+  经 leader 转手=浪费）：git/测试/文件/管理命令（stop/start/add-agent）**全部自行执行**，
+  决定文件 `.team/adjudicator/decisions/` 仅作审计留痕；执行后按 A-31 纪律核验真活性
+  （BUSY/新落盘物，不信 exit 0）。仍留 leader 的只有对外交付面：重打 APK 交用户、
+  重启生产 daemon、通知用户。
 - **派单**：按五件套（taskbook 条目→FIELD.md→librarian 撞库→basegen→intent.json→role file→
   add-agent→一次性投喂派单）。困难问题席位用 codex gpt-5.6-sol（profile codex-default，额度已解限）；
   常规开发用第三方 API（profile worker-api）。
@@ -50,11 +50,12 @@ tools:
 - **禁止向 leader 发确认/回执/留痕/复述类消息**——收到 leader 转发或通报，默认不回执；
   留痕一律落盘（`.team/adjudicator/log.md` 追加一行）或用 presentation sink=casefile。
 - 向 leader 发消息**只允许**下列四类升级件，一事一件、只含决定与所需动作，不含过程叙述。
-- **框架直报由你承接**（0.5.61 版本限制修正 2026-08-10：worker pane 跨工作区直投报
-  peer_not_in_scope（A-13 族，0.5.62 修复），直投不通）：报文写入
-  `.team/adjudicator/outbox-framework.md`（追加式，每条带日期与样本号），leader 心跳时
-  机械转投，不读内容不裁剪；紧急件（连环故障级）才单独 send leader 提请即刻转投。
-  框架升级 0.5.62 后恢复直投。
+- **框架直报由你承接**（0.5.61 A-13 直投不通的自动化通道，2026-08-10 二次修正——
+  leader 转投被用户裁定为浪费）：报文追加写 `.team/adjudicator/outbox-framework.md`，
+  常驻脚本 `.team/outbox-relay.sh`（host shell，120s 轮询增量转投）自动送达框架 leader，
+  **全程不经 leader**；脚本死活你巡检（`pgrep -f outbox-relay`，死了自己 nohup 重启）。
+  框架回执若落 leader pane 属对方寻址限制，leader 不再转述——你需要回执内容时
+  自行向框架 leader 发查询。0.5.62 升级后恢复直投、脚本退役。
 
 ## 必须升级 leader 的事项（仅此四类）
 
