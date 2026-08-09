@@ -46,8 +46,10 @@ import dev.agentmirror.app.service.ServiceWire
  * - 把会话 VM 挂到 [ServiceWire.uiConnector]（当前屏持有，退出即复位）；
  * - [SessionViewModel] 构造时已 subscribe（conn 层记簿，重连自动重放，004 无状态）。
  *
- * 上传地址（协议 §8 同端口 `POST /upload`）未接线层公开前传 null —— VM 对未配置
- * 明确报错「未配置上传地址」，不静默。
+ * 上传地址（协议 §8 同端口 `POST /upload`）统一读 [ServiceWire.uploadBaseUrl]——由
+ * [startPersistentConnection] 统一装配入口注入（fix-reconnect-stale-config 同根并案：
+ * 此前硬编码传 null 绕过统一入口 → 真机实证「未配置上传地址」；统一收口后与连接配置
+ * 变更同源生效）。未注入时 VM 明确报错「未配置上传地址」，不静默。
  */
 @Composable
 fun SessionRoute(
@@ -79,8 +81,9 @@ fun SessionRoute(
     SessionScreen(viewModel = vm, name = name, onBack = onBack)
 }
 
-/** 安全构造会话 VM：获取共享 manager（未配置抛错则返回 null）→ 启动连接 → 注入生产上传器。 */
-private fun createSessionViewModel(ref: String): SessionViewModel? {
+/** 安全构造会话 VM：获取共享 manager（未配置抛错则返回 null）→ 启动连接 → 注入生产上传器。
+ *  internal（fix-reconnect-stale-config 同根并案）：上传基地址统一收口锁定的测试缝。 */
+internal fun createSessionViewModel(ref: String): SessionViewModel? {
     val manager = runCatching {
         // connListener 传空壳：manager 已存在时被忽略；新建时包装监听把事件经 uiConnector 扇出，
         // 本 VM 走 uiConnector 收事件（SessionViewModel.init 不自行 setListener，见其 KDoc）。
@@ -89,8 +92,10 @@ private fun createSessionViewModel(ref: String): SessionViewModel? {
     // 启动连接（幂等）：前台服务可能尚未启动（连接由 UI/配对层决定启动，fg-service KDoc）。
     // 会话页在屏期间由 SessionScreen 时钟泵驱动 pump/超时裁决；离屏后服务接手。
     manager.start()
-    // 上传地址接线层未公开前传 null；配对/接线任务落地后在此注入 base URL（协议 §8）。
-    return SessionViewModel(manager, HttpUrlConnectionUploader(), null, ref, INITIAL_ROWS, INITIAL_COLS)
+    // fix-reconnect-stale-config 同根并案：上传基地址统一读 ServiceWire.uploadBaseUrl
+    // （startPersistentConnection 统一装配入口注入；此前硬编码 null 绕过 → 真机实证
+    // 「未配置上传地址」）。未注入（连接配置未落地）时 VM 明确报错，不静默。
+    return SessionViewModel(manager, HttpUrlConnectionUploader(), ServiceWire.uploadBaseUrl, ref, INITIAL_ROWS, INITIAL_COLS)
 }
 
 /** 连接未配置的明确等待态（halt 纪律：缺字段不猜，不静默白屏）。 */

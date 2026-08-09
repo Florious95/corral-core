@@ -118,6 +118,15 @@ class ConnectionManager(
     /** 当前状态（测试与 UI 可读）。 */
     fun state(): ConnectionState = state
 
+    /**
+     * 当前拨号地址（构造期配置，重连中 UI 展示用，018 标准5 失败可见）。
+     *
+     * 返回本管理器**实际拨向**的地址——不是 ServiceWire 层配置字段。真机 stale-config 缺陷
+     * 时期，此值能直接暴露"重连正拨旧址"（改配置后仍拨旧地址）；配合 onReconnect 的
+     * 已试次数一并展示，用户不再面对无声的重连循环。
+     */
+    fun dialUrl(): String = config.url
+
     /** 活跃订阅 ref 集合（测试断言重放依据）。 */
     fun activeRefs(): Set<String> = activeSubscriptions.keys.toSet()
 
