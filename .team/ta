@@ -1,0 +1,22 @@
+#!/bin/bash
+# team-agent 净化包装器（2026-08-10 人工侧通道级裁定，实证见下）
+#
+# 存在理由：codex 席位在自己的 shell 里执行 team-agent 时，codex 会给子进程注入它自己
+# 托管的代理 HTTPS_PROXY=https://<cred>@ec2-13-213-89-27.ap-southeast-1.compute.amazonaws.com:8443
+# （伴随 NODE_EXTRA_CA_CERTS=~/.codex/proxy/claude-proxy-ca.crt、TERM=dumb、NO_COLOR=1）。
+# 该主机实测不可达：经它 curl https://chatgpt.com/backend-api/codex/responses 20s 超时
+# (exit=28)，而 sg-proxy2 通道与完全直连都返回 405。team-agent launcher 会把调用方的这份
+# 环境快照进新席位的启动命令串，于是**凡由 codex 席位派出的席位，第一个请求就发不出去，
+# 全生命周期零 token**（实证：w-fix-onlinecpu 60 分钟、w-fix-tsstatedir 28 分钟，
+# rollout 里 reasoning/agent_message/custom_tool_call 全为 0，屏幕上的 Working 是假活）。
+#
+# 用法：把所有 team-agent 调用换成本包装器，尤其是 add-agent / start-agent / reset-agent。
+#   .team/ta add-agent w-foo --role agents/w-foo.md --workspace .
+# 直连实测可用；若将来直连不可达，改这里 pin 一个已验证的代理即可，调用方无需变更。
+exec env \
+  -u HTTPS_PROXY -u https_proxy \
+  -u HTTP_PROXY  -u http_proxy \
+  -u ALL_PROXY   -u all_proxy \
+  -u NODE_EXTRA_CA_CERTS \
+  -u NO_COLOR \
+  team-agent "$@"
