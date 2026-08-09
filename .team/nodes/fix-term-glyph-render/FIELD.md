@@ -10,3 +10,7 @@
 
 ## 自查判据
 - 修后模拟器真实 claude 会话页截图对照留档 e2e/artifacts/ui-review/term-glyph-after.png，肉眼零豆腐。
+
+## 前席遗留（w-fix-glyph 死于 provider api_error，2026-08-09，带案重派）
+- 工作区遗留：app/app/src/test/kotlin/dev/agentmirror/app/termview/GlyphFontProviderTest.kt（红测半成品，M 状态）——先读它，可续用可重写，自行判断。
+- 前席 transcript（只在卡住时参考）：.team/runtime/provider-config/w-fix-glyph/claude/projects/…/a590f49e….jsonl
