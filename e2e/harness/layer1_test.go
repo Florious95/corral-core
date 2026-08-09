@@ -434,6 +434,76 @@ func TestLayer1(t *testing.T) {
 		t.Logf("bogus ref rejected: code=%s", ef.Code)
 	})
 
+	// --- Scenario 7b: state wiring end-to-end (defect D-1 regression) ---
+	// The built daemon now wires the agent-state pipeline (task
+	// fix-state-wiring). A wrapper-shaped fake claude tree (bash pane root →
+	// claude-named descendant) with a blocked permission box on screen must
+	// surface state=blocked (≠ unknown) in the daemon's listing — the
+	// blocked/done notification data source finally reachable from production.
+	t.Run("state_wiring_blocked_listing", func(t *testing.T) {
+		ctxT, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		// Isolated session: bash prints the blocked box then forks a child
+		// that becomes the claude-named fake (the wrapper scene; Identify walks
+		// descendants of pane_pid, so the fake must be a child, not the root).
+		// The pane's real pane_pid and pane_current_command=bash are what a
+		// real discovery scan reports.
+		cmd := `bash -c 'printf "Do you want to proceed?\n  (esc to cancel)\n"; sh -c "exec -a claude /bin/sleep 120" & wait'`
+		if _, err := e.Tmux("new-session", "-d", "-s", "state-e2e", "-c", e.Root, cmd); err != nil {
+			t.Fatalf("start state-e2e session: %v", err)
+		}
+		// Cleanup: kill the fake tree (scoped to our session's panes only —
+		// kill-window tears the fake claude child down with the session).
+		t.Cleanup(func() {
+			_, _ = e.Tmux("kill-session", "-t", "state-e2e")
+		})
+
+		// Poll listing until the daemon's background state refresh resolves the
+		// fake claude pane to blocked.
+		c, err := Connect(ctxT, e.WSURL, token)
+		if err != nil {
+			t.Fatalf("connect: %v", err)
+		}
+		defer c.Close()
+
+		deadline := time.Now().Add(20 * time.Second)
+		last := protocol.StateUnknown
+		for time.Now().Before(deadline) {
+			if err := c.Send(ctxT, protocol.List{ReqID: 55}); err != nil {
+				t.Fatalf("send list: %v", err)
+			}
+			f, err := c.waitControl(ctxT, protocol.TypeListing)
+			if err != nil {
+				t.Fatalf("wait listing: %v", err)
+			}
+			l := f.(protocol.Listing)
+			stateRefs := refsInSession(l, "state-e2e")
+			if len(stateRefs) == 0 {
+				time.Sleep(500 * time.Millisecond)
+				continue // not scanned yet
+			}
+			// Find the state-e2e session's state (single pane).
+			for i := range l.Workspaces {
+				for j := range l.Workspaces[i].Sessions {
+					if l.Workspaces[i].Sessions[j].Name == "state-e2e" {
+						last = l.Workspaces[i].Sessions[j].State
+						if last == protocol.StateBlocked {
+							// The 012 aggregate of this workspace must follow.
+							if agg := l.Workspaces[i].AggregateState; agg != protocol.StateBlocked {
+								t.Fatalf("state-e2e aggregate = %q, want blocked", agg)
+							}
+							t.Logf("state wiring e2e ok: session state=%s aggregate=%s", last, l.Workspaces[i].AggregateState)
+							return
+						}
+					}
+				}
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		t.Fatalf("state-e2e never surfaced blocked (last %s); daemon state wiring broken (D-1)", last)
+	})
+
 	// --- Scenario 8: real Claude Code CLI end-to-end (if enabled) ---
 	t.Run("real_claude_cli", func(t *testing.T) {
 		if os.Getenv("E2E_SKIP_CLI") != "" {
