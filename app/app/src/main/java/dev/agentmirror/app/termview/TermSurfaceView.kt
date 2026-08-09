@@ -217,6 +217,10 @@ class TermSurfaceView @JvmOverloads constructor(
      * 第二遍把连续同前景色格合并成一次 drawText（性能关键：draw 调用数 = run 数而非格数）。
      */
     private fun drawLine(canvas: Canvas, cells: List<Cell>, rowY: Int) {
+        // 网格是「每列一条目」：宽字符 = width=2 主格 + width=0 续格两个条目，x 恒按
+        // 一列推进；主格矩形铺满 width 列（含续格列），续格只占位不重画。旧实现把主格
+        // 当 2 列推进、续格又推 1 列且只铺 1 列宽矩形——背景色块内每个 CJK 留 2 列
+        // 默认深底黑洞、后续格整体右漂（用户真机实拍黑块马赛克根因，fix-term-bg-cjk）。
         var x = 0
         for (cell in cells) {
             if (cell.width == 0) {
@@ -224,8 +228,8 @@ class TermSurfaceView @JvmOverloads constructor(
                 continue
             }
             bgPaint.color = colorFor(cell.style.bg, background = true)
-            canvas.drawRect(x.toFloat(), rowY.toFloat(), (x + cellW).toFloat(), (rowY + cellH).toFloat(), bgPaint)
-            x += if (cell.width == 2) cellW * 2 else cellW
+            canvas.drawRect(x.toFloat(), rowY.toFloat(), (x + cellW * cell.width).toFloat(), (rowY + cellH).toFloat(), bgPaint)
+            x += cellW
         }
         drawTextRuns(canvas, cells, rowY)
     }
@@ -246,7 +250,8 @@ class TermSurfaceView @JvmOverloads constructor(
         val sb = StringBuilder()
         for (cell in cells) {
             if (cell.width == 0) {
-                col += 1 // 宽字符续格占一位，不画
+                // 宽字符续格：主格已按 width=2 计列，这里不再推进——否则每个 CJK 多漂
+                // 1 列，换色 run 的起始列随之右漂（背景色块内文字错位重叠根因）。
                 continue
             }
             // 同色段延续：append；颜色切换：flush 上一段再开新段。
@@ -343,16 +348,16 @@ class TermSurfaceView @JvmOverloads constructor(
         lineHeightPx = p.cellHeight
     }
 
-    /** 终端色（Indexed/真彩/默认）→ Android ARGB 色值。 */
+    /** 终端色（Indexed/真彩/默认）→ Android ARGB 色值。
+     *  索引 >15 走 xterm 256 扩展查表：旧实现 coerceIn(0,15) 把 256 色区整体塌缩到
+     *  基础 16 色——fg 16（黑）与 bg 254（浅灰）同折到 15 号浅灰，Claude Code recap
+     *  背景块内文字与底色同色整块隐形（fix-term-bg-cjk 模拟器实拍第二缺陷）。 */
     private fun colorFor(color: TerminalColor, background: Boolean): Int = when (color) {
         TerminalColor.Default -> if (background) themeBgArgb() else themeFgArgb()
         is TerminalColor.Rgb -> Color.rgb(color.r, color.g, color.b)
-        is TerminalColor.Indexed -> ANSI_COLORS[color.index.coerceIn(0, 15)] ?: fallbackIndexed(color.index)
-    }
-
-    private fun fallbackIndexed(index: Int): Int = when (index / 8) {
-        0 -> ANSI_COLORS[(index % 8) + 8] ?: Color.GRAY
-        else -> Color.GRAY
+        is TerminalColor.Indexed ->
+            if (color.index in 0..15) ANSI_COLORS[color.index] ?: Color.GRAY
+            else XTERM_256.getOrElse(color.index) { Color.GRAY }
     }
 
     private fun themeBgArgb(): Int = DEFAULT_BG
@@ -384,5 +389,23 @@ class TermSurfaceView @JvmOverloads constructor(
             14 to Color.rgb(41, 184, 219),
             15 to Color.rgb(229, 229, 229),
         )
+
+        /** xterm 256 色扩展区一次性预计算查表（绘制热路径查表零分配）：
+         *  16-231 为 6×6×6 色立方（分量 0 或 55+40×v，xterm 标准），232-255 为
+         *  24 级灰阶梯 8+10×n。0-15 槽位仅占位（colorFor 先走 ANSI_COLORS）。 */
+        val XTERM_256: IntArray = IntArray(256) { i ->
+            fun cube(v: Int): Int = if (v == 0) 0 else 55 + 40 * v
+            when {
+                i < 16 -> ANSI_COLORS[i] ?: Color.GRAY
+                i < 232 -> {
+                    val c = i - 16
+                    Color.rgb(cube(c / 36), cube(c / 6 % 6), cube(c % 6))
+                }
+                else -> {
+                    val v = 8 + 10 * (i - 232)
+                    Color.rgb(v, v, v)
+                }
+            }
+        }
     }
 }
