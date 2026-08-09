@@ -275,6 +275,9 @@ class PairingViewModel(
         }
         pendingConfig = null
         formError = null
+        // 每次新序列从队列头开始：attemptIndex 必须归零，否则 retryCandidate/retry 的新序列
+        // beginAttempt 时用旧序列的推进值判 `attemptIndex >= size` 直接误落「全部候选失败」。
+        attemptIndex = 0
         beginAttempt()
     }
 
@@ -337,6 +340,9 @@ class PairingViewModel(
      * 看到非 Pairing 即被短路，不会用「拒绝」覆盖本次明确失败原因。
      */
     private fun failPairing(cause: PairingFailCause, message: String) {
+        // leader 追加范围：失败态不得残留「正在连接」进行中文案——识别摘要随失败清空，
+        // 避免 ScanCard 在 Failed 态仍显示旧地址的进行中文本（003 失败可见、状态纯净）。
+        recognizedUrl = null
         pairingStatus = PairingStatus.Failed(cause, message)
         stopProbe()
     }

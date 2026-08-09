@@ -69,7 +69,11 @@ class PairingViewModelTest {
             connectionFactory = { cfg ->
                 nextConfig = cfg
                 val t = FakeWebSocketTransport()
-                nextDialScript?.let { t.dialScript = it }
+                if (failingDial) {
+                    t.dialScript = listOf(false)
+                } else {
+                    nextDialScript?.let { t.dialScript = it }
+                }
                 nextDialScript = null
                 transports.add(t)
                 ConnectionManager(
@@ -87,6 +91,15 @@ class PairingViewModelTest {
         fun dialFails() {
             nextDialScript = listOf(false)
         }
+
+        /** 后续每次拨号都失败（候选逐试全败场景）。 */
+        fun alwaysDialFails() {
+            nextDialScript = null
+            failingDial = true
+        }
+
+        /** 拨号脚本出队前若为真则整条脚本全 false（alwaysDialFails 的实现）。 */
+        var failingDial = false
 
         /** 拨号成功 + auth_ack ok → READY（配对成功）。 */
         fun authOk() {
@@ -334,5 +347,98 @@ class PairingViewModelTest {
     fun deriveUploadBaseMapsWsToHttp() {
         assertEquals("http://192.168.1.5:9900", deriveUploadBase("ws://192.168.1.5:9900/ws"))
         assertEquals("https://ts.host:443", deriveUploadBase("wss://ts.host:443/ws"))
+    }
+
+    // ---- candidates 候选逐试（fix-pairing-candidates：主选失败 → 自动逐试 → 首个可达即连）----
+
+    @Test
+    fun scanFailsPrimaryThenAutoTriesCandidatesSuccess() {
+        val h = Harness()
+        // 主选拨号失败（真实不可达路径：传输未建立即 onFailure → 可重连 → 推进逐试）。
+        // 注意不能用 peerFailure：那模拟"已建立传输/auth 已发后掉线"，会被 Connection 判为
+        // 永久关闭/拒绝（authSent=true → permanent），而非地址不可达推进候选。
+        h.dialFails()
+        h.vm.onQrText(
+            """{"v":1,"url":"ws://bad:1/ws","token":"T","ts_authkey":"","candidates":["ws://bad:1/ws","ws://good:1/ws"]}""",
+        )
+        // 拨号失败→推进逐试全在 onQrText 内同步完成：返回时已自动推进到第二候选 good 且拨号成功。
+        assertEquals(2, h.transports.size)
+        assertEquals("ws://good:1/ws", h.nextConfig?.url)
+        assertEquals("T", h.nextConfig?.token)
+        // 候选 good：拨号成功 → auth_ack ok → 配对成功（FIELD.md 模拟器走查：错误主选+正确候选）。
+        h.authOk()
+        assertEquals(PairingStatus.Success, h.vm.pairingStatus)
+        assertEquals("ws://good:1/ws", h.store.saved?.url)
+        assertEquals("T", h.store.saved?.token)
+    }
+
+    @Test
+    fun scanFailsPrimaryTimeoutAdvancesToNextCandidate() {
+        val h = Harness()
+        h.vm.onQrText(
+            """{"v":1,"url":"ws://slow:1/ws","token":"T","candidates":["ws://slow:1/ws","ws://ok:1/ws"]}""",
+        )
+        // 主选拨号成功但不回 auth → 超时（候选预算 3s）→ 自动推进逐试。
+        h.clock.advance(3_001L)
+        h.vm.onTick(h.clock.nowMs())
+        assertEquals(2, h.transports.size)
+        assertEquals("ws://ok:1/ws", h.nextConfig?.url)
+    }
+
+    @Test
+    fun allCandidatesFailShowsFullCandidateListAndCanRetryCandidate() {
+        val h = Harness()
+        h.alwaysDialFails()
+        val candidates = """["ws://a:1/ws","ws://b:1/ws"]"""
+        h.vm.onQrText(
+            """{"v":1,"url":"ws://a:1/ws","token":"T","ts_authkey":"","candidates":$candidates}""",
+        )
+        // 逐试完两个候选（主选 a + 候选 b）全败 → 落最终失败态 + 候选列表可见。
+        assertEquals(listOf("ws://a:1/ws", "ws://b:1/ws"), h.vm.candidateUrls)
+        val st = h.vm.pairingStatus
+        assertTrue("expected Failed, got $st", st is PairingStatus.Failed)
+        assertTrue((st as PairingStatus.Failed).message.contains("候选"))
+        assertEquals(PairingFailCause.UNREACHABLE, h.failedCause())
+        assertNull(h.store.saved)
+        // 失败后候选列表一键重试：点 b 单次试配（不复逐试序列）。先关掉全败拨号脚本，
+        // 让候选 b 这次能拨通进入 Pairing；候选列表在单候选重试时保留可见。
+        h.failingDial = false
+        h.vm.retryCandidate("ws://b:1/ws")
+        assertTrue(h.vm.pairingStatus is PairingStatus.Pairing)
+        assertEquals("ws://b:1/ws", h.nextConfig?.url)
+        assertEquals(listOf("ws://a:1/ws", "ws://b:1/ws"), h.vm.candidateUrls)
+    }
+
+    @Test
+    fun failureClearsInProgressRecognitionText() {
+        // leader 追加范围：失败态不得残留「正在连接」进行中文案。
+        val h = Harness()
+        h.dialFails()
+        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"T"}""")
+        assertTrue(h.vm.pairingStatus is PairingStatus.Failed)
+        assertNull(h.vm.recognizedUrl)
+    }
+
+    @Test
+    fun noCandidatesKeepsLegacyBehavior() {
+        // 无 candidates 的旧 QR：单次试配 + 15s 超时，失败即落失败态（前向兼容，契约 §2.1）。
+        val h = Harness()
+        h.alwaysDialFails()
+        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"T"}""")
+        assertEquals(1, h.transports.size)
+        assertEquals(PairingFailCause.UNREACHABLE, h.failedCause())
+        assertTrue(h.vm.candidateUrls.isEmpty())
+    }
+
+    @Test
+    fun scanCandidatesDeduplicatedWithPrimary() {
+        // 主选 + 候选重复项去重：逐试队列不重复拨同一地址。
+        val h = Harness()
+        h.alwaysDialFails()
+        h.vm.onQrText(
+            """{"v":1,"url":"ws://a:1/ws","token":"T","candidates":["ws://a:1/ws","ws://b:1/ws","ws://a:1/ws"]}""",
+        )
+        assertEquals(2, h.transports.size)
+        assertEquals(listOf("ws://a:1/ws", "ws://b:1/ws"), h.vm.candidateUrls)
     }
 }
