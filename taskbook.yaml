@@ -654,6 +654,19 @@ tasks:
     evidence: ".team/evidence/e2e.json"
     contention: impl
 
+  - id: fix-ts-dial-timing
+    goal: >
+      P1 排队（feat-ts-wire 交件时移交的已知 UX 皱褶，leader 裁定 2026-08-09 后置）：
+      tailnet-only 地址手填时首拨早于 tsnet 节点 Up 会先失败一次，需用户在「已入网」后
+      手动重试——候选逐试与 TS 起网无时序编排。修复方向：tailnet 地址（100.64/10 CGNAT）
+      候选延迟到 Up 事件后再试（或 Up 前对 tailnet 候选显示「等待入网」而非失败），
+      失败可见红线不变。依赖 feat-ts-wire 落地后的 TsnetBackend Up 状态导出面。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["feat-ts-wire"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-ts-dial-timing.json"
+    contention: impl
+
   - id: test-app-dogfood
     goal: >
       真机模拟试用（2026-08-09 立案，用户点名 Opus 5 识图席；用户裁定：用例必须从需求分析
