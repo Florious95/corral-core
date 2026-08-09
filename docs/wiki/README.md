@@ -2,7 +2,7 @@
 
 > ⚠️ **生成物，勿手改。** 本文件由 `tools/archwiki/build_wiki.py` 从源码现算生成，改源码后重跑 `python3 tools/archwiki/build_wiki.py` 刷新；重跑无 diff（幂等）。人工改动会被覆盖。
 
-扫描 **18** 个包（Go 9 + Kotlin 9）、**18** 条包间依赖边。
+扫描 **18** 个包（Go 9 + Kotlin 9）、**22** 条包间依赖边。
 
 ## 判据结果
 
@@ -39,13 +39,17 @@ flowchart LR
     go_cmd_agentmirrord --> go_internal_pairing
     go_cmd_agentmirrord --> go_internal_tsnetd
     go_internal_agentstate --> go_internal_protocol
+    go_internal_api --> go_internal_agentstate
     go_internal_api --> go_internal_bridge
     go_internal_api --> go_internal_discovery
     go_internal_api --> go_internal_protocol
+    kt_dev_agentmirror_app --> kt_dev_agentmirror_app_pairing
+    kt_dev_agentmirror_app --> kt_dev_agentmirror_app_service
     kt_dev_agentmirror_app --> kt_dev_agentmirror_app_session
     kt_dev_agentmirror_app --> kt_dev_agentmirror_app_ui_theme
     kt_dev_agentmirror_app --> kt_dev_agentmirror_app_workspace
     kt_dev_agentmirror_app_pairing --> kt_dev_agentmirror_app_conn
+    kt_dev_agentmirror_app_pairing --> kt_dev_agentmirror_app_service
     kt_dev_agentmirror_app_workspace --> kt_dev_agentmirror_app_conn
     kt_dev_agentmirror_app_service --> kt_dev_agentmirror_app
     kt_dev_agentmirror_app_service --> kt_dev_agentmirror_app_conn
@@ -71,13 +75,13 @@ flowchart LR
 ### Go · internal/api
 
 - **职责**：Package api implements the service-side WebSocket API and the image upload endpoint, wiring together discovery and bridge (task ws-api).
-- **导出面**：Discoverer, NewServer, Options, Server, StateProvider, TokenValidator
-- **依赖边**：internal/bridge, internal/discovery, internal/protocol
+- **导出面**：Discoverer, NewServer, NewStateProvider, Options, Server, StateProvider, TokenValidator
+- **依赖边**：internal/agentstate, internal/bridge, internal/discovery, internal/protocol
 
 ### Go · internal/bridge
 
 - **职责**：Package bridge exposes a single tmux pane as a terminal bridge: first-frame snapshot, incremental output stream, whole-message input injection with a decidable ack, resize, and scrollback paging.
-- **导出面**：ErrPaneNotFound, ErrServerUnreachable, ErrTmuxTimeout, NewPane, Pane
+- **导出面**：ErrInvalidKey, ErrPaneNotFound, ErrServerUnreachable, ErrTmuxTimeout, NewPane, Pane
 - **依赖边**：（无）
 
 ### Go · internal/config
@@ -95,13 +99,13 @@ flowchart LR
 ### Go · internal/pairing
 
 - **职责**：Package pairing implements token-based device pairing and QR-code onboarding for the Android app.
-- **导出面**：Address, DetectAddresses, EnsureToken, GenerateToken, KindLAN, KindLoopback, KindTailnet, LoadToken, NewPayload, Onboarding, Payload, PayloadVersion, PrimaryHost, PrintOnboarding, PrintOnboardingWith, RenderQR, SaveToken, TokenDir, WSURL
+- **导出面**：Address, DetectAddresses, EnsureToken, GenerateToken, KindLAN, KindLoopback, KindTailnet, LoadToken, NewPayload, Onboarding, Payload, PayloadVersion, PrimaryHost, PrintOnboarding, PrintOnboardingAll, PrintOnboardingWith, RenderQR, SaveToken, TokenDir, WSURL
 - **依赖边**：（无）
 
 ### Go · internal/protocol
 
 - **职责**：Package protocol defines the wire contract between the Android app and the agentmirrord service.
-- **导出面**：AgentState, Auth, AuthAck, BinaryHeaderLen, BinaryKind, BinaryMagic, BinaryMaxPayloadLen, BinaryMaxRefLen, BinaryPayload, DecodeBinary, DefaultBinarySessionRefLen, EncodeBinary, Envelope, ErrBadMagic, ErrBadPayload, ErrInvalidCount, ErrInvalidField, ErrInvalidGeometry, ErrInvalidRef, ErrInvalidState, ErrMissingVersion, ErrRefTooLong, ErrTruncated, ErrUnknownKind, ErrUnknownType, ErrUnsupportedVersion, ErrorCode, ErrorFrame, FrameType, Input, InputAck, InputFailReason, List, ListDelta, Listing, MarshalFrame, Resize, Scrollback, Session, Subscribe, Typed, UnmarshalFrame, Unsubscribe, UploadResp, Workspace
+- **导出面**：AgentState, Auth, AuthAck, BinaryHeaderLen, BinaryKind, BinaryMagic, BinaryMaxPayloadLen, BinaryMaxRefLen, BinaryPayload, DecodeBinary, DefaultBinarySessionRefLen, EncodeBinary, Envelope, ErrBadMagic, ErrBadPayload, ErrInvalidCount, ErrInvalidField, ErrInvalidGeometry, ErrInvalidRef, ErrInvalidState, ErrMissingVersion, ErrRefTooLong, ErrTruncated, ErrUnknownKind, ErrUnknownType, ErrUnsupportedVersion, ErrorCode, ErrorFrame, FrameType, Input, InputAck, InputFailReason, Key, List, ListDelta, Listing, MarshalFrame, Resize, Scrollback, Session, Subscribe, Typed, UnmarshalFrame, Unsubscribe, UploadResp, Workspace
 - **依赖边**：（无）
 
 ### Go · internal/tsnetd
@@ -113,9 +117,9 @@ flowchart LR
 ### Kotlin · dev.agentmirror.app
 
 - **职责**：Compose 应用根组合。
-- **导出面**：AgentMirrorApp, MainActivity
-- **依赖边**：dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace
-- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由（两级导航：舰队 → 会话，见需求 001）， 不持有任何业务状态；[WorkspaceViewModel] 为根级单例（接线层在此挂载 conn 层回调）。 点会话跳会话页：[SessionRoute]（session-ui 交付；共享连接经 ServiceWire 获取， 连接未配置时给明确等待态）。
+- **导出面**：AgentMirrorApp, MainActivity, MainNavState
+- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace
+- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态（activeSession/showPairing）由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。
 
 ### Kotlin · dev.agentmirror.app.ui.theme
 
@@ -126,8 +130,8 @@ flowchart LR
 ### Kotlin · dev.agentmirror.app.pairing
 
 - **职责**：配对：扫码连接（路线 a：QR 载服务端地址 + 配对 token，可选 TS authkey，需求 011）。
-- **导出面**：Failed, PairingConfig, PairingConfigStore, PairingViewModel, QrParseException, QrPayload, QrPayloadParser, SharedPreferencesPairingConfigStore
-- **依赖边**：dev.agentmirror.app.conn
+- **导出面**：Failed, Pairing, PairingConfig, PairingConfigStore, PairingFailCause, PairingRoute, PairingScreen, PairingViewModel, QrParseException, QrPayload, QrPayloadParser, SharedPreferencesPairingConfigStore
+- **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.service
 - **doc 全文**：配对：扫码连接（路线 a：QR 载服务端地址 + 配对 token，可选 TS authkey，需求 011）。 负责相机扫码、地址解析与配对握手；替代"终端 App + Tailscale App + SSH 配置"三件套 （需求 001 单一 App 原则）。本包为占位骨架，由 pairing 任务落位实现。
 
 ### Kotlin · dev.agentmirror.app.workspace
@@ -154,14 +158,14 @@ flowchart LR
 ### Kotlin · dev.agentmirror.app.tsnet
 
 - **职责**：内嵌 Tailscale 联网（需求 007/011 路线 a：服务端/App 内嵌 tailscale）。
-- **导出面**：（无导出符号）
+- **导出面**：Error, GomobileTsnetBackend, TsnetAuthKeys, TsnetBackend, TsnetDial, TsnetManager, TsnetProxy, TsnetSocksAuthenticator, Up
 - **依赖边**：（无）
-- **doc 全文**：内嵌 Tailscale 联网（需求 007/011 路线 a：服务端/App 内嵌 tailscale）。 提供 LAN 之外的可达通道，QR 可选携带 TS authkey 以自举组网。 本包为占位骨架，由 tsnet 任务落位实现（App 侧为 Tailscale Android SDK 封装）。
+- **doc 全文**：内嵌 Tailscale 联网（需求 007/011 路线 a：服务端/App 内嵌 tailscale）。 提供 LAN 之外的可达通道：QR 可选携带 TS authkey，[TsnetManager] 用它在 App 进程内起 tsnet 用户态节点（gomobile 绑定 libs/tsnetbind.aar，无 VpnService、 零系统权限），Up 后经 [TsnetDial] 给 OkHttp 配 loopback SOCKS5 即达 tailnet。 分层（native 隔离红线）：[TsnetBackend] 薄适配接口 → [GomobileTsnetBackend] 唯一触达 native；状态机/authkey 校验/dial 选择均纯 JVM 可测。 路线裁定与实测数字见 docs/decisions/app-tsnet.md。
 
 ### Kotlin · dev.agentmirror.app.conn
 
 - **职责**：连接层：与主机 sidecar 的 WebSocket 连接、会话枚举、帧协议编解码。
-- **导出面**：AgentState, AuthAckFrame, AuthFrame, BinaryFrame, BinaryFrameCodec, BinaryKind, Clock, Connection, ConnectionConfig, ConnectionManager, ConnectionState, ErrorCode, ErrorFrame, FrameCodec, FrameDecodeException, FrameEncodeException, FrameError, InputAckFrame, InputFailReason, InputFrame, ListDeltaFrame, ListFrame, Listener, ListingFrame, ProtocolVersion, Real, ReconnectPolicy, ResizeFrame, ScrollbackFrame, Session, SubscribeFrame, TransportListener, UnsubscribeFrame, WebSocketTransport, Workspace
+- **导出面**：AgentState, AuthAckFrame, AuthFrame, BinaryFrame, BinaryFrameCodec, BinaryKind, Clock, Connection, ConnectionConfig, ConnectionManager, ConnectionState, ErrorCode, ErrorFrame, FrameCodec, FrameDecodeException, FrameEncodeException, FrameError, InputAckFrame, InputFailReason, InputFrame, InputKey, ListDeltaFrame, ListFrame, Listener, ListingFrame, ProtocolVersion, Real, ReconnectPolicy, ResizeFrame, ScrollbackFrame, Session, SubscribeFrame, TransportListener, UnsubscribeFrame, WebSocketTransport, Workspace
 - **依赖边**：（无）
 - **doc 全文**：连接层：与主机 sidecar 的 WebSocket 连接、会话枚举、帧协议编解码。 分层（自底向上）： 1. [FrameCodec] / [BinaryFrameCodec] —— 纯函数编解码：JSON 控制帧（信封 + 12 类帧 载荷，docs/protocol.md §4）+ 二进制流帧（§6，含 scrollback 12 字节收敛区间头）。 编解码都消费同一份契约夹具做字节级断言（server/internal/protocol/testdata/）。 2. [Connection] —— 单条 WS 生命周期状态机（握手 → 就绪 → 关闭）。 3. [ConnectionManager] —— 重连策略 + 订阅簿记：重连后自动重放 auth + 全部活跃 subscribe（004 无状态铁律的重放语义）；listing seq 不连续 → 自动重新 list。 上层（UI/service）只见 Flow/回调，不见 WS 细节。本层不持久任何会话状态。
 
