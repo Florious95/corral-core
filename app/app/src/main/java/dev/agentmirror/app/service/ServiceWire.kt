@@ -46,9 +46,22 @@ object ServiceWire {
     @Volatile
     var transportFactory: TransportFactory = OkHttpTransportFactory
 
-    /** UI 侧监听桥（UI 接线层注入；服务回调原样转投）。 */
+    /**
+     * UI 侧监听桥（UI 接线层注入；服务回调原样转投）。
+     *
+     * 挂载时补播当前连接态：工作区 VM 可能在连接已 READY 之后才挂载（配对完成启动服务 →
+     * READY 早于 UI 组合），若只靠包装监听"事件发生时转投"，VM 会错过已发生的
+     * onStateChanged(READY)，顶栏永远停在"连接中…"。补播让新挂载的 UI 监听立即反映真实
+     * 连接态（004 无状态：列表由 READY+全量 listing 恢复，连接态由本补播即时对齐；
+     * 语义同 SessionViewModel.init 自行 onStateChanged(manager.state())）。
+     */
     @Volatile
     var uiConnector: ConnectionManager.Listener? = null
+        set(value) {
+            field = value
+            // manager 可能尚未创建（fg-service 未启动 / 连接未配置）：此时无当前态可补，跳过。
+            value?.let { manager?.state()?.let(it::onStateChanged) }
+        }
 
     /** 图片上传基地址（协议 §8 `POST /upload`；配对成功后由配对层注入，见 [deriveUploadBase]）。 */
     @Volatile

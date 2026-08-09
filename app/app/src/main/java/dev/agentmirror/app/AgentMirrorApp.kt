@@ -17,12 +17,14 @@
 package dev.agentmirror.app
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import dev.agentmirror.app.pairing.PairingConfigStore
 import dev.agentmirror.app.pairing.PairingRoute
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
+import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.session.SessionRoute
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.workspace.WorkspaceScreen
@@ -40,17 +42,21 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
  *
  * 导航态（activeSession/showPairing）由 [navState]（D-3 修复）注入：MainActivity 在
  * onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。
+ *
+ * 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复，
+ * navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入
+ * [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector
+ * 全仓无调用点，见 fix-workspace-wiring 知识基底）。
  */
 @Composable
 fun AgentMirrorApp(
     navState: MainNavState,
+    workspaceViewModel: WorkspaceViewModel,
 ) {
     AgentMirrorTheme {
         val context = LocalContext.current
         // 配对配置存储（SharedPreferences）：首启判定 + 重配入口共用。
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
-        // 根级 ViewModel：接线层（service 任务）将把 ConnectionManager 回调接进来。
-        val viewModel = remember { WorkspaceViewModel() }
         val session = navState.activeSession
 
         when {
@@ -71,10 +77,26 @@ fun AgentMirrorApp(
                 },
             )
             // 工作区：有配置直进；"重新配对"从设置入口进入（见 WorkspaceScreen 顶栏设置钮）。
-            else -> WorkspaceScreen(
-                viewModel = viewModel,
-                onOpenSession = { ref, name -> navState.activeSession = ref to name },
-            )
+            else -> {
+                // 接线（fix-workspace-wiring）：把 Activity 持有的工作区 VM 接入
+                // ServiceWire.uiConnector 扇出。配对成功切工作区后，conn 层 READY + listing /
+                // list_delta 经此桥进入 VM，列表才渲染（此前 VM 裸建从未接线，uiConnector 全仓
+                // 无调用点，配对成功列表永不显示）。DisposableEffect 同构 SessionRoute：挂载注册 /
+                // 离屏复位，防重复注册与泄漏；断连重挂由 READY+全量 listing 恢复（004 无状态）。
+                DisposableEffect(workspaceViewModel) {
+                    ServiceWire.uiConnector = workspaceViewModel
+                    onDispose {
+                        // 只在仍是本 VM 时复位：避免复位掉新挂载的 VM（防重复注册竞态）。
+                        if (ServiceWire.uiConnector === workspaceViewModel) {
+                            ServiceWire.uiConnector = null
+                        }
+                    }
+                }
+                WorkspaceScreen(
+                    viewModel = workspaceViewModel,
+                    onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                )
+            }
         }
     }
 }
