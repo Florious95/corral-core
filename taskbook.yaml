@@ -427,6 +427,19 @@ tasks:
     evidence: ".team/evidence/fix-pairing-timeout-pump.json"
     contention: impl
 
+  - id: fix-recovery-baseline
+    goal: >
+      P1（test-aggregate-status 席位测出，红测已 t.Skip 留档）：discovery 全程失败后客户端持
+      空 listing（seq=1）保持连接；舰队恢复后的首个成功扫描被当基线处理不推 delta、seq 不变，
+      客户端 seq 连续性检查判不出断点，空 listing 静默滞留至手动重 list（违红线5 失败可见）。
+      修复后解除 TestDiscoveryRecoveryReachesConnectedClientFromStartFailure 的 t.Skip 转绿。
+      排期：P0 波次收口后派。
+    acceptance: ["bash -lc 'cd server && go test ./internal/api/...'"]
+    deps: ["test-aggregate-status"]
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/fix-recovery-baseline.json"
+    contention: impl
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
