@@ -532,6 +532,17 @@ tasks:
     evidence: ".team/evidence/fix-term-render-debt.json"
     contention: impl
 
+  - id: fix-term-residuals
+    goal: >
+      P1（w-term-debt 界外两条，2026-08-09）：①resize 后服务端不补快照——SIGWINCH 重排后客户端
+      留提示符残影（协议/服务端 resize 语义补快照或增量重放，方案席位裁量报 leader）；②会话页
+      首行被 translate(0,-lineHeightPx) 裁切半行（A-snapshot-align.png 可见）。红测先行。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'", "bash -lc 'cd server && go test ./internal/api/... ./internal/bridge/...'"]
+    deps: ["fix-term-render-debt"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "server/internal/api/", "server/internal/bridge/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-residuals.json"
+    contention: impl
+
   - id: fix-release-test-host
     goal: >
       基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
