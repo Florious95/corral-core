@@ -1,0 +1,41 @@
+{
+  "task_id": "test-aggregate-status",
+  "status": "pass",
+  "worker": "w-test-aggstate",
+  "date": "2026-08-09",
+  "summary": "补齐 012 聚合规则与 server 端 diff 及 discovery 失败三块零覆盖（审计 D-5/D-6/G-6）。新增 3 个 _test.go（aggregate_test.go / diff_test.go / discovery_failure_test.go）共 22 具名用例（≥12 达标），生产代码零改动。验收命令 `cd server && go test ./internal/api/...` 绿。测出 1 处真缺陷候选（已按契约停于红测 t.Skip+缺陷注释，报 leader 立案，不顺手修）。",
+  "acceptance": {
+    "command": "bash -lc 'cd server && go test ./internal/api/...'",
+    "result": "exit 0：ok  github.com/agentmirror/agentmirror/internal/api",
+    "ratchet": "gate server 面 cases=273（基线 230，上行 +43；本席新增 22 具名，其余为并行席位补量）"
+  },
+  "tests": {
+    "named_cases": 22,
+    "pass": 21,
+    "skip_defect_red": 1,
+    "aggregate_test_go": "8 具名：statePriority 全序（blocked4>done3>working2>idle1>unknown/future0）、aggregate blocked 胜全 known、done>working>idle、unknown 剔除不计入（两条）、全 unknown 才 unknown、空列表 unknown、wsAggregate count+ranked、wsAggregate 空工作区",
+    "diff_test_go": "9 具名：无变化空 delta、add 新工作区、add 既有工作区、remove 工作区仍活、remove 末会话工作区消失（不发 changed_workspaces）、state 变化更聚合、state 变化聚合稳定抑制 workspace 帧、dims 变化抑制 workspace 帧、跨 cwd 迁移（old+new 双 ws 帧）",
+    "discovery_failure_test_go": "5 具名：失败保留最后好快照、首次即失败返回空 listing、失败期间不推伪造 delta、恢复后续 diff 正常发 delta、恢复直连客户端（缺陷红测，Skip）"
+  },
+  "write_scope_check": {
+    "in_scope": [
+      "server/internal/api/aggregate_test.go",
+      "server/internal/api/diff_test.go",
+      "server/internal/api/discovery_failure_test.go"
+    ],
+    "production_touched": "none",
+    "gofmt": "三个新文件 gofmt 全过；server/internal/api/ 无任何已跟踪文件被改动（git status 确认）"
+  },
+  "defects_found": [
+    {
+      "id": "D-new-recovery-silent",
+      "severity": "P1 候选",
+      "location": "server/internal/api/server.go publishListing prev==nil 分支（首次成功扫描当基线，不回发 delta）",
+      "symptom": "服务端总停机（discovery 全程失败）后客户端已拿到空 listing(seq=1) 并保持连接；当舰队恢复、首个成功扫描落地时，prev==nil 被当基线处理，不推 list_delta，seq 保持 1——客户端 seq 连续性检查（protocol.md §5.3）判不出断点，空 listing 静默滞留直到用户手动重新 list。触发 003 标准四/失败可见红线（会话出现即应被唤醒）。",
+      "red_test": "TestDiscoveryRecoveryReachesConnectedClientFromStartFailure（discovery_failure_test.go）：全失败启动→空 listing→恢复→断言 3s 内收到含 2 added_sessions 的 delta。当前红（确定性 3.00s 超时），已按契约 t.Skip+缺陷注释，报 leader 立案，不顺手修。",
+      "not_fixed": true
+    }
+  ],
+  "note": "gate server 面另有一处非本席回归的 gofmt 债：server/internal/pairing/probe_test.go 未格式化，来自 fix-qr-host-detect 提交 378c0d8（2026-08-09 14:05 入库，git status 无工作树改动，非半成品在途）。不在本任务 write_scope（仅 server/internal/api/ 新增 _test.go），未修不动，报 leader 知悉。",
+  "leader_note": "leader 复跑验收 exit 0；22 具名用例（aggregate 8/diff 9/discovery 5）核实；生产代码零改动核实。P1 候选『恢复期静默』采纳立案 fix-recovery-baseline（排队，t.Skip 红测即其修复席位的现成红测）。gofmt 债（probe_test.go，378c0d8 遗留）leader 顺手修清。席位交件即退役。"
+}
