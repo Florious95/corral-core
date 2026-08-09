@@ -70,6 +70,13 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests {
+            // Robolectric 基建（fix-app-nav 引入，后续 seams 任务共用）：在 JVM 上模拟
+            // Activity 生命周期（深链/旋转重建导航态），需加载合并后的 manifest 与资源。
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 // 红测（fix-app-network-manifest）前置依赖：ManifestNetworkPolicyTest 同时断言 debug 与
@@ -113,4 +120,8 @@ dependencies {
     implementation(files("libs/tsnetbind.aar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    // Robolectric 基建（fix-app-nav 引入，后续 seams 任务共用）：Activity/生命周期级单测。
+    // 版本 4.16.1（maven 实测存在，2026-08-09；4.17-beta 不取）；测试以 @Config(sdk=[34])
+    // 跑，避开 compileSdk 36 的 Robolectric 支持面差异（fix-app-nav 知识基底 §3 小样验证）。
+    testImplementation("org.robolectric:robolectric:4.16.1")
 }

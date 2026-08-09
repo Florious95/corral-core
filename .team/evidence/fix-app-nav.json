@@ -1,0 +1,24 @@
+{
+  "task_id": "fix-app-nav",
+  "status": "pass",
+  "worker": "w-fix-appnav",
+  "date": "2026-08-09",
+  "summary": "实锤缺陷 D-2+D-3 合并修复（审计 §0.4）。D-2 通知深链断链：MainActivity 消费 ACTION_OPEN_SESSION+EXTRA_SESSION_REF——onCreate（冷启动直达）与 onNewIntent（singleTop 在屏切换）双路径，manifest 加 launchMode=singleTop（与 PendingIntent 的 FLAG_ACTIVITY_SINGLE_TOP|CLEAR_TOP 配对，在屏点通知不重建不闪白）。D-3 旋转/回收丢导航态：activeSession/showPairing 从 Compose remember 提升为 Activity 级 MainNavState，经 onSaveInstanceState 保存/恢复。顺带引入 Robolectric 基建（4.16.1 + isIncludeAndroidResources + @Config(sdk=[34]) 模板），供后续 test-app-android-seams 复用。",
+  "root_cause_chain": [
+    "1. D-2：NotificationHelper.kt:148-158 构造深链 PendingIntent（ACTION_OPEN_SESSION+EXTRA_SESSION_REF），但全仓无任何消费方——点通知只是拉起 App 首页，003 标准四『需要时被唤醒』断链",
+    "2. D-3：AgentMirrorApp.kt:49-52 activeSession/showPairing 用 remember 而非 rememberSaveable/Activity 保存——旋转/深色切换/进程回收重建即丢当前会话页，回到列表"
+  ],
+  "red_tests": [
+    "MainActivityNavTest（Robolectric）：深链冷启动直达会话页、onNewIntent 在屏投递、重建（recreate）后 activeSession/showPairing 保持——修前 3 红，修后全绿（席位自报红测铁证 3 红 2 绿→修后 5 绿）"
+  ],
+  "tests": {
+    "acceptance": "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Nav*\"' -> exit 0（leader 复跑实证）",
+    "robolectric_baseline": "Robolectric 4.16.1（maven 实测存在，拒 4.17-beta）；@Config(sdk=[34]) 避开 compileSdk 36 支持面差异——模板已验证可复用"
+  },
+  "write_scope_check": {
+    "in_scope": ["app/app/src/main/java/dev/agentmirror/app/{MainActivity,AgentMirrorApp,MainNavState}.kt", "app/app/src/main/AndroidManifest.xml", "app/app/build.gradle.kts", "app/app/src/test/java/dev/agentmirror/app/MainActivityNavTest.kt"],
+    "deviation": "无越权；manifest launchMode=singleTop 属深链消费必需且注释论证幂等性"
+  },
+  "note": "深链会话展示名以 ref 兜底（后续列表可查 ref→name 时可优化）。test-app-android-seams 与 feat-input-keys-app 的依赖自此满足。",
+  "leader_note": "席位 artifact 声称已写本证据文件但实际未落盘（fg-service 同款账面≠实际前科）——leader 复核改动与验收后代写留痕。验收复跑 exit 0。席位交件即退役。"
+}
