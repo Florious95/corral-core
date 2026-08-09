@@ -16,18 +16,26 @@
 
 package dev.agentmirror.app.workspace
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +43,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,15 +52,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.agentmirror.app.ui.theme.MonoFontFamily
+import dev.agentmirror.app.ui.theme.Spacing
 
 /**
- * 工作区两级导航（需求 001 舰队视角 → 002 两级分组）。
+ * 工作区两级导航（需求 001 舰队视角 → 002 两级分组），018 全面重设计版。
  *
- * - 一级：工作目录列表（会话数徽章 + 聚合状态徽章），cwd 为聚合键；
- * - 二级：进入工作区后展示该 cwd 下会话列表（状态徽章，unknown 灰显不阻塞）；
- * - 点会话：路由到会话页（本任务只做占位；会话页归 session-ui 任务挂载）。
+ * 图28 实锤缺陷修复清单：
+ * - safe-area：顶栏 statusBarsPadding、列表 navigationBarsPadding（018 §一.2）；
+ * - 标题栏：一级「工作区」/二级目录名，AnimatedContent 平滑切换（此前无标题栏）；
+ * - 行层级：主（目录名）/辅（全路径中段省略）/次（徽章+会话数）三级分明（此前四行撑爆）；
+ * - 加载态：CONNECTING 且无数据时专门设计（此前直接渲染空 LazyColumn = 白屏）；
+ * - 转场：一二级横向滑动 + 淡入淡出；行点击 ripple（Surface onClick）。
  *
  * 状态全部来自 [WorkspaceViewModel]；聚合字段是服务端权威值，本屏只渲染不重算（012）。
  */
@@ -65,159 +80,330 @@ fun WorkspaceScreen(
     var selectedCwd by remember { mutableStateOf<String?>(null) }
     val selectedWorkspace = state.workspaces.firstOrNull { it.cwd == selectedCwd }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // 顶栏：连接状态提示条（断连显示重连中，conn 层自动重连，UI 只反映状态）。
-        ConnectionBar(connection = state.connection)
+    // 系统返回键语义：二级会话列表 → 一级工作区（此前只能点顶部文字返回）。
+    BackHandler(enabled = selectedWorkspace != null) { selectedCwd = null }
 
-        when {
-            state.isDisconnected -> DisconnectedContent(state)
-            state.isEmpty -> EmptyGuideContent()
-            selectedWorkspace == null -> WorkspaceList(
-                workspaces = state.workspaces,
-                onOpenWorkspace = { selectedCwd = it.cwd },
-            )
-            else -> SessionList(
-                workspace = selectedWorkspace,
-                onBack = { selectedCwd = null },
-                onOpenSession = onOpenSession,
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        TopBar(
+            selected = selectedWorkspace,
+            onBack = { selectedCwd = null },
+        )
+        ConnectionBanner(connection = state.connection)
+
+        // 一级⇄二级转场：以选中 cwd 为键横向滑动（进入右滑入，返回左滑入），018 §一.6。
+        AnimatedContent(
+            targetState = selectedWorkspace?.cwd,
+            transitionSpec = {
+                if (targetState != null) {
+                    (slideInHorizontally { it / 4 } + fadeIn())
+                        .togetherWith(slideOutHorizontally { -it / 4 } + fadeOut())
+                } else {
+                    (slideInHorizontally { -it / 4 } + fadeIn())
+                        .togetherWith(slideOutHorizontally { it / 4 } + fadeOut())
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+            label = "workspace-level",
+        ) { cwd ->
+            val workspace = state.workspaces.firstOrNull { it.cwd == cwd }
+            when {
+                cwd != null && workspace != null -> SessionList(
+                    workspace = workspace,
+                    onOpenSession = onOpenSession,
+                )
+                // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
+                state.connection == ConnectionUi.CONNECTING && state.workspaces.isEmpty() ->
+                    LoadingContent()
+                state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
+                state.isEmpty -> EmptyGuideContent()
+                else -> WorkspaceList(
+                    workspaces = state.workspaces,
+                    onOpenWorkspace = { selectedCwd = it.cwd },
+                )
+            }
         }
     }
 }
 
-/** 顶栏连接状态条：断连/重连中给提示条；就绪/连接中给细线（渲染态锚点）。 */
+/**
+ * 顶栏：一级显「工作区」标题；二级显返回钮 + 目录名（单行尾省略）。
+ * statusBarsPadding 在容器上：背景延伸进状态栏（edge-to-edge），内容不叠压（018 §一.2）。
+ */
 @Composable
-private fun ConnectionBar(connection: ConnectionUi) {
-    val barModifier = Modifier
-        .fillMaxWidth()
-        .background(MaterialTheme.colorScheme.surfaceVariant)
-        .padding(horizontal = 16.dp, vertical = 6.dp)
-    when (connection) {
-        ConnectionUi.READY -> Spacer(Modifier.height(2.dp))
-        ConnectionUi.CONNECTING -> Row(
-            modifier = barModifier,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+private fun TopBar(
+    selected: WorkspaceUi?,
+    onBack: () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .defaultMinSize(minHeight = 56.dp)
+                .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-            Text("连接中…", style = MaterialTheme.typography.labelMedium)
-        }
-        ConnectionUi.RECONNECTING -> Row(
-            modifier = barModifier,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-            Text("重连中…", style = MaterialTheme.typography.labelMedium)
-        }
-        ConnectionUi.STOPPED -> Row(modifier = barModifier) {
-            Text("连接已关闭", style = MaterialTheme.typography.labelMedium)
+            if (selected == null) {
+                Text(
+                    text = "工作区",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(horizontal = Spacing.sm),
+                )
+            } else {
+                // 「‹ 工作区」文案沿用旧版（e2e 语义树兼容），视觉压为次层级色。
+                TextButton(onClick = onBack) {
+                    Text("‹ 工作区", style = MaterialTheme.typography.labelLarge)
+                }
+                Text(
+                    text = cwdDisplayName(selected.cwd),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = Spacing.xs, end = Spacing.sm),
+                )
+            }
         }
     }
 }
 
-/** 断连态：保留最后一次已知列表，顶栏已提示重连；不阻塞浏览（004 无状态免疫）。 */
+/**
+ * 连接状态横幅：断连/连接中给 tonal 提示条，READY 平滑收起（AnimatedVisibility——
+ * 018 §一.6 连接状态变化平滑呈现，替代旧版 2dp Spacer 闪跳）。
+ * conn 层自动重连，UI 只反映状态（004）。
+ */
 @Composable
-private fun DisconnectedContent(state: WorkspaceUiState) {
-    if (state.workspaces.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("正在连接主机…", style = MaterialTheme.typography.bodyMedium)
+private fun ConnectionBanner(connection: ConnectionUi) {
+    AnimatedVisibility(visible = connection != ConnectionUi.READY) {
+        val (text, isError) = when (connection) {
+            ConnectionUi.CONNECTING -> "连接中…" to false
+            ConnectionUi.RECONNECTING -> "重连中…" to false
+            ConnectionUi.STOPPED -> "连接已关闭" to true
+            ConnectionUi.READY -> "" to false // 不可达：READY 不进本分支
         }
-    } else {
-        WorkspaceList(workspaces = state.workspaces, onOpenWorkspace = {})
+        Surface(
+            color = if (isError) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.secondaryContainer
+            },
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.pageH, vertical = Spacing.xs),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!isError) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(14.dp),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isError) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    },
+                )
+            }
+        }
     }
 }
 
-/** 空态：就绪但主机上无工作区 → 引导文案（无工作区 ≠ 错误）。 */
+/** 加载态（018 §一.5 每页专门设计）：连接尚未就绪且无缓存列表时的等待画面。 */
+@Composable
+private fun LoadingContent() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
+        ) {
+            CircularProgressIndicator()
+            Text(
+                text = "正在连接主机…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** 断连且无缓存列表：错误态设计（有缓存列表时走列表+顶部横幅，004 不阻塞浏览）。 */
+@Composable
+private fun DisconnectedEmptyContent(state: WorkspaceUiState) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            modifier = Modifier.padding(horizontal = Spacing.xl),
+        ) {
+            GlyphMark(error = true)
+            Text(
+                text = if (state.connection == ConnectionUi.STOPPED) "连接已关闭" else "正在重连…",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = if (state.connection == ConnectionUi.STOPPED) {
+                    "与主机的连接已终止。\n请检查主机守护进程，或重新配对。"
+                } else {
+                    "连接已断开，正在自动重连。\n恢复后列表会自动刷新。"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/** 空态（018 §一.5）：就绪但主机无工作区 → 图形锚点 + 分层引导文案（无工作区 ≠ 错误）。 */
 @Composable
 private fun EmptyGuideContent() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            modifier = Modifier.padding(horizontal = Spacing.xl),
+        ) {
+            GlyphMark(error = false)
+            Text(
+                text = "暂无工作区",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "先在主机上启动一个 tmux 中的 Agent CLI，\n它会被自动纳管到这里。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/** 空/错态图形锚点：终端提示符字形（零图标库依赖，产品身份语言与列表行图标同源）。 */
+@Composable
+private fun GlyphMark(error: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .background(
+                color = if (error) {
+                    MaterialTheme.colorScheme.errorContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
+                shape = MaterialTheme.shapes.medium,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
         Text(
-            text = "暂无工作区\n\n先在主机上启动一个 tmux 中的 Agent CLI，\n它会被自动纳管到这里。",
-            style = MaterialTheme.typography.bodyMedium,
+            text = "❯_",
+            style = MaterialTheme.typography.titleLarge,
+            fontFamily = MonoFontFamily,
+            color = if (error) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
     }
 }
 
-/** 一级：工作目录（cwd 聚合）列表。 */
+/** 一级：工作目录（cwd 聚合）列表。行内容布局见 [WorkspaceRow]（层级重做）。 */
 @Composable
 private fun WorkspaceList(
     workspaces: List<WorkspaceUi>,
     onOpenWorkspace: (WorkspaceUi) -> Unit,
 ) {
-    LazyColumn(Modifier.fillMaxSize()) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
         items(workspaces, key = { it.cwd }) { ws ->
+            // Surface onClick：ripple 点击态 + 48dp 最小触控目标（018 §一.4/一.6）。
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenWorkspace(ws) },
+                onClick = { onOpenWorkspace(ws) },
+                color = MaterialTheme.colorScheme.background,
             ) {
-                Column {
-                    WorkspaceRow(
-                        cwd = ws.cwd,
-                        sessionCount = ws.sessionCount,
-                        aggregateState = ws.aggregateState,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                    HorizontalDivider(color = Color.Transparent)
-                }
+                WorkspaceRow(
+                    cwd = ws.cwd,
+                    sessionCount = ws.sessionCount,
+                    aggregateState = ws.aggregateState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
+                )
             }
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = Spacing.pageH + 40.dp + Spacing.md),
+            )
         }
     }
 }
 
-/** 二级：选中 cwd 下的会话列表（ref 寻址、name 展示；unknown 灰显不阻塞）。 */
+/** 二级：选中 cwd 下的会话列表（ref 寻址、name 展示；unknown 灰显不阻塞，008）。 */
 @Composable
 private fun SessionList(
     workspace: WorkspaceUi,
-    onBack: () -> Unit,
     onOpenSession: (ref: String, name: String) -> Unit,
 ) {
-    Column(Modifier.fillMaxSize()) {
-        // 二级页头：返回一级 + 当前 cwd。
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "‹ 工作区",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.clickable(onClick = onBack),
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = workspace.cwd,
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-        LazyColumn(Modifier.weight(1f)) {
-            items(workspace.sessions, key = { it.ref }) { s ->
-                Surface(
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+    ) {
+        items(workspace.sessions, key = { it.ref }) { s ->
+            Surface(
+                onClick = { onOpenSession(s.ref, s.name) },
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onOpenSession(s.ref, s.name) },
+                        .defaultMinSize(minHeight = 56.dp)
+                        .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = s.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f),
-                            )
-                            StateBadge(state = s.state)
-                        }
-                        HorizontalDivider(color = Color.Transparent)
-                    }
+                    // 会话名等宽单行中段省略：tmux 会话名首尾都是辨识信息
+                    // （前缀=类型、尾缀=序号），中段省略两头都保（018 §一.3）。
+                    Text(
+                        text = s.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontFamily = MonoFontFamily,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.MiddleEllipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    StateBadge(state = s.state)
                 }
             }
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = Spacing.pageH),
+            )
         }
     }
 }
