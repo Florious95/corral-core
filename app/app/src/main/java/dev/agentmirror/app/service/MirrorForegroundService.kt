@@ -141,7 +141,11 @@ class MirrorForegroundService : Service() {
         }
 
         override fun onReconnect(attempt: Int, delayMs: Long) {
-            notifications.notifyPersistent("连接中断，正在重连…（$attempt）")
+            // 018 标准5 失败可见：重连中通知展示当前拨号地址 + 已试次数（attempt 从 0 起）。
+            // 地址取自 ConnectionManager.dialUrl()（管理器实际拨向的地址，非 ServiceWire 配置字段）
+            // ——stale-config 时期此值能直接暴露"重连正拨旧址"（改配置后仍拨旧地址）。
+            val url = this@MirrorForegroundService.manager?.dialUrl() ?: "?"
+            notifications.notifyPersistent("连接中断，正在重连…（第 ${attempt + 1} 次，拨号 $url）")
         }
     }
 

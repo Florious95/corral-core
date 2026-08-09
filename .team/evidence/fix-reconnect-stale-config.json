@@ -1,0 +1,35 @@
+{
+  "task_id": "fix-reconnect-stale-config",
+  "status": "pass",
+  "worker": "w-fix-reconnstale",
+  "date": "2026-08-09",
+  "summary": "P0 锁屏断连无限重连中根因修复（真机四次实证：daemon 全程零连接到达）。根因①②③全代码取证+修复，红测先行：①ServiceWire.manager 单例复用导致 setConfig 变更后 manager 仍持旧拨号地址——真机序列先扫错地址再改对下重连永远拨旧址；②E2 审计缺口：ConnectivityManager.NetworkCallback 从未注册（ConnectionManager.onNetworkAvailable 全仓零调用点），网络恢复无人打断退避；③同根并案：SessionRoute.createSessionViewModel 硬编码传 null 给 uploadBaseUrl，绕过 startPersistentConnection 统一装配入口（图30 未配置上传地址）。修复：setConfig 检测配置变更即 releaseManager（相同配置保持单例防闪断）；新增 service 包 NetworkConnectivityWatcher（ConnectivityManager.registerDefaultNetworkCallback → ServiceWire.onNetworkAvailable → 当前 manager），MainActivity onCreate/onDestroy 注册注销；SessionRoute 统一读 ServiceWire.uploadBaseUrl；重连中通知展示当前拨号地址+已试次数（018 标准5 失败可见，ConnectionManager 增 dialUrl()）。",
+  "root_cause_chain": [
+    "1. ConnectionManager.config 是构造期 val（ConnectionManager.kt:60），拨号目标在构造时固化；ServiceWire.manager 单例幂等复用（fix-cold-start-reconnect 双层守卫）使已存在 manager 永不重建",
+    "2. 用户先扫 ws://10.20.55.20:9900/ws（不可达）建 manager → 改对 ws://192.168.31.116:9900/ws 后 setConfig 只更新 ServiceWire.config 字段 → 锁屏断连重连仍拨旧地址 → daemon 全程零连接到达（leader lsof 铁证）",
+    "3. E2 审计缺口：ConnectionManager.onNetworkAvailable() 已实现『RECONNECTING 中立即重拨』但全仓零调用点（grep 证实）——ConnectivityManager.NetworkCallback 从未注册，锁屏 WiFi 休眠断连后退避爬到长间隔，解锁网络恢复无人打断退避空转",
+    "4. 同根并案：SessionRoute.createSessionViewModel 硬编码传 null 给 uploadBaseUrl（SessionRoute.kt:93），绕过 startPersistentConnection 统一装配入口（该入口已正确注入）→ 真机传图报『未配置上传地址』（图30）"
+  ],
+  "red_tests": [
+    "ServiceWireStaleConfigTest（纯 JVM，写前红）：configChange_rebuildsManager_dialsNewUrl——setConfig 变更后 manager 重建拨新址（修前单例复用拨旧址红）；networkAvailable_duringReconnect_retriesImmediately——RECONNECTING 中网络恢复立即重拨（修前 ServiceWire 无 onNetworkAvailable 编译红）；sameConfig_keepsManager_avoidFlap 保真防闪断",
+    "SessionUploadBaseWiringTest（纯 JVM，写前红）：createSessionViewModel_readsUploadBaseFromServiceWire——上传基地址统一读 ServiceWire.uploadBaseUrl（修前硬编码 null 红）；uploadUnset 保真未注入报错语义"
+  ],
+  "tests": {
+    "acceptance_unit": "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest' -> exit 0，256 用例（本席新增 6），0 失败 0 错误",
+    "manifest_regression": "ManifestNetworkPolicyTest 4 断言保持绿（新增 ACCESS_NETWORK_STATE 未破坏既有 INTERNET/明文断言）"
+  },
+  "write_scope_check": {
+    "in_scope": [
+      "app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt（setConfig 重建语义 + onNetworkAvailable 转发）",
+      "app/app/src/main/java/dev/agentmirror/app/service/NetworkConnectivityWatcher.kt（新）",
+      "app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt（dialUrl() 拨号地址取值口）",
+      "app/app/src/main/java/dev/agentmirror/app/service/MirrorForegroundService.kt（重连通知展示拨号地址+已试次数，018 标准5）",
+      "app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt（uploadBaseUrl 统一收口）+ SessionViewModel.kt（baseUrl internal 测试缝）",
+      "app/app/src/test/java/dev/agentmirror/app/service/ServiceWireStaleConfigTest.kt（新，4 用例）",
+      "app/app/src/test/java/dev/agentmirror/app/session/SessionUploadBaseWiringTest.kt（新，2 用例）"
+    ],
+    "deviation": "leader 裁定三处授权扩权（最小连带，行内注释 // fix-reconnect-stale-config 扩权 留痕）：①MainActivity.kt onCreate 注册/onDestroy 注销网络回调（app 包，~6 行，与 ui-redesign 的 enableEdgeToEdge 后 WindowManager 段行级合并，未冲突）；②app/app/src/main/AndroidManifest.xml 加 ACCESS_NETWORK_STATE 一行（普通权限，注册回调前置）；③SessionRoute 改读 ServiceWire.uploadBaseUrl + 锁定测试（与 ui-redesign 不同文件，未触碰）。"
+  },
+  "note": "网络回调注册点选在 MainActivity（非 fg-service）：全仓取证证实 MirrorForegroundService 从未被 startService（零调用点），退避打断需进程存活全程生效。ConnectionManager.onNetworkAvailable 钩子先于本席已存在（conn 知识基底 §1），本席补齐了『谁调它』的缺失链路。",
+  "leader_note": "交件即退役。"
+}
