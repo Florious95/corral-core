@@ -543,6 +543,20 @@ tasks:
     evidence: ".team/evidence/fix-term-residuals.json"
     contention: impl
 
+  - id: fix-term-bg-cjk
+    goal: >
+      P0（用户真机实拍经 App 传图链路上传取证，2026-08-09 21:50）：终端带背景色区块（SGR bg，
+      Claude Code recap/引用框）内 CJK 文字大面积重叠错位黑块化，默认背景区域同字符完全正常。
+      疑点：背景色 run 绘制路径的双宽单元格测量/推进与默认路径不一致（glyph 案修复未覆盖该路径）
+      或反色处理缺陷——取证定性再修。顺带：会话页键条最右「→」被屏幕右缘裁半（KeyBar 横向布局
+      约束最小修）。红测先行（SGR 背景色+CJK 混排夹具网格断言+真实 recap capture 字节），修后
+      同机位截图对照留档。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'"]
+    deps: ["fix-term-render-debt"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-bg-cjk.json"
+    contention: impl
+
   - id: fix-release-test-host
     goal: >
       基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
