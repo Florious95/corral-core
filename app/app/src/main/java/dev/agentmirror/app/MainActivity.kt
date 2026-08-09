@@ -22,6 +22,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
+import dev.agentmirror.app.pairing.startPersistentConnection
 import dev.agentmirror.app.service.NotificationHelper
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
@@ -49,8 +50,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        navState = MainNavState(initialShowPairing = SharedPreferencesPairingConfigStore(this).load() == null)
+        // 冷启动重连（fix-cold-start-reconnect P0）：首启判定读取配对配置，有配置即启动
+        // 常驻连接——force-stop/重开后自动重连回列表，顶栏不再永远「连接中…」（004 核心承诺
+        // 「被杀即无所谓，重开自动恢复」）。序列与 PairingRoute.onPaired 同构（幂等，防双连接）；
+        // 无配置则落配对页（首启语义）。navState.restoreFrom 后判 showPairing：旋转/回收重建
+        // 仍停在配对页（用户正重配）时不打扰后台启动旧连接。
+        val storedConfig = SharedPreferencesPairingConfigStore(this).load()
+        navState = MainNavState(initialShowPairing = storedConfig == null)
         navState.restoreFrom(savedInstanceState) // D-3：旋转/进程回收重建后恢复导航态
+        if (!navState.showPairing && storedConfig != null) {
+            startPersistentConnection(storedConfig)
+        }
         // 工作区 VM 与 Activity 同生命周期；列表状态由 conn 层 READY+全量 listing 恢复（004 无状态）。
         workspaceViewModel = WorkspaceViewModel()
         handleDeepLink(intent) // D-2：冷启动直达（ACTION_OPEN_SESSION+EXTRA_SESSION_REF）

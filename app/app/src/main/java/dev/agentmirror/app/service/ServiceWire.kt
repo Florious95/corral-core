@@ -22,6 +22,7 @@ import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
@@ -49,19 +50,33 @@ object ServiceWire {
     /**
      * UI 侧监听桥（UI 接线层注入；服务回调原样转投）。
      *
-     * 挂载时补播当前连接态：工作区 VM 可能在连接已 READY 之后才挂载（配对完成启动服务 →
-     * READY 早于 UI 组合），若只靠包装监听"事件发生时转投"，VM 会错过已发生的
-     * onStateChanged(READY)，顶栏永远停在"连接中…"。补播让新挂载的 UI 监听立即反映真实
-     * 连接态（004 无状态：列表由 READY+全量 listing 恢复，连接态由本补播即时对齐；
-     * 语义同 SessionViewModel.init 自行 onStateChanged(manager.state())）。
+     * 挂载时补播当前连接态 + 最近一次全量 listing：工作区 VM 可能在连接已 READY 之后才挂载
+     * （配对完成启动服务 / 冷启动 onCreate 即启动连接 → READY+listing 早于 UI 组合），若只靠
+     * 包装监听"事件发生时转投"，VM 会错过已发生的 onStateChanged(READY) 与全量 listing——
+     * 前者顶栏永停"连接中…"（fix-workspace-wiring），后者列表永空 / 只渲染零散 delta
+     * （fix-cold-start-reconnect 层2 实证：force-stop 重开只显示一个真实舰队工作区，隔离会话
+     * 缺失）。补播让新挂载的 UI 监听立即反映真实连接态与全量数据（004 无状态：列表由
+     * READY+全量 listing 恢复，连接态由本补播即时对齐；语义同 SessionViewModel.init 自行
+     * onStateChanged(manager.state())）。listing 后到达的 list_delta 会继续流式更新，
+     * 补播的 listing 只是兜底基线（与 conn 层自动重 list 语义一致，无缓存引入）。
      */
     @Volatile
     var uiConnector: ConnectionManager.Listener? = null
         set(value) {
             field = value
-            // manager 可能尚未创建（fg-service 未启动 / 连接未配置）：此时无当前态可补，跳过。
-            value?.let { manager?.state()?.let(it::onStateChanged) }
+            if (value == null) return
+            // 补播当前连接态（manager 可能未创建：无态可补，跳过）。
+            manager?.state()?.let(value::onStateChanged)
+            // 补播最近一次全量 listing：晚挂载 VM 的列表基线（可能已错过 READY 后的 listing）。
+            lastListing?.let(value::onFrame)
         }
+
+    /**
+     * 最近一次全量 listing 帧（挂载补播用）。只保留最新一份（覆盖式），
+     * 与 [uiConnector] setter 的补播语义配套：晚挂载 UI 以它为列表基线。
+     */
+    @Volatile
+    private var lastListing: ListingFrame? = null
 
     /** 图片上传基地址（协议 §8 `POST /upload`；配对成功后由配对层注入，见 [deriveUploadBase]）。 */
     @Volatile
@@ -109,6 +124,8 @@ object ServiceWire {
                     }
 
                     override fun onFrame(frame: FramePayload) {
+                        // 捕获全量 listing：晚挂载 UI 的列表基线（uiConnector setter 补播）。
+                        if (frame is ListingFrame) lastListing = frame
                         connListener.onFrame(frame)
                         uiConnector?.onFrame(frame)
                     }
@@ -147,7 +164,21 @@ object ServiceWire {
     fun releaseManager() {
         val m = manager
         manager = null
+        // 清掉列表基线：新管理器重连后以新 listing 为准（旧基线随旧连接作废）。
+        lastListing = null
         m?.stop()
+    }
+
+    /**
+     * 仅测试用：清空已注入的连接配置。
+     *
+     * [config] 与 manager 生命周期解耦：`releaseManager()` 不清 config（冷启动重连依赖
+     * 配置持久——Activity 重建后经 [setConfig] 再次注入同一配置）。但 config 是进程级
+     * 单例状态，测试泄漏会让后续用例误以为已配对（SessionRoute 据此建 SessionViewModel，
+     * 实证污染 WorkspaceWiringTest）。测试应在 teardown 调用本方法复位。
+     */
+    internal fun resetConfigForTest() {
+        config = null
     }
 }
 
