@@ -30,6 +30,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /** 状态徽章各状态的背景色（008：blocked 醒目、done 完成色、working 活跃色、idle 中性、unknown 灰显）。 */
@@ -60,7 +62,11 @@ fun StateBadge(state: AgentState, modifier: Modifier = Modifier) {
             text = style.label,
             style = MaterialTheme.typography.labelSmall,
             color = Color.White,
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier
+                .align(Alignment.Center)
+                // R-7（017 当期裁定）：颜色不作唯一信息载体——徽章语义化，供 TalkBack 朗读
+                // （text 与 contentDescription 并存，取后者播报；加法性，不改变视觉渲染）。
+                .semantics { contentDescription = "状态：${style.label}" },
         )
     }
 }

@@ -124,4 +124,11 @@ dependencies {
     // 版本 4.16.1（maven 实测存在，2026-08-09；4.17-beta 不取）；测试以 @Config(sdk=[34])
     // 跑，避开 compileSdk 36 的 Robolectric 支持面差异（fix-app-nav 知识基底 §3 小样验证）。
     testImplementation("org.robolectric:robolectric:4.16.1")
+    // Compose UI 测试（test-app-android-seams 引入）：StateBadge 语义用 createComposeRule
+    // 在 Robolectric JVM 上跑（不起模拟器）。BOM 约束 testImplementation 需单独声明
+    // （implementation 的 platform 约束不传播到 test 配置）；ui-test-manifest 的
+    // ComponentActivity 宿主由 debug 变体合并进 manifest（debugImplementation）。
+    testImplementation(platform("androidx.compose:compose-bom:2025.12.01"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
