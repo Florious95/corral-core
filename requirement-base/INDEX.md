@@ -18,6 +18,7 @@
 | 012 | [工作区聚合状态规则](entries/012-工作区聚合状态规则.md) | 已裁定 | 聚合状态服务端权威算；blocked>done>working>idle；unknown 不计入、全 unknown 才聚合；固化 protocol.md |
 | 013 | [测试体系与回归门禁](entries/013-测试体系与回归门禁.md) | 已裁定 | 五层测试体系；tools/gate/run.sh 全量门；0新回归标尺；测试数棘轮；失败四归因 |
 | 014 | [产品定名](entries/014-产品定名.md) | 已裁定 | 定名 agentmirror；module/applicationId/二进制落地；被否候选留档 |
+| 015 | [验收达成](entries/015-验收达成.md) | 已达成 | e2e exit 0；首帧 p90 50.6ms；老化 40/40；全量门 600+ 绿；任务书 24 项 pass；交付 agentmirror |
 
 ## 未决议题（契约级，施工前须定夺）
 
