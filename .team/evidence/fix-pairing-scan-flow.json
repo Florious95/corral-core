@@ -1,0 +1,43 @@
+{
+  "task_id": "fix-pairing-scan-flow",
+  "status": "pass",
+  "worker": "w-fix-scanflow",
+  "date": "2026-08-09",
+  "summary": "真机验收缺陷 B 修复：扫码「已识别」后无任何可见后续（静默等待）。整改三点全做：①识别成功→立即自动发起配对并显示「连接中…」含目标地址；②失败显式报错（区分 超时/拒绝/不可达/解析失败）+ 重试按钮；③识别值自动回填手填表单（url+token 落输入框，可改地址重试——缺陷 A 自救通路）。坏 payload 显式提示而非静默。顺带：屏上不再展示裸 JSON（qrText 完全移除，改 recognizedUrl 地址摘要，token 不上屏 §9）。",
+  "root_cause_chain": [
+    "1. ScanCard 解码后仅展示「已识别: {裸 JSON}」+ 调用 onQrText，屏幕展示文本与状态机无任何关联",
+    "2. PairingViewModel.onStateChanged 对 RECONNECTING 不处理：拨号失败（含缺陷 A 的 TUN 地址不可达）进入指数退避，配对阶段静默挂起直到 15s 超时才报错——用户等待无果、无进度态、无失败报错",
+    "3. onQrText 解析成功即 startPairing，但手填表单（manualUrl/manualToken）从不回填——用户无法改地址重试，缺陷 A 场景无自救通路",
+    "4. qrText 上屏展示原始 JSON 全文：含 token 的裸 JSON 超出「QR 是 token 唯一合法出口」的必要范围（§9）"
+  ],
+  "fixes": {
+    "instant_progress": "识别成功→立即 startPairing，Pairing 状态改为 data class Pairing(targetUrl)，StatusArea 显示「连接中… <地址>」（token 不上屏）",
+    "explicit_failure_cause": "PairingFailCause 枚举：REJECTED(拒绝)/UNREACHABLE(拨号失败·不可达)/TIMEOUT(超时)/PARSE_ERROR(坏 payload)/PROTOCOL_ERROR(协议异常)。onStateChanged 新增 RECONNECTING 分支：配对阶段任何掉线/拨号失败立即 failPairing(UNREACHABLE)，不再无限退避等超时",
+    "auto_refill": "onQrText 解析成功后 manualUrl/manualToken 自动回填手填表单；submitManual/retry 均更新 recognizedUrl（地址上屏）",
+    "retry_button": "失败态（非 PARSE_ERROR）UI 显示「重试」按钮 → viewModel.retry() 以失败时配置重拨；canRetry 供判定",
+    "parse_error_visible": "坏 payload（坏 JSON/缺字段/坏版本）→ Failed(PARSE_ERROR, 固定文案)，不静默",
+    "token_off_screen": "qrText 上屏完全移除（VM 字段删除 + Screen 改 recognizedUrl 摘要），token 仅在手填表单明文编辑（既有红线），绝不上屏/不进日志"
+  },
+  "red_tests": [
+    "scanAutoFillsManualFormForEditRetry: 扫码后 manualUrl/manualToken 必须回填识别值。修前红（manualUrl 为空 ComparisonFailure），修后绿",
+    "scanDialFailureSurfacesImmediatelyNotSilent: 拨号失败（dialScript=[false]，缺陷 A 不可达场景）必须立即显式 Failed(UNREACHABLE)。修前红（15s 静默挂起 AssertionError），修后绿"
+  ],
+  "tests": {
+    "acceptance": "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"' -> exit 0，PairingViewModelTest 18 测全绿（原 13 + 红测 2 + 新增 3）",
+    "cause_classification": "authFailureSurfacesExplicitRejection→REJECTED；pairTimeoutSurfacesExplicitFailure→TIMEOUT；scanDialFailure→UNREACHABLE；scanRejects*→PARSE_ERROR 全锁定",
+    "auto_connect": "scanImmediatelyAutoConnectsWithTargetUrlVisible：扫码后即时 Pairing(targetUrl)；failThenRetryReconnectsWithSameConfig：失败后重试重拨同配置；scannedFieldsEditableThenSubmitUsesEditedAddress：回填表单改地址重提走新地址",
+    "token_hygiene": "token 不进日志：pairing 包唯一 Log.w（PairingRoute 既有，启动常驻连接失败异常消息，不含 token 值）保留；errorMessageNeverContainsTokenValue 阳性对照继续锁死；qrText 全移除 grep 证实",
+    "full_app_suite": ":app:testDebugUnitTest -> 178 测 0 失败 0 回归"
+  },
+  "write_scope_check": {
+    "changed": [
+      "app/app/src/main/java/dev/agentmirror/app/pairing/PairingViewModel.kt",
+      "app/app/src/main/java/dev/agentmirror/app/pairing/PairingModels.kt",
+      "app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt",
+      "app/app/src/test/java/dev/agentmirror/app/pairing/PairingViewModelTest.kt"
+    ],
+    "conn_service_untouched": "未动 conn/ 包、ServiceWire、service/ 传输实现——试配对仍走既有独立 ConnectionManager + 注入工厂",
+    "protocol_untouched": "未改协议/服务端；QR JSON 契约对齐 server qr.go 不变"
+  },
+  "note": "配对成功路由（PairingRoute onPaired 注入 setConfig/uploadBaseUrl/start）未被本任务触碰——整改聚焦扫码→状态机可见性。失败态重试按钮在 UI 层经 PairingStatus.Failed 分支渲染（Compose 非单测范围，逻辑在 VM 已测）。"
+}

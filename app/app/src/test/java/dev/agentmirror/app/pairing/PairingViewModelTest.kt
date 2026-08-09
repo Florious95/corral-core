@@ -105,6 +105,13 @@ class PairingViewModelTest {
             clock.advance(PairTimeoutMs + 1)
             vm.onTick(clock.nowMs())
         }
+
+        /** 断言失败态并返回其 cause（配对状态机统一走 Failed(cause, message)）。 */
+        fun failedCause(): PairingFailCause {
+            val st = vm.pairingStatus
+            assertTrue("expected Failed, got $st", st is PairingStatus.Failed)
+            return (st as PairingStatus.Failed).cause
+        }
     }
 
     companion object {
@@ -189,8 +196,50 @@ class PairingViewModelTest {
         val st = h.vm.pairingStatus
         assertTrue(st is PairingStatus.Failed)
         assertTrue((st as PairingStatus.Failed).message.contains("不可达"))
+        assertEquals(PairingFailCause.UNREACHABLE, (st as PairingStatus.Failed).cause)
         // 失败不落配置（已有配置不被污染）。
         assertNull(h.store.saved)
+    }
+
+    @Test
+    fun scanImmediatelyAutoConnectsWithTargetUrlVisible() {
+        val h = Harness()
+        // 缺陷 B 整改点①：识别成功→立即自动发起配对并显示「连接中…」进度态（含目标地址）。
+        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC"}""")
+        val st = h.vm.pairingStatus
+        assertTrue("expected Pairing, got $st", st is PairingStatus.Pairing)
+        assertEquals("ws://host:9900/ws", (st as PairingStatus.Pairing).targetUrl)
+    }
+
+    @Test
+    fun failThenRetryReconnectsWithSameConfig() {
+        val h = Harness()
+        h.dialFails()
+        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC"}""")
+        assertEquals(PairingFailCause.UNREACHABLE, h.failedCause())
+        // 失败态可重试（非解析失败）：以失败时配置重拨（不重新解析 QR）。
+        assertTrue(h.vm.canRetry)
+        h.vm.retry()
+        val st = h.vm.pairingStatus
+        assertTrue("expected Pairing, got $st", st is PairingStatus.Pairing)
+        assertEquals("ws://host:9900/ws", h.nextConfig?.url)
+        assertEquals("ABC", h.nextConfig?.token)
+    }
+
+    @Test
+    fun scannedFieldsEditableThenSubmitUsesEditedAddress() {
+        val h = Harness()
+        // 缺陷 A 自救通路：识别值回填手填表单 → 用户改地址 → 手填「连接」以新地址重试。
+        h.vm.onQrText("""{"v":1,"url":"ws://198.18.0.1:9900/ws","token":"ABC","ts_authkey":""}""")
+        assertEquals("ws://198.18.0.1:9900/ws", h.vm.manualUrl)
+        assertEquals("ABC", h.vm.manualToken)
+        h.vm.manualUrl = "ws://192.168.1.5:9900/ws"
+        h.vm.submitManual()
+        assertNull(h.vm.formError)
+        assertEquals("ws://192.168.1.5:9900/ws", h.nextConfig?.url)
+        assertEquals("ABC", h.nextConfig?.token)
+        // 地址上屏、token 绝不上屏（§9 红线）。
+        assertEquals("ws://192.168.1.5:9900/ws", h.vm.recognizedUrl)
     }
 
     // ---- 手填（兜底入口）----
@@ -236,9 +285,9 @@ class PairingViewModelTest {
         val h = Harness()
         h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"WRONG"}""")
         h.authReject("token_mismatch")
-        val st = h.vm.pairingStatus
-        assertTrue(st is PairingStatus.Failed)
-        assertTrue((st as PairingStatus.Failed).message.contains("拒绝"))
+        // 拒绝须分类明确（003 失败可见 + 区分原因供 UI 指引）。
+        assertEquals(PairingFailCause.REJECTED, h.failedCause())
+        assertTrue((h.vm.pairingStatus as PairingStatus.Failed).message.contains("拒绝"))
         // 失败不落配置（已有配置不被污染）。
         assertNull(h.store.saved)
     }
@@ -248,9 +297,7 @@ class PairingViewModelTest {
         val h = Harness()
         h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"SLOW"}""")
         h.tickPastPairTimeout()
-        val st = h.vm.pairingStatus
-        assertTrue(st is PairingStatus.Failed)
-        assertTrue((st as PairingStatus.Failed).message.contains("超时"))
+        assertEquals(PairingFailCause.TIMEOUT, h.failedCause())
         assertNull(h.store.saved)
     }
 
