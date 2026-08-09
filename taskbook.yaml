@@ -233,6 +233,22 @@ tasks:
     evidence: ".team/evidence/state-ident-wrapper.json"
     contention: impl
 
+  - id: fix-bridge-restart-pipe
+    goal: >
+      修复 e2e 老化层实证缺陷（004 无状态免疫跨 daemon 重启失守）：daemon 被杀重启后，重新 subscribe
+      的 delta 流 0 帧。根因已实证：旧 pipe-pane cat 进程残留持有旧 FIFO，新 pipe-pane -o 见 pane 已
+      pipe 即静默 no-op，新 relay O_RDONLY 永久阻塞且 teardown 不可达。修复要求：①subscribe 先无条件
+      detach 旧 pipe 再 -o（对任何崩溃残留幂等自愈——崩溃是常态路径不是异常）；②relay 打开 FIFO 非阻塞
+      +超时重试，保证 teardown 可达；③daemon 优雅关闭 drain 订阅（可选加固）。红测先行：以 e2e 实证
+      形状写 bridge 集成红测（预置 stale cat 残留 → 重新 subscribe → delta 必须恢复）。
+      红线：不改协议；e2e/ 只读。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/bridge/...'"
+    deps: ["term-bridge", "ws-api"]
+    write_scope: ["server/internal/bridge/", "server/internal/api/", "server/cmd/"]
+    evidence: ".team/evidence/fix-bridge-restart-pipe.json"
+    contention: impl
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
