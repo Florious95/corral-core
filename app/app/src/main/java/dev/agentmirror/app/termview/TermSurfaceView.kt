@@ -278,18 +278,17 @@ class TermSurfaceView @JvmOverloads constructor(
                 continue
             }
             // 本格主字符 + 紧随的组合/零宽码点（同段内），一次性画（组合字形整体）。
-            val sb = StringBuilder(text.substring(i, i + chars))
+            // 用 (text, start, end) 区间重载测量/绘制，热路径零分配（不切子串）。
             var j = i + chars
             while (j < n) {
                 val nc = text.codePointAt(j)
                 if (CharWidth.of(nc) != 0) break
-                sb.append(Character.toChars(nc))
                 j += Character.charCount(nc)
             }
             val cellPx = cellW * width
-            val actual = paint.measureText(sb.toString())
+            val actual = paint.measureText(text, i, j)
             // 格内水平居中：字形实际宽度小于格宽时居中，大于则轻微左出（不破栅格）。
-            canvas.drawText(sb.toString(), x + (cellPx - actual) / 2f, rowY.toFloat(), paint)
+            canvas.drawText(text, i, j, x + (cellPx - actual) / 2f, rowY.toFloat(), paint)
             x += cellPx
             i = j
         }
