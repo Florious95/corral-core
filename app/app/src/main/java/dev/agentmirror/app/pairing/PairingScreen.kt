@@ -117,7 +117,7 @@ fun PairingScreen(
             }
             ManualFormCard(viewModel)
             TsTokenCard()
-            StatusArea(status)
+            StatusArea(status, onRetry = { viewModel.retry() })
         }
     }
 }
@@ -218,9 +218,10 @@ private fun ScanCard(viewModel: PairingViewModel) {
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        viewModel.qrText?.let { qr ->
+        viewModel.recognizedUrl?.let { url ->
+            // 识别摘要只上屏地址，绝不上屏裸 JSON（含 token）——QR 是 token 唯一合法出口（§9）。
             Text(
-                text = "已识别：$qr",
+                text = "已识别 · 正在连接 $url",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -302,11 +303,12 @@ private fun TsTokenCard() {
 
 /** 配对状态区：进行中/成功/失败全部明确可见（003 静默失效最高罪）。 */
 @Composable
-private fun StatusArea(status: PairingStatus) {
+private fun StatusArea(status: PairingStatus, onRetry: () -> Unit) {
     when (status) {
         PairingStatus.Idle -> Unit
-        PairingStatus.Pairing -> Text(
-            text = "正在配对…",
+        is PairingStatus.Pairing -> Text(
+            // 整改点①：识别成功立即自动配对并显示「连接中…」进度态，含目标地址（token 不上屏，§9）。
+            text = "连接中… ${status.targetUrl}",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -315,11 +317,17 @@ private fun StatusArea(status: PairingStatus) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
         )
-        is PairingStatus.Failed -> Text(
-            text = status.message,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.error,
-        )
+        is PairingStatus.Failed -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = status.message,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+            if (status.cause != PairingFailCause.PARSE_ERROR) {
+                // 整改点②：失败给显式报错 + 重试按钮（解析失败无配置，重试无意义，应重扫/手填）。
+                Button(onClick = onRetry) { Text("重试") }
+            }
+        }
     }
 }
 
