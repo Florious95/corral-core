@@ -1,0 +1,49 @@
+{
+  "task_id": "e2e-layer2-harden",
+  "status": "pass",
+  "worker": "w-e2e-harden",
+  "date": "2026-08-09",
+  "summary": "消除 e2e 层2 账实落差（审计 §0.3-2）：弱文本判定+假杀假断 升级为真旅程硬化判定。核心交付：①语义定位（uiautomator dump 解析 text→bounds 中心点 tap，替换硬编码坐标 540,789 等）；②强判定（配对成功 = daemon 日志出现 `listing: first snapshot`——首个客户端 auth 后 markAuthed 唤醒 idle-gated listing loop 才打，服务端真实 WS 连接铁证，不再'文本出现连接中即 PASS'）；③隔离 tmux 真实会话（显式 -S + 隔离 TMUX_TMPDIR，绝不碰真实舰队）+ 真旅程骨架（列表含会话→点开→快照→输入→force-stop→恢复，被 app 缺陷①阻断处 expected-fail 显式标注）。验收 `bash -lc 'bash e2e/run.sh --layer 2'` exit 0，阳性对照（故意错断言）必红 exit 1。",
+  "fake_green_eliminated": [
+    "基线（HEAD layer2.sh）把'连接中…'出现 1s 即判 workspace reached = PASS——复现 3 次全绿，但保留的 daemon 日志 0 条真实 WS 连接/握手/auth 记录，app 从未连上 daemon（弱文本判定假绿实锤）",
+    "硬化后：无 `listing: first snapshot` 即红；实测基线假绿路径被硬化版打红（必须真实连接）"
+  ],
+  "defect_findings": [
+    {
+      "id": "fix-workspace-wiring（缺陷①，leader 已立案）",
+      "root_cause": "WorkspaceViewModel.onConnectionStateChanged/onFrame（WorkspaceViewModel.kt:109/117）无任何调用点——全仓 grep 只有 SessionRoute.kt:72 接 ServiceWire.uiConnector，WorkspaceScreen 的 VM 是 AgentMirrorApp.kt:53 remember 裸建，常驻连接的 READY/listing 回调无人转投。配对成功（onPaired→showPairing=false 切屏）后工作区 VM 永远收不到数据，UI 卡默认'连接中…'、列表空白。",
+      "evidence_trace": "app 侧 E2E_TRACE（临时插桩，交件前已清除，产品逻辑零改动）：transport onOpen → auth_ack ok:true → connection READY fired → PairingViewModel onStateChanged=READY → STOPPED(Success) → PairingScreen LaunchedEffect status=Success pending=true → PairingRoute calling upstream onPaired()。连接/认证/切屏全链路健康，唯独工作区列表不渲染。",
+      "user_symptom": "配对成功但列表永不显示（004 主链断）",
+      "five_column": "goal=把 WorkspaceViewModel 挂到 ServiceWire.uiConnector（DisposableEffect 接线，与 SessionRoute 同构）；acceptance=Robolectric 断言工作区 VM 收到 READY+listing 渲染列表；write_scope=app/app/src/main（workspace 接线）+ src/test"
+    },
+    {
+      "id": "fix-pairing-timeout-pump（缺陷②，leader 已立案）",
+      "root_cause": "PairingViewModel.onTick（PairingViewModel.kt:147）生产无人调用——全仓 grep onTick 仅 SessionScreen.kt:85（那是 SessionViewModel 的）。配对页无时钟泵 → PAIR_TIMEOUT_MS=15s 永不触发 → 地址不可达/握手失败时无限'连接中…'。违反工程常识红线5（失败可见）：fix-pairing-scan-flow 的超时报错在生产等于死代码。",
+      "user_symptom": "配对失败无限转圈，无超时报错",
+      "five_column": "goal=PairingScreen 加 LaunchedEffect 时钟泵调 viewModel.onTick（与 SessionScreen 同构）；acceptance=JVM 假时钟测试超时→Failed(TIMEOUT)；write_scope=app/app/src/main（PairingScreen）+ src/test"
+    }
+  ],
+  "tests": {
+    "acceptance": "bash -lc 'bash e2e/run.sh --layer 2' -> exit 0（最终复跑实证，layer2.json pass=true + expected_fail=[fix-workspace-wiring] + harden=true）",
+    "positive_control": "故意把配对页断言改成'绝不存在节点XYZ' -> LAYER2 FAIL + exit 1 + layer2.json pass=false（断言逻辑必红不假绿）",
+    "idempotent": "同一验收命令复跑 3 次均 exit 0（端口随机、marker 唯一、隔离环境干净）"
+  },
+  "process_hygiene": {
+    "orphans": "跑后 ps/pgrep/lsof 检查：零残留 agentmirrord 进程、零残留隔离 TMPD（/tmp/e2e-l2.* 不存在）、零残留监听端口。trap 收尸：kill daemon + 轮询 wait + kill -9 兜底 + 隔离 tmux kill-server + rm -rf TMPD",
+    "purification": "脚本开头 export -n TMUX_TMPDIR + unset TMUX；隔离 tmux 用 TMUX='' TMUX_TMPDIR=$TMPD/tmux tmux -f /dev/null（socket 落 <TMPD>/tmux/tmux-<uid>/default，daemon DefaultSocketDirs 恰好扫描，绝不碰 /private/tmp/tmux-501 真实舰队 189 socket）",
+    "trace_cleanup": "临时取证插桩（server ws_handler/ws_conn E2E_TRACE + app Connection/PairingViewModel/PairingScreen/PairingRoute/AgentMirrorApp E2E_TRACE）全部还原；e2e/bin/agentmirrord 用干净代码重编（strings 验证 0 条 E2E_TRACE）"
+  },
+  "common_sense_redlines": {
+    "r1_idle_economy": "daemon 是隔离自起、trap 收尸；隔离 tmux 随 TMPD 删除",
+    "r2_process_hygiene": "见 process_hygiene：零孤儿零残留",
+    "r3_resource_bounded": "隔离 TMPD 退出即删；daemon.log 留现场仅 artifacts 快照",
+    "r4_reachability": "ws://10.0.2.2:PORT 是模拟器→主机标准映射（QEMU 内建转发，实证 nc 通、daemon 收到真实 auth）",
+    "r5_failure_visible": "每步失败留现场（layer2.*.xml + daemon.log）+ 显式 LAYER2 FAIL 报错；配对超时缺陷②已立案"
+  },
+  "write_scope_check": {
+    "in_scope": ["e2e/layer2.sh"],
+    "artifacts": ["e2e/artifacts/layer2.json", "e2e/artifacts/layer2.daemon.log", "e2e/artifacts/layer2.expected-fail.xml", "e2e/artifacts/layer2.pairing.xml", "e2e/artifacts/layer2.pair-form.xml"],
+    "deviation": "e2e/bin/agentmirrord 为 run.sh 每次重建的构建产物（git 已跟踪，head 同款约定）；server/app 产品代码零改动"
+  },
+  "note": "按 leader 裁定：app 缺陷①阻断真旅程全绿时，任务交付「硬化层2（app 缺陷位 expected-fail 显式标注+关联案 id fix-workspace-wiring）+ 立案材料」，不算未完成。硬化版已让基线假绿现形（本轮最有价值交付）。fix-workspace-wiring / fix-pairing-timeout-pump 修复合入后：层2 真旅程段（点开→快照→输入→force-stop→恢复）应自动真绿，无需改脚本。"
+}
