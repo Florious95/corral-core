@@ -455,6 +455,54 @@ tasks:
     evidence: ".team/evidence/fix-cold-start-reconnect.json"
     contention: impl
 
+  - id: fix-reconnect-stale-config
+    goal: >
+      P0（四次真机实证，2026-08-09 活现场）：锁屏断连后无限「重连中」且会话全点不开，daemon 侧
+      全程零连接到达——重连请求根本没发到正确地址。根因候选（席位取证定性，两条都要查）：
+      ①ServiceWire.manager 单例幂等复用（fix-cold-start-reconnect 引入的双层守卫）导致 setConfig
+      变更后已存在 manager 仍持旧拨号地址——用户先扫错地址(10.20.55.20)再改对(192.168.31.116)
+      的真实序列下，重连永远拨旧址；②审计 E2 缺口：ConnectivityManager.NetworkCallback 未注册，
+      网络恢复不触发立即重连、退避空转。修复：配置变更必须使 manager 重建或热更新拨号目标
+      （锁定测试：改配置后重连拨新址）；注册网络回调网络恢复即重试；重连中 UI 显示当前拨号
+      地址+已试次数（018 标准 5 失败可见）。**同根并案（图30 实证）**：某会话内传图报「未配置
+      上传地址」——uploadBaseUrl 是启动装配三件套之一，取证哪条真实路径未走 PersistentConnection
+      统一入口（丢 uploadBaseUrl 的路径大概率同样丢配置更新），统一收口到唯一入口+锁定测试。红测先行。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["fix-cold-start-reconnect"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-reconnect-stale-config.json"
+    contention: impl
+
+  - id: ui-redesign
+    goal: >
+      P0（用户三次真机批评+018 裁定，2026-08-09）：全 App 按 018 视觉标准整体重设计，非打补丁。
+      范围：Theme token 化（M3 色板/字阶/间距/圆角，深浅双套）、全页 safe-area、配对页/列表页/
+      会话页三页重做（列表行层级+路径中段省略+徽章五态色彩语义、会话页紧凑顶栏+名称省略、
+      每页加载/空/错误态设计）、点击态与转场。实锤缺陷清单：图28 状态栏叠压/无标题栏/行距悬空，
+      图29 顶栏撑爆压返回键，图31 键盘弹出后终端区与输入区之间巨幅空白（IME insets/adjustResize
+      重排缺陷——键盘弹出应内容重排跟随而非留洞）（豆腐块归 fix-term-glyph-render 不在本案）。
+      **视觉验收关（018 §二）**：交件必附全页全态截图落 e2e/artifacts/ui-review/，leader 逐图
+      目检对照 018 七条逐条结论进证据 ui_review 字段——测试绿但目检不过=打回。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'", "bash -lc 'ls e2e/artifacts/ui-review/*.png | head -1'"]
+    deps: ["fix-workspace-wiring"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/", "app/app/src/test/"]
+    evidence: ".team/evidence/ui-redesign.json"
+    contention: contract
+
+  - id: fix-term-glyph-render
+    goal: >
+      P0（三次真机实证，图29）：终端画面大片 ■ 豆腐块——Android 默认 monospace 缺字形
+      （Claude Code TUI 重度使用盲文旋转符 U+28xx、制表符/框线、Powerline 私有区、特殊符号）。
+      修复：终端画布字形回退链（paint.hasGlyph 检测缺字→按字符逐段回退系统字体/内置兜底），
+      宽字符（CJK/emoji 双宽）测量与列对齐不破坏。红测先行：夹具字符串（盲文轮转/框线/
+      CJK/emoji 混排）逐字符 hasGlyph+测量断言；模拟器会话页截图对照留档。禁止整体换字体
+      牺牲等宽对齐。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'"]
+    deps: ["term-view"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-glyph-render.json"
+    contention: impl
+
   - id: fix-pairing-candidates
     goal: >
       P0（2026-08-09 二次真机实证：QR 主地址赌错网卡，用户撞「地址不可达」后只能靠人肉猜正确地址）：
