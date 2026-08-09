@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
@@ -55,6 +56,15 @@ type Server struct {
 	loopCtx  context.Context
 	loopStop context.CancelFunc
 	loopOnce sync.Once
+
+	// authed counts live, authenticated connections (set by handleAuth, cleared
+	// by teardown). The listing loop polls only while authed > 0; with zero
+	// clients it parks and spawns no scan subprocesses (taskbook
+	// #fix-daemon-idle-cpu: unconditional ticks burned 17.5% CPU per orphan).
+	// wakeCh is a capacity-1 signal that the count just went 0→1, so the loop
+	// runs a fresh full scan immediately instead of waiting for the next tick.
+	authed  atomic.Int64
+	wakeCh  chan struct{}
 }
 
 // NewServer constructs the API server from Options. Zero values use the
@@ -97,6 +107,10 @@ func NewServer(opts Options) *Server {
 		s.maxInput = defaultMaxInputBytes
 	}
 
+	// wakeCh is created before the loop so a 0→1 auth can never send on a nil
+	// channel. Capacity 1: a wake that finds the slot occupied is dropped —
+	// the loop is already about to run, so one scan covers both clients.
+	s.wakeCh = make(chan struct{}, 1)
 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
 	go s.listingLoop(s.loopCtx)
 	return s
@@ -181,24 +195,69 @@ func (s *Server) rebuildCatalog(ctx context.Context) error {
 	return nil
 }
 
-// listingLoop is the periodic scan heartbeat: every interval it scans tmux and
-// pushes a list_delta to every live client. The first scan establishes the
-// baseline (seq 1); later scans diff and emit only real changes. A discovery
-// error is logged and skipped — the last good snapshot stays current and the
-// loop keeps going (a dead tmux must never take the API down).
+// listingLoop is the idle-gated periodic scan heartbeat (taskbook
+// #fix-daemon-idle-cpu). Every ListInterval while at least one connection is
+// authenticated it scans tmux and pushes a list_delta to every live client;
+// with zero authenticated connections it parks and spawns no scan subprocesses
+// (the fix for the 17.5%-per-orphan idle burn). The 0→1 transition wakes the
+// loop immediately so the first client's listing is fresh, not up to one
+// interval old. The first scan establishes the baseline (seq 1); later scans
+// diff and emit only real changes. A discovery error is logged and skipped —
+// the last good snapshot stays current and the loop keeps going (a dead tmux
+// must never take the API down).
 func (s *Server) listingLoop(ctx context.Context) {
-	ticker := time.NewTicker(s.listInterval)
-	defer ticker.Stop()
 	s.log.Debug("listing loop started", "interval", s.listInterval)
 	for {
+		if s.countAuthed() == 0 {
+			// Zero clients: park and spawn no scan subprocesses (the idle-burn
+			// red line). A 0→1 wake breaks the park and scans immediately below.
+			select {
+			case <-ctx.Done():
+				s.log.Debug("listing loop stopped")
+				return
+			case <-s.wakeCh:
+			}
+		} else {
+			// Clients connected: scan on the regular cadence, or sooner when a
+			// wake arrives (a re-auth while already active gets a fresh scan).
+			select {
+			case <-ctx.Done():
+				s.log.Debug("listing loop stopped")
+				return
+			case <-s.wakeCh:
+			case <-time.After(s.listInterval):
+			}
+		}
+		s.publishListing(ctx)
+	}
+}
+
+// --- idle-gate accounting (taskbook #fix-daemon-idle-cpu) -------------------
+
+// markAuthed is called by handleAuth when a connection authenticates: it bumps
+// the live-client count and wakes the loop (0→1) so the first client's listing
+// is fresh immediately instead of after one interval.
+func (s *Server) markAuthed() {
+	if s.authed.Add(1) == 1 {
 		select {
-		case <-ctx.Done():
-			s.log.Debug("listing loop stopped")
-			return
-		case <-ticker.C:
-			s.publishListing(ctx)
+		case s.wakeCh <- struct{}{}:
+		default:
 		}
 	}
+}
+
+// unmarkAuthed is called by teardown when a connection closes: it drops the
+// live-client count. When it reaches zero the loop parks after the in-flight
+// scan, so an idle daemon spawns no further scan subprocesses.
+func (s *Server) unmarkAuthed() {
+	if s.authed.Add(-1) <= 0 {
+		s.authed.Store(0) // never negative: teardown is idempotent-guarded by wsConn
+	}
+}
+
+// countAuthed returns the number of live, authenticated connections.
+func (s *Server) countAuthed() int64 {
+	return s.authed.Load()
 }
 
 // publishListing performs one scan-and-diff cycle. The first scan (no previous

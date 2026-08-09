@@ -178,6 +178,12 @@ func (c *wsConn) flushQueued() {
 // fail before the reply reached the wire.
 func (c *wsConn) teardown() {
 	c.cancel()
+	// The connection is no longer a live client: un-count it so the listing
+	// loop parks once zero clients remain (idle-gate, taskbook
+	// #fix-daemon-idle-cpu). Only an authenticated connection was counted.
+	if c.authed.Load() {
+		c.s.unmarkAuthed()
+	}
 	c.subsMu.Lock()
 	for _, sub := range c.subs {
 		sub.cancel()

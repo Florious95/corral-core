@@ -24,6 +24,10 @@ import (
 func (c *wsConn) handleAuth(a protocol.Auth) bool {
 	if c.s.tokenValidator.ValidateToken(c.ctx, a.Token) {
 		c.authed.Store(true)
+		// The connection is now a live client: count it so the listing loop
+		// wakes for the 0→1 transition and keeps polling (idle-gate, taskbook
+		// #fix-daemon-idle-cpu). teardown un-counts it on close.
+		c.s.markAuthed()
 		c.send(&protocol.AuthAck{OK: true})
 		return true
 	}

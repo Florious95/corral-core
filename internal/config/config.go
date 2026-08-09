@@ -57,6 +57,13 @@ type Config struct {
 	// ListInterval is how often the daemon re-scans tmux and pushes list_delta.
 	// Consumed by api.Options.ListInterval. Zero defaults to 2s.
 	ListInterval time.Duration
+
+	// StateDir is where the daemon keeps its single-instance pidfile
+	// (agentmirrord.pid). Empty resolves to the pairing token dir (the shared
+	// per-user agentmirror config root). Overridable via AGENTMIRROR_STATE_DIR
+	// so tests and the e2e harness can isolate concurrent instances (taskbook
+	// #fix-daemon-idle-cpu single-instance guard).
+	StateDir string
 }
 
 // parsePositiveInt64 parses a non-negative integer string (e.g. a byte cap).
@@ -140,6 +147,7 @@ func Load(args []string) (Config, error) {
 	fs.String("max-upload-bytes", "20971520", "max uploaded image bytes (default 20 MiB)")
 	fs.String("max-input-bytes", "1048576", "max input frame text bytes (default 1 MiB)")
 	fs.String("list-interval", "2s", "tmux re-scan / list_delta interval (default 2s)")
+	fs.String("state-dir", "", "state directory for the single-instance pidfile (default: user config dir/agentmirror)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -160,6 +168,7 @@ func Load(args []string) (Config, error) {
 		Token:        resolve(resolution{flagName: "token", envKey: "AGENTMIRROR_TOKEN", def: ""}),
 		Host:         resolve(resolution{flagName: "host", envKey: "AGENTMIRROR_HOST", def: ""}),
 		UploadDir:    resolve(resolution{flagName: "upload-dir", envKey: "AGENTMIRROR_UPLOAD_DIR", def: ""}),
+		StateDir:     resolve(resolution{flagName: "state-dir", envKey: "AGENTMIRROR_STATE_DIR", def: ""}),
 	}
 
 	// Numeric/duration settings resolve as strings first (the resolution table

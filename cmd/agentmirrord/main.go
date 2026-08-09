@@ -60,6 +60,23 @@ func run(args []string) int {
 
 	logger := newLogger(cfg.LogLevel)
 
+	// Enforce the single-instance guard before opening any listener (taskbook
+	// #fix-daemon-idle-cpu: orphan instances each burned ~17.5% CPU). A second
+	// launch finds the flock held and fails loudly; the pidfile sits next to
+	// the pairing token under the shared per-user config root.
+	stateDir, err := resolveStateDir(cfg.StateDir)
+	if err != nil {
+		logger.Error("failed to resolve state dir", "err", err)
+		return 1
+	}
+	pidfilePath, releaseLock, err := acquirePidfile(stateDir, "agentmirrord")
+	if err != nil {
+		logger.Error("single-instance guard refused startup", "err", err)
+		return 1
+	}
+	defer releaseLock()
+	logger.Info("single-instance guard acquired", "pidfile", pidfilePath)
+
 	// Resolve the pairing token before anything else: an explicit flag/env
 	// token wins, otherwise one is generated and persisted for reuse. Failure
 	// is fatal — booting with an empty token would accept an empty-token auth,
