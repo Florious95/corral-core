@@ -31,3 +31,12 @@
 - 注释红线、净化前缀、-race 照旧。
 
 ## 5. 沉淀区（唯一允许你追加写入的区域）
+
+### 交件记录（2026-08-09，w-fix-bridge，验收 exit 0）
+
+- **主修**（`server/internal/bridge/stream.go`）：subscribe 先 `pipe-pane -t`（无参 detach，幂等 rc=0）再 `pipe-pane -o`。实测证实：detach 后残留 cat 收 EOF 退出，-o 才真正挂上新 writer。
+- **加固**（`openFIFO`）：FIFO 读端 open 有界化——goroutine 阻塞 open + 3s 超时后自身 O_WRONLY|O_NONBLOCK open 解开阻塞（macOS 实测 0s 生效），超时上抛可判定错误。**关键实测**：macOS(BSD) 上 poll 对"writer 已连接但无数据"不触发 POLLIN（与 Linux 不同），所以不能用 poll 做 open 有界化，必须用 self-writer 技法。
+- **可选加固**（`server/internal/api/server.go`+`ws_conn.go`）：`Server.Close` drain 所有活跃连接订阅（`wsConn.closeSubscriptions`）。
+- **红测 4 个**全先红后绿：restart-pipe 复现 2 个（bridge）+ OpenFIFO 超时 + Close drain（api）。
+- **验收**：bridge 全包、api 全包、server 全量、关键测试 -race 全过；vet/build/gofmt 净；e2e/ 严格只读。
+- 注意：bridge 改动已被 leader commit e446859 带入 HEAD；api 加固改动在工作树未提交。
