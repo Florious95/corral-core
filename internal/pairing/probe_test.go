@@ -31,6 +31,9 @@ func TestClassifyIP(t *testing.T) {
 		{"100.63.255.255", KindLAN},      // just below the /10
 		{"100.128.0.1", KindLAN},         // just above the /10
 		{"169.254.1.2", ""},              // link-local: skip
+		{"198.18.0.1", ""},               // RFC 2544 benchmark range: proxy fake-IP TUN, skip
+		{"198.19.255.255", ""},           // RFC 2544 /15 upper bound: skip
+		{"198.17.255.255", KindLAN},      // just below the /15: still a real host address
 		{"fe80::1", ""},                  // IPv6 link-local: skip
 		{"2001:db8::1", ""},              // global IPv6: not yet paired over
 	}

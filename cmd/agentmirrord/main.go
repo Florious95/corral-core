@@ -226,6 +226,13 @@ func printOnboardingSeam(w io.Writer, o pairing.Onboarding, addrs []pairing.Addr
 	return pairing.PrintOnboardingWith(o, addrs, primary, w)
 }
 
+// printOnboardingSeamAll is printOnboardingSeam for the full-candidate view:
+// it renders every candidate address, so tests can assert the whole-candidate
+// guide contract without probing the real network.
+func printOnboardingSeamAll(w io.Writer, o pairing.Onboarding, addrs []pairing.Address, primary string) error {
+	return pairing.PrintOnboardingAll(o, addrs, primary, w)
+}
+
 // listenPort extracts the port number from a host:port listen address,
 // defaulting to the documented 9900 when the address has no parseable port.
 func listenPort(addr string) string {
