@@ -263,6 +263,33 @@ tasks:
     evidence: ".team/evidence/fix-app-network-manifest.json"
     contention: impl
 
+  - id: fix-qr-host-detect
+    goal: >
+      修复真机验收缺陷 A：QR 主地址选中代理 TUN 虚拟网卡（实测 198.18.0.1，RFC2544 基准段），手机不可达。
+      重写地址择优：排除 198.18.0.0/15、169.254/16、utun*/tun/tap/awdl*/llw*/bridge*，RFC1918 实网卡
+      （en* 优先）排最前；QR 用最优者，启动指引列出全部候选地址+各自完整 ws URL 供手填；新增 -host
+      flag 显式覆盖。红测先行：fake 接口表驱动排序断言（含 198.18 TUN 混入场景，修前红）。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/pairing/...'"
+    deps: ["pairing-security"]
+    write_scope: ["server/internal/pairing/", "server/cmd/", "server/internal/config/"]
+    evidence: ".team/evidence/fix-qr-host-detect.json"
+    contention: impl
+
+  - id: fix-pairing-scan-flow
+    goal: >
+      修复真机验收缺陷 B：扫码"已识别"后无任何可见后续——须改为：识别成功→立即自动发起配对并显示
+      "连接中…"进度态→失败显式报错（含原因：超时/拒绝/不可达）+ 重试按钮 + **识别出的 url/token 自动
+      回填手填表单**（用户可改地址重试，正是绕过缺陷 A 的通路）；识别到坏 payload 也要显式提示。
+      003 静默失败最高罪。红测先行：ViewModel 状态机（识别→auto 连接中→失败态含原因与回填、成功态
+      路由）修前红。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'"
+    deps: ["pairing-ui"]
+    write_scope: ["app/app/src/main/java/**/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-pairing-scan-flow.json"
+    contention: impl
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
