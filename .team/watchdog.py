@@ -38,11 +38,11 @@ from datetime import datetime, timezone
 WS = "/Volumes/nvme/Projects/远程Agent安卓"
 INTERVAL = 180          # 采样间隔（秒）
 BUSY_STALE_SEC = 900    # T1：BUSY 但无输出的停滞阈值（15 分钟）
-IDLE_SAMPLES = 2        # T2：连续非 BUSY 采样数（≈6 分钟）
+IDLE_SAMPLES = 1        # T2：非 BUSY 采样数（v4.1 收紧 2→1：用户两次肉眼先于看门狗发现停摆；中性探针误发无害，漏发/慢发才是真代价。约 3 分钟内出针）
 GLOBAL_SAMPLES = 3      # T3：全局 0 BUSY 采样数
 MAX_SAMPLES = 120       # 6 小时心跳
 NUDGE_BUDGET = 2        # v3：每席每任务自动探针预算，烧穿才升级 leader
-HASH_SAMPLES = 3        # T4：pane 正文 hash 连续不变的采样数（≈9 分钟）
+HASH_SAMPLES = 2        # T4：pane 正文 hash 连续不变的采样数（v4.1 收紧 3→2，≈6 分钟）
 TAIL_STRIP = 15         # T4：剥掉 pane 尾部 UI 区行数（输入框/状态栏/任务列表/spinner）
 
 
