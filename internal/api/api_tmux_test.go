@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,9 @@ func TestSubscribeSnapshotThenDelta(t *testing.T) {
 	if len(snap.Data) == 0 {
 		t.Error("snapshot is empty")
 	}
+	// 首帧快照同样必须重锚游标（A 图中屏残影 = subscribe 快照重放后游标错位，
+	// SIGWINCH 重绘增量落在旧网格底行）。
+	assertSnapshotCursorSuffix(t, te, snap.Data)
 
 	// Inject output; the delta stream must carry it (positive control: the
 	// pipe is actually attached).
@@ -365,6 +369,86 @@ func TestResizeChangesPane(t *testing.T) {
 	}
 	if strings.TrimSpace(out) != "120x30" {
 		t.Errorf("pane size = %q, want 120x30 (resize applied to subscribed pane)", out)
+	}
+}
+
+// TestResizeRepushesSnapshot is the fix-term-residuals red test: after a
+// resize is applied, the server must re-push a fresh binary snapshot to the
+// subscribed connection. Rationale: SIGWINCH makes the CLI redraw, but the
+// redraw arrives as deltas composited over the client's stale, old-geometry
+// grid — leftover prompt residue survives. Only a snapshot (which the client
+// replays via clear-and-rebuild) deterministically clears residuals
+// (docs/protocol.md §4.2 resize).
+func TestResizeRepushesSnapshot(t *testing.T) {
+	te := startTmuxEnv(t, "cat")
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
+	_ = te.readBinaryFrame() // subscribe-time snapshot
+
+	// Put a marker on screen first, so the re-pushed snapshot provably carries
+	// the pane's CURRENT content (not an empty shell captured pre-reflow).
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 21, Ref: te.ref(), Text: "RESIDUAL_MARK_9"})
+	te.waitForMirror("RESIDUAL_MARK_9")
+
+	te.wsEnv.sendFrame(&protocol.Resize{Ref: te.ref(), Rows: 30, Cols: 120})
+
+	// Drain interleaving frames (input_ack already consumed by waitForMirror's
+	// skip; deltas may still stream) until the fresh snapshot arrives.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Until(deadline))
+		typ, data, err := te.wsEnv.conn.Read(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("resize did not re-push a snapshot within deadline: %v", err)
+		}
+		if typ != websocket.MessageBinary {
+			continue // control frames (list_delta, …) interleave; skip
+		}
+		p, err := protocol.DecodeBinary(data)
+		if err != nil {
+			t.Fatalf("decode binary: %v", err)
+		}
+		if p.Kind != protocol.KindSnapshot {
+			continue // delta traffic; the snapshot must still arrive
+		}
+		if p.Ref != te.ref() {
+			t.Errorf("re-pushed snapshot ref = %q, want %q", p.Ref, te.ref())
+		}
+		if !bytes.Contains(p.Data, []byte("RESIDUAL_MARK_9")) {
+			t.Errorf("re-pushed snapshot misses on-screen marker; got %q", p.Data)
+		}
+		assertSnapshotCursorSuffix(t, te, p.Data)
+		return
+	}
+	t.Fatal("resize did not re-push a snapshot (client residuals would survive)")
+}
+
+// assertSnapshotCursorSuffix verifies the snapshot ends with a cursor-position
+// escape (ESC[row;colH) matching the pane's REAL cursor. capture-pane carries
+// no cursor state, so a replayed snapshot leaves the client cursor at the end
+// of the capture (the bottom row on an untrimmed full-height capture) while
+// the real cursor sits mid-screen; the next delta without absolute addressing
+// (e.g. bash's SIGWINCH prompt redraw, plain "\r\e[K…") then prints at the
+// wrong row — the second half of the residual defect (on-device screenshot
+// evidence: phantom bottom-row prompt). The server must re-anchor the cursor
+// inside the snapshot bytes themselves (zero protocol change).
+func assertSnapshotCursorSuffix(t *testing.T, te *tmuxEnv, data []byte) {
+	t.Helper()
+	out, err := runTmuxCmd(te.env, te.sock, "display-message", "-p", "-t", te.paneID, "#{cursor_x} #{cursor_y}")
+	if err != nil {
+		t.Fatalf("read cursor: %v", err)
+	}
+	var x, y int
+	if _, err := fmt.Sscanf(strings.TrimSpace(out), "%d %d", &x, &y); err != nil {
+		t.Fatalf("parse cursor %q: %v", out, err)
+	}
+	want := fmt.Sprintf("\x1b[%d;%dH", y+1, x+1)
+	if !bytes.HasSuffix(data, []byte(want)) {
+		tail := data
+		if len(tail) > 24 {
+			tail = tail[len(tail)-24:]
+		}
+		t.Errorf("snapshot must end with cursor re-anchor %q; tail = %q", want, tail)
 	}
 }
 

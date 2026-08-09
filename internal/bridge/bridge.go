@@ -51,6 +51,24 @@ func (p *Pane) Snapshot(ctx context.Context) ([]byte, error) {
 	return runTmux(ctx, p.socket, p.timeout, "capture-pane", "-e", "-p", "-t", p.target)
 }
 
+// CursorPos reads the pane's current cursor position (0-based column x,
+// row y) from the server. capture-pane output carries no cursor state, so a
+// snapshot consumer that replays it must re-anchor the client cursor
+// separately — otherwise the next output without absolute addressing (e.g. a
+// shell's SIGWINCH prompt redraw, plain "\r ESC[K …") lands wherever the
+// replay left the cursor instead of where the real cursor is
+// (fix-term-residuals: phantom bottom-row prompt on device).
+func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
+	out, err := runTmux(ctx, p.socket, p.timeout, "display-message", "-p", "-t", p.target, "#{cursor_x},#{cursor_y}")
+	if err != nil {
+		return 0, 0, err
+	}
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(out)), "%d,%d", &x, &y); err != nil {
+		return 0, 0, fmt.Errorf("tmux: parse cursor pos %q: %w", strings.TrimSpace(string(out)), err)
+	}
+	return x, y, nil
+}
+
 // Scrollback fetches one page of history strictly above the visible screen.
 // start and end are negative line offsets relative to the screen bottom
 // (e.g. -30..-21 for the ten lines just above the top of the screen); paging

@@ -7,8 +7,10 @@ package api
 // ever swallowed silently (knowledge-base red line).
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
@@ -16,6 +18,37 @@ import (
 	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
 )
+
+// snapshotWithCursor captures the pane's visible screen and re-anchors the
+// cursor inside the returned bytes (fix-term-residuals). Two transformations
+// over the raw capture:
+//
+//  1. trailing blank lines are trimmed — capture-pane emits the full pane
+//     height as bare LFs with no cursor state, so replaying them only walks
+//     the client cursor to the bottom row (and risks a scroll-up on the last
+//     terminator); a replay clears the grid first, so trailing blanks carry
+//     zero information;
+//  2. a cursor-position escape (CUP, 1-based) matching the pane's REAL cursor
+//     is appended, so the client's VT engine lands the cursor exactly where
+//     the pane's is. Without it, the next delta without absolute addressing
+//     (bash's SIGWINCH prompt redraw is plain "\r ESC[K …") prints at the
+//     capture's end instead of the real cursor row — the phantom-prompt
+//     residual seen on device.
+//
+// Both stay inside the snapshot's existing "raw ANSI bytes" contract: zero
+// protocol change, zero client change (docs/protocol.md §6.2).
+func snapshotWithCursor(ctx context.Context, br *bridge.Pane) ([]byte, error) {
+	snap, err := br.Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	x, y, err := br.CursorPos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	snap = bytes.TrimRight(snap, "\n")
+	return append(snap, []byte(fmt.Sprintf("\x1b[%d;%dH", y+1, x+1))...), nil
+}
 
 // handleAuth validates the pairing token and answers auth_ack. On rejection the
 // connection is closed right after the ack, so the client can treat
@@ -82,7 +115,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		return
 	}
 
-	snap, err := br.Snapshot(c.ctx)
+	snap, err := snapshotWithCursor(c.ctx, br)
 	if err != nil {
 		detach()
 		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
@@ -229,7 +262,8 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 // handleResize reports the client's terminal dims (docs/protocol.md §4.2). It
 // applies only to subscribed sessions (requirement 005: whoever last operated
 // the pane wins). An unknown ref is an error; resize on an unsubscribed but
-// known session is a no-op, and there is no resize ack frame.
+// known session is a no-op, and there is no resize ack frame — the fresh
+// snapshot pushed after a successful resize is the de-facto receipt.
 func (c *wsConn) handleResize(r protocol.Resize) {
 	c.s.ensureInitialScan(c.ctx)
 	br, ok := c.resolveBridge(r.Ref)
@@ -246,7 +280,33 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		} else {
 			c.sendError(protocol.ErrCodeInternal, "resize failed")
 		}
+		return
 	}
+	// Re-push a full snapshot after the reflow (fix-term-residuals): the CLI's
+	// SIGWINCH redraw arrives only as deltas composited over the client's
+	// stale old-geometry grid, so leftover residue can never be cleared
+	// deterministically by the stream alone. A snapshot is replayed by the
+	// client as clear-and-rebuild (same semantics as the subscribe first
+	// frame), which is the single convergence point. tmux reflows the pane
+	// synchronously on resize-window, so capturing right after Resize is
+	// content-correct; any in-flight pre-resize delta the relay still sends
+	// afterwards is redundant repaint bytes, not residue (docs/protocol.md
+	// §4.2 resize).
+	snap, err := snapshotWithCursor(c.ctx, br)
+	if err != nil {
+		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		return
+	}
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+		Kind: protocol.KindSnapshot,
+		Ref:  r.Ref,
+		Data: snap,
+	})
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
+		return
+	}
+	c.sendBinary(frame)
 }
 
 // scrollbackRange converges a scrollback request (protocol from_line/count,
