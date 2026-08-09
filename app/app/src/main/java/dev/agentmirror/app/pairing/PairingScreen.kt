@@ -63,6 +63,7 @@ import com.google.zxing.DecodeHintType
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
+import kotlinx.coroutines.delay
 import java.nio.ByteBuffer
 
 /**
@@ -92,6 +93,18 @@ fun PairingScreen(
     ) { granted -> hasCameraPermission = granted }
 
     val status = viewModel.pairingStatus
+
+    // 时钟泵：配对超时裁决的唯一生产节奏（红线5 失败可见，同构 SessionScreen.kt:85）。
+    // 缺陷实锤：此前全仓唯一 onTick 调用在 SessionScreen（那是 SessionViewModel 的），
+    // 配对页无人调 onTick → PAIR_TIMEOUT_MS 永不触发 → 地址不可达/握手静默挂起时无限
+    // 「连接中…」。LaunchedEffect 随本组合生命周期启停：配对页离屏（成功路由/跳过/销毁）
+    // 即取消协程停泵，不空转。
+    LaunchedEffect(viewModel) {
+        while (true) {
+            viewModel.onTick(System.currentTimeMillis())
+            delay(TICK_MS)
+        }
+    }
 
     // 配对成功：路由层切工作区（防重复触发）。
     LaunchedEffect(status) {
@@ -333,3 +346,6 @@ private fun StatusArea(status: PairingStatus, onRetry: () -> Unit) {
 
 /** 扫码节流：连续帧不重复解码（同一 QR 不反复触发配对）。 */
 private const val SCAN_THROTTLE_MS = 1_500L
+
+/** 时钟泵周期（配对超时裁决节奏；与 SessionScreen 同款 100ms 泵）。 */
+private const val TICK_MS = 100L
