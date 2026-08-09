@@ -18,11 +18,13 @@ package dev.agentmirror.app
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.pairing.startPersistentConnection
+import dev.agentmirror.app.service.NetworkConnectivityWatcher
 import dev.agentmirror.app.service.NotificationHelper
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
@@ -50,6 +52,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // IME 重排（ui-redesign，图31 空洞根因修复）：edge-to-edge（decorFitsSystemWindows=false）
+        // 下 manifest 未声明 softInputMode 时系统默认解析为 adjustPan——键盘弹出整窗上移，
+        // 再叠加 Compose imePadding 的内容补偿 = 双重位移，终端区与输入区之间出现整屏空洞。
+        // 显式锁 adjustResize：API 30+ edge-to-edge 窗口不真截断，只保证不 pan 并把 IME insets
+        // 交给 Compose（会话页底部集群 imePadding 单点消费），键盘弹出内容重排跟随不留洞。
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // fix-reconnect-stale-config 扩权（leader 裁定）：注册网络可达性回调（生命周期注册段）。
+        // 锁屏 WiFi 休眠断连后，网络恢复必须打断退避立即重拨（否则退避爬到长间隔无人打断，
+        // 无限「重连中」空转，真机实证）。进程级幂等，旋转重建不重复注册；onDestroy 注销。
+        NetworkConnectivityWatcher.register(this)
         // 冷启动重连（fix-cold-start-reconnect P0）：首启判定读取配对配置，有配置即启动
         // 常驻连接——force-stop/重开后自动重连回列表，顶栏不再永远「连接中…」（004 核心承诺
         // 「被杀即无所谓，重开自动恢复」）。序列与 PairingRoute.onPaired 同构（幂等，防双连接）；
@@ -89,5 +101,12 @@ class MainActivity : ComponentActivity() {
         // 通知 PendingIntent 只带 ref 不带 name：展示名以 ref 兜底（会话名由列表/通知标题给，
         // 深链直达时列表尚未加载，ref 是唯一可寻址键）。
         navState.activeSession = ref to ref
+    }
+
+    // fix-reconnect-stale-config 扩权（leader 裁定）：Activity 销毁时注销网络回调。
+    // 生命周期对称（onCreate 注册 / onDestroy 注销），防回调泄漏与重复注册竞态。
+    override fun onDestroy() {
+        NetworkConnectivityWatcher.unregister(this)
+        super.onDestroy()
     }
 }

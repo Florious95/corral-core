@@ -27,6 +27,9 @@ limitations under the License.
       此前模拟器手填 ws://10.0.2.2:9902/ws 停在「正在配对…」15s 超时即此因。
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- fix-reconnect-stale-config 扩权（leader 裁定）：网络可达性回调（registerDefaultNetworkCallback）
+         前置权限。锁屏断连后网络恢复必须打断退避立即重拨（E2 缺口收口）；普通权限，安装时授予。 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- 前台服务 + 通知：状态沿变化发系统通知、常驻通知栏（fg-service）。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

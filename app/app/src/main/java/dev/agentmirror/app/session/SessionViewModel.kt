@@ -48,7 +48,8 @@ import dev.agentmirror.terminal.TerminalEmulator
 class SessionViewModel(
     private val manager: ConnectionManager,
     private val uploader: AttachmentUploader,
-    private val baseUrl: String?,
+    /** 上传基地址（协议 §8 同端口 `POST /upload`）；internal 供统一收口锁定测试断言。 */
+    internal val baseUrl: String?,
     val ref: String,
     initialRows: Int,
     initialCols: Int,

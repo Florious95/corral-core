@@ -89,9 +89,34 @@ object ServiceWire {
     /**
      * 注入配对后的连接配置（URL + token）。须在服务启动前调用；
      * 未注入时服务启动抛明确异常（halt 纪律：缺字段不猜）。
+     *
+     * **配置变更语义（fix-reconnect-stale-config P0 根因①）**：已存在 manager 的拨号地址是
+     * 构造期快照（ConnectionConfig 是 val），setConfig 只更新本层字段不会热更已存活实例。
+     * 用户先扫错地址(10.20.55.20)再改对(192.168.31.116)的真实序列下，若不做任何处理，重连
+     * 永远拨旧址（真机实证：daemon 侧全程零连接到达）。因此：
+     * - 新配置 ≠ 当前配置 ⇒ 重建 manager（stop 置空），下次 [manager()] 以新地址拨号；
+     * - 相同配置重复注入（重复扫同码 / 冷启动同一 storedConfig）⇒ 保持单例，不闪断既有会话。
+     * 重建语义 = 用户显式改了地址 → 旧链路的拨号意图作废，必须以新地址重拨（016 首触零阻断）。
      */
     fun setConfig(c: ConnectionConfig) {
+        val old = config
         config = c
+        if (old != null && old != c) {
+            // 配置变更：作废旧拨号目标（stop + 置空），下次 manager() 用新 config 重建。
+            releaseManager()
+        }
+    }
+
+    /**
+     * 网络可达性恢复钩子（fix-reconnect-stale-config P0 根因② E2 缺口收口）。
+     *
+     * [NetworkConnectivityWatcher]（Android ConnectivityManager 回调）接这里；转发给当前
+     * [ConnectionManager.onNetworkAvailable]——RECONNECTING 中立即重拨，打断退避（LIBRARIAN
+     * 撞库回执：需求库无退避算法条目，但**网络恢复必须打断退避**）。manager 为 null（未建
+     * 连接）时无态可打，安全跳过。
+     */
+    fun onNetworkAvailable() {
+        manager?.onNetworkAvailable()
     }
 
     /**
