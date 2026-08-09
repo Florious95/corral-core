@@ -322,7 +322,7 @@ tasks:
       中该 pane state≠unknown 且聚合正确；层1 harness 增状态断言场景。
     acceptance: ["bash -lc 'cd server && go test ./...'"]
     deps: ["state-parser", "state-ident-wrapper", "ws-api"]
-    write_scope: ["server/cmd/", "server/internal/api/", "e2e/harness/"]
+    write_scope: ["server/cmd/", "server/internal/api/", "e2e/harness/"]  # 扩权留痕：discovery/{model,scan,model_test}.go 加法性新增 Pane.PanePID（状态装配必需输入，leader 追认，见证据 JSON）
     evidence: ".team/evidence/fix-state-wiring.json"
     contention: impl
 

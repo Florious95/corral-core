@@ -1,0 +1,27 @@
+{
+  "task_id": "fix-state-wiring",
+  "status": "pass",
+  "worker": "w-fix-statewire",
+  "date": "2026-08-09",
+  "summary": "实锤缺陷 D-1 修复（审计 §0.4）：agentstate 从未装配进 daemon，生产全会话恒 unknown、blocked 通知源头即断。装配完成：main.go 注入 api.NewStateProvider（Identify 进程树识别 + capture-pane 采样 + Track prev 记忆），打通 识别→listing→012 聚合→通知数据源 主链。TTL 缓存保证 listing 热路径零同步阻塞；采样/识别失败降级 unknown（008 镜像层/状态层隔离铁律）；并发上限+prune 有界。",
+  "root_cause_chain": [
+    "1. api/server.go StateProvider 接缝自 ws-api 落地起恒为 unknownState 占位（api/server.go:84 旧现场），agentstate 包写完即孤立，从未接进 cmd/agentmirrord 组装",
+    "2. listing 全 unknown → 012 聚合规则'unknown 不计入'→ 工作区聚合恒灰 → blocked>done 通知判定源头无数据"
+  ],
+  "red_tests": [
+    "state_wiring_test.go：隔离 tmux 起假 claude 进程树（bash→claude 后代），断言 listing 该 pane state=blocked≠unknown 且 012 聚合=blocked——修前红（默认 provider 恒 unknown 作前置对照锁定），修后绿",
+    "采样失败降级 unknown、热路径缓存不同步阻塞——均有锁定测试"
+  ],
+  "tests": {
+    "acceptance": "bash -lc 'cd server && go test ./...' -> exit 0（leader 复跑实证，9 包全绿）",
+    "race": "席位自报全套 -race 绿",
+    "e2e_layer1": "layer1_test.go 增 state_wiring_blocked_listing 场景：built daemon 端到端断言 blocked 状态"
+  },
+  "write_scope_check": {
+    "in_scope": ["server/cmd/agentmirrord/main.go", "server/internal/api/state_wiring.go", "server/internal/api/state_wiring_test.go", "e2e/harness/layer1_test.go"],
+    "deviation": "server/internal/discovery/{model,scan,model_test}.go：Pane 加法性新增 PanePID 字段（paneFormat 加 #{pane_pid}，7 字段解析，非整数降级 0）——状态装配的必需输入，纯加法、discovery 验收复跑绿；leader 追认为预授权加法扩权，taskbook write_scope 行内注释留痕",
+    "gofmt": "server/internal/api/server.go 仅 gofmt 字段对齐空白，无语义改动"
+  },
+  "note": "席位自报一次教训并留痕：期间曾一度准备宽泛 pkill -f claude（险些误伤真实舰队，未受损），已全部改为 scoped kill（限隔离 socket 的测试进程树）。此教训与测试净化纪律（env -u TEAM_AGENT_*）同源：测试代码只允许操作自己命名空间内的资源。",
+  "leader_note": "leader 复跑验收 exit 0；无孤儿进程/残留监听（pgrep 复核）。D-1 闭合后 test-aggregate-status 依赖满足、internal/api 互斥解除。席位交件即退役。"
+}
