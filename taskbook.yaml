@@ -587,7 +587,7 @@ tasks:
       token 红线）。契约先行：docs/protocol.md QR payload 节 ts_authkey 语义补全。
     acceptance: ["bash -lc 'cd server && go test ./internal/tsnetd/... ./internal/pairing/...'", "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
     deps: ["tsnet-embed", "app-tsnet", "fix-pairing-candidates"]
-    write_scope: ["server/internal/tsnetd/", "server/internal/pairing/", "server/cmd/", "docs/protocol.md", "app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/test/", "server/internal/config/  # 纯加法 TSAuthKey flag+env+单测，leader 裁定 2026-08-09"]
+    write_scope: ["server/internal/tsnetd/", "server/internal/pairing/", "server/cmd/", "docs/protocol.md", "app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/test/", "server/internal/config/  # 纯加法 TSAuthKey flag+env+单测，leader 裁定 2026-08-09", "tools/tsnetbind/  # Android netlink 禁令→netmon.RegisterInterfaceGetter 接口提供者+AAR 重建，leader 裁定 2026-08-09 23:2x", "app/app/libs/  # 同上，gomobile AAR 产物"]
     evidence: ".team/evidence/feat-ts-wire.json"
     contention: contract
 
@@ -652,4 +652,23 @@ tasks:
     deps: ["ws-api", "state-parser", "pairing-security", "session-ui", "workspace-ui", "pairing-ui", "fg-service"]
     write_scope: ["e2e/"]
     evidence: ".team/evidence/e2e.json"
+    contention: impl
+
+  - id: test-app-dogfood
+    goal: >
+      真机模拟试用（2026-08-09 立案，用户点名 Opus 5 识图席；用户裁定：用例必须从需求分析
+      推导，不许凭直觉拍场景）。两段式：①测试设计——通读 requirement-base/（INDEX+条目）与
+      docs/scenario-coverage.md 场景总图纸，从需求推导用户场景与完备用例集，落
+      e2e/artifacts/dogfood/TESTPLAN.md：每用例=需求出处（条目编号/场景图纸行）+前置+步骤+期望
+      +判定方式（结构断言/截图目检/tmux 对账），附需求→用例覆盖矩阵，未覆盖需求显式列明原因；
+      ②执行——模拟器（AVD wedding_user_a_api35）自打最新 APK 冷装，按 TESTPLAN 逐用例跑，
+      逐屏截图并亲自目检（018 七条+工程常识红线五条），结果与"新毛病"落 REPORT.md（每条：
+      现象+截图文件名+复现步骤+严重度+对照条款）。只报不修。TS 功能在途（feat-ts-wire）
+      不计新毛病只记现象。隔离铁律：自建 TMUX_TMPDIR+高端口 daemon，绝不触碰生产 daemon
+      与用户真实 tmux。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/dogfood/TESTPLAN.md && test -s e2e/artifacts/dogfood/REPORT.md && ls e2e/artifacts/dogfood/*.png >/dev/null'"
+    deps: ["fix-term-bg-cjk", "ui-redesign"]
+    write_scope: ["e2e/artifacts/dogfood/"]
+    evidence: ".team/evidence/test-app-dogfood.json"
     contention: impl
