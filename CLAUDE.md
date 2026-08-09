@@ -22,7 +22,10 @@
   leader 发消息；一般问题直投**裁定席 `adjudicator`**（codex gpt-5.6-sol，常驻，具 leader 同等
   裁定/验收/派单/commit 能力，章程见 `agents/adjudicator.md`）；leader 只收四类：用户指令、
   裁定席升级件（契约级/对外交付/通道变更/连环故障）、看门狗 escalation、框架直报回执。
-  leader 收到一般问题私信一律转发 adjudicator 不亲裁。
+  leader 收到一般问题私信一律转发 adjudicator 不亲裁。**席位严禁 send leader**（唯一上级
+  =adjudicator；此禁令必须写进每份 role file 与每条派单，adjudicator 派单时强制执行）；
+  框架固定注入（report_result 完成上报/abnormal_exit 事件/五类关键消息）无法关断，leader 对其
+  一律不动作不回复，由 adjudicator 认领处理。
 - **Anthropic 订阅席位用法铁律**（用户两次裁定 2026-08-10，额度见底实证；违者即浪费）：
   ①**一次性投喂**：派单一条消息给全流程、方向、需求、验收标准，之后不追加轮次；
   ②**汇报即关**：席位 report 完成的当刻 stop-agent 关闭，不做小修小改的往返轮次——
