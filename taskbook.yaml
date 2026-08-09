@@ -349,6 +349,57 @@ tasks:
     evidence: ".team/evidence/e2e-layer2-harden.json"
     contention: impl
 
+  # ---------- P0 第二波（场景审计 §12 + 017 裁定实装；2026-08-09 开出）----------
+  - id: test-aggregate-status
+    goal: >
+      补齐 012 聚合规则与 server 端 diff 的零覆盖（审计 D-5/D-6/G-6）：statePriority 全序、
+      unknown 剔除、全 unknown 才 unknown、空工作区；modelSnapshot.diff() 的 removed/changed/
+      跨 cwd 迁移/噪声抑制；discovery 扫描失败时 API 行为（scriptedDiscoverer.err 死接缝激活）。
+      仅新增 _test.go 不改生产代码；测出真缺陷即停、报 leader 立案，不顺手修。新增 ≥12 具名用例。
+    acceptance: ["bash -lc 'cd server && go test ./internal/api/...'"]
+    deps: ["fix-state-wiring"]
+    write_scope: ["server/internal/api/"]  # 仅 _test.go 新文件；用例数棘轮随全量门 --accept-baseline 上行
+    evidence: ".team/evidence/test-aggregate-status.json"
+    contention: none
+
+  - id: feat-input-keys-server
+    goal: >
+      R-1 特殊键服务端全链（017 裁定）：docs/protocol.md 契约先行——input 帧可选 keys 字段
+      （前向兼容增量不 bump 版本，闭集 esc/ctrl_c/tab/up/down/left/right）；protocol 包模型+
+      闭集校验+黄金夹具（testdata/，Kotlin 共享消费）；bridge 命名键注入（send-keys 非 -l 映射），
+      与 Inject 同款决定性 ack；ws_handler keys 分支接线（末步，互斥约束见基底）。R-2 服务端
+      paste-buffer -p 路径已存在不新增代码，仅 protocol.md 标注 ?2004 退化风险。红测先行。
+    acceptance: ["bash -lc 'cd server && go test ./internal/protocol/... ./internal/bridge/... ./internal/api/...'"]
+    deps: ["fix-state-wiring"]
+    write_scope: ["docs/protocol.md", "server/internal/protocol/", "server/internal/bridge/", "server/internal/api/"]
+    evidence: ".team/evidence/feat-input-keys-server.json"
+    contention: impl
+
+  - id: feat-input-keys-app
+    goal: >
+      R-1 特殊键 App 侧（017 裁定）：会话页输入条上方快捷键条（Esc/Ctrl-C/Tab/↑↓←→ 最小集），
+      conn 层 Input 帧 keys 字段（消费共享黄金夹具字节级断言）；R-2 多行粘贴 App 不拆分整段发送
+      （走服务端 paste-buffer -p 既有路径）。红测先行（VM 层键发送/多行不拆分断言）。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["feat-input-keys-server", "fix-app-nav"]
+    write_scope: ["app/app/src/main/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-input-keys-app.json"
+    contention: impl
+
+  - id: test-app-android-seams
+    goal: >
+      Android 接缝零测四类补齐（审计 §12 P0-6，复用 fix-app-nav 落地的 Robolectric 基建）：
+      NotificationHelper（渠道/构建/权限缺失降级）、HttpUrlConnectionUploader（multipart 组包/
+      非200/坏JSON/空path/base 未配）、SharedPreferencesPairingConfigStore（真持久化 round-trip）、
+      StateBadge 语义（Compose rule + R-7 contentDescription 标注顺带断言）。仅测试不改生产代码
+      （StateBadge contentDescription 若缺失属 R-7 当期项，可加法性补标注——唯一允许的生产触碰，
+      行内注释留痕）。新增 ≥20 用例。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["fix-app-nav"]
+    write_scope: ["app/app/src/test/", "app/app/src/main/java/dev/agentmirror/app/workspace/"]  # main 仅限 StateBadge contentDescription 加法（R-7）
+    evidence: ".team/evidence/test-app-android-seams.json"
+    contention: none
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
