@@ -23,8 +23,16 @@ v3.2 增量（2026-08-09，w-input-keys Cloudflare 524 停摆 13 分钟未被抓
 ②上游 API 可重试错误（524/529/overloaded/stream timeout）表现为 turn 中断、
   席位非 BUSY 停在空提示符——T2（连续 2 采样非 BUSY ≈6 分钟）即覆盖，无需读 pane 原文；
   探针文本明示"上游 API 报错直接继续即自动重试"，一条消息即救活。
+
+v4 增量（2026-08-09，w-test-appseams 停空提示符而 status 全绿案）：框架两个官方信号
+双双失真——last_output_at 被 UI 噪声（spinner/状态栏刷新）污染，live 席位精确同刻
+"永远在动"；activity=provider_jsonl:assistant_in_flight 在响应中断 jsonl 未闭合时永卡
+BUSY。T1/T2 因此对这类停摆全盲（已直报框架 leader）。新增 T4 主力信号：
+tmux capture-pane 取 pane **正文**（剥尾部 UI 区 TAIL_STRIP 行），md5 连续
+HASH_SAMPLES 次不变即判停滞——真停摆时正文完全静止，UI 动画剥除后免疫噪声。
+只做 hash 不解析语义，不违"不读 worker 终端原文"纪律。复活判定同款：hash 变即清零。
 """
-import json, subprocess, time, sys, glob, os
+import json, subprocess, time, sys, glob, os, hashlib
 from datetime import datetime, timezone
 
 WS = "/Volumes/nvme/Projects/远程Agent安卓"
@@ -34,11 +42,39 @@ IDLE_SAMPLES = 2        # T2：连续非 BUSY 采样数（≈6 分钟）
 GLOBAL_SAMPLES = 3      # T3：全局 0 BUSY 采样数
 MAX_SAMPLES = 120       # 6 小时心跳
 NUDGE_BUDGET = 2        # v3：每席每任务自动探针预算，烧穿才升级 leader
+HASH_SAMPLES = 3        # T4：pane 正文 hash 连续不变的采样数（≈9 分钟）
+TAIL_STRIP = 15         # T4：剥掉 pane 尾部 UI 区行数（输入框/状态栏/任务列表/spinner）
+
+
+SESSION = "team-remote-agent-android"  # 本工程 team session 名（固定；socket 名 restart 后会变）
+
+
+def team_tmux() -> tuple[str, str]:
+    """发现承载本工程 session 的私有 tmux socket（宿主机可能同时跑多个工程的 team，
+    必须按 SESSION 精确匹配，绝不能按 mtime 猜——实测猜会命中别家 team）。"""
+    for sock in glob.glob("/private/tmp/tmux-501/ta-*"):
+        r = subprocess.run(["tmux", "-S", sock, "list-sessions", "-F", "#{session_name}"],
+                           capture_output=True, text=True, timeout=10)
+        if SESSION in r.stdout.split():
+            return sock, SESSION
+    return "", ""
+
+
+def pane_hash(sock: str, session: str, seat: str) -> str:
+    """T4 信号源：窗口名=席位名；正文（剥尾部 UI 区）md5。取不到返回空串（不参与判定）。"""
+    r = subprocess.run(["tmux", "-S", sock, "capture-pane", "-p", "-t", f"{session}:{seat}"],
+                       capture_output=True, text=True, timeout=10)
+    if r.returncode != 0:
+        return ""
+    body = "\n".join(r.stdout.rstrip().splitlines()[:-TAIL_STRIP])
+    return hashlib.md5(body.encode()).hexdigest()
 
 os.chdir(WS)
 idle_count: dict[str, int] = {}
 nudges: dict[str, int] = {}          # v3：seat -> 已发探针数（按 seat:task 键）
 last_seen_output: dict[str, str] = {}  # v3：seat -> 上次采样的 last_output_at（复活判定）
+pane_hashes: dict[str, str] = {}     # v4：seat -> 上次正文 hash
+hash_still: dict[str, int] = {}      # v4：seat -> 连续不变采样数
 global_count = 0
 log = open(".team/logs/watchdog.log", "a")
 
@@ -65,6 +101,7 @@ def inflight_seats():
 
 for i in range(MAX_SAMPLES):
     try:
+        sock, session = team_tmux()  # 每轮动态发现（restart 后 socket 名会变）
         st = sample()
         agents = st.get("agents", {})
         owe = inflight_seats()
@@ -80,13 +117,25 @@ for i in range(MAX_SAMPLES):
             state = a.get("worker_state")
             last = a.get("last_output_at")
             age = (now - datetime.fromisoformat(last)).total_seconds() if last else None
-            # v3 复活判定：探针发出后 last_output_at 前进 → 计数清零
+            # v4 主力信号：pane 正文 hash（UI 噪声免疫；框架 last_output_at/BUSY 已证失真）
+            h = pane_hash(sock, session, seat) if sock else ""
+            if h:
+                if h == pane_hashes.get(seat):
+                    hash_still[seat] = hash_still.get(seat, 0) + 1
+                else:
+                    hash_still[seat] = 0
+                    # v4 复活判定：正文前进即视为活，探针计数清零
+                    if nudges.get(key):
+                        print(f"revived: {key} (正文 hash 前进)", file=log, flush=True)
+                        nudges[key] = 0
+                pane_hashes[seat] = h
+            # v3 复活判定：探针发出后 last_output_at 前进 → 计数清零（信号已知可能失真，仅作辅助）
             if nudges.get(key) and last and last != last_seen_output.get(key):
-                print(f"revived: {key} (nudge 后输出前进)", file=log, flush=True)
-                nudges[key] = 0
-                idle_count[seat] = 0
+                pass  # v4 起不再凭此清零：last_output_at 被 UI 噪声污染，会把死席误判复活
             stall_why = None
-            if state == "BUSY":
+            if hash_still.get(seat, 0) >= HASH_SAMPLES:
+                stall_why = f"T4 正文静止 {hash_still[seat]} 采样（约 {hash_still[seat]*INTERVAL//60} 分钟）"
+            elif state == "BUSY":
                 idle_count[seat] = 0
                 if age is not None and age > BUSY_STALE_SEC:
                     stall_why = f"假忙碌 BUSY 无输出 {int(age)}s"
@@ -99,6 +148,7 @@ for i in range(MAX_SAMPLES):
                     nudges[key] = nudges.get(key, 0) + 1
                     last_seen_output[key] = last or ""
                     idle_count[seat] = 0  # 给探针一个观察窗
+                    hash_still[seat] = 0  # v4 同款观察窗
                     nudge(seat, task, stall_why)
                     print(f"nudge#{nudges[key]}: {key} ({stall_why})", file=log, flush=True)
                 else:
@@ -121,7 +171,7 @@ for i in range(MAX_SAMPLES):
             global_count = 0
         # v3.2①：live 工作席（w- 前缀）却无在途 intent = 看门狗盲区，逐轮曝光供 leader 对账
         blind = [s for s in agents if s.startswith("w-") and s not in owe]
-        print(f"{now:%H:%M:%S} busy={busy_total} inflight={list(owe.values())} blind={blind} idle={idle_count} nudges={nudges} g={global_count}", file=log, flush=True)
+        print(f"{now:%H:%M:%S} busy={busy_total} inflight={list(owe.values())} blind={blind} still={hash_still} idle={idle_count} nudges={nudges} g={global_count}", file=log, flush=True)
         if escalations:
             print("STALL_ESCALATION\n" + "\n".join(escalations))
             sys.exit(1)
