@@ -127,8 +127,21 @@ dependencies {
     // Compose UI 测试（test-app-android-seams 引入）：StateBadge 语义用 createComposeRule
     // 在 Robolectric JVM 上跑（不起模拟器）。BOM 约束 testImplementation 需单独声明
     // （implementation 的 platform 约束不传播到 test 配置）；ui-test-manifest 的
-    // ComponentActivity 宿主由 debug 变体合并进 manifest（debugImplementation）。
+    // ComponentActivity 宿主按变体合并进 manifest（debugImplementation 进 debug 主 manifest，
+    // releaseImplementation 进 release 主 manifest，见下方 fix-release-test-host 注释）。
     testImplementation(platform("androidx.compose:compose-bom:2025.12.01"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    // release 单测变体的 Compose 测试宿主（fix-release-test-host 清偿门债：testReleaseUnitTest
+    // 原 13 红，统一 Unable to resolve ComponentActivity）。
+    // 机制（小步实验实测，非猜测）：Robolectric 单测的活动解析读的是 packageReleaseUnitTestForUnitTest
+    // 产物（apk-for-local-test.ap_）内嵌的**变体主 manifest**——不是 processReleaseUnitTestManifest
+    // 的 XML。因此 testImplementation 只让 unit-test XML 含宿主、资源 APK 仍缺（实测仍红）；
+    // 必须用 releaseImplementation 把 ui-test-manifest 并入 release 主 manifest，资源 APK 才带上
+    // ComponentActivity 宿主（实测转绿）。
+    // 副作用评估：release APK 因此多一个 ComponentActivity 测试宿主。该 activity 是
+    // ui-test-manifest 官方设计的 test-only 宿主（无 intent-filter、不可隐式启动，仅
+    // createComposeRule/ActivityScenario 显式 launch 使用），对本应用主流程零影响；
+    // debug 变体本就经 debugImplementation 带同一宿主，双变体行为自此对称。
+    releaseImplementation("androidx.compose.ui:ui-test-manifest")
 }
