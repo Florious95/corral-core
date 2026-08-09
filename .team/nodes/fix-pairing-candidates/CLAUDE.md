@@ -52,7 +52,7 @@
 
 ## 3. 需求基
 - goal 引用条目：（goal 无编号引用）
-- librarian 撞库：无回执文件（leader 未查或无命中）
+- librarian 撞库回执：.team/nodes/fix-pairing-candidates/LIBRARIAN.md（先完整读）
 - 修订记录 requirement-base/REVISIONS.md 必读（被推翻结论不回改条目）
 
 ## 4. 经验基（通用纪律+先例）
