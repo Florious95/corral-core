@@ -249,6 +249,20 @@ tasks:
     evidence: ".team/evidence/fix-bridge-restart-pipe.json"
     contention: impl
 
+  - id: fix-app-network-manifest
+    goal: >
+      修复 e2e 层2 实证缺陷：APP 无法建立任何出网连接。①AndroidManifest 加 INTERNET 权限；
+      ②明文策略 leader 裁定：debug 与 release 均允许明文（usesCleartextTraffic=true + 注释引 007/011
+      ——ws:// 是本产品的出厂传输，tailnet 层已有 WireGuard 加密，LAN 明文属用户自网；TLS 列后续版本
+      议题，不许用禁明文杀死产品本体）；③红测先行：robolectric 断言 debug/release merged manifest
+      含 INTERNET 且 cleartext 允许。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Manifest*\"'"
+    deps: ["pairing-ui"]
+    write_scope: ["app/app/src/main/AndroidManifest.xml", "app/app/src/test/", "app/app/build.gradle.kts"]
+    evidence: ".team/evidence/fix-app-network-manifest.json"
+    contention: impl
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
