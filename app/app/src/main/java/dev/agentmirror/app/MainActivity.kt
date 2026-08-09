@@ -23,6 +23,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.service.NotificationHelper
+import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
  * 应用唯一 Activity 入口（Compose 单 Activity，singleTop）。
@@ -40,14 +41,21 @@ class MainActivity : ComponentActivity() {
     /** 导航壳状态（D-3 修复核心）：activeSession/showPairing 提升到 Activity，重建保态。 */
     internal lateinit var navState: MainNavState
 
+    /** 工作区 VM（fix-workspace-wiring 接线修复）：从 AgentMirrorApp 根 remember 提升到
+     *  Activity，与 navState 同模式——接线层在 Compose 把 [ServiceWire.uiConnector] 挂到它
+     *  上（见 AgentMirrorApp 工作区分支），Robolectric 测试可直接断言其状态。 */
+    internal lateinit var workspaceViewModel: WorkspaceViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         navState = MainNavState(initialShowPairing = SharedPreferencesPairingConfigStore(this).load() == null)
         navState.restoreFrom(savedInstanceState) // D-3：旋转/进程回收重建后恢复导航态
+        // 工作区 VM 与 Activity 同生命周期；列表状态由 conn 层 READY+全量 listing 恢复（004 无状态）。
+        workspaceViewModel = WorkspaceViewModel()
         handleDeepLink(intent) // D-2：冷启动直达（ACTION_OPEN_SESSION+EXTRA_SESSION_REF）
         setContent {
-            AgentMirrorApp(navState = navState)
+            AgentMirrorApp(navState = navState, workspaceViewModel = workspaceViewModel)
         }
     }
 

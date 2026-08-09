@@ -410,7 +410,7 @@ tasks:
       READY+listing 后渲染列表状态。
     acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Workspace*\"'"]
     deps: ["workspace-ui", "fg-service"]
-    write_scope: ["app/app/src/main/java/dev/agentmirror/app/workspace/", "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt", "app/app/src/test/"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/workspace/", "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt", "app/app/src/test/"]  # 扩权留痕：service/ServiceWire.kt uiConnector 补播 setter + MainActivity.kt VM 提升（修复必需最小连带，leader 追认，见证据 JSON）
     evidence: ".team/evidence/fix-workspace-wiring.json"
     contention: impl
 
