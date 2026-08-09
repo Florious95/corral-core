@@ -14,3 +14,8 @@
 ## 前席遗留（w-fix-glyph 死于 provider api_error，2026-08-09，带案重派）
 - 工作区遗留：app/app/src/test/kotlin/dev/agentmirror/app/termview/GlyphFontProviderTest.kt（红测半成品，M 状态）——先读它，可续用可重写，自行判断。
 - 前席 transcript（只在卡住时参考）：.team/runtime/provider-config/w-fix-glyph/claude/projects/…/a590f49e….jsonl
+
+## 二席续报（w-fix-glyph2 亦死于 provider api_error+A-24 拒启，2026-08-09；三席 Fable 5 收尾）
+- glyph2 已确认：termview 包下 GlyphFontProvider/GlyphSlot/GlyphFallbackPolicy/GlyphRunBuilder 源码与三个测试文件均在工作区（前席骨架完整度高于最初记录）。glyph2 正在跑红绿基线时亡，未及回报基线结论。
+- 你的第一步：跑 `:app:testDebugUnitTest --tests "*Glyph*"` 与 `:terminal:test` 得出红绿基线，再决定续用/重写。
+- 连续两席死于第三方 API api_error——你走订阅通道，无此风险。
