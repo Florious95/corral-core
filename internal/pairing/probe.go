@@ -63,29 +63,55 @@ func classifyIP(ip net.IP) string {
 // loopback. A loopback fallback is guaranteed even when the enumeration fails,
 // so callers always have a last-resort URL.
 func DetectAddresses() []Address {
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return loopbackOnly()
+	}
+	// Collect the live probe table (interface name + addresses), then delegate
+	// the whole classification/ordering decision to detectAddresses. That seam
+	// is what lets the sort/exclusion contract be tested against a fake
+	// interface table instead of the real (variable) network.
+	probes := make([]ifaceAddr, 0, len(ifs))
+	for _, i := range ifs {
+		if i.Flags&net.FlagUp == 0 {
+			continue // a down interface is not reachable
+		}
+		addrs, err := i.Addrs()
+		if err != nil {
+			continue
+		}
+		probes = append(probes, ifaceAddr{name: i.Name, addrs: addrs})
+	}
+	return detectAddresses(probes)
+}
+
+// ifaceAddr is one probe unit: an interface name plus its addresses. The name
+// matters because virtual-tunnel and NIC-naming rules (utun*/awdl*/bridge*…,
+// en*) are part of the address-selection contract.
+type ifaceAddr struct {
+	name  string
+	addrs []net.Addr
+}
+
+// detectAddresses classifies and orders a probe table the same way the live
+// path does: LAN (sorted) then tailnet (sorted) then a guaranteed loopback
+// fallback. It is a pure function over its input, so tests can drive it with a
+// fake interface table reproducing a real machine snapshot.
+func detectAddresses(probes []ifaceAddr) []Address {
 	var lan, tail, loop []Address
-	if ifs, err := net.Interfaces(); err == nil {
-		for _, i := range ifs {
-			if i.Flags&net.FlagUp == 0 {
-				continue // a down interface is not reachable
-			}
-			addrs, err := i.Addrs()
-			if err != nil {
+	for _, p := range probes {
+		for _, a := range p.addrs {
+			ipnet, ok := a.(*net.IPNet)
+			if !ok {
 				continue
 			}
-			for _, a := range addrs {
-				ipnet, ok := a.(*net.IPNet)
-				if !ok {
-					continue
-				}
-				switch classifyIP(ipnet.IP) {
-				case KindLAN:
-					lan = append(lan, Address{IP: ipnet.IP, Kind: KindLAN})
-				case KindTailnet:
-					tail = append(tail, Address{IP: ipnet.IP, Kind: KindTailnet})
-				case KindLoopback:
-					loop = append(loop, Address{IP: ipnet.IP, Kind: KindLoopback})
-				}
+			switch classifyIP(ipnet.IP) {
+			case KindLAN:
+				lan = append(lan, Address{IP: ipnet.IP, Kind: KindLAN})
+			case KindTailnet:
+				tail = append(tail, Address{IP: ipnet.IP, Kind: KindTailnet})
+			case KindLoopback:
+				loop = append(loop, Address{IP: ipnet.IP, Kind: KindLoopback})
 			}
 		}
 	}
@@ -96,6 +122,12 @@ func DetectAddresses() []Address {
 		loop = append(loop, Address{IP: net.ParseIP("127.0.0.1"), Kind: KindLoopback})
 	}
 	return append(append(lan, tail...), loop...)
+}
+
+// loopbackOnly is the guaranteed fallback when enumeration itself fails: a
+// caller always gets a last-resort (loopback) URL rather than nothing.
+func loopbackOnly() []Address {
+	return []Address{{IP: net.ParseIP("127.0.0.1"), Kind: KindLoopback}}
 }
 
 // defaultRouteSource returns the source IP the OS selects for outbound
