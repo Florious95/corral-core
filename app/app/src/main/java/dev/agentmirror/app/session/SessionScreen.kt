@@ -156,7 +156,10 @@ fun SessionScreen(
                     .imePadding(),
             ) {
                 StatusArea(viewModel)
-                KeyBar(viewModel = viewModel)
+                KeyBar(
+                    enabled = viewModel.inputStatus !is InputStatus.Sending,
+                    onKey = viewModel::sendKey,
+                )
                 InputBar(
                     viewModel = viewModel,
                     onPickImage = {
@@ -285,23 +288,28 @@ private fun InputBar(
  *
  * 键帽升级为 tonal Surface 芯片：ripple 点击态 + M3 最小 48dp 触控目标（Surface onClick
  * 自动外扩触控区，视觉高度不变，018 §一.4/一.6）；窄屏横向滚动不折行。
+ * 参数化（enabled/onKey）而非直收 VM：供 KeyBarFitTest 独立渲染打几何断言
+ * （fix-term-bg-cjk 顺带：真机最右「→」被右缘裁半）。
  * 每键点按即发 keys 帧（走 VM [SessionViewModel.sendKey]，input_ack 必达回执——003 发送必达）；
  * 在途发送（InputStatus.Sending）时整体置灰，与草稿共用发送闸。
  * 文案锁中文（R-6 当期裁定）；每键带 contentDescription 语义标注（R-7 顺带）。
  */
 @Composable
-private fun KeyBar(viewModel: SessionViewModel) {
-    val enabled = viewModel.inputStatus !is InputStatus.Sending
+internal fun KeyBar(enabled: Boolean, onKey: (InputKey) -> Unit) {
+    // 横向预算收紧（fix-term-bg-cjk 顺带）：7 键各带 M3 48dp 触控地板，加上原 md 键帽
+    // 内距/6dp 间距/sm 外距，系统字号放大档（fontScale≥1.2）下固有和超出 411dp 屏宽，
+    // 真机最右「→」静置被右缘裁半。内距 md→sm、间距 6→4、外距 sm→xs 后 fontScale 1.4
+    // 仍整排可见（KeyBarFitTest 锁定）；更窄屏/更大字号由 horizontalScroll 兜底。
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         for (entry in KEY_BAR_ENTRIES) {
             Surface(
-                onClick = { viewModel.sendKey(entry.key) },
+                onClick = { onKey(entry.key) },
                 enabled = enabled,
                 shape = MaterialTheme.shapes.extraSmall,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -313,7 +321,7 @@ private fun KeyBar(viewModel: SessionViewModel) {
                     fontFamily = MonoFontFamily,
                     modifier = Modifier
                         .semantics { contentDescription = entry.contentDescription }
-                        .padding(horizontal = Spacing.md, vertical = 6.dp),
+                        .padding(horizontal = Spacing.sm, vertical = 6.dp),
                 )
             }
         }
