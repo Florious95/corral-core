@@ -1,0 +1,129 @@
+{
+  "task_id": "audit-prod-daemon-lifecycle",
+  "status": "pass",
+  "status_reason": "审计和值守交付已完成；退出原因因缺少决定性证据保持 unknown",
+  "classification": "unknown",
+  "timeline": [
+    {
+      "at": "2026-08-10T00:58:19+08:00",
+      "fact": "PID 46081/PPID 46069 存活，程序为工作区 server/agentmirrord，监听 :9900",
+      "evidence": "e2e/artifacts/feat-ts-wire-verify3/cleanup-followup.log:1-12"
+    },
+    {
+      "at": "2026-08-10T01:12:04+08:00",
+      "fact": "dogfood artifact 定稿，记录两个环境外 agentmirrord 仍运行且未收信号；未列 PID",
+      "evidence": "e2e/artifacts/dogfood/REPORT.md:703-728"
+    },
+    {
+      "at": "2026-08-10T01:18:54+08:00",
+      "fact": "stop_agent 结构化目标为 w-dogfood2 pane PID 20069，不含 PID 46081",
+      "evidence": ".team/logs/events.jsonl:5288-5291"
+    },
+    {
+      "at": "2026-08-10T01:23:19+08:00",
+      "fact": "恢复实例 PID 3393 与 prod log 同时出生",
+      "evidence": "ps/lsof/stat read-only snapshot in REPORT.md"
+    }
+  ],
+  "tests": [
+    {
+      "status": "executed",
+      "command": "bash e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.sh > e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log 2>&1",
+      "exit_code": 0,
+      "log_path": "e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log"
+    },
+    {
+      "status": "executed",
+      "command": "bash -lc 'python3 -m py_compile .team/watchdog.py && bash -n .team/prod-daemon-launch.sh'",
+      "exit_code": 0,
+      "log_path": "e2e/artifacts/audit-prod-daemon-lifecycle/REPORT.md"
+    },
+    {
+      "status": "executed",
+      "command": "bash -lc 'test -s e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log'",
+      "exit_code": 0,
+      "log_path": "e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log"
+    },
+    {
+      "status": "executed",
+      "command": "bash -lc 'test -s e2e/artifacts/audit-prod-daemon-lifecycle/REPORT.md && python3 -m json.tool .team/evidence/audit-prod-daemon-lifecycle.json >/dev/null'",
+      "exit_code": 0,
+      "log_path": "e2e/artifacts/audit-prod-daemon-lifecycle/REPORT.md"
+    }
+  ],
+  "prod_untouched": {
+    "value": true,
+    "pid": 3393,
+    "port": 9900,
+    "before_after": {
+      "process_start": "2026-08-10T01:23:19+08:00 unchanged",
+      "listener": "PID 3393 agentmirrord *:9900 unchanged",
+      "stdio_log_inode": "FD 1/2 inode 652421996 unchanged"
+    },
+    "signals_sent": 0,
+    "restarts": 0,
+    "takeovers": 0,
+    "http_ws_probes": 0,
+    "tmux_attaches": 0,
+    "evidence": "e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log"
+  },
+  "secrets_absent": true,
+  "secret_handling": {
+    "profile_env_reads": 0,
+    "provider_env_reads": 0,
+    "credential_values_logged": 0,
+    "qr_originals_read_or_logged": 0
+  },
+  "causal_gaps": [
+    "旧进程 wait status 不存在",
+    "没有 signal sender",
+    "旧 stdout/stderr 未落盘",
+    "没有 Terminal/shell 关闭事件",
+    "宽 pkill 仅有 HANDOFF 文本，无执行证据",
+    "dirty build 不能与当前源码做精确因果映射"
+  ],
+  "followup_task": null,
+  "rework": {
+    "seat": "w-fix-prodguard-dedupe",
+    "at": "2026-08-10",
+    "trigger": "VERIFICATION.md 终审唯一红项：record_prod_guard 在 fault→healthy→同 fault 复发下压掉复发告警",
+    "red_test": {
+      "command": "python3 .team/watchdog.py --prod-guard-once --port 60000 --log <tmp>/prod.log --escalation-log <tmp>/esc.log (S1 fault→S2 healthy→S3 recurrence)",
+      "before_fix": "S1 escalation_written=true；S2 false；S3 复发 escalation_written=false 被吞；esc.log fault 记录仅 1 条（复现 VERIFICATION §3 红证）",
+      "after_fix": "S1 true；S2 healthy 恢复转换 true（仅一条）；S3 复发 true（再告警）；esc.log fault=2/healthy=1"
+    },
+    "fix": {
+      "file": ".team/watchdog.py",
+      "function": "record_prod_guard",
+      "summary": "状态机加健康恢复位：连续同 fault 仍去重；fault→healthy 真实恢复转换仅落一条 state=healthy 记录作为最小跨进程记忆；健康不逐轮刷屏；不同 fault 不吞",
+      "verification_document": "e2e/artifacts/audit-prod-daemon-lifecycle/VERIFICATION.md (保留红证原文未篡改)"
+    },
+    "tests": [
+      {
+        "status": "executed",
+        "command": "bash e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.sh > e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log 2>&1",
+        "exit_code": 0,
+        "log_path": "e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log",
+        "covered_contract": "连续同 fault 去重；fault→healthy→同 fault 复发再告警；恢复后健康不刷屏；不同 fault 不吞"
+      },
+      {
+        "status": "executed",
+        "command": "bash -lc 'python3 -m py_compile .team/watchdog.py && bash -n .team/prod-daemon-launch.sh'",
+        "exit_code": 0,
+        "log_path": "e2e/artifacts/audit-prod-daemon-lifecycle/REPORT.md"
+      }
+    ],
+    "prod_untouched_reconfirmed": {
+      "pid": 3393,
+      "port": 9900,
+      "process_start": "Mon Aug 10 01:23:19 2026 ./server/agentmirrord unchanged",
+      "listener": "p3393 cagentmirrord *:9900 unchanged",
+      "stdio_log_inode": "FD 1/2 inode 652421996 unchanged",
+      "escalation_log": ".team/logs/watchdog-escalation.log inode 652067937 size 327 mtime 2026-08-10 01:58:42 unchanged",
+      "signals_sent": 0,
+      "restarts": 0,
+      "takeovers": 0,
+      "http_ws_probes": 0
+    }
+  }
+}

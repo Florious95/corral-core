@@ -39,11 +39,22 @@ v4.3 增量（2026-08-09，用户实证误报过多案）：v4.1 把窗收紧后
 清零 T2/T4 计数与探针账；真停摆（空提示符/死流）CPU 静止，照抓。窗口回调至中间值
 （IDLE 1→3、HASH 2→3，约 9 分钟出针）：误报的代价是探针噪声+假升级打断 leader，
 已被用户实证为真代价，不再视为"无害"。
+
+v4.4 增量（2026-08-10，终审红项回炉）：生产守卫去重状态机修复——同端口
+「fault→healthy→同 fault 复发」复发必须再告警（红项实证：健康快照不落状态位，
+去重读上一条 fault 被误压）。修法：仅真实恢复转换（上一条同端口 fault）落一条
+state=healthy 记录作为最小跨进程记忆；健康不逐轮刷屏；连续同 fault 仍去重；不同 fault 不吞。
 """
-import json, subprocess, time, sys, glob, os, hashlib, re
+from __future__ import annotations
+
+import argparse, json, subprocess, time, sys, glob, os, hashlib, re
 from datetime import datetime, timezone
 
 WS = "/Volumes/nvme/Projects/远程Agent安卓"
+TA = os.path.join(WS, ".team", "ta")
+PROD_PORT = 9900
+PROD_LOG = os.path.join(WS, ".team", "logs", "agentmirrord-prod.log")
+PROD_ESCALATION_LOG = os.path.join(WS, ".team", "logs", "watchdog-escalation.log")
 INTERVAL = 180          # 采样间隔（秒）
 BUSY_STALE_SEC = 900    # T1：BUSY 但无输出的停滞阈值（15 分钟）
 IDLE_SAMPLES = 3        # T2：非 BUSY 采样数（v4.3 回调 1→3：v4.1 的"误发无害"被用户实证推翻——等回执的席位 3 分钟即中针+假升级；配合 CPU 活性信号，真停摆约 9 分钟出针）
@@ -112,6 +123,193 @@ def pane_cpu(sock: str, session: str, seat: str) -> float:
         total += secs
     return total
 
+
+def _listener_processes(port: int) -> tuple[dict[int, str], str | None]:
+    """只用 lsof 读取监听者；不连接端口，也不读取进程 argv。"""
+    try:
+        r = subprocess.run(
+            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-Fpctn"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {}, type(exc).__name__
+    if r.returncode not in (0, 1):
+        return {}, f"lsof_exit_{r.returncode}"
+    processes: dict[int, str] = {}
+    current_pid: int | None = None
+    for line in r.stdout.splitlines():
+        if line.startswith("p") and line[1:].isdigit():
+            current_pid = int(line[1:])
+            processes.setdefault(current_pid, "")
+        elif line.startswith("c") and current_pid is not None:
+            processes[current_pid] = line[1:]
+    return processes, None
+
+
+def _stdio_fds(pid: int) -> tuple[dict[str, dict[str, str]], str | None]:
+    """读取 fd 1/2 的路径与 inode，确认日志不是仅存在却未被进程接管。"""
+    try:
+        r = subprocess.run(
+            ["lsof", "-nP", "-a", "-p", str(pid), "-d", "1,2", "-FpfDin"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {}, type(exc).__name__
+    if r.returncode != 0:
+        return {}, f"lsof_exit_{r.returncode}"
+    fds: dict[str, dict[str, str]] = {}
+    current_fd: str | None = None
+    for line in r.stdout.splitlines():
+        if line.startswith("f"):
+            current_fd = line[1:]
+            fds.setdefault(current_fd, {})
+        elif current_fd is not None and line[:1] in {"D", "i", "n"}:
+            fds[current_fd][line[0]] = line[1:]
+    return fds, None
+
+
+def probe_prod_guard(port: int, log_path: str) -> dict:
+    """返回生产守卫快照；全程只有 ps/lsof/stat 等只读系统调用。"""
+    faults: list[str] = []
+    processes, listener_error = _listener_processes(port)
+    if listener_error:
+        faults.append("listener_probe_error")
+    if not processes:
+        faults.append("missing_listener")
+    elif len(processes) != 1:
+        faults.append("ambiguous_listener")
+
+    pid = next(iter(processes)) if len(processes) == 1 else None
+    process_name = processes.get(pid, "") if pid is not None else ""
+    if pid is not None:
+        try:
+            ps = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "comm="],
+                capture_output=True, text=True, timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            ps = None
+        if ps is None or ps.returncode != 0 or not ps.stdout.strip():
+            faults.append("listener_process_missing")
+        else:
+            comm_name = os.path.basename(ps.stdout.strip())
+            if "agentmirrord" not in {process_name, comm_name}:
+                faults.append("listener_not_agentmirrord")
+
+    expected_path = os.path.realpath(log_path)
+    try:
+        log_stat = os.stat(expected_path)
+        log_exists = True
+    except OSError:
+        log_stat = None
+        log_exists = False
+        faults.append("missing_log")
+
+    captured = {"1": False, "2": False}
+    if pid is not None:
+        fds, fd_error = _stdio_fds(pid)
+        if fd_error:
+            faults.append("stdio_probe_error")
+        for fd in captured:
+            info = fds.get(fd, {})
+            same_path = os.path.realpath(info.get("n", "")) == expected_path
+            same_inode = log_stat is not None and info.get("i") == str(log_stat.st_ino)
+            captured[fd] = same_path and same_inode
+            if not captured[fd]:
+                faults.append(f"fd_{fd}_not_prod_log")
+
+    faults = list(dict.fromkeys(faults))
+    return {
+        "healthy": not faults,
+        "port": port,
+        "pid": pid,
+        "process": process_name or None,
+        "log_exists": log_exists,
+        "stdio_captured": captured,
+        "faults": faults,
+    }
+
+
+def _last_prod_guard_record(path: str) -> dict | None:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if not line.startswith("PROD_GUARD "):
+            continue
+        try:
+            return json.loads(line[len("PROD_GUARD "):])
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def _append_prod_guard_record(path: str, record: dict) -> bool:
+    """追加一条 PROD_GUARD 记录（fault 或 healthy 恢复转换）。"""
+    record = dict(record)
+    record["at"] = datetime.now(timezone.utc).isoformat()
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("PROD_GUARD " + json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    return True
+
+
+def record_prod_guard(snapshot: dict, path: str) -> bool:
+    """守卫去重状态机（终审红项回炉，2026-08-10 契约）：
+      1. 连续相同 fault：只落一条（上一条同端口同指纹 fault 即去重）；
+      2. fault→healthy 后同 fault 复发：必须再追加——去重只读"上一条记录"，
+         若健康不落任何位，复发时上一条仍是旧 fault 会被误去重（VERIFICATION 红项）。
+         故允许在真实恢复转换（上一条同端口为 fault）时落一条 state=healthy 记录，
+         这是允许的最小跨进程恢复记忆；
+      3. 健康不逐轮刷屏：仅恢复转换落一条 healthy，后续健康轮 no-op；
+      4. 不同 fault 转换不得被吞：指纹不同即追加。
+    返回是否追加了记录（healthy 恢复转换也算追加，供 CLI 以 escalation_written 呈现）。"""
+    previous = _last_prod_guard_record(path)
+    port = snapshot["port"]
+    if snapshot["healthy"]:
+        if previous is not None and previous.get("state") == "fault" \
+                and previous.get("port") == port:
+            return _append_prod_guard_record(path, {
+                "component": "prod_daemon_guard",
+                "state": "healthy",
+                "fingerprint": f"{port}:",
+                "port": port,
+                "pid": snapshot["pid"],
+                "faults": [],
+            })
+        return False
+    fingerprint = f"{port}:" + ",".join(snapshot["faults"])
+    if previous and previous.get("state") == "fault" \
+            and previous.get("fingerprint") == fingerprint:
+        return False
+    return _append_prod_guard_record(path, {
+        "component": "prod_daemon_guard",
+        "state": "fault",
+        "fingerprint": fingerprint,
+        "port": port,
+        "pid": snapshot["pid"],
+        "faults": snapshot["faults"],
+    })
+
+
+def prod_guard_cli(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="read-only agentmirrord production guard")
+    parser.add_argument("--port", type=int, default=PROD_PORT)
+    parser.add_argument("--log", default=PROD_LOG)
+    parser.add_argument("--escalation-log", default=PROD_ESCALATION_LOG)
+    args = parser.parse_args(argv)
+    snapshot = probe_prod_guard(args.port, args.log)
+    snapshot["escalation_written"] = record_prod_guard(snapshot, args.escalation_log)
+    print(json.dumps(snapshot, ensure_ascii=False, sort_keys=True))
+    return 0 if snapshot["healthy"] else 1
+
+
+# 隔离自测/人工诊断只跑一轮后退出；绝不进入团队 tmux/status 采样循环。
+if len(sys.argv) > 1 and sys.argv[1] == "--prod-guard-once":
+    sys.exit(prod_guard_cli(sys.argv[2:]))
+
 os.chdir(WS)
 idle_count: dict[str, int] = {}
 nudges: dict[str, int] = {}          # v3：seat -> 已发探针数（按 seat:task 键）
@@ -127,10 +325,10 @@ def nudge(seat: str, task: str, why: str) -> None:
     text = (f"看门狗探针（{why}）：若你在等 leader 裁定请回执说明；若上一轮因上游 API 报错中断"
             f"（524/529/overloaded/timeout 均可重试），直接继续即可；否则从你的知识基底 "
             f"{WS}/.team/nodes/{task}/CLAUDE.md 与已落盘成果继续推进任务 {task}，完成后 report_result。")
-    subprocess.run(["team-agent", "send", seat, text], capture_output=True, text=True, timeout=60)
+    subprocess.run([TA, "send", seat, text], capture_output=True, text=True, timeout=60)
 
 def sample():
-    out = subprocess.run(["team-agent", "status", "--json"], capture_output=True, text=True, timeout=60).stdout
+    out = subprocess.run([TA, "status", "--json"], capture_output=True, text=True, timeout=60).stdout
     return json.loads(out)
 
 def inflight_seats():
@@ -145,6 +343,8 @@ def inflight_seats():
 
 for i in range(MAX_SAMPLES):
     try:
+        prod_snapshot = probe_prod_guard(PROD_PORT, PROD_LOG)
+        prod_escalated = record_prod_guard(prod_snapshot, PROD_ESCALATION_LOG)
         sock, session = team_tmux()  # 每轮动态发现（restart 后 socket 名会变）
         st = sample()
         agents = st.get("agents", {})
@@ -226,7 +426,8 @@ for i in range(MAX_SAMPLES):
             global_count = 0
         # v3.2①：live 工作席（w- 前缀）却无在途 intent = 看门狗盲区，逐轮曝光供 leader 对账
         blind = [s for s in agents if s.startswith("w-") and s not in owe]
-        print(f"{now:%H:%M:%S} busy={busy_total} inflight={list(owe.values())} blind={blind} still={hash_still} idle={idle_count} nudges={nudges} g={global_count}", file=log, flush=True)
+        prod_state = "healthy" if prod_snapshot["healthy"] else ",".join(prod_snapshot["faults"])
+        print(f"{now:%H:%M:%S} prod={prod_state} prod_escalated={prod_escalated} busy={busy_total} inflight={list(owe.values())} blind={blind} still={hash_still} idle={idle_count} nudges={nudges} g={global_count}", file=log, flush=True)
         if escalations:
             print("STALL_ESCALATION\n" + "\n".join(escalations))
             sys.exit(1)
