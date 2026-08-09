@@ -1,0 +1,23 @@
+{
+  "task_id": "fix-term-residuals",
+  "status": "pass",
+  "worker": "w-term-res",
+  "date": "2026-08-09",
+  "summary": "P1 两条清偿。①首行 translate 裁切：TermSurfaceView.onDraw 的 canvas.translate(0,-lineHeightPx) 连同 drawText 基线语义错用（y 是基线、字形画在基线上方）把首行整体抬出画布顶——拆除 translate（含回到底部按钮块的反向补偿），measureCells 现算 baselinePx=-fontMetrics.ascent，MONO batch 与 drawCentered 两条绘制路径统一以『行顶+baselinePx』为基线，首行字形恰落 y∈[0,cellH) 带内。②resize 残影双根因：(a) resize 后服务端不补快照——handleResize 成功后按 handleSubscribe 同款路径补发 KindSnapshot（客户端既有 SNAPSHOT→replaySnapshot 清屏重建，零客户端改动）；(b) capture-pane 快照不携带游标位置——重放后客户端游标停在快照末尾（未裁尾时=底行），bash SIGWINCH 重绘增量（\\r ESC[K 无绝对定位）落在错位游标处形成幽灵提示符（真机截图实证，A 图中屏残影同机理）。新增 bridge.Pane.CursorPos（#{cursor_x},#{cursor_y}），api.snapshotWithCursor 裁尾部空行 LF 并追加 CUP 游标重锚序列，subscribe 首帧与 resize 补发两路快照共用——零协议帧改动（仍是裸 ANSI 字节，docs/protocol.md §6.2 契约先行更新）。",
+  "tests": {
+    "acceptance": [
+      "bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest' -> exit 0",
+      "bash -lc 'cd server && go test ./internal/api/... ./internal/bridge/...' -> ok (api 4.9s / bridge 5.6s)"
+    ],
+    "red_first": [
+      "TermFirstRowVisibleTest.firstRowBackgroundAndGlyphsNotClippedAboveTop 红（记录型 Canvas 几何断言：首行背景顶=-20 抬出画布）→ 修后绿",
+      "TestResizeRepushesSnapshot 红（5s 无快照补发超时）→ 修后绿",
+      "assertSnapshotCursorSuffix 扩入 TestResizeRepushesSnapshot + TestSubscribeSnapshotThenDelta 红（快照尾=24 个裸 LF 无游标重锚）→ 修后绿",
+      "SnapshotReplayTest.replayCursorReanchorSuffixLandsFollowupDeltaAtRealRow（客户端契约护栏：CUP 重锚后无定位增量落真游标行、底行保持空白）"
+    ],
+    "on_device": ".team/evidence/fix-term-residuals/A-fixed-same-shot.png（与 fix-term-render-debt/A-snapshot-align.png 同机位：隔离 tmux 80x24 proof 会话 ALIGN_A..D + bash，模拟器进会话页走 subscribe→测量→resize 全链路）——首行 ALIGN_A 完整可见（对照 A 图被顶栏切半）、中屏无孤立 bash-3.2$ 残影、底行无幽灵提示符，唯一提示符行与 capture-pane 事实源一致。B-interim-phantom-bottom-prompt.png 为中间态取证：仅修快照补发未修游标重锚时底行冒出幽灵提示符——残影第二根因的发现现场",
+    "contract": "docs/protocol.md 先契约后码：§3 流程图补 resize 后快照补发线；§4.2 resize 段补『成功后必补发 snapshot、以补发帧为事实回执、未订阅仍 no-op』；§6.2 kind=1 行补『裁尾空行+CUP 游标重锚』语义"
+  },
+  "discipline": "红测先行（三组红→绿留档）；快照游标重锚零协议帧改动零客户端改动；热路径零新增分配（baselinePx 为 measureCells 期缓存字段）；只写 write_scope + leader 授权的 docs/protocol.md；隔离取证环境（短路径 /tmp socket 防 sun_path 超限教训、TMUX='' 剥离防触真实舰队）用毕全清（daemon 杀净/端口关/隔离 tmux kill-server/临时目录删）；未 commit 未 push",
+  "out_of_scope_findings": "①隔离 daemon 的 discovery 默认扫描目录会带出真实舰队会话（本次仅目视确认未交互）；e2e 取证若需完全隔离需 daemon 支持限定 socket 目录参数。②zsh 无 /dev/tcp 内建，layer2.sh 的端口探测在非 bash 环境静默假阴。"
+}
