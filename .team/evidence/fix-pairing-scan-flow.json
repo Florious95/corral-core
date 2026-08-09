@@ -39,5 +39,6 @@
     "conn_service_untouched": "未动 conn/ 包、ServiceWire、service/ 传输实现——试配对仍走既有独立 ConnectionManager + 注入工厂",
     "protocol_untouched": "未改协议/服务端；QR JSON 契约对齐 server qr.go 不变"
   },
-  "note": "配对成功路由（PairingRoute onPaired 注入 setConfig/uploadBaseUrl/start）未被本任务触碰——整改聚焦扫码→状态机可见性。失败态重试按钮在 UI 层经 PairingStatus.Failed 分支渲染（Compose 非单测范围，逻辑在 VM 已测）。"
+  "note": "配对成功路由（PairingRoute onPaired 注入 setConfig/uploadBaseUrl/start）未被本任务触碰——整改聚焦扫码→状态机可见性。失败态重试按钮在 UI 层经 PairingStatus.Failed 分支渲染（Compose 非单测范围，逻辑在 VM 已测）。",
+  "leader_note": "leader 复跑验收 exit 0（18 测）；整改三点+token 不上屏核实；失败原因五分类。常识红线5（失败可见）自证通过。"
 }
