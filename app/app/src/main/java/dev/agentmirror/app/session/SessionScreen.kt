@@ -46,8 +46,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.termview.TermSurfaceView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -55,12 +58,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 会话页 Compose 屏（003 四标准的渲染壳）：终端画布 + 顶部连接条 + 底部本地输入条。
+ * 会话页 Compose 屏（003 四标准的渲染壳）：终端画布 + 顶部连接条 + 底部输入区。
  *
  * 薄层：所有业务状态与动作在 [SessionViewModel]（纯 JVM 已测），本组合只做绑定——
  * - 终端：[TermSurfaceView] 嵌入 [AndroidView]，注入 [SessionViewModel.presenter]；
  * - 输入条：本地编辑零网络（003 第一条），发送走 VM（input_ack 必达回执）；
  * - 加号：Photo Picker（无权限弹窗）→ multipart 上传 → 主机路径注入光标处；
+ * - 快捷键条（R-1，017）：输入条上方，最小集 Esc / Ctrl-C / Tab / ↑ ↓ ← →，
+ *   点按即发 keys 帧（不附加回车；回执/错误全部可见）；
  * - 回执/错误/连接状态全部可见（静默失效猎杀）。
  */
 @Composable
@@ -130,6 +135,9 @@ fun SessionScreen(
 
         // 状态区：发送回执 / 上传回执 / 协议错误（明确可见，静默失效猎杀）。
         StatusArea(viewModel)
+
+        // 快捷键条（R-1，017）：输入条上方，点按即发 keys 帧（input_ack 必达回执）。
+        KeyBar(viewModel = viewModel)
 
         // 底部输入条：本地编辑零网络 + 加号附件 + 发送。
         InputBar(
@@ -217,6 +225,55 @@ private fun InputBar(
         }
     }
 }
+
+/**
+ * 快捷键条（R-1，017）：输入条上方，最小集 Esc / Ctrl-C / Tab / ↑ ↓ ← →。
+ *
+ * 每个键点按即发 keys 帧（走 VM [SessionViewModel.sendKey]，input_ack 必达回执——
+ * 003 发送必达）；在途发送（InputStatus.Sending）时整体置灰，与草稿共用发送闸。
+ * 文案锁中文（R-6 当期裁定）；每键带 contentDescription 语义标注（R-7 顺带）。
+ */
+@Composable
+private fun KeyBar(viewModel: SessionViewModel) {
+    val enabled = viewModel.inputStatus !is InputStatus.Sending
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        for (entry in KEY_BAR_ENTRIES) {
+            Text(
+                text = entry.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
+                    .semantics { contentDescription = entry.contentDescription }
+                    .clickable(enabled = enabled) { viewModel.sendKey(entry.key) }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+/** 快捷键条条目：显示文案 + 线上键值 + 无障碍语义标注（017 R-1 最小集顺序）。 */
+private data class KeyBarEntry(
+    val label: String,
+    val key: InputKey,
+    val contentDescription: String,
+)
+
+/** 快捷键条最小集（017 R-1 原文顺序：Esc / Ctrl-C / Tab / ↑ ↓ ← →）。 */
+private val KEY_BAR_ENTRIES = listOf(
+    KeyBarEntry("Esc", InputKey.ESC, "Esc 键：中断当前步骤"),
+    KeyBarEntry("Ctrl-C", InputKey.CTRL_C, "Ctrl-C 键：发送中断信号"),
+    KeyBarEntry("Tab", InputKey.TAB, "Tab 键：补全"),
+    KeyBarEntry("↑", InputKey.UP, "上方向键"),
+    KeyBarEntry("↓", InputKey.DOWN, "下方向键"),
+    KeyBarEntry("←", InputKey.LEFT, "左方向键"),
+    KeyBarEntry("→", InputKey.RIGHT, "右方向键"),
+)
 
 /** 回执/错误状态区：发送回执、上传回执、协议/解码错误全部明确可见。 */
 @Composable
