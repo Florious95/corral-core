@@ -32,7 +32,7 @@ tmux capture-pane 取 pane **正文**（剥尾部 UI 区 TAIL_STRIP 行），md5
 HASH_SAMPLES 次不变即判停滞——真停摆时正文完全静止，UI 动画剥除后免疫噪声。
 只做 hash 不解析语义，不违"不读 worker 终端原文"纪律。复活判定同款：hash 变即清零。
 """
-import json, subprocess, time, sys, glob, os, hashlib
+import json, subprocess, time, sys, glob, os, hashlib, re
 from datetime import datetime, timezone
 
 WS = "/Volumes/nvme/Projects/远程Agent安卓"
@@ -61,13 +61,19 @@ def team_tmux() -> tuple[str, str]:
 
 
 def pane_hash(sock: str, session: str, seat: str) -> str:
-    """T4 信号源：窗口名=席位名；正文（剥尾部 UI 区）md5。取不到返回空串（不参与判定）。"""
+    """T4 信号源：窗口名=席位名；正文（剥尾部 UI 区）md5。取不到返回空串（不参与判定）。
+
+    v4.2（w-fix-pairpump 停滞 22 分钟未被抓案）：spinner 计时行（"Sautéed for 22m 39s"、
+    "(34s · thinking more)"）出现在**正文区**而非尾部 UI 区，每采样都在变 → 正文 hash
+    "永远在动"，T4 失明。修法：hash 前把所有数字序列归一化为 #——计时/耗时/token 计数的
+    跳动不再影响指纹，而真实新输出必含非数字变化。副作用（纯数字进度行更新被视作静止）
+    仅导致误发中性探针，无害。"""
     r = subprocess.run(["tmux", "-S", sock, "capture-pane", "-p", "-t", f"{session}:{seat}"],
                        capture_output=True, text=True, timeout=10)
     if r.returncode != 0:
         return ""
     body = "\n".join(r.stdout.rstrip().splitlines()[:-TAIL_STRIP])
-    return hashlib.md5(body.encode()).hexdigest()
+    return hashlib.md5(re.sub(r"\d+", "#", body).encode()).hexdigest()
 
 os.chdir(WS)
 idle_count: dict[str, int] = {}
