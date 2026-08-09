@@ -455,6 +455,20 @@ tasks:
     evidence: ".team/evidence/fix-cold-start-reconnect.json"
     contention: impl
 
+  - id: fix-pairing-candidates
+    goal: >
+      P0（2026-08-09 二次真机实证：QR 主地址赌错网卡，用户撞「地址不可达」后只能靠人肉猜正确地址）：
+      多网卡下正确地址机器不可判定，产品必须把选择权给用户而不是赌。方案：①QR payload 增可选
+      candidates 字段（全部候选 ws URL，服务端已会算，qr-host-detect 交付的终端清单同源）；
+      ②App 配对失败（不可达/超时）时若有 candidates，展示候选列表逐项一键重试（自动逐个试探
+      更佳——3s 超时/个）；③手填表单地址下拉可选候选。协议前向兼容（无 candidates 行为不变）。
+      红测先行：解析含 candidates 的 QR、失败后候选可见可点、逐试成功即连。
+    acceptance: ["bash -lc 'cd server && go test ./internal/pairing/... ./internal/protocol/...'", "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["fix-qr-host-detect", "fix-pairing-scan-flow"]
+    write_scope: ["server/internal/pairing/", "docs/protocol.md", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-pairing-candidates.json"
+    contention: impl
+
   - id: fix-release-test-host
     goal: >
       基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
