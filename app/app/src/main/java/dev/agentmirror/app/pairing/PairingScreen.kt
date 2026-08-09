@@ -297,14 +297,18 @@ private fun ScanCard(viewModel: PairingViewModel) {
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        viewModel.recognizedUrl?.let { url ->
-            // 识别摘要只上屏地址，绝不上屏裸 JSON（含 token）——QR 是 token 唯一合法出口（§9）。
-            Text(
-                text = "已识别 · 正在连接 $url",
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = MonoFontFamily,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        // 识别摘要只上屏地址，绝不上屏裸 JSON（含 token）——QR 是 token 唯一合法出口（§9）。
+        // 仅在配对进行中展示「正在连接」：失败态不得残留进行中文案（leader 追加范围，
+        // 双保险：VM failPairing 已清 recognizedUrl，此处再按状态门控）。
+        if (viewModel.pairingStatus is PairingStatus.Pairing) {
+            viewModel.recognizedUrl?.let { url ->
+                Text(
+                    text = "已识别 · 正在连接 $url",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = MonoFontFamily,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Text(
             text = "对准主机终端上的二维码即可自动配对。",

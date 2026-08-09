@@ -1,0 +1,37 @@
+{
+  "task_id": "fix-pairing-candidates",
+  "status": "pass",
+  "worker": "w-pair-cand",
+  "date": "2026-08-09",
+  "summary": "P0 二次真机实证立案修复：多真实网卡下「哪个地址对端可达」机器不可判定（QR 主选 10.20.55.20，手机 WiFi 在 192.168.31.x → 地址不可达），产品必须给候选全集逐试、不赌单一主选。方案全落：①QR payload 增可选 candidates 字段（同一主机全候选 ws URL，服务端 DetectAddresses 同源计算，主选打头、不含 loopback）；②App 配对失败（不可达/超时/拨号失败）且有候选时自动逐个试探（3s/个），首个可达即连（成功持久化该候选 url+token）；③全败落最终失败态并展示候选列表一键重试（点谁试谁，列表保留可见）+手填地址下拉选候选。协议前向兼容：无 candidates 的旧 QR 字节级不变（omitempty 不发射该键），无候选行为=旧版单次试配 15s 超时。",
+  "root_cause": "多真实网卡（10.20.55.20/192.168.31.116）下服务端探测出的主选地址对端（手机）未必可达，机器无法判定哪个网卡在手机所在网段；QR 只载单 url，用户撞不可达后只能人肉猜正确地址。fix-qr-host-detect 只解决了排除假网卡（198.18/169.254）与全候选指引，未把候选给 App 自动逐试。",
+  "changes": [
+    "docs/protocol.md: 新增 §2.1 QR 配对载荷（candidates 可选字段契约：主选打头、不含 loopback、前向兼容不 bump、App 逐试语义、坏候选跳过不拖垮 QR）；§10 参考实现补 qr.go 条目",
+    "server/internal/pairing/qr.go: Payload 增 `Candidates []string json:\"candidates,omitempty\"`（无候选不发射键=旧字节不变）；+NewPayloadWithCandidates(url,token,candidates)",
+    "server/internal/pairing/probe.go: +buildCandidates(primary,port,addrs)（主选打头含 -host 覆盖、LAN+tailnet 去重、不含 loopback、loopback 主选降级空集）；+onboardingPayload(o,addrs,primary) seam；printOnboarding 改走 onboardingPayload（QR 内嵌全候选）",
+    "server/internal/pairing/candidates_test.go: 红测 6 条（wire 契约/omitempty/去重/loopback 排除/-host 前置/降级空集/onboarding seam）",
+    "server/internal/pairing/qr_test.go: `got != p` 改 reflect.DeepEqual（Payload 含切片不可 ==；原断言语义不变）",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PairingModels.kt: QrPayload 增 candidates: List<String>",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/QrPayloadParser.kt: DTO +candidates List<String>?；normalizeCandidates 保留顺序去重、非 ws/空项跳过不报错；缺省空列表",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PairingViewModel.kt: 逐试状态机——startPairingSequence(主选+候选队列)/beginAttempt/advanceAttempt（拨号失败 RECONNECTING 即推进、超时按 attemptBudgetMs 推进）；无候选=单元素队列=旧版 15s 单次；有候选 3s/个，全败落 UNREACHABLE「已尝试全部候选地址」+candidateUrls 暴露；retryCandidate(url) 单候选重试且列表保留；resetCandidates 语义；attemptIndex 每次新序列归零（retryCandidate 误落全败的坑已锁）；failPairing 清 recognizedUrl（leader 追加范围：失败态不得残留「正在连接」）",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt: Failed 分支候选列表一键重试（沿用 errorContainer 卡+Mono labelMedium 可点行，保留「连接」「重试」精确文案）；手填地址 ExposedDropdownMenuBox+DropdownMenu 候选下拉（selectCandidateUrl 回填）；ScanCard recognizedUrl 仅 Pairing 态显示「正在连接」（双保险）",
+    "app/app/src/test/java/dev/agentmirror/app/pairing/QrPayloadParserTest.kt: +parsesCandidates/noCandidatesDefaultsEmpty/candidatesSkipInvalidEntries",
+    "app/app/src/test/java/dev/agentmirror/app/pairing/PairingViewModelTest.kt: +harness alwaysDialFails/failingDial；+scanFailsPrimaryThenAutoTriesCandidatesSuccess（错误主选+正确候选逐试成功=FIELD 模拟器走查）/scanFailsPrimaryTimeoutAdvancesToNextCandidate/allCandidatesFailShowsFullCandidateListAndCanRetryCandidate（全败列表可见可点+retryCandidate 保留列表）/noCandidatesKeepsLegacyBehavior（无候选单次试配）/scanCandidatesDeduplicatedWithPrimary/failureClearsInProgressRecognitionText（leader 追加范围锁定）"
+  ],
+  "red_tests": [
+    "Go 红测先行：candidates_test.go 修前红（编译失败：undefined NewPayloadWithCandidates/buildCandidates/onboardingPayload + Payload 无 Candidates 字段），修后全绿",
+    "App 红测先行：QrPayloadParserTest.candidates* 修前红（QrPayload 无 candidates 字段）；PairingViewModelTest 逐试用例修前红（startPairingSequence 未实现）",
+    "调试锁定：retryCandidate 曾误落「全部候选失败」——attemptIndex 未在新序列归零，beginAttempt 判 `attemptIndex >= size` 误判；归零后修绿（配 test 锁定）"
+  ],
+  "tests": [
+    "验收 Go：bash -lc 'cd server && go test ./internal/pairing/... ./internal/protocol/...' → exit 0",
+    "验收 App：bash -lc 'cd app && ./gradlew :app:testDebugUnitTest' → exit 0，290 测 0 红（pairing 40 测含新增 11 条全绿）",
+    "契约基准：TestPayloadCandidatesJSONContract（wire 往返+主选打头）、TestPayloadNoCandidatesOmitsKey（omitempty 无候选不发射键）、TestBuildCandidates*（loopback 排除/-host 前置/降级空集）、TestOnboardingPayloadCarriesCandidates（render seam 内嵌候选）",
+    "App 逐试：scanFailsPrimaryThenAutoTriesCandidatesSuccess（拨号失败→推进→候选 authOk→成功持久化 good）；scanFailsPrimaryTimeoutAdvancesToNextCandidate（超时 3s 推进）；allCandidatesFail（全败落失败+候选列表可见可点）；noCandidatesKeepsLegacyBehavior（单次试配 15s 旧行为）",
+    "token 纪律：candidates 仅地址，token 仍只上行一次不进日志；错误文案恒不含 token（既有 errorMessageNeverContainsTokenValue 继续锁死）",
+    "全量回归：:app:testDebugUnitTest 290 测 0 红（含 ui-redesign 255 基线 + term-glyph 新 4 条）"
+  ],
+  "write_scope_compliance": "仅动 write_scope：docs/protocol.md、server/internal/pairing/、app pairing/、app/src/test/。未 bump 协议版本；既有夹具字节未动（protocol testdata 零改动）；未动 server/cmd、未动 conn/service 传输层。",
+  "coordination": "ui-redesign 席（018 重设计）点对点协调：Screen 视觉归它、我仅 Failed 分支加候选接线+手填下拉，严格沿用其 errorContainer/Mono/Spacing 样式语言并保留「连接」「重试」精确文案（其 e2e layer2 语义依赖）；编译互阻两次即时解除。term-glyph 席（termview）并发域：我未触碰，其陈旧测试产物已清。",
+  "evidence_file": ".team/evidence/fix-pairing-candidates.json"
+}

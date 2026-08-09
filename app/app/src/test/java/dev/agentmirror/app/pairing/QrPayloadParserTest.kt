@@ -77,4 +77,34 @@ class QrPayloadParserTest {
         assertTrue(isValidWsUrl("ws://host:1/ws"))
         assertTrue(isValidWsUrl("wss://host:1/ws"))
     }
+
+    // ---- candidates 候选字段（fix-pairing-candidates：多网卡全候选，契约 §2.1）----
+
+    @Test
+    fun parsesCandidates() {
+        // 候选列表按线上顺序保留（服务端主选打头）。
+        val p = QrPayloadParser.parse(
+            """{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"T","ts_authkey":"","candidates":["ws://192.168.1.5:9900/ws","ws://10.0.0.7:9900/ws"]}""",
+        )
+        assertEquals(
+            listOf("ws://192.168.1.5:9900/ws", "ws://10.0.0.7:9900/ws"),
+            p.candidates,
+        )
+    }
+
+    @Test
+    fun noCandidatesDefaultsEmpty() {
+        // 无 candidates 的旧 QR：候选为空列表，行为与旧版一致（前向兼容，契约 §2.1）。
+        val p = QrPayloadParser.parse("""{"v":1,"url":"ws://h:1/ws","token":"t"}""")
+        assertTrue(p.candidates.isEmpty())
+    }
+
+    @Test
+    fun candidatesSkipInvalidEntries() {
+        // 契约 §2.1：candidates 中非 ws URL / 空项跳过不报错，坏候选不拖垮整个 QR。
+        val p = QrPayloadParser.parse(
+            """{"v":1,"url":"ws://h:1/ws","token":"t","candidates":["ws://a:1/ws","http://bad","not-a-url",""]}""",
+        )
+        assertEquals(listOf("ws://a:1/ws"), p.candidates)
+    }
 }
