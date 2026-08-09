@@ -109,8 +109,11 @@ for i in $(seq 1 20); do
   sleep 1
   UI="$(dumpui)"
   case "$UI" in
+    # 配对成功已进工作区：工作区顶栏状态条是「连接中…」/「正在连接主机…」/「暂无工作区」，
+    # 配对页文案已全部消失（配对页仍含「连接主机/手填连接/扫码连接」）。
     *"暂无工作区"*|*"工作区"*) WORKSPACE=1; echo "=== [layer2] workspace reached after ${i}s"; break ;;
     *"配对成功"*) WORKSPACE=1; echo "=== [layer2] pairing success after ${i}s"; break ;;
+    *"连接中"*|*"正在连接主机"*) WORKSPACE=1; echo "=== [layer2] workspace reached (连接中…) after ${i}s"; break ;;
     *"配对超时"*|*"拒绝"*|*"失败"*) echo "LAYER2 FAIL: pairing error: $(echo "$UI" | grep -oE 'text=\"[^\"]{2,40}\"' | grep -E '超时|拒绝|失败|错误' | head -1)"; break ;;
   esac
 done
