@@ -60,7 +60,6 @@ class GlyphRunBuilder(private val policy: GlyphFallbackPolicy) {
             val cp = text.codePointAt(i)
             val width = CharWidth.of(cp)
             val slot = policy.resolve(cp)
-            val unit = String(Character.toChars(cp))
             if (width == 0) {
                 // 零宽/组合码点：并入当前段，绝不单独切段（字形组合必须整体画）。
                 // 段尚未打开时（理论边界）以当前槽位起段，列不推进。
@@ -68,7 +67,7 @@ class GlyphRunBuilder(private val policy: GlyphFallbackPolicy) {
                     curSlot = slot
                     curStart = col
                 }
-                curText.append(unit)
+                curText.appendCodePoint(cp)
             } else {
                 // 段未开：起段；槽位切换：flush 上一段再开新段（startCol 记新段首列）。
                 if (curSlot == null) {
@@ -80,7 +79,7 @@ class GlyphRunBuilder(private val policy: GlyphFallbackPolicy) {
                     curText = StringBuilder()
                     curStart = col
                 }
-                curText.append(unit)
+                curText.appendCodePoint(cp)
                 col += width
             }
             i += Character.charCount(cp)
