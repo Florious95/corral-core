@@ -15,6 +15,9 @@
 ## 席位与模型
 
 - teammate 一律第三方 API（compatible_api profile）；难点模块可开 Fable 5 短命席位（一次性，交件即退役）
+- **Fable 5/订阅席位边界**（用户裁定 2026-08-10）：只许单点攻坚，不许持续生命周期开发。
+  派单时必须写死单一命中目标；席内扩案（新雷/新层缺陷）不得原席续干，leader 拆案改派第三方席位；
+  Fable 5 席位墙钟超 2 小时未交件，leader 必须主动审视拆案。开发常规通道永远是第三方 API
 - 密钥只存在于 `.team/current/profiles/*.env`，**任何席位（含 leader）禁止读其原文**；
   诊断只用 `team-agent profile show <name> --workspace . --json`
 - **席位恢复纪律**（A-24 实证，2026-08-09）：席位恢复失败达 2 轮（自动恢复/start-agent/reset 任意组合）
