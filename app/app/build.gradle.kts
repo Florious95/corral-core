@@ -72,6 +72,17 @@ android {
     }
 }
 
+// 红测（fix-app-network-manifest）前置依赖：ManifestNetworkPolicyTest 同时断言 debug 与
+// release 两个变体的 merged manifest（INTERNET + 明文放行）。单测任务默认只走 debug 依赖链，
+// release 的最终 merged manifest 产物须显式前置 :app:processReleaseManifest 才能保证存在。
+// 注：AGP 的单测任务在 android 配置阶段后延后注册，故用 configureEach 延迟挂依赖
+// （dependsOn 传任务名字符串由 Gradle 延迟解析，不要求此刻已注册）。
+tasks.configureEach {
+    if (name == "testDebugUnitTest") {
+        dependsOn("processReleaseManifest")
+    }
+}
+
 dependencies {
     // Compose BOM 统一管理 Compose 系版本。
     implementation(platform("androidx.compose:compose-bom:2025.12.01"))
