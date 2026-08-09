@@ -258,10 +258,20 @@ if [ "$LIST_OK" != "1" ]; then
   exit 0
 fi
 
-# --- 7. 真旅程（列表渲染正常才走）：点开会话 → 快照断言 → 输入回显。 ---
-# 点开列表里隔离会话（按会话名 e2e-l2 语义定位）。
+# --- 7. 真旅程（列表渲染正常才走）：点开工作区 → 点开会话 → 快照断言 → 输入回显。 ---
+# 两级结构（002：一级=cwd 工作区聚合，二级=会话）。首页列表项显示的是**完整 cwd 路径**
+# （fix-workspace-wiring 首次真渲染的 dump 实证），会话行要点进工作区后才可见——
+# 原版直接 tap "e2e-l2" 是对两级结构的误解（该段此前被 expected-fail 挡着从未真跑，
+# 首跑即暴露；leader 修，2026-08-09）。
 echo "$UI" > "$ART/layer2.list.xml"
-tap_text "$ART/layer2.list.xml" "e2e-l2" || { echo "LAYER2 FAIL: open session" | tee "$ART/layer2.fail"; exit 1; }
+# UI 显示的 cwd 是 tmux 上报的 realpath（macOS /tmp → /private/tmp 软链解析后），
+# 必须用 pwd -P 归一化，否则精确匹配差一个 /private 前缀（首跑实证）。
+L2_CWD_REAL="$(cd "$L2_TMPD/cwd" && pwd -P)"
+tap_text "$ART/layer2.list.xml" "$L2_CWD_REAL" || { echo "LAYER2 FAIL: open workspace (cwd row)" | tee "$ART/layer2.fail"; exit 1; }
+sleep 2
+UI="$(dumpui)"; echo "$UI" > "$ART/layer2.workspace.xml"
+# 二级页 tap 会话行（tmux session 名 e2e-l2）；失败留 dump 供选择器诊断。
+tap_text "$ART/layer2.workspace.xml" "e2e-l2" || { echo "LAYER2 FAIL: open session (level-2 row)" | tee "$ART/layer2.fail"; exit 1; }
 sleep 4
 UI="$(dumpui)"
 # 快照断言：终端画布为 Canvas 自定义 View，文本不进语义树；改断言「会话页顶栏 + 输入条」
@@ -284,16 +294,30 @@ CXIN=$(edittext_center "$ART/layer2.session.xml" 0) || { echo "LAYER2 FAIL: inpu
 UI="$(dumpui)"; echo "$UI" > "$ART/layer2.session.xml"
 tap_text "$ART/layer2.session.xml" "发送" || { echo "LAYER2 FAIL: send button" | tee "$ART/layer2.fail"; exit 1; }
 sleep 3
-CAP=$(TMUX='' TMUX_TMPDIR="$L2_TMPD/tmux" tmux -S "$L2_TMPD/tmux/tmux-$(id -u)/default" capture-pane -p -t e2e-l2:0.0 2>/dev/null)
+# capture 用与 new-session 完全一致的解析方式（TMUX_TMPDIR 自解析，不手拼 -S 路径——
+# 手拼 tmux-$(id -u)/default 与实际 socket 不符时 capture 静默空串，曾致「回显失败」误报）；
+# 重试窗口：WS 往返+bridge 注入有秒级延迟，3s 一锤定音会闪失。
+CAP=""
+for i in 1 2 3 4 5; do
+  CAP=$(TMUX='' TMUX_TMPDIR="$L2_TMPD/tmux" tmux capture-pane -p -t e2e-l2:0.0 2>"$ART/layer2.capture-err.txt")
+  case "$CAP" in *"$IN_MARKER"*) break;; esac
+  sleep 2
+done
 if case "$CAP" in *"$IN_MARKER"*) true;; *) false;; esac; then
   echo "=== [layer2] input echoed in isolated pane (tmux capture: $IN_MARKER)"
 else
   echo "LAYER2 FAIL: input marker not echoed in pane" | tee "$ART/layer2.fail"
   echo "$CAP" > "$ART/layer2.pane-capture.txt"
+  cp "$L2_TMPD/daemon.log" "$ART/layer2.daemon.log" 2>/dev/null  # 失败必留 daemon 侧证据
   exit 1
 fi
 
 # --- 8. 杀 App 真杀 → 重开 → 断言恢复（004 真验证）。 ---
+# 恢复语义裁定（leader，2026-08-09）：force-stop 是用户强杀，Android 清空
+# savedInstanceState（D-3 的导航态保持只覆盖旋转/系统回收），004 原文「客户端无状态，
+# 被杀即无所谓」——正确恢复 = 冷启后**自动重连**、工作区列表恢复且隔离会话仍在
+# （主机是唯一运行时，会话没死才是本命题）；要求回到会话页需要磁盘级导航持久化，
+# 004 未承诺（若要做是新议题）。降级到配对页才是 004 破坏（配置丢失）。
 "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1
 sleep 1
 "$ADB" shell am start -W -n "$PKG/.MainActivity" >/dev/null 2>&1
@@ -301,19 +325,19 @@ RESTORED=0
 for i in $(seq 1 20); do
   sleep 1
   UI="$(dumpui)"
-  # 恢复 = 回到会话页（返回锚 + 输入条），而非列表页/配对页。
-  if ui_has "$UI" "‹ 返回" && ( ui_has "$UI" "输入指令" || ui_has "$UI" "$MARKER" ); then
-    RESTORED=1; echo "=== [layer2] session restored after force-stop (i=${i}s)"
+  # 恢复 = 自动重连回列表页且隔离会话行仍在（cwd realpath 精确匹配）。
+  if ui_has "$UI" "$L2_CWD_REAL"; then
+    RESTORED=1; echo "=== [layer2] workspace restored after force-stop, isolated session persists (i=${i}s)"
     break
   fi
   if ui_has "$UI" "连接主机" && ui_has "$UI" "手填连接"; then
-    echo "LAYER2 FAIL: restored to pairing page after force-stop (004 broken)" | tee "$ART/layer2.fail"
+    echo "LAYER2 FAIL: restored to pairing page after force-stop (004 broken: config lost)" | tee "$ART/layer2.fail"
     echo "$UI" > "$ART/layer2.restore-pairing.xml"
     break
   fi
 done
 if [ "$RESTORED" != "1" ]; then
-  echo "LAYER2 FAIL: did not restore to session page after force-stop" | tee "$ART/layer2.fail"
+  echo "LAYER2 FAIL: workspace list not restored after force-stop (004 broken: no auto-reconnect)" | tee "$ART/layer2.fail"
   echo "$UI" > "$ART/layer2.restore-fail.xml"
   exit 1
 fi

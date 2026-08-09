@@ -440,6 +440,21 @@ tasks:
     evidence: ".team/evidence/fix-recovery-baseline.json"
     contention: impl
 
+  - id: fix-cold-start-reconnect
+    goal: >
+      P0（层2 真旅程末步抓获，2026-08-09）：冷启动自动重连缺失——ServiceWire.manager().start()
+      全仓唯一调用点在 PairingRoute.onPaired（配对成功一刻），force-stop/正常重开后有配置直接进
+      工作区页但无人启动连接，顶栏永远「连接中…」列表空白（e2e/artifacts/layer2.restore-fail.xml
+      现场）。004「被杀即无所谓」破坏，真机每次重开必撞。修复：冷启动检测到已有配对配置即启动
+      常驻连接（与 PairingRoute.onPaired 同构；幂等防重复 start）。红测先行：Robolectric 冷启动
+      （config 非空）断言连接启动且工作区接线收到状态推进；层2 末步（force-stop 恢复断言）即
+      端到端验收，脚本无需改。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'", "bash -lc 'bash e2e/run.sh --layer 2'"]
+    deps: ["fix-workspace-wiring"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-cold-start-reconnect.json"
+    contention: impl
+
   - id: fix-release-test-host
     goal: >
       基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
