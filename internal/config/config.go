@@ -35,6 +35,12 @@ type Config struct {
 	// reply and never written to a log.
 	Token string
 
+	// Host is an explicit host override for the QR's primary address
+	// (task fix-qr-host-detect). When set it beats every automatic probe
+	// (default-route source, DetectAddresses ladder): the user knows which
+	// address their phone can actually reach.
+	Host string
+
 	// UploadDir is where POST /upload writes images (docs/protocol.md §8),
 	// consumed by api.Options.UploadDir. Empty defaults to
 	// ~/Downloads/agentmirror-uploads.
@@ -129,6 +135,7 @@ func Load(args []string) (Config, error) {
 	fs.String("qr-listen", "", "pairing QR listen address, e.g. 0.0.0.0:9901 (empty disables)")
 	fs.String("log-level", "info", "log severity level: debug|info|warn|error")
 	fs.String("token", "", "static pairing token; connections must present it in auth (never logged)")
+	fs.String("host", "", "override host for the QR's primary address, e.g. 192.168.1.5 (beats auto-detect)")
 	fs.String("upload-dir", "", "directory for POST /upload images (default ~/Downloads/agentmirror-uploads)")
 	fs.String("max-upload-bytes", "20971520", "max uploaded image bytes (default 20 MiB)")
 	fs.String("max-input-bytes", "1048576", "max input frame text bytes (default 1 MiB)")
@@ -151,6 +158,7 @@ func Load(args []string) (Config, error) {
 		QRListenAddr: resolve(resolution{flagName: "qr-listen", envKey: "AGENTMIRROR_QR_LISTEN", def: ""}),
 		LogLevel:     resolve(resolution{flagName: "log-level", envKey: "AGENTMIRROR_LOG_LEVEL", def: "info"}),
 		Token:        resolve(resolution{flagName: "token", envKey: "AGENTMIRROR_TOKEN", def: ""}),
+		Host:         resolve(resolution{flagName: "host", envKey: "AGENTMIRROR_HOST", def: ""}),
 		UploadDir:    resolve(resolution{flagName: "upload-dir", envKey: "AGENTMIRROR_UPLOAD_DIR", def: ""}),
 	}
 

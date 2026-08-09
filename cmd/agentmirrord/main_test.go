@@ -67,7 +67,7 @@ func TestResolveTokenAutoGeneratesPersistsReuses(t *testing.T) {
 // the token and the ws URL, plus the manual-fill instructions.
 func TestPrintPairingGuideCarriesLegalExits(t *testing.T) {
 	var buf bytes.Buffer
-	if err := printPairingGuide(&buf, "tok-abc-123", "9900", false); err != nil {
+	if err := printPairingGuide(&buf, "tok-abc-123", "9900", false, ""); err != nil {
 		t.Fatalf("printPairingGuide: %v", err)
 	}
 	out := buf.String()
@@ -98,6 +98,46 @@ func TestPrintPairingGuideDegradedWarns(t *testing.T) {
 	}
 	if !strings.Contains(out, "127.0.0.1") {
 		t.Error("degraded guide must still carry the loopback fallback URL")
+	}
+}
+
+// TestPrintPairingGuideHostOverride pins the -host override seam: when a host
+// is explicitly configured the QR/guide must carry it, regardless of what the
+// automatic probe would pick (task fix-qr-host-detect).
+func TestPrintPairingGuideHostOverride(t *testing.T) {
+	var buf bytes.Buffer
+	if err := printPairingGuide(&buf, "tok-abc-123", "9900", false, "10.0.0.9"); err != nil {
+		t.Fatalf("printPairingGuide(override): %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "ws://10.0.0.9:9900/ws") {
+		t.Errorf("guide must carry the explicit host, got:\n%s", out)
+	}
+}
+
+// TestPrintPairingGuideListsCandidates verifies the full-candidate guide lists
+// every detected address with its own ws URL, so a user whose phone cannot
+// reach the QR's primary can re-enter another host by hand. It injects a
+// two-LAN-address probe set (the live-machine shape from the defect) and checks
+// both appear with full ws URLs.
+func TestPrintPairingGuideListsCandidates(t *testing.T) {
+	addrs := []pairing.Address{
+		{IP: net.ParseIP("192.168.31.116"), Kind: pairing.KindLAN},
+		{IP: net.ParseIP("10.20.55.20"), Kind: pairing.KindLAN},
+		{IP: net.ParseIP("127.0.0.1"), Kind: pairing.KindLoopback},
+	}
+	var buf bytes.Buffer
+	if err := printOnboardingSeamAll(&buf, pairing.Onboarding{Token: "tok-x", Port: "9900"}, addrs, "192.168.31.116"); err != nil {
+		t.Fatalf("printOnboardingSeamAll: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"ws://192.168.31.116:9900/ws",
+		"ws://10.20.55.20:9900/ws",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("full-candidate guide must contain %s, got:\n%s", want, out)
+		}
 	}
 }
 

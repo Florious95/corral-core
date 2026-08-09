@@ -110,8 +110,10 @@ func run(args []string) int {
 	// Print the QR + plain-text guide to stdout now that we know the listener
 	// set. This is the user-facing onboarding and the token's legal exit; a
 	// failure to print it must stop the daemon, because a token the user never
-	// sees leaves them unable to pair.
-	if err := printPairingGuide(os.Stdout, token, listenPort(cfg.ListenAddr), group.TailnetEnabled()); err != nil {
+	// sees leaves them unable to pair. All detected candidate addresses are
+	// listed so the user can re-enter another host by hand (task
+	// fix-qr-host-detect: the QR carries the best host, the guide the rest).
+	if err := printPairingGuide(os.Stdout, token, listenPort(cfg.ListenAddr), group.TailnetEnabled(), cfg.Host); err != nil {
 		logger.Error("failed to print pairing guide", "err", err)
 		return 1
 	}
@@ -197,15 +199,25 @@ func tokenSource(explicit string) string {
 	return "auto"
 }
 
-// printPairingGuide writes the onboarding QR + guide to w. It is the thin
-// wiring seam around pairing.PrintOnboarding so tests can capture the output
-// without forking the daemon.
-func printPairingGuide(w io.Writer, token, port string, tailnet bool) error {
-	return pairing.PrintOnboarding(w, pairing.Onboarding{
+// printPairingGuide writes the onboarding QR + guide to w, listing every
+// detected candidate address after the QR's primary host (task
+// fix-qr-host-detect). It is the thin wiring seam around pairing.PrintOnboarding
+// so tests can capture the output without forking the daemon. hostOverride,
+// when non-empty, pins the QR's primary address and beats every automatic
+// probe.
+func printPairingGuide(w io.Writer, token, port string, tailnet bool, hostOverride string) error {
+	// resolve the primary host once so the guide's primary and the QR agree.
+	// The override may come from the -host flag/env (already folded into
+	// cfg.Host); pass it in so PrimaryHost can pick it up deterministically.
+	host := hostOverride
+	if host == "" {
+		host = pairing.PrimaryHost()
+	}
+	return pairing.PrintOnboardingAll(pairing.Onboarding{
 		Token:          token,
 		Port:           port,
 		TailnetEnabled: tailnet,
-	})
+	}, pairing.DetectAddresses(), host, w)
 }
 
 // printOnboardingSeam renders the guide for an injected address set, exposing

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sort"
 )
 
@@ -16,6 +17,15 @@ import (
 // inside it is the host's tailnet address.
 var tailnetNet = func() *net.IPNet {
 	_, n, _ := net.ParseCIDR("100.64.0.0/10")
+	return n
+}()
+
+// rfc2544Net is the RFC 2544 benchmark range (198.18.0.0/15). Proxy tools
+// (Clash/Surge/… fake-IP modes) hand out addresses from this block to virtual
+// TUN interfaces; a phone on the real LAN can never reach one, so it must be
+// excluded from the candidate list (task fix-qr-host-detect, real 198.18.0.1).
+var rfc2544Net = func() *net.IPNet {
+	_, n, _ := net.ParseCIDR("198.18.0.0/15")
 	return n
 }()
 
@@ -39,7 +49,9 @@ type Address struct {
 }
 
 // classifyIP returns the address kind for one IP, or "" when the address must
-// be skipped (link-local, or IPv6 not yet supported for LAN pairing).
+// be skipped. Skipped blocks: link-local (169.254/16 + IPv6 fe80::/10), the
+// RFC 2544 benchmark range (198.18.0.0/15 — proxy fake-IP TUNs live here, a
+// phone can never reach them), and IPv6 (not yet paired over).
 func classifyIP(ip net.IP) string {
 	if ip.IsLoopback() {
 		return KindLoopback
@@ -50,6 +62,11 @@ func classifyIP(ip net.IP) string {
 	if ip.To4() == nil {
 		// Global IPv6 is a valid host address but the Android LAN pairing
 		// targets IPv4/tailnet for now; skip to keep the guide focused.
+		return ""
+	}
+	if rfc2544Net.Contains(ip) {
+		// 198.18.0.0/15 is not link-local, so IsLinkLocal* cannot catch it;
+		// exclude explicitly (task fix-qr-host-detect).
 		return ""
 	}
 	if tailnetNet.Contains(ip) {
@@ -141,6 +158,13 @@ func defaultRouteSource() (net.IP, error) {
 	}
 	defer conn.Close()
 	if ua, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+		// The routing table can legitimately select a proxy fake-IP TUN as the
+		// outbound source (the real-machine defect: 198.18.0.1 won). Reject an
+		// address that classifyIP would skip, so the fallback ladder (which is
+		// already exclusion-aware) picks a phone-reachable host.
+		if classifyIP(ua.IP) == "" {
+			return nil, fmt.Errorf("pairing: default-route probe: source %s is not a usable LAN address", ua.IP)
+		}
 		return ua.IP, nil
 	}
 	return nil, fmt.Errorf("pairing: default-route probe: unexpected local addr")
@@ -164,12 +188,22 @@ func pickPrimary(addrs []Address) string {
 	return "127.0.0.1"
 }
 
-// PrimaryHost returns the best host for the QR: the default-route source IP
-// when discoverable, otherwise the first LAN/tailnet address, else loopback.
+// PrimaryHost returns the best host for the QR: an explicit override
+// (AGENTMIRROR_HOST / -host), else the default-route source IP when
+// discoverable, else the first LAN/tailnet address from the (exclusion-aware)
+// DetectAddresses ladder, else loopback.
 func PrimaryHost() string {
+	// An explicit override wins over every automatic probe: the phone is the
+	// ground truth of what is reachable, and the user knows it best.
+	if h := os.Getenv("AGENTMIRROR_HOST"); h != "" {
+		return h
+	}
 	if ip, err := defaultRouteSource(); err == nil {
 		return ip.String()
 	}
+	// Tail-recursive: recompute DetectAddresses rather than recursing on
+	// PrimaryHost (which would re-run the env check and loop if a bug ever
+	// left defaultRouteSource always failing).
 	return pickPrimary(DetectAddresses())
 }
 
@@ -194,22 +228,33 @@ type Onboarding struct {
 // printOnboarding; the QR and this guide are the token's two legal exits
 // (docs/protocol.md §9) — the only places it may appear.
 func PrintOnboarding(w io.Writer, o Onboarding) error {
-	return printOnboarding(w, o, DetectAddresses(), PrimaryHost())
+	return printOnboarding(w, o, DetectAddresses(), PrimaryHost(), false)
 }
 
 // PrintOnboardingWith renders the guide for an injected address set and
 // primary host instead of probing the machine. It is the seam that lets callers
 // (and tests) exercise the degraded-warning path deterministically.
 func PrintOnboardingWith(o Onboarding, addrs []Address, primary string, w io.Writer) error {
-	return printOnboarding(w, o, addrs, primary)
+	return printOnboarding(w, o, addrs, primary, false)
+}
+
+// PrintOnboardingAll renders the guide with every detected candidate address
+// listed alongside the primary (task fix-qr-host-detect: when multiple usable
+// hosts coexist, the QR carries the best one and the guide offers the rest for
+// manual re-entry). It is the seam the cmd wiring calls when it wants the full
+// candidate list shown.
+func PrintOnboardingAll(o Onboarding, addrs []Address, primary string, w io.Writer) error {
+	return printOnboarding(w, o, addrs, primary, true)
 }
 
 // printOnboarding renders the guide for a given address set and primary host.
 // If no LAN/tailnet address was found it prints an explicit degraded warning
 // instead of silently handing out an unreachable QR (knowledge-base red line).
 // Splitting probe from render keeps that warning testable without the real
-// network.
-func printOnboarding(w io.Writer, o Onboarding, addrs []Address, primary string) error {
+// network. When listAll is set, every candidate address is listed under the
+// primary (the full-candidate guide); otherwise only tailnet addresses are
+// listed after it (the legacy view).
+func printOnboarding(w io.Writer, o Onboarding, addrs []Address, primary string, listAll bool) error {
 	url := WSURL(primary, o.Port)
 
 	body, err := NewPayload(url, o.Token).Marshal()
@@ -226,12 +271,17 @@ func printOnboarding(w io.Writer, o Onboarding, addrs []Address, primary string)
 	fmt.Fprintln(w, "配对信息 · 用 App 扫码，或手填以下内容：")
 	fmt.Fprintf(w, "  服务端 ws 地址 : %s\n", url)
 	fmt.Fprintf(w, "  配对 token      : %s\n", o.Token)
-	fmt.Fprintln(w, "  其他可达地址（若上面的连不上，改用下列之一）：")
-	for _, a := range addrs {
-		if a.Kind == KindLoopback {
-			continue
+	if listAll {
+		// The QR carries only the primary host; the full candidate list lets a
+		// user whose phone cannot reach it re-enter another address by hand.
+		// Loopback is never offered as an alternative (it is the last-resort QR).
+		fmt.Fprintln(w, "  其他可达地址（若上面的连不上，改用下列之一）：")
+		for _, a := range addrs {
+			if a.Kind == KindLoopback {
+				continue
+			}
+			fmt.Fprintf(w, "    ws://%s:%s/ws   [%s]\n", a.IP.String(), o.Port, a.Kind)
 		}
-		fmt.Fprintf(w, "    ws://%s:%s/ws   [%s]\n", a.IP.String(), o.Port, a.Kind)
 	}
 	if o.TailnetEnabled {
 		for _, a := range addrs {

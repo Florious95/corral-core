@@ -95,6 +95,68 @@ func TestDetectAddressesAlwaysHasLoopback(t *testing.T) {
 	}
 }
 
+// fakeAddr builds a *net.IPNet probe entry from a CIDR string, keeping the
+// host IP from the address portion (ParseCIDR normalizes IP to the network
+// address; the probe table must mirror the host's actual interface address).
+func fakeAddr(cidr string) net.Addr {
+	ip, n, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic(err)
+	}
+	// A /32 mask keeps the exact IP while still presenting as an *IPNet.
+	return &net.IPNet{IP: ip, Mask: n.Mask}
+}
+
+// fakeProbe builds one probe unit (interface name + addresses) from CIDRs.
+func fakeProbe(name string, cidrs ...string) ifaceAddr {
+	addrs := make([]net.Addr, 0, len(cidrs))
+	for _, c := range cidrs {
+		addrs = append(addrs, fakeAddr(c))
+	}
+	return ifaceAddr{name: name, addrs: addrs}
+}
+
+// probeSet is the injected live address table: en* = physical NIC, utun/tun/
+// tap/awdl/llw/bridge = virtual tunnel/group names, lo0 = loopback.
+var probeSet = []ifaceAddr{
+	fakeProbe("en0", "192.168.31.116/24", "fe80::1e0a:3a00:1/64"), // real LAN
+	fakeProbe("en1", "10.20.55.20/24"),                           // real LAN (second NIC)
+	fakeProbe("utun3", "198.18.0.1/15"),                          // proxy fake-IP TUN (real 198.18 defect)
+	fakeProbe("bridge0", "169.254.27.197/16"),                    // link-local
+	fakeProbe("awdl0", "fe80::100/64"),                           // AWDL, IPv6 only
+	fakeProbe("lo0", "127.0.0.1/8"),
+}
+
+// TestDetectAddressesFakeIfacesExcludesVirtualTunnels is the red test for the
+// QR host-detection defect (task fix-qr-host-detect). The live machine carries
+// RFC1918 addresses on real NICs (en0/en1) plus a proxy fake-IP TUN
+// (utun3 = 198.18.0.1, RFC2544 benchmark range) and a link-local bridge0. The
+// defect was that 198.18.0.1 won primary and the QR pointed at an unreachable
+// host. The contract now is: RFC1918 physical-NIC addresses rank first, the
+// proxy TUN and link-local must never appear in the candidate list.
+func TestDetectAddressesFakeIfacesExcludesVirtualTunnels(t *testing.T) {
+	addrs := detectAddresses(probeSet)
+
+	var ips []string
+	for _, a := range addrs {
+		ips = append(ips, a.IP.String())
+	}
+	wantFirstTwo := []string{"10.20.55.20", "192.168.31.116"}
+	for i, want := range wantFirstTwo {
+		if len(addrs) < i+1 || addrs[i].IP.String() != want {
+			t.Errorf("candidate[%d] = %v, want %s (RFC1918 real NIC must lead); full list %v",
+				i, ips, want, ips)
+		}
+	}
+	for _, banned := range []string{"198.18.0.1", "169.254.27.197"} {
+		for _, a := range addrs {
+			if a.IP.String() == banned {
+				t.Errorf("candidate list must exclude %s (proxy TUN / link-local), got %v", banned, ips)
+			}
+		}
+	}
+}
+
 // TestHasReachableLAN is the degraded-path red test for the guide's warning:
 // a loopback-only address set must report unreachable (so the guide emits the
 // explicit degraded warning instead of a silently useless QR), while any
@@ -124,7 +186,7 @@ func TestHasReachableLAN(t *testing.T) {
 func TestPrintOnboardingDegradedWarns(t *testing.T) {
 	var buf strings.Builder
 	loopOnly := []Address{{IP: net.ParseIP("127.0.0.1"), Kind: KindLoopback}}
-	if err := printOnboarding(&buf, Onboarding{Token: "tok-x", Port: "9900"}, loopOnly, "127.0.0.1"); err != nil {
+	if err := printOnboarding(&buf, Onboarding{Token: "tok-x", Port: "9900"}, loopOnly, "127.0.0.1", false); err != nil {
 		t.Fatalf("printOnboarding(degraded): %v", err)
 	}
 	if !strings.Contains(buf.String(), "⚠") {
@@ -136,7 +198,7 @@ func TestPrintOnboardingDegradedWarns(t *testing.T) {
 		{IP: net.ParseIP("127.0.0.1"), Kind: KindLoopback},
 		{IP: net.ParseIP("192.168.1.5"), Kind: KindLAN},
 	}
-	if err := printOnboarding(&buf, Onboarding{Token: "tok-x", Port: "9900"}, mixed, "192.168.1.5"); err != nil {
+	if err := printOnboarding(&buf, Onboarding{Token: "tok-x", Port: "9900"}, mixed, "192.168.1.5", false); err != nil {
 		t.Fatalf("printOnboarding(healthy): %v", err)
 	}
 	if strings.Contains(buf.String(), "⚠") {
