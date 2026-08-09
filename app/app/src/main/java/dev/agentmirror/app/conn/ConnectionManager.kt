@@ -197,6 +197,24 @@ class ConnectionManager(
         return true
     }
 
+    /**
+     * 注入一个命名特殊键（input.keys，R-1 快捷键条，017 裁定）。
+     *
+     * 与 [sendInput] 同款决定性链路：input 以 input_ack 完结（003 发送必达），超时/掉线
+     * 判明确失败。keys 不附加回车（快捷键条语义 = 按一下那个键）；text 与 keys 互斥
+     * （契约 §4.2，InputFrame.validate 兜底）。
+     * @return false = 当前不可发送；true = 已送出，结果以 [Listener.onInputResult] 判定。
+     */
+    fun sendInputKeys(ref: String, key: InputKey): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        val reqId = nextReqId++
+        val frame = InputFrame(reqId = reqId, ref = ref, keys = listOf(key))
+        if (!conn.send(frame)) return false
+        pendingInputs[reqId] = PendingInput(clock.nowMs() + inputTimeoutMs)
+        return true
+    }
+
     /** 订阅会话镜像；记簿待重放，已就绪则立发。 */
     fun subscribe(ref: String, rows: Int, cols: Int): Boolean {
         if (state == ConnectionState.STOPPED) return false

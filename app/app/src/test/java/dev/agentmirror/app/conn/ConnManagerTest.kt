@@ -312,6 +312,54 @@ class ConnManagerTest {
     }
 
     @Test
+    fun testInputKeysSendsKeysFrameWithoutText() {
+        // R-1 快捷键条：sendInputKeys 发出 keys 帧（无 text、无附加回车），且与草稿同款
+        // 必达回执（input_ack ok）。契约 §4.2：keys 不附加回车 = 快捷键条语义。
+        val h = Harness()
+        h.start()
+        ready(h.transport())
+        assertTrue(h.manager.sendInputKeys("s1", InputKey.CTRL_C))
+        val sent = h.transport().sentText.map { runCatching { FrameCodec.decode(it) }.getOrNull() }
+        val input = sent.filterIsInstance<InputFrame>().last()
+        assertEquals("s1", input.ref)
+        assertEquals("", input.text) // keys 帧不得带 text（互斥）
+        assertEquals(listOf(InputKey.CTRL_C), input.keys)
+
+        h.transport().deliverText(
+            """{"v":1,"type":"input_ack","payload":{"req_id":${input.reqId},"ok":true}}""",
+        )
+        assertEquals(1, h.listener.inputResults.size)
+        val (reqId, ok, reason) = h.listener.inputResults[0]
+        assertEquals(input.reqId, reqId)
+        assertTrue(ok)
+        assertEquals(null, reason)
+    }
+
+    @Test
+    fun testInputKeysFailureReasonSurfaces() {
+        // keys 帧失败回执同款必达可见：reason 上浮（003 发送必达）。
+        val h = Harness()
+        h.start()
+        ready(h.transport())
+        assertTrue(h.manager.sendInputKeys("s1", InputKey.UP))
+        val input = h.transport().sentText.map { runCatching { FrameCodec.decode(it) }.getOrNull() }
+            .filterIsInstance<InputFrame>().last()
+        h.transport().deliverText(
+            """{"v":1,"type":"input_ack","payload":{"req_id":${input.reqId},"ok":false,"reason":"session_not_found"}}""",
+        )
+        assertEquals(1, h.listener.inputResults.size)
+        assertEquals(false, h.listener.inputResults[0].second)
+        assertEquals("session_not_found", h.listener.inputResults[0].third)
+    }
+
+    @Test
+    fun testInputKeysBeforeReadyFails() {
+        val h = Harness()
+        h.start()
+        assertFalse(h.manager.sendInputKeys("s1", InputKey.TAB)) // 未就绪不可发送
+    }
+
+    @Test
     fun testInputTimeoutIsExplicitFailure() {
         val h = Harness()
         h.start()
