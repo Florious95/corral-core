@@ -44,19 +44,40 @@ data class PairingConfig(
     val token: String,
 )
 
+/** 配对失败原因分类（供 UI 区分超时/拒绝/不可达/解析失败并给对应指引；003 明确报错）。 */
+enum class PairingFailCause {
+    /** 服务端拒绝配对信息（auth 被拒 / 协议拒绝）。 */
+    REJECTED,
+
+    /** 拨号失败 / 地址不可达（缺陷 A 的 TUN 虚拟网卡地址正是此型）。 */
+    UNREACHABLE,
+
+    /** 配对超时：15s 内未完成拨号+auth 握手。 */
+    TIMEOUT,
+
+    /** QR 内容解析失败（坏 JSON / 缺字段 / 坏版本）。 */
+    PARSE_ERROR,
+
+    /** 协议层错误帧 / 本地解码失败。 */
+    PROTOCOL_ERROR,
+}
+
 /** 配对页状态机（003 明确报错：成功/失败都可见，静默失效最高罪）。 */
 sealed interface PairingStatus {
     /** 无在途配对。 */
     data object Idle : PairingStatus
 
-    /** 正在连接试配对（auth 握手验证中）。 */
-    data object Pairing : PairingStatus
+    /** 正在连接试配对（auth 握手验证中）；[targetUrl] 供「连接中… <地址>」进度展示（token 不上屏）。 */
+    data class Pairing(val targetUrl: String) : PairingStatus
 
     /** auth 通过，配对成功（瞬时态，路由层观察后切工作区）。 */
     data object Success : PairingStatus
 
-    /** 失败，[message] 人类可读（恒不含 token 值，协议 §9 红线）。 */
-    data class Failed(val message: String) : PairingStatus
+    /**
+     * 失败，[cause] 供 UI 区分超时/拒绝/不可达/解析失败，
+     * [message] 人类可读（恒不含 token 值，协议 §9 红线）。
+     */
+    data class Failed(val cause: PairingFailCause, val message: String) : PairingStatus
 }
 
 /** QR JSON 解析失败（消息恒为固定文案，绝不带 token 值）。 */

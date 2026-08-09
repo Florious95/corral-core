@@ -1,0 +1,26 @@
+{
+  "task_id": "fix-qr-host-detect",
+  "status": "pass",
+  "summary": "真机验收缺陷 A 修复：QR 主地址原选中代理 fake-IP TUN（实测 198.18.0.1，RFC2544 基准段），手机不可达。重写地址择优——排除 198.18.0.0/15、169.254/16、IPv6；RFC1918 实网卡排最前；新增 -host flag/env（AGENTMIRROR_HOST）显式覆盖一切自动探测；PrintOnboarding 列全部候选地址+完整 ws URL 供手填换选（QR 仍单 url，JSON 契约不变）。红测先行：fake 接口表复现真机快照（含 198.18 TUN 混入），修前红修后绿。",
+  "root_cause": "classifyIP 未排除 RFC2544 基准段（198.18.0.0/15，代理 fake-IP TUN 地址区），defaultRouteSource 拨 UDP 走代理路由选中 198.18.0.1 作为 PrimaryHost → QR 指向对端不可达地址，违反可达性常识红线（CLAUDE.md 工程常识红线第 4 条）。",
+  "changes": [
+    "server/internal/pairing/probe.go: +rfc2544Net（198.18.0.0/15）classifyIP 排除；defaultRouteSource 拒绝 classifyIP 判不可用地址（回归门）；PrimaryHost 尾递归 + AGENTMIRROR_HOST env 覆盖；DetectAddresses 抽 detectAddresses(probes) 纯函数 seam（fake 接口表可注入）；+PrintOnboardingAll 全候选列表 seam",
+    "server/internal/config/config.go: +Host 字段（flag -host + env AGENTMIRROR_HOST）",
+    "server/cmd/agentmirrord/main.go: printPairingGuide 改走 PrintOnboardingAll 列全候选；+hostOverride 参数；+printOnboardingSeamAll seam",
+    "server/internal/pairing/probe_test.go: 红测 TestDetectAddressesFakeIfacesExcludesVirtualTunnels（fake 接口表含 198.18 TUN/169.254 link-local，断言 RFC1918 排前二+排除）；TestClassifyIP +198.18 边界用例",
+    "server/cmd/agentmirrord/main_test.go: +TestPrintPairingGuideHostOverride、+TestPrintPairingGuideListsCandidates"
+  ],
+  "tests": [
+    "红测先行（修前红）：TestDetectAddressesFakeIfacesExcludesVirtualTunnels FAIL——候选列 [10.20.55.20 192.168.31.116 198.18.0.1 127.0.0.1] 含 198.18.0.1（纯产品红，fake 接口表注入无 harness 干扰）",
+    "修后转绿：同测试 PASS——候选 [10.20.55.20 192.168.31.116 127.0.0.1]，198.18.0.1/169.254.27.197 排除",
+    "验收命令 bash -lc 'cd server && go test ./internal/pairing/...' → exit 0",
+    "go vet ./... → exit 0",
+    "go test ./...（全 server）→ 9 包全绿（cmd/agentstate/api/bridge/config/discovery/pairing/protocol/tsnetd）",
+    "go test -race ./internal/pairing/... ./cmd/... → 绿",
+    "TestClassifyIP 边界：198.18.0.1/198.19.255.255 判 skip、198.17.255.255 判 LAN（/15 边界锁定）"
+  ],
+  "notes": "排序契约归属在 DetectAddresses（pairing-security 沉淀坑 1：pickPrimary 只认输入顺序）。红测用 detectAddresses(probes) 纯函数 seam 驱动 fake 接口表，无需触碰真实网络，确定性复现真机快照。defaultRouteSource 回归门：即便路由表选中 198.18/link-local 源地址也拒绝并回退排除感知阶梯。QR JSON 契约不变（仍单 url 字段，Payload struct 未动）；token 纪律不变。",
+  "write_scope_compliance": "仅动 server/internal/pairing/、server/cmd/、server/internal/config/；QR JSON 契约与 token 纪律零改动。",
+  "evidence_file": ".team/evidence/fix-qr-host-detect.json",
+  "leader_note": "leader 复跑测试全绿+真机环境 smoke 实证：198.18 TUN 已从广播中消失，候选表含手机网段地址；-host 覆盖在位。常识红线4（可达性）自证通过。"
+}
