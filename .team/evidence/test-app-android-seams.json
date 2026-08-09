@@ -1,0 +1,38 @@
+{
+  "task_id": "test-app-android-seams",
+  "role": "Android 接缝测试工程师",
+  "status": "delivered",
+  "summary": "四类 Android 接缝零测补齐：NotificationHelper / HttpUrlConnectionUploader / SharedPreferencesPairingConfigStore / StateBadge 语义（Compose rule），共 39 用例全绿；R-7 当期项 StateBadge contentDescription 加法留痕。",
+  "tests": {
+    "service.NotificationHelperTest": 14,
+    "session.HttpUrlConnectionUploaderTest": 10,
+    "pairing.SharedPreferencesPairingConfigStoreTest": 6,
+    "workspace.StateBadgeTest": 9,
+    "total_seams": 39,
+    "all_green": true
+  },
+  "acceptance": {
+    "command": "cd app && ./gradlew -q :app:testDebugUnitTest",
+    "note": "全量 238 用例，39 属本席四类且全绿；唯一 1 红为 pairing/ 域 PairingScreenClockPumpTest.timeoutBecomesVisibleOnScreen（expected Failed(TIMEOUT) got Pairing(...)），非本席 write_scope，leader 已归案 fix-pairing-timeout-pump。"
+  },
+  "write_scope": {
+    "new_tests": [
+      "app/app/src/test/java/dev/agentmirror/app/service/NotificationHelperTest.kt",
+      "app/app/src/test/java/dev/agentmirror/app/session/HttpUrlConnectionUploaderTest.kt",
+      "app/app/src/test/java/dev/agentmirror/app/pairing/SharedPreferencesPairingConfigStoreTest.kt",
+      "app/app/src/test/kotlin/dev/agentmirror/app/workspace/StateBadgeTest.kt"
+    ],
+    "build_gradle_additions": [
+      "app/app/build.gradle.kts: testImplementation(compose-bom/ui-test-junit4) + debugImplementation(ui-test-manifest)  （知识基底 §1 允许的加法性依赖）"
+    ],
+    "prod_sole_exception": "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadge.kt — R-7（017 当期裁定）contentDescription 语义标注加法，行内留痕 // R-7，未改视觉渲染"
+  },
+  "red_test_first": true,
+  "discipline": {
+    "no_real_network": true,
+    "no_emulator": true,
+    "no_git_push": true,
+    "no_local_commit": true,
+    "comment_carrying_code": true
+  }
+}
