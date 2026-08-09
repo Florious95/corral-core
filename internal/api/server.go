@@ -102,10 +102,27 @@ func NewServer(opts Options) *Server {
 	return s
 }
 
-// Close stops the discovery loop. It does not close live connections; the
-// daemon calls it on shutdown after its listeners stop accepting.
+// Close stops the discovery loop and drains every live subscription on every
+// tracked connection so no pipe-pane cat is left attached to a pane when the
+// daemon exits (the graceful-shutdown half of the crash-residue fix, root-cause
+// chain step 2; a SIGKILL path still relies on bridge subscribe's detach-first
+// self-healing — graceful close is never the only line of defense). It does not
+// close live connections; the daemon calls it on shutdown after its listeners
+// stop accepting.
 func (s *Server) Close() {
 	s.loopStop()
+	// Snapshot the tracked connections under the lock, then drain each outside
+	// it: closeSubscriptions takes a per-connection subsMu, so taking
+	// trackersMu here too would invert lock order with registerTracker.
+	s.trackersMu.Lock()
+	conns := make([]*wsConn, 0, len(s.trackers))
+	for c := range s.trackers {
+		conns = append(conns, c)
+	}
+	s.trackersMu.Unlock()
+	for _, c := range conns {
+		c.closeSubscriptions()
+	}
 }
 
 // Handler returns the full HTTP handler: /ws (WebSocket) and /upload

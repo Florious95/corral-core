@@ -322,6 +322,24 @@ func (c *wsConn) subscribed(ref string) bool {
 	return c.subs[ref] != nil
 }
 
+// closeSubscriptions drains every live subscription on this connection —
+// cancelling its relay and detaching its pipe — without closing the connection
+// itself. It is the graceful-shutdown drain: Server.Close calls it on every
+// tracked connection so no pipe-pane cat outlives the daemon (the graceful half
+// of the crash-residue fix, root-cause chain step 2; SIGKILL relies on bridge
+// subscribe's detach-first self-healing instead). Safe to run concurrently with
+// relay/teardown: each sub's cancelOnce serializes detach.
+func (c *wsConn) closeSubscriptions() {
+	c.subsMu.Lock()
+	subs := c.subs
+	c.subs = make(map[string]*subscription)
+	c.subsMu.Unlock()
+	for _, sub := range subs {
+		sub.cancel()
+		sub.detach()
+	}
+}
+
 // subscribeCancel tears down the subscription for ref, if any. It is
 // idempotent: cancelling a session that is not subscribed is not an error
 // (docs/protocol.md §4.2). Returns true if a subscription existed.
