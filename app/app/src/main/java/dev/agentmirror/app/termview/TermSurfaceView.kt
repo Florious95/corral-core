@@ -29,6 +29,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import dev.agentmirror.terminal.Cell
+import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
 import kotlin.math.max
@@ -69,6 +70,12 @@ class TermSurfaceView @JvmOverloads constructor(
         textSize = 44f
         color = Color.WHITE
     }
+
+    /** 字形回退提供者：三槽位 Paint + 槽位判定 + 分段器（单例，首帧懒建）。 */
+    private var glyphProvider: GlyphFontProvider? = null
+
+    private fun glyphs(): GlyphFontProvider =
+        glyphProvider ?: GlyphFontProvider(context).also { glyphProvider = it }
     private val labelBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
@@ -192,33 +199,99 @@ class TermSurfaceView @JvmOverloads constructor(
         drawTextRuns(canvas, cells, rowY)
     }
 
-    /** 扫描 [cells] 的同色连续段（run）：段内一次 drawText，draw x 由格宽累计。 */
+    /**
+     * 扫描 [cells] 的同色连续段（run）：段内按字形槽位再切成子段绘制。
+     *
+     * 颜色段拼接成文本（格列按 cell.width 推进，宽字符占两格、续格占一位），
+     * 交给 [GlyphRunBuilder] 按槽位分段：
+     * - MONO 段 batch 一次 drawText（ASCII 原生等宽，栅格不破坏，draw 数 = 段数）；
+     * - SYSTEM_FALLBACK / POWERLINE 段逐码点按格居中画（fallback advance ≠ 格宽，
+     *   实证 ⠋=22px vs 格 19px，整段连画会漂移，见记忆 term-glyph-fallback-empirics）。
+     */
     private fun drawTextRuns(canvas: Canvas, cells: List<Cell>, rowY: Int) {
-        var runStartPx = 0
-        var x = 0
+        var runStartCol = 0
+        var col = 0
         var runStyle: TerminalColor? = null
         val sb = StringBuilder()
         for (cell in cells) {
             if (cell.width == 0) {
-                x += cellW
+                col += 1 // 宽字符续格占一位，不画
                 continue
             }
             // 同色段延续：append；颜色切换：flush 上一段再开新段。
             if (runStyle != cell.style.fg && sb.isNotEmpty()) {
-                fgPaint.color = colorFor(runStyle ?: TerminalColor.Default, background = false)
-                canvas.drawText(sb.toString(), runStartPx.toFloat(), rowY.toFloat(), fgPaint)
+                drawGlyphRuns(canvas, sb.toString(), runStartCol, rowY, runStyle ?: TerminalColor.Default)
                 sb.clear()
-                runStartPx = x
+                runStartCol = col
             } else if (sb.isEmpty()) {
-                runStartPx = x
+                runStartCol = col
             }
             runStyle = cell.style.fg
             sb.append(cell.text)
-            x += if (cell.width == 2) cellW * 2 else cellW
+            col += cell.width
         }
         if (sb.isNotEmpty()) {
-            fgPaint.color = colorFor(runStyle ?: TerminalColor.Default, background = false)
-            canvas.drawText(sb.toString(), runStartPx.toFloat(), rowY.toFloat(), fgPaint)
+            drawGlyphRuns(canvas, sb.toString(), runStartCol, rowY, runStyle ?: TerminalColor.Default)
+        }
+    }
+
+    /** 画一个颜色段：按字形槽位切成子段后分槽绘制。 */
+    private fun drawGlyphRuns(canvas: Canvas, text: String, startCol: Int, rowY: Int, fg: TerminalColor) {
+        val g = glyphs()
+        val color = colorFor(fg, background = false)
+        for (seg in g.runBuilder.build(text, startCol)) {
+            when (seg.slot) {
+                GlyphSlot.MONO -> {
+                    // 等宽原生段：batch 一次 drawText（textSize/颜色同前，保持既有栅格基线）。
+                    fgPaint.color = color
+                    canvas.drawText(seg.text, seg.startCol * cellW.toFloat(), rowY.toFloat(), fgPaint)
+                }
+                GlyphSlot.SYSTEM_FALLBACK -> {
+                    g.systemPaint.color = color
+                    drawCentered(canvas, g.systemPaint, seg.text, seg.startCol, rowY)
+                }
+                GlyphSlot.POWERLINE -> {
+                    g.powerlinePaint.color = color
+                    drawCentered(canvas, g.powerlinePaint, seg.text, seg.startCol, rowY)
+                }
+            }
+        }
+    }
+
+    /**
+     * 逐格把 [text] 按格居中画（fallback 字形 advance ≠ 格宽，必须逐格定位才能保持
+     * 等宽栅格）。宽字符（CJK/emoji）按 [CharWidth] 占两格居中；紧随主字符的组合/零宽
+     * 码点并入同格一起画（组合字形必须整体渲染，如"你"+尖音符）。基线沿用 rowY（与
+     * batch ASCII 同基线，纵向对齐）。
+     */
+    private fun drawCentered(canvas: Canvas, paint: Paint, text: String, startCol: Int, rowY: Int) {
+        var x = startCol * cellW
+        var i = 0
+        val n = text.length
+        while (i < n) {
+            val cp = text.codePointAt(i)
+            val width = CharWidth.of(cp)
+            val chars = Character.charCount(cp)
+            if (width == 0) {
+                // 段首孤立零宽（构建器已把组合码点并入主字符段，理论边界）：跳过不画。
+                i += chars
+                continue
+            }
+            // 本格主字符 + 紧随的组合/零宽码点（同段内），一次性画（组合字形整体）。
+            val sb = StringBuilder(text.substring(i, i + chars))
+            var j = i + chars
+            while (j < n) {
+                val nc = text.codePointAt(j)
+                if (CharWidth.of(nc) != 0) break
+                sb.append(Character.toChars(nc))
+                j += Character.charCount(nc)
+            }
+            val cellPx = cellW * width
+            val actual = paint.measureText(sb.toString())
+            // 格内水平居中：字形实际宽度小于格宽时居中，大于则轻微左出（不破栅格）。
+            canvas.drawText(sb.toString(), x + (cellPx - actual) / 2f, rowY.toFloat(), paint)
+            x += cellPx
+            i = j
         }
     }
 
@@ -226,7 +299,10 @@ class TermSurfaceView @JvmOverloads constructor(
 
     private fun measureCells() {
         val p = presenter ?: return
-        fgPaint.textSize = p.cellHeight * 0.85f
+        val size = p.cellHeight * 0.85f
+        // 主字体 textSize 决定格宽（等宽栅格基准）；回退槽字体同尺寸，逐格居中使用同指标。
+        fgPaint.textSize = size
+        glyphs().setTextSize(size)
         val metrics = fgPaint.fontMetrics
         cellH = (metrics.descent - metrics.ascent).roundToInt()
         val textW = fgPaint.measureText("W")

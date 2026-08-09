@@ -16,6 +16,12 @@
 
 package dev.agentmirror.app
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -59,44 +65,71 @@ fun AgentMirrorApp(
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
         val session = navState.activeSession
 
-        when {
-            // 会话页优先（在屏会话不被重配打断）。
-            session != null -> SessionRoute(ref = session.first, name = session.second) {
-                navState.activeSession = null
-            }
-            // 配对页：首启无配置，或用户从设置/重配入口进入。
-            navState.showPairing -> PairingRoute(
-                configStore = configStore,
-                onPaired = {
-                    // 配对成功：配置已落库 + ServiceWire 注入（见 PairingRoute），切工作区。
-                    navState.showPairing = false
-                },
-                onSkip = {
-                    // 首启跳过：进空工作区（连接未配置 → 工作区顶栏显示连接中/重配入口）。
-                    navState.showPairing = false
-                },
-            )
-            // 工作区：有配置直进；"重新配对"从设置入口进入（见 WorkspaceScreen 顶栏设置钮）。
-            else -> {
-                // 接线（fix-workspace-wiring）：把 Activity 持有的工作区 VM 接入
-                // ServiceWire.uiConnector 扇出。配对成功切工作区后，conn 层 READY + listing /
-                // list_delta 经此桥进入 VM，列表才渲染（此前 VM 裸建从未接线，uiConnector 全仓
-                // 无调用点，配对成功列表永不显示）。DisposableEffect 同构 SessionRoute：挂载注册 /
-                // 离屏复位，防重复注册与泄漏；断连重挂由 READY+全量 listing 恢复（004 无状态）。
-                DisposableEffect(workspaceViewModel) {
-                    ServiceWire.uiConnector = workspaceViewModel
-                    onDispose {
-                        // 只在仍是本 VM 时复位：避免复位掉新挂载的 VM（防重复注册竞态）。
-                        if (ServiceWire.uiConnector === workspaceViewModel) {
-                            ServiceWire.uiConnector = null
+        // 路由描述值（AnimatedContent 的转场键）：三分支互斥，与原 when 语义一一对应。
+        val route: AppRoute = when {
+            session != null -> AppRoute.Session(ref = session.first, name = session.second)
+            navState.showPairing -> AppRoute.Pairing
+            else -> AppRoute.Workspace
+        }
+
+        // 页面转场（018 §一.6）：淡入 + 轻微缩放进场（无方向性——三路由无严格层级栈，
+        // 方向滑动会在 深链/重配 等非线性跳转下语义错乱）。转场期间新旧屏短暂共存：
+        // uiConnector 挂载安全性依赖两处 DisposableEffect 的同 VM 身份守卫（见下），
+        // 新屏先挂新 VM、旧屏 onDispose 发现已非自己则不复位——不误伤。
+        AnimatedContent(
+            targetState = route,
+            transitionSpec = {
+                (fadeIn(tween(220)) + scaleIn(initialScale = 0.98f, animationSpec = tween(220)))
+                    .togetherWith(fadeOut(tween(90)))
+            },
+            label = "app-route",
+        ) { r ->
+            when (r) {
+                // 会话页优先（在屏会话不被重配打断）。
+                is AppRoute.Session -> SessionRoute(ref = r.ref, name = r.name) {
+                    navState.activeSession = null
+                }
+                // 配对页：首启无配置，或用户从设置/重配入口进入。
+                AppRoute.Pairing -> PairingRoute(
+                    configStore = configStore,
+                    onPaired = {
+                        // 配对成功：配置已落库 + ServiceWire 注入（见 PairingRoute），切工作区。
+                        navState.showPairing = false
+                    },
+                    onSkip = {
+                        // 首启跳过：进空工作区（连接未配置 → 工作区顶栏显示连接中/重配入口）。
+                        navState.showPairing = false
+                    },
+                )
+                // 工作区：有配置直进；"重新配对"从设置入口进入（见 WorkspaceScreen 顶栏设置钮）。
+                AppRoute.Workspace -> {
+                    // 接线（fix-workspace-wiring）：把 Activity 持有的工作区 VM 接入
+                    // ServiceWire.uiConnector 扇出。配对成功切工作区后，conn 层 READY + listing /
+                    // list_delta 经此桥进入 VM，列表才渲染（此前 VM 裸建从未接线，uiConnector 全仓
+                    // 无调用点，配对成功列表永不显示）。DisposableEffect 同构 SessionRoute：挂载注册 /
+                    // 离屏复位，防重复注册与泄漏；断连重挂由 READY+全量 listing 恢复（004 无状态）。
+                    DisposableEffect(workspaceViewModel) {
+                        ServiceWire.uiConnector = workspaceViewModel
+                        onDispose {
+                            // 只在仍是本 VM 时复位：避免复位掉新挂载的 VM（防重复注册竞态）。
+                            if (ServiceWire.uiConnector === workspaceViewModel) {
+                                ServiceWire.uiConnector = null
+                            }
                         }
                     }
+                    WorkspaceScreen(
+                        viewModel = workspaceViewModel,
+                        onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                    )
                 }
-                WorkspaceScreen(
-                    viewModel = workspaceViewModel,
-                    onOpenSession = { ref, name -> navState.activeSession = ref to name },
-                )
             }
         }
     }
+}
+
+/** 根路由三分支的转场键（data class 让同名不同 ref 的会话切换也触发转场）。 */
+private sealed interface AppRoute {
+    data class Session(val ref: String, val name: String) : AppRoute
+    data object Pairing : AppRoute
+    data object Workspace : AppRoute
 }

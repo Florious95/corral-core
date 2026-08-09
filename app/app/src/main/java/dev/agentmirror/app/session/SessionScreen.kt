@@ -20,22 +20,26 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,29 +48,34 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.termview.TermSurfaceView
+import dev.agentmirror.app.ui.theme.MonoFontFamily
+import dev.agentmirror.app.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 会话页 Compose 屏（003 四标准的渲染壳）：终端画布 + 顶部连接条 + 底部输入区。
+ * 会话页 Compose 屏（003 四标准的渲染壳）：终端画布 + 紧凑顶栏 + 底部输入区。018 重设计版。
  *
- * 薄层：所有业务状态与动作在 [SessionViewModel]（纯 JVM 已测），本组合只做绑定——
- * - 终端：[TermSurfaceView] 嵌入 [AndroidView]，注入 [SessionViewModel.presenter]；
- * - 输入条：本地编辑零网络（003 第一条），发送走 VM（input_ack 必达回执）；
- * - 加号：Photo Picker（无权限弹窗）→ multipart 上传 → 主机路径注入光标处；
- * - 快捷键条（R-1，017）：输入条上方，最小集 Esc / Ctrl-C / Tab / ↑ ↓ ← →，
- *   点按即发 keys 帧（不附加回车；回执/错误全部可见）；
- * - 回执/错误/连接状态全部可见（静默失效猎杀）。
+ * 图29/图31 实锤缺陷修复：
+ * - 紧凑顶栏（018 §一.7 顶栏不喧宾夺主）：48dp 单行，会话名等宽**单行中段省略**——
+ *   64 字符名不再换两行压住返回键与状态栏；statusBarsPadding 进 safe-area；
+ * - IME 重排（图31）：MainActivity 已把窗口锁 adjustResize（edge-to-edge 下系统默认
+ *   解析成 pan，整窗上移 + imePadding 双重补偿 = 巨幅空洞的根因）；本屏底部集群
+ *   （状态区+键条+输入条）统一 navigationBarsPadding().imePadding()，键盘弹出时终端区
+ *   weight 收缩内容重排跟随，不留洞；
+ * - 底部集群坐 surfaceContainer 面板底，与终端画布形成明确分区。
+ *
+ * 薄层纪律不变：所有业务状态与动作在 [SessionViewModel]（纯 JVM 已测），本组合只做绑定。
  */
 @Composable
 fun SessionScreen(
@@ -77,7 +86,7 @@ fun SessionScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // 附件选择：Photo Picker（ActivityResultContracts.PickVisualMedia，无权限弹窗）。
+    // 附件选择:Photo Picker(ActivityResultContracts.PickVisualMedia,无权限弹窗)。
     val pickMedia = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? ->
@@ -93,7 +102,7 @@ fun SessionScreen(
         }
     }
 
-    // 回执/错误瞬时态自动收起（"已发送"/"已注入"短暂可见；错误多停留一会儿）。
+    // 回执/错误瞬时态自动收起（「已发送」/「已注入」短暂可见；错误多停留一会儿）。
     LaunchedEffect(viewModel.inputStatus, viewModel.uploadStatus, viewModel.transientError) {
         val holdMs = when {
             viewModel.inputStatus is InputStatus.Failed -> TRANSIENT_MS * 3
@@ -106,11 +115,14 @@ fun SessionScreen(
         viewModel.dismissTransient()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // 顶栏：返回 + 会话名 + 连接状态条。
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
         TopBar(name = name, onBack = onBack, viewModel = viewModel)
 
-        // 终端画布：占满中间区域。
+        // 终端画布：占满中间区域；IME 弹出时本区 weight 收缩（内容重排跟随，图31 修复）。
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -122,68 +134,98 @@ fun SessionScreen(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
-            // "回到底部"悬浮钮（锁定历史时出现，006 交互）。
+            // 「回到底部」悬浮钮（锁定历史时出现，006 交互）。
             if (viewModel.showBackToBottom) {
                 BackToBottomButton(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(16.dp),
+                        .padding(Spacing.lg),
                     onClick = { viewModel.onScrollToBottom() },
                 )
             }
         }
 
-        // 状态区：发送回执 / 上传回执 / 协议错误（明确可见，静默失效猎杀）。
-        StatusArea(viewModel)
-
-        // 快捷键条（R-1，017）：输入条上方，点按即发 keys 帧（input_ack 必达回执）。
-        KeyBar(viewModel = viewModel)
-
-        // 底部输入条：本地编辑零网络 + 加号附件 + 发送。
-        InputBar(
-            viewModel = viewModel,
-            onPickImage = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        )
+        // 底部集群：状态区 + 键条 + 输入条统一坐 surfaceContainer 面板；
+        // navigationBarsPadding().imePadding() 单点承担全部底部 insets（顺序敏感：
+        // 先消费导航栏再补 IME 差值，键盘收起时只让导航栏、弹出时整体贴键盘顶）。
+        Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding(),
+            ) {
+                StatusArea(viewModel)
+                KeyBar(viewModel = viewModel)
+                InputBar(
+                    viewModel = viewModel,
+                    onPickImage = {
+                        pickMedia.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                )
+            }
+        }
     }
 }
 
-/** 顶栏：返回箭头 + 会话名 + 连接状态条。 */
+/**
+ * 紧凑顶栏（图29 修复 + 018 §一.7）：48dp 单行——返回钮 + 会话名（等宽、单行中段省略：
+ * tmux 会话名首尾都是辨识位，中段省略两头都保）。「‹ 返回」文案沿用（e2e 语义树兼容）。
+ * 连接横幅平滑展开收起，READY 无痕。
+ */
 @Composable
 private fun TopBar(
     name: String,
     onBack: () -> Unit,
     viewModel: SessionViewModel,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .statusBarsPadding(),
         ) {
-            TextButton(onClick = onBack) { Text("‹ 返回") }
-            Text(
-                text = name,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        // 连接状态条：READY 时不显示；断连/重连中给明确提示（conn 层自动重连，这里只反映）。
-        viewModel.connectionBanner?.let { banner ->
-            Text(
-                text = banner,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-            )
+                    .defaultMinSize(minHeight = 48.dp)
+                    .padding(horizontal = Spacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onBack) {
+                    Text("‹ 返回", style = MaterialTheme.typography.labelLarge)
+                }
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontFamily = MonoFontFamily,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.MiddleEllipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = Spacing.md),
+                )
+            }
+            // 连接状态横幅：READY 时平滑收起；断连/重连中明确提示（conn 层自动重连，这里只反映）。
+            AnimatedVisibility(visible = viewModel.connectionBanner != null) {
+                Text(
+                    text = viewModel.connectionBanner.orEmpty(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .padding(horizontal = Spacing.pageH, vertical = 6.dp),
+                )
+            }
         }
     }
 }
 
-/** 底部输入条：加号（附件） + 草稿框 + 发送。 */
+/** 底部输入条：加号（附件） + 草稿框（圆角胶囊） + 发送。 */
 @Composable
 private fun InputBar(
     viewModel: SessionViewModel,
@@ -192,26 +234,38 @@ private fun InputBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .imePadding()
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = Spacing.sm, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         // 加号：相册/拍照（Photo Picker，无权限弹窗）→ 上传 → 路径注入。
         IconButton(
             onClick = onPickImage,
             enabled = viewModel.uploadStatus !is UploadStatus.Uploading,
         ) {
-            Text("＋", style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = "＋",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { contentDescription = "添加图片附件" },
+            )
         }
         OutlinedTextField(
             value = viewModel.textFieldValue,
             onValueChange = { viewModel.textFieldValue = it },
-            placeholder = { Text("输入指令…") },
+            placeholder = {
+                Text("输入指令…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            },
             modifier = Modifier.weight(1f),
             enabled = viewModel.inputStatus !is InputStatus.Sending,
             maxLines = 4,
+            shape = MaterialTheme.shapes.large,
+            colors = OutlinedTextFieldDefaults.colors(
+                // 输入条坐在 surfaceContainer 面板上，草稿框用更低一层的底色拉开层次。
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
         )
         // 发送：一次性注入并回车（本地先校验可发送性，未就绪立即报错）。
         TextButton(
@@ -229,8 +283,10 @@ private fun InputBar(
 /**
  * 快捷键条（R-1，017）：输入条上方，最小集 Esc / Ctrl-C / Tab / ↑ ↓ ← →。
  *
- * 每个键点按即发 keys 帧（走 VM [SessionViewModel.sendKey]，input_ack 必达回执——
- * 003 发送必达）；在途发送（InputStatus.Sending）时整体置灰，与草稿共用发送闸。
+ * 键帽升级为 tonal Surface 芯片：ripple 点击态 + M3 最小 48dp 触控目标（Surface onClick
+ * 自动外扩触控区，视觉高度不变，018 §一.4/一.6）；窄屏横向滚动不折行。
+ * 每键点按即发 keys 帧（走 VM [SessionViewModel.sendKey]，input_ack 必达回执——003 发送必达）；
+ * 在途发送（InputStatus.Sending）时整体置灰，与草稿共用发送闸。
  * 文案锁中文（R-6 当期裁定）；每键带 contentDescription 语义标注（R-7 顺带）。
  */
 @Composable
@@ -239,20 +295,27 @@ private fun KeyBar(viewModel: SessionViewModel) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         for (entry in KEY_BAR_ENTRIES) {
-            Text(
-                text = entry.label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
-                    .semantics { contentDescription = entry.contentDescription }
-                    .clickable(enabled = enabled) { viewModel.sendKey(entry.key) }
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            )
+            Surface(
+                onClick = { viewModel.sendKey(entry.key) },
+                enabled = enabled,
+                shape = MaterialTheme.shapes.extraSmall,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ) {
+                Text(
+                    text = entry.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontFamily = MonoFontFamily,
+                    modifier = Modifier
+                        .semantics { contentDescription = entry.contentDescription }
+                        .padding(horizontal = Spacing.md, vertical = 6.dp),
+                )
+            }
         }
     }
 }
@@ -275,7 +338,10 @@ private val KEY_BAR_ENTRIES = listOf(
     KeyBarEntry("→", InputKey.RIGHT, "右方向键"),
 )
 
-/** 回执/错误状态区：发送回执、上传回执、协议/解码错误全部明确可见。 */
+/**
+ * 回执/错误状态区：发送回执、上传回执、协议/解码错误全部明确可见（003 静默失效猎杀）。
+ * 平滑展开收起（AnimatedVisibility 替代旧版 2dp Spacer 占位闪跳，018 §一.6）。
+ */
 @Composable
 private fun StatusArea(viewModel: SessionViewModel) {
     val message = when (val s = viewModel.inputStatus) {
@@ -290,39 +356,46 @@ private fun StatusArea(viewModel: SessionViewModel) {
         UploadStatus.Idle -> null
     } ?: viewModel.transientError
 
-    if (message != null) {
+    AnimatedVisibility(visible = message != null) {
         val isError = viewModel.inputStatus is InputStatus.Failed ||
             viewModel.uploadStatus is UploadStatus.Failed ||
             viewModel.transientError != null
         Text(
-            text = message,
+            text = message.orEmpty(),
             style = MaterialTheme.typography.labelMedium,
             color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
+                .padding(horizontal = Spacing.pageH, vertical = Spacing.xs),
         )
-    } else {
-        Spacer(Modifier.height(2.dp))
     }
 }
 
-/** "回到底部"悬浮钮（锁定历史时点击恢复跟随，006）。 */
+/** 「回到底部」悬浮钮（锁定历史时点击恢复跟随，006）：tonal 胶囊 + ripple。 */
 @Composable
 private fun BackToBottomButton(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    Text(
-        text = "回到底部",
-        style = MaterialTheme.typography.labelLarge,
-        color = Color.White,
-        modifier = modifier
-            .background(Color(0xB04A4A4A), shape = MaterialTheme.shapes.small)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    )
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedPill,
+        color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+    ) {
+        Text(
+            text = "↓ 回到底部",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        )
+    }
 }
+
+/** 悬浮钮胶囊形状（全圆角）。 */
+private val RoundedPill = androidx.compose.foundation.shape.RoundedCornerShape(50)
 
 /**
  * 上传已选图片：读 URI 字节 → 构造 [Attachment] → VM 上传（URI 读取与网络都在 IO 线程，

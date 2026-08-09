@@ -31,21 +31,31 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +63,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -63,16 +74,23 @@ import com.google.zxing.DecodeHintType
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
+import dev.agentmirror.app.ui.theme.MonoFontFamily
+import dev.agentmirror.app.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import java.nio.ByteBuffer
 
 /**
- * 配对页 Compose 屏（薄渲染壳）：扫码 view + 手填兜底表单 + TS token 占位入口。
+ * 配对页 Compose 屏（薄渲染壳）：扫码卡 + 手填兜底卡 + TS token 占位卡。018 重设计版。
  *
- * 所有业务状态与动作在 [PairingViewModel]（纯 JVM 已测）；本组合只做绑定：
- * - 扫码：CameraX 分析流 → ZXing 解码 QR → [PairingViewModel.onQrText]（零 GMS，008）；
- * - 手填：地址 + token 兜底（扫码不可用/相机被拒时）；
- * - TS token：仅入口占位（app-tsnet 接入前禁用，接入选单回填）。
+ * 视觉重做要点：
+ * - safe-area：顶栏 statusBarsPadding，滚动区尾部 navigationBarsPadding + imePadding
+ *   （手填表单聚焦时键盘不遮挡输入，018 §一.2）；
+ * - 三段内容全部升级为 surfaceContainer 圆角卡（M3 分组语言，替代裸文本直排）；
+ * - 状态区专门设计：进行中=进度横幅（spinner+地址）、失败=错误卡+重试、成功=确认横幅
+ *   （018 §一.5 状态可视；003 静默失效最高罪）。
+ *
+ * 业务绑定不变：扫码 CameraX→ZXing→[PairingViewModel.onQrText]（零 GMS，008）；
+ * 手填兜底；TS token 占位（app-tsnet 接入前禁用）。
  */
 @Composable
 fun PairingScreen(
@@ -94,7 +112,7 @@ fun PairingScreen(
 
     val status = viewModel.pairingStatus
 
-    // 时钟泵：配对超时裁决的唯一生产节奏（红线5 失败可见，同构 SessionScreen.kt:85）。
+    // 时钟泵：配对超时裁决的唯一生产节奏（红线5 失败可见，同构 SessionScreen 时钟泵）。
     // 缺陷实锤：此前全仓唯一 onTick 调用在 SessionScreen（那是 SessionViewModel 的），
     // 配对页无人调 onTick → PAIR_TIMEOUT_MS 永不触发 → 地址不可达/握手静默挂起时无限
     // 「连接中…」。LaunchedEffect 随本组合生命周期启停：配对页离屏（成功路由/跳过/销毁）
@@ -113,14 +131,20 @@ fun PairingScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
         TopBar(onSkip = onSkip)
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = Spacing.pageH)
+                .navigationBarsPadding()
+                .imePadding(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // 扫码区：有权限渲染 CameraX 预览；无权限给授权按钮 + 手填兜底提示。
             if (hasCameraPermission) {
@@ -130,30 +154,67 @@ fun PairingScreen(
             }
             ManualFormCard(viewModel)
             TsTokenCard()
-            StatusArea(status, onRetry = { viewModel.retry() })
+            StatusArea(
+                status = status,
+                onRetry = { viewModel.retry() },
+                // fix-pairing-candidates：失败后候选列表可见可点（一键重试单项，主选打头）。
+                candidateUrls = viewModel.candidateUrls,
+                onRetryCandidate = { viewModel.retryCandidate(it) },
+            )
+            // 滚动尾部呼吸位（卡片不贴屏幕底）。
+            Box(Modifier.height(Spacing.sm))
         }
     }
 }
 
-/** 顶栏：标题 + 「以后再说」跳过（首启可跳过，从设置可随时重配）。 */
+/** 顶栏：标题 + 副标题引导 + 「以后再说」跳过（首启可跳过，从设置可随时重配）。 */
 @Composable
 private fun TopBar(onSkip: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .statusBarsPadding()
+            .defaultMinSize(minHeight = 56.dp)
+            .padding(horizontal = Spacing.pageH, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "连接主机",
-            style = MaterialTheme.typography.titleLarge,
+        Column(
             modifier = Modifier.weight(1f),
-        )
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = "连接主机",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = "镜像主机 tmux 里的 Agent 终端",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         TextButton(onClick = onSkip) { Text("以后再说") }
     }
 }
 
-/** 扫码卡：CameraX 预览 + ZXing 分析。 */
+/** 分组卡容器：三段内容统一的 surfaceContainer 圆角卡壳（M3 分组语言）。 */
+@Composable
+private fun SectionCard(content: @Composable () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            content()
+        }
+    }
+}
+
+/** 扫码卡：CameraX 预览（圆角裁切）+ ZXing 分析。 */
 @Composable
 private fun ScanCard(viewModel: PairingViewModel) {
     val context = LocalContext.current
@@ -198,13 +259,18 @@ private fun ScanCard(viewModel: PairingViewModel) {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("扫码连接", style = MaterialTheme.typography.titleMedium)
+    SectionCard {
+        Text(
+            text = "扫码连接",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .clip(MaterialTheme.shapes.small)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         ) {
             AndroidView(
                 factory = { ctx ->
@@ -236,12 +302,13 @@ private fun ScanCard(viewModel: PairingViewModel) {
             Text(
                 text = "已识别 · 正在连接 $url",
                 style = MaterialTheme.typography.labelSmall,
+                fontFamily = MonoFontFamily,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Text(
             text = "对准主机终端上的二维码即可自动配对。",
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -250,34 +317,78 @@ private fun ScanCard(viewModel: PairingViewModel) {
 /** 相机未授权卡：明确引导授权 + 提示可手填兜底（不静默，003）。 */
 @Composable
 private fun NoPermissionCard(onRequest: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("扫码连接", style = MaterialTheme.typography.titleMedium)
+    SectionCard {
         Text(
-            text = "扫码需要相机权限。\n未授权时请改用下方手填连接。",
+            text = "扫码连接",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "扫码需要相机权限。未授权时请改用下方手填连接。",
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Button(onClick = onRequest) { Text("授予相机权限") }
     }
 }
 
-/** 手填兜底：地址 + token（扫码不可用/被拒时）。 */
+/** 手填兜底：地址 + token（扫码不可用/被拒时）。等宽输入（地址/token 都是机器串）。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ManualFormCard(viewModel: PairingViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("手填连接", style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(
-            value = viewModel.manualUrl,
-            onValueChange = { viewModel.manualUrl = it },
-            label = { Text("服务端 ws 地址") },
-            placeholder = { Text("ws://192.168.1.5:9900/ws") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+    val candidates = viewModel.candidateUrls
+    // 手填地址候选下拉（fix-pairing-candidates）：有候选时地址框旁出「▾」，可从候选选。
+    var menuExpanded by remember { mutableStateOf(false) }
+    SectionCard {
+        Text(
+            text = "手填连接",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
         )
+        ExposedDropdownMenuBox(
+            expanded = menuExpanded && candidates.isNotEmpty(),
+            onExpandedChange = { menuExpanded = it },
+        ) {
+            OutlinedTextField(
+                value = viewModel.manualUrl,
+                onValueChange = { viewModel.manualUrl = it },
+                label = { Text("服务端 ws 地址") },
+                placeholder = { Text("ws://192.168.1.5:9900/ws", fontFamily = MonoFontFamily) },
+                singleLine = true,
+                shape = MaterialTheme.shapes.small,
+                colors = manualFieldColors(),
+                trailingIcon = {
+                    if (candidates.isNotEmpty()) {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+            )
+            DropdownMenu(
+                expanded = menuExpanded && candidates.isNotEmpty(),
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                candidates.forEach { url ->
+                    DropdownMenuItem(
+                        text = { Text(url, fontFamily = MonoFontFamily) },
+                        onClick = {
+                            // 选中候选回填地址框（selectCandidateUrl），用户可改后「连接」。
+                            viewModel.selectCandidateUrl(url)
+                            menuExpanded = false
+                        },
+                    )
+                }
+            }
+        }
         OutlinedTextField(
             value = viewModel.manualToken,
             onValueChange = { viewModel.manualToken = it },
             label = { Text("配对 token") },
             singleLine = true,
+            shape = MaterialTheme.shapes.small,
+            colors = manualFieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
         viewModel.formError?.let { err ->
@@ -297,11 +408,22 @@ private fun ManualFormCard(viewModel: PairingViewModel) {
     }
 }
 
+/** 手填输入框配色：卡内输入用更低一层底色拉开层次（与会话页草稿框同语法）。 */
+@Composable
+private fun manualFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+)
+
 /** TS token 入口（占位）：App 内嵌 tailscale 归 app-tsnet 任务；接入前禁用并说明。 */
 @Composable
 private fun TsTokenCard() {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Tailscale 入网（可选）", style = MaterialTheme.typography.titleMedium)
+    SectionCard {
+        Text(
+            text = "Tailscale 入网（可选）",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         OutlinedTextField(
             value = "",
             onValueChange = {},
@@ -309,36 +431,104 @@ private fun TsTokenCard() {
             enabled = false,
             supportingText = { Text("即将推出：填入后扫码即自动加入 tailnet。") },
             singleLine = true,
+            shape = MaterialTheme.shapes.small,
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
-/** 配对状态区：进行中/成功/失败全部明确可见（003 静默失效最高罪）。 */
+/**
+ * 配对状态区（018 §一.5 专门设计）：进行中=tonal 进度横幅；成功=确认横幅；
+ * 失败=错误卡 + 重试按钮。全部明确可见（003 静默失效最高罪）。
+ */
 @Composable
-private fun StatusArea(status: PairingStatus, onRetry: () -> Unit) {
+private fun StatusArea(
+    status: PairingStatus,
+    onRetry: () -> Unit,
+    candidateUrls: List<String>,
+    onRetryCandidate: (String) -> Unit,
+) {
     when (status) {
         PairingStatus.Idle -> Unit
-        is PairingStatus.Pairing -> Text(
-            // 整改点①：识别成功立即自动配对并显示「连接中…」进度态，含目标地址（token 不上屏，§9）。
-            text = "连接中… ${status.targetUrl}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        PairingStatus.Success -> Text(
-            text = "配对成功！",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        is PairingStatus.Failed -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        is PairingStatus.Pairing -> Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                // 整改点①：识别成功立即自动配对并显示「连接中…」进度态，含目标地址（token 不上屏，§9）。
+                Text(
+                    text = "连接中… ${status.targetUrl}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+        }
+        PairingStatus.Success -> Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text(
-                text = status.message,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.error,
+                text = "配对成功！",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
             )
-            if (status.cause != PairingFailCause.PARSE_ERROR) {
-                // 整改点②：失败给显式报错 + 重试按钮（解析失败无配置，重试无意义，应重扫/手填）。
-                Button(onClick = onRetry) { Text("重试") }
+        }
+        is PairingStatus.Failed -> Surface(
+            color = MaterialTheme.colorScheme.errorContainer,
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                Text(
+                    text = status.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                if (status.cause != PairingFailCause.PARSE_ERROR) {
+                    // 整改点②：失败给显式报错 + 重试按钮（解析失败无配置，重试无意义，应重扫/手填）。
+                    Button(onClick = onRetry) { Text("重试") }
+                }
+                if (candidateUrls.isNotEmpty()) {
+                    // fix-pairing-candidates：全部候选失败后候选列表可见可点——一键重试单项。
+                    // 可点行沿用 errorContainer 卡语言 + Mono 等宽；labelMedium 行高接近 48dp 触控。
+                    Text(
+                        text = "候选地址（点选一项重试）",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    candidateUrls.forEach { url ->
+                        Surface(
+                            onClick = { onRetryCandidate(url) },
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = MaterialTheme.colorScheme.errorContainer,
+                        ) {
+                            Text(
+                                text = url,
+                                fontFamily = MonoFontFamily,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
