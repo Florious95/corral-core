@@ -61,11 +61,16 @@ class PairingViewModelTest {
         val transports = mutableListOf<FakeWebSocketTransport>()
         var nextConfig: ConnectionConfig? = null
 
+        /** 下一次拨号脚本（默认成功）；见 [dialFails]。 */
+        var nextDialScript: List<Boolean>? = null
+
         val vm = PairingViewModel(
             configStore = store,
             connectionFactory = { cfg ->
                 nextConfig = cfg
                 val t = FakeWebSocketTransport()
+                nextDialScript?.let { t.dialScript = it }
+                nextDialScript = null
                 transports.add(t)
                 ConnectionManager(
                     config = cfg,
@@ -77,6 +82,11 @@ class PairingViewModelTest {
         )
 
         fun lastTransport(): FakeWebSocketTransport = transports.last()
+
+        /** 让下一次配对拨号失败（模拟地址不可达——缺陷 A 的 TUN 地址场景）。 */
+        fun dialFails() {
+            nextDialScript = listOf(false)
+        }
 
         /** 拨号成功 + auth_ack ok → READY（配对成功）。 */
         fun authOk() {
@@ -155,6 +165,32 @@ class PairingViewModelTest {
         val st = h.vm.pairingStatus
         assertTrue(st is PairingStatus.Failed)
         assertTrue((st as PairingStatus.Failed).message.contains("地址"))
+    }
+
+    // ---- 扫码回填 + 拨号失败快反（fix-pairing-scan-flow 红测：修前红）----
+
+    @Test
+    fun scanAutoFillsManualFormForEditRetry() {
+        val h = Harness()
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC123","ts_authkey":""}""")
+        // 缺陷 B 整改点③：识别值自动回填手填表单（url+token 落输入框），
+        // 用户可改地址重试——正是绕过缺陷 A（TUN 地址不可达）的自救通路。
+        assertEquals("ws://192.168.1.5:9900/ws", h.vm.manualUrl)
+        assertEquals("ABC123", h.vm.manualToken)
+    }
+
+    @Test
+    fun scanDialFailureSurfacesImmediatelyNotSilent() {
+        val h = Harness()
+        h.dialFails()
+        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC"}""")
+        // 缺陷 B 整改点②：拨号失败（地址不可达）必须立即显式失败，
+        // 而不是静默挂起 15 秒等超时（003 静默失效最高罪）。
+        val st = h.vm.pairingStatus
+        assertTrue(st is PairingStatus.Failed)
+        assertTrue((st as PairingStatus.Failed).message.contains("不可达"))
+        // 失败不落配置（已有配置不被污染）。
+        assertNull(h.store.saved)
     }
 
     // ---- 手填（兜底入口）----
