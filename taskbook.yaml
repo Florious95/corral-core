@@ -440,6 +440,19 @@ tasks:
     evidence: ".team/evidence/fix-recovery-baseline.json"
     contention: impl
 
+  - id: fix-release-test-host
+    goal: >
+      基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
+      测试（StateBadgeTest/WorkspaceWiringTest/PairingScreenClockPumpTest）统一 Unable to resolve
+      activity。根因 ui-test-manifest 仅 debugImplementation，release 单测变体无宿主 Activity。
+      修复方向自选（testImplementation 迁移/变体豁免/显式 test manifest），验收=双变体全绿。
+      gate 当前跑 debug 变体不挡门，P2 排期。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest :app:testReleaseUnitTest'"]
+    deps: ["test-app-android-seams"]
+    write_scope: ["app/app/build.gradle.kts", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-release-test-host.json"
+    contention: none
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
