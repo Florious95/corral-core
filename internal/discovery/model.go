@@ -34,6 +34,14 @@ type Pane struct {
 	// e.g. "zsh" while a shell is in the foreground.
 	Command string
 
+	// PanePID is tmux #{pane_pid}, the PID of the pane's first process. It is
+	// additive input for the state-wiring layer (task fix-state-wiring): the
+	// agent identifier walks the pane's process tree from this root to decide
+	// which agent CLI runs in a wrapper pane (pane_current_command=bash).
+	// Zero when the format could not parse a PID (safe: identification
+	// degrades to unknown, requirement 008 isolation law).
+	PanePID int
+
 	// Width and Height are the pane's character-cell dimensions.
 	Width  int
 	Height int

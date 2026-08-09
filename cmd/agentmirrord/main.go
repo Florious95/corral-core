@@ -97,11 +97,20 @@ func run(args []string) int {
 		"list_interval", cfg.ListInterval,
 	)
 
+	// Wire the agent-state pipeline behind the StateProvider seam (task
+	// fix-state-wiring, defect D-1). Before this the provider defaulted to
+	// always-unknown, so every session rendered grey and blocked/done
+	// notifications never fired. The provider runs its own background sampling
+	// (bounded IO, TTL cache) and is closed with the api server.
+	stateProvider := api.NewStateProvider(logger)
+	defer stateProvider.Close()
+
 	// The API server consumes the resolved settings. The token is write-only:
 	// it is passed into the validator seam and never logged or echoed here
 	// (docs/protocol.md §9).
 	apiServer := api.NewServer(api.Options{
 		Token:          token,
+		StateProvider:  stateProvider,
 		UploadDir:      cfg.UploadDir,
 		MaxUploadBytes: cfg.MaxUploadBytes,
 		MaxInputBytes:  int(cfg.MaxInputBytes),

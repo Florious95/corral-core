@@ -63,8 +63,8 @@ type Server struct {
 	// #fix-daemon-idle-cpu: unconditional ticks burned 17.5% CPU per orphan).
 	// wakeCh is a capacity-1 signal that the count just went 0→1, so the loop
 	// runs a fresh full scan immediately instead of waiting for the next tick.
-	authed  atomic.Int64
-	wakeCh  chan struct{}
+	authed atomic.Int64
+	wakeCh chan struct{}
 }
 
 // NewServer constructs the API server from Options. Zero values use the

@@ -16,8 +16,9 @@ import (
 // server in one query. Fields are "|"-separated; the last field is
 // "<width>x<height>". The chosen fields are the two-level model inputs:
 // session name (label only), window index, pane id, cwd (grouping key),
-// foreground command, and dimensions.
-const paneFormat = "#{session_name}|#{window_index}|#{pane_id}|#{pane_current_path}|#{pane_current_command}|#{pane_width}x#{pane_height}"
+// foreground command, pane pid (state-wiring additive input, task
+// fix-state-wiring), and dimensions.
+const paneFormat = "#{session_name}|#{window_index}|#{pane_id}|#{pane_current_path}|#{pane_current_command}|#{pane_pid}|#{pane_width}x#{pane_height}"
 
 // socketTimeout bounds a single tmux query against a single socket so a hung
 // server cannot stall the whole scan. A server that does not answer within
@@ -165,7 +166,7 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 // so the caller can skip the offending pane without failing the whole scan.
 func parsePaneLine(line string) (Pane, bool) {
 	parts := strings.Split(line, "|")
-	if len(parts) != 6 {
+	if len(parts) != 7 {
 		return Pane{}, false
 	}
 
@@ -173,7 +174,14 @@ func parsePaneLine(line string) (Pane, bool) {
 	if err != nil {
 		return Pane{}, false
 	}
-	dims := strings.SplitN(parts[5], "x", 2)
+	// PanePID is additive (state-wiring input). A missing or non-numeric PID
+	// degrades the pane to PID 0; the consumer treats 0 as "no process tree"
+	// and identifies by command/title alone — never a scan failure (008).
+	pid, err := strconv.Atoi(parts[5])
+	if err != nil {
+		pid = 0
+	}
+	dims := strings.SplitN(parts[6], "x", 2)
 	if len(dims) != 2 {
 		return Pane{}, false
 	}
@@ -192,6 +200,7 @@ func parsePaneLine(line string) (Pane, bool) {
 		PaneID:      parts[2],
 		CWD:         parts[3],
 		Command:     parts[4],
+		PanePID:     pid,
 		Width:       width,
 		Height:      height,
 	}, true

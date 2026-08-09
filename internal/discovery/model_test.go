@@ -11,7 +11,7 @@ import (
 // TestParsePaneLineValid checks that a well-formed paneFormat line maps to the
 // expected Pane fields.
 func TestParsePaneLineValid(t *testing.T) {
-	line := "alpha|2|%3|/workspaces/eng|zsh|120x30"
+	line := "alpha|2|%3|/workspaces/eng|zsh|4242|120x30"
 	p, ok := parsePaneLine(line)
 	if !ok {
 		t.Fatalf("parsePaneLine(%q) unexpectedly rejected a valid line", line)
@@ -22,6 +22,7 @@ func TestParsePaneLineValid(t *testing.T) {
 		PaneID:      "%3",
 		CWD:         "/workspaces/eng",
 		Command:     "zsh",
+		PanePID:     4242,
 		Width:       120,
 		Height:      30,
 	}
@@ -34,13 +35,14 @@ func TestParsePaneLineValid(t *testing.T) {
 // ok=false (and never panic), so the scan can skip them.
 func TestParsePaneLineMalformed(t *testing.T) {
 	cases := []string{
-		"",                            // empty
-		"a|0|%0|cwd|cmd",              // too few fields
-		"a|0|%0|cwd|cmd|80x24|x",      // too many fields
-		"a|notanint|%0|cwd|cmd|80x24", // non-integer window index
-		"a|0|%0|cwd|cmd|80",           // size missing "x"
-		"a|0|%0|cwd|cmd|ax24",         // non-integer width
-		"a|0|%0|cwd|cmd|80xb",         // non-integer height
+		"",                                // empty
+		"a|0|%0|cwd|cmd",                  // too few fields
+		"a|0|%0|cwd|cmd|80x24|x|y",        // too many fields
+		"a|notanint|%0|cwd|cmd|7|80x24",   // non-integer window index
+		"a|0|%0|cwd|cmd|7|80",             // size missing "x"
+		"a|0|%0|cwd|cmd|7|ax24",           // non-integer width
+		"a|0|%0|cwd|cmd|7|80xb",           // non-integer height
+		"a|0|%0|cwd|cmd|7|80x24|trailing", // stray trailing field
 	}
 	for _, line := range cases {
 		if p, ok := parsePaneLine(line); ok {
