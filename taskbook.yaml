@@ -400,6 +400,33 @@ tasks:
     evidence: ".team/evidence/test-app-android-seams.json"
     contention: none
 
+  - id: fix-workspace-wiring
+    goal: >
+      修复 e2e-layer2-harden 取证实锤缺陷①（阻断配对后进列表，真机 T1 必挂）：WorkspaceViewModel
+      的 onConnectionStateChanged/onFrame 入口（WorkspaceViewModel.kt:109/117）全仓无调用点——
+      WorkspaceScreen 的 VM 在 AgentMirrorApp.kt:53 remember 裸建，从未挂到 ServiceWire.uiConnector，
+      配对成功切屏后收不到 READY/listing，永远"连接中…"空白。修复：与 SessionRoute.kt:72 同构的
+      DisposableEffect 接线。红测先行：Robolectric/JVM 断言工作区 VM 经 uiConnector 收到
+      READY+listing 后渲染列表状态。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Workspace*\"'"]
+    deps: ["workspace-ui", "fg-service"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/workspace/", "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-workspace-wiring.json"
+    contention: impl
+
+  - id: fix-pairing-timeout-pump
+    goal: >
+      修复 e2e-layer2-harden 取证实锤缺陷②（红线5 失败可见违反）：PairingViewModel.onTick
+      （PairingViewModel.kt:147）生产无人调用——配对页无时钟泵，PAIR_TIMEOUT_MS=15s 永不触发，
+      地址不可达/握手失败时无限"连接中…"，fix-pairing-scan-flow 的超时五分类报错成死代码。
+      修复：PairingScreen 加 LaunchedEffect 时钟泵（与 SessionScreen.kt:85 同构）。红测先行：
+      JVM 假时钟断言超时→Failed(TIMEOUT) 上屏。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'"]
+    deps: ["fix-pairing-scan-flow"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-pairing-timeout-pump.json"
+    contention: impl
+
   # ---------- 横切 ----------
   - id: test-gate
     goal: >
