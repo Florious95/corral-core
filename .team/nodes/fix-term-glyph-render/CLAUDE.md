@@ -1,39 +1,28 @@
-# 知识基底 · fix-term-glyph-render（终端豆腐块——字形回退链）
+# 知识基底 · fix-term-glyph-render（tools/basegen.py 编译产物——手工编辑无效，重编请改素材源后重跑）
 
-## 0. 任务（taskbook.yaml#fix-term-glyph-render）
-- 真机实锤（图 29/30）：终端画面大片 ■ 黑块，Claude Code TUI 的界面元素（旋转指示、进度块、框线）整段变豆腐。根因方向：终端画布用单一等宽 Typeface 绘制，Android 默认 monospace 覆盖面窄——盲文点阵 U+2800-28FF（spinner 常用）、块元素 U+2580-259F、框线 U+2500-257F 部分、Powerline 私有区 U+E0B0+、部分符号无字形。Canvas drawText 不做系统级字体回退（TextView 会，裸 Paint 不会）→ 缺字即豆腐。
-- 修复：字形回退链——绘制前按字符（codepoint）用 `paint.hasGlyph()` 检测，缺字回退到候选 Typeface 序列（系统 sans/symbol 字体等，实测哪些系统字体有这些区段；Typeface.create 缓存防抖）；宽度强制单元格对齐（回退字形宽度≠等宽单元格时居中裁剪/缩放绘制，禁止破坏列对齐）。双宽（CJK/emoji）测量既有逻辑不回退（已有 wcwidth 处理，验证不破坏）。
-- 红测先行：夹具字符串覆盖 盲文轮转符/块元素/框线/Powerline/CJK/emoji 混排——逐字符断言「hasGlyph(主字体) 为假的字符经回退链后有字形可绘」+列对齐测量断言。JVM 层（:terminal 纯 JVM 不涉 Android Paint）测网格/测量语义；termview 层（app 模块，Robolectric 有 Paint）测回退链选择。
-- 验收：`cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest` 全绿；模拟器会话页截图（真实 claude 会话画面）对照留档 e2e/artifacts/ui-review/term-glyph-after.png。
-- 红线：禁止整体换字体牺牲等宽（终端本体必须等宽栅格）；:terminal 纯 JVM 模块禁止引 Android 依赖（008 隔离，回退链属 termview 渲染层）。
+## 1. 任务信封（taskbook.yaml 原文，机械抽取）
+```yaml
+  - id: fix-term-glyph-render
+    goal: >
+      P0（三次真机实证，图29）：终端画面大片 ■ 豆腐块——Android 默认 monospace 缺字形
+      （Claude Code TUI 重度使用盲文旋转符 U+28xx、制表符/框线、Powerline 私有区、特殊符号）。
+      修复：终端画布字形回退链（paint.hasGlyph 检测缺字→按字符逐段回退系统字体/内置兜底），
+      宽字符（CJK/emoji 双宽）测量与列对齐不破坏。红测先行：夹具字符串（盲文轮转/框线/
+      CJK/emoji 混排）逐字符 hasGlyph+测量断言；模拟器会话页截图对照留档。禁止整体换字体
+      牺牲等宽对齐。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'"]
+    deps: ["term-view"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-glyph-render.json"
+    contention: impl
+```
 
-## 1. 现场基
-- 渲染画布：app/app/src/main/java/dev/agentmirror/app/termview/（Canvas 栅格绘制、Typeface 选择处 grep Typeface/drawText）；:terminal 模块=纯 JVM 引擎（feed/网格/damage），字形无关——大概率只动 termview。
-- 双宽处理：termview 测量逻辑（wcwidth 类）现状先读。
-- **并行环境**：ui-redesign 席位动 Screen 层视觉（不进 termview 画布内部）；你只动 termview/ 与 :terminal（如需）+测试。每次落盘保持可编译。
-- 真实样本：Claude Code TUI 常用字符实测（✳✻✽ 及 U+28xx 盲文轮转、▁▂▃ 块、╭─╮ 圆角框线）——从 e2e 隔离会话 capture-pane 取真实字节做夹具最稳。
-
-## 2. 需求基（指针）
-1. requirement-base/entries/018 标准7（终端页专项：字形完整/等宽对齐）
-2. requirement-base/entries/006（秒开与本地滚动——渲染性能不得回退，回退链要有缓存）
-3. docs/scenario-coverage.md C 矩阵（终端内容保真）
-
-## 3. 经验基
-- hasGlyph 逐字符调用有开销：按 codepoint 结果缓存（LRU/数组），滚动热路径零新增分配；红测先行；截图自检后再交件；净化前缀 env -u TEAM_AGENT_*。
-
-
-## 4. 架构基（build_wiki.py 现算，2026-08-09，18 包 22 边；全卡见 docs/wiki/README.md）
-- 本案 write_scope 包：app_termview
+## 2. 架构基（build_wiki.py 现算影响闭包）
+- write_scope 包：dev.agentmirror.app.termview
 - 正向依赖（你消费的契约，只读）：无
-- **反向依赖（改动波及面，回归自查范围）**：kt_dev_agentmirror_app_session
-- 各包职责/导出面/依赖边以 docs/wiki/README.md 对应架构卡为准（现算产物，与代码同步）。
+- **反向依赖（波及面=回归自查范围）**：kt_dev_agentmirror_app_session
 
-## 5. 需求基增补（librarian 撞库，2026-08-09）
-- 006/011/R-002：自研最小 VT 引擎裁定与首帧 p90 50.6ms 实证（015）——回退链不得回退此性能
-- 005 内容保真由 CLI 重画保证——你只管「有字形可绘」，不管语义
-- 「字形/等宽」需求库无沉淀，018 标准7 是唯一判定权威
-
-## 6. 影响闭包架构卡内联（契约级，build_wiki.py 现算）
+### 闭包架构卡内联（职责/导出面/依赖边）
 
 ### Kotlin · dev.agentmirror.app.termview
 
@@ -48,3 +37,16 @@
 - **导出面**：Attachment, Failed, Failure, HttpUrlConnectionUploader, SessionRoute, SessionScreen, SessionViewModel, Success
 - **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.service, dev.agentmirror.app.termview
 - **doc 全文**：会话页：单个 tmux 会话的交互界面。 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条。 本包为占位骨架，由 session 任务落位实现。
+
+## 3. 需求基
+- goal 引用条目：（goal 无编号引用）
+- librarian 撞库回执：.team/nodes/fix-term-glyph-render/LIBRARIAN.md（先完整读）
+- 修订记录 requirement-base/REVISIONS.md 必读（被推翻结论不回改条目）
+
+## 4. 经验基（通用纪律+先例）
+- 红测先行；每次落盘保持整模块可编译（共享编译单元互阻三次实案）；编译被他人半成品阻断→直接 send 文件主人（附文件+行号+错误原文），主人最高优先修复回执，不经 leader
+- 测试净化前缀 env -u TEAM_AGENT_*；tmux 只用自建隔离 socket；杀进程只 scoped kill 自己命名空间（w-fix-statewire 险案）
+- 代码必须带注释（设计决策写为什么）；禁止 git push；本地不 commit；report_result 恰好一次带 tests
+
+## 5. 现场基（leader 手填取证素材——唯一手填合法区）
+- .team/nodes/fix-term-glyph-render/FIELD.md（先完整读；含真机实证/失败现场/裁定）
