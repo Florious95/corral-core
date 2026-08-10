@@ -202,14 +202,37 @@ def escalate(text):
         f.write(text.rstrip() + "\n\n")
 
 
-ROLE_TMPL = """---
-name: {seat}
-role: {tid} 承办
-provider: codex
+# 通道策略（工程约定 + 用户 2026-08-10 复申）：**主力一律第三方 API（DeepSeek Flash）**，
+# codex gpt-5.6-sol 只留给困难问题。今天全部席位被我硬编码成 sol，又慢又拖沓且烧订阅额度——
+# 这是模板缺省值写死造成的，不是逐案判断的结果。升级到 sol 的条件只有两条，其余一律 flash：
+#   ① taskbook 该条 contention: contract（契约级）
+#   ② 同一任务自动返工已达 MAX_ATTEMPTS（此时按 skill 的熔断口径开顾问席，模型才用 sol）
+HARD_FM = """provider: codex
 auth_mode: subscription
 permission_mode: auto_approve
 profile: codex-default
-model: gpt-5.6-sol
+model: gpt-5.6-sol"""
+
+# 第三方 API 席位：模型来自 profile worker-api（MODEL=deepseek-v4-flash[1m]），角色文件不写 model
+EASY_FM = """provider: claude_code
+auth_mode: compatible_api
+permission_mode: auto_approve
+profile: worker-api"""
+
+
+def channel_for(t, s):
+    """返回该任务应走的 frontmatter 通道块。困难判据显式、可复核，不靠感觉。"""
+    if (t.get("contention") or "").strip() == "contract":
+        return HARD_FM, "contract"
+    if s.get("attempts", {}).get(t["id"], 0) >= MAX_ATTEMPTS:
+        return HARD_FM, "returned>=%d" % MAX_ATTEMPTS
+    return EASY_FM, "default"
+
+
+ROLE_TMPL = """---
+name: {seat}
+role: {tid} 承办
+{frontmatter}
 tools:
   - fs_read
   - fs_list
@@ -228,10 +251,9 @@ tools:
 ## 交件契约（三个值一字不改，源码级约束）
 1. **先把证据写盘** `{ev}`：`status` 只允许 `pass`/`red`/`blocked` 三值，
    带 `tests`（argv+rc 原文）、`changes`、`deviation`（无则空数组）。
-2. **再**调恰好一次：
-   `report_result(..., presentation={{"sink":"silent","class":"stage_result","case_id":"{case}"}})`
-   —— `class` 非 `stage_result` 会被框架强制投 leader；`sink=silent` 是「照样落库、只是不打扰」；
-   `case_id` 缺失直接 `missing_case_id`。artifacts 里放证据文件路径。
+2. **再**调恰好一次 `report_result`，**不要设 presentation.sink=silent**——
+   本工程 2026-08-10 起由 leader 手动调度，交件必须实时投达 leader；silent 只落库不注入，
+   会让 leader 一无所知（实证：15 条结果在库里躺了一整天没人看见）。artifacts 里放证据文件路径。
 3. 结构化数据一律写证据文件，**不要塞进 result envelope**（闭合 schema，自定义键会被静默丢弃）。
 
 ## 纪律
@@ -291,8 +313,10 @@ def dispatch(tid, t, s, rework=""):
 
     # case_id 要先于 role file 存在，但它来自派单 send —— 故 role 里用占位，派单消息里给准值
     role = f"agents/{seat}.md"
+    fm, why = channel_for(t, s)
+    print(f"派单 {tid} → 通道 {'codex/sol' if fm is HARD_FM else 'api/deepseek-flash'}（判据 {why}）", flush=True)
     open(role, "w", encoding="utf-8").write(ROLE_TMPL.format(
-        seat=seat, tid=tid, base=base, ev=t["evidence"], case="见派单消息中的 case_id",
+        seat=seat, tid=tid, base=base, ev=t["evidence"], case="见派单消息中的 case_id", frontmatter=fm,
         acc="\n".join(f"- `{a}`" for a in t["acceptance"]) or "- （taskbook 未给 acceptance，禁止自拟）"))
     r = run([TA, "add-agent", seat, "--role-file", role, "--workspace", "."])
     if "ok: True" not in r.stdout:
@@ -302,8 +326,7 @@ def dispatch(tid, t, s, rework=""):
                     f"任务 `{tid}`｜知识基底 `{base}`｜验收由引擎复跑：" +
                     " / ".join(t["acceptance"]) +
                     f"｜证据先写 `{t['evidence']}`（status 只允许 pass/red/blocked），"
-                    f"再 report_result(presentation={{\"sink\":\"silent\",\"class\":\"stage_result\","
-                    f"\"case_id\":\"<本条消息的 message_id>\"}})｜"
+                    f"再 report_result（**不要 sink=silent**，交件必须实时投达 leader）｜"
                     f"只向 adjudicator 投消息，严禁向 leader 发消息。**开工。**"])
     cid = sent.get("message_id")
     if not cid:
