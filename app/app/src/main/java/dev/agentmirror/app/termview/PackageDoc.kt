@@ -22,4 +22,6 @@ package dev.agentmirror.app.termview
  * [TermViewPresenter] 纯 JVM 视口状态机（跟随/锁定历史、可见行窗口、捏合行列数换算、
  * 脏区合并），单测全部打在它上；[TermSurfaceView] 薄 Android 层（Canvas 画格、拖动/捏合
  * 手势、Choreographer 帧调度）。内核为 :terminal 模块；resize 协议帧由上层接线（conn/session）。
+ *
+ * @consumes dev.agentmirror.terminal
  */

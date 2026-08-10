@@ -60,7 +60,15 @@ enum class InputKey(val wire: String) {
     RIGHT("right");
 
     companion object {
-        /** 按线上字符串解析；未识别值返回 null（解码器据此判坏帧）。 */
+        /**
+         * 按线上字符串解析；未识别值返回 null（解码器据此判坏帧）。
+         *
+         * @contract
+         * @pre 无
+         * @post 返回 entries 中 wire 等于 value 的成员；无匹配返回 null
+         * @err 无（不抛异常；未识别键由解码器报 [FrameError.INVALID_FIELD]）
+         * @inv 返回值为 null 或闭集七键成员
+         */
         fun fromWire(value: String): InputKey? =
             entries.firstOrNull { it.wire == value }
     }

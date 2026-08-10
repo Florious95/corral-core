@@ -34,9 +34,15 @@ internal data class UploadResponseDto(
  * 生产附件上传器（协议 §8 multipart）：`POST {baseUrl}/upload` → 主机绝对路径。
  *
  * 用 JDK [HttpURLConnection] 实现（:app 当前零 OkHttp 依赖；上传为一次性短连接，
- * 不做连接池）。multipart 字段名取 "file"（服务端 ws-api 任务按此约定实现，
- * 一致时以 protocol.md §8 为准）。响应非 2xx / JSON 无 path / 网络异常 ⇒ 明确失败，
- * 绝不静默（003 静默失效猎杀）。
+ * 不做连接池）。multipart 字段名取 "file"；服务端按携带 filename 的首个 part 取文件，
+ * 不校验字段名（见 server/internal/api/upload.go findFilePart）。响应非 2xx /
+ * JSON 无 path / 网络异常 ⇒ 明确失败，绝不静默（003 静默失效猎杀）。
+ *
+ * @contract
+ * @pre baseUrl 非空 http(s) 基地址；attachment.bytes 非空
+ * @post 成功返回 [UploadOutcome.Success]（主机绝对路径）；失败返回 [UploadOutcome.Failure]（人类可读原因）
+ * @err 网络/IO 异常、非 2xx 响应、JSON 无 path 或 path 为空，全部折叠为 [UploadOutcome.Failure]，不抛出
+ * @inv 每次调用独立建连，finally 必断开（无连接池）
  */
 class HttpUrlConnectionUploader : AttachmentUploader {
 

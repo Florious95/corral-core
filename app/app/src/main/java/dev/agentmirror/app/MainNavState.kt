@@ -34,6 +34,13 @@ import androidx.compose.runtime.setValue
  *
  * 状态用 Compose [mutableStateOf]：组合内读取即订阅、写入自动重组（与 remember 语义一致）；
  * MainActivity 直接持有时同样可读写。
+ *
+ * @contract
+ * @pre 构造参数 initialShowPairing 为首启配对判定结果（无配对配置 → true，进配对页）
+ * @post [writeTo] 落全部非空导航态（无会话时不写会话键）；[restoreFrom] 仅在
+ *       savedInstanceState 含 KEY_SHOW_PAIRING 时恢复，否则整体跳过保持初值
+ * @err none
+ * @inv activeSession 非空时恒为 (ref, name) 二元组；writeTo/restoreFrom 往返还原同一导航态
  */
 class MainNavState(initialShowPairing: Boolean) {
 

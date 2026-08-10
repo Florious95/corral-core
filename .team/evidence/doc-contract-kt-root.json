@@ -1,0 +1,92 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-kt-root",
+  "case_id": "msg_1c3d25432490",
+  "summary": "根包 dev.agentmirror.app 三件事完工：①改写 2 处不实注释——路由「三分支互斥」实为四分支（Session/Pairing/Settings/Workspace），旧行为描述未随 ea5195f 加 Settings 分支更新，属「旧行为残留」形态；②补 1 个契约符号（MainNavState，serialize roundtrip 契约真实）+ 5 条 @consumes 消 5 条 T3-4 漂移；③阳性对照做过：临时删 MainNavState @err，单包硬判精确 exit 1 指向该符号，恢复后 exit 0。逐个顶层 public 导出（AgentMirrorApp/MainActivity/MainNavState）及其引用的依赖包符号逐条核读过，其余注释与实现一致无需改写（非敷衍的 0 默认——每一处引用都对照了实现与仓库存在性，见 rewritten 与 uncertain）。验收三命令全过：单包硬判 exit 0、:app:testDebugUnitTest 345 测 0 失败 0 错误、全仓库 --check exit 0。",
+  "rewritten": [
+    {
+      "symbol": "AgentMirrorApp（路由描述注释）",
+      "file": "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt",
+      "line": 68,
+      "original": "// 路由描述值（AnimatedContent 的转场键）：三分支互斥，与原 when 语义一一对应。",
+      "issue": "注释称路由三分支互斥，实际 when 有四个分支（Session/Pairing/Settings/Workspace）。Settings 分支由 ea5195f「App 配对与设置页入库」加入，改分支时未更新计数注释——旧行为描述残留，judgment 无法发现（语义断言无形状）。",
+      "evidence": "同文件 69-78 行 when 显式列 Session/Pairing/Settings/Workspace 四分支；git log 证实 ea5195f 加入 Settings 分支前是三分支。",
+      "rewritten_to": "// 路由描述值（AnimatedContent 的转场键）：四分支互斥，与原 when 语义一一对应。"
+    },
+    {
+      "symbol": "AppRoute",
+      "file": "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt",
+      "line": 144,
+      "original": "/** 根路由三分支的转场键（data class 让同名不同 ref 的会话切换也触发转场）。 */",
+      "issue": "同上，sealed interface AppRoute 实际有四个 data object/class 分支（Session/Pairing/Settings/Workspace），计数注释过时。",
+      "evidence": "同文件 145-150 行 AppRoute 声明四个子类型；与上一处同源同因。",
+      "rewritten_to": "/** 根路由四分支的转场键（data class 让同名不同 ref 的会话切换也触发转场）。 */"
+    }
+  ],
+  "rewritten_confirmation": "改写后的两句均已对照实现再验：AgentMirrorApp 内 when 的四分支（69-78 行）与 AppRoute 的四个子类型（145-150 行）逐字相符；T3-2 单包硬判确认新写文本未引入任何不存在引用（exit 0）。MainNavState/MainActivity 的引用全部逐条核读：writeTo 只在 activeSession 非空时写会话键、restoreFrom 在 savedInstanceState 无 KEY_SHOW_PAIRING 时整体跳过——@contract @post 措辞按此精确校准，不是照抄 doc。",
+  "contracts_added": [
+    {
+      "symbol": "MainNavState",
+      "file": "app/app/src/main/java/dev/agentmirror/app/MainNavState.kt",
+      "line": 24,
+      "contract": "@contract / @pre 构造参数 initialShowPairing 为首启配对判定结果（无配对配置 → true，进配对页） / @post [writeTo] 落全部非空导航态（无会话时不写会话键）；[restoreFrom] 仅在 savedInstanceState 含 KEY_SHOW_PAIRING 时恢复，否则整体跳过保持初值 / @err none / @inv activeSession 非空时恒为 (ref, name) 二元组；writeTo/restoreFrom 往返还原同一导航态",
+      "rationale": "导航态 serialize roundtrip 契约真实存在：@pre 由 MainActivity.onCreate 传 storedConfig==null 保证；@post 由 writeTo（49-57 行只在 activeSession 非空时写会话键）与 restoreFrom（60-67 行含 KEY_SHOW_PAIRING 才恢复否则 return）逐行对齐；无错误面写 @err none；@inv 由恢复逻辑 ref!=null 时 name?ref 兜底保证二元组不变量"
+    }
+  ],
+  "consumes_added": [
+    {
+      "pkg": "dev.agentmirror.app",
+      "file": "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt",
+      "line": 57,
+      "consumes": [
+        "dev.agentmirror.app.pairing",
+        "dev.agentmirror.app.service",
+        "dev.agentmirror.app.session",
+        "dev.agentmirror.app.ui.theme",
+        "dev.agentmirror.app.workspace"
+      ],
+      "rationale": "根包无 PackageDoc.kt，依 role 文件约定写在包内首个文件的顶部 KDoc（AgentMirrorApp.kt）。五条均对应真实 import（AgentMirrorApp.kt 30-37 行 + MainActivity.kt 25-29 行），import 图经 resolve_kotlin_deps 解析为这五个依赖边，声明后 T3-4 5 条漂移清零"
+    }
+  ],
+  "consumes_rationale": "只补根包自己的 5 条，未替其它包补。import 图对照：pairing（PairingConfigStore/PairingRoute/SharedPreferencesPairingConfigStore/startPersistentConnection）、service（ServiceWire/NetworkConnectivityWatcher/NotificationHelper）、session（SessionRoute）、ui.theme（AgentMirrorTheme/Spacing）、workspace（WorkspaceScreen/WorkspaceViewModel）全部真实存在于根包 import 语句。",
+  "uncertain": [
+    {
+      "symbol": "MainActivity.onCreate 软输入法注释",
+      "file": "app/app/src/main/java/dev/agentmirror/app/MainActivity.kt",
+      "line": 56,
+      "note": "注释称 edge-to-edge 下 manifest 未声明 softInputMode 时系统默认解析为 adjustPan，故显式锁 adjustResize。无法从仓库内源码验证系统默认行为（依赖 Android 平台实现），且 SoftInputMode 运行时生效不改变 manifest 无该声明的事实（已 grep 确认）。原注释表述与实现行为方向一致（代码确实 setSoftInputMode(ADJUST_RESIZE)），未改写，仅记录不确定。"
+    }
+  ],
+  "uncertain_rationale": "判不出、不可从仓库源码验证的断言，按纪律写入 uncertain 而非猜着改。其余全部引用均有仓库内实现对照。",
+  "deviation": [],
+  "positive_control": {
+    "summary": "阳性对照：临时删除 MainNavState KDoc 的 @err none 行，单包硬判立即 exit 1，输出精确指向 app/app/src/main/java/dev/agentmirror/app/MainNavState.kt:24 `@contract` — 缺契约标签: @err；随后恢复该行，再次单包硬判 exit 0。证明判据对根包真的扫得到、真的会红，不是'扫不到所以全绿'。",
+    "broken_argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app",
+    "broken_rc": 1,
+    "broken_output": "[T3-3] dev.agentmirror.app  app/app/src/main/java/dev/agentmirror/app/MainNavState.kt:24  `@contract` — 缺契约标签: @err",
+    "restored_argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app",
+    "restored_rc": 0
+  },
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt — 顶部 KDoc 补 5 条 @consumes（+6 行注释）；路由描述注释「三分支」→「四分支」；AppRoute 注释「三分支」→「四分支」（共 +10 行注释，零实现改动）",
+    "app/app/src/main/java/dev/agentmirror/app/MainNavState.kt — 类 KDoc 补 @contract 四标签（+7 行注释，零实现改动）"
+  ],
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app",
+      "rc": 0,
+      "note": "单包硬判：T3-1/T3-2/T3-3/T3-4 全 PASS，根包 5 条漂移清零"
+    },
+    {
+      "argv": "noglob env -u 'TEAM_AGENT_*' bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'",
+      "rc": 0,
+      "note": "42 套件 345 测试 0 失败 0 错误（XML 统计），包内测试保持绿"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库 exit 0：T1-1/T1-2 绿；T3 报告模式列清单不改退出码，剩余违规全在他包（service/session/workspace/pairing 各自席位在途）"
+    }
+  ],
+  "per_symbol_confirmation": "本包导出符号逐个核读：AgentMirrorApp（路由/转场/接线注释对照 69-150 行实现与 pairing/workspace 真实现）、MainActivity（深链/singleTop/持久化/网络回调对照 manifest singleTop、NotificationHelper 常量、NetworkConnectivityWatcher.register 幂等、startPersistentConnection 冷启动重连）、MainNavState（writeTo/restoreFrom 逐行对照）。其余引用的依赖包符号（ServiceWire.uiConnector/connectionPath/pairingTransportFactory、PairingConfigStore.save 覆盖语义、WorkspaceScreen 顶栏设置钮、NotificationHelper.ACTION_OPEN_SESSION/EXTRA_SESSION_REF）全部存在且行为相符。0 条默认结论不成立——每条引用都做过实现对照。SettingsScreen 为 internal fun 非导出符号，未改。"
+}

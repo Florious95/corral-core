@@ -38,7 +38,8 @@ import kotlin.math.roundToInt
 /**
  * 终端画布视图：Canvas 逐格绘制 + 拖动/捏合手势 + Choreographer 帧调度（薄层，业务状态全在 [TermViewPresenter]）。
  *
- * 每帧只重绘 presenter 给出的脏逻辑行区间（60fps 工作量 = 脏行数而非全屏，006）；
+ * 帧循环纯数据驱动：presenter 的脏区只作"画面已变化"的触发信号（[TermViewPresenter.takeDamage]
+ * 排空即弃，防缓冲无界增长），之后整帧重绘可见窗口全部行（每帧工作量 = 窗口行数，非脏行数，006）；
  * 拖动滚动只改本地视口零网络，捏合字号经 presenter 换算 rows/cols 后由上层发协议 resize 帧（005）。
  * 绘制全部逻辑收敛在本类（等宽字体测量/同色 run 合并/宽字符/BCE 背景），供 Presenter 单测隔离。
  */
@@ -181,7 +182,7 @@ class TermSurfaceView @JvmOverloads constructor(
         return true
     }
 
-    /** 每帧：清屏、铺脏行背景、按同色 run 合并画前景。 */
+    /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val p = presenter ?: return
@@ -196,7 +197,8 @@ class TermSurfaceView @JvmOverloads constructor(
             drawLine(canvas, p.lineCells(logical), rowY)
         }
 
-        // 回到底部悬浮按钮（锁定历史时显示）。
+        // 视图内"回到底部"悬浮钮为历史遗留死代码：backToBottomLabel 全仓库无赋值点，本块永不走；
+        // 实际回到底部入口是 session 层 Compose 悬浮钮（读 `SessionViewModel.showBackToBottom`）。
         backToBottomLabel?.let { label ->
             if (p.showBackToBottom) {
                 labelBgPaint.color = Color.argb(200, 30, 30, 30)

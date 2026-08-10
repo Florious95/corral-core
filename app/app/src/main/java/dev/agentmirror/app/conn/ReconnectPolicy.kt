@@ -31,6 +31,12 @@ class ReconnectPolicy(
     /**
      * 计算第 [attempt] 次重连的等待时长（attempt 从 0 起）。
      * `exp = min(base * 2^attempt, max)`；抖动为 ±ratio，最小 1ms。
+     *
+     * @contract
+     * @pre attempt ≥ 0（负数按 0 处理）
+     * @post 返回 ≥ 1 的延迟毫秒；无抖动时 = min(base * 2^attempt, max)
+     * @err 无（不抛异常）
+     * @inv 对固定 attempt 与固定 [random]，结果确定；抖动不改变指数上限截断
      */
     fun nextDelayMs(attempt: Int): Long {
         val exponent = attempt.coerceAtLeast(0)

@@ -23,10 +23,10 @@ package dev.agentmirror.app.conn
  * （conn 知识基底 §1：测试用假时钟），使退避序列确定性可断言。
  */
 interface Clock {
-    /** 当前单调时间毫秒。 */
+    /** 当前时间毫秒（Real 为墙钟 System.currentTimeMillis；仅用于相对差值与期限比较）。 */
     fun nowMs(): Long
 
-    /** 真实时钟。 */
+    /** 真实时钟（墙钟；宿主在期限比较期间不应回拨系统时间）。 */
     object Real : Clock {
         override fun nowMs(): Long = System.currentTimeMillis()
     }

@@ -22,6 +22,12 @@ import java.util.concurrent.Executors
 /**
  * tsnet 节点生命周期状态（对外只读，[TsnetManager.state]）。
  * 迁移图：Idle → Starting → Up | Error；stop() 从任意态回 Idle。
+ * @contract
+ * @pre none（状态对象可直接实例化，测试即用 [TsnetState.Up]/[TsnetState.Error] 构造）
+ * @post [Up] 携带 [TsnetProxy] 接线凭据；[Error] 携带描述文案
+ * @err none（错误面以 [Error] 状态承载，不抛异常）
+ * @inv [Up] 恒携带非空 [proxy]；状态对象不可变，可跨线程安全读（authkey 剔除由
+ *       [TsnetManager] 生产路径保证，非本类型约束）
  */
 sealed interface TsnetState {
     /** 未启动（初始态 / stop 后）。 */
@@ -46,6 +52,14 @@ sealed interface TsnetState {
  *
  * stop-during-starting 用 generation 计数丢弃迟到结果：stop() 令代次+1，
  * 在途 start 结果落地时发现代次不匹配即丢弃并关后端，杜绝"僵尸 Up"。
+ * @contract
+ * @pre none（backend/executor/onState 由构造注入）
+ * @post start() 返回 true 表示已受理，节点终态（Up/Error）经 [onState] 异步到达；
+ *       返回 false 分两种：已在 Starting/Up（状态不变）或 authkey 结构非法
+ *       （状态置 [TsnetState.Error]）；stop() 从任意态回 Idle
+ * @err 后端启动异常不抛出，折叠为 [TsnetState.Error]（文案经 redactAuthKey 剔除 key）
+ * @inv state 恒属 [TsnetState] 闭集；重复 start 在 Starting/Up 时被拒；代次不匹配的
+ *       迟到结果丢弃并关后端（无僵尸 Up）
  */
 class TsnetManager(
     private val backend: TsnetBackend,

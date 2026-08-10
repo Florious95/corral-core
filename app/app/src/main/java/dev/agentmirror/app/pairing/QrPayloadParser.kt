@@ -34,7 +34,14 @@ object QrPayloadParser {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** 解析一行 QR 内容；失败抛 [QrParseException]（消息不携带 token）。 */
+    /**
+     * 解析一行 QR 内容；失败抛 [QrParseException]（消息不携带 token）。
+     * @contract
+     * @pre none（任意输入都会被解析/校验；坏输入走 @err）
+     * @post 返回版本/url/token 校验通过、候选去重归一后的 [QrPayload]；url/token 已 trim
+     * @err 坏 JSON / 版本非 1 / url 非 ws(s) / token 为空 → [QrParseException]（固定文案，不含 token 值）
+     * @inv 未知字段忽略；坏候选跳过不报错
+     */
     fun parse(raw: String): QrPayload {
         val dto = try {
             json.decodeFromString<QrDto>(raw)

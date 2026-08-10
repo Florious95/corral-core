@@ -23,5 +23,10 @@ package dev.agentmirror.app.workspace
  *   UI 状态；聚合字段（session_count / aggregate_state）为服务端权威值，只渲染不重算（012）。
  * - [WorkspaceScreen] / [StateBadge]：薄 Compose 渲染层；状态徽章五值（008）。
  *
- * 二级导航进入会话页由根路由（AgentMirrorApp）占位跳转，会话页归 session-ui 任务。
+ * 二级导航经 [WorkspaceScreen] 的 onOpenSession 回调把 (ref, name) 交给根路由
+ * [AgentMirrorApp]，由其挂载 [SessionRoute] 进入会话页。
+ *
+ * @consumes dev.agentmirror.app.conn
+ * @consumes dev.agentmirror.app.tsnet
+ * @consumes dev.agentmirror.app.ui.theme
  */

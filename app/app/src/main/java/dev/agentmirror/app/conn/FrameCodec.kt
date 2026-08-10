@@ -49,6 +49,13 @@ object FrameCodec {
     /**
      * 编码一个控制帧为完整的 JSON 文本消息（WS text 载荷）。
      * 校验失败抛 [FrameEncodeException]（无效帧不跨线）。
+     *
+     * @contract
+     * @pre frame 非空且 validate() 返回 null（无效帧不跨线）
+     * @post 返回含 "v"=ProtocolVersion.VALUE、type=frame.frameType、payload 为 JSON 编码正文的完整信封
+     * @err frame.validate() 失败抛 [FrameEncodeException]（INVALID_FIELD）；ErrorFrame 携带
+     *      [ErrorCode.UNKNOWN]（解码回退值）编码必拒（INVALID_FIELD）
+     * @inv 纯函数，无外部副作用；输出 "type" 与 frame.frameType 一致
      */
     fun encode(frame: FramePayload): String {
         val payloadEl: JsonElement = FramePayload.encode(frame) // 内含 validate
@@ -65,11 +72,15 @@ object FrameCodec {
     /**
      * 解码一条 JSON 文本消息为具体控制帧。
      *
-     * @throws FrameDecodeException 分类码见 [FrameError]：
+     * @contract
+     * @pre text 是一个完整的 JSON 控制帧消息
+     * @post 返回的 [FramePayload] 的 frameType 等于 wire "type" 且 validate() 已通过；出错时抛异常
+     * @err 分类码见 [FrameError]：
      *   - 缺 "v" ⇒ MISSING_VERSION；非当前版本 ⇒ UNSUPPORTED_VERSION
      *   - JSON 无法解析 / 信封非对象 ⇒ BAD_FRAME
      *   - 缺 / 空 "type" ⇒ INVALID_FIELD；未知 "type" ⇒ UNSUPPORTED_TYPE
-     *   - 必填字段缺失 / 校验失败 ⇒ INVALID_FIELD
+     *   - payload 结构无法按声明类型解析 ⇒ BAD_FRAME；必填字段缺失 / 校验失败 ⇒ INVALID_FIELD
+     * @inv 纯函数，无外部副作用；未知信封/字段被忽略（向前兼容），未知 "type" 是错误
      */
     fun decode(text: String): FramePayload {
         val root: JsonElement = try {

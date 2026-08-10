@@ -1,0 +1,439 @@
+{
+  "verdict": "confirmed",
+  "task_id": "doc-contract-batch3.verify",
+  "case_id": "msg_11fd97da8d00",
+  "packages": [
+    {
+      "pkg": "dev.agentmirror.app",
+      "rewritten_checked": [
+        {
+          "symbol": "AgentMirrorApp（路由描述注释）",
+          "claim": "注释称路由三分支，实际 when 有 Session/Pairing/Settings/Workspace 四分支；Settings 由 ea5195f 加入",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码：AgentMirrorApp.kt 75-80 when 显式四分支（session!=null→Session / showPairing→Pairing / showSettings→Settings / else→Workspace）；HEAD 原文确为『三分支互斥』（69-74 行）。git show ea5195f 证实 `+ navState.showSettings -> AppRoute.Settings` 与 `+ data object Settings : AppRoute` 均为该提交加入。改后『四分支互斥』与实现逐字相符。此条为 ea5195f（今晚提交）自己制造的不实注释，承办席改写属实。"
+        },
+        {
+          "symbol": "AppRoute",
+          "claim": "sealed interface AppRoute 实际有四个子类型，注释三分支过时",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码：AgentMirrorApp.kt 151-155 AppRoute 四个子类型（Session/Pairing/Settings/Workspace）；HEAD 原文『根路由三分支』（144-145 行）。改后『四分支』相符。"
+        }
+      ],
+      "missed_by_worker": [],
+      "contracts_spotchecked": [
+        {
+          "symbol": "MainNavState",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 MainNavState.kt：@pre（initialShowPairing 由 MainActivity:71 storedConfig==null 传入）成立；@post writeTo 49-57 行仅在 activeSession 非空时写会话键、restoreFrom 60-67 行无 KEY_SHOW_PAIRING 整体 return 保持初值，逐行相符；@err none 诚实（无错误面）；@inv 二元组不变量由 restoreFrom `ref to (name ?: ref)` 兜底成立。"
+        }
+      ],
+      "impl_changed": false,
+      "scope_violation": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app", "rc": 0},
+        {"argv": "noglob env -u 'TEAM_AGENT_*' bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'（--rerun-tasks 强制真跑）", "rc": 0, "note": "42 套件 345 测试 0 失败 0 错误 0 skip，XML mtime 06:31 真跑"}
+      ]
+    },
+    {
+      "pkg": "dev.agentmirror.app.conn",
+      "rewritten_checked": [
+        {
+          "symbol": "PackageDoc.kt（包级 Flow 说法）",
+          "claim": "grep 全仓库 conn 源码零 Flow 出现，上层消费的是 Listener 回调不是 Flow",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep：`grep -rn Flow app/app/src/main/java/dev/agentmirror/app/conn/` 零命中（grep rc=1）；ConnectionManager.Listener/Connection.Listener 是实际回调面。改后指回调（[ConnectionManager.Listener]/[Connection.Listener]）属实。"
+        },
+        {
+          "symbol": "BinaryFrameCodec（解码超限断言）",
+          "claim": "称解码拒绝超限帧，实际 decode() 无 payload 大小校验，MAX_BINARY_PAYLOAD 只在 encode() 侧",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 BinaryFrame.kt：decode()（176-231 行）无 data.size 检查；encode()（121-140 行）有 `data.size > MAX_BINARY_PAYLOAD` 抛 INVALID_FIELD。Go 参考 server/internal/protocol/binary.go:155-156『Decode imposes no payload-size cap』逐字佐证。改后『载荷大小上限只在编码侧校验，解码侧不设上限（对齐 Go DecodeBinary）』相符。"
+        },
+        {
+          "symbol": "FrameError（enum doc）",
+          "claim": "枚举成员含 BAD_MAGIC/UNKNOWN_KIND/TRUNCATED/REF_TOO_LONG 等二进制帧错误码，非『控制帧专属』",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 CodecErrors.kt：FrameError 11 个成员含 BAD_MAGIC/UNKNOWN_KIND/TRUNCATED/REF_TOO_LONG，均只由 BinaryFrameCodec 抛。改后『控制帧与二进制流帧共用』相符。"
+        },
+        {
+          "symbol": "InputFailReason（strictDeserialize 机制）",
+          "claim": "实际由 InputFailReasonSerializer 经 strictDeserialize 直接抛 FrameDecodeException INVALID_FIELD，不经 FramePayload.decode 捕获转换",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 FrameEnums.kt：InputFailReasonSerializer.deserialize（152-162 行）调 strictDeserialize(decoder, FrameError.INVALID_FIELD)（123-133 行）直接 throw FrameDecodeException；FrameDecodeException（CodecErrors.kt:78-81）非 SerializationException 子类，故不被 FramePayload.decode 的 catch(SerializationException)→BAD_FRAME 路径捕获。改后说法成立。"
+        },
+        {
+          "symbol": "Connection.Listener.onLocalDecodeError（编码面）",
+          "claim": "该回调同时承载发送路径编码失败，Connection.send/sendBinary 的 catch(FrameEncodeException) 也经它上浮",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 Connection.kt：send() 93-95 行、sendBinary() 114-116 行 catch(FrameEncodeException) 均调 listener.onLocalDecodeError。改后『本地编解码失败（…或发送路径编码校验不过）』相符。"
+        },
+        {
+          "symbol": "Connection（class doc 同源）",
+          "claim": "与 onLocalDecodeError 同源：只提解码，漏编码失败同样上浮",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "同 onLocalDecodeError，本人读 Connection.kt 27-29 行与 send/sendBinary 实现，改后相符。"
+        },
+        {
+          "symbol": "Clock.nowMs()/Clock.Real",
+          "claim": "Clock.Real 用 System.currentTimeMillis() 是墙钟非单调时钟；系统回拨会倒退",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 Clock.kt：Real.nowMs() = System.currentTimeMillis()（墙钟）。HEAD 原文『当前单调时间毫秒』不实。改后『墙钟 System.currentTimeMillis；仅用于相对差值与期限比较』相符。"
+        },
+        {
+          "symbol": "Connection.Listener.onOpened",
+          "claim": "onOpen() 里先调 listener.onOpened()（133 行）再发 auth（136 行），回调返回时 auth 尚未发出",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 Connection.kt onOpen()：130-145 行，listener.onOpened()（133 行）在前，transport.sendText(FrameCodec.encode(auth))（136 行）在后。协议级顺序断言核准：回调确实早于 auth 上行。改后『auth 帧紧随本回调上行（回调返回后立即发出）』准确。"
+        },
+        {
+          "symbol": "ConnectionState.AUTHENTICATING",
+          "claim": "该状态在 onOpened 时 setState 设置，早于 auth 实际发出",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 ConnectionManager.kt：connListener.onOpened()（354-356 行）setState(AUTHENTICATING)；该回调由 Connection.onOpen 内 listener.onOpened() 触发，时点先于 auth 上行。改后『auth 上行前/上行中，等待 auth_ack』准确。"
+        },
+        {
+          "symbol": "ConnectionManager.Listener.onInputResult（doc）",
+          "claim": "错误面列不全：漏 stop 的『connection stopped』与 auth 被拒/永久关闭的『connection rejected/closed』两条本地判定",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 ConnectionManager.kt：stop()（164 行）failAllPending(\"connection stopped\")；onClosed(permanent=true)（399 行）failAllPending(\"connection rejected/closed: $reason\")。两条均真实存在。改后完整列出四条本地判定，相符。"
+        },
+        {
+          "symbol": "ConnectionManager.stop（doc）",
+          "claim": "『新的簿记起点』语义模糊/近错：stop 后 activeSubscriptions 保留（重 start 仍重放），重新算的只是 attempt/lastSeenSeq",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 ConnectionManager.kt：stop()（160-166 行）不清 activeSubscriptions；start()（143-148 行）只重置 attempt=0/lastSeenSeq=null。改后『attempt/seq 重算，订阅簿记保留待重放』准确。"
+        }
+      ],
+      "missed_by_worker": [],
+      "contracts_spotchecked": [
+        {
+          "symbol": "ReconnectPolicy.nextDelayMs",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 ReconnectPolicy.kt：@pre attempt≥0（负数按 0 处理）→ exponent.coerceAtLeast(0) 成立；@post 无抖动时=min(base*2^attempt,max) 与 44 行 minOf(baseMs shl exponent, maxMs) 相符；@err 无（不抛异常）诚实；@inv 抖动不改变指数上限截断（45-46 行 raw 先截断再加抖动）成立。"
+        },
+        {
+          "symbol": "ConnectionManager.sendInput",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 ConnectionManager.kt sendInput（230-238 行）：@pre READY+connection 非空与 231-232 行相符；@post 返回 true 时 pendingInputs 登记 deadlineMs 与 236 行相符；@err 已送出则超时/掉线/stop 经 onInputResult 判失败与 resolveExpiredInputs/failAllPending 相符；@inv req_id 单调递增（nextReqId++）成立。"
+        },
+        {
+          "symbol": "FrameCodec.encode/decode",
+          "verdict": "不凑数、描述正确、@err 无漏",
+          "evidence": "本人读码 FrameCodec.kt encode（60-70 行）/decode（85-115 行）与 Go json.go UnmarshalFrame（49-88 行）：@err 分类（MISSING_VERSION/UNSUPPORTED_VERSION/BAD_FRAME/INVALID_FIELD/UNSUPPORTED_TYPE）与实现及 Go 参考逐条对应；缺 v→MISSING_VERSION、非整数→BAD_FRAME、不匹配→UNSUPPORTED_VERSION、空 type→INVALID_FIELD、未知 type→UNSUPPORTED_TYPE、payload 结构坏→BAD_FRAME、缺必填字段→INVALID_FIELD，全齐无漏。@inv 未知字段忽略由 CodecErrors.kt ignoreUnknownKeys=true 保证。"
+        },
+        {
+          "symbol": "AuthFrame/AuthAckFrame/InputFrame/InputAckFrame 等 12 帧契约",
+          "verdict": "不凑数",
+          "evidence": "本人读码 Frames.kt：每帧均有真实 validate()（AuthFrame token 非空；AuthAckFrame ok/reason 矛盾组合；InputFrame text+keys 互斥；InputAckFrame ok:false 缺 reason 等），@pre/@post/@err/@inv 全部可追溯到实现与 Go validate.go 逐条对齐。协议契约语义真实，非硬套标签。"
+        },
+        {
+          "symbol": "fromWire 纯查找 ×5（AgentState/BinaryKind/ErrorCode/InputFailReason/InputKey）",
+          "verdict": "边界值——最接近纯 getter 的一批，但 @err 诚实标注『无/不抛』，非凑数式假错误面",
+          "evidence": "这 5 个是 `entries.firstOrNull{...}` 纯查找，唯一接近『纯 getter 硬套四标签』的候选。但：①它们都有真实 wire 契约语义（未知值→null 或 UNKNOWN 前向兼容回退，直接决定解码器判坏帧路径），非纯值对象；②@pre 一律诚实『无』，@err 一律诚实『不抛异常』而非编造错误面；③@post/@inv 精确描述实际返回行为（null 或闭集成员）。判为非恶意凑数，但确是 35 个里价值最低的一批，建议后续可考虑对纯查找收敛为单行 doc 而非四标签。"
+        }
+      ],
+      "impl_changed": false,
+      "scope_violation": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.conn", "rc": 0},
+        {"argv": "noglob env -u 'TEAM_AGENT_*' bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'（--rerun-tasks）", "rc": 0, "note": "345 测 0 失败；conn 包 ConnCodecTest(48)/ConnConnectionTest(26)/ConnReconnectPolicyTest(3)/ConnManagerTest(10) 全绿"}
+      ]
+    },
+    {
+      "pkg": "dev.agentmirror.app.pairing",
+      "rewritten_checked": [
+        {
+          "symbol": "PackageDoc.kt 包级 KDoc（占位骨架）",
+          "claim": "『占位骨架』不实，包内已完整实现",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码：QrPayloadParser.parse/PairingViewModel/PairingScreen/startPersistentConnection 均真实实现且有消费方（AgentMirrorApp:103 PairingRoute 唯一调用点，MainActivity:74 startPersistentConnection）。改后描述真实职责属实。"
+        },
+        {
+          "symbol": "PairingRoute.kt 函数 KDoc 首行",
+          "claim": "『仅路由挂载，不含接线层』与函数体矛盾；『MainActivity/AgentMirrorApp 双入口』不实，唯一调用点是 AgentMirrorApp",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep：`PairingRoute(` 生产唯一调用点 AgentMirrorApp.kt:103；函数体确有 TsnetBootstrap.install（兜底 tsnet）、DisposableEffect onTsnetState、startPersistentConnection 装配。改后属实。"
+        },
+        {
+          "symbol": "createPairingViewModel 内联注释",
+          "claim": "实际调用 ServiceWire.pairingTransportFactory() 而非 transportFactory",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码：PairingRoute.kt:75 调用 ServiceWire.pairingTransportFactory()；ServiceWire.kt:57-58 定义 internal fun pairingTransportFactory()（transportFactory===OkHttpTransportFactory 时换 OkHttpPairingTransportFactory 不改写连接路径徽标）。改后属实。"
+        },
+        {
+          "symbol": "PairingViewModel.connectionState",
+          "claim": "声称 UI 顶部提示消费它；实际全仓无任何读取，UI 的『连接中…』由 pairingStatus.targetUrl 呈现，connectionState 仅回调写入（write-only）",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep：`connectionState` 在 PairingViewModel.kt 仅 113 行声明 + 268 行 onStateChanged 赋值两处，无第三处读取；PairingScreen 状态区读 viewModel.pairingStatus（StatusArea 里 status.targetUrl）。改后『回调写入；当前无 UI 读取，保留供后续接线』准确。"
+        },
+        {
+          "symbol": "PairingViewModel.manualToken",
+          "claim": "声称落配置后进入存储加密 TODO；实际全仓库无任何 token 加密实现或 TODO 记录，token 明文存 SharedPreferences",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep 全仓：`加密 TODO|encrypt.*TODO|TODO.*encrypt` 零命中；PairingConfigStore.save（75-76 行）putString(KEY_TOKEN, config.token) 明文，仅 tsAuthKey 走 secretCipher.encrypt。改后『token 以明文存于 SharedPreferences（历史欠账）』准确。"
+        },
+        {
+          "symbol": "PairingViewModel.canRetry",
+          "claim": "把『解析失败无配置』写成唯一决定因素；实际 getter 只读 currentConfig != null",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 PairingViewModel.kt:249-251 `val canRetry get() = currentConfig != null`。原注释夸大，改后『由最近一次试配对是否已建立配置（[currentConfig]）决定』准确。"
+        },
+        {
+          "symbol": "PairingFailCause.TIMEOUT 枚举 doc",
+          "claim": "15s 只是无候选单地址预算；有候选逐试时每地址 3s（CANDIDATE_TRY_MS）",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 PairingViewModel.kt:371 attemptBudgetMs = if (attemptQueue.size > 1) CANDIDATE_TRY_MS else PAIR_TIMEOUT_MS；459 行 PAIR_TIMEOUT_MS=15_000L、462 行 CANDIDATE_TRY_MS=3_000L。改后『候选逐试每地址 3s、无候选 15s』准确。"
+        },
+        {
+          "symbol": "PairingStatus.Failed doc",
+          "claim": "PairingFailCause 实含五类（含 PROTOCOL_ERROR），doc 只列四类",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 PairingModels.kt:68-83 PairingFailCause 含 REJECTED/UNREACHABLE/TIMEOUT/PARSE_ERROR/PROTOCOL_ERROR 五类；PairingViewModel.onFrame/onLocalDecodeError 均以 PROTOCOL_ERROR 失败。改后补『协议错误』属实。"
+        }
+      ],
+      "missed_by_worker": [],
+      "contracts_spotchecked": [
+        {
+          "symbol": "startPersistentConnection",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 PersistentConnection.kt：@post 三件套（setConfig/uploadBaseUrl/manager().start()）与 84-91 行逐行相符；@err runCatching 落日志不抛与 87-90 行相符，tsnet 起网走 TsnetState.Error 与 63-78 行相符；@inv 幂等双守卫（ServiceWire.manager 单例 + ConnectionManager.start 非 STOPPED 返回）与 43-46 行相符；tailnet 首拨延后 whenSettled 与 66-77 行相符。"
+        },
+        {
+          "symbol": "QrPayloadParser.parse / isValidWsUrl / deriveUploadBase",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码：parse 坏 JSON/版本非1/url 非法/token 空→QrParseException 固定文案不含 token（45-67 行）；isValidWsUrl 仅 ws/wss 且 host 非空否则 false（115-120 行）；deriveUploadBase ws→http wss→https 保留 host:port 去路径（132-138 行）。三个契约 @pre/@post/@err 全部与实现相符。isValidWsUrl/deriveUploadBase 的 @err none/@inv none 诚实（无错误面）。"
+        }
+      ],
+      "impl_changed": false,
+      "scope_violation": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.pairing", "rc": 0},
+        {"argv": "noglob env -u 'TEAM_AGENT_*' bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'（--rerun-tasks）", "rc": 0, "note": "配对测试保持绿"}
+      ]
+    },
+    {
+      "pkg": "dev.agentmirror.app.service",
+      "rewritten_checked": [
+        {
+          "symbol": "PackageDoc.kt（包级 KDoc）",
+          "claim": "默认传输工厂写错（实际 OkHttpTransportFactory 非 NoopTransportFactory）；MirrorForegroundService 写成『由 UI/配对层控制启动』现状实为全仓无调用点；深链消费方含糊为『会话页』实为 MainActivity.handleDeepLink",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码：ServiceWire.kt:51 `var transportFactory: TransportFactory = OkHttpTransportFactory`（NoopTransportFactory 非默认确认）；本人 grep `startService|startForegroundService|stopService` 全 app/src/main 仅命中 MirrorForegroundService.kt:47 自己的 doc 注释，零生产调用点；manifest 79 行声明 foregroundServiceType dataSync。MainActivity.kt:98-104 handleDeepLink 消费 ACTION_OPEN_SESSION/EXTRA_SESSION_REF。改后全部属实。"
+        },
+        {
+          "symbol": "MirrorForegroundService",
+          "claim": "把设计意图写成现状：『由 UI/配对层决定 startService』暗示已有接线，实际无任何调用点启动本服务；服务若从未启动其 onCreate/onStartCommand 路径根本不执行",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep 全仓 MirrorForegroundService 引用：仅 manifest 79 行声明 + 本类自引用 + PackageDoc/ServiceWire doc 提及，零 startService/startForegroundService/ComponentName 启动。commit 105a2fe『死件家族第六例 MirrorForegroundService 接线留待后案』。改后新增『接线现状（死件家族第六例）』段与实现相符，并诚实标注电量策略是设计意图尚未落地。"
+        },
+        {
+          "symbol": "ServiceWire（对象 KDoc）",
+          "claim": "①虚构消费方：PairingViewModel 不消费 uiConnector，自带独立 ConnectionManager 探针；②『服务持有』不实（服务未启动），实际本对象进程级持有",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep：`uiConnector` 在 pairing/ 零实际订阅代码；PairingViewModel.kt:122 probe 字段、391-398 startProbe() 自行 new ConnectionManager + setListener(this)。ServiceWire 是 object 进程级持有。改后属实。"
+        },
+        {
+          "symbol": "ServiceWire.manager()",
+          "claim": "实际调用方是 startPersistentConnection 与 SessionRoute.createSessionViewModel；服务未启动不经此处创建",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep：ServiceWire.manager 调用点 startPersistentConnection（PersistentConnection.kt:87）与 SessionRoute createSessionViewModel（SessionRoute.kt:97）；MirrorForegroundService.onCreate（81 行）虽然也调 ServiceWire.manager 但服务永不启动。改后『当前调用方是配对/冷启动入口与 [SessionRoute]；[MirrorForegroundService] 未启动，不经此处创建』属实。"
+        },
+        {
+          "symbol": "ServiceWire.transportFactory 字段",
+          "claim": "『UI/配对层在启动服务前注入』中『启动服务前』是空概念（服务未启动），拨号由 manager/startPersistentConnection 驱动",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "同上，服务无调用点。改后『UI/配对层在拨号前注入』属实。"
+        },
+        {
+          "symbol": "ServiceWire.setConfig()",
+          "claim": "抛异常的不是『服务启动』而是 manager()（IllegalStateException）；服务未启动",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 ServiceWire.kt：IllegalStateException 在 manager()（184 行 `config ?: throw`），不在服务启动。改后『须在首次 [manager] 调用前注入；未注入时 [manager] 抛明确异常』属实。"
+        },
+        {
+          "symbol": "ServiceWire.manager 字段/releaseManager()",
+          "claim": "『服务持有/服务 onDestroy 调用』不实；releaseManager 实际也被 setConfig 配置变更调用",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 ServiceWire.kt：setConfig()（130 行）old!=c 时 releaseManager()；releaseManager（240-246 行）置 null + m.stop() 幂等。改后『进程级单例；由 [MirrorForegroundService.onDestroy] 或 [setConfig] 配置变更时 stop』属实。"
+        },
+        {
+          "symbol": "NoopTransportFactory",
+          "claim": "『未注入真实传输时的默认』不实，生产默认是 OkHttpTransportFactory，Noop 是测试/降级用",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 ServiceWire.kt:51 默认 OkHttpTransportFactory；NoopTransportFactory 仅测试（ColdStartReconnectTest 显式注入）与降级用。改后『测试与降级用…生产默认值是 [OkHttpTransportFactory]，本工厂不参与生产路径』属实。"
+        },
+        {
+          "symbol": "NotificationHelper 类 KDoc + openSessionPendingIntent + 常量",
+          "claim": "虚构消费方：『session-ui 接线』不存在，实际消费方是 MainActivity.handleDeepLink",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep：ACTION_OPEN_SESSION 生产读取仅 MainActivity.kt:99 handleDeepLink；session-ui 层无读该 action 的代码。改后消费方标注 [MainActivity] 属实。"
+        },
+        {
+          "symbol": "MirrorForegroundService（@contract 补充）",
+          "claim": "本类确有契约（START_STICKY/幂等释放/未注入配置抛异常），原注释无 @contract",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 MirrorForegroundService.kt：onStartCommand 返回 START_STICKY（97 行）；onDestroy 幂等（103-107 行 removeCallbacks+releaseManager+manager=null）；onCreate 经 ServiceWire.manager 未注入配置时抛 IllegalStateException。契约四标签与实现相符，并诚实注明『本服务未接线，实际不进入该路径』。"
+        }
+      ],
+      "missed_by_worker": [],
+      "contracts_spotchecked": [
+        {
+          "symbol": "StateWatcher",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 StateWatcher.kt：@pre 首个 listing 建基线不通知与 76-79 行 isBaseline 逻辑相符；@post 沿变化 blocked/done 触发一次 onNotify、同状态重复抑制（notified[ref]!=curr 判定）、离开触发 onClear、unknown 永不通知（needsAttention 只在 BLOCKED/DONE）与 119-131 行逐行相符；@err none 诚实；@inv lastState/notified 只含已知 ref 与 53-56 行相符。"
+        },
+        {
+          "symbol": "ServiceWire.manager() / setConfig()",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 ServiceWire.kt：manager（178-232 行）双检锁 + config?:throw IllegalStateException + 幂等返回同一实例，与 @pre/@post/@err/@inv 相符；setConfig（124-132 行）old!=c 清路径徽标+releaseManager、同配置保持单例，与 @post 相符。"
+        },
+        {
+          "symbol": "OkHttpWebSocketTransport",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 OkHttpWebSocketTransport.kt：@pre isOpen 在 onOpen 前为 false（57-59 行初值 false，97-100 行 onOpen 置 true）；@post 单终结恰好一次由 terminalDelivered 守卫（88-94 行 deliverTerminal）；@err onFailure 上抛/onClosed 上抛与 115-123 行相符。"
+        }
+      ],
+      "impl_changed": false,
+      "scope_violation": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.service", "rc": 0},
+        {"argv": "noglob env -u 'TEAM_AGENT_*' bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'（--rerun-tasks）", "rc": 0, "note": "服务包测试保持绿"}
+      ]
+    },
+    {
+      "pkg": "dev.agentmirror.app.session",
+      "rewritten_checked": [
+        {
+          "symbol": "PackageDoc (包级 KDoc)",
+          "claim": "『本包为占位骨架，由 session 任务落位实现』过时，session 任务早已落位",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码：SessionScreen/SessionViewModel/HttpUrlConnectionUploader 完整实现，6 个测试类存在。改后现状描述属实。"
+        },
+        {
+          "symbol": "SessionViewModel.showBackToBottom",
+          "claim": "TermSurfaceView.backToBottomLabel 全仓库唯一赋值点是声明处 null 恒为 null，自绘按钮是死路径永不渲染；实际渲染该按钮的是 SessionScreen 的 Compose BackToBottomButton",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep 全仓 backToBottomLabel：仅 termview/TermSurfaceView.kt 66 行声明 `= null` + 200 行读取，零赋值（grep `backToBottomLabel *=` 零命中）→ 恒 null 死路径确认。SessionScreen.kt:204-210 Compose BackToBottomButton 按 showBackToBottom 渲染。改后属实。"
+        },
+        {
+          "symbol": "SessionViewModel.onScrollToBottom",
+          "claim": "联动方 TermSurfaceView 悬浮钮自绘为死路径；实际消费方是 SessionScreen 的 Compose BackToBottomButton onClick 回调",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 SessionScreen.kt:209 `onClick = { viewModel.onScrollToBottom() }`。改后属实。"
+        },
+        {
+          "symbol": "SessionViewModel.dismissTransient",
+          "claim": "全仓库唯一调用点是 SessionScreen.kt:175 的 LaunchedEffect（delay 后自动触发），不存在点击触发路径",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人 grep dismissTransient：生产唯一调用点 SessionScreen.kt:175（LaunchedEffect 166-176 行 delay 后自动触发）；StatusArea 无 clickable。改后属实。"
+        },
+        {
+          "symbol": "SessionViewModel.syncFromPresenter",
+          "claim": "Compose 组合不是逐帧回调本函数——唯一生产调用点是 SessionScreen 的 LaunchedEffect 时钟泵（TICK_MS=100ms 周期）+ onScrollToBottom 显式调用",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 SessionScreen.kt:157-163 LaunchedEffect while(true){onTick;syncFromPresenter;delay(TICK_MS)}，619 行 TICK_MS=100L。改后属实。"
+        },
+        {
+          "symbol": "HttpUrlConnectionUploader (类 KDoc)",
+          "claim": "把客户端约定写成服务端契约：server/upload.go findFilePart 明确写字段名非契约，服务端按携带 filename 的首个 part 取文件",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "本人读码 server/internal/api/upload.go:149『the field name the client uses is not part of the contract』+ 150-160 行 findFilePart 按 part.FileName()!=\"\" 取首个文件 part。改后属实。"
+        }
+      ],
+      "missed_by_worker": [
+        {
+          "symbol": "SessionRoute.kt（本包）3 处残留不实注释，与承办席在本包/他包已修的同形态问题同源",
+          "claim": "①行42『MainActivity/AgentMirrorApp 接线处唯一入口』不实——MainActivity 从不调 SessionRoute（唯一调用点 AgentMirrorApp.kt:96），与 pairing 席在 PairingRoute.kt 修掉的『MainActivity/AgentMirrorApp 双入口』谎言完全同形态（虚构消费方）；②行42『仅路由挂载，不含接线层』与函数体矛盾——SessionRoute 确实做了 ServiceWire.uiConnector 接线（76 行 `ServiceWire.uiConnector = vm` + DisposableEffect），与 pairing 席修掉的『仅路由挂载不含接线层』同形态；③行44+99-100『共享 ConnectionManager 单例由 fg-service 持有』『前台服务可能尚未启动（连接由 UI/配对层决定启动，fg-service KDoc）』——正是本批 service 席核准的核心发现（MirrorForegroundService 永不启动、manager 由本对象进程级持有）的对立面，是本批最大的不实断言在 session 包自己的残留",
+          "verdict": "真不实（承办席漏改）",
+          "new_text_accurate": null,
+          "evidence": "本人 grep：SessionRoute( 生产唯一调用点 AgentMirrorApp.kt:96（MainActivity 零调用）；本人读码 SessionRoute.kt:75-81 DisposableEffect 确实接线 ServiceWire.uiConnector；service 席核准的『前台服务无任何 startService 调用点』（本人亦已独立 grep 确认）。三处均为 D-14 同形态/虚构消费方/把未接线服务写成现状，承办席在 SessionViewModel.kt 修了同形态（showBackToBottom/onScrollToBottom 指向 TermSurfaceView），但未扫自己的 SessionRoute.kt。"
+        }
+      ],
+      "contracts_spotchecked": [
+        {
+          "symbol": "SessionViewModel.sendDraft / sendKey / uploadAttachment",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 SessionViewModel.kt：sendDraft（227-241 行）发送闸 inputStatus is Sending return、未就绪 Failed、成功 Sending，与 @pre/@post/@err/@inv 相符；sendKey 同构且 pendingSendIsKey 区分回执语义；uploadAttachment（278-295 行）base==null 明确报错『未配置上传地址』、Uploading 闸、失败不修改草稿，与契约相符。"
+        },
+        {
+          "symbol": "AttachmentUploader / HttpUrlConnectionUploader",
+          "verdict": "不凑数、描述正确",
+          "evidence": "本人读码 HttpUrlConnectionUploader.kt：@pre baseUrl 非空+bytes 非空；@err 网络/非2xx/无 path 全部折叠 UploadOutcome.Failure 不抛；@inv 每次独立建连 finally 断开。上传实现与契约相符。"
+        }
+      ],
+      "impl_changed": false,
+      "scope_violation": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.session", "rc": 0},
+        {"argv": "noglob env -u 'TEAM_AGENT_*' bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'（--rerun-tasks）", "rc": 0, "note": "session 6 测试类保持绿"}
+      ]
+    }
+  ],
+  "key_findings_verified": {
+    "foreground_service_never_started": true,
+    "foreground_service_grep_evidence": "grep -rn 'startService|startForegroundService|stopService' app/app/src/main/ → 唯一命中 app/app/src/main/java/dev/agentmirror/app/service/MirrorForegroundService.kt:47 的 doc 注释本身（零生产调用点）；grep -rn 'MirrorForegroundService' app/app/src/ → manifest:79 声明 + 本类自引用 + PackageDoc/ServiceWire doc 提及，无 ComponentName/startService 启动。manifest 79-81 行 <service android:name=\".service.MirrorForegroundService\" android:exported=\"false\" android:foregroundServiceType=\"dataSync\" />。commit 105a2fe 明记『死件家族第六例 MirrorForegroundService 接线留待后案』。后台保活与锁屏重连实际未接线——本批最重发现，核准。",
+    "noop_transport_not_default": true,
+    "noop_transport_evidence": "ServiceWire.kt:51 var transportFactory: TransportFactory = OkHttpTransportFactory（默认 OkHttp，非 Noop）；NoopTransportFactory 仅测试/降级用。",
+    "token_plaintext_storage": true,
+    "token_plaintext_evidence": "grep 全仓 '加密 TODO|encrypt.*TODO|TODO.*encrypt' 零命中；PairingConfigStore.save 75-76 行 putString(KEY_TOKEN, config.token) 明文，仅 tsAuthKey 走 secretCipher.encrypt（Android Keystore AES-GCM）。SharedPreferencesPairingConfigStore KDoc 自认『token 仍沿用既有 SharedPreferences 存储（历史欠账）』。",
+    "connectionstate_write_only": true,
+    "connectionstate_write_only_evidence": "grep 'connectionState' PairingViewModel.kt → 仅 113 行声明 + 268 行 onStateChanged 赋值，零读取；PairingScreen 状态区读 pairingStatus.targetUrl。",
+    "onopened_before_auth": true,
+    "onopened_before_auth_evidence": "Connection.kt onOpen() 130-145 行：listener.onOpened()（133 行）先于 transport.sendText(FrameCodec.encode(auth))（136 行）；ConnectionManager.connListener.onOpened 354-356 行 setState(AUTHENTICATING)。协议级顺序断言核准：回调与 AUTHENTICATING 状态确实早于 auth 上行。",
+    "root_route_four_branches": true,
+    "root_route_four_branches_evidence": "AgentMirrorApp.kt 75-80 when 四分支（Session/Pairing/Settings/Workspace）；AppRoute 151-155 四个子类型；git show ea5195f 证实 Settings 分支由该提交加入（原注释『三分支』未随更新）。这是 ea5195f（今晚提交）自己制造的不实注释，承办席改写属实。",
+    "backtobottom_dead_path": true,
+    "backtobottom_dead_path_evidence": "grep 全仓 backToBottomLabel：termview/TermSurfaceView.kt 66 行声明 null + 200 行读取，零赋值 → 恒 null 死路径；SessionScreen.kt:204-210 Compose BackToBottomButton 是真实渲染方。"
+  },
+  "gaps": [
+    "session 包 SessionRoute.kt 残留 3 处不实注释（行42 双入口谎言 + 行42 仅路由挂载不含接线层 + 行44/99-100 fg-service 持有 manager/前台服务决定启动），与本批已核准的核心发现（前台服务永不启动）直接矛盾，承办席漏改，建议后续窄修。",
+    "conn 包 5 个 fromWire 纯查找（AgentState/BinaryKind/ErrorCode/InputFailReason/InputKey）被套四标签，是 35 个契约里价值最低的一批——虽 @err/@pre 诚实标『无/不抛』非凑数式假错误面，但可视为边界性凑数，建议后续可收敛为单行 doc。",
+    "docs/wiki/t3-report.md 被 --check 自动重写（生成物），未回退，符合纪律。"
+  ],
+  "notes": "本批 37 条改写全部属实（原注释确实不实，改后文本与实现相符），.conn 35 个契约非恶意凑数（5 个 fromWire 纯查找为边界值但 @err 诚实标注），五条重点断言全部独立核准（前台服务永不启动 / token 明文存储 / connectionState write-only / onOpened 早于 auth / 根路由四分支），零实现改动、零越界、acceptance 全绿（含 --rerun-tasks 真跑 345 测 0 失败）。发现 1 处漏网：session 包 SessionRoute.kt 残留与配对席修掉的同形态不实注释（MainActivity 双入口 / 仅路由挂载不含接线层 / fg-service 持有 manager），且与本批最重发现（前台服务永不启动）直接矛盾，属承办席应修未修。ea5195f 今晚提交自己制造了根包『三分支』不实注释，承办席已改写为四分支（属实）。已做独立故意破坏对照（删 FrameCodec decode @err → 精确 exit 1 指向该符号 → 恢复 exit 0）。",
+  "positive_control_self_done": {
+    "operation": "临时改坏 FrameCodec.kt decode 的 @err 行为 '@err-DELIBERATE-BREAK'",
+    "command": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.conn",
+    "result": "T3-3 FAIL：1 条违规，[T3-3] dev.agentmirror.app.conn app/app/src/main/java/dev/agentmirror/app/conn/FrameCodec.kt:72 `@contract` — 缺契约标签: @err；exit 1",
+    "restored": true,
+    "restored_rc": 0,
+    "conclusion": "判据对本批包真实生效、精确到符号行，非扫不到包而全绿；恢复后 git diff --stat 与原状一致（13+/2-），无残留。"
+  }
+}

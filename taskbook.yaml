@@ -1190,3 +1190,215 @@ tasks:
     write_scope: ["server/cmd/agentmirrord/"]
     evidence: ".team/evidence/doc-contract-cmd.json"
     contention: impl
+
+  # ---------- 阶段一二第三批：Kotlin 侧 5 包 ----------
+  - id: doc-contract-kt-root
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/doc-contract-kt-root.json"
+    contention: impl
+
+  - id: doc-contract-kt-conn
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.conn`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.conn'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/conn/"]
+    evidence: ".team/evidence/doc-contract-kt-conn.json"
+    contention: impl
+
+  - id: doc-contract-kt-pairing
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.pairing`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.pairing'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/pairing/"]
+    evidence: ".team/evidence/doc-contract-kt-pairing.json"
+    contention: impl
+
+  - id: doc-contract-kt-service
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.service`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.service'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/service/"]
+    evidence: ".team/evidence/doc-contract-kt-service.json"
+    contention: impl
+
+  - id: doc-contract-kt-session
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.session`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.session'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/"]
+    evidence: ".team/evidence/doc-contract-kt-session.json"
+    contention: impl
+
+  # ---------- 阶段一二第四批：Kotlin 侧收尾 5 包 ----------
+  - id: doc-contract-kt-termview
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.termview`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.termview'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/doc-contract-kt-termview.json"
+    contention: impl
+
+  - id: doc-contract-kt-tsnet
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.tsnet`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.tsnet'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/tsnet/"]
+    evidence: ".team/evidence/doc-contract-kt-tsnet.json"
+    contention: impl
+
+  - id: doc-contract-kt-theme
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.ui.theme`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.ui.theme'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/ui/theme/"]
+    evidence: ".team/evidence/doc-contract-kt-theme.json"
+    contention: impl
+
+  - id: doc-contract-kt-workspace
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.workspace`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.workspace'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/workspace/"]
+    evidence: ".team/evidence/doc-contract-kt-workspace.json"
+    contention: impl
+
+  - id: doc-contract-kt-terminal
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.terminal`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.terminal'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/terminal/src/main/kotlin/dev/agentmirror/terminal/"]
+    evidence: ".team/evidence/doc-contract-kt-terminal.json"
+    contention: impl

@@ -39,13 +39,18 @@ import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.tsnet.ConnectionPath
 
 /**
- * 会话页路由挂载（MainActivity/AgentMirrorApp 接线处唯一入口；仅路由挂载，不含接线层）。
+ * 会话页路由挂载（[AgentMirrorApp] 的 Session 分支唯一入口；本组合同时承担接线层：
+ * 把当前会话 VM 挂到 [ServiceWire.uiConnector] 扇出，并安全创建共享连接）。
  *
- * 共享 [ConnectionManager] 单例由 fg-service 持有（[ServiceWire.manager]），UI 侧经
- * [ServiceWire.uiConnector] 扇出订阅同一连接（见 ServiceWire KDoc）。本组合：
+ * 共享 [ConnectionManager] 单例的创建方是 [ServiceWire.manager]（首次调用时构造），
+ * 生产路径经 [startPersistentConnection]（配对成功/冷启动）或本文件的
+ * [createSessionViewModel] 触发；UI 侧经 [ServiceWire.uiConnector] 扇出订阅同一连接
+ * （见 ServiceWire KDoc）。本组合：
  * - 安全获取共享 manager：连接配置未注入（配对层未落地）时明确返回等待态，不崩溃不白屏；
  * - 把会话 VM 挂到 [ServiceWire.uiConnector]（当前屏持有，退出即复位）；
  * - [SessionViewModel] 构造时已 subscribe（conn 层记簿，重连自动重放，004 无状态）。
+ * - 在屏期间由会话屏时钟泵驱动 [ConnectionManager.pump]/[ConnectionManager.resolveExpiredInputs]
+ *   （重连调度 + 输入超时裁决；配对页同机制，见 PairingViewModel）。
  *
  * 上传地址（协议 §8 同端口 `POST /upload`）统一读 [ServiceWire.uploadBaseUrl]——由
  * [startPersistentConnection] 统一装配入口注入（fix-reconnect-stale-config 同根并案：
@@ -96,8 +101,9 @@ internal fun createSessionViewModel(ref: String): SessionViewModel? {
         // 本 VM 走 uiConnector 收事件（SessionViewModel.init 不自行 setListener，见其 KDoc）。
         ServiceWire.manager(NoopUiListener)
     }.getOrNull() ?: return null
-    // 启动连接（幂等）：前台服务可能尚未启动（连接由 UI/配对层决定启动，fg-service KDoc）。
-    // 会话页在屏期间由 SessionScreen 时钟泵驱动 pump/超时裁决；离屏后服务接手。
+    // 启动连接（幂等）：manager 已存在（startPersistentConnection 已启动）时 start 为 no-op；
+    // 冷启动配对层先于本路径经 startPersistentConnection 启动，此处兜底再 start 一次。
+    // 连接时钟泵（pump/超时裁决）由在屏组合的 LaunchedEffect 驱动，本文件不负责。
     manager.start()
     // fix-reconnect-stale-config 同根并案：上传基地址统一读 ServiceWire.uploadBaseUrl
     // （startPersistentConnection 统一装配入口注入；此前硬编码 null 绕过 → 真机实证

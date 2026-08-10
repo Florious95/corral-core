@@ -27,5 +27,6 @@ package dev.agentmirror.app.conn
  * 3. [ConnectionManager] —— 重连策略 + 订阅簿记：重连后自动重放 auth + 全部活跃
  *    subscribe（004 无状态铁律的重放语义）；listing seq 不连续 → 自动重新 list。
  *
- * 上层（UI/service）只见 Flow/回调，不见 WS 细节。本层不持久任何会话状态。
+ * 上层（UI/service）只见回调（[ConnectionManager.Listener] / [Connection.Listener]），不见
+ * WS 细节。本层不持久任何会话状态。
  */

@@ -35,7 +35,15 @@ enum class BinaryKind(val wire: Int) {
     SCROLLBACK(3);
 
     companion object {
-        /** 按线上字节解析；未知 kind 返回 null（解码器需报 UNKNOWN_KIND）。 */
+        /**
+         * 按线上字节解析；未知 kind 返回 null（解码器需报 UNKNOWN_KIND）。
+         *
+         * @contract
+         * @pre 无
+         * @post 返回 entries 中 wire 等于 b 的成员；无匹配返回 null
+         * @err 无（不抛异常；未知 kind 由调用方报 [FrameError.UNKNOWN_KIND]）
+         * @inv 返回值为 null 或闭集成员
+         */
         fun fromWire(b: Int): BinaryKind? = entries.firstOrNull { it.wire == b }
     }
 }
@@ -91,8 +99,9 @@ data class BinaryFrame(
  * `[req_id:4BE 无符号][from_line:4BE 有符号][line_count:4BE 无符号][ANSI 字节]`。
  *
  * magic 与 version 在最外层：解码器先验 magic/version，再信任何字节。
- * 解码严格默认：坏 magic/版本、未知 kind、截断、超限、空 ref 一律报错
- * （畸形镜像流必须显式浮出，不得污染终端网格）。
+ * 解码严格默认：坏 magic/版本、未知 kind、截断、空 ref 一律报错
+ * （畸形镜像流必须显式浮出，不得污染终端网格）。载荷大小上限只在编码侧校验
+ * （[ProtocolVersion.MAX_BINARY_PAYLOAD]），解码侧不设上限（对齐 Go `DecodeBinary`）。
  */
 object BinaryFrameCodec {
     private const val HEADER_LEN = 5
@@ -101,6 +110,13 @@ object BinaryFrameCodec {
     /**
      * 编码一条二进制帧为完整字节序列（WS binary 载荷）。
      * 编码前校验 ref 长度与载荷大小，坏帧不跨线。
+     *
+     * @contract
+     * @pre frame.ref 非空且 ≤ [ProtocolVersion.MAX_REF_LEN] 字节、data ≤ [ProtocolVersion.MAX_BINARY_PAYLOAD]；
+     *      若 kind 为 [BinaryKind.SCROLLBACK] 则 reqId 与 lineCount ≥ 1
+     * @post 返回以 magic "RA" 开头、含版本字节与 kind 的完整二进制消息（对齐 Go EncodeBinary 布局）
+     * @err 空 ref ⇒ INVALID_REF；ref 超长 ⇒ REF_TOO_LONG；载荷超限 / scrollback 头不合法 ⇒ INVALID_FIELD
+     * @inv 纯函数，无外部副作用；data 字节原样进入返回消息，不经过 JSON 转义
      */
     fun encode(frame: BinaryFrame): ByteArray {
         // 编码侧边界校验（对齐 Go validateBinaryPayload）。
@@ -147,11 +163,15 @@ object BinaryFrameCodec {
     /**
      * 解码一条二进制 WS 消息为 [BinaryFrame]。
      *
-     * @throws FrameDecodeException 分类码见 [FrameError]：
+     * @contract
+     * @pre bytes 是至少 HEADER_LEN 字节的完整二进制消息
+     * @post 返回的 [BinaryFrame] 的 kind 合法且 ref 非空；出错时抛异常
+     * @err 分类码见 [FrameError]：
      *   - 帧太短 / 截断 ⇒ TRUNCATED
      *   - magic 不符 ⇒ BAD_MAGIC；版本字节不符 ⇒ UNSUPPORTED_VERSION
      *   - kind 未知 ⇒ UNKNOWN_KIND；reflen=0 ⇒ INVALID_REF
      *   - scrollback 头缺 / req_id=0 / line_count=0 ⇒ TRUNCATED / INVALID_FIELD
+     * @inv 纯函数，无外部副作用；解码侧不设 payload 大小上限（对齐 Go DecodeBinary）
      */
     fun decode(bytes: ByteArray): BinaryFrame {
         if (bytes.size < HEADER_LEN) {

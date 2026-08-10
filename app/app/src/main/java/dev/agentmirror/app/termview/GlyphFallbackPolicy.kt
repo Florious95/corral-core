@@ -43,6 +43,13 @@ class GlyphFallbackPolicy(private val probe: GlyphProbe) {
     /**
      * 判定码点 [codepoint] 的最终绘制槽位。热路径：ASCII/零宽两次分支即返回，
      * BMP 一次数组索引，零分配。
+     *
+     * @contract
+     * @pre none（任意 Unicode 码点均可判定）
+     * @post 零宽/组合及 C0/C1 控制 → [GlyphSlot.MONO]（不进缓存）；ASCII 可打印 → [GlyphSlot.MONO]（连探针都不调）；
+     *       其余按 MONO → SYSTEM_FALLBACK → POWERLINE 回退链判定，全链皆缺保底 MONO
+     * @err none
+     * @inv 判定结果按码点缓存终身复用（BMP 定长数组 / 非 BMP 惰性 HashMap），同码点不重复探测
      */
     fun resolve(codepoint: Int): GlyphSlot {
         // 零宽/组合码点并入主字符（CharWidth 判定，与内核一致）：必随主字符同字体槽画，

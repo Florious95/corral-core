@@ -40,6 +40,13 @@ import java.util.concurrent.TimeUnit
  *
  * 线程语义：OkHttp 回调都在 WebSocket 单线程串行到达（conn 层状态机据此免锁），本类
  * 原样转发。OkHttp 的 [WebSocketListener] 失败/关闭必有一次终结回调，映射到传输终结。
+ *
+ * @contract
+ * @pre start 后才有连接；[isOpen] 在 onOpen 前为 false
+ * @post OkHttp 单终结（onClosed 或 onFailure）→ 恰好一次 [TransportListener.onClosed]/[onFailure]，
+ *       不双发；text/binary 原样转发给监听
+ * @err 网络失败经 [TransportListener.onFailure] 上抛；服务端关闭经 [TransportListener.onClosed]
+ * @inv terminalDelivered 保证终结回调最多一次
  */
 class OkHttpWebSocketTransport(
     url: String,

@@ -24,8 +24,9 @@ package dev.agentmirror.app.conn
  * - READY 后掉线 ⇒ 非永久关闭（上层重连并重放 auth+subscribe）。
  * - 拨号失败（auth 未发出）⇒ 非永久关闭（网络问题，可重连）。
  *
- * 本地解码失败（坏帧/未知 type/版本不匹配）显式经 [Listener.onLocalDecodeError] 上浮，
- * 不静默吞掉（静默失效猎杀）。发送路径返回值可判定：非 READY 或校验不过即返回 false。
+ * 本地编解码失败（解码坏帧/未知 type/版本不匹配，或发送路径编码校验不过）显式经
+ * [Listener.onLocalDecodeError] 上浮，不静默吞掉（静默失效猎杀）。发送路径返回值可判定：
+ * 非 READY 或校验不过即返回 false。
  */
 class Connection(
     private val transport: WebSocketTransport,
@@ -39,7 +40,7 @@ class Connection(
 
     /** 事件回调（单一收件线程串行到达）。 */
     interface Listener {
-        /** 传输已建立且 auth 已发出，等待 auth_ack。 */
+        /** 传输已建立；auth 帧紧随本回调上行（回调返回后立即发出），等待 auth_ack。 */
         fun onOpened()
 
         /** auth_ack ok，连接就绪，可交换业务帧。 */
@@ -51,7 +52,7 @@ class Connection(
         /** 解码出的一帧二进制流帧（snapshot / delta / scrollback）。 */
         fun onBinary(frame: BinaryFrame)
 
-        /** 本地解码失败（坏帧/未知 type/版本不匹配等），显式上浮不静默。 */
+        /** 本地编解码失败（解码坏帧/未知 type/版本不匹配，或发送路径编码校验不过），显式上浮不静默。 */
         fun onLocalDecodeError(code: FrameError, message: String)
 
         /**
@@ -78,6 +79,12 @@ class Connection(
     /**
      * 发送一个控制帧。
      * @return false = 连接未就绪或帧校验不过（调用方必须能判定失败）。
+     *
+     * @contract
+     * @pre 连接已 READY（isReady = true）且未关闭
+     * @post 返回 true 时文本已交给传输层；编码失败经 [Listener.onLocalDecodeError] 上浮并返回 false
+     * @err 未就绪 / 编码校验不过 ⇒ 返回 false（不抛异常）
+     * @inv 不改变连接状态；close 后发送必为 false
      */
     fun send(frame: FramePayload): Boolean {
         if (closed || !isReady) return false
@@ -93,6 +100,12 @@ class Connection(
     /**
      * 发送一个二进制流帧。
      * @return false = 连接未就绪或帧校验不过。
+     *
+     * @contract
+     * @pre 连接已 READY（isReady = true）且未关闭
+     * @post 返回 true 时二进制已交给传输层；编码失败经 [Listener.onLocalDecodeError] 上浮并返回 false
+     * @err 未就绪 / 编码校验不过 ⇒ 返回 false（不抛异常）
+     * @inv 不改变连接状态；close 后发送必为 false
      */
     fun sendBinary(frame: BinaryFrame): Boolean {
         if (closed || !isReady) return false

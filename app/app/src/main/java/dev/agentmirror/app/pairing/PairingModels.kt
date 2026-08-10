@@ -72,7 +72,7 @@ enum class PairingFailCause {
     /** 拨号失败 / 地址不可达（缺陷 A 的 TUN 虚拟网卡地址正是此型）。 */
     UNREACHABLE,
 
-    /** 配对超时：15s 内未完成拨号+auth 握手。 */
+    /** 配对超时：候选逐试每地址 3s、无候选 15s，期限内未完成拨号+auth 握手。 */
     TIMEOUT,
 
     /** QR 内容解析失败（坏 JSON / 缺字段 / 坏版本）。 */
@@ -94,7 +94,7 @@ sealed interface PairingStatus {
     data object Success : PairingStatus
 
     /**
-     * 失败，[cause] 供 UI 区分超时/拒绝/不可达/解析失败，
+     * 失败，[cause] 供 UI 区分超时/拒绝/不可达/解析失败/协议错误，
      * [message] 人类可读（恒不含 token 值，协议 §9 红线）。
      */
     data class Failed(val cause: PairingFailCause, val message: String) : PairingStatus
@@ -106,6 +106,11 @@ class QrParseException(message: String) : Exception(message)
 /**
  * ws url 合法性：必须 ws:// 或 wss:// 且 host 非空（手填与 QR 共用）。
  * 前缀"ws" 单独或 http(s) 一律拒绝——协议 §1 只接受 WebSocket 端点。
+ * @contract
+ * @pre none
+ * @post 仅当 scheme 为 ws/wss 且 host 非空时返回 true
+ * @err none（内部解析异常一律返回 false）
+ * @inv none
  */
 fun isValidWsUrl(raw: String): Boolean = try {
     val uri = URI(raw.trim())
@@ -116,8 +121,13 @@ fun isValidWsUrl(raw: String): Boolean = try {
 
 /**
  * 从配对 ws url 推导 HTTP 上传基地址（协议 §8 同端口 `POST /upload`）：
- * ws→http、wss→https，保留 host:port，去掉路径。注入 ServiceWire.uploadBaseUrl
- * 供 HttpUrlConnectionUploader 使用（session-ui 沉淀欠账②清偿）。
+ * ws→http、wss→https，保留 host:port，去掉路径。注入 [ServiceWire.uploadBaseUrl]
+ * 供 [HttpUrlConnectionUploader] 使用（session-ui 沉淀欠账②清偿）。
+ * @contract
+ * @pre wsUrl 为合法 ws:// 或 wss:// URL
+ * @post 返回 `scheme://host[:port]` 基地址（无路径；无显式端口时省略端口）
+ * @err none
+ * @inv none
  */
 fun deriveUploadBase(wsUrl: String): String {
     val uri = URI(wsUrl)
