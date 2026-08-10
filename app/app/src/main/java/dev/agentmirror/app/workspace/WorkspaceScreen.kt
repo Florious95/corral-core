@@ -76,6 +76,7 @@ fun WorkspaceScreen(
     viewModel: WorkspaceViewModel,
     connectionPath: ConnectionPath? = null,
     onOpenSession: (ref: String, name: String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -95,6 +96,7 @@ fun WorkspaceScreen(
             // 拨号工厂记录的是本次尝试路径；只有 READY 后才可称为当前已连接路径。
             connectionPath = connectionPath.takeIf { state.connection == ConnectionUi.READY },
             onBack = { selectedCwd = null },
+            onOpenSettings = onOpenSettings,
         )
         ConnectionBanner(connection = state.connection)
 
@@ -120,8 +122,7 @@ fun WorkspaceScreen(
                     onOpenSession = onOpenSession,
                 )
                 // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
-                state.connection == ConnectionUi.CONNECTING && state.workspaces.isEmpty() ->
-                    LoadingContent()
+                state.isLoading -> LoadingContent()
                 state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
                 state.isEmpty -> EmptyGuideContent()
                 else -> WorkspaceList(
@@ -142,6 +143,7 @@ private fun TopBar(
     selected: WorkspaceUi?,
     connectionPath: ConnectionPath?,
     onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Row(
@@ -186,6 +188,7 @@ private fun TopBar(
                     modifier = Modifier.padding(horizontal = Spacing.sm),
                 )
             }
+            TextButton(onClick = onOpenSettings) { Text("设置") }
         }
     }
 }
