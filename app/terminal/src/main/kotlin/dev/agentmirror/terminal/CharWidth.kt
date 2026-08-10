@@ -62,6 +62,9 @@ object CharWidth {
         cp in 0xFE68..0xFE6B -> true
         cp in 0xFF00..0xFF60 -> true    // 全角形式
         cp in 0xFFE0..0xFFE6 -> true
+        cp == 0x26A0 -> true            // ⚠ + VS16：dogfood 夹具按 emoji 两列显示
+        cp == 0x2705 -> true            // ✅（East Asian Width=Wide）
+        cp == 0x274C -> true            // ❌（East Asian Width=Wide）
         cp in 0x1F300..0x1F64F -> true  // emoji 主区段
         cp in 0x1F680..0x1F6FF -> true  // 交通/地图 emoji
         cp in 0x1F900..0x1FAFF -> true  // 补充 emoji

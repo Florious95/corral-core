@@ -47,6 +47,14 @@ class CharWidthTest {
     }
 
     @Test
+    fun dogfoodEmojiFixtureUsesTwoCellGridWidth() {
+        // 真机夹具中的 BMP emoji 也按两列推进，否则会覆盖紧随其后的空格。
+        assertEquals(2, CharWidth.of(0x2705)) // ✅
+        assertEquals(2, CharWidth.of(0x274C)) // ❌
+        assertEquals(2, CharWidth.of(0x26A0)) // ⚠（后接 VS16）
+    }
+
+    @Test
     fun combiningAndJoinersAreZeroWidth() {
         assertEquals(0, CharWidth.of(0x0301)) // 组合尖音符
         assertEquals(0, CharWidth.of(0x200D)) // ZWJ
