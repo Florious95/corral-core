@@ -1,0 +1,8 @@
+{
+ "task_id": "doc-contract-batch2.verify",
+ "dispatched_to": "w-doc-verify2",
+ "base": "agents/w-doc-verify2.md",
+ "case_id": "msg_ed3de689f8e8",
+ "at": "2026-08-11 03:55:00",
+ "note": "第二批对抗性复核；intent 随派单同批写入（CLAUDE.md 新增红线）"
+}

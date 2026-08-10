@@ -1054,3 +1054,139 @@ tasks:
     write_scope: ["server/internal/discovery/"]
     evidence: ".team/evidence/doc-contract-discovery.json"
     contention: impl
+
+  # ---------- 阶段一二第二批：Go 侧剩余 5 包 ----------
+  - id: doc-contract-api
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/api` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/api'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/doc-contract-api.json"
+    contention: impl
+
+  - id: doc-contract-bridge
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/bridge` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/bridge'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/bridge/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/bridge/"]
+    evidence: ".team/evidence/doc-contract-bridge.json"
+    contention: impl
+
+  - id: doc-contract-pairing
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/pairing` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/pairing'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/pairing/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/pairing/"]
+    evidence: ".team/evidence/doc-contract-pairing.json"
+    contention: impl
+
+  - id: doc-contract-tsnetd
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/tsnetd` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/tsnetd'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/tsnetd/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/tsnetd/"]
+    evidence: ".team/evidence/doc-contract-tsnetd.json"
+    contention: impl
+
+  - id: doc-contract-cmd
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `cmd/agentmirrord` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg cmd/agentmirrord'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go build ./... && go vet ./cmd/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/cmd/agentmirrord/"]
+    evidence: ".team/evidence/doc-contract-cmd.json"
+    contention: impl

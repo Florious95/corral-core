@@ -218,16 +218,23 @@ def _go_package_doc_from_files(pkg_dir, pkg_name):
 
 
 def _go_package_comment(text, pkg_name):
-    """从文本中提取紧邻 `package <pkg_name>` 上方的 // 注释块。
+    """从文本中提取紧邻 package 声明上方的 // 注释块。
 
     按行号定位 package 声明后向上扫描；遇空行或非注释行立即截断，
     保证 doc 注释与 package 子句之间不含空行（Go 官方 doc comment 约定）。
+
+    pkg_name 是**目录名**。Go 命令包目录（cmd/<名>）声明 `package main`，目录名与
+    包名不一致，此时照 `collect_go_source()` 的 is_main 口径（286 行）把 `package main`
+    也归属本目录（命令包 doc 必须能被读到）。库包目录名 == 包名，行为不变。
     """
     lines = text.splitlines()
     pkg_re = re.compile(r"^\s*package\s+" + re.escape(pkg_name) + r"\b")
     pkg_idx = next((i for i, ln in enumerate(lines) if pkg_re.match(ln)), None)
     if pkg_idx is None:
-        return ""
+        main_re = re.compile(r"^\s*package\s+main\s*(?:$|/\*|//)")
+        pkg_idx = next((i for i, ln in enumerate(lines) if main_re.match(ln)), None)
+        if pkg_idx is None:
+            return ""
     doc_lines = []
     i = pkg_idx - 1
     while i >= 0:
@@ -982,6 +989,12 @@ def _extract_tags(block_lines):
 
     返回 (标签名→值文本 dict, 块文本)。行首 `@label` 识别；`@label` 后面跟 `:`
     或空白再跟值。Kotlin 行首 `* @label` 由 _kt_kdoc_lines 已剥掉 `*`。
+
+    **重复标签**：同一标签多条取值**全部保留**（存 list）。@consumes/@produces 是
+    可重复的跨层声明——命令包/库包的包级 doc 常在一个注释块里连续写多条
+    `@consumes x`，单值 dict 覆盖会让前面的全部静默丢读，T3-4 把已声明的包误判成
+    「import 了却未声明」。@contract/@pre/@post/@err/@inv 语义上单值，首条即留
+    （多写重叠时首条为准），消费方按 str 或 list 兼容取值。
     """
     tags = {}
     texts = []
@@ -990,7 +1003,14 @@ def _extract_tags(block_lines):
         if s.startswith("@"):
             m = re.match(r"^@([A-Za-z][\w-]*)\b", s)
             if m and m.group(1) in T3_CONTRACT_TAGS:
-                tags[m.group(1)] = s[m.end():].strip()
+                key = m.group(1)
+                val = s[m.end():].strip()
+                if key in tags:
+                    if not isinstance(tags[key], list):
+                        tags[key] = [tags[key]]  # 第二条起转 list，保留全部取值
+                    tags[key].append(val)
+                else:
+                    tags[key] = val
                 continue
         texts.append(s)
     return tags, "\n".join(texts)
@@ -1058,6 +1078,37 @@ def _check_t3_3_kt(kt_pkgs, root, pkg_filter, out):
                         })
 
 
+def _go_file_belongs_to_dir(text, pkg_name):
+    """该 Go 文件是否属于 `pkg_name`（目录名）这个包。
+
+    守卫：目录名 == package 名（防同一目录混入别包文件时误归属）。精确特判：
+    命令包目录（cmd/<名>）声明 `package main`，目录名 != 包名，照 collect_go_source()
+    的 is_main 口径（286 行）把 `package main` 也归属本目录。除 `package main`
+    外不作任何放宽——声明别的包名的文件仍被拒（防串味守卫保留）。
+    """
+    if re.search(r"^\s*package\s+" + re.escape(pkg_name) + r"\b", text, re.MULTILINE):
+        return True
+    return re.search(r"^\s*package\s+main\b", text, re.MULTILINE) is not None
+
+
+def _consumes_values(tags):
+    """把 _extract_tags 的 @consumes 值（str 单条或 list 多条）归一成包名迭代。
+
+    每个值取第一个空白分隔 token（包名）；容忍行内尾注（`@consumes internal/config  # 理由`）。
+    """
+    raw = tags.get("consumes")
+    if not raw:
+        return ()
+    values = raw if isinstance(raw, list) else [raw]
+    out = []
+    for v in values:
+        v = (v or "").strip().strip("\"'`")
+        if not v:
+            continue
+        out.append(v.split()[0])
+    return out
+
+
 def _declared_consumes(root, pkg_filter):
     """全仓库 @consumes 声明：包名 → 消费的目标包名集合（注释文本里读的）。
 
@@ -1075,15 +1126,11 @@ def _declared_consumes(root, pkg_filter):
         pkg_name = os.path.basename(dirpath)
         for f in sorted(f for f in files if f.endswith(".go") and not f.endswith("_test.go")):
             text = read_text(os.path.join(dirpath, f))
-            if re.search(r"^\s*package\s+" + re.escape(pkg_name) + r"\b",
-                         text, re.MULTILINE) is None:
-                continue  # 只有包所属文件才看包 doc（防御）
+            if not _go_file_belongs_to_dir(text, pkg_name):
+                continue  # 只有包所属文件才看包 doc（防御；命令包 `package main` 精确特判）
             for blk in _group_comment_blocks(_go_doc_lines(text)):
                 tags, _ = _extract_tags(blk)
-                if "consumes" in tags and tags["consumes"]:
-                    # 值取第一个空白分隔 token（包名）；容忍行内尾注
-                    # （`@consumes internal/config  # 理由`）。
-                    val = tags["consumes"].strip().strip("\"'`").split()[0]
+                for val in _consumes_values(tags):
                     declared.setdefault(pkg_key, set()).add(val)
     for src_root in _find_kotlin_roots(root):
         for dirpath, dirnames, files in os.walk(src_root):
@@ -1103,8 +1150,7 @@ def _declared_consumes(root, pkg_filter):
                 text = read_text(os.path.join(dirpath, f))
                 for blk in _group_comment_blocks(_kt_kdoc_lines(text)):
                     tags, _ = _extract_tags(blk)
-                    if "consumes" in tags and tags["consumes"]:
-                        val = tags["consumes"].strip().strip("\"'`").split()[0]
+                    for val in _consumes_values(tags):
                         declared.setdefault(pkg_key, set()).add(val)
     return declared
 

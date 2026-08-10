@@ -1,0 +1,74 @@
+{
+  "status": "pass",
+  "task_id": "t34-mainpkg",
+  "case_id": "msg_538bb02ef440",
+  "at": "2026-08-11",
+  "seat": "w-t34-mainpkg",
+  "channel": "provider=claude_code / auth_mode=compatible_api / profile=worker-api (deepseek-v4-flash[1m]) — contention=impl, 返工 0, 未升级 codex",
+  "summary": "T3-4 命令包盲区窄修完成。红测证明：必绿格 cmd/agentmirrord 修复前 rc=1（声明读不到 → T3-4「import 了却未声明」两条），修复后 rc=0（T3-4 PASS）；必红格 cmd/redcmd 修复前后都 rc=1（命令包绝不豁免于架构漂移判据）；防串味守卫保住（mixed.go 的 @consumes internal/other 在修复前后都未被归属，纯函数断言 internal/other 不在 cmd/agentmirrord 名下，report 模式只列 redcmd、internal/other 零出现）；真仓库 cmd/agentmirrord --strict-t3 从 rc=1（4 条漂移）转 rc=0（T3-4 PASS），w-doc-cmd 已写的 4 条 @consumes 全部被读到。生成物幂等（连跑两次 sha256 相同）；unittest 30 用例全绿（含新增 4 例确认在跑）；--check exit 0，既有 T1/T3-1/T3-2/T3-3 不被打坏。",
+  "fixture_rc_before_after": {
+    "red_test_target": {
+      "fixture": "tools/archwiki/testdata/consumes-main",
+      "pkg": "cmd/agentmirrord",
+      "cmd": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/consumes-main --check --go-source --strict-t3 --pkg cmd/agentmirrord",
+      "before": {
+        "rc": 1,
+        "note": "T3-4 FAIL — 跨层声明一致：2 条违规（[T3-4] cmd/agentmirrord :0 `internal/config`、`internal/proto` — import 了却未声明 @consumes）。这就是修复前的红测：声明写在 main.go 包级 doc 里，但 _declared_consumes() 对 package main 读不到 → 判「import 了却未声明」。此格必红证明该 fixture 确实扫到并判红，不是「没扫到当干净」。"
+      },
+      "after": {
+        "rc": 0,
+        "note": "T3-4 PASS — 跨层声明一致：无违规。修复后声明被读到，@consumes 与 import 图一致 → 转绿。这是本次修复的核心证明：rc 1→0。"
+      }
+    },
+    "must_stay_red": {
+      "fixture": "tools/archwiki/testdata/consumes-main",
+      "pkg": "cmd/redcmd",
+      "cmd": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/consumes-main --check --go-source --strict-t3 --pkg cmd/redcmd",
+      "before": {"rc": 1, "note": "T3-4 FAIL：cmd/redcmd import 了 internal/config 却未声明 → 架构漂移（命令包未豁免）。"},
+      "after": {"rc": 1, "note": "T3-4 FAIL：仍红——修复只补 package main 特判的「读取能力」，绝不豁免命令包的漂移判据。"}
+    }
+  },
+  "guard_preserved": {
+    "fixture": "tools/archwiki/testdata/consumes-main",
+    "case": "cmd/agentmirrord/mixed.go 声明 package somethingelse（目录名 != 包名 != main）、写 @consumes internal/other",
+    "before_fix": "report 模式 rc=1，T3-4 列 cmd/agentmirrord internal/config + internal/proto（bug 本身）+ cmd/redcmd；internal/other 未出现——旧守卫已拒 mixed.go",
+    "after_fix": "report 模式 rc=0，T3-4 只列 cmd/redcmd internal/config；cmd/agentmirrord 名下无违规、internal/other 零出现",
+    "pure_function": "_declared_consumes(consumes-main, None)：declared['cmd/agentmirrord'] == {'internal/config','internal/proto'}，'internal/other' NOT in it，'cmd/redcmd' not in declared",
+    "verdict": "防串味守卫保住：命令包目录混入声明别的包名的文件，其 @consumes 未被误归属到本目录。特判精确到 package main，未拆守卫。"
+  },
+  "second_defect_collapse": {
+    "issue": "同一 doc 块多条 @consumes 时 _extract_tags 按 dict 单值覆盖，只留最后一条（真仓库 main.go 写 4 条只读到 internal/api）。同属「声明写了却不被读取」，在 tools/archwiki/ 内，一并修复。",
+    "red_test_before": "test_extract_tags_keeps_multiple_consumes 修复前失败（断言 [internal/config, internal/proto, internal/api]，实际仅最后一条存活）",
+    "red_test_after": "修复后通过；纯函数断言 declared['cmd/agentmirrord'] == {'internal/config','internal/proto'}（fixture 同一 doc 块 2 条 @consumes 全保留）",
+    "verdict": "修复前多条 @consumes 只留最后一条 → 漏读；修复后全部保留 → T3-4 声明面完整。"
+  },
+  "tests": [
+    {
+      "argv": "env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"",
+      "rc": 0,
+      "note": "30 用例全绿（原 26 + 新增 4：test_t3_4_cmd_pkg_undeclared_is_red / test_t3_4_cmd_pkg_declared_is_green / test_t3_4_cmd_pkg_guard_holds / test_extract_tags_keeps_multiple_consumes，另更新 test_declared_consumes_reads_cmd_pkg_and_keeps_guard 断言双 consumer）。新用例确认在跑（-v 列出）。红测在修复前 4 例全失败（其中 declared_is_green 正是「修复前必红」格），修复后全绿。"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "真仓库全量判据 exit 0。T1-1/T1-2/T3-1/T3-2/T3-3 保持 PASS；T3-4 报告模式从 24 条违规降到 20 条（命令包 4 条消除，剩余 20 条全是 Kotlin 侧 w-doc-cmd 未收口项，基线即如此，未新增）。"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg cmd/agentmirrord",
+      "rc": 0,
+      "note": "真仓库命令包：T3-4 从修复前 rc=1（4 条漂移：internal/api + config + pairing + tsnetd）转 rc=0（T3-4 PASS）。w-doc-cmd 在 main.go 已写的 4 条 @consumes（internal/config / internal/pairing / internal/tsnetd / internal/api）全部被读到。声明归 w-doc-cmd，我只修判据读取能力。"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID python3 tools/archwiki/build_wiki.py（连跑两次）",
+      "rc": 0,
+      "note": "生成物幂等：docs/wiki/README.md 与 t3-report.md 连跑两次 sha256 完全一致（diff 为空）。"
+    }
+  ],
+  "changes": [
+    "tools/archwiki/build_wiki.py — _go_package_comment：目录名 != 包名时对 package main 特判归属本目录（doc 可读）；_extract_tags：重复标签全部保留存 list（多条 @consumes 不再被覆盖）；_go_file_belongs_to_dir：目录名守卫 + package main 精确特判（未拆防串味守卫）；_consumes_values：@consumes 值 str/list 归一成包名迭代",
+    "tools/archwiki/testdata/consumes-main/ — 新 fixture：cmd/agentmirrord（必绿，同一 doc 块 2 条 @consumes）、cmd/redcmd（必红，import 未声明）、cmd/agentmirrord/mixed.go（防串味，声明 package somethingelse + @consumes internal/other）、internal/config + internal/proto + internal/other（import 目标）",
+    "tools/archwiki/test_check.py — 新增 4 用例（必红 cmd_pkg_undeclared_is_red / 必绿 cmd_pkg_declared_is_green / 守卫 cmd_pkg_guard_holds / 纯函数 declared_consumes_reads + extract_tags_keeps_multiple_consumes）",
+    "tools/archwiki/testdata/README.md — 补 consumes-main/ fixture 说明行"
+  ],
+  "deviation": []
+}
