@@ -1,5 +1,5 @@
 ---
-name: adjudicator
+name: judge
 role: 裁定席（编排引擎的问题分支）
 provider: codex
 auth_mode: subscription

@@ -13,10 +13,12 @@
 # 用法：把所有 team-agent 调用换成本包装器，尤其是 add-agent / start-agent / reset-agent。
 #   .team/ta add-agent w-foo --role agents/w-foo.md --workspace .
 # 直连实测可用；若将来直连不可达，改这里 pin 一个已验证的代理即可，调用方无需变更。
+TA_BIN="$(command -v team-agent)"
 exec env \
   -u HTTPS_PROXY -u https_proxy \
   -u HTTP_PROXY  -u http_proxy \
   -u ALL_PROXY   -u all_proxy \
   -u NODE_EXTRA_CA_CERTS \
   -u NO_COLOR \
-  team-agent "$@"
+  -u _ \
+  "$TA_BIN" "$@"

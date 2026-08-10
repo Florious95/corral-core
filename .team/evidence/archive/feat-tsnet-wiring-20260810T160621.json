@@ -1,0 +1,71 @@
+{
+  "status": "red",
+  "notes": "返工依据：同一工作区当前 APK 的隔离 headscale 实链 run-20260810T150156-94334 已清洁复跑，result.json 为 failure_reason=expected_two_headscale_nodes、headscale_node_count=1；diagnostics.log:24/91 明确显示 App GoLog 停在 `LocalBackend state is NeedsLogin; running StartLoginInteractive...`，而旧 APK 同场景曾达到 node_count=2。该失败直接否定本任务的 App authkey 起网与模拟器 SOCKS5 路由闭环，不能归入仅限“用户真实 TS_AUTHKEY + 官方 tailnet 真机端到端”的允许未验证项。返工须先在本任务 App 写入范围内查清并修复当前 APK 的 authkey/control URL/tsnet bootstrap 消费链，再以隔离 headscale 证明 App 节点加入（node_count=2）、节点 Up、经 SOCKS5 拨 daemon 的 100.64/10 地址并进入工作区，且 cleanup=yes、凭据不上屏不落日志不入截图；若根因落到本任务 scope 外的 tools/tsnetbind 或 app/libs，禁止越界，按精确文件与证据红交由引擎另案。正式用户 tailnet 真机验证仍可保留 unverified。",
+  "tests": [
+    {
+      "argv": [
+        "env",
+        "-u",
+        "TEAM_AGENT_*",
+        "bash",
+        "-lc",
+        "cd app && ./gradlew -q :app:testDebugUnitTest"
+      ],
+      "rc": 0,
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "env",
+        "-u",
+        "TEAM_AGENT_*",
+        "bash",
+        "-lc",
+        "cd server && go test ./internal/tsnetd/... ./internal/pairing/..."
+      ],
+      "rc": 0,
+      "stdout": "ok  \tgithub.com/agentmirror/agentmirror/internal/tsnetd\t(cached)\nok  \tgithub.com/agentmirror/agentmirror/internal/pairing\t(cached)\n"
+    }
+  ],
+  "changes": [
+    {
+      "paths": [
+        "app/app/src/main/java/dev/agentmirror/app/pairing/",
+        "app/app/src/main/java/dev/agentmirror/app/tsnet/",
+        "app/app/src/main/java/dev/agentmirror/app/service/"
+      ],
+      "summary": "QR/手填 authkey 接入内嵌 tsnet，Keystore AES-GCM 持久化，tailnet 目标按节点 Up 状态经 SOCKS5 拨号，LAN 保持直连。"
+    },
+    {
+      "paths": [
+        "app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt",
+        "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt",
+        "app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt",
+        "app/app/src/test/java/dev/agentmirror/app/service/ServiceWireStaleConfigTest.kt"
+      ],
+      "summary": "连接路径改为 Compose 可观察状态，并只在 READY 时展示 LAN/tailnet，避免冷启动重试后徽标停在首拨路径或把未成功拨号冒充已连接。"
+    },
+    {
+      "paths": [
+        "server/cmd/agentmirrord/",
+        "server/internal/config/",
+        "server/internal/tsnetd/",
+        "server/internal/pairing/"
+      ],
+      "summary": "服务端仅从 TS_AUTHKEY 环境变量取凭据，等待 tsnet Up 后启动双栈监听，并把 tailnet 地址合并进 QR candidates；凭据只进入 QR 载荷，不进明文 guide 或日志。"
+    },
+    {
+      "paths": [
+        "docs/protocol.md",
+        "server/README.md",
+        "app/app/src/test/",
+        "server/internal/pairing/",
+        "server/internal/tsnetd/"
+      ],
+      "summary": "补齐 env-only 启动、安全边界、QR candidates 共存语义及假 tsnet 接缝回归测试。"
+    }
+  ],
+  "deviation": [
+    "真实 tailnet 真机端到端未运行：该项需要用户持有的真实 TS_AUTHKEY，按任务定义留待用户真机验收；本席未读取或使用真实凭据。"
+  ]
+}

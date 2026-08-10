@@ -1,0 +1,1 @@
+{"task_id":"fix-connected-idle-economy","dispatched_to":"w-fix-onlinecpu-e2e","base":".team/nodes/fix-connected-idle-economy/CLAUDE.md","at":"2026-08-10","note":"终审 res_385c2d2f3088 两红项回炉：三态各自新 runtime+每态零残留；helper token 改 env-only，server 五文件不动"}

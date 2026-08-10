@@ -1,0 +1,12 @@
+time=2026-08-09T23:29:00.146+08:00 level=INFO msg="single-instance guard acquired" pidfile=/tmp/tswire-e2e/agentmirrord.pid
+time=2026-08-09T23:29:00.146+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-09T23:29:00.146+08:00 level=INFO msg="agentmirrord starting" listen=0.0.0.0:29900 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-09T23:29:00.146+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir="/Users/alauda/Library/Application Support/agentmirror/tsnet"
+time=2026-08-09T23:29:00.147+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/09 23:29:00 tshttpproxy: using proxy "https://<redacted-proxy-cred>@sg-proxy2.team-agent.net:8443" for URL: "https://controlplane.tailscale.com/"
+2026/08/09 23:29:00 tsnet running state path /Users/alauda/Library/Application Support/agentmirror/tsnet/tailscaled.state
+2026/08/09 23:29:00 tsnet starting with hostname "MacBook-Pro.local", varRoot "/Users/alauda/Library/Application Support/agentmirror/tsnet"
+2026/08/09 23:29:00 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/09 23:29:00 AuthLoop: state is Starting; done
+time=2026-08-09T23:29:00.268+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+2026/08/09 23:29:01 tshttpproxy: CONNECT response from https://<redacted-proxy-cred>@sg-proxy2.team-agent.net:8443 for target "log.tailscale.com:443" (auth "Basic <redacted>"): 200 Connection established
