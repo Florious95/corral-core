@@ -1,0 +1,57 @@
+{
+  "task_id": "perf-thresholds-enforce",
+  "status": "red",
+  "rechecked_at": "2026-08-11T00:46:00+08:00",
+  "rechecker": "w-recheck-settle",
+  "seat_history": "dispatched 2026-08-10 21:59 to w-perf-thresholds-enforce, killed mid-run (no evidence file; re-judged from scratch by recheck-settle)",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'",
+      "rc": 0,
+      "note": "recheck acceptance argv; suite PASS ~31 min; new hard-gated baseline written to e2e/artifacts/fix-upload-auth/baseline.json"
+    },
+    {
+      "argv": "bash -lc 'python3 -c \"import json;d=json.load(open(\\\"e2e/artifacts/test-api-user-scenarios-perf/baseline.json\\\"));assert d[\\\"performance\\\"][\\\"hard_numeric_thresholds\\\"],\\\"门限未落盘\\\"\"'",
+      "rc": 1,
+      "note": "recheck acceptance argv verbatim; FAILS with AssertionError 门限未落盘 because this baseline file is never written by the current script"
+    }
+  ],
+  "positive_control": {
+    "fresh_hard_gated_baseline": "e2e/artifacts/fix-upload-auth/baseline.json: mode=hard_gated, hard_numeric_thresholds=14 entries all pass (5 latency + 3 economy-state CPU/spawns/descendants + 3 RSS)",
+    "threshold_values": "pair_to_first_listing.p95 0.804<=5; subscribe_first_frame.p95 145.4<=400; output_end_to_end.p95 45.07<=150; scrollback_page.p95 41.49<=150; reconnect_recovery.p95 123.1<=400; zero_connection cpu 0<=0.5, spawns 0==0, descendants 0==0; connected_zero cpu 1.18<=5; connected_single cpu 1.22<=5, descendants 2<=4; RSS deltas -4624/3808/704<=20480",
+    "null_metrics_resolved": "large_output.throughput 30580053 bytes/s; upload.latency p50 1.884 / p95 3.005 ms (both non-null in fresh baseline; committed baseline already non-null)",
+    "exit_gate_path": "script lines 1733-1962: add_threshold appends failures; baseline.status=pass only if no failures; final python block prints 'PERFORMANCE THRESHOLD FAIL: metric: measured=X unit, threshold COMP limit unit' to stderr and raise SystemExit(1 if failed else 0) under set -euo pipefail"
+  },
+  "goal_checks": [
+    {
+      "claim": "五条时延门限与静默经济三态门限真写进脚本",
+      "verdict": "met",
+      "evidence": "e2e/api-user-scenarios.sh lines 1747-1768: add_threshold for pair_to_first_listing<=5, subscribe_first_frame<=400, output_end_to_end<=150, scrollback_page<=150, reconnect_recovery<=400 (ms); zero_connection cpu<=0.5 spawns==0 descendants==0, connected_zero cpu<=5, connected_single cpu<=5 descendants<=4, each state RSS end_minus_start<=20480 KiB"
+    },
+    {
+      "claim": "门限落进 baseline.json.performance.hard_numeric_thresholds",
+      "verdict": "met",
+      "evidence": "fresh fix-upload-auth/baseline.json has performance.hard_numeric_thresholds=14 entries, all status=pass. BUT acceptance #2 reads test-api-user-scenarios-perf/baseline.json whose hard_numeric_thresholds is still [] (never written) => acceptance FAILS despite implementation being correct"
+    },
+    {
+      "claim": "large_output 与 upload 两项基线不再为 null",
+      "verdict": "met",
+      "evidence": "committed test-api-perf baseline already non-null (28.1MB/s, p50 2.64/p95 3.43); fresh hard-gated baseline non-null (30.6MB/s, p50 1.884/p95 3.005)"
+    },
+    {
+      "claim": "超门限真的 exit 非 0 并打印实测 vs 门限",
+      "verdict": "met",
+      "evidence": "script final python gate (1938-1962) prints 'PERFORMANCE THRESHOLD FAIL: metric: measured=<actual> unit, threshold <comp> <limit> unit' for each failed gate to stderr and exits 1; set -euo pipefail propagates. All thresholds passed this run (exit 0), but the fail path is unconditional and present"
+    }
+  ],
+  "gaps": [
+    "acceptance #2 path mismatch: e2e/api-user-scenarios.sh ART is e2e/artifacts/fix-upload-auth (write_scope dir of fix-upload-auth case) so its hard-gated baseline lands in fix-upload-auth/baseline.json; acceptance #2 hardcodes reading e2e/artifacts/test-api-user-scenarios-perf/baseline.json which no script writes. Even after a fresh e2e run acceptance #2 deterministically fails rc=1. Narrow fix options: (a) point acceptance #2 at fix-upload-auth/baseline.json, or (b) have the script also write/copy the hard-gated baseline to test-api-user-scenarios-perf/, or (c) restore ART to test-api-user-scenarios-perf and let fix-upload-auth read there. Implementation itself is correct; only the landing path is wrong.",
+    "cross-case coupling: the same e2e/api-user-scenarios.sh is shared by fix-upload-auth and perf-thresholds-enforce; the ART-dir retarget was made by one seat and breaks the other's acceptance. Leader should reconcile the two cases' artifact dir contract before commit."
+  ],
+  "suggested_commit_files": [
+    "e2e/api-user-scenarios.sh",
+    "e2e/artifacts/test-api-user-scenarios-perf/baseline.json",
+    "e2e/artifacts/fix-upload-auth/baseline.json",
+    "e2e/artifacts/fix-upload-auth/REPORT.md"
+  ]
+}
