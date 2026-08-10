@@ -1,0 +1,95 @@
+{
+  "status": "pass",
+  "task_id": "arch-criteria-t3-contract",
+  "rework": {
+    "round": 1,
+    "reason": "独立复核席 w-t3c-verify 判 refuted：T3-3 在 Go 侧按「文件」判契约完整性而非按「符号」，同文件多个 @contract 时残缺被掩盖。根因链已实证：①_go_doc_lines 剥 // 的正则失效——_all_comment_lines 返回的缓冲起点已在 // 之后、首字符是空格；②行首空格让 _group_comment_blocks 无法正确分块，整个文件注释合并成 mega-block；③标签 union 后，前一个完整 @contract 的 @err/@inv 掩盖后一个残缺符号的缺失。活体注入 server/internal/api/discoverer.go 的 Discoverer（四标签齐）+scopedDiscoveryDirsEnv（缺 @err/@inv）跑 --strict-t3 得 PASS 零违规。",
+    "fixes": [
+      "_go_doc_lines 改为 raw.strip() 剥行首伪缩进（_all_comment_lines 返回 // 之后内容，^// 正则永远不匹配）",
+      "_group_comment_blocks 改为按行号相邻（gap==1）判块，不再按行首缩进判续接——Go 每个符号的 doc 块被函数/空行天然隔开，四标签只在符号自己所属的注释块里查，绝不跨块 union",
+      "_all_comment_lines 的 BLOCK 状态补 \n 行号推进（隐藏缺陷：连续两个块注释时第二个块行号回卷错乱，影响 Kotlin 多符号分块与所有块注释行号报告）",
+      "新增 contract-multi 回归红测 fixture（同文件多 @contract，Go 的 Half 缺 @err/@inv + Kotlin 的 HalfClient 缺 @post），挂进 test_check.py"
+    ],
+    "audit_same_shape": {
+      "T3-4": "无风险：@consumes 是包级声明（union 进 declared[pkg_key]），跨符号归属天然正确；且 file-package<name> 守卫防跨包串味。实测 Alpha 声明 @consumes + Beta 无声明同文件，T3-4 零误报",
+      "T3-1": "无风险：用 _go_decl_has_doc/_kt_decl_has_doc 的原始行号邻接判定，不经过 _group_comment_blocks",
+      "T3-2": "无风险：逐行扫描（for lineno,text in doc_lines）不跨符号 union；BLOCK 行号修复反而是严格改善（连续块注释行号现正确）"
+    }
+  },
+  "summary": "阶段二验收定义先行：落地两条新判据，编号续 T3 系列，全部复用 arch-criteria-t3 已建成的 _all_comment_lines 字符串感知提取器，不另起炉灶。T3-3 契约标签完备：凡标 @contract 的符号四标签 @pre/@post/@err/@inv 必须齐全，显式 none 合法、缺项即红；T3-4 跨层声明一致：@consumes 声明的包必须真在 import 图里，import 了没声明判架构漂移（import 图用既有采集结果 deps，不重新解析）。准入纪律四格齐：contract-incomplete（Go 缺 @err/@inv + Kotlin 缺 @post）与 consumes-drift（声明没 import + import 没声明，Go/Kotlin 双侧）必红；contract-complete（四标签齐全含显式 none）与 consumes-consistent（声明与 import 图一致）必绿，全部挂进 test_check.py，套件 19→25 用例（含返工 #1 新增的 contract-multi 同文件多符号回归红测）。那个 0 已自证：真仓库 T3-3 违规 0 条，覆盖量数字给出扫描到的 @contract 符号总数=0、@consumes 声明总数=0、参与比对的 import 边数=29——0 是「真没有标注」（grep 实证全仓库无 @contract/@consumes 标签），判据真扫得到已由两个必红 fixture 用同一 scan_t3 路径自证（fixture 中 @contract 被扫到并红）。T3-4 真仓库 29 条架构漂移（全部 import 边未声明），即阶段二逐包补 @consumes 的收口清单。诚实边界明写进 t3-report 与 HANDBOOK：T3-3 只验标签齐不齐、T3-4 只验声明与 import 图一致，均不验契约内容是否描述正确（@post 真不真、@err 语义对不对属语义事实，由用例覆盖）。分级开关沿用：默认报告模式不改退出码（--check exit 0），--strict-t3 计入退出码，--pkg 单包硬判（真仓库 internal/api 精确到该包 4 条）。生成物幂等：两次 --check 的 stdout 与 docs/wiki/t3-report.md 重跑无 diff。红线全守：T1-1/T1-2/T3-1/T3-2 保持绿，--check exit 0；白名单零新增（T3-3/T3-4 无白名单）；写入限 tools/archwiki/ 与 docs/wiki/t3-report.md（HANDBOOK 在 .team/nodes/arch-criteria-t3/）。返工 #1 修复根因后验收三条仍全过，活体注入同一复现路径现正确报红。",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"'",
+      "rc": 0,
+      "note": "25 用例全绿（返工 #1 后：原 24 + 新增 contract-multi 同文件多 @contract 回归红测）。红测证明判据真会红：contract-incomplete --strict-t3 exit 1（T3-3 缺 @err/@inv 与缺 @post 各一条）；consumes-drift --strict-t3 exit 1（T3-4 声明没 import + import 没声明双侧 4 条）；contract-multi --strict-t3 exit 1（Go Half 缺 @err/@inv + Kotlin HalfClient 缺 @post 都抓——返工 #1 的核心回归防线）"
+    },
+    {
+      "argv": "bash -lc 'python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/contract-multi --check --go-source --strict-t3'",
+      "rc": 1,
+      "note": "T3-3 同文件多符号回归红测（返工 #1）：Go Half 缺 @err/@inv、Kotlin HalfClient 缺 @post，前一个完整 @contract 不掩盖后一个残缺——旧实现按文件 union 标签会漏判，现按符号分块正确报红"
+    },
+    {
+      "argv": "活体注入复现（w-t3c-verify 同路径）：向 server/internal/api/discoverer.go 注入 Discoverer（四标签齐）+scopedDiscoveryDirsEnv（缺 @err/@inv）→ --strict-t3 --pkg internal/api",
+      "rc": 1,
+      "note": "修复后同一注入路径正确报红（scopedDiscoveryDirsEnv 缺 @err/@inv），撤销后 git diff 为空（工作区干净）"
+    },
+    {
+      "argv": "bash -lc 'python3 tools/archwiki/build_wiki.py --check'",
+      "rc": 0,
+      "note": "T1-1/T1-2/T3-1/T3-2 保持绿；T3-3 PASS 0 违规（真没有标注）；T3-4 FAIL 29 条架构漂移（报告模式列清单不改退出码）；--check 仍 exit 0"
+    },
+    {
+      "argv": "bash -lc 'grep -q \"T3-3\" docs/wiki/t3-report.md && grep -q \"T3-4\" docs/wiki/t3-report.md'",
+      "rc": 0,
+      "note": "报告含 T3-3/T3-4 两节 + 覆盖量数字（@contract 符号总数 0 / @consumes 声明总数 0 / import 边数 29）+ 诚实边界说明"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/contract-incomplete --check --go-source --strict-t3",
+      "rc": 1,
+      "note": "T3-3 红测（那个 0 自证的关键）：用与扫真仓库完全相同的 scan_t3 代码路径扫带残缺 @contract 的 fixture，必须红——实证 Go 缺 @err/@inv、Kotlin 缺 @post 各一条"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/contract-complete --check --go-source --strict-t3",
+      "rc": 0,
+      "note": "T3-3 阳性对照：fixture 确有 @contract，四标签齐全（含显式 none）PASS——证明 0 违规不是『没扫到』，判据真扫到了 @contract"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/consumes-drift --check --go-source --strict-t3",
+      "rc": 1,
+      "note": "T3-4 红测：声明 @consumes 但 import 图没有该包（Go drift + Kotlin ktdrift）+ import 了却未声明（Go hidden + Kotlin kthidden），双侧 4 条全抓"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/consumes-consistent --check --go-source --strict-t3",
+      "rc": 0,
+      "note": "T3-4 阳性对照：@consumes 与 import 图一致 PASS——证明声明面采集与 import 图比对真生效"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/api",
+      "rc": 1,
+      "note": "--pkg 单包硬判：真仓库 internal/api 精确到该包，T3-4 报 4 条漂移（internal/api 的 4 条 import 边未声明），不涉及其他包——阶段二逐包收口用"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check（连续两次，diff）",
+      "rc": 0,
+      "note": "幂等：两次 stdout byte 相同，docs/wiki/t3-report.md 重跑无 diff（生成物幂等红线守住；docs/wiki/ 已在基名索引排除，计数不漂移）"
+    },
+    {
+      "argv": "grep -rEn '@(contract|consumes|produces)\\b' server app/app/src/main",
+      "rc": 1,
+      "note": "真仓库零匹配：T3-3 的 0 是『真没有标注』的直接证据（判据扫得到已由必红 fixture 自证）"
+    }
+  ],
+  "changes": [
+    "tools/archwiki/build_wiki.py —— T3-3/T3-4 实现：_group_comment_blocks（符号级注释块聚合）、_extract_tags（@contract/@pre/@post/@err/@inv/@consumes/@produces 提取）、_check_t3_3_go/_check_t3_3_kt（四标签齐备判定）、_declared_consumes（包级 @consumes 声明面采集，Go 相对包路径 + Kotlin fq 名）、_check_t3_4（声明 vs import 图双向比对）；scan_t3 返回扩为四元组；_scan_coverage 增 contract_symbols/consumes_decls/import_edges 三项覆盖量数字；_print_t3_results 与 write_t3_report 增 T3-3/T3-4 两节 + 覆盖量表 + 诚实边界；argparse epilog 更新。复用 _all_comment_lines，不另起炉灶。**返工 #1 修复**：_go_doc_lines 改 raw.strip() 剥行首伪缩进；_group_comment_blocks 改按行号相邻（gap==1）判块不再按缩进；_all_comment_lines 的 BLOCK 状态补 \n 行号推进（连续块注释行号回卷的隐藏缺陷）",
+    "tools/archwiki/testdata/contract-incomplete/ —— T3-3 必红 fixture（Go 缺 @err/@inv、Kotlin 缺 @post）",
+    "tools/archwiki/testdata/contract-multi/ —— T3-3 同文件多 @contract 回归红测 fixture（返工 #1：Go Half 缺 @err/@inv、Kotlin HalfClient 缺 @post，前一个完整 @contract 不得掩盖后一个残缺）",
+    "tools/archwiki/testdata/contract-complete/ —— T3-3 必绿阳性对照（四标签齐全含显式 none）",
+    "tools/archwiki/testdata/consumes-drift/ —— T3-4 必红 fixture（声明没 import + import 没声明，Go/Kotlin 双侧）",
+    "tools/archwiki/testdata/consumes-consistent/ —— T3-4 必绿阳性对照（声明与 import 图一致）",
+    "tools/archwiki/test_check.py —— 新增 6 用例：T3-3/T3-4 红测各 1、阳性对照各 1、真仓库报告覆盖量数字断言 1、contract-multi 同文件多符号回归红测 1（返工 #1，套件 19→25）",
+    "tools/archwiki/testdata/README.md —— 补五个新 fixture 的判据/期望说明（含 contract-multi）",
+    "docs/wiki/t3-report.md —— 新增 T3-3/T3-4 两节 + 覆盖量数字 + 诚实边界说明（自动生成，幂等）",
+    ".team/nodes/arch-criteria-t3/HANDBOOK.md —— 新增 §9 阶段二契约标注写法与自检套路（标签集/判定细节/单包硬判命令/核对清单/三档开关速查）"
+  ],
+  "deviation": []
+}
