@@ -917,3 +917,35 @@ tasks:
     write_scope: ["tools/archwiki/", "docs/wiki/t3-report.md"]
     evidence: ".team/evidence/arch-criteria-t3.json"
     contention: impl
+
+  - id: arch-criteria-t3-contract
+    goal: >
+      阶段二（补契约）的验收定义先行，与 arch-criteria-t3 同一逻辑：判据不先立，
+      补契约就只能靠席位自报。落地两条新判据，编号续 T3 系列（T2-x 已被既有 FUTURE_CRITERIA 占用）：
+      T3-3 契约标签完备——凡标了 @contract 的符号，四标签 @pre / @post / @err / @inv 必须齐全，
+      允许显式写 none（表示"确无此项"），但不许缺项；缺项即"契约半成品"，比没有契约更坏，
+      因为它让读者以为契约已定。
+      T3-4 跨层声明一致——@consumes 声明的包必须真在该包的 import 图里；反之，跨层 import 了
+      却没声明的判架构漂移。这条让架构维基能从代码现算真依赖，而不是只统计 import。
+      标签集以 docs/next-round-plan-20260810.md §3.1 为准（@contract / @pre / @post / @inv /
+      @err / @consumes / @produces），本工程自定，不套用任何 Rust 工程的既有标注标准。
+      Go 写在 doc 注释里，Kotlin 写同名 KDoc 标签。
+      准入纪律与分级开关全部沿用 arch-criteria-t3 既有约定：每条判据先配必红 fixture 再配必绿
+      阳性对照（四格齐才准入，防"没扫到"被当成"干净"），挂进 test_check.py；
+      默认报告模式不改退出码，--strict-t3 计入退出码，--pkg 单包硬判供阶段二逐包收口。
+      复用 arch-criteria-t3 已建成的 _all_comment_lines 字符串感知提取器，不另起炉灶。
+      边界诚实（承 arch-criteria-t3 的教训，不得重犯）：本条只验标签的完备性与声明一致性，
+      **不验契约内容是否描述正确**——"@post 写的是不是真的"属语义事实，静态判据判不了，
+      那一面由用例覆盖。报告与 HANDBOOK 必须明写这条边界，不许暗示有它不具备的保护力。
+      对真仓库跑一次报告模式，清单落 docs/wiki/t3-report.md 的新增两节
+      （阳性对照：当前全仓库尚未标注 @contract，故 T3-3 违规数很可能为 0——**这个 0 必须自证是
+      "真没有标注"而不是"判据扫不到"**，做法是造一个带残缺 @contract 的 fixture 与真仓库同法扫描，
+      并在报告里给出"扫描到的 @contract 符号总数"这一覆盖量数字）。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "bash -lc 'grep -q \"T3-3\" docs/wiki/t3-report.md && grep -q \"T3-4\" docs/wiki/t3-report.md'"
+    deps: ["arch-criteria-t3"]
+    write_scope: ["tools/archwiki/", "docs/wiki/t3-report.md"]
+    evidence: ".team/evidence/arch-criteria-t3-contract.json"
+    contention: impl

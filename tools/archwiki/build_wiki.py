@@ -22,8 +22,20 @@ T3 判据（阶段一「注释即契约」验收定义先行，arch-criteria-t3�
         必须在仓库中真实存在。判定保守到不误报为止（宁可漏也不能吵）：
         只判三种明确形状——反引号包裹且大写开头的标识符、含 / 且以已知扩展名结尾的
         路径串、--flag 形式的串（仅 Go 侧 doc，daemon CLI 表面所在）；自然语言普通词不判。
+
+T3 判据（阶段二「补契约」验收定义先行，arch-criteria-t3-contract）：
+  T3-3  契约标签完备——凡标了 @contract 的符号，四标签 @pre / @post / @err / @inv 必须齐全。
+        允许显式写 none（表示「确无此项」），但不许缺项；缺项即「契约半成品」。
+  T3-4  跨层声明一致——@consumes 声明的包必须真在该包的 import 图里；反之，跨层 import 了
+        却没声明的判架构漂移。import 图用既有采集结果（go_pkgs/kt_pkgs 的 deps），不重新解析。
+
+        边界诚实（承 arch-criteria-t3 教训，不得重犯）：T3-3 只验标签**齐不齐**，
+        T3-4 只验声明与 import 图**一致不一致**——@post 写的内容是不是真的、@err 描述的
+        错误语义对不对，属语义事实，静态判据判不了，那一面由用例覆盖。报告与 HANDBOOK
+        必须明写这条边界，不许暗示判据有它不具备的保护力。
+
         分级开关：默认报告模式列清单不改退出码；--strict-t3 才计入退出码；
-        --pkg <包名> 单包硬判（阶段一逐包收口时每包的 acceptance）。
+        --pkg <包名> 单包硬判（阶段一/二逐包收口时每包的 acceptance）。
 
 判据准入纪律：每条判据必须自带红测 fixture（testdata/），写不出红测的不准入。
 本文件注释即外骨骼标注：结构化、机器可读，供后续判据（如围栏 YAML 解析）直接消费。
@@ -103,6 +115,22 @@ _GO_FLAG_REG = re.compile(
 #   * --tests — gradle 验收 flag，不是 daemon CLI
 T3_EXTERNAL_PATH_PREFIXES = ("herdr/", "src/detect/manifests/")
 T3_EXTERNAL_FLAGS = frozenset(("tests",))
+
+
+# ---------------------------------------------------------------------------
+# T3-3/T3-4 常量（arch-criteria-t3-contract，阶段二验收定义先行）
+# ---------------------------------------------------------------------------
+
+# 契约标签集（docs/next-round-plan-20260810.md §3.1，本工程自定）：
+#   * 声明标签：@contract（符号有契约）、@consumes / @produces（跨层依赖声明）。
+#   * 内容标签：@pre / @post / @err / @inv（@contract 符号必须齐全的四项）。
+# Go 写在 doc 注释里，Kotlin 写同名 KDoc 标签；@label 后跟冒号或空白。
+T3_CONTRACT_TAGS = ("contract", "consumes", "produces", "pre", "post", "err", "inv")
+# @contract 符号必须齐全的四标签。
+T3_CONTRACT_REQUIRED = ("pre", "post", "err", "inv")
+# 显式写 none 表示「确无此项」，属于合法齐全（不是缺项）——T3-3 只查标签**在不在**，
+# 值是什么（含 none）不影响判定，none 语义仅作 HANDBOOK 口径文档。
+T3_TAG_NONE_WORDS = ("none", "无", "n/a", "na", "-", "—", "--")
 
 
 # ---------------------------------------------------------------------------
@@ -686,6 +714,12 @@ def _all_comment_lines(text, lang):
                 state = "NORMAL"
                 i += 2
                 continue
+            if c == "\n":
+                # 块内换行必须推进 line 计数——否则连续两个块注释时第二个块的行号
+                # 会回卷错乱（返工 #1 w-t3c-verify 实证的隐藏缺陷：影响 T3-3 的
+                # 块邻接判定与所有块注释的行号报告）。piece 行号 = buf_start + off
+                # 依赖 buf 内 `\n` 数 == line 推进数，两者同时 +1 保持一致。
+                line += 1
             buf.append(c)
             i += 1
             continue
@@ -728,9 +762,14 @@ def _all_comment_lines(text, lang):
 
 
 def _go_doc_lines(text):
-    """Go 全部注释行的序列（行号, 剥掉 // 前导后的行）。T3-2 引用扫描用。"""
+    """Go 全部注释行的序列（行号, 剥掉 // 前导与行首空白后的行）。T3-2 引用扫描用。
+
+    注意：_all_comment_lines 对 // 行返回的是 **// 之后**的原始内容，行首带一个空格
+    （` // Foo` 里的 `// Foo` 后是 ` Foo`）。不能再用 `^//` 去剥——它早已剥过。这里
+    统一剥掉行首空白，保证 T3-3 的 _group_comment_blocks 拿到的行首没有那个伪缩进。
+    """
     return [
-        (ln, re.sub(r"^//\s*", "", raw))
+        (ln, raw.strip())
         for ln, raw in _all_comment_lines(text, "go")
     ]
 
@@ -807,7 +846,8 @@ def _build_basename_index(root):
     """
     index = set()
     skip = (".git", "build", ".gradle", ".idea", "node_modules", "vendor",
-            "Pods", "artifacts", ".m2", ".cxx")
+            "Pods", "artifacts", ".m2", ".cxx",
+            "__pycache__", ".pytest_cache", ".coverage", ".DS_Store")
     wiki_rel = WIKI_SUBDIR.split("/")[0]  # "docs"
     for dirpath, dirnames, files in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in skip]
@@ -906,12 +946,209 @@ def _scan_t3_2_doc_lines(doc_lines, kind, pkg_key, file, symbols, flags,
                 })
 
 
+def _group_comment_blocks(doc_lines):
+    """把 (行号, 剥壳文本) 的注释行序列聚合成符号级注释块。
+
+    一条 Go doc / Kotlin KDoc 常常跨多行，且 T3-3 要求契约标签都在「同一符号的
+    注释块」里才作数。聚合规则（宁漏不吵）：
+      * **行号相邻**（gap==1）归入同一块——同一注释块内的行天然连续（Go `//`
+        连续行、Kotlin KDoc 内 `*` 行），行号跳跃即中间隔了代码或空源行，属于
+        不同注释块，切块；
+      * 空内容行（裸 `//` / KDoc 内部空行）行号相邻则继续前块（段落分隔不是
+        符号分隔）。
+    这版修复（返工 #1，w-t3c-verify 实证）：原实现用「行首缩进」判续接，但
+    _all_comment_lines 对 // 行返回的是 // **之后**的内容（行首带一个空格），
+    Go 侧每个注释行都被当成「续接」，同文件所有注释合并成 mega-block，跨符号
+    union 标签，前一个完整 @contract 的 @err/@inv 掩盖了后一个残缺符号的缺失。
+    改为行号相邻判块后，Go 每个符号的 doc 块天然被函数/空行隔开，四标签只在
+    它自己所属的注释块里查找，不再跨块串味。
+    """
+    blocks = []
+    cur = []
+    prev_ln = None
+    for ln, text in doc_lines:
+        if cur and prev_ln is not None and ln > prev_ln + 1:
+            blocks.append(cur)
+            cur = []
+        cur.append((ln, text))
+        prev_ln = ln
+    if cur:
+        blocks.append(cur)
+    return blocks
+
+
+def _extract_tags(block_lines):
+    """从注释块提取契约标签（@contract/@pre/@post/@err/@inv/@consumes/@produces）。
+
+    返回 (标签名→值文本 dict, 块文本)。行首 `@label` 识别；`@label` 后面跟 `:`
+    或空白再跟值。Kotlin 行首 `* @label` 由 _kt_kdoc_lines 已剥掉 `*`。
+    """
+    tags = {}
+    texts = []
+    for _ln, text in block_lines:
+        s = text.strip()
+        if s.startswith("@"):
+            m = re.match(r"^@([A-Za-z][\w-]*)\b", s)
+            if m and m.group(1) in T3_CONTRACT_TAGS:
+                tags[m.group(1)] = s[m.end():].strip()
+                continue
+        texts.append(s)
+    return tags, "\n".join(texts)
+
+
+def _check_t3_3_go(go_pkgs, root, pkg_filter, out):
+    """T3-3 Go 侧：@contract 符号四标签必须齐全（含显式 none）。"""
+    server_root = os.path.join(root, GO_SUBDIR)
+    for dirpath, dirnames, files in os.walk(server_root):
+        dirnames[:] = [d for d in dirnames if d not in ("vendor", ".git")]
+        pkg_key = os.path.relpath(dirpath, server_root).replace(os.sep, "/")
+        if pkg_filter and pkg_key != pkg_filter:
+            continue
+        for f in sorted(files):
+            if not f.endswith(".go") or f.endswith("_test.go"):
+                continue
+            relpath = os.path.relpath(os.path.join(dirpath, f), root)
+            text = read_text(os.path.join(dirpath, f))
+            for blk in _group_comment_blocks(_go_doc_lines(text)):
+                tags, _ = _extract_tags(blk)
+                if "contract" not in tags:
+                    continue
+                missing = [t for t in T3_CONTRACT_REQUIRED if t not in tags]
+                if missing:
+                    out.append({
+                        "cid": "T3-3", "kind": "go", "pkg": pkg_key,
+                        "file": relpath, "line": blk[0][0],
+                        "ref": "@contract",
+                        "missing": missing,
+                        "reason": "缺契约标签: " + ", ".join("@%s" % t for t in missing),
+                    })
+
+
+def _check_t3_3_kt(kt_pkgs, root, pkg_filter, out):
+    """T3-3 Kotlin 侧：@contract 符号四标签必须齐全（含显式 none）。"""
+    for src_root in _find_kotlin_roots(root):
+        for dirpath, dirnames, files in os.walk(src_root):
+            dirnames[:] = [d for d in dirnames if d != "build"]
+            kt_files = sorted(f for f in files if f.endswith(".kt"))
+            if not kt_files:
+                continue
+            pkg_key = ""
+            for f in kt_files:
+                m = _KT_PACKAGE_DECL.search(read_text(os.path.join(dirpath, f)))
+                if m:
+                    pkg_key = m.group(1)
+                    break
+            if not pkg_key or (pkg_filter and pkg_key != pkg_filter):
+                continue
+            for f in kt_files:
+                relpath = os.path.relpath(os.path.join(dirpath, f), root)
+                text = read_text(os.path.join(dirpath, f))
+                for blk in _group_comment_blocks(_kt_kdoc_lines(text)):
+                    tags, _ = _extract_tags(blk)
+                    if "contract" not in tags:
+                        continue
+                    missing = [t for t in T3_CONTRACT_REQUIRED if t not in tags]
+                    if missing:
+                        out.append({
+                            "cid": "T3-3", "kind": "kotlin", "pkg": pkg_key,
+                            "file": relpath, "line": blk[0][0],
+                            "ref": "@contract",
+                            "missing": missing,
+                            "reason": "缺契约标签: " + ", ".join("@%s" % t for t in missing),
+                        })
+
+
+def _declared_consumes(root, pkg_filter):
+    """全仓库 @consumes 声明：包名 → 消费的目标包名集合（注释文本里读的）。
+
+    范围：Go 包 doc（package 子句上方 doc 注释块）与 Kotlin 包级 KDoc 块——
+    跨层声明是**包级**声明（哪个包消费哪个包），不是符号级。`internal/config` 这种
+    相对写法与 `dev.agentmirror.app.conn` 完整写法都收。
+    """
+    declared = {}
+    server_root = os.path.join(root, GO_SUBDIR)
+    for dirpath, dirnames, files in os.walk(server_root):
+        dirnames[:] = [d for d in dirnames if d not in ("vendor", ".git")]
+        pkg_key = os.path.relpath(dirpath, server_root).replace(os.sep, "/")
+        if pkg_filter and pkg_key != pkg_filter:
+            continue
+        pkg_name = os.path.basename(dirpath)
+        for f in sorted(f for f in files if f.endswith(".go") and not f.endswith("_test.go")):
+            text = read_text(os.path.join(dirpath, f))
+            if re.search(r"^\s*package\s+" + re.escape(pkg_name) + r"\b",
+                         text, re.MULTILINE) is None:
+                continue  # 只有包所属文件才看包 doc（防御）
+            for blk in _group_comment_blocks(_go_doc_lines(text)):
+                tags, _ = _extract_tags(blk)
+                if "consumes" in tags and tags["consumes"]:
+                    # 值取第一个空白分隔 token（包名）；容忍行内尾注
+                    # （`@consumes internal/config  # 理由`）。
+                    val = tags["consumes"].strip().strip("\"'`").split()[0]
+                    declared.setdefault(pkg_key, set()).add(val)
+    for src_root in _find_kotlin_roots(root):
+        for dirpath, dirnames, files in os.walk(src_root):
+            dirnames[:] = [d for d in dirnames if d != "build"]
+            kt_files = sorted(f for f in files if f.endswith(".kt"))
+            if not kt_files:
+                continue
+            pkg_key = ""
+            for f in kt_files:
+                m = _KT_PACKAGE_DECL.search(read_text(os.path.join(dirpath, f)))
+                if m:
+                    pkg_key = m.group(1)
+                    break
+            if not pkg_key or (pkg_filter and pkg_key != pkg_filter):
+                continue
+            for f in kt_files:
+                text = read_text(os.path.join(dirpath, f))
+                for blk in _group_comment_blocks(_kt_kdoc_lines(text)):
+                    tags, _ = _extract_tags(blk)
+                    if "consumes" in tags and tags["consumes"]:
+                        val = tags["consumes"].strip().strip("\"'`").split()[0]
+                        declared.setdefault(pkg_key, set()).add(val)
+    return declared
+
+
+def _check_t3_4(go_pkgs, kt_pkgs, root, pkg_filter, out, declared=None):
+    """T3-4 跨层声明一致：@consumes 必须真在 import 图里；import 了没声明判漂移。
+
+    声明面 = _declared_consumes()（调用方算一次传入）；import 图 = 既有采集结果的 deps
+    （不重新解析）。Go 声明键用相对包路径（`internal/api`），Kotlin 用 fq 包名
+    （`dev.agentmirror.app.conn`）——两侧各自归一后统一比对。相对写法的目标名
+    （`internal/config`）在两侧已知包键集合里精确匹配；无法解析的目标名放行（宁漏）。
+    """
+    declared = declared or _declared_consumes(root, pkg_filter)
+    go_known = set(go_pkgs)
+    kt_known = set(kt_pkgs)
+    for name, pkg in list(go_pkgs.items()) + list(kt_pkgs.items()):
+        if pkg_filter and name != pkg_filter:
+            continue
+        known = go_known if pkg["kind"] == "go" else kt_known
+        imports = set(pkg.get("deps", ()))
+        decl = declared.get(name, set())
+
+        for target in sorted(decl):
+            if target in known and target not in imports:
+                out.append({
+                    "cid": "T3-4", "kind": pkg["kind"], "pkg": name,
+                    "file": "", "line": 0, "ref": target,
+                    "reason": "声明 @consumes 但 import 图没有该包",
+                })
+        for dep in sorted(imports):
+            if dep not in decl:
+                out.append({
+                    "cid": "T3-4", "kind": pkg["kind"], "pkg": name,
+                    "file": "", "line": 0, "ref": dep,
+                    "reason": "import 了却未声明 @consumes（架构漂移）",
+                })
+
+
 def scan_t3(go_pkgs, kt_pkgs, root, pkg_filter=None):
-    """扫描 T3-1 / T3-2，返回 ([T3-1 违规], [T3-2 违规])。
+    """扫描 T3 全部判据，返回 ([T3-1], [T3-2], [T3-3], [T3-4]) 违规列表。
 
     违规记录 dict：cid / kind / pkg / file / line / symbol|ref / reason。
     pkg_filter 非空时只扫该包（Go 用相对包路径键如 internal/api，
-    Kotlin 用包名键如 dev.agentmirror.app.conn）——阶段一逐包收口用的单包硬判。
+    Kotlin 用包名键如 dev.agentmirror.app.conn）——阶段一/二逐包收口用的单包硬判。
     """
     symbols = _build_symbol_index(go_pkgs, kt_pkgs)
     flags = collect_go_flags(root)
@@ -985,22 +1222,33 @@ def scan_t3(go_pkgs, kt_pkgs, root, pkg_filter=None):
 
     v1.sort(key=lambda r: (r["pkg"], r["file"], r["line"], r["symbol"]))
     v2.sort(key=lambda r: (r["pkg"], r["file"], r["line"], r["ref"]))
-    return v1, v2
+
+    v3 = []
+    _check_t3_3_go(go_pkgs, root, pkg_filter, v3)
+    _check_t3_3_kt(kt_pkgs, root, pkg_filter, v3)
+    v3.sort(key=lambda r: (r["pkg"], r["file"], r["line"]))
+
+    v4 = []
+    _check_t3_4(go_pkgs, kt_pkgs, root, pkg_filter, v4)
+    v4.sort(key=lambda r: (r["pkg"], r["ref"]))
+    return v1, v2, v3, v4
 
 
-def _print_t3_results(v1, v2, strict_t3, pkg, out):
+def _print_t3_results(v1, v2, v3, v4, strict_t3, pkg, out):
     """打印 T3 判据结果；默认报告模式（列清单），--strict-t3 才计入退出码。"""
     mode = "严格（计入退出码）" if strict_t3 else "报告（不计退出码）"
     scope = "全部包" if not pkg else "单包 %s" % pkg
     print("", file=out)
     print("== T3 判据（%s，%s） ==" % (scope, mode), file=out)
-    for cid, viols in (("T3-1", v1), ("T3-2", v2)):
+    for cid, viols, empty_desc in (
+        ("T3-1", v1, "符号级 doc 覆盖"),
+        ("T3-2", v2, "引用真实性"),
+        ("T3-3", v3, "契约标签完备"),
+        ("T3-4", v4, "跨层声明一致"),
+    ):
         ok = not viols
         mark = "PASS" if ok else "FAIL"
-        if cid == "T3-1":
-            desc = "符号级 doc 覆盖：%d 条违规" % len(viols)
-        else:
-            desc = "引用真实性：%d 条违规" % len(viols) if viols else "引用真实性：无违规"
+        desc = "%s：%d 条违规" % (empty_desc, len(viols)) if viols else "%s：无违规" % empty_desc
         print("%s %-16s : %s — %s" % (cid, " ", mark, desc), file=out)
         for r in viols:
             if cid == "T3-1":
@@ -1014,38 +1262,65 @@ def _print_t3_results(v1, v2, strict_t3, pkg, out):
 
 
 def _scan_coverage(go_pkgs, kt_pkgs, root):
-    """T3 扫描覆盖统计（阳性对照铁律：扫描量必须 > 0，空扫描≠健康）。"""
+    """T3 扫描覆盖统计（阳性对照铁律：扫描量必须 > 0，空扫描≠健康）。
+
+    阶段二（arch-criteria-t3-contract）增三项覆盖量数字——那个 0 必须自证：
+      * T3-3 扫描到的 @contract 符号总数（真仓库尚未标注 @contract，须为 0，
+        但要让读者能区分「真没有」与「没扫到」：fixture 同法扫描能扫到就是没扫到）；
+      * @consumes 声明总数（T3-4 声明面）；
+      * 参与 T3-4 比对的 import 边数（Go+Kotlin 包间依赖边总数）。
+    """
     n_symbols = len(_build_symbol_index(go_pkgs, kt_pkgs))
     n_flags = len(collect_go_flags(root))
     n_basenames = len(_build_basename_index(root))
     n_go_doc = n_kt_doc = 0
+    n_contract = 0
+    n_consumes = 0
+    n_import_edges = sum(len(p.get("deps", ())) for p in list(go_pkgs.values()) + list(kt_pkgs.values()))
     server_root = os.path.join(root, GO_SUBDIR)
     for dirpath, dirnames, files in os.walk(server_root):
         dirnames[:] = [d for d in dirnames if d not in ("vendor", ".git")]
         for f in files:
             if not f.endswith(".go") or f.endswith("_test.go"):
                 continue
-            n_go_doc += len(_go_doc_lines(read_text(os.path.join(dirpath, f))))
+            path = os.path.join(dirpath, f)
+            text = read_text(path)
+            n_go_doc += len(_go_doc_lines(text))
+            for blk in _group_comment_blocks(_go_doc_lines(text)):
+                tags, _ = _extract_tags(blk)
+                n_contract += 1 if "contract" in tags else 0
+                n_consumes += 1 if "consumes" in tags else 0
     for src_root in _find_kotlin_roots(root):
         for dirpath, dirnames, files in os.walk(src_root):
             dirnames[:] = [d for d in dirnames if d != "build"]
             for f in files:
-                if f.endswith(".kt"):
-                    n_kt_doc += len(_kt_kdoc_lines(read_text(os.path.join(dirpath, f))))
+                if not f.endswith(".kt"):
+                    continue
+                path = os.path.join(dirpath, f)
+                text = read_text(path)
+                n_kt_doc += len(_kt_kdoc_lines(text))
+                for blk in _group_comment_blocks(_kt_kdoc_lines(text)):
+                    tags, _ = _extract_tags(blk)
+                    n_contract += 1 if "contract" in tags else 0
+                    n_consumes += 1 if "consumes" in tags else 0
     return {
         "symbols": n_symbols,
         "flags": n_flags,
         "basenames": n_basenames,
         "go_doc_lines": n_go_doc,
         "kt_doc_lines": n_kt_doc,
+        "contract_symbols": n_contract,
+        "consumes_decls": n_consumes,
+        "import_edges": n_import_edges,
     }
 
 
-def write_t3_report(v1, v2, go_pkgs, kt_pkgs, out_path, coverage=None):
+def write_t3_report(v1, v2, v3, v4, go_pkgs, kt_pkgs, out_path, coverage=None):
     """写 T3 报告（幂等：全排序、无时间戳）。落 docs/wiki/t3-report.md。
 
     coverage 为 _scan_coverage() 的统计 dict，随报告打印扫描量——
     阳性对照铁律：扫描量必须 > 0，防止「没扫到」被当成「很干净」。
+    阶段二（arch-criteria-t3-contract）：报告含 T3-3 / T3-4 两节 + 覆盖量数字。
     """
     n_go, n_kt = len(go_pkgs), len(kt_pkgs)
     lines = ["# T3 判据报告（自动生成）", ""]
@@ -1066,6 +1341,9 @@ def write_t3_report(v1, v2, go_pkgs, kt_pkgs, out_path, coverage=None):
         lines.append("| 仓库文件基名索引 | %d |" % coverage["basenames"])
         lines.append("| T3-2 扫描的 Go doc 行 | %d |" % coverage["go_doc_lines"])
         lines.append("| T3-2 扫描的 Kotlin KDoc 行 | %d |" % coverage["kt_doc_lines"])
+        lines.append("| **T3-3 扫描到的 `@contract` 符号总数** | %d |" % coverage["contract_symbols"])
+        lines.append("| **T3-4 `@consumes` 声明总数** | %d |" % coverage["consumes_decls"])
+        lines.append("| **T3-4 参与比对的 import 边数** | %d |" % coverage["import_edges"])
         lines.append("")
     lines.append("## T3-1 符号级 doc 覆盖")
     lines.append("")
@@ -1101,6 +1379,47 @@ def write_t3_report(v1, v2, go_pkgs, kt_pkgs, out_path, coverage=None):
                          % (r["pkg"], r["kind"], r["file"], r["line"], r["ref"], r["reason"]))
     else:
         lines.append("无违规：注释引用的符号名/仓库文件路径/CLI flag 均真实存在。")
+    lines.append("")
+    lines.append("## T3-3 契约标签完备")
+    lines.append("")
+    lines.append("凡标了 `@contract` 的符号，四标签 `@pre` / `@post` / `@err` / `@inv` 必须齐全；"
+                 "允许显式写 `none`（表示「确无此项」），但不许缺项。缺项即「契约半成品」——"
+                 "它比没有契约更坏，因为读者会以为契约已经定好了。")
+    lines.append("")
+    lines.append("> **诚实边界**：T3-3 只验标签**齐不齐**，**不验契约内容是否描述正确**——"
+                 "`@post` 写的是不是真的、`@err` 描述的错误语义对不对，属语义事实，静态判据判不了，"
+                 "那一面由用例覆盖。判据不保护「内容撒谎的齐全契约」。")
+    lines.append("")
+    if v3:
+        lines.append("`@contract` 符号缺契约标签，共 **%d** 条：" % len(v3))
+        lines.append("")
+        lines.append("| 包 | 语言 | 文件 | 行 | 缺失标签 | 原因 |")
+        lines.append("|---|---|---|---|---|---|")
+        for r in v3:
+            lines.append("| %s | %s | %s | %d | %s | %s |"
+                         % (r["pkg"], r["kind"], r["file"], r["line"],
+                            ", ".join("@%s" % t for t in r["missing"]), r["reason"]))
+    else:
+        lines.append("无违规：扫描到的 `@contract` 符号四标签齐全（含显式 `none`）。")
+    lines.append("")
+    lines.append("## T3-4 跨层声明一致")
+    lines.append("")
+    lines.append("`@consumes` 声明的包必须真在该包的 import 图里；反之，跨层 import 了却没声明的"
+                 "判架构漂移。import 图由 build_wiki 既有采集结果现算（不重新解析）。")
+    lines.append("")
+    lines.append("> **诚实边界**：T3-4 只验声明与 import 图**一致不一致**。它保证架构维基能从代码"
+                 "现算真依赖、防止「声明了没 import / import 了没声明」的漂移；但**不验 `@consumes` "
+                 "写的是不是业务上真该依赖**——那是设计语义，静态判据判不了。")
+    lines.append("")
+    if v4:
+        lines.append("`@consumes` 与 import 图不一致，共 **%d** 条：" % len(v4))
+        lines.append("")
+        lines.append("| 包 | 语言 | 目标包 | 原因 |")
+        lines.append("|---|---|---|---|")
+        for r in v4:
+            lines.append("| %s | %s | `%s` | %s |" % (r["pkg"], r["kind"], r["ref"], r["reason"]))
+    else:
+        lines.append("无违规：`@consumes` 声明与 import 图一致。")
     lines.append("")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as fh:
@@ -1245,13 +1564,13 @@ def run_check(go_pkgs, kt_pkgs, out=sys.stdout, root=None,
             failed += 1
         print("%s %-16s : %s — %s" % (cid, " ", mark, desc), file=out)
 
-    v1, v2 = scan_t3(go_pkgs, kt_pkgs, root, pkg_filter=pkg)
-    if strict_t3 and (v1 or v2):
+    v1, v2, v3, v4 = scan_t3(go_pkgs, kt_pkgs, root, pkg_filter=pkg)
+    if strict_t3 and (v1 or v2 or v3 or v4):
         failed += 1
-    _print_t3_results(v1, v2, strict_t3, pkg, out)
+    _print_t3_results(v1, v2, v3, v4, strict_t3, pkg, out)
     if t3_report:
         coverage = _scan_coverage(go_pkgs, kt_pkgs, root) if not pkg else None
-        write_t3_report(v1, v2, go_pkgs, kt_pkgs, t3_report, coverage=coverage)
+        write_t3_report(v1, v2, v3, v4, go_pkgs, kt_pkgs, t3_report, coverage=coverage)
 
     if failed:
         print("结果：未通过（exit 1）", file=out)
@@ -1266,8 +1585,8 @@ def main(argv=None):
         description="从 Go/Kotlin 源码现算架构维基与判据。"
         "默认生成 docs/wiki/README.md；--check 只判据不写盘。",
         epilog="判据：T1-1 internal 包环依赖；T1-2 包缺 doc 注释；"
-        "T3-1 符号级 doc 覆盖；T3-2 引用真实性。"
-        "判据准入纪律：每条判据必须自带红测 fixture（见 testdata/）。",
+        "T3-1 符号级 doc 覆盖；T3-2 引用真实性；T3-3 契约标签完备；"
+        "T3-4 跨层声明一致。判据准入纪律：每条判据必须自带红测 fixture（见 testdata/）。",
     )
     parser.add_argument(
         "--root",
