@@ -250,7 +250,44 @@ func buildCandidates(primary, port string, addrs []Address) []string {
 func onboardingPayload(o Onboarding, addrs []Address, primary string) Payload {
 	p := NewPayload(WSURL(primary, o.Port), o.Token)
 	p.Candidates = buildCandidates(primary, o.Port, addrs)
+	// feat-ts-wire（011 预授权分发）：配置的 TS authkey 原样上 QR——扫码即同时
+	// 完成配对+入网。QR 是 authkey 唯一合法出口（§2.1）；guide 明文区绝不打印。
+	p.TSAuthKey = o.TSAuthKey
 	return p
+}
+
+// WithTailnet merges the embedded tsnet node's tailnet IP into a probe result
+// (task feat-ts-wire): a userspace node has no host NIC, so DetectAddresses
+// cannot see its 100.x address — the daemon injects it here after Up, and the
+// merged set feeds both the QR candidates and the plain-text guide. The
+// address is deduplicated (the host may also run the Tailscale app whose TUN
+// already exposes the same IP) and appended after the probed set, keeping the
+// LAN-first candidate order. A nil IP (degraded / v6-only) is a no-op.
+func WithTailnet(addrs []Address, ip net.IP) []Address {
+	if ip == nil {
+		return addrs
+	}
+	for _, a := range addrs {
+		if a.IP.Equal(ip) {
+			return addrs
+		}
+	}
+	// Keep the package-wide address contract LAN -> tailnet -> loopback. Live
+	// DetectAddresses always appends loopback, so inserting at the end would put
+	// an injected userspace-node address after the fallback.
+	out := make([]Address, 0, len(addrs)+1)
+	inserted := false
+	for _, a := range addrs {
+		if !inserted && a.Kind == KindLoopback {
+			out = append(out, Address{IP: ip, Kind: KindTailnet})
+			inserted = true
+		}
+		out = append(out, a)
+	}
+	if !inserted {
+		out = append(out, Address{IP: ip, Kind: KindTailnet})
+	}
+	return out
 }
 
 // Onboarding carries what the daemon knows when it prints the pairing screen.
@@ -262,6 +299,11 @@ type Onboarding struct {
 	// TailnetEnabled reports whether a tailnet listener is up, so the guide
 	// can surface the tailnet address.
 	TailnetEnabled bool
+	// TSAuthKey is the configured Tailscale auth key destined for the QR's
+	// ts_authkey field ONLY (011 pre-authorized distribution, feat-ts-wire).
+	// Red line: it must never be rendered in the plain-text guide — the QR is
+	// its only legal exit (docs/protocol.md §2.1, token-grade secret).
+	TSAuthKey string
 }
 
 // PrintOnboarding writes the QR plus the plain-text connection guide to w

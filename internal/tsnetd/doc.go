@@ -8,7 +8,7 @@
 //
 // Construction (New) never starts the embedded node: the tsnet.Server is
 // built with Hostname/AuthKey/Dir wired through and its state directory is
-// created, but the node only comes up when ListenTailnet is called. This
+// created, but the node only comes up when Up or ListenTailnet is called. This
 // keeps the no-authkey red line (zero control-plane contact) trivially
 // enforceable and keeps unit tests network-free.
 package tsnetd

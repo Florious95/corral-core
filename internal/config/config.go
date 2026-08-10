@@ -58,6 +58,13 @@ type Config struct {
 	// Consumed by api.Options.ListInterval. Zero defaults to 2s.
 	ListInterval time.Duration
 
+	// TSAuthKey is the Tailscale node auth key (env-only TS_AUTHKEY — argv is
+	// forbidden because process lists/shell history expose it). Non-empty enables the embedded
+	// tailnet node AND rides the pairing QR's ts_authkey field (011
+	// pre-authorized distribution). Same red line as Token: never logged,
+	// never echoed; the QR is its only legal exit (docs/protocol.md §2.1).
+	TSAuthKey string
+
 	// StateDir is where the daemon keeps its single-instance pidfile
 	// (agentmirrord.pid). Empty resolves to the pairing token dir (the shared
 	// per-user agentmirror config root). Overridable via AGENTMIRROR_STATE_DIR
@@ -148,7 +155,6 @@ func Load(args []string) (Config, error) {
 	fs.String("max-input-bytes", "1048576", "max input frame text bytes (default 1 MiB)")
 	fs.String("list-interval", "2s", "tmux re-scan / list_delta interval (default 2s)")
 	fs.String("state-dir", "", "state directory for the single-instance pidfile (default: user config dir/agentmirror)")
-
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -169,6 +175,8 @@ func Load(args []string) (Config, error) {
 		Host:         resolve(resolution{flagName: "host", envKey: "AGENTMIRROR_HOST", def: ""}),
 		UploadDir:    resolve(resolution{flagName: "upload-dir", envKey: "AGENTMIRROR_UPLOAD_DIR", def: ""}),
 		StateDir:     resolve(resolution{flagName: "state-dir", envKey: "AGENTMIRROR_STATE_DIR", def: ""}),
+		// Credential is deliberately env-only: never accept it in argv.
+		TSAuthKey: os.Getenv("TS_AUTHKEY"),
 	}
 
 	// Numeric/duration settings resolve as strings first (the resolution table

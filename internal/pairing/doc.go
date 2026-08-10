@@ -8,9 +8,9 @@
 //     permission and reused across restarts; an explicitly configured token
 //     always wins.
 //   - qr: the token plus the service ws URL, carried in a single-line JSON
-//     payload that the Android app scans; the payload reserves the ts_authkey
-//     field for the app-tsnet task. Rendered as ANSI half blocks (▀▄█) with no
-//     image pipeline.
+//     payload that the Android app scans; optional ts_authkey starts the App's
+//     embedded tsnet node. Rendered as ANSI half blocks (▀▄█) with no image
+//     pipeline.
 //   - probe: deterministic discovery of the host's LAN/tailnet addresses to
 //     build the ws URL; degraded to a loopback fallback with an explicit
 //     warning instead of a silently unreachable QR.

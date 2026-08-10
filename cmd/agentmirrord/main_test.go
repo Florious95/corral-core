@@ -7,13 +7,16 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/agentmirror/agentmirror/internal/config"
 	"github.com/agentmirror/agentmirror/internal/pairing"
+	"github.com/agentmirror/agentmirror/internal/tsnetd"
 )
 
 // bufferLogger returns a logger writing to the returned buffer, so tests can
@@ -62,12 +65,41 @@ func TestResolveTokenAutoGeneratesPersistsReuses(t *testing.T) {
 	}
 }
 
+// TestRunPassesResolvedStateDirToTSNet pins the cmd-to-consumer seam. A fake
+// factory stops startup after capturing the exact options, proving the
+// resolved daemon state root reaches tsnetd instead of remaining dead config.
+func TestRunPassesResolvedStateDirToTSNet(t *testing.T) {
+	original := newTSNetGroup
+	t.Cleanup(func() { newTSNetGroup = original })
+
+	var got tsnetd.Options
+	newTSNetGroup = func(opts tsnetd.Options, _ *slog.Logger) (*tsnetd.Group, error) {
+		got = opts
+		return nil, errors.New("stop after options capture")
+	}
+
+	t.Setenv("TS_AUTHKEY", "configured-for-test")
+	stateDir := t.TempDir()
+	if code := run([]string{
+		"-listen", "127.0.0.1:0",
+		"-state-dir", stateDir,
+		"-token", "pairing-test",
+	}); code != 1 {
+		t.Fatalf("run exit code = %d, want 1 from capture sentinel", code)
+	}
+
+	want := filepath.Join(stateDir, "tsnet")
+	if got.Dir != want {
+		t.Fatalf("tsnetd.Options.Dir = %q, want resolved state subdir %q", got.Dir, want)
+	}
+}
+
 // TestPrintPairingGuideCarriesLegalExits locks the §9 exit contract at the
 // wiring seam: the printed guide is the token's legal exit and must contain
 // the token and the ws URL, plus the manual-fill instructions.
 func TestPrintPairingGuideCarriesLegalExits(t *testing.T) {
 	var buf bytes.Buffer
-	if err := printPairingGuide(&buf, "tok-abc-123", "9900", false, ""); err != nil {
+	if err := printPairingGuide(&buf, "tok-abc-123", "9900", false, "", nil, ""); err != nil {
 		t.Fatalf("printPairingGuide: %v", err)
 	}
 	out := buf.String()
@@ -106,7 +138,7 @@ func TestPrintPairingGuideDegradedWarns(t *testing.T) {
 // automatic probe would pick (task fix-qr-host-detect).
 func TestPrintPairingGuideHostOverride(t *testing.T) {
 	var buf bytes.Buffer
-	if err := printPairingGuide(&buf, "tok-abc-123", "9900", false, "10.0.0.9"); err != nil {
+	if err := printPairingGuide(&buf, "tok-abc-123", "9900", false, "10.0.0.9", nil, ""); err != nil {
 		t.Fatalf("printPairingGuide(override): %v", err)
 	}
 	out := buf.String()
@@ -138,6 +170,34 @@ func TestPrintPairingGuideListsCandidates(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("full-candidate guide must contain %s, got:\n%s", want, out)
 		}
+	}
+}
+
+// TestPrintPairingGuideTailnetWired (feat-ts-wire) pins the cmd seam: with a
+// tailnet IP and authkey configured, the guide lists the tailnet ws URL (the
+// embedded node's address is injected — no NIC exposes it) while the authkey
+// never appears in the plain text (§2.1: the QR is its only legal exit).
+func TestPrintPairingGuideTailnetWired(t *testing.T) {
+	const key = "tskey-auth-SECRET-guide"
+	var buf bytes.Buffer
+	if err := printPairingGuide(&buf, "tok-abc-123", "9900", true, "10.0.0.9", net.ParseIP("100.101.2.3"), key); err != nil {
+		t.Fatalf("printPairingGuide(tailnet): %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "ws://100.101.2.3:9900/ws") {
+		t.Errorf("guide must list the injected tailnet address, got:\n%s", out)
+	}
+	if strings.Contains(out, key) {
+		t.Error("guide must never print the TS authkey in plaintext")
+	}
+}
+
+func TestAutomaticPairingHostUsesTailnetInsteadOfLoopback(t *testing.T) {
+	if got := automaticPairingHost("127.0.0.1", net.ParseIP("100.101.2.3")); got != "100.101.2.3" {
+		t.Fatalf("automaticPairingHost = %q, want injected tailnet address", got)
+	}
+	if got := automaticPairingHost("192.168.1.5", net.ParseIP("100.101.2.3")); got != "192.168.1.5" {
+		t.Fatalf("LAN primary must still win, got %q", got)
 	}
 }
 

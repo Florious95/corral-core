@@ -2,8 +2,8 @@ package pairing
 
 // qr.go encodes the pairing handshake into a scannable QR. The QR content is a
 // single JSON line (requirement 011 route (a)): the service ws URL, the
-// pairing token, and a reserved Tailscale auth-key field the app-tsnet task
-// fills in later. Rendering is a self-contained ANSI half-block painter (▀▄█),
+// pairing token, and the optional Tailscale auth key consumed by the embedded
+// App tsnet node. Rendering is a self-contained ANSI half-block painter (▀▄█),
 // so onboarding needs no image pipeline and prints on any terminal.
 
 import (
@@ -18,7 +18,7 @@ import (
 const PayloadVersion = 1
 
 // Payload is the QR content: version, service ws URL, pairing token, the
-// reserved Tailscale auth key, and the optional full candidate ws URL set
+// optional Tailscale auth key, and the optional full candidate ws URL set
 // (task fix-pairing-candidates). Field order and JSON names are part of the
 // wire contract with the Android app (docs/protocol.md §2.1) — do not rename.
 type Payload struct {
@@ -29,9 +29,8 @@ type Payload struct {
 	// Token is the pairing token the app must present in its auth frame. It is
 	// an intentional part of the payload: the QR is a legal token exit (§9).
 	Token string `json:"token"`
-	// TSAuthKey is reserved for route (a)'s scan-to-join flow: when app-tsnet
-	// lands it carries the tailnet auth key so a scan also groups the phone
-	// onto the tailnet. Empty for now.
+	// TSAuthKey carries the credential for scan-to-join when configured. It is
+	// legal only inside the QR payload and must never enter the plain-text guide.
 	TSAuthKey string `json:"ts_authkey"`
 	// Candidates is the OPTIONAL full candidate ws URL set for THIS host (its
 	// other NICs, LAN + tailnet, never loopback). It is forward compatible:

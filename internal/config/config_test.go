@@ -71,6 +71,36 @@ func TestEnvFallback(t *testing.T) {
 	}
 }
 
+// TestTSAuthKeyResolution verifies TS authkey is env-only: argv is observable
+// through process lists/shell history, so -ts-authkey must remain an unknown flag.
+// The env key is the tailscale-conventional TS_AUTHKEY, not AGENTMIRROR_*.
+func TestTSAuthKeyResolution(t *testing.T) {
+	// default: absent everywhere → empty (tailnet disabled downstream).
+	t.Setenv("TS_AUTHKEY", "")
+	cfg, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.TSAuthKey != "" {
+		t.Errorf("default TSAuthKey = %q, want empty", cfg.TSAuthKey)
+	}
+
+	// env fallback.
+	t.Setenv("TS_AUTHKEY", "tskey-from-env")
+	cfg, err = Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.TSAuthKey != "tskey-from-env" {
+		t.Errorf("env TSAuthKey = %q, want tskey-from-env", cfg.TSAuthKey)
+	}
+
+	// argv is forbidden for this credential even though ordinary settings accept flags.
+	if _, err = Load([]string{"-ts-authkey", "forbidden-argv-value"}); err == nil {
+		t.Fatal("-ts-authkey must be rejected; TS_AUTHKEY is the only supported source")
+	}
+}
+
 // TestInvalidNumericRejected verifies a malformed numeric setting is a hard
 // error rather than a silent clamp.
 func TestInvalidNumericRejected(t *testing.T) {

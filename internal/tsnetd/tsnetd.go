@@ -5,12 +5,15 @@
 package tsnetd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	"tailscale.com/tsnet"
@@ -46,6 +49,12 @@ type Options struct {
 	// config directory. The directory is created and only touched when the
 	// tailnet is enabled.
 	Dir string
+
+	// ControlURL is the coordination-server URL. Empty means the official
+	// Tailscale control plane; non-empty points at a self-hosted one
+	// (headscale — deployment freedom per requirement 011, feat-ts-wire).
+	// Configured via the TS_CONTROL_URL environment variable in cmd.
+	ControlURL string
 }
 
 // Group is the set of listeners the daemon accepts client connections on. It
@@ -57,20 +66,23 @@ type Group struct {
 	LAN net.Listener
 
 	// ts is the embedded Tailscale server, constructed but NOT started. It
-	// is unexported so callers cannot accidentally trigger Up (which
-	// contacts the Tailscale control plane); that only happens inside
-	// ListenTailnet.
+	// is unexported so callers cannot bypass Group.Up/ListenTailnet (the
+	// operations that contact the Tailscale control plane).
 	ts *tsnet.Server
 
-	// started reports whether ListenTailnet succeeded, i.e. whether the
-	// node's initialization actually began. tsnet.Server.Close panics on a
-	// server that was never started (its sys bus is nil), so Close must not
-	// call it before started is true.
+	// started reports whether Up/ListenTailnet invoked a tsnet method that calls
+	// Start. It is set even when that method returns an error: a cancelled or
+	// failed Up still owns backend resources that Close must release. Close must
+	// only skip a server that was constructed but never asked to start.
 	started bool
 
 	// port is the port number the tailnet listener serves on the tailnet,
 	// derived from ListenAddr (same port, tailnet address).
 	port string
+
+	// authKey is retained only so external tsnet errors/log lines can be redacted
+	// before leaving this package. It is never logged or exported.
+	authKey string
 
 	// log is the logger used for the degraded-mode notice and the tsnet
 	// backend's debug logs. Always non-nil after New (nil-safe default).
@@ -103,11 +115,22 @@ func New(opts Options, logger *slog.Logger) (*Group, error) {
 	if authKey == "" {
 		authKey = os.Getenv(envAuthKey)
 	}
+	if raw := os.Getenv("TS_DEBUG_REGISTER"); authKey != "" && raw != "" {
+		enabled, parseErr := strconv.ParseBool(raw)
+		if parseErr != nil || enabled {
+			// This upstream debug path writes the complete registration request,
+			// including AuthKey, to tsnet's private logtail before Server.Logf can
+			// redact it. Reject the unsafe combination without echoing either value.
+			lan.Close()
+			return nil, errors.New("tsnetd: TS_DEBUG_REGISTER must be disabled when a TS authkey is configured")
+		}
+	}
 
 	g := &Group{
-		LAN:  lan,
-		log:  logger,
-		port: portOf(opts.ListenAddr),
+		LAN:     lan,
+		log:     logger,
+		port:    portOf(lan.Addr().String()),
+		authKey: authKey,
 	}
 
 	// No authkey anywhere: degrade to LAN-only. No tailscale state is
@@ -134,13 +157,15 @@ func New(opts Options, logger *slog.Logger) (*Group, error) {
 	}
 
 	g.ts = &tsnet.Server{
-		Hostname: opts.Hostname,
-		AuthKey:  authKey,
-		Dir:      dir,
+		Hostname:   opts.Hostname,
+		AuthKey:    authKey,
+		Dir:        dir,
+		ControlURL: opts.ControlURL,
 		Logf: func(format string, args ...any) {
 			// tsnet's Logf is printf-style; slog takes a single message, so
-			// format first then log at debug level.
-			logger.Debug("tsnet " + fmt.Sprintf(format, args...))
+			// format first, redact the configured credential, then log. Upstream
+			// debug modes may include a full RegisterRequest containing AuthKey.
+			logger.Debug("tsnet " + redactAuthKey(fmt.Sprintf(format, args...), authKey))
 		},
 	}
 	logger.Info("tailnet 已启用", "hostname", opts.Hostname, "state_dir", dir)
@@ -174,18 +199,48 @@ func (g *Group) ListenTailnet() (net.Listener, error) {
 		return nil, ErrTailnetDisabled
 	}
 	ln, err := g.ts.Listen("tcp", ":"+g.port)
-	if err != nil {
-		return nil, fmt.Errorf("tsnetd: tailnet listen on :%s: %w", g.port, err)
-	}
+	// Listen calls tsnet.Start even when the later listener setup fails.
 	g.started = true
+	if err != nil {
+		return nil, fmt.Errorf("tsnetd: tailnet listen on :%s: %s", g.port, redactAuthKey(err.Error(), g.authKey))
+	}
 	return ln, nil
+}
+
+// Up connects the embedded node to the tailnet and blocks until it is
+// running, returning the node's tailnet IPv4 (the 100.64.0.0/10 address the
+// pairing QR appends to its candidates, task feat-ts-wire). A userspace tsnet
+// node has no host NIC, so this is the only way the daemon can learn its own
+// tailnet address — interface probing cannot see it. In degraded mode it
+// returns ErrTailnetDisabled without touching the network. Cancel/timeout via
+// ctx: an invalid authkey otherwise blocks forever in the control-plane
+// handshake, and startup must fail visibly instead (工程红线5 失败可见).
+func (g *Group) Up(ctx context.Context) (net.IP, error) {
+	if g.ts == nil {
+		return nil, ErrTailnetDisabled
+	}
+	st, err := g.ts.Up(ctx)
+	// Up calls LocalClient -> Start before it can return any error. Mark the
+	// attempted node as closeable so timeout/bad-key paths do not leak it.
+	g.started = true
+	if err != nil {
+		return nil, fmt.Errorf("tsnetd: tailnet up: %s", redactAuthKey(err.Error(), g.authKey))
+	}
+	for _, a := range st.TailscaleIPs {
+		if a.Is4() {
+			return a.AsSlice(), nil
+		}
+	}
+	// Running but no IPv4 (v6-only tailnet): not an error — the caller just
+	// has no v4 address to advertise (pairing skips IPv6 for now).
+	return nil, nil
 }
 
 // Close releases the LAN listener and, if an embedded node was started,
 // shuts it down. It is safe to call multiple times: the underlying close
 // runs once. An embedded node that was constructed but never started is left
-// untouched (calling tsnet.Close on it would panic), which can only happen
-// after a failed ListenTailnet.
+// untouched (calling tsnet.Close on it would panic), which happens when the
+// group was constructed but neither Up nor ListenTailnet was attempted.
 func (g *Group) Close() error {
 	g.closeOnce.Do(func() {
 		var errs []error
@@ -212,4 +267,14 @@ func portOf(addr string) string {
 		return port
 	}
 	return "0"
+}
+
+// redactAuthKey removes the exact configured credential from external text.
+// Empty keys are a no-op: strings.ReplaceAll with an empty old value would
+// corrupt every log line.
+func redactAuthKey(text, authKey string) string {
+	if authKey == "" {
+		return text
+	}
+	return strings.ReplaceAll(text, authKey, "[REDACTED]")
 }

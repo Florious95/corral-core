@@ -33,7 +33,7 @@ server/
     └── tsnetd/           # tsnet 内嵌监听（任务 tsnet-embed）
 ```
 
-`internal/` 下除 `config/` 外的包当前为占位声明（doc.go 说明职责与边界），实现由各自任务落位。
+`internal/` 各包均由 daemon 入口按上述职责装配；`tsnetd` 与 LAN listener 组成同一 API 双栈。
 
 ## 构建与验证
 
@@ -52,12 +52,56 @@ go vet ./...
 | `-listen` | `AGENTMIRROR_LISTEN` | `0.0.0.0:9900` | WebSocket 服务监听地址 |
 | `-qr-listen` | `AGENTMIRROR_QR_LISTEN` | 空（禁用） | 配对 QR 页监听地址 |
 | `-log-level` | `AGENTMIRROR_LOG_LEVEL` | `info` | 日志级别 `debug\|info\|warn\|error` |
+| —（禁止 argv） | `TS_AUTHKEY` | 空（LAN-only） | 内嵌 tsnet 节点凭据；非空启用 LAN + tailnet 双栈 |
+| — | `TS_CONTROL_URL` | 官方控制面 | 可选自托管控制面（如 headscale）URL |
+| `-state-dir` | `AGENTMIRROR_STATE_DIR` | 用户配置目录 | pidfile；tsnet 状态位于其 `tsnet/` 子目录 |
 
-优先级：flag（显式指定）→ 环境变量 → 默认值。
+普通配置优先级：flag（显式指定）→ 环境变量 → 默认值。`TS_AUTHKEY` 是例外：它只允许
+环境变量，故意不提供 `-ts-authkey`；argv 会暴露在进程列表与 shell history 中。
+
+## LAN / tailnet 双栈运行
+
+不设置 `TS_AUTHKEY` 时，daemon 只监听 LAN，不连接 Tailscale 控制面，也不创建 tsnet
+状态目录：
+
+```bash
+go run ./cmd/agentmirrord -listen 0.0.0.0:9900
+```
+
+启用内嵌 tailnet 时，用终端的静默输入把 key 放进环境，再启动同一个 daemon。不要把 key
+写进命令参数、脚本、日志或截图：
+
+```bash
+IFS= read -r -s TS_AUTHKEY
+export TS_AUTHKEY
+go run ./cmd/agentmirrord -listen 0.0.0.0:9900
+unset TS_AUTHKEY
+```
+
+启动序列会先保留 LAN listener，再等待内嵌节点 Up（最长 60 秒），随后在 tailnet 的同一
+端口启动第二个 listener。控制面握手失败、key 无效/过期或 tailnet listener 失败都会明确
+退出，不会假装降级成功。配对 QR 的 `candidates` 同时包含 LAN 与 100.64.0.0/10 tailnet
+地址；QR 还携带 App 入网所需的凭据，因此二维码本身是秘密，不要分享或截图。
+
+daemon 与 App 会先后用同一 key 注册两个节点：必须使用至少可用两次的 reusable key；建议
+设置短有效期、预授权并用 ACL/tag 限权，配对完成后立即吊销。收到 SIGINT/SIGTERM 时，daemon
+会关闭 LAN/tailnet listener 与内嵌节点。自托管 headscale 可另设 `TS_CONTROL_URL`；不要为
+隔离测试改写 `HOME`，请用 `AGENTMIRROR_STATE_DIR` 指向专用目录。
+
+## 未验证清单
+
+- 尚未使用用户真实 `TS_AUTHKEY` 在真实 Android 设备完成「扫码 → App 内嵌节点 Up →
+  tailnet WebSocket READY」端到端；当前自动验收到假后端、SOCKS5 选路与双栈接线单测。
+- `TS_CONTROL_URL` 当前只配置 daemon；QR v1 不携带控制面 URL，App 的 headscale
+  扫码入网尚未形成产品链路，不应当作已支持或已验证。
+- Android Keystore 的真机加密持久化与系统回收后的恢复仍需真机验收；JVM 测试使用注入
+  加密器，只锁定「磁盘不写明文 authkey」的存储层语义。
 
 ## 日志
 
 标准库 `log/slog` 结构化日志（TextHandler，输出到 stderr）。
+tsnet 上游 debug/error 文本会在进入该日志前脱敏。不要启用 `TS_DEBUG_REGISTER`：该上游
+调试开关会在本地脱敏钩子之前记录完整注册请求；配置 authkey 时 daemon 会拒绝这种组合。
 
 ## 运行
 

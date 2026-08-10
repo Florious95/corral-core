@@ -13,6 +13,7 @@
 package tsnetd
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"log/slog"
@@ -115,6 +116,87 @@ func TestNewWithAuthkeyConstructsOnly(t *testing.T) {
 	}
 }
 
+func TestNewUsesActualLANPortForTailnet(t *testing.T) {
+	g, err := New(Options{
+		ListenAddr: "127.0.0.1:0",
+		AuthKey:    "tskey-test-fake",
+		Dir:        t.TempDir(),
+	}, discardLogger())
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer g.Close()
+
+	want := portOf(g.LAN.Addr().String())
+	if want == "0" || g.port != want {
+		t.Fatalf("tailnet port = %q, want bound LAN port %q", g.port, want)
+	}
+}
+
+func TestUpstreamLogRedactsAuthKey(t *testing.T) {
+	const key = "tskey-auth-must-not-reach-log"
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	g, err := New(Options{
+		ListenAddr: "127.0.0.1:0",
+		AuthKey:    key,
+		Dir:        t.TempDir(),
+	}, logger)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer g.Close()
+
+	g.ts.Logf("register request auth=%s", key)
+	if strings.Contains(buf.String(), key) {
+		t.Fatalf("upstream log leaked TS authkey: %q", buf.String())
+	}
+}
+
+func TestNewRejectsRegisterDebugWithAuthKey(t *testing.T) {
+	// Tailscale's TS_DEBUG_REGISTER path serializes the full register request,
+	// including AuthKey, into its private disk/remote logtail before Server.Logf
+	// can redact it. Fail closed instead of offering a misleading safe logger.
+	t.Setenv("TS_DEBUG_REGISTER", "true")
+	const key = "tskey-auth-must-not-reach-upstream-logtail"
+	g, err := New(Options{
+		ListenAddr: "127.0.0.1:0",
+		AuthKey:    key,
+		Dir:        t.TempDir(),
+	}, discardLogger())
+	if g != nil {
+		g.Close()
+	}
+	if err == nil {
+		t.Fatal("New must reject TS_DEBUG_REGISTER when an authkey is configured")
+	}
+	if strings.Contains(err.Error(), key) {
+		t.Fatalf("rejection leaked TS authkey: %q", err)
+	}
+}
+
+// TestControlURLWired (feat-ts-wire) asserts Options.ControlURL reaches the
+// tsnet server (self-hosted control planes — headscale — are a deployment
+// freedom per requirement 011; empty means the official control plane).
+func TestControlURLWired(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "tsnet-state")
+
+	g, err := New(Options{
+		ListenAddr: "127.0.0.1:0",
+		AuthKey:    "tskey-test-fake",
+		ControlURL: "http://127.0.0.1:8090",
+		Dir:        dir,
+	}, discardLogger())
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer g.Close()
+
+	if g.ts == nil || g.ts.ControlURL != "http://127.0.0.1:8090" {
+		t.Fatalf("tsnet.Server.ControlURL not wired, got %+v", g.ts)
+	}
+}
+
 // TestStateDirCreated asserts that New creates the configured state directory
 // (nested on purpose) when the tailnet is enabled, matching the contract that
 // tsnet state lives under the user config directory.
@@ -210,6 +292,27 @@ func TestAuthKeyOptionOverridesEnv(t *testing.T) {
 
 	if g.ts == nil || g.ts.AuthKey != "tskey-test-option" {
 		t.Fatalf("tsnet.Server.AuthKey = %v, want tskey-test-option", g.ts.AuthKey)
+	}
+}
+
+// TestDegradedUpRejected (task feat-ts-wire, red first) asserts that Up in
+// degraded mode fails cleanly with ErrTailnetDisabled — same contract as
+// ListenTailnet: no node, no control-plane contact, an explicit signal.
+func TestDegradedUpRejected(t *testing.T) {
+	t.Setenv("TS_AUTHKEY", "")
+
+	g, err := New(Options{ListenAddr: "127.0.0.1:0"}, discardLogger())
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer g.Close()
+
+	ip, err := g.Up(t.Context())
+	if !errors.Is(err, ErrTailnetDisabled) {
+		t.Fatalf("Up in degraded mode: got err=%v (want ErrTailnetDisabled)", err)
+	}
+	if ip != nil {
+		t.Fatalf("Up in degraded mode must return a nil IP, got %v", ip)
 	}
 }
 

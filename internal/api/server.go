@@ -95,7 +95,10 @@ func NewServer(opts Options) *Server {
 		s.stateProvider = unknownState{}
 	}
 	if s.discoverer == nil {
-		s.discoverer = tmuxDiscoverer{logger: log}
+		// Copy the explicit scope (or the e2e-only env bridge) so a later
+		// mutation cannot widen a running server's isolation boundary.
+		socketDirs := resolvedDiscoverySocketDirs(opts.DiscoverySocketDirs)
+		s.discoverer = tmuxDiscoverer{logger: log, socketDirs: socketDirs}
 	}
 	if s.listInterval <= 0 {
 		s.listInterval = defaultListInterval

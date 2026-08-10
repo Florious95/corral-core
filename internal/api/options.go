@@ -63,6 +63,13 @@ type Options struct {
 	// (discovery.Discover); tests inject a scoped or scripted discoverer.
 	Discoverer Discoverer
 
+	// DiscoverySocketDirs narrows the default discoverer to exactly these
+	// directories. Nil preserves production discovery.Discover behavior;
+	// non-nil (including an empty slice) is an explicit fail-closed scope for
+	// isolated tests and e2e probes that must not enumerate host tmux sockets.
+	// It is ignored when Discoverer is supplied.
+	DiscoverySocketDirs []string
+
 	// ListInterval is how often the server re-scans tmux and pushes list_delta
 	// frames. Zero defaults to 2s.
 	ListInterval time.Duration
