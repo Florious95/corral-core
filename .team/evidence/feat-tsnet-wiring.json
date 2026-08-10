@@ -1,0 +1,223 @@
+{
+  "task_id": "feat-tsnet-wiring",
+  "case_id": "msg_5d98f9002280",
+  "worker": "w-tsnet-wiring5",
+  "date": "2026-08-10",
+  "status": "pass",
+  "tests": [
+    {
+      "cwd": "server",
+      "argv": [
+        "go",
+        "test",
+        "./internal/tsnetd",
+        "-run",
+        "^TestNewRejectsRegisterDebugWithAuthKey$",
+        "-count=1"
+      ],
+      "rc": 1,
+      "phase": "red"
+    },
+    {
+      "cwd": "server",
+      "argv": [
+        "go",
+        "test",
+        "./internal/tsnetd",
+        "-run",
+        "^Test(NewRejectsRegisterDebugWithAuthKey|UpstreamLogRedactsAuthKey)$",
+        "-count=1"
+      ],
+      "rc": 0,
+      "phase": "green"
+    },
+    {
+      "cwd": "app",
+      "argv": [
+        "./gradlew",
+        "-q",
+        ":app:testDebugUnitTest",
+        "--tests",
+        "dev.agentmirror.app.ColdStartReconnectTest.newerLanConfigSupersedesPendingTailnetStart"
+      ],
+      "rc": 1,
+      "phase": "red"
+    },
+    {
+      "cwd": "app",
+      "argv": [
+        "./gradlew",
+        "-q",
+        ":app:testDebugUnitTest",
+        "--tests",
+        "dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStoreTest.load_dropsLegacyPlaintextWhenEncryptionFails"
+      ],
+      "rc": 1,
+      "phase": "red"
+    },
+    {
+      "cwd": "app",
+      "argv": [
+        "./gradlew",
+        "-q",
+        ":app:testDebugUnitTest",
+        "--tests",
+        "dev.agentmirror.app.ColdStartReconnectTest.newerLanConfigSupersedesPendingTailnetStart",
+        "--tests",
+        "dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStoreTest.load_dropsLegacyPlaintextWhenEncryptionFails"
+      ],
+      "rc": 0,
+      "phase": "green"
+    },
+    {
+      "cwd": "app",
+      "argv": [
+        "./gradlew",
+        "-q",
+        ":app:testDebugUnitTest",
+        "--tests",
+        "dev.agentmirror.app.tsnet.TsnetWireTest.换 key 重启节点（旧节点关闭新 key 起网）"
+      ],
+      "rc": 1,
+      "phase": "red"
+    },
+    {
+      "cwd": "app",
+      "argv": [
+        "./gradlew",
+        "-q",
+        ":app:testDebugUnitTest",
+        "--tests",
+        "dev.agentmirror.app.tsnet.TsnetWireTest.换 key 重启节点（旧节点关闭新 key 起网）"
+      ],
+      "rc": 0,
+      "phase": "green"
+    },
+    {
+      "cwd": "app",
+      "argv": [
+        "./gradlew",
+        "-q",
+        ":app:testDebugUnitTest",
+        "--tests",
+        "dev.agentmirror.app.ColdStartReconnectTest",
+        "--tests",
+        "dev.agentmirror.app.tsnet.TsnetManagerTest",
+        "--tests",
+        "dev.agentmirror.app.tsnet.TsnetWireTest",
+        "--tests",
+        "dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStoreTest",
+        "--tests",
+        "dev.agentmirror.app.service.ServiceWireStaleConfigTest"
+      ],
+      "rc": 0
+    },
+    {
+      "cwd": "server",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/tsnetd/...",
+        "./internal/pairing/...",
+        "./cmd/agentmirrord",
+        "./internal/config"
+      ],
+      "rc": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd app && ./gradlew -q :app:testDebugUnitTest"
+      ],
+      "rc": 0,
+      "phase": "acceptance"
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd server && go test ./internal/tsnetd/... ./internal/pairing/..."
+      ],
+      "rc": 0,
+      "phase": "acceptance"
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd app && ./gradlew -q --rerun-tasks :app:testDebugUnitTest"
+      ],
+      "rc": 0,
+      "phase": "fresh-full-suite"
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd server && go test ./cmd/agentmirrord ./internal/config"
+      ],
+      "rc": 0
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "app/app/src/main/java/dev/agentmirror/app",
+        "app/app/src/test",
+        "server/internal/pairing",
+        "server/internal/tsnetd",
+        "server/cmd",
+        "server/internal/config",
+        "docs/protocol.md",
+        "server/README.md"
+      ],
+      "rc": 0
+    }
+  ],
+  "changes": [
+    {
+      "paths": [
+        "app/app/src/main/java/dev/agentmirror/app/pairing/",
+        "app/app/src/main/java/dev/agentmirror/app/tsnet/",
+        "app/app/src/main/java/dev/agentmirror/app/service/"
+      ],
+      "summary": "QR/manual authkey now starts the embedded node, persists only Keystore AES-GCM ciphertext, redacts credential-bearing model/backend text, invalidates the whole legacy config if safe migration fails, and keeps pairing probes from overwriting the persistent LAN/tailnet badge."
+    },
+    {
+      "paths": [
+        "app/app/src/main/java/dev/agentmirror/app/pairing/PersistentConnection.kt",
+        "app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetWire.kt",
+        "app/app/src/main/java/dev/agentmirror/app/service/OkHttpWebSocketTransport.kt"
+      ],
+      "summary": "Tailnet cold start waits for embedded tsnet to settle before first dial, newer re-pair intents supersede stale callbacks, different authkeys use stable isolated state directories, and only 100.64.0.0/10 targets use the authenticated loopback SOCKS5 path when Up; LAN remains direct."
+    },
+    {
+      "paths": [
+        "server/internal/config/",
+        "server/internal/tsnetd/",
+        "server/internal/pairing/",
+        "server/cmd/agentmirrord/"
+      ],
+      "summary": "Daemon wiring consumes env-only TS_AUTHKEY, brings tsnet Up before QR emission, reuses the actual bound LAN port for :0, merges the embedded tailnet IP into QR candidates, exits cleanly on startup cancellation, closes partial resources, redacts external errors, and rejects TS_DEBUG_REGISTER when it could bypass redaction."
+    },
+    {
+      "paths": [
+        "docs/protocol.md",
+        "server/README.md",
+        "app/app/src/test/",
+        "server/internal/tsnetd/tsnetd_test.go",
+        "server/cmd/agentmirrord/main_test.go"
+      ],
+      "summary": "Protocol, operations, security boundaries, unverified items, and red/green regression coverage were updated for the live App/daemon/QR path."
+    }
+  ],
+  "deviation": [
+    "No user or real TS_AUTHKEY was used; real Android-device scan -> embedded tsnet Up -> tailnet WebSocket READY remains user-device E2E.",
+    "Android Keystore encryption and recovery after real device/system lifecycle events were not verified on hardware; JVM tests use an injected cipher.",
+    "TS_CONTROL_URL is daemon-only and QR v1 does not carry the control URL, so the App headscale scan path remains unsupported and unverified."
+  ]
+}

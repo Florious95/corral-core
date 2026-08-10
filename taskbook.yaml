@@ -591,6 +591,38 @@ tasks:
     evidence: ".team/evidence/feat-ts-wire.json"
     contention: contract
 
+  - id: fix-ts-state-dir-e2e
+    goal: >
+      P0 收尾阻塞（feat-ts-wire 最终验证发现，2026-08-10 裁定席立案）：cmd 已解析有效
+      -state-dir/AGENTMIRROR_STATE_DIR 并用于 pidfile，却未把隔离目录传入 tsnetd.Options.Dir；
+      tailnet 启用时空 Dir 回落 os.UserConfigDir()，在禁止改写 HOME、禁止触碰用户真实 tsnet 的
+      验收铁律下，自建 headscale + daemon + 模拟器实链只能记 BLOCKED。纯加法修复：把 cmd 已
+      resolve 的有效 stateDir 下独立 tsnet 子目录显式接入 Options.Dir，默认用户行为不变，不新增
+      第二套重叠 state-dir 配置；红测锁定消费方确实收到该目录、tailnet 未启用时不创建 tsnet
+      状态。随后把 headscale 验收固化为可重复脚本：全程不得赋值/重定向 HOME，不碰生产 daemon/
+      用户真实 tmux/真实 Tailscale；TS authkey 只经 TS_AUTHKEY 环境进入 daemon、禁止 argv flag、
+      禁止日志与截图明文。**用户裁定 2026-08-10：模拟器扫不了码就不要测模拟器扫码**——本任务
+      验收**不得**依赖模拟器摄像头/Extended Controls/任何前台鼠标或窗口寻址（此前因裸 qemu
+      bundleID=NULL 无法后台寻址而卡死，见 .team/evidence/fix-ts-state-dir-e2e.json 的 attempts）。
+      **用户裁定 2026-08-10（二次）：通过 API 测试**——即完全不经任何 UI 路径（不点界面、不填
+      输入框、不扫码、不做窗口寻址），改用 instrumentation/程序接口**直调**配对入口与 tsnet 启动
+      入口（App 侧走 androidTest instrumentation 直接调用 ConnectionManager/tsnet 绑定 API 并传入
+      authkey；authkey 只经受测进程的环境/参数注入，不上屏、不落日志、不入截图）。已连续 8 代
+      在「headscale_node_count=1 / expected_two_headscale_nodes」同一处失败，本轮**先定位再验证**：
+      必须先给出 App 侧节点到底有没有发起注册的证据（tsnet 启动是否被调用、authkey 是否真送达、
+      headscale 端有无收到该节点的注册请求、失败在哪一层），定位结论写进证据；在此基础上再实证
+      App 节点入网、经 SOCKS5 拨 daemon 的 100.64/10 地址并进入工作区。
+      真扫码（相机识别 QR）改由用户真机验收覆盖，不在本任务范围。
+      脚本无论成败都精确清理自建 headscale/daemon/端口/状态目录，落 argv 密钥形状 presence-only
+      与零残留证据。未跑成必须如实红交，不得再用 HOME 旁路，也不得回退鼠标/前台方案。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh'"
+    deps: ["feat-ts-wire"]
+    write_scope: ["server/cmd/agentmirrord/", "e2e/feat-ts-wire-headscale.sh", "e2e/artifacts/fix-ts-state-dir-e2e/"]
+    evidence: ".team/evidence/fix-ts-state-dir-e2e.json"
+    contention: impl
+
   - id: fix-release-test-host
     goal: >
       基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
@@ -684,4 +716,64 @@ tasks:
     deps: ["fix-term-bg-cjk", "ui-redesign"]
     write_scope: ["e2e/artifacts/dogfood/"]
     evidence: ".team/evidence/test-app-dogfood.json"
+    contention: impl
+
+  - id: fix-connected-idle-economy
+    goal: >
+      P1（test-app-dogfood D-16，2026-08-10 契约升级）：修复 daemon 在“已连接+单订阅+用户零操作”
+      稳态持续约 14.8% CPU 的在线静默能耗缺陷。已证边界仅为零连接 0.0% 对比单订阅静默态；
+      已连接零订阅尚未量测，listing 轮询与订阅成本占比不得凭推断写结论。红测先行：以假时钟/
+      可计数 sampler 锁定 3/27/200 pane 下全局采样速率有界且不随舰队规模线性常烧，并保证任一
+      pane 状态变化最迟 60s 可见；再做隔离 27-pane 真进程三态量测（零连接/已连接零订阅/
+      已连接单订阅），两种在线静默态平均 CPU 均 ≤5%，原始 CPU time、capture-pane 派生率与
+      pane 数完整落证。不得调阈值凑数；若 5% 不可达则如实红交。协议/App 不改，生产 daemon 与
+      用户真实 tmux 绝不触碰。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./internal/api/... ./cmd/...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/connected-idle-economy.sh'"
+    deps: ["fix-daemon-idle-cpu", "fix-state-wiring"]
+    write_scope: ["server/internal/api/", "e2e/connected-idle-economy.sh", "e2e/artifacts/fix-connected-idle-economy/"]
+    evidence: ".team/evidence/fix-connected-idle-economy.json"
+    contention: impl
+
+  - id: audit-prod-daemon-lifecycle
+    goal: >
+      调查 2026-08-10 01:2x 前生产 daemon PID 46081 无声退出事件：在不触碰当前生产 PID 3393、
+      不读取密钥/profile 原文、不把 token/authkey 上屏落盘的前提下，对齐旧进程约 3.5h 生命周期、
+      各席位/测试脚本活动、系统退出证据与 daemon 自身 panic/主动退出路径，给出 product|environment|
+      unknown 三选一且逐证据可复核的结论。若属 product，只提交后续 fix 案五栏提案，不顺手修产品；
+      若属 environment，仅在裁定台账追加一行。同步加固值守面：生产启动必须经日志落盘脚本，
+      watchdog 对 :9900 监听、进程与日志接管做只读存活探针，异常只写 watchdog-escalation.log，
+      不自动重启、不发信号。红线：生产 daemon 与用户真实 tmux 禁触。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/audit-prod-daemon-lifecycle/REPORT.md && python3 -m json.tool .team/evidence/audit-prod-daemon-lifecycle.json >/dev/null'"
+      - "bash -lc 'python3 -m py_compile .team/watchdog.py && bash -n .team/prod-daemon-launch.sh'"
+      - "bash -lc 'test -s e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log'"
+    deps: ["fix-daemon-idle-cpu"]
+    write_scope: [".team/watchdog.py", ".team/prod-daemon-launch.sh", ".team/adjudicator/log.md", "e2e/artifacts/audit-prod-daemon-lifecycle/", ".team/evidence/audit-prod-daemon-lifecycle.json"]
+    evidence: ".team/evidence/audit-prod-daemon-lifecycle.json"
+    contention: impl
+
+  - id: test-api-user-scenarios-perf
+    goal: >
+      用户裁定 2026-08-10：**由 API 组成用户场景的测试，且必须包含性能测试**。建立一套完全经
+      程序接口（WS 协议 + HTTP 上传口 + 配对口）驱动的端到端场景套件，不经任何 UI 路径
+      （不点界面、不扫码、不做窗口寻址），把 016 首触九步与 017 当期承诺翻译成可重复跑的
+      API 剧本：配对建立→工作区/会话两级列举→会话订阅（快照+增量流+scrollback 分页）→
+      输入注入→输出回流→resize→图片上传→断线重连续订→状态字段流转。每个场景断言的是
+      用户可见结果（拿到什么、多久拿到、失败有没有原因），不是内部实现。
+      **性能面必须同场量测并落盘基线 JSON**：配对到首帧会话列表的时延、订阅首帧时延、
+      输出流端到端时延（p50/p95）、大输出吞吐、scrollback 分页时延、上传耗时/大小、
+      重连恢复时延；以及工程常识红线 1 要求的静默经济三态 CPU 与内存（零连接/已连接零订阅/
+      已连接单订阅），并记录 daemon 常驻内存与子进程派生计数。本轮**先建套件与基线**：
+      门限值不得自行拍脑袋，基线跑出来后连同建议门限写进证据，由用户或裁定席定门限后再转为
+      硬断言。红线：自建隔离 daemon + 高端口，绝不触碰生产 daemon（:9900）与用户真实 tmux；
+      配对 token 不落日志不上屏；跑完零残留进程/端口/临时目录。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'"
+      - "bash -lc 'python3 -m json.tool e2e/artifacts/test-api-user-scenarios-perf/baseline.json >/dev/null'"
+      - "bash -lc 'test -s e2e/artifacts/test-api-user-scenarios-perf/REPORT.md'"
+    deps: ["protocol-spec"]
+    write_scope: ["e2e/api-user-scenarios.sh", "e2e/artifacts/test-api-user-scenarios-perf/", ".team/evidence/test-api-user-scenarios-perf.json"]
+    evidence: ".team/evidence/test-api-user-scenarios-perf.json"
     contention: impl

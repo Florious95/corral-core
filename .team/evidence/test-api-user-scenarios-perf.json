@@ -1,0 +1,47 @@
+{
+  "task_id": "test-api-user-scenarios-perf",
+  "status": "pass",
+  "tests": [
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh"
+      ],
+      "rc": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "python3 -m json.tool e2e/artifacts/test-api-user-scenarios-perf/baseline.json >/dev/null"
+      ],
+      "rc": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "test -s e2e/artifacts/test-api-user-scenarios-perf/REPORT.md"
+      ],
+      "rc": 0
+    }
+  ],
+  "changes": [
+    {
+      "path": "e2e/api-user-scenarios.sh",
+      "summary": "API-only isolated end-to-end suite covering pairing, two-level listing, subscription snapshot/delta/scrollback, input/output, resize, upload, reconnect, state transitions, performance baselines, three silent-economy states, and scoped zero-residue cleanup."
+    },
+    {
+      "path": "e2e/artifacts/test-api-user-scenarios-perf/",
+      "summary": "Fresh baseline JSON, human report, scenario/resource measurements, isolation audit, and cleanup evidence from the successful acceptance run."
+    },
+    {
+      "path": ".team/evidence/test-api-user-scenarios-perf.json",
+      "summary": "File-backed task receipt with exact acceptance argv and return codes."
+    }
+  ],
+  "deviation": [
+    "The task-scoped untracked suite and artifacts already existed when this seat started, so this seat performed a fresh full acceptance run and regenerated the measured artifacts but did not fabricate a post-hoc red-first run. Product/API coverage deviations are recorded in baseline.json and REPORT.md."
+  ]
+}
