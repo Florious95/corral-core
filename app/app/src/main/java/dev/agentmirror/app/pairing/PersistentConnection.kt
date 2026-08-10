@@ -23,6 +23,14 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.tsnet.TsnetDial
+import dev.agentmirror.app.tsnet.TsnetState
+import dev.agentmirror.app.tsnet.TsnetWire
+import java.net.URI
+
+/** 串行化启动意图；代次让迟到的 tsnet 终态不能恢复已被重配取代的旧地址。 */
+private val persistentConnectionStartLock = Any()
+private var persistentConnectionStartGeneration = 0L
 
 /**
  * 启动常驻连接（配对成功与冷启动重连共用的唯一启动入口，fix-cold-start-reconnect P0）。
@@ -41,6 +49,33 @@ import dev.agentmirror.app.service.ServiceWire
  * 尝试（不静默），此处只落日志可判定。
  */
 fun startPersistentConnection(config: PairingConfig) {
+    synchronized(persistentConnectionStartLock) {
+        val generation = ++persistentConnectionStartGeneration
+        // feat-ts-wire：配置携带 authkey（配对时扫码/手填带入并持久化）→ 先确保 tsnet
+        // 节点起网（幂等）。tailnet 地址的拨号依赖节点 Up 后的 SOCKS 通道，因此首拨等节点
+        // 明确 Up/Error；LAN 地址仍立即直连（transport 工厂拨号时刻现查状态）。key 值不落日志。
+        if (config.tsAuthKey.isNotBlank()) {
+            TsnetWire.ensureStarted(config.tsAuthKey)
+            val host = runCatching { URI(config.url).host }.getOrNull()
+            if (TsnetDial.isTailnetHost(host) && TsnetWire.state !is TsnetState.Up) {
+                // 冷启动没有配对页时钟泵；tailnet 目标若在 Starting 阶段先直拨，失败后可能
+                // 永久停在 RECONNECTING。等节点明确 Up/Error 再首拨；LAN 地址仍立即直连。
+                TsnetWire.whenSettled {
+                    synchronized(persistentConnectionStartLock) {
+                        if (generation == persistentConnectionStartGeneration) {
+                            startPersistentConnectionNow(config)
+                        }
+                    }
+                }
+                return
+            }
+        }
+        startPersistentConnectionNow(config)
+    }
+}
+
+/** 已满足 tailnet 起网前置条件后的原有三件套；提取只为一次性状态回调复用。 */
+private fun startPersistentConnectionNow(config: PairingConfig) {
     ServiceWire.setConfig(ConnectionConfig(config.url, config.token))
     ServiceWire.uploadBaseUrl = deriveUploadBase(config.url)
     runCatching { ServiceWire.manager(NoopConnListener).start() }

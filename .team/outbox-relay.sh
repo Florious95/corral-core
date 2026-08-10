@@ -18,7 +18,7 @@ while true; do
     if [ "$size" -gt "$last" ]; then
       chunk=$(tail -c +"$((last + 1))" "$OUTBOX")
       if [ -n "$(printf '%s' "$chunk" | tr -d '[:space:]')" ]; then
-        if team-agent send "$TARGET" "[remote-agent-android 裁定席·outbox 自动转投] $chunk" \
+        if "$WS/.team/ta" send "$TARGET" "[remote-agent-android 裁定席·outbox 自动转投] $chunk" \
              --workspace "$WS" >> "$LOG" 2>&1; then
           echo "$size" > "$STATE"
           echo "$(date '+%F %T') relayed bytes $last..$size" >> "$LOG"

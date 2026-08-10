@@ -23,6 +23,9 @@ package dev.agentmirror.app.tsnet
  * 见 docs/decisions/app-tsnet.md），认证为用户名 `tsnet` + [cred] 口令。
  */
 data class TsnetProxy(val host: String, val port: Int, val cred: String) {
+    /** loopback 代理凭据同样是秘密，禁止 data class 默认 toString 明文展开。 */
+    override fun toString(): String = "TsnetProxy(host=$host, port=$port, cred=[redacted])"
+
     companion object {
         /**
          * 解析 gomobile 层返回的 "host:port" 一体串（tsnet loopback 监听 127.0.0.1，

@@ -84,12 +84,15 @@ class TsnetManagerTest {
     }
 
     @Test
-    fun `后端失败 - Error 带原因`() {
-        backend.failWith = IllegalStateException("control plane unreachable")
-        assertTrue(manager.start("/dir", "phone", "tskey-auth-abc"))
+    fun `后端失败 - Error 保留原因但脱敏 authkey`() {
+        val authKey = "tskey-auth-secret"
+        backend.failWith = IllegalStateException("control plane unreachable for $authKey")
+        assertTrue(manager.start("/dir", "phone", authKey))
         executor.runAll()
         val s = manager.state
         assertTrue(s is TsnetState.Error && s.reason.contains("control plane unreachable"))
+        assertFalse((s as TsnetState.Error).reason.contains(authKey))
+        assertEquals("失败路径也必须释放后端可能已创建的部分资源", 1, backend.closeCalls)
     }
 
     @Test

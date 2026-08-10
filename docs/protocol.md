@@ -47,7 +47,7 @@
   "v": 1,            // 载荷 schema 版本（当前恒 1；未知版本 App 拒绝并提示）
   "url": "ws://192.168.31.116:9900/ws",  // 主选 WebSocket 端点
   "token": "…",      // 配对 token：扫码即走 §3 auth 上行；QR 是其合法出口之一（§9）
-  "ts_authkey": "",  // 保留：Tailscale auth key（app-tsnet 接入后填充），当前恒空
+  "ts_authkey": "",  // Tailscale auth key（可选，task feat-ts-wire；语义见下）
   "candidates": [    // 可选：同一主机的全部候选 ws URL（含主选 url）
     "ws://192.168.31.116:9900/ws",
     "ws://10.20.55.20:9900/ws",
@@ -73,6 +73,28 @@
   4. 手填表单地址支持从候选下拉选。
 - 解析宽容：`candidates` 中非 ws URL / 空项**跳过不报错**；`candidates` 类型错误（非数组）
   视为无候选——坏候选不拖垮整个 QR，主选 `url` 仍可配对。
+
+**`ts_authkey` 语义（task feat-ts-wire，requirement 011 预授权分发裁定）**：
+
+- 服务端通过环境变量 `TS_AUTHKEY` 配置 TS authkey 时，daemon 内嵌
+  tsnet 节点真实起网，并把**同一 authkey** 原样写入本字段——预授权分发：App 扫码
+  即拿到入网凭证，扫一次码同时完成「配对 + 加入 tailnet」，用户零额外操作（011
+  路线 (a) 单一 App 原则）。未配置时字段为空串（与历史 QR 字节兼容，不 bump 版本）。
+  因 daemon 与 App 会先后注册两个节点，此 key 必须允许至少两次使用；建议使用短期、
+  预授权且由 ACL/tag 限权的 reusable key，配对完成后立即吊销。
+- 服务端起网成功后，tailnet 地址（100.64.0.0/10）以 ws URL 形式**追加进
+  `candidates`**（tsnet 用户态节点无本机网卡，接口探测看不见它，必须由 tsnet
+  状态显式注入）；guide 明文区照常列出 tailnet 地址，**但绝不明文打印 authkey**。
+- App 消费：`ts_authkey` 非空 → 在 App 进程内起 tsnet 用户态节点（gomobile 绑定，
+  无 VpnService）；节点 Up 后，**仅目标 host 落在 100.64.0.0/10 的拨号**经 tsnet
+  loopback SOCKS5 通道，其余地址（LAN 等）一律直拨——按地址选路，不引入全局代理，
+  无 authkey 时保持历史直拨路径；携带 authkey 且节点仍在 Starting 时，tailnet 首拨
+  等待节点进入 Up/Error，LAN 候选仍立即直拨（不把起网窗口误判成连接失败）。
+- 手填通道：配对页保留 authkey 输入框，手填 key 与扫码 key 走同一起网入口。
+- **安全红线（同 token §9 级）**：authkey 不落日志、不进错误文案、不在 UI 明文
+  回显（输入框为密文态）；QR 是它唯一的分发出口；App 侧随配对配置持久化（与
+  token 配置一起管理，但磁盘值由 Android Keystore AES-GCM 加密）。密钥不得通过
+  argv flag 传入（进程列表/shell history 可见），只允许 `TS_AUTHKEY` 环境变量。
 
 ## 3. 生命周期
 
