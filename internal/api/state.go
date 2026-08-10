@@ -14,11 +14,19 @@ import (
 )
 
 // StateProvider maps one discovered pane to its normalized agent state. The
-// state-parser task lands the real implementation; the default always returns
-// protocol.StateUnknown (008 first-class value).
+// production implementation is wiredStateProvider (state_wiring.go), assembled
+// by NewStateProvider and handed to the api server by cmd/agentmirrord
+// (task fix-state-wiring); a caller that wires no provider gets unknownState,
+// which always returns protocol.StateUnknown (requirement 008 first-class
+// value).
 type StateProvider interface {
 	// State returns the pane's normalized agent state, degrading to
 	// protocol.StateUnknown when undecidable.
+	// @contract
+	// @pre ctx 非 nil；p 为 discovery.Pane
+	// @post 返回五种闭值之一（working/idle/blocked/done/unknown）；判定不出返回 StateUnknown
+	// @err none — 永不返回 error（008 隔离铁律）
+	// @inv 不触碰镜像/输入路径
 	State(ctx context.Context, p discovery.Pane) protocol.AgentState
 }
 

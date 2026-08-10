@@ -60,6 +60,11 @@ func (p Payload) Marshal() ([]byte, error) {
 
 // RenderQR draws the half-block ANSI art for content: the full multi-line
 // string (trailing newline) ready to print to a terminal.
+// @contract
+// @pre none
+// @post 返回以换行结尾的多行 ANSI 半块艺术串（每两个模块一行）
+// @err content 超过所选纠错级别（Medium）的 QR 容量时报错
+// @inv none
 func RenderQR(content string) (string, error) {
 	q, err := qrcode.New(content, qrcode.Medium)
 	if err != nil {

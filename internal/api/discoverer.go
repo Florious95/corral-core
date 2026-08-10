@@ -25,6 +25,11 @@ const scopedDiscoveryDirsEnv = "AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS"
 type Discoverer interface {
 	// Discover scans the host's tmux servers and returns the aggregated
 	// workspace model. The returned model is pure data.
+	// @contract
+	// @pre ctx 非 nil
+	// @post 返回一次全新二层级 Model；实现不缓存
+	// @err ctx 取消/超时返回 ctx.Err()；发现失败返回非 nil error（由调用方记录并保留上一快照）
+	// @inv 不产生客户端可见的副作用；返回的 Model 为纯数据
 	Discover(ctx context.Context) (*discovery.Model, error)
 }
 

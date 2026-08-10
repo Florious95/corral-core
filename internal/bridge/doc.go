@@ -17,4 +17,7 @@
 // The mirror/inject red line is structural: a Pane only reads and writes the
 // pane's input/output streams; it never kills, detaches, or alters the pane's
 // runtime state beyond what a call explicitly requests.
+//
+// @consumes none — 本包只依赖标准库（context/fmt/os/strconv/strings/syscall/time/
+// os/exec/bytes/sync/sync/atomic/path/filepath），无内部包跨层依赖
 package bridge

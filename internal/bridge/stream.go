@@ -67,6 +67,11 @@ func newFIFOPath(p *Pane) string {
 // raw terminal byte chunks plus a cancel function that detaches the pipe and
 // closes the channel. A second Subscribe on the same pane is idempotent in
 // the tmux sense: it replaces the previous pipe without error.
+// @contract
+// @pre 目标 pane 存在（pipe-pane -o 前置 attach）；订阅前先 detach 已有 pipe（崩溃残留免疫）
+// @post 返回 ch 与 detach；调用 detach 后 pipe 拆除、FIFO 移除、ch 关闭；relay 满缓冲时丢字节（下个快照对账）
+// @err 建 FIFO 失败→fmt.Errorf；attach 超时→ErrTmuxTimeout；tmux 失败→ErrServerUnreachable/ErrPaneNotFound；FIFO 无 writer→fifoOpenTimeout 后 decidable error
+// @inv none — 纯镜像，只读 pane 输出流
 func (p *Pane) Subscribe(ctx context.Context) (<-chan []byte, func(), error) {
 	return subscribe(ctx, p.socket, p.target, newFIFOPath(p), p.timeout)
 }

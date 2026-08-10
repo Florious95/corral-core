@@ -31,12 +31,17 @@ type Pane struct {
 // NewPane returns a Pane bound to a bare pane id on the given tmux socket.
 // The empty socket means the tmux default socket. The default per-command
 // timeout applies unless overridden via WithTimeout.
+// @contract
+// @pre none — 参数不在本函数校验；paneID 应为 discovery 层产出的裸 pane id（"%N"）
+// @post 返回绑定 socket/paneID 的 Pane，timeout 为 defaultTimeout
+// @err none
+// @inv none — 纯构造，不触碰 tmux
 func NewPane(socket, paneID string) *Pane {
 	return &Pane{socket: socket, target: paneID, timeout: defaultTimeout}
 }
 
-// WithTimeout returns a copy of p with a custom per-command timeout. Useful
-// for slow clients whose pane operations legitimately take longer.
+// WithTimeout returns a copy of p with a custom per-command timeout,
+// overriding the default set by NewPane. The receiver p is left unchanged.
 func (p *Pane) WithTimeout(d time.Duration) *Pane {
 	cp := *p
 	cp.timeout = d
@@ -47,6 +52,11 @@ func (p *Pane) WithTimeout(d time.Duration) *Pane {
 // color escapes preserved (capture-pane -e). It is the first frame a
 // subscriber draws before switching to the incremental stream (requirement
 // 006's "video fast-open").
+// @contract
+// @pre none — pane 存在性由 tmux 在调用时惰性判定
+// @post 返回原始终端字节且 ANSI 转义保留；pane 运行态不被修改
+// @err 目标 pane 不存在→ErrPaneNotFound；server 不可达→ErrServerUnreachable；超时→ErrTmuxTimeout
+// @inv none — 只读操作
 func (p *Pane) Snapshot(ctx context.Context) ([]byte, error) {
 	return runTmux(ctx, p.socket, p.timeout, "capture-pane", "-e", "-p", "-t", p.target)
 }
@@ -58,6 +68,11 @@ func (p *Pane) Snapshot(ctx context.Context) ([]byte, error) {
 // shell's SIGWINCH prompt redraw, plain "\r ESC[K …") lands wherever the
 // replay left the cursor instead of where the real cursor is
 // (fix-term-residuals: phantom bottom-row prompt on device).
+// @contract
+// @pre none — pane 存在性由 tmux 在调用时惰性判定
+// @post 返回 0-based 列 x 与行 y
+// @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout；cursor 输出解析失败→fmt.Errorf
+// @inv none — 只读操作
 func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
 	out, err := runTmux(ctx, p.socket, p.timeout, "display-message", "-p", "-t", p.target, "#{cursor_x},#{cursor_y}")
 	if err != nil {
@@ -73,6 +88,11 @@ func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
 // start and end are negative line offsets relative to the screen bottom
 // (e.g. -30..-21 for the ten lines just above the top of the screen); paging
 // parameters come from the caller per requirement 006. Returns raw bytes.
+// @contract
+// @pre start、end 为负行偏移（相对屏幕底部）且 start < end
+// @post 返回该页原始终端字节（ANSI 保留，capture-pane -S/-E）
+// @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
+// @inv none — 只读操作
 func (p *Pane) Scrollback(ctx context.Context, start, end int) ([]byte, error) {
 	return runTmux(ctx, p.socket, p.timeout,
 		"capture-pane", "-e", "-p", "-t", p.target,
@@ -86,6 +106,11 @@ func (p *Pane) Scrollback(ctx context.Context, start, end int) ([]byte, error) {
 // text goes through load-buffer + paste-buffer, which tmux handles more
 // reliably for embedded newlines. Carriage returns are normalized away so a
 // phone line-ending cannot inject stray keystrokes.
+// @contract
+// @pre 目标 pane 存在（requirePane 前置检查）；text 可为任意内容（"\r" 会被删除）
+// @post 整条消息进入 pane 并按一次 Enter；单行走 send-keys -l，多行走 load-buffer + paste-buffer
+// @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
+// @inv none — 除注入文本与一次 Enter 外不触碰 pane 运行态
 func (p *Pane) Inject(ctx context.Context, text string) error {
 	if err := p.requirePane(ctx); err != nil {
 		return err
@@ -128,6 +153,11 @@ var namedKeys = map[string]string{
 // ack as Inject (requirement 003): a non-nil error means the keys did not go in
 // (unknown key name, pane gone, or server unreachable). An unknown key name
 // fails before any tmux call.
+// @contract
+// @pre pane 存在；每个 key 都属 namedKeys 闭集（否则在任意 tmux 调用前返回 ErrInvalidKey）
+// @post 全部命名 key 在单次 send-keys 调用中按序发送，不追加 Enter
+// @err 未知 key→ErrInvalidKey；pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
+// @inv none — 除按键外不触碰 pane 运行态
 func (p *Pane) SendKeys(ctx context.Context, keys ...string) error {
 	named := make([]string, 0, len(keys))
 	for _, k := range keys {
@@ -199,6 +229,11 @@ func (p *Pane) requirePane(ctx context.Context) error {
 // from the server, so the caller sees the truth, not the request. Resize is
 // a primitive only: the "whose last operation wins" grouping policy
 // (requirement 005) belongs to the layer that owns sessions.
+// @contract
+// @pre pane 存在；cols/rows 为请求尺寸（tmux 侧再约束）
+// @post window-size latest 已设、resize-window 已执行；返回 pane 实际新尺寸（读回值，非请求值）
+// @err 解析 window id/尺寸失败→fmt.Errorf；tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
+// @inv none — 只改尺寸，不触碰 pane 其他运行态
 func (p *Pane) Resize(ctx context.Context, cols, rows int) (width, height int, err error) {
 	winID, err := p.windowID(ctx)
 	if err != nil {
@@ -243,12 +278,13 @@ func (p *Pane) size(ctx context.Context) (int, int, error) {
 	return w, h, nil
 }
 
-// Pane.Socket exposes the socket the pane is bound to (used by the stream
-// layer to build its own commands).
+// Socket exposes the socket the Pane is bound to. An empty string means the
+// tmux default socket.
 func (p *Pane) Socket() string { return p.socket }
 
-// Pane.Target exposes the bare pane id (used by the stream layer).
+// Target exposes the bare pane id (e.g. "%0") the Pane is bound to.
 func (p *Pane) Target() string { return p.target }
 
-// Pane.Timeout exposes the per-command timeout (used by the stream layer).
+// Timeout exposes the per-command timeout that bounds every tmux invocation
+// the Pane makes.
 func (p *Pane) Timeout() time.Duration { return p.timeout }

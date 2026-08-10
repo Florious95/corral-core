@@ -30,6 +30,11 @@ const pidfileName = "agentmirrord.pid"
 // a release function that unlocks and closes it (idempotent). A second
 // instance holding the lock yields an error naming the conflicting pidfile, so
 // the operator knows which instance is alive and where to look.
+// @contract
+// @pre dir 可创建（不存在则建，0700）；name 非空
+// @post 成功时 flock 被持有且 pid 已写入；release 解锁并关闭、幂等
+// @err 二启持锁冲突报 "another agentmirrord instance is already running" 并含 pidfile 路径；mkdir/open/flock/truncate/write 任一失败均包装且含路径
+// @inv flock 是权威锁，pidfile 内容仅为提示（陈旧 pid 不阻塞重启）
 func acquirePidfile(dir, name string) (string, func(), error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", nil, fmt.Errorf("state dir: %w", err)

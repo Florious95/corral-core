@@ -151,6 +151,11 @@ type stateCacheEntry struct {
 // the API: process-tree identify + pane-output sampling + prev-tracked state,
 // served from a TTL cache so the listing hot path never blocks on state IO
 // (requirement 008). log may be nil (discarded).
+// @contract
+// @pre log 可为 nil（内部替换为 DiscardHandler）
+// @post 返回的 *wiredStateProvider 已就绪：cache/pending/token bucket 初始化，后台刷新 goroutine 上下文已创建
+// @err none — 构造不失败
+// @inv 后台 goroutine 由 Close 终结；State() 永不做同步 IO
 func NewStateProvider(log *slog.Logger) *wiredStateProvider {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
@@ -177,12 +182,22 @@ func NewStateProvider(log *slog.Logger) *wiredStateProvider {
 
 // Close cancels the background refresh goroutines. The daemon calls it during
 // shutdown after the api server closes.
+// @contract
+// @pre 由 NewStateProvider 构造
+// @post 后台刷新 goroutine 的 ctx 已取消；在途 refresh 在 sampling budget 内退出
+// @err none
+// @inv 幂等：重复调用安全；State() 在 Close 后可继续返回缓存值
 func (p *wiredStateProvider) Close() { p.cancel() }
 
 // State implements StateProvider. It is a pure cache read plus a refresh
 // schedule: never performs I/O synchronously (requirement 008), so the listing
 // loop cannot be stalled by the state pipeline. Unknown is returned for a pane
 // never sampled yet, and for a pane whose last refresh failed.
+// @contract
+// @pre ctx 非 nil；pn 为 discovery.Pane（首次出现时建立缓存条目）
+// @post 返回缓存中的最近状态；未采样或上次刷新失败返回 StateUnknown；若该 ref 过期则入队一次后台刷新（由 token bucket 限流）
+// @err none — State 不返回 error；所有失败降级为 StateUnknown
+// @inv 不做同步 IO；刷新在后台 goroutine 按 fleet 级 token bucket 调度
 func (p *wiredStateProvider) State(ctx context.Context, pn discovery.Pane) protocol.AgentState {
 	ref := sessionRef(pn)
 	now := p.now()

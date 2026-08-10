@@ -31,7 +31,9 @@ var rfc2544Net = func() *net.IPNet {
 
 // Address kind values.
 const (
-	// KindLAN marks a private/LAN unicast IPv4 address.
+	// KindLAN marks a unicast IPv4 address the host exposes on its LAN: any IPv4
+	// that is not loopback, link-local, RFC 2544, or tailnet (a public/global
+	// unicast address is still KindLAN).
 	KindLAN = "lan"
 	// KindTailnet marks an address in the Tailscale CGNAT range (100.64.0.0/10).
 	KindTailnet = "tailnet"
@@ -79,6 +81,11 @@ func classifyIP(ip net.IP) string {
 // deterministic order: LAN addresses (sorted), then tailnet addresses, then
 // loopback. A loopback fallback is guaranteed even when the enumeration fails,
 // so callers always have a last-resort URL.
+// @contract
+// @pre none
+// @post 返回顺序 LAN（排序）→ tailnet（排序）→ loopback，且总是含 loopback
+// @err none（接口枚举失败时降级为 loopback 而非报错）
+// @inv none
 func DetectAddresses() []Address {
 	ifs, err := net.Interfaces()
 	if err != nil {
@@ -189,9 +196,18 @@ func pickPrimary(addrs []Address) string {
 }
 
 // PrimaryHost returns the best host for the QR: an explicit override
-// (AGENTMIRROR_HOST / -host), else the default-route source IP when
-// discoverable, else the first LAN/tailnet address from the (exclusion-aware)
+// (AGENTMIRROR_HOST env), else the default-route source IP when discoverable,
+// else the first LAN/tailnet address from the (exclusion-aware)
 // DetectAddresses ladder, else loopback.
+//
+// Note: the -host flag itself is folded into config.Host by cmd/agentmirrord
+// and delivered to the guide via printPairingGuide's hostOverride (main.go),
+// which bypasses PrimaryHost — so PrimaryHost only honors the env override.
+// @contract
+// @pre none
+// @post 返回非空 host：env 覆盖 > 默认路由源 IP > LAN/tailnet 首选 > "127.0.0.1"
+// @err none（各自动探测失败静默降级到下一梯级）
+// @inv none
 func PrimaryHost() string {
 	// An explicit override wins over every automatic probe: the phone is the
 	// ground truth of what is reachable, and the user knows it best.
@@ -261,8 +277,13 @@ func onboardingPayload(o Onboarding, addrs []Address, primary string) Payload {
 // cannot see its 100.x address — the daemon injects it here after Up, and the
 // merged set feeds both the QR candidates and the plain-text guide. The
 // address is deduplicated (the host may also run the Tailscale app whose TUN
-// already exposes the same IP) and appended after the probed set, keeping the
-// LAN-first candidate order. A nil IP (degraded / v6-only) is a no-op.
+// already exposes the same IP) and inserted just before the loopback fallback
+// (LAN -> tailnet -> loopback order). A nil IP (degraded / v6-only) is a no-op.
+// @contract
+// @pre none
+// @post ip 非 nil 且不在 addrs 时，按其 Kind 序插入一个 KindTailnet 的副本；ip 已在集内或 nil 则原样返回
+// @err none（纯函数，不失败）
+// @inv 返回值保持 LAN → tailnet → loopback 的地址序；ip 至多出现一次
 func WithTailnet(addrs []Address, ip net.IP) []Address {
 	if ip == nil {
 		return addrs
@@ -310,6 +331,11 @@ type Onboarding struct {
 // (typically os.Stdout). It probes the host's addresses and delegates to
 // printOnboarding; the QR and this guide are the token's two legal exits
 // (docs/protocol.md §9) — the only places it may appear.
+// @contract
+// @pre w 非 nil（nil writer 将 panic）
+// @post 向 w 写入 QR + 明文指引；无 LAN/tailnet 时带降级警告
+// @err 载荷编组或 QR 编码失败返回包装错误
+// @inv none
 func PrintOnboarding(w io.Writer, o Onboarding) error {
 	return printOnboarding(w, o, DetectAddresses(), PrimaryHost(), false)
 }
@@ -317,6 +343,11 @@ func PrintOnboarding(w io.Writer, o Onboarding) error {
 // PrintOnboardingWith renders the guide for an injected address set and
 // primary host instead of probing the machine. It is the seam that lets callers
 // (and tests) exercise the degraded-warning path deterministically.
+// @contract
+// @pre w 非 nil（nil writer 将 panic）
+// @post 按注入的 addrs/primary 渲染指引，不再探测本机
+// @err 载荷编组或 QR 编码失败返回包装错误
+// @inv none
 func PrintOnboardingWith(o Onboarding, addrs []Address, primary string, w io.Writer) error {
 	return printOnboarding(w, o, addrs, primary, false)
 }
@@ -326,6 +357,11 @@ func PrintOnboardingWith(o Onboarding, addrs []Address, primary string, w io.Wri
 // hosts coexist, the QR carries the best one and the guide offers the rest for
 // manual re-entry). It is the seam the cmd wiring calls when it wants the full
 // candidate list shown.
+// @contract
+// @pre w 非 nil（nil writer 将 panic）
+// @post 除主 URL 外，把每个非 loopback 候选地址列入明文指引（listAll 视图）
+// @err 载荷编组或 QR 编码失败返回包装错误
+// @inv none
 func PrintOnboardingAll(o Onboarding, addrs []Address, primary string, w io.Writer) error {
 	return printOnboarding(w, o, addrs, primary, true)
 }

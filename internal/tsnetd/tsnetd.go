@@ -101,6 +101,11 @@ type Group struct {
 // nothing, so construction alone never touches the Tailscale control plane.
 // Without an authkey it degrades to a LAN-only group and logs that the
 // tailnet is not enabled.
+// @contract
+// @pre opts.ListenAddr 非空合法（net.Listen 的要求）；opts.AuthKey 为空时读 TS_AUTHKEY 环境变量
+// @post 返回的 Group 恒带已打开的 LAN listener；有 authkey 时 ts 节点被构造但未启动（零控制面接触）；无 authkey 时降级为 LAN-only 且不创建任何 state dir
+// @err LAN 监听失败、TS_DEBUG_REGISTER 开启且配置了 authkey、默认 state dir 解析失败、state dir 创建失败
+// @inv LAN listener 在成功返回后归调用者所有（Close 负责释放）；失败路径不外泄任何已打开的 socket
 func New(opts Options, logger *slog.Logger) (*Group, error) {
 	if logger == nil {
 		logger = slog.Default()
@@ -176,6 +181,11 @@ func New(opts Options, logger *slog.Logger) (*Group, error) {
 // state is persisted to when Options.Dir is empty. It is the Go user config
 // directory (e.g. $XDG_CONFIG_HOME or ~/.config on Linux) joined with
 // agentmirror/tsnet, keeping per-user state without root privileges.
+// @contract
+// @pre none
+// @post 返回 <用户配置目录>/agentmirror/tsnet 的绝对路径；不创建目录
+// @err 用户配置目录不可解析时返回包装错误
+// @inv none
 func DefaultDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
@@ -186,6 +196,11 @@ func DefaultDir() (string, error) {
 
 // TailnetEnabled reports whether the group carries an embedded Tailscale
 // node, i.e. whether a TS authkey was configured.
+// @contract
+// @pre none
+// @post 返回 true 当且仅当 New 时配置了 authkey（ts 节点非 nil）
+// @err none
+// @inv 与 ListenTailnet/Up 能否工作一致：true 时二者可调用，false 时二者返回 ErrTailnetDisabled
 func (g *Group) TailnetEnabled() bool {
 	return g.ts != nil
 }
@@ -194,6 +209,11 @@ func (g *Group) TailnetEnabled() bool {
 // the Tailscale control plane — and returns the tailnet listener serving the
 // group's port. In degraded mode it returns ErrTailnetDisabled without doing
 // anything. Callers that only want LAN connectivity must not call this.
+// @contract
+// @pre TailnetEnabled() 为 true（否则返回 ErrTailnetDisabled）；同一 Group 上不应与 Up 重复启动节点
+// @post 成功时返回 tailnet listener（首次调用即触发 tsnet.Start 与控制面握手）；失败时组内节点标记为已启动，供 Close 回收
+// @err degraded 模式返回 ErrTailnetDisabled；tsnet.Listen 失败返回包装错误（authkey 已从错误文本脱敏）
+// @inv 调用后 started 恒为 true（即使失败）；不影响 LAN listener
 func (g *Group) ListenTailnet() (net.Listener, error) {
 	if g.ts == nil {
 		return nil, ErrTailnetDisabled
@@ -215,6 +235,11 @@ func (g *Group) ListenTailnet() (net.Listener, error) {
 // returns ErrTailnetDisabled without touching the network. Cancel/timeout via
 // ctx: an invalid authkey otherwise blocks forever in the control-plane
 // handshake, and startup must fail visibly instead (工程红线5 失败可见).
+// @contract
+// @pre TailnetEnabled() 为 true；ctx 非 nil；调用者需对 ctx 设超时/取消（坏 authkey 会在控制面握手处阻塞）
+// @post 成功时节点已入网并返回其 tailnet IPv4（100.64.0.0/10）；v6-only tailnet 返回 nil IP（非错误）
+// @err degraded 模式返回 ErrTailnetDisabled；tsnet.Up 失败返回包装错误（authkey 已脱敏）；ctx 超时/取消同样返回错误
+// @inv 调用后 started 恒为 true（即使失败）；返回的 IP 是 pairing 侧注入候选集的唯一来源（WithTailnet）
 func (g *Group) Up(ctx context.Context) (net.IP, error) {
 	if g.ts == nil {
 		return nil, ErrTailnetDisabled
@@ -241,6 +266,11 @@ func (g *Group) Up(ctx context.Context) (net.IP, error) {
 // runs once. An embedded node that was constructed but never started is left
 // untouched (calling tsnet.Close on it would panic), which happens when the
 // group was constructed but neither Up nor ListenTailnet was attempted.
+// @contract
+// @pre 任意次调用均安全（幂等）
+// @post 首次调用关闭已启动的 ts 节点与 LAN listener；后续调用为 no-op 并返回首次错误
+// @err 首次关闭中 ts 节点或 LAN listener 的关闭错误以 errors.Join 汇总返回
+// @inv Close 后 LAN listener 不再 Accept；未启动的 ts 节点（started=false）不被触碰（tsnet.Close 会 panic）
 func (g *Group) Close() error {
 	g.closeOnce.Do(func() {
 		var errs []error

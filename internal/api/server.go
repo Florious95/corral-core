@@ -72,6 +72,11 @@ type Server struct {
 // NewServer constructs the API server from Options. Zero values use the
 // documented defaults; the token validator and state provider fall back to
 // their safe defaults when unset. The discovery loop starts immediately.
+// @contract
+// @pre Options 任何字段可零值；全部按 Options 上文档的默认回退
+// @post 返回已装配的 Server；discovery loop 已以 goroutine 启动；TokenValidator/StateProvider/Discoverer 缺省时装入安全默认
+// @err none — 构造不返回 error；无效配置在运行时暴露
+// @inv 生命周期由 Close 终结；loop 在零连接时挂起（idle-gate）
 func NewServer(opts Options) *Server {
 	log := opts.Log
 	if log == nil {
@@ -129,6 +134,11 @@ func NewServer(opts Options) *Server {
 // self-healing — graceful close is never the only line of defense). It does not
 // close live connections; the daemon calls it on shutdown after its listeners
 // stop accepting.
+// @contract
+// @pre Server 由 NewServer 构造
+// @post discovery loop 已停止；每个 tracked 连接的订阅被排空（relay 已取消、pipe 已 detach）；连接本身保持开放
+// @err none
+// @inv 幂等：重复调用安全；不 close 任何 WebSocket 连接
 func (s *Server) Close() {
 	s.loopStop()
 	// Snapshot the tracked connections under the lock, then drain each outside
@@ -147,6 +157,11 @@ func (s *Server) Close() {
 
 // Handler returns the full HTTP handler: /ws (WebSocket) and /upload
 // (multipart image upload) on the same port (docs/protocol.md §8).
+// @contract
+// @pre Server 由 NewServer 构造
+// @post 返回一个 http.Handler：/ws 升级为 WebSocket，/upload 接受 POST 图片上传；两路径共用同一端口
+// @err none
+// @inv 返回的 handler 持有 Server 引用；Server.Close 后不再接受新连接
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", s.handleWS)

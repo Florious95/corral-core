@@ -17,6 +17,13 @@
 //   - api: the WS API server (internal/api) whose handler serves /ws and
 //     /upload on the group's listener;
 //   - graceful shutdown on SIGINT/SIGTERM.
+//
+// The four internal modules it imports are declared as the dependency surface
+// below so the architecture wiki can derive the graph from code.
+// @consumes internal/config
+// @consumes internal/pairing
+// @consumes internal/tsnetd
+// @consumes internal/api
 package main
 
 import (
@@ -53,6 +60,11 @@ func main() {
 
 // run wires configuration, logging, listeners, and graceful shutdown. It
 // returns the process exit code: 0 on clean shutdown, 1 on startup failure.
+// @contract
+// @pre none — args 可为空（全部走默认值）；调用方通常传 os.Args[1:]
+// @post 干净关闭（ctx 取消 / SIGINT / SIGTERM）与 -h/--help 请求返回 0；任何启动或 serve 失败返回 1
+// @err 配置加载失败、状态目录解析失败、单实例锁被占、token 解析失败、监听器打开失败、tailnet Up/ListenTailnet 失败、引导打印失败、serve 非 ErrServerClosed 失败——均记日志并返回 1
+// @inv 单实例守卫在整个 run 生命周期持有；token 值永不落日志
 func run(args []string) int {
 	cfg, err := config.Load(args)
 	if err != nil {
@@ -236,6 +248,11 @@ func resolveToken(cfg config.Config, logger *slog.Logger) (string, error) {
 // resolveTokenDir is resolveToken with an injectable store directory. With an
 // empty dirOverride it resolves the platform user config dir; tests pass a
 // temp dir to avoid touching the real store.
+// @contract
+// @pre cfg 为已解析配置；dirOverride 可空（空则用平台用户配置目录）
+// @post 显式 token 直接返回且不持久化；自动路径生成并持久化到 dir；返回的 token 永不为空且无错误
+// @err 用户配置目录解析失败或 EnsureToken 失败返回非 nil error；绝不返回空 token + nil error
+// @inv token 值永不落日志（只记 source 与 store path）
 func resolveTokenDir(cfg config.Config, logger *slog.Logger, dirOverride string) (string, error) {
 	if cfg.Token != "" {
 		logger.Info("pairing token source=explicit")
@@ -268,12 +285,18 @@ func tokenSource(explicit string) string {
 
 // printPairingGuide writes the onboarding QR + guide to w, listing every
 // detected candidate address after the QR's primary host (task
-// fix-qr-host-detect). It is the thin wiring seam around pairing.PrintOnboarding
-// so tests can capture the output without forking the daemon. hostOverride,
-// when non-empty, pins the QR's primary address and beats every automatic
-// probe. tailnetIP (nil when disabled) is the embedded node's address merged
-// into the candidate set; tsAuthKey rides the QR payload only — the guide
-// never prints it (feat-ts-wire, §2.1 red line).
+// fix-qr-host-detect). It is the thin wiring seam around pairing.PrintOnboardingAll
+// (not PrintOnboarding: the daemon wants the full-candidate guide) so tests can
+// capture the output without forking the daemon. hostOverride, when non-empty,
+// pins the QR's primary address and beats every automatic probe. tailnetIP (nil
+// when disabled) is the embedded node's address merged into the candidate set;
+// tsAuthKey rides the QR payload only — the guide never prints it
+// (feat-ts-wire, §2.1 red line).
+// @contract
+// @pre token 与 port 非空；w 非 nil
+// @post 写出含 token 的 QR 与明文指引；非回环候选地址全部列出；tailnet 启用时列出 tailnet 地址；tsAuthKey 永不出现在明文
+// @err 仅 QR 渲染或 payload 序列化失败返回非 nil error（透传 pairing.PrintOnboardingAll）
+// @inv token 只出现于 QR 与明文指引（两个合法出口）
 func printPairingGuide(w io.Writer, token, port string, tailnet bool, hostOverride string, tailnetIP net.IP, tsAuthKey string) error {
 	// resolve the primary host once so the guide's primary and the QR agree.
 	// The override may come from the -host flag/env (already folded into

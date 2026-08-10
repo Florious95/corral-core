@@ -2,11 +2,12 @@ package api
 
 // options.go declares the configuration surface of the WebSocket API server:
 // every tunable cmd/agentmirrord wires in (pairing token, upload directory,
-// size limits, listing cadence) plus the two extension seams a later task
-// replaces — the token validator (pairing-security) and the agent-state
-// provider (state-parser wiring). Zero values fall back to the defaults
-// documented on each field, so a minimal NewServer(&Options{Token: t}) is
-// enough to bring up a fully functional service.
+// size limits, listing cadence) plus the two extension seams — the token
+// validator (default staticToken, pairing generates the token itself) and the
+// agent-state provider (default unknownState, production wiredStateProvider
+// via NewStateProvider). Zero values fall back to the defaults documented on
+// each field, so a minimal NewServer(&Options{Token: t}) is enough to bring up
+// a fully functional service.
 
 import (
 	"log/slog"
@@ -51,16 +52,19 @@ type Options struct {
 	// (docs/protocol.md §9). Ignored when TokenValidator is set.
 	Token string
 
-	// TokenValidator decides whether an auth frame's token is accepted. It is
-	// the seam the pairing-security task replaces with a real pairing flow;
-	// the default validates against Options.Token.
+	// TokenValidator decides whether an auth frame's token is accepted. The
+	// default is staticToken, validating against Options.Token in constant
+	// time; the seam stays for a future pairing flow. pairing generates the
+	// token itself (task pairing-security), it does not replace this
+	// validator.
 	TokenValidator TokenValidator
 
 	// StateProvider maps each discovered pane to its normalized agent state.
-	// The default always returns protocol.StateUnknown (requirement 008
-	// first-class value); the state-parser task lands the real provider and
-	// the wiring is a later integration. State failures must never affect
-	// mirroring or input — this interface is the seam that guarantees it.
+	// The default is unknownState, always returning protocol.StateUnknown
+	// (requirement 008 first-class value); the production wiring is
+	// wiredStateProvider via NewStateProvider, assembled by cmd/agentmirrord
+	// (task fix-state-wiring). State failures must never affect mirroring or
+	// input — this interface is the seam that guarantees it.
 	StateProvider StateProvider
 
 	// Discoverer produces the tmux workspace snapshot the listing loop
