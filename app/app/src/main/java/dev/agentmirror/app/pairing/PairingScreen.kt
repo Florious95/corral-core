@@ -17,7 +17,13 @@
 package dev.agentmirror.app.pairing
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -101,16 +107,35 @@ fun PairingScreen(
     onSkip: () -> Unit,
 ) {
     val context = LocalContext.current
-    var hasCameraPermission by remember {
+    var cameraPermissionState by remember {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context, Manifest.permission.CAMERA,
-            ) == PackageManager.PERMISSION_GRANTED,
+            if (context.hasCameraPermission()) CameraPermissionUiState.Granted
+            else CameraPermissionUiState.Requestable,
         )
+    }
+    val settingsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        cameraPermissionState = if (context.hasCameraPermission()) {
+            CameraPermissionUiState.Granted
+        } else {
+            CameraPermissionUiState.PermanentlyDenied
+        }
     }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> hasCameraPermission = granted }
+    ) { granted ->
+        cameraPermissionState = cameraPermissionUiState(
+            granted = granted,
+            requested = true,
+            shouldShowRationale = context.findActivity()?.let { activity ->
+                androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(
+                    activity,
+                    Manifest.permission.CAMERA,
+                )
+            } == true,
+        )
+    }
 
     val status = viewModel.pairingStatus
 
@@ -149,10 +174,21 @@ fun PairingScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // 扫码区：有权限渲染 CameraX 预览；无权限给授权按钮 + 手填兜底提示。
-            if (hasCameraPermission) {
+            if (cameraPermissionState == CameraPermissionUiState.Granted) {
                 ScanCard(viewModel)
             } else {
-                NoPermissionCard(onRequest = { permissionLauncher.launch(Manifest.permission.CAMERA) })
+                NoPermissionCard(
+                    state = cameraPermissionState,
+                    onRequest = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                    onOpenSettings = {
+                        settingsLauncher.launch(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:${context.packageName}"),
+                            ),
+                        )
+                    },
+                )
             }
             ManualFormCard(viewModel)
             TsTokenCard(viewModel)
@@ -320,9 +356,33 @@ private fun ScanCard(viewModel: PairingViewModel) {
     }
 }
 
-/** 相机未授权卡：明确引导授权 + 提示可手填兜底（不静默，003）。 */
+/** 相机权限 UI 状态：永久拒绝必须走系统设置，不能继续展示无效授权按钮。 */
+internal enum class CameraPermissionUiState {
+    Granted,
+    Requestable,
+    Denied,
+    PermanentlyDenied,
+}
+
+/** 将系统权限结果收敛为可渲染状态，隔离 Android 回调细节以便 JVM 锁定二次拒绝语义。 */
+internal fun cameraPermissionUiState(
+    granted: Boolean,
+    requested: Boolean,
+    shouldShowRationale: Boolean,
+): CameraPermissionUiState = when {
+    granted -> CameraPermissionUiState.Granted
+    !requested -> CameraPermissionUiState.Requestable
+    shouldShowRationale -> CameraPermissionUiState.Denied
+    else -> CameraPermissionUiState.PermanentlyDenied
+}
+
+/** 相机未授权卡：拒绝原因、下一步和手填兜底都明确可见（不静默，003 红线5）。 */
 @Composable
-private fun NoPermissionCard(onRequest: () -> Unit) {
+internal fun NoPermissionCard(
+    state: CameraPermissionUiState,
+    onRequest: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     SectionCard {
         Text(
             text = "扫码连接",
@@ -330,13 +390,38 @@ private fun NoPermissionCard(onRequest: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "扫码需要相机权限。未授权时请改用下方手填连接。",
+            text = when (state) {
+                CameraPermissionUiState.Requestable ->
+                    "扫码需要相机权限。未授权时请改用下方手填连接。"
+                CameraPermissionUiState.Denied ->
+                    "相机权限已被拒绝，可再次授权；也可改用下方手填连接。"
+                CameraPermissionUiState.PermanentlyDenied ->
+                    "相机权限已被永久拒绝，请到系统设置中开启；也可改用下方手填连接。"
+                CameraPermissionUiState.Granted -> return@SectionCard
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button(onClick = onRequest) { Text("授予相机权限") }
+        if (state == CameraPermissionUiState.PermanentlyDenied) {
+            Button(onClick = onOpenSettings) { Text("打开系统设置") }
+        } else {
+            Button(onClick = onRequest) {
+                Text(if (state == CameraPermissionUiState.Denied) "再次授权" else "授予相机权限")
+            }
+        }
     }
 }
+
+/** LocalContext 可能包在主题 ContextWrapper 中，逐层找到权限 rationale 所需 Activity。 */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+/** 当前相机权限事实源。 */
+private fun Context.hasCameraPermission(): Boolean =
+    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
 /** 手填兜底：地址 + token（扫码不可用/被拒时）。等宽输入（地址/token 都是机器串）。 */
 @OptIn(ExperimentalMaterial3Api::class)
