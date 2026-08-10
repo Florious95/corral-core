@@ -51,6 +51,9 @@ nohup bash .team/outbox-relay.sh > /dev/null 2>&1 &
 5. **席位恢复三情报**：A-24 拒启→弃 id 处女重建；A-31 `start-agent` 对 pane_dead 静默假成功
    →恢复后必须核真活性（BUSY/新落盘物），不信 exit 0；`reset-agent` 不重读 role file 的 model
    →换模型必须 remove+add。
+   **通道补丁**：所有 Team Agent CLI 调用统一走 `.team/ta <子命令>`，尤其
+   `add-agent`/`start-agent`/`reset-agent`；禁止手写净化前缀或直接调用 `team-agent`。Codex 新席还须核其
+   `~/.codex/sessions` 当日 JSONL 已有 `reasoning` 或 `custom_tool_call`，否则屏上 Working 仍是假活。
 6. **客观核对不凭自报**：状态查 evidence JSON+git+进程，`team-agent status` 的 worker_state
    对已停席位会显示假 BUSY（本文 §核对 实测），不可信。
 

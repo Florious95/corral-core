@@ -92,9 +92,22 @@ class TsnetManager(
             }
             result.fold(
                 onSuccess = { transition(TsnetState.Up(it)) },
-                onFailure = { transition(TsnetState.Error(it.message ?: it.javaClass.simpleName)) },
+                // gomobile/控制面错误文本不受本项目控制，可能把调用参数带回；保留可诊断
+                // 原因但先剔除本次 authkey，状态随后会进入 UI，绝不能原样外泄凭证。
+                onFailure = {
+                    // start 可能在创建 native 节点后、读取代理信息前失败；接口约定未启动时
+                    // close 也无害，因此失败路径统一 best-effort 收尾，杜绝半启动节点泄漏。
+                    runCatching { backend.close() }
+                    transition(TsnetState.Error(redactAuthKey(it, key)))
+                },
             )
         }
+    }
+
+    /** 后端错误的 UI 安全文案：精确替换本次归一化 key，不记录也不返回原凭证。 */
+    private fun redactAuthKey(error: Throwable, authKey: String): String {
+        val reason = error.message ?: error.javaClass.simpleName
+        return reason.replace(authKey, "[redacted]")
     }
 
     /** 停节点回 Idle。Starting 期间调用依赖代次机制让迟到结果自清理。 */

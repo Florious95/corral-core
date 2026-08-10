@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 
@@ -73,6 +74,7 @@ import dev.agentmirror.app.ui.theme.Spacing
 @Composable
 fun WorkspaceScreen(
     viewModel: WorkspaceViewModel,
+    connectionPath: ConnectionPath? = null,
     onOpenSession: (ref: String, name: String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -90,6 +92,8 @@ fun WorkspaceScreen(
     ) {
         TopBar(
             selected = selectedWorkspace,
+            // 拨号工厂记录的是本次尝试路径；只有 READY 后才可称为当前已连接路径。
+            connectionPath = connectionPath.takeIf { state.connection == ConnectionUi.READY },
             onBack = { selectedCwd = null },
         )
         ConnectionBanner(connection = state.connection)
@@ -136,6 +140,7 @@ fun WorkspaceScreen(
 @Composable
 private fun TopBar(
     selected: WorkspaceUi?,
+    connectionPath: ConnectionPath?,
     onBack: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
@@ -152,7 +157,9 @@ private fun TopBar(
                     text = "工作区",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = Spacing.sm),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = Spacing.sm),
                 )
             } else {
                 // 「‹ 工作区」文案沿用旧版（e2e 语义树兼容），视觉压为次层级色。
@@ -168,6 +175,15 @@ private fun TopBar(
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = Spacing.xs, end = Spacing.sm),
+                )
+            }
+            connectionPath?.let { path ->
+                // READY 时旧横幅会收起；常驻标签仍明确告诉用户当前链路是 LAN 还是 tailnet。
+                Text(
+                    text = path.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = Spacing.sm),
                 )
             }
         }

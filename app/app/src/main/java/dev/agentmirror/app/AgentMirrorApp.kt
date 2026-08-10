@@ -86,9 +86,12 @@ fun AgentMirrorApp(
         ) { r ->
             when (r) {
                 // 会话页优先（在屏会话不被重配打断）。
-                is AppRoute.Session -> SessionRoute(ref = r.ref, name = r.name) {
-                    navState.activeSession = null
-                }
+                is AppRoute.Session -> SessionRoute(
+                    ref = r.ref,
+                    name = r.name,
+                    connectionPath = ServiceWire.connectionPath(),
+                    onBack = { navState.activeSession = null },
+                )
                 // 配对页：首启无配置，或用户从设置/重配入口进入。
                 AppRoute.Pairing -> PairingRoute(
                     configStore = configStore,
@@ -119,6 +122,7 @@ fun AgentMirrorApp(
                     }
                     WorkspaceScreen(
                         viewModel = workspaceViewModel,
+                        connectionPath = ServiceWire.connectionPath(),
                         onOpenSession = { ref, name -> navState.activeSession = ref to name },
                     )
                 }

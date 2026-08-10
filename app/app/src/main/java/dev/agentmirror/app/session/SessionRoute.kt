@@ -36,6 +36,7 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.tsnet.ConnectionPath
 
 /**
  * 会话页路由挂载（MainActivity/AgentMirrorApp 接线处唯一入口；仅路由挂载，不含接线层）。
@@ -55,6 +56,7 @@ import dev.agentmirror.app.service.ServiceWire
 fun SessionRoute(
     ref: String,
     name: String,
+    connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
 ) {
     var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
@@ -78,7 +80,12 @@ fun SessionRoute(
         }
     }
 
-    SessionScreen(viewModel = vm, name = name, onBack = onBack)
+    SessionScreen(
+        viewModel = vm,
+        name = name,
+        connectionPath = connectionPath,
+        onBack = onBack,
+    )
 }
 
 /** 安全构造会话 VM：获取共享 manager（未配置抛错则返回 null）→ 启动连接 → 注入生产上传器。

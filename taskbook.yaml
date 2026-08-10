@@ -433,7 +433,7 @@ tasks:
       空 listing（seq=1）保持连接；舰队恢复后的首个成功扫描被当基线处理不推 delta、seq 不变，
       客户端 seq 连续性检查判不出断点，空 listing 静默滞留至手动重 list（违红线5 失败可见）。
       修复后解除 TestDiscoveryRecoveryReachesConnectedClientFromStartFailure 的 t.Skip 转绿。
-      排期：P0 波次收口后派。
+      排期：P0 波次已于 2026-08-10 收口（feat-tsnet-wiring 与 TS 链入库），本条放行。
     acceptance: ["bash -lc 'cd server && go test ./internal/api/...'"]
     deps: ["test-aggregate-status"]
     write_scope: ["server/internal/api/"]
@@ -776,4 +776,85 @@ tasks:
     deps: ["protocol-spec"]
     write_scope: ["e2e/api-user-scenarios.sh", "e2e/artifacts/test-api-user-scenarios-perf/", ".team/evidence/test-api-user-scenarios-perf.json"]
     evidence: ".team/evidence/test-api-user-scenarios-perf.json"
+    contention: impl
+
+  - id: fix-upload-auth
+    goal: >
+      P0 安全缺口（test-api-user-scenarios-perf 套件 2026-08-10 实测发现，证据见
+      e2e/artifacts/test-api-user-scenarios-perf/baseline.json 的 deviations）：`POST /upload`
+      端点当前**没有任何鉴权检查**——任何能连到 :9900 的人都能往用户主机的上传目录写文件，
+      而 WS 侧是有配对 token 校验的，等于绕过配对直写磁盘。修复：上传端点复用现有配对 token 校验
+      （与 WS 握手同一套凭据来源，不新发明 header 契约前先在 docs/protocol.md 补该端点的鉴权契约
+      再实现）；未授权请求返回明确错误码与原因（红线5 失败可见），token 不落日志。
+      红测先行：未带凭据/带错凭据/带对凭据三分支断言，并在 API 场景套件里加一条对应场景。
+      同时处置 D-13：上传目录大小上限、超限拒绝或轮转、README 说明（红线3 资源有界）。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/... ./internal/pairing/...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'"
+    deps: ["test-api-user-scenarios-perf"]
+    write_scope: ["server/internal/api/", "server/internal/pairing/", "server/internal/config/", "docs/protocol.md", "server/README.md", "e2e/api-user-scenarios.sh", "e2e/artifacts/fix-upload-auth/"]
+    evidence: ".team/evidence/fix-upload-auth.json"
+    contention: impl
+
+  - id: fix-dogfood-pairing-ux
+    goal: >
+      dogfood 缺陷波次一（P1+P2，来源 e2e/artifacts/dogfood/REPORT.md）：
+      D-07 配对 token 明文上屏（协议 §9 铁律：QR 是唯一合法出口，token 不上屏不落日志）；
+      D-14 配对完成后再无重配入口，且代码注释谎称"设置里有重配按钮"（注释与实现不符，红线：
+      注释即契约）——补设置页单档重配流程并修正注释；D-11 017 R-4 token 吊销与 `-token` flag
+      的文档欠账（README/protocol 补齐吊销与轮换说明）。红测先行：token 不出现在任何可见文本节点
+      的断言、重配入口可达性断言。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/pairing/...\"'"
+    deps: ["test-app-dogfood"]
+    write_scope: ["app/app/src/main/java/", "app/app/src/test/", "server/internal/pairing/", "server/README.md", "docs/protocol.md", ".team/evidence/fix-dogfood-pairing-ux.json"]
+    evidence: ".team/evidence/fix-dogfood-pairing-ux.json"
+    contention: impl
+
+  - id: fix-dogfood-upload-media
+    goal: >
+      dogfood 缺陷波次二（P1，来源 e2e/artifacts/dogfood/REPORT.md）：
+      D-03 上传文件名传的是 MediaStore 数字 ID、扩展名全丢（SessionScreen.kt 用 uri.lastPathSegment），
+      需取真实 displayName/MIME 推导扩展名；D-02 「+」菜单只有相册，017 R-8 承诺的拍照直传缺席；
+      D-01 相机权限二次拒绝后按钮静默无响应（红线5 失败可见：必须给出可见原因与去设置的引导）。
+      红测先行：文件名推导单测（含无扩展名/中文名/重名）、权限拒绝态 UI 断言。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+    deps: ["test-app-dogfood"]
+    write_scope: ["app/app/src/main/java/", "app/app/src/test/", ".team/evidence/fix-dogfood-upload-media.json"]
+    evidence: ".team/evidence/fix-dogfood-upload-media.json"
+    contention: impl
+
+  - id: fix-dogfood-term-ux
+    goal: >
+      dogfood 缺陷波次三（P1+P2，来源 e2e/artifacts/dogfood/REPORT.md）：
+      D-04 终端滚动方向与全平台惯例相反（TermSurfaceView 手势符号反）；D-08 连接后先闪空态、
+      缺加载态（红线5：用户动作必须有可见中间反馈）；D-09 emoji 单宽排版吃掉后随空格（宽字符
+      推进与 CJK 同源，参照 fix-term-bg-cjk 的列推进修复）。红测先行：滚动方向断言、
+      加载态状态机断言、emoji 宽度网格断言。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'"
+    deps: ["test-app-dogfood"]
+    write_scope: ["app/app/src/main/java/", "app/app/src/test/", "app/terminal/", ".team/evidence/fix-dogfood-term-ux.json"]
+    evidence: ".team/evidence/fix-dogfood-term-ux.json"
+    contention: impl
+
+  - id: perf-thresholds-enforce
+    goal: >
+      把 test-api-user-scenarios-perf 的基线转成硬门限断言（门限由 leader 2026-08-10 依基线定，
+      留 ~3x 余量，避免机器抖动误红；基线见 e2e/artifacts/test-api-user-scenarios-perf/baseline.json）：
+      pair_to_first_listing p95 ≤ 5ms；subscribe_first_frame p95 ≤ 400ms；output_end_to_end
+      p95 ≤ 150ms；scrollback_page p95 ≤ 150ms；reconnect_recovery p95 ≤ 400ms。
+      静默经济三态：零连接 CPU ≤ 0.5% 且子进程派生 = 0；已连接零订阅 CPU ≤ 5%；已连接单订阅
+      CPU ≤ 5% 且子进程 ≤ 4；任一态 10 分钟窗口 RSS 净增 ≤ 20MiB。
+      同时补齐基线里没测出数的两项：large_output 吞吐与 upload 耗时（当前 p50/p95 为 null）。
+      超门限必须 exit 非 0 并打印实测值与门限值对比，不得静默通过。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'"
+      - "bash -lc 'python3 -c \"import json;d=json.load(open(\\\"e2e/artifacts/test-api-user-scenarios-perf/baseline.json\\\"));assert d[\\\"performance\\\"][\\\"hard_numeric_thresholds\\\"],\\\"门限未落盘\\\"\"'"
+    deps: ["test-api-user-scenarios-perf"]
+    write_scope: ["e2e/api-user-scenarios.sh", "e2e/artifacts/test-api-user-scenarios-perf/", ".team/evidence/perf-thresholds-enforce.json"]
+    evidence: ".team/evidence/perf-thresholds-enforce.json"
     contention: impl

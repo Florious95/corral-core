@@ -1,0 +1,187 @@
+{
+  "cases": {
+    "msg_4bfe7c900a30": {
+      "task": "feat-tsnet-wiring",
+      "seat": "w-tsnet-wiring",
+      "at": 1786306724.865859,
+      "state": "processed",
+      "alive_checked": true,
+      "revived_at": 1786329209.148404
+    },
+    "msg_673c02d8f260": {
+      "task": "fix-ts-dial-timing",
+      "seat": "w-ts-dial-timing",
+      "at": 1786308526.7134862,
+      "state": "processed",
+      "alive_checked": true,
+      "revived_at": 1786329226.349683
+    },
+    "msg_f3f12e474728": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e",
+      "at": 1786322864.044802,
+      "state": "processed",
+      "alive_checked": true,
+      "revived_at": 1786329218.5424562
+    },
+    "msg_4a54e2925e00": {
+      "task": "feat-tsnet-wiring",
+      "seat": "w-tsnet-wiring2",
+      "at": 1786329339.581242,
+      "state": "processed",
+      "alive_checked": false
+    },
+    "msg_4c552f5b26b8": {
+      "task": "fix-ts-dial-timing",
+      "seat": "w-ts-dial-timing2",
+      "at": 1786329340.8729541,
+      "state": "processed",
+      "alive_checked": false
+    },
+    "msg_4e267f8e62d0": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e2",
+      "at": 1786329342.2319849,
+      "state": "processed",
+      "alive_checked": false
+    },
+    "msg_3de0f5988228": {
+      "task": "feat-tsnet-wiring",
+      "seat": "w-tsnet-wiring3",
+      "at": 1786340373.681556,
+      "state": "processed",
+      "alive_checked": true,
+      "revived_at": 1786342349.854939
+    },
+    "msg_32fa45651cd0": {
+      "task": "fix-ts-dial-timing",
+      "seat": "w-ts-dial-timing3",
+      "at": 1786340375.01816,
+      "state": "processed",
+      "alive_checked": false
+    },
+    "msg_36999519b6f0": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e3",
+      "at": 1786340376.362955,
+      "state": "processed",
+      "alive_checked": true,
+      "revived_at": 1786342366.388621
+    },
+    "msg_6d26675d78e8": {
+      "task": "feat-tsnet-wiring",
+      "seat": "w-tsnet-wiring4",
+      "at": 1786344168.045483,
+      "state": "processed",
+      "alive_checked": true,
+      "cpu": 37.67999999999999,
+      "last_progress": 1786345577.9157481
+    },
+    "msg_6b0fb92d4e00": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e4",
+      "at": 1786344169.4261708,
+      "state": "processed",
+      "alive_checked": true,
+      "cpu": 33.06000000000001,
+      "last_progress": 1786345577.9594398
+    },
+    "msg_474539a8dbd8": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e5",
+      "at": 1786347379.909052,
+      "state": "processed",
+      "alive_checked": false,
+      "cpu": 0.51,
+      "last_progress": 1786347380.086636
+    },
+    "msg_59f9ab5d8040": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e6",
+      "at": 1786349181.411199,
+      "state": "processed",
+      "alive_checked": false,
+      "cpu": 0.44999999999999996,
+      "last_progress": 1786349182.752674
+    },
+    "msg_5d98f9002280": {
+      "task": "feat-tsnet-wiring",
+      "seat": "w-tsnet-wiring5",
+      "at": 1786349182.715638,
+      "state": "processed",
+      "alive_checked": true,
+      "cpu": 61.51,
+      "last_progress": 1786350984.788605
+    },
+    "msg_3ecb805221f8": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e7",
+      "at": 1786350984.5722592,
+      "state": "processed",
+      "alive_checked": false,
+      "cpu": 0.5,
+      "last_progress": 1786350984.825268
+    },
+    "msg_713216857108": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e8",
+      "at": 1786352786.692961,
+      "state": "processed",
+      "alive_checked": true,
+      "cpu": 48.09999999999999,
+      "last_progress": 1786354587.2101572
+    },
+    "msg_147c79b56c80": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e9",
+      "at": 1786356924.4064581,
+      "state": "processed",
+      "alive_checked": true,
+      "cpu": 81.96,
+      "last_progress": 1786360527.15739
+    },
+    "msg_15eac0462ab8": {
+      "task": "test-api-user-scenarios-perf",
+      "seat": "w-api-user-scenarios-perf",
+      "at": 1786356925.581646,
+      "state": "processed",
+      "alive_checked": true,
+      "cpu": 69.81000000000002,
+      "last_progress": 1786358726.6137118
+    },
+    "msg_18485b73fc08": {
+      "task": "fix-ts-state-dir-e2e",
+      "seat": "w-ts-state-dir-e2e10",
+      "at": 1786362279.723104,
+      "state": "in_flight",
+      "alive_checked": true,
+      "cpu": 8.679999999999998,
+      "last_progress": 1786362555.036103
+    },
+    "msg_16d0ac645630": {
+      "task": "test-api-user-scenarios-perf",
+      "seat": "w-api-user-scenarios-perf2",
+      "at": 1786362281.079306,
+      "state": "processed",
+      "alive_checked": false
+    }
+  },
+  "pending_adjudication": {
+    "test-app-android-seams:status=delivered seat=w-test-appseams": true,
+    "fix-recovery-baseline:deps 已满足但 goal 写着排期约束「P0 波次收口后派。」，请裁定：现在": true,
+    "feat-tsnet-wiring:add-agent 失败：ok: False\nerror: spec compi": true,
+    "feat-ts-wire:status=blocked seat=w-ts-verify3": true,
+    "fix-ts-state-dir-e2e:status=blocked seat=w-fix-tsstatedir2": true,
+    "test-app-dogfood:status=done seat=w-dogfood2": true,
+    "fix-recovery-baseline:status=blocked seat=None": true,
+    "fix-ts-state-dir-e2e:status=red seat=w-fix-tsstatedir2": true,
+    "fix-ts-dial-timing:交件 status=pass，deviation=True，ui_review=": true,
+    "feat-tsnet-wiring:交件 status=pass，deviation=True，ui_review=": true,
+    "test-api-user-scenarios-perf:交件 status=pass，deviation=True，ui_review=": true
+  },
+  "attempts": {
+    "fix-ts-state-dir-e2e": 2,
+    "feat-tsnet-wiring": 1,
+    "test-api-user-scenarios-perf": 1
+  }
+}
