@@ -47,6 +47,18 @@
 - **席位恢复纪律**（A-24 实证，2026-08-09）：席位恢复失败达 2 轮（自动恢复/start-agent/reset 任意组合）
   即弃 id——remove 归档后换**处女 id** add-agent 重建带案重派，不再消耗轮次；死 id 的 runtime 残留
   （provider-config/env/events）保留供框架取证。停摆检测与自动探针由 `.team/watchdog.py` 值守（三条件+预算 2）
+- **派单必写 intent，否则该席对看门狗全盲**（2026-08-11 两次实证，同一个洞栽两回）：
+  `.team/watchdog.py` 的 `inflight_seats()` 以 `.team/evidence/<task>.intent.json` 存在且对应
+  `<task>.json` 未落盘来判"在途"。**人工派单漏写 intent ⇒ 该席位永远进不了停摆计数**
+  （`turnend`/`still`/`idle` 三个计数器压根不为它创建），卡死多久都没人发现。
+  铁律：`add-agent` + `send` 的同一批操作里**必写** intent，字段
+  `{task_id, dispatched_to, base, case_id, at, note}`；`case_id` 取 `send --json` 返回的 `message_id`。
+  两次实证：①2026-08-11 00:0x 手工派两席后全盲；②同日 03:4x 一晚派 11 席一个 intent 都没写，
+  `w-doc-tsnetd` 卡死无人知，看门狗采样里跟的还是两个早已退役的席位。
+- **判活性只看 pane 尾栏真值位，不看框架状态**（2026-08-11 实证）：框架对卡死 35 分钟的席位
+  持续报 `worker_state=BUSY` 且 `last_output_at` 还在跳。Claude Code pane 回合进行中尾栏含
+  `esc to interrupt`，回合结束则无——这是布尔真值位，能把"在长思考"与"已收工"分开，
+  已落地为 watchdog 的 T5 判据（连续 2 采样无标记即出针，约 4 分钟）。
 - **派单必经净化包装器 `.team/ta`**（2026-08-10 人工侧通道级裁定，实证在脚本头注释）：codex 席位
   在自身 shell 执行 `team-agent` 时会被 codex 注入其托管的死代理（`ec2-13-213-89-27…:8443`，
   实测不可达），launcher 把它快照进新席位启动串 ⇒ **凡 codex 席位派出的席位全生命周期零 token**

@@ -1,0 +1,98 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-tsnetd",
+  "case_id": "msg_a59f12f1c338",
+  "summary": "internal/tsnetd 三件事全部办结。①注释核实：包内 8 个非测试导出符号（ErrTailnetDisabled / Options / Group / New / DefaultDir / TailnetEnabled / ListenTailnet / Up / Close）+ 私有 helper（portOf/redactAuthKey）逐条与实现对照读，**一条不实注释都没找到**——确认不是默认结论，而是逐符号交叉验证：ErrTailnetDisabled 的『degraded 模式无节点可听』语义经 New 的降级分支（ts 为 nil）与 ListenTailnet/Up 的 `if g.ts == nil return ErrTailnetDisabled` 双证；Options.ControlURL 注释声称『Configured via TS_CONTROL_URL env in cmd』，实测 server/cmd/agentmirrord/main.go:158 真读取 os.Getenv(\"TS_CONTROL_URL\")；Up 注释声称返回的 tailnet IPv4 是『pairing QR appends to its candidates』，实测 main.go:306 automaticPairingHost 把 loopback 主地址替换为 tailnetIP、main.go:313 经 pairing.WithTailnet(DetectAddresses(), tailnetIP) 合并进候选集（probe.go:287），且 v6-only 返回 nil IP 的注释与实现 for 循环逐行吻合；ListenTailnet 注释声称『Listen calls tsnet.Start even when the later listener setup fails』，实证 tailscale.com/tsnet v1.102.2 源码 tsnet.go:2046 listen() 在 registerListener 之前调用 s.Start() 属实；Close 注释声称『calling tsnet.Close on a never-started server would panic』，实证 tsnet.Close->close() 对未 doInit 的 Server 访问 shutdownCancel/netstack 等 nil 字段会 panic，故 started 守卫必要。②补契约：为确有契约面的 6 个导出符号补 @contract 四标签齐全（New / DefaultDir / TailnetEnabled / ListenTailnet / Up / Close），未为纯构造类型（Options/Group 结构体）凑数；@err 均对着实现把真实错误分支列全（New 的四个错误面、ListenTailnet/Up 的 ErrTailnetDisabled + tsnet 包装错误 + authkey 脱敏、Close 的 errors.Join 汇总）。③T3-4 漂移：internal/tsnetd **零漂移**——该包只 import 标准库 + 外部 tailscale.com/tsnet，无任何内部包 import；T3-4 清单里『cmd/agentmirrord → internal/tsnetd』是 cmd 包的漂移（cmd 消费了 tsnetd 却未声明，但那属于 doc-contract-cmd 席的 write_scope，本席不得越界代补）。按 protocol/bridge 先例在包级 doc 显式写 @consumes none（判据对 none 安全：none 不在已知包键集，不会判『声明了没 import』）。阳性对照已做并还原：删 ListenTailnet 的 @err → --strict-t3 --pkg internal/tsnetd exit 1 精确指向 tsnetd.go:208 缺 @err，还原后 exit 0——证明判据真扫到本包，绿不是『没扫到』。验收三连全过：单包硬判 exit 0、包内 go test 全绿（ok 0.595s）、全仓库 --check exit 0（T3 报告模式列出的 T3-1 1 条 TsnetInterfaceCodec.kt 与 T3-4 20 条全是他包既有状态，与本包无关且不计退出码）。改动仅注释：doc.go +5 行 / tsnetd.go +30 行 @contract 标签，零实现改动（git diff 实证）。",
+  "rewritten": [],
+  "rewritten_confirmation": "本包一条不实注释都没找到。确认过程（非默认结论）：包内 9 个非测试导出符号的 doc 注释逐条与实现对照，注释里引用的每类事实逐项实证——①跨包引用：Options.ControlURL 注释声称『Configured via the TS_CONTROL_URL environment variable in cmd』，实测 server/cmd/agentmirrord/main.go:158 真有一行 `ControlURL: os.Getenv(\"TS_CONTROL_URL\")`（grep 全仓库无第二处消费者，声明与实现一致）；Up 注释声称返回的 tailnet IPv4 被『the pairing QR appends to its candidates』，实测 main.go:306 automaticPairingHost(ip.IsLoopback() && tailnetIP != nil → tailnetIP.String()) 与 main.go:313 pairing.WithTailnet(pairing.DetectAddresses(), tailnetIP) 真消费，pairing/probe.go:287 WithTailnet 把 IP 注入候选集并 dedup，注释与实现吻合；②上游库语义：ListenTailnet 注释声称『tsnet.Listen calls tsnet.Start even when the later listener setup fails』，实证 tailscale.com/tsnet v1.102.2 tsnet.go:2046 `if err := s.Start(); err != nil` 在 registerListener 之前调用，注释属实；Close 注释声称未启动的节点调 tsnet.Close 会 panic，实证 tsnet.Close()->close() 对未 doInit 的 Server 访问 shutdownCancel（nil）会 panic，故 g.started 守卫必要，注释属实；③行为断言：New 注释声称无 authkey 时『degrades to a LAN-only group』且不创建 state dir，实测 New 分支 `if authKey == \"\" { logger.Warn(...); return g, nil }` 早退在 MkdirAll 之前，TestStateDirNotCreatedWhenDegraded 测试锁定；Up 注释声称 v6-only tailnet 返回 nil IP 而非错误，实测 for 循环无 v4 时 `return nil, nil`，与注释逐行吻合；④需求/任务引用：注释引用的 feat-ts-wire、工程红线5、011 均经 taskbook.yaml / requirement-base/entries/011-技术路线裁定.md 核实为真实条目。另用 git log 回看本包历史（2bc984f 建包，2026-08-09，doc 与实现同 commit 演进），无『曾如此现已改掉』的旧行为残留。现有注释无死错误面、无旧 API 残留、无虚构消费方、无未接线能力写成现状——6 类不实谱系在本包全部排除。",
+  "contracts_added": [
+    {
+      "symbol": "New",
+      "file": "server/internal/tsnetd/tsnetd.go",
+      "line": 104,
+      "contract": "@contract / @pre opts.ListenAddr 非空合法（net.Listen 要求）；opts.AuthKey 为空时读 TS_AUTHKEY 环境变量 / @post 返回的 Group 恒带已打开的 LAN listener；有 authkey 时 ts 节点被构造但未启动（零控制面接触）；无 authkey 时降级为 LAN-only 且不创建任何 state dir / @err LAN 监听失败、TS_DEBUG_REGISTER 开启且配置了 authkey、默认 state dir 解析失败、state dir 创建失败 / @inv LAN listener 在成功返回后归调用者所有（Close 负责释放）；失败路径不外泄任何已打开的 socket",
+      "rationale": "对外主构造入口，四个错误分支真实存在（net.Listen 失败 tsnetd.go:109-112、TS_DEBUG_REGISTER+authkey 拒绝 118-127、DefaultDir 解析失败 146-152、MkdirAll 失败 154-157），@inv 的『失败路径 lan.Close() 不外泄 socket』由三处失败分支的 lan.Close() 调用实证（124/150/155）"
+    },
+    {
+      "symbol": "DefaultDir",
+      "file": "server/internal/tsnetd/tsnetd.go",
+      "line": 179,
+      "contract": "@contract / @pre none / @post 返回 <用户配置目录>/agentmirror/tsnet 的绝对路径；不创建目录 / @err 用户配置目录不可解析时返回包装错误 / @inv none",
+      "rationale": "纯函数：无前置/不变量显式 none，后置（os.UserConfigDir + filepath.Join agentmirror/tsnet 不创建目录）由实现 179-185 与 TestDefaultDir 测试锁定，@err 面（os.UserConfigDir 失败返回包装错误）真实"
+    },
+    {
+      "symbol": "TailnetEnabled",
+      "file": "server/internal/tsnetd/tsnetd.go",
+      "line": 189,
+      "contract": "@contract / @pre none / @post 返回 true 当且仅当 New 时配置了 authkey（ts 节点非 nil）/ @err none / @inv 与 ListenTailnet/Up 能否工作一致：true 时二者可调用，false 时二者返回 ErrTailnetDisabled",
+      "rationale": "值函数：@err none 显式齐全，后置由实现 g.ts != nil 直接保证，@inv 的一致性由 ListenTailnet/Up 的 g.ts==nil 早退分支与 TestNewDegradedNoAuthkey 锁定"
+    },
+    {
+      "symbol": "ListenTailnet",
+      "file": "server/internal/tsnetd/tsnetd.go",
+      "line": 197,
+      "contract": "@contract / @pre TailnetEnabled() 为 true（否则返回 ErrTailnetDisabled）；同一 Group 上不应与 Up 重复启动节点 / @post 成功时返回 tailnet listener（首次调用即触发 tsnet.Start 与控制面握手）；失败时组内节点标记为已启动，供 Close 回收 / @err degraded 模式返回 ErrTailnetDisabled；tsnet.Listen 失败返回包装错误（authkey 已从错误文本脱敏）/ @inv 调用后 started 恒为 true（即使失败）；不影响 LAN listener",
+      "rationale": "@err 面列全：ErrTailnetDisabled（g.ts==nil 分支）+ tsnet.Listen 包装错误（含 redactAuthKey 脱敏），@post 的『失败也标 started』由实现 g.started=true 在 err 检查之前赋值实证（222-223），TestDegradedListenTailnetRejected 锁定 degraded 语义"
+    },
+    {
+      "symbol": "Up",
+      "file": "server/internal/tsnetd/tsnetd.go",
+      "line": 218,
+      "contract": "@contract / @pre TailnetEnabled() 为 true；ctx 非 nil；调用者需对 ctx 设超时/取消（坏 authkey 会在控制面握手处阻塞）/ @post 成功时节点已入网并返回其 tailnet IPv4（100.64.0.0/10）；v6-only tailnet 返回 nil IP（非错误）/ @err degraded 模式返回 ErrTailnetDisabled；tsnet.Up 失败返回包装错误（authkey 已脱敏）；ctx 超时/取消同样返回错误 / @inv 调用后 started 恒为 true（即使失败）；返回的 IP 是 pairing 侧注入候选集的唯一来源（WithTailnet）",
+      "rationale": "main.go:180 用 context.WithTimeout(ctx, tailnetUpTimeout) 调用（@pre 的超时建议属实），@post 的 v6-only 返回 nil 由实现 249-256 for 循环无 v4 时 return nil,nil 锁定，@inv 的 pairing 消费由 main.go:313 WithTailnet 实证，TestDegradedUpRejected 锁定 degraded 语义"
+    },
+    {
+      "symbol": "Close",
+      "file": "server/internal/tsnetd/tsnetd.go",
+      "line": 244,
+      "contract": "@contract / @pre 任意次调用均安全（幂等）/ @post 首次调用关闭已启动的 ts 节点与 LAN listener；后续调用为 no-op 并返回首次错误 / @err 首次关闭中 ts 节点或 LAN listener 的关闭错误以 errors.Join 汇总返回 / @inv Close 后 LAN listener 不再 Accept；未启动的 ts 节点（started=false）不被触碰（tsnet.Close 会 panic）",
+      "rationale": "幂等由 closeOnce.Do 保证（TestCloseReleasesLAN 双 Close 断言），@inv 的『未启动节点不触碰』由 `if g.ts != nil && g.started` 守卫实证（246-251），@err 的 errors.Join 汇总由实现 257 行实证"
+    }
+  ],
+  "consumes_added": [
+    {
+      "file": "server/internal/tsnetd/doc.go",
+      "declaration": "@consumes none",
+      "rationale": "本包 import 图只有标准库（context/errors/fmt/log/slog/net/os/path/filepath/strconv/strings/sync）+ 外部库 tailscale.com/tsnet，无任何内部包依赖；按 protocol/bridge 先例显式声明 @consumes none，让『本包无跨层依赖』成为可判据的声明而非沉默。判据对 none 安全：none 不在 go_known 已知包键集，T3-4 判定『声明 @consumes 但 import 图没有该包』需 target in known，none 永远不触发，且反向漂移『import 了没声明』对本包无内部依赖也不触发——T3-4 单包硬判 PASS 实证"
+    }
+  ],
+  "consumes_rationale": "internal/tsnetd 包零架构漂移：包内全部 import 均为标准库 + tailscale.com/tsnet（外部库，非内部包）。docs/wiki/t3-report.md T3-4 清单 20 条（施工后）无本包条目；清单中『cmd/agentmirrord → internal/tsnetd』属于 cmd 包的漂移（cmd 消费了 tsnetd 却没在 cmd 包级 doc 声明），归 doc-contract-cmd 席位，本席 write_scope 严格限 server/internal/tsnetd/ 不得越界代补。依据 HANDBOOK §9.3『只声明真实存在的 import』——本包无内部 import 可声明，但按第一批 protocol/bridge 先例显式写 @consumes none 声明『空依赖』，避免沉默被误读。",
+  "uncertain": [],
+  "uncertain_rationale": "判不准处为零：包内所有导出符号的注释都有可落地的代码事实或上游库源码事实佐证。唯一值得记录但已实证排除的是 Close 注释声称的『tsnet.Close on never-started server would panic』——初读疑为夸张，实证 tailscale.com/tsnet v1.102.2 tsnet.go:603-680 close() 对未 doInit 的 Server 访问 shutdownCancel（nil）确实 panic，故不列 uncertain。",
+  "deviation": [],
+  "changes": [
+    "server/internal/tsnetd/doc.go — 包级 doc 补 @consumes none（+5 行注释，零实现改动）",
+    "server/internal/tsnetd/tsnetd.go — New/DefaultDir/TailnetEnabled/ListenTailnet/Up/Close 六符号补 @contract 四标签（+30 行注释，零实现改动）"
+  ],
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/tsnetd",
+      "rc": 0,
+      "note": "开工前基线：T3-1/T3-2/T3-3/T3-4 全 PASS，exit 0（如 leader 预告，单包硬判本来就绿）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/tsnetd",
+      "rc": 0,
+      "note": "施工后：T3-1/T3-2/T3-3/T3-4 全 PASS，exit 0（契约与 @consumes none 均被识别）"
+    },
+    {
+      "argv": "bash -lc 'cd server && env -u TEAM_AGENT_AGENT_ID -u TEAM_AGENT_TASK_ID -u TEAM_AGENT_TEAM_ID go test -count=1 ./internal/tsnetd/...'",
+      "rc": 0,
+      "note": "包内 15 个测试全绿：ok github.com/agentmirror/agentmirror/internal/tsnetd 0.595s——注释改动零行为影响"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库判据不被打坏：T1-1/T1-2 保持绿 exit 0；T3 报告模式列清单（T3-1 1 条 TsnetInterfaceCodec.kt、T3-4 20 条他包漂移，均非本包且不计退出码）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/tsnetd（故意破坏：删 ListenTailnet 的 @err 标签）",
+      "rc": 1,
+      "note": "阳性对照（只验绿不验红等于没验）：破坏后单包硬判真 exit 1，精确报『[T3-3] internal/tsnetd server/internal/tsnetd/tsnetd.go:208 @contract — 缺契约标签: @err』——证明判据真扫到本包，绿的成果不是『没扫到』的假绿；随后已还原，git diff 确认工作区只剩注释新增"
+    }
+  ],
+  "positive_control": {
+    "summary": "故意破坏一次并确认判据真会红，然后还原。破坏动作：删除 ListenTailnet（tsnetd.go:208）doc 注释块中的 @err 标签行。破坏后运行 `python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/tsnetd` 输出 'T3-3: FAIL — 契约标签完备：1 条违规 / [T3-3] internal/tsnetd server/internal/tsnetd/tsnetd.go:208 @contract — 缺契约标签: @err'，exit 1。还原后同命令恢复 T3-3 PASS、exit 0。结论：判据对本包的 @contract 完备性真实生效，'全绿'不可能是扫不到本包的假象。",
+    "output_snippet": "== T3 判据（单包 internal/tsnetd，严格（计入退出码）） ==\nT3-1 : PASS — 符号级 doc 覆盖：无违规\nT3-2 : PASS — 引用真实性：无违规\nT3-3 : FAIL — 契约标签完备：1 条违规\n  [T3-3] internal/tsnetd  server/internal/tsnetd/tsnetd.go:208  `@contract` — 缺契约标签: @err\nT3-4 : PASS — 跨层声明一致：无违规\n结果：未通过（exit 1）"
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-cmd",
+  "case_id": "msg_a66220191a48",
+  "scope": "server/cmd/agentmirrord/",
+  "summary": "改写 1 条不实注释（printPairingGuide：注释称包装 pairing.PrintOnboarding，实际调 pairing.PrintOnboardingAll——'真函数名写错'新形态，PrintOnboarding 真实存在所以 T3-2 抓不住）、补 4 个契约（run / resolveTokenDir / printPairingGuide / acquirePidfile）、补 4 条 @consumes（internal/config/pairing/tsnetd/api，覆盖全部真实内部 import）。施工中撞到 T3-4 判据对 package main 命令包的静默失效（声明写了判据不读），判根因 + 拒绝越界 + 上报 leader；leader 裁定修判据，w-t34-mainpkg 专席修好两处（目录名==包名守卫 + _extract_tags 同块多 @consumes 只留最后一条），修复后单包硬判从 rc=1（4 条漂移）转 rc=0，三条 acceptance 全绿。详见 deviation。",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg cmd/agentmirrord",
+      "rc": 0,
+      "note": "修复判据后 T3-1..T3-4 全 PASS，我写的 4 条 @consumes 全部被读到"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* bash -lc \"cd server && go build ./... && go vet ./cmd/... && go test -count=1 ./cmd/agentmirrord/...\"",
+      "rc": 0,
+      "note": "ok github.com/agentmirror/agentmirror/cmd/agentmirrord"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库 exit 0；剩余 T3-4 20 条 + T3-1 1 条均属 Kotlin 包 dev.agentmirror.app.*，非本包职责，未被打坏"
+    }
+  ],
+  "changes": [
+    "server/cmd/agentmirrord/main.go: 改 1 条不实注释（printPairingGuide 函数名）+ 补 3 个 @contract（run/resolveTokenDir/printPairingGuide）+ 包级 doc 补 4 条 @consumes（35 行注释变更，0 行实现变更）",
+    "server/cmd/agentmirrord/pidfile.go: 补 1 个 @contract（acquirePidfile）（5 行注释变更，0 行实现变更）"
+  ],
+  "rewritten": [
+    {
+      "symbol": "printPairingGuide",
+      "file": "server/cmd/agentmirrord/main.go:269-282",
+      "inaccurate": "原注释称 'It is the thin wiring seam around pairing.PrintOnboarding'——但函数体实际调用 pairing.PrintOnboardingAll（main.go:286 printPairingGuide 内调 PrintOnboardingAll），走完整候选指引视图（listAll=true），不是 PrintOnboarding 的单候选默认视图。谱系新形态'真函数名写错'：PrintOnboarding 真实存在，T3-2 只验引用存在性、抓不住'用了错的那个函数'——两个函数都在导出面，判据无法区分。",
+      "evidence": "main.go printPairingGuide 函数体最后一行 return pairing.PrintOnboardingAll(pairing.Onboarding{...}, pairing.WithTailnet(...), host, w)；而 pairing/probe.go:313 PrintOnboarding 走 printOnboarding(..., false) 单候选视图，probe.go:329 PrintOnboardingAll 走 printOnboarding(..., true) 完整候选视图。run() 在 main.go:193 调用 printPairingGuide 且日志/注释均期望'列出每个探测到的候选地址'（full-candidate），与 PrintOnboardingAll 语义吻合，原注释函数名是错的。",
+      "rewritten_to": "'It is the thin wiring seam around pairing.PrintOnboardingAll (not PrintOnboarding: the daemon wants the full-candidate guide)' + 说明其余行为（hostOverride 钉死主地址、tailnetIP 合并进候选集、tsAuthKey 只进 QR 不进明文）不变"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "run",
+      "file": "server/cmd/agentmirrord/main.go",
+      "contract": "@contract + @pre none（args 可空全默认）+ @post 干净关闭/SIGINT/SIGTERM 与 -h/--help 返回 0、启动或 serve 失败返回 1 + @err 列全 7 条 return 1 路径（config 加载/状态目录/单实例锁/token/监听器/tailnet Up/ListenTailnet/引导打印/serve 非 ErrServerClosed）+ @inv 单实例守卫全程持有、token 永不落日志"
+    },
+    {
+      "symbol": "resolveTokenDir",
+      "file": "server/cmd/agentmirrord/main.go",
+      "contract": "@contract + @pre cfg 已解析、dirOverride 可空 + @post 显式 token 直接返回不持久化、自动路径生成并持久化、返回 token 永不为空且无错误 + @err 配置目录解析/EnsureToken 失败返回 error、绝不返回空 token+nil error + @inv token 值永不落日志"
+    },
+    {
+      "symbol": "printPairingGuide",
+      "file": "server/cmd/agentmirrord/main.go",
+      "contract": "@contract + @pre token/port 非空、w 非 nil + @post 写出含 token 的 QR+明文指引、非回环候选全部列出、tsAuthKey 永不出现在明文 + @err 仅 QR 渲染或 payload 序列化失败返回 error（透传 pairing.PrintOnboardingAll）+ @inv token 只现于 QR 与明文两个合法出口"
+    },
+    {
+      "symbol": "acquirePidfile",
+      "file": "server/cmd/agentmirrord/pidfile.go",
+      "contract": "@contract + @pre dir 可创建、name 非空 + @post 成功时 flock 持有且 pid 已写入、release 幂等 + @err 二启冲突报 already running 含 pidfile 路径、mkdir/open/flock/truncate/write 任一失败均包装含路径 + @inv flock 是权威锁、pidfile 内容仅提示（陈旧 pid 不阻塞重启）"
+    }
+  ],
+  "consumes_added": [
+    {
+      "pkg": "cmd/agentmirrord",
+      "target": "internal/config",
+      "file": "server/cmd/agentmirrord/main.go",
+      "note": "真实 import（main.go 包级 doc 补 @consumes internal/config），T3-4 修复后判据已读到"
+    },
+    {
+      "pkg": "cmd/agentmirrord",
+      "target": "internal/pairing",
+      "file": "server/cmd/agentmirrord/main.go",
+      "note": "真实 import，同块 @consumes 之一"
+    },
+    {
+      "pkg": "cmd/agentmirrord",
+      "target": "internal/tsnetd",
+      "file": "server/cmd/agentmirrord/main.go",
+      "note": "真实 import，同块 @consumes 之一"
+    },
+    {
+      "pkg": "cmd/agentmirrord",
+      "target": "internal/api",
+      "file": "server/cmd/agentmirrord/main.go",
+      "note": "真实 import，同块 @consumes 之一"
+    }
+  ],
+  "uncertain": [],
+  "deviation": [
+    {
+      "type": "tooling-gap",
+      "summary": "T3-4 判据对 package main 命令包静默失效——声明写了、判据不读、报告照样报漂移",
+      "phase": "blocked",
+      "phenomenon": "cmd/agentmirrord 单包硬判 T3-4 红 4 条（import 了却未声明 @consumes），即使已在包级 doc 补 4 条 @consumes（全部对应真实 import）仍红。",
+      "root_cause_1": "tools/archwiki/build_wiki.py:1078 _declared_consumes 的 Go 侧用 '目录名 == package 名' 守卫：re.search(r'^\\s*package\\s+' + re.escape(pkg_name) + r'\\b')，其中 pkg_name = os.path.basename(dirpath) = 'agentmirrord'。cmd/agentmirrord 声明 'package main'，正则永不匹配 → @consumes 被静默丢弃。全仓库唯一 Go 命令包（已核实 server/cmd 下仅它含 package main），其余 8 个 Go 包目录名==包名不受影响；Kotlin 侧走 fq 包名也不受影响。",
+      "root_cause_2": "w-t34-mainpkg 追加发现的第二处静默失效：_extract_tags 对同一 doc 块的多个 @consumes 只保留最后一条（dict 覆盖）——即使第一处修好，4 条 @consumes 也只剩 internal/api 被读到。两个洞叠加才构成'声明写了、判据说你没写'的完整假象。（此处注明：root_cause_2 是 w-t34-mainpkg 发现的，不是我。）",
+      "my_handling": "判出根因后拒绝越界（write_scope 严格限于 server/cmd/agentmirrord/，未擅改 tools/archwiki/），上报 leader 请求裁定，halt 等待。",
+      "leader_ruling": "裁定方案①修判据，不接受方案②'命令包 @consumes 免验'边界——理由：命令包正是跨层 import 最密集处，免验等于在 T3-4 上开一个正好覆盖架构最关键点的洞，且此洞是静默的（声明写了判据不读）比明着不支持更坏。开专席 w-t34-mainpkg 承办，写入限 tools/archwiki/，先写红测（命令包声明 @consumes 应转绿的 fixture 修复前必红）。",
+      "post_fix_rerun": "w-t34-mainpkg 交件后复跑：cmd/agentmirrord 单包硬判 --strict-t3 从 rc=1（4 条漂移）转 rc=0，T3-1..T3-4 全 PASS，我写的 4 条 @consumes 全部被读到。build+vet+test 全绿；全仓库 check exit 0（剩余 T3-4 20 条 + T3-1 1 条均属 Kotlin 包，非本包）。",
+      "value": "本轮第一个'施工席在自己 write_scope 边界上撞到工装缺陷'的实例；判根因、拒越界、停下问三步闭环。后续 13 个包走同一条路可复用此记录。"
+    }
+  ],
+  "positive_control": {
+    "procedure": "收工前临时删除 run() 的 @err 标签（main.go），跑单包硬判，确认 exit 1 且精确指向该符号，随后恢复。按 leader 裁定用 T3-3 做对照——T3-4 施工期本就因判据缺陷红，用它做对照证明不了'判据真扫得到'，而 T3-3 是判据真能验本包契约的维度。",
+    "result_red": "T3-3 FAIL — 契约标签完备：1 条违规\n  [T3-3] cmd/agentmirrord  server/cmd/agentmirrord/main.go:61  `@contract` — 缺契约标签: @err\n结果：未通过（exit 1）",
+    "exit_red": 1,
+    "exit_after_restore": 0,
+    "note": "判据对 cmd/agentmirrord 真实生效且精确到符号行（main.go:61）——非'扫不到包而全绿'。恢复 @err 后 T3-3 转 PASS。"
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "status": "pass",
+  "case_id": "msg_a5090a8690c0",
+  "package": "internal/pairing",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/pairing",
+      "rc": 0,
+      "note": "施工后单包硬判 exit 0（T3-1/T3-2/T3-3/T3-4 全 PASS）"
+    },
+    {
+      "argv": "cd server && env -u TEAM_AGENT_* go test -count=1 ./internal/pairing/...",
+      "rc": 0,
+      "note": "包内测试全绿，无实现改动"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据未被打坏（T1 保持 PASS；T3-4 的 28 条漂移是其他包的既有现状）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/pairing（阳性对照：临时删除 GenerateToken 的 @err）",
+      "rc": 1,
+      "note": "故意破坏对照：exit 1 且精确指向 server/internal/pairing/token.go:47 '缺契约标签: @err'，改回后 exit 0"
+    }
+  ],
+  "changes": [
+    "server/internal/pairing/token.go",
+    "server/internal/pairing/qr.go",
+    "server/internal/pairing/probe.go"
+  ],
+  "rewritten": [
+    {
+      "symbol": "PrimaryHost",
+      "file": "server/internal/pairing/probe.go",
+      "inaccurate": "原注释称优先 override 来自 'AGENTMIRROR_HOST / -host'，但实现只读 os.Getenv(\"AGENTMIRROR_HOST\")，完全没有 -host flag。实证：-host flag 在 internal/config/config.go:171 注册并折进 cfg.Host，cmd/agentmirrord/main.go:193 经 printPairingGuide 的 hostOverride 直接喂给 PrintOnboardingAll，绕过 PrimaryHost；PrimaryHost 唯一 override 入口就是 env。形态谱系：把 '不属于该函数的输入' 写成 '该函数的 override'（旧 API 残留/能力归属错侧的变体）。",
+      "basis": "probe.go PrimaryHost 函数体仅 os.Getenv('AGENTMIRROR_HOST') 一个分支；main.go:277-291 printPairingGuide 的 hostOverride 路径独立于 PrimaryHost；config.go:171 -host flag 注册。",
+      "rewritten_to": "改为 'AGENTMIRROR_HOST env' 单入口，并补注：-host flag 折进 config.Host 后由 printPairingGuide 的 hostOverride 送达（main.go），绕过 PrimaryHost——只承认 env override。附 @contract：@pre none / @post 返回非空 host（env 覆盖 > 默认路由源 IP > LAN/tailnet 首选 > 127.0.0.1）/ @err none（自动探测失败静默降级到下一梯级）/ @inv none。"
+    },
+    {
+      "symbol": "KindLAN",
+      "file": "server/internal/pairing/probe.go",
+      "inaccurate": "原注释称 KindLAN 是 'private/LAN unicast IPv4 address'，但 classifyIP 对任何未被排除的 unicast IPv4 都返回 KindLAN——包括公网地址。probe_test.go TestClassifyIP 明文钉死 8.8.8.8 -> KindLAN（'non-private unicast IPv4 is still a host address'）。形态谱系：约束写错（把集合写窄成 'private/LAN'，实际是 '非 loopback/link-local/RFC2544/tailnet 的任意 unicast IPv4'）。",
+      "basis": "probe.go classifyIP 返回 KindLAN 的分支无私有性判断；probe_test.go:27 用例 8.8.8.8 -> KindLAN。",
+      "rewritten_to": "改为 'any unicast IPv4 not loopback/link-local/RFC 2544/tailnet (public/global unicast is still KindLAN)'。"
+    },
+    {
+      "symbol": "WithTailnet",
+      "file": "server/internal/pairing/probe.go",
+      "inaccurate": "原注释称 tailnet IP 'appended after the probed set'（追加在探测集末尾），但实现是插到第一个 loopback 之前（LAN -> tailnet -> loopback 序），并非追加在末尾。若探测集含 loopback（真实 DetectAddresses 必然带），'追加末尾'会落在 loopback 之后、违反包级地址序契约。形态谱系：行为描述不精确（旧行为/实现措辞残留，属次要不实）。",
+      "basis": "probe.go WithTailnet 的插入逻辑：for 循环里在第一个 a.Kind == KindLoopback 前插入 tailnet 地址（inserted=true），无 loopback 才追加末尾。",
+      "rewritten_to": "改为 'inserted just before the loopback fallback (LAN -> tailnet -> loopback order)'。"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "TokenDir",
+      "file": "server/internal/pairing/token.go",
+      "contract": "@contract + @pre none + @post 返回 os.UserConfigDir()/agentmirror + @err os.UserConfigDir 失败返回包装错误 + @inv none"
+    },
+    {
+      "symbol": "GenerateToken",
+      "file": "server/internal/pairing/token.go",
+      "contract": "@contract + @pre none + @post 返回 128 位随机、base32（A-Z, 2-7）编码、26 字符无填充 token + @err crypto/rand 读失败返回包装错误 + @inv none"
+    },
+    {
+      "symbol": "LoadToken",
+      "file": "server/internal/pairing/token.go",
+      "contract": "@contract + @pre none + @post 文件不存在或 trim 后为空时 ok=false，否则 ok=true 返回 trim 后 token + @err 已存在文件的读失败返回包装错误 + @inv none"
+    },
+    {
+      "symbol": "SaveToken",
+      "file": "server/internal/pairing/token.go",
+      "contract": "@contract + @pre none + @post token 以 0600 写入 dir/token（临时文件改名，不留半成品）+ @err 建目录/写临时文件/改名任一步失败返回包装错误；错误串不含 token 值（§9）+ @inv none"
+    },
+    {
+      "symbol": "EnsureToken",
+      "file": "server/internal/pairing/token.go",
+      "contract": "@contract + @pre none + @post explicit 非空时原样返回不落盘；否则返回已持久化 token 或新生成并持久化 + @err LoadToken/GenerateToken/SaveToken 失败时传播包装错误 + @inv token 值不出现于错误串（§9）"
+    },
+    {
+      "symbol": "RenderQR",
+      "file": "server/internal/pairing/qr.go",
+      "contract": "@contract + @pre none + @post 返回以换行结尾的多行 ANSI 半块艺术串（每两个模块一行）+ @err content 超过所选纠错级别（Medium）QR 容量时报错 + @inv none"
+    },
+    {
+      "symbol": "DetectAddresses",
+      "file": "server/internal/pairing/probe.go",
+      "contract": "@contract + @pre none + @post 返回顺序 LAN（排序）→ tailnet（排序）→ loopback，且总是含 loopback + @err none（接口枚举失败降级为 loopback 而非报错）+ @inv none"
+    },
+    {
+      "symbol": "PrimaryHost",
+      "file": "server/internal/pairing/probe.go",
+      "contract": "@contract + @pre none + @post 返回非空 host：env 覆盖 > 默认路由源 IP > LAN/tailnet 首选 > '127.0.0.1' + @err none（自动探测失败静默降级到下一梯级）+ @inv none"
+    },
+    {
+      "symbol": "WithTailnet",
+      "file": "server/internal/pairing/probe.go",
+      "contract": "@contract + @pre none + @post ip 非 nil 且不在 addrs 时按其 Kind 序插入一个 KindTailnet 副本；ip 已在集内或 nil 则原样返回 + @err none（纯函数，不失败）+ @inv 返回保持 LAN → tailnet → loopback 序，ip 至多出现一次"
+    },
+    {
+      "symbol": "PrintOnboarding",
+      "file": "server/internal/pairing/probe.go",
+      "contract": "@contract + @pre w 非 nil（nil writer 将 panic）+ @post 向 w 写入 QR + 明文指引；无 LAN/tailnet 时带降级警告 + @err 载荷编组或 QR 编码失败返回包装错误 + @inv none"
+    },
+    {
+      "symbol": "PrintOnboardingWith",
+      "file": "server/internal/pairing/probe.go",
+      "contract": "@contract + @pre w 非 nil（nil writer 将 panic）+ @post 按注入 addrs/primary 渲染指引，不探测本机 + @err 载荷编组或 QR 编码失败返回包装错误 + @inv none"
+    },
+    {
+      "symbol": "PrintOnboardingAll",
+      "file": "server/internal/pairing/probe.go",
+      "contract": "@contract + @pre w 非 nil（nil writer 将 panic）+ @post 除主 URL 外把每个非 loopback 候选地址列入明文指引（listAll 视图）+ @err 载荷编组或 QR 编码失败返回包装错误 + @inv none"
+    }
+  ],
+  "consumes_added": [],
+  "consumes_explanation": "internal/pairing 的 import 图只含标准库与外部依赖 github.com/skip2/go-qrcode，零内部包 import——本包没有任何 T3-4 漂移条目可消。docs/wiki/t3-report.md 里唯一命名 internal/pairing 的 T3-4 行是 cmd/agentmirrord 消费 internal/pairing（消费者侧漂移，属 cmd/agentmirrord 的 write_scope，越界不替它补）。在本包包 doc 补 @consumes 会构成'声明了却没 import'的假声明（同样判红），故正确的③结论是零增补。",
+  "uncertain": [],
+  "deviation": [],
+  "symbol_audit_note": "逐符号核实了全部 19 个非测试导出符号（probe.go: Address/DetectAddresses/PrimaryHost/WSURL/WithTailnet/Onboarding/PrintOnboarding/PrintOnboardingWith/PrintOnboardingAll；qr.go: PayloadVersion/Payload/NewPayload/NewPayloadWithCandidates/RenderQR；token.go: TokenDir/GenerateToken/LoadToken/SaveToken/EnsureToken）。其中 16 个经对照实现确认为真话未改（Address/WSURL/Onboarding 及其字段、Payload/PayloadVersion/NewPayload/NewPayloadWithCandidates、PrintOnboarding 系等）；3 个改写（见 rewritten）。token.go 文件头提到 api.TokenValidator 属实（internal/api/token.go:17 存在，main.go:122-123 把 token 交给 api.Options.Token 作为默认 validator），未改。",
+  "positive_control": "故意破坏对照：临时删除 GenerateToken 的 @err 标签行后跑单包硬判，exit 1 且 T3-3 FAIL 精确指向 'server/internal/pairing/token.go:47 `@contract` — 缺契约标签: @err'（证明判据确实扫到这个包、红测有效）；随后恢复 @err 行，单包硬判 exit 0。只验绿不验红等于没验——此对照证明全绿不是'扫不到这个包'造成的假绿。"
+}
