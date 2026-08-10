@@ -15,6 +15,12 @@
 ## 席位与模型
 
 - teammate 一律第三方 API（compatible_api profile）；难点模块可开 Fable 5 短命席位（一次性，交件即退役）
+- **通道判据（2026-08-10 用户复申，违者即浪费）**：默认 `provider: claude_code` +
+  `auth_mode: compatible_api` + `profile: worker-api`（模型即 `deepseek-v4-flash[1m]`，角色文件**不写 model**）。
+  升级 codex `gpt-5.6-sol` 仅两种情形：① taskbook 该条 `contention: contract`；
+  ② 同一任务自动返工达上限（开顾问席熔断）。派单必须打印通道判据一行，跑偏一眼可见。
+  实证教训：2026-08-10 我在派单模板里写死 `provider: codex`，全天所有席位都是 sol，又慢又拖沓且烧订阅额度
+  ——这是决策错误不是配置意外，详见 `docs/next-round-plan-20260810.md` §4。
 - **困难问题通道**（用户裁定 2026-08-10）：codex provider + `gpt-5.6-sol` 模型
   （profile `codex-default`，订阅额度已重置，**额度解限**——不受下条轮次/墙钟约束，
   但工程纪律「红测先行/隔离/basegen/交件即退役」照常）。Fable 5/Anthropic 订阅通道不再开发发用。
