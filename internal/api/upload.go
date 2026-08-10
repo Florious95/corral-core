@@ -26,6 +26,13 @@ func (s *Server) serveUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if token, reason := uploadBearerToken(r); reason != "" {
+		writeUploadError(w, http.StatusUnauthorized, "unauthorized", reason)
+		return
+	} else if !s.tokenValidator.ValidateToken(r.Context(), token) {
+		writeUploadError(w, http.StatusUnauthorized, "unauthorized", "invalid bearer token")
+		return
+	}
 
 	// Bound the body so a hostile or buggy peer cannot allocate without limit.
 	// The cap includes the file itself plus multipart framing slack so a file
@@ -67,6 +74,21 @@ func (s *Server) serveUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
+	// Serialize the quota check with the write so concurrent uploads cannot
+	// each observe spare capacity and collectively cross the directory cap.
+	s.uploadMu.Lock()
+	defer s.uploadMu.Unlock()
+	used, err := uploadDirSize(dir)
+	if err != nil {
+		s.log.Error("upload: measure dir", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if used > s.maxUploadDir-int64(len(data)) {
+		writeUploadError(w, http.StatusInsufficientStorage, "storage_limit_exceeded", "upload directory size limit exceeded")
+		return
+	}
 	path, err := writeUpload(dir, part.FileName(), data)
 	if err != nil {
 		s.log.Error("upload: write file", "err", err)
@@ -81,6 +103,38 @@ func (s *Server) serveUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(body)
+}
+
+// uploadBearerToken parses the standard Authorization: Bearer credential.
+// It returns only fixed, token-free rejection reasons so malformed input can
+// never be reflected into a response or log.
+func uploadBearerToken(r *http.Request) (string, string) {
+	values := r.Header.Values("Authorization")
+	if len(values) == 0 {
+		return "", "missing bearer token"
+	}
+	if len(values) != 1 {
+		return "", "invalid authorization header"
+	}
+	fields := strings.Fields(values[0])
+	if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") || fields[1] == "" {
+		return "", "invalid authorization header"
+	}
+	return fields[1], ""
+}
+
+type uploadError struct {
+	Code   string `json:"code"`
+	Reason string `json:"reason"`
+}
+
+func writeUploadError(w http.ResponseWriter, status int, code, reason string) {
+	w.Header().Set("Content-Type", "application/json")
+	if status == http.StatusUnauthorized {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+	}
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(uploadError{Code: code, Reason: reason})
 }
 
 // protocolUploadResp mirrors protocol.UploadResp as an HTTP JSON body. It is
@@ -126,6 +180,27 @@ func (s *Server) resolveUploadDir() (string, error) {
 		return "", err
 	}
 	return dir, nil
+}
+
+// uploadDirSize measures the regular files in the flat directory used by the
+// uploader. Symlinks and subdirectories are ignored: the endpoint creates
+// neither, and following them could escape a user-configured directory.
+func uploadDirSize(dir string) (int64, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return 0, err
+		}
+		if info.Mode().IsRegular() {
+			total += info.Size()
+		}
+	}
+	return total, nil
 }
 
 // writeUpload writes data to dir under a safe unique filename and returns the

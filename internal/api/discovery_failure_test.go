@@ -190,16 +190,10 @@ func TestDiscoveryRecoveryResumesDelta(t *testing.T) {
 // standard four — a session appearing is exactly when the user must be told),
 // not silently leave it on the stale empty listing.
 //
-// DEFECT CANDIDATE (reported to leader, do NOT fix in this task): the first
-// successful post-outage scan is treated as a baseline (server.go
-// publishListing, the `prev == nil` branch) even though a connected client
-// already received a seq-1 listing, so no delta is emitted and seq stays 1.
-// The client's freshness check (protocol.md §5.3 seq continuity) cannot detect
-// the discontinuity, so its empty listing stays silently stale until it
-// re-lists. The assertions below are the red test that must pass once the
-// defect is resolved.
+// The first successful post-outage scan must diff against the empty seq-1
+// listing already visible to the client instead of silently replacing it as a
+// baseline. The assertions below guard that recovery path.
 func TestDiscoveryRecoveryReachesConnectedClientFromStartFailure(t *testing.T) {
-	t.Skip("defect filed to leader: recovery after a total-outage listing never reaches the connected client (server.go publishListing prev==nil baseline branch)")
 	fd := &flipDiscoverer{model: nil, err: errors.New("tmux down")}
 	e := startWS(t, Options{Token: "test-token", Discoverer: fd})
 	e.auth()

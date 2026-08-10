@@ -52,12 +52,30 @@ go vet ./...
 | `-listen` | `AGENTMIRROR_LISTEN` | `0.0.0.0:9900` | WebSocket 服务监听地址 |
 | `-qr-listen` | `AGENTMIRROR_QR_LISTEN` | 空（禁用） | 配对 QR 页监听地址 |
 | `-log-level` | `AGENTMIRROR_LOG_LEVEL` | `info` | 日志级别 `debug\|info\|warn\|error` |
+| `-token` | `AGENTMIRROR_TOKEN` | 自动生成并持久化 | 显式配对 token；凭据会出现在 argv，优先使用环境变量 |
+| `-upload-dir` | `AGENTMIRROR_UPLOAD_DIR` | `~/Downloads/agentmirror-uploads` | 图片上传落盘目录 |
+| `-max-upload-bytes` | `AGENTMIRROR_MAX_UPLOAD_BYTES` | `20971520` | 单次上传文件上限（20 MiB） |
 | —（禁止 argv） | `TS_AUTHKEY` | 空（LAN-only） | 内嵌 tsnet 节点凭据；非空启用 LAN + tailnet 双栈 |
 | — | `TS_CONTROL_URL` | 官方控制面 | 可选自托管控制面（如 headscale）URL |
 | `-state-dir` | `AGENTMIRROR_STATE_DIR` | 用户配置目录 | pidfile；tsnet 状态位于其 `tsnet/` 子目录 |
 
 普通配置优先级：flag（显式指定）→ 环境变量 → 默认值。`TS_AUTHKEY` 是例外：它只允许
 环境变量，故意不提供 `-ts-authkey`；argv 会暴露在进程列表与 shell history 中。
+
+`POST /upload` 必须携带 `Authorization: Bearer <pairing-token>`，与 WebSocket 握手复用同一
+凭据。上传目录内常规文件总量硬上限为 1 GiB；将越过上限的请求会以 HTTP 507 明确拒绝，
+daemon 不会擅自删除自定义目录中的文件。达到上限后请删除不再需要的旧上传文件再重试。
+
+## 配对 token 吊销与轮换
+
+未显式配置 `-token` / `AGENTMIRROR_TOKEN` 时，daemon 首次启动会生成 token，保存到系统用户
+配置目录下的 `agentmirror/token`（权限 `0600`），后续重启复用。要全量吊销已配对 App：先停
+daemon，删除该 token 文件，再启动 daemon；启动时会生成新 token，所有仍持有旧 token 的 App
+都会认证失败，需扫描新的配对 QR。删除文件前不要复制、打印或截图其内容。
+
+使用显式 token 时，它不会写入上述文件；改用新的 `AGENTMIRROR_TOKEN`（或新的 `-token` 值）
+并重启即可轮换。显式值优先于磁盘中的自动 token，因此仅删除 token 文件不会吊销显式值。
+App 重新配对成功后会以新配置覆盖原有单档。
 
 ## LAN / tailnet 双栈运行
 

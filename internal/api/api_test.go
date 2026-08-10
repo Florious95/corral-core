@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -225,6 +226,7 @@ func TestUploadPersistsFileAndReturnsPath(t *testing.T) {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer test-token")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("do upload: %v", err)
@@ -254,6 +256,92 @@ func TestUploadPersistsFileAndReturnsPath(t *testing.T) {
 	}
 }
 
+// TestUploadAuthentication locks the HTTP upload contract to the same pairing
+// token used by WebSocket auth. Rejections are visible but never echo either
+// the configured token or the presented credential.
+func TestUploadAuthentication(t *testing.T) {
+	tests := []struct {
+		name       string
+		auth       string
+		wantStatus int
+		wantFiles  int
+	}{
+		{name: "missing credential", wantStatus: http.StatusUnauthorized},
+		{name: "wrong credential", auth: "Bearer wrong-token", wantStatus: http.StatusUnauthorized},
+		{name: "valid credential", auth: "Bearer test-token", wantStatus: http.StatusOK, wantFiles: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uploadDir := t.TempDir()
+			srv := NewServer(Options{
+				Token:      "test-token",
+				UploadDir:  uploadDir,
+				Discoverer: scriptedDiscoverer{model: testModel()},
+			})
+			defer srv.Close()
+			hsrv := httptest.NewServer(srv.Handler())
+			defer hsrv.Close()
+
+			var buf bytes.Buffer
+			mw := multipart.NewWriter(&buf)
+			fw, err := mw.CreateFormFile("file", "auth.png")
+			if err != nil {
+				t.Fatalf("create form file: %v", err)
+			}
+			if _, err := fw.Write([]byte("image")); err != nil {
+				t.Fatalf("write part: %v", err)
+			}
+			if err := mw.Close(); err != nil {
+				t.Fatalf("close multipart: %v", err)
+			}
+
+			req, err := http.NewRequest(http.MethodPost, hsrv.URL+"/upload", &buf)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req.Header.Set("Content-Type", mw.FormDataContentType())
+			if tt.auth != "" {
+				req.Header.Set("Authorization", tt.auth)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("do upload: %v", err)
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("read response: %v", err)
+			}
+			if resp.StatusCode != tt.wantStatus {
+				t.Fatalf("upload status = %d, want %d, body %s", resp.StatusCode, tt.wantStatus, body)
+			}
+			if bytes.Contains(body, []byte("test-token")) || bytes.Contains(body, []byte("wrong-token")) {
+				t.Fatalf("upload response echoed credential: %s", body)
+			}
+			if tt.wantStatus == http.StatusUnauthorized {
+				var rejection struct {
+					Code   string `json:"code"`
+					Reason string `json:"reason"`
+				}
+				if err := json.Unmarshal(body, &rejection); err != nil {
+					t.Fatalf("decode rejection: %v", err)
+				}
+				if rejection.Code != "unauthorized" || rejection.Reason == "" {
+					t.Fatalf("rejection = %+v, want unauthorized with non-empty reason", rejection)
+				}
+			}
+			entries, err := os.ReadDir(uploadDir)
+			if err != nil {
+				t.Fatalf("read upload dir: %v", err)
+			}
+			if len(entries) != tt.wantFiles {
+				t.Fatalf("stored files = %d, want %d", len(entries), tt.wantFiles)
+			}
+		})
+	}
+}
+
 // TestUploadTooLarge verifies an upload exceeding the byte cap is rejected.
 func TestUploadTooLarge(t *testing.T) {
 	srv := NewServer(Options{
@@ -271,12 +359,78 @@ func TestUploadTooLarge(t *testing.T) {
 	fw.Write(bytes.Repeat([]byte("x"), 100))
 	mw.Close()
 
-	resp, err := http.Post(hsrv.URL+"/upload", mw.FormDataContentType(), &buf)
+	req, err := http.NewRequest(http.MethodPost, hsrv.URL+"/upload", &buf)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer test-token")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("do upload: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversize upload status = %d, want 413", resp.StatusCode)
+	}
+}
+
+// TestUploadDirectoryLimit verifies the endpoint rejects an upload that would
+// cross the fixed total-directory quota without deleting existing files.
+func TestUploadDirectoryLimit(t *testing.T) {
+	uploadDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(uploadDir, "existing.png"), bytes.Repeat([]byte("x"), 8), 0o600); err != nil {
+		t.Fatalf("seed upload dir: %v", err)
+	}
+	srv := NewServer(Options{
+		Token:      "test-token",
+		UploadDir:  uploadDir,
+		Discoverer: scriptedDiscoverer{model: testModel()},
+	})
+	defer srv.Close()
+	srv.maxUploadDir = 10
+	hsrv := httptest.NewServer(srv.Handler())
+	defer hsrv.Close()
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("file", "new.png")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := fw.Write([]byte("abc")); err != nil {
+		t.Fatalf("write part: %v", err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatalf("close multipart: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, hsrv.URL+"/upload", &buf)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer test-token")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do upload: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInsufficientStorage {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("upload status = %d, want 507, body %s", resp.StatusCode, body)
+	}
+	var rejection uploadError
+	if err := json.NewDecoder(resp.Body).Decode(&rejection); err != nil {
+		t.Fatalf("decode rejection: %v", err)
+	}
+	if rejection.Code != "storage_limit_exceeded" || rejection.Reason == "" {
+		t.Fatalf("rejection = %+v, want storage_limit_exceeded with reason", rejection)
+	}
+	entries, err := os.ReadDir(uploadDir)
+	if err != nil {
+		t.Fatalf("read upload dir: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "existing.png" {
+		t.Fatalf("quota rejection changed upload dir: %+v", entries)
 	}
 }

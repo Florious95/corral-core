@@ -34,7 +34,9 @@ type Server struct {
 	listInterval time.Duration
 	uploadDir    string
 	maxUpload    int64
+	maxUploadDir int64
 	maxInput     int
+	uploadMu     sync.Mutex
 
 	// snapshot is the latest published two-level model (nil before the first
 	// scan) and seq its monotonically increasing version, guarded by snapMu.
@@ -84,6 +86,7 @@ func NewServer(opts Options) *Server {
 		listInterval:   opts.ListInterval,
 		uploadDir:      opts.UploadDir,
 		maxUpload:      opts.MaxUploadBytes,
+		maxUploadDir:   defaultMaxUploadDirBytes,
 		maxInput:       opts.MaxInputBytes,
 		catalog:        newSessionCatalog(),
 		trackers:       make(map[*wsConn]struct{}),
@@ -264,17 +267,17 @@ func (s *Server) countAuthed() int64 {
 }
 
 // publishListing performs one scan-and-diff cycle. The first scan (no previous
-// model) just establishes the baseline at seq 1; each later scan with changes
-// bumps the seq and fans out one list_delta.
+// model or sequence) just establishes the baseline at seq 1; each later scan
+// with changes bumps the seq and fans out one list_delta.
 func (s *Server) publishListing(ctx context.Context) {
-	prev, _ := s.currentSnapshot()
+	prev, prevSeq := s.currentSnapshot()
 	if err := s.rebuildCatalog(ctx); err != nil {
 		s.log.Warn("listing: discovery failed", "err", err)
 		return
 	}
 	cur, _ := s.currentSnapshot()
 
-	if prev == nil {
+	if prev == nil && prevSeq == 0 {
 		// First snapshot establishes the baseline; guarantee it carries a
 		// sequence >= 1 (a client that lists before this tick reads seq 1).
 		s.snapMu.Lock()
@@ -284,6 +287,12 @@ func (s *Server) publishListing(ctx context.Context) {
 		s.snapMu.Unlock()
 		s.log.Debug("listing: first snapshot", "seq", s.currentSeq())
 		return
+	}
+	if prev == nil {
+		// A failed initial scan still publishes an empty seq-1 listing. Treat
+		// that client-visible state as the baseline so recovery is announced
+		// instead of silently replacing it with the first successful snapshot.
+		prev = &modelSnapshot{}
 	}
 
 	d := cur.diff(prev)

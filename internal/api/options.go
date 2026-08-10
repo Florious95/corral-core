@@ -24,6 +24,11 @@ const (
 	// defaultMaxUploadBytes caps one uploaded image (docs/protocol.md §8).
 	defaultMaxUploadBytes = 20 << 20 // 20 MiB
 
+	// defaultMaxUploadDirBytes caps all regular files in the flat upload
+	// directory. The server rejects an upload that would cross the cap rather
+	// than deleting files from a user-configured directory.
+	defaultMaxUploadDirBytes = 1 << 30 // 1 GiB
+
 	// defaultMaxInputBytes caps the text of one input frame; a larger text is
 	// rejected with input_ack reason too_large.
 	defaultMaxInputBytes = 1 << 20 // 1 MiB
