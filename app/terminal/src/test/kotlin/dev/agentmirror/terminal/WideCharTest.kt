@@ -50,6 +50,20 @@ class WideCharTest {
     }
 
     @Test
+    fun dogfoodEmojiKeepsFollowingSpaceOnItsOwnCell() {
+        val t = TerminalEmulator(12, 2)
+        t.feed("✅ ❌ ")
+
+        // 每个 emoji 主格 + 续格后才是空格，确保字形不会吃掉分隔列。
+        assertEquals(2, t.cellAt(0, 0).width)
+        assertEquals(0, t.cellAt(1, 0).width)
+        assertEquals(" ", t.cellAt(2, 0).text)
+        assertEquals(2, t.cellAt(3, 0).width)
+        assertEquals(0, t.cellAt(4, 0).width)
+        assertEquals(" ", t.cellAt(5, 0).text)
+    }
+
+    @Test
     fun overwritingHalfClearsWholeWideChar() {
         val t = TerminalEmulator(10, 3)
         t.feed("你\rx") // 覆盖首格

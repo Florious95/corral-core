@@ -71,6 +71,9 @@ data class WorkspaceUiState(
     val connection: ConnectionUi = ConnectionUi.CONNECTING,
     val workspaces: List<WorkspaceUi> = emptyList(),
 ) {
+    /** 连接未就绪且无缓存列表 = 加载态；此时不能提前显示“暂无工作区”。 */
+    val isLoading: Boolean get() = connection == ConnectionUi.CONNECTING && workspaces.isEmpty()
+
     /** 就绪且无工作区 = 空态，给引导文案（无工作区 ≠ 错误）。 */
     val isEmpty: Boolean get() = connection == ConnectionUi.READY && workspaces.isEmpty()
 

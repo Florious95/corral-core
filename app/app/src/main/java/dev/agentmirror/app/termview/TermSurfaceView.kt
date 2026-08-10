@@ -95,8 +95,9 @@ class TermSurfaceView @JvmOverloads constructor(
         override fun onDown(e: MotionEvent): Boolean = true
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
             presenter?.let {
-                // 向上滚 = dy<0：content 更向下，历史在更上，deltaLines>0。
-                val deltaLines = ((dy) / lineHeightPx.toFloat()).roundToInt()
+                // GestureDetector 的 distanceY 是“上一点 - 当前点”：手指下拖为负；
+                // Presenter 的正值才是看更早历史，因此必须反号以保持内容跟手移动。
+                val deltaLines = (-dy / lineHeightPx.toFloat()).roundToInt()
                 if (deltaLines != 0) it.onScrollBy(deltaLines)
             }
             return true

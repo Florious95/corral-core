@@ -278,6 +278,15 @@ class WorkspaceViewModelTest {
     }
 
     @Test
+    fun connectingWithNoWorkspaces_isLoadingInsteadOfEmpty() {
+        val s = WorkspaceViewModel().uiState.value
+
+        // listing 尚未到达时必须给中间反馈，不能提前宣告主机没有工作区。
+        assertTrue(s.isLoading)
+        assertFalse(s.isEmpty)
+    }
+
+    @Test
     fun reconnectKeepsLastKnownList_butFlagsDisconnected() {
         val vm = WorkspaceViewModel()
         vm.onConnectionStateChanged(ConnectionState.READY)
