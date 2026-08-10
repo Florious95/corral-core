@@ -20,8 +20,21 @@ unset TMUX TS_AUTHKEY TS_CONTROL_URL TS_DEBUG_REGISTER
 E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$E2E_ROOT/.." && pwd)"
 SERVER_ROOT="$REPO_ROOT/server"
-ART="$E2E_ROOT/artifacts/fix-upload-auth"
+# Canonical performance-baseline home.  taskbook goal, docs/perf-scenarios.md and this
+# case's acceptance all read e2e/artifacts/test-api-user-scenarios-perf/baseline.json, so
+# this path is a constant independent of the per-run case artifact dir below: a borrowing
+# case may re-point ART (API_SCENARIO_CASE_ART) without moving or emptying the approved
+# baseline.  The already-committed fix-upload-auth artifacts stay where they are.
+PERF_ART="$E2E_ROOT/artifacts/test-api-user-scenarios-perf"
+mkdir -p "$PERF_ART"
+
+# Per-run case artifact dir (logs, scenarios, resources, report).  Defaults to the
+# canonical perf home; another case reusing this script sets API_SCENARIO_CASE_ART.
+ART="${API_SCENARIO_CASE_ART:-$PERF_ART}"
+case "$ART" in /*) ;; *) ART="$E2E_ROOT/$ART" ;; esac
 mkdir -p "$ART"
+# Relative view of the case-artifact dir, used only for the human-facing summary.
+ART_REL="${ART#"$E2E_ROOT/"}"
 
 BUILD_LOG="$ART/build.log"
 DAEMON_LOG="$ART/daemon.log"
@@ -31,7 +44,7 @@ PS_AUDIT="$ART/ps-spawns.log"
 VIOLATIONS="$ART/isolation-violations.log"
 CLEANUP_JSON="$ART/cleanup.json"
 SCENARIO_JSON="$ART/scenarios.json"
-BASELINE_JSON="$ART/baseline.json"
+BASELINE_JSON="$PERF_ART/baseline.json"
 REPORT="$ART/REPORT.md"
 
 : >"$BUILD_LOG"
@@ -1803,7 +1816,7 @@ unverified = [
 
 baseline = {
     "schema_version": 1,
-    "suite": "fix-upload-auth",
+    "suite": "test-api-user-scenarios-perf",
     "status": "fail" if failures else "pass",
     "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "source": {"git_head": git_head, "go_version": go_version},
@@ -1966,5 +1979,5 @@ PY
 test -s "$REPORT"
 
 echo "api-user-scenarios: PASS"
-echo "baseline: e2e/artifacts/fix-upload-auth/baseline.json"
-echo "report: e2e/artifacts/fix-upload-auth/REPORT.md"
+echo "baseline: e2e/artifacts/test-api-user-scenarios-perf/baseline.json"
+echo "report: e2e/$ART_REL/REPORT.md"
