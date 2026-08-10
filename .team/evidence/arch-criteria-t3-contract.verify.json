@@ -1,0 +1,83 @@
+{
+  "verdict": "confirmed",
+  "round": 2,
+  "case_id": "msg_b375b244c7f0",
+  "live_injection_both_orderings": {
+    "testA_incomplete_first": {
+      "file": "server/internal/api/discoverer.go",
+      "layout": "scopedDiscoveryDirsEnv (仅 @pre/@post，缺 @err/@inv) 在前，Discoverer (四标签齐) 在后",
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3",
+      "rc": 1,
+      "result": "T3-3 FAIL — discoverer.go:17 缺 @err/@inv，指向残缺符号，正确红"
+    },
+    "testB_complete_first": {
+      "file": "server/internal/api/discoverer.go",
+      "layout": "scopedDiscoveryDirsEnv (四标签齐) 在前，Discoverer (缺 @err/@inv) 在后",
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3",
+      "rc": 1,
+      "result": "T3-3 FAIL — discoverer.go:28 缺 @err/@inv，指向残缺符号，正确红"
+    },
+    "testC_different_file": {
+      "file": "server/internal/api/upload.go",
+      "layout": "serveUpload (四标签齐) 在前，uploadBearerToken (缺 @err/@inv) 在后",
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3",
+      "rc": 1,
+      "result": "T3-3 FAIL — upload.go:113 缺 @err/@inv，指向残缺符号，正确红"
+    },
+    "revert": "两文件注入后逐字节比对 git HEAD 完全一致（cmp 通过）；.team/verify-t3c/ 已删；报告回归 canonical（0/0/29）。工作区无注入残留"
+  },
+  "no_risk_selfchecks": {
+    "t3_4_guard": {
+      "verdict": "confirmed",
+      "evidence": [
+        "同文件两符号（t34g.go：SymbolA 声明 @consumes internal/used + 真实 import，SymbolB 不声明）→ T3-4 PASS rc=0，无串味误报",
+        "反向（t34g2.go：import internal/used 但无任何 @consumes）→ T3-4 FAIL 1 条『import 了却未声明』rc=1，正确抓",
+        "跨包守卫（t34g3.go + rogue.go 声明 package rogue 与目录名不符）→ rogue 的 @consumes 被正确忽略，t34g3 PASS rc=0——守卫在生效路径上（_declared_consumes 第 1078-1080 行 re.search 包名匹配），非写了没被调用",
+        "Kotlin 同文件两符号（SymbolA 声明 @consumes，SymbolB 不声明）→ 声明被正确归属，无串味"
+      ]
+    },
+    "t3_1": {
+      "verdict": "confirmed",
+      "evidence": "T3-1 用原始行号邻接判定（_go_decl_has_doc/_kt_decl_has_doc），不经 _group_comment_blocks；真仓库 TsnetInterfaceCodec.kt:46 行号与真实声明精确对应。修复无影响"
+    },
+    "t3_2": {
+      "verdict": "confirmed",
+      "evidence": "T3-2 逐行扫描（_scan_t3_2_doc_lines），不跨符号 union；行号修复（BLOCK 状态遇 \\n 推进行号）是严格改善，不改变引用判定逻辑"
+    }
+  },
+  "line_number_accuracy": {
+    "verdict": "confirmed",
+    "evidence": [
+      "Go // 连续块：Alpha(块首 line4) 缺 @post/@err/@inv、Beta(块首 line9) 缺 @err/@inv、Gamma(块首 line15) 四标签齐——报告行号与真实行号逐一对应",
+      "Kotlin 连续 KDoc 块：Alpha@3 完整、Beta@13 缺 @err/@inv、Gamma@21 完整——三个块正确切分，行号精确",
+      "BLOCK 状态 \\n 推进行号修复：连续两个 /* */ 块注释第二个块行号不再回卷（lineno fixture 中 First/Second/Third 行号全部正确）"
+    ]
+  },
+  "checks": [
+    {"name": "contract-multi 必红", "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/contract-multi --check --go-source --strict-t3", "rc": 1, "expected": 1, "met": true, "note": "Go multi.go:12 缺 @err/@inv + Kotlin Multi.kt:13 缺 @post，双抓"},
+    {"name": "四格-contract-incomplete", "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/contract-incomplete --check --go-source --strict-t3", "rc": 1, "expected": 1, "met": true},
+    {"name": "四格-contract-complete", "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/contract-complete --check --go-source --strict-t3", "rc": 0, "expected": 0, "met": true},
+    {"name": "四格-consumes-drift", "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/consumes-drift --check --go-source --strict-t3", "rc": 1, "expected": 1, "met": true},
+    {"name": "四格-consumes-consistent", "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/consumes-consistent --check --go-source --strict-t3", "rc": 0, "expected": 0, "met": true},
+    {"name": "单测套件 25 用例", "argv": "bash -lc 'env -u TEAM_AGENT_* python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"'", "rc": 0, "expected": 0, "met": true, "note": "25/25 OK（19→24→25，contract-multi 新增挂上）"},
+    {"name": "新增用例真在跑", "argv": "bash -lc 'env -u TEAM_AGENT_* python3 -m unittest tools.archwiki.test_check.TestRedFixtures.test_t3_3_multi_contract_symbols_in_one_file_is_red'", "rc": 0, "expected": 0, "met": true, "note": "单独跑 OK（首次 0.000s FAILED 为缓存伪影，重跑 0.049s 通过）"},
+    {"name": "既有判据未打坏", "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0, "expected": 0, "met": true},
+    {"name": "幂等", "argv": "python3 tools/archwiki/build_wiki.py --check 连跑两次 md5", "rc": 0, "expected": "hash 一致", "met": true, "note": "连跑 hash 恒 224f330caf933b279b4cd688f0f41ea3；stdout diff 空"},
+    {"name": "退出码分级：报告模式", "argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0, "expected": 0, "met": true},
+    {"name": "退出码分级：--strict-t3", "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3", "rc": 1, "expected": 1, "met": true},
+    {"name": "--pkg Go 单包", "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/api", "rc": 1, "expected": 1, "met": true, "note": "精确 4 条"},
+    {"name": "--pkg Kotlin 单包", "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.session", "rc": 1, "expected": 1, "met": true, "note": "精确 5 条"},
+    {"name": "none 变体", "argv": "python3 内联 _extract_tags 测试", "rc": 0, "expected": "presence 判定", "met": true, "note": "@pre:空值/@pre 无/@pre:none无空格/@pre NONE/@Pre 大写 均正确要求缺项标签"},
+    {"name": "白名单零新增", "argv": "grep -in 'whitelist|exempt|allowlist' tools/archwiki/build_wiki.py", "rc": 1, "expected": 0, "met": true, "note": "零命中，无豁免条目"}
+  ],
+  "gaps": [
+    {
+      "id": "GAP-pre-existing-go-block-comment-star-invisible",
+      "severity": "LOW",
+      "title": "Go /* */ 块注释内 @contract 标签带 * 前缀时不可见（先于本次返工已存在，非回归）",
+      "evidence": "_go_doc_lines 只剥 // 与行首空白，不剥 /* */ 块的 * 前缀。lineno fixture 中 /* ... * @contract */ 未识别。对比 git HEAD 旧实现同样不剥（re.sub('^//\\\\s*') 对 * 前缀无效）。",
+      "impact": "若 Go 代码用 /* */ 块注释写契约标签会漏检。但工程约定为『Go 写在 doc 注释里』（// 形式），且契约标签放 /* */ 块内不是文档约定写法；Kotlin KDoc（/** */）经 _kt_kdoc_lines 剥 * 前缀所以正常。属已知形态边界，非本次修复引入。"
+    }
+  ],
+  "notes": "返工#1 三连环修复全部经独立实证：①_go_doc_lines 改为 raw.strip() 剥行首伪缩进生效（doc_lines 每行不再带行首空格，_group_comment_blocks 不再全文件合并）；②_group_comment_blocks 改行号相邻(gap==1)判块，Go 同文件多 @contract 符号不再跨符号 union——两种排列顺序（残缺在前/完整在前）+ 换一个 Go 文件（upload.go）活体注入全部正确红且指向残缺符号，原缺陷彻底消除；③BLOCK 状态 \\n 推进行号修复——连续块注释行号不再回卷，报告行号与真实行号逐一对应。T3-4 三条『无风险』自查独立验证成立（含 file-package 守卫在生效路径的实证：rogue.go 包名不符时 @consumes 被忽略）。判据主体（四格、双侧方向、退出码分级、--pkg、none 变体、零白名单、诚实边界）全部保持。残留仅一个先于本次返工已存在的 LOW 级形态边界（Go /* */ 块注释 * 前缀标签不可见），非回归，工程约定为 // doc 注释。判 confirmed。"
+}

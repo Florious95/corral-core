@@ -109,6 +109,50 @@ class TestRedFixtures(unittest.TestCase):
         # 新扩展面：Kotlin KDoc 内谎称 flag（Kotlin 侧对齐 flag 判定）
         self.assertIn("--no-such-plain-flag", out)
 
+    def test_t3_3_incomplete_contract_is_red(self):
+        """T3-3 红测：@contract 符号缺标签（Go 缺 @err/@inv、Kotlin 缺 @post）
+        → strict-t3 exit 1。用与扫真仓库完全相同的代码路径（scan_t3 → _check_t3_3_*），
+        这就是那个「0 必须自证」的必红 fixture。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "contract-incomplete"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-3", out)
+        self.assertIn("@err, @inv", out)   # Go 缺两项
+        self.assertIn("@post", out)         # Kotlin 缺 @post
+        self.assertIn("契约标签完备", out)
+
+    def test_t3_3_multi_contract_symbols_in_one_file_is_red(self):
+        """T3-3 回归红测（返工 #1，w-t3c-verify 实证）：同文件多个 @contract 符号，
+        其中一个残缺 → 必须红。旧实现按文件 union 标签，前一个完整 @contract 的
+        @err/@inv 掩盖后一个残缺符号的缺失——单符号四格 fixture 撞不到这条。
+        Go 侧缺 @err/@inv、Kotlin 侧缺 @post 都要抓。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "contract-multi"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-3", out)
+        self.assertIn("@err, @inv", out)          # Go Half 残缺
+        self.assertIn("@post", out)               # Kotlin HalfClient 残缺
+        self.assertIn("server/multi/multi.go", out)
+        self.assertIn("Multi.kt", out)
+
+    def test_t3_4_consumes_drift_is_red(self):
+        """T3-4 红测：@consumes 与 import 图不一致（声明了没 import + import 了
+        没声明，Go/Kotlin 双侧）→ strict-t3 exit 1。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "consumes-drift"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-4", out)
+        self.assertIn("internal/config", out)          # Go 声明了没 import（drift 包）
+        self.assertIn("import 了却未声明", out)          # 架构漂移方向
+        self.assertIn("dev.agentmirror.fixture.ktused", out)  # Kotlin 侧
+        self.assertIn("跨层声明一致", out)
+
     def test_pkg_dirty_is_red(self):
         """--pkg 单包硬判：指向 dirty 包必须红，且不扫到 clean 包。"""
         code, out = run_tool(
@@ -194,6 +238,47 @@ class TestPositiveControl(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("T3-2", out)
         self.assertIn("PASS", out)
+
+    def test_t3_3_complete_contract_is_green(self):
+        """T3-3 阳性对照：@contract 符号四标签齐全（含显式 none）→ strict-t3 exit 0
+        （防「没扫到」当「干净」——fixture 里确有 @contract，判据必须 PASS 才算扫到）。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "contract-complete"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("T3-3", out)
+        self.assertIn("PASS", out)
+
+    def test_t3_4_consumes_consistent_is_green(self):
+        """T3-4 阳性对照：@consumes 与 import 图一致 → strict-t3 exit 0
+        （防「没扫到」当「干净」——fixture 里确有 @consumes，判据必须 PASS 才算扫到）。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "consumes-consistent"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("T3-4", out)
+        self.assertIn("PASS", out)
+
+    def test_real_repo_t3_report_has_contract_coverage_numbers(self):
+        """那个 0 必须自证：真仓库报告含 @contract 符号总数 / @consumes 声明总数 /
+        import 边数三项覆盖量数字。contract_symbols=0 是「真没有标注」的诚实呈现，
+        其「判据真扫得到」已由 contract-incomplete/consumes-drift 两个必红 fixture 用
+        同一 scan_t3 路径自证（本套件的红测用例）。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            report = os.path.join(tmp, "t3-report.md")
+            code, out = run_tool(ROOT, ["--check", "--t3-report", report])
+            self.assertEqual(code, 0, out)
+            with open(report, encoding="utf-8") as fh:
+                text = fh.read()
+            self.assertIn("@contract", text)
+            self.assertIn("T3-3", text)
+            self.assertIn("T3-4", text)
+            # 三项覆盖量数字必须在报告里出现（含数值 0 的项）。
+            self.assertRegex(text, r"@contract.*符号总数.*\|\s*\d+\s*\|")
+            self.assertRegex(text, r"@consumes.*声明总数.*\|\s*\d+\s*\|")
+            self.assertRegex(text, r"参与比对的 import 边数.*\|\s*\d+\s*\|")
 
     def test_pkg_clean_is_green(self):
         """--pkg 单包硬判阳性对照：指向 clean 包 → exit 0。"""

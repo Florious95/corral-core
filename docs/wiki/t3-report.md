@@ -10,9 +10,12 @@
 |---|---|
 | 导出符号索引（Go+Kotlin） | 206 |
 | Go CLI flag 索引 | 11 |
-| 仓库文件基名索引 | 1714 |
+| 仓库文件基名索引 | 1786 |
 | T3-2 扫描的 Go doc 行 | 2179 |
 | T3-2 扫描的 Kotlin KDoc 行 | 3031 |
+| **T3-3 扫描到的 `@contract` 符号总数** | 0 |
+| **T3-4 `@consumes` 声明总数** | 0 |
+| **T3-4 参与比对的 import 边数** | 29 |
 
 ## T3-1 符号级 doc 覆盖
 
@@ -29,3 +32,51 @@
 > **诚实边界**：T3-2 只验证**引用形状可判者**——反引号包裹的大写符号、含 `/` 且带已知扩展名的路径、`--flag`。**不验证语义事实**：自然语言断言（如"设置里有重配按钮"）没有可判形状，静态判据解析不出"某组件里有没有某按钮"，这类行为性断言由用例覆盖（如 PairingUxTest 的重配入口可达性断言），不在此列。注释里指认代码实体时务必写成反引号符号或真实路径，让引用变成判据可验的形状。
 
 无违规：注释引用的符号名/仓库文件路径/CLI flag 均真实存在。
+
+## T3-3 契约标签完备
+
+凡标了 `@contract` 的符号，四标签 `@pre` / `@post` / `@err` / `@inv` 必须齐全；允许显式写 `none`（表示「确无此项」），但不许缺项。缺项即「契约半成品」——它比没有契约更坏，因为读者会以为契约已经定好了。
+
+> **诚实边界**：T3-3 只验标签**齐不齐**，**不验契约内容是否描述正确**——`@post` 写的是不是真的、`@err` 描述的错误语义对不对，属语义事实，静态判据判不了，那一面由用例覆盖。判据不保护「内容撒谎的齐全契约」。
+
+无违规：扫描到的 `@contract` 符号四标签齐全（含显式 `none`）。
+
+## T3-4 跨层声明一致
+
+`@consumes` 声明的包必须真在该包的 import 图里；反之，跨层 import 了却没声明的判架构漂移。import 图由 build_wiki 既有采集结果现算（不重新解析）。
+
+> **诚实边界**：T3-4 只验声明与 import 图**一致不一致**。它保证架构维基能从代码现算真依赖、防止「声明了没 import / import 了没声明」的漂移；但**不验 `@consumes` 写的是不是业务上真该依赖**——那是设计语义，静态判据判不了。
+
+`@consumes` 与 import 图不一致，共 **29** 条：
+
+| 包 | 语言 | 目标包 | 原因 |
+|---|---|---|---|
+| cmd/agentmirrord | go | `internal/api` | import 了却未声明 @consumes（架构漂移） |
+| cmd/agentmirrord | go | `internal/config` | import 了却未声明 @consumes（架构漂移） |
+| cmd/agentmirrord | go | `internal/pairing` | import 了却未声明 @consumes（架构漂移） |
+| cmd/agentmirrord | go | `internal/tsnetd` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app | kotlin | `dev.agentmirror.app.pairing` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app | kotlin | `dev.agentmirror.app.service` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app | kotlin | `dev.agentmirror.app.session` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app | kotlin | `dev.agentmirror.app.workspace` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.pairing | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.pairing | kotlin | `dev.agentmirror.app.service` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.pairing | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.pairing | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.service | kotlin | `dev.agentmirror.app` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.service | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.service | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.service` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.termview` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
+| dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
+| internal/agentstate | go | `internal/protocol` | import 了却未声明 @consumes（架构漂移） |
+| internal/api | go | `internal/agentstate` | import 了却未声明 @consumes（架构漂移） |
+| internal/api | go | `internal/bridge` | import 了却未声明 @consumes（架构漂移） |
+| internal/api | go | `internal/discovery` | import 了却未声明 @consumes（架构漂移） |
+| internal/api | go | `internal/protocol` | import 了却未声明 @consumes（架构漂移） |
