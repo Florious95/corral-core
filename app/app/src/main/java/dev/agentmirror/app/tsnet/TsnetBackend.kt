@@ -30,6 +30,11 @@ data class TsnetProxy(val host: String, val port: Int, val cred: String) {
         /**
          * 解析 gomobile 层返回的 "host:port" 一体串（tsnet loopback 监听 127.0.0.1，
          * 无 IPv6 括号形态）。非法输入抛 [IllegalArgumentException]，由调用方兜成 Error 状态。
+         * @contract
+         * @pre addr 形如 "host:port"，且 port 段可解析为 1..65535 的整数
+         * @post 返回 [TsnetProxy]，host 为冒号前段、port 为端口整数、cred 原样保留
+         * @err 缺端口/端口非法抛 [IllegalArgumentException]
+         * @inv 不修改入参；返回对象 port 恒在 1..65535
          */
         fun parse(addr: String, cred: String): TsnetProxy {
             val i = addr.lastIndexOf(':')

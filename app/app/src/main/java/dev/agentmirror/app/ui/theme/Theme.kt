@@ -43,10 +43,23 @@ import androidx.compose.ui.unit.sp
  * 所有页面/组件禁止再出现字面量颜色——只允许引用 MaterialTheme.colorScheme 与本文件 token。
  */
 
-/** 品牌主色：深蓝（终端深夜配色基调，与资源 colors.xml 一致）。 */
+/**
+ * 历史品牌深蓝（`0xFF1B2A4A`，与资源 `app/app/src/main/res/values/colors.xml` 的
+ * `brand_primary` 同值）。
+ *
+ * ui-redesign（018）后 M3 深浅两套 primary 均已改用独立取值（深 `0xFF9DBDFF`、
+ * 浅 `0xFF2F5DA8`），本 token 自彼时起无任何消费点——保留仅为资源一致性对照，
+ * 不作配色来源。
+ */
 val brandPrimary: Color = Color(0xFF1B2A4A)
 
-/** 品牌背景色：接近黑的深蓝，用于深色终端背景。 */
+/**
+ * 历史品牌背景深蓝（`0xFF0D1626`）。
+ *
+ * ui-redesign（018）后深色 scheme 的 `background` 已改用 `0xFF0B111D`（近黑深蓝，
+ * 与纯黑终端画布分层次）；终端画布默认底色由 `TermSurfaceView.DEFAULT_BG` 以同一
+ * 字面量承载，但不经本 token 引用。本 token 自彼时起无任何消费点，保留仅为存档。
+ */
 val brandBackground: Color = Color(0xFF0D1626)
 
 // ---- 深色套（主人格）：近黑深蓝底 + 去饱和浅蓝主色，表面用蓝灰阶拉开容器层次 ----
@@ -259,6 +272,13 @@ val DarkStateTones = StateTones(
 /**
  * 五态徽章色板注入点。默认浅色套：单测（StateBadgeTest 等）裸 MaterialTheme 包裹
  * 不经 [AgentMirrorTheme] 也能渲染，不因缺 provider 崩溃。
+ *
+ * @contract
+ * @pre none
+ * @post `current` 始终为可用 [StateTones]：未被 [AgentMirrorTheme] 覆盖时取浅色套
+ *       默认值 [LightStateTones]
+ * @err none
+ * @inv 值非空（不因缺 provider 抛异常），默认 [LightStateTones]
  */
 val LocalStateTones = staticCompositionLocalOf { LightStateTones }
 
@@ -267,6 +287,14 @@ val LocalStateTones = staticCompositionLocalOf { LightStateTones }
  *
  * 状态栏图标颜色适配（018 §一.2）由 MainActivity enableEdgeToEdge 的 auto 样式承担
  * （浅色套深图标/深色套浅图标），主题层不重复管理窗口。
+ *
+ * @contract
+ * @pre none（`darkTheme` / `content` 无前置约束）
+ * @post 按 `darkTheme` 注入对应徽章色板（深 [DarkStateTones] / 浅 [LightStateTones]），
+ *       并以 MaterialTheme 渲染对应 colorScheme / typography / shapes
+ * @err none
+ * @inv 注入的 [LocalStateTones] 与 colorScheme 属同一套（`darkTheme=true` 时深色
+ *       scheme + [DarkStateTones]，`false` 时浅色 scheme + [LightStateTones]）
  */
 @Composable
 fun AgentMirrorTheme(

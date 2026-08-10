@@ -37,6 +37,13 @@ import dev.agentmirror.app.conn.ListingFrame
  *   不因断连丢唤醒，也不因重连重复轰炸。
  * - conn 层保证 list_delta 不先于 listing（seq 不连续 / delta 先到即自动重新 list，
  *   见 ConnectionManager.onFrame），本对象按"有基线在前"的顺序消费即可。
+ *
+ * @contract
+ * @pre 首个 listing 建立基线、不触发通知；此后 listing/delta 逐会话比对旧状态
+ * @post 状态沿变化进入 blocked/done 且非重复 → 触发一次 onNotify；同状态重复/未变化抑制；
+ *       离开 blocked/done 或会话消失 → onClear；unknown 永不通知
+ * @err none
+ * @inv lastState/notified 只含已知 ref；同一 ref 的通知与清除交替出现
  */
 class StateWatcher(
     private val onNotify: (ref: String, name: String, state: AgentState) -> Unit,

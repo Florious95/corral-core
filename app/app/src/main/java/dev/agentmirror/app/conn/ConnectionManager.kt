@@ -23,7 +23,7 @@ enum class ConnectionState {
     /** 拨号中。 */
     CONNECTING,
 
-    /** 已建立、auth 已发出，等待 auth_ack。 */
+    /** 传输已建立、auth 上行前/上行中，等待 auth_ack。 */
     AUTHENTICATING,
 
     /** 认证通过，可交换业务帧。 */
@@ -72,8 +72,9 @@ class ConnectionManager(
 
         /**
          * 输入投递的判定结果（必达回执）。reason 非空当且仅当 ok=false。
-         * ok=false 的 reason 为 input_ack 的 reason.wire，或本地判定：
-         * "timeout"（超时无回执）/"connection lost: …"（掉线时未决输入）。
+         * ok=false 的 reason 为 input_ack 的 reason.wire，或本地判定："timeout"（超时无回执）、
+         * "connection lost: …"（掉线时未决输入）、"connection stopped"（[ConnectionManager.stop]）、
+         * "connection rejected/closed: …"（auth 被拒 / 永久关闭）。
          */
         fun onInputResult(reqId: Long, ok: Boolean, reason: String?)
 
@@ -132,6 +133,12 @@ class ConnectionManager(
 
     /**
      * 启动：首次连接立即发起；已启动（非 STOPPED）时幂等。
+     *
+     * @contract
+     * @pre 无
+     * @post 若此前 STOPPED：attempt/lastSeenSeq 重置并进入 CONNECTING 发起连接；否则保持现状
+     * @err 无（连接失败经 Listener.onClosed(permanent=false) 走重连调度）
+     * @inv 不改变已非 STOPPED 的状态；可重复调用
      */
     fun start() {
         if (state != ConnectionState.STOPPED) return
@@ -142,7 +149,13 @@ class ConnectionManager(
 
     /**
      * 永久关闭：取消待重连、关闭当前连接、未决输入一律判失败。
-     * 幂等；stop 后可重新 [start]（新的簿记起点）。
+     * 幂等；stop 后可重新 [start]（attempt/seq 重算，订阅簿记保留待重放）。
+     *
+     * @contract
+     * @pre 无
+     * @post 状态为 STOPPED；activeSubscriptions 保留（重 start 时仍重放），pendingInputs 清空
+     * @err 未决输入经 onInputResult(reqId, false, "connection stopped") 判失败
+     * @inv 可重复调用；STOPPED 状态下再 stop 为无操作
      */
     fun stop() {
         pendingReconnectAt = null
@@ -155,6 +168,12 @@ class ConnectionManager(
     /**
      * 宿主驱动的时钟泵：nowMs 到达重连触发时刻即发起重连。
      * 生产由定时器周期调用；单测由假时钟推进驱动（确定性）。
+     *
+     * @contract
+     * @pre 无
+     * @post nowMs ≥ 待触发时刻时清除 pendingReconnectAt 并发起连接；否则无操作
+     * @err 无（连接失败经调度路径处理）
+     * @inv 可重复调用；不改变非重连状态
      */
     fun pump(nowMs: Long) {
         val at = pendingReconnectAt ?: return
@@ -183,6 +202,12 @@ class ConnectionManager(
     /**
      * 网络可达性变化钩子：RECONNECTING 中立即重试，不等退避到点。
      * Android 侧 ConnectivityManager 回调接这里（知识基底 §1 钩子接口）。
+     *
+     * @contract
+     * @pre 无
+     * @post RECONNECTING 且有待触发重连时清除 pendingReconnectAt 并立即发起连接；否则无操作
+     * @err 无（连接失败经调度路径处理）
+     * @inv 非 RECONNECTING 时为无操作
      */
     fun onNetworkAvailable() {
         if (state == ConnectionState.RECONNECTING && pendingReconnectAt != null) {
@@ -195,6 +220,12 @@ class ConnectionManager(
      * 注入整条文本（input 以 input_ack 完结：必达回执）。text 为空 = 仅回车。
      * @return false = 当前不可发送（未就绪/校验不过）；true = 已送出，结果以
      * [Listener.onInputResult] 判定（超时 = 明确失败）。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空
+     * @post 返回 true 时 input 帧已发出且 pendingInputs 登记了超时期限；结果必达 [Listener.onInputResult]
+     * @err 未就绪 / 编码校验不过 ⇒ 返回 false；已送出则超时 / 掉线 / stop 经 onInputResult 判失败
+     * @inv ref 不变；req_id 单调递增（nextReqId）
      */
     fun sendInput(ref: String, text: String): Boolean {
         val conn = connection ?: return false
@@ -213,6 +244,12 @@ class ConnectionManager(
      * 判明确失败。keys 不附加回车（快捷键条语义 = 按一下那个键）；text 与 keys 互斥
      * （契约 §4.2，InputFrame.validate 兜底）。
      * @return false = 当前不可发送；true = 已送出，结果以 [Listener.onInputResult] 判定。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空
+     * @post 返回 true 时 input 帧已发出（keys 携带且不附加回车）且 pendingInputs 登记超时期限
+     * @err 未就绪 / 编码校验不过 ⇒ 返回 false；已送出则超时 / 掉线 / stop 经 onInputResult 判失败
+     * @inv keys 与 text 一帧至多其一；req_id 单调递增
      */
     fun sendInputKeys(ref: String, key: InputKey): Boolean {
         val conn = connection ?: return false
@@ -224,7 +261,15 @@ class ConnectionManager(
         return true
     }
 
-    /** 订阅会话镜像；记簿待重放，已就绪则立发。 */
+    /**
+     * 订阅会话镜像；记簿待重放，已就绪则立发。
+     *
+     * @contract
+     * @pre 状态非 STOPPED；rows/cols ≥ 1 由帧校验兜底
+     * @post ref 已记入 activeSubscriptions（重连后重放）；连接就绪时立发 SubscribeFrame
+     * @err STOPPED ⇒ 返回 false 且不记簿；未就绪（但已启动）⇒ 返回 true 仅记簿待重放
+     * @inv 重复订阅以最新 rows/cols 覆盖簿记（重放意图最新优先）；同一 ref 可多次立发 SubscribeFrame
+     */
     fun subscribe(ref: String, rows: Int, cols: Int): Boolean {
         if (state == ConnectionState.STOPPED) return false
         activeSubscriptions[ref] = rows to cols
@@ -233,7 +278,15 @@ class ConnectionManager(
         return conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols))
     }
 
-    /** 退订（幂等）；同时移出重放簿记。 */
+    /**
+     * 退订（幂等）；同时移出重放簿记。
+     *
+     * @contract
+     * @pre 无（任意状态可调，幂等）
+     * @post ref 已从 activeSubscriptions 移除；连接就绪时立发 UnsubscribeFrame
+     * @err 无（不抛异常）；未就绪 ⇒ 返回 true 仅移簿记
+     * @inv 退订不改变连接状态
+     */
     fun unsubscribe(ref: String): Boolean {
         activeSubscriptions.remove(ref)
         val conn = connection ?: return true
@@ -241,21 +294,45 @@ class ConnectionManager(
         return conn.send(UnsubscribeFrame(ref = ref))
     }
 
-    /** 请求全量列表。 */
+    /**
+     * 请求全量列表。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空
+     * @post 返回 true 时 ListFrame 已发出（req_id 单调递增）
+     * @err 未就绪 ⇒ 返回 false
+     * @inv 不改变订阅簿记
+     */
     fun list(): Boolean {
         val conn = connection ?: return false
         if (!conn.isReady) return false
         return conn.send(ListFrame(reqId = nextReqId++))
     }
 
-    /** 拉一页历史（from_line 按 tmux capture-pane 语义；count >= 1）。 */
+    /**
+     * 拉一页历史（from_line 按 tmux capture-pane 语义；count >= 1）。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空；count ≥ 1
+     * @post 返回 true 时 ScrollbackFrame 已发出（req_id 单调递增）
+     * @err 未就绪 ⇒ 返回 false；count 非法由帧校验兜底
+     * @inv 不改变订阅簿记
+     */
     fun scrollback(ref: String, fromLine: Int, count: Long): Boolean {
         val conn = connection ?: return false
         if (!conn.isReady) return false
         return conn.send(ScrollbackFrame(reqId = nextReqId++, ref = ref, fromLine = fromLine, count = count))
     }
 
-    /** 上报手机行列数（只作用于已订阅会话）。 */
+    /**
+     * 上报手机行列数（只作用于已订阅会话）。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空；rows/cols ≥ 1
+     * @post 返回 true 时 ResizeFrame 已发出
+     * @err 未就绪 ⇒ 返回 false；rows/cols 非法由帧校验兜底
+     * @inv 不改变订阅簿记
+     */
     fun resize(ref: String, rows: Int, cols: Int): Boolean {
         val conn = connection ?: return false
         if (!conn.isReady) return false

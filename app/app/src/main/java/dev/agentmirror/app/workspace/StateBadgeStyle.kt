@@ -21,7 +21,7 @@ import dev.agentmirror.app.conn.AgentState
 /**
  * 会话状态徽章语义（requirement 008 裁定，docs/protocol.md §5.2 优先级表同源）。
  *
- * 五值闭集（[AgentState]）各自对应一种视觉与文案；[unknown] 是一等公民、灰显，
+ * 五值闭集（[AgentState]）各自对应一种视觉与文案；[UNKNOWN] 是一等公民、灰显，
  * 绝不阻塞列表渲染（008 状态/镜像解耦）。文案与色板是渲染侧的单一事实来源。
  */
 enum class StateBadgeStyle(

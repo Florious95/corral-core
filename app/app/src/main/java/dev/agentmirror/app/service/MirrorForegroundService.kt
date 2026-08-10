@@ -35,14 +35,27 @@ import dev.agentmirror.app.conn.FramePayload
  *   （来自 [ServiceWire]，UI 侧经 [ServiceWire.uiConnector] 订阅同一连接）。
  * - [onStartCommand]：startForeground（dataSync 类型，常驻通知）+ 启动连接并驱动时钟泵
  *   （[ConnectionManager.pump] 重连到点 + [ConnectionManager.resolveExpiredInputs] 输入超时）。
- *   电量策略（004 裁定）：**是否启动本服务**由 UI/配对层决定（仅在有活跃订阅或用户开启
- *   后台守望时 startService；无订阅时 stop），本服务自身不决策。
  * - [onDestroy]：停时钟泵、释放连接（幂等）、停用通知渠道通知。
  *
  * 断连静默重连：conn 层 ConnectionManager 自动指数退避重连（本服务只反映状态，见
  * 任务目标「断连静默重连（conn 层已管，服务只反映）」）；重连 READY 后 conn 层自动
  * 重新 list + 重放订阅（无状态免疫，004）。服务被系统杀 → 冷启动重连即恢复，无状态，
  * 没有丢失可言。
+ *
+ * **接线现状（死件家族第六例）**：本服务已在 `app/app/src/main/AndroidManifest.xml` 声明
+ * （foregroundServiceType dataSync），但**当前无任何生产代码启动它**——全仓库没有
+ * `startService`/`startForegroundService` 调用点（fix-reconnect-stale-config 收口提交记录：
+ * "MirrorForegroundService 接线留待后案"）。电量策略（004 裁定）"是否启动由 UI/配对层决定"
+ * 是设计意图，尚未落地。常驻连接现在由 [ServiceWire.manager] 直接持有：配对成功/冷启动经
+ * `startPersistentConnection` 启动，退避泵由在屏组合的 LaunchedEffect（[SessionScreen]/
+ * [PairingScreen]）驱动。本类实现完备但处于未启用状态。
+ *
+ * @contract
+ * @pre 未注入配置时 [onCreate] 经 [ServiceWire.manager] 抛 [IllegalStateException]
+ *      （本服务未接线，实际不进入该路径）
+ * @post [onStartCommand] 返回 START_STICKY；[onDestroy] 停泵并释放连接（幂等）
+ * @err 连接启动失败由 conn 层退避重连消化，不在此抛
+ * @inv onDestroy 后 manager 置 null；pumpRunnable 停发
  */
 class MirrorForegroundService : Service() {
 

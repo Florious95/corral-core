@@ -51,6 +51,12 @@ object NetworkConnectivityWatcher {
     /**
      * 注册默认网络回调。幂等（已注册直接返回）；[Context] 取系统服务，
      * 服务不可用或缺权限时落日志降级（退避泵兜底，不硬失败）。
+     *
+     * @contract
+     * @pre 无（任意时刻可调用；重复调用幂等）
+     * @post 进程级至多注册一个默认网络回调；回调已注册时直接返回不重复注册
+     * @err 系统服务不可用 / 注册抛异常 → 落日志降级，不抛给调用方
+     * @inv registered 标志与回调实例同生命周期（register 置位 / unregister 复位）
      */
     fun register(context: Context) {
         if (registered) return
@@ -76,7 +82,15 @@ object NetworkConnectivityWatcher {
         registered = true
     }
 
-    /** 注销默认网络回调。幂等；[Context] 仅用于取系统服务。 */
+    /**
+     * 注销默认网络回调。幂等；[Context] 仅用于取系统服务。
+     *
+     * @contract
+     * @pre 无（未注册时调用直接返回）
+     * @post 已注册的回调被注销，registered 复位；未注册时无操作
+     * @err 注销抛异常 → 落日志降级，不抛给调用方
+     * @inv unregister 与 register 配对使用；回调实例注销后置 null
+     */
     fun unregister(context: Context) {
         if (!registered) return
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return

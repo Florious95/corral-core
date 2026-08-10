@@ -37,10 +37,24 @@ class ScrollbackBuffer(val capacity: Int) {
     /** 当前缓冲行数。 */
     val size: Int get() = synchronized(lock) { lines.size }
 
-    /** 取第 [index] 行（0 = 最老）。 */
+    /**
+     * 取第 [index] 行（0 = 最老）。
+     * @contract
+     * @pre 0 <= index < size
+     * @post 返回第 index 行的不可变行
+     * @err index 越界抛 IndexOutOfBoundsException
+     * @inv none
+     */
     fun line(index: Int): List<Cell> = synchronized(lock) { lines[index] }
 
-    /** 尾部追加一行（屏幕顶部滚出的行）；满则淘汰头部最老行。 */
+    /**
+     * 尾部追加一行（屏幕顶部滚出的行）；满则淘汰头部最老行。
+     * @contract
+     * @pre none
+     * @post capacity > 0 时 [line] 入尾（满则先淘汰最老行）；capacity <= 0 时无操作
+     * @err none
+     * @inv capacity > 0 时 size <= capacity
+     */
     fun appendTail(line: List<Cell>) {
         if (capacity <= 0) return
         synchronized(lock) {
@@ -54,6 +68,11 @@ class ScrollbackBuffer(val capacity: Int) {
      *
      * 只填剩余容量：环形缓冲已满时再塞更老历史没有意义（马上会被淘汰），
      * 超出部分丢弃最老端，保留与现有头部衔接的一段。
+     * @contract
+     * @pre none
+     * @post capacity > 0 时保留与剩余容量匹配的较新区段按原时间正序头插；容量满时无操作
+     * @err none
+     * @inv 头插后 size <= capacity
      */
     fun prependHead(older: List<List<Cell>>) {
         synchronized(lock) {
@@ -66,7 +85,14 @@ class ScrollbackBuffer(val capacity: Int) {
         }
     }
 
-    /** 清空全部历史（ED 3 或上层重建时用）。 */
+    /**
+     * 清空全部历史（ED 3 或上层重建时用）。
+     * @contract
+     * @pre none
+     * @post size == 0
+     * @err none
+     * @inv none
+     */
     fun clear() {
         synchronized(lock) { lines.clear() }
     }

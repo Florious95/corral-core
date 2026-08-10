@@ -44,6 +44,12 @@ class GlyphRunBuilder(private val policy: GlyphFallbackPolicy) {
     /**
      * 把 [text] 按字形槽位切成子段；[startCol] 为 [text] 首字符的格列。
      * 返回空表当 [text] 为空。
+     *
+     * @contract
+     * @pre none（任意 text / startCol 均可调用）
+     * @post text 为空返回空表；非空时连续同槽位码点聚成同一段，各段 [GlyphSegment.startCol] 为段首字符格列
+     * @err none
+     * @inv 各码点占格宽度不变，总列宽 == [CharWidth] 各码点宽度之和（列对齐由调用方按宽度推进）
      */
     fun build(text: String, startCol: Int): List<GlyphSegment> {
         if (text.isEmpty()) return emptyList()

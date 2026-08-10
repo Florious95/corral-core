@@ -60,7 +60,15 @@ enum class ErrorCode(val wire: String) {
     UNKNOWN("unknown");
 
     companion object {
-        /** 按线上字符串解析；未识别值返回 [UNKNOWN]（前向兼容回退，不抛错）。 */
+        /**
+         * 按线上字符串解析；未识别值返回 [UNKNOWN]（前向兼容回退，不抛错）。
+         *
+         * @contract
+         * @pre 无
+         * @post 返回 entries 中 wire 等于 value 的成员；无匹配返回 [UNKNOWN]
+         * @err 无（不抛异常；前向兼容容忍未知 code）
+         * @inv 返回值恒为非 null；[UNKNOWN] 仅本地解码回退、永不上行
+         */
         fun fromWire(value: String): ErrorCode =
             entries.firstOrNull { it.wire == value } ?: UNKNOWN
     }
@@ -70,8 +78,8 @@ enum class ErrorCode(val wire: String) {
  * input_ack ok:false 时的机器可读 reason 闭集（docs/protocol.md §7.3）。
  *
  * reason 存在当且仅当 ok:false（一字段一义）；ok:true 时不得携带。
- * 解码遇未识别 reason 抛 [SerializationException]，由 FramePayload.decode 捕获并转
- * [FrameDecodeException] INVALID_FIELD（闭集，未知值按坏帧处理）。
+ * 解码遇未识别 reason 由序列化器直接抛 [FrameDecodeException] INVALID_FIELD
+ * （闭集，未知值按坏帧处理）。
  */
 @Serializable(with = InputFailReasonSerializer::class)
 enum class InputFailReason(val wire: String) {
@@ -91,7 +99,15 @@ enum class InputFailReason(val wire: String) {
     INTERNAL("internal");
 
     companion object {
-        /** 按线上字符串解析；未识别值返回 null（解码器据此判坏帧）。 */
+        /**
+         * 按线上字符串解析；未识别值返回 null（解码器据此判坏帧）。
+         *
+         * @contract
+         * @pre 无
+         * @post 返回 entries 中 wire 等于 value 的成员；无匹配返回 null
+         * @err 无（不抛异常；未识别 reason 由解码器报 [FrameError.INVALID_FIELD]）
+         * @inv 返回值为 null 或闭集成员
+         */
         fun fromWire(value: String): InputFailReason? =
             entries.firstOrNull { it.wire == value }
     }

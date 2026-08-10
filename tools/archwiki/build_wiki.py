@@ -55,7 +55,9 @@ import sys
 
 MODULE_PREFIX = "github.com/agentmirror/agentmirror"  # server/go.mod 的 module 行（naming 转正，2026-08-09）
 GO_SUBDIR = "server"          # Go module 在仓库内的相对目录
-KT_SEARCH = ("app/app/src/main/java",)  # Kotlin 源码根候选（相对仓库根）
+# Kotlin 源码根候选：app/<模块>/src/main/ 下的源码目录名。既有模块（app/app）用 java，
+# 新模块（app/terminal）用 kotlin——两种形态都要覆盖，按形状发现不写死模块名。
+KT_SEARCH = ("java", "kotlin")
 WIKI_SUBDIR = "docs/wiki"     # 生成物输出目录
 
 # 脚本所在位置的仓库根（本脚本位于 <root>/tools/archwiki/，三级上级即仓库根）。
@@ -425,20 +427,22 @@ def _kotlin_exports(text):
 
 
 def _find_kotlin_roots(root):
-    """定位 Kotlin 源码根（默认 app/app/src/main/java）。"""
-    for cand in KT_SEARCH:
-        full = os.path.join(root, cand)
-        if os.path.isdir(full):
-            return [full]
-    # 兜底：任何 `*/src/main/java`（模块目录命名可能演进）。
+    """定位 Kotlin 源码根：按 `app/<模块>/src/main/{java,kotlin}` 形状跨模块发现。
+
+    KT_SEARCH 是 src/main/ 下的源码目录名候选（java 与 kotlin 两种形态）。既有模块
+    app/app 用 java、新模块 app/terminal 用 kotlin，将来新增模块只需照此形状放源码。
+    不写死模块名——`app/*/src/main/{java,kotlin}` 一律进采集。
+    """
     app_dir = os.path.join(root, "app")
-    if os.path.isdir(app_dir):
-        return sorted(
-            os.path.join(d, "src", "main", "java")
-            for d in os.listdir(app_dir)
-            if os.path.isdir(os.path.join(d, "src", "main", "java"))
-        )
-    return []
+    if not os.path.isdir(app_dir):
+        return []
+    roots = []
+    for mod in sorted(os.listdir(app_dir)):
+        for sub in KT_SEARCH:
+            full = os.path.join(app_dir, mod, "src", "main", sub)
+            if os.path.isdir(full):
+                roots.append(full)
+    return roots
 
 
 def collect_kotlin(root):

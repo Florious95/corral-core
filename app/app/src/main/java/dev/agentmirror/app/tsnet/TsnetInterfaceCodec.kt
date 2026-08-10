@@ -43,6 +43,13 @@ data class NetIfSnapshot(
     val cidrs: List<String>,
 )
 
+/**
+ * [NetIfSnapshot] 表 → tsnetbind 行文本的编码器（feat-ts-wire）。
+ *
+ * 与解析端（tools/tsnetbind/tsnetbind.go 的 parseInterfaces）是**跨语言 wire 契约**，
+ * 两端各有契约锁测（Go 侧 tsnetbind_test、Kotlin 侧 TsnetInterfaceCodecTest），
+ * 改一端必须同改另一端。本对象只编码不解析。
+ */
 object TsnetInterfaceCodec {
 
     /** 编码全表；每卡一行。名字里的分隔符字符防御性替换（Java 层不该出现，但坏值不毁表）。 */

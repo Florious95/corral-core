@@ -189,6 +189,25 @@ class TestRedFixtures(unittest.TestCase):
         self.assertIn("T3-1", out)
         self.assertIn("KotlinUndoc", out)
 
+    def test_t3_3_ktroot_kotlin_src_root_is_red(self):
+        """T3-3 红测（扫描根缺陷）：src/main/kotlin 下的残缺 @contract 必须被扫到。
+
+        这是本轮修复（_find_kotlin_roots 覆盖 app/*/src/main/kotlin）的红测：
+        修复前扫描根只认 */src/main/java，dev.agentmirror.terminal 的 TerminalEmulator
+        缺 @post **空通过（exit 0）**；修复后必须红。fixture 同一布局里还有
+        src/main/java（Legacy）与 src/main/kotlin 完整契约（terminalgrid 包）——
+        只靠「多扫一个目录」推不出这条，必须真报出 TerminalEmulator 缺 @post。
+        """
+        code, out = run_tool(
+            os.path.join(TESTDATA, "ktroot"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-3", out)
+        self.assertIn("@post", out)                       # TerminalEmulator 缺 @post
+        self.assertIn("dev.agentmirror.terminal", out)
+        self.assertIn("TerminalEmulator", out)
+
 
 class TestPositiveControl(unittest.TestCase):
     """阳性对照：真实仓库必须绿；缺一条判据都算失败。"""
@@ -273,6 +292,21 @@ class TestPositiveControl(unittest.TestCase):
         )
         self.assertEqual(code, 0, out)
         self.assertIn("T3-4", out)
+        self.assertIn("PASS", out)
+
+    def test_t3_3_ktroot_kotlin_src_root_complete_is_green(self):
+        """T3-3 阳性对照（扫描根缺陷的必绿格）：src/main/kotlin 下完整 @contract 必须绿。
+
+        修复后 TerminalEmulator（缺 @post）红，但同一 fixture 里 kotlin 目录下
+        dev.agentmirror.terminalgrid 包（Grid/Render 四标签齐全）单包硬判必须 exit 0——
+        防把修复改成「凡 kotlin 目录一律红」。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "ktroot"),
+            ["--check", "--go-source", "--strict-t3",
+             "--pkg", "dev.agentmirror.terminalgrid"],
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("T3-3", out)
         self.assertIn("PASS", out)
 
     def test_t3_4_cmd_pkg_declared_is_green(self):
@@ -394,6 +428,26 @@ class TestPureFunctions(unittest.TestCase):
         )
         self.assertNotIn("internal/other", declared.get("cmd/agentmirrord", set()))
         self.assertNotIn("cmd/redcmd", declared)
+
+    def test_find_kotlin_roots_covers_java_and_kotlin_shapes(self):
+        """扫描根发现（本轮修复核心）：跨模块同时覆盖 app/*/src/main/java 与
+        app/*/src/main/kotlin 两种形状。
+
+        ktroot fixture 布局：app/app/src/main/java（既有形态）+ app/terminal/
+        src/main/kotlin（新形态）。修复前只返回 java 根（terminal 模块对判据
+        不可见、空通过），修复后两条都要在。"""
+        import build_wiki
+        roots = build_wiki._find_kotlin_roots(os.path.join(TESTDATA, "ktroot"))
+        self.assertTrue(
+            any(r.endswith(os.path.join("app", "app", "src", "main", "java"))
+                for r in roots),
+            roots,
+        )
+        self.assertTrue(
+            any(r.endswith(os.path.join("app", "terminal", "src", "main", "kotlin"))
+                for r in roots),
+            roots,
+        )
 
     def test_extract_tags_keeps_multiple_consumes(self):
         """同 doc 块多条 @consumes 必须全部保留（红测：多条只留最后一条是 bug）。

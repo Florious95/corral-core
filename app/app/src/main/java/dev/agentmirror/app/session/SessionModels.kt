@@ -44,6 +44,12 @@ sealed interface UploadOutcome {
  *
  * 生产用 [HttpUrlConnectionUploader]（同端口 `POST /upload`，协议 §8）；
  * 单测注入假实现断言 path 插入光标处与失败报错。
+ *
+ * @contract
+ * @pre baseUrl 非空 http(s) 基地址；attachment.bytes 非空
+ * @post 返回 [UploadOutcome.Success]（path 为主机绝对路径）或 [UploadOutcome.Failure]（人类可读原因）
+ * @err 网络异常 / 非 2xx / 响应无 path 一律折叠为 [UploadOutcome.Failure]，不抛出
+ * @inv 上传结果只经返回值表达，不修改 attachment
  */
 fun interface AttachmentUploader {
     fun upload(baseUrl: String, attachment: Attachment): UploadOutcome

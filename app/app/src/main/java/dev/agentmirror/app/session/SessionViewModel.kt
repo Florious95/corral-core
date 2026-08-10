@@ -101,7 +101,7 @@ class SessionViewModel(
     /** 是否还有更老历史可分页（服务端收敛判顶后为 false）。 */
     var hasMoreHistory by mutableStateOf(true)
 
-    /** 是否锁定在历史中（"回到底部"可见性；TermSurfaceView 自绘悬浮钮）。 */
+    /** 是否锁定在历史中（"回到底部"可见性；会话屏 Compose 悬浮钮按此渲染）。 */
     var showBackToBottom by mutableStateOf(false)
 
     // ---- 历史分页簿记（006：滚动到边界按需补页）----
@@ -217,6 +217,12 @@ class SessionViewModel(
     /**
      * 发送草稿：一次性注入并回车（R-2 多行不拆分：含 \n 的文本整段一条 input.text，
      * 服务端 paste-buffer -p 括号粘贴路径处理）；回执经 [onInputResult] 判定（必达）。
+     *
+     * @contract
+     * @pre connectionState 为 READY，且 inputStatus 非 Sending
+     * @post 注入成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent] 或 [InputStatus.Failed]
+     * @err 未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿
+     * @inv 在途不回发（发送闸）
      */
     fun sendDraft() {
         if (inputStatus is InputStatus.Sending) return // 在途不回发
@@ -239,6 +245,12 @@ class SessionViewModel(
      *
      * 走既有 input→input_ack 决定性链路（003 发送必达：ack 失败/超时可见），与草稿共用
      * 发送闸（在途不回发）；回执 ok 只显示已发送、不动草稿（用户在打字）。
+     *
+     * @contract
+     * @pre connectionState 为 READY，且 inputStatus 非 Sending
+     * @post 注入成功置 [InputStatus.Sending] 并标记本回执为快捷键（回执 ok 不动草稿）
+     * @err 未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿
+     * @inv 在途不回发（发送闸）
      */
     fun sendKey(key: InputKey) {
         if (inputStatus is InputStatus.Sending) return // 在途不回发
@@ -254,7 +266,15 @@ class SessionViewModel(
         }
     }
 
-    /** 上传附件（协议 §8 multipart）→ 主机绝对路径插入光标处，不自动发送。 */
+    /**
+     * 上传附件（协议 §8 multipart）→ 主机绝对路径插入光标处，不自动发送。
+     *
+     * @contract
+     * @pre baseUrl 已注入（连接配置已落地），且 uploadStatus 非 Uploading
+     * @post 成功：路径插入光标处并置 [UploadStatus.Success]；失败：置 [UploadStatus.Failed] 且不修改草稿
+     * @err 未配置上传地址 / 上传失败均置 [UploadStatus.Failed] 明确报错
+     * @inv 在途不重传；上传不自动发送草稿
+     */
     fun uploadAttachment(attachment: Attachment) {
         if (uploadStatus is UploadStatus.Uploading) return
         val base = baseUrl
@@ -274,7 +294,7 @@ class SessionViewModel(
         }
     }
 
-    /** 视口信号收敛（Compose 每帧 / 测试显式调用）：滚动到顶即补页。 */
+    /** 视口信号收敛（会话屏时钟泵周期调用 / 测试显式调用）：滚动到顶即补页。 */
     fun syncFromPresenter() {
         val locked = presenter.showBackToBottom
         showBackToBottom = locked
@@ -284,7 +304,7 @@ class SessionViewModel(
         }
     }
 
-    /** 回到底部：恢复跟随（与 TermSurfaceView 悬浮钮联动）。 */
+    /** 回到底部：恢复跟随（会话屏「回到底部」悬浮钮点击回调）。 */
     fun onScrollToBottom() {
         presenter.onScrollToBottom()
         syncFromPresenter()
@@ -295,7 +315,7 @@ class SessionViewModel(
         manager.unsubscribe(ref)
     }
 
-    /** 收起瞬时状态（Sent / 上传 Success / 错误提示，UI 延迟或点击触发）。 */
+    /** 收起瞬时状态（Sent / 上传 Success / 错误提示，会话屏 LaunchedEffect 延迟后自动触发）。 */
     fun dismissTransient() {
         if (inputStatus is InputStatus.Sent) inputStatus = InputStatus.Idle
         if (uploadStatus is UploadStatus.Success) uploadStatus = UploadStatus.Idle

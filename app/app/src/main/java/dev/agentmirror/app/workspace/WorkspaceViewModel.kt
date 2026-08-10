@@ -35,7 +35,8 @@ import kotlinx.coroutines.flow.update
  * 连接状态的 UI 映射（展示层只用这四态渲染顶栏/引导）。
  *
  * CONNECTING 合并 conn 层的 CONNECTING 与 AUTHENTICATING（对用户同为"连接中"）。
- * 断连（RECONNECTING/STOPPED）由 conn 层自动重连，UI 只反映状态（004 无状态免疫）。
+ * 断连态由 conn 层管理：RECONNECTING 自动退避重连；STOPPED 是永久关闭（auth 被拒 /
+ * 显式 stop），不再自动重连。UI 只反映状态，不决策（004 无状态免疫）。
  */
 enum class ConnectionUi {
     /** 拨号中/认证中。 */
@@ -58,7 +59,11 @@ data class SessionUi(
     val state: AgentState,
 )
 
-/** 一级工作区条目：cwd 聚合。聚合字段全部来自服务端权威值，客户端只渲染不重算（012）。 */
+/**
+ * 一级工作区条目：cwd 聚合。聚合字段以服务端权威值为准——added_sessions 新建工作区在
+ * changed_workspaces 纠正前，以该会话自身状态做渲染占位（见 [WorkspaceViewModel]）；
+ * 客户端只渲染不重算（012）。
+ */
 data class WorkspaceUi(
     val cwd: String,
     val sessionCount: Int,
@@ -95,6 +100,14 @@ data class WorkspaceUiState(
  * - session_count / aggregate_state 是服务端权威值，客户端只渲染、不重算；
  * - delta 无 removed_workspaces 通道：会话全走的空工作区由本层从一级列表移除（渲染必需）；
  * - changed_workspaces 中 sessions 可省略，只携带 cwd/count/aggregate 语义。
+ *
+ * @contract
+ * @pre none（任意时刻可构造；任意帧可到达，无关帧被忽略）
+ * @post 收到 ListingFrame 整体替换两级模型；收到 ListDeltaFrame 按四组字段增量落位；
+ *       [onConnectionStateChanged] 把 [ConnectionState] 映射为 UI 四态
+ * @err none（无异常面；无关帧走 else 分支忽略，不破坏状态）
+ * @inv 工作区保服务端下发顺序（LinkedHashMap 插入序）；聚合字段以服务端权威值为准，
+ *       added_sessions 新建工作区的单会话占位由后续 changed_workspaces 纠正
  */
 class WorkspaceViewModel(
     initialConnection: ConnectionUi = ConnectionUi.CONNECTING,
@@ -117,7 +130,8 @@ class WorkspaceViewModel(
 
     // ---- ConnectionManager.Listener（接线层经 ServiceWire.uiConnector 原样路由进来）----
     // 与 SessionViewModel 同款接线语义：VM 实现 Listener 供接线层把 uiConnector 扇出的回调
-    // 原样路由进来；不自行 setListener（共享连接由 fg-service 持包装监听 + uiConnector 扇出）。
+    // 原样路由进来；不自行 setListener（共享连接由 [ServiceWire.manager] 进程级单例持有，
+    // 其内部包装监听把事件喂给调用方 connListener 并扇出到 [ServiceWire.uiConnector]）。
 
     /** 连接态回调（Listener 入口）：委托 [onConnectionStateChanged] 保持公开 API 不变。 */
     override fun onStateChanged(state: ConnectionState) = onConnectionStateChanged(state)

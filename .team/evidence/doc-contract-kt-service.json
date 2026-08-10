@@ -1,0 +1,121 @@
+{
+  "task_id": "doc-contract-kt-service",
+  "status": "pass",
+  "package": "dev.agentmirror.app.service",
+  "summary": "改写 10 处不实注释（覆盖谱系⑤虚构消费方×2、⑥未接线写成现状×6、⑧真默认值写错×2），补 8 个 @contract，消 3 条 T3-4 漂移。核心发现：MirrorForegroundService 已在 manifest 声明但全仓库无任何 startService/startForegroundService 调用点（死件家族第六例，commit 105a2fe 明记'接线留待后案'），原注释却把它写成'由 UI/配对层控制启动'的现状——D-14 同形态（⑥）；ServiceWire 注释虚构 PairingViewModel 为 uiConnector 消费方（⑤，实际它自带独立探针）。已逐符号核实全部 9 个导出符号。",
+  "tests": [
+    {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.service", "rc": 1, "note": "施工前基线：T3-4 FAIL 3 条漂移（import 了未声明 @consumes），T3-1/2/3 绿"},
+    {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.service", "rc": 0, "note": "施工后：T3-1/2/3/4 全绿，单包硬判通过"},
+    {"argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'", "rc": 0, "note": "包内测试保持绿（gradle 静默成功无输出）"},
+    {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0, "note": "全仓库判据：T1 全绿 exit 0；T3 报告模式余下违规均在别的包（tsnet 1 条 T3-1、workspace 3 条 T3-4），非本包、不改"},
+    {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.service", "rc": 1, "note": "阳性对照（故意破坏）：删除 StateWatcher 的 @err → T3-3 FAIL，精确指向 StateWatcher.kt:24 '缺契约标签: @err' → 恢复后重跑 rc=0，确认判据真的能扫到本包"}
+  ],
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/service/PackageDoc.kt",
+    "app/app/src/main/java/dev/agentmirror/app/service/MirrorForegroundService.kt",
+    "app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt",
+    "app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt",
+    "app/app/src/main/java/dev/agentmirror/app/service/NetworkConnectivityWatcher.kt",
+    "app/app/src/main/java/dev/agentmirror/app/service/OkHttpWebSocketTransport.kt",
+    "app/app/src/main/java/dev/agentmirror/app/service/StateWatcher.kt"
+  ],
+  "rewritten": [
+    {
+      "symbol": "PackageDoc.kt（包级 KDoc）",
+      "original": "ServiceWire：接线点——传输工厂（默认 NoopTransportFactory）；[MirrorForegroundService]：薄 Android 层…UI/配对层经 ServiceWire 控制启动/停止；NotificationHelper…会话页深链 PendingIntent",
+      "inaccuracy": "①默认传输工厂写错：ServiceWire.transportFactory 实际默认 OkHttpTransportFactory（ServiceWire.kt:51），非 NoopTransportFactory（谱系⑧ 真默认值写错）；②MirrorForegroundService 写成'由 UI/配对层控制启动'的现状，实际全仓库无任何 startService/startForegroundService 调用点（grep 全仓库确认，commit 105a2fe 明记'死件家族第六例 MirrorForegroundService 接线留待后案'），是 D-14 同形态——未接线能力写成现状（谱系⑥）；③深链消费方含糊为'会话页'，实际是 MainActivity.handleDeepLink（mainActivity.kt:99）",
+      "evidence": "ServiceWire.kt:51 默认值；grep -rn 'startService|startForegroundService|MirrorForegroundService' 全仓库仅 manifest:79 声明；git log 105a2fe 收口提交记录；mainActivity.kt:99-104 handleDeepLink",
+      "rewritten_to": "默认 [OkHttpTransportFactory]；[MirrorForegroundService] 标注'已在 manifest 声明，但当前无任何生产代码启动它（死件家族第六例，接线留待后案）'；深链消费方指 [MainActivity] 的 handleDeepLink；并补 @consumes dev.agentmirror.app/.conn/.tsnet"
+    },
+    {
+      "symbol": "MirrorForegroundService",
+      "original": "电量策略（004 裁定）：**是否启动本服务**由 UI/配对层决定（仅在有活跃订阅或用户开启后台守望时 startService；无订阅时 stop），本服务自身不决策",
+      "inaccuracy": "把设计意图写成现状：'由 UI/配对层决定 startService' 暗示已有该接线，实际没有任何调用点启动本服务（谱系⑥ 未接线能力写成现状，D-14 同形态）。服务若从未启动，其 onCreate/onStartCommand 路径根本不执行，这段描述的是蓝图而非实况",
+      "evidence": "grep -rn 'MirrorForegroundService|startService|startForegroundService|ComponentName' 全仓库：唯一生产引用是 manifest 声明 + 本类自引用；commit 105a2fe 'MirrorForegroundService 接线留待后案'",
+      "rewritten_to": "新增'**接线现状（死件家族第六例）**'段：已在 manifest 声明（foregroundServiceType dataSync）但无任何生产代码启动；电量策略是设计意图尚未落地；常驻连接实际由 [ServiceWire.manager] 直接持有（配对成功/冷启动经 startPersistentConnection 启动），退避泵由在屏组合 LaunchedEffect（[SessionScreen]/[PairingScreen]）驱动；本类实现完备但处于未启用状态"
+    },
+    {
+      "symbol": "ServiceWire（对象 KDoc）",
+      "original": "服务持有唯一 ConnectionManager（背景常驻连接），UI（WorkspaceViewModel / SessionViewModel / PairingViewModel 等）经此桥订阅同一连接",
+      "inaccuracy": "①虚构消费方（谱系⑤）：PairingViewModel 不消费 uiConnector——它自带独立 ConnectionManager 探针（pairingViewModel.kt:113 probe、startProbe 独立建 manager、setListener(this)），全仓 grep 证实 PairingViewModel 零引用 ServiceWire.uiConnector；②'服务持有'不实（服务未启动），实际是本对象进程级持有（谱系⑥）",
+      "evidence": "pairingViewModel.kt:36-38 独立 ConnectionManager、startProbe() 自行 new manager；grep -rn 'uiConnector' pairing/ 仅注释提及，无实际订阅代码",
+      "rewritten_to": "改为'本对象持有唯一 [ConnectionManager]（背景常驻连接，[MirrorForegroundService] 若启动也经 [manager] 共享同一实例），UI（[WorkspaceViewModel] / [SessionViewModel]）经此桥订阅'；配对试连接仍标注为独立 ConnectionManager 不走本桥"
+    },
+    {
+      "symbol": "ServiceWire.manager()",
+      "original": "仅 [MirrorForegroundService] 首次 onCreate 时创建",
+      "inaccuracy": "服务未启动，manager 不是由服务创建的；实际调用方是 startPersistentConnection（persistentConnection.kt:81）与 SessionRoute.createSessionViewModel（sessionRoute.kt:97）（谱系⑥ 把未接线的服务写成创建方）",
+      "evidence": "persistentConnection.kt:81 ServiceWire.manager(NoopConnListener).start()；sessionRoute.kt:97 ServiceWire.manager(NoopUiListener)；MirrorForegroundService 无调用点",
+      "rewritten_to": "标注当前调用方是配对/冷启动入口 startPersistentConnection 与 [SessionRoute]（createSessionViewModel）；[MirrorForegroundService] 未启动不经此处创建"
+    },
+    {
+      "symbol": "ServiceWire.transportFactory 字段",
+      "original": "UI/配对层在启动服务前注入",
+      "inaccuracy": "服务未启动，'启动服务前'是空概念（谱系⑥）",
+      "evidence": "无任何 startService 调用点；拨号由 ServiceWire.manager/startPersistentConnection 驱动",
+      "rewritten_to": "'UI/配对层在拨号前注入'"
+    },
+    {
+      "symbol": "ServiceWire.setConfig()",
+      "original": "须在服务启动前调用；未注入时服务启动抛明确异常",
+      "inaccuracy": "抛异常的不是'服务启动'而是 manager()（IllegalStateException）；服务未启动（谱系⑥/⑧）",
+      "evidence": "ServiceWire.manager() 中 config ?: throw IllegalStateException；无服务启动路径",
+      "rewritten_to": "'须在首次 [manager] 调用前注入；未注入时 [manager] 抛明确异常'"
+    },
+    {
+      "symbol": "ServiceWire.manager 字段 / releaseManager()",
+      "original": "连接管理器（服务持有；[MirrorForegroundService.onDestroy] 时 stop）；停止并释放连接管理器（服务 onDestroy 调用）",
+      "inaccuracy": "服务未启动，'服务持有/服务 onDestroy 调用'不实；releaseManager 实际也被 setConfig 配置变更调用（谱系⑥）",
+      "evidence": "setConfig() 中 old != null && old != c → releaseManager()；MirrorForegroundService 无调用点",
+      "rewritten_to": "'连接管理器（进程级单例；由 [MirrorForegroundService.onDestroy] 或 [setConfig] 配置变更时 stop）'；releaseManager 标注'服务 onDestroy / 配置变更时调用；幂等'"
+    },
+    {
+      "symbol": "NoopTransportFactory",
+      "original": "每次拨号立即失败（未注入真实传输时的默认，见 [ServiceWire]）",
+      "inaccuracy": "生产默认是 OkHttpTransportFactory，Noop 是测试/降级用，不是默认（谱系⑧ 真默认值写错）",
+      "evidence": "ServiceWire.kt:51 var transportFactory = OkHttpTransportFactory；测试 ColdStartReconnectTest 显式注入 NoopTransportFactory",
+      "rewritten_to": "'每次拨号立即失败（测试与降级用，见 [ServiceWire]）…生产默认值是 [OkHttpTransportFactory]，本工厂不参与生产路径'"
+    },
+    {
+      "symbol": "NotificationHelper 类 KDoc + openSessionPendingIntent + ACTION_OPEN_SESSION/EXTRA_SESSION_REF 常量",
+      "original": "点按深链到对应会话页（[ACTION_OPEN_SESSION] 路由，消费方归 session-ui 接线）；深链 action：打开某会话页（session-ui 消费）",
+      "inaccuracy": "虚构消费方（谱系⑤）：'session-ui 接线'不存在，实际消费方是 MainActivity.handleDeepLink（mainActivity.kt:99-104，onCreate/onNewIntent 两处读 action/extra 路由），经 navState 路由到会话页",
+      "evidence": "mainActivity.kt:99-104 if (intent?.action != NotificationHelper.ACTION_OPEN_SESSION) return / getStringExtra(EXTRA_SESSION_REF)；session-ui 层无读该 action 的代码",
+      "rewritten_to": "消费方标注为 [MainActivity] 的 handleDeepLink（onCreate 冷启动 / onNewIntent 在屏两处），经 [MainActivity.navState] 路由到会话页；常量 KDoc 同步改为'（[MainActivity] 消费）'"
+    },
+    {
+      "symbol": "MirrorForegroundService（@contract 补充）",
+      "original": "无契约标注",
+      "inaccuracy": "本类确有契约（START_STICKY / 幂等释放 / 未注入配置抛异常），原注释无 @contract",
+      "evidence": "onStartCommand 返回 START_STICKY；onDestroy 幂等（removeCallbacks + releaseManager + manager=null）；onCreate 经 ServiceWire.manager 在未注入配置时抛 IllegalStateException",
+      "rewritten_to": "补 @contract 四标签：@pre 未注入配置时 onCreate 经 manager 抛 IllegalStateException（注明'本服务未接线，实际不进入该路径'）；@post onStartCommand 返回 START_STICKY / onDestroy 停泵并释放连接（幂等）；@err 连接启动失败由 conn 层退避重连消化；@inv onDestroy 后 manager 置 null、pumpRunnable 停发"
+    }
+  ],
+  "contracts_added": [
+    "StateWatcher（类级）：@pre 首个 listing 建基线不通知 / @post 沿变化 blocked/done 触发一次 onNotify、重复抑制、离开触发 onClear、unknown 永不通知 / @err none / @inv lastState/notified 只含已知 ref",
+    "ServiceWire.manager()：@pre 未创建时 config 须已注入否则抛 IllegalStateException / @post 进程级唯一单例幂等 / @err IllegalStateException / @inv 进程存活期间复用、releaseManager 后重建",
+    "ServiceWire.setConfig()：@pre 无 / @post 配置更新、变更时清路径徽标并 releaseManager、重复注入保持单例不闪断 / @err none / @inv 只影响后续拨号不热更存活 manager",
+    "ServiceWire.uiConnector：@pre 无 / @post 挂载补播当前态与最近 listing、摘除不补播 / @err none / @inv 至多一个监听后挂覆盖前挂",
+    "NetworkConnectivityWatcher.register()：@pre 无（幂等）/ @post 至多注册一个回调 / @err 系统服务不可用或注册异常落日志降级 / @inv registered 与回调同生命周期",
+    "NetworkConnectivityWatcher.unregister()：@pre 无（未注册直接返回）/ @post 注销回调并复位 / @err 注销异常落日志降级 / @inv 与 register 配对",
+    "OkHttpWebSocketTransport（类级）：@pre start 后才有连接、isOpen 在 onOpen 前为 false / @post 单终结恰好一次 onClosed/onFailure 不双发 / @err 网络失败 onFailure、服务端关闭 onClosed / @inv terminalDelivered 保证终结最多一次",
+    "MirrorForegroundService（类级）：@pre 未注入配置 onCreate 抛 IllegalStateException / @post START_STICKY + 幂等释放 / @err 启动失败由 conn 退避消化 / @inv onDestroy 后 manager 置 null"
+  ],
+  "consumes_added": [
+    "@consumes dev.agentmirror.app（PackageDoc.kt，真实 import：MainActivity/R）",
+    "@consumes dev.agentmirror.app.conn（PackageDoc.kt，真实 import：ConnectionManager 等）",
+    "@consumes dev.agentmirror.app.tsnet（PackageDoc.kt，真实 import：TsnetDial/TsnetWire/ConnectionPath）"
+  ],
+  "uncertain": [
+    "NetworkConnectivityWatcher 类 KDoc 的'不带 Looper 的重载回调在进程主线程投递，与 ConnectionManager 状态机同线程串行（无并发）'：前半句属实（Android registerDefaultNetworkCallback 无 handler 重载在主线程投递）；但'与状态机同线程串行'牵涉 conn 层状态机的真实线程面——OkHttp WebSocket 回调线程 vs 主线程 pump/onNetworkAvailable 之间是否真正无并发，属 conn 包（另一个席位的包）的线程语义，我在本包内无法独立判定，未改，留待 conn 包确认。"
+  ],
+  "deviation": [],
+  "positive_control": {
+    "what": "删除 StateWatcher 的 @err 标签",
+    "command": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.service",
+    "rc": 1,
+    "output_excerpt": "T3-3: FAIL — 契约标签完备：1 条违规\n  [T3-3] dev.agentmirror.app.service  app/app/src/main/java/dev/agentmirror/app/service/StateWatcher.kt:24  `@contract` — 缺契约标签: @err\n结果：未通过（exit 1）",
+    "restored_rc": 0,
+    "conclusion": "判据确实扫到本包：删 @err 后单包硬判 exit 1 并精确指向 StateWatcher.kt:24；恢复后 exit 0。排除了'扫不到本包所以全绿'的假绿。"
+  }
+}

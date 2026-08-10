@@ -19,6 +19,12 @@ package dev.agentmirror.app.pairing
 /**
  * 配对：扫码连接（路线 a：QR 载服务端地址 + 配对 token，可选 TS authkey，需求 011）。
  *
- * 负责相机扫码、地址解析与配对握手；替代"终端 App + Tailscale App + SSH 配置"三件套
- * （需求 001 单一 App 原则）。本包为占位骨架，由 pairing 任务落位实现。
+ * 负责相机扫码、地址解析与配对握手、配置持久化与常驻连接装配；替代
+ * "终端 App + Tailscale App + SSH 配置"三件套（需求 001 单一 App 原则）。
+ * 配对成功与冷启动重连共用 [startPersistentConnection] 作为唯一装配入口。
+ *
+ * @consumes dev.agentmirror.app.conn
+ * @consumes dev.agentmirror.app.service
+ * @consumes dev.agentmirror.app.tsnet
+ * @consumes dev.agentmirror.app.ui.theme
  */

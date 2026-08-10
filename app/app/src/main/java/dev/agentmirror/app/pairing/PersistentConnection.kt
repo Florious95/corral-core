@@ -45,8 +45,14 @@ private var persistentConnectionStartGeneration = 0L
  *   不会重建连接管理器——冷启动与配对成功先后触发只持有一条连接；
  * - [ConnectionManager.start]：非 STOPPED 状态直接返回，不二次拨号。
  *
- * 启动失败不阻塞调用方流程：连接未就绪时工作区/会话页的 [ServiceWire.manager] 兜底会再
- * 尝试（不静默），此处只落日志可判定。
+ * 启动失败不阻塞调用方流程：连接未就绪时会话页/前台服务的 [ServiceWire.manager] 兜底会
+ * 再尝试（不静默），此处只落日志可判定。
+ *
+ * @contract
+ * @pre none（配置即函数入参；无外部前置状态）
+ * @post 已注入 [ServiceWire.setConfig] + [ServiceWire.uploadBaseUrl]，并触发常驻连接启动
+ * @err 常驻连接装配/启动失败仅落日志（[ServiceWire.manager]/[ConnectionManager.start] 调用已 runCatching），不抛给调用方；tsnet 起网经 [TsnetWire.ensureStarted] 失败走 [TsnetState.Error] 不静默
+ * @inv 幂等：既有 [ServiceWire.manager] 单例复用、[ConnectionManager.start] 非 STOPPED 直接返回，不产生双连接；tailnet 目标在节点未 Up 时首拨延后到 [TsnetWire.whenSettled] 之后
  */
 fun startPersistentConnection(config: PairingConfig) {
     synchronized(persistentConnectionStartLock) {
