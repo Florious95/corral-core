@@ -76,21 +76,143 @@ class TestRedFixtures(unittest.TestCase):
         self.assertEqual(code, 2, out)
         self.assertIn("空扫描", out)
 
+    def test_t3_1_missing_symbol_doc_is_red(self):
+        """T3-1 红测：顶层导出符号缺 doc（Go+Kotlin 各一）→ strict-t3 exit 1。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "missingdoc-symbol"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-1", out)
+        self.assertIn("Undocumented", out)          # Go 漏 doc 的导出符号
+        self.assertIn("缺紧邻", out)
+
+    def test_t3_2_lying_ref_is_red(self):
+        """T3-2 红测：谎称符号/路径/flag（覆盖全部注释形态）→ strict-t3 exit 1。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "lying-ref"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-2", out)
+        # 原始 doc/KDoc 面
+        self.assertIn("MissingInterface", out)      # Go 反引号谎称符号
+        self.assertIn("GhostHelper", out)
+        self.assertIn("--no-such-flag", out)        # Go KDoc 谎称 flag
+        self.assertIn("docs/never-created.md", out)  # Go 谎称路径
+        self.assertIn("config/settings.yaml", out)   # Kotlin KDoc 谎称路径
+        # 新扩展面：函数体内普通 // 注释（旧扫描器完全不可见）
+        self.assertIn("GhostBody", out)              # Go 函数体 // 谎称符号
+        self.assertIn("docs/fake-body.md", out)      # Go 函数体 // 谎称路径
+        self.assertIn("MissingBodyComment", out)     # Kotlin 函数体 // 谎称符号
+        self.assertIn("config/bad-body.yaml", out)   # Kotlin 函数体 // 谎称路径
+        # 新扩展面：Kotlin KDoc 内谎称 flag（Kotlin 侧对齐 flag 判定）
+        self.assertIn("--no-such-plain-flag", out)
+
+    def test_pkg_dirty_is_red(self):
+        """--pkg 单包硬判：指向 dirty 包必须红，且不扫到 clean 包。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "pkg-filter"),
+            ["--check", "--go-source", "--strict-t3", "--pkg", "dirty"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-1", out)
+        self.assertIn("dirty", out)
+        self.assertNotIn("server/clean", out)       # 精确到单包
+
+    def test_pkg_ktdirty_is_red(self):
+        """--pkg 单包硬判（Kotlin 侧）：指向 ktdirty 包必须红。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "pkg-filter"),
+            ["--check", "--go-source", "--strict-t3",
+             "--pkg", "dev.agentmirror.fixture.ktdirty"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-1", out)
+        self.assertIn("KotlinUndoc", out)
+
 
 class TestPositiveControl(unittest.TestCase):
     """阳性对照：真实仓库必须绿；缺一条判据都算失败。"""
 
     def test_real_repo_check_passes(self):
-        """真实仓库 --check → exit 0，且打印非零扫描量（空扫描≠健康）。"""
+        """真实仓库 --check → exit 0；T1 判据必须 PASS（阳性对照）。
+
+        注意：T3 默认报告模式列清单、不改退出码，所以 T1 之外可能有 T3 FAIL 行
+        （真仓库 18 包尚未刷注释），FAIL 断言只限定在 T1 行。
+        """
         code, out = run_tool(ROOT, ["--check"])
         self.assertEqual(code, 0, out)
         self.assertIn("T1-1", out)
         self.assertIn("T1-2", out)
-        self.assertNotIn("FAIL", out)
+        self.assertIn("T3-1", out)
+        self.assertIn("T3-2", out)
+        t1_lines = [l for l in out.splitlines() if "T1-" in l]
+        self.assertTrue(t1_lines, "缺少 T1 输出: " + out)
+        for l in t1_lines:
+            self.assertIn("PASS", l, "T1 判据必须保持绿: " + l)
         # 扫描量 > 0（阳性对照铁律）。
         m = [line for line in out.splitlines() if line.startswith("扫描") ]
         self.assertTrue(m, "缺少扫描量输出: " + out)
         self.assertNotIn("0 包", m[0], m[0])
+
+    def test_real_repo_t3_report_nonempty_with_coverage(self):
+        """阳性对照铁律：T3 报告非空 + 扫描量 > 0，防「没扫到」被当「很干净」。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            report = os.path.join(tmp, "t3-report.md")
+            code, out = run_tool(ROOT, ["--check", "--t3-report", report])
+            self.assertEqual(code, 0, out)
+            self.assertTrue(os.path.isfile(report), out)
+            with open(report, encoding="utf-8") as fh:
+                text = fh.read()
+            self.assertIn("T3-1", text)
+            self.assertIn("T3-2", text)
+            self.assertIn("T3 扫描覆盖", text)
+            self.assertIn("导出符号索引", text)
+            self.assertIn("Go CLI flag 索引", text)
+
+    def test_t3_1_documented_symbol_is_green(self):
+        """T3-1 阳性对照：全符号有 doc → strict-t3 exit 0（防「没扫到」当「干净」）。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "documented-symbol"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("T3-1", out)
+        self.assertIn("PASS", out)
+
+    def test_t3_2_truthful_ref_is_green(self):
+        """T3-2 阳性对照：doc/注释引用全真实 → strict-t3 exit 0（防「没扫到」当「干净」）。
+
+        覆盖全部注释形态的真实引用（含函数体内 // 注释引用真实符号/路径/flag
+        `--listen`）都不得误报——这是扩展扫描面后的"宁可漏不可吵"回归防线。
+        """
+        code, out = run_tool(
+            os.path.join(TESTDATA, "truthful-ref"),
+            ["--check", "--go-source", "--strict-t3"],
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("T3-2", out)
+        self.assertIn("PASS", out)
+
+    def test_pkg_clean_is_green(self):
+        """--pkg 单包硬判阳性对照：指向 clean 包 → exit 0。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "pkg-filter"),
+            ["--check", "--go-source", "--strict-t3", "--pkg", "clean"],
+        )
+        self.assertEqual(code, 0, out)
+
+    def test_report_mode_does_not_affect_exit(self):
+        """报告模式分级开关：有违规的 fixture 不带 --strict-t3 → 列清单但 exit 0。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "missingdoc-symbol"),
+            ["--check", "--go-source"],
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("T3-1", out)
+        self.assertIn("FAIL", out)  # 清单仍如实列出违规
+        self.assertIn("报告模式", out)
 
 
 class TestPureFunctions(unittest.TestCase):

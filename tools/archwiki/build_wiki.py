@@ -15,6 +15,16 @@
   T1-1  internal 包环依赖
   T1-2  包缺 doc 注释（Go: doc.go/包注释；Kotlin: 模块 KDoc）
 
+T3 判据（阶段一「注释即契约」验收定义先行，arch-criteria-t3）：
+  T3-1  符号级 doc 覆盖——非测试导出符号（Go 顶层导出 decl / Kotlin 顶层 public 声明）
+        必须有紧邻 doc/KDoc。T1-2 只到包级，这条升到符号级。
+  T3-2  引用真实性——doc/KDoc/外骨骼标签文本里提到的符号名、仓库文件路径、CLI flag
+        必须在仓库中真实存在。判定保守到不误报为止（宁可漏也不能吵）：
+        只判三种明确形状——反引号包裹且大写开头的标识符、含 / 且以已知扩展名结尾的
+        路径串、--flag 形式的串（仅 Go 侧 doc，daemon CLI 表面所在）；自然语言普通词不判。
+        分级开关：默认报告模式列清单不改退出码；--strict-t3 才计入退出码；
+        --pkg <包名> 单包硬判（阶段一逐包收口时每包的 acceptance）。
+
 判据准入纪律：每条判据必须自带红测 fixture（testdata/），写不出红测的不准入。
 本文件注释即外骨骼标注：结构化、机器可读，供后续判据（如围栏 YAML 解析）直接消费。
 """
@@ -36,6 +46,11 @@ GO_SUBDIR = "server"          # Go module 在仓库内的相对目录
 KT_SEARCH = ("app/app/src/main/java",)  # Kotlin 源码根候选（相对仓库根）
 WIKI_SUBDIR = "docs/wiki"     # 生成物输出目录
 
+# 脚本所在位置的仓库根（本脚本位于 <root>/tools/archwiki/，三级上级即仓库根）。
+DEFAULT_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+
 CRITERIA = [
     ("T1-1", "internal 包环依赖"),
     ("T1-2", "包缺 doc 注释"),
@@ -46,6 +61,48 @@ FUTURE_CRITERIA = [
     ("T2-1", "零消费者包", "没有任何包引用它 → 未落地，仅预留"),
     ("T2-2", "孤儿子图", "从进程入口无法到达的包子图 → 未落地，仅预留"),
 ]
+
+# ---------------------------------------------------------------------------
+# T3 判据常量（arch-criteria-t3，阶段一验收定义先行）
+# ---------------------------------------------------------------------------
+
+# T3-2 路径引用只认这些已知源码/文档/资产扩展名结尾的串（含 / 且以扩展名结尾）。
+T3_PATH_EXTENSIONS = (
+    "go", "kt", "md", "py", "yaml", "yml", "json", "sh", "xml", "txt", "toml",
+    "gradle", "kts", "proto", "c", "h", "rs", "js", "ts", "html", "css", "aar",
+)
+_T3_PATH_EXT_PATTERN = "|".join(sorted(T3_PATH_EXTENSIONS))
+
+# T3-2 反引号引用：大写开头的标识符才判，且排除协议/工具类全大写词（非仓库符号，
+# 宁可漏也不能吵——见 HANDBOOK.md 判据边界）。
+T3_NONSYMBOL_TOKENS = frozenset(
+    ("POST", "GET", "PUT", "PATCH", "DELETE", "HEAD",
+     "HTTP", "HTTPS", "WS", "WSS", "URL", "URI",
+     "JSON", "YAML", "XML", "SQL", "README")
+)
+
+# 路径引用：至少一个目录段 + 末段 + 已知扩展名。前向负断言排除 //、URL 前缀
+# （//192.168.1.5、ws://host/… 这类串不得被当成仓库文件路径）。
+_T3_PATH_REF = re.compile(
+    r"(?<![A-Za-z0-9_/])"
+    r"((?:[A-Za-z0-9_~.-]+/)+[A-Za-z0-9_~.-]+\.(?:" + _T3_PATH_EXT_PATTERN + r"))"
+    r"(?![\w])"
+)
+# CLI flag 引用：--flag 形式，前后不接词字符/连字符。
+_T3_FLAG_REF = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]*(?![\w-])")
+# 反引号包裹的标识符（含短语/表格，短语在候选提取时排除）。
+_T3_BACKTICK_REF = re.compile(r"`([^`]+)`")
+# Go flag 注册行：fs.String("name", …) / fs.Bool / fs.Int / fs.Duration 等。
+_GO_FLAG_REG = re.compile(
+    r'fs\.(?:String|Bool|Int|Int64|Uint|Uint64|Float64|Duration|Var)\("([a-z][a-z0-9-]*)"'
+)
+
+# 外部引用白名单（宁可漏不可吵）：这些前缀/flag 明确指向仓库之外的东西，
+# 不是本仓库的符号/路径/CLI，判据不验。
+#   * src/detect/manifests/claude.toml — herdr 合规注记（外部参考实现，见 adapters.go）
+#   * --tests — gradle 验收 flag，不是 daemon CLI
+T3_EXTERNAL_PATH_PREFIXES = ("herdr/", "src/detect/manifests/")
+T3_EXTERNAL_FLAGS = frozenset(("tests",))
 
 
 # ---------------------------------------------------------------------------
@@ -525,6 +582,532 @@ def parse_exoskeleton_fences(source_text):
 
 
 # ---------------------------------------------------------------------------
+# T3 判据实现（arch-criteria-t3：阶段一「注释即契约」的验收定义先行）
+# ---------------------------------------------------------------------------
+# T3-1 符号级 doc 覆盖：非测试导出符号必须有紧邻 doc/KDoc（复用 _GO_TOP_DECL /
+#       _KT_EXPORT_DECL，不另起炉灶）。T3-2 引用真实性：全部注释形态（KDoc + 普通 // + /* */ +
+#       行尾注释）里提到的符号名、仓库文件路径、CLI flag 必须在仓库中真实存在。
+# 准入纪律：每条判据先配红测 fixture（testdata/ 下的 missingdoc-symbol/ 与
+#       lying-ref/ 必红；documented-symbol/ 与 truthful-ref/ 必绿）。
+
+
+def _go_decl_has_doc(lines, decl_lineno):
+    """Go 顶层声明是否紧邻 doc：上一行是注释行（// 或 /* */）即算达标。
+
+    多行 /* */ 块以 `*/` 结尾紧邻声明、单行 /* */ 紧邻声明都覆盖。
+    Go 官方 doc 约定要求 doc 与声明之间无空行，故只查紧邻上一行。
+    """
+    if decl_lineno <= 1:
+        return False
+    prev = lines[decl_lineno - 2].strip()
+    return prev.startswith("//") or prev.startswith("/*") or prev.endswith("*/")
+
+
+def _all_comment_lines(text, lang):
+    """字符串感知的注释行提取器，返回 [(行号, 注释原始内容)]。
+
+    覆盖全部注释形态：// 行注释、/* */ 块注释（含 Kotlin KDoc /** */）、行尾注释。
+    字符串字面量感知：双引号串、单引号字符、Go 反引号 raw string、Kotlin 三引号串
+    里的内容**不**当注释扫（否则 `"// not a comment"` 会误判）。
+
+    T3-2 判据边界（宁可漏不可吵）：带形状的引用无论写在哪种注释形态里都判，
+    但字符串里的"//"、"/*"不是注释，不判。
+    """
+    out = []
+    n = len(text)
+    i = 0
+    line = 1
+    state = "NORMAL"  # NORMAL/LINE/BLOCK/STR/CHAR/RAW/TRIPLE
+    buf = []
+    buf_start = None
+    buf_is_block = False
+
+    def flush():
+        nonlocal buf, buf_start
+        if buf and buf_start is not None:
+            joined = "".join(buf).split("\n")
+            for off, piece in enumerate(joined):
+                out.append((buf_start + off, piece))
+        buf = []
+        buf_start = None
+
+    while i < n:
+        c = text[i]
+        if state == "NORMAL":
+            if c == "\n":
+                line += 1
+                i += 1
+                continue
+            if c == "/" and i + 1 < n and text[i + 1] == "/":
+                state = "LINE"
+                buf = []
+                buf_start = line
+                i += 2
+                continue
+            if c == "/" and i + 1 < n and text[i + 1] == "*":
+                state = "BLOCK"
+                buf = []
+                buf_start = line
+                i += 2
+                continue
+            if c == '"':
+                state = "STR"
+                i += 1
+                continue
+            if c == "'":
+                state = "CHAR"
+                i += 1
+                continue
+            if lang == "go" and c == "`":
+                state = "RAW"
+                i += 1
+                continue
+            if (lang == "kotlin" and c == '"' and i + 2 < n
+                    and text[i + 1] == '"' and text[i + 2] == '"'):
+                state = "TRIPLE"
+                i += 3
+                continue
+            i += 1
+            continue
+        elif state == "LINE":
+            if c == "\n":
+                flush()
+                state = "NORMAL"
+                line += 1
+                i += 1
+                continue
+            buf.append(c)
+            i += 1
+            continue
+        elif state == "BLOCK":
+            if c == "*" and i + 1 < n and text[i + 1] == "/":
+                buf.append("*/")
+                flush()
+                state = "NORMAL"
+                i += 2
+                continue
+            buf.append(c)
+            i += 1
+            continue
+        elif state == "STR":
+            if c == "\\":
+                i += 1
+            elif c == '"':
+                state = "NORMAL"
+            elif c == "\n":
+                line += 1
+            i += 1
+            continue
+        elif state == "CHAR":
+            if c == "\\":
+                i += 1
+            elif c == "'":
+                state = "NORMAL"
+            elif c == "\n":
+                line += 1
+            i += 1
+            continue
+        elif state == "RAW":  # Go backtick raw string
+            if c == "`":
+                state = "NORMAL"
+            elif c == "\n":
+                line += 1
+            i += 1
+            continue
+        elif state == "TRIPLE":  # Kotlin triple-quoted string
+            if c == '"' and i + 2 < n and text[i + 1] == '"' and text[i + 2] == '"':
+                state = "NORMAL"
+                i += 3
+                continue
+            if c == "\n":
+                line += 1
+            i += 1
+            continue
+    flush()
+    return out
+
+
+def _go_doc_lines(text):
+    """Go 全部注释行的序列（行号, 剥掉 // 前导后的行）。T3-2 引用扫描用。"""
+    return [
+        (ln, re.sub(r"^//\s*", "", raw))
+        for ln, raw in _all_comment_lines(text, "go")
+    ]
+
+
+def _kt_kdoc_end_lines(text):
+    """Kotlin 全部 KDoc 块的结束行号集合（供声明 doc 邻接判定）。"""
+    ends = set()
+    for m in _KT_KDOC_BLOCK.finditer(text):
+        ends.add(text[:m.end()].count("\n") + 1)
+    return ends
+
+
+def _kt_kdoc_lines(text):
+    """Kotlin 全部注释行的序列（行号, 剥掉 // 与 KDoc 行首 * 后的行）。"""
+    out = []
+    for ln, raw in _all_comment_lines(text, "kotlin"):
+        s = raw.strip()
+        if s.startswith("//"):
+            s = s[2:].lstrip()
+        elif s.startswith("*"):
+            s = s[1:].lstrip()
+        out.append((ln, s))
+    return out
+
+
+def _kt_decl_has_doc(lines, decl_lineno, kdoc_ends):
+    """Kotlin 顶层声明是否紧邻 KDoc：向上跳过 @ 注解行，遇空行即断。
+
+    标准 Kotlin 约定是「KDoc → 注解 → 声明」三层，故注解行是合法的 doc 间隔。
+    """
+    idx = decl_lineno - 2
+    while idx >= 0:
+        s = lines[idx].strip()
+        if not s:
+            return False
+        if s.startswith("@"):
+            idx -= 1
+            continue
+        return (idx + 1) in kdoc_ends
+    return False
+
+
+def collect_go_flags(root):
+    """扫描 server/ 下全部非测试 Go 文件里 flag.FlagSet 注册的 flag 名。
+
+    flag 包自动注册 -h/--help，算作真实存在。ts-authkey 是 env-only（config_test
+    明文：必须保持未知 flag），不算 flag。排 _test.go：测试私有 FlagSet 不算 daemon CLI。
+    """
+    flags = {"help"}
+    server_root = os.path.join(root, GO_SUBDIR)
+    for dirpath, dirnames, files in os.walk(server_root):
+        dirnames[:] = [d for d in dirnames if d not in ("vendor", ".git")]
+        for f in files:
+            if not f.endswith(".go") or f.endswith("_test.go"):
+                continue
+            flags.update(_GO_FLAG_REG.findall(read_text(os.path.join(dirpath, f))))
+    return flags
+
+
+def _build_symbol_index(go_pkgs, kt_pkgs):
+    """仓库导出符号全集（Go+Kotlin），供反引号引用真实性查表。"""
+    idx = set()
+    for pkg in list(go_pkgs.values()) + list(kt_pkgs.values()):
+        idx.update(pkg.get("exports", ()))
+    return idx
+
+
+def _build_basename_index(root):
+    """仓库内全部文件基名集合，供路径引用兜底解析。
+
+    排除生成/缓存目录（.git/build/.gradle/artifacts 等），这些不是 doc 引用目标。
+    docs/wiki/ 是生成物输出目录（README.md/t3-report.md 由本工具重写），也排除——
+    否则报告文件自身的创建会让基名索引漂移、破坏幂等（本工具的既有契约）。
+    """
+    index = set()
+    skip = (".git", "build", ".gradle", ".idea", "node_modules", "vendor",
+            "Pods", "artifacts", ".m2", ".cxx")
+    wiki_rel = WIKI_SUBDIR.split("/")[0]  # "docs"
+    for dirpath, dirnames, files in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip]
+        rel = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        if rel.startswith(WIKI_SUBDIR):
+            continue  # 生成物输出目录不参与引用查表
+        for f in files:
+            index.add(f)
+    return index
+
+
+def _resolve_path_ref(ref, root, basename_index):
+    """路径引用真实性：根相对存在，或已知前缀拼接存在，或同名文件存在于仓库。
+
+    前缀集合覆盖 Go 源/Kotlin 源/文档/工具/libs 等常见挂点；基名兜底放行
+    `pairing/probe.go` 这种省前缀写法（真实文件存在即不误报，宁可漏也不能吵）。
+
+    外部参考前缀（T3_EXTERNAL_PATH_PREFIXES，如 herdr/ 合规注记的 src/detect/
+    manifests/claude.toml）指向仓库外的东西，直接放行不判——宁可漏也不能吵。
+    """
+    if ref.startswith(T3_EXTERNAL_PATH_PREFIXES):
+        return True
+    if os.path.isfile(os.path.join(root, ref)):
+        return True
+    for prefix in (
+        "server/internal/", "server/", "app/app/src/main/java/",
+        "app/app/src/main/", "app/app/src/", "app/", "tools/",
+        "docs/", "e2e/", "internal/", "libs/",
+    ):
+        if os.path.isfile(os.path.join(root, prefix, ref)):
+            return True
+    return os.path.basename(ref) in basename_index
+
+
+def _backtick_symbol_candidates(ref):
+    """从反引号内容提取候选符号名；无明确符号形状返回 None（不判）。
+
+    判据边界（见 HANDBOOK.md）：只判**单个、大写开头、标识符形状**的引用。
+    含空白（短语/表格/JSON 示例）、小写开头（remember/tsnet/公式）、全大写协议词
+    （POST/URL/…）一律不判——宁可漏也不能吵。`Foo.bar()` 取 `Foo`、`Foo<T>` 取 `Foo`。
+    """
+    s = ref.strip()
+    if not s or any(ch.isspace() for ch in s):
+        return None
+    s = s.rstrip("(),;.。：:）")
+    if not s:
+        return None
+    if "<" in s:
+        s = s.split("<", 1)[0]
+    if "." in s:
+        s = s.split(".", 1)[0]
+    s = s.strip()
+    if not re.fullmatch(r"[A-Z][A-Za-z0-9_]*", s):
+        return None
+    if s in T3_NONSYMBOL_TOKENS:
+        return None
+    return s
+
+
+def _scan_t3_2_doc_lines(doc_lines, kind, pkg_key, file, symbols, flags,
+                         basename_index, root, out):
+    """对一组注释行扫描三类引用（符号/路径/flag），不存在的记违规。
+
+    T3-2 扫描面（arch-criteria-t3 返工 #1）：**全部注释形态**都扫——普通 // 注释、
+    /* */ 块注释、行尾注释、KDoc，Go 与 Kotlin 两侧对齐。带形状的引用无论写在
+    哪种注释里都必须被判（宁可漏不可吵的"漏"不指注释形态，只指引用形状）。
+    CLI flag Go 与 Kotlin 两侧都判；外部工具 flag（gradle --tests）走
+    T3_EXTERNAL_FLAGS 白名单放行，不误报。
+    """
+    for lineno, text in doc_lines:
+        for m in _T3_BACKTICK_REF.finditer(text):
+            cand = _backtick_symbol_candidates(m.group(1))
+            if cand and cand not in symbols:
+                out.append({
+                    "cid": "T3-2", "kind": kind, "pkg": pkg_key, "file": file,
+                    "line": lineno, "ref": m.group(1),
+                    "reason": "注释引用的符号不存在: " + cand,
+                })
+        for m in _T3_PATH_REF.finditer(text):
+            ref = m.group(1)
+            if not _resolve_path_ref(ref, root, basename_index):
+                out.append({
+                    "cid": "T3-2", "kind": kind, "pkg": pkg_key, "file": file,
+                    "line": lineno, "ref": ref,
+                    "reason": "注释引用的仓库文件路径不存在: " + ref,
+                })
+        for m in _T3_FLAG_REF.finditer(text):
+            name = m.group(0)[2:]
+            if name in T3_EXTERNAL_FLAGS:
+                continue  # 外部工具 flag（gradle --tests），不误报
+            if name not in flags:
+                out.append({
+                    "cid": "T3-2", "kind": kind, "pkg": pkg_key, "file": file,
+                    "line": lineno, "ref": m.group(0),
+                    "reason": "注释引用的 CLI flag 未注册: " + m.group(0),
+                })
+
+
+def scan_t3(go_pkgs, kt_pkgs, root, pkg_filter=None):
+    """扫描 T3-1 / T3-2，返回 ([T3-1 违规], [T3-2 违规])。
+
+    违规记录 dict：cid / kind / pkg / file / line / symbol|ref / reason。
+    pkg_filter 非空时只扫该包（Go 用相对包路径键如 internal/api，
+    Kotlin 用包名键如 dev.agentmirror.app.conn）——阶段一逐包收口用的单包硬判。
+    """
+    symbols = _build_symbol_index(go_pkgs, kt_pkgs)
+    flags = collect_go_flags(root)
+    basename_index = _build_basename_index(root)
+    v1, v2 = [], []
+    pkg_filter = pkg_filter or ""
+
+    server_root = os.path.join(root, GO_SUBDIR)
+    for dirpath, dirnames, files in os.walk(server_root):
+        dirnames[:] = [d for d in dirnames if d not in ("vendor", ".git")]
+        pkg_key = os.path.relpath(dirpath, server_root).replace(os.sep, "/")
+        if pkg_filter and pkg_key != pkg_filter:
+            continue
+        for f in sorted(files):
+            if not f.endswith(".go") or f.endswith("_test.go"):
+                continue
+            path = os.path.join(dirpath, f)
+            relpath = os.path.relpath(path, root)
+            text = read_text(path)
+            lines = text.splitlines()
+            for m in _GO_TOP_DECL.finditer(text):
+                lineno = text[:m.start()].count("\n") + 1
+                if not _go_decl_has_doc(lines, lineno):
+                    v1.append({
+                        "cid": "T3-1", "kind": "go", "pkg": pkg_key,
+                        "file": relpath, "line": lineno, "symbol": m.group(1),
+                        "reason": "顶层导出声明缺紧邻 doc",
+                    })
+            _scan_t3_2_doc_lines(_go_doc_lines(text), "go", pkg_key, relpath,
+                                 symbols, flags, basename_index, root, v2)
+
+    for src_root in _find_kotlin_roots(root):
+        for dirpath, dirnames, files in os.walk(src_root):
+            dirnames[:] = [d for d in dirnames if d != "build"]
+            kt_files = sorted(f for f in files if f.endswith(".kt"))
+            if not kt_files:
+                continue
+            pkg_key = ""
+            for f in kt_files:
+                m = _KT_PACKAGE_DECL.search(read_text(os.path.join(dirpath, f)))
+                if m:
+                    pkg_key = m.group(1)
+                    break
+            if not pkg_key:
+                continue
+            if pkg_filter and pkg_key != pkg_filter:
+                continue
+            for f in kt_files:
+                path = os.path.join(dirpath, f)
+                relpath = os.path.relpath(path, root)
+                text = read_text(path)
+                lines = text.splitlines()
+                ends = _kt_kdoc_end_lines(text)
+                for i, line in enumerate(lines):
+                    if line[:1] in (" ", "\t"):
+                        continue  # 缩进=嵌套声明，非顶层
+                    s = line.strip()
+                    if not s or s.startswith("@"):
+                        continue
+                    m = _KT_EXPORT_DECL.match(s)
+                    if not m:
+                        continue
+                    if not _kt_decl_has_doc(lines, i + 1, ends):
+                        v1.append({
+                            "cid": "T3-1", "kind": "kotlin", "pkg": pkg_key,
+                            "file": relpath, "line": i + 1, "symbol": m.group(1),
+                            "reason": "顶层 public 声明缺紧邻 KDoc",
+                        })
+                _scan_t3_2_doc_lines(_kt_kdoc_lines(text), "kotlin", pkg_key,
+                                     relpath, symbols, flags, basename_index, root, v2)
+
+    v1.sort(key=lambda r: (r["pkg"], r["file"], r["line"], r["symbol"]))
+    v2.sort(key=lambda r: (r["pkg"], r["file"], r["line"], r["ref"]))
+    return v1, v2
+
+
+def _print_t3_results(v1, v2, strict_t3, pkg, out):
+    """打印 T3 判据结果；默认报告模式（列清单），--strict-t3 才计入退出码。"""
+    mode = "严格（计入退出码）" if strict_t3 else "报告（不计退出码）"
+    scope = "全部包" if not pkg else "单包 %s" % pkg
+    print("", file=out)
+    print("== T3 判据（%s，%s） ==" % (scope, mode), file=out)
+    for cid, viols in (("T3-1", v1), ("T3-2", v2)):
+        ok = not viols
+        mark = "PASS" if ok else "FAIL"
+        if cid == "T3-1":
+            desc = "符号级 doc 覆盖：%d 条违规" % len(viols)
+        else:
+            desc = "引用真实性：%d 条违规" % len(viols) if viols else "引用真实性：无违规"
+        print("%s %-16s : %s — %s" % (cid, " ", mark, desc), file=out)
+        for r in viols:
+            if cid == "T3-1":
+                print("  [%s] %s  %s:%d  `%s` — %s"
+                      % (cid, r["pkg"], r["file"], r["line"], r["symbol"], r["reason"]), file=out)
+            else:
+                print("  [%s] %s  %s:%d  `%s` — %s"
+                      % (cid, r["pkg"], r["file"], r["line"], r["ref"], r["reason"]), file=out)
+    if not strict_t3:
+        print("（T3 报告模式：违规列清单，不计入退出码。--strict-t3 才硬判。）", file=out)
+
+
+def _scan_coverage(go_pkgs, kt_pkgs, root):
+    """T3 扫描覆盖统计（阳性对照铁律：扫描量必须 > 0，空扫描≠健康）。"""
+    n_symbols = len(_build_symbol_index(go_pkgs, kt_pkgs))
+    n_flags = len(collect_go_flags(root))
+    n_basenames = len(_build_basename_index(root))
+    n_go_doc = n_kt_doc = 0
+    server_root = os.path.join(root, GO_SUBDIR)
+    for dirpath, dirnames, files in os.walk(server_root):
+        dirnames[:] = [d for d in dirnames if d not in ("vendor", ".git")]
+        for f in files:
+            if not f.endswith(".go") or f.endswith("_test.go"):
+                continue
+            n_go_doc += len(_go_doc_lines(read_text(os.path.join(dirpath, f))))
+    for src_root in _find_kotlin_roots(root):
+        for dirpath, dirnames, files in os.walk(src_root):
+            dirnames[:] = [d for d in dirnames if d != "build"]
+            for f in files:
+                if f.endswith(".kt"):
+                    n_kt_doc += len(_kt_kdoc_lines(read_text(os.path.join(dirpath, f))))
+    return {
+        "symbols": n_symbols,
+        "flags": n_flags,
+        "basenames": n_basenames,
+        "go_doc_lines": n_go_doc,
+        "kt_doc_lines": n_kt_doc,
+    }
+
+
+def write_t3_report(v1, v2, go_pkgs, kt_pkgs, out_path, coverage=None):
+    """写 T3 报告（幂等：全排序、无时间戳）。落 docs/wiki/t3-report.md。
+
+    coverage 为 _scan_coverage() 的统计 dict，随报告打印扫描量——
+    阳性对照铁律：扫描量必须 > 0，防止「没扫到」被当成「很干净」。
+    """
+    n_go, n_kt = len(go_pkgs), len(kt_pkgs)
+    lines = ["# T3 判据报告（自动生成）", ""]
+    lines.append(
+        "> ⚠️ **生成物，勿手改。** 由 `tools/archwiki/build_wiki.py --check --t3-report` "
+        "从源码现算生成，重跑无 diff（幂等）。人工改动会被覆盖。"
+    )
+    lines.append("")
+    lines.append("扫描 **%d** 个包（Go %d + Kotlin %d）。" % (n_go + n_kt, n_go, n_kt))
+    if coverage:
+        lines.append("")
+        lines.append("## T3 扫描覆盖（阳性对照：扫描量必须 > 0）")
+        lines.append("")
+        lines.append("| 项 | 数量 |")
+        lines.append("|---|---|")
+        lines.append("| 导出符号索引（Go+Kotlin） | %d |" % coverage["symbols"])
+        lines.append("| Go CLI flag 索引 | %d |" % coverage["flags"])
+        lines.append("| 仓库文件基名索引 | %d |" % coverage["basenames"])
+        lines.append("| T3-2 扫描的 Go doc 行 | %d |" % coverage["go_doc_lines"])
+        lines.append("| T3-2 扫描的 Kotlin KDoc 行 | %d |" % coverage["kt_doc_lines"])
+        lines.append("")
+    lines.append("## T3-1 符号级 doc 覆盖")
+    lines.append("")
+    if v1:
+        lines.append("导出符号缺紧邻 doc/KDoc，共 **%d** 条：" % len(v1))
+        lines.append("")
+        lines.append("| 包 | 语言 | 文件 | 行 | 符号 | 原因 |")
+        lines.append("|---|---|---|---|---|---|")
+        for r in v1:
+            lines.append("| %s | %s | %s | %d | `%s` | %s |"
+                         % (r["pkg"], r["kind"], r["file"], r["line"], r["symbol"], r["reason"]))
+    else:
+        lines.append("无违规：全部非测试导出符号均有紧邻 doc/KDoc。")
+    lines.append("")
+    lines.append("## T3-2 引用真实性")
+    lines.append("")
+    lines.append("扫描**全部注释形态**（KDoc/doc 注释 + 函数体内普通 `//` 注释 + `/* */` 块注释 + "
+                 "行尾注释，Go 与 Kotlin 两侧对齐，含 Kotlin 侧 `--flag` 判定）。")
+    lines.append("")
+    lines.append("> **诚实边界**：T3-2 只验证**引用形状可判者**——反引号包裹的大写符号、含 `/` 且"
+                 "带已知扩展名的路径、`--flag`。**不验证语义事实**：自然语言断言（如\"设置里有重配"
+                 "按钮\"）没有可判形状，静态判据解析不出\"某组件里有没有某按钮\"，这类行为性断言由"
+                 "用例覆盖（如 PairingUxTest 的重配入口可达性断言），不在此列。注释里指认代码实体时"
+                 "务必写成反引号符号或真实路径，让引用变成判据可验的形状。")
+    lines.append("")
+    if v2:
+        lines.append("注释引用的符号/路径/CLI flag 不存在，共 **%d** 条：" % len(v2))
+        lines.append("")
+        lines.append("| 包 | 语言 | 文件 | 行 | 引用 | 原因 |")
+        lines.append("|---|---|---|---|---|---|")
+        for r in v2:
+            lines.append("| %s | %s | %s | %d | `%s` | %s |"
+                         % (r["pkg"], r["kind"], r["file"], r["line"], r["ref"], r["reason"]))
+    else:
+        lines.append("无违规：注释引用的符号名/仓库文件路径/CLI flag 均真实存在。")
+    lines.append("")
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
 # 渲染输出（mermaid 总图 + 架构卡）
 # ---------------------------------------------------------------------------
 
@@ -633,11 +1216,20 @@ def build_model(root, force_go_source=False):
     return go_pkgs, kt_pkgs
 
 
-def run_check(go_pkgs, kt_pkgs, out=sys.stdout):
-    """--check 执行：打印判据结果，返回退出码（0 过 / 1 违 / 2 空扫描）。"""
+def run_check(go_pkgs, kt_pkgs, out=sys.stdout, root=None,
+              strict_t3=False, pkg=None, t3_report=None):
+    """--check 执行：打印判据结果，返回退出码（0 过 / 1 违 / 2 空扫描）。
+
+    T3 分级开关（arch-criteria-t3）：
+      * 默认报告模式——T3 列清单、不改变退出码（真仓库 18 包尚未刷注释，硬判会阻塞入库）；
+      * --strict-t3——T3 违规计入退出码；
+      * --pkg <包名>——T3 只扫该包（阶段一逐包收口时每包的 acceptance）。
+    """
     all_pkgs = list(go_pkgs.values()) + list(kt_pkgs.values())
     total_edges = sum(len(p["deps"]) for p in all_pkgs)
     n = len(all_pkgs)
+    if root is None:
+        root = os.getcwd()
 
     print("== 架构维基判据检查（--check）==", file=out)
     # 阳性对照铁律：空扫描视为失败，不视为健康。
@@ -653,6 +1245,14 @@ def run_check(go_pkgs, kt_pkgs, out=sys.stdout):
             failed += 1
         print("%s %-16s : %s — %s" % (cid, " ", mark, desc), file=out)
 
+    v1, v2 = scan_t3(go_pkgs, kt_pkgs, root, pkg_filter=pkg)
+    if strict_t3 and (v1 or v2):
+        failed += 1
+    _print_t3_results(v1, v2, strict_t3, pkg, out)
+    if t3_report:
+        coverage = _scan_coverage(go_pkgs, kt_pkgs, root) if not pkg else None
+        write_t3_report(v1, v2, go_pkgs, kt_pkgs, t3_report, coverage=coverage)
+
     if failed:
         print("结果：未通过（exit 1）", file=out)
         return 1
@@ -665,13 +1265,14 @@ def main(argv=None):
         prog="build_wiki.py",
         description="从 Go/Kotlin 源码现算架构维基与判据。"
         "默认生成 docs/wiki/README.md；--check 只判据不写盘。",
-        epilog="判据：T1-1 internal 包环依赖；T1-2 包缺 doc 注释。"
+        epilog="判据：T1-1 internal 包环依赖；T1-2 包缺 doc 注释；"
+        "T3-1 符号级 doc 覆盖；T3-2 引用真实性。"
         "判据准入纪律：每条判据必须自带红测 fixture（见 testdata/）。",
     )
     parser.add_argument(
         "--root",
-        default=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        help="仓库根目录（默认：本脚本上级两级，即 tools/ 的父目录）。",
+        default=DEFAULT_REPO_ROOT,
+        help="仓库根目录（默认：本脚本三级上级，即仓库根）。",
     )
     parser.add_argument(
         "--out",
@@ -688,13 +1289,35 @@ def main(argv=None):
         action="store_true",
         help="强制 Go 走源码轻解析（跳过 go list）。供无 go 环境与红测 fixture 使用。",
     )
+    parser.add_argument(
+        "--strict-t3",
+        action="store_true",
+        help="T3 判据计入退出码（默认报告模式只列清单不改退出码）。",
+    )
+    parser.add_argument(
+        "--pkg",
+        default=None,
+        metavar="包名",
+        help="T3 只扫该包（Go 用相对包路径键如 internal/api；Kotlin 用包名键）。"
+        "阶段一逐包收口时每包的 acceptance 就是 --check --strict-t3 --pkg <该包>。",
+    )
+    parser.add_argument(
+        "--t3-report",
+        default=None,
+        metavar="路径",
+        help="把 T3 违规清单写成 markdown 报告（默认：<root>/docs/wiki/t3-report.md）。",
+    )
     args = parser.parse_args(argv)
 
     root = os.path.abspath(args.root)
     go_pkgs, kt_pkgs = build_model(root, force_go_source=args.go_source)
 
     if args.check:
-        return run_check(go_pkgs, kt_pkgs)
+        t3_report = args.t3_report
+        if args.t3_report is None and not args.pkg and root == DEFAULT_REPO_ROOT:
+            t3_report = os.path.join(root, WIKI_SUBDIR, "t3-report.md")
+        return run_check(go_pkgs, kt_pkgs, root=root,
+                         strict_t3=args.strict_t3, pkg=args.pkg, t3_report=t3_report)
 
     out_dir = args.out or os.path.join(root, WIKI_SUBDIR)
     generate_wiki(go_pkgs, kt_pkgs, out_dir)
