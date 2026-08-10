@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.service
 
+import androidx.compose.runtime.derivedStateOf
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
@@ -25,12 +26,17 @@ import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.WebSocketTransport
+import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.tsnet.TsnetBackend
+import dev.agentmirror.app.tsnet.TsnetProxy
+import dev.agentmirror.app.tsnet.TsnetWire
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.Executor
 
 /**
  * 重连链路 stale config 红测（fix-reconnect-stale-config P0 根因①/②，纯 JVM）。
@@ -166,6 +172,58 @@ class ServiceWireStaleConfigTest {
             "ws://192.168.31.116:9900/ws",
             m.dialUrl(),
         )
+    }
+
+    @Test
+    fun okHttpFactory_recordsLanOrTailnetFromActualSocketChoice() {
+        TsnetWire.resetForTest()
+        try {
+            // 节点未 Up：即使目标是普通 LAN，实际选择也明确记录为 LAN。
+            OkHttpTransportFactory.create("ws://192.168.31.116:9900/ws")
+            assertEquals(ConnectionPath.LAN, ServiceWire.connectionPath())
+
+            // 假节点同步 Up 后，100.64/10 目标确实注入 SOCKS socketFactory，才记录 tailnet。
+            TsnetWire.environment = TsnetWire.Environment("/tmp/ts-test", "agentmirror-test")
+            TsnetWire.executorForTest = Executor { it.run() }
+            TsnetWire.backendFactory = {
+                object : TsnetBackend {
+                    override fun start(stateDir: String, hostname: String, authKey: String) =
+                        TsnetProxy("127.0.0.1", 1080, "fake-cred")
+
+                    override fun close() = Unit
+                }
+            }
+            TsnetWire.ensureStarted("fake-auth-key")
+            OkHttpTransportFactory.create("ws://100.101.2.3:9900/ws")
+            assertEquals(ConnectionPath.TAILNET, ServiceWire.connectionPath())
+        } finally {
+            TsnetWire.resetForTest()
+        }
+    }
+
+    @Test
+    fun pairingProbeDoesNotOverwritePersistentConnectionPath() {
+        ServiceWire.transportFactory = OkHttpTransportFactory
+        ServiceWire.recordConnectionPath(ConnectionPath.TAILNET)
+
+        // 只创建、不 start：验证配对探针选路不会把仍在 READY 的旧持久连接徽标改成 LAN。
+        ServiceWire.pairingTransportFactory().create("ws://192.168.31.116:9900/ws")
+
+        assertEquals(ConnectionPath.TAILNET, ServiceWire.connectionPath())
+    }
+
+    @Test
+    fun connectionPath_isSnapshotObservableWhenRetrySwitchesToTailnet() {
+        // AgentMirrorApp reads connectionPath() while composing the workspace/session header.
+        // A cold-start tailnet URL first records LAN while tsnet is Starting, then records
+        // TAILNET on the successful retry; the observable read must invalidate between them.
+        val observed = derivedStateOf { ServiceWire.connectionPath() }
+
+        ServiceWire.recordConnectionPath(ConnectionPath.LAN)
+        assertEquals(ConnectionPath.LAN, observed.value)
+
+        ServiceWire.recordConnectionPath(ConnectionPath.TAILNET)
+        assertEquals(ConnectionPath.TAILNET, observed.value)
     }
 
     // ---- 红测二：RECONNECTING 中网络恢复必须立即重拨（根因② E2 缺口锁定）----

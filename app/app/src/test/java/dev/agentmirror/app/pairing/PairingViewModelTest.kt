@@ -41,8 +41,10 @@ class PairingViewModelTest {
     private class FakeStore : PairingConfigStore {
         var saved: PairingConfig? = null
         var cleared = false
+        var failSave = false
         override fun load(): PairingConfig? = saved
         override fun save(config: PairingConfig) {
+            if (failSave) error("keystore rejected fake-secret-material")
             saved = config
         }
 
@@ -55,7 +57,10 @@ class PairingViewModelTest {
      * 测试夹具：脚本化拨号 + 假时钟的 VM。
      * 每开始一次配对，工厂创建一个连接（携带独立 FakeWebSocketTransport）。
      */
-    private class Harness {
+    private class Harness(
+        /** feat-ts-wire：记录型起网入口（生产由 PairingRoute 接 TsnetWire.ensureStarted）。 */
+        tsnetStarter: (String) -> Unit = {},
+    ) {
         val store = FakeStore()
         val clock = FakeClock()
         val transports = mutableListOf<FakeWebSocketTransport>()
@@ -66,6 +71,7 @@ class PairingViewModelTest {
 
         val vm = PairingViewModel(
             configStore = store,
+            tsnetStarter = tsnetStarter,
             connectionFactory = { cfg ->
                 nextConfig = cfg
                 val t = FakeWebSocketTransport()
@@ -185,6 +191,178 @@ class PairingViewModelTest {
         val st = h.vm.pairingStatus
         assertTrue(st is PairingStatus.Failed)
         assertTrue((st as PairingStatus.Failed).message.contains("地址"))
+    }
+
+    // ---- feat-ts-wire 红测：ts_authkey 消费（011 预授权：扫码即入网；手填通道保留）----
+
+    @Test
+    fun scanWithTsAuthKeyStartsTsnetAndPersistsKey() {
+        val started = mutableListOf<String>()
+        val h = Harness(tsnetStarter = { started.add(it) })
+        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC123","ts_authkey":"tskey-qr-1"}""")
+        // 扫码携带 authkey → 立即触发起网（011 扫码即入网，先于/伴随试配对）。
+        assertEquals(listOf("tskey-qr-1"), started)
+        // 红线：key 不回填手填输入框（QR 是唯一分发出口，不主动上屏）。
+        assertEquals("", h.vm.manualTsAuthKey)
+        // 配对成功 → key 随配置持久化（冷启动重连需要它重新起网）。
+        h.authOk()
+        assertEquals("tskey-qr-1", h.store.saved?.tsAuthKey)
+    }
+
+    @Test
+    fun scanWithoutTsAuthKeyDoesNotStartTsnet() {
+        val started = mutableListOf<String>()
+        val h = Harness(tsnetStarter = { started.add(it) })
+        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC123","ts_authkey":""}""")
+        // 无 key 降级：绝不触发起网（验收边界：降级不回退，LAN 路径零影响）。
+        assertTrue(started.isEmpty())
+        h.authOk()
+        assertEquals("", h.store.saved?.tsAuthKey)
+    }
+
+    @Test
+    fun manualTsAuthKeyStartsTsnetOnSubmit() {
+        val started = mutableListOf<String>()
+        val h = Harness(tsnetStarter = { started.add(it) })
+        h.vm.manualUrl = "ws://host:9900/ws"
+        h.vm.manualToken = "ABC123"
+        h.vm.manualTsAuthKey = "  tskey-manual-1  "
+        h.vm.submitManual()
+        // 手填通道（FIELD 裁定：输入框接活）：提交时以 trim 后 key 起网。
+        assertEquals(listOf("tskey-manual-1"), started)
+        h.authOk()
+        assertEquals("tskey-manual-1", h.store.saved?.tsAuthKey)
+    }
+
+    @Test
+    fun manualEmptyTsAuthKeyDoesNotStartTsnet() {
+        val started = mutableListOf<String>()
+        val h = Harness(tsnetStarter = { started.add(it) })
+        h.vm.manualUrl = "ws://host:9900/ws"
+        h.vm.manualToken = "ABC123"
+        h.vm.submitManual()
+        assertTrue(started.isEmpty())
+    }
+
+    @Test
+    fun tsnetStateSurfacesToObservable() {
+        val h = Harness()
+        // 起网状态可视（018 标准5）：外部（TsnetWire 监听）投递的状态落 observable。
+        h.vm.onTsnetState(dev.agentmirror.app.tsnet.TsnetState.Starting)
+        assertEquals(dev.agentmirror.app.tsnet.TsnetState.Starting, h.vm.tsState)
+        val err = dev.agentmirror.app.tsnet.TsnetState.Error("入网失败")
+        h.vm.onTsnetState(err)
+        assertEquals(err, h.vm.tsState)
+    }
+
+    @Test
+    fun manualTailnetWaitsForTsnetUpBeforeFirstDial() {
+        lateinit var h: Harness
+        h = Harness(tsnetStarter = {
+            h.vm.onTsnetState(dev.agentmirror.app.tsnet.TsnetState.Starting)
+        })
+        h.vm.manualUrl = "ws://100.101.2.3:9900/ws"
+        h.vm.manualToken = "ABC123"
+        h.vm.manualTsAuthKey = "tskey-manual-1"
+
+        h.vm.submitManual()
+
+        // tailnet 首拨必须等节点真正 Up；Starting 期间不能先直拨制造一次假失败。
+        assertTrue(h.transports.isEmpty())
+        assertTrue(h.vm.pairingStatus is PairingStatus.Pairing)
+
+        h.vm.onTsnetState(
+            dev.agentmirror.app.tsnet.TsnetState.Up(
+                dev.agentmirror.app.tsnet.TsnetProxy("127.0.0.1", 1080, "test-cred"),
+            ),
+        )
+
+        assertEquals(1, h.transports.size)
+        assertEquals("ws://100.101.2.3:9900/ws", h.nextConfig?.url)
+    }
+
+    @Test
+    fun mixedCandidatesTryLanButDelayTailnetUntilTsnetUp() {
+        lateinit var h: Harness
+        h = Harness(tsnetStarter = {
+            h.vm.onTsnetState(dev.agentmirror.app.tsnet.TsnetState.Starting)
+        })
+        h.dialFails()
+
+        h.vm.onQrText(
+            """{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC123","ts_authkey":"tskey-qr-1","candidates":["ws://192.168.1.5:9900/ws","ws://100.101.2.3:9900/ws"]}""",
+        )
+
+        // LAN 主选照常立即试且失败；tailnet 候选停在等待态，不在 Up 前直拨。
+        assertEquals(1, h.transports.size)
+        assertTrue(h.vm.pairingStatus is PairingStatus.Pairing)
+
+        h.vm.onTsnetState(
+            dev.agentmirror.app.tsnet.TsnetState.Up(
+                dev.agentmirror.app.tsnet.TsnetProxy("127.0.0.1", 1080, "test-cred"),
+            ),
+        )
+
+        assertEquals(2, h.transports.size)
+        assertEquals("ws://100.101.2.3:9900/ws", h.nextConfig?.url)
+    }
+
+    @Test
+    fun waitingTailnetFailsVisiblyOnTsnetErrorWithoutDial() {
+        lateinit var h: Harness
+        h = Harness(tsnetStarter = {
+            h.vm.onTsnetState(dev.agentmirror.app.tsnet.TsnetState.Starting)
+        })
+        h.vm.manualUrl = "ws://100.101.2.3:9900/ws"
+        h.vm.manualToken = "ABC123"
+        h.vm.manualTsAuthKey = "tskey-manual-1"
+        h.vm.submitManual()
+
+        h.vm.onTsnetState(dev.agentmirror.app.tsnet.TsnetState.Error("control plane unreachable"))
+
+        assertTrue(h.transports.isEmpty())
+        assertEquals(PairingFailCause.UNREACHABLE, h.failedCause())
+        assertTrue((h.vm.pairingStatus as PairingStatus.Failed).message.contains("入网失败"))
+    }
+
+    @Test
+    fun retryAfterTsnetErrorRestartsNodeBeforeTailnetDial() {
+        lateinit var h: Harness
+        var starts = 0
+        h = Harness(tsnetStarter = {
+            starts++
+            h.vm.onTsnetState(dev.agentmirror.app.tsnet.TsnetState.Starting)
+        })
+        h.vm.manualUrl = "ws://100.101.2.3:9900/ws"
+        h.vm.manualToken = "ABC123"
+        h.vm.manualTsAuthKey = "fake-auth-key"
+        h.vm.submitManual()
+        h.vm.onTsnetState(dev.agentmirror.app.tsnet.TsnetState.Error("control plane unreachable"))
+        assertEquals(PairingFailCause.UNREACHABLE, h.failedCause())
+
+        h.vm.retry()
+        assertEquals(2, starts)
+        assertTrue(h.transports.isEmpty())
+        h.vm.onTsnetState(
+            dev.agentmirror.app.tsnet.TsnetState.Up(
+                dev.agentmirror.app.tsnet.TsnetProxy("127.0.0.1", 1080, "fake-cred"),
+            ),
+        )
+        assertEquals(1, h.transports.size)
+    }
+
+    @Test
+    fun secureStoreFailureBecomesFixedVisibleError() {
+        val h = Harness()
+        h.store.failSave = true
+        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC123"}""")
+        h.authOk()
+
+        assertEquals(PairingFailCause.PROTOCOL_ERROR, h.failedCause())
+        val message = (h.vm.pairingStatus as PairingStatus.Failed).message
+        assertTrue(message.contains("安全存储"))
+        assertFalse(message.contains("fake-secret-material"))
+        assertNull(h.vm.pendingConfig)
     }
 
     // ---- 扫码回填 + 拨号失败快反（fix-pairing-scan-flow 红测：修前红）----

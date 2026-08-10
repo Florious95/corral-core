@@ -112,7 +112,7 @@ class MirrorForegroundService : Service() {
     /** 连接状态映射为常驻通知文案（服务只反映状态，不决策）。 */
     private fun connectionText(state: ConnectionState): String = when (state) {
         ConnectionState.CONNECTING, ConnectionState.AUTHENTICATING -> "正在连接…"
-        ConnectionState.READY -> "已连接"
+        ConnectionState.READY -> ServiceWire.connectionPath()?.let { "已连接 · ${it.label}" } ?: "已连接"
         ConnectionState.RECONNECTING -> "连接中断，正在重连…"
         ConnectionState.STOPPED -> "连接已停止"
     }

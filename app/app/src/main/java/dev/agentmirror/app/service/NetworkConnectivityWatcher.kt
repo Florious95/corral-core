@@ -54,6 +54,11 @@ object NetworkConnectivityWatcher {
      */
     fun register(context: Context) {
         if (registered) return
+        // feat-ts-wire：网络接线引导段顺带注入 tsnet 运行环境（幂等）。register 在
+        // MainActivity.onCreate 早于冷启动 startPersistentConnection 的首次拨号执行，
+        // 是冷启动路径上唯一先于拨号、且持有 Context 的可写钩子——带 authkey 的配置
+        // 冷启动重新起网依赖它。
+        TsnetBootstrap.install(context)
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: run {
                 Log.w(TAG, "connectivity service unavailable; network-callback retry skipped")

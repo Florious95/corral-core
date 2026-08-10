@@ -51,7 +51,7 @@ class QrPayloadParserTest {
 
     @Test
     fun missingTsAuthKeyDefaultsEmpty() {
-        // ts_authkey 本任务不消费（app-tsnet 接入前占位），缺省按空处理。
+        // 兼容旧 QR：缺省按空处理，不启动内嵌 tsnet。
         val p = QrPayloadParser.parse("""{"v":1,"url":"ws://h:1/ws","token":"t"}""")
         assertEquals("", p.tsAuthKey)
     }

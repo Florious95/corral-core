@@ -18,6 +18,7 @@ package dev.agentmirror.app.tsnet
 
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -66,6 +67,46 @@ class TsnetDialTest {
         assertNull(auth.credentialsFor("127.0.0.1", 1080))
         assertNull(auth.credentialsFor("evil.example", 49677))
         assertNull(auth.credentialsFor(null, 49677))
+    }
+
+    // ---- feat-ts-wire 红测：按目标地址选路（leader 裁定：仅 CGNAT 段走 SOCKS，不引入全局代理）----
+
+    @Test
+    fun `tailnet 段判定 - 100_64 到 100_127 为真其余为假`() {
+        // 100.64.0.0/10 边界：first==100 && second in 64..127。
+        assertEquals(true, TsnetDial.isTailnetHost("100.64.0.1"))
+        assertEquals(true, TsnetDial.isTailnetHost("100.101.2.3"))
+        assertEquals(true, TsnetDial.isTailnetHost("100.127.255.254"))
+        assertEquals(false, TsnetDial.isTailnetHost("100.63.255.255"))
+        assertEquals(false, TsnetDial.isTailnetHost("100.128.0.0"))
+        assertEquals(false, TsnetDial.isTailnetHost("192.168.1.5"))
+        assertEquals(false, TsnetDial.isTailnetHost("10.20.55.20"))
+        // 非 IPv4（主机名/坏串/空）一律不判为 tailnet——直拨，不猜 DNS。
+        assertEquals(false, TsnetDial.isTailnetHost("myhost.example"))
+        assertEquals(false, TsnetDial.isTailnetHost("100.64.0"))
+        assertEquals(false, TsnetDial.isTailnetHost("100.64.0.256"))
+        assertEquals(false, TsnetDial.isTailnetHost(""))
+        assertEquals(false, TsnetDial.isTailnetHost(null))
+    }
+
+    @Test
+    fun `按址选路 - tailnet 目标且 Up 才给 SOCKS socket 工厂`() {
+        assertNotNull(TsnetDial.socketFactoryFor(TsnetState.Up(proxy), "100.101.2.3"))
+    }
+
+    @Test
+    fun `按址选路 - LAN 目标即使 Up 也直拨（不引入全局代理）`() {
+        assertNull(TsnetDial.socketFactoryFor(TsnetState.Up(proxy), "192.168.1.5"))
+        assertNull(TsnetDial.socketFactoryFor(TsnetState.Up(proxy), "myhost.example"))
+    }
+
+    @Test
+    fun `按址选路 - 无 authkey 降级不回退（tailnet 目标未 Up 直拨自然失败）`() {
+        // 红测（验收边界）：节点未起（Idle/Starting/Error）时 tailnet 目标不换路、
+        // 不兜底、不给工厂——直拨该地址让失败可见（003），LAN 路径零影响。
+        assertNull(TsnetDial.socketFactoryFor(TsnetState.Idle, "100.101.2.3"))
+        assertNull(TsnetDial.socketFactoryFor(TsnetState.Starting, "100.101.2.3"))
+        assertNull(TsnetDial.socketFactoryFor(TsnetState.Error("bad key"), "100.101.2.3"))
     }
 
     @Test

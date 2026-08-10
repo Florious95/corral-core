@@ -19,6 +19,9 @@ package dev.agentmirror.app.service
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
+import dev.agentmirror.app.tsnet.TsnetDial
+import dev.agentmirror.app.tsnet.TsnetWire
+import dev.agentmirror.app.tsnet.ConnectionPath
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -127,6 +130,12 @@ class OkHttpWebSocketTransport(
 /**
  * 真实传输工厂：每次拨号新建一条 OkHttp WebSocket（WebSocket 是逐连接实例）。
  * 注入 [ServiceWire.transportFactory] 即全 app 共享真实连接（session/workspace 共用）。
+ *
+ * feat-ts-wire 按址选路：每次 create（= conn 层每次拨号/重连）现查 [TsnetWire.state]，
+ * 目标是 tailnet 段（100.64/10）且节点 Up 才经 loopback SOCKS5 走 tsnet（自实现握手
+ * 的 socketFactory 注入，[TsnetDial.socketFactoryFor]——Android libcore 内建 SOCKS
+ * 客户端认证不生效），其余直拨。选路在拨号时刻而非工厂构造时刻——节点 Up 晚于
+ * 首拨时，conn 层退避重连的下一次 create 自然拿到 SOCKS 通路，无需额外通知。
  */
 object OkHttpTransportFactory : TransportFactory {
     private val client = OkHttpClient.Builder()
@@ -136,5 +145,26 @@ object OkHttpTransportFactory : TransportFactory {
         .retryOnConnectionFailure(false)
         .build()
 
-    override fun create(url: String): WebSocketTransport = OkHttpWebSocketTransport(url, client)
+    override fun create(url: String): WebSocketTransport = create(url, recordConnectionPath = true)
+
+    /** 配对探针复用同一选路实现，但不得覆盖持久连接的用户可见路径。 */
+    internal fun create(url: String, recordConnectionPath: Boolean): WebSocketTransport {
+        // 提取 host 判 tailnet 段；坏 URL host=null → 直拨（拨号层自会显式失败，003）。
+        val host = runCatching { java.net.URI(url).host }.getOrNull()
+        val sf = TsnetDial.socketFactoryFor(TsnetWire.state, host)
+        // 记录的是本次实际选择：只有确实注入 SOCKS socketFactory 才叫 tailnet；
+        // 不能仅凭目标 100.x 或节点 Up 事后推断，否则 UI 会把直拨误标成隧道。
+        if (recordConnectionPath) {
+            ServiceWire.recordConnectionPath(if (sf == null) ConnectionPath.LAN else ConnectionPath.TAILNET)
+        }
+        // newBuilder 共享连接池/线程池，仅 socketFactory 差异——非 tailnet 目标零行为变化。
+        val chosen = if (sf == null) client else client.newBuilder().socketFactory(sf).build()
+        return OkHttpWebSocketTransport(url, chosen)
+    }
+}
+
+/** 独立配对探针工厂：真实拨号选路不变，仅不写持久连接的全局 LAN/tailnet 徽标。 */
+internal object OkHttpPairingTransportFactory : TransportFactory {
+    override fun create(url: String): WebSocketTransport =
+        OkHttpTransportFactory.create(url, recordConnectionPath = false)
 }

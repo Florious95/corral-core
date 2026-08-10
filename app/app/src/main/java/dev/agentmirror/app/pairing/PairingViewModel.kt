@@ -26,6 +26,9 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ErrorFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.tsnet.TsnetDial
+import dev.agentmirror.app.tsnet.TsnetState
+import java.net.URI
 
 /**
  * 配对页状态机（纯 JVM 可测核心，验收模式 `--tests "*Pairing*"` 打在它上面）。
@@ -37,13 +40,19 @@ import dev.agentmirror.app.conn.FramePayload
  *
  * 纪律：
  * - token 不进日志、错误消息绝不携带 token 值（协议 §9 红线）；
- * - ts_authkey 仅占位保留（app-tsnet 接入前不消费，不参与配对）；
+ * - ts_authkey 非空时先启动内嵌 tsnet，并随成功配置安全持久化供冷启动恢复；
  * - 配对成功后才落配置（[PairingConfigStore.save]），失败不污染已有配置。
  */
 class PairingViewModel(
     private val configStore: PairingConfigStore,
     private val connectionFactory: (ConnectionConfig) -> ConnectionManager,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /**
+     * tsnet 起网入口（feat-ts-wire）：扫码带 key / 手填 key 时调用。生产由
+     * PairingRoute 接 [dev.agentmirror.app.tsnet.TsnetWire.ensureStarted]；
+     * 测试注入记录假件。VM 不持节点生命周期（节点随进程存活，归 TsnetWire）。
+     */
+    private val tsnetStarter: (String) -> Unit = {},
 ) : ConnectionManager.Listener {
 
     // ---- 可观察 UI 状态（Compose 屏直接读）----
@@ -59,6 +68,34 @@ class PairingViewModel(
 
     /** 手填 token 草稿（明文编辑；落配置后进入存储加密 TODO）。 */
     var manualToken by mutableStateOf("")
+
+    /**
+     * 手填 Tailscale auth key 草稿（feat-ts-wire 手填通道；屏上密文态渲染）。
+     * 扫码带入的 key **不回填**本框——QR 是 key 唯一分发出口，不主动上屏（§2.1 红线）。
+     */
+    var manualTsAuthKey by mutableStateOf("")
+
+    /** tsnet 节点状态（TS 态可视，018 标准5；TsnetWire 监听经 [onTsnetState] 投递）。 */
+    var tsState by mutableStateOf<TsnetState>(TsnetState.Idle)
+        private set
+
+    /** TsnetWire 状态监听落点（可能来自后台线程；Compose snapshot 写线程安全）。 */
+    fun onTsnetState(state: TsnetState) {
+        tsState = state
+        if (!waitingForTsnet || pairingStatus !is PairingStatus.Pairing) return
+        when (state) {
+            is TsnetState.Up -> {
+                waitingForTsnet = false
+                startProbe()
+            }
+            is TsnetState.Error -> {
+                waitingForTsnet = false
+                // 起网失败仍走候选推进：后面的 LAN 候选不被 tailnet 拖垮。
+                advanceAttempt(PairingFailCause.UNREACHABLE, "tailnet 入网失败：${state.reason}")
+            }
+            else -> Unit
+        }
+    }
 
     /** 配对状态机（Idle/Pairing/Success/Failed）。 */
     var pairingStatus by mutableStateOf<PairingStatus>(PairingStatus.Idle)
@@ -93,11 +130,17 @@ class PairingViewModel(
     /** 当前逐试的 token（主选与候选同源同一 token）。 */
     private var currentToken = ""
 
+    /** 当前 TS authkey（扫码/手填带入，trim 后；随配对成功持久化，重试序列间保留）。 */
+    private var currentTsAuthKey = ""
+
     /** 当前尝试的超时预算（有候选时每候选 3s；无候选保持旧版 15s）。 */
     private var attemptBudgetMs = PAIR_TIMEOUT_MS
 
     /** 当前尝试在 [attemptQueue] 中的下标（推进逐试序列）。 */
     private var attemptIndex = 0
+
+    /** tailnet 候选已就位，但必须等 tsnet Up 后才创建拨号探针。 */
+    private var waitingForTsnet = false
 
     // ---- 入口 ----
 
@@ -116,6 +159,10 @@ class PairingViewModel(
         // 正是绕过缺陷 A（TUN 地址不可达）的自救通路；地址上屏、token 不上屏（§9）。
         manualUrl = payload.url
         manualToken = payload.token
+        // feat-ts-wire（011 预授权分发）：QR 带 authkey → 立即起网（先于试配对，SOCKS
+        // 通道尽早就绪供 tailnet 候选拨号）。key 不回填手填框（QR 是唯一出口，不上屏）。
+        currentTsAuthKey = payload.tsAuthKey.trim()
+        if (currentTsAuthKey.isNotEmpty()) tsnetStarter(currentTsAuthKey)
         // fix-pairing-candidates：主选打头 + candidates 全候选逐试（无候选 = 单元素队列）。
         startPairingSequence(buildAttemptQueue(payload), payload.token, resetCandidates = true)
     }
@@ -131,6 +178,9 @@ class PairingViewModel(
         }
         formError?.let { return }
         recognizedUrl = url
+        // feat-ts-wire 手填通道（FIELD 裁定：输入框接活）：填了 key 即起网。
+        currentTsAuthKey = manualTsAuthKey.trim()
+        if (currentTsAuthKey.isNotEmpty()) tsnetStarter(currentTsAuthKey)
         startPairingSequence(listOf(url), token, resetCandidates = true)
     }
 
@@ -148,6 +198,7 @@ class PairingViewModel(
         succeeded = false
         // 先置 Idle 再停旧探针：旧探针 stop 的同步 STOPPED 回调看到非 Pairing 不误报拒绝。
         pairingStatus = PairingStatus.Idle
+        waitingForTsnet = false
         stopProbe()
         currentConfig = null
         pendingConfig = null
@@ -156,6 +207,7 @@ class PairingViewModel(
         candidateUrls = emptyList()
         attemptQueue = emptyList()
         currentToken = ""
+        currentTsAuthKey = ""
     }
 
     /**
@@ -168,6 +220,7 @@ class PairingViewModel(
         if (queue.isEmpty()) return
         // 扫码识别值仍留在手填表单可编辑；地址上屏、token 不上屏（§9）。
         recognizedUrl = queue.first()
+        restartTsnetAfterFailure()
         startPairingSequence(queue, currentToken, resetCandidates = true)
     }
 
@@ -179,6 +232,7 @@ class PairingViewModel(
         if (pairingStatus !is PairingStatus.Failed) return
         if (!isValidWsUrl(url)) return
         recognizedUrl = url
+        restartTsnetAfterFailure()
         // resetCandidates=false：保留全候选列表展示，单候选再失败仍可点其他候选。
         startPairingSequence(listOf(url), currentToken, resetCandidates = false)
     }
@@ -193,7 +247,7 @@ class PairingViewModel(
             p.pump(now)
             p.resolveExpiredInputs(now)
         }
-        if (pairingStatus is PairingStatus.Pairing && now - pairingStartedAt > attemptBudgetMs) {
+        if (!waitingForTsnet && pairingStatus is PairingStatus.Pairing && now - pairingStartedAt > attemptBudgetMs) {
             // fix-pairing-candidates：超时也逐试推进（有候选时每候选 3s；无候选保持旧版 15s 单次失败）。
             advanceAttempt(PairingFailCause.TIMEOUT, "配对超时：请检查服务端地址与网络后重试")
         }
@@ -213,7 +267,13 @@ class PairingViewModel(
                     failPairing(PairingFailCause.PROTOCOL_ERROR, "配对失败：缺少配置")
                     return
                 }
-                configStore.save(cfg)
+                try {
+                    configStore.save(cfg)
+                } catch (_: Exception) {
+                    pendingConfig = null
+                    failPairing(PairingFailCause.PROTOCOL_ERROR, "配对失败：安全存储不可用，请检查设备安全设置后重试")
+                    return
+                }
                 pendingConfig = cfg
                 pairingStatus = PairingStatus.Success
                 stopProbe()
@@ -275,10 +335,18 @@ class PairingViewModel(
         }
         pendingConfig = null
         formError = null
+        waitingForTsnet = false
         // 每次新序列从队列头开始：attemptIndex 必须归零，否则 retryCandidate/retry 的新序列
         // beginAttempt 时用旧序列的推进值判 `attemptIndex >= size` 直接误落「全部候选失败」。
         attemptIndex = 0
         beginAttempt()
+    }
+
+    /** tsnet 失败后的重试必须重新起网；同一 key 的 Up/Starting 节点由 TsnetWire 幂等保留。 */
+    private fun restartTsnetAfterFailure() {
+        if (currentTsAuthKey.isNotEmpty() && (tsState is TsnetState.Idle || tsState is TsnetState.Error)) {
+            tsnetStarter(currentTsAuthKey)
+        }
     }
 
     /**
@@ -292,15 +360,38 @@ class PairingViewModel(
         }
         val url = attemptQueue[attemptIndex]
         attemptBudgetMs = if (attemptQueue.size > 1) CANDIDATE_TRY_MS else PAIR_TIMEOUT_MS
-        currentConfig = PairingConfig(url, currentToken)
+        // authkey 随配置走（成功即持久化，冷启动重连用它重新起网，feat-ts-wire）。
+        currentConfig = PairingConfig(url, currentToken, currentTsAuthKey)
         pendingConfig = null
         recognizedUrl = url
         pairingStatus = PairingStatus.Pairing(url)
+        if (mustWaitForTsnet(url)) {
+            when (val state = tsState) {
+                is TsnetState.Up -> startProbe()
+                is TsnetState.Error ->
+                    advanceAttempt(PairingFailCause.UNREACHABLE, "tailnet 入网失败：${state.reason}")
+                // 等待起网不占用候选的 3s/15s 拨号预算，预算从 Up 后真正首拨起算。
+                else -> waitingForTsnet = true
+            }
+            return
+        }
+        startProbe()
+    }
+
+    /** 真正创建并启动当前候选的试配对探针。 */
+    private fun startProbe() {
+        val config = checkNotNull(currentConfig) { "pairing config missing before dial" }
         pairingStartedAt = nowMs()
-        val manager = connectionFactory(ConnectionConfig(url, currentToken))
+        val manager = connectionFactory(ConnectionConfig(config.url, config.token))
         probe = manager
         manager.setListener(this)
         manager.start()
+    }
+
+    /** 只有携带/正在使用 tsnet 的 CGNAT 字面地址需等 Up；无 key 降级仍按旧路径直拨显错。 */
+    private fun mustWaitForTsnet(url: String): Boolean {
+        val tailnet = TsnetDial.isTailnetHost(URI(url).host)
+        return tailnet && (currentTsAuthKey.isNotEmpty() || tsState is TsnetState.Starting)
     }
 
     /**
@@ -311,6 +402,7 @@ class PairingViewModel(
     private fun advanceAttempt(cause: PairingFailCause, message: String) {
         // 先置 Idle 再停旧探针：旧探针 stop 的同步 STOPPED 回调看到非 Pairing 不误报拒绝。
         pairingStatus = PairingStatus.Idle
+        waitingForTsnet = false
         stopProbe()
         if (attemptQueue.size <= 1) {
             failPairing(cause, message)
@@ -344,6 +436,7 @@ class PairingViewModel(
         // 避免 ScanCard 在 Failed 态仍显示旧地址的进行中文本（003 失败可见、状态纯净）。
         recognizedUrl = null
         pairingStatus = PairingStatus.Failed(cause, message)
+        waitingForTsnet = false
         stopProbe()
     }
 

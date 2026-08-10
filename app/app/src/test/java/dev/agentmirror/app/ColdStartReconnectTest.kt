@@ -25,8 +25,14 @@ import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.WebSocketTransport
+import dev.agentmirror.app.pairing.PairingConfig
+import dev.agentmirror.app.pairing.startPersistentConnection
 import dev.agentmirror.app.service.NoopTransportFactory
 import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.tsnet.TsnetBackend
+import dev.agentmirror.app.tsnet.TsnetProxy
+import dev.agentmirror.app.tsnet.TsnetState
+import dev.agentmirror.app.tsnet.TsnetWire
 import dev.agentmirror.app.workspace.ConnectionUi
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 import org.junit.After
@@ -41,6 +47,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.util.concurrent.Executor
 
 /**
  * 冷启动自动重连 Robolectric 测试（fix-cold-start-reconnect P0，验收 `--tests "*ColdStart*"`）。
@@ -81,6 +88,7 @@ class ColdStartReconnectTest {
         ServiceWire.transportFactory = NoopTransportFactory // 安全默认：不真联网（Noop 拨号即败）
         ServiceWire.releaseManager() // stop + 置空 manager
         ServiceWire.resetConfigForTest() // 清 config：防泄漏污染后续用例（SessionRoute 据此建 VM）
+        TsnetWire.resetForTest()
     }
 
     @After
@@ -95,6 +103,7 @@ class ColdStartReconnectTest {
         ServiceWire.transportFactory = NoopTransportFactory
         ServiceWire.releaseManager()
         ServiceWire.resetConfigForTest()
+        TsnetWire.resetForTest()
     }
 
     /** 本用例创建的 Activity 控制器（@After 统一 destroy，防止跨用例类泄漏）。 */
@@ -114,6 +123,19 @@ class ColdStartReconnectTest {
             val t = FakeWebSocketTransport()
             created.add(t)
             return t
+        }
+    }
+
+    /** 手动执行器：让测试把 tsnet 保持在 Starting，点名推进到 Up。 */
+    private class ManualExecutor : Executor {
+        private val queued = ArrayDeque<Runnable>()
+
+        override fun execute(command: Runnable) {
+            queued.addLast(command)
+        }
+
+        fun runAll() {
+            while (queued.isNotEmpty()) queued.removeFirst().run()
         }
     }
 
@@ -142,6 +164,67 @@ class ColdStartReconnectTest {
         assertEquals("http://10.0.2.2:9900", ServiceWire.uploadBaseUrl)
         // 有配置直进工作区（不落配对页）。
         assertFalse("有配置冷启动不得停配对页", activity.navState.showPairing)
+    }
+
+    @Test
+    fun coldStart_tailnetWaitsForEmbeddedNodeBeforeFirstDial() {
+        val executor = ManualExecutor()
+        val statesAtDial = mutableListOf<TsnetState>()
+        val created = mutableListOf<FakeWebSocketTransport>()
+        TsnetWire.environment = TsnetWire.Environment("/tmp/ts-cold-start", "agentmirror-test")
+        TsnetWire.executorForTest = executor
+        TsnetWire.backendFactory = {
+            object : TsnetBackend {
+                override fun start(stateDir: String, hostname: String, authKey: String) =
+                    TsnetProxy("127.0.0.1", 1080, "fake-cred")
+
+                override fun close() = Unit
+            }
+        }
+        ServiceWire.transportFactory = TransportFactory {
+            statesAtDial += TsnetWire.state
+            FakeWebSocketTransport().also(created::add)
+        }
+
+        startPersistentConnection(
+            PairingConfig("ws://100.101.2.3:9900/ws", "tok-cold-tailnet", "fake-auth-key"),
+        )
+
+        assertTrue("tailnet 冷启动在 tsnet Up 前不得先直拨", created.isEmpty())
+        executor.runAll()
+        assertEquals(1, created.size)
+        assertTrue("首拨必须发生在 tsnet Up 后，实际=$statesAtDial", statesAtDial.single() is TsnetState.Up)
+    }
+
+    @Test
+    fun newerLanConfigSupersedesPendingTailnetStart() {
+        val executor = ManualExecutor()
+        TsnetWire.environment = TsnetWire.Environment("/tmp/ts-cold-start", "agentmirror-test")
+        TsnetWire.executorForTest = executor
+        TsnetWire.backendFactory = {
+            object : TsnetBackend {
+                override fun start(stateDir: String, hostname: String, authKey: String) =
+                    TsnetProxy("127.0.0.1", 1080, "fake-cred")
+
+                override fun close() = Unit
+            }
+        }
+        val dialedUrls = mutableListOf<String>()
+        ServiceWire.transportFactory = TransportFactory { url ->
+            dialedUrls += url
+            FakeWebSocketTransport()
+        }
+        val tailnet = PairingConfig("ws://100.101.2.3:9900/ws", "tok-old", "fake-auth-key")
+        val lan = PairingConfig("ws://192.168.1.8:9900/ws", "tok-new")
+
+        startPersistentConnection(tailnet)
+        startPersistentConnection(lan)
+        assertEquals(listOf(lan.url), dialedUrls)
+
+        executor.runAll()
+
+        assertEquals("迟到的 tsnet Up 不得恢复已被新 LAN 配置取代的拨号", listOf(lan.url), dialedUrls)
+        assertEquals("http://192.168.1.8:9900", ServiceWire.uploadBaseUrl)
     }
 
     // ---- 红测二：连接推进时工作区接线收到状态推进（列表数据源就绪）----

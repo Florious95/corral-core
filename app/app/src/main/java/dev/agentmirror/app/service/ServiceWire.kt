@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.service
 
+import androidx.compose.runtime.mutableStateOf
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
@@ -26,6 +27,7 @@ import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
+import dev.agentmirror.app.tsnet.ConnectionPath
 
 /**
  * 前台服务的接线点（service 包之外唯一改动接口；UI/配对层注入）。
@@ -46,6 +48,13 @@ object ServiceWire {
     /** 传输工厂（UI/配对层在启动服务前注入；默认真实 OkHttp，服务永远可跑）。 */
     @Volatile
     var transportFactory: TransportFactory = OkHttpTransportFactory
+
+    /**
+     * 配对试探针与持久连接共用真实传输能力，但生产 OkHttp 探针不得改写当前连接路径徽标。
+     * 测试/替代工厂原样返回，保留既有注入接缝。
+     */
+    internal fun pairingTransportFactory(): TransportFactory =
+        if (transportFactory === OkHttpTransportFactory) OkHttpPairingTransportFactory else transportFactory
 
     /**
      * UI 侧监听桥（UI 接线层注入；服务回调原样转投）。
@@ -101,10 +110,28 @@ object ServiceWire {
     fun setConfig(c: ConnectionConfig) {
         val old = config
         config = c
+        if (old != c) connectionPathState.value = null
         if (old != null && old != c) {
             // 配置变更：作废旧拨号目标（stop + 置空），下次 manager() 用新 config 重建。
             releaseManager()
         }
+    }
+
+    /**
+     * 最近一次真实 transport create 选择的网络类型；未拨号时为 null（不能按配置猜）。
+     *
+     * 必须是 Compose snapshot state：tailnet 冷启动首拨可能在节点 Starting 时先记为 LAN，
+     * Up 后重试才切为 TAILNET。工作区/会话顶栏直接读 [connectionPath]，若这里只是普通字段，
+     * 父组合不会因重试改路而重组，标签会永久停在首拨的 LAN。
+     */
+    private val connectionPathState = mutableStateOf<ConnectionPath?>(null)
+
+    /** UI/通知读取实际拨号路径（READY 时即为当前已连接路径）。 */
+    fun connectionPath(): ConnectionPath? = connectionPathState.value
+
+    /** transport 工厂在每次拨号选择完成后记录；internal 防其他层伪造状态。 */
+    internal fun recordConnectionPath(path: ConnectionPath) {
+        connectionPathState.value = path
     }
 
     /**
@@ -204,6 +231,7 @@ object ServiceWire {
      */
     internal fun resetConfigForTest() {
         config = null
+        connectionPathState.value = null
     }
 }
 

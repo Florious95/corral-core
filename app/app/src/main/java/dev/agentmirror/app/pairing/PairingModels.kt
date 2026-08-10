@@ -34,7 +34,7 @@ data class QrPayload(
     val url: String,
     /** 配对 token：只上行一次，不回显、不落日志（协议 §9）。 */
     val token: String,
-    /** 保留字段：Tailscale auth key，app-tsnet 接入后扫码同时组网；本任务仅占位不消费。 */
+    /** Tailscale auth key：非空时扫码同时启动 App 内嵌 tsnet；不回显、不落日志。 */
     val tsAuthKey: String,
     /**
      * 全候选 ws URL（可选字段，契约 §2.1，fix-pairing-candidates）：
@@ -42,13 +42,27 @@ data class QrPayload(
      * 主选不可达时自动逐个试探（3s/个），全败后候选列表可见可点。
      */
     val candidates: List<String>,
-)
+) {
+    /** data class 默认 toString 会带出两项凭据；显式封口，避免崩溃/调试输出误泄漏。 */
+    override fun toString(): String =
+        "QrPayload(v=$version, url=$url, token=[redacted], tsAuthKey=[redacted], candidates=$candidates)"
+}
 
-/** 配对成功后的连接配置负载（持久化：url + token）。 */
+/** 配对成功后的连接配置负载（持久化：url + token + 可选 TS authkey）。 */
 data class PairingConfig(
     val url: String,
     val token: String,
-)
+    /**
+     * Tailscale auth key（feat-ts-wire）：扫码/手填带入，随配置持久化——冷启动重连
+     * 需要它重新起 tsnet 节点（tailnet 地址拨号依赖 SOCKS 通道）。空串 = 未用 TS，
+     * 行为与旧版一致。红线同 token：不落日志、不进错误文案（协议 §2.1/§9）。
+     */
+    val tsAuthKey: String = "",
+) {
+    /** 配置对象可能进入断言/崩溃文本；token 与 authkey 永不由 toString 明文输出。 */
+    override fun toString(): String =
+        "PairingConfig(url=$url, token=[redacted], tsAuthKey=[redacted])"
+}
 
 /** 配对失败原因分类（供 UI 区分超时/拒绝/不可达/解析失败并给对应指引；003 明确报错）。 */
 enum class PairingFailCause {

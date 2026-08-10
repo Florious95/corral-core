@@ -54,8 +54,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.termview.TermSurfaceView
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
@@ -81,6 +83,7 @@ import kotlinx.coroutines.withContext
 fun SessionScreen(
     viewModel: SessionViewModel,
     name: String,
+    connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -120,7 +123,13 @@ fun SessionScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        TopBar(name = name, onBack = onBack, viewModel = viewModel)
+        TopBar(
+            name = name,
+            // 拨号选择早于 socket 成功；只在 READY 时展示 LAN/tailnet，避免把尝试冒充连接。
+            connectionPath = connectionPath.takeIf { viewModel.connectionState == ConnectionState.READY },
+            onBack = onBack,
+            viewModel = viewModel,
+        )
 
         // 终端画布：占满中间区域；IME 弹出时本区 weight 收缩（内容重排跟随，图31 修复）。
         Box(
@@ -181,6 +190,7 @@ fun SessionScreen(
 @Composable
 private fun TopBar(
     name: String,
+    connectionPath: ConnectionPath?,
     onBack: () -> Unit,
     viewModel: SessionViewModel,
 ) {
@@ -211,6 +221,14 @@ private fun TopBar(
                         .weight(1f)
                         .padding(end = Spacing.md),
                 )
+                connectionPath?.let { path ->
+                    Text(
+                        text = path.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = Spacing.sm),
+                    )
+                }
             }
             // 连接状态横幅：READY 时平滑收起；断连/重连中明确提示（conn 层自动重连，这里只反映）。
             AnimatedVisibility(visible = viewModel.connectionBanner != null) {

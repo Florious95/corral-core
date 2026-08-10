@@ -65,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -74,13 +75,14 @@ import com.google.zxing.DecodeHintType
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
+import dev.agentmirror.app.tsnet.TsnetState
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import java.nio.ByteBuffer
 
 /**
- * 配对页 Compose 屏（薄渲染壳）：扫码卡 + 手填兜底卡 + TS token 占位卡。018 重设计版。
+ * 配对页 Compose 屏（薄渲染壳）：扫码卡 + 手填兜底卡 + TS auth key 卡。018 重设计版。
  *
  * 视觉重做要点：
  * - safe-area：顶栏 statusBarsPadding，滚动区尾部 navigationBarsPadding + imePadding
@@ -90,7 +92,7 @@ import java.nio.ByteBuffer
  *   （018 §一.5 状态可视；003 静默失效最高罪）。
  *
  * 业务绑定不变：扫码 CameraX→ZXing→[PairingViewModel.onQrText]（零 GMS，008）；
- * 手填兜底；TS token 占位（app-tsnet 接入前禁用）。
+ * 手填兜底；TS auth key 手填 + 入网状态可视（feat-ts-wire 接活）。
  */
 @Composable
 fun PairingScreen(
@@ -153,7 +155,7 @@ fun PairingScreen(
                 NoPermissionCard(onRequest = { permissionLauncher.launch(Manifest.permission.CAMERA) })
             }
             ManualFormCard(viewModel)
-            TsTokenCard()
+            TsTokenCard(viewModel)
             StatusArea(
                 status = status,
                 onRetry = { viewModel.retry() },
@@ -390,6 +392,8 @@ private fun ManualFormCard(viewModel: PairingViewModel) {
             value = viewModel.manualToken,
             onValueChange = { viewModel.manualToken = it },
             label = { Text("配对 token") },
+            // token 与 TS authkey 同级敏感；手填时也必须遮罩，避免录屏/截图明文带出。
+            visualTransformation = PasswordVisualTransformation(),
             singleLine = true,
             shape = MaterialTheme.shapes.small,
             colors = manualFieldColors(),
@@ -419,9 +423,17 @@ private fun manualFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
 )
 
-/** TS token 入口（占位）：App 内嵌 tailscale 归 app-tsnet 任务；接入前禁用并说明。 */
+/**
+ * TS auth key 卡（feat-ts-wire 接活，替代「即将推出」空壳）：手填通道 + TS 态可视。
+ *
+ * - 输入密文态渲染（PasswordVisualTransformation）：authkey 同 token 红线不明文上屏
+ *   （§2.1）；扫码带入的 key 不回填本框（QR 是唯一分发出口）。
+ * - supportingText 呈现节点状态（018 标准5 状态可视）：入网中/已入网/失败原因；
+ *   Idle 时为使用引导。key 随「连接」提交生效（[PairingViewModel.submitManual]），
+ *   扫码路径则由 QR 自带 key 自动起网。
+ */
 @Composable
-private fun TsTokenCard() {
+private fun TsTokenCard(viewModel: PairingViewModel) {
     SectionCard {
         Text(
             text = "Tailscale 入网（可选）",
@@ -429,16 +441,38 @@ private fun TsTokenCard() {
             color = MaterialTheme.colorScheme.onSurface,
         )
         OutlinedTextField(
-            value = "",
-            onValueChange = {},
+            value = viewModel.manualTsAuthKey,
+            onValueChange = { viewModel.manualTsAuthKey = it },
             label = { Text("Tailscale auth key") },
-            enabled = false,
-            supportingText = { Text("即将推出：填入后扫码即自动加入 tailnet。") },
+            visualTransformation = PasswordVisualTransformation(),
+            supportingText = {
+                val (text, isError) = tsStateLine(viewModel.tsState)
+                Text(
+                    text = text,
+                    color = if (isError) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            },
             singleLine = true,
             shape = MaterialTheme.shapes.small,
+            colors = manualFieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
     }
+}
+
+/**
+ * TS 节点状态 → 状态行文案（第二值 = 是否错误配色）。纯函数便于目检维护；
+ * Error.reason 来自 TsnetManager/后端，其契约保证不含 authkey 值（红线）。
+ */
+private fun tsStateLine(state: TsnetState): Pair<String, Boolean> = when (state) {
+    TsnetState.Idle -> "填入 auth key 后点「连接」，或直接扫携带 key 的二维码，自动加入 tailnet。" to false
+    TsnetState.Starting -> "tailnet 入网中…" to false
+    is TsnetState.Up -> "已入网：tailnet 通道就绪，100.x 地址可直连。" to false
+    is TsnetState.Error -> "入网失败：${state.reason}" to true
 }
 
 /**
