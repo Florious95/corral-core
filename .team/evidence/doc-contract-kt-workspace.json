@@ -1,0 +1,122 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-kt-workspace",
+  "case_id": "msg_8571ee316360",
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/workspace/PackageDoc.kt",
+    "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt",
+    "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadgeStyle.kt"
+  ],
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.workspace",
+      "rc": 0,
+      "note": "单包硬判全绿（T3-1..T3-4 PASS）：施工前 T3-4 3 条漂移全部消除；T3-1/T3-2 本就 PASS（T3-1 无违规，T3-2 无违规），T3-3 新增 @contract 后 PASS"
+    },
+    {
+      "argv": "bash -c 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "note": "模块测试全绿（GRADLE_EXIT=0）。注：外层 shell 为 zsh 会 glob-fail TEAM_AGENT_*，故经 bash -c 嵌套透传净化前缀，与 acceptance 命令同语义"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据保持绿（T1-1/T1-2 PASS；T3 全部 PASS，exit 0），未打坏其他包"
+    }
+  ],
+  "positive_control": {
+    "procedure": "临时删除 WorkspaceViewModel（WorkspaceViewModel.kt）@contract 块里的 @err 行，跑单包硬判，确认 exit 1 并精确指向该符号，随后从备份恢复改回",
+    "result_red": "T3-3 FAIL — 契约标签完备：1 条违规 [T3-3] dev.agentmirror.app.workspace  app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt:90  `@contract` — 缺契约标签: @err；结果：未通过（exit 1）",
+    "exit_red": 1,
+    "exit_after_restore": 0,
+    "note": "判据对 dev.agentmirror.app.workspace 真实生效且精确到符号行——非'扫不到包而全绿'"
+  },
+  "rewritten": [
+    {
+      "symbol": "PackageDoc（包级 KDoc）",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/PackageDoc.kt",
+      "original": "二级导航进入会话页由根路由（AgentMirrorApp）占位跳转，会话页归 session-ui 任务。",
+      "inaccuracy": "过时（谱系①旧状态残留）：session-ui 任务早已落位——根包 AgentMirrorApp 直接挂载 [SessionRoute]，会话页完整实现（SessionScreen/SessionViewModel/HttpUrlConnectionUploader）。KDoc 把已完成的活写成未来式/占位式",
+      "rewritten": "改为现状描述：二级导航经 [WorkspaceScreen] 的 onOpenSession 回调把 (ref, name) 交给根路由 [AgentMirrorApp]，由其挂载 [SessionRoute] 进入会话页（与根包 AgentMirrorApp.kt 的 AppRoute.Session 分支一致）。并补包级 @consumes 三条（见 consumes_added）"
+    },
+    {
+      "symbol": "ConnectionUi",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt",
+      "original": "断连（RECONNECTING/STOPPED）由 conn 层自动重连，UI 只反映状态（004 无状态免疫）。",
+      "inaccuracy": "错误面写混（谱系②约束写错侧）：STOPPED 是永久关闭（ConnectionState.STOPPED = auth 被拒/显式 stop，Connection.kt finish() 里 explicitPermanent=true 走 permanent 分支，ConnectionManager.connListener.onClosed(permanent=true) 不再调度重连）——把永久关闭说成'自动重连'是假话",
+      "rewritten": "断连态由 conn 层管理：RECONNECTING 自动退避重连；STOPPED 是永久关闭（auth 被拒 / 显式 stop），不再自动重连。UI 只反映状态，不决策（004 无状态免疫）。"
+    },
+    {
+      "symbol": "WorkspaceViewModel（内部接线注释）",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt",
+      "original": "不自行 setListener（共享连接由 fg-service 持包装监听 + uiConnector 扇出）。",
+      "inaccuracy": "虚构消费方（谱系⑤）：MirrorForegroundService 全仓库无 startService/startForegroundService 调用点（死件家族第六例，其自身 KDoc 明说'当前无任何生产代码启动它'），不存在'由 fg-service 持包装监听'的接线现状。实际包装监听在 ServiceWire.manager() 内部构造（connListener + uiConnector 双扇出），由 PersistentConnection.startPersistentConnectionNow 与 SessionRoute.createSessionViewModel 经 manager() 装配",
+      "rewritten": "共享连接由 [ServiceWire.manager] 进程级单例持有，其内部包装监听把事件喂给调用方 connListener 并扇出到 [ServiceWire.uiConnector]（引用改为真实存在的 ServiceWire.manager，T3-2 可验）"
+    },
+    {
+      "symbol": "WorkspaceUi",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt",
+      "original": "一级工作区条目：cwd 聚合。聚合字段全部来自服务端权威值，客户端只渲染不重算（012）。",
+      "inaccuracy": "绝对化断言漏边界（谱系⑩幽灵 TODO 近亲）：聚合字段并非恒来自服务端权威——added_sessions 新建工作区在 changed_workspaces 纠正前，以该会话自身状态做渲染占位（upsertSession 里 sessionCount=0/aggregateState=s.state 占位，单测 delta_addedSession_createsNewWorkspace 实证）。'全部来自服务端权威值'是假的",
+      "rewritten": "一级工作区条目：cwd 聚合。聚合字段以服务端权威值为准——added_sessions 新建工作区在 changed_workspaces 纠正前，以该会话自身状态做渲染占位（见 [WorkspaceViewModel]）；客户端只渲染不重算（012）。"
+    },
+    {
+      "symbol": "StateBadgeStyle（KDoc 链接）",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadgeStyle.kt",
+      "original": "五值闭集（[AgentState]）各自对应一种视觉与文案；[unknown] 是一等公民、灰显",
+      "inaccuracy": "指向错误（谱系⑧真符号写错）：KDoc 链接写 [unknown] 小写，实际枚举常量是 [UNKNOWN]（T3-2 只验存在性、不验指向；小写 unknown 非导出符号查不到，KDoc 断链）",
+      "rewritten": "五值闭集（[AgentState]）各自对应一种视觉与文案；[UNKNOWN] 是一等公民、灰显"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "WorkspaceViewModel",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "none（任意时刻可构造；任意帧可到达，无关帧被忽略）",
+      "post": "收到 ListingFrame 整体替换两级模型；收到 ListDeltaFrame 按四组字段增量落位；onConnectionStateChanged 把 ConnectionState 映射为 UI 四态",
+      "err": "none（无异常面；无关帧走 else 分支忽略，不破坏状态）",
+      "inv": "工作区保服务端下发顺序（LinkedHashMap 插入序）；聚合字段以服务端权威值为准，added_sessions 新建工作区的单会话占位由后续 changed_workspaces 纠正",
+      "note": "本包唯一有真实契约的符号：有状态帧流消费者（listing 全量替换/delta 增量/连接态映射/占位纠正），契约内容对着实现逐条核过（applyListing/applyDelta/upsertSession/toUi）"
+    }
+  ],
+  "consumes_added": [
+    {
+      "pkg": "dev.agentmirror.app.workspace",
+      "target": "dev.agentmirror.app.conn",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/PackageDoc.kt",
+      "note": "import 了却未声明 @consumes（T3-4 漂移，Kotlin 侧本包 3 条之一）"
+    },
+    {
+      "pkg": "dev.agentmirror.app.workspace",
+      "target": "dev.agentmirror.app.tsnet",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/PackageDoc.kt",
+      "note": "import 了却未声明 @consumes（T3-4 漂移，Kotlin 侧本包 3 条之一）"
+    },
+    {
+      "pkg": "dev.agentmirror.app.workspace",
+      "target": "dev.agentmirror.app.ui.theme",
+      "file": "app/app/src/main/java/dev/agentmirror/app/workspace/PackageDoc.kt",
+      "note": "import 了却未声明 @consumes（T3-4 漂移，Kotlin 侧本包 3 条之一）"
+    }
+  ],
+  "uncertain": [
+    {
+      "symbol": "PackageDoc KDoc 引用的需求号 001/002/008/012",
+      "note": "已核 requirement-base/INDEX.md 存在 001/002/008/012 条目且语义吻合（001 舰队视角/002 两级分组/008 状态镜像解耦/012 聚合规则），未改写。无判不准项"
+    },
+    {
+      "symbol": "WorkspaceViewModel KDoc 里 'seq 跳变与 delta 先于 listing 等一致性恢复已由 conn 层 ConnectionManager 自动重新 list'",
+      "note": "已核 ConnectionManager.connListener.onFrame：ListDeltaFrame 且 !continuous（seq != seen+1）时自动 sendList()，与 KDoc 一致，未改写。无判不准项"
+    },
+    {
+      "symbol": "WorkspaceScreen KDoc 里 '行点击 ripple（Surface onClick）' 与 'unknown 灰显不阻塞（008）'",
+      "note": "已核 WorkspaceScreen.WorkspaceList 用 Surface(onClick) 带 ripple、SessionList 对 any state 渲染 StateBadge（unknown 也正常渲染），与 KDoc 一致，未改写。无判不准项"
+    },
+    {
+      "symbol": "ConnectionUi.STOPPED 文案 'auth 被拒 / 显式 stop'",
+      "note": "已核 Connection.kt finish() 的 permanent 推导：auth 被拒（authAcked=false 且 authSent=true → permanent）、显式 close()（explicitPermanent=true）→ STOPPED。与改写后说法一致。无判不准项"
+    }
+  ],
+  "deviation": []
+}

@@ -110,7 +110,15 @@ sealed interface FramePayload {
     }
 }
 
-/** 配对握手 C→S（token 一次性上行，任何回复不回显）。 */
+/**
+ * 配对握手 C→S（token 一次性上行，任何回复不回显）。
+ *
+ * @contract
+ * @pre token 非空
+ * @post 服务端凭 token 判定身份后回 AuthAckFrame；token 不出现在任何回执里
+ * @err validate() 对空 token 返回非空原因（编码时抛 [FrameEncodeException]）
+ * @inv token 绝不被记录或回显
+ */
 @Serializable
 data class AuthFrame(
     @SerialName("token") val token: String,
@@ -120,7 +128,15 @@ data class AuthFrame(
         if (token.isEmpty()) "auth token must be non-empty" else null
 }
 
-/** 握手裁决 S→C：ok:false 必须带 reason（随后关闭连接）。 */
+/**
+ * 握手裁决 S→C：ok:false 必须带 reason（随后关闭连接）。
+ *
+ * @contract
+ * @pre 无
+ * @post ok:false 时 reason 非空；ok:true 时 reason 为空
+ * @err validate() 对 ok/reason 矛盾组合返回非空原因
+ * @inv reason 存在当且仅当 ok=false（一字段一义）
+ */
 @Serializable
 data class AuthAckFrame(
     @SerialName("ok") val ok: Boolean,
@@ -134,7 +150,15 @@ data class AuthAckFrame(
     }
 }
 
-/** 全量列表请求 C→S（req_id >= 1）。 */
+/**
+ * 全量列表请求 C→S（req_id >= 1）。
+ *
+ * @contract
+ * @pre reqId ≥ 1（0 与"未设置"不可区分）
+ * @post 服务端以 reqId 对应回复 ListingFrame
+ * @err validate() 对 reqId ≤ 0 返回非空原因
+ * @inv reqId 由调用方单调递增
+ */
 @Serializable
 data class ListFrame(
     @SerialName("req_id") val reqId: Long,
@@ -166,7 +190,15 @@ data class Session(
     @SerialName("cols") val cols: Int,
 )
 
-/** 全量列表回复 S→C（req_id 对应 list；seq 单调递增）。 */
+/**
+ * 全量列表回复 S→C（req_id 对应 list；seq 单调递增）。
+ *
+ * @contract
+ * @pre reqId ≥ 1 且 seq ≥ 1
+ * @post workspaces 为服务端权威快照；客户端只渲染不重算聚合
+ * @err validate() 对 reqId/seq ≤ 0 返回非空原因
+ * @inv seq 单调递增；[AgentState] 值必须属闭集
+ */
 @Serializable
 data class ListingFrame(
     @SerialName("req_id") val reqId: Long,
@@ -184,6 +216,12 @@ data class ListingFrame(
 /**
  * 列表增量推送 S→C（主动，无轮询）。四组字段两两不相交；seq 单调递增。
  * seq 不连续于上次见过的值 ⇒ 客户端必须重新 list 拉全量（无状态恢复）。
+ *
+ * @contract
+ * @pre seq ≥ 1
+ * @post 客户端按 added/removed/changed 四组应用增量；seq 不连续时须回退全量 list
+ * @err validate() 对 seq ≤ 0 返回非空原因
+ * @inv 四组字段两两不相交；seq 单调递增
  */
 @Serializable
 data class ListDeltaFrame(
@@ -197,7 +235,15 @@ data class ListDeltaFrame(
     override fun validate(): String? = if (seq <= 0) "list_delta seq must be >= 1" else null
 }
 
-/** 订阅会话镜像 C→S（成功后 S 先发 snapshot 再流 delta）。 */
+/**
+ * 订阅会话镜像 C→S（成功后 S 先发 snapshot 再流 delta）。
+ *
+ * @contract
+ * @pre ref 非空且 rows/cols ≥ 1
+ * @post 服务端成功后先发 BinaryKind.SNAPSHOT 再流 BinaryKind.DELTA
+ * @err validate() 对空 ref 或 rows/cols ≤ 0 返回非空原因
+ * @inv rows/cols 是订阅时的终端尺寸；随后可经 ResizeFrame 调整
+ */
 @Serializable
 data class SubscribeFrame(
     @SerialName("ref") val ref: String,
@@ -212,7 +258,15 @@ data class SubscribeFrame(
     }
 }
 
-/** 停止镜像 C→S（幂等；连接关闭即全部退订）。 */
+/**
+ * 停止镜像 C→S（幂等；连接关闭即全部退订）。
+ *
+ * @contract
+ * @pre ref 非空
+ * @post 服务端停止对该 ref 的镜像推送
+ * @err validate() 对空 ref 返回非空原因
+ * @inv 幂等；重复退订与退订未订阅会话均为合法
+ */
 @Serializable
 data class UnsubscribeFrame(
     @SerialName("ref") val ref: String,
@@ -227,6 +281,12 @@ data class UnsubscribeFrame(
  * keys（R-1 快捷键条，017 裁定，可选字段前向兼容增量不 bump 版本）：携带时发送命名
  * 特殊键且**不附加回车**（快捷键条语义 = 按一下那个键）。text 与 keys 一帧至多其一，
  * 两者都有判协议错误（契约 §4.2）；两者皆无 = 仅回车（既有语义不变）。
+ *
+ * @contract
+ * @pre reqId ≥ 1、ref 非空、text 与 keys 至多一个非空
+ * @post 该帧在 wire 上合法（validate 通过）；空 text 且空 keys 是合法的裸 Enter
+ * @err validate() 对 reqId ≤ 0 / 空 ref / text+keys 并存返回非空原因
+ * @inv keys 注入不附加回车
  */
 @Serializable
 data class InputFrame(
@@ -249,6 +309,12 @@ data class InputFrame(
 /**
  * 注入回执 S→C（必达）。ok:true 表示字节已进面板；ok:false 必须带 reason。
  * reason 存在当且仅当 ok:false（一字段一义）。
+ *
+ * @contract
+ * @pre reqId ≥ 1
+ * @post ok:false 时 reason 非 null；ok:true 时 reason 为 null
+ * @err validate() 对 reqId ≤ 0 / ok:false 缺 reason / ok:true 带 reason 返回非空原因
+ * @inv reason 存在当且仅当 ok=false
  */
 @Serializable
 data class InputAckFrame(
@@ -265,7 +331,15 @@ data class InputAckFrame(
     }
 }
 
-/** 按行区间拉历史 C→S（from_line 按 tmux capture-pane 语义；count >= 1）。 */
+/**
+ * 按行区间拉历史 C→S（from_line 按 tmux capture-pane 语义；count >= 1）。
+ *
+ * @contract
+ * @pre reqId ≥ 1、ref 非空、count ≥ 1
+ * @post 服务端返回 BinaryKind.SCROLLBACK 帧，其 reqId/fromLine/lineCount 为实际返回区间
+ * @err validate() 对 reqId ≤ 0 / 空 ref / count ≤ 0 返回非空原因
+ * @inv fromLine 可为负（历史行）；变更 fromLine 不影响帧合法性，由服务端收敛
+ */
 @Serializable
 data class ScrollbackFrame(
     @SerialName("req_id") val reqId: Long,
@@ -282,7 +356,15 @@ data class ScrollbackFrame(
     }
 }
 
-/** 上报手机行列数 C→S（只作用于已订阅会话）。 */
+/**
+ * 上报手机行列数 C→S（只作用于已订阅会话）。
+ *
+ * @contract
+ * @pre ref 非空且 rows/cols ≥ 1
+ * @post 服务端按新尺寸调整已订阅会话的镜像
+ * @err validate() 对空 ref 或 rows/cols ≤ 0 返回非空原因
+ * @inv 未订阅会话的 resize 是空操作（服务端忽略）
+ */
 @Serializable
 data class ResizeFrame(
     @SerialName("ref") val ref: String,
@@ -297,7 +379,15 @@ data class ResizeFrame(
     }
 }
 
-/** 协议级错误 S→C（坏帧/未知类型/缺会话/版本不支持/内部错误）。 */
+/**
+ * 协议级错误 S→C（坏帧/未知类型/缺会话/版本不支持/内部错误）。
+ *
+ * @contract
+ * @pre 无
+ * @post code 为 [ErrorCode] 闭集成员（客户端解码未识别值回退 [ErrorCode.UNKNOWN]）
+ * @err 无本地错误面；[ErrorCode.UNKNOWN] 仅解码回退、编码必拒
+ * @inv reason 为人类可读补充，可为空
+ */
 @Serializable
 data class ErrorFrame(
     @SerialName("code") val code: ErrorCode,

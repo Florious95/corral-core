@@ -42,6 +42,12 @@ import java.net.URI
  * - token 不进日志、错误消息绝不携带 token 值（协议 §9 红线）；
  * - ts_authkey 非空时先启动内嵌 tsnet，并随成功配置安全持久化供冷启动恢复；
  * - 配对成功后才落配置（[PairingConfigStore.save]），失败不污染已有配置。
+ *
+ * @contract
+ * @pre none
+ * @post 配对成功时 [PairingStatus.Success] + [pendingConfig] 非空；失败时 [PairingStatus.Failed] 带 cause/message
+ * @err REJECTED/UNREACHABLE/TIMEOUT/PARSE_ERROR/PROTOCOL_ERROR 五类失败均进入 [PairingStatus.Failed]；token 值不进入错误文案
+ * @inv 非 Pairing 状态下不入成功/失败分支；已 succeeded 后忽略后续 STOPPED 不误报拒绝
  */
 class PairingViewModel(
     private val configStore: PairingConfigStore,
@@ -66,7 +72,10 @@ class PairingViewModel(
     /** 手填地址草稿（本地编辑零网络；扫码识别值自动回填，可改地址重试）。 */
     var manualUrl by mutableStateOf("")
 
-    /** 手填 token 草稿（明文编辑；落配置后进入存储加密 TODO）。 */
+    /**
+     * 手填 token 草稿（明文编辑）。落配置后 token 以明文存于 SharedPreferences
+     * （历史欠账，见 [SharedPreferencesPairingConfigStore] KDoc）；TS authkey 单独加密持久化。
+     */
     var manualToken by mutableStateOf("")
 
     /**
@@ -100,7 +109,7 @@ class PairingViewModel(
     /** 配对状态机（Idle/Pairing/Success/Failed）。 */
     var pairingStatus by mutableStateOf<PairingStatus>(PairingStatus.Idle)
 
-    /** 试配对连接状态（配对中顶部提示「配对中…」；READY 即成功）。 */
+    /** 试配对连接状态镜像（[ConnectionManager] 回调写入；当前无 UI 读取，保留供后续接线）。 */
     var connectionState by mutableStateOf(ConnectionState.STOPPED)
 
     /** 手填表单校验错误（提交前本地判定，明确报错）。 */
@@ -237,7 +246,7 @@ class PairingViewModel(
         startPairingSequence(listOf(url), currentToken, resetCandidates = false)
     }
 
-    /** 失败态是否可重试：解析失败的坏 payload 无配置，重试无意义（应重扫或手填）。 */
+    /** 失败态是否可重试：由最近一次试配对是否已建立配置（[currentConfig]）决定；首启即解析失败的坏 payload 无配置，重试无意义（应重扫或手填）。 */
     val canRetry: Boolean
         get() = currentConfig != null
 

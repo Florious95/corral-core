@@ -22,8 +22,9 @@ import android.graphics.Typeface
 import android.util.Log
 
 /**
- * 字形字体提供者：为 [GlyphSlot] 三槽位各造一支 Paint，并用真实 Paint.hasGlyph 实现
- * [GlyphProbe]（Android 层的运行时字形判定，替换单测假探针）。
+ * 字形字体提供者：为 [GlyphSlot] 三槽位各造一支 Paint，并实现 [GlyphProbe]
+ * （Android 层的运行时字形判定，替换单测假探针）：[GlyphSlot.MONO] 槽按 ASCII 原生等宽
+ * 预判，系统/Powerline 槽用真实 Paint.hasGlyph 实测。
  *
  * 真机实证（本席位，API35 模拟器）：Typeface.MONOSPACE 会走系统 fallback 链，盲文/框线/
  * CJK/emoji 全部 hasGlyph=true——所以 [GlyphSlot.MONO] 的判定**不是** "hasGlyph"（那会把

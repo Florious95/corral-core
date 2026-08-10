@@ -43,6 +43,13 @@ object TsnetSocks {
      * 成功返回后流即为目标连接的透明通道；失败抛 [IOException]（消息含 REP 码
      * 语义，不含凭证）。[host] 为 IPv4 字面量走 ATYP=IPv4，否则 ATYP=DOMAIN
      * （tailnet 目标恒为 100.x IPv4，DOMAIN 只是兜底）。
+     * @contract
+     * @pre [input]/[output] 已连接到 SOCKS5 代理（握手期间由本函数独占读写）
+     * @post 返回后流为目标的透明通道（SOCKS5 CONNECT 已建链）
+     * @err 各类协议失败均抛 [IOException]：凭证超长、问候/应答版本非法、认证被拒、
+     *       不支持的认证法、目标域名超长（>255 字节）、应答地址类型非法、代理建链失败
+     *       （含 REP 码）、任意阶段 EOF（代理关闭连接）
+     * @inv [user]/[pass] 只写入握手字节流，不进任何异常消息（凭证红线）
      */
     fun handshake(input: InputStream, output: OutputStream, host: String, port: Int, user: String, pass: String) {
         // 问候：VER=5，提供 no-auth 与 user/pass 两法（服务端按需选 0x02）。

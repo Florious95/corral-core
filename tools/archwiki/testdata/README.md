@@ -19,5 +19,6 @@
 | `consumes-drift/` | T3-4 跨层声明一致 | `--check --strict-t3` 必须红（声明了没 import + import 了没声明，Go/Kotlin 双侧） |
 | `consumes-consistent/` | T3-4 阳性对照 | `--check --strict-t3` 必须绿（@consumes 与 import 图一致） |
 | `consumes-main/` | T3-4 命令包盲区（package main 特判） | 必红 `cmd/redcmd`（import 了未声明）；必绿 `cmd/agentmirrord`（声明与 import 一致，**修复前红、修复后绿**——`_declared_consumes` 必须读到命令包声明）；防串味 `mixed.go`（命令包目录混入声明别的包名的文件，其 @consumes 不得被误归属，守卫必须保住） |
+| `ktroot/` | Kotlin 扫描根发现（`_find_kotlin_roots` 覆盖 `app/*/src/main/kotlin`） | **修复前必空通过**（`src/main/kotlin` 下的残缺 @contract 对判据不可见、exit 0），修复后必红 `dev.agentmirror.terminal`（TerminalEmulator 缺 @post）；必绿 `dev.agentmirror.terminalgrid`（kotlin 目录下完整 @contract 单包硬判 exit 0，防「凡 kotlin 目录一律红」） |
 
 运行方式见 `tools/archwiki/test_check.py`。

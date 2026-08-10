@@ -26,10 +26,11 @@ import dev.agentmirror.app.service.TsnetBootstrap
 import dev.agentmirror.app.tsnet.TsnetWire
 
 /**
- * 配对页路由挂载（MainActivity/AgentMirrorApp 接线处唯一入口；仅路由挂载，不含接线层）。
+ * 配对页路由挂载（[AgentMirrorApp] 接线处唯一入口）：挂载时兜底注入 tsnet 运行环境并
+ * 接线 [TsnetWire.stateListener]，配对成功时装配常驻连接。
  *
  * - 生产 [PairingViewModel]：真实配置存储（SharedPreferences）+ 真实传输工厂
- *   （[ServiceWire.transportFactory]，默认 OkHttp，leader 裁定 A）建独立试配对连接；
+ *   （[ServiceWire.pairingTransportFactory]，默认 OkHttp，leader 裁定 A）建独立试配对连接；
  * - 配对成功：经 [startPersistentConnection] 注入常驻连接（完整序列：连接配置 + 上传
  *   基地址 + 持久连接启动，与冷启动重连共用同一入口，杜绝序列漂移）+ 通知上层切工作区。
  *   落库已由 VM 完成，这里只接线。
@@ -70,7 +71,8 @@ private fun createPairingViewModel(configStore: PairingConfigStore): PairingView
     return PairingViewModel(
         configStore = configStore,
         connectionFactory = { cfg ->
-            // 试配对用独立 ConnectionManager：工厂用 ServiceWire.transportFactory（默认 OkHttp）。
+            // 试配对用独立 ConnectionManager：工厂经 ServiceWire.pairingTransportFactory()
+            // 取真实传输（默认 OkHttp 配对专用工厂，不改写连接路径徽标）。
             // 配对成功后才由 ServiceWire.setConfig 落常驻连接配置（见 PairingRoute）。
             ConnectionManager(config = cfg, transportFactory = ServiceWire.pairingTransportFactory())
         },

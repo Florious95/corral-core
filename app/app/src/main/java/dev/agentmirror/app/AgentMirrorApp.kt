@@ -53,6 +53,12 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
  * navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入
  * [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector
  * 全仓无调用点，见 fix-workspace-wiring 知识基底）。
+ *
+ * @consumes dev.agentmirror.app.pairing
+ * @consumes dev.agentmirror.app.service
+ * @consumes dev.agentmirror.app.session
+ * @consumes dev.agentmirror.app.ui.theme
+ * @consumes dev.agentmirror.app.workspace
  */
 @Composable
 fun AgentMirrorApp(
@@ -65,7 +71,7 @@ fun AgentMirrorApp(
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
         val session = navState.activeSession
 
-        // 路由描述值（AnimatedContent 的转场键）：三分支互斥，与原 when 语义一一对应。
+        // 路由描述值（AnimatedContent 的转场键）：四分支互斥，与原 when 语义一一对应。
         val route: AppRoute = when {
             session != null -> AppRoute.Session(ref = session.first, name = session.second)
             navState.showPairing -> AppRoute.Pairing
@@ -141,7 +147,7 @@ fun AgentMirrorApp(
     }
 }
 
-/** 根路由三分支的转场键（data class 让同名不同 ref 的会话切换也触发转场）。 */
+/** 根路由四分支的转场键（data class 让同名不同 ref 的会话切换也触发转场）。 */
 private sealed interface AppRoute {
     data class Session(val ref: String, val name: String) : AppRoute
     data object Pairing : AppRoute

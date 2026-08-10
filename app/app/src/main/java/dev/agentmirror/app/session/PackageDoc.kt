@@ -19,6 +19,15 @@ package dev.agentmirror.app.session
 /**
  * 会话页：单个 tmux 会话的交互界面。
  *
- * 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条。
- * 本包为占位骨架，由 session 任务落位实现。
+ * 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条；
+ * 图片附件走 multipart HTTP 上传（上传基地址由 service 装配的 ServiceWire 统一注入），
+ * 跨层共享连接经 service 的 ServiceWire.uiConnector 扇出订阅。会话页已完整落位：
+ * 镜像流（snapshot/delta/scrollback 本地滚动补页）、发送必达回执、附件路径注入光标处。
+ *
+ * @consumes dev.agentmirror.app.conn
+ * @consumes dev.agentmirror.app.service
+ * @consumes dev.agentmirror.app.termview
+ * @consumes dev.agentmirror.app.tsnet
+ * @consumes dev.agentmirror.app.ui.theme
+ * @consumes dev.agentmirror.terminal
  */

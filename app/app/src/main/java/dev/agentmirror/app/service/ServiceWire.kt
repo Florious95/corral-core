@@ -33,19 +33,20 @@ import dev.agentmirror.app.tsnet.ConnectionPath
  * 前台服务的接线点（service 包之外唯一改动接口；UI/配对层注入）。
  *
  * - [transportFactory]：真实 WebSocket 传输工厂。默认 [OkHttpTransportFactory]
- *   （leader 裁定 A，清偿传输欠账①）：配对后注入 [setConfig] 并启动服务即走真实 OkHttp
- *   连接；[NoopTransportFactory] 保留为测试与降级用（拨号立即失败 → conn 层退避重连，
+ *   （leader 裁定 A，清偿传输欠账①）：配对后注入 [setConfig] 并启动连接即走真实 OkHttp
+ *   拨号；[NoopTransportFactory] 保留为测试与降级用（拨号立即失败 → conn 层退避重连，
  *   生命周期可运行、不静默吞）。
- * - [uiConnector]：UI 侧监听桥。服务持有唯一 ConnectionManager（背景常驻连接），
- *   UI（WorkspaceViewModel / SessionViewModel / PairingViewModel 等）经此桥订阅同一连接，
- *   服务回调原样转投。多槽扇出：单屏在屏时挂一槽（SessionRoute 等），无需多屏同挂；
- *   配对试连接是**独立** ConnectionManager，不走本桥。
+ * - [uiConnector]：UI 侧监听桥。本对象持有唯一 [ConnectionManager]（背景常驻连接，
+ *   [MirrorForegroundService] 若启动也经 [manager] 共享同一实例），UI
+ *   （[WorkspaceViewModel] / [SessionViewModel]）经此桥订阅同一连接，服务回调原样转投。
+ *   多槽扇出：单屏在屏时挂一槽（SessionRoute 等），无需多屏同挂；配对试连接是**独立**
+ *   ConnectionManager（[PairingViewModel] 自带探针），不走本桥。
  * - [uploadBaseUrl]：图片上传基地址（协议 §8 同端口 `POST /upload`）。配对层成功后从
  *   配对 ws url 推导 http(s) 基地址注入（清偿 session-ui 沉淀欠账②）；未注入时
  *   [HttpUrlConnectionUploader] 明确报错「未配置上传地址」，不静默。
  */
 object ServiceWire {
-    /** 传输工厂（UI/配对层在启动服务前注入；默认真实 OkHttp，服务永远可跑）。 */
+    /** 传输工厂（UI/配对层在拨号前注入；默认真实 OkHttp，服务永远可跑）。 */
     @Volatile
     var transportFactory: TransportFactory = OkHttpTransportFactory
 
@@ -68,6 +69,12 @@ object ServiceWire {
      * READY+全量 listing 恢复，连接态由本补播即时对齐；语义同 SessionViewModel.init 自行
      * onStateChanged(manager.state())）。listing 后到达的 list_delta 会继续流式更新，
      * 补播的 listing 只是兜底基线（与 conn 层自动重 list 语义一致，无缓存引入）。
+     *
+     * @contract
+     * @pre 无（任意时刻可挂/摘）
+     * @post 挂载时补播当前连接态与最近一次全量 listing（若已有）；摘除（置 null）不补播
+     * @err none
+     * @inv 任意时刻至多一个 UI 监听挂在桥（后挂覆盖前挂）
      */
     @Volatile
     var uiConnector: ConnectionManager.Listener? = null
@@ -96,8 +103,8 @@ object ServiceWire {
     private var config: ConnectionConfig? = null
 
     /**
-     * 注入配对后的连接配置（URL + token）。须在服务启动前调用；
-     * 未注入时服务启动抛明确异常（halt 纪律：缺字段不猜）。
+     * 注入配对后的连接配置（URL + token）。须在首次 [manager] 调用前注入；
+     * 未注入时 [manager] 抛明确异常（halt 纪律：缺字段不猜）。
      *
      * **配置变更语义（fix-reconnect-stale-config P0 根因①）**：已存在 manager 的拨号地址是
      * 构造期快照（ConnectionConfig 是 val），setConfig 只更新本层字段不会热更已存活实例。
@@ -106,6 +113,13 @@ object ServiceWire {
      * - 新配置 ≠ 当前配置 ⇒ 重建 manager（stop 置空），下次 [manager()] 以新地址拨号；
      * - 相同配置重复注入（重复扫同码 / 冷启动同一 storedConfig）⇒ 保持单例，不闪断既有会话。
      * 重建语义 = 用户显式改了地址 → 旧链路的拨号意图作废，必须以新地址重拨（016 首触零阻断）。
+     *
+     * @contract
+     * @pre 无（任意时刻可注入；重复注入同配置幂等）
+     * @post config 更新为新值；新配置 ≠ 旧配置 ⇒ 清路径徽标并 [releaseManager]（下次
+     *       [manager] 以新地址拨号）；相同配置重复注入 ⇒ 保持单例、不闪断
+     * @err none
+     * @inv 配置变更只影响后续拨号，不热更已存活 manager（ConnectionConfig 是 val 快照）
      */
     fun setConfig(c: ConnectionConfig) {
         val old = config
@@ -147,10 +161,19 @@ object ServiceWire {
     }
 
     /**
-     * 获取/创建持久 [ConnectionManager]（前台服务与应用同进程生命周期）。
+     * 获取/创建持久 [ConnectionManager]（应用进程级单例）。
      *
-     * 仅 [MirrorForegroundService] 首次 onCreate 时创建；connListener 既喂服务自身
-     * （连接状态→常驻通知、帧→状态守望），又原样转投 [uiConnector]（UI 侧共享同一连接）。
+     * 当前调用方是配对/冷启动入口 `startPersistentConnection` 与 [SessionRoute]
+     * （createSessionViewModel）；[MirrorForegroundService] 未启动，不经此处创建。
+     * connListener 既喂服务自身（连接状态→常驻通知、帧→状态守望），又原样转投
+     * [uiConnector]（UI 侧共享同一连接）。未注入配置（[setConfig] 未调用）时抛
+     * [IllegalStateException]（halt 纪律：缺字段不猜）。
+     *
+     * @contract
+     * @pre 若尚未创建，则 [config] 必须已由 [setConfig] 注入（否则抛 [IllegalStateException]）
+     * @post 返回进程级唯一 [ConnectionManager]；重复调用返回同一实例（幂等）
+     * @err [IllegalStateException]：未注入配置即请求创建时
+     * @inv manager 单例在进程存活期间复用；[releaseManager] 后才重建
      */
     fun manager(
         connListener: ConnectionManager.Listener,
@@ -208,11 +231,12 @@ object ServiceWire {
         }
     }
 
-    /** 连接管理器（服务持有；[MirrorForegroundService.onDestroy] 时 stop）。 */
+    /** 连接管理器（进程级单例；由 [MirrorForegroundService.onDestroy] 或 [setConfig]
+     *  配置变更时 stop）。 */
     @Volatile
     private var manager: ConnectionManager? = null
 
-    /** 停止并释放连接管理器（服务 onDestroy 调用）。 */
+    /** 停止并释放连接管理器（服务 onDestroy / 配置变更时调用；幂等）。 */
     fun releaseManager() {
         val m = manager
         manager = null
@@ -236,10 +260,11 @@ object ServiceWire {
 }
 
 /**
- * 占位传输工厂：每次拨号立即失败（未注入真实传输时的默认，见 [ServiceWire]）。
+ * 占位传输工厂：每次拨号立即失败（测试与降级用，见 [ServiceWire]）。
  *
  * 每次 create 返回一个立即 [WebSocketTransport.start] 即 onFailure 的传输；
  * ConnectionManager 依此进入 RECONNECTING → 指数退避重连，生命周期可运行。
+ * 生产默认值是 [OkHttpTransportFactory]，本工厂不参与生产路径。
  */
 object NoopTransportFactory : TransportFactory {
     override fun create(url: String): WebSocketTransport = object : WebSocketTransport {
@@ -247,7 +272,7 @@ object NoopTransportFactory : TransportFactory {
             get() = false
 
         override fun start(listener: TransportListener) {
-            // 拨号立即失败：真实传输未接线（ServiceWire.transportFactory 仍为默认值）。
+            // 拨号立即失败：测试/降级用（本工厂非生产默认值，见类 KDoc）。
             listener.onFailure(
                 IllegalStateException(
                     "no real transport wired: ServiceWire.transportFactory not injected",

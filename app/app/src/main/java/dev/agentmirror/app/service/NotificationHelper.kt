@@ -35,7 +35,8 @@ import dev.agentmirror.app.conn.AgentState
  *   随连接状态更新内容（已连接/重连中…），不可滑走（setOngoing）。
  * - [CHANNEL_STATE] 状态通知渠道（IMPORTANCE_HIGH，可提醒）：blocked/done 沿变化时的唤醒通知，
  *   按会话 ref 取稳定通知 id，同 ref 更新同一通知（blocked→done 只刷新内容不再响铃），
- *   点按深链到对应会话页（[ACTION_OPEN_SESSION] 路由，消费方归 session-ui 接线）。
+ *   点按深链到对应会话页（[ACTION_OPEN_SESSION] 路由，消费方是 [MainActivity] 的
+ *   handleDeepLink，经 [MainActivity.navState] 路由到会话页）。
  *
  * 静默失效猎杀：发送/取消一律 try-catch，失败落 Log.w 可判定，绝不静默吞。
  * 线程安全：NotificationManager.notify/cancel 线程安全，可在 conn 收件线程直接调用。
@@ -142,8 +143,9 @@ class NotificationHelper(context: Context) {
     /**
      * 深链到对应会话页：ACTION_OPEN_SESSION + ref 到 MainActivity。
      *
-     * 消费方归 session-ui 接线（MainActivity 路由读取该 action/extra 打开会话页）；
-     * 此处只负责构造携带 ref 的 PendingIntent（服务职责，见 fg-service 知识基底 §1）。
+     * 消费方是 [MainActivity] 的 handleDeepLink（onCreate 冷启动 / onNewIntent 在屏两处
+     * 读取该 action/extra 打开会话页）；此处只负责构造携带 ref 的 PendingIntent
+     * （服务职责，见 fg-service 知识基底 §1）。
      */
     private fun openSessionPendingIntent(ref: String): PendingIntent =
         PendingIntent.getActivity(
@@ -170,10 +172,10 @@ class NotificationHelper(context: Context) {
         /** 状态通知 id 基址：ref 哈希偏移，同 ref 稳定、跨 ref 近唯一。 */
         const val ID_STATE_BASE = 1000
 
-        /** 深链 action：打开某会话页（session-ui 消费）。 */
+        /** 深链 action：打开某会话页（[MainActivity] 消费）。 */
         const val ACTION_OPEN_SESSION = "dev.agentmirror.app.action.OPEN_SESSION"
 
-        /** 深链 extra：会话 ref（session-ui 消费）。 */
+        /** 深链 extra：会话 ref（[MainActivity] 消费）。 */
         const val EXTRA_SESSION_REF = "dev.agentmirror.app.extra.SESSION_REF"
 
         /** 状态通知 id：ref → 稳定正整数（碰撞概率低；requestCode 同源）。 */

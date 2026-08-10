@@ -30,7 +30,10 @@ data class ScreenSnapshot(
 )
 
 /**
- * 脏区回调：一次 feed/重放后需要重绘的屏幕行区间（渲染层增量刷新用）。
+ * 脏区回调：一次 feed/重放后需要重绘的屏幕行区间（屏幕行号，含端点）。
+ *
+ * 真实消费方 `TermViewPresenter` 接管本回调后把屏幕脏行换算成逻辑行区间缓存；
+ * 渲染层帧循环把脏区当作"画面已变化"的触发信号、整帧重绘（并非据此局部增量刷新）。
  */
 fun interface DamageListener {
     /** 通知 [rows] 区间（含端点，屏幕行号）内容已变化。 */
@@ -97,7 +100,14 @@ class TerminalEmulator(
     // 五个公开入口（feed/replaySnapshot/resize/prependHistory/snapshot）以实例锁串行。
     // 锁序：本锁 → presenter.damageLock（damageListener 在锁内回调），反向不存在，无死锁。
 
-    /** 喂入增量字节流（pipe-pane 语义，可在任意字节处切断）。 */
+    /**
+     * 喂入增量字节流（pipe-pane 语义，可在任意字节处切断）。
+     * @contract
+     * @pre 0 <= offset <= bytes.size 且 0 <= length <= bytes.size - offset
+     * @post 字节按 ANSI 状态机解析进当前网格；结束时合并脏区经 [damageListener] 上抛
+     * @err 参数区间越界抛 IndexOutOfBoundsException
+     * @inv 半截转义序列跨调用保持（增量语义，留在下一段续解）
+     */
     @Synchronized
     fun feed(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset) {
         parser.feed(bytes, offset, length)
@@ -110,8 +120,14 @@ class TerminalEmulator(
     /**
      * 快照重放（capture-pane -e 语义）：按 [cols]x[rows] 清屏重建，scrollback 保留。
      *
-     * 重连/订阅首帧/resize 后均走此入口（004 无状态：重连即重放）；样式、游标、
-     * alternate screen、半截转义序列全部复位后再喂快照字节。
+     * 重连/订阅首帧/resize 后均走此入口（004 无状态：重连即重放）；样式、游标位置与
+     * 可见性、alternate screen、半截转义序列全部复位后再喂快照字节（DECSC/DECRC
+     * 保存的游标寄存器 [savedCursor] 保留不清）。
+     * @contract
+     * @pre cols > 0 且 rows > 0
+     * @post 主屏按 cols x rows 清屏重建；scrollback 保留；样式/游标可见性/备屏/解析器复位
+     * @err none
+     * @inv none
      */
     @Synchronized
     fun replaySnapshot(bytes: ByteArray, cols: Int, rows: Int) {
@@ -140,7 +156,14 @@ class TerminalEmulator(
     fun replaySnapshot(text: String, cols: Int, rows: Int) =
         replaySnapshot(text.toByteArray(Charsets.UTF_8), cols, rows)
 
-    /** 换网格尺寸（只换尺寸不 reflow，内容以随后到达的服务端快照为准，005）。 */
+    /**
+     * 换网格尺寸（只换尺寸不 reflow，内容以随后到达的服务端快照为准，005）。
+     * @contract
+     * @pre cols > 0 且 rows > 0
+     * @post 主屏与备屏尺寸更新；左上角重叠区内容保留；滚动区域回落全屏
+     * @err none
+     * @inv none
+     */
     @Synchronized
     fun resize(cols: Int, rows: Int) {
         main.resize(cols, rows)
@@ -153,6 +176,11 @@ class TerminalEmulator(
      *
      * [bytes] 按行解析（LF 分行，仅应用 SGR，其余序列忽略）；alternate screen
      * 期间历史不可用，调用被忽略。
+     * @contract
+     * @pre none
+     * @post 备屏未激活时解析 [bytes] 并头插进 scrollback；激活时无操作
+     * @err none
+     * @inv none
      */
     @Synchronized
     fun prependHistory(bytes: ByteArray) {
@@ -163,7 +191,14 @@ class TerminalEmulator(
     /** 便捷入口：按 UTF-8 编码插入历史文本。 */
     fun prependHistory(text: String) = prependHistory(text.toByteArray(Charsets.UTF_8))
 
-    /** 取当前屏幕的不可变快照（渲染层消费）。 */
+    /**
+     * 取当前屏幕的不可变快照（渲染层消费）。
+     * @contract
+     * @pre none
+     * @post 返回与当前网格一致的 [ScreenSnapshot]，行列表为新建不可变 List（单元格对象不可变、可安全共享）
+     * @err none
+     * @inv none
+     */
     @Synchronized
     fun snapshot(): ScreenSnapshot {
         val g = grid()

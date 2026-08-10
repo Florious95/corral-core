@@ -25,7 +25,14 @@ package dev.agentmirror.terminal
  */
 object CharWidth {
 
-    /** 返回码点的占格宽度（0/1/2）。 */
+    /**
+     * 返回码点的占格宽度（0/1/2）。
+     * @contract
+     * @pre none
+     * @post 返回值在 {0, 1, 2} 内：0=零宽/组合，1=普通，2=宽字符
+     * @err none
+     * @inv 纯函数，同一码点恒返回同一宽度
+     */
     fun of(codePoint: Int): Int = when {
         codePoint < 0x20 || codePoint in 0x7F..0x9F -> 0
         isZeroWidth(codePoint) -> 0

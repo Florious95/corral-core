@@ -2,28 +2,24 @@
 
 > ⚠️ **生成物，勿手改。** 由 `tools/archwiki/build_wiki.py --check --t3-report` 从源码现算生成，重跑无 diff（幂等）。人工改动会被覆盖。
 
-扫描 **18** 个包（Go 9 + Kotlin 9）。
+扫描 **19** 个包（Go 9 + Kotlin 10）。
 
 ## T3 扫描覆盖（阳性对照：扫描量必须 > 0）
 
 | 项 | 数量 |
 |---|---|
-| 导出符号索引（Go+Kotlin） | 206 |
+| 导出符号索引（Go+Kotlin） | 217 |
 | Go CLI flag 索引 | 11 |
-| 仓库文件基名索引 | 1926 |
+| 仓库文件基名索引 | 2143 |
 | T3-2 扫描的 Go doc 行 | 2529 |
-| T3-2 扫描的 Kotlin KDoc 行 | 3031 |
-| **T3-3 扫描到的 `@contract` 符号总数** | 58 |
-| **T3-4 `@consumes` 声明总数** | 9 |
-| **T3-4 参与比对的 import 边数** | 29 |
+| T3-2 扫描的 Kotlin KDoc 行 | 4043 |
+| **T3-3 扫描到的 `@contract` 符号总数** | 138 |
+| **T3-4 `@consumes` 声明总数** | 15 |
+| **T3-4 参与比对的 import 边数** | 31 |
 
 ## T3-1 符号级 doc 覆盖
 
-导出符号缺紧邻 doc/KDoc，共 **1** 条：
-
-| 包 | 语言 | 文件 | 行 | 符号 | 原因 |
-|---|---|---|---|---|---|
-| dev.agentmirror.app.tsnet | kotlin | app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetInterfaceCodec.kt | 46 | `TsnetInterfaceCodec` | 顶层 public 声明缺紧邻 KDoc |
+无违规：全部非测试导出符号均有紧邻 doc/KDoc。
 
 ## T3-2 引用真实性
 
@@ -47,27 +43,4 @@
 
 > **诚实边界**：T3-4 只验声明与 import 图**一致不一致**。它保证架构维基能从代码现算真依赖、防止「声明了没 import / import 了没声明」的漂移；但**不验 `@consumes` 写的是不是业务上真该依赖**——那是设计语义，静态判据判不了。
 
-`@consumes` 与 import 图不一致，共 **20** 条：
-
-| 包 | 语言 | 目标包 | 原因 |
-|---|---|---|---|
-| dev.agentmirror.app | kotlin | `dev.agentmirror.app.pairing` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app | kotlin | `dev.agentmirror.app.service` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app | kotlin | `dev.agentmirror.app.session` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app | kotlin | `dev.agentmirror.app.workspace` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.pairing | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.pairing | kotlin | `dev.agentmirror.app.service` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.pairing | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.pairing | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.service | kotlin | `dev.agentmirror.app` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.service | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.service | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.service` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.termview` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.session | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
-| dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
+无违规：`@consumes` 声明与 import 图一致。
