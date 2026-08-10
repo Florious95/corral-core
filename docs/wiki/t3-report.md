@@ -10,11 +10,11 @@
 |---|---|
 | 导出符号索引（Go+Kotlin） | 206 |
 | Go CLI flag 索引 | 11 |
-| 仓库文件基名索引 | 1831 |
-| T3-2 扫描的 Go doc 行 | 2297 |
+| 仓库文件基名索引 | 1926 |
+| T3-2 扫描的 Go doc 行 | 2529 |
 | T3-2 扫描的 Kotlin KDoc 行 | 3031 |
-| **T3-3 扫描到的 `@contract` 符号总数** | 19 |
-| **T3-4 `@consumes` 声明总数** | 2 |
+| **T3-3 扫描到的 `@contract` 符号总数** | 58 |
+| **T3-4 `@consumes` 声明总数** | 9 |
 | **T3-4 参与比对的 import 边数** | 29 |
 
 ## T3-1 符号级 doc 覆盖
@@ -47,14 +47,10 @@
 
 > **诚实边界**：T3-4 只验声明与 import 图**一致不一致**。它保证架构维基能从代码现算真依赖、防止「声明了没 import / import 了没声明」的漂移；但**不验 `@consumes` 写的是不是业务上真该依赖**——那是设计语义，静态判据判不了。
 
-`@consumes` 与 import 图不一致，共 **28** 条：
+`@consumes` 与 import 图不一致，共 **20** 条：
 
 | 包 | 语言 | 目标包 | 原因 |
 |---|---|---|---|
-| cmd/agentmirrord | go | `internal/api` | import 了却未声明 @consumes（架构漂移） |
-| cmd/agentmirrord | go | `internal/config` | import 了却未声明 @consumes（架构漂移） |
-| cmd/agentmirrord | go | `internal/pairing` | import 了却未声明 @consumes（架构漂移） |
-| cmd/agentmirrord | go | `internal/tsnetd` | import 了却未声明 @consumes（架构漂移） |
 | dev.agentmirror.app | kotlin | `dev.agentmirror.app.pairing` | import 了却未声明 @consumes（架构漂移） |
 | dev.agentmirror.app | kotlin | `dev.agentmirror.app.service` | import 了却未声明 @consumes（架构漂移） |
 | dev.agentmirror.app | kotlin | `dev.agentmirror.app.session` | import 了却未声明 @consumes（架构漂移） |
@@ -75,7 +71,3 @@
 | dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.conn` | import 了却未声明 @consumes（架构漂移） |
 | dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.tsnet` | import 了却未声明 @consumes（架构漂移） |
 | dev.agentmirror.app.workspace | kotlin | `dev.agentmirror.app.ui.theme` | import 了却未声明 @consumes（架构漂移） |
-| internal/api | go | `internal/agentstate` | import 了却未声明 @consumes（架构漂移） |
-| internal/api | go | `internal/bridge` | import 了却未声明 @consumes（架构漂移） |
-| internal/api | go | `internal/discovery` | import 了却未声明 @consumes（架构漂移） |
-| internal/api | go | `internal/protocol` | import 了却未声明 @consumes（架构漂移） |

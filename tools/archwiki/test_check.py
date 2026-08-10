@@ -153,6 +153,20 @@ class TestRedFixtures(unittest.TestCase):
         self.assertIn("dev.agentmirror.fixture.ktused", out)  # Kotlin 侧
         self.assertIn("跨层声明一致", out)
 
+    def test_t3_4_cmd_pkg_undeclared_is_red(self):
+        """T3-4 命令包盲区红测：命令包（package main，目录名 != 包名）import 了
+        内部包却未声明 @consumes → 必须红。这条证的是「命令包绝不豁免于架构漂移
+        判据」——修 package main 特判时不许把命令包整个放过。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "consumes-main"),
+            ["--check", "--go-source", "--strict-t3", "--pkg", "cmd/redcmd"],
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("T3-4", out)
+        self.assertIn("import 了却未声明 @consumes", out)
+        self.assertIn("internal/config", out)
+        self.assertIn("cmd/redcmd", out)
+
     def test_pkg_dirty_is_red(self):
         """--pkg 单包硬判：指向 dirty 包必须红，且不扫到 clean 包。"""
         code, out = run_tool(
@@ -261,6 +275,39 @@ class TestPositiveControl(unittest.TestCase):
         self.assertIn("T3-4", out)
         self.assertIn("PASS", out)
 
+    def test_t3_4_cmd_pkg_declared_is_green(self):
+        """T3-4 命令包盲区红测的转绿格：命令包声明了与 import 一致的 @consumes
+        → strict-t3 必须绿。修复前这一格必红（`_declared_consumes()` 对 package main
+        返回空，声明读不到 → 「import 了却未声明」），修复后才转绿。为了不把
+        「没扫到当干净」，本格同时隐含两条约束：
+          * main.go 的 `@consumes internal/config` 若读不到 → red（import 了却未声明）；
+          * mixed.go 的 `@consumes internal/other` 若被误归属 → red（声明了没 import）。
+        只有「声明读到 + 守卫仍在」才可能绿。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "consumes-main"),
+            ["--check", "--go-source", "--strict-t3", "--pkg", "cmd/agentmirrord"],
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("T3-4", out)
+        self.assertIn("PASS", out)
+
+    def test_t3_4_cmd_pkg_guard_holds(self):
+        """防串味守卫回归：命令包目录下混入声明别的包名的文件（mixed.go 声明
+        package somethingelse、写 `@consumes internal/other`），其 @consumes 不得被
+        误归属到本目录。整 fixture 报告模式（exit 0）下只有 redcmd 的漂移被列出，
+        cmd/agentmirrord 必须干净——尤其不得出现把它名下 `internal/other` 判成
+        「声明了没 import」的违规。"""
+        code, out = run_tool(
+            os.path.join(TESTDATA, "consumes-main"),
+            ["--check", "--go-source"],
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("T3-4", out)
+        self.assertIn("cmd/redcmd", out)          # redcmd 的漂移仍如实列出
+        self.assertIn("internal/config", out)
+        self.assertNotIn("cmd/agentmirrord", out)  # 声明一致的命令包不许被误报
+        self.assertNotIn("internal/other", out)    # mixed.go 的 @consumes 不得被归属
+
     def test_real_repo_t3_report_has_contract_coverage_numbers(self):
         """那个 0 必须自证：真仓库报告含 @contract 符号总数 / @consumes 声明总数 /
         import 边数三项覆盖量数字。contract_symbols=0 是「真没有标注」的诚实呈现，
@@ -326,6 +373,46 @@ class TestPureFunctions(unittest.TestCase):
         bad = "// unrelated\n\npackage a\n"
         self.assertEqual(build_wiki._go_package_comment(good, "a"), "Package a does things.")
         self.assertEqual(build_wiki._go_package_comment(bad, "a"), "")
+
+    def test_declared_consumes_reads_cmd_pkg_and_keeps_guard(self):
+        """T3-4 命令包归属的纯函数断言（fixture 白盒，最精确的一格）：
+
+          * `cmd/agentmirrord`（package main，目录名 != 包名）的 @consumes 必须被读到，
+            且**同一 doc 块多条 @consumes 全部保留**（internal/config + internal/proto）；
+          * 混入的 mixed.go（声明别的包名 package somethingelse）的
+            `@consumes internal/other` 不得被归属到 cmd/agentmirrord（防串味守卫
+            必须保住——修的是 package main 特判，不是拆守卫）；
+          * `cmd/redcmd` 未声明任何 @consumes → 不得出现在 declared 里。
+        """
+        import build_wiki
+        declared = build_wiki._declared_consumes(
+            os.path.join(TESTDATA, "consumes-main"), None
+        )
+        self.assertEqual(
+            declared.get("cmd/agentmirrord"),
+            {"internal/config", "internal/proto"},
+        )
+        self.assertNotIn("internal/other", declared.get("cmd/agentmirrord", set()))
+        self.assertNotIn("cmd/redcmd", declared)
+
+    def test_extract_tags_keeps_multiple_consumes(self):
+        """同 doc 块多条 @consumes 必须全部保留（红测：多条只留最后一条是 bug）。
+
+        命令包/库包的包级 doc 常在同一个注释块里连续写多条 @consumes
+        （真仓库 main.go 就写了 4 条）。_extract_tags 若按 dict 单值覆盖，
+        只有最后一条存活——声明面漏读，T3-4 把前面几条误判成「import 了却未声明」。
+        """
+        import build_wiki
+        blk = [
+            (1, "@consumes internal/config"),
+            (2, "@consumes internal/proto"),
+            (3, "@consumes internal/api"),
+        ]
+        tags, _ = build_wiki._extract_tags(blk)
+        self.assertEqual(
+            tags["consumes"],
+            ["internal/config", "internal/proto", "internal/api"],
+        )
 
 
 class TestGeneration(unittest.TestCase):
