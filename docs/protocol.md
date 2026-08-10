@@ -349,7 +349,13 @@ kind=3 时 payload 头部为 **12 字节元数据头**，描述**服务端实际
 ## 8. 图片上传（HTTP，同端口）
 
 - 图片走 **multipart HTTP 端点**，不走 WebSocket：`POST /upload`（同服务端口）。
+- 鉴权：请求必须携带标准 HTTP 头 `Authorization: Bearer <pairing-token>`；服务端用与
+  WebSocket `auth` 握手相同的 `TokenValidator` 校验。缺失或错误凭据均返回 HTTP 401，
+  JSON 正文包含稳定的 `code: "unauthorized"` 与非空 `reason`；响应和日志不得回显 token。
 - 成功：S 将文件落盘主机，返回 JSON `{"path": "/绝对/路径"}`（`protocol.UploadResp`）。
+- 资源上限：单文件默认不超过 20 MiB，上传目录内的常规文件总量硬上限为 1 GiB；本次写入
+  会越过目录上限时返回 HTTP 507，JSON `code` 为 `storage_limit_exceeded` 并携带非空
+  `reason`。服务端不自动删除自定义目录中的既有文件，由用户清理后重试。
 - C 再将该 `path` 作为 `input.text` 注入，CLI 原生吃图片路径（requirement 003 图片管线；
   **不涉及任何多模态 API**）。
 
@@ -358,6 +364,15 @@ kind=3 时 payload 头部为 **12 字节元数据头**，描述**服务端实际
 - 配对 token 只在 `auth` 上行一次；**任何回复不回显、任何日志不出现**（011 路线 a）。
 - 未认证连接的任何操作一律 `error: unauthorized`。
 - 服务端日志不得记录帧 payload 中的敏感内容。
+
+### 9.1 token 生命周期与全量吊销
+
+- 默认 token 由 daemon 生成并以 `0600` 保存到系统用户配置目录的 `agentmirror/token`，重启复用；
+  停止 daemon、删除该文件并重启会生成新 token，从而让全部旧 App 配置在下一次认证时失效。
+- 显式 `-token` / `AGENTMIRROR_TOKEN` 不写入 token 文件且优先级更高；轮换时必须改为新值并重启，
+  只删除自动 token 文件不能吊销仍在使用的显式值。
+- 轮换后 App 必须重新扫描新 QR；单档客户端在新配对成功后覆盖旧配置。token 文件内容、显式值和
+  QR 均不得进入日志或截图。
 
 ## 10. 参考实现与契约夹具
 

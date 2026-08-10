@@ -4,9 +4,8 @@
 # The suite deliberately drives only program interfaces: WebSocket protocol
 # frames plus POST /upload.  Fixture setup uses a self-owned tmux -L server;
 # there is no UI, QR scan, window lookup, real-user tmux, or production :9900
-# interaction.  Performance values are baseline observations, never gates in
-# this first round.  Only functional correctness, isolation, exact stream
-# delivery, and zero-residue cleanup can fail the run.
+# interaction.  Functional correctness, performance thresholds, isolation,
+# exact stream delivery, and zero-residue cleanup are all hard gates.
 
 set -euo pipefail
 umask 077
@@ -21,7 +20,7 @@ unset TMUX TS_AUTHKEY TS_CONTROL_URL TS_DEBUG_REGISTER
 E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$E2E_ROOT/.." && pwd)"
 SERVER_ROOT="$REPO_ROOT/server"
-ART="$E2E_ROOT/artifacts/test-api-user-scenarios-perf"
+ART="$E2E_ROOT/artifacts/fix-upload-auth"
 mkdir -p "$ART"
 
 BUILD_LOG="$ART/build.log"
@@ -285,7 +284,9 @@ chmod 700 "$SHIM_DIR/ps"
 ln -s /bin/sleep "$RUN_ROOT/bin/codex"
 cat >"$RUN_ROOT/bin/interactive-agent" <<'SH'
 #!/bin/bash
-"$(dirname "$0")/codex" 600 &
+# Stay alive beyond the three sequential 600-second resource windows so the
+# functional state assertions still exercise a live agent-shaped child.
+"$(dirname "$0")/codex" 3600 &
 printf '%s\n' "$!" >>"$API_SCENARIO_OWNED_PIDS"
 printf '❯\n'
 export PS1='❯ '
@@ -862,7 +863,7 @@ func (c *client) measureScrollback(ctx context.Context, reqID uint32, ref string
 	}
 }
 
-func uploadOnce(ctx context.Context, client *http.Client, url, dir string, index int, size int) (float64, int, string, error) {
+func uploadOnce(ctx context.Context, client *http.Client, url, dir, token string, index int, size int) (float64, int, string, error) {
 	data := make([]byte, size)
 	copy(data, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
 	for i := 8; i < len(data); i++ {
@@ -886,6 +887,7 @@ func uploadOnce(ctx context.Context, client *http.Client, url, dir string, index
 		return 0, 0, "", err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+token)
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
@@ -910,6 +912,55 @@ func uploadOnce(ctx context.Context, client *http.Client, url, dir string, index
 		return 0, 0, "", fmt.Errorf("uploaded file missing or wrong size")
 	}
 	return elapsed, multipartBytes, out.Path, nil
+}
+
+func expectUploadUnauthorized(ctx context.Context, client *http.Client, url, authorization string) error {
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	part, err := mw.CreateFormFile("file", "unauthorized.png")
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write([]byte("image")); err != nil {
+		return err
+	}
+	if err := mw.Close(); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized upload status %d: %s", resp.StatusCode, raw)
+	}
+	if authorization != "" && bytes.Contains(raw, []byte(strings.TrimPrefix(authorization, "Bearer "))) {
+		return fmt.Errorf("upload rejection echoed credential")
+	}
+	var rejection struct {
+		Code   string `json:"code"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(raw, &rejection); err != nil {
+		return err
+	}
+	if rejection.Code != "unauthorized" || strings.TrimSpace(rejection.Reason) == "" {
+		return fmt.Errorf("upload rejection lacked unauthorized code and visible reason")
+	}
+	return nil
 }
 
 func expectBadToken(ctx context.Context, url string) error {
@@ -1228,11 +1279,17 @@ func runFull(ctx context.Context, url, uploadURL, uploadDir, primaryCWD, otherCW
 	pass("scrollback_pagination", "ten distinct contiguous req_id-correlated pages", "range headers prove no gaps or overlaps", "each page has 100 lines and a non-empty payload")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
+	if err := expectUploadUnauthorized(ctx, httpClient, uploadURL, ""); err != nil {
+		return result, err
+	}
+	if err := expectUploadUnauthorized(ctx, httpClient, uploadURL, "Bearer invalid-upload-credential"); err != nil {
+		return result, err
+	}
 	uploadSamples := make([]float64, 0, 5)
 	multipartSizes := make([]int, 0, 5)
 	lastPath := ""
 	for i := 0; i < 5; i++ {
-		ms, multipartBytes, path, err := uploadOnce(ctx, httpClient, uploadURL, uploadDir, i, 1<<20)
+		ms, multipartBytes, path, err := uploadOnce(ctx, httpClient, uploadURL, uploadDir, token, i, 1<<20)
 		if err != nil {
 			return result, err
 		}
@@ -1241,6 +1298,7 @@ func runFull(ctx context.Context, url, uploadURL, uploadDir, primaryCWD, otherCW
 		lastPath = path
 	}
 	result.Metrics.Upload = uploadMetric{FileBytes: 1 << 20, Samples: summarize("ms", uploadSamples), MultipartBytes: multipartSizes}
+	pass("upload_authentication", "missing bearer token rejected with 401 and reason", "wrong bearer token rejected with 401 and reason", "valid pairing token accepted", "credentials not echoed")
 	reqID++
 	if _, err := c.sendInputWait(ctx, protocol.Input{ReqID: reqID, Ref: primaryRef, Text: "printf '" + octal(lastPath+"\n") + "'"}, []string{lastPath}, 15*time.Second); err != nil {
 		return result, err
@@ -1496,7 +1554,9 @@ for _ in $(seq 1 150); do
 done
 [ "$listener_ready" -eq 1 ] || { echo "isolated daemon did not open high port" >&2; exit 1; }
 
-RESOURCE_SECONDS=10
+# RSS growth is a long-window property; the approved gate is ten minutes for
+# each isolated economy state rather than the shorter discovery baseline.
+RESOURCE_SECONDS=600
 RESOURCE_FILES=()
 
 measure_resource_state() {
@@ -1649,8 +1709,7 @@ EOF
 GIT_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || printf unknown)"
 GO_VERSION="$($REAL_GO version | sed 's/[[:space:]]\+/ /g')"
 
-# Assemble the canonical baseline and human report from measured JSON.  Numeric
-# threshold proposals are mechanically derived and explicitly unapproved.
+# Assemble the canonical baseline and enforce the approved numeric thresholds.
 "$PYTHON_BIN" - "$SCENARIO_JSON" "$CLEANUP_JSON" "$BASELINE_JSON" "$REPORT" "$GIT_HEAD" "$GO_VERSION" "${RESOURCE_FILES[@]}" <<'PY'
 import datetime, json, math, platform, sys
 
@@ -1668,38 +1727,67 @@ def rounded(value):
     return round(float(value), 3)
 
 perf = scenario["metrics"]
-suggested = {
-    "status": "advisory_unapproved",
-    "approval_owner": "user_or_adjudicator",
-    "derivation_policy": {
-        "latency_max": "2x observed p95",
-        "throughput_min": "0.5x observed throughput",
-        "rss_max": "1.5x observed peak",
-        "cpu_mean_max": "2x observed mean when nonzero; null when the sample is at timer resolution zero",
-        "spawn_count_max": "2x observed exact spawn count",
-    },
-    "values": {
-        "pair_to_first_listing_ms_max": rounded(perf["pair_to_first_listing"]["p95"] * 2),
-        "subscribe_first_frame_ms_max": rounded(perf["subscribe_first_frame"]["p95"] * 2),
-        "output_end_to_end_p95_ms_max": rounded(perf["output_end_to_end"]["p95"] * 2),
-        "scrollback_page_ms_max": rounded(perf["scrollback_page"]["p95"] * 2),
-        "upload_ms_max": rounded(perf["upload"]["latency"]["p95"] * 2),
-        "reconnect_recovery_ms_max": rounded(perf["reconnect_recovery"]["p95"] * 2),
-        "large_output_bytes_per_second_min": rounded(perf["large_output"]["throughput_bytes_per_second"] * 0.5),
-    },
-    "economy_by_state": {},
-}
-for row in resources:
-    suggested["economy_by_state"][row["state"]] = {
-        "cpu_mean_percent_max": rounded(row["cpu"]["mean_percent"] * 2) if row["cpu"]["mean_percent"] > 0 else None,
-        "daemon_rss_kib_max": rounded(row["daemon_rss"]["max"] * 1.5),
-        "external_process_spawns_max": int(row["external_process_spawns"]["total"] * 2),
-    }
+failures = []
+hard_thresholds = []
+
+def add_threshold(metric, actual, comparator, limit, unit):
+    numeric = isinstance(actual, (int, float)) and not isinstance(actual, bool) and math.isfinite(actual)
+    passed = numeric and (actual <= limit if comparator == "<=" else actual == limit)
+    hard_thresholds.append({
+        "metric": metric,
+        "actual": actual if numeric else None,
+        "comparator": comparator,
+        "threshold": limit,
+        "unit": unit,
+        "status": "pass" if passed else "fail",
+    })
+    if not passed:
+        failures.append(f"PERFORMANCE THRESHOLD FAIL: {metric}: measured={actual!r} {unit}, threshold {comparator} {limit} {unit}")
+
+add_threshold("pair_to_first_listing.p95", perf["pair_to_first_listing"]["p95"], "<=", 5, "ms")
+add_threshold("subscribe_first_frame.p95", perf["subscribe_first_frame"]["p95"], "<=", 400, "ms")
+add_threshold("output_end_to_end.p95", perf["output_end_to_end"]["p95"], "<=", 150, "ms")
+add_threshold("scrollback_page.p95", perf["scrollback_page"]["p95"], "<=", 150, "ms")
+add_threshold("reconnect_recovery.p95", perf["reconnect_recovery"]["p95"], "<=", 400, "ms")
+
+resources_by_state = {row["state"]: row for row in resources}
+
+def resource_value(state, *keys):
+    value = resources_by_state.get(state)
+    for key in keys:
+        value = value.get(key) if isinstance(value, dict) else None
+    return value
+
+add_threshold("zero_connection.cpu.mean_percent", resource_value("zero_connection", "cpu", "mean_percent"), "<=", 0.5, "percent_of_one_core")
+add_threshold("zero_connection.external_process_spawns.total", resource_value("zero_connection", "external_process_spawns", "total"), "==", 0, "processes")
+add_threshold("zero_connection.daemon_descendants.peak", resource_value("zero_connection", "daemon_descendants", "peak"), "==", 0, "processes")
+add_threshold("connected_zero_subscription.cpu.mean_percent", resource_value("connected_zero_subscription", "cpu", "mean_percent"), "<=", 5, "percent_of_one_core")
+add_threshold("connected_single_subscription.cpu.mean_percent", resource_value("connected_single_subscription", "cpu", "mean_percent"), "<=", 5, "percent_of_one_core")
+add_threshold("connected_single_subscription.daemon_descendants.peak", resource_value("connected_single_subscription", "daemon_descendants", "peak"), "<=", 4, "processes")
+for state in ("zero_connection", "connected_zero_subscription", "connected_single_subscription"):
+    add_threshold(f"{state}.daemon_rss.end_minus_start", resource_value(state, "daemon_rss", "end_minus_start"), "<=", 20 * 1024, "KiB")
+
+required_measurements = []
+
+def require_measurement(metric, actual, unit, positive=False):
+    numeric = isinstance(actual, (int, float)) and not isinstance(actual, bool) and math.isfinite(actual)
+    passed = numeric and (actual > 0 if positive else actual >= 0)
+    required_measurements.append({
+        "metric": metric,
+        "actual": actual if numeric else None,
+        "unit": unit,
+        "status": "pass" if passed else "fail",
+    })
+    if not passed:
+        failures.append(f"PERFORMANCE MEASUREMENT FAIL: {metric}: measured={actual!r} {unit}")
+
+require_measurement("large_output.throughput_bytes_per_second", perf["large_output"].get("throughput_bytes_per_second"), "bytes_per_second", positive=True)
+require_measurement("upload.latency.p50", perf["upload"]["latency"].get("p50"), "ms")
+require_measurement("upload.latency.p95", perf["upload"]["latency"].get("p95"), "ms")
 
 deviations = [
     "Current product has no standalone HTTP pairing/QR endpoint; pairing is tested through the shipped WS auth/auth_ack program interface.",
-    "POST /upload currently has no authentication check; this suite records the product risk and does not invent a header contract.",
-    "Economy samples use sequential states on one isolated daemon with 10-second windows; they are baseline observations, not approved long-window gates.",
+    "Economy samples use sequential states on one isolated daemon with 10-minute windows.",
     "Wrapper-shaped local shells stand in for agent CLIs; no production daemon, real user tmux, real phone, camera, notification surface, or lock screen is touched.",
 ]
 unverified = [
@@ -1715,8 +1803,8 @@ unverified = [
 
 baseline = {
     "schema_version": 1,
-    "suite": "test-api-user-scenarios-perf",
-    "status": "pass",
+    "suite": "fix-upload-auth",
+    "status": "fail" if failures else "pass",
     "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "source": {"git_head": git_head, "go_version": go_version},
     "platform": {
@@ -1737,14 +1825,14 @@ baseline = {
         "observed_states": scenario["observed_states"],
     },
     "performance": {
-        "mode": "baseline_only",
-        "hard_numeric_thresholds": [],
+        "mode": "hard_gated",
+        "hard_numeric_thresholds": hard_thresholds,
+        "required_numeric_measurements": required_measurements,
         "percentile_method": scenario["percentile_method"],
         "metrics": perf,
-        "suggested_thresholds": suggested,
     },
     "silent_economy": {
-        "mode": "baseline_only",
+        "mode": "hard_gated",
         "states": resources,
         "daemon_memory_unit": "KiB RSS",
         "child_spawn_method": "daemon-side external spawns counted by exact tmux/ps PATH shims; descendant counts use read-only system-wide PID/PPID snapshots held in memory only",
@@ -1763,7 +1851,7 @@ def dist_line(label, item):
 lines = [
     "# API 用户场景与性能基线报告",
     "",
-    "结论：**PASS（baseline-only）**。全部用户动作由 `/ws` 与 `/upload` 程序接口驱动；性能数值已落盘，但本轮没有批准的数值硬门限。功能错误、字节丢失、隔离越界或清理残留仍会直接失败。",
+    f"结论：**{'FAIL' if failures else 'PASS'}（hard-gated）**。全部用户动作由 `/ws` 与 `/upload` 程序接口驱动；功能错误、性能超门限、字节丢失、隔离越界或清理残留都会直接失败。",
     "",
     "## 场景结果",
     "",
@@ -1787,6 +1875,7 @@ lines += [
     dist_line("断线后 auth+续订到 snapshot", perf["reconnect_recovery"]),
     "",
     f"大输出：期望/实收 `{perf['large_output']['expected_bytes']}` / `{perf['large_output']['received_bytes']}` bytes，丢失 `{perf['large_output']['loss_bytes']}`，吞吐 `{perf['large_output']['throughput_bytes_per_second']:.3f}` bytes/s。",
+    f"上传耗时：p50 `{perf['upload']['latency']['p50']:.3f}` ms，p95 `{perf['upload']['latency']['p95']:.3f}` ms。",
     "",
     "## 静默经济三态",
     "",
@@ -1803,13 +1892,15 @@ for row in resources:
 
 lines += [
     "",
-    "## 建议门限（待裁定，不执行）",
+    "## 硬数值门限",
     "",
-    "建议值只按当前基线机械派生：时延 2×p95、吞吐 0.5×观测值、RSS 1.5×峰值、CPU 与派生计数 2×观测值；CPU 观测为计时分辨率零时不提出数值。用户或裁定席批准前，脚本不使用这些数字判定 PASS/FAIL。既有 006 的 `<200ms` 首帧目标也仅作历史参考，本轮未硬断言。",
-    "",
-    "```json",
-    json.dumps(suggested, ensure_ascii=False, indent=2),
-    "```",
+    "| 指标 | 实测值 | 比较 | 门限 | 结果 |",
+    "|---|---:|:---:|---:|:---:|",
+]
+for gate in hard_thresholds:
+    lines.append(f"| `{gate['metric']}` | {gate['actual']} {gate['unit']} | {gate['comparator']} | {gate['threshold']} {gate['unit']} | {gate['status'].upper()} |")
+
+lines += [
     "",
     "## 隔离与清理",
     "",
@@ -1842,10 +1933,38 @@ for path in pathlib.Path(sys.argv[1]).rglob("*"):
 PY
 unset TOKEN
 
+# Run the leak check before returning a threshold failure, then print every
+# failed comparison with its measured and approved values.
+"$PYTHON_BIN" - "$BASELINE_JSON" <<'PY'
+import json, sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    baseline = json.load(fh)
+
+failed = False
+for gate in baseline["performance"]["hard_numeric_thresholds"]:
+    if gate["status"] == "fail":
+        failed = True
+        print(
+            f"PERFORMANCE THRESHOLD FAIL: {gate['metric']}: measured={gate['actual']!r} {gate['unit']}, "
+            f"threshold {gate['comparator']} {gate['threshold']} {gate['unit']}",
+            file=sys.stderr,
+        )
+for measurement in baseline["performance"]["required_numeric_measurements"]:
+    if measurement["status"] == "fail":
+        failed = True
+        print(
+            f"PERFORMANCE MEASUREMENT FAIL: {measurement['metric']}: "
+            f"measured={measurement['actual']!r} {measurement['unit']}",
+            file=sys.stderr,
+        )
+raise SystemExit(1 if failed else 0)
+PY
+
 "$PYTHON_BIN" -m json.tool "$BASELINE_JSON" >/dev/null
 "$PYTHON_BIN" -m json.tool "$CLEANUP_JSON" >/dev/null
 test -s "$REPORT"
 
 echo "api-user-scenarios: PASS"
-echo "baseline: e2e/artifacts/test-api-user-scenarios-perf/baseline.json"
-echo "report: e2e/artifacts/test-api-user-scenarios-perf/REPORT.md"
+echo "baseline: e2e/artifacts/fix-upload-auth/baseline.json"
+echo "report: e2e/artifacts/fix-upload-auth/REPORT.md"
