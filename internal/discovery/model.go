@@ -73,6 +73,11 @@ type Model struct {
 }
 
 // Workspace returns the workspace whose CWD matches, or nil if absent.
+// @contract
+// @pre none（纯查询，无副作用）
+// @post 返回 CWD 精确匹配的 Workspace；无匹配时返回 nil
+// @err none
+// @inv 不修改 Model；cwd 不变则结果不变
 func (m *Model) Workspace(cwd string) *Workspace {
 	for i := range m.Workspaces {
 		if m.Workspaces[i].CWD == cwd {

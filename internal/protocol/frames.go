@@ -37,6 +37,12 @@ type Typed interface {
 // Auth is the pairing handshake (C→S). Token is write-only: it travels once
 // from client to server, is never echoed in any reply, and must never be
 // logged (requirement 011 route (a)).
+//
+// @contract
+// @pre Token 非空
+// @post 服务端凭 Token 判定身份后回 TypeAuthAck；Token 不出现在任何回执里
+// @err Validate 对空 Token 返回 ErrInvalidField
+// @inv Token 绝不被记录或回显（011 路由 (a)）
 type Auth struct {
 	Token string `json:"token"`
 }
@@ -139,6 +145,12 @@ type Unsubscribe struct {
 // shortcut-bar semantics are "press that key once". Text and Keys are mutually
 // exclusive (a frame carrying both is a protocol error, docs/protocol.md §4.2);
 // neither present means a bare Enter, matching the pre-Keys behavior.
+//
+// @contract
+// @pre ReqID >= 1、Ref 非空、Text 与 Keys 至多一个非空、Keys 中每个键都属闭集
+// @post 该帧在 wire 上合法（Validate 通过）且不附带服务端状态变更
+// @err Validate 对 ReqID 0、空 Ref、text+keys 并存、未知 key 返回 ErrInvalidField
+// @inv 空 Text 且空 Keys 是合法的裸 Enter，服务端必须接受
 type Input struct {
 	ReqID uint32 `json:"req_id"`
 	Ref   string `json:"ref"`
@@ -162,6 +174,12 @@ type InputAck struct {
 // negative = history above it. Count is the number of lines requested (>= 1).
 // The server clamps to the available range and reports the actual range in
 // the binary Scrollback reply.
+//
+// @contract
+// @pre ReqID >= 1、Ref 非空、Count >= 1
+// @post 服务器返回一个 KindScrollback 的 BinaryPayload，其 FromLine/LineCount 是实际返回的范围
+// @err Validate 对 ReqID 0、空 Ref、Count 0 返回 ErrInvalidField
+// @inv 变更 FromLine 不影响该帧的合法性（任何 int32 都合法，由服务端 clamp）
 type Scrollback struct {
 	ReqID    uint32 `json:"req_id"`
 	Ref      string `json:"ref"`

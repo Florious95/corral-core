@@ -20,15 +20,17 @@ type Sample struct {
 	// 4KiB), ANSI escape sequences included. Rules run on this after stripping.
 	RecentOutput []byte
 
-	// LastOutputAge is how long ago the last output was observed. It is an
-	// input for time-assisted rules (the idle/blocked distinction) but never a
-	// blocking wait — decisions stay synchronous and side-effect free.
+	// LastOutputAge is how long ago the last output was observed. It is reserved
+	// for future time-assisted rules (the idle/blocked distinction) — no rule
+	// table consumes it today — and is never a blocking wait: decisions stay
+	// synchronous and side-effect free.
 	LastOutputAge time.Duration
 }
 
 // Confidence grades how strongly a decision is grounded. It accompanies every
-// State so the consumer (ws-api push logic) can weigh whether an edge like
-// done/blocked is worth a notification (requirement 003 standard four).
+// State so a future push layer can weigh whether an edge like done/blocked is
+// worth a notification (requirement 003 standard four); no consumer reads it
+// yet.
 type Confidence int
 
 const (
@@ -77,6 +79,12 @@ func DefaultRegistry() Registry {
 // command is not an error: it degrades to StateUnknown with unknown confidence,
 // keeping the state layer isolated from panes this server does not understand
 // (requirement 008: undecidable must never affect mirroring or input).
+//
+// @contract
+// @pre sample 任意；PaneCommand 决定路由，未知命令合法
+// @post 返回一个 State：已识别命令为对应 adapter 的判定，未知命令为 StateUnknown
+// @err none — 未知命令不报错，降级为 StateUnknown（requirement 008）
+// @inv 无 I/O，Detect 是 sample 的纯函数
 func (r Registry) Detect(sample Sample) State {
 	if a, ok := r[sample.PaneCommand]; ok {
 		return a.Detect(sample)
@@ -90,6 +98,12 @@ func (r Registry) Detect(sample Sample) State {
 // kind first, then this dispatches to the same per-agent rule tables the
 // direct-pane path uses. An unknown kind degrades to StateUnknown, never an
 // error (requirement 008: undecidable must never affect mirroring or input).
+//
+// @contract
+// @pre kind 为任意 AgentKind，sample 任意
+// @post 已知 kind 返回对应 adapter 的判定；未知 kind 返回 StateUnknown
+// @err none — 未知 kind 不报错，降级为 StateUnknown
+// @inv 无 I/O；kind.Command() + 路由逻辑是纯函数
 func (r Registry) DetectForKind(kind AgentKind, sample Sample) State {
 	cmd, ok := kind.Command()
 	if !ok {

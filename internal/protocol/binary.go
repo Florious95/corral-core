@@ -22,6 +22,10 @@ import (
 //
 // The magic and version live on the outside so a decoder can reject a
 // mis-framed message before trusting any byte.
+//
+// Dead code note: ErrInvalidGeometry and ErrInvalidCount are sentinels this
+// package never constructs — they are retained because internal/api/ws_conn.go
+// matches them via errors.Is in classifyCodecError.
 
 const (
 	// BinaryHeaderLen is the header byte count excluding the variable-length
@@ -72,6 +76,12 @@ func (k BinaryKind) validKind() bool {
 }
 
 // BinaryPayload wraps the decoded body of one binary stream frame.
+//
+// @contract
+// @pre 由 DecodeBinary 或手工构造，Kind 属闭集且 Ref 非空
+// @post 对 KindScrollback，ReqID >= 1 且 LineCount >= 1；对 Snapshot/Delta，两者为 0
+// @err 作为 EncodeBinary 入参不合法时返回 ErrUnknownKind / ErrInvalidRef / ErrRefTooLong / ErrInvalidField
+// @inv Data 始终是原始终端字节，绝不被 JSON 转义
 type BinaryPayload struct {
 	// Kind discriminates the payload semantics.
 	Kind BinaryKind
@@ -103,10 +113,17 @@ type BinaryPayload struct {
 }
 
 // EncodeBinary serializes a BinaryPayload into one complete binary WebSocket
-// message. It validates the ref bounds and payload size first so a bad frame
-// never crosses the wire. Kind is checked by the caller's constructor choices
-// (Snapshot/Delta set ReqID 0); ReqID is meaningful only for Scrollback but a
-// nonzero value is not rejected.
+// message. It validates the frame first so a bad frame never crosses the
+// wire: the kind must be in the closed set, the ref non-empty and within
+// BinaryMaxRefLen, the data within BinaryMaxPayloadLen, and a scrollback
+// reply's ReqID/LineCount at least 1. For Snapshot/Delta a nonzero ReqID is
+// not rejected — it is ignored, matching the decode side.
+//
+// @contract
+// @pre p.Kind 属闭集、p.Ref 非空且 <= BinaryMaxRefLen、len(p.Data) <= BinaryMaxPayloadLen；若 p.Kind 为 KindScrollback 则 ReqID 与 LineCount >= 1
+// @post 返回以 BinaryMagic 开头、长度为 BinaryHeaderLen + len(Ref) + len(Data)（Scrollback 另加 scrollbackHeaderLen）的完整二进制消息
+// @err ErrUnknownKind / ErrInvalidRef / ErrRefTooLong / ErrInvalidField
+// @inv 纯函数，无外部副作用；Data 字节原样进入返回消息
 func EncodeBinary(p BinaryPayload) ([]byte, error) {
 	if err := validateBinaryPayload(p); err != nil {
 		return nil, err
@@ -133,9 +150,17 @@ func EncodeBinary(p BinaryPayload) ([]byte, error) {
 }
 
 // DecodeBinary parses one binary WebSocket message back into a BinaryPayload.
-// It is strict by default: a bad magic or version, an unknown kind, a
-// truncated header, an oversized frame, or an empty ref is an error (a
-// malformed mirror stream must surface, not corrupt the client's grid).
+// It is strict: a bad magic or version, an unknown kind, a truncated header,
+// or an empty ref is an error (a malformed mirror stream must surface, not
+// corrupt the client's grid). Decode imposes no payload-size cap — the
+// BinaryMaxPayloadLen limit is enforced on the encode side by EncodeBinary,
+// so a consumer that only decodes never rejects large data on size grounds.
+//
+// @contract
+// @pre data 是至少 BinaryHeaderLen 字节的完整二进制消息
+// @post 返回的 BinaryPayload.Kind 合法且 Ref 非空；出错时返回零值 BinaryPayload 与 error
+// @err ErrTruncated / ErrBadMagic / ErrUnsupportedVersion / ErrUnknownKind / ErrInvalidRef / ErrInvalidField
+// @inv 纯函数，无外部副作用；decode 侧不设 payload 大小上限
 func DecodeBinary(data []byte) (BinaryPayload, error) {
 	if len(data) < BinaryHeaderLen {
 		return BinaryPayload{}, fmt.Errorf("%w: got %d bytes", ErrTruncated, len(data))

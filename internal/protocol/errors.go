@@ -37,9 +37,16 @@ var (
 	ErrInvalidRef = errors.New("protocol: invalid or empty session ref")
 	// ErrRefTooLong means a binary session ref exceeds 255 bytes.
 	ErrRefTooLong = errors.New("protocol: session ref exceeds 255 bytes")
-	// ErrInvalidGeometry means a terminal dimension (rows/cols) is zero.
+	// ErrInvalidGeometry is a reserved sentinel for a zero terminal dimension
+	// (rows/cols). This package never constructs it — bad geometry is rejected
+	// via ErrInvalidField by the Resize/Subscribe Validate methods and the
+	// binary codec. It is retained only so internal/api/ws_conn.go's
+	// classifyCodecError can errors.Is-match it.
 	ErrInvalidGeometry = errors.New("protocol: invalid terminal geometry")
-	// ErrInvalidCount means a line count is zero.
+	// ErrInvalidCount is a reserved sentinel for a zero line count. As with
+	// ErrInvalidGeometry it is never constructed by this package (scrollback
+	// count validation uses ErrInvalidField) and exists only for ws_conn.go's
+	// errors.Is matching.
 	ErrInvalidCount = errors.New("protocol: invalid line count")
 )
 

@@ -11,4 +11,6 @@
 // The state layer must stay strictly isolated from the mirror/input path:
 // any state failure — including a failed identification, which always degrades
 // to unknown — must never affect mirroring or input (requirement 008).
+//
+// @consumes internal/protocol
 package agentstate

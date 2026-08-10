@@ -2,6 +2,9 @@
 // agentmirrord service. The human-readable contract is docs/protocol.md; this
 // package is its machine-verifiable Go reference implementation.
 //
+// @consumes none
+// @produces internal/protocol
+//
 // Transport model: a single WebSocket connection carries two interleaved
 // message kinds —
 //   - text messages are JSON control frames (pairing auth, workspace listing +

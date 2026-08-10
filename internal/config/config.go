@@ -20,8 +20,12 @@ type Config struct {
 	// ListenAddr is the host:port the daemon's WebSocket API listens on.
 	ListenAddr string
 
-	// QRListenAddr is the host:port serving the pairing QR page. Empty
-	// means pairing-QR serving is disabled.
+	// QRListenAddr is the resolved -qr-listen / AGENTMIRROR_QR_LISTEN setting.
+	// The pairing QR is printed to stdout (printPairingGuide in
+	// server/cmd/agentmirrord/main.go), not served over HTTP: this field
+	// currently reaches no listener and only appears in the startup log line.
+	// It is kept so a future QR-serving task can wire it without breaking the
+	// flag/env surface. Empty means no such listener is configured.
 	QRListenAddr string
 
 	// LogLevel is the slog severity level (debug|info|warn|error).
@@ -76,6 +80,11 @@ type Config struct {
 // parsePositiveInt64 parses a non-negative integer string (e.g. a byte cap).
 // Zero is allowed (it means "use the api default" downstream); a negative or
 // non-numeric value is an error so a typo fails fast.
+// @contract
+// @pre none — 任何字符串都可传入；name 仅用于错误信息
+// @post 返回值 >= 0；n == 0 合法（表示"下游用默认"）
+// @err 值非数字或为负数时返回非 nil error，错误信息含 name 与原始值
+// @inv none — 纯函数，不读写全局状态
 func parsePositiveInt64(name, v string) (int64, error) {
 	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
@@ -90,6 +99,11 @@ func parsePositiveInt64(name, v string) (int64, error) {
 // parsePositiveDuration parses a duration string (e.g. "2s"). Zero is allowed
 // (it means "use the api default" downstream); a negative or unparsable value
 // is an error.
+// @contract
+// @pre none — 任何字符串都可传入；name 仅用于错误信息
+// @post 返回值 >= 0；0 合法（表示"下游用默认"）
+// @err 值非 time.ParseDuration 可解析格式或为负数时返回非 nil error
+// @inv none — 纯函数，不读写全局状态
 func parsePositiveDuration(name, v string) (time.Duration, error) {
 	d, err := time.ParseDuration(v)
 	if err != nil {
@@ -139,6 +153,11 @@ func (r resolution) resolveNonEmpty(fs *flag.FlagSet, setFlags map[string]bool) 
 // Load parses args (typically os.Args[1:]) and returns the resolved Config.
 // Unrecognized flags are rejected by the flag package's default error
 // behavior; the returned error is non-nil in that case.
+// @contract
+// @pre none — args 可为空（全默认值）；调用方通常传 os.Args[1:]
+// @post 返回的 Config 中每个设置已按 flag > env > default 优先级解析；数值/时长字段已解析为 int64 / time.Duration
+// @err flag 包拒绝未知 flag（-h/--help 返回 flag.ErrHelp）；数值/时长值非法或为负时返回非 nil error
+// @inv none — Load 是纯函数，不读不写全局可变状态
 func Load(args []string) (Config, error) {
 	fs := flag.NewFlagSet("agentmirrord", flag.ContinueOnError)
 

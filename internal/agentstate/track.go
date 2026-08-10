@@ -17,6 +17,12 @@ import "github.com/agentmirror/agentmirror/internal/protocol"
 // working→working stays working/unknown (an unreadable sample is not proof of
 // completion); any other previous state that lands on idle stays idle (a
 // blocked→idle move is the user answering, not the agent finishing).
+//
+// @contract
+// @pre prev 为 protocol.AgentState 的合法值，sample 任意（未知输出合法）
+// @post 仅当 prev=working 且当前判定 idle 时返回 done；其余情况返回当前规则判定
+// @err none — 永不 error；未知输入降级为 StateUnknown
+// @inv 纯函数：(prev, sample) 完全决定结果，无 I/O、无隐藏内存，可无状态重放
 func Track(prev protocol.AgentState, sample Sample) State {
 	cur := DefaultRegistry().Detect(sample)
 

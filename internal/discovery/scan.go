@@ -30,6 +30,11 @@ const socketTimeout = 5 * time.Second
 // DefaultSocketDirs(), skipping unreachable or stale sockets so one dead server
 // never fails the scan. The returned Model is a pure-data snapshot; no caching
 // is performed.
+// @contract
+// @pre ctx 必须非 nil；logger 可为 nil（内部替换为丢弃日志的 handler）
+// @post 返回一次全新快照 Model；不可达或过期的 socket 被跳过，单点故障不中止扫描
+// @err ctx 取消或超时时返回 ctx.Err()
+// @inv 不做缓存，每次调用重新扫描
 func Discover(ctx context.Context, logger *slog.Logger) (*Model, error) {
 	return DiscoverWithDirs(ctx, logger, DefaultSocketDirs())
 }
@@ -37,6 +42,11 @@ func Discover(ctx context.Context, logger *slog.Logger) (*Model, error) {
 // DiscoverWithDirs is Discover over an explicit list of socket directories,
 // used by callers that need to override the discovery surface (tests inject
 // isolated TMUX_TMPDIR trees here so no real socket is ever touched).
+// @contract
+// @pre ctx 必须非 nil；socketDirs 为要扫描的目录列表，可为空
+// @post 返回一次全新快照 Model；每个目录内不可达或过期的 socket 被跳过
+// @err ctx 取消或超时时返回 ctx.Err()；目录读取失败仅记日志并跳过，不返回错误
+// @inv 不做缓存；空 socketDirs 返回空 Model 且 error 为 nil
 func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []string) (*Model, error) {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
@@ -78,6 +88,11 @@ func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []str
 // /private/tmp, so both spellings are scanned but de-duplicated). Duplicate
 // paths that resolve to the same directory are listed once so panes are never
 // double-counted.
+// @contract
+// @pre none（无外部前置条件）
+// @post 返回目录列表去重（EvalSymlinks 解析后相同即只列一次）；列表永不为空，至少含平台默认目录
+// @err none（不返回错误；无法解析的路径按原样收录，由扫描时跳过）
+// @inv 不触发任何 tmux 调用，纯本地路径计算
 func DefaultSocketDirs() []string {
 	uid := "tmux-" + strconv.Itoa(os.Getuid())
 	var raw []string

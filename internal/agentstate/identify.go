@@ -80,6 +80,12 @@ type IdentifyInput struct {
 // Every failure path (pane without a PID, ps timeout/error, no descendant
 // match) degrades to AgentKindUnknown — never an error, never a block
 // (requirement 008: a failed identification must not affect mirroring).
+//
+// @contract
+// @pre in 为任意 IdentifyInput；无非法输入（PanePID=0 视为无 pane）
+// @post 返回合法 AgentKind；识别失败时恒为 AgentKindUnknown，从不返回错误
+// @err none — 所有失败路径降级为 AgentKindUnknown，错误不向调用方泄漏
+// @inv 进程树 I/O 单次 ps 且受 ≤500ms 预算约束（identifyTimeout）；决策核心 identifyFromTable/classifyArgv 纯函数
 func Identify(ctx context.Context, in IdentifyInput) AgentKind {
 	if k := kindFromCommand(in.PaneCommand); k != AgentKindUnknown {
 		return k

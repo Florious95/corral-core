@@ -10,6 +10,12 @@ import (
 // "type" discriminator from the payload, stamps Version, and validates the
 // payload first — an invalid frame never leaves this process. The payload
 // must implement Typed (all control frames do; see uploadresp note).
+//
+// @contract
+// @pre payload 实现 Typed 且 payload.Validate() 返回 nil
+// @post 返回含 "v"=Version、type=payload.FrameType()、payload 为 JSON 编码正文的完整信封
+// @err payload.Validate() 的失败原样返回；json.Marshal 失败返回编码错误
+// @inv 纯函数，无外部副作用；输出的 "type" 与 payload 的 FrameType() 一致
 func MarshalFrame(payload Typed) ([]byte, error) {
 	if err := payload.Validate(); err != nil {
 		return nil, err
@@ -31,8 +37,15 @@ func MarshalFrame(payload Typed) ([]byte, error) {
 // type) and validates the payload before returning. Unknown envelope or
 // payload fields are ignored for forward compatibility; a rejected version,
 // unknown type, or invalid payload is an error. The concrete payload type is
-// derived from the wire "type" and returned as a Typed interface value; when
-// nil is returned, raw holds the decoded envelope (nil env is not returned).
+// derived from the wire "type" and returned as a Typed interface value whose
+// Validate has already passed. On failure it returns (nil, err); it never
+// returns (nil, nil).
+//
+// @contract
+// @pre data 是一个完整的 WebSocket text message（JSON）
+// @post 返回的 Typed 的 FrameType() 等于 wire "type" 且 Validate() 已通过；出错时返回 (nil, err)
+// @err ErrBadPayload / ErrMissingVersion / ErrUnsupportedVersion / ErrUnknownType / 各 payload 的 Validate 错误
+// @inv 纯函数，无外部副作用；绝不返回 (nil, nil)
 func UnmarshalFrame(data []byte) (Typed, error) {
 	env, err := decodeEnvelope(data)
 	if err != nil {
