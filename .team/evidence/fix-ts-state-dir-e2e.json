@@ -1,0 +1,49 @@
+{
+  "status": "pass",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\"'",
+      "rc": 0
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh'",
+      "rc": 1,
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T194658-73712",
+      "result": "red: headscale-nodes.json initially retained pre_auth_key.key; cleanup redacted it and failed closed"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh'",
+      "rc": 0,
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T195016-35161"
+    }
+  ],
+  "changes": [
+    "server/cmd/agentmirrord passes the resolved stateDir/tsnet path to tsnetd.Options.Dir and a consumer-seam test identifies the exact value",
+    "e2e/feat-ts-wire-headscale.sh drives pairing, tsnet startup, and ConnectionManager through instrumentation APIs only",
+    "headscale node artifacts remove pre_auth_key.key in-stream before durable write"
+  ],
+  "diagnosis": {
+    "tsnet_start_called": "yes",
+    "authkey_delivery": "TS_AUTHKEY environment via task FIFO wrapper",
+    "app_registration": "registered; headscale_node_count=2",
+    "connection_path": "explicit_tsnet_proxy_socket_factory",
+    "workspace_listing_received": "yes",
+    "isolated_session_received": "yes",
+    "forced_derp_packet_flow": "accepts=2 packets_received=36 packets_sent=36"
+  },
+  "safety": {
+    "home_override_used": "no",
+    "camera_or_ui_path_used": "no",
+    "foreground_mouse_or_window_targeting_used": "no",
+    "authkey_value_in_argv_logs_or_artifacts": "no",
+    "cleanup_status": "yes",
+    "production_daemon_baseline_untouched": "yes"
+  },
+  "artifacts": [
+    "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T195016-35161/result.json",
+    "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T195016-35161/instrumentation-proof.txt",
+    "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T195016-35161/cleanup.txt",
+    "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T195016-35161/argv-presence.txt"
+  ],
+  "deviation": []
+}

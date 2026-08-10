@@ -1,0 +1,1 @@
+{"task_id":"audit-prod-daemon-lifecycle","dispatched_to":"v-audit-prod-daemon2","base":".team/nodes/audit-prod-daemon-lifecycle/CLAUDE.md","at":"2026-08-10","note":"回炉 res_3801d8b90998 后二次处女 worker-api 终审；保留第一次 FAIL 红证，独立复跑去重状态机与三条 acceptance"}

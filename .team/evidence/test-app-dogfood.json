@@ -1,6 +1,6 @@
 {
   "task_id": "test-app-dogfood",
-  "status": "done",
+  "status": "pass",
   "seat": "w-dogfood2",
   "seat_note": "真机模拟试用官接力席（Opus 5 识图席，一次性，交件即退役）。前席 w-dogfood 三连 provider 死亡退场，其落盘截图 01~17 全部有效，本席逐图亲自目检后接续，未重做测试设计。",
   "at": "2026-08-10",
