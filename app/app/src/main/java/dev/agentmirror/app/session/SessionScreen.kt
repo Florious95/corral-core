@@ -16,7 +16,16 @@
 
 package dev.agentmirror.app.session
 
+import android.Manifest
+import android.content.ContentValues
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +45,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -45,7 +56,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +68,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.termview.TermSurfaceView
@@ -64,6 +79,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 /**
  * 会话页 Compose 屏（003 四标准的渲染壳）：终端画布 + 紧凑顶栏 + 底部输入区。018 重设计版。
@@ -88,12 +104,53 @@ fun SessionScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
 
     // 附件选择:Photo Picker(ActivityResultContracts.PickVisualMedia,无权限弹窗)。
     val pickMedia = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? ->
         if (uri != null) uploadPickedImage(context, viewModel, uri, scope)
+    }
+    val takePhoto = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { saved ->
+        val uri = pendingCaptureUri
+        pendingCaptureUri = null
+        if (saved && uri != null) {
+            uploadPickedImage(context, viewModel, uri, scope)
+        } else if (uri != null) {
+            context.contentResolver.delete(uri, null, null)
+        }
+    }
+    val takePhotoPreview = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicturePreview(),
+    ) { bitmap: Bitmap? ->
+        if (bitmap == null) {
+            viewModel.transientError = "拍照已取消"
+        } else {
+            uploadCapturedPreview(viewModel, bitmap, scope)
+        }
+    }
+    val launchCameraCapture = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val uri = createCameraImageUri(context)
+            if (uri == null) {
+                viewModel.transientError = "无法创建拍照文件"
+            } else {
+                pendingCaptureUri = uri
+                takePhoto.launch(uri)
+            }
+        } else {
+            // API 26–28 向公共 MediaStore 写入需要旧存储权限；缩略图契约无需扩大权限面。
+            takePhotoPreview.launch(null)
+        }
+    }
+    val cameraPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) launchCameraCapture()
+        else viewModel.transientError = "相机权限未授权，请到系统设置中开启后重试"
     }
 
     // 时钟泵：重连调度 + 输入超时裁决 + 视口信号收敛（生产节奏，测试用假时钟）。
@@ -176,6 +233,16 @@ fun SessionScreen(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                         )
                     },
+                    onTakePhoto = {
+                        if (
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            launchCameraCapture()
+                        } else {
+                            cameraPermission.launch(Manifest.permission.CAMERA)
+                        }
+                    },
                 )
             }
         }
@@ -251,6 +318,7 @@ private fun TopBar(
 private fun InputBar(
     viewModel: SessionViewModel,
     onPickImage: () -> Unit,
+    onTakePhoto: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -259,18 +327,11 @@ private fun InputBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
-        // 加号：相册/拍照（Photo Picker，无权限弹窗）→ 上传 → 路径注入。
-        IconButton(
-            onClick = onPickImage,
+        AttachmentButton(
             enabled = viewModel.uploadStatus !is UploadStatus.Uploading,
-        ) {
-            Text(
-                text = "＋",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.semantics { contentDescription = "添加图片附件" },
-            )
-        }
+            onPickImage = onPickImage,
+            onTakePhoto = onTakePhoto,
+        )
         OutlinedTextField(
             value = viewModel.textFieldValue,
             onValueChange = { viewModel.textFieldValue = it },
@@ -296,6 +357,48 @@ private fun InputBar(
             Text(
                 text = if (viewModel.inputStatus is InputStatus.Sending) "…" else "发送",
                 style = MaterialTheme.typography.labelLarge,
+            )
+        }
+    }
+}
+
+/** 附件入口只做动作分流：拍照与系统 Photo Picker 最终复用同一上传链。 */
+@Composable
+internal fun AttachmentButton(
+    enabled: Boolean,
+    onPickImage: () -> Unit,
+    onTakePhoto: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            enabled = enabled,
+        ) {
+            Text(
+                text = "＋",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { contentDescription = "添加图片附件" },
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("拍照") },
+                onClick = {
+                    expanded = false
+                    onTakePhoto()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("从相册选择") },
+                onClick = {
+                    expanded = false
+                    onPickImage()
+                },
             )
         }
     }
@@ -428,7 +531,7 @@ private val RoundedPill = androidx.compose.foundation.shape.RoundedCornerShape(5
  * VM 的 Compose 状态写入线程安全）。
  */
 private fun uploadPickedImage(
-    context: android.content.Context,
+    context: Context,
     viewModel: SessionViewModel,
     uri: Uri,
     scope: kotlinx.coroutines.CoroutineScope,
@@ -436,13 +539,78 @@ private fun uploadPickedImage(
     val resolver = context.contentResolver
     scope.launch {
         val attachment = withContext(Dispatchers.IO) {
-            val name = (uri.lastPathSegment ?: "image")
-                .substringAfterLast('/').takeIf { it.isNotBlank() } ?: "image"
             val mime = resolver.getType(uri) ?: "application/octet-stream"
+            val name = attachmentFileName(queryDisplayName(context, uri), mime)
             val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
             if (bytes == null) null else Attachment(name, mime, bytes)
         }
         if (attachment != null) {
+            withContext(Dispatchers.IO) { viewModel.uploadAttachment(attachment) }
+        } else {
+            viewModel.uploadStatus = UploadStatus.Failed("无法读取所选图片")
+        }
+    }
+}
+
+/** MediaStore/OpenableColumns 是 content URI 的真实展示名来源；URI 路径段只是内部数字 ID。 */
+private fun queryDisplayName(context: Context, uri: Uri): String? = runCatching {
+    context.contentResolver.query(
+        uri,
+        arrayOf(OpenableColumns.DISPLAY_NAME),
+        null,
+        null,
+        null,
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) cursor.getString(0) else null
+    }
+}.getOrNull()
+
+/** 保留 provider 的真实展示名；仅在缺扩展名时用 MIME 补齐，避免 CLI 把图片当未知二进制。 */
+internal fun attachmentFileName(displayName: String?, mimeType: String?): String {
+    val name = displayName
+        ?.substringAfterLast('/')
+        ?.substringAfterLast('\\')
+        ?.takeIf { it.isNotBlank() }
+        ?: "image"
+    val dot = name.lastIndexOf('.')
+    if (dot > 0 && dot < name.lastIndex) return name
+    val extension = mimeType
+        ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it.lowercase()) }
+        ?.takeIf { it.isNotBlank() }
+        ?: return name
+    return "$name.$extension"
+}
+
+/** 为 TakePicture 预建全分辨率 MediaStore 目标；生成名自带 JPEG 扩展名并可直接进入上传链。 */
+private fun createCameraImageUri(context: Context): Uri? {
+    val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "camera-${System.currentTimeMillis()}.jpg")
+        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+    }
+    return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+}
+
+/** API 26–28 的无存储权限回退：压缩相机预览并复用附件上传状态机。 */
+private fun uploadCapturedPreview(
+    viewModel: SessionViewModel,
+    bitmap: Bitmap,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    scope.launch {
+        val attachment = withContext(Dispatchers.IO) {
+            val bytes = ByteArrayOutputStream().use { output ->
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)) return@withContext null
+                output.toByteArray()
+            }
+            Attachment(
+                name = "camera-${System.currentTimeMillis()}.jpg",
+                mimeType = "image/jpeg",
+                bytes = bytes,
+            )
+        }
+        if (attachment == null) {
+            viewModel.uploadStatus = UploadStatus.Failed("无法读取拍照图片")
+        } else {
             withContext(Dispatchers.IO) { viewModel.uploadAttachment(attachment) }
         }
     }
