@@ -433,9 +433,9 @@ tasks:
       空 listing（seq=1）保持连接；舰队恢复后的首个成功扫描被当基线处理不推 delta、seq 不变，
       客户端 seq 连续性检查判不出断点，空 listing 静默滞留至手动重 list（违红线5 失败可见）。
       修复后解除 TestDiscoveryRecoveryReachesConnectedClientFromStartFailure 的 t.Skip 转绿。
-      排期：P0 波次已于 2026-08-10 收口（feat-tsnet-wiring 与 TS 链入库），本条放行。
+      前置说明：P0 波次已于 2026-08-10 收口（feat-tsnet-wiring 与 TS 链入库），本条放行。
     acceptance: ["bash -lc 'cd server && go test ./internal/api/...'"]
-    deps: ["test-aggregate-status"]
+    deps: ["test-aggregate-status", "feat-tsnet-wiring", "fix-ts-state-dir-e2e"]
     write_scope: ["server/internal/api/"]
     evidence: ".team/evidence/fix-recovery-baseline.json"
     contention: impl
@@ -857,4 +857,54 @@ tasks:
     deps: ["test-api-user-scenarios-perf"]
     write_scope: ["e2e/api-user-scenarios.sh", "e2e/artifacts/test-api-user-scenarios-perf/", ".team/evidence/perf-thresholds-enforce.json"]
     evidence: ".team/evidence/perf-thresholds-enforce.json"
+    contention: impl
+
+  # ---------- 2026-08-11 本轮：结账 + 阶段一判据 ----------
+  - id: recheck-settle-20260811
+    goal: >
+      结账（只复跑不修）：工作区悬着 54 项未提交改动，来自 6 个案子——4 案席位自报 pass
+      （fix-dogfood-pairing-ux / fix-dogfood-upload-media / fix-dogfood-term-ux / fix-recovery-baseline）、
+      2 案被清场杀在半路（fix-upload-auth 是 P0 安全：POST /upload 曾零鉴权；perf-thresholds-enforce）。
+      逐案原样复跑该案 taskbook acceptance 的 argv，并为每次测量配阳性对照（解析测试结果 XML/输出，
+      确认用例数非零、本轮新增红测文件确实被执行且计数非零——"exit 0"本身不算证据，
+      gradle -q 配 UP-TO-DATE 可以让没跑测试也退 0）。再逐案核对 goal 里的声明是否真落地
+      （例：fix-recovery-baseline 要求解除 TestDiscoveryRecoveryReachesConnectedClientFromStartFailure
+      的 t.Skip；fix-dogfood-pairing-ux 要求 D-14 的设置页重配入口可达、且原先谎称"设置里有重配按钮"
+      的注释已改真；fix-upload-auth 要求 docs/protocol.md 先有该端点鉴权契约再实现，且含 D-13 上传目录上限）。
+      产出 .team/recheck-20260811/verdict.json（每案 status pass/red/blocked + tests 的 argv 与 rc 原文
+      + positive_control 计数 + goal 逐条落地核对结论 + 建议的窄提交文件分组）与同目录 VERDICT.md 人读版；
+      同时把每案判定写回 .team/evidence/ 下该案的证据文件。
+      硬红线：只复跑不修——测试红了不许改测试、不许改产品代码、不许放宽 acceptance，
+      差口原样记进 verdict.json 的 gaps 数组（后续转缺陷条目排进阶段三）。不许 git commit/push（leader 收口）。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/... ./internal/pairing/...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest :terminal:test\"'"
+      - "bash -lc 'python3 -c \"import json;d=json.load(open(\\\".team/recheck-20260811/verdict.json\\\"));c=d[\\\"cases\\\"];assert len(c)>=6;assert all(x[\\\"tests\\\"] for x in c);assert d[\\\"positive_control\\\"][\\\"app_tests_run\\\"]>0 and d[\\\"positive_control\\\"][\\\"terminal_tests_run\\\"]>0\"'"
+    deps: []
+    write_scope: [".team/recheck-20260811/", ".team/evidence/"]
+    evidence: ".team/evidence/recheck-settle-20260811.json"
+    contention: impl
+
+  - id: arch-criteria-t3
+    goal: >
+      阶段一的验收定义先行：把"注释最新/契约齐"变成机器判据，否则该阶段只能靠席位自报。
+      命名裁定（leader 2026-08-11）：tools/archwiki/build_wiki.py 里 T2-1/T2-2 已被 FUTURE_CRITERIA
+      占用（零消费者包 / 孤儿子图）、T2-3 被 parse_exoskeleton_fences 预留，故新判据另开 T3 系列，
+      不得覆盖既有编号。落地两条：
+      T3-1 符号级 doc 覆盖——非测试导出符号（Go 顶层导出 decl / Kotlin 顶层 public 声明）必须有紧邻 doc/KDoc；
+      T3-2 引用真实性——doc 与外骨骼标签文本里提到的符号名、仓库文件路径、CLI flag 必须在仓库中真实存在；
+      这条专抓"注释谎称设置里有重配按钮"那类谎报注释，是本轮"注释即契约"能否成立的关键。
+      准入纪律（沿用本文件既有约定）：每条判据必须先配红测 fixture 才准入——testdata/ 下各建至少一个
+      必红 mini-repo，另各配一个必绿的阳性对照 fixture（防"没扫到"被当成"干净"），全部挂进 test_check.py。
+      分级开关：默认报告模式（列清单、不改变退出码，因真仓库 18 包尚未刷注释、此刻必然大面积违规），
+      --strict-t3 才计入退出码，--pkg 包名 支持单包硬判——阶段一逐包收口时用它做每包 acceptance。
+      对真仓库跑一次报告模式，清单落 docs/wiki/t3-report.md（阳性对照：清单必须非空，空即判工具没真扫）。
+      红线：既有 T1-1/T1-2 必须保持绿；不得为了让真仓库好看而放宽判据。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "bash -lc 'test -s docs/wiki/t3-report.md && grep -q \"T3-1\" docs/wiki/t3-report.md && grep -q \"T3-2\" docs/wiki/t3-report.md'"
+    deps: []
+    write_scope: ["tools/archwiki/", "docs/wiki/t3-report.md"]
+    evidence: ".team/evidence/arch-criteria-t3.json"
     contention: impl

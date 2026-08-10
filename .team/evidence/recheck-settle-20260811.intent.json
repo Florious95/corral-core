@@ -1,0 +1,1 @@
+{"task_id": "recheck-settle-20260811", "dispatched_to": "w-recheck-settle", "base": ".team/nodes/recheck-settle-20260811/CLAUDE.md", "case_id": "msg_3d7927d0bf20", "at": "2026-08-11 00:01:00", "note": "leader 人工派单（本轮为人工调度，非编排引擎）；补写此 intent 是为让 watchdog 的 inflight_seats() 能看见本席，否则停摆计数永不自增"}
