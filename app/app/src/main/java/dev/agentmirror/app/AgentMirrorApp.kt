@@ -46,7 +46,7 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
  * - 配对页可从设置/重配入口重进（重新配对）。
  * 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。
  *
- * 导航态（activeSession/showPairing）由 [navState]（D-3 修复）注入：MainActivity 在
+ * 导航态由 [navState]（D-3 修复）注入：MainActivity 在
  * onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。
  *
  * 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复，
@@ -69,6 +69,7 @@ fun AgentMirrorApp(
         val route: AppRoute = when {
             session != null -> AppRoute.Session(ref = session.first, name = session.second)
             navState.showPairing -> AppRoute.Pairing
+            navState.showSettings -> AppRoute.Settings
             else -> AppRoute.Workspace
         }
 
@@ -104,7 +105,15 @@ fun AgentMirrorApp(
                         navState.showPairing = false
                     },
                 )
-                // 工作区：有配置直进；"重新配对"从设置入口进入（见 WorkspaceScreen 顶栏设置钮）。
+                // 设置页：单档模型只提供重配；成功后 PairingConfigStore.save 覆盖现有档案。
+                AppRoute.Settings -> SettingsScreen(
+                    onBack = { navState.showSettings = false },
+                    onRePair = {
+                        navState.showSettings = false
+                        navState.showPairing = true
+                    },
+                )
+                // 工作区：有配置直进；顶栏设置钮进入真实设置页，再选择重新配对。
                 AppRoute.Workspace -> {
                     // 接线（fix-workspace-wiring）：把 Activity 持有的工作区 VM 接入
                     // ServiceWire.uiConnector 扇出。配对成功切工作区后，conn 层 READY + listing /
@@ -124,6 +133,7 @@ fun AgentMirrorApp(
                         viewModel = workspaceViewModel,
                         connectionPath = ServiceWire.connectionPath(),
                         onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                        onOpenSettings = { navState.showSettings = true },
                     )
                 }
             }
@@ -135,5 +145,6 @@ fun AgentMirrorApp(
 private sealed interface AppRoute {
     data class Session(val ref: String, val name: String) : AppRoute
     data object Pairing : AppRoute
+    data object Settings : AppRoute
     data object Workspace : AppRoute
 }
