@@ -40,6 +40,19 @@ v4.3 增量（2026-08-09，用户实证误报过多案）：v4.1 把窗收紧后
 （IDLE 1→3、HASH 2→3，约 9 分钟出针）：误报的代价是探针噪声+假升级打断 leader，
 已被用户实证为真代价，不再视为"无害"。
 
+v5 增量（2026-08-11，w-arch-t3 吐完长思考文本即卡死 35 分钟案）：席位 turn 结束后停在空
+提示符，而框架 worker_state 持续报 BUSY、last_output_at 还在跳（T1/T2 全盲，实测 idle 计数
+恒 0）；能救它的只剩 T4，但 T4 要 HASH_SAMPLES×INTERVAL≈9 分钟，且阈值**不能再短**——
+席位真在长思考时正文也只有 "Thought for ##s" 这类纯数字行在变，数字归一化后同样静止，
+收紧窗口就会打断正在思考的席位（v4.3 的教训）。
+新增 T5：尾栏 turn 活跃标记。Claude Code pane 回合进行中尾栏含 TURN_MARKER
+（"esc to interrupt"），回合结束则无——这是布尔真值而非启发式，能把"在思考"与"已收工"
+彻底分开，不受数字归一化影响。语义：在途席位连续 TURN_ENDED_SAMPLES 次尾栏无标记 ⇒
+turn 已结束却没交件 ⇒ 出针。标记存在时同时清零 T2/T4 计数与探针账（等价于一个精确的活性信号）。
+只读尾栏这一个布尔位，不解析正文语义，不违"不读 worker 终端原文"纪律。
+采样间隔同步 180→120 秒；HASH/IDLE 阈值 3→4 以保持各自约 8 分钟的原有墙钟标定不变，
+T5 则 2 采样即约 4 分钟出针。
+
 v4.4 增量（2026-08-10，终审红项回炉）：生产守卫去重状态机修复——同端口
 「fault→healthy→同 fault 复发」复发必须再告警（红项实证：健康快照不落状态位，
 去重读上一条 fault 被误压）。修法：仅真实恢复转换（上一条同端口 fault）落一条
@@ -55,15 +68,18 @@ TA = os.path.join(WS, ".team", "ta")
 PROD_PORT = 9900
 PROD_LOG = os.path.join(WS, ".team", "logs", "agentmirrord-prod.log")
 PROD_ESCALATION_LOG = os.path.join(WS, ".team", "logs", "watchdog-escalation.log")
-INTERVAL = 180          # 采样间隔（秒）
+INTERVAL = 120          # 采样间隔（秒）（v5：180→120，配合阈值上调保持原墙钟标定）
 BUSY_STALE_SEC = 900    # T1：BUSY 但无输出的停滞阈值（15 分钟）
-IDLE_SAMPLES = 3        # T2：非 BUSY 采样数（v4.3 回调 1→3：v4.1 的"误发无害"被用户实证推翻——等回执的席位 3 分钟即中针+假升级；配合 CPU 活性信号，真停摆约 9 分钟出针）
+IDLE_SAMPLES = 4        # T2：非 BUSY 采样数（v5 随 INTERVAL 缩短 3→4，墙钟仍约 8 分钟）
 GLOBAL_SAMPLES = 3      # T3：全局 0 BUSY 采样数
-MAX_SAMPLES = 120       # 6 小时心跳
+MAX_SAMPLES = 180       # 6 小时心跳（v5：INTERVAL 缩短后同步加倍采样数）
 NUDGE_BUDGET = 2        # v3：每席每任务自动探针预算，烧穿才升级 leader
-HASH_SAMPLES = 3        # T4：pane 正文 hash 连续不变的采样数（v4.3 回调 2→3；长编译静默由 CPU 信号豁免）
+HASH_SAMPLES = 4        # T4：pane 正文 hash 连续不变的采样数（v5 随 INTERVAL 缩短 3→4，墙钟仍约 8 分钟）
 CPU_EPS = 1.0           # v4.3：采样间子树 CPU 前进超此秒数即判"在干活"
 TAIL_STRIP = 15         # T4：剥掉 pane 尾部 UI 区行数（输入框/状态栏/任务列表/spinner）
+TURN_MARKER = "esc to interrupt"  # v5 T5：尾栏含此串 = 回合进行中（Claude Code pane 真值位）
+TURN_TAIL_LINES = 6     # v5 T5：只在 pane 最后这几行找标记（尾栏区，正文不参与）
+TURN_ENDED_SAMPLES = 2  # v5 T5：连续几次尾栏无标记即判"回合已结束却没交件"（约 4 分钟）
 
 
 SESSION = "team-remote-agent-android"  # 本工程 team session 名（固定；socket 名 restart 后会变）
@@ -94,6 +110,21 @@ def pane_hash(sock: str, session: str, seat: str) -> str:
         return ""
     body = "\n".join(r.stdout.rstrip().splitlines()[:-TAIL_STRIP])
     return hashlib.md5(re.sub(r"\d+", "#", body).encode()).hexdigest()
+
+
+def pane_turn_active(sock: str, session: str, seat: str) -> bool | None:
+    """v5 T5 信号源：尾栏是否含 TURN_MARKER，即"回合进行中"的布尔真值位。
+
+    与 T4 的区别：T4 判"正文动没动"，会被"长思考时只有数字在变"骗过（数字归一化后
+    与真停摆同样静止）；本信号直接取 Claude Code pane 尾栏的 in-flight 标记，
+    在思考=有标记、已收工=无标记，两者不再混淆。取不到返回 None（不参与判定）。
+    """
+    r = subprocess.run(["tmux", "-S", sock, "capture-pane", "-p", "-t", f"{session}:{seat}"],
+                       capture_output=True, text=True, timeout=10)
+    if r.returncode != 0:
+        return None
+    tail = r.stdout.rstrip().splitlines()[-TURN_TAIL_LINES:]
+    return any(TURN_MARKER in ln for ln in tail)
 
 
 def pane_cpu(sock: str, session: str, seat: str) -> float:
@@ -317,6 +348,7 @@ last_seen_output: dict[str, str] = {}  # v3：seat -> 上次采样的 last_outpu
 pane_hashes: dict[str, str] = {}     # v4：seat -> 上次正文 hash
 hash_still: dict[str, int] = {}      # v4：seat -> 连续不变采样数
 pane_cpus: dict[str, float] = {}     # v4.3：seat -> 上次子树累计 CPU 秒
+turn_ended: dict[str, int] = {}      # v5：seat -> 连续"尾栏无 turn 标记"采样数
 global_count = 0
 log = open(".team/logs/watchdog.log", "a")
 
@@ -384,11 +416,26 @@ for i in range(MAX_SAMPLES):
                         print(f"revived: {key} (CPU 前进 {cpu - prev_cpu:.1f}s)", file=log, flush=True)
                         nudges[key] = 0
                 pane_cpus[seat] = cpu
+            # v5 T5：尾栏 turn 标记——布尔真值位，把"在思考"与"已收工"分开
+            turn = pane_turn_active(sock, session, seat) if sock else None
+            if turn is True:
+                turn_ended[seat] = 0
+                # 回合确实在跑：等价于精确活性信号，清零启发式计数与探针账
+                hash_still[seat] = 0
+                idle_count[seat] = 0
+                if nudges.get(key):
+                    print(f"revived: {key} (尾栏 turn 标记恢复)", file=log, flush=True)
+                    nudges[key] = 0
+            elif turn is False:
+                turn_ended[seat] = turn_ended.get(seat, 0) + 1
             # v3 复活判定：探针发出后 last_output_at 前进 → 计数清零（信号已知可能失真，仅作辅助）
             if nudges.get(key) and last and last != last_seen_output.get(key):
                 pass  # v4 起不再凭此清零：last_output_at 被 UI 噪声污染，会把死席误判复活
             stall_why = None
-            if hash_still.get(seat, 0) >= HASH_SAMPLES:
+            if turn_ended.get(seat, 0) >= TURN_ENDED_SAMPLES:
+                stall_why = (f"T5 回合已结束却没交件（尾栏连续 {turn_ended[seat]} 采样无"
+                             f"「{TURN_MARKER}」，约 {turn_ended[seat]*INTERVAL//60} 分钟）")
+            elif hash_still.get(seat, 0) >= HASH_SAMPLES:
                 stall_why = f"T4 正文静止 {hash_still[seat]} 采样（约 {hash_still[seat]*INTERVAL//60} 分钟）"
             elif state == "BUSY":
                 idle_count[seat] = 0
@@ -404,6 +451,7 @@ for i in range(MAX_SAMPLES):
                     last_seen_output[key] = last or ""
                     idle_count[seat] = 0  # 给探针一个观察窗
                     hash_still[seat] = 0  # v4 同款观察窗
+                    turn_ended[seat] = 0  # v5 同款观察窗：探针投递到席位起身有延迟
                     nudge(seat, task, stall_why)
                     print(f"nudge#{nudges[key]}: {key} ({stall_why})", file=log, flush=True)
                 else:
@@ -427,7 +475,7 @@ for i in range(MAX_SAMPLES):
         # v3.2①：live 工作席（w- 前缀）却无在途 intent = 看门狗盲区，逐轮曝光供 leader 对账
         blind = [s for s in agents if s.startswith("w-") and s not in owe]
         prod_state = "healthy" if prod_snapshot["healthy"] else ",".join(prod_snapshot["faults"])
-        print(f"{now:%H:%M:%S} prod={prod_state} prod_escalated={prod_escalated} busy={busy_total} inflight={list(owe.values())} blind={blind} still={hash_still} idle={idle_count} nudges={nudges} g={global_count}", file=log, flush=True)
+        print(f"{now:%H:%M:%S} prod={prod_state} prod_escalated={prod_escalated} busy={busy_total} inflight={list(owe.values())} blind={blind} still={hash_still} idle={idle_count} turnend={turn_ended} nudges={nudges} g={global_count}", file=log, flush=True)
         if escalations:
             print("STALL_ESCALATION\n" + "\n".join(escalations))
             sys.exit(1)

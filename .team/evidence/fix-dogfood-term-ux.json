@@ -1,0 +1,55 @@
+{
+  "task_id": "fix-dogfood-term-ux",
+  "status": "pass",
+  "rechecked_at": "2026-08-11T00:09:00+08:00",
+  "rechecker": "w-recheck-settle",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "note": "recheck acceptance argv; forced --rerun-tasks real execution: 345 tests 0 failures; TermGestureDirectionTest 1 test + WorkspaceViewModelTest 15 tests fresh"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'",
+      "rc": 0,
+      "note": "recheck acceptance argv; forced --rerun-tasks real execution: 67 tests 0 failures; CharWidthTest 6 + WideCharTest 10 fresh"
+    }
+  ],
+  "positive_control": {
+    "app_xml": "42 files, 345 tests, failures=0 errors=0 skipped=0, ALL fresh (mtime 00:08:20 > rerun start 00:07:55)",
+    "terminal_xml": "9 files, 67 tests, failures=0 errors=0 skipped=0, ALL fresh",
+    "TermGestureDirectionTest": "tests=1 failures=0 fresh; fingerDragDownScrollsIntoHistory present and passed",
+    "WorkspaceViewModelTest": "connectingWithNoWorkspaces_isLoadingInsteadOfEmpty present and passed (of 15)",
+    "CharWidthTest": "emojiIsDoubleWidth present and passed (of 6)",
+    "WideCharTest": "emojiOccupiesTwoCells present and passed (of 10)",
+    "gradle_rerun_forced": "initial -q run was UP-TO-DATE; --rerun-tasks forced real re-execution"
+  },
+  "goal_checks": [
+    {
+      "claim": "D-04 滚动方向断言",
+      "verdict": "met",
+      "evidence": "TermSurfaceView.kt:100 'GestureDetector 的 distanceY 是“上一点 - 当前点”：手指下拖为负; deltaLines=(-dy/lineHeightPx).roundToInt()' — sign flipped so down-drag scrolls into history. TermGestureDirectionTest.fingerDragDownScrollsIntoHistory sends real ACTION_DOWN+ACTION_MOVE (100f,20f)->(100f,70f) and asserts !presenter.isFollowingBottom"
+    },
+    {
+      "claim": "D-08 加载态状态机断言",
+      "verdict": "met",
+      "evidence": "WorkspaceUiState.isLoading = connection==CONNECTING && workspaces.isEmpty(); WorkspaceScreen branches: isLoading->LoadingContent, isEmpty->EmptyGuideContent (READY+empty). WorkspaceViewModelTest.connectingWithNoWorkspaces_isLoadingInsteadOfEmpty asserts isLoading true"
+    },
+    {
+      "claim": "D-09 emoji 宽度网格断言",
+      "verdict": "met",
+      "evidence": "CharWidth now treats U+26A0/2705/274C as double-width; WideCharTest.emojiOccupiesTwoCells feeds '✅ ❌ ' and asserts emoji main+continuation cells (width 2 then 0) before the space so glyphs don't eat the separator"
+    }
+  ],
+  "gaps": [],
+  "suggested_commit_files": [
+    "app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt",
+    "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt",
+    "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt",
+    "app/app/src/test/kotlin/dev/agentmirror/app/termview/TermGestureDirectionTest.kt",
+    "app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceViewModelTest.kt",
+    "app/terminal/src/main/kotlin/dev/agentmirror/terminal/CharWidth.kt",
+    "app/terminal/src/test/kotlin/dev/agentmirror/terminal/CharWidthTest.kt",
+    "app/terminal/src/test/kotlin/dev/agentmirror/terminal/WideCharTest.kt"
+  ]
+}

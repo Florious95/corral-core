@@ -1,0 +1,59 @@
+{
+  "task_id": "fix-upload-auth",
+  "status": "pass",
+  "rechecked_at": "2026-08-11T00:46:00+08:00",
+  "rechecker": "w-recheck-settle",
+  "seat_history": "dispatched 2026-08-10 21:59 to w-upload-auth, killed mid-run (no evidence file; re-judged from scratch by recheck-settle)",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/... ./internal/pairing/...\"'",
+      "rc": 0,
+      "note": "recheck acceptance argv; api 66 RUN lines ok 5.180s, pairing 26 RUN lines ok 0.692s; focused upload tests PASS: TestUploadAuthentication (missing/wrong/valid), TestUploadTooLarge, TestUploadDirectoryLimit, TestUploadPersistsFileAndReturnsPath"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'",
+      "rc": 0,
+      "note": "recheck acceptance argv; isolated high port 62792, isolated TMUX_TMPDIR, production :9900 untouched; suite PASS in ~31 min, all 14 scenarios pass, cleanup zero-residue"
+    }
+  ],
+  "positive_control": {
+    "go_focused": "TestUploadAuthentication runs three subtests missing_credential / wrong_credential / valid_credential all --- PASS; response never echoes test-token/wrong-token",
+    "e2e_baseline": "e2e/artifacts/fix-upload-auth/baseline.json status=pass mode=hard_gated, hard_numeric_thresholds=14 entries 0 fails, required_numeric_measurements pass (large_output throughput 30.6MB/s, upload p50 1.884ms p95 3.0052ms)",
+    "e2e_scenarios": "14 scenarios all pass, including upload_authentication (missing/wrong/valid bearer) and image_upload_and_path_injection",
+    "cleanup": "daemon_pid_gone/client_pid_gone/tmux_pid_gone/listener_absent/socket_absent/runtime_handles_zero/runtime_tree_absent/build_tree_absent all true, out_of_scope_tmux_targets=0",
+    "isolation": "daemon.log records only token_source=explicit, never token value; production daemon pid 3393 / :9900 untouched"
+  },
+  "goal_checks": [
+    {
+      "claim": "docs/protocol.md 先有该端点鉴权契约再实现（POST /upload 需 Bearer token，与 WS 握手同源）",
+      "verdict": "met",
+      "evidence": "docs/protocol.md §8 '图片上传' now specifies: '鉴权：请求必须携带标准 HTTP 头 Authorization: Bearer <pairing-token>；服务端用与 WebSocket auth 握手相同的 TokenValidator 校验。缺失或错误凭据均返回 HTTP 401，JSON 正文包含稳定的 code: \"unauthorized\" 与非空 reason；响应和日志不得回显 token。' and §8 资源上限. §8 section header pre-existed in HEAD; the auth contract lines are part of this changeset. server/internal/api/upload.go implements exactly this contract (uploadBearerToken + TokenValidator.ValidateToken + 401 + WWW-Authenticate: Bearer + token-free rejection reasons). Note: temporal ordering of doc-vs-code within one uncommitted changeset is not separately provable, but contract and implementation are coherent and the fix reuses the existing WS pairing token rather than inventing a new scheme."
+    },
+    {
+      "claim": "未授权三分支（无凭据/错凭据/对凭据）断言齐全",
+      "verdict": "met",
+      "evidence": "TestUploadAuthentication (api_test.go): table {missing credential 401/wantFiles 0, wrong credential Bearer wrong-token 401/0, valid credential Bearer test-token 200/1}; e2e scenarios.json upload_authentication passes same three branches; credential never echoed"
+    },
+    {
+      "claim": "token 不落日志",
+      "verdict": "met",
+      "evidence": "daemon.log contains only token_source=explicit; upload.go log lines (resolve dir/measure dir/write file) carry no token; uploadBearerToken returns only fixed token-free reasons; e2e script's final leak check scans every artifact for the generated token (script lines 1927-1933)"
+    },
+    {
+      "claim": "D-13 上传目录大小上限/超限拒绝或轮转 + README 说明",
+      "verdict": "met",
+      "evidence": "options.go defaultMaxUploadDirBytes=1<<30 (1 GiB); server.go uploadMu serializes quota check with write; upload.go returns HTTP 507 storage_limit_exceeded with reason; TestUploadDirectoryLimit seeds dir and asserts rejection code + dir unchanged; server/README.md documents '上传目录内常规文件总量硬上限为 1 GiB…HTTP 507…删除不再需要的旧上传文件再重试'"
+    }
+  ],
+  "gaps": [],
+  "suggested_commit_files": [
+    "server/internal/api/upload.go",
+    "server/internal/api/server.go",
+    "server/internal/api/options.go",
+    "server/internal/api/api_test.go",
+    "docs/protocol.md",
+    "server/README.md",
+    "e2e/api-user-scenarios.sh",
+    "e2e/artifacts/fix-upload-auth/"
+  ]
+}

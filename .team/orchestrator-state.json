@@ -153,7 +153,7 @@
       "task": "fix-ts-state-dir-e2e",
       "seat": "w-ts-state-dir-e2e10",
       "at": 1786362279.723104,
-      "state": "in_flight",
+      "state": "processed",
       "alive_checked": true,
       "cpu": 8.679999999999998,
       "last_progress": 1786362555.036103
@@ -163,6 +163,58 @@
       "seat": "w-api-user-scenarios-perf2",
       "at": 1786362281.079306,
       "state": "processed",
+      "alive_checked": false
+    },
+    "msg_c48c0b784c00": {
+      "task": "fix-upload-auth",
+      "seat": "w-upload-auth",
+      "at": 1786370370.0952792,
+      "state": "in_flight",
+      "alive_checked": false,
+      "cpu": 2.78,
+      "last_progress": 1786370419.357574
+    },
+    "msg_c0f35399db98": {
+      "task": "fix-dogfood-pairing-ux",
+      "seat": "w-dogfood-pairing-ux",
+      "at": 1786370371.30973,
+      "state": "in_flight",
+      "alive_checked": false,
+      "cpu": 2.5399999999999996,
+      "last_progress": 1786370419.39253
+    },
+    "msg_cf909aa269b0": {
+      "task": "fix-dogfood-upload-media",
+      "seat": "w-dogfood-upload-media",
+      "at": 1786370372.5022762,
+      "state": "in_flight",
+      "alive_checked": false,
+      "cpu": 2.63,
+      "last_progress": 1786370419.4279628
+    },
+    "msg_cbfde2025310": {
+      "task": "fix-dogfood-term-ux",
+      "seat": "w-dogfood-term-ux",
+      "at": 1786370373.696217,
+      "state": "in_flight",
+      "alive_checked": false,
+      "cpu": 2.5599999999999996,
+      "last_progress": 1786370419.463715
+    },
+    "msg_b7fc28f8e798": {
+      "task": "perf-thresholds-enforce",
+      "seat": "w-perf-thresholds-enforce",
+      "at": 1786370374.8893619,
+      "state": "in_flight",
+      "alive_checked": false,
+      "cpu": 2.4899999999999993,
+      "last_progress": 1786370419.499542
+    },
+    "msg_8c4181b03580": {
+      "task": "fix-recovery-baseline",
+      "seat": "w-recovery-baseline",
+      "at": 1786370419.3219042,
+      "state": "in_flight",
       "alive_checked": false
     }
   },
@@ -177,7 +229,8 @@
     "fix-ts-state-dir-e2e:status=red seat=w-fix-tsstatedir2": true,
     "fix-ts-dial-timing:交件 status=pass，deviation=True，ui_review=": true,
     "feat-tsnet-wiring:交件 status=pass，deviation=True，ui_review=": true,
-    "test-api-user-scenarios-perf:交件 status=pass，deviation=True，ui_review=": true
+    "test-api-user-scenarios-perf:交件 status=pass，deviation=True，ui_review=": true,
+    "fix-recovery-baseline:deps 已满足但 goal 写着排期约束「P0 波次已于 2026-08-10": true
   },
   "attempts": {
     "fix-ts-state-dir-e2e": 2,
