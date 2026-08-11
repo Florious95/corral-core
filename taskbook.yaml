@@ -1565,3 +1565,62 @@ tasks:
     write_scope: ["tools/tsnetbind/", "app/app/libs/"]
     evidence: ".team/evidence/fix-tsnetbind-align.json"
     contention: impl
+
+  - id: fix-app-runtime-sa
+    goal: >
+      两件事合并（同属 `:app` 模块运行时，按「同一 Gradle 模块同一时刻只放一席」的红线合席）：
+      ①**补在屏兜底时钟泵**（阶段三复核 `w-stage3-verify` 记的 medium gap）：
+      `feat-fg-service-wiring` 把时钟泵改为**单归属前台服务**（2s 一拍），
+      在屏组合不再各自持有；后果是**服务被杀时即使 App 在前台也没有泵**，界面停止更新。
+      接线前泵由在屏组合的 `LaunchedEffect` 驱动、前台恒有泵，所以这是功能回退。
+      它踩在 004 的自检标准上——「删掉前台服务这一层，产品功能应当仍然完整，**只是后台期间体验降级**」，
+      现状是**前台也降级**。修法：在屏组合检测到服务不可用时接管泵（服务恢复后让出，不得双泵重复拍），
+      并配红测断言「服务不可用 + 前台在屏 ⇒ 泵仍在跑」与「服务恢复 ⇒ 不出现双泵」。
+      ②**修 `docs/stage3-issue-inventory.md` 分组 E**（`app/app` 运行时，gate 复跑后剩 10 条）：
+      逐条按清单处置，**修的是问题不是告警**——不许用 `@Suppress` 或改写法把告警糊过去，
+      每条要能说清"这条告警指出的实际风险是什么、修完为什么风险消失了"。
+      确有必须抑制的逐条给具体理由写进证据，不许写"误报"了事。
+      红线：改动若使符号行为或错误面变化，**必须同步更新该符号的注释与契约标签**——
+      本轮刚花整轮治「注释落后于实现」（19 包 75 条），且 `.session`/`.workspace`/`.service`
+      三个包的注释在前台服务接线后刚同步过第二版，**不要造出第三版不实注释**。
+      不得放宽 Lint 规则集或加 `lintOptions` 豁免（已裁定）。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash tools/gate/run.sh'"
+    deps: ["feat-fg-service-wiring", "gate-static-analysis"]
+    write_scope: ["app/app/src/main/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-app-runtime-sa.json"
+    contention: impl
+
+  - id: plan-stage4-execution
+    goal: >
+      阶段四（把用例设计里的用例全部跑一遍）的**执行方案先行**，本条**只产出文档、不跑任何用例、
+      不改任何代码**——用例执行等阶段三收口后另派。
+      输入：`e2e/artifacts/dogfood/TESTPLAN.md` 的 41 条用例、`docs/perf-scenarios.md` 的 A–F 六组性能场景、
+      `docs/next-round-plan-20260810.md` §3.5 的三通道分工、`requirement-base/entries/016-生产级验收定义修正.md`
+      （真机验收权威性）与 `013-测试体系与回归门禁.md`（五层测试体系）。
+      产出 `docs/stage4-execution-plan.md`，必须回答清楚：
+      ①**逐条用例的通道归属**——模拟器 UI 自动化 / API 与 instrumentation（仅 TS 网络）/ 真机（交付后用户验）。
+      用户裁定原文：「模拟器能测的全测；测不到测不了的才用 API 模拟用户场景」，
+      **UI 必须测**，走 API 只针对 TS 网络（tailnet 在模拟器里不好测）。别把 UI 划进 API 通道偷懒。
+      ②**已知不可用面**：相机与 Extended Controls 的窗口寻址在本机模拟器上已实证不可用
+      （2026-08-10 为此空转八代），相关用例直接划真机通道，不要再在模拟器上硬撞。
+      ③**每条用例的判定方式**：uiautomator 结构断言写什么、截图截哪一屏（018 要求 leader 逐图目检）、
+      失败如何归因（013 的失败四归因）。
+      ④**执行顺序与批次切分**：受「同一 Gradle 模块同一时刻只放一席」约束（本轮实证，已入 CLAUDE.md），
+      UI 自动化批次不能与 `:app` 施工席并行；给出可操作的排期形状。
+      ⑤**阳性对照方案**：每类判定配一个必然非空的对照（例如故意让断言目标缺失、确认用例真的会红），
+      防止"没测到"被当成"通过"——本轮已三次栽在这个坑上（T3-2 抓不住原型、gradle UP-TO-DATE 假绿、
+      terminal 模块整体不在扫描根）。
+      ⑥**性能场景的接入点**：A–F 六组里哪些进本轮、哪些后置，F1 终端滚动帧率必须进
+      （`docs/round-findings-20260811.md` P-3 已裁：先量 F1 再决定要不要接脏区局部重绘）。
+      红线：**不许在本条里跑用例或改代码**；不许把"可自动化度"当成覆盖优先级
+      （016 明裁：自动化必要非充分、验收权在真机、可自动化度不决定覆盖优先级）。
+    acceptance:
+      - "bash -lc 'test -s docs/stage4-execution-plan.md'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["docs/stage4-execution-plan.md"]
+    evidence: ".team/evidence/plan-stage4-execution.json"
+    contention: impl
