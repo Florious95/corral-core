@@ -35,7 +35,9 @@ package dev.agentmirror.app.service
  * 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。
  * 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源
  * 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵
- * （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。
+ * （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时
+ * 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进），
+ * 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。
  *
  * @consumes dev.agentmirror.app
  * @consumes dev.agentmirror.app.conn

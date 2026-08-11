@@ -21,6 +21,7 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -70,27 +71,30 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
 
     override fun save(config: PairingConfig) {
         // 先完成加密再打开 editor：Keystore 失败时不留下 url/token 已更新、key 未更新的半配置。
+        // KTX edit {}（ApplySharedPref/UseKtx stage3 #13）：默认 apply（异步落盘），保存路径
+        // 不要求同步持久化——失败静默由下次读判断，语义与 apply 一致。
         val encryptedAuthKey = config.tsAuthKey.takeIf { it.isNotEmpty() }?.let(secretCipher::encrypt)
-        val editor = prefs.edit()
-            .putString(KEY_URL, config.url)
-            .putString(KEY_TOKEN, config.token)
+        prefs.edit {
+            putString(KEY_URL, config.url)
+            putString(KEY_TOKEN, config.token)
             // 清掉前席曾使用的明文键；即使它存在，下一次成功保存也会完成迁移。
-            .remove(KEY_TS_AUTHKEY_LEGACY)
-        if (encryptedAuthKey == null) {
-            editor.remove(KEY_TS_AUTHKEY_ENCRYPTED)
-        } else {
-            editor.putString(KEY_TS_AUTHKEY_ENCRYPTED, encryptedAuthKey)
+            remove(KEY_TS_AUTHKEY_LEGACY)
+            if (encryptedAuthKey == null) {
+                remove(KEY_TS_AUTHKEY_ENCRYPTED)
+            } else {
+                putString(KEY_TS_AUTHKEY_ENCRYPTED, encryptedAuthKey)
+            }
         }
-        editor.apply()
     }
 
     override fun clear() {
-        prefs.edit()
-            .remove(KEY_URL)
-            .remove(KEY_TOKEN)
-            .remove(KEY_TS_AUTHKEY_ENCRYPTED)
-            .remove(KEY_TS_AUTHKEY_LEGACY)
-            .apply()
+        // KTX edit {}（UseKtx stage3 #14）：清除路径无同步语义要求。
+        prefs.edit {
+            remove(KEY_URL)
+            remove(KEY_TOKEN)
+            remove(KEY_TS_AUTHKEY_ENCRYPTED)
+            remove(KEY_TS_AUTHKEY_LEGACY)
+        }
     }
 
     /**
@@ -123,12 +127,17 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
 
     /** 失败迁移不能留下可被后续 load 当作 LAN 配置的 url/token 半配置。 */
     private fun discardConfigAfterMigrationFailure() {
-        prefs.edit()
-            .remove(KEY_URL)
-            .remove(KEY_TOKEN)
-            .remove(KEY_TS_AUTHKEY_ENCRYPTED)
-            .remove(KEY_TS_AUTHKEY_LEGACY)
-            .commit()
+        // KTX edit(commit = true)（ApplySharedPref/UseKtx stage3 #12/#15）：**必须同步落盘**——
+        // apply() 是异步调度，若进程在写盘前被杀，遗留的 url/token 会被下次 load() 误读为
+        // 合法 LAN 配置（load 只在 key 缺失时回 ""，url/token 残留即误配对）。这里删配置是
+        // 迁移失败的收敛动作，同步提交保证失败即清、进程死亡不残留；KTX 的 commit 参数是
+        // lint 认可的在需要同步语义时保留 commit 的写法（不触发 ApplySharedPref）。
+        prefs.edit(commit = true) {
+            remove(KEY_URL)
+            remove(KEY_TOKEN)
+            remove(KEY_TS_AUTHKEY_ENCRYPTED)
+            remove(KEY_TS_AUTHKEY_LEGACY)
+        }
     }
 
     private companion object {

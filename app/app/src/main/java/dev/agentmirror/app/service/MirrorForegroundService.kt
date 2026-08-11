@@ -51,7 +51,10 @@ import dev.agentmirror.app.conn.FramePayload
  *   （startPersistentConnection 与 createSessionViewModel 装配入口统一触发，幂等）；
  * - 停止：用户显式断开经 [MirrorForegroundService.stop]（017 R-3 切主机即断开重连：
  *   重配新主机释放旧链路后服务继续跟随新连接；R-5 通知全局开关的停止入口即本 API）。
- * 时钟泵由本服务驱动（2s 一拍），在屏组合不再各自持有（SessionScreen 已移除 onTick）。
+ * 时钟泵由本服务驱动（2s 一拍，[pumpRunnable]）；在屏兜底泵（[OnScreenFallbackPump]）
+ * 在服务不可用时接管（fix-app-runtime-sa：服务被杀时前台界面仍保持推进），服务恢复即让出
+ * （泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。在屏组合不再各自持有
+ * （SessionScreen 已移除 onTick）。
  *
  * 断连静默重连：conn 层 ConnectionManager 自动指数退避重连（本服务只反映状态）；重连 READY
  * 后 conn 层自动重新 list + 重放订阅（无状态免疫，004）。
@@ -112,6 +115,8 @@ class MirrorForegroundService : Service() {
             .onFailure { Log.w(TAG, "start persistent connection from service: ${it.message}") }
         handler.removeCallbacks(pumpRunnable)
         handler.post(pumpRunnable)
+        // 泵归属标记置位（fix-app-runtime-sa）：在屏兜底泵据此让出，避免双泵重复拍。
+        ServiceWire.servicePumpActive = true
         return START_STICKY
     }
 
@@ -120,16 +125,19 @@ class MirrorForegroundService : Service() {
     override fun onDestroy() {
         // 停时钟泵并释放连接（幂等）；前台服务随进程死亡由 Activity 冷启动重连恢复（004 无状态免疫）。
         handler.removeCallbacks(pumpRunnable)
+        // 泵归属标记复位（fix-app-runtime-sa）：兜底泵据此接管，服务被杀后前台界面保持推进。
+        ServiceWire.servicePumpActive = false
         ServiceWire.serviceListener = null
         ServiceWire.releaseManager()
         super.onDestroy()
     }
 
     /**
-     * 时钟泵单拍（生产 pumpRunnable 与测试共用的推进点）：重连到点判定 + 输入超时裁决。
+     * 时钟泵单拍（服务 pumpRunnable 与测试共用的推进点）：重连到点判定 + 输入超时裁决。
      *
-     * 归属服务（feat-fg-service-wiring）：在屏组合不再各自持有时钟泵。连接经
-     * [ServiceWire.managerOrNull] 读取——服务不缓存引用（004：服务杀后由冷启动恢复，
+     * 归属服务（feat-fg-service-wiring）：在屏组合不再各自持有时钟泵。服务被杀/销毁时
+     * [OnScreenFallbackPump] 兜底接管（fix-app-runtime-sa，泵归属判据 [ServiceWire.servicePumpActive]）。
+     * 连接经 [ServiceWire.managerOrNull] 读取——服务不缓存引用（004：服务杀后由冷启动恢复，
      * 连接状态不在本服务）。
      *
      * @contract
