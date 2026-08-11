@@ -30,11 +30,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.service.MirrorForegroundService
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.tsnet.ConnectionPath
 
@@ -49,8 +52,11 @@ import dev.agentmirror.app.tsnet.ConnectionPath
  * - 安全获取共享 manager：连接配置未注入（配对层未落地）时明确返回等待态，不崩溃不白屏；
  * - 把会话 VM 挂到 [ServiceWire.uiConnector]（当前屏持有，退出即复位）；
  * - [SessionViewModel] 构造时已 subscribe（conn 层记簿，重连自动重放，004 无状态）。
- * - 在屏期间由会话屏时钟泵驱动 [ConnectionManager.pump]/[ConnectionManager.resolveExpiredInputs]
- *   （重连调度 + 输入超时裁决；配对页同机制，见 PairingViewModel）。
+ *
+ * 连接与时钟泵归属（feat-fg-service-wiring）：连接由前台服务承接（[MirrorForegroundService]
+ * 持有 [ServiceWire.manager] 单例并驱动时钟泵），在屏组合**不再各自持有**——会话页不再
+ * 有 LaunchedEffect 时钟泵，[SessionViewModel.onTick] 的宿主节奏改由服务泵单拍驱动
+ * （服务 [MirrorForegroundService.pumpOnce] 调 manager.pump/resolveExpiredInputs）。
  *
  * 上传地址（协议 §8 同端口 `POST /upload`）统一读 [ServiceWire.uploadBaseUrl]——由
  * [startPersistentConnection] 统一装配入口注入（fix-reconnect-stale-config 同根并案：
@@ -64,9 +70,10 @@ fun SessionRoute(
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
 ) {
+    val sessionContext = LocalContext.current
     var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
     if (viewModel == null) {
-        viewModel = remember(ref) { createSessionViewModel(ref) }
+        viewModel = remember(ref) { createSessionViewModel(ref, sessionContext) }
     }
     val vm = viewModel
 
@@ -94,8 +101,9 @@ fun SessionRoute(
 }
 
 /** 安全构造会话 VM：获取共享 manager（未配置抛错则返回 null）→ 启动连接 → 注入生产上传器。
- *  internal（fix-reconnect-stale-config 同根并案）：上传基地址统一收口锁定的测试缝。 */
-internal fun createSessionViewModel(ref: String): SessionViewModel? {
+ *  internal（fix-reconnect-stale-config 同根并案）：上传基地址统一收口锁定的测试缝。
+ *  [context] 为前台服务启动所需（进入会话即确保服务在运行，幂等）；纯 JVM 测试传 null。 */
+internal fun createSessionViewModel(ref: String, context: Context? = null): SessionViewModel? {
     val manager = runCatching {
         // connListener 传空壳：manager 已存在时被忽略；新建时包装监听把事件经 uiConnector 扇出，
         // 本 VM 走 uiConnector 收事件（SessionViewModel.init 不自行 setListener，见其 KDoc）。
@@ -103,8 +111,12 @@ internal fun createSessionViewModel(ref: String): SessionViewModel? {
     }.getOrNull() ?: return null
     // 启动连接（幂等）：manager 已存在（startPersistentConnection 已启动）时 start 为 no-op；
     // 冷启动配对层先于本路径经 startPersistentConnection 启动，此处兜底再 start 一次。
-    // 连接时钟泵（pump/超时裁决）由在屏组合的 LaunchedEffect 驱动，本文件不负责。
     manager.start()
+    // feat-fg-service-wiring：进入会话即确保前台服务在运行（幂等）——连接与时钟泵由服务
+    // 承接（后台期间通知栏常驻 + 重连/超时裁决不依赖在屏组合）。若冷启动已启动过服务，
+    // 这里只是再投一次 onStartCommand（系统对已运行服务幂等）。Context 未注入（纯 JVM 测试）
+    // 时跳过——连接已装配，产品功能仍完整（前台服务是体验增强）。
+    context?.let(MirrorForegroundService::start)
     // fix-reconnect-stale-config 同根并案：上传基地址统一读 ServiceWire.uploadBaseUrl
     // （startPersistentConnection 统一装配入口注入；此前硬编码 null 绕过 → 真机实证
     // 「未配置上传地址」）。未注入（连接配置未落地）时 VM 明确报错，不静默。

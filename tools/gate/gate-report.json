@@ -1,7 +1,7 @@
 {
   "schema": "agentmirror-gate-report-v1",
-  "conclusion": "pass",
-  "generated_at": "2026-08-09T10:47:53+00:00",
+  "conclusion": "fail",
+  "generated_at": "2026-08-11T04:48:08+00:00",
   "baseline_accept": {
     "applied": false,
     "reason": null
@@ -11,30 +11,91 @@
       "name": "server",
       "ok": true,
       "skipped": false,
-      "cases": 276,
-      "duration_ms": 8179,
+      "cases": 315,
+      "duration_ms": 9979,
       "failures": [],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": 276,
-        "current": 276,
+        "baseline": 315,
+        "current": 315,
         "action": "same"
       }
     },
     {
       "name": "app",
-      "ok": true,
+      "ok": false,
       "skipped": false,
-      "cases": 547,
-      "duration_ms": 1183,
-      "failures": [],
+      "cases": 771,
+      "duration_ms": 31484,
+      "failures": [
+        {
+          "test": "lint:ApplySharedPref:app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt:131",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:OldTargetApi:app/app/build.gradle.kts:50",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:GradleDependency:app/app/build.gradle.kts:96",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:NewerVersionAvailable:app/app/build.gradle.kts:34",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:NewerVersionAvailable:app/app/build.gradle.kts:108",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:NewerVersionAvailable:app/app/build.gradle.kts:122",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:ObsoleteSdkInt:app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt:52",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:ObsoleteSdkInt:app/app/src/main/res/mipmap-anydpi-v26:?",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:UnusedResources:app/app/src/main/res/values/colors.xml:18",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:MonochromeLauncherIcon:app/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml:16",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:MonochromeLauncherIcon:app/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml:16",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:UseKtx:app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt:74",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:UseKtx:app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt:88",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:UseKtx:app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt:126",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:UseKtx:app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt:187",
+          "category": "unclassified"
+        }
+      ],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": 547,
-        "current": 547,
-        "action": "same"
+        "baseline": 757,
+        "current": 771,
+        "action": "up"
       }
     },
     {
@@ -42,7 +103,7 @@
       "ok": true,
       "skipped": false,
       "cases": 1,
-      "duration_ms": 756,
+      "duration_ms": 3989,
       "failures": [],
       "skip_reason": null,
       "detail": null,
@@ -54,5 +115,5 @@
     }
   ],
   "issues": [],
-  "summary": "结论 pass：3 套件共 824 用例。绿。"
+  "summary": "结论 fail：3 套件共 1087 用例。红：本次非全绿，详见 suites/issues。"
 }

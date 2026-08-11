@@ -26,16 +26,16 @@ package dev.agentmirror.app.service
  *   PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。
  * - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定
  *   [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。
- *   已在 manifest 声明，但**当前无任何生产代码启动它**（死件家族第六例，接线留待后案，
- *   见 fix-reconnect-stale-config 收口提交）——常驻连接实际由 [ServiceWire] 直接持有，
- *   配对/冷启动入口（`startPersistentConnection`）经 [ServiceWire.manager] 启动。
- * - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥、
- *   连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问。
+ *   已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start]
+ *   启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。
+ * - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥
+ *   （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一
+ *   [ConnectionManager]，服务与 UI 都经它访问同一单例。
  *
- * 电量策略（004 裁定）：仅在有活跃订阅或用户开启后台守望时运行前台服务；服务被系统杀 →
- * 冷启动重连即恢复（客户端无状态，没有丢失可言）。当前前台服务**未接线**：连接由
- * [ServiceWire.manager] 在配对成功/冷启动时直接启动（不经本服务），退避泵由在屏组合
- * 的 LaunchedEffect 驱动（[SessionScreen]/[PairingScreen]），服务启动留待后案。
+ * 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。
+ * 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源
+ * 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵
+ * （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。
  *
  * @consumes dev.agentmirror.app
  * @consumes dev.agentmirror.app.conn

@@ -153,10 +153,12 @@ fun SessionScreen(
         else viewModel.transientError = "相机权限未授权，请到系统设置中开启后重试"
     }
 
-    // 时钟泵：重连调度 + 输入超时裁决 + 视口信号收敛（生产节奏，测试用假时钟）。
+    // 连接时钟泵归属（feat-fg-service-wiring）：重连调度 + 输入超时裁决由前台服务驱动
+    // （MirrorForegroundService.pumpOnce，2s 一拍），本屏不再调用 vm.onTick（连接时钟不在
+    // 屏组合持有）。剩余本地拍只做视口信号收敛（syncFromPresenter：滚动到顶时按页补更老
+    // 历史，006）——纯 UI 本地逻辑、零连接状态零网络，不违背"连接由服务承接"。
     LaunchedEffect(viewModel) {
         while (true) {
-            viewModel.onTick(System.currentTimeMillis())
             viewModel.syncFromPresenter()
             delay(TICK_MS)
         }

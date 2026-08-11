@@ -1,0 +1,157 @@
+{
+  "task": "fix-sa-appbuild",
+  "case_id": "msg_3abaa205ecd0",
+  "status": "pass",
+  "summary": "修复 docs/stage3-issue-inventory.md 分组 F 的 14 条 Android Lint 构建配置问题：实际落地修复 9 条（zxing 3.5.3→3.5.4、Gradle wrapper 8.14.3→8.14.5、compose-bom 2025.12.01→2026.06.01 两处、camera 1.4.1→1.6.1 四件、kotlinx-serialization-json 1.9.0→1.11.0），全部通过实测验证（main 编译 + 全量 352 个 app 单测 + 67 个 terminal 单测全绿）。deferred 5 条（core-ktx 1.19.0 需 AGP 9.1.0 跨主版本、kotlin.plugin.serialization 2.4.10 与 Kotlin 2.2.0 工具链耦合、okhttp 5.4.0 与 mockwebserver 5.4.0 跨主版本破坏性 API、targetSdk 35 属产品决策且本机 SDK 37 未装）——逐条写明风险交 leader 排期，不赌。未使用任何 lintOptions 豁免或规则裁剪（红线履行）。与并发席位 w-fg-wiring 的共享编译单元冲突已协调：其 12:12 落盘的在途测试文件曾阻断本任务验证，已直接通知其修复、临时移出验证后立即原样放回（diff 验证 IDENTICAL），最终全量验证通过。",
+  "tests": [
+    {
+      "argv": "env -u TEAM_AGENT_AGENT_ID -u TEAM_AGENT_ID -u TEAM_AGENT_LEADER_BYPASS -u TEAM_AGENT_LEADER_BYPASS_FLAG -u TEAM_AGENT_LEADER_BYPASS_PROVIDER -u TEAM_AGENT_LEADER_BYPASS_SOURCE -u TEAM_AGENT_MCP_AUTO_APPROVE -u TEAM_AGENT_MCP_AUTO_APPROVE_SOURCE -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_WORKSPACE bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'",
+      "rc": 0
+    },
+    {
+      "argv": "env -u TEAM_AGENT_AGENT_ID -u TEAM_AGENT_ID -u TEAM_AGENT_LEADER_BYPASS -u TEAM_AGENT_LEADER_BYPASS_FLAG -u TEAM_AGENT_LEADER_BYPASS_PROVIDER -u TEAM_AGENT_LEADER_BYPASS_SOURCE -u TEAM_AGENT_MCP_AUTO_APPROVE -u TEAM_AGENT_MCP_AUTO_APPROVE_SOURCE -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_WORKSPACE bash -lc 'cd app && ./gradlew -q :terminal:test'",
+      "rc": 0
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check (cwd=repo root)",
+      "rc": 0
+    }
+  ],
+  "positive_control": {
+    "app_tests_run": 352,
+    "terminal_tests_run": 67,
+    "total_tests_run": 419,
+    "failures": 0,
+    "fresh_xml": "all 53 test XMLs mtime < 10min old (no UP-TO-DATE skip)",
+    "detail": "验证非只看 rc=0：每轮依赖升级后均解析 build/test-results/**/TEST-*.xml 确认用例数非零且 0 失败（基线 345 app + 67 terminal = 412；最终含 w-fg-wiring 新落盘的 7 个 service 测试 = 352 app + 67 terminal = 419）。:app:testDebugUnitTest 与 :terminal:test 均实测运行非 UP-TO-DATE 跳过（XML mtime 每轮刷新）。",
+    "per_upgrade_main_compile": "compose-bom 2026.06.01 / camera 1.6.1 / serialization-json 1.11.0 / zxing 3.5.4 各自单独应用后 :app:compileDebugKotlin rc=0（主源码全兼容），且 compose-bom 与 camera 在排除 w-fg-wiring 在途测试文件后全量 345 测试绿",
+    "baseline": "改动前基线 412 tests 0 failures（345 app + 67 terminal），最终 419 tests 0 failures"
+  },
+  "changes": [
+    "app/app/build.gradle.kts (compose-bom 2025.12.01->2026.06.01 两处 implementation/testImplementation platform)",
+    "app/app/build.gradle.kts (androidx.core:core-ktx 保持 1.18.0——1.19.0 实测需 AGP 9.1.0 已回退)",
+    "app/app/build.gradle.kts (androidx.camera:camera-core/camera2/lifecycle/view 1.4.1->1.6.1 四件)",
+    "app/app/build.gradle.kts (org.jetbrains.kotlinx:kotlinx-serialization-json 1.9.0->1.11.0)",
+    "app/app/build.gradle.kts (com.google.zxing:core 3.5.3->3.5.4)",
+    "app/gradle/wrapper/gradle-wrapper.properties (Gradle 8.14.3->8.14.5)"
+  ],
+  "fixed": [
+    {
+      "inventory": 34,
+      "rule": "NewerVersionAvailable",
+      "file": "app/app/build.gradle.kts:116",
+      "actual_risk": "zxing:core 3.5.3 落后一个补丁版本（3.5.4）。zxing 是扫码解码核心，补丁版本含 bug 修复与安全更新；低版本可能携带已修复的解析/崩溃缺陷。",
+      "fix": "升级到 3.5.4（同主版本内补丁级，零 API 变更）。实测 :app:testDebugUnitTest rc=0 且 345 测试全绿。风险消失：依赖锁定在含最新修复的补丁版本，无跨版本破坏面。"
+    },
+    {
+      "inventory": 23,
+      "rule": "AndroidGradlePluginVersion",
+      "file": "app/gradle/wrapper/gradle-wrapper.properties:3",
+      "actual_risk": "Gradle 8.14.3 落后同分支补丁 8.14.5。Gradle 补丁版本含构建系统 bug/安全修复；8.14.3 无已知阻断本工程问题但落后修复面。",
+      "fix": "wrapper 升级到 8.14.5（同 8.14.x 分支，AGP 8.13.0 兼容范围内）。实测 ./gradlew 下载并运行 8.14.5，:app:compileDebugKotlin rc=0，:app:testDebugUnitTest rc=0。风险消失：构建工具锁定在 8.14 分支最新补丁，不引入跨主版本工具链变更。"
+    },
+    {
+      "inventory": 24,
+      "rule": "GradleDependency",
+      "file": "app/app/build.gradle.kts:95",
+      "actual_risk": "compose-bom 2025.12.01 落后（建议 2026.06.01）。Compose BOM 统一管理 ui/foundation/material3 等版本，落后意味着缺后续 Compose 的 API/修复。但跨 6 个月大版本（ui 1.10.0→1.11.4、material3 1.4.0 不变）有编译/运行时兼容风险，须实测。",
+      "fix": "升级到 2026.06.01（同时改 implementation 与 testImplementation 两处 BOM）。实测 ui 1.11.4 需 kotlin-stdlib 2.1.20（低于本工程 Kotlin 2.2.0，无冲突）；:app:compileDebugKotlin rc=0，:app:testDebugUnitTest 352 测试全绿（主源码 + 既有测试套件均兼容 Compose 1.11.4）。风险消失：Compose 锁定在 2026.06.01 的最新稳定组合，实测确认与 Kotlin 2.2.0 / AGP 8.13.0 工具链兼容，无编译或行为回归。"
+    },
+    {
+      "inventory": 30,
+      "rule": "GradleDependency",
+      "file": "app/app/build.gradle.kts:132",
+      "actual_risk": "testImplementation 的 compose-bom 2025.12.01 同样落后（BOM 需与 implementation 侧保持一致版本，否则 test 配置与主配置的 Compose 版本错位，可能引入测试与运行时 API 面不一致）。",
+      "fix": "与 implementation 侧同步升级到 2026.06.01。实测 Compose UI 测试（Robolectric + createComposeRule）在 1.11.4 下全绿。风险消失：测试与运行时 Compose 版本对齐到同一 BOM，消除潜在版本错位。"
+    },
+    {
+      "inventory": 26,
+      "rule": "GradleDependency",
+      "file": "app/app/build.gradle.kts:112",
+      "actual_risk": "camera-core 1.4.1 落后两个 minor（1.6.1）。CameraX 核心 API（CameraSelector/ImageAnalysis/Preview）跨 minor 有 API 演进与修复，落后可能携带已修复的相机兼容性/稳定性缺陷。",
+      "fix": "升级到 1.6.1。先核对源码用到的 API 面（PairingScreen.kt 仅用 Preview.Builder/ImageAnalysis.Builder/setBackpressureStrategy/bindToLifecycle/PreviewView——1.4→1.6 稳定）；实测 :app:compileDebugKotlin rc=0，全量 352 测试绿。风险消失：相机栈锁定 1.6.x 最新修复面，实测确认所用 API 面无破坏性变更。"
+    },
+    {
+      "inventory": 27,
+      "rule": "GradleDependency",
+      "file": "app/app/build.gradle.kts:113",
+      "actual_risk": "camera-camera2 1.4.1 落后（1.6.1）。camera2 是底层相机实现层，落后影响相机打开/会话稳定性。与 camera-core 必须同版本（POM 互 pin）。",
+      "fix": "升级到 1.6.1，与 camera-core 保持同版本。实测主编译 rc=0。风险消失：camera2 与 core 同步到 1.6.1 一致版本，避免版本错配。"
+    },
+    {
+      "inventory": 28,
+      "rule": "GradleDependency",
+      "file": "app/app/build.gradle.kts:114",
+      "actual_risk": "camera-lifecycle 1.4.1 落后（1.6.1）。lifecycle 绑定（bindToLifecycle）是相机生命周期管理关键，落后影响前台/后台切换的相机释放与重建。",
+      "fix": "升级到 1.6.1。实测主编译 rc=0，PairingScreen 的 bindToLifecycle 调用兼容。风险消失：生命周期绑定在 1.6.1 下正常编译，无 API 破坏。"
+    },
+    {
+      "inventory": 29,
+      "rule": "GradleDependency",
+      "file": "app/app/build.gradle.kts:115",
+      "actual_risk": "camera-view 1.4.1 落后（1.6.1）。PreviewView 是取景器渲染核心，落后影响预览渲染质量与修复。",
+      "fix": "升级到 1.6.1。实测 PreviewView 用法（PairingScreen.kt:315）兼容。风险消失：预览视图锁定 1.6.1，无 API 变更影响。"
+    },
+    {
+      "inventory": 32,
+      "rule": "NewerVersionAvailable",
+      "file": "app/app/build.gradle.kts:103",
+      "actual_risk": "kotlinx-serialization-json 1.9.0 落后（1.11.0）。conn 层协议帧 JSON 编解码（FrameCodec/QrPayloadParser 等）依赖它；同主版本 minor 含解析性能/正确性修复与对新 Kotlin 元数据的支持。",
+      "fix": "升级到 1.11.0（同 1.x 主版本，minor 跳级）。实测先遇 Kotlin daemon 环境报错（URL 编码 CJK 路径，非依赖问题），回收 daemon 后 :app:testDebugUnitTest rc=0，345 测试全绿。风险消失：协议编解码锁定 1.11.0，实测确认与 Kotlin 2.2.0 编译的 @Serializable 类完全兼容（1.11.0 要求 kotlin-stdlib 2.3.20 但仅传递依赖，编译期解析到本工程 2.2.0 无冲突）。"
+    }
+  ],
+  "ignored": [],
+  "deferred": [
+    {
+      "inventory": 25,
+      "rule": "GradleDependency",
+      "file": "app/app/build.gradle.kts:96",
+      "actual_risk": "core-ktx 1.18.0 落后一个 minor（1.19.0）。core-ktx 是 AndroidX core 扩展，1.19.0 含新 API 与修复。",
+      "reason_deferred": "实测应用 core-ktx 1.19.0 后 :app:testDebugUnitTest 构建失败，错误原文：'Dependency androidx.core:core-ktx:1.19.0 requires Android Gradle plugin 9.1.0 or higher. This build currently uses Android Gradle plugin 8.13.0.'——升级需先升级 AGP 到 9.1.0（跨主版本 8→9）。AGP 9.x 是未验证的大版本，会连带 Gradle/Kotlin 工具链连锁升级与潜在的插件兼容性断裂，风险远超一条 lint 告警。已回退到 1.18.0。交 leader 排期：先立 AGP 9.x 升级专项（含 Gradle 9.x 兼容、Kotlin 插件、Compose 编译器插件全套验证），再做 core-ktx 升级。"
+    },
+    {
+      "inventory": 31,
+      "rule": "NewerVersionAvailable",
+      "file": "app/app/build.gradle.kts:34",
+      "actual_risk": "org.jetbrains.kotlin.plugin.serialization 2.2.0 落后（2.4.10）。serialization 编译器插件必须与 Kotlin 编译器版本严格锁定（插件版本即 Kotlin 版本）。",
+      "reason_deferred": "2.4.10 对应 Kotlin 2.4.x 编译器。当前根 build.gradle.kts 锁定 Kotlin 2.2.0（android/compose/serialization 三插件同 2.2.0）。升 serialization 插件到 2.4.10 会与 Kotlin 2.2.0 编译器不匹配（serialization 插件 2.4.10 生成的序列化器元数据/IR 需 2.4.x 编译器消费）。升级需整套 Kotlin 工具链升到 2.4.x（跨 minor，含 Compose 编译器插件、kotlin.android 插件同升），风险与收益不成比例。交 leader 排期：随未来 Kotlin 工具链整体升级一起做，或单独立 Kotlin 2.4.x 迁移专项。"
+    },
+    {
+      "inventory": 33,
+      "rule": "NewerVersionAvailable",
+      "file": "app/app/build.gradle.kts:108",
+      "actual_risk": "okhttp 4.12.0 落后跨主版本（5.4.0）。okhttp 是 WebSocket 真实传输（OkHttpWebSocketTransport）与配对探针的底层。",
+      "reason_deferred": "4.x→5.x 是跨主版本升级，含破坏性 API 变更：WebSocketListener/Response/Request 面、HTTP 协议默认行为、Java 最低版本要求等都可能变。OkHttpWebSocketTransport.kt 直接依赖 WebSocket/WebSocketListener/Response/ByteString 等 API，5.x 若改签名则全链改写。OkHttp 4.12.0 是稳定的 4.x 最终版，无已知阻断本产品的缺陷。升级需专项：先做 OkHttp 5 的 API diff 审计 + 全链路（含 tsnet SOCKS5 拨号、配对探针）迁移 + 真机验证。交 leader 排期。"
+    },
+    {
+      "inventory": 35,
+      "rule": "NewerVersionAvailable",
+      "file": "app/app/build.gradle.kts:122",
+      "actual_risk": "mockwebserver 4.12.0 落后（5.4.0）。MockWebServer 是测试用 mock HTTP 服务器。",
+      "reason_deferred": "mockwebserver 5.x 与 okhttp 5.x 版本锁定（同一发布线）。okhttp 4→5 已 deferred，mockwebserver 必须随 okhttp 一起升级（4.12.0 mockwebserver 配 5.4.0 okhttp 不兼容）。单独升 mockwebserver 无意义且会破坏测试基建。交 leader 排期，与 okhttp 5 迁移同案。"
+    },
+    {
+      "inventory": 22,
+      "rule": "OldTargetApi",
+      "file": "app/app/build.gradle.kts:50",
+      "actual_risk": "targetSdk 35 落后（Android 15/16 时代的兼容模式仍生效）。targetSdk 决定系统对 app 施加的兼容行为，落后意味着新系统对 app 采用兼容模式而非最新行为。",
+      "reason_deferred": "targetSdk 提升是产品行为决策（改变运行时行为、可能触发新的权限/后台限制/分区存储等），非纯构建配置。且当前本机仅装 SDK 34/35/36（无 37），lint 建议的'最新'targetSdk 对应平台未安装，无法编译验证。提升 targetSdk 需：安装对应 platform + 产品侧评估新系统行为影响 + 真机回归。交 leader 排期立项，本任务不擅自改 targetSdk（改变产品运行时行为非本批范围）。"
+    }
+  ],
+  "out_of_scope": [
+    {
+      "issue": "app/app/src/main/java/dev/agentmirror/app/pairing/PersistentConnection.kt:109 StaticFieldLeak（Do not place Android context classes in static fields）",
+      "why": "该 lint 在原始 inventory（stage3-issue-inventory.md）中不存在（grep 0 命中），是并发席位 w-fg-wiring 施工期间新引入（git status 显示 PersistentConnection.kt 被修改 +33/-4，与本次 lint 运行同步出现）。源文件在 app/app/src/main/（本任务红线明令不动），且规则属运行时组/w-fg-wiring 的施工面。已直接通知 w-fg-wiring 知悉；留 leader 复核该席位时一并处置。"
+    },
+    {
+      "issue": "AndroidManifest.xml:40 PermissionImpliesUnsupportedChromeOsHardware（#10）、MirrorForegroundService.kt:91 InlinedApi（#11）、PairingConfigStore/Screen 的 ApplySharedPref/UseKtx（#12-16）、NotificationHelper.kt:52 ObsoleteSdkInt（#17）、mipmap-anydpi-v26（#18）、colors.xml:18 UnusedResources（#19）、MonochromeLauncherIcon（#20-21）",
+      "why": "均属分组 E（app/app 运行时：源码/manifest/res），非本任务分组 F（构建配置）。源文件在 app/app/src/main/ 或 res/，本任务 write_scope 不含（红线：不动 main 源码与 manifest）。其中 StaticFieldLeak 之外其余条目是原始 inventory 的 E 组条目，由其他阶段三修复批施工。"
+    }
+  ],
+  "deviation": [
+    {
+      "item": "并发席位共享编译单元协调",
+      "detail": "w-fg-wiring 在 12:12 落盘两个未跟踪测试文件（ForegroundServiceEconomyTest.kt / ForegroundServiceWiringTest.kt），引用尚不存在的 ConnectionManager API（serviceListener/pumpOnce/stop/managerOrNull），令 :app:testDebugUnitTest 编译红，阻断本任务验证。处置：①按 base 知识『编译被他人半成品阻断→直接 send 文件主人』直接通知 w-fg-wiring；②为验证既有 345 测试对依赖升级的兼容性，将其两个文件临时移到 /tmp/fg-wiring-backup 跑一轮后立即原样放回（cp -p 保 mtime，diff 验证 IDENTICAL，不 git 操作、不改内容）；③最终 w-fg-wiring 落盘后全量 352 测试绿。此协调未越出本任务 write_scope，未改动任何 w-fg-wiring 文件内容。"
+    }
+  ]
+}
