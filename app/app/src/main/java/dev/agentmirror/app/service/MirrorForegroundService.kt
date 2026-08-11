@@ -50,7 +50,7 @@ import dev.agentmirror.app.conn.FramePayload
  * - 启动：配对成功 / 冷启动有配置 / 进入会话 三处经 [MirrorForegroundService.start] 启动
  *   （startPersistentConnection 与 createSessionViewModel 装配入口统一触发，幂等）；
  * - 停止：用户显式断开经 [MirrorForegroundService.stop]（017 R-3 切主机即断开重连：
- *   重配新主机释放旧链路后服务继续跟随新连接；R-5 通知全局开关的停止入口即本 API）。
+ *   重配新主机释放旧链路后服务继续跟随新连接）。
  * 时钟泵由本服务驱动（2s 一拍，[pumpRunnable]）；在屏兜底泵（[OnScreenFallbackPump]）
  * 在服务不可用时接管（fix-app-runtime-sa：服务被杀时前台界面仍保持推进），服务恢复即让出
  * （泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。在屏组合不再各自持有
@@ -227,7 +227,7 @@ class MirrorForegroundService : Service() {
         }
 
         /**
-         * 停止前台服务（用户显式断开 / R-5 通知开关的停止入口；feat-fg-service-wiring）。
+         * 停止前台服务（用户显式断开的规范停止点；feat-fg-service-wiring）。
          *
          * 017 R-3「切主机即断开重连」：重配新主机走配置变更（[ServiceWire.setConfig]）释放
          * 旧链路后继续跟随新连接，无需停服务；本 API 是「用户显式断开」的规范停止点——
