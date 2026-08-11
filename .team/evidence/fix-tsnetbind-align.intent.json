@@ -1,0 +1,1 @@
+{"task_id": "fix-tsnetbind-align", "dispatched_to": "w-tsnet-align", "base": ".team/nodes/fix-tsnetbind-align/CLAUDE.md", "case_id": "msg_3afba9a16f50", "at": "2026-08-11 12:10:00", "note": "阶段三修复批派单；intent 随派单同批写入"}

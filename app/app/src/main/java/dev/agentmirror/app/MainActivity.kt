@@ -70,8 +70,10 @@ class MainActivity : ComponentActivity() {
         val storedConfig = SharedPreferencesPairingConfigStore(this).load()
         navState = MainNavState(initialShowPairing = storedConfig == null)
         navState.restoreFrom(savedInstanceState) // D-3：旋转/进程回收重建后恢复导航态
+        // feat-fg-service-wiring：冷启动传 Activity 作前台服务启动所需 Context
+        // （startForegroundService 在 startPersistentConnection 内完成；this 即应用上下文）。
         if (!navState.showPairing && storedConfig != null) {
-            startPersistentConnection(storedConfig)
+            startPersistentConnection(storedConfig, this)
         }
         // 工作区 VM 与 Activity 同生命周期；列表状态由 conn 层 READY+全量 listing 恢复（004 无状态）。
         workspaceViewModel = WorkspaceViewModel()

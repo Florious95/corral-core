@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -129,6 +130,13 @@ def run_server_suite() -> dict:
             if fname:
                 failures.append({"test": f"gofmt:{fname}", "category": "unclassified"})
 
+    # 4) staticcheck ./...（gate-static-analysis 接入）：BSD-3，008 全开源兼容；默认规则集
+    #    不裁剪（红线：不许为了让门禁变绿而降规则）。二进制不在登录 PATH（GOPATH/bin 未导出），
+    #    经 go env GOPATH 解析绝对路径；找不到即显式红（环境缺失不得静默当 pass）。
+    #    每条 finding 记一条失败（test 键 stable，供四归因 carry-over），文件:行 归因到包。
+    for line in _staticcheck_findings(sdir):
+        failures.append({"test": f"staticcheck:{line}", "category": "unclassified"})
+
     return {
         "name": "server",
         "ok": not failures,
@@ -137,6 +145,35 @@ def run_server_suite() -> dict:
         "failures": failures,
         "duration_ms": _ms(start),
     }
+
+
+def _staticcheck_findings(sdir: Path) -> list[str]:
+    """跑 staticcheck ./...，返回 (file:line) 形式的 finding 列表；工具缺失/崩溃返回哨兵条目。
+
+    哨兵也走失败通道：空清单不算健康（知识基底§2 T3-2/terminal 双盲区教训），
+    工具没跑成必须可见红，而不是被当成「干净」。
+    """
+    gopath = subprocess.run(
+        ["bash", "-lc", f"cd {shlex_quote(str(sdir))} && {_SANITIZE} go env GOPATH"],
+        capture_output=True, text=True,
+    ).stdout.strip()
+    scbin = Path(gopath or "go") / "bin" / "staticcheck"
+    if not scbin.exists():
+        return ["(binary not found)"]
+    p = _bash(f"{_SANITIZE} {scbin} ./... 2>&1", sdir)
+    out: list[str] = []
+    for raw in p.stdout.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        # 格式 "file.go:line:col: message (ruleid)" → 取 file:line 作稳定归因键。
+        parts = line.split(":")
+        if len(parts) >= 2:
+            out.append(f"{parts[0]}:{parts[1]}")
+    if p.returncode != 0 and not out:
+        # 工具崩溃/进程失败但无逐条可归因：如实记一条，绝不静默放行。
+        out.append("(exit non-zero, no attributable finding)")
+    return out
 
 
 def run_app_suite() -> dict:
@@ -168,6 +205,35 @@ def run_app_suite() -> dict:
     if p.returncode != 0:
         # gradle 整体失败：XML 若已暴露具体用例失败则清单已有，仍补一条构建级失败防静默。
         failures.append({"test": f"gradle test (exit {p.returncode})", "category": "unclassified"})
+
+    # Android Lint（gate-static-analysis 接入）：AGP 自带，零新依赖。默认规则集不裁剪
+    # （红线：不许为了让门禁变绿而降规则）。lintDebug 默认仅 error 使构建失败（AbortOnError），
+    # 但为「暴露不挑 + 立账完整」，把 XML 报告里每条 finding（含 warning）都记为失败条目——
+    # 存量未清前 app 面非绿属预期，四归因由上游 carry-over 标注。
+    lint = _bash(f"{_SANITIZE} ./gradlew -q :app:lintDebug 2>&1", adir)
+    lint_xml = adir / "app" / "build" / "reports" / "lint-results-debug.xml"
+    if lint_xml.exists():
+        try:
+            root = ET.parse(str(lint_xml)).getroot()
+            for issue in root.findall("issue"):
+                iid = issue.get("id", "?")
+                loc = issue.find("location")
+                f = loc.get("file", "?") if loc is not None else "?"
+                ln = loc.get("line", "?") if loc is not None else "?"
+                # 仓库内路径取相对根（键稳定）；仓库外（如 ~/.gradle 缓存）保留绝对路径照记。
+                if os.path.isabs(f):
+                    try:
+                        rel = os.path.relpath(f, REPO)
+                        if not rel.startswith(".."):
+                            f = rel
+                    except ValueError:
+                        pass  # Windows 盘符跨盘等罕见情况，保留原文
+                failures.append({"test": f"lint:{iid}:{f}:{ln}", "category": "unclassified"})
+        except Exception:
+            failures.append({"test": "lint (unparseable report)", "category": "unclassified"})
+    elif lint.returncode != 0:
+        # 报告缺失且 gradle 非 0：工具没跑成，必须可见红而非当「干净」。
+        failures.append({"test": "lint (no report, exit non-zero)", "category": "unclassified"})
 
     return {
         "name": "app",

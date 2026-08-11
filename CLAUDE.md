@@ -47,6 +47,15 @@
 - **席位恢复纪律**（A-24 实证，2026-08-09）：席位恢复失败达 2 轮（自动恢复/start-agent/reset 任意组合）
   即弃 id——remove 归档后换**处女 id** add-agent 重建带案重派，不再消耗轮次；死 id 的 runtime 残留
   （provider-config/env/events）保留供框架取证。停摆检测与自动探针由 `.team/watchdog.py` 值守（三条件+预算 2）
+- **Android 侧并发的真实粒度是「Gradle 模块」，不是「文件」**（2026-08-11 实证）：
+  `同文件零并发` 在 Go 侧够用（`go test ./internal/api/...` 只编译该包及其依赖），
+  但 Android 侧**同一 Gradle 模块的编译单元是共享的**——任何席位跑 `:app:testDebugUnitTest`
+  都会编译整个模块，把**别的席位写到一半的源码**一起编进去。
+  实证：`w-sa-appbuild` 只改 `app/app/build.gradle.kts`，与 `w-fg-wiring` 零文件重叠，
+  但为了拿到可信验收结果，不得不把对方在途的源码「临时移出验证后原样放回」——
+  这次没丢东西，属侥幸。铁律：**同一 Gradle 模块内同一时刻只放一席施工**；
+  确需并行的按模块切（`:app` / `:terminal` 可并行），或让第二席只做不需编译的产物
+  （纯文档、纯清单）。派单前按模块而非按文件核并发冲突。
 - **派单必写 intent，否则该席对看门狗全盲**（2026-08-11 两次实证，同一个洞栽两回）：
   `.team/watchdog.py` 的 `inflight_seats()` 以 `.team/evidence/<task>.intent.json` 存在且对应
   `<task>.json` 未落盘来判"在途"。**人工派单漏写 intent ⇒ 该席位永远进不了停摆计数**
