@@ -44,7 +44,8 @@ import dev.agentmirror.app.tsnet.ConnectionPath
  * - [serviceListener]：前台服务监听槽（feat-fg-service-wiring）。连接事件原样转投
  *   [MirrorForegroundService]（状态→常驻通知、帧→状态守望），与 UI 的 [uiConnector]
  *   并行——服务不持有连接状态（004 无状态底线），只在 onStartCommand/泵单拍时经
- *   [managerOrNull] 读取同一单例。
+ *   [managerOrNull] 读取同一单例。泵归属标记 [servicePumpActive] 同槽置位/复位：
+ *   在屏兜底泵（[AppClockPump]）以此让出（fix-app-runtime-sa，不双泵）。
  * - [uploadBaseUrl]：图片上传基地址（协议 §8 同端口 `POST /upload`）。配对层成功后从
  *   配对 ws url 推导 http(s) 基地址注入（清偿 session-ui 沉淀欠账②）；未注入时
  *   [HttpUrlConnectionUploader] 明确报错「未配置上传地址」，不静默。
@@ -101,6 +102,18 @@ object ServiceWire {
      */
     @Volatile
     var serviceListener: ConnectionManager.Listener? = null
+
+    /**
+     * 前台服务时钟泵在跑标记（fix-app-runtime-sa 在屏兜底泵的归属判据）。
+     *
+     * 服务 onStartCommand 置位、onDestroy 复位（同一处挂 pumpRunnable）。在屏兜底泵
+     * [AppClockPump.fallbackPumpOnce] 以本标记让出：服务泵在跑时兜底泵零工作，不双泵。
+     * 服务被系统杀 → 本标记随进程/服务销毁复位 → 前台兜底泵接管；服务重建 → 服务泵
+     * 恢复，兜底泵让出。标记与 [serviceListener] 同生命周期槽（都挂在服务上），但语义独立
+     * （监听与泵归属不捆绑：前者管事件扇出，后者管时钟归属）。
+     */
+    @Volatile
+    var servicePumpActive: Boolean = false
 
     /**
      * 最近一次全量 listing 帧（挂载补播用）。只保留最新一份（覆盖式），

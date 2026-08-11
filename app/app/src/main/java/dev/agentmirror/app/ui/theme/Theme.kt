@@ -44,17 +44,16 @@ import androidx.compose.ui.unit.sp
  */
 
 /**
- * 历史品牌深蓝（`0xFF1B2A4A`，与资源 `app/app/src/main/res/values/colors.xml` 的
- * `brand_primary` 同值）。
+ * 历史品牌深蓝（`0xFF1B2A4A`）。
  *
  * ui-redesign（018）后 M3 深浅两套 primary 均已改用独立取值（深 `0xFF9DBDFF`、
- * 浅 `0xFF2F5DA8`），本 token 自彼时起无任何消费点——保留仅为资源一致性对照，
- * 不作配色来源。
+ * 浅 `0xFF2F5DA8`），本 token 自彼时起无任何消费点——保留仅为存档（原 colors.xml 的
+ * `brand_primary` 资源随 stage3 #19 删除，本 token 不再有资源对照）。
  */
 val brandPrimary: Color = Color(0xFF1B2A4A)
 
 /**
- * 历史品牌背景深蓝（`0xFF0D1626`）。
+ * 历史品牌背景深蓝（`0xFF0D1626`；colors.xml 的 `brand_background` 仍被自适应启动图标引用）。
  *
  * ui-redesign（018）后深色 scheme 的 `background` 已改用 `0xFF0B111D`（近黑深蓝，
  * 与纯黑终端画布分层次）；终端画布默认底色由 `TermSurfaceView.DEFAULT_BG` 以同一
