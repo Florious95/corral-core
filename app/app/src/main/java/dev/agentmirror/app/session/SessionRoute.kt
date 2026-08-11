@@ -38,6 +38,7 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.service.MirrorForegroundService
+import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.tsnet.ConnectionPath
 
@@ -53,10 +54,12 @@ import dev.agentmirror.app.tsnet.ConnectionPath
  * - 把会话 VM 挂到 [ServiceWire.uiConnector]（当前屏持有，退出即复位）；
  * - [SessionViewModel] 构造时已 subscribe（conn 层记簿，重连自动重放，004 无状态）。
  *
- * 连接与时钟泵归属（feat-fg-service-wiring）：连接由前台服务承接（[MirrorForegroundService]
- * 持有 [ServiceWire.manager] 单例并驱动时钟泵），在屏组合**不再各自持有**——会话页不再
- * 有 LaunchedEffect 时钟泵，[SessionViewModel.onTick] 的宿主节奏改由服务泵单拍驱动
- * （服务 [MirrorForegroundService.pumpOnce] 调 manager.pump/resolveExpiredInputs）。
+ * 连接与时钟泵归属（feat-fg-service-wiring + fix-app-runtime-sa）：连接由前台服务承接
+ * （[MirrorForegroundService] 持有 [ServiceWire.manager] 单例并驱动时钟泵），在屏组合
+ * **不再各自持有**——会话页不再有 LaunchedEffect 时钟泵，[SessionViewModel.onTick] 的
+ * 宿主节奏改由服务泵单拍驱动（服务 [MirrorForegroundService.pumpOnce] 调
+ * manager.pump/resolveExpiredInputs）。服务被杀时由根组合的 [OnScreenFallbackPump] 兜底
+ * 接管（服务恢复即让出，不双泵）。
  *
  * 上传地址（协议 §8 同端口 `POST /upload`）统一读 [ServiceWire.uploadBaseUrl]——由
  * [startPersistentConnection] 统一装配入口注入（fix-reconnect-stale-config 同根并案：

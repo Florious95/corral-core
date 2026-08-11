@@ -16,4 +16,7 @@ limitations under the License.
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/brand_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <!-- 主题图标（Android 13+ 系统按主题色调染；MonochromeLauncherIcon stage3 #20）：
+         前景为纯白矢量，系统会按主题着色，直接复用为单色稿。 -->
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
 </adaptive-icon>

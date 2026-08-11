@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import dev.agentmirror.app.pairing.PairingConfigStore
 import dev.agentmirror.app.pairing.PairingRoute
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
+import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.session.SessionRoute
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
@@ -67,6 +68,10 @@ fun AgentMirrorApp(
 ) {
     AgentMirrorTheme {
         val context = LocalContext.current
+        // 在屏兜底时钟泵（fix-app-runtime-sa）：任一屏在屏且 App RESUMED 即挂一个兜底泵，
+        // 前台服务泵不可用时接管共享连接的重连调度与输入超时裁决，服务恢复即让出（不双泵）。
+        // 挂在根组合保证工作区/会话/设置/配对任一屏在屏都有兜底；服务常驻时兜底泵零工作。
+        OnScreenFallbackPump()
         // 配对配置存储（SharedPreferences）：首启判定 + 重配入口共用。
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
         val session = navState.activeSession

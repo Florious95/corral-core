@@ -22,7 +22,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
 import dev.agentmirror.app.MainActivity
 import dev.agentmirror.app.R
@@ -47,9 +46,8 @@ class NotificationHelper(context: Context) {
     private val nm: NotificationManager =
         appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    /** 创建两条通知渠道（幂等；minSdk 26，NotificationChannel 可直接用）。 */
+    /** 创建两条通知渠道（幂等；minSdk 26 = API 26，NotificationChannel 自 API 26 起可用）。 */
     fun createChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return // minSdk 26，防御性保留
         nm.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_PERSISTENT,
