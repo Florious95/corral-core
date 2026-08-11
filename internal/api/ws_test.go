@@ -109,26 +109,6 @@ func (e *wsEnv) readControl() protocol.Typed {
 	return typed
 }
 
-// readControlTimeout reads one control frame with a deadline, failing the test
-// if none arrives in time. Used to assert the absence of an unexpected reply.
-func (e *wsEnv) readControlTimeout(d time.Duration) protocol.Typed {
-	e.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), d)
-	defer cancel()
-	typ, data, err := e.conn.Read(ctx)
-	if err != nil {
-		e.t.Fatalf("read frame within %v: %v", d, err)
-	}
-	if typ != websocket.MessageText {
-		e.t.Fatalf("expected control frame, got message type %v", typ)
-	}
-	typed, err := protocol.UnmarshalFrame(data)
-	if err != nil {
-		e.t.Fatalf("decode frame %q: %v", data, err)
-	}
-	return typed
-}
-
 // readControlDraining reads control frames, skipping (draining) any binary
 // mirror frames that arrive first (e.g. the echo of an injected input). It
 // fails the test if no control frame arrives within 5s.
@@ -167,19 +147,6 @@ func (e *wsEnv) sendFrame(typed protocol.Typed) {
 	}
 }
 
-// readBinary reads one binary message (snapshot/delta/scrollback frame).
-func (e *wsEnv) readBinary() []byte {
-	e.t.Helper()
-	typ, data, err := e.conn.Read(context.Background())
-	if err != nil {
-		e.t.Fatalf("read binary: %v", err)
-	}
-	if typ != websocket.MessageBinary {
-		e.t.Fatalf("expected binary message, got %v", typ)
-	}
-	return data
-}
-
 // auth authenticates the test client with the default token.
 func (e *wsEnv) auth() {
 	e.t.Helper()
@@ -204,21 +171,6 @@ func testModel() *discovery.Model {
 				Panes: []discovery.Pane{
 					{Socket: "/tmp/sock1", Session: "alpha", PaneID: "%0", CWD: "/ws/a", Command: "claude", Width: 100, Height: 40},
 					{Socket: "/tmp/sock1", Session: "beta", PaneID: "%1", CWD: "/ws/a", Command: "codex", Width: 80, Height: 24},
-				},
-			},
-		},
-	}
-}
-
-// modelForSocket builds a model with a single pane on the given isolated
-// tmux socket (used by the real-tmux integration tests).
-func modelForSocket(sock string) *discovery.Model {
-	return &discovery.Model{
-		Workspaces: []discovery.Workspace{
-			{
-				CWD: "/ws/b",
-				Panes: []discovery.Pane{
-					{Socket: sock, Session: "integ", PaneID: "%0", CWD: "/ws/b", Command: "cat", Width: 80, Height: 24},
 				},
 			},
 		},

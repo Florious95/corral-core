@@ -91,14 +91,3 @@ func (c *sessionCatalog) list() []*sessionEntry {
 	}
 	return out
 }
-
-// bridgeFor returns the bridge bound to the session a client addressed, and
-// the session's pane identity. ok=false means the ref is unknown (the caller
-// replies session_not_found).
-func (c *sessionCatalog) bridgeFor(ref string) (*bridge.Pane, discovery.Pane, bool) {
-	e := c.entry(ref)
-	if e == nil {
-		return nil, discovery.Pane{}, false
-	}
-	return e.bridge, e.pane, true
-}

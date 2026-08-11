@@ -22,9 +22,6 @@ import (
 	"github.com/agentmirror/agentmirror/internal/pairing"
 )
 
-// pidfileName is the lock/pid file name inside the state directory.
-const pidfileName = "agentmirrord.pid"
-
 // acquirePidfile acquires the single-instance flock for name inside dir and,
 // on success, writes the current pid into it. It returns the pidfile path and
 // a release function that unlocks and closes it (idempotent). A second

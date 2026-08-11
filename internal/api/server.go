@@ -54,10 +54,11 @@ type Server struct {
 	trackers   map[*wsConn]struct{}
 
 	// loopCtx/loopStop own the periodic scan goroutine (started by NewServer,
-	// stopped by Close).
+	// stopped by Close). The goroutine is started exactly once by NewServer, so
+	// no sync.Once guard is needed here (a previously present loopOnce field was
+	// dead and has been removed).
 	loopCtx  context.Context
 	loopStop context.CancelFunc
-	loopOnce sync.Once
 
 	// authed counts live, authenticated connections (set by handleAuth, cleared
 	// by teardown). The listing loop polls only while authed > 0; with zero

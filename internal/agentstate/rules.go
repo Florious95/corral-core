@@ -125,13 +125,11 @@ func anyLineContains(text string, lines []string, set string) bool {
 }
 
 // splitLines splits stripped text into its logical lines for line-anchored
-// rules. A final empty line from a trailing newline is dropped.
+// rules. A final empty line from a trailing newline is dropped. strings.Split
+// returns a fresh backing array that this function never shares with any
+// caller, so the result is trimmed in place directly (no defensive copy needed).
 func splitLines(text string) []string {
-	raw := strings.Split(text, "\n")
-	out := raw[:0:len(raw)]
-	for _, ln := range raw {
-		out = append(out, ln)
-	}
+	out := strings.Split(text, "\n")
 	// Trim one trailing empty element produced by a trailing "\n".
 	if n := len(out); n > 0 && out[n-1] == "" {
 		out = out[:n-1]

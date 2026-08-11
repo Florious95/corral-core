@@ -275,10 +275,8 @@ func TestStateProviderCacheDoesNotBlockHotPath(t *testing.T) {
 
 	// Swap in a sample seam that would block forever if called synchronously.
 	p.sample = func(ctx context.Context, pn discovery.Pane) ([]byte, time.Duration, error) {
-		select {
-		case <-ctx.Done():
-			return nil, 0, ctx.Err()
-		}
+		<-ctx.Done()
+		return nil, 0, ctx.Err()
 	}
 
 	pn := discovery.Pane{Socket: "/s", PaneID: "%0", Command: "claude", CWD: "/ws/x", Width: 80, Height: 24}

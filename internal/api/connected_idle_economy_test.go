@@ -296,7 +296,10 @@ func TestConnectedIdleEconomySamplingRateFairnessAndVisibility(t *testing.T) {
 				samplesMu.Lock()
 				before := total
 				samplesMu.Unlock()
-				snap = buildSnapshot(catalog, p, context.Background())
+				// buildSnapshot's value is irrelevant in this round: the call is
+				// what drives the sampler's dispatch (counted via p.sample). The
+				// FIFO result is only read after the loop settles, below.
+				_ = buildSnapshot(catalog, p, context.Background())
 				waitConnectedIdleProvider(t, p)
 				samplesMu.Lock()
 				dispatched := total - before
