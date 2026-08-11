@@ -38,6 +38,12 @@ limitations under the License.
 
     <!-- 配对扫码：CameraX 相机采集（首次使用请求；不授权回退手填连接兜底）。 -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 相机是可选能力（扫码配对用，已有手填连接回退，D-01）：required=false 防止无相机设备
+         （ChromeOS/部分平板）被 Play 商店判为不兼容而过滤掉（lint PermissionImpliesUnsupportedChromeOsHardware，
+         stage3 #10，Error 级）。 -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <application
         android:allowBackup="true"

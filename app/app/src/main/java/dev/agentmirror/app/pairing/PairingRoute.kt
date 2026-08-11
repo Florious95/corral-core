@@ -45,6 +45,7 @@ fun PairingRoute(
     // feat-ts-wire：tsnet 环境兜底注入（正常冷启动已由 NetworkConnectivityWatcher.register
     // 注入，此处防其他宿主/测试路径漏注；幂等）。
     TsnetBootstrap.install(LocalContext.current)
+    val context = LocalContext.current
     val viewModel = remember { createPairingViewModel(configStore) }
     // TS 态可视桥（018 标准5）：TsnetWire 状态 → VM observable；离屏卸钩防泄漏，
     // 挂载即补播当前态（节点可能已 Up——重进配对页时状态不回退）。
@@ -59,7 +60,8 @@ fun PairingRoute(
             // 配对成功：注入常驻连接并启动（幂等由 startPersistentConnection 双层守卫保证，
             // 配对成功态单次触发；用户配对完直落工作区，列表必须即刻有数据——不等 fg-service
             // onCreate，fg-service KDoc 允许 UI 先启连）；随后切工作区。
-            startPersistentConnection(cfg)
+            // context（LocalContext）随调用传入：前台服务启动所需（startForegroundService）。
+            startPersistentConnection(cfg, context)
             onPaired()
         },
         onSkip = onSkip,

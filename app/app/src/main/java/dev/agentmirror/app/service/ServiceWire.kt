@@ -37,10 +37,14 @@ import dev.agentmirror.app.tsnet.ConnectionPath
  *   拨号；[NoopTransportFactory] 保留为测试与降级用（拨号立即失败 → conn 层退避重连，
  *   生命周期可运行、不静默吞）。
  * - [uiConnector]：UI 侧监听桥。本对象持有唯一 [ConnectionManager]（背景常驻连接，
- *   [MirrorForegroundService] 若启动也经 [manager] 共享同一实例），UI
+ *   [MirrorForegroundService] 经 [serviceListener] 与 UI 并行扇出），UI
  *   （[WorkspaceViewModel] / [SessionViewModel]）经此桥订阅同一连接，服务回调原样转投。
  *   多槽扇出：单屏在屏时挂一槽（SessionRoute 等），无需多屏同挂；配对试连接是**独立**
  *   ConnectionManager（[PairingViewModel] 自带探针），不走本桥。
+ * - [serviceListener]：前台服务监听槽（feat-fg-service-wiring）。连接事件原样转投
+ *   [MirrorForegroundService]（状态→常驻通知、帧→状态守望），与 UI 的 [uiConnector]
+ *   并行——服务不持有连接状态（004 无状态底线），只在 onStartCommand/泵单拍时经
+ *   [managerOrNull] 读取同一单例。
  * - [uploadBaseUrl]：图片上传基地址（协议 §8 同端口 `POST /upload`）。配对层成功后从
  *   配对 ws url 推导 http(s) 基地址注入（清偿 session-ui 沉淀欠账②）；未注入时
  *   [HttpUrlConnectionUploader] 明确报错「未配置上传地址」，不静默。
@@ -86,6 +90,17 @@ object ServiceWire {
             // 补播最近一次全量 listing：晚挂载 VM 的列表基线（可能已错过 READY 后的 listing）。
             lastListing?.let(value::onFrame)
         }
+
+    /**
+     * 前台服务监听槽（feat-fg-service-wiring）：连接事件 → 常驻通知 + 状态守望。
+     *
+     * 与 [uiConnector] 并行扇出（服务回调在 manager 包装监听里原样转投本槽）。服务在
+     * [MirrorForegroundService.onCreate] 挂载、[onDestroy] 摘除（幂等）。服务不缓存
+     * [ConnectionManager] 引用（004 无状态底线：状态唯一来源是 prefs/conn 层），
+     * 只在泵单拍时经 [managerOrNull] 读取同一单例。
+     */
+    @Volatile
+    var serviceListener: ConnectionManager.Listener? = null
 
     /**
      * 最近一次全量 listing 帧（挂载补播用）。只保留最新一份（覆盖式），
@@ -161,13 +176,30 @@ object ServiceWire {
     }
 
     /**
+     * 获取当前持久 [ConnectionManager] 单例；不存在（未创建）返回 null。
+     *
+     * 调用方是 [MirrorForegroundService]（时钟泵 [MirrorForegroundService.pumpOnce]、通知文案、
+     * 启动时确保连接）与测试断言。服务不缓存引用——每次经本方法读取，避免把连接状态
+     * 搬进服务（004 无状态底线）。未注入配置时返回 null（不是抛异常：服务可启动但连接
+     * 不建，由冷启动路径恢复，不静默白屏）。
+     *
+     * @contract
+     * @pre 无
+     * @post 返回进程级唯一 [ConnectionManager] 或 null（未创建时）
+     * @err none（不抛异常）
+     * @inv 与 [manager] 共享同一单例；[releaseManager] 后返回 null
+     */
+    fun managerOrNull(): ConnectionManager? = manager
+
+    /**
      * 获取/创建持久 [ConnectionManager]（应用进程级单例）。
      *
-     * 当前调用方是配对/冷启动入口 `startPersistentConnection` 与 [SessionRoute]
-     * （createSessionViewModel）；[MirrorForegroundService] 未启动，不经此处创建。
-     * connListener 既喂服务自身（连接状态→常驻通知、帧→状态守望），又原样转投
-     * [uiConnector]（UI 侧共享同一连接）。未注入配置（[setConfig] 未调用）时抛
-     * [IllegalStateException]（halt 纪律：缺字段不猜）。
+     * 调用方是配对/冷启动入口 `startPersistentConnection` 与 [SessionRoute]
+     * （createSessionViewModel）；[MirrorForegroundService] 启动时经本方法确保连接创建
+     * （已存在则复用，幂等）。connListener 既喂调用方（服务经 [serviceListener] 槽、
+     * UI 经 [uiConnector] 槽），又原样转投 [uiConnector]/[serviceListener]（UI 与服务共享
+     * 同一连接）。未注入配置（[setConfig] 未调用）时抛 [IllegalStateException]
+     * （halt 纪律：缺字段不猜）。
      *
      * @contract
      * @pre 若尚未创建，则 [config] 必须已由 [setConfig] 注入（否则抛 [IllegalStateException]）
@@ -195,6 +227,7 @@ object ServiceWire {
                 object : ConnectionManager.Listener {
                     override fun onStateChanged(state: ConnectionState) {
                         connListener.onStateChanged(state)
+                        serviceListener?.onStateChanged(state)
                         uiConnector?.onStateChanged(state)
                     }
 
@@ -202,26 +235,31 @@ object ServiceWire {
                         // 捕获全量 listing：晚挂载 UI 的列表基线（uiConnector setter 补播）。
                         if (frame is ListingFrame) lastListing = frame
                         connListener.onFrame(frame)
+                        serviceListener?.onFrame(frame)
                         uiConnector?.onFrame(frame)
                     }
 
                     override fun onBinary(frame: BinaryFrame) {
                         connListener.onBinary(frame)
+                        serviceListener?.onBinary(frame)
                         uiConnector?.onBinary(frame)
                     }
 
                     override fun onLocalDecodeError(code: FrameError, message: String) {
                         connListener.onLocalDecodeError(code, message)
+                        serviceListener?.onLocalDecodeError(code, message)
                         uiConnector?.onLocalDecodeError(code, message)
                     }
 
                     override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) {
                         connListener.onInputResult(reqId, ok, reason)
+                        serviceListener?.onInputResult(reqId, ok, reason)
                         uiConnector?.onInputResult(reqId, ok, reason)
                     }
 
                     override fun onReconnect(attempt: Int, delayMs: Long) {
                         connListener.onReconnect(attempt, delayMs)
+                        serviceListener?.onReconnect(attempt, delayMs)
                         uiConnector?.onReconnect(attempt, delayMs)
                     }
                 },

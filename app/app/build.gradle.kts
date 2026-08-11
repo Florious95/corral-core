@@ -92,7 +92,7 @@ tasks.configureEach {
 
 dependencies {
     // Compose BOM 统一管理 Compose 系版本。
-    implementation(platform("androidx.compose:compose-bom:2025.12.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
     implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.ui:ui")
@@ -100,7 +100,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     debugImplementation("androidx.compose.ui:ui-tooling")
     // conn 层：协议控制帧 JSON 编解码（kotlinx-serialization-json，Apache-2.0）。
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     // 终端内核：ANSI/CSI 解析 + 字符网格 + 本地 scrollback（:terminal，term-core-android 任务交付，纯 JVM 零 Android 依赖）。
     implementation(project(":terminal"))
     // 配对：OkHttp WebSocket 真实传输（conn 层 WebSocketTransport 接口的 service 实现，
@@ -109,11 +109,11 @@ dependencies {
     // 配对扫码：CameraX 相机分析流 + ZXing core（均 Apache-2.0，零 GMS 依赖，008 开源自托管精神）。
     // 注意：google maven 无 androidx.camera:camera-bom（1.4.x/1.3.x 实测 404，BOM 从未随该系列发布），
     // 各 camera artifact 的 POM 自带同版本依赖管理（1.4.1 互 pin），故显式按版本声明、不引 BOM。
-    implementation("androidx.camera:camera-core:1.4.1")
-    implementation("androidx.camera:camera-camera2:1.4.1")
-    implementation("androidx.camera:camera-lifecycle:1.4.1")
-    implementation("androidx.camera:camera-view:1.4.1")
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.camera:camera-core:1.6.1")
+    implementation("androidx.camera:camera-camera2:1.6.1")
+    implementation("androidx.camera:camera-lifecycle:1.6.1")
+    implementation("androidx.camera:camera-view:1.6.1")
+    implementation("com.google.zxing:core:3.5.4")
     // 内嵌组网：tsnet 用户态节点 gomobile 绑定（本地构建产物，非 maven——
     // libtailscale 无任何预构建 artifact，实测 Maven Central 0 命中；由 tools/tsnetbind
     // 重建，见 libs/README.md）。tailscale 系 BSD-3，Apache-2.0 兼容，零 GMS。
@@ -129,7 +129,7 @@ dependencies {
     // （implementation 的 platform 约束不传播到 test 配置）；ui-test-manifest 的
     // ComponentActivity 宿主按变体合并进 manifest（debugImplementation 进 debug 主 manifest，
     // releaseImplementation 进 release 主 manifest，见下方 fix-release-test-host 注释）。
-    testImplementation(platform("androidx.compose:compose-bom:2025.12.01"))
+    testImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     // release 单测变体的 Compose 测试宿主（fix-release-test-host 清偿门债：testReleaseUnitTest

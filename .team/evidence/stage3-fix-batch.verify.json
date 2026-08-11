@@ -1,0 +1,160 @@
+{
+  "task": "stage3-fix-batch.verify",
+  "verifier": "w-stage3-verify",
+  "status": "pass",
+  "case_id": "msg_9afb0ea0d118",
+  "channel": "provider=claude_code / auth_mode=compatible_api / profile=worker-api (deepseek-v4-flash), contention=impl, 返工 0，未升级 codex",
+  "summary": "004 底线守住（有 1 项 gap：泵单归属服务，服务被杀后前台期无泵）；三条 P1 全部真解（#10 已核合并后最终 manifest required=false 双变体保留、#11 API 守卫覆盖唯一使用点、AAR 自行 objdump 确认 LOAD align 2**14）；gate 重跑 fail，剩余 15 条全部可归因基线（E 组 10 条未派工 + F 组 5 条 deferred），新引入 0 条；注释无「第三版不实」，仅 2 处措辞级小瑕疵（含 1 处与 004 gap 同源的过度宣称）。四席 acceptance 原样复跑全绿（staticcheck/go test/go vet/app 704/terminal 67/archwiki exit 0）。",
+  "arch_bottom_line": {
+    "verdict": "held_with_caveat",
+    "reasoning": "004 核心（不保活、客户端无状态、被杀即无所谓=冷启动恢复）真守住并有红测守门；但「前台服务纯体验增强、零正确性角色」被过度宣称——重连/输入超时裁决的时钟泵已单归属服务，服务被杀后前台期也无泵。",
+    "verification_1_test_body": {
+      "test_read": "ForegroundServiceWiringTest.serviceKilled_coldStartRestores_sameWorkspaceState 逐行读毕",
+      "genuine_or_substitute": "genuine",
+      "why": "首启 seedConfig→buildMainActivity（冷启动）→驱动 READY+listing→断言工作区渲染出 1 工作区 /proj/a + 1 会话 s1；杀服务(stop)+destroy Activity+ServiceWire.releaseManager/resetConfigForTest/uiConnector=null（等价进程死亡，状态唯一来源 prefs）；冷启动#2→断言连接计数=2（重新拨号非残留复用）→驱动 READY+listing→断言工作区恢复到被杀前完全一致（1 工作区 /proj/a + s1）。真在断言「被杀后冷启动恢复到原状」，非「只验服务能启动」的替身。",
+      "other_tests_quality": "coldStartWithConfig 断言 startForegroundService 真实调用点+连接拨号；coldStartWithoutConfig 断言无配置不启服务（对照组）；serviceLifecycle 断言 start→manager+常驻通知、stop→释放+解绑；sessionEntry 断言进入会话复用同 manager 不二次拨号；servicePump 断言服务 pumpOnce 驱动退避重拨。均非替身。"
+    },
+    "verification_2_implementation": {
+      "service_only_state": "服务不持有连接状态：ConnectionManager 是 ServiceWire 进程级单例（配置唯一来源 SharedPreferences），服务每次经 managerOrNull() 读取并驱动 pumpOnce；onDestroy 释放 manager。StateWatcher 只持通知去重簿记（lastState/notified/baseline）——丢失只丢后台通知去重，不丢产品数据。",
+      "rebuild_path": "冷启动路径完整：MainActivity.onCreate → startPersistentConnection(storedConfig, this) → ServiceWire.setConfig + manager.start()（立即拨号）+ MirrorForegroundService.start。服务被杀后冷启动重连路径完整（红测断言）。",
+      "pump_single_homing": "grep 证实：持久连接唯一生产泵驱动点是 MirrorForegroundService.pumpOnce（SessionScreen 已移除 vm.onTick；SessionViewModel.onTick 无生产调用者；PairingScreen.onTick 只驱动配对探针独立 ConnectionManager）。Connection.kt 无自驱重连。"
+    },
+    "verification_3_reverse_reasoning": {
+      "product_without_service": "可用：冷启动重连照常（start() 立即拨号）、连接在 ServiceWire、UI 经 uiConnector 订阅、列表/会话/发送在工作时全可用。",
+      "product_without_service_degradation": "断连自动重连（退避到点）与输入超时裁决（input_ack 超时=明确失败）随泵消失而失效：服务被系统回收且进程存活时，中途断连无自动重连（只剩冷启动/网络变化事件可恢复）；socket 存活但无 ack 的边缘场景输入会卡「发送中」。",
+      "verdict_on_004": "NOT refuted：004 核心（无状态+冷启动恢复）由红测真实守门且反向推演成立；但「删掉服务层产品仍完整」被过度宣称——泵已从在屏组合搬到服务，成为服务存活的正确性依赖。这是本批唯一实质性 gap。"
+    }
+  },
+  "p1_verified": {
+    "p1_10_camera_uses_feature": {
+      "verdict": "RESOLVED",
+      "merged_manifest_checked": "app/app/build/intermediates/merged_manifests/debug/processDebugManifest/AndroidManifest.xml:55-57 与 release/processReleaseManifest 同：<uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />。双变体均保留。",
+      "no_override": "merged debug/release 中 android.hardware.camera 的 uses-feature 恰 1 条，无其它库合并成 required=true 的冲突条目（camera 1.6.1 合并后行为确认）。",
+      "freshness": "merged manifest mtime 12:22 > 源 AndroidManifest.xml mtime 12:21（#10 改动后重生成），非陈旧产物。",
+      "store_risk": "required=false 明确：无相机设备判兼容可安装，手填连接 D-01 兜底。Play 商店可见性硬伤消除。"
+    },
+    "p1_11_inlined_api": {
+      "verdict": "RESOLVED",
+      "guard_coverage": "FOREGROUND_SERVICE_TYPE_DATA_SYNC 在 main 全仓恰 1 处（MirrorForegroundService.kt:102），位于 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)（97-107 行）内。API 26-28 路径走无类型重载 startForeground(id, notification)（API 5 即有），@Suppress(\"DEPRECATION\") 是使用低版本已弃用重载的必要抑制，非绕过 P1。",
+      "low_version_path_walkable": "minSdk 26 编译路径：26-28 分支不引用 API 29 常量，InlinedApi 不再触发；manifest foregroundServiceType=\"dataSync\"（merged manifest 108-110 行确认）持久属性不分 SDK，29+ 运行时带类型重载与 manifest 一致。",
+      "other_suppress_check": "无 @Suppress(\"InlinedApi\")/@SuppressLint 在 P1 点。"
+    },
+    "p1_aar_16kb_alignment": {
+      "verdict": "RESOLVED",
+      "readelf_mine": "自行解包 AAR 用 /usr/bin/objdump -p 跑当前 libgojni.so：LOAD#1 off=0x0 vaddr=0x0 align 2**14；LOAD#2 off=0x11a6048 vaddr=0x11aa048 align 2**14（2**14=16384=16KB）。两条 LOAD 均 16KB 对齐，(off−vaddr)%16K==0（LOAD#2 差 0x4000）。与 w-tsnet-align 数字逐字一致。",
+      "build_flag": "tools/tsnetbind/build.sh:30 含 -ldflags \"-s -w -extldflags=-Wl,-z,max-page-size=16384\"。",
+      "reproducible": "tools/tsnetbind/README.md 给出单命令重建（bash tools/tsnetbind/build.sh）、前置（Go 1.26+ / SDK+NDK / gomobile 自动安装）、模拟器 x86_64 变体、对齐自检 readelf/objdump 命令。可复现，非一次性手工二进制。",
+      "aar_changed": "git diff 证实 app/app/libs/tsnetbind.aar 变更（Bin 7995085→7995431 bytes）。"
+    }
+  },
+  "fixed_not_silenced": {
+    "suppression_search": "全仓库（app/src、build.gradle.kts、tools/tsnetbind、server/）搜 lint:ignore / tools:ignore / lintOptions / staticcheck.conf / //lint: / @SuppressLint / @Suppress：仅 2 处命中——TermSurfaceView.kt:176 @SuppressLint(ClickableViewAccessibility)（git diff 为空=先于本批存在，非新增）与 MirrorForegroundService.kt:105 @Suppress(DEPRECATION)（#11 低版本重载必需）。无任何 lintOptions disable、无 staticcheck 规则裁剪。",
+    "u1000_deletions": "6 个 U1000 死符号全部未导出且无悬空引用（grep 复扫全空）：Server.loopOnce 字段、sessionCatalog.bridgeFor 方法、wsEnv.readControlTimeout、wsEnv.readBinary、modelForSocket 函数、pidfileName 常量。loopOnce 仅余说明注释；splitLines（S1011 改写）仍被 evaluateRules 使用。未删任何导出符号。",
+    "deferred_judgment": {
+      "verdict": "全部成立，无一条属嫌麻烦",
+      "inventory_25_corektx": "1.19.0 需 AGP 9.1.0（build.gradle.kts 现 AGP 8.13.0），8→9 跨主版本连锁，风险远超一条 lint 告警。成立。",
+      "inventory_31_serialization_plugin": "serialization 插件版本=Kotlin 版本；2.4.10 需 Kotlin 2.4.x 编译器，根锁 Kotlin 2.2.0，单升插件破坏 IR/元数据。成立。",
+      "inventory_33_okhttp": "4.x→5.x 跨主版本破坏性 API，OkHttpWebSocketTransport 直接依赖 WebSocket 面。成立。",
+      "inventory_35_mockwebserver": "mockwebserver 与 okhttp 版本锁定（4.12.0 配 5.4.0 不兼容），须随 okhttp 同升。成立。",
+      "inventory_22_targetSdk": "targetSdk 提升是产品行为决策（改变运行时行为），且本机仅装 SDK 34/35/36 无 37 无法编译验证。成立。"
+    }
+  },
+  "gate_delta": {
+    "gate_rerun": {
+      "argv": "env -u TEAM_AGENT_* bash tools/gate/run.sh",
+      "rc": 1,
+      "result": "结论 fail：3 套件 1087 用例。server ok（0 失败）、app 15 失败、archwiki ok。棘轮未下行（server 315 / app 771 / archwiki 1，均≥基线；app 771=基线 757+7 新测试×2 变体=14）。"
+    },
+    "baseline_38": {
+      "resolved_by_batch": 23,
+      "remaining": 15,
+      "newly_introduced": 0,
+      "resolved_detail": "server 分组 A/B/C/D 9 条 + E 组 #10/#11（fg-wiring 并案）+ F 组实修 9 条（#23/#24/#26/#27/#28/#29/#30/#32/#34）+ G 组 #36/#37/#38 Aligned16KB。9+2+9+3=23。",
+      "remaining_detail": {
+        "group_E_undispatched_10": [
+          "#12 ApplySharedPref PairingConfigStore.kt:131",
+          "#13 UseKtx PairingConfigStore.kt:74",
+          "#14 UseKtx PairingConfigStore.kt:88",
+          "#15 UseKtx PairingConfigStore.kt:126",
+          "#16 UseKtx PairingScreen.kt:187",
+          "#17 ObsoleteSdkInt NotificationHelper.kt:52",
+          "#18 ObsoleteSdkInt mipmap-anydpi-v26",
+          "#19 UnusedResources colors.xml:18",
+          "#20 MonochromeLauncherIcon ic_launcher.xml:16",
+          "#21 MonochromeLauncherIcon ic_launcher_round.xml:16"
+        ],
+        "group_F_deferred_5": [
+          "#22 OldTargetApi targetSdk 35",
+          "#25 GradleDependency core-ktx 1.19.0（需 AGP 9.1.0）",
+          "#31 NewerVersionAvailable kotlin.plugin.serialization 2.4.10",
+          "#33 NewerVersionAvailable okhttp 5.4.0",
+          "#35 NewerVersionAvailable mockwebserver 5.4.0"
+        ],
+        "newly_introduced": []
+      }
+    },
+    "gate_still_red_reason": "15 条剩余全部在 38 条基线内：E 组 10 条属 app/app 运行时（分组 E，尚未派工）+ F 组 5 条为本批 deferred（理由成立）。gate red 是预期现状，非本批回归。"
+  },
+  "comments_third_version": {
+    "verdict": "无第三版不实注释",
+    "service_package": "service/PackageDoc.kt 已改为「已接线（feat-fg-service-wiring）…连接与时钟泵由本服务承接（004/011）」，与接线后实现相符。MirrorForegroundService.kt KDoc 同步更新（start/stop 接线点、泵归属、managerOrNull 读取不缓存），与实现相符。ServiceWire.kt KDoc（serviceListener 并行扇出、managerOrNull 服务不缓存引用）与实现相符。",
+    "session_package": "session/SessionRoute.kt + SessionScreen.kt 已改「在屏组合不再各自持有」「连接时钟由服务驱动」，与实现相符（SessionScreen LaunchedEffect 只剩 syncFromPresenter 视口收敛）。",
+    "workspace_package": "workspace/PackageDoc.kt 无 fg-service/泵断言可落后，未失真。",
+    "minor_imprecisions": [
+      "MirrorForegroundService.kt KDoc「删掉本服务这一层…只是后台期间不再有泵与通知栏常驻」——过度宣称：泵已从在屏组合移除，服务删掉后前台期也无泵（与 004 gap 同源）。",
+      "SessionRoute.kt KDoc「服务持有 ServiceWire.manager 单例」——措辞不精确：单例由 ServiceWire 持有，服务经 managerOrNull 读取（同一文件的其它注释已澄清）。"
+    ],
+    "third_version_risk": "「刚改实又变假」的第三版反转未出现：三个包注释描述与接线后新实现一致，未退回旧谎报。"
+  },
+  "economy_assessment": {
+    "verdict": "PASS，口径可支撑 CPU 有界",
+    "conversion": "µs/拍 × 拍频(2s 一拍)：0.049/0.085/0.053 µs ÷ 2000ms ≈ 常驻占用 <0.000005%，三态均有界。证据给出的换算（每 2s 一拍单拍 <0.1µs ⇒ <0.000005%）成立。",
+    "three_states": "零连接（manager null→泵零工作）/ 已连接零订阅 / 已连接单订阅 三态由 ForegroundServiceEconomyTest 真实量测（直接驱动 pumpOnce 10000 拍 wall-clock），非只报数字。断言单拍 <1ms（宽松余量）实测 µs 级。",
+    "subprocess": "0 子进程：grep ProcessBuilder/Runtime.exec 在 app/app/src/main 零命中（复核），服务泵纯内存推进。成立。",
+    "scale_boundedness": "pump() O(1)（读 pendingReconnectAt）+ resolveExpiredInputs O(pendingInputs)（随在途输入而非舰队规模）。不随舰队规模线性增长。成立。",
+    "minor_note": "量测在 Robolectric JVM 上直接调 pumpOnce，非真机 Handler 周期——数字为指示性非设备精确；「已连接单订阅」与零订阅成本无实质差异（泵不扫订阅），口径如实。"
+  },
+  "red_lines": {
+    "write_scope": "四席改动均在自己 write_scope：fg-wiring(app main+test+manifest)、sa-server(server Go)、sa-appbuild(build.gradle.kts+wrapper)、tsnet-align(tools/tsnetbind+libs)。无越权残留。",
+    "backup_leftover": "/tmp/fg-wiring-backup 不存在（已清理）；全仓无 *.orig/*.bak/*.backup；w-sa-appbuild 临时移出的两个测试文件现完整在仓（ForegroundServiceWiringTest 6 条 + EconomyTest 1 条，本次 :app:testDebugUnitTest 实跑通过）。",
+    "residual_dirs": ".team/verify-stage3 不存在（未建）；/tmp 临时产物已清理。",
+    "acceptance_reruns": [
+      { "argv": "env -u TEAM_AGENT_* /Users/alauda/go/bin/staticcheck ./... (cwd=server)", "rc": 0 },
+      { "argv": "env -u TEAM_AGENT_* go test -count=1 ./... (cwd=server)", "rc": 0, "result": "9 包全 ok（cmd/agentmirrord、internal/agentstate、api、bridge、config、discovery、pairing、protocol、tsnetd）" },
+      { "argv": "env -u TEAM_AGENT_* go vet ./... (cwd=server)", "rc": 0 },
+      { "argv": "env -u TEAM_AGENT_* ./gradlew -q :app:testDebugUnitTest (cwd=app)", "rc": 0, "result": "704 tests 0 failures（含 ForegroundServiceWiringTest 6 + ForegroundServiceEconomyTest 1）" },
+      { "argv": "env -u TEAM_AGENT_* ./gradlew -q :terminal:test (cwd=app)", "rc": 0, "result": "67 tests 0 failures" },
+      { "argv": "env -u TEAM_AGENT_* python3 tools/archwiki/build_wiki.py --check (cwd=repo root)", "rc": 0, "result": "19 包 31 边 T1-1/T1-2/T3-1..4 全 PASS" },
+      { "argv": "objdump -p <AAR>/jni/arm64-v8a/libgojni.so (自验)", "rc": 0, "result": "两条 LOAD align 2**14=16384=16KB" },
+      { "argv": "env -u TEAM_AGENT_* bash tools/gate/run.sh", "rc": 1, "result": "fail：15 条剩余全基线归因，新引入 0" }
+    ],
+    "archwiki_check": "exit 0（19 包判据未被打坏）"
+  },
+  "gaps": [
+    {
+      "id": "G1",
+      "severity": "medium",
+      "title": "时钟泵单归属前台服务（004 底线的软肋）",
+      "detail": "持久连接的重连调度+输入超时裁决唯一生产驱动点是 MirrorForegroundService.pumpOnce。服务被系统回收且进程存活时：中途断连无自动重连（只剩冷启动/网络变化事件），socket 存活但无 ack 的输入超时永不裁决。004 核心（无状态+冷启动恢复）守住了，但「前台服务纯体验增强、零正确性角色」被过度宣称。",
+      "recommendation": "考虑把泵驱动迁回一个与进程同寿命的宿主（如 Application-scoped 协程/looper），服务只叠加后台期间的额外拍；或明确接受「服务被杀期间无自动重连」为产品语义并在 KDoc 如实描述。"
+    },
+    {
+      "id": "G2",
+      "severity": "low",
+      "title": "KDoc 措辞两处与实现不完全一致",
+      "detail": "MirrorForegroundService KDoc「删掉服务层只是后台期间不再有泵」（过度，见 G1）；SessionRoute KDoc「服务持有 ServiceWire.manager 单例」（实为 ServiceWire 持有，服务经 managerOrNull 读取）。非谎报，建议顺手改实。"
+    },
+    {
+      "id": "G3",
+      "severity": "info",
+      "title": "静默经济量测为 JVM 指示性数字",
+      "detail": "pumpOnce 三态在 Robolectric JVM 直接调用量测，非真机 Handler 周期；数字远低于阈值，有界性结论成立，但非设备精确值。"
+    }
+  ],
+  "notes": [
+    "gate 用例数棘轮未下行：app 771（=基线 757 + 7 新测试×2 变体）、server 315、archwiki 1。",
+    "w-sa-appbuild 与 w-fg-wiring 的编译单元协调（临时移出验证后原样放回）已验证无内容丢失、无残留备份。",
+    "全部 acceptance 均用 env -u TEAM_AGENT_* 前缀实跑；未触碰生产 daemon 与用户 tmux；未 git commit/push。",
+    "四席证据与复核结果一致：无一处关键数字（merged manifest、readelf align、测试数、deferred 理由）与实际不符。"
+  ]
+}

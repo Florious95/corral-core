@@ -1,0 +1,117 @@
+{
+  "task": "fix-sa-server",
+  "case_id": "msg_3a7a9a527580",
+  "status": "pass",
+  "summary": "修复 docs/stage3-issue-inventory.md 分组 A/B/C/D 全部 9 条 staticcheck 问题：internal/api 6 条（loopOnce/bridgeFor 死符号删除、SA4006 snap 丢弃值显式化、S1000 select 简化、readControlTimeout/readBinary/modelForSocket 死测试辅助删除）、internal/agentstate 1 条（S1011 splitLines 拷贝循环消除）、cmd/agentmirrord 1 条（pidfileName 死常量删除）。逐条判定实际风险并核实风险消失；未用任何规则裁剪或行内忽略；未删任何导出符号。staticcheck ./... rc=0，三验收命令全绿。",
+  "tests": [
+    {
+      "argv": "env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID bash -lc 'go test -count=1 ./...' (cwd=server)",
+      "rc": 0
+    },
+    {
+      "argv": "env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID go vet ./... (cwd=server)",
+      "rc": 0
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check (cwd=repo root)",
+      "rc": 0
+    },
+    {
+      "argv": "env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID /Users/alauda/go/bin/staticcheck ./... (cwd=server)",
+      "rc": 0
+    }
+  ],
+  "positive_control": {
+    "staticcheck_real_scan": "true",
+    "detail": "在 internal/api 临时引入未使用包级变量 zzPositiveControl（zz_positive_control.go）后 staticcheck ./internal/api/ 退出 1 并报 'internal/api/zz_positive_control.go:4:5: var zzPositiveControl is unused (U1000)'；删除该临时文件后 staticcheck ./... 复退 0、无残留。证明工具真在扫描本批文件，rc=0 不是'没扫到'。",
+    "before_findings_count": 9,
+    "after_findings_count": 0
+  },
+  "changes": [
+    "server/internal/api/server.go (removed dead field Server.loopOnce; comment updated)",
+    "server/internal/api/session.go (removed dead method sessionCatalog.bridgeFor)",
+    "server/internal/api/connected_idle_economy_test.go (SA4006: loop-local snap never read -> _ = with reason comment)",
+    "server/internal/api/state_wiring_test.go (S1000: single-case select -> plain channel receive)",
+    "server/internal/api/ws_test.go (removed dead test helpers readControlTimeout/readBinary/modelForSocket)",
+    "server/internal/agentstate/rules.go (S1011: splitLines redundant copy loop eliminated)",
+    "server/cmd/agentmirrord/pidfile.go (removed dead const pidfileName)"
+  ],
+  "fixed": [
+    {
+      "inventory": 1,
+      "rule": "U1000",
+      "file": "server/internal/api/server.go:60",
+      "actual_risk": "Server.loopOnce (sync.Once) 是死字段——全仓唯一出现即声明处，从不被读取。遗留歧义：读者会误以为 Close 经由它做幂等守卫，但 loopStop() 直接取消且 listingLoop 由 ctx.Done 单点退出，并无第二次启动路径（goroutine 只由 NewServer 启动一次）。死字段误导维护者以为存在一个从未生效的 once 保护。",
+      "fix": "删除字段。风险消失：结构中不再存在一个暗示不存在的同步语义的残留字段；goroutine 生命周期由 loopCtx/loopStop 唯一描述，注释同步说明启动恰好一次、无需 once。",
+      "comment_synced": "true"
+    },
+    {
+      "inventory": 2,
+      "rule": "U1000",
+      "file": "server/internal/api/session.go:98",
+      "actual_risk": "sessionCatalog.bridgeFor 全仓零调用（生产与测试均无）。它被 ws_conn.resolvePane 完全取代（后者返回同型 (*bridge.Pane, discovery.Pane, bool) 且直接 c.s.catalog.entry(ref)）。死方法若被误用会绕过 entry 的锁语义（无读写锁保护）引入并发读 map 风险——保留即埋雷。",
+      "fix": "删除方法。风险消失：唯一的 ref→(bridge,pane) 查询路径收敛到 resolvePane（经带锁 entry），死代码不能在未来被误当'更简单的取法'引入数据竞争。",
+      "comment_synced": "true"
+    },
+    {
+      "inventory": 3,
+      "rule": "SA4006",
+      "file": "server/internal/api/connected_idle_economy_test.go:299",
+      "actual_risk": "循环内 buildSnapshot 的返回值赋给 snap 后从未读取（该轮只依赖调用副作用驱动 p.sample 采样计数），随后在循环外被重新赋值。staticcheck 判此赋值永不使用——这是一个被丢弃的值，掩盖了'此调用是采样驱动器而非读结果'的真实意图。",
+      "fix": "改为 `_ = buildSnapshot(...)` 并加注释说明该调用的价值在副作用（驱动采样计数），结果仅在循环结算后读取。风险消失：丢弃意图显式化，与同测试 351 行既有 `_ = buildSnapshot` 风格一致，SA4006 不再触发，测试语义不变。",
+      "comment_synced": "true"
+    },
+    {
+      "inventory": 4,
+      "rule": "S1000",
+      "file": "server/internal/api/state_wiring_test.go:278",
+      "actual_risk": "单 case 的 select{case <-ctx.Done():} 是风格噪音——select 的随机化/多路语义在此无意义，可读性差。静态风格问题，非缺陷。",
+      "fix": "简化为 `<-ctx.Done()`。风险消失：单路接收语义直接表达，行为逐字节一致（case 分支返回相同值）。",
+      "comment_synced": "true"
+    },
+    {
+      "inventory": 5,
+      "rule": "U1000",
+      "file": "server/internal/api/ws_test.go:114",
+      "actual_risk": "wsEnv.readControlTimeout 全仓零调用（生产与测试）。死测试辅助——若被保留，未来维护者可能误以为'超时断言'已被覆盖，实际没有用例消费它，削弱测试辅助面的可读性。",
+      "fix": "删除。风险消失：测试辅助面只保留实际消费的读取路径（readControl/readControlDraining），不存在零消费者却冒充能力的死方法。",
+      "comment_synced": "true"
+    },
+    {
+      "inventory": 6,
+      "rule": "U1000",
+      "file": "server/internal/api/ws_test.go:171",
+      "actual_risk": "wsEnv.readBinary 全仓零调用。真实的二进制读取已由 tmuxEnv.readBinaryFrame（api_tmux_test.go:99）承担并 decode 成 protocol.BinaryPayload；此方法只返回裸 []byte，是死测试辅助。",
+      "fix": "删除。风险消失：二进制读取的唯一真实路径 readBinaryFrame 保留，无重复/死辅助。",
+      "comment_synced": "true"
+    },
+    {
+      "inventory": 8,
+      "rule": "U1000",
+      "file": "server/internal/api/ws_test.go:215",
+      "actual_risk": "modelForSocket 全仓零调用（生产与测试）。真实的隔离 socket 模型由 testModel 与各集成测试自建；该辅助是死代码，暗示存在一个从未被用的'集成测试专用模型构造'。",
+      "fix": "删除。风险消失：测试模型构造收敛到实际消费的 testModel，无死辅助。",
+      "comment_synced": "true"
+    },
+    {
+      "inventory": 7,
+      "rule": "S1011",
+      "file": "server/internal/agentstate/rules.go:132",
+      "actual_risk": "splitLines 用 raw[:0:len(raw)] 预占容量 + 逐元素拷贝，把 strings.Split 的结果复制一遍，纯冗余——strings.Split 返回的全新 backing array 不会与本函数共享别名，拷贝不提供任何防御价值，且 splitLines 唯一调用方 evaluateRules 不在函数外保留该切片，尾修裁剪同样安全。",
+      "fix": "改为直接 `out := strings.Split(text, \"\\n\")` 并保留尾空行裁剪。风险消失：拷贝循环移除，行为逐字节一致（同长度同内容同容量），S1011 不再触发。注释同步说明 strings.Split 返回 fresh backing array 故原地裁剪安全。",
+      "comment_synced": "true"
+    },
+    {
+      "inventory": 9,
+      "rule": "U1000",
+      "file": "server/cmd/agentmirrord/pidfile.go:26",
+      "actual_risk": "const pidfileName (\"agentmirrord.pid\") 全仓零引用——acquirePidfile 从 name 参数推导文件名（name+\".pid\"），调用方 main.go:95 与 pidfile_test.go 均传字面量 \"agentmirrord\"，无法把该常量接入推导而不双拼 \".pid\"。常量名还与之推导的文件名（name+\".pid\"）不一致，是误导性死常量。",
+      "fix": "删除常量。风险消失：文件名唯一真源是 acquirePidfile 的推导（name+\".pid\"），文件头注释与 @err 契约已明确 canonical 名 <stateDir>/agentmirrord.pid，无死常量误导。",
+      "comment_synced": "true"
+    }
+  ],
+  "ignored": [],
+  "out_of_scope": [],
+  "deferred": [],
+  "deviation": []
+}

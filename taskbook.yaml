@@ -1497,3 +1497,71 @@ tasks:
     write_scope: ["README.md", "server/README.md", "docs/"]
     evidence: ".team/evidence/fix-dogfood-lock-zh.json"
     contention: impl
+
+  # ---------- 阶段三修复批：按 docs/stage3-issue-inventory.md 分组 ----------
+  - id: fix-sa-server
+    goal: >
+      修复 `docs/stage3-issue-inventory.md` 分组 A / B / C / D 的全部 9 条 staticcheck 问题
+      （`internal/api` 6 + `internal/api` 测试辅助 1 + `internal/agentstate` 1 + `cmd/agentmirrord` 1）。
+      逐条按清单原文处置：**能修则修，不能修则给出不修的技术理由并在清单里标注**——
+      staticcheck 存在少量在本工程语境下不适用的规则，但**默认规则集不得裁剪**（已裁），
+      个别不适用项只允许用最小范围的行内 `//lint:ignore <规则> <理由>` 且**理由必须具体**，
+      不许写"误报"三个字了事；用了几条、各是什么理由，逐条写进证据。
+      红线：**修的是问题不是告警**——不许用改签名、加空引用、`_ = x` 之类的手法把告警糊过去；
+      若某条 staticcheck 告警指向的是真实死代码（如本轮已记录的 `internal/bridge` 四个零消费导出符号），
+      **不要顺手删**，那超出本条范围，记进证据的 `out_of_scope` 数组交 leader 排期。
+      改动若使某个符号的行为或错误面发生变化，**必须同步更新该符号的注释与 `@err` 契约标签**——
+      本轮刚花整轮治"注释落后于实现"，不许在修 lint 时当场制造新的。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go vet ./...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["gate-static-analysis"]
+    write_scope: ["server/"]
+    evidence: ".team/evidence/fix-sa-server.json"
+    contention: impl
+
+  - id: fix-sa-appbuild
+    goal: >
+      修复 `docs/stage3-issue-inventory.md` 分组 F 的 14 条 Android Lint 问题
+      （`app/app` 构建配置：依赖版本与工程卫生）。
+      逐条处置：依赖版本升级须**确认兼容性**（升完 `:app:testDebugUnitTest` 与 `:terminal:test` 必须仍绿），
+      工程卫生项按 Lint 建议修正。
+      红线：**不得为了消告警而放宽 Lint 规则集或加 `lintOptions` 豁免**（默认规则集不裁剪已裁定）；
+      确有必须豁免的逐条给具体理由，写进 `tools/gate/README.md` 的豁免表，一条豁免一行理由。
+      **不得升级到未验证的大版本**——若某条 Lint 建议的升级跨越主版本且存在破坏性变更风险，
+      记进证据的 `deferred` 数组并说明风险，交 leader 排期，不要赌。
+      注意与其他席位的写入面隔离：**不要动 `app/app/src/main/` 下任何源码或 manifest**
+      （那是运行时组与 `w-fg-wiring` 的地盘），本条只管构建配置与依赖声明。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["gate-static-analysis"]
+    write_scope: ["app/build.gradle.kts", "app/app/build.gradle.kts", "app/terminal/build.gradle.kts", "app/settings.gradle.kts", "app/gradle/", "app/gradle.properties", "tools/gate/README.md"]
+    evidence: ".team/evidence/fix-sa-appbuild.json"
+    contention: impl
+
+  - id: fix-tsnetbind-align
+    goal: >
+      修复 `docs/stage3-issue-inventory.md` 分组 G 的 `Aligned16KB`（3 条为同一 AAR 的重复告警）：
+      `app/app/libs/tsnetbind.aar` 内的 `jni/arm64-v8a/libgojni.so` **未按 16KB 对齐**。
+      **这是 P1 且是上架硬性要求**：Android 15+ 对未 16KB 对齐的 native 库强制拒绝，
+      不修则 App 无法在 Android 15 及以上正常分发/运行——不是告警洁癖，是发布阻断项。
+      修法：在 `tools/tsnetbind` 的 gomobile 构建链里加 16KB 对齐
+      （Go 1.22+ 的 gomobile 可经链接器参数指定 max-page-size；具体手段由你按实测确定），
+      重新产出 AAR 并替换 `app/app/libs/tsnetbind.aar`。
+      **阳性对照（必做）**：不许只看 Lint 不再报。要用客观工具直接验证 `.so` 的段对齐
+      （如 `objdump -p` / `readelf -l` 读 LOAD 段的 align 值，或 `zipalign -c -P 16 -v`），
+      给出**修复前与修复后的实测数字对比**——"Lint 不报了"可能只是产物没被重新扫描。
+      同时确认替换后 tsnet 功能未坏：TS 链相关测试与 e2e 必须仍绿。
+      红线：不得用给 Lint 加豁免的方式"解决"（那会把上架阻断项藏起来）；
+      重建 AAR 的构建步骤必须**可复现**并写进 `tools/tsnetbind/README`（或等价文档），
+      不许只在本机手工产出一个二进制就交件——那样下次没人能重建。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["gate-static-analysis"]
+    write_scope: ["tools/tsnetbind/", "app/app/libs/"]
+    evidence: ".team/evidence/fix-tsnetbind-align.json"
+    contention: impl

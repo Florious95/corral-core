@@ -1,0 +1,1 @@
+{"task_id": "stage3-fix-batch.verify", "dispatched_to": "w-stage3-verify", "base": "agents/w-stage3-verify.md", "case_id": "msg_9afb0ea0d118", "at": "2026-08-11 12:40:00", "note": "阶段三修复批复核；intent 随派单同批写入"}

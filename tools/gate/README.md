@@ -34,15 +34,45 @@ bash tools/gate/run.sh --accept-baseline=<理由>  # 显式接受用例数下行
 
 | 面 | 命令 | 用例数来源 | 空扫描(0 用例) |
 |----|------|-----------|----------------|
-| server | `go test ./... -count=1 -json` + `go vet ./...` + `gofmt -l .` | `go test -json` 的 Test 事件（pass/fail）计数 | **红**（min_cases=1） |
-| app | `./gradlew -q test` | `build/test-results/**/TEST-*.xml` 的 tests 属性求和 | 起步基线为 0（当前 app 无测试类），不判红 |
+| server | `go test ./... -count=1 -json` + `go vet ./...` + `gofmt -l .` + `staticcheck ./...` | `go test -json` 的 Test 事件（pass/fail）计数 | **红**（min_cases=1） |
+| app | `./gradlew -q test` + `./gradlew -q :app:lintDebug` | `build/test-results/**/TEST-*.xml` 的 tests 属性求和 | 起步基线为 0（当前 app 无测试类），不判红 |
 | archwiki | `python3 tools/archwiki/build_wiki.py --check` | 存在才跑；缺席显式 `skipped` 标注 | — |
 
-app 面基线以当前实际值起步（知识基底 §2 现场基）：棘轮自动上行，后续只增不减。
-`:terminal` 等后续模块若被 include，其测试结果自动计入。注意 `./gradlew test` 会同时跑
-`testDebugUnitTest` 与 `testReleaseUnitTest` 两个变体，两套 XML 都计入求和（规范 §1 原文即
-「TEST-*.xml 的 tests 属性求和」，未去重）——同一测试类可能以 debug/release 两态各计一次，
-棘轮度量口径保持一致即可。
+### 静态分析（gate-static-analysis 接入，2026-08-11）
+
+- **server 面 staticcheck**：`go vet` 之外的静态分析，BSD-3 许可（与 Apache-2.0 兼容，
+  需求 008 全开源约束）。**默认规则集不裁剪**（红线：不许为了让门禁变绿而降规则）。
+  二进制不在登录 PATH（`GOPATH/bin` 未导出），gate.py 经 `go env GOPATH` 解析绝对路径；
+  找不到即显式红（环境缺失不得静默当 pass）。每条 finding 记一条失败（`staticcheck:<file>:<line>`），
+  供四归因 carry-over。
+- **app 面 Android Lint**：AGP 自带（零新依赖），跑 `:app:lintDebug`。**默认规则集不裁剪**。
+  lint 默认仅 error 使构建失败（AbortOnError），但 gate 把 XML 报告里每条 finding
+  （含 warning）都记为失败条目——存量未清前 app 面非绿属预期，四归因由上游标注，不挑不藏。
+  报告读取 `app/app/build/reports/lint-results-debug.xml`；报告缺失且 gradle 非 0 时
+  记「lint (no report, exit non-zero)」显式红（空清单不算健康）。
+
+## gate 进 acceptance 收口位（约定）
+
+**taskbook 里凡涉及代码改动的条目，acceptance 末尾补一条全量门**，标准 argv：
+
+```bash
+bash -lc 'env -u TEAM_AGENT_WORKSPACE -u TEAM_AGENT_ID -u TEAM_AGENT_OWNER_TEAM_ID -u TEAM_AGENT_AGENT_ID bash tools/gate/run.sh'
+```
+
+说明：
+- taskbook 内部常用简写 `env -u TEAM_AGENT_*`——在 bash 下是未展开的字面量（无文件命中时
+  原样传给 `env`，`-u` 不接受通配，实际不净化任何变量）。**真正生效的净化在 gate.py 内部**，
+  按上表显式清单逐条 `-u`。标准 argv 用显式清单，与 gate.py `_SANITIZE` 同一份来源。
+- 门**允许因新接工具暴露存量问题而非绿**——此时证据里必须逐条说明每条非绿的来源与归属；
+  禁止调低棘轮基线或裁剪规则集让它变绿。
+- 具体条目的批量补写由 leader 收口时做（gate-static-analysis 只立约定，不逐条改）。
+
+## 豁免清单
+
+默认规则集不裁剪。确有必须豁免的逐条给理由（一行一条，没理由的不许加）：
+
+（当前无豁免——见 `docs/stage3-issue-inventory.md`，`Aligned16KB` 的 tsnetbind AAR
+对齐问题记录为 tools/tsnetbind 的真实缺陷，不豁免。）
 
 ## 约束
 

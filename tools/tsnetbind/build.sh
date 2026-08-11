@@ -20,7 +20,14 @@ command -v gobind   >/dev/null || go install golang.org/x/mobile/cmd/gobind@late
 ABIS="${ABIS:-android/arm64}"
 
 # -ldflags "-s -w" 去符号表/调试信息：.so 30.1MB→21.9MB，AAR 14.2MB→8.0MB。
-gomobile bind -target="$ABIS" -androidapi 26 -ldflags "-s -w" \
+# 16KB 对齐（2026-08-11，fix-tsnetbind-align）：Android 15+（API 35）对未按 16KB
+# 对齐的 native 库在加载时强制拒绝（linker 要求 LOAD 段 p_align>=0x4000），这是上架
+# 硬性要求。Go 的 c-shared 外部链接经 NDK clang 出最终 ELF，故必须把 -z max-page-size
+# 透传给外部链接器：-extldflags=-Wl,-z,max-page-size=16384。修复前后实测 LOAD 段
+# Align 0x1000(4KB)→0x4000(16KB)（readelf -l 验证）。不能靠 lint 豁免——那是把上架
+# 阻断项藏起来。
+gomobile bind -target="$ABIS" -androidapi 26 \
+  -ldflags "-s -w -extldflags=-Wl,-z,max-page-size=16384" \
   -o ../../app/app/libs/tsnetbind.aar .
 
 ls -la ../../app/app/libs/tsnetbind.aar
