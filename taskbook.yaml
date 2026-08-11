@@ -1402,3 +1402,38 @@ tasks:
     write_scope: ["app/terminal/src/main/kotlin/dev/agentmirror/terminal/"]
     evidence: ".team/evidence/doc-contract-kt-terminal.json"
     contention: impl
+
+  # ---------- 撞库后立案：未兑现的已裁需求 ----------
+  - id: feat-fg-service-wiring
+    goal: >
+      兑现 011 已裁的「Android 前台服务 + 常驻连接」路线。当前 `MirrorForegroundService`
+      在 AndroidManifest.xml 里声明了，但**全仓库没有任何 startService / startForegroundService /
+      stopService 调用点**，它从未被启动过（其自身 KDoc 在 commit 105a2fe 即写明"死件家族第六例，
+      接线留待后案"）；真实接线是 ConnectionManager 由 startPersistentConnection（MainActivity.onCreate）
+      或 SessionRoute.createSessionViewModel 创建，时钟泵由在屏组合的 LaunchedEffect 驱动，
+      fg-service 的 pumpRunnable 从未运行。
+      本条不是新功能，是**未兑现的已裁需求**：011「推送/后台：Android 前台服务 + 常驻连接，
+      不依赖 FCM/Google 服务」（依据 010 验收只含安卓 + 004 前台服务路线已裁 + 008 开源自托管友好）；
+      004 亦明写「Android 额外提供前台服务选项（通知栏常驻），成本低收益实」。
+      **架构底线（004 不得违背）**：前台服务是**体验增强，不得成为正确性依赖**。
+      004 的主张是「不保活、客户端无状态、被杀即无所谓」——即便服务被杀，
+      冷启动 → 重连 → 首屏快照仍须在 1 秒内恢复到被杀前的画面。
+      所以接线后必须仍能通过「杀服务 → 冷启动恢复」的验证，不许把状态搬进服务里。
+      范围：服务生命周期接线（何时启动/何时停止，与配对完成、会话进入、用户显式断开的关系）；
+      连接与时钟泵归属改由服务承接（在屏组合不再各自持有）；通知栏常驻内容与点击深链
+      （NotificationHelper 已有深链实现，真实消费方是 MainActivity.handleDeepLink）；
+      前台服务类型与 Android 14+ 的 foregroundServiceType 合规声明；
+      锁屏/后台期间连接维持与恢复。
+      红线：不得依赖 FCM/Google 服务（011）；不得把客户端变成有状态（004）；
+      通知内容不得含配对 token 明文（协议 §9）；静默经济红线照常适用——
+      服务常驻期间 CPU 与子进程派生必须有界，须给出量测。
+      红测先行：服务启动/停止的状态机断言、被杀后冷启动恢复断言、
+      「连接由服务承接而非在屏组合」的归属断言。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "bash -lc 'grep -rn \"startForegroundService\\|startService\" app/app/src/main/java --include=*.kt | grep -v test'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/main/java/dev/agentmirror/app/", "app/app/src/main/AndroidManifest.xml", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-fg-service-wiring.json"
+    contention: impl
