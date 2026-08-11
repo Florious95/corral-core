@@ -1437,3 +1437,63 @@ tasks:
     write_scope: ["app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/main/java/dev/agentmirror/app/", "app/app/src/main/AndroidManifest.xml", "app/app/src/test/"]
     evidence: ".team/evidence/feat-fg-service-wiring.json"
     contention: impl
+
+  # ---------- 阶段三：一次性跑出所有隐含问题并全修 ----------
+  - id: gate-static-analysis
+    goal: >
+      阶段三第一步——**把隐含问题一次性全部暴露出来并立账**，本条只负责"暴露与立账 + 门禁接入"，
+      修复由后续按账施工（避免边扫边修导致清单永远不收敛）。
+      背景：`tools/gate/run.sh` 最后一次运行是 **2026-08-09 18:47**（`tools/gate/gate-report.json` mtime），
+      此后两天的全部改动**没过过门**——这是"隐含问题从不被发现"的直接原因。
+      三件事：
+      ①**接入静态分析**（`docs/next-round-plan-20260810.md` §3.3 已裁）：Go 侧 `go vet`（已有）+
+      **staticcheck**（BSD-3，许可与 Apache-2.0 兼容，符合 008）；Android 侧 **Android Lint**
+      （AGP 自带，零新依赖）。**不引 detekt**（需加插件、收益与 Lint 重叠）。三者接进 `tools/gate/run.sh`
+      的对应面，成为门禁的一部分。
+      ②**把 gate 加进每条 acceptance 的收口位**——taskbook 里凡涉及代码改动的条目，
+      acceptance 末尾补一条全量门；本条先在 `tools/gate/README.md` 写明该约定并给出标准 argv，
+      具体条目的批量补写由 leader 收口时做。
+      ③**全量跑一遍并立账**：`tools/gate/run.sh` 三面 + `archwiki --check`（含 T3 全套）+
+      新接的静态分析，把**所有** issue 逐条落进 `docs/stage3-issue-inventory.md`
+      （字段：来源工具 / 文件:行 / 规则 id / 原文 / 初判严重度 / 建议归属包）。
+      红线：**本条只暴露不修复**——发现问题原样记账，不许顺手改产品代码（顺手改会让"这一批到底发现了多少"
+      永远算不清）；工具自身的接入改动除外。
+      **不许为了让门禁变绿而降低规则集**：staticcheck 与 Lint 的默认规则集不得裁剪，
+      确有必须豁免的（如生成物目录）逐条给理由写进 README。
+      **阳性对照**：接入后必须自证工具真在跑——故意引入一个必然被 staticcheck 报的构造
+      （如未使用的变量）确认它真报、再撤销；Android Lint 同法。空清单不算健康，
+      扫出 0 条要说明是"真干净"还是"没扫到"。
+      注意 gate 有**用例数棘轮**，本轮 19 包大量注释改动可能撞红，如撞红照实记账、不许绕过棘轮。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash tools/gate/run.sh'"
+      - "bash -lc 'test -s docs/stage3-issue-inventory.md'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["tools/gate/", "docs/stage3-issue-inventory.md", "app/app/build.gradle.kts", "app/build.gradle.kts", "server/"]
+    evidence: ".team/evidence/gate-static-analysis.json"
+    contention: impl
+
+
+  - id: fix-dogfood-lock-zh
+    goal: >
+      兑现 017 R-6（当期**锁中文**并在 README 明示；抽取翻译后置）——dogfood 缺陷 D-12，至今未开工。
+      现状：产品界面全中文，但仓库文档从未明示"当期锁定中文、国际化后置"这一裁定。
+      本产品 Apache-2.0 全开源（见 008），外部读者无从得知这是**有意为之的当期边界**而非疏漏，
+      也不知道翻译抽取属已裁的后置项而非欢迎 PR 的开放任务。
+      范围：根 README.md 与 server/README.md（以及 app 侧若有面向用户的说明文档）明确写出——
+      ① 当期界面语言锁定中文；
+      ② 国际化与翻译抽取为**已裁定的后置项**（出处 requirement-base/entries/017-场景审计八项裁定.md 的 R-6），
+      不是待办疏漏；
+      ③ 对外部贡献者说明当前不接受翻译 PR 的原因与将来开放的条件。
+      措辞要让不了解本项目决策史的人一眼看懂，不要只写"锁中文"三个字。
+      红线：**只改文档，不动任何代码与界面文案**；不得把后置项写成"计划中"或"即将支持"——
+      那正是本轮在治的形态⑦（把未来效果写成现在式），需求基裁的是**后置**，不是承诺。
+      引用需求条目时写成可验证的形状（真实文件路径），让 T3-2 的引用真实性判据能验。
+    acceptance:
+      - "bash -lc 'grep -q 中文 README.md'"
+      - "bash -lc 'grep -q 017 README.md'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["README.md", "server/README.md", "docs/"]
+    evidence: ".team/evidence/fix-dogfood-lock-zh.json"
+    contention: impl
