@@ -47,6 +47,18 @@
 - **席位恢复纪律**（A-24 实证，2026-08-09）：席位恢复失败达 2 轮（自动恢复/start-agent/reset 任意组合）
   即弃 id——remove 归档后换**处女 id** add-agent 重建带案重派，不再消耗轮次；死 id 的 runtime 残留
   （provider-config/env/events）保留供框架取证。停摆检测与自动探针由 `.team/watchdog.py` 值守（三条件+预算 2）
+- **看门狗必须由守护进程托管，且每次派单前按 cwd 核活**（2026-08-11 实证，用户当场指出"看门狗没有生效"）：
+  裸起的 `watchdog.py` 被外部杀过一次——stdout 日志 **0 字节**（Python 异常会留 traceback，
+  什么都没有 ⇒ 是收到信号直接没的），死亡时刻落在施工席跑全量 `tools/gate/run.sh` 的窗口内，
+  最可能是测试/清理链路按进程名扫射时误伤。后果：**无人值守近 5 小时**，
+  期间 `w-notif-toggle` 建完任务列表即停摆、空转 5 小时无人发现。
+  处置：`.team/watchdog-supervisor.sh` 守护托管（watchdog 退出即重启并记账，
+  能查"它被杀过几次"），启动用
+  `nohup python3 -c 'import os; os.setsid(); os.execvp("bash",["bash",".team/watchdog-supervisor.sh"])' &`
+  —— **macOS 无 `setsid` 命令**（用它会整条静默失败，本工程已栽过），必须走 Python 的 `os.setsid()`
+  拿独立会话，使按会话组扫射打不到它。
+  **纪律：每次派单前顺手核一次守护与看门狗是否按 cwd 活着**，不要靠"我起过它"这个记忆——
+  本轮两次栽在这上面（一次把别工程的同名进程当成本工程的，一次它死了 5 小时我还在报"值守中"）。
 - **Android 侧并发的真实粒度是「Gradle 模块」，不是「文件」**（2026-08-11 实证）：
   `同文件零并发` 在 Go 侧够用（`go test ./internal/api/...` 只编译该包及其依赖），
   但 Android 侧**同一 Gradle 模块的编译单元是共享的**——任何席位跑 `:app:testDebugUnitTest`
