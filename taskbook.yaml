@@ -1624,3 +1624,304 @@ tasks:
     write_scope: ["docs/stage4-execution-plan.md"]
     evidence: ".team/evidence/plan-stage4-execution.json"
     contention: impl
+
+  # ---------- 阶段四：用例执行（42 条，A10a 随 R-004 撤销） ----------
+  - id: stage4-b1-ui-firsttouch
+    goal: >
+      阶段四 B1 批次：模拟器 UI 自动化·首触主干。独占 :app 编译 + 独占模拟器。
+      按 docs/stage4-execution-plan.md §1 A 组执行 A1–A9a 共 13 条用例。
+      需先 assembleDebug 装最新 APK 到模拟器、预置隔离 tmux 夹具。
+      每用例逐条：结构断言 + 截图 + 阳性对照 + 失败四归因。
+      截图落 e2e/artifacts/stage4-execution/；判定结果逐条落 REPORT.md。
+      A10a 已随 R-004 撤销，不跑。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/stage4-execution/REPORT.md'"
+      - "bash -lc 'ls e2e/artifacts/stage4-execution/A1-*.png e2e/artifacts/stage4-execution/A3-*.png 2>/dev/null | wc -l | xargs test 0 -lt'"
+    deps: ["plan-stage4-execution"]
+    write_scope: ["e2e/artifacts/stage4-execution/"]
+    evidence: ".team/evidence/stage4-b1-ui-firsttouch.json"
+    contention: none
+
+  - id: stage4-b3-host-t
+    goal: >
+      阶段四 B3 批次：宿主 T 对账。零设备依赖，独立隔离 daemon 端口。
+      按 docs/stage4-execution-plan.md §1 执行 C4、C5(H 面)、D1–D4 共 6 条用例。
+      隔离铁律：自建 TMUX_TMPDIR + 高端口 daemon（≥19983），绝不触碰生产 daemon（pid 3393，:9900）
+      与用户真实 tmux。测试一律 env -u TEAM_AGENT_*。
+      每用例逐条判定落 REPORT，收尾自证零残留（lsof + 进程表）。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/stage4-execution/REPORT.md'"
+    deps: ["plan-stage4-execution"]
+    write_scope: ["e2e/artifacts/stage4-execution/"]
+    evidence: ".team/evidence/stage4-b3-host-t.json"
+    contention: none
+
+  - id: stage4-b2-ui-backend
+    goal: >
+      阶段四 B2 批次：模拟器 UI 自动化·后台/通知/视觉。独占 :app 编译 + 独占模拟器。
+      按 docs/stage4-execution-plan.md §1 执行 A10、A11、A12 + B1–B8 + C1、C2、C3、C5(U)、C6(菜单) + D5
+      共 22 条用例（A10a 已随 R-004 撤销）。
+      需先 assembleDebug 装最新 APK（含 fix-upload-bearer 修复）。
+      每用例逐条：结构断言 + 截图 + 阳性对照 + 失败四归因。
+      截图落 e2e/artifacts/stage4-execution/；判定结果逐条落 REPORT-B2.md。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/stage4-execution/REPORT-B2.md'"
+    deps: ["stage4-b1-ui-firsttouch"]
+    write_scope: ["e2e/artifacts/stage4-execution/"]
+    evidence: ".team/evidence/stage4-b2-ui-backend.json"
+    contention: none
+
+  # ---------- 本轮新增（2026-08-12 用户裁定） ----------
+  - id: web-client
+    goal: >
+      构建 Web 端客户端（同协议浏览器客户端）。基于 docs/protocol.md WebSocket 协议，
+      用 xterm.js 做终端渲染，实现与安卓端功能对齐：配对页（ws 地址+token）、
+      工作区列表（两级分组）、会话页（终端镜像+输入+特殊键条）。
+      主要用途：测试第一道（Playwright/Chrome DevTool MCP），80% 问题在 Web 端先拦。
+      二进制帧协议需在 JS 侧实现解析（与 Go/Kotlin 对称）。
+      目录：web/（monorepo 内新目录）。
+    acceptance:
+      - "bash -lc 'cd web && npm test'"
+      - "bash -lc 'test -f web/index.html'"
+    deps: []
+    write_scope: ["web/"]
+    evidence: ".team/evidence/web-client.json"
+    contention: none
+
+  - id: test-automation
+    goal: >
+      构建独立的自动化测试工程。完全独立项目，不嵌入产品代码。
+      提供：通用断言库、通用测试函数、环境管理（隔离 daemon/tmux 起停）、
+      用例注册与选择性执行、结果持久化。脚本是执行单元，工程是粘合层。
+      技术栈：Playwright（Web 端测试） + adb/uiautomator helpers（安卓端）。
+      目录：test/（monorepo 内新目录）。
+    acceptance:
+      - "bash -lc 'test -f test/package.json || test -f test/pytest.ini || test -f test/Makefile'"
+    deps: []
+    write_scope: ["test/"]
+    evidence: ".team/evidence/test-automation.json"
+    contention: none
+
+  - id: fix-terminal-resize-cluster
+    goal: >
+      修复终端尺寸管理四连缺陷（D-20/D-21/D-28/D-29）：
+      D-20 键盘弹出时内容被遮挡（视口要上推但 rows/cols 不变）；
+      D-21 退出会话不恢复终端原始尺寸；
+      D-28 捏合缩放后右侧内容溢出（cols 没跟着减少）；
+      D-29 捏合过程中闪烁重绘（应松手后才发一次 resize）。
+      规则（用户裁定）：仅首次进入 CLI 时 resize 一次，此后键盘/输入框不触发 resize；
+      捏合缩放松手后发一次 resize（过程中只做本地视觉缩放）；退出时恢复原始尺寸。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/"]
+    evidence: ".team/evidence/fix-terminal-resize-cluster.json"
+    contention: none
+
+  - id: fix-upload-token-chain
+    goal: >
+      修复图片上传永远 401（D-22）。fix-upload-bearer 已在 HttpUrlConnectionUploader 加了
+      Bearer 头参数，但运行时 token 可能没传到。需排查：ServiceWire.currentConfig()?.token
+      是否为 null、SessionRoute 是否正确传入 uploadToken、ViewModel 是否下传。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/service/"]
+    evidence: ".team/evidence/fix-upload-token-chain.json"
+    contention: none
+
+  - id: fix-back-gesture
+    goal: >
+      修复安卓侧滑返回直接退出 App（D-23）。Android predictive back / edge gesture
+      应该返回上一级页面（会话→工作区列表→配对页），而不是退出 App。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-back-gesture.json"
+    contention: none
+
+  - id: fix-ts-auth-inapp
+    goal: >
+      修复 App 内填 TS auth key 无法入网（D-25）。排查 App 侧 tsnet 客户端（gomobile 绑定）
+      是否在 auth 帧发送时正确启动。用户实测外部 TS（小火箭）可用但 App 内置入网不工作。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/main/java/dev/agentmirror/app/conn/"]
+    evidence: ".team/evidence/fix-ts-auth-inapp.json"
+    contention: none
+
+  - id: fix-state-detection
+    goal: >
+      提升 Agent 工作状态检测准确率（D-26）。当前状态检测（working/idle/blocked 等）准确率低。
+      参考开源项目 herdr（GitHub）的 CLI 状态检测实现。state_wiring 已有框架，需改进算法。
+    acceptance:
+      - "bash -lc 'cd server && env -u TEAM_AGENT_* go test ./...'"
+    deps: []
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/fix-state-detection.json"
+    contention: none
+
+  - id: fix-refresh-direction
+    goal: >
+      修复发消息后概率性从上往下逐行刷新（D-27）。只在 input 发送后概率出现——从上往下一行行刷新、
+      底部是旧内容。可能是 input 后触发了不必要的 snapshot 重放。需服务端日志排查。
+    acceptance:
+      - "bash -lc 'cd server && env -u TEAM_AGENT_* go test ./...'"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["server/internal/api/", "app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-refresh-direction.json"
+    contention: none
+
+  - id: fix-d27-v3
+    goal: >
+      D-27 第二次回炉：发消息后逐行刷新。核心问题——为什么发消息追加和 CLI 自己吐字追加
+      表现不同？两者本质都是 CLI 底部追加内容。找到差异点，统一实现。
+    acceptance:
+      - "bash -lc 'cd server && env -u TEAM_AGENT_* go test ./...'"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["server/internal/api/", "app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-d27-v3.json"
+    contention: none
+
+  - id: fix-rendering-d34-d35
+    goal: >
+      D-34 缩放字体堆叠 + D-35 bypass 符号缺省。需多模态开发者处理（能看截图判断渲染效果）。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-rendering-d34-d35.json"
+    contention: none
+
+  - id: fix-scrollback-d36
+    goal: >
+      D-36 向上滑动无法查看历史消息。触摸滑动手势未转成 scrollback 请求。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-scrollback-d36.json"
+    contention: none
+
+  - id: base-v2-gate
+    goal: >
+      v2 基线门禁（取证任务，不改产品代码）。v5 被用户判定不合格已退回 v2 基线
+      （tag v2-baseline，v5 改动封存于分支 v5-failed）。本任务证伪或证实
+      「v2 基线不闪」这一前提：打 v2 包上模拟器，录屏抽帧判定点开输入框 / 发消息
+      增行时是否闪烁；同时建立回归基准截图集（后续每修一条缺陷重跑，判定不倒退），
+      并复现 D-35 / D-36 留证。产出即后续各修复任务的现场基（FIELD.md）素材。
+    acceptance:
+      - "e2e/artifacts/baseline-v2/REPORT.md 给出 v2 闪/不闪的明确结论 + 抽帧证据路径"
+      - "e2e/artifacts/baseline-v2/ 内含 R1-R5 回归基准截图与 D-35/D-36 复现截图"
+    deps: []
+    write_scope: ["e2e/artifacts/baseline-v2/"]
+    evidence: ".team/evidence/base-v2-gate.json"
+    contention: none
+
+  - id: feat-daemon-scoped-discovery
+    status: void
+    void_reason: >
+      2026-08-12 立案后即撤：leader 调研遗漏，该能力已存在。
+      server/internal/api/discoverer.go:21 已定义 AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS，
+      语义完全一致（不设=生产全扫；设空=一个都不扫；设了=fail-closed 白名单）。
+      w-nav-recover 第二次运行实测该环境变量生效，UI 只见本席临时 cwd。
+      其真实阻塞是脚本 /tmp 与 /private/tmp 路径文本不一致（macOS symlink），非产品缺口。
+      本条不施工。保留条目作为「leader 因未查 env 常量而误立案」的记录。
+    original_goal: >
+      给 agentmirrord 增加「只扫指定 tmux socket 目录」的配置出口，使测试可以起一个
+      真正隔离的 daemon。现状：discovery.DefaultSocketDirs() 扫「$TMUX_TMPDIR 覆盖树
+      **加上**平台默认目录」，故设 TMUX_TMPDIR 也无法排除宿主真实 socket；
+      api.Discoverer 内部已有 socketDirs 字段（注释明写 set-but-empty means scan none），
+      但 cmd/agentmirrord 未将其暴露为 flag/env。
+      后果（2026-08-12 实证）：w-nav-recover 自建隔离 daemon 后，其 discovery 仍扫到宿主
+      真实 socket，UI dump 出现用户真实工作区与会话名，触碰「绝不触碰用户真实 tmux」红线并 halt。
+      这卡死整条模拟器测试流水线：要么碰真实 tmux，要么 blocked。
+      本任务只做配置出口接线，不改扫描算法、不改默认行为（不传即维持现状全扫）。
+    acceptance:
+      - "bash -lc 'cd server && env -u TEAM_AGENT_* go test ./...'"
+      - "红测：给定隔离 socket 目录时，Discover 结果不含该目录之外的任何 socket"
+      - "默认行为不变：未配置时仍等价于 DefaultSocketDirs()"
+    deps: []
+    write_scope: ["server/cmd/agentmirrord/", "server/internal/api/"]
+    evidence: ".team/evidence/feat-daemon-scoped-discovery.json"
+    contention: none
+
+  - id: fix-ime-no-resize
+    goal: >
+      兑现 raw/019 已裁定但从未实现的规则：键盘弹出 / 输入框变高时，**终端 rows/cols 不变、
+      不触发 tmux resize**，改为视口上推（像聊天软件那样内容区平移）。
+      用户 2026-08-12 真机原话：「点击输入框导致界面的尺寸变化，从而导致重绘。
+      同时我输入框多说一句话，也会导致它尺寸变化和重绘，这是绝对难以接受的。」
+      A/B/C 三包实测证实这不是回归：v2 基线 / d35fix / v4 三组终端下边界数字完全相同
+      （2010 → 聚焦 1896 → 两行 1833 → 三行 1770），即该规则从未被实现过。
+      注意与 D-20 的边界：D-20「键盘不遮挡内容」已修（ui-redesign「IME 空洞根治」）；
+      本条是同一裁定的另一半「不触发 resize」，两者不可互相代替。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "红测断言：IME 弹起与输入框行数变化时不产生 resize 协议帧（rows/cols 不变）"
+      - "模拟器实测：输入框由一行变两行三行，终端已有内容不整体重绘、不重排"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-ime-no-resize.json"
+    contention: none
+
+  - id: test-pinch-harness
+    goal: >
+      让捏合缩放在模拟器/JVM 上可测，并据此判定 v2 捏合是真坏还是取证手段不行。
+      base-v2-gate 实测发现：向 /dev/input/event1 注入真实双指后前后截图 SHA-256 全等
+      且未生成 cell_size.xml，捏合无任何可观察效果。该现象有两种读法（功能真坏 /
+      注入未构成 App 可识别手势），两种导向完全不同的工作，未定夺前 D-28/D-29/D-31/D-34
+      四条挂起。更要紧的是：多点触控目前在三层测试流水线里是盲区，
+      即使修好也没有任何回归守门，改坏了不会有人知道。本任务先补测试能力再谈修复。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "产出可重复的捏合手势测试（JVM 层合成多指 MotionEvent），能断言 ScaleGestureDetector 触发与 presenter 字号变更"
+      - "给出明确判定：v2 捏合是功能坏 还是 注入手段不足，附证据"
+    deps: []
+    write_scope: ["app/app/src/test/", "app/app/src/androidTest/", "e2e/artifacts/pinch-harness/"]
+    evidence: ".team/evidence/test-pinch-harness.json"
+    contention: none
+
+  - id: rootcause-flicker-v5
+    goal: >
+      v5 输入框闪烁回归回炉根因（审查任务，只加测试不改产品代码）。失败 diff 封存于
+      分支 v5-failed（commit 2874c54），嫌疑为 TermSurfaceView 三处叠加：D-28 clipRect
+      + D-31 CellSizeStore（presenter setter 内同步 onFontSizeChanged）+ D-38
+      onWindowVisibilityChanged。产出单一根因陈述 + 双向根因探针（v5 代码上命中、
+      v2 基线上不命中）。探针即后续 termview 改动的回归守门。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "探针在 v2 基线通过、在 v5-failed 工作树失败，两次实跑输出原样入报告"
+    deps: []
+    write_scope: ["app/app/src/test/"]
+    evidence: ".team/evidence/rootcause-flicker-v5.json"
+    contention: none
+
+  - id: fix-keybar-d37
+    goal: >
+      D-37 特殊键条不支持连按。MVP 方案已出（.team/evidence/research-keybar-rapid.md）：
+      conn 返回 req_id + VM 键去闸按 req_id 路由 + UI 键条放开。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-keybar-d37.json"
+    contention: none
+
+  - id: fix-bg-resume-d38
+    goal: >
+      D-38 后台返回对话显示在半截（必现）。恢复时 viewport 没滚到底部。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-bg-resume-d38.json"
+    contention: none

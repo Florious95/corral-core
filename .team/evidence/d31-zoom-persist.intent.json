@@ -1,0 +1,6 @@
+{
+  "task_id": "d31-zoom-persist",
+  "seat": "w-dev-zoom-persist",
+  "intent": "D-31 缩放持久化：集成 CellSizeStore 到 TermSurfaceView（初始化 load + 捏合结束 save）",
+  "dispatched_at": "2026-08-12T15:15:00+08:00"
+}
