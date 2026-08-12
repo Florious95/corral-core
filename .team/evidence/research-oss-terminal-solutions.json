@@ -1,0 +1,22 @@
+{
+  "task_id": "research-oss-terminal-solutions",
+  "status": "pass",
+  "result_id": "res_159162b66b28",
+  "agent": "w-oss-research",
+  "summary": "调研开源终端实现如何解决移动/小窗口四类问题，四条逐一给出开源做法 + 出处 + 许可证 + 落到我方函数。产出 docs/oss-terminal-solutions.md。",
+  "由来": "用户点名 herdr：「它本来是一个 CLI，可以在 SSH 客户端里被使用，那也意味着它对移动窗口做了优化，这些问题都应该能找到解决办法。」leader 起初把这条缩水成「对照我们自己的 Web 端」，被用户指出没照做，遂补派本任务并把 herdr 提为首要对象。",
+  "核心结论": {
+    "右列半字": "根因不在 reflow——内核 TerminalGrid.write 已防宽字符占末列；问题在渲染层 TermSurfaceView.drawLine/drawCentered 把宽字符画过画布右缘被 Canvas 裁半。根治方向：alacritty/xterm.js 的 LEADING_WIDE_CHAR_SPACER 边界模型。",
+    "整屏重刷": "内核早有行级脏区 takeDirty，但 TermSurfaceView 整帧全窗口重绘。herdr 内嵌 ghostty（MIT）的 collect_dirty_patch 逐行 patch 是直接模板。",
+    "上滑失效": "历史根本没真加载；SessionViewModel 只在「滚到顶」才补页，滑一屏内无响应。修法：补页触发提前到「距顶 <1 屏」，topLine 从绝对行号改 offset-from-bottom（herdr 主仓库模型）。",
+    "闪烁与字号": "resize 无锚定（herdr 在 resize 前记录 offset、后恢复）且无 reflow（wezterm rewrap_lines 模型）；字号全仓库无持久化（对比 ghostty config）。"
+  },
+  "许可证核查": {
+    "可引用": "herdr / ghostty / xterm.js / alacritty / wezterm / libvterm —— Apache-2.0 或 MIT",
+    "仅借鉴算法不复制代码": "herdr-remote（AGPL）、mosh（GPLv3）",
+    "工程红线": "终端内核须 Apache-2.0 兼容；Termux 系 GPLv3 不可用"
+  },
+  "与另一份对照的冲突": "本调研判「右列半字」根因在渲染层裁剪；study-web-terminal-model 判在「cols 用名义字格宽算、绘制用实测字形宽算，两栅格不收敛」。两说互斥且都言之成理。leader 未拍板选边，改为要求 fix-cols-grid-convergence 席位**先写判别红测**（ASCII 是否也被截 / cols×字形宽是否超 View 宽），用测试分辨后再动手——避免第五轮白修。",
+  "artifacts": ["docs/oss-terminal-solutions.md"],
+  "at": "2026-08-12"
+}

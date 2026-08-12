@@ -153,7 +153,32 @@ class TermViewPresenter(
         val current = topLine ?: maxTop
         val next = (current - deltaLines).coerceIn(0, maxTop)
         topLine = if (next >= maxTop) null else next
+        // D-36 鸡生蛋打破：本地 buffer 为空（打开会话初始态/ED3 清屏后）时 maxTop == 0，
+        // 上滑（deltaLines > 0）本无可滚空间、next 被钳到 0 且恒触底 → topLine 恒 null（跟随），
+        // 「滚到顶才拉历史」的补页条件（SessionViewModel.syncFromPresenter: atHistoryTop =
+        // locked && window.first == 0）永远走不到，上滑完全失效。空 buffer 上滑显式锁定到
+        // 逻辑行 0（可补页锚点），使上层补页条件命中、历史并入后 buffer 有内容可滚。
+        if (maxTop == 0 && deltaLines > 0) {
+            topLine = 0
+        }
         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
+        onFrameRequested?.invoke()
+    }
+
+    /**
+     * 历史分页头插并入 [merged] 行后，已锁定历史区的视口随之平移：头插让所有旧逻辑行号
+     * +[merged]，冻结的 [topLine] 必须同步平移，否则视口跳到并入的旧页而非停在原内容处
+     * （D-36：连续滚动的锚定保持）。跟随态（topLine == null）贴底不动，无需平移。
+     *
+     * @contract
+     * @pre [merged] >= 0（本页实际并入缓冲的历史行数，非请求 count——容量满时并入数更少）
+     * @post 锁定态 topLine += merged（并入后仍指向同一内容行）；跟随态不变；随后必触发一次 [onFrameRequested]
+     * @err none
+     * @inv none
+     */
+    fun onHistoryPrepend(merged: Int) {
+        if (merged <= 0) return
+        topLine?.let { topLine = it + merged }
         onFrameRequested?.invoke()
     }
 
@@ -172,6 +197,49 @@ class TermViewPresenter(
     }
 
     // ---- 捏合 → 行列数换算（005：让 CLI 自己重画）----
+
+    /**
+     * 真实视口变化（回前台/旋转/分屏/窗口尺寸变更）：重放当前像素几何。
+     *
+     * fix-viewport-restore-d38 判据：**两个入口语义正交**——
+     * [onViewportSizeChanged] 是布局挤压（IME/输入框），只推可见行、不重算；
+     * 本入口是真实视口变化，必须重算 rows/cols，内核尺寸不一致则 emit 一次 resize。
+     *
+     * 为什么「一律 emit」和「一律不 emit」都错、而必须给真实视口变化一个独立入口：
+     * - 一律 emit：IME 弹起/收起都会扰动服务端（用户原话「绝对难以接受」）；
+     * - 一律不 emit：回前台时没人负责把几何重新对齐到当前 View（D-38 根因）——View 高复原
+     *   但 [onSizeChanged] 未必回调，内核 rows 停在离开前/首帧被挤压的旧小几何上
+     *   （用户截图：终端只占顶部约 1/4、下方大片空黑）；emit 抑制进一步让本来能顺带纠正
+     *   的路径也不纠正，但根因是「回前台无对齐入口」，叠加因素不是病根；
+     * - 独立入口：View 层只有知道「这是回前台/窗口变更」的时点才调它（见 TermSurfaceView
+     *   onWindowVisibilityChanged），自然区分了「临时挤压」与「真实视口变化」两种语义。
+     *
+     * [visibleRowsOverride] 的清除与重算在此一举：后台期间收缩残留的挤压随像素高复原被清掉
+     * （updateVisibleRows 按当前像素重算），几何事件强制重算并（按需）emit 一次。
+     *
+     * @contract
+     * @pre 入参为当前 View 的真实像素尺寸（可为 0x0——布局尚未就绪时调用应安全忽略）
+     * @post viewportWidthPx/HeightPx 更新为入参；非正尺寸安全忽略（正尺寸才重算几何）；
+     *       visibleRows 按当前像素重算（挤压残留被清除）；内核尺寸不一致则 emit 一次 resize；
+     *       随后必触发一次 [onFrameRequested]（几何事件必重画）
+     * @err none
+     * @inv 仅当尺寸正且内核几何不一致才 emit；与 [onViewportSizeChanged] 的语义互斥
+     */
+    fun onRealViewportChanged(widthPx: Int, heightPx: Int) {
+        viewportWidthPx = widthPx
+        viewportHeightPx = heightPx
+        val rowsBefore = visibleRows
+        updateVisibleRows()
+        // 真实视口变化：几何事件强制重算（内核尺寸一致时按需跳过，不重复 emit）。
+        if (widthPx > 0 && heightPx > 0) {
+            recomputeGeometry()
+        }
+        if (visibleRows != rowsBefore) {
+            onFrameRequested?.invoke()
+        }
+        // 几何事件本身即需重画（即使像素高未变——如回前台 View 高复原、onSizeChanged 未回调）。
+        onFrameRequested?.invoke()
+    }
 
     /**
      * 视图像素尺寸变化（IME/输入框挤压、复原、旋转重建后的首帧）。
