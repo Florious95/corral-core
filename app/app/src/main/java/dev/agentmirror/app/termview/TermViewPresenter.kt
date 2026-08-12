@@ -39,6 +39,16 @@ class TermViewPresenter(
     private val emulator: TerminalEmulator,
     private val onResizeRequest: (rows: Int, cols: Int) -> Unit,
 ) {
+    /**
+     * 时间源（整屏重写兜底判定的唯一时间依据）。
+     *
+     * 默认 [dev.agentmirror.app.conn.Clock.Real]（墙钟）；JVM 单测注入假时钟推进
+     * 「数据静默」判定（TermRewriteFallbackTest）。**刻意不进构造函数**：作为构造参数会
+     * 占据 trailing lambda 的末位，把 `TermViewPresenter(emulator) { ... }` 的 lambda 误绑
+     * 到 clock（Kotlin trailing lambda 恒绑最后声明参数，onResizeRequest 就无值了）。
+     * 字段注入同样可测，且不改变既有构造签名。
+     */
+    var clock: dev.agentmirror.app.conn.Clock = dev.agentmirror.app.conn.Clock.Real
 
     /** 视口顶行（逻辑行，0=最老历史）：null=跟随底部；非 null=锁定历史，冻结不变。 */
     private var topLine: Int? = null
@@ -63,6 +73,23 @@ class TermViewPresenter(
     /** 视图像素尺寸，捏合行列数换算的基准。 */
     private var viewportWidthPx: Int = 0
     private var viewportHeightPx: Int = 0
+
+    /**
+     * 稳定视口基准（扣除 IME inset 后的窗口像素尺寸），D-38 真根因判据的载体。
+     *
+     * 设计（leader 打回几何推断后定稿）：**presenter 不做任何关于 IME 的推断**——「回前台那一刻
+     * IME 在不在屏」是 View 层通过 WindowInsets 直接可知的事实，由 View 层扣除 IME inset 后把
+     * 稳定窗口高度传给 [onRealViewportChanged]。presenter 收到即视为真实视口，重算并更新本基准。
+     *
+     * 为什么不能几何推断：分屏/多窗口拖拽/系统栏变化都可能是「宽度不变 + 高度变小」，与 IME 挤压
+     * 同形。若 presenter 猜「小高度=IME」会把一次真实的几何变化当成 IME 忽略，制造更难查的假阴性
+     * （leader 打回理由）。raw/019 的直接翻译是「IME 从不相干 → 扣掉它」，而非「猜到它然后忽略」。
+     *
+     * 本基准由 View 层传的「扣除 IME 后高度」驱动；在首帧 seed（[onViewportSizeChanged]）与每次
+     * 真实视口变化（[onRealViewportChanged]）时更新。仅作「高度复原/增长」这类自愈判定的参照。
+     */
+    private var stableWidthPx: Int = 0
+    private var stableHeightPx: Int = 0
 
     /**
      * 首次真实视口是否已建立（raw/019：唯一合法的一次 resize 已上抛）。
@@ -245,8 +272,14 @@ class TermViewPresenter(
         viewportHeightPx = heightPx
         val rowsBefore = visibleRows
         updateVisibleRows()
-        // 真实视口变化：几何事件强制重算（内核尺寸一致时按需跳过，不重复 emit）。
+
+        // 真实视口变化：presenter 不做 IME 推断——View 层传入的已是「扣除 IME inset 后的稳定
+        // 窗口高度」（TermSurfaceView 从 WindowInsets 拿 IME 可见性与高度），presenter 收到即视为
+        // 真实几何，重算并按需 emit（内核尺寸一致则跳过）。这样分屏/旋转/多窗口传真实变化正常
+        // 重算；回前台 IME 在屏时 View 层传扣除后的全高，不会 rebase 到挤压值。
         if (widthPx > 0 && heightPx > 0) {
+            stableWidthPx = widthPx
+            stableHeightPx = heightPx
             recomputeGeometry()
         }
         if (visibleRows != rowsBefore) {
@@ -280,6 +313,9 @@ class TermViewPresenter(
         // 0x0 预布局 / 非正尺寸不是真实视口：不落 seed（否则旋转重建后首帧被吞成非 resize）。
         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
             viewportSeeded = true
+            // 稳定基准 = 首帧 seed 的高度（IME 未开时的全高；若在屏则后续「真增长」分支自愈）。
+            stableWidthPx = widthPx
+            stableHeightPx = heightPx
             recomputeGeometry()
         }
         // 首帧之后：挤压/复原只改可见行数（视口上推），不再 emit resize。
@@ -406,7 +442,7 @@ class TermViewPresenter(
     }
 
     /**
-     * 整屏重写（recap）进行中标记：自整屏清屏（ED2/ED3）起，到本帧呈现的脏行追上屏幕底部为止。
+     * 整屏重写（recap）进行中状态：自整屏清屏（ED2/ED3）起，到本次重写落定/兜底为止。
      *
      * fix-input-send-fullrepaint 第二半：真实 CLI 收到消息后整屏 recap（清屏 + 自上而下
      * 逐行重写），字节经网络分片流式回传。若逐分片呈现，高 RTT 下用户看到「写了一半」的
@@ -414,18 +450,47 @@ class TermViewPresenter(
      * 消息。**屏幕正在被整体重写时不展示中间态**（leader 裁定：这不是防抖降低概率，而是
      * 终态确定、只不展示写了一半的样子；对齐 Web 端 xterm.js 内部 buffer + ~120ms 合并）。
      *
-     * 抑制区间：自整屏清屏（脏区覆盖全窗口）起，到 [takeFrameRepaint] 消费时脏行仍未覆盖
-     * 屏幕底部（重写未落定）为止——期间 [takeFrameRepaint] 返回空（无可呈现的中间帧），
-     * 画面停在上一帧稳定态；脏行覆盖到屏幕底部（重写落定）后，本帧一次性呈现完整画面并
-     * 退出抑制。
+     * 落定判据（结构性，非计时，leader 硬约束）：自清屏起，屏幕**每一行**都已被重写过
+     * （重写覆盖 [0, rows-1] 全窗口）⇒ 落定。用 [rewriteDirtyRows] 累积本次重写写过的
+     * 屏幕行（bitmask），覆盖满即落定。
      *
-     * 判据（TermRewriteIntermediateSuppressionTest）：整屏重写期间帧呈现为空；落定后一次性
-     * 呈现覆盖全窗口；普通增量立即呈现不得被吞。
+     * 硬上界兜底（leader 硬约束，防冻屏）：重写期间若**数据静默超过 [rewriteSilenceTimeoutMs]**，
+     * 无论落定与否立刻呈现当前状态（宁可一次中间态，不可冻屏），并递增 [rewriteFallbackCount]
+     * （可观测，禁止静默兜底）。
      */
-    private var rewriteInProgress = false
+    private class RewriteState {
+        var inProgress = false
+        /** 本次重写已写过的屏幕行 bitmask（结构性落定判据：覆盖满 rows 行即落定）。 */
+        var dirtyRows = 0L
+        /** 本次重写最后一次收到数据的时间（毫秒，注入时钟）。 */
+        var lastDataMs = 0L
+        /** 兜底已触发计数（可观测，禁止静默兜底）。 */
+        var fallbackCount = 0
+    }
+
+    private val rewrite = RewriteState()
 
     /** 是否处于整屏重写（recap）抑制态（测试/可观测：区分「被抑制」与「普通空脏区」）。 */
-    val isRewriteInProgress: Boolean get() = rewriteInProgress
+    val isRewriteInProgress: Boolean get() = rewrite.inProgress
+
+    /** 兜底已触发计数（可观测，非静默——leader 硬约束：兜底一旦静默就变成遮羞布）。 */
+    val rewriteFallbackCount: Int get() = rewrite.fallbackCount
+
+    /**
+     * 兜底阈值：重写期间数据静默超过此时长（毫秒）即强制呈现当前状态。
+     *
+     * 量级依据：用户主场景 Tailscale（高 RTT），整屏 recap 分成很多帧、LAN 实测约 1 秒、
+     * TS 下更久。上界若按「重写开始后绝对时间」定，会在高 RTT 下过早触发、抑制失效；
+     * 按「距上一次收到数据」定——数据还在来就继续等，真的断了才兜底。阈值取 2× 局域网
+     * recap 时长（1s）留出余量：数据仍在持续到达（分片间隔远小于此）绝不会触发；只有
+     * 数据流真中断（重写中断/卡住/判据漏洞）才会兜底。
+     */
+    private val rewriteSilenceTimeoutMs: Long = 2000L
+
+    /** 测试注入：数据静默推进（模拟「重写中断、不再有数据到达」的兜底路径）。 */
+    fun onRewriteSilence(nowMs: Long) {
+        rewrite.lastDataMs = nowMs
+    }
 
     /**
      * 取本帧要呈现的重绘范围（帧回调唯一入口，替代「takeDamage 排空 + 整帧重绘」）：
@@ -444,14 +509,61 @@ class TermViewPresenter(
         // 几何事件优先：整窗重绘（不排空增量脏区——下一帧增量照常消费）。
         if (fullRepaintPending) {
             fullRepaintPending = false
-            rewriteInProgress = false // 几何整帧=画面已换，抑制态复位
+            rewrite.inProgress = false // 几何整帧=画面已换，抑制态复位
+            rewrite.dirtyRows = 0
             return null
         }
-        // 【当前为红测阶段的直通实现】先锁定双路径重绘范围的缺陷（红测 B/C 必须红），
-        // 再在下一阶段实现整屏重写中间态抑制（第二半）。直通 = 行为与旧链路完全一致：
-        // 增量脏区照常返回、几何事件返回 null（整窗）。此直通让红测 C 以「无抑制」的红
-        // 形态呈现，验证判据本身。
-        return takeDamage()
+        val damage = takeDamage()
+        if (damage.isEmpty()) {
+            // 无增量脏区：若处于抑制态，检查兜底（数据静默超阈值 → 强制呈现当前状态）。
+            if (rewrite.inProgress) {
+                val silent = clock.nowMs() - rewrite.lastDataMs
+                if (silent > rewriteSilenceTimeoutMs) {
+                    rewrite.fallbackCount++
+                    rewrite.inProgress = false
+                    rewrite.dirtyRows = 0
+                    // 兜底呈现：整窗（当前状态），宁可一次中间态不可冻屏。
+                    return listOf(0..(emulator.rows - 1))
+                }
+            }
+            return emptyList()
+        }
+        // 记录本次重写已写过的屏幕行（结构性落定判据）与最后数据时间。
+        val screenRows = emulator.rows
+        for (r in damage) {
+            // 脏区是逻辑行；换算回屏幕行（滚动行是历史，不参与落定判据）。
+            val sb = emulator.scrollback.size
+            val screenStart = (r.first - sb).coerceAtLeast(0)
+            val screenEnd = (r.last - sb).coerceAtMost(screenRows - 1)
+            if (screenStart <= screenEnd) {
+                for (y in screenStart..screenEnd) rewrite.dirtyRows = rewrite.dirtyRows or (1L shl y)
+            }
+        }
+        rewrite.lastDataMs = clock.nowMs()
+
+        // 整屏重写判定：未在抑制态时，本次脏区覆盖全窗口（recap 清屏起点）→ 进入抑制态。
+        // **清屏自身的整屏脏区不参与落定判据**：若计入 dirtyRows，清屏瞬间「每一行都被重写」
+        // 就满足了，抑制立即失效（重写还没开始）。因此进入抑制时清空 dirtyRows，
+        // 只有清屏**之后**的逐行重写才累积（结构性落定：每一行都被**重写**过，而非被清掉）。
+        // 已在抑制态时，全窗口脏区是重写**完成**的信号（落到最后一行）而非新清屏——
+        // 不能重复进入抑制，否则落定判据永不满足（重写完成帧被当成又一次清屏起点）。
+        if (!rewrite.inProgress && damage.any { it.first <= window.first && it.last >= window.last }) {
+            rewrite.inProgress = true
+            rewrite.dirtyRows = 0 // 清屏不计入落定；清屏本身不呈现
+            return emptyList()
+        }
+        // 结构性落定：自清屏起每一行都已被重写 → 一次性呈现完整画面并退出抑制。
+        if (rewrite.inProgress) {
+            val full = (1L shl screenRows) - 1
+            if (rewrite.dirtyRows and full == full) {
+                rewrite.inProgress = false
+                rewrite.dirtyRows = 0
+                // 落定：一次性呈现整个屏幕（recap 已完成，所有行都需重画）。
+                return listOf(0..(emulator.rows - 1))
+            }
+            return emptyList() // 未落定：抑制中间帧
+        }
+        return damage // 普通增量：立即呈现
     }
 
     /** 帧开始：抓一次内核快照缓存，供本帧 [lineCells] 复用（屏幕行零重复拷贝）。 */
