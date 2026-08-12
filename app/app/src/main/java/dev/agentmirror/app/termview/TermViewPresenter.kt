@@ -94,6 +94,15 @@ class TermViewPresenter(
     /** 本帧内核快照缓存：beginFrame 抓一次，避免 lineCells 对屏幕行逐行深拷贝。 */
     private var frameSnapshot: ScreenSnapshot? = null
 
+    /**
+     * 几何事件（滚动/字号/视口变化）请求整窗重绘标记。
+     *
+     * fix-input-send-fullrepaint：这些事件不产生内核 damage（takeDamage 返回空），但窗口
+     * 内容整体变了必须整窗重绘；[takeFrameRepaint] 据此区分「几何整帧（null）」与
+     * 「增量脏行（区间列表）」。几何分支置位、[takeFrameRepaint] 消费即清。
+     */
+    private var fullRepaintPending = false
+
     init {
         // 接管内核脏区回调：把屏幕脏行换算为逻辑行区间后缓存，作"画面已变化"的数据驱动
         // 唤醒信号（缺陷①：增量流到达的唯一唤醒点）。渲染层不据此局部重绘——View 帧回调
@@ -161,6 +170,8 @@ class TermViewPresenter(
         if (maxTop == 0 && deltaLines > 0) {
             topLine = 0
         }
+        // 几何事件（视口平移）：整窗重绘（不产生内核 damage，须显式置位）。
+        fullRepaintPending = true
         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
         onFrameRequested?.invoke()
     }
@@ -179,6 +190,8 @@ class TermViewPresenter(
     fun onHistoryPrepend(merged: Int) {
         if (merged <= 0) return
         topLine?.let { topLine = it + merged }
+        // 几何事件（视口平移）：整窗重绘（历史并入改变全部行号，不产生 damage）。
+        fullRepaintPending = true
         onFrameRequested?.invoke()
     }
 
@@ -193,6 +206,8 @@ class TermViewPresenter(
      */
     fun onScrollToBottom() {
         topLine = null
+        // 几何事件（恢复跟随）：整窗重绘。
+        fullRepaintPending = true
         onFrameRequested?.invoke()
     }
 
@@ -235,9 +250,12 @@ class TermViewPresenter(
             recomputeGeometry()
         }
         if (visibleRows != rowsBefore) {
+            // 几何事件（可见行数变化）：整窗重绘。
+            fullRepaintPending = true
             onFrameRequested?.invoke()
         }
         // 几何事件本身即需重画（即使像素高未变——如回前台 View 高复原、onSizeChanged 未回调）。
+        fullRepaintPending = true
         onFrameRequested?.invoke()
     }
 
@@ -270,6 +288,8 @@ class TermViewPresenter(
         // 可见行数变化（挤压/复原）即需重画——视口上推露出底行，本回调是唯一信号
         // （旧链路经 emulator.resize→flushDamage 间接唤醒，现在 resize 不再走，须直呼）。
         if (visibleRows != rowsBefore) {
+            // 几何事件（挤压/复原可见行数变化）：整窗重绘（视口上推）。
+            fullRepaintPending = true
             onFrameRequested?.invoke()
         }
     }
@@ -290,8 +310,60 @@ class TermViewPresenter(
         recomputeGeometry()
         // 捏合改字格后可见行数随之变化（同一视口高 ÷ 新字格高），重排跟随新栅格。
         updateVisibleRows()
+        // 几何事件（栅格几何变了）：整窗重绘。
+        fullRepaintPending = true
         // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
         onFrameRequested?.invoke()
+    }
+
+    /**
+     * 实测字形推进宽回写（fix-cols-grid-convergence 修法 1）：View 层每帧测量出的真实
+     * 列推进宽写回 [cellWidth]，使 [recomputeGeometry] 的 cols 与绘制推进**同一栅格来源**。
+     *
+     * 这是「最右列被截」的根治点：此前 cols 用名义 [DEFAULT_CELL_WIDTH]=10 算、绘制用
+     * 实测 cellW 算，两套栅格永不收敛，cols 偏大时末列画到视口外被 Canvas 裁。
+     *
+     * **只回写 cellWidth、绝不回写 cellHeight**（收敛性 + 不动 IME 成果的双重原因）：
+     * - cellW 是 cellHeight 的函数（measureCells 里 textSize = cellHeight*0.85 决定字形度量），
+     *   回写 cellW 不改变下一次测量的 cellW → 首次回写后即幂等收敛（**至多一次**
+     *   recomputeGeometry，可证明：同值直接 return）；回写 cellH 则会触发
+     *   cellH→textSize→cellH 的反馈环（真机字体度量随字号缩放，需证明收敛，违反约束一）。
+     * - rows = viewportHeight / cellHeight 用 cellHeight 算；动 cellHeight 会扰动
+     *   fix-ime-no-resize 锚定的首帧 rows（TermViewImeResizePresenterProbeTest
+     *   断言 firstViewportEmitsInitialResize = (96 to 108)，基于默认 cellHeight=20）。
+     *
+     * @contract
+     * @pre measuredCellW > 0（View 层已 guard）
+     * @post cellWidth 更新为入参；若与旧值不同则重算行列数并按需经 [onResizeRequest] 上抛
+     *       一次（cols = viewportWidth / 实测宽，与绘制同源）、随后必触发一次 [onFrameRequested]
+     *       （栅格几何变了）；同值调用为幂等 no-op（不触发任何 emit / 帧请求——反馈环收敛点）
+     * @err none
+     * @inv 同值二次调用不产生任何副作用；cellHeight 永不被本方法改动
+     */
+    fun setMeasuredCellWidth(measuredCellW: Int) {
+        if (measuredCellW <= 0) return
+        if (measuredCellW == cellWidth) return // 幂等：已收敛，绝不重复 emit（反馈环收敛点）
+        cellWidth = measuredCellW
+        recomputeGeometry()
+        // 几何事件（栅格几何变了）：整窗重绘。
+        fullRepaintPending = true
+        onFrameRequested?.invoke()
+    }
+
+    /**
+     * 渲染层右缘护栏已 engage 的累计次数（fix-cols-grid-convergence 修法 3 的可观测信号）。
+     *
+     * 约束三（leader）：护栏不许变成静默遮羞布——必须可观测，正常条件从不 engage。
+     * View 层 drawLine 检测到宽字符背景矩形右缘越过视口宽时递增本值并收边（把矩形裁进
+     * 视口），测试断言本值 > 0 证明护栏在异常条件（网格超宽 = A 回归）确实兜住了，
+     * 而非悄悄裁掉无人知晓。正常条件（cols 与画布同源）下本值恒为 0。
+     */
+    var clipGuardEngageCount: Int = 0
+        private set
+
+    /** View 层护栏收边时上报（可观测，非静默）：递增 [clipGuardEngageCount]。 */
+    fun onClipGuardEngaged() {
+        clipGuardEngageCount++
     }
 
     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */
@@ -331,6 +403,55 @@ class TermViewPresenter(
             if (lo <= hi) lo..hi else null
         }
         return mergeRanges(clipped)
+    }
+
+    /**
+     * 整屏重写（recap）进行中标记：自整屏清屏（ED2/ED3）起，到本帧呈现的脏行追上屏幕底部为止。
+     *
+     * fix-input-send-fullrepaint 第二半：真实 CLI 收到消息后整屏 recap（清屏 + 自上而下
+     * 逐行重写），字节经网络分片流式回传。若逐分片呈现，高 RTT 下用户看到「写了一半」的
+     * 画面——清屏后、重写未完成前底部空白，最新消息正落在最后才写到的底部 → 看不到最新
+     * 消息。**屏幕正在被整体重写时不展示中间态**（leader 裁定：这不是防抖降低概率，而是
+     * 终态确定、只不展示写了一半的样子；对齐 Web 端 xterm.js 内部 buffer + ~120ms 合并）。
+     *
+     * 抑制区间：自整屏清屏（脏区覆盖全窗口）起，到 [takeFrameRepaint] 消费时脏行仍未覆盖
+     * 屏幕底部（重写未落定）为止——期间 [takeFrameRepaint] 返回空（无可呈现的中间帧），
+     * 画面停在上一帧稳定态；脏行覆盖到屏幕底部（重写落定）后，本帧一次性呈现完整画面并
+     * 退出抑制。
+     *
+     * 判据（TermRewriteIntermediateSuppressionTest）：整屏重写期间帧呈现为空；落定后一次性
+     * 呈现覆盖全窗口；普通增量立即呈现不得被吞。
+     */
+    private var rewriteInProgress = false
+
+    /** 是否处于整屏重写（recap）抑制态（测试/可观测：区分「被抑制」与「普通空脏区」）。 */
+    val isRewriteInProgress: Boolean get() = rewriteInProgress
+
+    /**
+     * 取本帧要呈现的重绘范围（帧回调唯一入口，替代「takeDamage 排空 + 整帧重绘」）：
+     *  - null：几何整帧（滚动/字号/视口变化）——渲染层整窗重绘；
+     *  - 空列表：整屏重写（recap）进行中，无可呈现的中间帧——渲染层不画，画面停在上帧；
+     *  - 非空：本帧只重绘这些脏行（增量，脏行级）。
+     *
+     * @contract
+     * @pre none
+     * @post 消费即清 [fullRepaintPending]；整屏重写抑制态下返回空（不消费增量脏区，等落定）；
+     *       非抑制态返回 takeDamage 结果（脏行区间）；几何事件返回 null
+     * @err none
+     * @inv takeDamage 语义不变；[fullRepaintPending] 优先于增量脏区
+     */
+    fun takeFrameRepaint(): List<IntRange>? {
+        // 几何事件优先：整窗重绘（不排空增量脏区——下一帧增量照常消费）。
+        if (fullRepaintPending) {
+            fullRepaintPending = false
+            rewriteInProgress = false // 几何整帧=画面已换，抑制态复位
+            return null
+        }
+        // 【当前为红测阶段的直通实现】先锁定双路径重绘范围的缺陷（红测 B/C 必须红），
+        // 再在下一阶段实现整屏重写中间态抑制（第二半）。直通 = 行为与旧链路完全一致：
+        // 增量脏区照常返回、几何事件返回 null（整窗）。此直通让红测 C 以「无抑制」的红
+        // 形态呈现，验证判据本身。
+        return takeDamage()
     }
 
     /** 帧开始：抓一次内核快照缓存，供本帧 [lineCells] 复用（屏幕行零重复拷贝）。 */

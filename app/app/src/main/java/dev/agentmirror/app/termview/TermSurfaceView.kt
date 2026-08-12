@@ -32,6 +32,7 @@ import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -263,14 +264,34 @@ class TermSurfaceView @JvmOverloads constructor(
         // 一列推进；主格矩形铺满 width 列（含续格列），续格只占位不重画。旧实现把主格
         // 当 2 列推进、续格又推 1 列且只铺 1 列宽矩形——背景色块内每个 CJK 留 2 列
         // 默认深底黑洞、后续格整体右漂（用户真机实拍黑块马赛克根因，fix-term-bg-cjk）。
+        // 右缘护栏（fix-cols-grid-convergence 修法 3）：当网格 cols 超过视口可容纳列数
+        // （A 回归/异常条件）时，末列宽字符主格矩形右缘会越过视口宽被 Canvas 裁半
+        // （用户「『它』的一半」）。此处把越界矩形收边进视口（宁可裁背景也不整字符出画布），
+        // 并上报可观测信号（约束三：护栏不许静默——测试断言 clipGuardEngageCount > 0）。
+        // 正常条件（cols 与画布同源）下任何矩形右缘 ≤ 视口宽，本护栏恒不 engage。
+        // 仅当 View 已真实布局（width>0）时启用护栏；width=0（测试直接 view.draw 未 layout）
+        // 退回原行为不裁剪，避免误伤既有整帧渲染测试（TermBgCjkAlignTest 等走 view.draw 无
+        // layout，clipRight=0 会把所有格裁掉——这正是它们 red 的原因）。
+        val clipRight = if (width > 0) width.toFloat() else Float.MAX_VALUE
         var x = 0
         for (cell in cells) {
             if (cell.width == 0) {
                 x += cellW
                 continue
             }
-            bgPaint.color = colorFor(cell.style.bg, background = true)
-            canvas.drawRect(x.toFloat(), rowY.toFloat(), (x + cellW * cell.width).toFloat(), (rowY + cellH).toFloat(), bgPaint)
+            val right = (x + cellW * cell.width).toFloat()
+            // 护栏三段式：完全在视口内照画；跨越右缘收边（engage 可观测）；完全在视口外
+            // （网格超宽到列起点已出画布）直接跳过不画——收边到负数宽度是 bug，绝不画负矩形。
+            if (x < clipRight) {
+                val clippedRight = if (right > clipRight) {
+                    presenter?.onClipGuardEngaged()
+                    clipRight
+                } else {
+                    right
+                }
+                bgPaint.color = colorFor(cell.style.bg, background = true)
+                canvas.drawRect(x.toFloat(), rowY.toFloat(), clippedRight, (rowY + cellH).toFloat(), bgPaint)
+            }
             x += cellW
         }
         drawTextRuns(canvas, cells, rowY)
@@ -388,7 +409,14 @@ class TermSurfaceView @JvmOverloads constructor(
         // ascent 为负（基线上方高度）：基线偏移 = -ascent，保证首行字形完整落在 y∈[0,cellH)。
         baselinePx = -metrics.ascent
         val textW = fgPaint.measureText("W")
-        cellW = max(1, textW.roundToInt())
+        // 修法 2（fix-cols-grid-convergence）：cellW 求法从 roundToInt() 改 floor——
+        // 宁可少一列不可多一列（对齐 web terminal.js:65）。round 会把实测 10.6px 取整到
+        // 11px，放大绘制步进更容易越界；floor 保证 cols*cellW ≤ 视口宽，最后一列整格可见。
+        cellW = max(1, floor(textW).toInt())
+        // 修法 1：把实测列推进宽回写 presenter，使上报 cols 与绘制推进同一栅格来源
+        // （根治「最右列被截」：cols 不再用名义 10px 算）。setMeasuredCellWidth 幂等——
+        // 同值直接 no-op，首次回写后收敛，至多一次 recomputeGeometry（约束一反馈环收敛）。
+        p.setMeasuredCellWidth(cellW)
         lineHeightPx = p.cellHeight
     }
 

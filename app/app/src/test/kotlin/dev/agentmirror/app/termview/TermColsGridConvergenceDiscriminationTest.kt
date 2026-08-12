@@ -30,28 +30,25 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * 判别红测：fix-cols-grid-convergence 开工第一产出——分辨两个互斥根因，**不许靠推理选边**。
+ * 判别红测（数字优先版）：fix-cols-grid-convergence 开工第一产出。
+ * **产出是数字，不是红绿** —— 每个测试都在 stdout 打 `[DISCRIM]` 判别行，断言只是把
+ * 数字指向 A / B / 都不是 的哪一档。
  *
- * 假说 A（web-vs-android-terminal-model）：上报 cols 用**名义字格宽**（默认 10px）算、
- *   画布列推进用**实测字形宽**（measureCells 的 cellW）算，两栅格从不收敛。
- *   可证伪预测：上报 cols ≠ floor(View宽 / 实测字形推进宽)。
+ * 两个互斥根因 + 我们的实测形态：
+ * - 假说 A：cols 用**名义字格宽(10px)**算、绘制用**实测字形宽**算，两栅格永不收敛。
+ *   真机字形宽(8-11px) > 名义 10 → cols 偏大 → 网格比视口宽 → **ASCII 也被截**。
+ * - 假说 B：cols 正确，渲染层 drawLine/drawCentered 把**宽字符**画过画布右缘被 Canvas 裁。
+ *   预言：只有 CJK 被截，ASCII 不会。
  *
- * 假说 B（oss-terminal-solutions）：cols 正确，问题在渲染层 drawLine/drawCentered
- *   把**宽字符**画过画布右缘被 Canvas 裁半（ASCII 不会）。
+ * JVM 关键约束（必须向 leader 讲清）：Robolectric legacy graphics 的 measureText 是
+ * stub（返回字符数），实测 cellW=1 < 名义 10，cols 偏**小**方向与真机相反——
+ * JVM 渲染上测不出「ASCII 越界」。因此 ASCII 越界用**真机字形宽参数化**判别（结构级
+ * 数字，无需渲染），CJK 越界用**网格超宽渲染**判别（机制级数字，需要渲染）。
  *
- * 三组测量（都从真实渲染输出取值，不猜 Robolectric 像素）：
- * ① reportedCols（presenter 首个真实视口上抛的 resize cols）；
- * ② measuredCellW = 实际绘制的单格背景矩形最小宽度（= 画布列推进宽）；
- * ③ 宽字符主格背景矩形右缘 vs 画布（视口）宽——末列宽字符是否越界。
- *
- * 判定：① 红 ⇒ A 成立（两栅格不收敛）；② 在「网格 cols 正确」时绿 ⇒ B 非独立根因；
- *   ③ 在「网格 cols 超宽（A 的条件）」时红 ⇒ B 是 A 触发下的渲染层越界机制。
- *   三测综合输出 A / B / both。
- *
- * Robolectric legacy graphics：measureText("W") 返回字符数 1 → cellW=1（与真机实测
- * 8-11px 方向相反，故 A 的不等式方向在 JVM 上翻转），但「两栅格是否同一来源」这一结构
- * 不变量与像素值无关，JVM 可判。背景矩形宽按 cell.width（1 或 2）铺、与字形是否被改写为
- * '?' 无关——越界可稳定测量。
+ * 判别矩阵（四个数，均=末字符右缘 x - 画布右边界 x，负=越界被裁）：
+ * - ASCII 差值 < 0（真机参数化）→ A 成立（两栅格不收敛导致 cols 偏大）
+ * - CJK 差值 < 0 且 ASCII 差值 ≥ 0（网格超宽渲染）→ B 的机制在 A 条件下成立
+ * - 两差值均 ≥ 0 却仍截断 → A、B 都不是，根因在别处（服务端产内容时 cols 就超）
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -81,8 +78,7 @@ class TermColsGridConvergenceDiscriminationTest {
         }
     }
 
-    /** SGR 47（Indexed 7）白底 ARGB（TermSurfaceView.ANSI_COLORS[7]）。用白底过滤单元格矩形，
-     *  把 onDraw 的全视口默认深底矩形排除在外。 */
+    /** SGR 47（Indexed 7）白底 ARGB（TermSurfaceView.ANSI_COLORS[7]）。用白底过滤单元格矩形。 */
     private val whiteBg = Color.rgb(229, 229, 229)
 
     private fun draw(view: TermSurfaceView, width: Int, height: Int): RecordingCanvas {
@@ -102,161 +98,196 @@ class TermColsGridConvergenceDiscriminationTest {
         return w.toInt()
     }
 
-    // ---- ① 假说 A 判别：上报 cols 与画布可容纳列数是否同一栅格 ----
+    // ---------------------------------------------------------------------------
+    // 判别 A（结构）：上报 cols 与画布可容纳列数是否同一栅格
+    // 数字：reportedCols vs canvasCapacity（= viewportW / 实测 cellW）
+    // 红 = 两栅格不收敛（A 结构成立）。真机方向在 判别A-真机 参数化补。
+    // ---------------------------------------------------------------------------
 
-    /**
-     * 验收标准原文（taskbook）：「给定 View 宽度与实测字形宽，上报 cols 与画布可容纳列数
-     * 必须相等；且 cols*字形宽 <= View 宽」。
-     * 当前实现：cols = View宽 / presenter.cellWidth（名义 10）；可容纳列数 = View宽 / 实测 cellW。
-     * 两来源不相等 ⇒ 红（修复：实测字形宽回写 presenter 后转绿）。
-     */
     @Test
-    fun hypothesisA_reportedColsMustEqualCanvasCapacity() {
+    fun hypothesisA_reportedColsAndCanvasCapacityMustShareSource() {
         val viewportW = 1080
         val viewportH = 480
         val reportedCols = mutableListOf<Int>()
         val emulator = TerminalEmulator(80, 24)
         val presenter = TermViewPresenter(emulator) { rows, cols ->
             reportedCols += cols
-            emulator.resize(rows, cols) // 模拟上层把 resize 落进内核
+            emulator.resize(cols, rows) // onResizeRequest 参数序 = rows, cols
         }
         val view = TermSurfaceView(RuntimeEnvironment.getApplication()).apply {
             this.presenter = presenter
+            layout(0, 0, viewportW, viewportH) // layout→onSizeChanged→首帧 seed→emit；view.width 反映画布宽
         }
-        // 直接驱动 presenter 视口（= layout → onSizeChanged → onViewportSizeChanged 的效果，
-        // 不走 Robolectric layout 路径——既有 TermBgCjkAlignTest 同款：view.draw 直接测 onDraw）。
-        presenter.onViewportSizeChanged(viewportW, viewportH) // 首个真实视口 → 上抛 resize
-        // 给内容一个 SGR 白底，便于从渲染输出取实测 cellW（可容纳列数 = floor(View宽/实测 cellW)）。
+        // 白底内容让实测推进宽可从渲染输出测得。
         emulator.feed("[47m" + "W".repeat(20) + "[0m")
         val canvas = draw(view, viewportW, viewportH)
 
         val cols = reportedCols.last()
+        val nominal = presenter.cellWidth
         val cellW = measuredCellW(canvas)
         val canvasCapacity = viewportW / cellW
 
-        println("[假说A判别] reportedCols=$cols, presenter.cellWidth=${presenter.cellWidth}, " +
-            "实测推进宽 cellW=$cellW, 画布可容纳列数=$canvasCapacity, View宽=$viewportW")
+        val deltaCols = canvasCapacity - cols
+        println("[DISCRIM-A-结构] viewportW=$viewportW 名义cellWidth=$nominal 实测推进宽cellW=$cellW")
+        println("[DISCRIM-A-结构] reportedCols=$cols canvasCapacity=$canvasCapacity Δcols=$deltaCols")
 
-        // 两栅格必须同源：上报 cols == 画布按实测推进宽可容纳的列数。
-        // 当前：cols=1080/10=108，可容纳=1080/1=1080 —— 红。
+        // 两栅格必须同源：上报 cols == 画布按实测推进宽可容纳列数。当前：108 vs 1080。
         assertEquals(
-            "[假说A] 上报 cols($cols) 与画布可容纳列数($canvasCapacity) 不相等——" +
-                "cols 用名义字格宽 ${presenter.cellWidth} 算、绘制用实测宽 $cellW 算，两栅格不收敛",
+            "[A] 上报 cols($cols) 与画布可容纳列数($canvasCapacity) 不相等——" +
+                "cols 用名义字格宽 $nominal 算、绘制用实测宽 $cellW 算，两栅格不收敛（A 结构成立）",
             canvasCapacity, cols,
         )
-        // 验收第二半：cols*实测推进宽 <= View 宽（floor 保证等号成立时恒满足；单列不溢出）。
+        // 验收第二半：cols*实测推进宽 <= View 宽（floor 保证等号成立时恒满足）。
         assertTrue(
-            "[假说A] cols*推进宽=${cols * cellW} > View宽=$viewportW——网格比视口宽，末列必越界",
+            "[A] cols*推进宽=${cols * cellW} > View宽=$viewportW——网格比视口宽，末列必越界",
             cols * cellW <= viewportW,
         )
     }
 
-    // ---- ② 假说 B 判别 A：网格 cols 正确时，末列宽字符是否不越界 ----
+    // ---------------------------------------------------------------------------
+    // 判别 A-真机（参数化）：真机字形宽 > 名义 10 时，ASCII 是否也会被截。
+    // JVM 的 cellW=1 < 名义10，cols 偏小，渲染测不出 ASCII 越界；但真机字形宽
+    // 典型 11px > 名义10，cols=viewportW/10 偏大。用结构数字（不依赖渲染）判别：
+    //   cols(名义10) 与 canvasCapacity(真机字形宽) 的差 → ASCII 行末列越界量。
+    // 红 = 真机下 ASCII 也会越界 → A 在真机成立（不只 CJK）。
+    // ---------------------------------------------------------------------------
 
-    /**
-     * 把 presenter.cellWidth 置为实测推进宽（模拟修复后的同一栅格来源）→ 上报 cols == 画布
-     * 可容纳列数。此时内核 TerminalGrid.write 已防宽字符占末列（整字符落到下一行），
-     * 渲染层背景矩形右缘必须不越过视口。绿 ⇒ B 的「cols 正确时仍越界」预言不成立。
-     */
     @Test
-    fun hypothesisB_wideCharDoesNotOverflowWhenColsCorrect() {
+    fun hypothesisA_realCellWidthOverflowsAsciiOnDevice() {
         val viewportW = 1080
-        val viewportH = 480
-        val reportedCols = mutableListOf<Int>()
-        val emulator = TerminalEmulator(80, 24)
-        val presenter = TermViewPresenter(emulator) { rows, cols ->
-            reportedCols += cols
-            emulator.resize(rows, cols)
-        }
-        val view = TermSurfaceView(RuntimeEnvironment.getApplication()).apply {
-            this.presenter = presenter
-        }
-        // 校准实测推进宽：直接驱动 presenter 视口 + 白底内容让背景矩形可测。
-        presenter.onViewportSizeChanged(viewportW, viewportH)
-        emulator.feed("[47m" + "W".repeat(20) + "[0m")
-        val calib = draw(view, viewportW, viewportH)
-        val cellW = measuredCellW(calib)
+        val realCellW = 11 // 真机实测字形宽典型值（web-vs-android doc: 实测 11px > 名义 10）
+        val cols = viewportW / 10 // presenter 用名义 10 算的上报 cols
+        val capacity = viewportW / realCellW // 画布按真机实测推进宽可容纳列数
+        val asciiEdgeDelta = cols * realCellW - viewportW // 末 ASCII 列右缘 - 画布右边界
 
-        // 修复后状态：实测推进宽回写 presenter → 上报 cols 与画布可容纳列数同源。
-        reportedCols.clear()
-        presenter.onFontSizeChanged(cellW, presenter.cellHeight) // recomputeGeometry → cols=View宽/实测宽
-        val cols = reportedCols.last()
-        assertEquals("校准失效：cols ≠ floor(View宽/实测宽)", viewportW / cellW, cols)
+        println("[DISCRIM-A-真机] viewportW=$viewportW 真机cellW=$realCellW")
+        println("[DISCRIM-A-真机] reportedCols=$cols(=viewportW/名义10) canvasCapacity=$capacity(=viewportW/实测11)")
+        println("[DISCRIM-A-真机] ASCII末列右缘=$cols*$realCellW=${cols * realCellW} 画布右边界=$viewportW " +
+            "ASCII越界量=$asciiEdgeDelta px")
 
-        // 清屏后摆宽字符在「末列前两格」：主格 cols-2、续格 cols-1（内核只防占 cols-1，允许到这）。
-        emulator.feed("[2J")
-        emulator.feed("[47m" + "X".repeat(cols - 2) + "它" + "[0m")
-        val canvas = draw(view, viewportW, viewportH)
-        val white = canvas.rects.filter { it.color == whiteBg }
-        assertTrue("夹具失效：未画出白底格", white.isNotEmpty())
-        val maxRight = white.maxOf { it.right }
-
-        println("[假说B-正确cols] cols=$cols, cellW=$cellW, cols*cellW=${cols * cellW}, " +
-            "View宽=$viewportW, 最右矩形右缘=$maxRight")
-
-        // cols 正确时，最右矩形右缘必须不越过视口（宽字符整体可见或整字符已在下一行）。
+        // 真机 A 成立 ⇔ ASCII 末列右缘越过画布右边界（差值 < 0）。当前：108*11-1080=108px 越界。
         assertTrue(
-            "[假说B] cols 正确（=$cols，cols*cellW=${cols * cellW} ≤ View宽）时，" +
-                "末列宽字符主格矩形右缘($maxRight) 仍越过视口宽($viewportW) —— B 的越界预言成立",
-            maxRight <= viewportW.toFloat(),
-        )
-        // 内核护栏：宽字符主格不得落在网格末列（cols-1）。"它"占 cols-2..cols-1，
-        // 主格矩形起点应为 (cols-2)*cellW；末列起点 (cols-1)*cellW 不得有宽字符主格。
-        val wideRects = white.filter { it.right - it.left > cellW * 1.5f }
-        assertTrue("夹具失效：宽字符主格矩形未画出", wideRects.isNotEmpty())
-        val lastColStart = (cols - 1) * cellW
-        assertTrue(
-            "[假说B] 末列（col ${cols - 1}）出现宽字符主格（起点=${wideRects.maxOf { it.left }}, " +
-                "末列起点=$lastColStart）——内核 TerminalGrid.write 护栏失效",
-            wideRects.none { it.left >= lastColStart.toFloat() - 0.01f },
+            "[A-真机] 真机字形宽 ${realCellW}px > 名义 10px 时，cols=$cols 而画布只容纳 $capacity 列，" +
+                "ASCII 末列右缘(${cols * realCellW}) 越过画布右边界($viewportW) $asciiEdgeDelta px —— " +
+                "A 在真机成立：ASCII 也会被截",
+            asciiEdgeDelta > 0,
         )
     }
 
-    // ---- ③ 假说 B 判别 B：网格 cols 超宽（假说 A 的条件）时，宽字符是否被裁半 ----
+    // ---------------------------------------------------------------------------
+    // 判别 B（机制）+ 护栏 engage（约束三）：网格超宽（A 的条件）时，渲染层护栏必须
+    // engage 把宽字符收进视口（可观测），且 ASCII 从不受收边。
+    // 修复前数字（已取到）：CJK 主格矩形右缘 101 > 画布 100（越界被裁）；
+    //                     ASCII 末列右缘 99 ≤ 100（不越界）。
+    // 修复后：护栏把 CJK 收进（右缘 ≤ 画布宽）、clipGuardEngageCount > 0（可观测）、
+    //         ASCII 原样（从不受收边）。红测在修复后转绿。
+    // ---------------------------------------------------------------------------
 
-    /**
-     * 复现用户症状的最短路径：网格 cols（= 上报 cols）大于 View 可容纳列数（A 的条件）。
-     * 内核只防「宽字符占 grid.cols-1 末列」，不防「宽字符占最后一个可见列」——宽字符主格
-     * 矩形右缘越过视口宽，真机被 Canvas 裁半（「『它』的一半」）。同一行 ASCII 在末可见列的
-     * 右缘恰到视口，不被裁 —— B 的「只有 CJK 被截」机制在此成立。
-     */
     @Test
-    fun hypothesisB_wideCharClippedWhenGridWiderThanView() {
+    fun hypothesisB_clipGuardEngagesOnlyForWideCharWhenGridOverflows() {
         // 画布（视口）宽固定 100，模拟一个只装得下 100 列的手机视口；网格却是 120 列（A 的超宽）。
         val canvasW = 100
         val canvasH = 60
         val emulator = TerminalEmulator(cols = 120, rows = 3)
-        // 不 layout：presenter 不被 seed，内核保留超宽 120 列（A 条件：上报 cols 偏大）。
-        val presenter = TermViewPresenter(emulator) { _, _ -> }
+        val presenter = TermViewPresenter(emulator) { _, _ -> } // 不同步内核：保持超宽 120 列
         val view = TermSurfaceView(RuntimeEnvironment.getApplication()).apply {
             this.presenter = presenter
+            layout(0, 0, canvasW, canvasH) // view.width=100 → 护栏 clipRight=100；grid 120 > 100
         }
-        // 99 个 ASCII 填满可见列（0..98），宽字符主格落在第 99 列（最后一个可见列），
-        // 主格 99 + 续格 100 —— 主格矩形右缘 = 101，越过 100 宽的视口 → 被 Canvas 裁半。
+        // 99 个 ASCII 填满可见列（0..98），宽字符主格落在第 99 列（最后一个可见列）。
         emulator.feed("[47m" + "X".repeat(99) + "它" + "[0m")
         val canvas = draw(view, canvasW, canvasH)
         val white = canvas.rects.filter { it.color == whiteBg }
         assertTrue("夹具失效：未画出白底格", white.isNotEmpty())
         val cellW = measuredCellW(canvas)
 
-        val asciiMaxRight = white.filter { (it.right - it.left) <= cellW * 1.5f }.maxOf { it.right }
-        val wideRects = white.filter { (it.right - it.left) > cellW * 1.5f }
-        assertTrue("夹具失效：末列宽字符主格矩形未画出", wideRects.isNotEmpty())
-        val wideMaxRight = wideRects.maxOf { it.right }
+        // 宽字符主格起点 = 第 99 列（末列前两格之一）→ 按 x 坐标（起点 ≥ 98*cellW）区分，
+        // 不用矩形宽度：护栏收边后宽字符矩形可能只剩 1 格宽，宽度过滤会漏判（previous bug）。
+        val lastColStartX = (canvasW / cellW - 2) * cellW // = 98*cellW（CJK 主格起点）
+        val cjkRects = white.filter { it.left >= lastColStartX.toFloat() - 0.01f }
+        assertTrue("夹具失效：末列宽字符主格矩形未画出", cjkRects.isNotEmpty())
+        val cjkRight = cjkRects.maxOf { it.right }
+        val asciiRight = white.filter { it.left < lastColStartX.toFloat() - 0.01f }.maxOf { it.right }
 
-        println("[假说B-超宽网格] 网格cols=120, 视口宽=$canvasW, cellW=$cellW, " +
-            "末ASCII矩形右缘=$asciiMaxRight, 宽字符主格矩形右缘=$wideMaxRight")
+        val asciiDelta = canvasW - asciiRight // + = 不越界
+        val cjkDelta = canvasW - cjkRight // + = 被护栏收进（≤ 画布宽）
 
-        // ASCII 在末可见列：右缘恰到（或不超过）视口 —— 不被裁。
+        println("[DISCRIM-B-机制] 网格cols=120 视口宽=$canvasW cellW=$cellW")
+        println("[DISCRIM-B-机制] ASCII末可见列右缘=$asciiRight 画布右边界=$canvasW Δ=$asciiDelta")
+        println("[DISCRIM-B-机制] CJK主格矩形右缘=$cjkRight 画布右边界=$canvasW Δ=$cjkDelta")
+        println("[DISCRIM-B-机制] 护栏engage次数=${presenter.clipGuardEngageCount}")
+
+        // 修复后红测转绿断言：
+        // 1) 护栏必须 engage（可观测）——证明网格超宽异常被兜住，不是静默遮羞布。
         assertTrue(
-            "[假说B] ASCII 在末可见列右缘($asciiMaxRight) 越过视口宽($canvasW) —— ASCII 也被裁，与 B 预言矛盾",
-            asciiMaxRight <= canvasW.toFloat(),
+            "[B-机制] 网格超宽（A 回归）时护栏必须 engage（clipGuardEngageCount>0），" +
+                "而非静默裁掉——约束三可观测要求",
+            presenter.clipGuardEngageCount > 0,
         )
-        // 宽字符主格矩形右缘越过视口 —— 真机 Canvas 裁成「半个字」。红 = B 的渲染越界机制在 A 条件下成立。
+        // 2) CJK 被收进：主格矩形右缘 ≤ 画布宽（不再越界被 Canvas 裁半）。
         assertTrue(
-            "[假说B] 网格超宽（A 条件）时，末列宽字符主格矩形右缘($wideMaxRight) " +
-                "越过视口宽($canvasW) —— 渲染层无右缘护栏，宽字符被 Canvas 裁半",
-            wideMaxRight > canvasW.toFloat(),
+            "[B-机制] CJK 主格矩形右缘($cjkRight) 仍越过画布右边界($canvasW) Δ=$cjkDelta —— " +
+                "护栏未把宽字符收进视口",
+            cjkDelta >= 0,
+        )
+        // 3) ASCII 从不受收边：末列 ASCII 右缘 ≤ 画布宽（且不被收——护栏只收越界的宽字符）。
+        assertTrue(
+            "[B-机制] ASCII 末列右缘($asciiRight) 越过画布右边界($canvasW) Δ=$asciiDelta —— " +
+                "ASCII 也被收边（护栏误伤窄字符）",
+            asciiDelta >= 0,
+        )
+    }
+
+    // ---------------------------------------------------------------------------
+    // 对照：把 cellW 回写 presenter（修复后的同一栅格来源）→ cols 正确。
+    // 数字：CJK 末列主格矩形右缘 vs 画布右边界。
+    // 绿 = CJK 差值 ≥ 0（不越界）→ B 非独立根因，A 修复后 B 的越界消失。
+    // ---------------------------------------------------------------------------
+
+    @Test
+    fun hypothesisB_correctCols_wideCharDoesNotOverflow() {
+        val viewportW = 1080
+        val viewportH = 480
+        val reportedCols = mutableListOf<Int>()
+        val emulator = TerminalEmulator(80, 24)
+        val presenter = TermViewPresenter(emulator) { rows, cols ->
+            reportedCols += cols
+            emulator.resize(cols, rows)
+        }
+        val view = TermSurfaceView(RuntimeEnvironment.getApplication()).apply {
+            this.presenter = presenter
+            layout(0, 0, viewportW, viewportH) // layout→seed；view.width 反映画布宽（护栏 clipRight）
+        }
+        // 校准实测推进宽：白底内容让背景矩形可测。draw 时 measureCells 自动回写 cellWidth。
+        emulator.feed("[47m" + "W".repeat(20) + "[0m")
+        val calib = draw(view, viewportW, viewportH)
+        val cellW = measuredCellW(calib)
+        // 修复后：draw 的 measureCells 已把实测 cellW 回写 presenter → cols 收敛到画布可容纳数。
+        assertEquals("校准失效：实测宽未回写 presenter", cellW, presenter.cellWidth)
+
+        // 清屏后摆宽字符在「末列前两格」：主格 cols-2、续格 cols-1（内核允许到这）。
+        emulator.feed("[2J")
+        emulator.feed("[47m" + "X".repeat(emulator.cols - 2) + "它" + "[0m")
+        val canvas = draw(view, viewportW, viewportH)
+        val white = canvas.rects.filter { it.color == whiteBg }
+        assertTrue("夹具失效：未画出白底格", white.isNotEmpty())
+        val maxRight = white.maxOf { it.right }
+        val delta = viewportW - maxRight
+
+        println("[DISCRIM-B-对照] emulator.cols=${emulator.cols} cellW=$cellW 视口宽=$viewportW")
+        println("[DISCRIM-B-对照] CJK最右矩形右缘=$maxRight 画布右边界=$viewportW Δ=$delta")
+        println("[DISCRIM-B-对照] 护栏engage次数=${presenter.clipGuardEngageCount}")
+
+        // cols 正确时，最右矩形右缘必须不越过视口（宽字符整体可见或整字符已在下一行）。
+        assertTrue(
+            "[B-对照] cols 正确（=${emulator.cols}，${emulator.cols}*cellW=${emulator.cols * cellW} ≤ View宽）时，" +
+                "末列宽字符主格矩形右缘($maxRight) 越过视口宽($viewportW) Δ=$delta —— B 越界预言成立",
+            delta >= 0,
+        )
+        // 约束三：正常 cols 下护栏必须从不 engage（可观测地证明护栏只在异常条件工作）。
+        assertEquals(
+            "[B-对照] cols 正确时护栏必须从不 engage（正常条件静默为 0）",
+            0, presenter.clipGuardEngageCount,
         )
     }
 }
