@@ -28,6 +28,12 @@ import dev.agentmirror.terminal.TerminalEmulator
  * 新输出到达窗口自动贴底；用户上滚即锁定历史，[topLine] 冻结为具体逻辑行号，锁定态新输出到达不动视口；
  * 拖回底部或点"回到底部"恢复跟随。捏合字号（005）→ 像素尺寸换算 rows/cols → 经 [onResizeRequest]
  * 上抛（协议 resize 帧由上层接线，conn/session 归属其他任务）。
+ *
+ * resize 抑制（raw/019 裁定②，fix-ime-no-resize）：[onViewportSizeChanged] 只在**首次真实视口**
+ * 建立时换算一次 rows/cols 并上抛（「仅首次进入 CLI 时 resize 一次」）；此后 IME 弹起 / 输入框
+ * 变高引起的视口收缩（及复原）只更新 [visibleRows]（可见行数）——渲染窗口随之下移/上推露出底行
+ * （视口上推，内容区平移，最后一行始终可见，D-20），**不再**改 rows/cols、不再上抛 resize。
+ * 捏合改字号（[onFontSizeChanged]）仍按像素换算并上抛（005 契约，D-29 同族另行立案，不得误伤）。
  */
 class TermViewPresenter(
     private val emulator: TerminalEmulator,
@@ -57,6 +63,25 @@ class TermViewPresenter(
     /** 视图像素尺寸，捏合行列数换算的基准。 */
     private var viewportWidthPx: Int = 0
     private var viewportHeightPx: Int = 0
+
+    /**
+     * 首次真实视口是否已建立（raw/019：唯一合法的一次 resize 已上抛）。
+     *
+     * 置位后 [onViewportSizeChanged] 只更新像素基准与可见行数，不再重算 rows/cols、
+     * 不再上抛 resize——IME/输入框挤压不得再扰动服务端。首帧前的 0x0 预布局 / 非正尺寸
+     * 不算真实视口，不置位（旋转重建 VM 后重新走本门，保证旋转仍是合法 resize）。
+     */
+    private var viewportSeeded = false
+
+    /**
+     * 当前可见行数（≤ 内核行数）；null = 未挤压，取 [TerminalEmulator.rows]。
+     *
+     * 视口上推的载体（raw/019）：IME/输入框把 View 高度挤小时，本值收缩为
+     * `viewportHeightPx / cellHeight`，[window] 随之只覆盖内容**底部**这几行——
+     * 跟随态贴底露出末行（D-20 最后一行仍可见），而非把末行裁出画布。像素挤压是布局
+     * 必然，真正被消灭的是 rows/cols 变化引发的服务端重排（resize 帧）。
+     */
+    private var visibleRowsOverride: Int? = null
 
     /** 内核脏区换算来的逻辑行区间缓冲（"画面已变化"信号载体，非局部重绘清单——渲染层
      *  整帧全窗口重绘，View 帧回调取走即弃）。写侧在 WS 收件线程（feed→damageListener）、
@@ -90,17 +115,20 @@ class TermViewPresenter(
     private val logicalCount: Int get() = emulator.scrollback.size + emulator.rows
 
     /**
-     * 当前可见逻辑行区间（含端点，长度恒为屏幕行数，钳制在逻辑行空间内）。
+     * 当前可见逻辑行区间（含端点，长度恒为可见行数，钳制在逻辑行空间内）。
+     *
+     * 可见行数 = [visibleRowsOverride]（IME/输入框挤压时收缩）或内核行数。收缩时跟随态
+     * 窗口仍贴底——露出内容末行（D-20 最后一行可见），这就是「视口上推，内容区平移」。
      *
      * @contract
      * @pre none
-     * @post 返回 [top, bottom] 且长度恒为 emulator.rows（顶部钳制在 [0, maxTop]，底部钳制到末逻辑行）
+     * @post 返回 [top, bottom] 且长度恒为可见行数（顶部钳制在 [0, maxTop]，底部钳制到末逻辑行）
      * @err none
      * @inv 跟随态（topLine == null）窗口贴底；锁定态窗口顶 == 冻结的 topLine
      */
     val window: IntRange
         get() {
-            val height = emulator.rows
+            val height = visibleRows
             val maxTop = (logicalCount - height).coerceAtLeast(0)
             val top = (topLine ?: maxTop).coerceIn(0, maxTop)
             val bottom = (top + height - 1).coerceAtMost((logicalCount - 1).coerceAtLeast(0))
@@ -120,7 +148,7 @@ class TermViewPresenter(
      * @inv topLine 恒为 null（跟随）或在 [0, maxTop] 内的冻结行号
      */
     fun onScrollBy(deltaLines: Int) {
-        val height = emulator.rows
+        val height = visibleRows
         val maxTop = (logicalCount - height).coerceAtLeast(0)
         val current = topLine ?: maxTop
         val next = (current - deltaLines).coerceIn(0, maxTop)
@@ -146,18 +174,36 @@ class TermViewPresenter(
     // ---- 捏合 → 行列数换算（005：让 CLI 自己重画）----
 
     /**
-     * 视图像素尺寸变化（旋转/窗口调整）：重算行列数，变化则上抛 resize 请求。
+     * 视图像素尺寸变化（IME/输入框挤压、复原、旋转重建后的首帧）。
+     *
+     * raw/019 裁定②核心：**只在首次真实视口建立一次 rows/cols 并上抛**（「仅首次进入
+     * CLI 时 resize 一次」）；此后本方法把尺寸变化一律当作「布局挤压」——只更新像素基准
+     * 与可见行数（[updateVisibleRows]，视口上推露出底行），不再重算 rows/cols、不再上抛
+     * resize，服务端不被扰动（消灭 resize 协议帧本体，而非靠服务端 no-op 兜底）。
      *
      * @contract
      * @pre none
-     * @post viewportWidthPx/HeightPx 更新为入参；行列数与内核不一致则经 [onResizeRequest] 上抛
+     * @post viewportWidthPx/HeightPx 更新为入参；首次真实视口（正尺寸）行列数与内核不一致
+     *       则经 [onResizeRequest] 上抛一次并置位 [viewportSeeded]；此后仅更新可见行数
      * @err none
      * @inv 像素/字格任一非正时不做换算（recomputeGeometry 提前返回）
      */
     fun onViewportSizeChanged(widthPx: Int, heightPx: Int) {
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
-        recomputeGeometry()
+        // 0x0 预布局 / 非正尺寸不是真实视口：不落 seed（否则旋转重建后首帧被吞成非 resize）。
+        if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
+            viewportSeeded = true
+            recomputeGeometry()
+        }
+        // 首帧之后：挤压/复原只改可见行数（视口上推），不再 emit resize。
+        val rowsBefore = visibleRows
+        updateVisibleRows()
+        // 可见行数变化（挤压/复原）即需重画——视口上推露出底行，本回调是唯一信号
+        // （旧链路经 emulator.resize→flushDamage 间接唤醒，现在 resize 不再走，须直呼）。
+        if (visibleRows != rowsBefore) {
+            onFrameRequested?.invoke()
+        }
     }
 
     /**
@@ -174,6 +220,8 @@ class TermViewPresenter(
         cellWidth = newCellWidth
         cellHeight = newCellHeight
         recomputeGeometry()
+        // 捏合改字格后可见行数随之变化（同一视口高 ÷ 新字格高），重排跟随新栅格。
+        updateVisibleRows()
         // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
         onFrameRequested?.invoke()
     }
@@ -232,6 +280,27 @@ class TermViewPresenter(
     }
 
     // ---- 内部实现 ----
+
+    /**
+     * 当前可见行数：未挤压时 = 内核行数；被 IME/输入框挤压时 = 视口像素高 ÷ 字格高。
+     *
+     * 渲染窗口的上界（[window] 用它），恒钳在 [1, 内核行数]（挤压到只剩 1 行以内视为 1 行，
+     * 避免空窗口；不放大——挤压不产生比内核更多的行）。像素/字格非正时回落内核行数。
+     */
+    private val visibleRows: Int
+        get() {
+            val override = visibleRowsOverride ?: return emulator.rows
+            return override.coerceIn(1, emulator.rows)
+        }
+
+    /** 按当前像素视口与字格更新 [visibleRowsOverride]（视口上推的载体；非正输入回落 null）。 */
+    private fun updateVisibleRows() {
+        if (viewportHeightPx <= 0 || cellHeight <= 0) {
+            visibleRowsOverride = null
+            return
+        }
+        visibleRowsOverride = viewportHeightPx / cellHeight
+    }
 
     /** 内核屏幕脏行 [range] → 逻辑行区间缓存；锁定态窗口外损伤由 [takeDamage] 裁剪吸收。
      *  缓存后触发帧请求（缺陷①：增量流到达的唯一唤醒点，回调在锁外调避免持锁跳线程）。 */
