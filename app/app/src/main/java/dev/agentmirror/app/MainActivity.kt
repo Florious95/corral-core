@@ -19,6 +19,7 @@ package dev.agentmirror.app
 import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -70,6 +71,14 @@ class MainActivity : ComponentActivity() {
         val storedConfig = SharedPreferencesPairingConfigStore(this).load()
         navState = MainNavState(initialShowPairing = storedConfig == null)
         navState.restoreFrom(savedInstanceState) // D-3：旋转/进程回收重建后恢复导航态
+        // D-23/D-32：根系统返回统一走导航壳逐级裁决；配对页为根，放行 Activity 默认退出。
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (navState.onSystemBack()) return
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+            }
+        })
         // feat-fg-service-wiring：冷启动传 Activity 作前台服务启动所需 Context
         // （startForegroundService 在 startPersistentConnection 内完成；this 即应用上下文）。
         if (!navState.showPairing && storedConfig != null) {
