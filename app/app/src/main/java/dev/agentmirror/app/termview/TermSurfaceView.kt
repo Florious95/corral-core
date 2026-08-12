@@ -293,6 +293,8 @@ class TermSurfaceView @JvmOverloads constructor(
                     g.powerlinePaint.color = color
                     drawCentered(canvas, g.powerlinePaint, seg.text, seg.startCol, rowY)
                 }
+                // GlyphRunBuilder 必须在输出段前把内部信号改写成 MONO+'?'；到达这里即违约。
+                GlyphSlot.VISIBLE_FALLBACK -> error("unresolved visible glyph fallback")
             }
         }
     }

@@ -1,0 +1,67 @@
+{
+  "task_id": "fix-rendering-d34-d35",
+  "status": "pass",
+  "scope_note": "本轮只做 D-35。D-34（缩放字体堆叠）挂起——它依赖捏合缩放，而立案时 v2 捏合被判无反应；该判定后由 test-pinch-harness 澄清为「注入手段不足、功能未坏」，D-34 已解除挂起但另行排期。",
+  "result_ids": ["res_0d673fb990a1", "res_0f125f5e9278", "res_0c4f2ee411b0"],
+  "agents": {"dev": "w-dev-d35", "review": "w-rev-d35", "test": "w-test-d35", "qa": "w-base-v2"},
+  "summary": "D-35 状态栏 bypass 符号缺省（渲染为豆腐块）已修复并经用户真机确认。根因：GlyphFallbackPolicy 回退链 MONO → SYSTEM_FALLBACK → POWERLINE 三槽全 miss 后 else 分支回到已确认缺字的 MONO，GlyphRunBuilder 原样保留码点，TermSurfaceView 以 MONO drawText，必然产生豆腐块。修复：新增第四槽 VISIBLE_FALLBACK 与形近等价映射层，回退链变为 MONO → SYSTEM_FALLBACK → POWERLINE → 形近等价映射 → '?' 安全网。",
+  "codepoint_fact": {
+    "value": "U+23F5 BLACK MEDIUM RIGHT-POINTING TRIANGLE CENTRED（⏵）",
+    "raw_bytes": "20 20 e2 8f b5 e2 8f b5 20",
+    "how_obtained": "w-base-v2 自建隔离 socket /private/tmp/tmux-501/d35-real-symbol 运行真实 claude.exe，capture-pane + od/hexdump",
+    "independently_confirmed": "leader 独立复核 UTF-8 解码（字节→码位是算术）；另有一次越界取得的同值结果被作废但结论一致",
+    "leader_hypothesis_refuted": "leader 曾据用户参考图字形 ▸ 怀疑是 U+25B8 —— 错误。字形形状不能反推码位，用户参考图只是有该字形的字体把 U+23F5 画出来的样子。"
+  },
+  "design_decision": {
+    "chosen": "形近等价映射，不内置字体",
+    "decisive_evidence": "e2e/artifacts/d35-real-symbol/before-v2-glyph-probe.png —— 七个形近三角并排渲染，仅 U+23F5 为豆腐块，U+25B8/U+25B6/U+25B7/U+25BA/U+2023/U+27A4 六个本机均有真字形。故无需内置字体，APK 零增重。且 U+25B8 形状正是用户参考图形态。",
+    "anti_hardcode_rule": "通用机制 + 映射数据条目为合规（未命中自动落 '?' 安全网）；渲染路径写 if (cp == 0x23F5) 为违规。实现落在 DRAWABLE_EQUIVALENTS = mapOf(0x23F5 to 0x25B8)，是数据不是分支。",
+    "extra_safety_by_dev": "开发席自行加了 leader 未要求的约束：GlyphFallbackPolicy.kt:86 若 CharWidth.of(equivalent) != CharWidth.of(codepoint) 则拒绝映射，防止替代字形破坏等宽对齐。",
+    "honest_boundary": "映射表当前仅一条数据。机制通用、未命中安全落 '?'，但只用一个真实符号验证过。日后 Claude Code 换符号或出现其他缺字形，不会再出豆腐块（有 '?' 兜底），但也不会自动变三角，需补表。"
+  },
+  "口径更正记录": {
+    "conflict": "docs/defects-v5-status.md 与 HANDOFF-leader-20260812.md 记为「bypass 符号透明红框」，taskbook 与真相源 raw/046 记为「符号显示为空」。leader 一度判为口径冲突并裁定「不是透明红框」。",
+    "resolution": "用户给出真机参考图后澄清：两者是同一现象的两种描述——豆腐块空心方框被整行 ANSI 红色染红，即用户所见「两个透明的、小的、红色的矩形」。leader 的「口径冲突」判断本身是错的，已更正。",
+    "unchanged": "修法方向自始至终正确：字形回退问题，非配色/透明度问题。"
+  },
+  "tests": [
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests dev.agentmirror.app.termview.GlyphAllMissFallbackRegressionTest", "rc": 0, "note": "审查席 5 项机制探针：①三槽 miss 后映射为经 probe 确认可画的 U+25B8 ②目标也 miss 则落 '?' ③源本身可画则保持原样 ④未映射 BMP/PUA/astral 缺口安全落 '?' 且保列宽 ⑤CJK/Powerline 不替换"},
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests dev.agentmirror.app.termview.BypassStatusSymbolVisibilityScenarioTest", "rc": 0, "note": "测试席场景红测：修复前在 detached HEAD 7c56353 上 rc=1，失败原文 expected two visible U+25B8 triangles ... got U+23F5, U+23F5；修复后 rc=0"},
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest", "rc": 0, "note": "全量 362 tests 绿，含强制回归门 TermSurfaceSessionBindingRegressionTest"},
+    {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0, "note": "架构门 PASS"}
+  ],
+  "眼见为实": {
+    "emulator": "同一真实 claude.exe 会话，修复前 □□ bypass permissions on，修复后 ▸▸ bypass permissions on。证据 e2e/artifacts/d35-real-symbol/compare-real-claude-before-after.png，leader 已裁剪放大 4 倍逐字确认。",
+    "no_collateral_damage": "字形探针七码位修复前后放大比对：仅 U+23F5 由 □ 变 ▸，其余六个像素级不变。证据 compare-glyph-probe-before-after.png。",
+    "user_real_device": "⭐ 用户 2026-08-12 真机实测确认：「左下角的那个透明红框，这个问题也解决了。」—— 这是终审。模拟器只能证明模拟器字体链有 U+25B8，用户手机是另一套字体环境，用户确认才证明映射目标在真机同样有字形。"
+  },
+  "ui_review": {
+    "requirement": "raw/018 UI 视觉标准「审查关」流程红线：UI 任务交件必附全态截图，leader 逐图目检，测试绿但目检不过 = 不合格打回。",
+    "reviewer": "leader，逐图目检",
+    "screenshots": ["e2e/artifacts/ui-review/d35-normal-light.png", "e2e/artifacts/ui-review/d35-normal-dark.png", "e2e/artifacts/ui-review/d35-empty-light.png", "e2e/artifacts/ui-review/d35-error-reconnecting-light.png"],
+    "verdict": "PASS",
+    "逐项结论": {
+      "第1项 现代设计语言/深浅双套": "PASS —— 深色态背景、键条、输入框整套主题正确应用，非裸默认样式",
+      "第2项 系统集成 safe-area": "PASS —— 状态栏与导航栏区域正确避让",
+      "第5项 状态可视（空/错误态专门设计）": "PASS —— 空态：图标 + 「暂无工作区」+ 可操作引导「先在主机上启动一个 tmux 中的 Agent CLI，它会被自动纳管到这里」；错误态：顶部重连状态条 + 错误色图标 + 「正在重连…」+ 「连接已断开，正在自动重连。恢复后列表会自动刷新。」告知了发生什么/系统在做什么/接下来会怎样。断连时 LAN 指示器正确消失。",
+      "第7项 终端页专项": "PASS —— 字形完整无豆腐块（U+23F5 现为三角，深浅色两态均确认）、等宽对齐正常、顶栏紧凑"
+    }
+  },
+  "leader_verification": {
+    "done": [
+      "改动范围核对：只在 app/.../termview/ 五文件，未外溢",
+      "反硬编码核对：grep 确认 0x23F5 只出现在 DRAWABLE_EQUIVALENTS 映射表中，渲染路径无单码位分支",
+      "探针非恒真恒假：读源确认精确复刻故障条件，两侧同一份代码均可编译",
+      "对比图裁剪放大 4 倍逐字目检，未采信席位描述",
+      "UI 全态四图逐图目检对照七项视觉标准",
+      "席位诚实边界核对：审查席明确拒绝宣称整体已修，把模拟器与 UI 目检交回 leader；测试席在独立 detached HEAD 上验红而非污染的共享树"
+    ],
+    "打回记录": [
+      "第一次交件被打回：UI 审查关全态截图未做（ui-review/ 无本轮新图，最新文件还是 8/10 的）",
+      "第一次交件被打回：R1 与 R2 为同一张图（SHA-256 相同）却充作两项独立证据，要求说明共同佐证的判读位置或补图",
+      "上一轮「闪烁复检」证据被 leader 判无效：flicker-after-fix-contact.png 抽帧中 App 根本不在前台，全是安卓桌面与浏览器标签页，等于没做；席位已撤出证据链并以有效录屏重做"
+    ]
+  },
+  "downstream": "本任务产出的第四槽机制与形近等价映射是 termview 的长期能力；任何后续缺字形只需补 DRAWABLE_EQUIVALENTS 数据条目，无需改渲染路径。",
+  "at": "2026-08-12"
+}

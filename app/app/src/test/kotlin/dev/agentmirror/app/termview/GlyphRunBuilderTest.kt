@@ -32,6 +32,7 @@ class GlyphRunBuilderTest {
             GlyphSlot.MONO -> codepoint in 0x20..0x7E
             GlyphSlot.SYSTEM_FALLBACK -> systemRanges.any { codepoint in it }
             GlyphSlot.POWERLINE -> codepoint in 0xE0A0..0xE0B3
+            GlyphSlot.VISIBLE_FALLBACK -> true
         }
 
         private val systemRanges = listOf(

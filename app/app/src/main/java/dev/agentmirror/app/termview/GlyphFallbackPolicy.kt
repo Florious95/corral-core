@@ -28,13 +28,18 @@ import dev.agentmirror.terminal.CharWidth
  * 1. 组合/零宽码点 → [GlyphSlot.MONO]（并入主字符一起画，不单独进回退）；
  * 2. ASCII 可打印 → [GlyphSlot.MONO] 快速路径（预判定，连探针都不调）；
  * 3. 其余 → 探 [GlyphSlot.MONO]；缺则 [GlyphSlot.SYSTEM_FALLBACK]（盲文/框线/块/
- *    CJK/emoji/全角全落这里）；仍缺则 [GlyphSlot.POWERLINE]（内置兜底，仅 PUA 缺口）。
+ *    CJK/emoji/全角全落这里）；仍缺则 [GlyphSlot.POWERLINE]（内置兜底，仅 PUA 缺口）；
+ *    全链皆缺时尝试形近等价映射（目标也须走真实探针）；映射未命中或目标仍缺才返回
+ *    [GlyphSlot.VISIBLE_FALLBACK]，由 builder 把缺字码点替换成可见 ASCII。
  *
  * [probe] 判定结果按码点缓存：字体在一次 App 会话内不变，缓存终身有效（无需失效）。
  */
 class GlyphFallbackPolicy(private val probe: GlyphProbe) {
 
-    /** BMP 缓存（0x0000..0xFFFF 每码点一槽，0=未决，1..3=槽位 ordinal+1）。256KB 一次性。 */
+    /** 经探针确认可画的形近等价码点及其实际字体槽。 */
+    internal data class DrawableEquivalent(val codepoint: Int, val slot: GlyphSlot)
+
+    /** BMP 缓存（0x0000..0xFFFF 每码点一槽，0=未决，1..4=槽位 ordinal+1）。256KB 一次性。 */
     private val bmpCache = IntArray(0x10000)
 
     /** 非 BMP（astral：emoji/CJK 扩展）缓存，惰性分配（BMP 之外实际用到才建）。 */
@@ -47,7 +52,7 @@ class GlyphFallbackPolicy(private val probe: GlyphProbe) {
      * @contract
      * @pre none（任意 Unicode 码点均可判定）
      * @post 零宽/组合及 C0/C1 控制 → [GlyphSlot.MONO]（不进缓存）；ASCII 可打印 → [GlyphSlot.MONO]（连探针都不调）；
-     *       其余按 MONO → SYSTEM_FALLBACK → POWERLINE 回退链判定，全链皆缺保底 MONO
+     *       其余按 MONO → SYSTEM_FALLBACK → POWERLINE 回退链判定，全链皆缺转 VISIBLE_FALLBACK
      * @err none
      * @inv 判定结果按码点缓存终身复用（BMP 定长数组 / 非 BMP 惰性 HashMap），同码点不重复探测
      */
@@ -67,6 +72,26 @@ class GlyphFallbackPolicy(private val probe: GlyphProbe) {
         }
     }
 
+    /**
+     * 查询全字体 miss 的 [codepoint] 是否有经真实探针确认可画的形近等价码点。
+     *
+     * @contract
+     * @pre [codepoint] 已由 [resolve] 判为 [GlyphSlot.VISIBLE_FALLBACK]
+     * @post 映射不存在、目标格宽不同或映射目标三槽全 miss 时返回 null；否则返回映射目标及探针选中的真实字体槽
+     * @err none
+     * @inv 映射目标绝不因“形近”被假定可画，必须经过 MONO → SYSTEM_FALLBACK → POWERLINE 探针链；映射不改变终端格宽
+     */
+    internal fun resolveDrawableEquivalent(codepoint: Int): DrawableEquivalent? {
+        val equivalent = DRAWABLE_EQUIVALENTS[codepoint] ?: return null
+        if (CharWidth.of(equivalent) != CharWidth.of(codepoint)) return null
+        val slot = if (equivalent < 0x10000) {
+            cachedResolve(equivalent)
+        } else {
+            astralCache.getOrPut(equivalent) { probeResolve(equivalent) }
+        }
+        return if (slot == GlyphSlot.VISIBLE_FALLBACK) null else DrawableEquivalent(equivalent, slot)
+    }
+
     /** BMP 判定（数组缓存）：命中直接返回，未决则判一次并写入。 */
     private fun cachedResolve(codepoint: Int): GlyphSlot {
         val cached = bmpCache[codepoint]
@@ -76,18 +101,25 @@ class GlyphFallbackPolicy(private val probe: GlyphProbe) {
         return slot
     }
 
-    /** 一次完整回退链判定（MONO → SYSTEM_FALLBACK → POWERLINE → 保底 MONO）。 */
+    /** 一次完整回退链判定（MONO → SYSTEM_FALLBACK → POWERLINE → 可见替代信号）。 */
     private fun probeResolve(codepoint: Int): GlyphSlot = when {
         probe.hasGlyph(codepoint, GlyphSlot.MONO) -> GlyphSlot.MONO
         probe.hasGlyph(codepoint, GlyphSlot.SYSTEM_FALLBACK) -> GlyphSlot.SYSTEM_FALLBACK
         probe.hasGlyph(codepoint, GlyphSlot.POWERLINE) -> GlyphSlot.POWERLINE
-        // 全链皆缺：保底主等宽（豆腐兜底优先级高于崩溃；缺口由 Field 留档）。
-        else -> GlyphSlot.MONO
+        else -> GlyphSlot.VISIBLE_FALLBACK
     }
 
     private fun slotOfOrdinal(ordinal: Int): GlyphSlot = when (ordinal) {
         0 -> GlyphSlot.MONO
         1 -> GlyphSlot.SYSTEM_FALLBACK
-        else -> GlyphSlot.POWERLINE
+        2 -> GlyphSlot.POWERLINE
+        else -> GlyphSlot.VISIBLE_FALLBACK
+    }
+
+    private companion object {
+        /** 数据表只描述视觉等价关系；能否使用仍由 [resolveDrawableEquivalent] 的探针决定。 */
+        val DRAWABLE_EQUIVALENTS = mapOf(
+            0x23F5 to 0x25B8,
+        )
     }
 }
