@@ -73,6 +73,8 @@ class GlyphFontProvider(context: Context) : GlyphProbe {
         GlyphSlot.SYSTEM_FALLBACK -> systemPaint.hasGlyph(oneChar(codepoint))
         // 内置 Powerline 字体覆盖面（PUA + 实心块）。
         GlyphSlot.POWERLINE -> powerlinePaint.hasGlyph(oneChar(codepoint))
+        // 内部终止信号，不是实际字体槽；不得参与候选链探测。
+        GlyphSlot.VISIBLE_FALLBACK -> false
     }
 
     private fun oneChar(codepoint: Int): String = String(Character.toChars(codepoint))

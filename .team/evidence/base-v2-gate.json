@@ -1,0 +1,72 @@
+{
+  "task_id": "base-v2-gate",
+  "status": "pass",
+  "result_id": "res_09fb10e190a8",
+  "agent": "w-base-v2",
+  "summary": "v2 基线门禁结论：不闪。前提证实，回退决策地基成立。依据两段模拟器连续录屏抽帧目检：点输入框/IME 20.2679s@10fps 共 203 帧、有效发送增行 12.5541s@10fps 共 126 帧，均未见整屏白帧、终端清空或大面积闪跳。R1-R5 回归基准落盘，D-35/D-36 均复现。APK 落 ~/Desktop/agentmirror-v2baseline-7c56353.apk，SHA-256 9719857efd8b4cb4bd5848e4bb2953c10c2ad3a20632075c90d355e6e003ebce。",
+  "gate_verdict": {
+    "question": "v2 基线点开输入框 / 发消息增行时是否闪烁",
+    "answer": "不闪",
+    "method": "screenrecord + ffmpeg fps=10 全量抽帧逐帧目检，非推理、非单测",
+    "consequence": "「退回 v2 重做」的决策前提成立，后续缺陷修复可在此基线上进行"
+  },
+  "regression_baseline": {
+    "R1": "输入框聚焦 + IME 弹起后终端区完整可见，无闪烁",
+    "R2": "IME 弹起时终端最后一行与输入框均可见，未被遮挡（D-20 仍好）",
+    "R3": "CJK 与 Powerline 符号均有实际渲染，第三个特殊字形形态留作基线",
+    "R4": "键条连按三次上键，历史文本进入编辑行，无闪退（D-37 仍好）",
+    "R5": "捏合无效——见下方 blocking_finding"
+  },
+  "repro_confirmed": {
+    "D-35": "渲染为两个空方框（豆腐块），字形回退失败。证据 D35-bypass-actual-rendering.png。与真相源 raw/046「符号显示为空」一致，与「透明红框」说法无关。",
+    "D-36": "生成 160 行历史后连续两次上滑，动作前/一次后/二次后三张截图 SHA-256 完全相同（db319681…2ee7），画面完全不动。证据链三图齐全。"
+  },
+  "blocking_finding": {
+    "id": "v2-pinch-inert",
+    "severity": "high",
+    "statement": "v2 基线上捏合缩放完全无反应：向 /dev/input/event1 注入真实双指捏合后，前后 PNG SHA-256 完全相同（7638c3…c7d），且未生成 cell_size.xml。",
+    "impact": "D-28（捏合右侧溢出）、D-29（捏合闪烁重绘）、D-31（缩放不持久化）三条缺陷均以「捏合可用」为前提。捏合无效则三条在 v2 上无法复现，按「眼见为实铁律」不得开工。",
+    "two_readings": [
+      "读法一：捏合功能在 v2 即为坏的 —— 那么这是一条此前未立案的独立缺陷，且是 D-28/D-29/D-31 的共同上游，必须先修它",
+      "读法二：adb 事件注入未能构成 App 可识别的 ScaleGestureDetector 手势 —— 那么是取证手段不足，需换真机手测或改注入方式"
+    ],
+    "leader_decision": "未定夺。两种读法导致完全不同的工作，需先分辨。已挂起 D-28/D-29/D-31，不得在分辨之前派修复席。",
+    "seat_honesty": "席位未冒充通过，明确标注「仅记录现状，不作通过判定」，符合工程纪律。"
+  },
+  "open_risks": [
+    {
+      "id": "d35-fixture-codepoint-unverified",
+      "statement": "报告称输出「与 Claude Code 状态栏相同的 Unicode 符号序列」，但该断言无从验证——席位自选 U+23F5（\\342\\217\\265）作夹具，用户真机所见符号的实际码位未经确认。",
+      "impact": "若开发席针对 U+23F5 单点打补丁，而用户真机符号是别的码位，将重演上届「错误标记为已修」。",
+      "mitigation": "已写入 fix-rendering-d34-d35 现场基：修复必须是通用字形回退策略（GlyphFallbackPolicy 层），禁止按单一码位硬编码。"
+    }
+  ],
+  "tests": [
+    {"argv": "GRADLE_USER_HOME=<artifact-dir>/gradle-home ./gradlew --no-daemon -I <artifact-dir>/redirect-build.gradle -q :app:assembleDebug", "rc": 0, "note": "构建缓存与产物重定向到取证目录，不污染主工程"},
+    {"argv": "adb -s emulator-5554 install -r <v2-apk>", "rc": 0, "note": "Success；先卸载旧包避免残留 SharedPreferences 干扰"},
+    {"argv": "screenrecord + ffmpeg fps=10 抽帧目检", "rc": 0, "note": "input/IME 203 帧、send/add-line 126 帧，均无闪烁"},
+    {"argv": "D-36：生成 160 行历史 + 两次上滑 + 三图哈希比对", "rc": 0, "note": "三图 SHA-256 全等，D-36 复现成立"},
+    {"argv": "sips 尺寸核对 9 张主截图", "rc": 0, "note": "均为 1080x2400"}
+  ],
+  "leader_verification": {
+    "done": [
+      "产物齐全：R1-R5 + D-35/D-36 复现 + 两段录屏及全量抽帧 + REPORT.md，共 40+ 件",
+      "APK 存在且 SHA-256 前缀与自报吻合（9719857e…）",
+      "leader 亲自目检 D35-bypass-actual-rendering.png：确认渲染为两个空方框（豆腐块），符号未画出，佐证「符号缺省」口径、排除「透明红框」口径",
+      "席位诚实边界核对：第一段录屏发送未命中，只用于 IME 判定未冒充增行证据；D-35 明示未模拟完整 Claude Code UI；R5 明示不作通过判定 —— 三处均如实标注",
+      "产品代码零改动；未切分支、未 commit、未 push；未输出配对凭据值"
+    ],
+    "note": "本任务无 write_scope 越界：全部写盘落 e2e/artifacts/baseline-v2/。"
+  },
+  "artifacts": [
+    "e2e/artifacts/baseline-v2/REPORT.md",
+    "e2e/artifacts/baseline-v2/flicker-input-send.mp4",
+    "e2e/artifacts/baseline-v2/flicker-send-line.mp4",
+    "e2e/artifacts/baseline-v2/D35-bypass-actual-rendering.png",
+    "e2e/artifacts/baseline-v2/D36-before-up-swipe.png",
+    "e2e/artifacts/baseline-v2/D36-after-up-swipe.png",
+    "e2e/artifacts/baseline-v2/D36-after-second-up-swipe.png",
+    "~/Desktop/agentmirror-v2baseline-7c56353.apk"
+  ],
+  "at": "2026-08-12"
+}

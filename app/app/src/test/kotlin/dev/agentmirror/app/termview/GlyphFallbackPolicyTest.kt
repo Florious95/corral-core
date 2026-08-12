@@ -35,6 +35,7 @@ class GlyphFallbackPolicyTest {
             GlyphSlot.MONO -> codepoint in 0x20..0x7E
             GlyphSlot.SYSTEM_FALLBACK -> inSystemRanges(codepoint)
             GlyphSlot.POWERLINE -> codepoint in POWERLINE_COVERED
+            GlyphSlot.VISIBLE_FALLBACK -> true
         }
 
         companion object {
@@ -72,6 +73,7 @@ class GlyphFallbackPolicyTest {
                 GlyphSlot.MONO -> monoCalls++
                 GlyphSlot.SYSTEM_FALLBACK -> fallbackCalls++
                 GlyphSlot.POWERLINE -> {}
+                GlyphSlot.VISIBLE_FALLBACK -> {}
             }
             return fake.hasGlyph(codepoint, slot)
         }
@@ -139,10 +141,11 @@ class GlyphFallbackPolicyTest {
     }
 
     @Test
-    fun puaOutsideBundledFontFallsToSystemThenMono() {
-        // 内置 Powerline 未覆盖的 PUA（如 Nerd Font 扩展区）：系统 sans 也无 → 保底 MONO（豆腐优于崩溃，缺口留档）。
+    fun puaOutsideBundledFontUsesVisibleFallback() {
+        // 内置 Powerline 未覆盖的 PUA（如 Nerd Font 扩展区）：系统 sans 也无时必须发出
+        // 可见替代信号，不能把已确认缺字的原码点继续交给 MONO 画成豆腐块。
         val p = GlyphFallbackPolicy(FakeGlyphProbe())
-        assertEquals(GlyphSlot.MONO, p.resolve(0xE200))
+        assertEquals(GlyphSlot.VISIBLE_FALLBACK, p.resolve(0xE200))
     }
 
     // ---- 组合/零宽码点：并入主字符，不进回退 ----
