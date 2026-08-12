@@ -158,6 +158,47 @@ func TestLastOutputAgeDoesNotChangeDecision(t *testing.T) {
 	}
 }
 
+// TestClaudeTitleSignalKeysState pins the D-26 title-signal fix (task
+// fix-state-detection): Claude Code writes a braille spinner in the pane title
+// while working and a ✳ (U+2733) prefix while idle, and those markers must
+// decide the state even when the screen text would mislead (the idle
+// action-bar "for agents" that previously false-matched working).
+func TestClaudeTitleSignalKeysState(t *testing.T) {
+	adapter := &ClaudeCodeAdapter{}
+
+	// The screen tail that previously false-matched working: an idle status bar
+	// whose "for agents" hint is a substring of the working rule's anyContains,
+	// plus the bare ❯ prompt the idle-prompt rule keys on. This is the REAL idle
+	// screen shape the D-26 probe measured on the fleet (e.g. w-librarian).
+	const idleScreenWithAgentsHint = "\n❯ \n⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents\n"
+
+	cases := []struct {
+		name  string
+		title string
+		out   string
+		want  protocol.AgentState
+	}{
+		// Working title (braille spinner) beats an idle-looking screen.
+		{name: "spinner title + idle bar", title: "⠙ w-librarian", out: idleScreenWithAgentsHint, want: protocol.StateWorking},
+		// Idle title (✳) beats the false-working screen.
+		{name: "star title + agents hint", title: "✳ w-librarian", out: idleScreenWithAgentsHint, want: protocol.StateIdle},
+		// Empty title falls back to the screen table (the bare prompt reads idle).
+		{name: "empty title falls back", title: "", out: idleScreenWithAgentsHint, want: protocol.StateIdle},
+		// Blocked screen outranks a working title (a box needs attention).
+		{name: "blocked box beats spinner", title: "⠙ w-librarian", out: claudeBlockedPermission, want: protocol.StateBlocked},
+		// Spinner in title is working regardless of screen tail.
+		{name: "spinner title working", title: "⠹ agent", out: "❯\n", want: protocol.StateWorking},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := Sample{PaneCommand: "claude", PaneTitle: tc.title, RecentOutput: []byte(tc.out)}
+			if got := adapter.Detect(s); got.State != tc.want {
+				t.Errorf("Detect(title=%q, out=%q) = %+v, want %v", tc.title, tc.out, got, tc.want)
+			}
+		})
+	}
+}
+
 func keys(m map[string]Adapter) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

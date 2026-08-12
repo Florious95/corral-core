@@ -58,11 +58,19 @@ type wsConn struct {
 }
 
 // subscription is one live mirror on this connection: the relay goroutine's
-// cancel func and the pipe detach func, torn down together.
+// cancel func, pipe detach func, and pane-size restore func, torn down together.
 type subscription struct {
 	ref    string
 	cancel context.CancelFunc
 	detach func()
+	// restoreSize returns the pane to the geometry captured before this
+	// subscription reshaped it. Nil when the original geometry could not be read.
+	// @contract
+	// @pre non-nil closure captures one successful pre-subscribe Size result
+	// @post subscribeCancel invokes it after cancel+detach to attempt the original geometry
+	// @err Resize failures are logged and not returned to the already-unsubscribing client
+	// @inv at most the subscription that captured the geometry owns this closure
+	restoreSize func()
 }
 
 // serveConn owns the connection from accept to close.
@@ -359,6 +367,9 @@ func (c *wsConn) subscribeCancel(ref string) bool {
 	if sub != nil {
 		sub.cancel()
 		sub.detach()
+		if sub.restoreSize != nil {
+			sub.restoreSize()
+		}
 	}
 	return sub != nil
 }

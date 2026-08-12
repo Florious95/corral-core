@@ -100,6 +100,19 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	}
 	c.subscribeCancel(s.Ref)
 
+	// Remember the pane geometry before reshaping it for the phone so an
+	// explicit unsubscribe can return the CLI to its original full-window size
+	// (D-21). A size-read failure is non-fatal, matching the resize below.
+	// @contract
+	// @pre br resolves the subscribed pane before any client resize is applied
+	// @post success captures origCols/origRows for this subscription; failure leaves restoreSize nil
+	// @err Size failure is logged and mirroring continues without a restore contract
+	// @inv captured dimensions precede this subscription's Resize and are never overwritten
+	origCols, origRows, sizeErr := br.Size(c.ctx)
+	if sizeErr != nil {
+		c.logErr("subscribe read original size", sizeErr)
+	}
+
 	// Initial client dims reshape the pane so the CLI redraws for the phone
 	// (requirement 005). A resize failure is not fatal: the mirror continues at
 	// the pane's current size, and the real existence check happens below.
@@ -135,6 +148,19 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 
 	subCtx, cancel := context.WithCancel(c.ctx)
 	sub := &subscription{ref: s.Ref, cancel: cancel, detach: detach}
+	if sizeErr == nil {
+		// Install the restore contract only when the pre-resize geometry is known.
+		// @contract
+		// @pre Size succeeded before the subscription resize
+		// @post invocation attempts exactly one Resize to origCols/origRows
+		// @err Resize failure is logged and otherwise ignored during unsubscribe
+		// @inv captured geometry belongs to this subscription and is never recomputed after resize
+		sub.restoreSize = func() {
+			if _, _, err := br.Resize(c.ctx, origCols, origRows); err != nil {
+				c.logErr("unsubscribe restore size", err)
+			}
+		}
+	}
 	c.subscribeAdd(sub)
 	go c.relay(subCtx, sub, ch)
 }
@@ -231,10 +257,11 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 		return
 	}
 
-	// 坐标契约（写死，防再次错位）：协议 §6.3 与 tmux capture-pane -S/-E 是**同一坐标系**，
-	// 顶部相对——0 = 当前屏顶行，负数 = 屏上历史行（-1 = 屏顶上一行）。因此收敛后的协议
-	// 区间 [start, end] **直传** bridge，**禁止**做 ±pane.Height 平移（平移会把当前屏打成
-	// 历史、把历史页锚点打偏一屏，D-36 实证根因）。
+	// Protocol scrollback coordinates are top-relative (0 = screen top, negative =
+	// history above) — identical to tmux capture-pane -S/-E. Pass them straight
+	// through (D-36): the old `- pane.Height` translation assumed bottom-relative
+	// tmux semantics and shifted every page into history (current-screen requests
+	// returned stale history, history pages reported wrong anchors).
 	data, err := br.Scrollback(c.ctx, start, end)
 	if err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
@@ -245,17 +272,25 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 		return
 	}
 
-	// 元数据头必须与页内容自洽：tmux capture-pane 在屏幕内容不足 pane.Height 时**裁掉尾部
-	// 空行**（协议区间 [start,end] 的理论行数 = end-start+1 会虚高），客户端按 line_count
-	// 锚定视口，虚高即错位。因此 line_count 用**实际数据行数**（countLines）度量，页尾行号
-	// = start + 实际行数 - 1。客户端据此头插并入、判顶（frame.fromLine > 请求值 ⇒ 到顶）。
-	actualLines := countLines(data)
+	// Trim trailing blank rows (consistent with snapshotWithCursor): capture-pane
+	// emits a pane's blank bottom rows as bare LFs past the content. Trimming keeps
+	// the reported line_count (§6.3 实际区间) equal to the actual non-blank lines,
+	// which the client uses to anchor its scrollback buffer.
+	data = bytes.TrimRight(data, "\n")
+	lineCount := uint32(countLines(data))
+	if lineCount == 0 {
+		// Degenerate fully-blank page: report one empty line (EncodeBinary requires
+		// LineCount >= 1); a blank page carries no content either way.
+		lineCount = 1
+		data = []byte("\n")
+	}
+
 	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
 		Kind:      protocol.KindScrollback,
 		Ref:       sc.Ref,
 		ReqID:     sc.ReqID,
 		FromLine:  int32(start),
-		LineCount: uint32(actualLines),
+		LineCount: lineCount,
 		Data:      data,
 	})
 	if err != nil {
@@ -280,6 +315,23 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 	if !c.subscribed(r.Ref) {
 		return
 	}
+	// D-27 (fix-d27-v3): detect no-op resizes by comparing the pane's ACTUAL
+	// dims before and after the resize-window call (both fresh reads, never
+	// the request values — tmux may converge a same-size request to the same
+	// pane size). A resize that did not change the pane must NOT re-push a
+	// snapshot: the client replays a snapshot as clear-and-rebuild, which on
+	// the phone reads as the "top-down line-by-line refresh" D-27 reports.
+	// The IME keyboard/input-box relayout that follows every message send
+	// produces exactly these same-size resizes (fix-refresh-direction
+	// root-cause chain step 3), so skipping the no-op repush closes the only
+	// production path to the flicker without touching the protocol.
+	beforeW, beforeH, err := br.Size(c.ctx)
+	if err != nil {
+		c.logErr("resize read before", err)
+		// A size read failure should not silently abort: fall through and let
+		// the resize attempt itself decide (Resize re-reads below).
+		beforeW, beforeH = -1, -1
+	}
 	if _, _, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows)); err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
@@ -288,13 +340,25 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		}
 		return
 	}
-	// Re-push a full snapshot after the reflow (fix-term-residuals): the CLI's
-	// SIGWINCH redraw arrives only as deltas composited over the client's
-	// stale old-geometry grid, so leftover residue can never be cleared
-	// deterministically by the stream alone. A snapshot is replayed by the
-	// client as clear-and-rebuild (same semantics as the subscribe first
-	// frame), which is the single convergence point. tmux reflows the pane
-	// synchronously on resize-window, so capturing right after Resize is
+	afterW, afterH, err := br.Size(c.ctx)
+	if err != nil {
+		c.logErr("resize read after", err)
+		afterW, afterH = -1, -1
+	}
+	if beforeW >= 0 && beforeW == afterW && beforeH == afterH {
+		// Pane dims unchanged by the resize: no reflow happened, so there is
+		// no new geometry to converge. Skip the snapshot repush — the client
+		// keeps its grid and the delta stream stays authoritative (004).
+		c.s.log.Debug("ws: resize no-op, skip snapshot", "conn", c.id, "ref", r.Ref, "dims", fmt.Sprintf("%dx%d", beforeW, beforeH))
+		return
+	}
+	// Re-push a full snapshot after a REAL reflow (fix-term-residuals): the
+	// CLI's SIGWINCH redraw arrives only as deltas composited over the
+	// client's stale old-geometry grid, so leftover residue can never be
+	// cleared deterministically by the stream alone. A snapshot is replayed
+	// by the client as clear-and-rebuild (same semantics as the subscribe
+	// first frame), which is the single convergence point. tmux reflows the
+	// pane synchronously on resize-window, so capturing right after Resize is
 	// content-correct; any in-flight pre-resize delta the relay still sends
 	// afterwards is redundant repaint bytes, not residue (docs/protocol.md
 	// §4.2 resize).
@@ -322,31 +386,38 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 // entirely below the screen) is shifted to the nearest available edge so the
 // client receives a useful page instead of a single degenerate line.
 func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, pane discovery.Pane, fromLine, count int) (int, int, error) {
-	// historySize = 屏上历史行数。坐标系顶部相对（0=屏顶，负=历史）：`-S MinInt32 -E -1`
-	// 捕获从最老到**屏顶上一行**（-E -1 已排除整个屏幕），其行数即历史行数。
-	// **不得再减 pane.Height**——-E -1 已不含屏幕，减了即双计屏（历史被错误少算一屏，
-	// 收敛区间错位，D-36 实证根因二）。tmux history-limit 有界且小，整段捕获成本可接受。
-	oldestToTop, err := br.Scrollback(ctx, math.MinInt32, -1)
+	// historySize = how many lines of history tmux retains above the screen.
+	// Measured by capturing from the oldest possible line to the line just above
+	// the screen top (-1) — top-relative semantics, so the capture is exactly the
+	// history, no screen rows, no height subtraction needed (D-36: the old
+	// `- pane.Height` double-counted the screen against tmux's top-relative coords
+	// and under-reported history).
+	oldestToBottom, err := br.Scrollback(ctx, math.MinInt32, -1)
 	if err != nil {
 		return 0, 0, err
 	}
-	historySize := countLines(oldestToTop)
+	historySize := countLines(oldestToBottom)
 	if historySize < 0 {
 		historySize = 0
 	}
 
-	// Available range in protocol coordinates.
+	// Available range in protocol coordinates (0 = screen top, negative = history).
 	oldest := -historySize
 	bottom := pane.Height - 1
 
 	requestEnd := fromLine + count - 1
 	switch {
-	case requestEnd < oldest:
-		// Entirely above the history: shift so the page starts at the oldest
-		// available line, capped by what exists.
+	case requestEnd <= oldest:
+		// Entirely above the history (or ending exactly at the oldest line): shift
+		// so the page starts at the oldest available line and grab count lines —
+		// a useful full page, not a degenerate sliver. Cap at the last history line
+		// (-1 = line above screen top), never onto the visible screen: an above-history
+		// request asks for history, so the reply must not leak on-screen rows
+		// (TestScrollbackConvergedRange: scrollback(-500,100) must return only history).
+		// D-36: scrollback(-30,5) with 26 history lines → (-26,-22) = the 5 oldest.
 		start, end := oldest, oldest+count-1
-		if end > bottom {
-			end = bottom
+		if end > -1 {
+			end = -1
 		}
 		return start, end, nil
 	case fromLine > bottom:

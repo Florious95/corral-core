@@ -392,7 +392,12 @@ func (s *Server) resolveBridge(ref string) (*bridge.Pane, bool) {
 // handleWS upgrades an HTTP request to the WebSocket API and serves the
 // connection until it closes.
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := websocket.Accept(w, r, nil)
+	// InsecureSkipVerify: this is a LAN/tailnet-internal daemon, not exposed to
+	// the public internet — skip the browser Origin check so web clients can
+	// connect from any origin (see docs/protocol.md).
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+	})
 	if err != nil {
 		s.log.Warn("ws: accept failed", "err", err)
 		return

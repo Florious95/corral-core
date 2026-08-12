@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/agentstate"
 	"github.com/agentmirror/agentmirror/internal/discovery"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
@@ -268,6 +269,57 @@ func TestStateProviderSampleFailureDegradesUnknown(t *testing.T) {
 // still return a state immediately (it returns the cached value and refreshes
 // in the background), so the listing loop can never be stalled by state IO
 // (requirement 008, knowledge base §0.4 D-1 red line).
+// TestStateProviderTitleSignalDrivesState pins the D-26 title wiring (task
+// fix-state-detection): the pane title (OSC title) must reach the agentstate
+// adapter, so a working spinner title yields working even when the screen text
+// alone would read idle. This is the end-to-end gap the reverted finalizeState
+// fix never covered — it tuned cache timing, not the detection input.
+func TestStateProviderTitleSignalDrivesState(t *testing.T) {
+	p := NewStateProvider(discardLogger())
+	defer p.Close()
+	p.ttl = time.Millisecond // refresh eagerly
+
+	// sample seam returns an idle-looking screen; identify resolves the kind.
+	p.sample = func(ctx context.Context, pn discovery.Pane) ([]byte, time.Duration, error) {
+		// A screen that, without the title, reads idle: bare prompt + agents hint.
+		return []byte("❯ \n⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents\n"), 0, nil
+	}
+	p.identify = func(ctx context.Context, in agentstate.IdentifyInput) agentstate.AgentKind {
+		return agentstate.AgentKindClaude
+	}
+
+	// Working title (braille spinner): must resolve working.
+	working := discovery.Pane{Socket: "/s", PaneID: "%0", Command: "bash", PaneTitle: "⠙ w-librarian", CWD: "/ws/x", Width: 80, Height: 24}
+	_ = p.State(context.Background(), working)
+	// Give the refresh time to land.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		st := p.State(context.Background(), working)
+		if st == protocol.StateWorking {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got := p.State(context.Background(), working); got != protocol.StateWorking {
+		t.Fatalf("working-title pane state = %q, want working (title signal)", got)
+	}
+
+	// Idle title (✳): must resolve idle despite the agents-hint screen.
+	idle := discovery.Pane{Socket: "/s", PaneID: "%1", Command: "bash", PaneTitle: "✳ w-librarian", CWD: "/ws/x", Width: 80, Height: 24}
+	_ = p.State(context.Background(), idle)
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		st := p.State(context.Background(), idle)
+		if st == protocol.StateIdle {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got := p.State(context.Background(), idle); got != protocol.StateIdle {
+		t.Fatalf("idle-title pane state = %q, want idle (title signal)", got)
+	}
+}
+
 func TestStateProviderCacheDoesNotBlockHotPath(t *testing.T) {
 	p := NewStateProvider(discardLogger())
 	defer p.Close()

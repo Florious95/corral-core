@@ -48,11 +48,18 @@ func aggregateState(states []protocol.AgentState) protocol.AgentState {
 
 // toSession converts one catalog entry into the protocol Session the client
 // renders. State comes from the provider (which may be the always-unknown
-// default); dims come from the pane as discovered.
+// default); dims come from the pane as discovered. The display name is the
+// tmux window name when one is known (task fix-session-alias: window names
+// carry the meaningful per-window labels the fleet is organized by), falling
+// back to the session name when the scan produced none.
 func toSession(e *sessionEntry, provider StateProvider, ctx context.Context) protocol.Session {
+	name := e.pane.WindowName
+	if name == "" {
+		name = e.pane.Session
+	}
 	return protocol.Session{
 		Ref:   e.ref,
-		Name:  e.pane.Session,
+		Name:  name,
 		Cwd:   e.pane.CWD,
 		State: provider.State(ctx, e.pane),
 		Rows:  uint16(e.pane.Height),

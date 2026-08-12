@@ -304,7 +304,7 @@ func (p *wiredStateProvider) refresh(ref string, pn discovery.Pane, prev protoco
 	} else {
 		kind := p.identify(ctx, agentstate.IdentifyInput{
 			PanePID:     pn.PanePID,
-			PaneTitle:   "", // title is a secondary heuristic; the tree is authoritative (state-ident-wrapper §5)
+			PaneTitle:   pn.PaneTitle, // the OSC title carries the working/idle marker (fix-state-detection)
 			PaneCommand: pn.Command,
 		})
 		// Normalize the rule-table dispatch key: for a wrapper pane the
@@ -316,6 +316,7 @@ func (p *wiredStateProvider) refresh(ref string, pn discovery.Pane, prev protoco
 		}
 		decided := agentstate.Track(prev, agentstate.Sample{
 			PaneCommand:   cmd,
+			PaneTitle:     pn.PaneTitle,
 			RecentOutput:  out,
 			LastOutputAge: age,
 		})

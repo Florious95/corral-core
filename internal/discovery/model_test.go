@@ -9,9 +9,9 @@ import (
 )
 
 // TestParsePaneLineValid checks that a well-formed paneFormat line maps to the
-// expected Pane fields.
+// expected Pane fields, including the trailing window name.
 func TestParsePaneLineValid(t *testing.T) {
-	line := "alpha|2|%3|/workspaces/eng|zsh|4242|120x30"
+	line := "alpha|2|%3|/workspaces/eng|zsh|4242|✳ eng-shell|120x30|wiki-r5-acceptance-tester"
 	p, ok := parsePaneLine(line)
 	if !ok {
 		t.Fatalf("parsePaneLine(%q) unexpectedly rejected a valid line", line)
@@ -19,6 +19,8 @@ func TestParsePaneLineValid(t *testing.T) {
 	want := Pane{
 		Session:     "alpha",
 		WindowIndex: 2,
+		WindowName:  "wiki-r5-acceptance-tester",
+		PaneTitle:   "✳ eng-shell",
 		PaneID:      "%3",
 		CWD:         "/workspaces/eng",
 		Command:     "zsh",
@@ -35,14 +37,15 @@ func TestParsePaneLineValid(t *testing.T) {
 // ok=false (and never panic), so the scan can skip them.
 func TestParsePaneLineMalformed(t *testing.T) {
 	cases := []string{
-		"",                                // empty
-		"a|0|%0|cwd|cmd",                  // too few fields
-		"a|0|%0|cwd|cmd|80x24|x|y",        // too many fields
-		"a|notanint|%0|cwd|cmd|7|80x24",   // non-integer window index
-		"a|0|%0|cwd|cmd|7|80",             // size missing "x"
-		"a|0|%0|cwd|cmd|7|ax24",           // non-integer width
-		"a|0|%0|cwd|cmd|7|80xb",           // non-integer height
-		"a|0|%0|cwd|cmd|7|80x24|trailing", // stray trailing field
+		"",                                       // empty
+		"a|0|%0|cwd|cmd",                         // too few fields (5)
+		"a|0|%0|cwd|cmd|80x24",                   // too few fields (6)
+		"a|0|%0|cwd|cmd|7|80x24",                 // too few fields (8, missing title)
+		"a|0|%0|cwd|cmd|7|title|80x24|win|extra", // too many fields (10)
+		"a|notanint|%0|cwd|cmd|7|title|80x24|win", // non-integer window index
+		"a|0|%0|cwd|cmd|7|title|80|win",           // size missing "x"
+		"a|0|%0|cwd|cmd|7|title|ax24|win",         // non-integer width
+		"a|0|%0|cwd|cmd|7|title|80xb|win",         // non-integer height
 	}
 	for _, line := range cases {
 		if p, ok := parsePaneLine(line); ok {

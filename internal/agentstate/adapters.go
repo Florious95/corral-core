@@ -1,6 +1,10 @@
 package agentstate
 
-import "github.com/agentmirror/agentmirror/internal/protocol"
+import (
+	"strings"
+
+	"github.com/agentmirror/agentmirror/internal/protocol"
+)
 
 // This file implements the first-batch adapters: Claude Code and Codex.
 //
@@ -32,10 +36,7 @@ import "github.com/agentmirror/agentmirror/internal/protocol"
 //   - idle: the rest-state action bar "bypass permissions on · N shell" with
 //     no "esc to interrupt", and a bare "❯" prompt line.
 //
-// The rules are ordered so a strong blocked/working signal outranks idle. When
-// the tables cannot decide (e.g. the CLI redrew its working indicator again —
-// D-26 moved it to ◐-family frames), Detect falls back to the glyph-independent
-// activity signal over Sample.FrameHistory (decideWithActivity).
+// The rules are ordered so a strong blocked/working signal outranks idle.
 type ClaudeCodeAdapter struct{}
 
 // claudeRules is the Claude Code rule table. Edit here when the CLI changes
@@ -55,14 +56,14 @@ var claudeRules = []rule{
 	{
 		id: "claude-working-action-bar", priority: 900,
 		state: protocol.StateWorking, confidence: ConfidenceMedium,
-		comment:     "Bottom action bar while working: 'esc to interrupt' and the stop button '⏹ for agents' appear only while a task is running. Breaks if the interrupt hint wording changes.",
-		anyContains: []string{"esc to interrupt", "⏹ for agents", "for agents"},
+		comment:     "Bottom action bar while working: 'esc to interrupt' and the stop button '⏹ for agents' appear only while a task is running. The bare 'for agents' is deliberately NOT a trigger: an idle pane's navigation hint '← for agents' (subagents) contains it, so matching it alone false-positives idle as working (D-26 fleet measurement). The stop glyph '⏹' or the interrupt hint is the real working marker. Breaks if the interrupt hint wording changes.",
+		anyContains: []string{"esc to interrupt", "⏹ for agents"},
 		notContains: []string{"do you want to proceed?", "allow command?"},
 	},
 	{
 		id: "claude-working-spinner", priority: 800,
 		state: protocol.StateWorking, confidence: ConfidenceLow,
-		comment:     "Fallback: a known working glyph (braille dots, ◐-family half-fill frames, ✳) on any line while the action bar is cut out of the tail window. Deliberately excludes the '⠤' idle separator (not in spinnerFrames).",
+		comment:     "Fallback: a braille spinner frame on any line while the action bar is cut out of the tail window. Deliberately excludes the '⠤' idle separator (not in spinnerFrames).",
 		spinnerLine: true,
 	},
 	{
@@ -83,12 +84,26 @@ var claudeRules = []rule{
 
 // Detect implements Adapter. It is a pure function of the sample's bytes: it
 // strips ANSI, runs the rule table, and always returns a State (unknown when
-// nothing matches). When the table yields unknown it falls back to the
-// glyph-independent activity signal (D-26 layer ②), so a CLI that redraws its
-// working indicator still reads working. It never blocks, never errors, and
-// never performs I/O.
+// nothing matches). It never blocks, never errors, and never performs I/O.
+//
+// The pane_title OSC signal is checked FIRST for Claude Code, because it is a
+// stronger and more current signal than screen text (herdr keys its claude
+// manifest on the title spinner/star): a braille spinner means working, a ✳
+// (U+2733) prefix means idle. The screen-rule blocked check still runs first
+// — a permission box needs attention even while the title spins — then the
+// title, then the screen table as fallback (codex and edge cases).
 func (a *ClaudeCodeAdapter) Detect(sample Sample) State {
-	return decideWithActivity(claudeRules, sample)
+	text := stripANSI(string(sample.RecentOutput))
+	// Blocked outranks everything: an interactive box is the strongest signal
+	// (requirement 003: a false idle on a blocked pane is a missed wake-up).
+	if state := blockedStateFromScreen(text); state != protocol.StateUnknown {
+		return State{State: state, Confidence: ConfidenceHigh}
+	}
+	// The title is authoritative for working/idle when it carries the marker.
+	if s := stateFromTitle(sample.PaneTitle); s.State != protocol.StateUnknown {
+		return s
+	}
+	return evaluateRules(claudeRules, text)
 }
 
 // CodexAdapter decides the state of a Codex pane (command "codex") from its
@@ -118,7 +133,7 @@ var codexRules = []rule{
 	{
 		id: "codex-working-spinner", priority: 650,
 		state: protocol.StateWorking, confidence: ConfidenceLow,
-		comment:     "Fallback: known working glyph on any line (same glyph set as Claude Code).",
+		comment:     "Fallback: braille spinner frame on any line (same frame set as Claude Code).",
 		spinnerLine: true,
 	},
 	{
@@ -130,8 +145,52 @@ var codexRules = []rule{
 	},
 }
 
-// Detect implements Adapter (same purity contract as ClaudeCodeAdapter): rule
-// tables first, then the glyph-independent activity fallback (D-26 layer ②).
+// Detect implements Adapter (same purity contract as ClaudeCodeAdapter).
 func (a *CodexAdapter) Detect(sample Sample) State {
-	return decideWithActivity(codexRules, sample)
+	return evaluateRules(codexRules, stripANSI(string(sample.RecentOutput)))
+}
+
+// stateFromTitle classifies a Claude Code pane title (OSC title) into a state.
+// It is the title half of the D-26 fix (task fix-state-detection): Claude Code
+// draws a braille spinner (U+2800–U+28FF) while working and a ✳ (U+2733)
+// prefix while idle. A title without either marker — codex's directory name,
+// a plain shell, or empty — returns StateUnknown so the screen table decides.
+//
+// The markers are verified against the live fleet (2026-08-12, D-26): every
+// working claude pane carries a rotating braille frame; every idle one a ✳.
+func stateFromTitle(title string) State {
+	if title == "" {
+		return State{State: protocol.StateUnknown, Confidence: ConfidenceUnknown}
+	}
+	// A working title is a braille spinner frame (U+2800–U+28FF). It may appear
+	// anywhere in the title (Claude Code prefixes it before the window label).
+	for _, r := range title {
+		if r >= 0x2800 && r <= 0x28FF {
+			return State{State: protocol.StateWorking, Confidence: ConfidenceHigh}
+		}
+	}
+	// An idle title starts with ✳ (U+2733). Prefix match avoids a bare
+	// "sparkle" appearing later in a window label that happens to contain it.
+	if strings.HasPrefix(title, "✳") {
+		return State{State: protocol.StateIdle, Confidence: ConfidenceHigh}
+	}
+	return State{State: protocol.StateUnknown, Confidence: ConfidenceUnknown}
+}
+
+// blockedStateFromScreen is a narrow screen-text check for interactive boxes
+// that must outrank any title signal: a permission/approval prompt rendered
+// while the agent waits. It is deliberately minimal — just the box phrases the
+// rule tables already key on — and returns StateUnknown when no box is present
+// so the caller falls through to the title/table path.
+func blockedStateFromScreen(text string) protocol.AgentState {
+	lower := strings.ToLower(text)
+	switch {
+	case strings.Contains(lower, "do you want to proceed?"),
+		strings.Contains(lower, "allow command?"),
+		strings.Contains(lower, "press enter to confirm or esc to cancel"),
+		strings.Contains(lower, "press enter to confirm"),
+		strings.Contains(lower, "enter to confirm or esc to cancel"):
+		return protocol.StateBlocked
+	}
+	return protocol.StateUnknown
 }

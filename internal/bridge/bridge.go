@@ -84,16 +84,14 @@ func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
 	return x, y, nil
 }
 
-// Scrollback fetches one page of the pane's history + screen. start/end are
-// capture-pane -S/-E coordinates, TOP-RELATIVE: 0 = screen top row, -1 = the
-// row just above the screen, -2 = two rows above, etc. This matches the
-// protocol's from_line semantics (§6.3) directly, so the API layer passes
-// protocol coordinates through WITHOUT translation. A history-only page uses a
-// fully negative range (e.g. -30..-21); the current-screen page uses 0..(height-1);
-// a range spanning history + screen is allowed (e.g. -5..4). Returns raw bytes.
+// Scrollback fetches one line range of the pane (capture-pane -S/-E).
+// start/end use tmux top-relative coordinates: 0 = visible screen top,
+// negative = history above it — identical to the protocol (§6.3), so callers
+// pass protocol rows through unchanged (no screen-height translation; D-36
+// corrected the old "bottom-relative" misreading). Returns raw ANSI bytes.
 // @contract
-// @pre start < end（capture-pane -S/-E 坐标，顶部相对：0=屏顶，负=屏上历史）
-// @post 返回该页原始终端字节（ANSI 保留，capture-pane -S/-E）
+// @pre start、end 为 tmux capture-pane 行坐标（0=屏顶，负=屏上历史）且 start < end
+// @post 返回该行区间的原始终端字节（ANSI 保留，capture-pane -S/-E）
 // @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
 // @inv none — 只读操作
 func (p *Pane) Scrollback(ctx context.Context, start, end int) ([]byte, error) {
@@ -251,7 +249,7 @@ func (p *Pane) Resize(ctx context.Context, cols, rows int) (width, height int, e
 		"resize-window", "-t", winID, "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows)); err != nil {
 		return 0, 0, err
 	}
-	return p.size(ctx)
+	return p.Size(ctx)
 }
 
 // windowID resolves the tmux window id ("@N") owning this pane, which is the
@@ -268,8 +266,17 @@ func (p *Pane) windowID(ctx context.Context) (string, error) {
 	return id, nil
 }
 
-// size reads the pane's actual dimensions from the server.
-func (p *Pane) size(ctx context.Context) (int, int, error) {
+// Size reads the pane's actual dimensions from the tmux server (fresh read,
+// never cached). It is the truth source for "did a resize actually change the
+// pane" — D-27 fix: a no-op resize (requested dims equal the current pane
+// dims) must be detectable by comparing the read-back before/after, because
+// tmux may converge a same-size request to the same pane size (fix-d27-v3).
+// @contract
+// @pre pane 存在（错误归类沿用 requirePane 语义）
+// @post 返回 pane 当前实际字符尺寸 (width, height)，均为正数
+// @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout；尺寸解析失败→fmt.Errorf
+// @inv none — 纯只读查询，不触碰 pane 运行态
+func (p *Pane) Size(ctx context.Context) (int, int, error) {
 	out, err := runTmux(ctx, p.socket, p.timeout, "display-message", "-p", "-t", p.target, "#{pane_width}x#{pane_height}")
 	if err != nil {
 		return 0, 0, err

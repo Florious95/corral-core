@@ -210,6 +210,41 @@ func TestDiscoverCarriesSocketThrough(t *testing.T) {
 	}
 }
 
+// TestDiscoverCarriesWindowNameThrough is the additive red test for the
+// WindowName field (task fix-session-alias): a pane discovered through a real
+// isolated server must retain the tmux window name it lives in, because the
+// listing layer renders it as the session's display label (window names carry
+// the meaningful per-window labels, session names the whole-team name). The
+// session name must stay intact alongside it.
+func TestDiscoverCarriesWindowNameThrough(t *testing.T) {
+	root := testSocketRoot(t)
+	tmp := t.TempDir()
+	cwd := mkdirTmp(t, tmp, "ws-winname")
+	sock := startTestServer(t, root, "srv", cwd, "-s", "alpha")
+
+	// Rename the window to the meaningful label the client should render.
+	cmd := exec.Command("tmux", "-S", sock, "rename-window", "-t", "alpha:0", "wiki-r5-acceptance-tester")
+	cmd.Env = append(envWithout(os.Environ(), "TMUX"), "TMUX_TMPDIR="+root)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("rename-window: %v\n%s", err, out)
+	}
+
+	model, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{testSocketDir(t, root)})
+	if err != nil {
+		t.Fatalf("DiscoverWithDirs: %v", err)
+	}
+	if len(model.Workspaces) != 1 || len(model.Workspaces[0].Panes) != 1 {
+		t.Fatalf("want exactly one pane, got %+v", model.Workspaces)
+	}
+	got := model.Workspaces[0].Panes[0]
+	if got.WindowName != "wiki-r5-acceptance-tester" {
+		t.Fatalf("pane WindowName = %q, want %q", got.WindowName, "wiki-r5-acceptance-tester")
+	}
+	if got.Session != "alpha" {
+		t.Fatalf("pane Session = %q, want alpha (session name must be preserved)", got.Session)
+	}
+}
+
 // TestDiscoverToleratesDeadSocket is the red-line test: a stale socket (inode
 // present, no listener) mixed into the directory must be skipped and must not
 // abort the scan or affect the result.
