@@ -1,110 +1,83 @@
 # 远程Agent安卓（暂名）——工程编排约定
 
 手机远程操控主机 tmux 中大量 Agent CLI 的开源产品（Apache 2.0）。
-产品需求的唯一权威是 `requirement-base/`（先撞库再问用户）；任务状态的唯一权威是
-`taskbook.yaml` + `.team/evidence/`。本工程按 taskbook-orchestration skill 运行。
+产品需求的唯一权威是 `requirement-wiki/`（LLM Wiki 概念网络，先撞库再问用户）；
+原始文档真相源是 `requirement-base/`（只增不删，维基从中分解概念）；
+任务状态的唯一权威是 `taskbook.yaml` + `.team/evidence/`。
 
 ## 目录地图
 
-- `requirement-base/` — 需求维基（INDEX 索引 / entries 条目 / REVISIONS 修订记录），只增不改
+- `requirement-wiki/` — 需求维基（LLM Wiki 概念网络：concepts/techniques/patterns/等，活库可改可删）
+- `requirement-base/` — 原始文档真相源（entries/ 条目，分解时不删除）
+- `web/` — Web 端客户端（同协议浏览器客户端，测试第一道）
+- `test/` — 独立自动化测试工程（不嵌入产品代码）
 - `taskbook.yaml` — 任务书（五栏+争议度）
 - `agents/` — 席位角色文件（retired/ 为退役归档）
 - `.team/evidence/` — 任务证据 JSON（状态唯一来源）
-- 产品代码目录在架构裁定后建立
 
 ## 席位与模型
 
-- teammate 一律第三方 API（compatible_api profile）；难点模块可开 Fable 5 短命席位（一次性，交件即退役）
-- **通道判据（2026-08-10 用户复申，违者即浪费）**：默认 `provider: claude_code` +
-  `auth_mode: compatible_api` + `profile: worker-api`（模型即 `deepseek-v4-flash[1m]`，角色文件**不写 model**）。
-  升级 codex `gpt-5.6-sol` 仅两种情形：① taskbook 该条 `contention: contract`；
-  ② 同一任务自动返工达上限（开顾问席熔断）。派单必须打印通道判据一行，跑偏一眼可见。
-  实证教训：2026-08-10 我在派单模板里写死 `provider: codex`，全天所有席位都是 sol，又慢又拖沓且烧订阅额度
-  ——这是决策错误不是配置意外，详见 `docs/next-round-plan-20260810.md` §4。
-- **困难问题通道**（用户裁定 2026-08-10）：codex provider + `gpt-5.6-sol` 模型
-  （profile `codex-default`，订阅额度已重置，**额度解限**——不受下条轮次/墙钟约束，
-  但工程纪律「红测先行/隔离/basegen/交件即退役」照常）。Fable 5/Anthropic 订阅通道不再开发发用。
-- **全自动编排**（用户裁定 2026-08-10）：席位间自行交接下一棒（含知识基底指针），期间不向
-  leader 发消息；一般问题直投**裁定席 `adjudicator`**（codex gpt-5.6-sol，常驻，具 leader 同等
-  裁定/验收/派单/commit 能力，章程见 `agents/adjudicator.md`）；leader 只收四类：用户指令、
-  裁定席升级件（契约级/对外交付/通道变更/连环故障）、看门狗 escalation、框架直报回执。
-  **2026-08-10 终形态（框架 leader 指导落地）**：框架 leader 绑定已转移至常驻 LLM-leader pane
-  （tmux 窗口 llm-leader，codex gpt-5.6-sol 经 claim-leader 持有，owner_epoch 2，开机简报
-  `.team/llm-leader-boot.md`）——report_result/abnormal_exit/五类关键消息全部注入它，
-  由它独立完成裁定+验收+派单+值守，原 worker 裁定席由它承接后退役。人工侧（本会话）
-  唯一接口=轮询 `.team/escalations-for-human.md`（四类升级件：对外交付/契约级需用户/
-  通道额度/超自愈连环故障），零其他信息到达。
-- **Anthropic 订阅席位用法铁律**（用户两次裁定 2026-08-10，额度见底实证；违者即浪费）：
-  ①**一次性投喂**：派单一条消息给全流程、方向、需求、验收标准，之后不追加轮次；
-  ②**汇报即关**：席位 report 完成的当刻 stop-agent 关闭，不做小修小改的往返轮次——
-  小修小改一律另派第三方席位或留 leader 验收裁定；
-  ③**杂务外包**：Fable 5 开发席必须配低成本第三方 teammate 承接跑命令类杂务
-  （跑测试/起环境/截图/e2e 复跑），Fable 5 上下文只花在设计与写码上；
-  ④席内扩案（新雷/新层缺陷）不得原席续干，leader 拆案改派第三方席位；
-  ⑤墙钟超 2 小时未交件必须主动审视拆案。开发常规通道永远是第三方 API
-- 密钥只存在于 `.team/current/profiles/*.env`，**任何席位（含 leader）禁止读其原文**；
-  诊断只用 `team-agent profile show <name> --workspace . --json`
-- **席位恢复纪律**（A-24 实证，2026-08-09）：席位恢复失败达 2 轮（自动恢复/start-agent/reset 任意组合）
-  即弃 id——remove 归档后换**处女 id** add-agent 重建带案重派，不再消耗轮次；死 id 的 runtime 残留
-  （provider-config/env/events）保留供框架取证。停摆检测与自动探针由 `.team/watchdog.py` 值守（三条件+预算 2）
-- **看门狗必须由守护进程托管，且每次派单前按 cwd 核活**（2026-08-11 实证，用户当场指出"看门狗没有生效"）：
-  裸起的 `watchdog.py` 被外部杀过一次——stdout 日志 **0 字节**（Python 异常会留 traceback，
-  什么都没有 ⇒ 是收到信号直接没的），死亡时刻落在施工席跑全量 `tools/gate/run.sh` 的窗口内，
-  最可能是测试/清理链路按进程名扫射时误伤。后果：**无人值守近 5 小时**，
-  期间 `w-notif-toggle` 建完任务列表即停摆、空转 5 小时无人发现。
-  处置：`.team/watchdog-supervisor.sh` 守护托管（watchdog 退出即重启并记账，
-  能查"它被杀过几次"），启动用
-  `nohup python3 -c 'import os; os.setsid(); os.execvp("bash",["bash",".team/watchdog-supervisor.sh"])' &`
-  —— **macOS 无 `setsid` 命令**（用它会整条静默失败，本工程已栽过），必须走 Python 的 `os.setsid()`
-  拿独立会话，使按会话组扫射打不到它。
-  **纪律：每次派单前顺手核一次守护与看门狗是否按 cwd 活着**，不要靠"我起过它"这个记忆——
-  本轮两次栽在这上面（一次把别工程的同名进程当成本工程的，一次它死了 5 小时我还在报"值守中"）。
-- **Android 侧并发的真实粒度是「Gradle 模块」，不是「文件」**（2026-08-11 实证）：
-  `同文件零并发` 在 Go 侧够用（`go test ./internal/api/...` 只编译该包及其依赖），
-  但 Android 侧**同一 Gradle 模块的编译单元是共享的**——任何席位跑 `:app:testDebugUnitTest`
-  都会编译整个模块，把**别的席位写到一半的源码**一起编进去。
-  实证：`w-sa-appbuild` 只改 `app/app/build.gradle.kts`，与 `w-fg-wiring` 零文件重叠，
-  但为了拿到可信验收结果，不得不把对方在途的源码「临时移出验证后原样放回」——
-  这次没丢东西，属侥幸。铁律：**同一 Gradle 模块内同一时刻只放一席施工**；
-  确需并行的按模块切（`:app` / `:terminal` 可并行），或让第二席只做不需编译的产物
-  （纯文档、纯清单）。派单前按模块而非按文件核并发冲突。
-- **派单必写 intent，否则该席对看门狗全盲**（2026-08-11 两次实证，同一个洞栽两回）：
-  `.team/watchdog.py` 的 `inflight_seats()` 以 `.team/evidence/<task>.intent.json` 存在且对应
-  `<task>.json` 未落盘来判"在途"。**人工派单漏写 intent ⇒ 该席位永远进不了停摆计数**
-  （`turnend`/`still`/`idle` 三个计数器压根不为它创建），卡死多久都没人发现。
-  铁律：`add-agent` + `send` 的同一批操作里**必写** intent，字段
-  `{task_id, dispatched_to, base, case_id, at, note}`；`case_id` 取 `send --json` 返回的 `message_id`。
-  两次实证：①2026-08-11 00:0x 手工派两席后全盲；②同日 03:4x 一晚派 11 席一个 intent 都没写，
-  `w-doc-tsnetd` 卡死无人知，看门狗采样里跟的还是两个早已退役的席位。
-- **判活性只看 pane 尾栏真值位，不看框架状态**（2026-08-11 实证）：框架对卡死 35 分钟的席位
-  持续报 `worker_state=BUSY` 且 `last_output_at` 还在跳。Claude Code pane 回合进行中尾栏含
-  `esc to interrupt`，回合结束则无——这是布尔真值位，能把"在长思考"与"已收工"分开，
-  已落地为 watchdog 的 T5 判据（连续 2 采样无标记即出针，约 4 分钟）。
-- **派单必经净化包装器 `.team/ta`**（2026-08-10 人工侧通道级裁定，实证在脚本头注释）：codex 席位
-  在自身 shell 执行 `team-agent` 时会被 codex 注入其托管的死代理（`ec2-13-213-89-27…:8443`，
-  实测不可达），launcher 把它快照进新席位启动串 ⇒ **凡 codex 席位派出的席位全生命周期零 token**
-  （屏幕显示 Working 是假活）。所有 `add-agent/start-agent/reset-agent` 一律走 `.team/ta <子命令>`。
-- **新席位核真活性**：`status=工作` 不算数——必须取 `~/.codex/sessions/<当日>/` 最新 rollout jsonl，
-  确认其中出现 `reasoning`/`custom_tool_call` 记录，才算这个席位真的接通了模型。
-- **给席位发消息只走 `team-agent send`**，严禁 tmux `send-keys` 敲键盘（实证：键入文本会与框架注入
-  消息拼接成一条，并触发 steer 打断）。leader 的合法寻址是 `<team>/leader` 或
-  `<workspace>::<team>/leader`，裸 `leader` 会被拒（`state did not contain the requested team/name tuple`）。
+- 默认通道 `provider: claude_code` + `auth_mode: compatible_api` + `profile: worker-api`（deepseek-v4-flash，角色文件不写 model）。
+  升级仅两种：① `contention: contract`；② 返工达上限。
+- 多模态缺陷（需看截图判断渲染效果）用 Claude 订阅席位，不用 deepseek。
+- 密钥只存在于 `.team/current/profiles/*.env`，任何席位禁止读其原文。
+- 给席位发消息只走 `team-agent send`，禁 tmux `send-keys`。
+- 派单必经 `.team/ta`（净化包装器）。
+- 派单必写 intent，否则看门狗全盲。
+- 同一 Gradle 模块同一时刻只放一席施工。
 
 ## 工程红线
 
-- 代码必须带外骨骼注释（机器可校验标注），架构维基从代码现算，禁止人工另维护架构文档
+- 代码必须带外骨骼注释（机器可校验标注），架构维基从代码现算
 - halt 是默认：缺字段、判不出 ⇒ 停下问，绝不猜
-- 契约级议题（见 requirement-base/INDEX.md 未决议题表）定夺前，相关模块不施工
+- 契约级议题定夺前，相关模块不施工
 
-## 工程常识红线（2026-08-09 用户回炉裁定后增设；所有基底模板继承，验收必查）
+## 工程常识红线
 
-任何**面向用户或常驻运行**的交付物，功能验收之外必须自证以下工程卫生——缺一项即不合格，
-不因"验收命令绿了"豁免：
-1. **静默经济**：常驻进程空闲（零客户端/零订阅）时 CPU 趋近 0、无固定频率的子进程派生；
-   已连接但用户无操作时同样必须有界——CPU 与子进程派生不得仅因舰队规模线性常烧
-   （2026-08-10 裁定席升级、leader 裁定入线）。交付须分别量测三态：零连接、已连接零订阅、
-   已连接单订阅；
-2. **进程卫生**：单实例守卫；自身与测试脚本退出后零孤儿进程/零残留监听端口；
-3. **资源有界**：内存/磁盘（日志、上传目录）增长有界或有轮转说明；
-4. **可达性常识**：对外广播的地址/端口必须是对端真实可达的（虚拟网卡/回环/link-local 排除）；
-5. **失败可见**：用户任何动作在有限时间内必得可见结果（成功或带原因的失败），静默等待即缺陷。
+交付物功能验收之外必须自证：
+1. **静默经济**：空闲 CPU 趋近 0、无固定频率子进程派生
+2. **进程卫生**：单实例守卫、退出后零孤儿零残留端口
+3. **资源有界**：内存/磁盘增长有界或有轮转
+4. **可达性常识**：广播地址必须对端可达
+5. **失败可见**：任何动作有限时间内必得可见结果
+
+## 派单铁律（2026-08-12）
+
+1. **basegen 必须走**：`python3 tools/basegen.py <task-id>` 编译影响闭包作为知识基底。
+2. **开发+测试+审查三席并行**：测试席写场景红测，审查席写根因探针红测，开发席直接开始改——三席并行不阻塞，在红测上汇合。审查席不替代也不干扰测试席。
+3. **archwiki --strict-t3 必须 PASS**。
+4. **一次只改一个缺陷**，模拟器实测验证不倒退后才打包下一个。
+5. **心跳周期接近 1 小时**（保护缓存，缓存过期 1 小时）。
+
+## 眼见为实铁律（2026-08-12，v5 教训）
+
+修缺陷两头都必须在模拟器/真机上**亲眼看到**：
+1. **改之前必须复现**：在模拟器上走复现步骤，截图/录屏留证，看不到问题不开工。
+2. **改之后必须看到修复**：同样的复现步骤重走一遍，问题消失 + 不倒退，看不到修复不收工。
+3. **单元测试绿 ≠ 问题修了**：测试验证代码正确性，模拟器验证用户体验，两者不可替代。
+4. **不允许标记"已修"除非有模拟器实测截图**：自报完成 ≠ 真完成，截图是唯一证据。
+
+违反本条的后果已实证：v5 五个修复中三个 QA PASS 但引入输入框闪烁回归，因为跳过了"不倒退"验证。
+
+## 「回炉」流程（2026-08-12）
+
+凡修复后实测未生效，一律执行：
+1. 回退改动
+2. 开审查席看回退的 diff，反推根因，产出**根因探针**
+3. **回退后跑探针**：命中 → 诊断正确；不命中 → 诊断错误
+4. 审查席+测试席+开发席三席并行：审查写探针、测试写场景红测、开发改代码
+5. **修完后跑探针**：不再命中 → 修复有效；仍命中 → 没改到点上
+
+原则：失败的 diff 是信息不是垃圾。根因探针是验收标准。
+回炉的工程原理：agent 上下文有限倾向加代码，腐败代码正反馈堆叠，回炉先删再做打断循环。
+
+## 测试三层流水线（W-02）
+
+1. Web 端 + Chrome DevTool MCP → 拦 80% 问题
+2. 安卓模拟器 + adb/uiautomator → 端到端
+3. 用户手测 → 最终验收
+
+## 看门狗
+
+由 `.team/watchdog-supervisor.sh` 守护托管，每次派单前按 cwd 核活。
+macOS 无 setsid，用 `python3 -c 'os.setsid(); os.execvp(...)'`。

@@ -2,7 +2,7 @@
 
 > 状态：方案先行稿（plan-stage4-execution 交件）｜**只产出文档，不跑任何用例、不改任何代码。**
 > 用例执行等阶段三收口后另派席位，本文件是后继执行席位的**逐条作业手册**。
-> 输入：`e2e/artifacts/dogfood/TESTPLAN.md`（43 条用例）｜`docs/perf-scenarios.md`（A–F 六组）
+> 输入：`e2e/artifacts/dogfood/TESTPLAN.md`（42 条用例）｜`docs/perf-scenarios.md`（A–F 六组）
 > ｜`docs/next-round-plan-20260810.md` §3.5（三通道分工）｜`requirement-base/entries/016`（真机权威）
 > ｜`requirement-base/entries/013`（五层体系 + 失败四归因）｜`docs/round-findings-20260811.md`（P-3 与 F1）。
 > 红线：不跑用例、不改代码；自动化必要非充分、验收权在真机（016）；可自动化度不决定覆盖优先级（016c）。
@@ -14,9 +14,9 @@
 ### 0.1 用例总数是 **43 不是 41**
 
 派单与 taskbook 写「41 条」，但 `TESTPLAN.md` §10 已有算术勘误（裁定席 msg_2e00d012b430）：
-A 组表格实际 **17** 条（A1–A9a、A10、A10a、A11、A12），总计 = **17 + B8 + C6 + D5 + E7 = 43**。
-本方案逐条覆盖全部 **43** 条，不留 2 条死角。执行席**以本文件 §1 总表为准**，
-不要被「41」误导跳过 A9a/A10a 这类后补编号。
+A 组表格实际 **16** 条（A1–A9a、A10、A11、A12；**A10a 已随 R-004 撤销删除**），
+总计 = **16 + B8 + C6 + D5 + E7 = 42**。
+本方案逐条覆盖全部 **42** 条，不留死角。执行席**以本文件 §1 总表为准**。
 
 ### 0.2 上一轮（dogfood）已执行与未执行的底账（防重复、防漏跑）
 
@@ -43,11 +43,11 @@ GUI 窗口寻址的路径，模拟器一律可测**（用 adb shell 命令驱动
 
 ---
 
-## 1. 逐条用例通道归属总表（43 条）
+## 1. 逐条用例通道归属总表（42 条）
 
 通道记号：**U** = 模拟器 UI 自动化（adb + uiautomator + screencap）｜**H** = 宿主 T 对账
 （隔离 daemon/tmux/文档，零设备依赖，随模拟器批次环境执行）｜**R** = 真机（交付后用户验）。
-API/instrumentation 通道在本阶段**只承接 TS 网络**（§6 D1），43 条中**没有一条划进 API 通道**——
+API/instrumentation 通道在本阶段**只承接 TS 网络**（§6 D1），42 条中**没有一条划进 API 通道**——
 TESTPLAN 无 TS 专用用例，TS 已由 feat-ts-wire/headscale 脚本（API 通道）覆盖，不在本批重跑。
 
 ### A 组 · 016 首触九步（主干，最先最重）
@@ -68,7 +68,6 @@ TESTPLAN 无 TS 专用用例，TS 已由 feat-ts-wire/headscale 脚本（API 通
 | **A9 发图注入** | U+H | `adb push` 一张图→MediaStore 可见→「+」相册选图→断言上传进度/结果提示→H：`-upload-dir` 出现该文件→断言主机路径被插入输入框→发送→pane 收到该路径（H 对账）。**截**「上传结果」屏。 |
 | **A9a 上传失败可见** | U | daemon 停→选图上传→断言**明确失败文案 + 草稿保留**（红线5，D-02/D-03 修后复验该失败路径）。**截**「上传失败」屏。 |
 | **A10 blocked 通知** | U+H + R(Doze 延递) | 前置 `pm grant ... POST_NOTIFICATIONS`（API35 运行时权限）→pane 制造 blocked→App 退后台→等待→`cmd statusbar expand-notifications`→uiautomator 断言**通知出现且文案含会话/blocked 信息**→点击→断言**深链直达该会话页**（会话页特征节点，MainActivity.handleDeepLink 路由）。**截**「通知栏」屏。真机补：真实设备 Doze 下通知延递。 |
-| **A10a 通知全局开关** | U | 设置页→找通知开关→关闭→断言开关态翻转且后续 blocked 无通知（D-15 已修，运行时确认）。**截**「开关」屏。 |
 | **A11 杀 App 恢复** | U + R(厂商 ROM) | 会话页→`am force-stop`→重开→断言**免重配直达**、恢复到被杀前会话画面与导航位置（uiautomator 会话页节点 + 截图对比杀前）。**截**「恢复后」屏。真机补：厂商 ROM 杀后台策略。 |
 | **A12 锁屏重连** | U + R(Doze/ROM) | 会话页→`input keyevent 26`（power）锁屏 60s→`input keyevent 224`（wake）唤醒→`input keyevent 82`（menu）解除 keyguard（无 PIN 模拟器标准解锁序列，任一失败换 `wm dismiss-keyguard`）→断言 **30s 内自动恢复画面**、期间断连态可见、不无限重连（fix-reconnect-stale-config 复发才报）。**截**「解锁恢复」屏。真机补：Doze/厂商 ROM 深度。 |
 
@@ -207,7 +206,7 @@ B1 ── 模拟器 UI 批次 · 首触主干（独占 :app 编译 + 独占模�
      参考 wall-clock：一次 assembleDebug + 13 条首触用例 ≈ 1 席独占半天级。
 
 B2 ── 模拟器 UI 批次 · 后台/通知/视觉（同一模块锁，接续 B1）
-     → 跑 A10,A10a,A11,A12 + B1,B2,B3,B4,B5,B6,B7,B8 + C1,C2,C3,C5,C6(菜单) + D5
+     → 跑 A10,A11,A12 + B1,B2,B3,B4,B5,B6,B7,B8 + C1,C2,C3,C5,C6(菜单) + D5
      → 逐屏截图 + 断言 + 对照，落 REPORT。
 
 B3 ── 宿主 T 批次（零设备依赖，与 B1/B2 不同窗口并行可行，但需独立 daemon 端口）
@@ -303,7 +302,7 @@ P-3 已裁：**先量 F1 再决定要不要接脏区局部重绘**，量测前�
    附进 REPORT，空对照 = 判定不算数。
 4. **未验证清单**（016d）：真机项（相机/Doze/耗电/多网卡）与后置性能项**显式列出**，禁止计入已验收。
 5. 每批收尾：杀干净自建 daemon/tmux，`lsof -i :19983` 与进程表自证零残留（D2 同款）。
-6. 执行席证据 JSON 至少含：`status`、`per_case_results`（43 条逐条）、`positive_control`、
+6. 执行席证据 JSON 至少含：`status`、`per_case_results`（42 条逐条）、`positive_control`、
    `unverified`、`f1_metrics`（B4 批）、`deviation`。
 
 > 本文档只允许在 `docs/` 白名单内引用；所有 T 对账一律隔离环境，生产 daemon 与用户真实 tmux 禁触。
