@@ -1,8 +1,18 @@
 {
   "task_id": "fix-upload-token-chain",
-  "status": "pass",
-  "result_ids": ["res_0ffcec6a91e0", "res_0fed429e8b33", "res_0f125f5e9278", "res_0f1aa495fce8"],
-  "agents": {"dev": "w-dev-d22", "review": "w-rev-d22", "test": "w-test-d22", "qa": "w-base-v2"},
+  "status": "pass_user_confirmed",
+  "result_ids": [
+    "res_0ffcec6a91e0",
+    "res_0fed429e8b33",
+    "res_0f125f5e9278",
+    "res_0f1aa495fce8"
+  ],
+  "agents": {
+    "dev": "w-dev-d22",
+    "review": "w-rev-d22",
+    "test": "w-test-d22",
+    "qa": "w-base-v2"
+  },
   "summary": "D-22 图片上传永远 401 已修复并经模拟器真实上传验收。根因：配对配置的 token 从未进入 SessionRoute → SessionViewModel → HttpUrlConnectionUploader 调用链，上传请求根本没有 Authorization 头，而服务端已要求 Bearer，故必现 401。修复：ServiceWire 提供当前连接配置只读快照（与 WebSocket 认证同一来源）→ SessionRoute 下传 → SessionViewModel 传给 uploader → 仅在非空白时设置 Bearer 头；并封死无认证二参入口。",
   "⚠️_前置发现_任务书与证据均记载了一件从未发生的工作": {
     "false_record": ".team/evidence/archive/fix-upload-token-chain.FALSIFIED-20260812.json（原 .team/evidence/fix-upload-token-chain.json）",
@@ -13,11 +23,31 @@
     "user_was_right": "用户报告此为『新的改动引发』。leader 初判『不是回归』——**判错了**（只 grep 了 server 侧归档，未查 app 侧，也未想到代码可能在归档前已被销毁）。用户的判断成立：上传在 v4 可用，回退后失效。"
   },
   "tests": [
-    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests dev.agentmirror.app.session.SessionUploadAuthorizationScenarioTest（隔离 worktree, detached HEAD 7c56353）", "rc": 1, "note": "修复前真红：命中『已配对上传请求缺非空 Bearer』行为断言。在独立 worktree 上验红，避免被共享树的在途改动污染。"},
-    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests SessionUploadAuthorizationScenarioTest --tests SessionUploadTokenChainTest --tests SessionUploadBaseWiringTest --tests HttpUrlConnectionUploaderTest --rerun-tasks", "rc": 0, "note": "修复后全绿"},
-    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests TermSurfaceSessionBindingRegressionTest --tests TermSurfacePinchGestureTest --tests 'dev.agentmirror.app.pairing.*'", "rc": 0, "note": "两道强制回归门 + 架构基现算的波及面 pairing 全绿"},
-    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest", "rc": 0, "note": "全量绿（BUILD SUCCESSFUL in 16s），含二参 guard 整改后复跑"},
-    {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0, "note": "架构门 PASS"}
+    {
+      "argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests dev.agentmirror.app.session.SessionUploadAuthorizationScenarioTest（隔离 worktree, detached HEAD 7c56353）",
+      "rc": 1,
+      "note": "修复前真红：命中『已配对上传请求缺非空 Bearer』行为断言。在独立 worktree 上验红，避免被共享树的在途改动污染。"
+    },
+    {
+      "argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests SessionUploadAuthorizationScenarioTest --tests SessionUploadTokenChainTest --tests SessionUploadBaseWiringTest --tests HttpUrlConnectionUploaderTest --rerun-tasks",
+      "rc": 0,
+      "note": "修复后全绿"
+    },
+    {
+      "argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests TermSurfaceSessionBindingRegressionTest --tests TermSurfacePinchGestureTest --tests 'dev.agentmirror.app.pairing.*'",
+      "rc": 0,
+      "note": "两道强制回归门 + 架构基现算的波及面 pairing 全绿"
+    },
+    {
+      "argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest",
+      "rc": 0,
+      "note": "全量绿（BUILD SUCCESSFUL in 16s），含二参 guard 整改后复跑"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "架构门 PASS"
+    }
   ],
   "眼见为实": {
     "verdict": "模拟器真实上传：成功",
@@ -57,5 +87,11 @@
     "e2e/artifacts/d22-upload/isolation-cleanup.txt",
     ".team/evidence/archive/fix-upload-token-chain.FALSIFIED-20260812.json"
   ],
-  "at": "2026-08-12"
+  "at": "2026-08-12",
+  "user_field_confirmation": {
+    "at": "2026-08-12 深夜",
+    "device": "用户真机（LAN 链路）",
+    "evidence": "用户经 App 成功上传两张截图，落盘 /Users/alauda/Downloads/agentmirror-uploads/upload-20260812T145627-*.jpg 与 upload-20260812T150200-*.jpg",
+    "significance": "D-22 在真机 LAN 路径确认修复。TS 路径另由 fix-upload-transport-tsnet 修复，待用户恢复 Tailscale 后验证。"
+  }
 }

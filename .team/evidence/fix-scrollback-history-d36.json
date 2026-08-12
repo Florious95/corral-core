@@ -1,0 +1,44 @@
+{
+  "task_id": "fix-scrollback-history-d36",
+  "status": "pass_pending_daemon_rebuild",
+  "result_id": "res_17103adb1ec0",
+  "agent": "w-dev-d36",
+  "summary": "D-36 向上滑看历史：协议两端一起修。服务端去掉 scrollback 坐标 pane.Height 平移、historySize 不双计屏、line_count 用实际数据行数；客户端打破「空 buffer 锁不住 → 补页条件永不走」的鸡生蛋死结，并在历史头插时保持锚定。",
+  "用户最终定义_前四轮都按错误定义修": {
+    "final": "「向上滑动就是**完全失效**的。我只有捏合缩放成比较小的情况下，它才能向上滑。也就是说，**它就加载了最小字体的一页**。」——即 App 从头到尾只有一屏。",
+    "superseded": "用户此前表述为「历史仅限于我打开这个窗口积攒的历史」，leader 据此立案为「本地滚动通、只是不拉服务端历史」——**该定义是错的**，用户随即更正。",
+    "lesson": "四轮修不好，根因之一是**定义一直没对齐**。每轮都在修一个用户没报的问题。"
+  },
+  "两个根因_均有隔离实证": {
+    "服务端坐标": "ws_handler.go 原有 `start - pane.Height` 平移，而协议与捕获坐标其实**都是顶部相对**（0=屏顶，负=历史），平移把当前屏打成历史、历史锚点偏一屏；scrollbackRange 的 historySize 又 `- pane.Height` 双计屏。隔离 daemon 实锤：40 行历史下预取 scrollback(-400,400) 返回 fromLine=-31（错位 5 行）+ 内容空洞 DL_32..36 缺失，客户端据此提前判顶停止补页；请求 -800 / -10000 全被收敛到同一错位页。",
+    "客户端鸡生蛋": "打开会话时 replaySnapshot 重建网格，capture-pane 快照恰好只有可见屏 rows 行、正好填满 → **无行滚出 → 本地 buffer 恒空** → logicalCount==rows → maxTop==0 → 上滑被 coerceIn(0,0) 钳死、topLine 恒为 null（跟随态）→ **补页触发条件（滚到顶）永远走不到**。要滚到顶才拉历史，但没历史就滚不动。"
+  },
+  "⚠️_第二份假PASS记录": {
+    "file": ".team/evidence/archive/fix-scrollback-d36.FALSIFIED-20260812.json",
+    "claim": "status=pass，声称已修服务端 scrollback 坐标平移",
+    "reality": "修复从未落地代码库；ws_handler.go 的平移原样还在。席位用隔离 daemon 实锤而非采信账面，才发现此事。",
+    "context": "本轮抓到的第二份假记录（第一份为 fix-upload-token-chain，声称打通整条上传鉴权链，实际一个环节都不存在）。**任务状态的唯一权威里至少有两条是假的**，这正是某些缺陷「修了四轮还在」的机制。"
+  },
+  "改动": [
+    "server/internal/api/ws_handler.go：去平移、协议坐标直传 tmux；historySize 不双计屏；line_count 用 countLines(data) 实际行数防理论值虚高",
+    "server/internal/bridge/bridge.go：坐标语义写进 @contract 注释（这次错位就是因为两套坐标没人写清楚）",
+    "app/.../termview/TermViewPresenter.kt：onScrollBy 在空 buffer 上滑时显式锁到逻辑行 0（打破鸡生蛋）；新增 onHistoryPrepend(merged) 头插锚定保持",
+    "app/.../session/SessionViewModel.kt：SCROLLBACK 分支算实际并入行数并平移视口"
+  ],
+  "tests": [
+    {"argv": "go test：TestScrollbackCurrentScreenMatchesVisible / TestScrollbackHistoryMetaMatchesContent", "rc": 0, "note": "服务端 2 条红测，修前红→修后绿"},
+    {"argv": "JVM：TermViewScrollbackBoundaryTest / TermGesturePagingRedTest（真实 MotionEvent）/ SessionScrollbackPagingTest", "rc": 0, "note": "客户端 3 条红测，修前全红→修后全绿。含补页请求发出、并入后可继续滚、分页收敛三项。"},
+    {"argv": "test/cases/d36_scrollback.test.js", "rc": 0, "note": "2 条 e2e，修前红→修后绿"},
+    {"argv": "cd app && ./gradlew :app:testDebugUnitTest / cd server && go test ./... / archwiki --strict-t3", "rc": 0, "note": "全量与架构门全绿；两道强制回归门保持绿"}
+  ],
+  "scope_expansion": {
+    "what": "leader 授权 write_scope 从 app 侧扩至 server/internal/api/ + server/internal/bridge/ + test/cases/",
+    "why": "席位 halt 请示并给出实证：只修客户端的话，预取回来的内容仍锚点错位一屏 + 提前判顶，用户照样看不到完整历史。协议两端的缺陷由一个席位一起修，比拆成两半各修一半更不容易出错。"
+  },
+  "副产物_强线索": "席位报告了一条它未动的基线失败用例 d27:redundant-same-size-resize-after-input-must-not-repush-snapshot（发送 input 后出现同尺寸冗余 resize，服务端据此补发整屏 snapshot），基线即红。该机制与用户报告的「发消息后整屏逐行重刷、只在本端发送时出现、时长随 RTT」高度吻合，已转给 w-dev-repaint 核实。",
+  "pending": [
+    {"item": "重编 daemon", "note": "服务端改动需重编才生效；生产 daemon pid 39489 为 13:40 旧二进制"},
+    {"item": "真机验证", "note": "用户在真机确认「能像 CLI 滚鼠标滚轮那样翻到最开始」"}
+  ],
+  "at": "2026-08-12"
+}

@@ -1,0 +1,27 @@
+{
+  "task_id": "fix-upload-transport-tsnet",
+  "status": "pass_pending_tailnet_field_verification",
+  "agent": "w-dev-upload-tsnet",
+  "summary": "修复图片上传在 tailnet 下必然 timeout。根因：WebSocket 经 tsnet 通道拨号，而 HttpUrlConnectionUploader 走系统网络栈直连——两条通道不同，daemon 只在 tailnet 可达时 WS 通而 HTTP 上传出不去。修复后 tsnet Up + tailnet host 时上传复用 WS 的 TsnetProxySocketFactory，否则保持系统直连。",
+  "用户实证": "「我现在基于 TS 的 token 以及 TS 的局域网 IP 在和你沟通，说明这条链路已经走通了」——同一时刻 WS 正常、上传 timeout，直接坐实通道差异即缺陷。失败模式为 Timeout 而非 401，反证 D-22 的 Bearer 修复有效。",
+  "⭐席位推翻leader指令且正确": {
+    "leader_instruction": "「复用既有 TsnetDial.proxyFor(state)，不要自己发明代理逻辑」",
+    "seat_finding": "proxyFor(state) 返回 java.net.Proxy.Type.SOCKS，但这正是 WS 生产路径**不用**的通道。WS 用 socketFactoryFor —— 自实现 RFC1929 握手，因为 Android libcore 内建 SOCKS 客户端对 tsnet 认证不生效（TsnetSocks KDoc 记载，有模拟器实证）。",
+    "consequence_if_obeyed": "上传若用 java.net.Proxy SOCKS，真机上会重演「模拟器绿、真机坏」——正是本任务要修的坑本身。",
+    "leader_judgment": "席位按「与 WS 走同一条真实通道」的意图执行、而非按 leader 写错的字面，判定正确。已明确告知：以后指令与代码事实冲突，一律说清理由、按事实做、回报 leader。"
+  },
+  "改动": "仅 app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt（write_scope 内）。tsnet Up + tailnet host → OkHttp 复用 WS 的 TsnetProxySocketFactory；否则（LAN / 域名 / 未 Up）保持原 HttpURLConnection 系统直连，LAN 零行为变化。与 WS 读同一份 TsnetWire.state，避免两边判断不一致。",
+  "tests": [
+    {"argv": "HttpUrlConnectionUploaderTsnetRouteTest（3 用例）", "rc": 0, "note": "用**真实 SOCKS5 服务器**（RFC1928+1929，同 tsnet 契约）在 JVM 上验证：①SOCKS 建连+上传成功+Bearer/multipart 保留 ②LAN 且 tsnet Up 时仍直连、零 CONNECT ③未起网直连。修复前 SOCKS 用例红，修复后全绿。"},
+    {"argv": "既有 session/tsnet/pairing/service/conn 全部单测", "rc": 0, "note": "271 passed，D-22 Bearer 链路与 D-30 均未倒退"},
+    {"argv": "TermSurfaceSessionBindingRegressionTest + TermSurfacePinchGestureTest", "rc": 0, "note": "两道强制回归门绿"},
+    {"argv": "python3 tools/archwiki/build_wiki.py --check（--strict-t3）", "rc": 0, "note": "架构门 PASS"}
+  ],
+  "为什么上一轮模拟器实测没抓到": "D-22 的模拟器验收用隔离 daemon + 10.0.2.2 局域网直连，全程未经 tsnet。**验的场景和用户用的场景不是同一条路。** 这是本轮第三次「模拟器绿、真机坏」（前两次：捏合、上滑）。",
+  "pending": {
+    "item": "真机 / tailnet 现场实测",
+    "blocker": "leader 已查实本机 Tailscale.app 不存在、tailscaled 未运行、无 100.x 接口；用户当前连接已回退 LAN。tailnet 路径客观上无法验证。",
+    "note": "非席位问题。LAN 零行为变化已由红测覆盖，可保不倒退。待用户恢复 Tailscale 后补验。"
+  },
+  "at": "2026-08-12"
+}

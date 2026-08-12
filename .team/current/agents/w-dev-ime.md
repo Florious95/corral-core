@@ -64,3 +64,18 @@ emulator-5556 归 w-nav-recover 独占，不许碰。
 - **不许手改 SharedPreferences 绕过配对流程**，要连就走 App 正常流程。
 - 判不出就 halt 问 leader，绝不猜。看不到就说看不到。
 - 卡住重试至多 2 次停下上报；不要发空转心跳。report_result 恰好一次，带 tests。
+
+## ⛔ 通道硬限制（deepseek worker-api，非多模态）
+
+**你的通道只接受文本，不接受图片。读取任何图片文件（png/jpg/截图）会让整个
+对话历史永久失效——图片一旦进入历史，此后每次请求都会 400，上下文救不回来。
+本轮已有席位因此报废。**
+
+因此：
+- ❌ 禁止 `Read` 任何 .png/.jpg/.jpeg/.gif/.webp 文件
+- ❌ 禁止操作模拟器、禁止截图、禁止 uiautomator/screenrecord 取证
+- ✅ 模拟器实测与一切视觉验收由 Sonnet 多模态席位 `w-base-v2` 承担
+- ✅ 你只负责代码与自动化测试；需要看图判断时，停下来交给 leader 转派
+
+需要图片证据时的正确做法：send_message 给 leader 说明「需要什么视觉证据」，
+由 leader 派 w-base-v2 取证后把**文字结论**转给你。
