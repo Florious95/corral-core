@@ -20,11 +20,18 @@ import (
 // mapping to UI elements visible and one edit away, so a CLI redesign is a
 // routine maintenance task, not a code archaeology exercise.
 
-// spinnerFrames is the set of braille spinner frame characters Claude Code and
-// Codex draw while working. It deliberately excludes the dotted separator
-// "⠤" that idle status bars use, so a line containing a spinner frame is a
-// working signal, not an idle one.
-const spinnerFrames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+// spinnerFrames is the set of spinner frame characters the known Agent CLIs
+// draw while working: the braille dots (Claude Code / Codex classic), the
+// half-fill circle sequence ◐◑◒◓◔◕ Claude Code adopted as its new working
+// indicator (D-26), and the ✳ busy marker. It deliberately excludes the dotted
+// separator "⠤" that idle status bars use, so a line containing a spinner
+// frame is a working signal, not an idle one.
+//
+// This whitelist is a stopgap (D-26 layer ①): upstream redraws its indicator
+// without notifying us, so the durable signal is the glyph-independent
+// decideActivity fallback over Sample.FrameHistory (layer ②), not any
+// particular character set.
+const spinnerFrames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◑◒◓◔◕✳"
 
 // rule is one entry in an adapter's rule table. Match conditions are ANDed
 // within each list and the lists are ANDed together; an empty list imposes no

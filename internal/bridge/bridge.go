@@ -84,12 +84,15 @@ func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
 	return x, y, nil
 }
 
-// Scrollback fetches one page of history strictly above the visible screen.
-// start and end are negative line offsets relative to the screen bottom
-// (e.g. -30..-21 for the ten lines just above the top of the screen); paging
-// parameters come from the caller per requirement 006. Returns raw bytes.
+// Scrollback fetches one page of the pane's history + screen. start/end are
+// capture-pane -S/-E coordinates, TOP-RELATIVE: 0 = screen top row, -1 = the
+// row just above the screen, -2 = two rows above, etc. This matches the
+// protocol's from_line semantics (§6.3) directly, so the API layer passes
+// protocol coordinates through WITHOUT translation. A history-only page uses a
+// fully negative range (e.g. -30..-21); the current-screen page uses 0..(height-1);
+// a range spanning history + screen is allowed (e.g. -5..4). Returns raw bytes.
 // @contract
-// @pre start、end 为负行偏移（相对屏幕底部）且 start < end
+// @pre start < end（capture-pane -S/-E 坐标，顶部相对：0=屏顶，负=屏上历史）
 // @post 返回该页原始终端字节（ANSI 保留，capture-pane -S/-E）
 // @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
 // @inv none — 只读操作

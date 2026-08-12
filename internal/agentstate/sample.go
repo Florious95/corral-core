@@ -25,6 +25,17 @@ type Sample struct {
 	// table consumes it today — and is never a blocking wait: decisions stay
 	// synchronous and side-effect free.
 	LastOutputAge time.Duration
+
+	// FrameHistory is an optional window of recent raw pane captures for the
+	// glyph-independent activity fallback (D-26 layer ②), in chronological order
+	// (oldest first, the current screen last). When the per-agent rule tables
+	// yield unknown, decideActivity reads liveness off this window: any change
+	// between adjacent stripped frames ⇒ working, an all-identical window ⇒
+	// idle. It is additive — producers that pass a single RecentOutput leave it
+	// nil and the decision degrades to the rule tables unchanged. It is what
+	// lets detection survive a CLI swapping its spinner glyph entirely, which a
+	// byte whitelist never can (D-26: upstream redraws without notifying us).
+	FrameHistory [][]byte
 }
 
 // Confidence grades how strongly a decision is grounded. It accompanies every

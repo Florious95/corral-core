@@ -231,10 +231,11 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 		return
 	}
 
-	// bridge.Scrollback addresses lines relative to the screen bottom
-	// (-1 = bottom row), whereas the protocol addresses them relative to the
-	// screen top. Translate: protocol row F maps to tmux row F - paneHeight.
-	data, err := br.Scrollback(c.ctx, start-pane.Height, end-pane.Height)
+	// 坐标契约（写死，防再次错位）：协议 §6.3 与 tmux capture-pane -S/-E 是**同一坐标系**，
+	// 顶部相对——0 = 当前屏顶行，负数 = 屏上历史行（-1 = 屏顶上一行）。因此收敛后的协议
+	// 区间 [start, end] **直传** bridge，**禁止**做 ±pane.Height 平移（平移会把当前屏打成
+	// 历史、把历史页锚点打偏一屏，D-36 实证根因）。
+	data, err := br.Scrollback(c.ctx, start, end)
 	if err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
@@ -244,12 +245,17 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 		return
 	}
 
+	// 元数据头必须与页内容自洽：tmux capture-pane 在屏幕内容不足 pane.Height 时**裁掉尾部
+	// 空行**（协议区间 [start,end] 的理论行数 = end-start+1 会虚高），客户端按 line_count
+	// 锚定视口，虚高即错位。因此 line_count 用**实际数据行数**（countLines）度量，页尾行号
+	// = start + 实际行数 - 1。客户端据此头插并入、判顶（frame.fromLine > 请求值 ⇒ 到顶）。
+	actualLines := countLines(data)
 	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
 		Kind:      protocol.KindScrollback,
 		Ref:       sc.Ref,
 		ReqID:     sc.ReqID,
 		FromLine:  int32(start),
-		LineCount: uint32(end - start + 1),
+		LineCount: uint32(actualLines),
 		Data:      data,
 	})
 	if err != nil {
@@ -316,16 +322,15 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 // entirely below the screen) is shifted to the nearest available edge so the
 // client receives a useful page instead of a single degenerate line.
 func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, pane discovery.Pane, fromLine, count int) (int, int, error) {
-	// historySize = how many lines of history tmux retains above the screen.
-	// It is measured by capturing from the oldest possible line to the screen
-	// bottom and subtracting the screen height. (tmux's history-limit is
-	// bounded and small; a dedicated bridge primitive could avoid the full
-	// capture, but this consumes only the public bridge API.)
-	oldestToBottom, err := br.Scrollback(ctx, math.MinInt32, -1)
+	// historySize = 屏上历史行数。坐标系顶部相对（0=屏顶，负=历史）：`-S MinInt32 -E -1`
+	// 捕获从最老到**屏顶上一行**（-E -1 已排除整个屏幕），其行数即历史行数。
+	// **不得再减 pane.Height**——-E -1 已不含屏幕，减了即双计屏（历史被错误少算一屏，
+	// 收敛区间错位，D-36 实证根因二）。tmux history-limit 有界且小，整段捕获成本可接受。
+	oldestToTop, err := br.Scrollback(ctx, math.MinInt32, -1)
 	if err != nil {
 		return 0, 0, err
 	}
-	historySize := countLines(oldestToBottom) - pane.Height
+	historySize := countLines(oldestToTop)
 	if historySize < 0 {
 		historySize = 0
 	}

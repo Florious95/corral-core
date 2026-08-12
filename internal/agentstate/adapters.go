@@ -32,7 +32,10 @@ import "github.com/agentmirror/agentmirror/internal/protocol"
 //   - idle: the rest-state action bar "bypass permissions on · N shell" with
 //     no "esc to interrupt", and a bare "❯" prompt line.
 //
-// The rules are ordered so a strong blocked/working signal outranks idle.
+// The rules are ordered so a strong blocked/working signal outranks idle. When
+// the tables cannot decide (e.g. the CLI redrew its working indicator again —
+// D-26 moved it to ◐-family frames), Detect falls back to the glyph-independent
+// activity signal over Sample.FrameHistory (decideWithActivity).
 type ClaudeCodeAdapter struct{}
 
 // claudeRules is the Claude Code rule table. Edit here when the CLI changes
@@ -59,7 +62,7 @@ var claudeRules = []rule{
 	{
 		id: "claude-working-spinner", priority: 800,
 		state: protocol.StateWorking, confidence: ConfidenceLow,
-		comment:     "Fallback: a braille spinner frame on any line while the action bar is cut out of the tail window. Deliberately excludes the '⠤' idle separator (not in spinnerFrames).",
+		comment:     "Fallback: a known working glyph (braille dots, ◐-family half-fill frames, ✳) on any line while the action bar is cut out of the tail window. Deliberately excludes the '⠤' idle separator (not in spinnerFrames).",
 		spinnerLine: true,
 	},
 	{
@@ -80,9 +83,12 @@ var claudeRules = []rule{
 
 // Detect implements Adapter. It is a pure function of the sample's bytes: it
 // strips ANSI, runs the rule table, and always returns a State (unknown when
-// nothing matches). It never blocks, never errors, and never performs I/O.
+// nothing matches). When the table yields unknown it falls back to the
+// glyph-independent activity signal (D-26 layer ②), so a CLI that redraws its
+// working indicator still reads working. It never blocks, never errors, and
+// never performs I/O.
 func (a *ClaudeCodeAdapter) Detect(sample Sample) State {
-	return evaluateRules(claudeRules, stripANSI(string(sample.RecentOutput)))
+	return decideWithActivity(claudeRules, sample)
 }
 
 // CodexAdapter decides the state of a Codex pane (command "codex") from its
@@ -112,7 +118,7 @@ var codexRules = []rule{
 	{
 		id: "codex-working-spinner", priority: 650,
 		state: protocol.StateWorking, confidence: ConfidenceLow,
-		comment:     "Fallback: braille spinner frame on any line (same frame set as Claude Code).",
+		comment:     "Fallback: known working glyph on any line (same glyph set as Claude Code).",
 		spinnerLine: true,
 	},
 	{
@@ -124,7 +130,8 @@ var codexRules = []rule{
 	},
 }
 
-// Detect implements Adapter (same purity contract as ClaudeCodeAdapter).
+// Detect implements Adapter (same purity contract as ClaudeCodeAdapter): rule
+// tables first, then the glyph-independent activity fallback (D-26 layer ②).
 func (a *CodexAdapter) Detect(sample Sample) State {
-	return evaluateRules(codexRules, stripANSI(string(sample.RecentOutput)))
+	return decideWithActivity(codexRules, sample)
 }

@@ -242,8 +242,11 @@ func TestScrollbackConvergedRange(t *testing.T) {
 	// Wait for the tail on screen.
 	te.waitForMirror("SCBK_60")
 
-	// Request far more history than exists: from_line=-500, count=100.
-	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 9, Ref: te.ref(), FromLine: -500, Count: 100})
+	// Request far more history than exists: from_line=-500, count=20. The page
+	// is entirely above the oldest available line, so it must clamp to the
+	// oldest history page (which the count keeps strictly in history, never
+	// reaching the screen).
+	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 9, Ref: te.ref(), FromLine: -500, Count: 20})
 
 	// Read the scrollback binary reply, draining any mirror deltas that arrive
 	// first (the injected loop's echo is still streaming). The scrollback reply
@@ -282,10 +285,14 @@ func TestScrollbackConvergedRange(t *testing.T) {
 	if payload.FromLine < -1000 {
 		t.Errorf("from_line = %d, not clamped to available history", payload.FromLine)
 	}
-	if payload.LineCount > 100 {
-		t.Errorf("line_count = %d, exceeds requested count 100", payload.LineCount)
+	if payload.LineCount > 20 {
+		t.Errorf("line_count = %d, exceeds requested count 20", payload.LineCount)
 	}
-	// The payload must contain the oldest history lines, not the newest.
+	// The page must be clamped to the OLDEST available history (SCBK_1) and stay
+	// strictly above the screen (no SCBK_60, which is on the visible tail).
+	if !bytes.Contains(payload.Data, []byte("SCBK_1")) {
+		t.Errorf("scrollback page must contain the oldest history line SCBK_1; got %q", payload.Data)
+	}
 	if bytes.Contains(payload.Data, []byte("SCBK_60")) {
 		t.Error("scrollback page must not contain on-screen tail SCBK_60")
 	}
@@ -467,5 +474,219 @@ func TestStateNeverGatesMirror(t *testing.T) {
 	ia := ack.(protocol.InputAck)
 	if !ia.OK {
 		t.Fatalf("input ack under unknown state: %s", ia.Reason)
+	}
+}
+
+// ---- D-36 服务端坐标红测（fix-scrollback-history-d36）----
+//
+// 坐标系定义（写死，防再次错位）：协议 §6.3 与 tmux capture-pane -S/-E 是**同一坐标系**，
+// 顶部相对：0 = 当前屏顶行，负数 = 屏上历史行（-1 = 屏顶上一行，-2 = 再上一行…）。
+// 服务端把协议 from_line/count 直传 tmux，**禁止**做 ±pane.Height 平移（平移会把当前屏
+// 打成历史、把历史页锚点打偏）。historySize = capture-pane 从最老到屏顶上一行
+// (-S MinInt32 -E -1) 的行数，**不得再减 pane.Height**（-E -1 已排除屏幕，减了即双计屏）。
+//
+// 上述两处缺陷修复前，以下两条用例必红；修复后转绿。
+
+// scbkReadReply drains interleaving binary frames (mirror deltas of the
+// injected loop's echo) until the scrollback reply (KindScrollback) arrives.
+func (te *tmuxEnv) scbkReadReply() protocol.BinaryPayload {
+	te.t.Helper()
+	for i := 0; i < 50; i++ {
+		typ, data, err := te.wsEnv.conn.Read(context.Background())
+		if err != nil {
+			te.t.Fatalf("read scrollback reply: %v", err)
+		}
+		if typ != websocket.MessageBinary {
+			continue
+		}
+		p, err := protocol.DecodeBinary(data)
+		if err != nil {
+			te.t.Fatalf("decode binary: %v", err)
+		}
+		if p.Kind == protocol.KindScrollback {
+			return p
+		}
+	}
+	te.t.Fatal("scrollback reply never arrived")
+	return protocol.BinaryPayload{}
+}
+
+// stripANSI strips CSI/SGR escape sequences from capture-pane -e output.
+func stripANSI(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0x1b {
+			if i+1 < len(s) && s[i+1] == '[' {
+				j := i + 2
+				for j < len(s) && !((s[j] >= 'A' && s[j] <= 'Z') || (s[j] >= 'a' && s[j] <= 'z')) {
+					j++
+				}
+				if j < len(s) {
+					i = j
+				}
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// scbkMarkerNum parses "SBCMARK_<n>" (or any prefix_<n>) from a line.
+func scbkMarkerNum(line, prefix string) (int, bool) {
+	idx := strings.Index(line, prefix+"_")
+	if idx < 0 {
+		return 0, false
+	}
+	n := 0
+	for _, c := range line[idx+len(prefix)+1:] {
+		if c < '0' || c > '9' {
+			break
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n, n > 0
+}
+
+// scbkSplitLines splits capture output on newlines, dropping a trailing empty.
+func scbkSplitLines(s string) []string {
+	parts := strings.Split(s, "\n")
+	if n := len(parts); n > 0 && parts[n-1] == "" {
+		parts = parts[:n-1]
+	}
+	return parts
+}
+
+// TestScrollbackCurrentScreenMatchesVisible is the D-36 red test A: a
+// scrollback(0, count) request — the current-screen page the client pulls when
+// it starts scrolling — must return the pane's CURRENT VISIBLE screen, with the
+// data line count matching the metadata line_count. Today the server translates
+// protocol 0 by subtracting pane.Height, so the page lands on history above the
+// screen (content never reaches the visible bottom, and line_count lies). RED.
+func TestScrollbackCurrentScreenMatchesVisible(t *testing.T) {
+	te := startTmuxEnv(t, "bash")
+	// Small screen so the 60-line marker run overflows into history quickly.
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 8, Cols: 60})
+	_ = te.readBinaryFrame() // snapshot
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(),
+		Text: "for i in $(seq 1 60); do echo SBCMARK_$i; done"})
+	te.waitForMirror("SBCMARK_60")
+
+	// Read the actual visible screen via tmux (capture-pane) to know its
+	// top/bottom markers — the screen the current-screen page MUST cover.
+	// (Using runTmuxCmd, not readBinaryFrame: the subscribe snapshot was already
+	// consumed above and the mirror deltas carry loop echo, not a clean screen.)
+	out, err := runTmuxCmd(te.env, te.sock, "capture-pane", "-e", "-p", "-t", te.paneID)
+	if err != nil {
+		t.Fatalf("capture visible screen: %v\n%s", err, out)
+	}
+	vis := scbkSplitLines(stripANSI(out))
+	var topNum, botNum int
+	for _, l := range vis {
+		if n, ok := scbkMarkerNum(l, "SBCMARK"); ok {
+			if topNum == 0 || n < topNum {
+				topNum = n
+			}
+			if n > botNum {
+				botNum = n
+			}
+		}
+	}
+	if botNum == 0 {
+		t.Fatalf("visible screen has no SBCMARK; capture=%q", out)
+	}
+	if botNum != 60 {
+		t.Fatalf("visible screen bottom = SBCMARK_%d, want SBCMARK_60 (loop not flushed?)", botNum)
+	}
+
+	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 9, Ref: te.ref(), FromLine: 0, Count: 8})
+	payload := te.scbkReadReply()
+	pageLines := scbkSplitLines(stripANSI(string(payload.Data)))
+	// [red 1] 数据行数必须等于元数据 line_count（§6.3 自洽）。
+	if len(pageLines) != int(payload.LineCount) {
+		t.Errorf("D-36: current-screen page data lines = %d, metadata line_count = %d (mismatch)",
+			len(pageLines), payload.LineCount)
+	}
+	// [red 2] 页必须到达可见屏底部（含最末输出 SBCMARK_60）。
+	lastNum := 0
+	for _, l := range pageLines {
+		if n, ok := scbkMarkerNum(l, "SBCMARK"); ok {
+			lastNum = n
+		}
+	}
+	if lastNum < botNum {
+		t.Errorf("D-36: current-screen page last = SBCMARK_%d, must reach visible bottom SBCMARK_%d (page is history, not screen)",
+			lastNum, botNum)
+	}
+	// [red 3] 页首行必须在可见屏顶（或紧邻其上方 1 行），而非历史深处。
+	firstNum := 0
+	for _, l := range pageLines {
+		if n, ok := scbkMarkerNum(l, "SBCMARK"); ok {
+			firstNum = n
+			break
+		}
+	}
+	if firstNum < topNum-1 {
+		t.Errorf("D-36: current-screen page first = SBCMARK_%d, must start at/near visible top SBCMARK_%d (page is history)",
+			firstNum, topNum)
+	}
+}
+
+// TestScrollbackHistoryMetaMatchesContent is the D-36 red test B: a history
+// page's metadata from_line must match the page's actual content — the client
+// anchors its scroll viewport on that metadata. Today the pane.Height
+// translation shifts the anchor by one screen. RED.
+func TestScrollbackHistoryMetaMatchesContent(t *testing.T) {
+	te := startTmuxEnv(t, "bash")
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 5, Cols: 60})
+	_ = te.readBinaryFrame() // snapshot
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(),
+		Text: "for i in $(seq 1 40); do echo SBHIST_$i; done"})
+	te.waitForMirror("SBHIST_40")
+
+	// Visible screen top marker T → protocol 0 is at SBHIST_T.
+	out, err := runTmuxCmd(te.env, te.sock, "capture-pane", "-e", "-p", "-t", te.paneID)
+	if err != nil {
+		t.Fatalf("capture visible screen: %v\n%s", err, out)
+	}
+	vis := scbkSplitLines(stripANSI(out))
+	topNum := 0
+	for _, l := range vis {
+		if n, ok := scbkMarkerNum(l, "SBHIST"); ok {
+			topNum = n
+			break
+		}
+	}
+	if topNum == 0 {
+		t.Fatalf("visible screen top has no SBHIST marker; capture=%q", out)
+	}
+
+	// 请求完全在历史之上的页：from_line=-30 count=5 → 收敛到最老页。
+	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 5, Ref: te.ref(), FromLine: -30, Count: 5})
+	payload := te.scbkReadReply()
+	pageLines := scbkSplitLines(stripANSI(string(payload.Data)))
+	if len(pageLines) == 0 {
+		t.Fatal("history page empty")
+	}
+	firstNum := 0
+	for _, l := range pageLines {
+		if n, ok := scbkMarkerNum(l, "SBHIST"); ok {
+			firstNum = n
+			break
+		}
+	}
+	if firstNum == 0 {
+		t.Fatalf("history page first line has no SBHIST marker; page=%q", payload.Data)
+	}
+	// 协议坐标推导：协议 0 = 屏顶 topNum，页首行 firstNum 的协议行 = firstNum - topNum。
+	expected := firstNum - topNum
+	if payload.FromLine != int32(expected) {
+		t.Errorf("D-36: history page meta.from_line = %d, content implies %d (SBHIST_%d at protocol coord %d−%d); anchor shifted",
+			payload.FromLine, expected, firstNum, firstNum, topNum)
+	}
+	// 数据行数自洽。
+	if len(pageLines) != int(payload.LineCount) {
+		t.Errorf("D-36: history page data lines = %d, metadata line_count = %d (mismatch)",
+			len(pageLines), payload.LineCount)
 	}
 }
