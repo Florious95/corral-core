@@ -61,7 +61,8 @@ import dev.agentmirror.app.tsnet.ConnectionPath
  * manager.pump/resolveExpiredInputs）。服务被杀时由根组合的 [OnScreenFallbackPump] 兜底
  * 接管（服务恢复即让出，不双泵）。
  *
- * 上传地址（协议 §8 同端口 `POST /upload`）统一读 [ServiceWire.uploadBaseUrl]——由
+ * 上传地址（协议 §8 同端口 `POST /upload`）统一读 [ServiceWire.uploadBaseUrl]，认证 token
+ * 统一读 [ServiceWire.currentConfig]——二者都由
  * [startPersistentConnection] 统一装配入口注入（fix-reconnect-stale-config 同根并案：
  * 此前硬编码传 null 绕过统一入口 → 真机实证「未配置上传地址」；统一收口后与连接配置
  * 变更同源生效）。未注入时 VM 明确报错「未配置上传地址」，不静默。
@@ -120,10 +121,17 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
     // 这里只是再投一次 onStartCommand（系统对已运行服务幂等）。Context 未注入（纯 JVM 测试）
     // 时跳过——连接已装配，产品功能仍完整（前台服务是体验增强）。
     context?.let(MirrorForegroundService::start)
-    // fix-reconnect-stale-config 同根并案：上传基地址统一读 ServiceWire.uploadBaseUrl
-    // （startPersistentConnection 统一装配入口注入；此前硬编码 null 绕过 → 真机实证
-    // 「未配置上传地址」）。未注入（连接配置未落地）时 VM 明确报错，不静默。
-    return SessionViewModel(manager, HttpUrlConnectionUploader(), ServiceWire.uploadBaseUrl, ref, INITIAL_ROWS, INITIAL_COLS)
+    // 上传基地址与认证 token 均取 ServiceWire 的当前配对配置链：HTTP 上传与 WebSocket
+    // 认证同源。token 只作为参数下传，禁止日志/回显；配置未落地时 manager() 已阻止建 VM。
+    return SessionViewModel(
+        manager,
+        HttpUrlConnectionUploader(),
+        ServiceWire.uploadBaseUrl,
+        ref,
+        INITIAL_ROWS,
+        INITIAL_COLS,
+        uploadToken = ServiceWire.currentConfig()?.token,
+    )
 }
 
 /** 连接未配置的明确等待态（halt 纪律：缺字段不猜，不静默白屏）。 */

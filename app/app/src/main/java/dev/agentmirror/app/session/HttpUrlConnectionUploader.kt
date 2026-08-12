@@ -39,14 +39,26 @@ internal data class UploadResponseDto(
  * JSON 无 path / 网络异常 ⇒ 明确失败，绝不静默（003 静默失效猎杀）。
  *
  * @contract
- * @pre baseUrl 非空 http(s) 基地址；attachment.bytes 非空
+ * @pre baseUrl 非空 http(s) 基地址；uploadToken 为配对配置中的认证 token；attachment.bytes 非空
  * @post 成功返回 [UploadOutcome.Success]（主机绝对路径）；失败返回 [UploadOutcome.Failure]（人类可读原因）
  * @err 网络/IO 异常、非 2xx 响应、JSON 无 path 或 path 为空，全部折叠为 [UploadOutcome.Failure]，不抛出
- * @inv 每次调用独立建连，finally 必断开（无连接池）
+ * @inv token 只进入 Authorization 请求头，不进入日志/结果；每次调用独立建连，finally 必断开（无连接池）
  */
 class HttpUrlConnectionUploader : AttachmentUploader {
 
-    override fun upload(baseUrl: String, attachment: Attachment): UploadOutcome {
+    /**
+     * 无认证入口禁止发起请求：保留 SAM 契约兼容性，但让错误用法立即显式失败。
+     *
+     * @contract
+     * @pre 无
+     * @post 返回明确的未配置认证失败，且不建立 HTTP 连接
+     * @err none
+     * @inv 不允许无 token 请求静默退化为服务端 401
+     */
+    override fun upload(baseUrl: String, attachment: Attachment): UploadOutcome =
+        UploadOutcome.Failure("未配置上传认证")
+
+    override fun upload(baseUrl: String, uploadToken: String?, attachment: Attachment): UploadOutcome {
         val endpoint = baseUrl.trimEnd('/') + "/upload"
         val boundary = "AgentMirrorBoundary${System.currentTimeMillis()}"
         val body = buildMultipartBody(boundary, attachment)
@@ -60,6 +72,9 @@ class HttpUrlConnectionUploader : AttachmentUploader {
                 conn.readTimeout = READ_TIMEOUT_MS
                 conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
                 conn.setRequestProperty("Content-Length", body.size.toString())
+                if (!uploadToken.isNullOrBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer $uploadToken")
+                }
                 conn.outputStream.use { it.write(body) }
 
                 val code = conn.responseCode

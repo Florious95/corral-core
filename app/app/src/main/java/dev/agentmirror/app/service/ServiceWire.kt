@@ -160,6 +160,17 @@ object ServiceWire {
     }
 
     /**
+     * 当前持久连接配置的只读快照；会话上传与 WebSocket 认证必须消费同一 token 来源。
+     *
+     * @contract
+     * @pre 无
+     * @post 已注入配置时返回该 [ConnectionConfig]，否则返回 null
+     * @err none
+     * @inv 不复制、不记录、不回显 token
+     */
+    internal fun currentConfig(): ConnectionConfig? = config
+
+    /**
      * 最近一次真实 transport create 选择的网络类型；未拨号时为 null（不能按配置猜）。
      *
      * 必须是 Compose snapshot state：tailnet 冷启动首拨可能在节点 Starting 时先记为 LAN，

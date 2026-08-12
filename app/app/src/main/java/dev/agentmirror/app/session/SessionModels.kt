@@ -46,13 +46,17 @@ sealed interface UploadOutcome {
  * 单测注入假实现断言 path 插入光标处与失败报错。
  *
  * @contract
- * @pre baseUrl 非空 http(s) 基地址；attachment.bytes 非空
+ * @pre baseUrl 非空 http(s) 基地址；uploadToken 为配对配置中的认证 token；attachment.bytes 非空
  * @post 返回 [UploadOutcome.Success]（path 为主机绝对路径）或 [UploadOutcome.Failure]（人类可读原因）
  * @err 网络异常 / 非 2xx / 响应无 path 一律折叠为 [UploadOutcome.Failure]，不抛出
- * @inv 上传结果只经返回值表达，不修改 attachment
+ * @inv token 只进入 Authorization 请求头，不进入结果或日志；上传结果只经返回值表达，不修改 attachment
  */
 fun interface AttachmentUploader {
     fun upload(baseUrl: String, attachment: Attachment): UploadOutcome
+
+    /** 配对认证上传入口；测试假实现沿用两参数 SAM 时由默认实现委托。 */
+    fun upload(baseUrl: String, uploadToken: String?, attachment: Attachment): UploadOutcome =
+        upload(baseUrl, attachment)
 }
 
 /** 发送回执状态机（003 发送必达：成功/失败都可见）。 */

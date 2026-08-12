@@ -53,6 +53,8 @@ class SessionViewModel(
     val ref: String,
     initialRows: Int,
     initialCols: Int,
+    /** 上传认证与持久连接共用配对 token；只下传给 uploader，不记录、不回显。 */
+    internal val uploadToken: String? = null,
 ) : ConnectionManager.Listener {
 
     /** 终端内核：snapshot 重放 + delta 追加 + 本地 scrollback（006 本地化滚动）。 */
@@ -284,7 +286,7 @@ class SessionViewModel(
             return
         }
         uploadStatus = UploadStatus.Uploading
-        val outcome = uploader.upload(base, attachment)
+        val outcome = uploader.upload(base, uploadToken, attachment)
         uploadStatus = when (outcome) {
             is UploadOutcome.Success -> {
                 insertPathAtCursor(outcome.path)
