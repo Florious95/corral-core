@@ -173,6 +173,45 @@ class TermSurfaceView @JvmOverloads constructor(
         presenter?.onViewportSizeChanged(w, h)
     }
 
+    /**
+     * 窗口可见性变化（回前台/切后台）——fix-viewport-restore-d38 的根因补齐。
+     *
+     * D-38（用户多次报告）：切后台再回前台，终端只占屏幕顶部约 1/4、下方大片空黑。
+     * 根因：**回前台时没有任何人把终端几何重新对齐到当前 View 尺寸**——View 高复原但
+     * [onSizeChanged] 未必回调（尺寸与离开前相同），presenter 的内核 rows 停在离开前
+     * （或首帧被 IME 挤压）的旧小几何上。v5 曾用本方法补这个位（当时 QA PASS），
+     * 该文件在回收导航时被列为禁区未捞回，缺口一直空着。
+     *
+     * 修复：VISIBLE 时显式调 [TermViewPresenter.onRealViewportChanged] 重放当前几何——
+     * 真实视口变化（回前台）重算 rows/cols、内核尺寸不一致则 emit 一次 resize，
+     * 把几何重新对齐到当前 View（区别于 [onSizeChanged] 的 IME/输入框挤压语义，
+     * 后者只推 visibleRows 不发 resize——两者入口正交，见 presenter 注释）。
+     *
+     * 非 VISIBLE（切后台/遮罩）时撤销待执行帧：后台期间不渲染，避免 Choreographer
+     * 在不可见窗口空转（静默经济红线；v5 同款），帧循环仍纯数据驱动、空闲零帧。
+     *
+     * @contract
+     * @pre visibility 为 Android 窗口可见性值；presenter/有效尺寸可未就绪
+     * @post VISIBLE 且尺寸正：presenter 重放当前几何、按需 emit 一次 resize 并请求整帧；
+     *       VISIBLE 但尺寸未就绪（0x0）：安全忽略（presenter 正尺寸才重算）；
+     *       非 VISIBLE：撤销待执行帧、framePending 复位
+     * @err none
+     * @inv 不可见期间 framePending=false；恢复只复用当前 width/height，不猜测历史尺寸
+     */
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) {
+            if (framePending) {
+                Choreographer.getInstance().removeFrameCallback(frameCallback)
+                framePending = false
+            }
+            return
+        }
+        if (width <= 0 || height <= 0) return
+        presenter?.onRealViewportChanged(width, height)
+        postFrame()
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         presenter ?: return super.onTouchEvent(event)

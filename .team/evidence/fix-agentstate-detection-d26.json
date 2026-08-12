@@ -1,0 +1,39 @@
+{
+  "task_id": "fix-agentstate-detection-d26",
+  "status": "partial_layer1_live_layer2_dormant",
+  "result_id": "res_16d351aec3a0",
+  "agent": "w-dev-d26",
+  "summary": "D-26 Agent 工作状态检测两层修复。Layer ① 补齐新版指示字形（◐◑◒◓◔◕ 半填充圆序列 + ✳），生产路径立即生效。Layer ② 新增字形无关活性判据 decideActivity（帧窗口相邻变化⇒working、全同⇒idle、<2 帧⇒unknown），已实现且 10 条单测全绿，**但生产路径未接线，当前处于休眠状态**。",
+  "直接原因_用户截图实证": "Claude Code 新版把「工作中」指示符改成 ◐ 这类半填充圆动画（tmux 窗口标题形如 \"◐w-dev-cols\"），而本工程检测仍在匹配旧的转圈/左右移动点字形。用户原话：「最新版本 Claude Code 它的工作状态已经改成这样。然后此前这个工程它检测工作中状态还是点的转圈或点的左右移动。」用户就此报过三次失败。",
+  "⚠️_必须记清的实际生效范围": {
+    "layer1_生产生效": "rules.go 的 spinnerFrames 补入新字形。重编 daemon 后，含 ◐ 的 pane 立即可判 working。**这是用户真机上唯一会生效的部分。**",
+    "layer2_已实现但休眠": "activity.go 的 decideActivity + Sample.FrameHistory 可选字段。但 capturePaneOutput 仍只传单帧 ⇒ FrameHistory 为空 ⇒ decideActivity 返回 unknown ⇒ 落回规则表（字形白名单）。**治本那层在生产里没跑起来。**",
+    "seat_honesty": "席位主动披露此事，而非让「10 条红测全绿」把这个洞盖住。**若不披露，leader 会把本条记成「已修+治本」——那就是本轮第三份假 PASS，且出自 leader 之手。** 这个披露本身比修复更值钱。",
+    "leader_judgment": "据此判 status 为 partial，不判 pass。接线属 server/internal/api/ 改动，席位守边界未越界（D-36 正在改该目录），另行立案。"
+  },
+  "共存设计": "规则表优先，仅 unknown 时才落 activity fallback。blocked 权限框 / working 动作条 / idle prompt 三类文本规则永不被活动信号覆盖，有专门测试钉死。",
+  "tests": [
+    {"argv": "go test ./internal/agentstate/... -count=1", "rc": 0, "note": "activity_test.go 10 条全绿"},
+    {"argv": "防退化关键项：从未见过的字形（时钟 emoji 🕐🕑🕒🕓）仍判 working", "rc": 0, "note": "证明 Layer ② 逻辑不依赖白名单。这条是 leader 派单时专门加的验收，防止「只补 ◐」变成下一轮回归。"},
+    {"argv": "新版 ◐ 指示符 → working（含整帧旋转序列逐帧断言）", "rc": 0, "note": ""},
+    {"argv": "静止 pane → idle；ANSI 纯色变 → idle（可见内容不变不算工作）", "rc": 0, "note": ""},
+    {"argv": "blocked/working/idle 文本规则优先于活动信号", "rc": 0, "note": "共存设计钉死"},
+    {"argv": "单帧 / nil history → unknown", "rc": 0, "note": "边界 + 保证当前生产路径行为不变"},
+    {"argv": "go vet ./... / go build ./... / archwiki --strict-t3 --pkg internal/agentstate", "rc": 0, "note": "全 PASS"}
+  ],
+  "pending": [
+    {
+      "item": "重编 daemon",
+      "note": "服务端改动需重编才生效。生产 daemon pid 39489 是 13:40 构建的旧二进制。重编与真机验证由 leader 安排。"
+    },
+    {
+      "item": "Layer ② 生产接线",
+      "note": "需在 sampling 层把最近 N 次 capture 拼成 FrameHistory 传入。属 server/internal/api/ 改动，与 D-36 正在改的目录重叠，另行立案排期。**未接线前，上游若再改图标，本缺陷仍会复发**——这正是 Layer ② 要防的事。"
+    },
+    {
+      "item": "眼见为实",
+      "note": "改前复现、改后看到修复的真机/模拟器验证尚未做。"
+    }
+  ],
+  "at": "2026-08-12"
+}

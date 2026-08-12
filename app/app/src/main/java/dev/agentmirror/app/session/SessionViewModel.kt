@@ -171,7 +171,13 @@ class SessionViewModel(
             BinaryKind.DELTA -> emulator.feed(frame.data)
             // 历史分页：按服务端收敛后的实际区间头插（经验基）。
             BinaryKind.SCROLLBACK -> {
+                val before = emulator.scrollback.size
                 emulator.prependHistory(frame.data)
+                val merged = emulator.scrollback.size - before
+                // D-36 锚定保持：头插并入 [merged] 行后，锁定历史区的视口必须同步平移
+                // （topLine += merged），否则视口跳到并入的旧页、用户被顶离原内容处；
+                // 若并入 0 行（容量满/空历史）平移是无操作。跟随态贴底不受影响。
+                presenter.onHistoryPrepend(merged)
                 historyRequestInFlight = false
                 // 收敛判顶：实际区间起点比请求的更近 0 ⇒ 已到历史顶。
                 if (frame.fromLine > historyRequestedFromLine) {

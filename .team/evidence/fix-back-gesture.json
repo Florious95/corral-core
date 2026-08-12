@@ -1,7 +1,10 @@
 {
   "task_id": "fix-back-gesture",
-  "status": "pass",
-  "covers": ["D-23 侧滑返回直接退出 App", "D-32 返回跳级（3→1）"],
+  "status": "pass_user_confirmed",
+  "covers": [
+    "D-23 侧滑返回直接退出 App",
+    "D-32 返回跳级（3→1）"
+  ],
   "result_id": "res_11b246e19b58",
   "agent": "w-nav-recover",
   "summary": "侧滑第三级落点：第二级。从归档分支 v5-failed(2874c54) 精确回收 5 个导航文件后，左缘右滑与右缘左滑均从第三级会话页落到第二级会话列表，App 全程保持前台，从未出现 NexusLauncher。D-32 逐级验证同时通过：第三级 → 第二级 → 第一级 → 配对根，每次只退一级。行为与 v4 同形。",
@@ -30,8 +33,16 @@
     "为什么能挑干净": "导航与 termview 在归档里是不同文件，可精确分离；且上一轮回炉产出的守门探针 TermSurfaceSessionBindingRegressionTest 提供了『毒有没有跟进来』的客观判据 —— 它绿即证明未连带。"
   },
   "tests": [
-    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests BackGestureNavTest --tests MainActivityNavTest --tests TermSurfaceSessionBindingRegressionTest --tests TermSurfacePinchGestureTest", "rc": 0, "note": "BackGestureNavTest 14 例 + MainActivityNavTest 5 例 + 两道强制回归门全绿"},
-    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:assembleDebug", "rc": 0, "note": "构建成功"}
+    {
+      "argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests BackGestureNavTest --tests MainActivityNavTest --tests TermSurfaceSessionBindingRegressionTest --tests TermSurfacePinchGestureTest",
+      "rc": 0,
+      "note": "BackGestureNavTest 14 例 + MainActivityNavTest 5 例 + 两道强制回归门全绿"
+    },
+    {
+      "argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:assembleDebug",
+      "rc": 0,
+      "note": "构建成功"
+    }
   ],
   "眼见为实": {
     "device": "emulator-5556（新建 AVD agentmirror_test_b，本席独占；用户授权开第二台后新增，与 emulator-5554 互不干扰）",
@@ -56,5 +67,15 @@
     "seat_honesty": "前一轮（席位重建前）两次运行都停在任何 swipe 之前，席位报『未测得』而非在三个选项里挑一个 —— 没有事实就不编，这个克制是本次能被信任的前提。"
   },
   "至今未提交": "本工程当前主干累积多条已收口但未 commit 的改动（D-35 termview、D-22 session+service、本条导航 4 文件）。**本轮最大教训就是未提交的工作会归零**（v4 的导航与上传实现均因此永久丢失），建议 leader 尽早为已收口项建立 commit 锚点。",
-  "at": "2026-08-12"
+  "at": "2026-08-12",
+  "user_field_confirmation": {
+    "at": "2026-08-12 深夜",
+    "device": "用户真机（LAN 链路，包 agentmirror-v6-9653be0.apk）",
+    "words": "「侧滑的几个问题都解决了。」",
+    "covers": [
+      "D-23 侧滑返回直接退出 App",
+      "D-32 返回跳级（3→1）"
+    ],
+    "significance": "终审。模拟器实测只证明模拟器上行为正确；用户真机确认才算这条缺陷真的对用户消失了。本条自 v4 起被回退丢失、经归档回收后修复，用户确认闭环。"
+  }
 }

@@ -109,13 +109,17 @@ globalRegistry.define({
       const meta = decodeScrollbackPayload(bin.payload);
       helpers.log(`scrollback(0,6) meta: fromLine=${meta.fromLine} lineCount=${meta.lineCount} dataBytes=${meta.data.length}`);
 
-      const pageLines = splitLines(stripAnsi(meta.data));
-      helpers.log(`scrollback page (${pageLines.length} lines): ${JSON.stringify(stripAnsi(meta.data))}`);
+      // 协议语义：line_count 是 capture-pane -S/-E 区间大小（行数，**含尾空行**）。
+      // splitLines 剥尾空 ⇒ 直接数换行符最稳妥（capture-pane 每行一个 \n）。
+      const raw = stripAnsi(meta.data);
+      const dataLineCount = (raw.match(/\n/g) || []).length;
+      const pageLines = splitLines(raw);
+      helpers.log(`scrollback page (${pageLines.length} nonblank / ${dataLineCount} newlines): ${JSON.stringify(raw)}`);
 
-      // [2] 数据行数 === 元数据 line_count（协议自洽）。
+      // [2] 数据行数（含尾空）=== 元数据 line_count（协议自洽）。
       expectEqual(
-        pageLines.length, meta.lineCount,
-        `D-36: scrollback data line count must equal metadata line_count (§6.3)`,
+        dataLineCount, meta.lineCount,
+        `D-36: scrollback data newline count must equal metadata line_count (§6.3)`,
       );
       // [3] 页必须包含可见屏末行标记（最末输出）——今日服务端回 s-line-1..3，缺末行 → 红。
       const lastNum = markerNum(pageLines[pageLines.length - 1], prefix);
@@ -129,7 +133,7 @@ globalRegistry.define({
         firstNum != null && firstNum >= topNum - 1,
         `D-36: current-screen page must start at/near the visible top (first=${firstNum}, top=${topNum})`,
       );
-      helpers.log(`d36 current-screen page OK: ${pageLines.length} lines ${firstNum}..${lastNum}`);
+      helpers.log(`d36 current-screen page OK: ${pageLines.length} nonblank lines ${firstNum}..${lastNum}`);
     } finally {
       client.close();
     }

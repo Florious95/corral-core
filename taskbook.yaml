@@ -1853,6 +1853,252 @@ tasks:
     evidence: ".team/evidence/feat-daemon-scoped-discovery.json"
     contention: none
 
+  - id: fix-session-list-stale
+    goal: >
+      修复「已消失的会话仍留在 App 会话列表中」（用户 2026-08-12 截图实证）。
+      复现：leader 释放席位 w-dev-d26，其 tmux 窗口随之消失；但 App 会话列表仍显示该会话，
+      点进去得到「协议错误：session_not_found（unknown session ref）」外加整屏空白。
+      用户原话：「你释放是完全没有任何问题的。有问题的是，**为什么这个释放的角色还出现在我 APP 里面的会话列表当中**？」
+      daemon 每 2s 扫一次 tmux（list_interval=2s）并发 list_delta，因此要么删除事件未下发、
+      要么客户端未按 delta 剔除、要么 seq 不连续时未重新 list。须查清并修。
+      附带（同一现象的第二面）：会话确已消失时的错误态是把协议错误码原文上屏 + 整屏空白，
+      违反 raw/018 视觉标准第 5 项「错误态每页专门设计」。合理行为是「该会话已结束」+ 可返回列表。
+      本产品中 tmux 会话消失是常态（agent 跑完退出、用户 kill、机器重启），不是边缘情况。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "红测：收到删除某 ref 的 list_delta 后，会话列表不再包含该 ref"
+      - "红测：list_delta.seq 不连续于上次见过的值时自动重新 list"
+      - "红测：进入已不存在的会话时呈现「会话已结束」态并可返回列表，不得把协议错误码原文上屏"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/workspace/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/conn/"]
+    evidence: ".team/evidence/fix-session-list-stale.json"
+    contention: none
+
+  - id: study-image-inline-context
+    goal: >
+      调研并给出方案：用户从手机发图片时，图片应**直接进入 Agent CLI 的上下文**，
+      而不是只注入一个路径、再由 Agent 额外发一次读取请求。
+      用户 2026-08-12 原话：「我发一张图片给你，希望这个图片在我发的这个消息里面它就能直接被读取，
+      **就像我直接在 CLI 里面给你发图片一样**……而不至于要重新发一个请求去读这张图，这样的话会浪费。
+      这个问题我已经提过了，但是**四五轮都没有解决**。」
+      现状：raw/003 的既定语义是「手机上传 → 主机落盘 → **文件路径注入 CLI 输入**」，
+      即当前行为符合原裁定；用户现在要的是更进一步。**这属于需求演进，不是实现缺陷**，
+      故先立调研任务而非修复任务：查清 Claude Code / Codex 等 CLI 在终端里接收图片的实际机制
+      （终端图片粘贴序列？bracketed paste？CLI 自身的附件语法？），
+      判断我方 daemon 能否在注入侧复现该机制，产出可行性结论与方案选项。
+      不产品化前不动代码。
+    acceptance:
+      - "产出 docs/image-inline-context.md：各 CLI 接收图片的实际机制 + 我方可否复现 + 方案选项与代价"
+      - "每条结论须有出处（文档/源码/实测），不得停留在推测"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/study-image-inline-context.json"
+    contention: none
+
+  - id: fix-viewport-restore-d38
+    goal: >
+      修复「切后台再回前台，终端只占屏幕一小块、下方大片空白」（D-38，用户已多次报告）。
+      用户 2026-08-12 截图实证：终端内容仅占屏幕顶部约 1/4，中间大片空黑，键条与输入框在底部
+      —— 即终端行数停留在一个更小的旧视口几何上，未随回前台恢复。
+      ⚠️ **leader 引入的风险必须一并处理**：今晚 fix-ime-no-resize 把
+      TermViewPresenter.onViewportSizeChanged 改成「首帧 seed 一次后不再 emit resize、
+      只更新 visibleRows」。修复前视口变化会触发重算并纠正几何；修复后则不会，
+      因此后台期间视口若变过（如 IME 收起），回前台会卡在旧的小几何上 —— 与本现象一致。
+      **根子是同一个毛病：onViewportSizeChanged 分不清「输入框临时挤压」与「真实视口变化」。**
+      「一律 emit」和「一律不 emit」都是错的。本任务要给出能区分两者的判据：
+      输入框/IME 引起的挤压 → 视口上推、不重算 rows/cols、不发 resize；
+      真实视口变化（回前台、旋转、分屏、窗口尺寸变更）→ 必须重算并按需发一次 resize。
+      v5 曾用 TermSurfaceView.onWindowVisibilityChanged 处理回前台（QA PASS），
+      代码在归档分支 v5-failed@2874c54 可参考，但该文件同时含 v5 闪烁回归元凶，**不得整文件捞回**。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "红测：IME 挤压序列不产生 resize 帧（保住 fix-ime-no-resize 成果）"
+      - "红测：模拟切后台→视口变化→回前台，几何必须恢复到与当前 View 尺寸一致，且最多发一次 resize"
+      - "强制门 TermSurfaceSessionBindingRegressionTest / TermSurfacePinchGestureTest / TermViewImeResizePresenterProbeTest 全绿"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-viewport-restore-d38.json"
+    contention: none
+
+  - id: fix-pinch-preview-commit
+    goal: >
+      兑现 raw/041 已裁定但从未实现的规则：捏合过程中**只做本地视觉缩放**（Canvas scale，
+      不改 rows/cols、不发 resize），**手指松开后才算最终 rows/cols 发一次 resize**，
+      并在此时持久化字号；下次进入会话在 View 布局完成之后再应用持久化值。
+      一次改动同时解决三条：D-29 捏合闪烁重绘、D-31 缩放不持久化、并为 D-28 右侧溢出提供收敛点。
+      **用户 2026-08-12 实证了根本病**：局域网下捏合整体重绘约 0.5 秒内结束，
+      Tailscale 下则「频繁闪烁」——即捏合过程中每帧都发 resize、服务端每次重排回一次整屏，
+      痛苦程度正比于 RTT。局域网把病掩盖了，而用户主场景是 TS。
+      ⚠️ 历史教训：v5 曾用 CellSizeStore 做字号持久化并引入输入框闪烁回归，
+      根因是**在新 View 尚未布局时**用 retained presenter 的旧 viewport 应用持久化字号，
+      沿 termview→session 反向边发出错误 resize。持久化功能本身没错，错在时机。
+      守门探针 TermSurfaceSessionBindingRegressionTest 专防此事，重做必须保持它绿。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "红测：捏合过程中（多次 scale 事件）不产生任何 resize 帧；松手后恰好产生一次"
+      - "红测：松手时持久化字号；重新绑定 View 时在布局完成后才应用，绑定期零 resize 帧"
+      - "强制门 TermSurfaceSessionBindingRegressionTest 保持绿"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-pinch-preview-commit.json"
+    contention: none
+
+  - id: study-herdr-agent-state
+    goal: >
+      调研 herdr 如何正确检测 Agent CLI 的运行状态，产出可落地的替代方案，
+      终结本工程「靠刮屏幕字符判状态」的路线。
+      **用户 2026-08-12 直接裁定**：「你假如说认为这两种，一个是完成态，一个是工作中态，
+      还在通过这样的字符串形式去确定它的工作状态，那就**完全走偏了**。
+      并且**这两个实际上都是完成的状态**。你可以通过 **herdr** 这个仓库去确定
+      如何正确的检测 Agent CLI 的状态。」
+      背景实证：Claude Code 完成态输出 `Brewed for 42m 3s`、也输出 `Churned for 3m 37s`，
+      两者**都是完成态**，且前导为同类星号字形 —— 字形与字符串层面根本无法分辨状态。
+      leader 此前让 D-26 往 spinnerFrames 白名单补 `✳` 等字形，方向错误，
+      上线后只会让「已停止工作却显示工作中」的误检更严重（用户已实测报告该误检）。
+      herdr 自述是 "the runtime your coding agents live on" —— 它托管 agent 进程，
+      因此可能以进程/PTY/运行时协议等结构性信号判定状态，而非刮屏。本任务查清其机制。
+    acceptance:
+      - "产出 docs/herdr-agent-state-detection.md：herdr 判定 agent 状态的实际机制（数据来源/信号/判据）+ 出处（仓库/文件/函数）+ 许可证 + 我方能否复现"
+      - "明确回答：不刮屏的前提下，我方 daemon 能获得哪些结构性信号（进程状态/PTY 活性/子进程/CLI 自身协议或钩子）"
+      - "给出替代方案与代价，并说明 D-26 现有 rules.go 字形白名单应如何退场"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/study-herdr-agent-state.json"
+    contention: contract
+
+  - id: fix-agentstate-detection-d26
+    goal: >
+      修复 D-26「Agent 工作状态检测准确率低」（用户报过三次失败）。
+      直接原因（用户 2026-08-12 截图实证）：Claude Code 新版把「工作中」指示符改成了 `◐` 这类
+      半填充圆动画，而本工程的 agentstate 检测仍在匹配旧的转圈 / 左右移动点的字形，**指示符换了检测没跟上**。
+      但只补新字形是治标：**按具体字形匹配，上游每改一次就失灵一次，且上游不会通知我们。**
+      因此本任务要两层一起做：
+      ① 立即修：补齐当前 Claude Code / Codex 等 CLI 的工作指示字形，让检测立刻恢复准确；
+      ② 治本：改成不依赖具体字形的判据 —— 例如「同一区域在短窗口内高频变化」这类
+      与字形无关的活性信号，使上游换图标不再导致误判。两层都要有测试。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/agentstate/...'"
+      - "红测：给定含新版 ◐ 类指示符的 pane 采样，判定为 working；给定静止 pane 判定为 idle"
+      - "红测：字形无关判据 —— 用一组从未见过的指示字形，仍能判出 working"
+    deps: []
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/fix-agentstate-detection-d26.json"
+    contention: none
+
+  - id: fix-input-send-fullrepaint
+    goal: >
+      修复「用户从 App 发消息后整屏自上而下逐行重刷、底部最新消息反而看不到」
+      （用户第 4 次报告，历史上从未真正解决）。
+      **关键差分（用户 2026-08-12 提供）**：该现象**只在用户从 App 发消息时出现**；
+      teammate 从其他进程往同一 tmux 会话写入时，终端内容变化本质相同，**却不会重刷**。
+      即渲染层有能力正确增量绘制，问题出在「App 发送 input」这条路径上多做了什么。
+      调研已指出（docs/oss-terminal-solutions.md）：内核早有行级脏区 takeDirty，
+      但 TermSurfaceView 仍整帧全窗口重绘；herdr 内嵌 ghostty（MIT）的 collect_dirty_patch
+      逐行 patch 是直接模板。但根治前须先解释清楚「为何只有自己发消息才触发」。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "红测：模拟『本端发送 input 后收到回显 delta』与『纯外部 delta』两条路径，断言两者产生的重绘范围一致（均为脏行级，不得整屏）"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-input-send-fullrepaint.json"
+    contention: none
+
+  - id: fix-cols-grid-convergence
+    goal: >
+      修复最右列文字被截断（用户第 4 次报告：「最右侧的字跑到屏幕外，只能看到一半」）。
+      根因由 study-web-terminal-model 查实并附代码证据：安卓把「上报给服务端的 cols」用
+      **名义字格宽（默认 10px）**计算，而「画布的列推进」用**实测字形宽**计算——
+      两个独立栅格从不收敛，服务端按较宽的 cols 换行，画布按较窄的实测宽推进，
+      于是最右一列必然画到 View 外。Web 端（xterm.js）用同一套 cell 度量决定列数与绘制推进，
+      不存在两套栅格，故无此现象。
+      修法方向：统一栅格来源，cols 必须由实测字形推进宽度求得且向下取整（宁可少一列不可多一列）。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "红测：给定 View 宽度与实测字形宽，上报 cols 与画布可容纳列数必须相等；且 cols*字形宽 <= View 宽"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-cols-grid-convergence.json"
+    contention: none
+
+  - id: research-oss-terminal-solutions
+    goal: >
+      调研开源终端实现如何解决移动/小窗口下的四类问题，产出可落地的技术方案（不改产品代码）。
+      用户判断：「这个东西应该有开源的办法……SSH 客户端里能用的 CLI 对移动窗口做过优化，
+      这些问题都应该能找到解决办法。」判断成立——终端 reflow、scrollback 分页、
+      小窗口 cols 收敛都是被反复解决过的问题，不应由本工程从零发明。
+      调研对象至少覆盖：xterm.js（MIT，本仓库 web/ 已在用）、libvterm/vte 类状态机、
+      alacritty/wezterm 的 grid 与 reflow 实现、mosh 的预测与重绘策略、
+      以及移动 SSH 客户端（Blink/Termius 等）对窄屏的处理。
+      硬约束：终端内核须 Apache-2.0 兼容（GPL 隔离红线，Termux 系 GPLv3 不可用）——
+      可借鉴模型与算法、可引用 MIT/Apache 代码，不得复制 GPL 代码。
+    acceptance:
+      - "产出 docs/oss-terminal-solutions.md：四类问题逐条给出至少一个开源实现的具体做法 + 出处（仓库/文件/函数）+ 许可证 + 可否直接采用的结论"
+      - "每条方案必须落到「我们要改哪个函数的什么行为」，不得停留在概念"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/research-oss-terminal-solutions.json"
+    contention: none
+
+  - id: study-web-terminal-model
+    goal: >
+      以 Web 客户端（xterm.js，MIT）为对照标准，产出安卓自研终端内核的模型差异清单。
+      同协议、同 daemon、两个客户端：Web 用成熟终端库，安卓自研内核（当初为避 GPL，
+      Termux 那套是 GPLv3 不可用）。用户反复报告的四条缺陷全部出在安卓端：
+      右侧文字截断、发消息从上往下刷新致最新消息看不到、向上滑看不到打开会话前的历史、
+      捏合后闪烁重绘且字号不持久化。
+      本任务只做对照分析，不改产品代码：读 web/js/{scrollback,terminal,client}.js 与
+      app 的 termview/terminal 内核，逐条比对 buffer 与 viewport 分离、reflow 锚定、
+      cell 宽度求法、scrollback 分页拉取四个模型点，产出差异清单与可执行的修法建议。
+    acceptance:
+      - "产出 docs/web-vs-android-terminal-model.md：四个模型点逐条对照 + 差异 + 修法建议"
+      - "每条差异必须给出代码位置（文件:行）作为证据，不得停留在概念描述"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/study-web-terminal-model.json"
+    contention: none
+
+  - id: fix-scrollback-history-d36
+    goal: >
+      D-36 精确定义（用户 2026-08-12 真机原话）：「向上滑只有部分生效……历史仅限于我打开这个
+      窗口积攒的历史。我的含义是我可以往上滑看到所有历史，就像我在 CLI 通过移动鼠标滚轮往上滑」。
+      即：本地缓冲滚动已通，但会话订阅之前的 tmux 历史从未被拉取。
+      注意管道已存在：ConnectionManager.scrollback(ref, fromLine, count) 可发 ScrollbackFrame，
+      SessionViewModel:333 也有调用点，服务端与协议均支持（二进制 kind=3，12 字节元数据头
+      req_id/from_line/line_count）。**所以这不是"没实现"，是行为不对**——
+      须查清触发条件、分页收敛、以及拉回的历史有没有真正并入本地 scrollback 可被滚动到。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "红测：滚到本地缓冲顶部时发出 scrollback 请求，且返回的历史并入缓冲后可继续向上滚动"
+      - "红测：连续翻页收敛（不重复拉同一页、不无限拉）"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/termview/", "server/internal/api/", "server/internal/bridge/", "test/cases/"]
+    evidence: ".team/evidence/fix-scrollback-history-d36.json"
+    scope_expanded: >
+      2026-08-12 leader 授权扩至 server/：席位以隔离 daemon 实证服务端 scrollback 坐标平移
+      （ws_handler.go:237 的 start-pane.Height）与 historySize 双计屏（scrollbackRange:324-332），
+      导致返回内容锚点错位一屏、出现空洞、且客户端据此提前判顶停止补页。
+      只修客户端无法达成 D-36 目标，故一并纳入。
+    contention: none
+
+  - id: fix-upload-transport-tsnet
+    goal: >
+      修复图片上传在 tailnet 下必然 timeout（用户 2026-08-12 真机实证，失败模式为 Timeout 而非 401）。
+      根因：WebSocket 经 tsnet 用户态节点的 SOCKS 代理拨号（TsnetDial.proxyFor 状态为 Up 时返回
+      java.net.Proxy SOCKS），而 HttpUrlConnectionUploader 用系统网络栈直连，无任何 Proxy 引用。
+      两条通道不同——daemon 只在 tailnet 可达时，WS 通而 HTTP 上传出不去，表现为 connectTimeout。
+      D-22（401，Bearer 头缺失）已修复且经模拟器实测通过，但该实测用的是隔离 daemon + 10.0.2.2
+      局域网直连，未经 tsnet，故未能覆盖本缺陷。修法：上传必须与 WS 使用同一传输通道。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "红测：tsnet 状态为 Up 时上传请求经 SOCKS 代理建连；Down/直连时保持系统直连"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/service/"]
+    evidence: ".team/evidence/fix-upload-transport-tsnet.json"
+    contention: none
+
   - id: fix-ime-no-resize
     goal: >
       兑现 raw/019 已裁定但从未实现的规则：键盘弹出 / 输入框变高时，**终端 rows/cols 不变、
