@@ -37,7 +37,7 @@ import androidx.compose.runtime.setValue
  *
  * @contract
  * @pre 构造参数 initialShowPairing 为首启配对判定结果（无配对配置 → true，进配对页）
- * @post [writeTo] 落全部非空导航态（无会话时不写会话键）；[restoreFrom] 仅在
+ * @post [writeTo] 落全部非空导航态（无工作区/会话时不写对应键）；[restoreFrom] 仅在
  *       savedInstanceState 含 KEY_SHOW_PAIRING 时恢复，否则整体跳过保持初值
  * @err none
  * @inv activeSession 非空时恒为 (ref, name) 二元组；writeTo/restoreFrom 往返还原同一导航态
@@ -53,10 +53,44 @@ class MainNavState(initialShowPairing: Boolean) {
     /** 当前会话（ref, name）；null = 不在会话页（工作区/配对页）。重建后恢复（D-3）。 */
     var activeSession by mutableStateOf<Pair<String, String>?>(null)
 
+    /** 当前选中的工作区 cwd；非空 = 工作区二级会话选择页。重建后恢复（D-32）。 */
+    var selectedWorkspaceCwd by mutableStateOf<String?>(null)
+
+    /**
+     * 系统返回逐级裁决（D-23/D-32）：会话 → 会话选择 → 工作区列表 → 配对根。
+     *
+     * @contract
+     * @pre none
+     * @post 有上一级时仅清当前最高优先级导航态并返回 true；配对根不改状态并返回 false
+     * @err none
+     * @inv 每次调用至多迁移一级，优先级恒为 activeSession → selectedWorkspaceCwd →
+     *      showSettings → showPairing；低优先级导航态不抢先消费返回事件
+     */
+    fun onSystemBack(): Boolean {
+        if (activeSession != null) {
+            activeSession = null
+            return true
+        }
+        if (selectedWorkspaceCwd != null) {
+            selectedWorkspaceCwd = null
+            return true
+        }
+        if (showSettings) {
+            showSettings = false
+            return true
+        }
+        if (!showPairing) {
+            showPairing = true
+            return true
+        }
+        return false
+    }
+
     /** 序列化到 Activity 的 outState（onSaveInstanceState 时调用）。 */
     fun writeTo(outState: Bundle) {
         outState.putBoolean(KEY_SHOW_PAIRING, showPairing)
         outState.putBoolean(KEY_SHOW_SETTINGS, showSettings)
+        selectedWorkspaceCwd?.let { outState.putString(KEY_WORKSPACE_CWD, it) }
         activeSession?.let { (ref, name) ->
             outState.putString(KEY_SESSION_REF, ref)
             outState.putString(KEY_SESSION_NAME, name)
@@ -68,6 +102,7 @@ class MainNavState(initialShowPairing: Boolean) {
         if (savedInstanceState == null || !savedInstanceState.containsKey(KEY_SHOW_PAIRING)) return
         showPairing = savedInstanceState.getBoolean(KEY_SHOW_PAIRING)
         showSettings = savedInstanceState.getBoolean(KEY_SHOW_SETTINGS)
+        selectedWorkspaceCwd = savedInstanceState.getString(KEY_WORKSPACE_CWD)
         val ref = savedInstanceState.getString(KEY_SESSION_REF)
         val name = savedInstanceState.getString(KEY_SESSION_NAME)
         activeSession = if (ref != null) ref to (name ?: ref) else null
@@ -76,6 +111,7 @@ class MainNavState(initialShowPairing: Boolean) {
     private companion object {
         const val KEY_SHOW_PAIRING = "nav_show_pairing"
         const val KEY_SHOW_SETTINGS = "nav_show_settings"
+        const val KEY_WORKSPACE_CWD = "nav_workspace_cwd"
         const val KEY_SESSION_REF = "nav_session_ref"
         const val KEY_SESSION_NAME = "nav_session_name"
     }

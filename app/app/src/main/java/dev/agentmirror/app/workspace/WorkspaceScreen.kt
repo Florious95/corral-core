@@ -16,7 +16,6 @@
 
 package dev.agentmirror.app.workspace
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -47,9 +46,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -70,21 +66,26 @@ import dev.agentmirror.app.ui.theme.Spacing
  * - 转场：一二级横向滑动 + 淡入淡出；行点击 ripple（Surface onClick）。
  *
  * 状态全部来自 [WorkspaceViewModel]；聚合字段是服务端权威值，本屏只渲染不重算（012）。
+ * [selectedWorkspaceCwd] 由根导航壳持有（D-32）；[onSelectWorkspace]/[onBackToList]
+ * 只请求上层迁移层级，本屏不再私存二级选择态。
+ *
+ * @contract
+ * @pre viewModel 提供当前工作区模型；selectedWorkspaceCwd 可为 null 或暂未出现在模型中的 cwd
+ * @post null cwd 渲染一级列表；非空 cwd 渲染对应会话列表（模型暂缺时为空表）；选择/返回经回调上抛
+ * @err none
+ * @inv 聚合状态不在 UI 重算；工作区选择态只读自入参，屏内不另建 remember 状态
  */
 @Composable
 fun WorkspaceScreen(
     viewModel: WorkspaceViewModel,
+    selectedWorkspaceCwd: String?,
     connectionPath: ConnectionPath? = null,
+    onSelectWorkspace: (cwd: String) -> Unit,
+    onBackToList: () -> Unit,
     onOpenSession: (ref: String, name: String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
-
-    var selectedCwd by remember { mutableStateOf<String?>(null) }
-    val selectedWorkspace = state.workspaces.firstOrNull { it.cwd == selectedCwd }
-
-    // 系统返回键语义：二级会话列表 → 一级工作区（此前只能点顶部文字返回）。
-    BackHandler(enabled = selectedWorkspace != null) { selectedCwd = null }
 
     Column(
         modifier = Modifier
@@ -92,17 +93,17 @@ fun WorkspaceScreen(
             .background(MaterialTheme.colorScheme.background),
     ) {
         TopBar(
-            selected = selectedWorkspace,
+            selectedCwd = selectedWorkspaceCwd,
             // 拨号工厂记录的是本次尝试路径；只有 READY 后才可称为当前已连接路径。
             connectionPath = connectionPath.takeIf { state.connection == ConnectionUi.READY },
-            onBack = { selectedCwd = null },
+            onBack = onBackToList,
             onOpenSettings = onOpenSettings,
         )
         ConnectionBanner(connection = state.connection)
 
         // 一级⇄二级转场：以选中 cwd 为键横向滑动（进入右滑入，返回左滑入），018 §一.6。
         AnimatedContent(
-            targetState = selectedWorkspace?.cwd,
+            targetState = selectedWorkspaceCwd,
             transitionSpec = {
                 if (targetState != null) {
                     (slideInHorizontally { it / 4 } + fadeIn())
@@ -117,8 +118,8 @@ fun WorkspaceScreen(
         ) { cwd ->
             val workspace = state.workspaces.firstOrNull { it.cwd == cwd }
             when {
-                cwd != null && workspace != null -> SessionList(
-                    workspace = workspace,
+                cwd != null -> SessionList(
+                    sessions = workspace?.sessions.orEmpty(),
                     onOpenSession = onOpenSession,
                 )
                 // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
@@ -127,7 +128,7 @@ fun WorkspaceScreen(
                 state.isEmpty -> EmptyGuideContent()
                 else -> WorkspaceList(
                     workspaces = state.workspaces,
-                    onOpenWorkspace = { selectedCwd = it.cwd },
+                    onOpenWorkspace = { onSelectWorkspace(it.cwd) },
                 )
             }
         }
@@ -140,7 +141,7 @@ fun WorkspaceScreen(
  */
 @Composable
 private fun TopBar(
-    selected: WorkspaceUi?,
+    selectedCwd: String?,
     connectionPath: ConnectionPath?,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -154,7 +155,7 @@ private fun TopBar(
                 .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (selected == null) {
+            if (selectedCwd == null) {
                 Text(
                     text = "工作区",
                     style = MaterialTheme.typography.titleLarge,
@@ -169,7 +170,7 @@ private fun TopBar(
                     Text("‹ 工作区", style = MaterialTheme.typography.labelLarge)
                 }
                 Text(
-                    text = cwdDisplayName(selected.cwd),
+                    text = cwdDisplayName(selectedCwd),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -383,7 +384,7 @@ private fun WorkspaceList(
 /** 二级：选中 cwd 下的会话列表（ref 寻址、name 展示；unknown 灰显不阻塞，008）。 */
 @Composable
 private fun SessionList(
-    workspace: WorkspaceUi,
+    sessions: List<SessionUi>,
     onOpenSession: (ref: String, name: String) -> Unit,
 ) {
     LazyColumn(
@@ -391,7 +392,7 @@ private fun SessionList(
             .fillMaxSize()
             .navigationBarsPadding(),
     ) {
-        items(workspace.sessions, key = { it.ref }) { s ->
+        items(sessions, key = { it.ref }) { s ->
             Surface(
                 onClick = { onOpenSession(s.ref, s.name) },
                 color = MaterialTheme.colorScheme.background,

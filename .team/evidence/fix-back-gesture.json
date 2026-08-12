@@ -1,0 +1,60 @@
+{
+  "task_id": "fix-back-gesture",
+  "status": "pass",
+  "covers": ["D-23 侧滑返回直接退出 App", "D-32 返回跳级（3→1）"],
+  "result_id": "res_11b246e19b58",
+  "agent": "w-nav-recover",
+  "summary": "侧滑第三级落点：第二级。从归档分支 v5-failed(2874c54) 精确回收 5 个导航文件后，左缘右滑与右缘左滑均从第三级会话页落到第二级会话列表，App 全程保持前台，从未出现 NexusLauncher。D-32 逐级验证同时通过：第三级 → 第二级 → 第一级 → 配对根，每次只退一级。行为与 v4 同形。",
+  "本质": {
+    "not_a_defect_fix": "这不是新写的修复，是**回收 leader 回退时误删的既有成果**。",
+    "why_lost": "v3/v4/v5 三个 APK 全部从未提交的工作区直接打包，git 无任何 commit/tag/stash 锚点。leader 将主干退回 git HEAD(7c56353) 时，把 v4 已经好用的导航实现一并退掉，用户随即在真机报告「侧滑直接退桌面，App 关闭」。",
+    "user_was_right": "用户判断「这也属于改动引发」成立。leader 最初把它当作 D-23 原始缺陷，判错了。"
+  },
+  "决定性对照证据": {
+    "source": "e2e/artifacts/abc-regression/REPORT.md（A/B/C 三包同一模拟器、同一隔离真实 claude.exe 会话、每组卸载全新安装）",
+    "A_v2基线_gitHEAD": "左右侧滑均 → 桌面（mCurrentFocus 变 NexusLauncher）",
+    "B_d35fix": "左右侧滑均 → 桌面（与 A 完全一致，证明 D-35 与此无关）",
+    "C_v4": "左右侧滑均 → 留在 App，落第二级会话列表",
+    "本任务_回收后": "左右侧滑均 → 落第二级会话列表（与 C 组 v4 同形）"
+  },
+  "回收清单": {
+    "recovered_from": "v5-failed @ 2874c54，逐 blob hash 与归档一致",
+    "files": [
+      "app/app/src/main/java/dev/agentmirror/app/MainActivity.kt（onBackPressedDispatcher.addCallback）",
+      "app/app/src/main/java/dev/agentmirror/app/MainNavState.kt（onSystemBack 逐级裁决 + selectedWorkspaceCwd）",
+      "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt（根 BackHandler 接线）",
+      "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt（二级选择态上提到导航壳）",
+      "app/app/src/test/java/dev/agentmirror/app/BackGestureNavTest.kt"
+    ],
+    "⚠️_禁区未被连带回收": "同一归档提交内含 v5 输入框闪烁回归的元凶。以下四文件确认未被回收，hash 与归档不同：termview/TermSurfaceView.kt、termview/CellSizeStore.kt、test/CellSizeStoreTest.kt、test/TermSurfaceResumeTest.kt。leader 已独立复核：git status 无 CellSizeStore；TermSurfaceView.kt 仍只含 D-35 的 2 行改动。",
+    "为什么能挑干净": "导航与 termview 在归档里是不同文件，可精确分离；且上一轮回炉产出的守门探针 TermSurfaceSessionBindingRegressionTest 提供了『毒有没有跟进来』的客观判据 —— 它绿即证明未连带。"
+  },
+  "tests": [
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests BackGestureNavTest --tests MainActivityNavTest --tests TermSurfaceSessionBindingRegressionTest --tests TermSurfacePinchGestureTest", "rc": 0, "note": "BackGestureNavTest 14 例 + MainActivityNavTest 5 例 + 两道强制回归门全绿"},
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:assembleDebug", "rc": 0, "note": "构建成功"}
+  ],
+  "眼见为实": {
+    "device": "emulator-5556（新建 AVD agentmirror_test_b，本席独占；用户授权开第二台后新增，与 emulator-5554 互不干扰）",
+    "method": "从已核验第三级出发（UI 含 claude.exe 顶栏与输入框），左缘右滑 5,1200→500,1200 / 右缘左滑 1075,1200→580,1200，各 300ms，每次滑动前重新进入第三级避免污染",
+    "raw_evidence": {
+      "left-before-focus.txt": "mCurrentFocus=dev.agentmirror.app/.MainActivity",
+      "left-after-focus.txt": "mCurrentFocus=dev.agentmirror.app/.MainActivity —— 未离开 App",
+      "right-after-focus.txt": "mCurrentFocus=dev.agentmirror.app/.MainActivity —— 未离开 App",
+      "result.txt": "left=level2  right=level2  d32=level3_to_level2_to_level1_to_pairing_root",
+      "left-after.xml": "含 text=\"‹ 工作区\" 与 text=\"claude.exe\" —— 确为第二级会话列表"
+    },
+    "leader_independent_check": "leader 未采信席位描述，直接读取 focus 文件、result.txt 与 UI dump 文本，逐条核对；并核实证据时间戳 21:00:58–21:02:32 确为本轮产生"
+  },
+  "isolation_compliance": {
+    "daemon": "自建隔离 daemon，用 AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS 收窄 discovery，全程 UI 只出现本席临时 cwd",
+    "note": "该环境变量定义在 server/internal/api/discoverer.go:21（不设=生产全扫；设空=一个都不扫；设了=fail-closed 白名单）。本轮此前有席位因未收窄而扫到宿主真实 socket 触线并 halt；leader 一度误判该能力不存在并另立任务 feat-daemon-scoped-discovery，查实后已撤销并在 taskbook 标 void。",
+    "verified": "未触碰宿主真实 tmux 与生产 daemon（pid 39489）"
+  },
+  "process_note": {
+    "stale_narrative_corrected": "席位评审时发现磁盘上已有本轮成功运行的完整证据，但 REPORT.md 与本证据文件仍写着更早两次中止运行留下的『未测得』。席位据实订正了叙述，未重新执行模拟器操作。",
+    "leader_check": "leader 核实证据文件时间戳（21:00:58–21:02:32）确在本轮重新派单之后产生，provenance 成立，非拿旧证据改写结论。此项特别核查的原因：本轮已抓到一份假 PASS 记录（fix-upload-token-chain），对『用磁盘已有证据改写结论』的形状保持警惕。",
+    "seat_honesty": "前一轮（席位重建前）两次运行都停在任何 swipe 之前，席位报『未测得』而非在三个选项里挑一个 —— 没有事实就不编，这个克制是本次能被信任的前提。"
+  },
+  "至今未提交": "本工程当前主干累积多条已收口但未 commit 的改动（D-35 termview、D-22 session+service、本条导航 4 文件）。**本轮最大教训就是未提交的工作会归零**（v4 的导航与上传实现均因此永久丢失），建议 leader 尽早为已收口项建立 commit 锚点。",
+  "at": "2026-08-12"
+}
