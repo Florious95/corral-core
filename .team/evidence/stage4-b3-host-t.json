@@ -1,0 +1,98 @@
+{
+  "task_id": "stage4-b3-host-t",
+  "seat": "w-stage4-b3",
+  "role": "阶段四 B3 宿主 T 对账执行席",
+  "base": "docs/stage4-execution-plan.md §1 C组+D组",
+  "channel": "H",
+  "date": "2026-08-11",
+  "status": "PASS",
+  "per_case_results": [
+    {
+      "case": "C4",
+      "name": "token 轮换文档化",
+      "channel": "H",
+      "result": "PASS",
+      "judgement": "文档断言: docs/protocol.md §9.1 + server/README.md 配对token吊销与轮换 含「删 token 文件重启即全量吊销」; 运行时实测(隔离HOME): 删token重启新token GLXM23→G76NXL 旧App失效",
+      "positive_control": "真文本命中1次; 假节点 ASSERT_C4_NEVER_EXISTS=0; 单测 TestEnsureTokenGeneratesPersistsReuses",
+      "attribution": "product"
+    },
+    {
+      "case": "C5",
+      "name": "锁中文并README明示(H面)",
+      "channel": "H",
+      "result": "PASS",
+      "judgement": "README.md 界面语言节 明示「当期锁定中文」+ 引用017 R-6; server/README.md 同步明示",
+      "positive_control": "真文本 R-6.*当期锁中文 命中1; 假节点=0",
+      "attribution": "product",
+      "note": "U面(UI文案全中文截图目检)归B2批次, 本批只验H面"
+    },
+    {
+      "case": "D1",
+      "name": "静默经济",
+      "channel": "H",
+      "result": "PASS",
+      "judgement": "独立命名空间干净零连接采样 12/12点 cpu=0.0% n_child=0; 阳性对照已连接态CPU抬升0.6-1.8%+周期派生tmux子进程",
+      "positive_control": "零连接0 vs 已连接非0 反差明确; server.go idle-gate机制; fix-connected-idle-economy三态≤5.0%已验",
+      "attribution": "product",
+      "note": "采样期间隔离daemon被并行B1批次超时进程管理SIGTERM干扰一次, 改用独立命名空间(:19985)重跑完成, 非产品缺陷"
+    },
+    {
+      "case": "D2",
+      "name": "进程卫生",
+      "channel": "H",
+      "result": "PASS",
+      "judgement": "二启两路径显式失败: 同state-dir单实例守卫(flock拒绝, exit1) / 异state-dir同端口bind冲突(exit1); 收尾kill后 lsof -i :19983空+进程消失+无孤儿",
+      "positive_control": "错误文本含pidfile路径非空; pidfile_test.go",
+      "attribution": "product"
+    },
+    {
+      "case": "D3",
+      "name": "资源有界",
+      "channel": "H",
+      "result": "PASS",
+      "judgement": "上传目录三面齐: 代码 options.go 20MiB/1GiB + upload.go HTTP507 storage_limit_exceeded; 文档 protocol §8 + server/README; 测试 TestUploadDirectoryLimit",
+      "positive_control": "真文本 storage_limit_exceeded 命中1; 假节点=0",
+      "attribution": "product",
+      "note": "日志轮转说明缺失为 scenario-coverage.md:194 已知后置项, 不阻塞本用例; 已标注"
+    },
+    {
+      "case": "D4",
+      "name": "可达性常识",
+      "channel": "H",
+      "result": "PASS",
+      "judgement": "启动横幅候选=10.20.55.20(feth2979)+192.168.31.116(en0) 仅LAN; 本机默认路由走utun4=198.18.0.1被classifyIP排除; 不含198.18/169.254/utun/awdl/bridge; R-003缺陷A未回归",
+      "positive_control": "ws://命中3; 排除项正则命中0; candidates_test.go",
+      "attribution": "product"
+    }
+  ],
+  "positive_control": {
+    "document_assertions": "真文本命中 + 假节点 ASSERT_*_NEVER_EXISTS 命中0 (C4/C5/D3)",
+    "d4_banner": "ws://命中>0 + 排除项正则(198.18/169.254/utun/awdl/bridge)命中0",
+    "d2_second_launch": "错误文本非空含pidfile路径, exit1",
+    "d1_idle": "零连接12/12点0.0%/0子进程 vs 已连接CPU抬升+子进程派生",
+    "c4_runtime": "删token重启新token"
+  },
+  "unverified": [
+    "C5 U面: UI文案全中文截图目检 → B2模拟器批次",
+    "D1长时老化>6分钟 → 后置aging-longrun",
+    "D3日志轮转说明 → 后置(scenario-coverage已知项)",
+    "真机维度(相机/Doze/多网卡)非本批通道"
+  ],
+  "isolation": {
+    "production_daemon_9900": "untouched (lsof only)",
+    "user_tmux": "untouched (self TMUX_TMPDIR only)",
+    "gradle_modules": "untouched",
+    "git": "no commit/push",
+    "secrets": "token redacted <TOKEN>; profiles/*.env not read"
+  },
+  "deviation": [
+    "隔离daemon一次被外部SIGTERM(并行B1批次超时管理波及, watchdog无kill逻辑), 改用独立命名空间:19985重跑D1完成; 非产品缺陷",
+    "C4运行时验证用隔离HOME(生产token文件只ls未动), 避免触碰生产token"
+  ],
+  "artifacts": [
+    "e2e/artifacts/stage4-execution/REPORT-B3.md",
+    "e2e/artifacts/stage4-execution/D1-samples-clean.tsv",
+    "e2e/artifacts/stage4-execution/D1-positive-control.txt",
+    "e2e/artifacts/stage4-execution/D4-banner-candidates.txt"
+  ]
+}

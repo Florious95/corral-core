@@ -72,7 +72,7 @@ INTERVAL = 120          # 采样间隔（秒）（v5：180→120，配合阈值�
 BUSY_STALE_SEC = 900    # T1：BUSY 但无输出的停滞阈值（15 分钟）
 IDLE_SAMPLES = 4        # T2：非 BUSY 采样数（v5 随 INTERVAL 缩短 3→4，墙钟仍约 8 分钟）
 GLOBAL_SAMPLES = 3      # T3：全局 0 BUSY 采样数
-MAX_SAMPLES = 180       # 6 小时心跳（v5：INTERVAL 缩短后同步加倍采样数）
+MAX_SAMPLES = 0         # 无限运行（用户裁定 2026-08-11：取消到期退出）
 NUDGE_BUDGET = 2        # v3：每席每任务自动探针预算，烧穿才升级 leader
 HASH_SAMPLES = 4        # T4：pane 正文 hash 连续不变的采样数（v5 随 INTERVAL 缩短 3→4，墙钟仍约 8 分钟）
 CPU_EPS = 1.0           # v4.3：采样间子树 CPU 前进超此秒数即判"在干活"
@@ -373,7 +373,8 @@ def inflight_seats():
             m[d["dispatched_to"]] = task
     return m
 
-for i in range(MAX_SAMPLES):
+i = 0
+while True:
     try:
         prod_snapshot = probe_prod_guard(PROD_PORT, PROD_LOG)
         prod_escalated = record_prod_guard(prod_snapshot, PROD_ESCALATION_LOG)

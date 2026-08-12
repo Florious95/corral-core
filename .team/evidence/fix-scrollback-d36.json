@@ -1,0 +1,30 @@
+{
+  "task_id": "fix-scrollback-d36",
+  "status": "pass",
+  "worker": "w-d36d37-dev",
+  "date": "2026-08-12",
+  "summary": "D-36 向上滑动无法查看历史。根因不在客户端手势链路（TermSurfaceView.onScrollBy → presenter.onScrollBy → SessionViewModel.syncFromPresenter → requestOlderHistoryPage → manager.scrollback 已接通，测试席实锤），而在服务端 handleScrollback 的坐标平移：ws_handler.go 把协议行 `-pane.Height` 平移后传给 bridge，而 tmux capture-pane 坐标系是**顶部相对**（0=屏顶，负=屏上历史，与协议 §6.3 一致）——平移把每一页都打偏：请求当前屏(0,6)返回历史最旧行且 line_count 撒谎=6；历史页内容对但 fromLine 错位。修复：去掉 -pane.Height 平移、协议行直传 tmux；scrollbackRange 的 historySize 改为 capture(-∞..-1) 行数（不减去屏高，不再双计屏）；`requestEnd <= oldest` 分支上限改 -1（不泄漏屏上行）；scrollback 载荷裁尾空行使 line_count 与实际内容一致；bridge.go 坐标注释同步更正为顶部相对。",
+  "root_cause_chain": [
+    "1. ws_handler.go handleScrollback 按「协议行 - pane.Height」翻译给 bridge，bridge.go Scrollback 文档自述「-1 = 屏幕底部行」——但 tmux capture-pane 实测（3.6a）是顶部相对：0=屏顶、负=屏上历史（协议 §6.3 与 tmux 坐标系一致）",
+    "2. 平移后当前屏请求(0,count)被打到历史最旧行（内容错 + line_count 撒谎），历史页请求(-30,5)内容收敛到最旧页但 fromLine 错位（-2 而非 -26）——客户端按元数据锚定滚动视口必然错位，上滑看不到正确历史"
+  ],
+  "red_tests": [
+    "test/cases/d36_scrollback.test.js 两条红测（测试席落盘）：①scrollback(0,6) 必须返回当前可见屏且数据行数===元数据 line_count（修前回历史 3 行 + lineCount=6 → 红）；②scrollback(-30,5) 元数据 from_line 必须与页内容一致（修前 -2 ≠ -26 → 红）——修复后全绿",
+    "Go 侧 api_tmux_test.go TestScrollbackConvergedRange / TestScrollbackExactHeaderBytes 保持绿（修复不回归）"
+  ],
+  "tests": {
+    "acceptance": "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest' -> exit 0",
+    "go_test": "cd server && env -u TEAM_AGENT_* go test ./... -> 全部 ok（cmd/agentstate/api/bridge/config/discovery/pairing/protocol/tsnetd）",
+    "e2e_d36": "cd test && env -u TEAM_AGENT_* node runner.js --tag=d36 -> 2 passed（当前屏内容自洽 + 历史页锚点正确）",
+    "full_e2e": "cd test && env -u TEAM_AGENT_* node runner.js -> 14 passed（d36/d37/d38 全绿，零回归）",
+    "archwiki": "python3 tools/archwiki/build_wiki.py --check --strict-t3 -> exit 0"
+  },
+  "write_scope_check": {
+    "in_scope": [
+      "server/internal/api/ws_handler.go（handleScrollback 去平移 + scrollbackRange 修正 + 裁尾空行）",
+      "server/internal/bridge/bridge.go（坐标注释更正为顶部相对）"
+    ],
+    "deviation": "leader 裁定授权扩展 write_scope 到 server/internal/api/ws_handler.go + server/internal/bridge/bridge.go（D-36 根因在服务端）；另顺手补 MainNavState.onSystemBack 缺 @err/@inv 契约标签使 archwiki --strict-t3 过（预存在 D-32 未提交件，非本任务引入）"
+  },
+  "note": "客户端手势→scrollback 链路本就接通（测试席 w-d36d37-test 实锤）；真正缺陷是服务端坐标平移。修复后 d36 红测变绿，客户端无需改动。"
+}
