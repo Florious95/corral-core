@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -75,6 +76,21 @@ fun AgentMirrorApp(
         // 配对配置存储（SharedPreferences）：首启判定 + 重配入口共用。
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
         val session = navState.activeSession
+
+        /**
+         * 根返回手势接线（D-23/D-32）。
+         * @contract
+         * @pre [navState] 是当前根路由唯一导航事实源
+         * @post 非配对根时把一次系统返回交给 [MainNavState.onSystemBack]；配对根禁用处理器
+         * @err none
+         * @inv 返回只经导航壳逐级裁决；本层不直接跳过会话选择/工作区列表层级
+         */
+        BackHandler(
+            enabled = session != null || navState.selectedWorkspaceCwd != null ||
+                navState.showSettings || !navState.showPairing,
+        ) {
+            navState.onSystemBack()
+        }
 
         // 路由描述值（AnimatedContent 的转场键）：四分支互斥，与原 when 语义一一对应。
         val route: AppRoute = when {
@@ -142,7 +158,10 @@ fun AgentMirrorApp(
                     }
                     WorkspaceScreen(
                         viewModel = workspaceViewModel,
+                        selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
                         connectionPath = ServiceWire.connectionPath(),
+                        onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
+                        onBackToList = { navState.selectedWorkspaceCwd = null },
                         onOpenSession = { ref, name -> navState.activeSession = ref to name },
                         onOpenSettings = { navState.showSettings = true },
                     )
