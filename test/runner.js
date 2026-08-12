@@ -74,28 +74,33 @@ async function run(argv = process.argv.slice(2)) {
   const log = (m) => process.stdout.write(`${m}\n`);
   const workDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'agenttest.'));
 
-  // --- beforeAll：构建并启动隔离环境 ---
+  // 纯本地用例（机器眼算子考卷）不需要 daemon/tmux 隔离环境，跳过环境起停。
+  const localOnlyRun = selected.every((c) => c.localOnly);
+
+  // --- beforeAll：构建并启动隔离环境（非 localOnly 才需要）---
   let daemon = null;
   let tmuxInfo = null;
   let setupFailed = null;
-  try {
-    fixtures.buildDaemon(SERVER_DIR, workDir, { log });
-    const port = fixtures.nextIsolatedPort();
-    tmuxInfo = fixtures.startIsolatedTmux(workDir, { name: 'iso', log });
-    const token = `test-tok-${Date.now().toString(36)}`;
-    daemon = fixtures.startIsolatedDaemon({
-      serverDir: SERVER_DIR,
-      workDir,
-      token,
-      port,
-      listIntervalMs: 500,
-      log,
-    });
-    // 写入共享环境（context.js 打破 runner↔cases 循环依赖）。
-    setEnvironment({ port, token, workDir, tmuxInfo, daemon });
-  } catch (err) {
-    setupFailed = err;
-    log(`SETUP FAILED: ${err.message}`);
+  if (!localOnlyRun) {
+    try {
+      fixtures.buildDaemon(SERVER_DIR, workDir, { log });
+      const port = fixtures.nextIsolatedPort();
+      tmuxInfo = fixtures.startIsolatedTmux(workDir, { name: 'iso', log });
+      const token = `test-tok-${Date.now().toString(36)}`;
+      daemon = fixtures.startIsolatedDaemon({
+        serverDir: SERVER_DIR,
+        workDir,
+        token,
+        port,
+        listIntervalMs: 500,
+        log,
+      });
+      // 写入共享环境（context.js 打破 runner↔cases 循环依赖）。
+      setEnvironment({ port, token, workDir, tmuxInfo, daemon });
+    } catch (err) {
+      setupFailed = err;
+      log(`SETUP FAILED: ${err.message}`);
+    }
   }
 
   // --- 逐条执行 ---
@@ -136,11 +141,11 @@ async function run(argv = process.argv.slice(2)) {
     log(`[${mark}] ${c.name} (${Date.now() - started}ms)${error ? `\n    ${error.message}` : ''}`);
   }
 
-  // --- afterAll：收尾 ---
+  // --- afterAll：收尾（非 localOnly 才需要停环境）---
   try {
     if (daemon) await daemon.stop();
     if (tmuxInfo) fixtures.stopIsolatedTmux(tmuxInfo, { log });
-    fixtures.assertNoResidue({ daemon, tmuxInfo, workDir, log });
+    if (!localOnlyRun) fixtures.assertNoResidue({ daemon, tmuxInfo, workDir, log });
   } catch (err) {
     log(`TEARDOWN WARNING: ${err.message}`);
   }
