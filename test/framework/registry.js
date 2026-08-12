@@ -17,10 +17,12 @@ class CaseRegistry {
   // @pre name 非空；fn 为 async 函数
   // @post 追加到 this.cases
   // @err name 重复抛 Error（防误注册）
-  define({ name, tags = [], fn, description = '' }) {
+  define({ name, tags = [], fn, description = '', localOnly = false }) {
     if (!name) throw new Error('case requires a name');
     if (this.cases.some((c) => c.name === name)) throw new Error(`duplicate case name: ${name}`);
-    this.cases.push({ name, tags, fn, description });
+    // localOnly：纯本地文件分析，不需要 daemon/tmux 隔离环境（机器眼算子考卷用）。
+    // runner 据此跳过环境 setup/teardown。
+    this.cases.push({ name, tags, fn, description, localOnly });
     return this;
   }
 
