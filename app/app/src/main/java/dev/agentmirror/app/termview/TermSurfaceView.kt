@@ -28,6 +28,8 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
@@ -66,6 +68,27 @@ class TermSurfaceView @JvmOverloads constructor(
     private var lineHeightPx: Int = 0
 
     private var backToBottomLabel: String? = null
+
+    /**
+     * 当前 IME inset 高度（px）。D-38 真根因修复：View 层从 WindowInsets 直接查询 IME 可见性
+     * 与高度（presenter 不做任何 IME 推断），回前台时用「当前 View 高 + imeInset」作为**扣除
+     * IME 后的稳定窗口高**传给 [TermViewPresenter.onRealViewportChanged]——避免把 IME 挤压值
+     * 当真实视口 rebase（分屏/旋转传真实变化，IME 在屏传扣除后的全高）。
+     *
+     * adjustResize + edge-to-edge 下 View 高度已被 IME 挤过（height = 窗口高 - IME inset），
+     * 所以「height + imeInset」= 无 IME 时的稳定高，正是 presenter 该收到的真实视口。
+     */
+    private var imeInsetPx: Int = 0
+
+    init {
+        // 监听窗口 insets：实时记录 IME inset 高度（Android 唯一可靠的 IME 可见性来源，
+        // 比几何推断可靠——分屏/多窗口也可能「宽度不变+高度变小」，不该被当成 IME）。
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            imeInsetPx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            // 必须返回原 insets（或 dispatch 给子 View），否则 Compose imePadding 等后续消费被吞。
+            insets
+        }
+    }
 
     // ---- 绘制工具 ----
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -122,17 +145,60 @@ class TermSurfaceView @JvmOverloads constructor(
         override fun doFrame(frameTimeNanos: Long) {
             framePending = false
             val p = presenter ?: return
-            // 排空脏区缓冲（防无界增长）后整帧重绘。不再自续下一帧：帧循环是纯数据
-            // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线；
-            // 旧版 showBackToBottom 自续 = 锁定历史时 60fps 空转，本案顺带拆除）。
-            while (p.takeDamage().isNotEmpty()) Unit
-            p.beginFrame()
-            invalidate()
+            prepareFrame()
+            val r = pendingRepaint
+            when {
+                // 几何整帧/首帧：整窗失效重绘。
+                r == null -> invalidate()
+                // recap 中间态抑制：不失效，画面停在上帧稳定态。
+                r.isEmpty() -> Unit
+                // 脏行级：只失效脏行所在矩形（其余行保留——partial invalidate 只重画脏区）。
+                else -> {
+                    val win = p.window
+                    var topRow = Int.MAX_VALUE
+                    var bottomRow = -1
+                    for (range in r) {
+                        val rowTop = (range.first - win.first).coerceAtLeast(0)
+                        val rowBottom = (range.last - win.first).coerceAtMost(win.last - win.first)
+                        if (rowTop < topRow) topRow = rowTop
+                        if (rowBottom > bottomRow) bottomRow = rowBottom
+                    }
+                    if (bottomRow >= topRow) {
+                        // 行高取实测与 presenter 名义值的较大者（恒 >0，防首帧 cellH=0 时失效零高）。
+                        val h = maxOf(cellH, presenter?.cellHeight ?: 0, 1)
+                        val topPx = topRow * h
+                        val bottomPx = (bottomRow + 1) * h + h // +h 外扩防欠失效
+                        invalidate(0, topPx, width, bottomPx.coerceAtMost(height))
+                    }
+                }
+            }
         }
+    }
+
+    /**
+     * 帧数据准备：取本帧重绘范围（脏行/整窗/抑制）+ 抓内核快照。
+     *
+     * 帧回调调用（Choreographer 驱动）；测试直接调它后 draw(canvas) 复刻帧路径
+     * （Robolectric 下 Choreographer 由 looper idle 推进，测试需确定性，故走本方法）。
+     */
+    internal fun prepareFrame() {
+        val p = presenter ?: return
+        pendingRepaint = p.takeFrameRepaint()
+        p.beginFrame()
     }
 
     /** 帧是否已排入 Choreographer（防重复排队；doFrame 时复位；仅主线程触碰）。 */
     private var framePending = false
+
+    /**
+     * 本帧待绘制重绘范围（[TermViewPresenter.takeFrameRepaint] 的产出，帧回调写入、onDraw 消费）。
+     *
+     * - null：整窗重绘（几何事件/首帧）——onDraw 铺全部行；
+     * - 空列表：无可呈现的中间帧（recap 重写进行中被抑制）——onDraw 只清屏不画行，画面停在
+     *   上帧稳定态（缓存上帧内容的 Android 窗口不会真正清掉旧画面，draw 没画的行保持原样）；
+     * - 非空：只重绘这些脏行（脏行级渲染，fix-input-send-fullrepaint 半一）。
+     */
+    private var pendingRepaint: List<IntRange>? = null
 
     /** 请求一帧：脏数据或状态变化驱动（Choreographer 垂直同步对齐；重复请求被合并为一帧）。 */
     private fun postFrame() {
@@ -209,7 +275,9 @@ class TermSurfaceView @JvmOverloads constructor(
             return
         }
         if (width <= 0 || height <= 0) return
-        presenter?.onRealViewportChanged(width, height)
+        // 扣除 IME 后的稳定窗口高：View 高已被 IME 挤过（adjustResize），height + imeInset 才是
+        // 真实视口。回前台 IME 在屏时传全高（不 rebase 到挤压值）；分屏/旋转 imeInset=0 传真实变化。
+        presenter?.onRealViewportChanged(width, height + imeInsetPx)
         postFrame()
     }
 
@@ -222,19 +290,26 @@ class TermSurfaceView @JvmOverloads constructor(
         return true
     }
 
-    /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
+    /** 每帧：铺可见窗口行背景、按同色 run 合并画前景（只画本帧 [pendingRepaint] 指定的行）。 */
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val p = presenter ?: return
-        // 清屏为终端默认背景（BCE：空白格也带背景色，必须整帧铺底色）。
-        bgPaint.color = themeBgArgb()
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
-
         measureCells()
         val win = p.window
-        for (logical in win) {
-            val rowY = (logical - win.first) * cellH
-            drawLine(canvas, p.lineCells(logical), rowY)
+        val repaint = pendingRepaint
+        // 本帧要画的行：null=整窗（几何/首帧）；空=无可呈现中间帧（recap 抑制，不画）；
+        // 非空=只画这些脏行（脏行级渲染，fix-input-send-fullrepaint 半一；takeDamage 已裁剪到窗口）。
+        if (repaint == null) {
+            // 整窗重绘：清屏为终端默认背景（BCE：空白格也带背景色，必须整帧铺底色）。
+            bgPaint.color = themeBgArgb()
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+        }
+
+        for (range in repaint ?: listOf(win)) {
+            for (logical in range) {
+                val rowY = (logical - win.first) * cellH
+                drawLine(canvas, p.lineCells(logical), rowY)
+            }
         }
 
         // 视图内"回到底部"悬浮钮为历史遗留死代码：backToBottomLabel 全仓库无赋值点，本块永不走；
@@ -251,6 +326,8 @@ class TermSurfaceView @JvmOverloads constructor(
                 canvas.drawText(label, x + pad, y + dp(28f), labelPaint)
             }
         }
+        // 本帧消费即清（下次帧回调重新写入）；残留旧清单会导致后续直接 draw 误画旧行。
+        pendingRepaint = null
     }
 
     // ---- 逐行绘制 ----
