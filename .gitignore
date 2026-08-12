@@ -1,4 +1,24 @@
+# 依赖与系统
 node_modules/
 .DS_Store
+
+# 团队编排运行时（含 profile 凭据，绝不入库）
 .team/runtime/
 .team/logs/
+.team/current/profiles/*.env
+
+# 构建产物
+app/.gradle/
+app/app/build/
+app/build/
+app/terminal/build/
+**/build/
+__pycache__/
+*.pyc
+
+# 编译二进制
+server/agentmirrord
+
+# Web 端生成物
+web/vendor/
+web/dist/
