@@ -1,0 +1,23 @@
+{
+  "name": "agentmirror-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "agentmirror browser client — mirrors tmux-hosted Agent CLI sessions over WebSocket (docs/protocol.md v1)",
+  "license": "Apache-2.0",
+  "scripts": {
+    "postinstall": "node scripts/postinstall.cjs",
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build-web.mjs",
+    "test": "node --test \"test/*.test.js\"",
+    "e2e": "node scripts/e2e.mjs",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@xterm/xterm": "6.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.5",
+    "ws": "^8.18.0"
+  }
+}

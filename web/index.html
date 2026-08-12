@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AgentMirror · Web</title>
+  <link rel="stylesheet" href="vendor/xterm/xterm.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="vendor/xterm/xterm.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <!-- 连接状态条 -->
+  <div id="conn-bar" style="display:none">
+    <span class="conn-state-dot" id="conn-state-dot"></span>
+    <span id="conn-state">stopped</span>
+    <span class="conn-spacer"></span>
+    <button id="btn-refresh-list" class="btn" title="重新拉取工作区列表">刷新列表</button>
+    <button id="btn-reconnect" class="btn" title="用当前配置重连">重连</button>
+    <label class="theme-control" for="theme-select">主题
+      <select id="theme-select" aria-label="主题">
+        <option value="system">跟随系统</option>
+        <option value="dark">深色</option>
+        <option value="light">浅色</option>
+      </select>
+    </label>
+    <button id="btn-disconnect" class="btn btn-danger" title="断开并回到配对页">断开</button>
+  </div>
+
+  <!-- 页面 1：配对 -->
+  <div id="pair-page" class="page">
+    <div class="pair-card">
+      <h1>AgentMirror <span class="sub">Web 客户端</span></h1>
+      <form id="pair-form">
+        <label for="ws-url">WebSocket 地址</label>
+        <input type="text" id="ws-url" placeholder="ws://192.168.31.116:9900/ws" autocomplete="url" spellcheck="false">
+        <label for="pair-token">配对 Token</label>
+        <!-- type=password：token 不上屏明文（纪律） -->
+        <input type="password" id="pair-token" placeholder="配对 token" autocomplete="off" spellcheck="false">
+        <button type="submit" id="btn-connect" class="btn btn-primary">连接</button>
+      </form>
+      <p id="pair-status" class="pair-status" role="status">尚未连接</p>
+      <p class="hint">在主机上运行 <code>agentmirrord</code>，用终端打印的配对信息填写上面两项。</p>
+    </div>
+  </div>
+
+  <!-- 页面 2：工作区列表 -->
+  <div id="workspaces-page" class="page">
+    <div class="page-inner">
+      <div class="page-header">
+        <h2>工作区</h2>
+        <span class="conn-state" id="conn-state-workspaces"></span>
+      </div>
+      <div id="ws-list" class="ws-list"></div>
+    </div>
+  </div>
+
+  <!-- 页面 3：会话 -->
+  <div id="session-page" class="page">
+    <div class="session-header">
+      <button id="btn-back" class="btn" title="返回工作区列表">‹ 返回</button>
+      <span class="session-title-name">会话</span>
+      <span class="conn-spacer"></span>
+    </div>
+    <div id="session-tabs" class="session-tabs" role="tablist"></div>
+    <div id="session-panels" class="session-panels"></div>
+  </div>
+</body>
+</html>
