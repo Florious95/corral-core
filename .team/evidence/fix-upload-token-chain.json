@@ -1,0 +1,61 @@
+{
+  "task_id": "fix-upload-token-chain",
+  "status": "pass",
+  "result_ids": ["res_0ffcec6a91e0", "res_0fed429e8b33", "res_0f125f5e9278", "res_0f1aa495fce8"],
+  "agents": {"dev": "w-dev-d22", "review": "w-rev-d22", "test": "w-test-d22", "qa": "w-base-v2"},
+  "summary": "D-22 图片上传永远 401 已修复并经模拟器真实上传验收。根因：配对配置的 token 从未进入 SessionRoute → SessionViewModel → HttpUrlConnectionUploader 调用链，上传请求根本没有 Authorization 头，而服务端已要求 Bearer，故必现 401。修复：ServiceWire 提供当前连接配置只读快照（与 WebSocket 认证同一来源）→ SessionRoute 下传 → SessionViewModel 传给 uploader → 仅在非空白时设置 Bearer 头；并封死无认证二参入口。",
+  "⚠️_前置发现_任务书与证据均记载了一件从未发生的工作": {
+    "false_record": ".team/evidence/archive/fix-upload-token-chain.FALSIFIED-20260812.json（原 .team/evidence/fix-upload-token-chain.json）",
+    "claim": "status=pass，由 w-fix-upload2 于 2026-08-12 提交，声称逐环验证了完整链路，附带具体文件名与行号（ServiceWire.kt:146 / SessionRoute.kt:136 / SessionViewModel.kt:295 / HttpUrlConnectionUploader.kt:69-71），并断言「运行时 token 不可能为 null」。",
+    "reality": "本轮两个席位读当前源码独立确认：ServiceWire 无 currentConfig、SessionViewModel 无 uploadToken、HttpUrlConnectionUploader 无任何 Authorization 设置。leader 另行核实：v5-failed 归档 app 侧搜 Bearer/uploadToken/Authorization/currentConfig 零命中；git log --all -S'Bearer' -- app/ 无任何提交。**该链路在代码里一个环节都不存在，也从未存在于任何提交。**",
+    "how_it_happened": "该假记录自述『本席未新增生产代码——工作树已含完整 fix-upload-bearer 链路（w-fix-upload-bearer 已退役）』。即：写代码的席位把改动留在未提交的工作区后退役，验证席据此立了 pass 证据，随后这些改动被某次 git checkout 抹除。leader 已核实非本届销毁：归档提交 v5-failed 的暂存清单中本就没有 session/service 文件。",
+    "root_lesson": "本工程规定「任务状态的唯一权威是 taskbook.yaml + .team/evidence/」，而该权威记录了一件从未发生的工作，且长达一日无人证伪。**未提交的工作区不是交付物**；没有 commit 锚点的『已完成』随时会归零，而账面不会自动更新。",
+    "user_was_right": "用户报告此为『新的改动引发』。leader 初判『不是回归』——**判错了**（只 grep 了 server 侧归档，未查 app 侧，也未想到代码可能在归档前已被销毁）。用户的判断成立：上传在 v4 可用，回退后失效。"
+  },
+  "tests": [
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests dev.agentmirror.app.session.SessionUploadAuthorizationScenarioTest（隔离 worktree, detached HEAD 7c56353）", "rc": 1, "note": "修复前真红：命中『已配对上传请求缺非空 Bearer』行为断言。在独立 worktree 上验红，避免被共享树的在途改动污染。"},
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests SessionUploadAuthorizationScenarioTest --tests SessionUploadTokenChainTest --tests SessionUploadBaseWiringTest --tests HttpUrlConnectionUploaderTest --rerun-tasks", "rc": 0, "note": "修复后全绿"},
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests TermSurfaceSessionBindingRegressionTest --tests TermSurfacePinchGestureTest --tests 'dev.agentmirror.app.pairing.*'", "rc": 0, "note": "两道强制回归门 + 架构基现算的波及面 pairing 全绿"},
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest", "rc": 0, "note": "全量绿（BUILD SUCCESSFUL in 16s），含二参 guard 整改后复跑"},
+    {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0, "note": "架构门 PASS"}
+  ],
+  "眼见为实": {
+    "verdict": "模拟器真实上传：成功",
+    "method": "卸载旧包 → 安装当前主树 APK（SHA-256 b311ede7…）→ **走 App 正常配对流程**连到测试席自建隔离 daemon（未手改 SharedPreferences、未触碰生产 daemon）→ 点『＋』→『从相册选择』→ 系统 Photo Picker 选真实 PNG → 上传",
+    "objective_proof": "源文件与主机收到文件 SHA-256 同为 2106e27bafac07bc2585383b3578021f8938119e50836e8a3aa7d22736e97ec6，upload-integrity.txt 记 result=identical。这是哈希不是目检。",
+    "raw003_semantics": "上传后输入框自动注入主机侧路径 /tmp/agentmirror-d22-upload/uploads/upload-20260812T125101-1000000214.png，符合 raw/003『手机上传 → 主机落盘 → 文件路径注入 CLI 输入』全链语义",
+    "no_401": "全程未出现 401",
+    "cleanup": "隔离 daemon 已停、端口 19989 已释放、隔离 tmux 已停、一次性 token 文件已删除、App 已 force-stop、模拟器已交还"
+  },
+  "leader_review_finding": {
+    "issue": "开发席首版保留了 HttpUrlConnectionUploader 的二参重载 upload(baseUrl, attachment) = upload(baseUrl, null, attachment)，注释标『仅供既有局部测试』。",
+    "leader_judgment": "不可接受。本缺陷的本质就是『token 没流到』，留一个静默传 null 的入口等于把同一个坑原样留在原地；注释不构成约束，编译器不认注释。要求：删除，或让它显式失败。",
+    "resolution": "开发席选方案二：二参入口立即返回 Failure('未配置上传认证')，不建立 HTTP 连接。测试席同步把既有真实 HTTP 用例全切三参假凭据，并新增 server.requestCount=0 断言防复发。",
+    "principle": "不要留下一个『能编译通过的错误用法』。"
+  },
+  "安全": {
+    "constraint": "配对 token 与 TS authkey 同级——不落日志、不上屏明文、不入截图、不进 report_result",
+    "enforced": [
+      "产品代码零 Log/println 涉及 token；外骨骼注释写死不变量『token 只进入 Authorization 请求头，不进入日志/结果』",
+      "全部测试使用假凭据常量，不读真实 token 文件",
+      "证据截图避开配对页与凭据页",
+      "leader 裁定凭据分两级：用户生产凭据绝不进 argv；测试席自建隔离 daemon 的一次性 token 属丢弃品，进 argv 属可接受风险",
+      "w-base-v2 实际做得比授权更严：用逐键 keyevent 输入 token（命令只含 Android keycode 数字），连一次性 token 都未进 argv"
+    ],
+    "禁令确立": "**不许手改 App 的 SharedPreferences 来绕过配对流程。** 绕过配对既泄露凭据（token 进 shell argv）又制造无法复现的状态；本轮已实证它把人带进『prefs 损坏还是凭据不匹配』的无法归因死角。要连就走 App 正常流程连。"
+  },
+  "process_notes": [
+    "审查席主动收窄职责：发现自己的整链探针与测试席场景近重复后，把根因探针收敛到『HttpUrlConnectionUploader 有/无认证凭据的可观察行为』，并移除会踩 D-30 边界的路径注入断言 —— 重叠时让开而非各堆一份",
+    "开发席在模拟器阶段 halt 并交回决定权（prefs 损坏 vs 凭据不匹配无法归因，拒绝自行归因），处置正确",
+    "leader 据此确立 Gradle 全量单测串行化规则：定向 --tests 随便跑；全量只由开发席在收工前独占跑一次"
+  ],
+  "artifacts": [
+    "e2e/artifacts/d22-upload/REPORT.md",
+    "e2e/artifacts/d22-upload/02-after-upload.png",
+    "e2e/artifacts/d22-upload/received-upload.png",
+    "e2e/artifacts/d22-upload/upload-integrity.txt",
+    "e2e/artifacts/d22-upload/isolation-cleanup.txt",
+    ".team/evidence/archive/fix-upload-token-chain.FALSIFIED-20260812.json"
+  ],
+  "at": "2026-08-12"
+}

@@ -23,7 +23,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.nio.charset.StandardCharsets
 
 /**
  * HttpUrlConnectionUploader 接缝零测（test-app-android-seams 交付物；B6 实锤：整类零测）。
@@ -94,7 +93,7 @@ class HttpUrlConnectionUploaderTest {
     fun upload_success_returnsPath() {
         // 协议 §8 成功形状：200 + {"path":"/host/abs"} → Success(path)。
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"path":"/tmp/uploads/a.png"}"""))
-        val result = HttpUrlConnectionUploader().upload(baseUrl(), attachment())
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
 
         assertEquals(UploadOutcome.Success("/tmp/uploads/a.png"), result)
     }
@@ -106,7 +105,7 @@ class HttpUrlConnectionUploaderTest {
         // 组包形状：开/结束边界、单文件段头、文件字节夹中间；Content-Type 头带 boundary。
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"path":"/x"}"""))
         val fileBytes = byteArrayOf(9, 8, 7, 6)
-        HttpUrlConnectionUploader().upload(baseUrl(), attachment(bytes = fileBytes))
+        HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment(bytes = fileBytes))
 
         val req = server.takeRequest()
         assertTrue(
@@ -120,7 +119,11 @@ class HttpUrlConnectionUploaderTest {
     fun multipart_sanitizesCrLfInFilename() {
         // CR/LF 剥离（防 multipart 头注入）：文件名带 \r\n 不得出现在组包头里。
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"path":"/x"}"""))
-        HttpUrlConnectionUploader().upload(baseUrl(), attachment(name = "evil\r\nbad.png"))
+        HttpUrlConnectionUploader().upload(
+            baseUrl(),
+            FAKE_UPLOAD_TOKEN,
+            attachment(name = "evil\r\nbad.png"),
+        )
 
         val body = server.takeRequest().body.readUtf8()
         assertTrue(body.contains("filename=\"evilbad.png\"")) // \r\n 被剥离成空
@@ -133,7 +136,7 @@ class HttpUrlConnectionUploaderTest {
     fun upload_http413_mapsToFailureText() {
         // B8 锚点：413 上传超限 → App 明确文案映射（"上传失败（HTTP 413）"）。
         server.enqueue(MockResponse().setResponseCode(413).setBody("payload too large"))
-        val result = HttpUrlConnectionUploader().upload(baseUrl(), attachment())
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
 
         assertTrue(result is UploadOutcome.Failure)
         assertEquals("上传失败（HTTP 413）", (result as UploadOutcome.Failure).reason)
@@ -143,7 +146,7 @@ class HttpUrlConnectionUploaderTest {
     fun upload_http500_mapsToFailureText() {
         // 500 服务端内部错误 → 明确文案。
         server.enqueue(MockResponse().setResponseCode(500).setBody("boom"))
-        val result = HttpUrlConnectionUploader().upload(baseUrl(), attachment())
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
 
         assertTrue(result is UploadOutcome.Failure)
         assertEquals("上传失败（HTTP 500）", (result as UploadOutcome.Failure).reason)
@@ -153,7 +156,7 @@ class HttpUrlConnectionUploaderTest {
     fun upload_unparsableJson_mapsToFailureText() {
         // 200 但 JSON 不可解析 → "上传响应无法解析"（坏响应绝不静默吞）。
         server.enqueue(MockResponse().setResponseCode(200).setBody("<html>not json</html>"))
-        val result = HttpUrlConnectionUploader().upload(baseUrl(), attachment())
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
 
         assertTrue(result is UploadOutcome.Failure)
         assertEquals("上传响应无法解析", (result as UploadOutcome.Failure).reason)
@@ -163,7 +166,7 @@ class HttpUrlConnectionUploaderTest {
     fun upload_emptyPath_mapsToFailureText() {
         // JSON 可解析但 path 空 → "上传响应缺少路径"。
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"path":""}"""))
-        val result = HttpUrlConnectionUploader().upload(baseUrl(), attachment())
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
 
         assertTrue(result is UploadOutcome.Failure)
         assertEquals("上传响应缺少路径", (result as UploadOutcome.Failure).reason)
@@ -173,7 +176,7 @@ class HttpUrlConnectionUploaderTest {
     fun upload_baseUrlNotConfigured_mapsToFailureText() {
         // base 未配（空串）：trimEnd 后拼 "/upload" 得 "/upload"——无 scheme，URL 构造抛异常被
         // 兜住，报"上传失败：..."（含原因，绝不静默）。
-        val result = HttpUrlConnectionUploader().upload("", attachment())
+        val result = HttpUrlConnectionUploader().upload("", FAKE_UPLOAD_TOKEN, attachment())
 
         assertTrue(result is UploadOutcome.Failure)
         assertTrue((result as UploadOutcome.Failure).reason.startsWith("上传失败"))
@@ -183,7 +186,7 @@ class HttpUrlConnectionUploaderTest {
     fun upload_unreachableServer_mapsToFailureText() {
         // base 配了但端点不可达（先关假端点，端口即释放）→ 连接异常被兜住，明确报失败。
         server.shutdown()
-        val result = HttpUrlConnectionUploader().upload(baseUrl(), attachment())
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
 
         assertTrue(result is UploadOutcome.Failure)
         assertTrue((result as UploadOutcome.Failure).reason.startsWith("上传失败"))
@@ -193,7 +196,19 @@ class HttpUrlConnectionUploaderTest {
     fun upload_baseUrlTrailingSlash_stillWorks() {
         // base 末尾带斜杠：trimEnd('/') 后拼接，成功路径不受影响。
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"path":"/tmp/x"}"""))
-        val result = HttpUrlConnectionUploader().upload("${baseUrl()}/", attachment())
+        val result = HttpUrlConnectionUploader().upload("${baseUrl()}/", FAKE_UPLOAD_TOKEN, attachment())
         assertEquals(UploadOutcome.Success("/tmp/x"), result)
+    }
+
+    @Test
+    fun upload_withoutAuthentication_failsBeforeHttpRequest() {
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), attachment())
+
+        assertEquals(UploadOutcome.Failure("未配置上传认证"), result)
+        assertEquals("缺少认证时不得发起 HTTP 请求", 0, server.requestCount)
+    }
+
+    private companion object {
+        const val FAKE_UPLOAD_TOKEN = "fake-upload-token"
     }
 }
