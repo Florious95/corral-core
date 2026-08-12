@@ -100,18 +100,14 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	}
 	c.subscribeCancel(s.Ref)
 
-	// Remember the pane geometry before reshaping it for the phone so an
-	// explicit unsubscribe can return the CLI to its original full-window size
-	// (D-21). A size-read failure is non-fatal, matching the resize below.
-	// @contract
-	// @pre br resolves the subscribed pane before any client resize is applied
-	// @post success captures origCols/origRows for this subscription; failure leaves restoreSize nil
-	// @err Size failure is logged and mirroring continues without a restore contract
-	// @inv captured dimensions precede this subscription's Resize and are never overwritten
-	origCols, origRows, sizeErr := br.Size(c.ctx)
-	if sizeErr != nil {
-		c.logErr("subscribe read original size", sizeErr)
-	}
+	// Pane-level original-geometry accounting (fix-host-pane-geometry-accounting):
+	// the first subscriber of this pane snapshots its pre-phone geometry as the
+	// shared baseline; later subscribers (other connections to the same pane) only
+	// bump the count and never rebase it. The restore happens when the last
+	// subscriber leaves (see paneGeometry.release), so the pane always returns to
+	// the same geometry regardless of how many clients came and went in between.
+	geom := c.s.geometryFor(s.Ref)
+	_, _, _ = geom.acquire(c.ctx, br)
 
 	// Initial client dims reshape the pane so the CLI redraws for the phone
 	// (requirement 005). A resize failure is not fatal: the mirror continues at
@@ -148,18 +144,14 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 
 	subCtx, cancel := context.WithCancel(c.ctx)
 	sub := &subscription{ref: s.Ref, cancel: cancel, detach: detach}
-	if sizeErr == nil {
-		// Install the restore contract only when the pre-resize geometry is known.
-		// @contract
-		// @pre Size succeeded before the subscription resize
-		// @post invocation attempts exactly one Resize to origCols/origRows
-		// @err Resize failure is logged and otherwise ignored during unsubscribe
-		// @inv captured geometry belongs to this subscription and is never recomputed after resize
-		sub.restoreSize = func() {
-			if _, _, err := br.Resize(c.ctx, origCols, origRows); err != nil {
-				c.logErr("unsubscribe restore size", err)
-			}
-		}
+	// Release hook: the pane-level geometry tracker is released when this
+	// subscription ends. When it is the last subscriber the tracker restores the
+	// pane to the shared original baseline (契约 2: teardown/closeSubscriptions/
+	// relay exit all call restoreSize, so every exit path hits the same release →
+	// last-leaver restores). geomOK==false means no baseline was captured (Size
+	// failed); release is then a no-op rather than restoring a guessed size.
+	sub.restoreSize = func() {
+		geom.release(c.ctx, br, c.s.log, s.Ref)
 	}
 	c.subscribeAdd(sub)
 	go c.relay(subCtx, sub, ch)

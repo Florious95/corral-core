@@ -49,6 +49,16 @@ type Server struct {
 
 	catalog *sessionCatalog
 
+	// paneGeoms holds the pane-level original-geometry singleton per ref
+	// (fix-host-pane-geometry-accounting). The original geometry is recorded by
+	// the first subscriber of a pane and restored when the last subscriber
+	// leaves — never rebased by an intermediate subscriber, so a pane that
+	// shrank/grew for the phone always returns to its pre-phone geometry
+	// regardless of who subscribed in between. This is the shared, connection-
+	// independent counterpart to the per-connection subscription table.
+	paneGeomsMu sync.Mutex
+	paneGeoms   map[string]*paneGeometry
+
 	// trackers is the list_delta fan-out: every live client's send channel.
 	trackersMu sync.Mutex
 	trackers   map[*wsConn]struct{}
@@ -95,6 +105,7 @@ func NewServer(opts Options) *Server {
 		maxUploadDir:   defaultMaxUploadDirBytes,
 		maxInput:       opts.MaxInputBytes,
 		catalog:        newSessionCatalog(),
+		paneGeoms:      make(map[string]*paneGeometry),
 		trackers:       make(map[*wsConn]struct{}),
 	}
 	if s.tokenValidator == nil {

@@ -65,11 +65,14 @@ type subscription struct {
 	detach func()
 	// restoreSize returns the pane to the geometry captured before this
 	// subscription reshaped it. Nil when the original geometry could not be read.
+	// restoreOnce guards it against double teardown (explicit unsubscribe racing
+	// a connection close): the pane-level release is idempotent anyway, but the
+	// Once keeps the invariant "at most one release per subscription" explicit.
 	// @contract
-	// @pre non-nil closure captures one successful pre-subscribe Size result
-	// @post subscribeCancel invokes it after cancel+detach to attempt the original geometry
+	// @pre non-nil closure captures the pane-level geometry tracker
+	// @post invoked at most once; releases one subscription on the tracker
 	// @err Resize failures are logged and not returned to the already-unsubscribing client
-	// @inv at most the subscription that captured the geometry owns this closure
+	restoreOnce sync.Once
 	restoreSize func()
 }
 
@@ -193,12 +196,12 @@ func (c *wsConn) teardown() {
 		c.s.unmarkAuthed()
 	}
 	c.subsMu.Lock()
-	for _, sub := range c.subs {
-		sub.cancel()
-		sub.detach()
-	}
+	subs := c.subs
 	c.subs = make(map[string]*subscription)
 	c.subsMu.Unlock()
+	for _, sub := range subs {
+		teardownSubscription(sub)
+	}
 	c.s.unregisterTracker(c)
 }
 
@@ -349,9 +352,25 @@ func (c *wsConn) closeSubscriptions() {
 	c.subs = make(map[string]*subscription)
 	c.subsMu.Unlock()
 	for _, sub := range subs {
-		sub.cancel()
-		sub.detach()
+		teardownSubscription(sub)
 	}
+}
+
+// teardownSubscription releases one subscription's resources in a fixed order:
+// cancel the relay context, detach the pipe, then release the pane geometry.
+// It is the single teardown path shared by every exit route — explicit
+// unsubscribe, connection close (teardown), graceful server close
+// (closeSubscriptions), and relay stream end — so the pane restore runs on all
+// of them alike (fix-host-pane-geometry-accounting 契约 2). restoreOnce makes
+// it idempotent if two routes race on the same subscription.
+func teardownSubscription(sub *subscription) {
+	sub.cancel()
+	sub.detach()
+	sub.restoreOnce.Do(func() {
+		if sub.restoreSize != nil {
+			sub.restoreSize()
+		}
+	})
 }
 
 // subscribeCancel tears down the subscription for ref, if any. It is
@@ -365,11 +384,7 @@ func (c *wsConn) subscribeCancel(ref string) bool {
 	}
 	c.subsMu.Unlock()
 	if sub != nil {
-		sub.cancel()
-		sub.detach()
-		if sub.restoreSize != nil {
-			sub.restoreSize()
-		}
+		teardownSubscription(sub)
 	}
 	return sub != nil
 }
@@ -381,7 +396,11 @@ func (c *wsConn) subscribeCancel(ref string) bool {
 // it when the connection closes.
 func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte) {
 	defer func() {
-		sub.detach()
+		// Single teardown path (fix-host-pane-geometry-accounting 契约 2): the
+		// pane restore runs on relay stream end too, exactly like the explicit
+		// unsubscribe / connection close / server close routes. restoreOnce keeps
+		// this idempotent if subscribeCancel/teardown already released it.
+		teardownSubscription(sub)
 		// Remove only if this subscription is still the live one for the ref
 		// (a re-subscribe may have replaced it concurrently).
 		c.subsMu.Lock()
