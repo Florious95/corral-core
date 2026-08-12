@@ -90,30 +90,32 @@ class TermRewriteIntermediateSuppressionTest {
         // 初始填满 10 行。
         h.emulator.feed((1..10).joinToString("\r\n") { "row-$it" } + "\r\n")
 
-        // ---- recap 分片到达：清屏 + 逐行重写 ----
-        // 分片 1：整屏清屏（ED2 全窗口标脏）。
+        // ---- recap 分片到达（网络 chunking：清屏一帧，随后逐行重写分多帧）----
+        // 帧 1：整屏清屏（ED2）。此帧进入抑制态（清屏本身不呈现）。
         clear(h)
-        // 分片 2-4：自上而下逐行重写（每分片几行）。
-        writeRow(h, 0, "recap-A")
-        writeRow(h, 1, "recap-B")
-        writeRow(h, 2, "recap-C")
+        val clearFrame = frameRepaint(h)
+        assertTrue("清屏帧不得呈现中间态（应为空），实得 $clearFrame", clearFrame != null && clearFrame.isEmpty())
+        assertTrue("清屏后应进入抑制态", h.presenter.isRewriteInProgress)
 
-        // 整屏重写期间：本帧要呈现的重绘范围必须为空（无可呈现的中间帧）。
-        val held = frameRepaint(h)
+        // 帧 2：重写前 6 行（0..5）——未覆盖全窗，继续抑制。
+        for (row in 0..5) writeRow(h, row, "recap-$row")
+        val midFrame = frameRepaint(h)
         assertTrue(
-            "整屏重写期间不得呈现中间帧：takeFrameRepaint 应为空列表，实得 $held",
-            held != null && held.isEmpty(),
+            "重写中途不得呈现中间帧（应为空），实得 $midFrame",
+            midFrame != null && midFrame.isEmpty(),
         )
+        assertTrue("重写中途应保持抑制态", h.presenter.isRewriteInProgress)
 
-        // 落定判定：下一帧请求（模拟帧回调再次查询）仍被抑制/或已落定为完整呈现。
-        // 契约：重写落定后，presenter 必须一次性给出完整窗口（非空脏行覆盖全窗）。
+        // 帧 3：重写后 6 行（6..11）——覆盖全窗 → 落定，一次性呈现完整画面。
+        for (row in 6 until ROWS) writeRow(h, row, "recap-$row")
         val settled = frameRepaint(h) ?: emptyList()
-        assertTrue("recap 落定后必须一次性呈现完整画面（非空、覆盖全窗口），实得 $settled", settled.isNotEmpty())
+        assertTrue("recap 落定后必须一次性呈现完整画面（非空），实得 $settled", settled.isNotEmpty())
         val window = h.presenter.window
         assertTrue(
             "落定呈现必须覆盖全窗口（0..${window.last}），实得 $settled",
             settled.any { it.first <= window.first && it.last >= window.last },
         )
+        assertTrue("落定后必须退出抑制态", !h.presenter.isRewriteInProgress)
     }
 
     @Test

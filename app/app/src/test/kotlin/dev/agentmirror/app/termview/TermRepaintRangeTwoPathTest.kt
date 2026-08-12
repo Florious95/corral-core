@@ -94,7 +94,8 @@ class TermRepaintRangeTwoPathTest {
     }
 
     private fun draw(view: TermSurfaceView, canvas: RepaintCanvas) {
-        view.presenter?.beginFrame()
+        // 复刻帧回调路径：prepareFrame 取本帧重绘范围（脏行/整窗/抑制）+ 抓快照，再 draw。
+        view.prepareFrame()
         view.draw(canvas)
     }
 
