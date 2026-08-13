@@ -39,17 +39,6 @@ class TermViewPresenter(
     private val emulator: TerminalEmulator,
     private val onResizeRequest: (rows: Int, cols: Int) -> Unit,
 ) {
-    /**
-     * 时间源（整屏重写兜底判定的唯一时间依据）。
-     *
-     * 默认 [dev.agentmirror.app.conn.Clock.Real]（墙钟）；JVM 单测注入假时钟推进
-     * 「数据静默」判定（TermRewriteFallbackTest）。**刻意不进构造函数**：作为构造参数会
-     * 占据 trailing lambda 的末位，把 `TermViewPresenter(emulator) { ... }` 的 lambda 误绑
-     * 到 clock（Kotlin trailing lambda 恒绑最后声明参数，onResizeRequest 就无值了）。
-     * 字段注入同样可测，且不改变既有构造签名。
-     */
-    var clock: dev.agentmirror.app.conn.Clock = dev.agentmirror.app.conn.Clock.Real
-
     /** 视口顶行（逻辑行，0=最老历史）：null=跟随底部；非 null=锁定历史，冻结不变。 */
     private var topLine: Int? = null
 
@@ -482,139 +471,27 @@ class TermViewPresenter(
     }
 
     /**
-     * 整屏重写（recap）进行中状态：自整屏清屏（ED2/ED3）起，到本次重写落定/兜底为止。
+     * 取本帧要呈现的重绘范围（帧回调唯一入口）。
      *
-     * fix-input-send-fullrepaint 第二半：真实 CLI 收到消息后整屏 recap（清屏 + 自上而下
-     * 逐行重写），字节经网络分片流式回传。若逐分片呈现，高 RTT 下用户看到「写了一半」的
-     * 画面——清屏后、重写未完成前底部空白，最新消息正落在最后才写到的底部 → 看不到最新
-     * 消息。**屏幕正在被整体重写时不展示中间态**（leader 裁定：这不是防抖降低概率，而是
-     * 终态确定、只不展示写了一半的样子；对齐 Web 端 xterm.js 内部 buffer + ~120ms 合并）。
-     *
-     * 落定判据（结构性，非计时，leader 硬约束）：自清屏起，屏幕**每一行**都已被重写过
-     * （重写覆盖 [0, rows-1] 全窗口）⇒ 落定。用 [rewriteDirtyRows] 累积本次重写写过的
-     * 屏幕行（bitmask），覆盖满即落定。
-     *
-     * 硬上界兜底（leader 硬约束，防冻屏）：重写期间若**数据静默超过 [rewriteSilenceTimeoutMs]**，
-     * 无论落定与否立刻呈现当前状态（宁可一次中间态，不可冻屏），并递增 [rewriteFallbackCount]
-     * （可观测，禁止静默兜底）。
-     */
-    private class RewriteState {
-        var inProgress = false
-        /** 本次重写已写过的屏幕行 bitmask（结构性落定判据：覆盖满 rows 行即落定）。 */
-        var dirtyRows = 0L
-        /** 本次重写最后一次收到数据的时间（毫秒，注入时钟）。 */
-        var lastDataMs = 0L
-        /** 兜底已触发计数（可观测，禁止静默兜底）。 */
-        var fallbackCount = 0
-    }
-
-    private val rewrite = RewriteState()
-
-    /** 是否处于整屏重写（recap）抑制态（测试/可观测：区分「被抑制」与「普通空脏区」）。 */
-    val isRewriteInProgress: Boolean get() = rewrite.inProgress
-
-    /** 兜底已触发计数（可观测，非静默——leader 硬约束：兜底一旦静默就变成遮羞布）。 */
-    val rewriteFallbackCount: Int get() = rewrite.fallbackCount
-
-    /**
-     * 次级静默落定阈值：重写期间数据静默超过此时长（毫秒）即判定「重写已落定」，呈现当前状态。
-     *
-     * 为何需要次级静默判据（leader msg_cb560692a120 实测锚定）：结构性判据「每一行都被重写」
-     * 只覆盖整屏 recap。用户敲 `clear`（清屏 + 提示符只写第 1 行 + 其余行本就该空）时，
-     * 结构性判据永远等不到 → 直到硬上界（2000ms）才呈现 → 用户看到旧内容残留 2 秒（实测
-     * 2050ms，TermRewriteClearScenarioTest）。`clear && echo`、TUI 退出、tmux clear-history
-     * 同形。
-     *
-     * **此数字必须从实测取（leader msg_9b1e529141f0），不许按人感知拍**：约束是
-     * **必须大于「整屏 recap 内部，相邻分片到达的最大间隔」**（注意：不是两波之间 765ms 那个
-     * 数——那是回显波与响应波的间隔，不是 recap 内部的分片间隔）。否则 recap 刚写完第一行、
-     * 第二个分片还在路上时会被误判 clear、露空白屏。
-     * 待 w-base-v2 测「间隔 A（recap 内部分片间隔）」后校准。当前 200ms 是待校准占位。
-     */
-    private val rewriteQuietMs: Long = 200L
-
-    /**
-     * 硬上界兜底阈值：重写期间数据静默超过此时长（毫秒）即**无条件**呈现当前状态。
-     *
-     * 最终保底（leader 硬约束：抑制必须有可观测硬上界，禁止冻屏）。即使结构性判据与次级
-     * 静默判据都有漏洞，本上界保证用户永远在有限时间内看到当前状态（宁可一次中间态，不可
-     * 冻屏）。2000ms = 2× 局域网 recap 时长（1s）留余量；与次级静默（200ms）区分计数，
-     * 各自可观测、各自有测试锚住。
-     */
-    private val rewriteSilenceTimeoutMs: Long = 2000L
-
-    /**
-     * 取本帧要呈现的重绘范围（帧回调唯一入口，替代「takeDamage 排空 + 整帧重绘」）：
-     *  - null：几何整帧（滚动/字号/视口变化）——渲染层整窗重绘；
-     *  - 空列表：整屏重写（recap）进行中，无可呈现的中间帧——渲染层不画，画面停在上帧；
-     *  - 非空：本帧只重绘这些脏行（增量，脏行级）。
+     * **抑制机制已回退**（leader msg_2ca924e58b58）：整屏重写抑制（recap 中间态）经三次实测
+     * 均为零收益——对「发消息整屏刷」ED2=0 不触发、对「捏合闪烁」快照重放本身原子（reset+feed+
+     * 一次 flushDamage，一帧渲染无中间态）、协议快照是单 WS 帧不拆分；代价是 clear 等 2050ms。
+     * 回退后本方法退化回 [takeDamage] 直通，只保留「几何整帧（null）vs 增量脏行」的区分
+     * （供脏行级渲染用，fix-input-send-fullrepaint 半一，保留）。
      *
      * @contract
      * @pre none
-     * @post 消费即清 [fullRepaintPending]；整屏重写抑制态下返回空（不消费增量脏区，等落定）；
-     *       非抑制态返回 takeDamage 结果（脏行区间）；几何事件返回 null
+     * @post 消费即清 [fullRepaintPending]；非空 = 脏行区间（增量），null = 几何整帧
      * @err none
-     * @inv takeDamage 语义不变；[fullRepaintPending] 优先于增量脏区
+     * @inv takeDamage 语义不变；[fullRepaintPending] 优先
      */
     fun takeFrameRepaint(): List<IntRange>? {
         // 几何事件优先：整窗重绘（不排空增量脏区——下一帧增量照常消费）。
         if (fullRepaintPending) {
             fullRepaintPending = false
-            rewrite.inProgress = false // 几何整帧=画面已换，抑制态复位
-            rewrite.dirtyRows = 0
             return null
         }
-        val damage = takeDamage()
-        if (damage.isEmpty()) {
-            // 无增量脏区：若处于抑制态，检查兜底（数据静默超阈值 → 强制呈现当前状态）。
-            if (rewrite.inProgress) {
-                val silent = clock.nowMs() - rewrite.lastDataMs
-                if (silent > rewriteSilenceTimeoutMs) {
-                    rewrite.fallbackCount++
-                    rewrite.inProgress = false
-                    rewrite.dirtyRows = 0
-                    // 兜底呈现：整窗（当前状态），宁可一次中间态不可冻屏。
-                    return listOf(0..(emulator.rows - 1))
-                }
-            }
-            return emptyList()
-        }
-        // 记录本次重写已写过的屏幕行（结构性落定判据）与最后数据时间。
-        val screenRows = emulator.rows
-        for (r in damage) {
-            // 脏区是逻辑行；换算回屏幕行（滚动行是历史，不参与落定判据）。
-            val sb = emulator.scrollback.size
-            val screenStart = (r.first - sb).coerceAtLeast(0)
-            val screenEnd = (r.last - sb).coerceAtMost(screenRows - 1)
-            if (screenStart <= screenEnd) {
-                for (y in screenStart..screenEnd) rewrite.dirtyRows = rewrite.dirtyRows or (1L shl y)
-            }
-        }
-        rewrite.lastDataMs = clock.nowMs()
-
-        // 整屏重写判定：未在抑制态时，本次脏区覆盖全窗口（recap 清屏起点）→ 进入抑制态。
-        // **清屏自身的整屏脏区不参与落定判据**：若计入 dirtyRows，清屏瞬间「每一行都被重写」
-        // 就满足了，抑制立即失效（重写还没开始）。因此进入抑制时清空 dirtyRows，
-        // 只有清屏**之后**的逐行重写才累积（结构性落定：每一行都被**重写**过，而非被清掉）。
-        // 已在抑制态时，全窗口脏区是重写**完成**的信号（落到最后一行）而非新清屏——
-        // 不能重复进入抑制，否则落定判据永不满足（重写完成帧被当成又一次清屏起点）。
-        if (!rewrite.inProgress && damage.any { it.first <= window.first && it.last >= window.last }) {
-            rewrite.inProgress = true
-            rewrite.dirtyRows = 0 // 清屏不计入落定；清屏本身不呈现
-            return emptyList()
-        }
-        // 结构性落定：自清屏起每一行都已被重写 → 一次性呈现完整画面并退出抑制。
-        if (rewrite.inProgress) {
-            val full = (1L shl screenRows) - 1
-            if (rewrite.dirtyRows and full == full) {
-                rewrite.inProgress = false
-                rewrite.dirtyRows = 0
-                // 落定：一次性呈现整个屏幕（recap 已完成，所有行都需重画）。
-                return listOf(0..(emulator.rows - 1))
-            }
-            return emptyList() // 未落定：抑制中间帧
-        }
-        return damage // 普通增量：立即呈现
+        return takeDamage()
     }
 
     /** 帧开始：抓一次内核快照缓存，供本帧 [lineCells] 复用（屏幕行零重复拷贝）。 */

@@ -29,6 +29,9 @@ defineScenario({
     { type: 'wait', ms: 1500 },                                        // 等快照稳定
     { type: 'capture', name: 'open-stable', kind: 'png' },             // 采集点① 打开后稳定帧
     { type: 'capture', name: 'open-dump', kind: 'uiautomator' },       // 采集点① dump
+    { type: 'tmux', cmd: 'send-keys', args: ['echo alive-probe'] },    // 主机追加新内容（存活判据）
+    { type: 'wait', ms: 800 },
+    { type: 'capture', name: 'resp-stable', kind: 'png' },             // 采集点① 追加后帧（screenResponsive）
     { type: 'input', text: 'echo hello' },                             // 发消息
     { type: 'wait', ms: 1000 },
     { type: 'capture', name: 'send-stable', kind: 'png' },             // 采集点② 发后稳定帧
@@ -36,8 +39,10 @@ defineScenario({
     { type: 'tmux', cmd: 'display-message', args: ['-p', '#{pane_width}x#{pane_height}'] }, // pane 记账
   ],
 
-  // 采集点 → 指标。
+  // 采集点 → 指标。**存活判据排最前**（leader 裁定，最高优先级）。
   metrics: [
+    { name: 'terminalContentAlive', capture: 'open-stable', fn: 'space.analyzeFrame', target: 'contentRatio', minRatio: 0.001, direction: 'higher-better', healthValue: 0.001 },
+    { name: 'screenResponsive', capture: 'resp-stable', fn: 'time.analyzeSequence', target: 'movementPattern', direction: 'equals', healthValue: 'BOTTOM_APPEND' },
     { name: 'rightEdgeGapPx', capture: 'open-stable', fn: 'space.analyzeFrame', target: 'rightMarginPx', direction: 'higher-better', healthValue: 100, knownBadValue: 0 },
     { name: 'bottomMarginPx', capture: 'open-stable', fn: 'space.analyzeFrame', target: 'bottomMarginPx', direction: 'lower-better', healthValue: 6, knownBadValue: 1123 },
     { name: 'lastRowVisible', capture: ['open-stable', 'open-dump'], fn: 'space+symbol', target: 'lastRowVisible', direction: 'equals', healthValue: true },
