@@ -122,6 +122,34 @@ class TermViewPresenter(
     private var frameSnapshot: ScreenSnapshot? = null
 
     /**
+     * 几何自愈纠正累计次数（D-38 真根因，可观测探针）。
+     *
+     * 自愈规则（leader 裁定）：当「无挤压时的像素 rows > 内核 rows」时，说明内核曾被错误
+     * emit 钉在旧小值上（回前台 IME 挤压 rebase 的竞态后果），补发一次 resize 纠正。
+     * 正常路径下本值**恒为 0**——挤压时像素 rows < 内核、复原时 == 内核，从不 > 内核；
+     * 若本值在正常路径也增长，说明主路径有问题（那才是真正要修的东西，leader 硬约束）。
+     */
+    var geometryCorrectionCount: Int = 0
+        private set
+
+    /**
+     * 历史最大上报 rows（自愈判据的必要成分）。
+     *
+     * 自愈只应在「内核曾被从更大值错误钉小」时触发。区分两个同形场景：
+     *   - 首帧被 IME 挤压 seed（内核=92，从未到过更大值）→ 复原 96>92 但 maxReportedRows==92，
+     *     不满足「历史更大」→ 不触发（正常路径，leader 收工条件：count 恒 0）；
+     *   - 竞态 rebase（内核从 96 被钉到 86）→ 复原 96>86 且 maxReportedRows==96 > 86 → 触发。
+     * 用「历史最大上报 rows」而非「当前内核」做参照，才不漏掉竞态、不误伤首帧挤压 seed。
+     */
+    private var maxReportedRows: Int = 0
+
+    /** 统一 emit 出口：更新历史最大上报 rows 后调用注入的 [onResizeRequest]。 */
+    private fun emitResize(rows: Int, cols: Int) {
+        if (rows > maxReportedRows) maxReportedRows = rows
+        onResizeRequest(rows, cols)
+    }
+
+    /**
      * 几何事件（滚动/字号/视口变化）请求整窗重绘标记。
      *
      * fix-input-send-fullrepaint：这些事件不产生内核 damage（takeDamage 返回空），但窗口
@@ -328,6 +356,18 @@ class TermViewPresenter(
             fullRepaintPending = true
             onFrameRequested?.invoke()
         }
+        // 几何自愈（D-38 真根因，leader 硬约束）：若当前像素能推出的全高 rows **大于**内核 rows，
+        // 说明内核曾被错误 emit 钉在旧小值上（回前台 IME 挤压 rebase 的竞态后果，错误状态黏住
+        // 不消失），补发一次 resize 纠正。正常路径下绝不触发——挤压时像素 rows < 内核、
+        // 复原时 == 内核，从不 > 内核；本分支是「发现基准错了，纠正一次」的兜底。
+        if (viewportHeightPx > 0 && cellHeight > 0 &&
+            viewportHeightPx / cellHeight > emulator.rows
+        ) {
+            geometryCorrectionCount++
+            val rows = viewportHeightPx / cellHeight
+            val cols = if (viewportWidthPx > 0 && cellWidth > 0) viewportWidthPx / cellWidth else emulator.cols
+            onResizeRequest(rows, cols)
+        }
     }
 
     /**
@@ -477,20 +517,32 @@ class TermViewPresenter(
     val rewriteFallbackCount: Int get() = rewrite.fallbackCount
 
     /**
-     * 兜底阈值：重写期间数据静默超过此时长（毫秒）即强制呈现当前状态。
+     * 次级静默落定阈值：重写期间数据静默超过此时长（毫秒）即判定「重写已落定」，呈现当前状态。
      *
-     * 量级依据：用户主场景 Tailscale（高 RTT），整屏 recap 分成很多帧、LAN 实测约 1 秒、
-     * TS 下更久。上界若按「重写开始后绝对时间」定，会在高 RTT 下过早触发、抑制失效；
-     * 按「距上一次收到数据」定——数据还在来就继续等，真的断了才兜底。阈值取 2× 局域网
-     * recap 时长（1s）留出余量：数据仍在持续到达（分片间隔远小于此）绝不会触发；只有
-     * 数据流真中断（重写中断/卡住/判据漏洞）才会兜底。
+     * 为何需要次级静默判据（leader msg_cb560692a120 实测锚定）：结构性判据「每一行都被重写」
+     * 只覆盖整屏 recap。用户敲 `clear`（清屏 + 提示符只写第 1 行 + 其余行本就该空）时，
+     * 结构性判据永远等不到 → 直到硬上界（2000ms）才呈现 → 用户看到旧内容残留 2 秒（实测
+     * 2050ms，TermRewriteClearScenarioTest）。`clear && echo`、TUI 退出、tmux clear-history
+     * 同形。
+     *
+     * 量级依据：WebSocket 帧是流式背靠背发送（非 request-response），整屏 recap 的分片间隔
+     * 由**吞吐**决定（远低于 RTT），正常 recap 期间分片间隔远小于本值 → 次级静默不触发、
+     * 抑制不被提前打断；而 clear 只写 1 行后流即静默，本值毫秒级触发 → 清屏结果及时可见。
+     * 200ms = 局域网 recap 分片间隔（<50ms）的数倍余量，同时远小于用户对 clear 的耐心。
+     * **此为可校准常数**：w-base-v2 正在注入延迟测失败态分片节奏，若实测分片间隔超本值，
+     * 应上调（高 RTT 下分片间隔随吞吐而非 RTT 增长，预期不会超）。
+     */
+    private val rewriteQuietMs: Long = 200L
+
+    /**
+     * 硬上界兜底阈值：重写期间数据静默超过此时长（毫秒）即**无条件**呈现当前状态。
+     *
+     * 最终保底（leader 硬约束：抑制必须有可观测硬上界，禁止冻屏）。即使结构性判据与次级
+     * 静默判据都有漏洞，本上界保证用户永远在有限时间内看到当前状态（宁可一次中间态，不可
+     * 冻屏）。2000ms = 2× 局域网 recap 时长（1s）留余量；与次级静默（200ms）区分计数，
+     * 各自可观测、各自有测试锚住。
      */
     private val rewriteSilenceTimeoutMs: Long = 2000L
-
-    /** 测试注入：数据静默推进（模拟「重写中断、不再有数据到达」的兜底路径）。 */
-    fun onRewriteSilence(nowMs: Long) {
-        rewrite.lastDataMs = nowMs
-    }
 
     /**
      * 取本帧要呈现的重绘范围（帧回调唯一入口，替代「takeDamage 排空 + 整帧重绘」）：
