@@ -1,0 +1,23 @@
+{
+  "task_id": "fix-viewport-restore-d38-probe",
+  "status": "pass_rootcause_probe_established",
+  "seat": "w-d38-probe",
+  "at": "2026-08-14",
+  "flow": "回炉流程步骤 2/3（CLAUDE.md）：审查席从回退的 diff 反推根因、产出根因探针、并在回退后 HEAD 上验证命中",
+  "probe": "app/app/src/test/kotlin/dev/agentmirror/app/termview/D38ViewportRestoreProbe.kt",
+  "report": "docs/d38-rootcause-probe.md",
+  "probe_run_on_reverted_head": {
+    "command": "./gradlew :app:testDebugUnitTest --tests \"dev.agentmirror.app.termview.D38ViewportRestoreProbe\"",
+    "result": "tests=5 failures=0 errors=0 time=0.015s，P1–P5 全部 PASS（PASS = 缺陷存在 = 命中）",
+    "meaning": "回炉流程步骤 3 通过：探针在回退后 HEAD 上命中 ⇒ 诊断正确"
+  },
+  "acceptance_line_for_future_fix": "修复后 P1/P2/P3/P5 必须 FAIL（不再命中），P4 必须 PASS（不倒退）",
+  "corrections": {
+    "false_account": "原 .team/evidence/fix-viewport-restore-d38.round1.json 记的根因是「onRealViewportChanged 把被挤压的几何当成永久基线」——但探针 P5 用反射实证：v6 的 TermViewPresenter **没有 onRealViewportChanged 这个方法**。那条描述说的是 v3 补丁里的行为，不是 v6 的行为。",
+    "discipline": "纪律①（回退期间立的账不能按回退前的代码来判）的**第三个实例**。前两个：fix-upload-transport-tsnet（记着已修待验证，其实修复早被 v6 全量回退 f89d47ec8 删掉）、以及本条。",
+    "why_it_mattered": "三次修复失败的原因由此解释：按一份描述着不存在代码的诊断去修，当然修不到点上。",
+    "corrected_rootcause": "v6 真正根因：viewportSeeded=true 之后，没有任何代码路径能调用 recomputeGeometry() 更新 emulator.rows。序列为——首帧被 IME 挤压 → onViewportSizeChanged(1080,1680) seed emulator.rows=84 → IME 收起 onViewportSizeChanged(1080,2800) 只更新 visibleRowsOverride=140、不动 emulator.rows → 回前台无 onWindowVisibilityChanged override → 渲染层 visibleRows = 140.coerceIn(1,84) = 84 → window 84 行而 View 有 140 行空间 → 56 行空黑（与用户真机截图 1123px 吻合）。",
+    "fix_lead": "v5 曾用 onWindowVisibilityChanged 补上这个缺口，但该文件被列为禁区、v6 回退时未捞回。"
+  },
+  "next": "缺陷③施工在缺陷①真机实测收工后另开三席；本探针是其验收线"
+}
