@@ -247,7 +247,16 @@ class TermSurfaceView @JvmOverloads constructor(
         if (width <= 0 || height <= 0) return
         // 扣除 IME 后的稳定窗口高：View 高已被 IME 挤过（adjustResize），height + imeInset 才是
         // 真实视口。回前台 IME 在屏时传全高（不 rebase 到挤压值）；分屏/旋转 imeInset=0 传真实变化。
-        presenter?.onRealViewportChanged(width, height + imeInsetPx)
+        //
+        // 主动查询当前 IME inset，而非读缓存字段 imeInsetPx：回前台时 onApplyWindowInsets 可能
+        // 尚未重新分发（visibility 变化先于 insets），缓存 imeInsetPx 还是旧值 0 → height+0=挤压值
+        // → presenter 收到错几何 emit，只能靠自愈纠正（w-base-v2 实测 geometryCorrectionCount=2
+        // 对应「回前台」「收键盘」两点的根因）。rootWindowInsets 是同步查询，此刻能拿到真实 ime。
+        val imeBottom = ViewCompat.getRootWindowInsets(this)
+            ?.getInsets(WindowInsetsCompat.Type.ime())
+            ?.bottom
+            ?: imeInsetPx // 兜底：无 insets 时回落缓存值（至少不凭空假设 0）
+        presenter?.onRealViewportChanged(width, height + imeBottom)
         postFrame()
     }
 
