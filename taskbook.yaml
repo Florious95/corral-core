@@ -2240,3 +2240,27 @@ tasks:
     write_scope: ["docs/"]
     evidence: ".team/evidence/perf-ts-link-guidance.json"
     contention: none
+
+  - id: perf-cellular-ts
+    goal: >
+      蜂窝数据 + Tailscale 真实场景下的链路优化建议（顾问席，只出建议不动手）。
+      用户 2026-08-13 23:29 把手机切到蜂窝数据并保持 TS 连接，测量窗口易逝。
+      已测（同一台手机）：局域网 9.2/47.6/130.8ms、家里WiFi+TS 327/669/1479ms、
+      蜂窝+TS 394/1221/2298ms、路由器 4.4/9.8/24.3ms。
+      拓扑已查清：Tailscale 跑在 Shadowrocket 的 MacPacketTunnel(pid 39476, UDP *:41641)
+      里，同进程挂着到 82.21.81.136:443/8443 的海外出口；主机默认路由为 Clash TUN(utun4)。
+      关键认识：家里 WiFi 下 TS 的 min 已 327ms 而局域网 9.2ms，蜂窝只加约 70ms
+      —— 绕海外是大头，蜂窝不是。
+      产出 docs/cellular-ts-optimization.md：§1 现状判读（增量，含 DIRECT/DERP 判定、
+      延迟成分能否拆开、ICMP 与 WS 应用层往返的差）、§2 网络侧建议（用户自己动手，
+      每步可回退）、§3 代码侧建议（按 1.22s/往返 重排前一席 D1-D6 并说明理由）、
+      §4 第一步。
+    acceptance:
+      - "产出 docs/cellular-ts-optimization.md，四节齐全"
+      - "§1 每个观测带时间戳并标注瞬时值/稳态值；推断与实测分开标注"
+      - "§3 给出对前一席 D1-D6 排序的重新判断与理由（尤其省往返与 delta 背压合并）"
+      - "零代码改动：git diff 中不得出现 app/ server/ test/ 下任何文件"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/perf-cellular-ts.json"
+    contention: none

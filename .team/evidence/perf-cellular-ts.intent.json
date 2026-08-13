@@ -1,0 +1,1 @@
+{"task_id":"perf-cellular-ts","dispatched_to":"w-perf-link","role_file":"agents/w-perf-link.md","model":"claude-fable-5","intent":"蜂窝+TS 真实场景链路优化建议。只出建议不动手，write_scope 仅 docs/。测量窗口易逝，实测尽早做。","at":"2026-08-13"}
