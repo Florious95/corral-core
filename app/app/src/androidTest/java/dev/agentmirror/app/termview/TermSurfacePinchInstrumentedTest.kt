@@ -83,8 +83,17 @@ class PinchHarnessInstrumentation : Instrumentation() {
             val centerX = location[0] + view.width / 2f
             val centerY = location[1] + view.height / 2f
             var dispatchedTouchCount = 0
+            val observedTrace = StringBuilder()
             runOnMainSync {
-                view.setOnTouchListener { _, _ -> dispatchedTouchCount++; false }
+                view.setOnTouchListener { _, e ->
+                    dispatchedTouchCount++
+                    observedTrace.append(
+                        "${MotionEvent.actionToString(e.actionMasked)}(pointers=${e.pointerCount}," +
+                            (0 until e.pointerCount).joinToString(",") { "p$it=(${e.getX(it)},${e.getY(it)})" } +
+                            "); ",
+                    )
+                    false
+                }
             }
             val initialWidth = presenter.cellWidth
             val initialHeight = presenter.cellHeight
@@ -109,20 +118,33 @@ class PinchHarnessInstrumentation : Instrumentation() {
                 SystemClock.sleep(16) // 一帧的量级，让手势看起来像真实产生的
             }
 
+            val trace = StringBuilder()
+            fun snapshot(label: String) {
+                trace.append("$label: cell=${presenter.cellWidth}x${presenter.cellHeight}; ")
+            }
+
             val p0 = centerX - 40f to centerY
             val p1 = centerX + 40f to centerY
             inject(MotionEvent.ACTION_DOWN, p0)
+            snapshot("DOWN")
             inject(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), p0, p1)
+            snapshot("POINTER_DOWN(span=80)")
             inject(MotionEvent.ACTION_MOVE, centerX - 80f to centerY, centerX + 80f to centerY)
+            snapshot("MOVE(span=160)")
             inject(MotionEvent.ACTION_MOVE, centerX - 140f to centerY, centerX + 140f to centerY)
+            snapshot("MOVE(span=280)")
             inject(MotionEvent.ACTION_MOVE, centerX - 200f to centerY, centerX + 200f to centerY)
+            snapshot("MOVE(span=400)")
             inject(
                 MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
                 centerX - 200f to centerY,
                 centerX + 200f to centerY,
             )
+            snapshot("POINTER_UP")
             inject(MotionEvent.ACTION_UP, centerX - 200f to centerY)
+            snapshot("UP")
             waitForIdleSync()
+            snapshot("AFTER_IDLE")
 
             check(dispatchedTouchCount > 0) {
                 "TermSurfaceView.setOnTouchListener 从未被调用——事件根本没有分发到这个 View " +
@@ -131,7 +153,10 @@ class PinchHarnessInstrumentation : Instrumentation() {
             check(presenter.cellWidth > initialWidth && presenter.cellHeight > initialHeight) {
                 "系统注入已成功且事件确实到达 View（收到 $dispatchedTouchCount 次 onTouch），" +
                     "但 TermSurfaceView 未改变字格: " +
-                    "${initialWidth}x$initialHeight -> ${presenter.cellWidth}x${presenter.cellHeight}"
+                    "${initialWidth}x$initialHeight -> ${presenter.cellWidth}x${presenter.cellHeight}\n" +
+                    "逐事件字格轨迹: $trace" +
+                    "\ncenter=($centerX,$centerY) viewSize=${view.width}x${view.height}" +
+                    "\nView 实际收到的事件（经过真实 InputDispatcher 转发后）: $observedTrace"
             }
         } finally {
             runOnMainSync { activity.finish() }
