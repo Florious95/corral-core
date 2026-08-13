@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.termview
 
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.DamageListener
 import dev.agentmirror.terminal.ScreenSnapshot
@@ -63,6 +64,11 @@ class TermViewPresenter(
     /** 视图像素尺寸，捏合行列数换算的基准。 */
     private var viewportWidthPx: Int = 0
     private var viewportHeightPx: Int = 0
+
+    /** 上次栅格快照的关键量（recordGridSnapshot 的变更守卫，防每帧重复记录刷缓冲）。 */
+    private var lastGridVw: Int = -1
+    private var lastGridNominal: Int = -1
+    private var lastGridMeasured: Int = -1
 
     /**
      * 首次真实视口是否已建立（raw/019：唯一合法的一次 resize 已上抛）。
@@ -224,6 +230,8 @@ class TermViewPresenter(
         updateVisibleRows()
         // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
         onFrameRequested?.invoke()
+        // 缺陷②观测点：捏合事件后落一条栅格快照（前后对比即「捏合前后各值如何变化」）。
+        recordGridSnapshot(newCellWidth)
     }
 
     /**
@@ -257,6 +265,9 @@ class TermViewPresenter(
         if (measuredCellW == cellWidth) return // 幂等：值稳定即停止，反馈环收敛点
         cellWidth = measuredCellW
         recomputeGeometry()
+        // 缺陷②观测点：回写实测推进宽后落一条栅格快照（幂等守卫 `== cellWidth` 已保证
+        // 值稳定即停止，不会每帧刷；真机收敛序列 seed 名义 10 → 回写实测 11 → 停）。
+        recordGridSnapshot(measuredCellW)
     }
 
     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */
@@ -267,6 +278,45 @@ class TermViewPresenter(
         if (rows != emulator.rows || cols != emulator.cols) {
             onResizeRequest(rows, cols)
         }
+    }
+
+    /**
+     * 缺陷②观测点：上报栅格几何（w-cols-prep 第 5 条测试规格，字段名逐字对齐）。
+     *
+     * 调用方：TermSurfaceView.measureCells()（绘制层每次量完实测推进宽后喂进来）；
+     * **变更守卫**——只在本栅格任一关键量（视口宽 / 名义字格宽 / 实测推进宽）变化时
+     * 落一条，避免每帧重复记录刷爆环形缓冲（静默经济红线）。捏合/视口变化自然触发
+     * 一次记录，前后对比即「捏合事件前后各值如何变化」。
+     *
+     * 字段（w-cols-prep 第 5 条规格）：viewport_width_px = 终端 View 像素宽；
+     * cell_width_nominal = 上报 cols 用的字格宽（[cellWidth]）；cell_width_measured =
+     * 绘制层实测推进宽（measureCells 的 fgPaint.measureText）；reported_cols =
+     * floor(viewport_width_px / cell_width_nominal)；canvas_capacity_cols =
+     * floor(viewport_width_px / cell_width_measured)；overflow_px = reported_cols >
+     * canvas_capacity_cols 时 (canvas_capacity_cols+1)*cell_width_measured -
+     * viewport_width_px，否则 0（容量边界列右缘越屏量，半字宽量级，非 reported 末列的
+     * 整列量——1260 真机：115*11-1260=5px 才对得上用户主诉）。
+     */
+    fun recordGridSnapshot(measuredCellW: Int) {
+        val vw = viewportWidthPx
+        val nominal = cellWidth
+        val reported = if (nominal > 0) vw / nominal else 0
+        val capacity = if (measuredCellW > 0) vw / measuredCellW else 0
+        val overflow = if (reported > capacity && measuredCellW > 0) {
+            (capacity + 1) * measuredCellW - vw
+        } else {
+            0
+        }
+        if (vw == lastGridVw && nominal == lastGridNominal && measuredCellW == lastGridMeasured) return
+        lastGridVw = vw
+        lastGridNominal = nominal
+        lastGridMeasured = measuredCellW
+        DiagLog.record(
+            "grid",
+            "viewport_width_px=$vw cell_width_nominal=$nominal cell_width_measured=$measuredCellW " +
+                "reported_cols=$reported canvas_capacity_cols=$capacity " +
+                "overflow_px=$overflow half_cell_px=${measuredCellW / 2.0}",
+        )
     }
 
     // ---- 帧消费：脏区合并 + 行数据 ----

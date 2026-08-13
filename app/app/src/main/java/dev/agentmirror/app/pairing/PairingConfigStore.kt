@@ -22,6 +22,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.core.content.edit
+import dev.agentmirror.app.diag.DiagLog
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -66,6 +67,11 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
         val url = prefs.getString(KEY_URL, null) ?: return null
         val token = prefs.getString(KEY_TOKEN, null) ?: return null
         val tsAuthKey = loadTsAuthKey() ?: return null
+        // 凭据脱敏前置（registerSecret 坑一：注册前窗口）：token 刚从 prefs 读出的那一刻
+        // 就注册，把「值在内存」到「registerSecret 生效」的窗口压到零。tsAuthKey 在
+        // TsnetWire.ensureStarted 入口已注册；这里补 token（URL 若带 userinfo 由结构兜底拦）。
+        DiagLog.registerSecret(token)
+        tsAuthKey.takeIf { it.isNotEmpty() }?.let(DiagLog::registerSecret)
         return PairingConfig(url, token, tsAuthKey)
     }
 

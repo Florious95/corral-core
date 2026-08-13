@@ -16,6 +16,8 @@
 
 package dev.agentmirror.app.conn
 
+import dev.agentmirror.app.diag.DiagLog
+
 /**
  * 单条 WebSocket 生命周期状态机（docs/protocol.md §3）。
  *
@@ -196,6 +198,10 @@ class Connection(
             authSent -> true   // auth 后立即断开 → 视作拒绝
             else -> false      // 拨号失败（auth 未发出）→ 可重连
         }
+        // 缺陷观测点：单条 WS 生命周期终结（permanent=可重连判定、reason=关闭原因）。
+        // ConnectionManager.setState 的 [ws] 覆盖的是聚合状态机，这里是单条连接的终结
+        // 判定（READY 掉线/拨号失败/auth 被拒）——事件覆盖红测直接驱动本类，必须在此落点。
+        DiagLog.record("ws", "close permanent=$permanent reason=${reason.take(200)}")
         listener.onClosed(permanent, reason)
     }
 }

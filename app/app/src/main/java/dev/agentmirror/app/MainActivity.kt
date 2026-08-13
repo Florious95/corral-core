@@ -22,6 +22,7 @@ import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import dev.agentmirror.app.diag.DiagLog
 import androidx.activity.enableEdgeToEdge
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.pairing.startPersistentConnection
@@ -39,6 +40,8 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
  * EXTRA_SESSION_REF，本 Activity 在 [onCreate]（冷启动直达）与 [onNewIntent]（singleTop
  * 在屏切换）两处消费，直达对应会话页。launchMode=singleTop（manifest）：通知点按在屏时走
  * onNewIntent 而非重建，不闪白、不丢当前屏。
+ *
+ * @consumes dev.agentmirror.app.diag
  */
 class MainActivity : ComponentActivity() {
 
@@ -52,6 +55,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 崩溃兜底（设计答复①，leader 认可）：崩溃/ANR trace 是 cause 链最长的地方，
+        // 必须经 DiagLog.recordCrash 递归脱敏后才进缓冲。链式安装：不替换既有 handler，
+        // 崩溃记录完仍转交原 handler（保留系统默认崩溃行为）。回调里 recordCrash 已 try/catch
+        // 包住，不会在崩溃回调里再抛（吞掉原始崩溃）。
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            DiagLog.recordCrash("crash", throwable)
+            prev?.uncaughtException(thread, throwable)
+        }
+        // 缺陷⑤观测点：前后台生命周期（回前台永远连不上的场景，需要 ON_STOP/ON_START
+        // 时间线来对齐「何时切后台 → 何时回前台 → 连接在哪个点失败」）。DiagLog 用时间戳
+        // 已由 record 自带，这里只记事件名；切换时刻即记录时刻。
+        DiagLog.record("lifecycle", "ON_CREATE")
         enableEdgeToEdge()
         // IME 重排（ui-redesign，图31 空洞根因修复）：edge-to-edge（decorFitsSystemWindows=false）
         // 下 manifest 未声明 softInputMode 时系统默认解析为 adjustPan——键盘弹出整窗上移，
@@ -103,6 +119,19 @@ class MainActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         navState.writeTo(outState)
         super.onSaveInstanceState(outState)
+    }
+
+    /** 缺陷⑤观测点：回前台（后台冻结窗口结束，连接自愈触发点——若此处 ensureStarted
+     *  被幂等守卫拦下、且 SOCKS 持续失败，日志里两个信号对撞即定位根因）。 */
+    override fun onStart() {
+        super.onStart()
+        DiagLog.record("lifecycle", "ON_START")
+    }
+
+    /** 缺陷⑤观测点：切后台（系统可能冻结进程/挂起连接，回前台时状态错位的起点）。 */
+    override fun onStop() {
+        DiagLog.record("lifecycle", "ON_STOP")
+        super.onStop()
     }
 
     /** 消费通知深链：匹配 action 且带 ref 才导航；缺 ref 忽略（halt 纪律：缺字段不猜）。 */

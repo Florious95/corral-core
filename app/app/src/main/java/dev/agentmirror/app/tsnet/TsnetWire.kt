@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.tsnet
 
+import dev.agentmirror.app.diag.DiagLog
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.Executor
@@ -82,6 +83,10 @@ object TsnetWire {
     @Synchronized
     fun ensureStarted(authKey: String) {
         val key = authKey.trim()
+        // 凭据脱敏前置（registerSecret 坑一：注册前窗口）：值刚进本方法就注册，把
+        // 「值在内存」到「registerSecret 生效」的窗口压到零——本方法内任何 record 都已被
+        // 脱敏兜住。注册表本身绝不进缓冲/导出（private，无 toString 暴露面）。
+        DiagLog.registerSecret(key)
         val env = environment
         if (env == null) {
             onState(TsnetState.Error("tsnet 环境未初始化（内部接线缺陷，请重启 App）"))
@@ -89,6 +94,11 @@ object TsnetWire {
         }
         val m = manager
         if (m != null && key == currentKey && (m.state is TsnetState.Starting || m.state is TsnetState.Up)) {
+            // 缺陷⑤核心观测点：ensureStarted 被调用但被幂等守卫拦下。真机复现的「回前台
+            // 永远连不上」若根因是节点停在 Up 而实际链路断了，这条记录会让日志里出现
+            // 「ensureStarted 被拦 state=Up」而 SOCKS 拨号持续失败——两个信号对撞即定位。
+            // 不记录 key 任何片段（含前缀），只记是否被拦与当前态。
+            DiagLog.record("tsnet", "ensureStarted 被幂等守卫拦下（重复 key，state=${m.state}）")
             return
         }
         // 换 key 或上次失败：停旧建新。stop() 的 Idle 回调经 onState 短暂可见，随后 Starting 覆盖。

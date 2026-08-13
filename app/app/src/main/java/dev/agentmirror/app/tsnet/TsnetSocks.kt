@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.tsnet
 
+import dev.agentmirror.app.diag.DiagLog
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -146,16 +147,33 @@ private class TsnetProxySocket(private val proxy: TsnetProxy) : Socket() {
     override fun connect(endpoint: SocketAddress, timeout: Int) {
         val target = endpoint as? InetSocketAddress
             ?: throw IOException("SOCKS5 拨号目标类型非法: $endpoint")
-        super.connect(InetSocketAddress(proxy.host, proxy.port), timeout)
-        // 握手期间限时读（默认 0=无限会让坏代理挂死拨号线程）；完成后还原由
-        // OkHttp 统一管理的读超时语义。
-        val prev = soTimeout
-        soTimeout = if (timeout > 0) timeout else HANDSHAKE_TIMEOUT_MS
+        val host = target.address?.hostAddress ?: target.hostString
+        val dialStart = System.currentTimeMillis()
+        // 缺陷⑤观测点：每次 SOCKS 拨号带目标 host:port、结果、异常类型/REP、耗时。
+        // 真实缺陷场景的判别信号 = 这里持续失败 + tsnet state 仍停在 Up——日志里「state=Up
+        // 但 SOCKS dial 全失败」两个信号对撞即定位。拨号成功时记录 host/port/耗时。
         try {
-            val host = target.address?.hostAddress ?: target.hostString
-            TsnetSocks.handshake(getInputStream(), getOutputStream(), host, target.port, "tsnet", proxy.cred)
-        } finally {
-            soTimeout = prev
+            super.connect(InetSocketAddress(proxy.host, proxy.port), timeout)
+            // 握手期间限时读（默认 0=无限会让坏代理挂死拨号线程）；完成后还原由
+            // OkHttp 统一管理的读超时语义。
+            val prev = soTimeout
+            soTimeout = if (timeout > 0) timeout else HANDSHAKE_TIMEOUT_MS
+            try {
+                TsnetSocks.handshake(getInputStream(), getOutputStream(), host, target.port, "tsnet", proxy.cred)
+            } finally {
+                soTimeout = prev
+            }
+            DiagLog.record(
+                "socks",
+                "dial ok host=$host port=${target.port} via=${proxy.host}:${proxy.port} ms=${System.currentTimeMillis() - dialStart}",
+            )
+        } catch (e: Exception) {
+            DiagLog.record(
+                "socks",
+                "dial fail host=$host port=${target.port} ex=${e.javaClass.simpleName} msg=${e.message} " +
+                    "ms=${System.currentTimeMillis() - dialStart}",
+            )
+            throw e
         }
     }
 

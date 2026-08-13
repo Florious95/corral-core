@@ -30,4 +30,5 @@ package dev.agentmirror.app.session
  * @consumes dev.agentmirror.app.tsnet
  * @consumes dev.agentmirror.app.ui.theme
  * @consumes dev.agentmirror.terminal
+ * @consumes dev.agentmirror.app.diag
  */

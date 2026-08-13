@@ -86,6 +86,22 @@ limitations under the License.
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!--
+          诊断日志导出的 FileProvider（feat-diagnostic-log-export）：设置页一键导出把
+          filesDir/diag/ 下的临时日志文件经 content URI 分享给用户选定的目标 App。
+          exported=false + grantUriPermissions：只授给分享 intent 的接收方，不对外暴露。
+          authority = {applicationId}.fileprovider（packageName 即 applicationId）。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>

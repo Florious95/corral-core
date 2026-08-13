@@ -41,5 +41,6 @@ package dev.agentmirror.app.service
  *
  * @consumes dev.agentmirror.app
  * @consumes dev.agentmirror.app.conn
+ * @consumes dev.agentmirror.app.diag
  * @consumes dev.agentmirror.app.tsnet
  */
