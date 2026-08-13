@@ -1,0 +1,71 @@
+{
+  "task_id": "fix-upload-transport-tsnet",
+  "role": "probe",
+  "agent": "w-up-probe",
+  "date": "2026-08-14",
+  "status": "pass_code_level_pending_real_device",
+  "summary": "根因已定位，代码级验证通过，模拟器结构性无法复现 tailnet 路径缺陷，最终验收待用户真机。",
+
+  "root_cause": {
+    "file": "app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt",
+    "line": 67,
+    "description": "URL(endpoint).openConnection() 无 proxy 参数，上传始终走系统网络栈，tailnet 地址在蜂窝网络下不可达，10s ConnectException。WS 走内嵌 tsnet SOCKS 独立运作，两条通道不同路。"
+  },
+
+  "hypotheses_eliminated": [
+    { "id": "A", "desc": "Manifest/VpnService 排除", "method": "静态代码分析", "result": "排除：manifest 无 BIND_VPN_SERVICE / allowBypass / excludedRoutes" },
+    { "id": "B", "desc": "内嵌 tsnet 创建 VPN/TUN 竞争", "method": "PackageDoc.kt 明文 + 代码分析", "result": "排除：tsnet 是纯用户态节点，无 VpnService，无 TUN" },
+    { "id": "C", "desc": "bindProcessToNetwork 绑定蜂窝", "method": "grep -r bindProcessToNetwork", "result": "排除：全目录零命中" },
+    { "id": "D", "desc": "系统 VPN 当时 Down", "method": "逻辑推导", "result": "最可能运行时原因，但对修复方向无影响" }
+  ],
+
+  "fix_direction_verified": {
+    "correct": true,
+    "fix_commit": "fb31674d2",
+    "fix_file": "app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt",
+    "fix_desc": "改用 TsnetDial.socketFactoryFor(TsnetWire.state, host)，tailnet host 走 TsnetProxySocketFactory（SOCKS），LAN host 直连"
+  },
+
+  "probes": {
+    "go_concept_probe": {
+      "file": "e2e/harness/upload_transport_probe_test.go",
+      "result": "4/4 PASS（概念验证：A=bug存在, B=修复有效, X/Y=自证）",
+      "note": "测试 Go 网络行为，非 Kotlin 代码路径"
+    },
+    "kotlin_unit_test": {
+      "file": "app/app/src/test/java/dev/agentmirror/app/session/HttpUrlConnectionUploaderTsnetRouteTest.kt",
+      "result": "7/7 PASS（真实 HttpUrlConnectionUploader 代码路径，含 DEBUG-SOCKS-CONNECT 确认）",
+      "note": "这是本缺陷的权威验收证据"
+    }
+  },
+
+  "emulator_test": {
+    "avd": "agentmirror_geo_1260x2800",
+    "apk_before": "/tmp/am-before（HEAD before fb31674d2）",
+    "apk_after": "/tmp/am-after（commit fb31674d2）",
+    "lan_regression": {
+      "endpoint": "ws://10.0.2.2:19983/ws",
+      "result": "PASS — 上传成功，logcat 无 DEBUG-SOCKS-CONNECT，LAN 路径不受影响",
+      "upload_file": "upload-20260813T191943-1000000022.png（179 bytes）"
+    },
+    "tailnet_path_limitation": {
+      "status": "INVALID",
+      "reason": "Mac 在 tailnet 上，模拟器经 host NAT 直达 Mac tailnet IP（100.103.188.4），无需隧道。改前 APK 上传也成功（< 1s），无法区分改前/改后。",
+      "evidence": "改前 APK 上传到 100.103.188.4:19983 → 文件 upload-20260813T191251-1000000022.png 到达，耗时 < 1s，logcat 无任何 ConnectException。",
+      "implication": "此模拟器环境下所有 tailnet 路径验证均无效。缺陷⑤（w-tsresume-probe）需提前纳入此限制。"
+    }
+  },
+
+  "pending_real_device": {
+    "what": "用户在蜂窝网络 + 官方 Tailscale App 运行环境下，用改后 APK 发送一张图片",
+    "why": "用户已有改前报错（after 10000ms，源=蜂窝地址），只缺改后成功证据",
+    "apk": "/tmp/am-after 产物，commit fb31674d2"
+  },
+
+  "security_incident": {
+    "date": "2026-08-14",
+    "type": "auth_key_fragment_in_url_field_screenshot",
+    "disposition": "截图已删，字段已清，AVD userdata 已清，auth key 已请用户轮换",
+    "lesson": "报告泄露时只说位置/范围/处置，泄露值本身一个字符都不带"
+  }
+}
