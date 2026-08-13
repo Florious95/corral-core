@@ -1,6 +1,6 @@
 {
   "task_id": "feat-remote-scroll-forward",
-  "status": "server_side_pass_pending_app_side",
+  "status": "pass_pending_real_device_test",
   "date": "2026-08-14",
   "worker": "w-scroll-design",
 

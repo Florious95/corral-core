@@ -28,6 +28,7 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ErrorFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.conn.PaneModeChangedFrame
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.termview.TermViewPresenter
 import dev.agentmirror.terminal.TerminalEmulator
@@ -106,6 +107,19 @@ class SessionViewModel(
     /** 是否锁定在历史中（"回到底部"可见性；会话屏 Compose 悬浮钮按此渲染）。 */
     var showBackToBottom by mutableStateOf(false)
 
+    /**
+     * 远端 pane 是否处于 tmux copy-mode（缺陷④ 远端滚动投送）。
+     *
+     * copy-mode 中用户按键被 tmux 拦截为 copy-mode 命令（而非送到运行的程序），
+     * 屏幕上看起来「敲了没反应」。服务端 handleScrollWheel 进入 copy-mode 后推
+     * PaneModeChangedFrame{inCopyMode=true}；handleInput 退出后推 {inCopyMode=false}。
+     * UI 据此显示 copy-mode 角标，告知用户当前模式（最小提示，不做花的）。
+     */
+    var inCopyMode by mutableStateOf(false)
+
+    /** 上次向服务端发出 ScrollWheelFrame 的时间戳（ms）；用于 50ms 节流。 */
+    private var lastScrollSentMs = 0L
+
     // ---- 历史分页簿记（006：滚动到边界按需补页）----
 
     /** 下一页请求的 from_line 锚点（协议 §6.3 capture-pane 语义：负=屏上历史）。 */
@@ -149,9 +163,12 @@ class SessionViewModel(
     }
 
     override fun onFrame(frame: FramePayload) {
-        // 列表帧归 workspace 渲染；本页只关心协议级错误（被动异常必须可见）。
-        if (frame is ErrorFrame) {
-            transientError = "协议错误：${frame.code.wire}${frame.reason.takeIf { it.isNotEmpty() }?.let { "（$it）" } ?: ""}"
+        when (frame) {
+            // 列表帧归 workspace 渲染；本页只关心协议级错误（被动异常必须可见）。
+            is ErrorFrame -> transientError = "协议错误：${frame.code.wire}${frame.reason.takeIf { it.isNotEmpty() }?.let { "（$it）" } ?: ""}"
+            // 缺陷④：远端 pane copy-mode 状态变更（进入/退出），驱动 UI 角标。
+            is PaneModeChangedFrame -> if (frame.ref == ref) inCopyMode = frame.inCopyMode
+            else -> Unit
         }
     }
 
@@ -312,6 +329,39 @@ class SessionViewModel(
         syncFromPresenter()
     }
 
+    /**
+     * 处理手势滚动（缺陷④ 远端滚动投送，由 TermSurfaceView 经 onRemoteScrollBy 回调触发）。
+     *
+     * READY 状态：以 50ms 节流发 ScrollWheelFrame 到服务端；delta = -deltaLines（协议约定
+     * delta<0=向上/看历史，deltaLines>0=看更早历史）。非 READY 状态降级到本地缓冲滚动，
+     * 保证掉线中仍可看本地 scrollback。
+     *
+     * 50ms 节流说明：GestureDetector 在快速滑动时每 ~16ms 触发一次 onScroll；不节流时
+     * 每帧都发帧，链路负担大；50ms 约保留 20fps 的手势密度，足以响应滑动速度。
+     * 超出窗口的事件被丢弃（非累加），因为每个滚轮档位都是相对偏移，丢中间帧不影响方向正确性。
+     *
+     * @contract
+     * @pre deltaLines 非零（调用方 TermSurfaceView 在 deltaLines==0 时不调用此方法）
+     * @post READY 时：间隔 ≥50ms 则发一帧 ScrollWheelFrame(delta=-deltaLines)；否则丢弃
+     *       非 READY 时：presenter.onScrollBy(deltaLines) 本地降级
+     * @err 帧校验失败由 conn 层静默（delta 不会为 0，由 deltaLines≠0 保证）
+     * @inv lastScrollSentMs 单调递增；connectionState 不被本方法改变
+     */
+    fun onScrollWheel(deltaLines: Int) {
+        if (connectionState != ConnectionState.READY) {
+            // 降级：非 READY（掉线/重连/停止）时走本地缓冲，保证用户仍可看历史。
+            presenter.onScrollBy(deltaLines)
+            return
+        }
+        val nowMs = System.currentTimeMillis()
+        if (nowMs - lastScrollSentMs < SCROLL_THROTTLE_MS) return
+        lastScrollSentMs = nowMs
+        // 协议约定：delta<0=向上看历史（scroll-up）。
+        // 手势约定：deltaLines>0=presenter 向更早历史滚（正值=看旧内容），
+        // 因此 delta=-deltaLines 使两端符号语义对齐。
+        manager.sendScrollWheel(ref, -deltaLines)
+    }
+
     /** 离开会话页时释放：退订镜像（conn 层幂等），停用连接由服务/接线层决定。 */
     fun dispose() {
         manager.unsubscribe(ref)
@@ -359,5 +409,8 @@ class SessionViewModel(
     private companion object {
         /** 历史分页大小（006：打开预取/滚到边界按页补）。 */
         const val HISTORY_PAGE = 400
+
+        /** ScrollWheelFrame 发送节流窗口（ms）：GestureDetector 约每 16ms 触发，节流到 ~20fps。 */
+        const val SCROLL_THROTTLE_MS = 50L
     }
 }

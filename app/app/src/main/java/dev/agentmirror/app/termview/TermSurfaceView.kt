@@ -62,6 +62,16 @@ class TermSurfaceView @JvmOverloads constructor(
             }
         }
 
+    /**
+     * 远端滚动回调（缺陷④）：由会话层（SessionViewModel）注入，将手势档位数投送到远端 pane。
+     * 注入后 onScroll 优先走此路径；null 则退回 presenter.onScrollBy（本地缓冲降级）。
+     *
+     * 注意：SessionScreen 在 AndroidView update lambda 里永远设此回调（只要会话页存活），
+     * 因此 null 分支在正常会话中不会触达——降级逻辑（READY 判断）实际由 SessionViewModel
+     * 内部负责，View 层不感知连接状态。null 分支保留是为了在测试/预览中允许不注入 VM。
+     */
+    var onRemoteScrollBy: ((deltaLines: Int) -> Unit)? = null
+
     /** 像素高度对应一逻辑行的行高（视口向下滚动超过一行时对齐整格）。 */
     private var lineHeightPx: Int = 0
 
@@ -111,11 +121,15 @@ class TermSurfaceView @JvmOverloads constructor(
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean = true
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
-            presenter?.let {
-                // GestureDetector 的 distanceY 是“上一点 - 当前点”：手指下拖为负；
-                // Presenter 的正值才是看更早历史，因此必须反号以保持内容跟手移动。
-                val deltaLines = (-dy / lineHeightPx.toFloat()).roundToInt()
-                if (deltaLines != 0) it.onScrollBy(deltaLines)
+            // GestureDetector 的 distanceY 是”上一点 - 当前点”：手指下拖为负；
+            // Presenter 的正值才是看更早历史，因此必须反号以保持内容跟手移动。
+            val deltaLines = (-dy / lineHeightPx.toFloat()).roundToInt()
+            if (deltaLines == 0) return true
+            val remoteScroll = onRemoteScrollBy
+            if (remoteScroll != null) {
+                remoteScroll(deltaLines) // 远端路径；降级判断由 SessionViewModel 负责
+            } else {
+                presenter?.onScrollBy(deltaLines) // 本地缓冲路径（测试/预览，无 VM 注入时）
             }
             return true
         }

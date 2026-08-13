@@ -57,6 +57,8 @@ sealed interface FramePayload {
                     FrameType.SCROLLBACK -> json.decodeFromJsonElement(ScrollbackFrame.serializer(), el)
                     FrameType.RESIZE -> json.decodeFromJsonElement(ResizeFrame.serializer(), el)
                     FrameType.ERROR -> json.decodeFromJsonElement(ErrorFrame.serializer(), el)
+                    FrameType.SCROLL_WHEEL -> json.decodeFromJsonElement(ScrollWheelFrame.serializer(), el)
+                    FrameType.PANE_MODE_CHANGED -> json.decodeFromJsonElement(PaneModeChangedFrame.serializer(), el)
                     else -> throw FrameDecodeException(
                         FrameError.UNSUPPORTED_TYPE,
                         "unknown frame type: $type",
@@ -105,6 +107,12 @@ sealed interface FramePayload {
                     }
                     json.encodeToJsonElement(ErrorFrame.serializer(), frame)
                 }
+                is ScrollWheelFrame -> json.encodeToJsonElement(ScrollWheelFrame.serializer(), frame)
+                // PaneModeChangedFrame is S→C only; client never encodes it upstream.
+                is PaneModeChangedFrame -> throw FrameEncodeException(
+                    FrameError.INVALID_FIELD,
+                    "pane_mode_changed is server-to-client only, never sent upstream",
+                )
             }
         }
     }
@@ -401,4 +409,52 @@ data class ErrorFrame(
     @SerialName("reason") val reason: String = "",
 ) : FramePayload {
     override val frameType: String get() = FrameType.ERROR
+}
+
+/**
+ * 滚轮手势 C→S（缺陷④ 远端滚动投送，docs/remote-scroll-forward-design.md）。
+ *
+ * delta < 0 = 向上滚（看历史）；delta > 0 = 向下滚。单位：档位（每档约 3 行）。
+ * 服务端无成功 ack（屏幕内容变化即反馈）；失败时服务端回 ErrorFrame。
+ *
+ * @contract
+ * @pre ref 非空；delta 非零
+ * @post 服务端按 delta 方向对远端 pane 执行滚动（mouse-tracking 路径注入字节；
+ *       copy-mode 降级路径进入 copy-mode 并返回 PaneModeChangedFrame）
+ * @err validate() 对空 ref / 零 delta 返回非空原因
+ * @inv delta 永不为 0（零档位是 no-op，编码前拒绝）
+ */
+@Serializable
+data class ScrollWheelFrame(
+    @SerialName("ref") val ref: String,
+    @SerialName("delta") val delta: Int,
+) : FramePayload {
+    override val frameType: String get() = FrameType.SCROLL_WHEEL
+    override fun validate(): String? = when {
+        ref.isEmpty() -> "scroll_wheel ref must be non-empty"
+        delta == 0 -> "scroll_wheel delta must be non-zero"
+        else -> null
+    }
+}
+
+/**
+ * pane copy-mode 状态变更通知 S→C（缺陷④）。
+ *
+ * 服务端在 pane 进入或退出 copy-mode 时推送（进：scroll 降级触发；退：handleInput 兜底）。
+ * 客户端据此显示 copy-mode 指示器，防止用户在 copy-mode 中打字无响应。
+ * 此帧为 S→C only，客户端**不上行**。
+ *
+ * @contract
+ * @pre ref 非空
+ * @post 客户端更新 inCopyMode 状态；为 true 时显示 copy-mode 指示；为 false 时隐藏
+ * @err validate() 对空 ref 返回非空原因
+ * @inv inCopyMode 反映服务端当前所知的 pane mode 状态（最终一致）
+ */
+@Serializable
+data class PaneModeChangedFrame(
+    @SerialName("ref") val ref: String,
+    @SerialName("in_copy_mode") val inCopyMode: Boolean,
+) : FramePayload {
+    override val frameType: String get() = FrameType.PANE_MODE_CHANGED
+    override fun validate(): String? = if (ref.isEmpty()) "pane_mode_changed ref must be non-empty" else null
 }
