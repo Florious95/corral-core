@@ -148,45 +148,64 @@ globalRegistry.define({
     assert(Math.min(darkAlive, lightAlive) / Math.max(darkDead, lightDead) > 5,
       `活/死方差分离度应 >5，实 ${Math.min(darkAlive, lightAlive).toFixed(0)}/${Math.max(darkDead, lightDead).toFixed(0)}`);
 
-    // 完整 computeAlive 路径：深死帧判死。
+    // 完整 computeAlive 路径：深死帧 + 主机有内容 → 判死（对账）。
     const { scenario } = require('../framework/inspection/index');
     const result = scenario.runScenarioMetrics({
       scenarioId: 'S1-open-session-send',
       captures: { 'open-stable': { kind: 'png', path: path.join(ART, 'd38-verify/02-baseline.png') } },
       provenance: { buildSha: 'test', device: 'test', latencyMs: 0, fixture: 'test' },
+      hostContent: { nonEmpty: true, lineCount: 87 }, // 主机有内容 → 屏幕空 = 死
     });
-    assert(result.alive && result.alive.alive === false, `深死帧应判死，实 ${JSON.stringify(result.alive)}`);
+    assert(result.alive && result.alive.alive === false, `深死帧+主机有内容应判死，实 ${JSON.stringify(result.alive)}`);
   },
 });
 
-// ---- 考卷7：存活判据 BLOCKED（leader 裁定，最高优先级）----
+// ---- 考卷7：存活判据 BLOCKED + 主机对账（leader 裁定，最高优先级）----
 
 globalRegistry.define({
-  name: 'inspection:R7-dead-screen-blocks-all',
+  name: 'inspection:R7-hostreconcile-blocks-or-indeterminate',
   tags: ['inspection', 'alive'],
   localOnly: true,
-  description: '死屏（contentRatio=0）→ 存活不过 → 后续指标一律 BLOCKED 不得 PASS',
+  description: '主机有内容+死屏→判死+后续BLOCKED；无主机状态→INDETERMINATE；主机空+App空→正常',
   async fn() {
+    const path = require('path');
+    const ART = path.resolve(__dirname, '../../e2e/artifacts');
     const { scenario } = require('../framework/inspection/index');
-    // 缺采集 → 存活判据无法成立（alive=false）→ 后续指标 BLOCKED。
-    const result = scenario.runScenarioMetrics({
+
+    // ① 主机有内容 + 屏幕死屏（P0 事故帧）→ 判死 + 后续 BLOCKED。
+    const r1 = scenario.runScenarioMetrics({
       scenarioId: 'S1-open-session-send',
-      captures: { /* 空：存活采集点缺失，其余也缺 */ },
+      captures: { 'open-stable': { kind: 'png', path: path.join(ART, 'd38-verify/02-baseline.png') } },
       provenance: PROV,
+      hostContent: { nonEmpty: true, lineCount: 87 }, // 主机 pane 有内容（w-base-v2 对账事实）
     });
-    // 存活判据缺采集 → alive=false（存活不过）。
-    assert(result.alive && result.alive.alive === false, `缺采集应存活不过，实 ${JSON.stringify(result.alive)}`);
-    // 后续指标（bottomMarginPx 等）应 BLOCKED 而非 PASS（存活不过 → 后续无意义）。
-    if (result.metrics.bottomMarginPx) {
+    assert(r1.alive && r1.alive.alive === false, `主机有内容+死屏应判死，实 ${JSON.stringify(r1.alive)}`);
+    if (r1.metrics.bottomMarginPx) {
       assert(
-        result.metrics.bottomMarginPx.status === 'BLOCKED' || result.metrics.bottomMarginPx.status === 'NOT_MEASURED',
-        `存活不过时后续指标应 BLOCKED/NOT_MEASURED，实 ${result.metrics.bottomMarginPx.status}`,
+        r1.metrics.bottomMarginPx.status === 'BLOCKED' || r1.metrics.bottomMarginPx.status === 'NOT_MEASURED',
+        `存活不过时后续指标应 BLOCKED/NOT_MEASURED，实 ${r1.metrics.bottomMarginPx.status}`,
       );
     }
-    // 存活指标自己不得被 BLOCKED 覆盖。
+
+    // ② 无主机状态（只有历史截图）→ INDETERMINATE（不得判活也不得判死）。
+    const r2 = scenario.runScenarioMetrics({
+      scenarioId: 'S1-open-session-send',
+      captures: { 'open-stable': { kind: 'png', path: path.join(ART, 'd38-verify/02-baseline.png') } },
+      provenance: PROV,
+      // 不传 hostContent
+    });
     assert(
-      !result.metrics.terminalContentAlive || result.metrics.terminalContentAlive.status !== 'BLOCKED',
-      '存活指标自己不得被标 BLOCKED',
+      r2.alive && r2.alive.indeterminate === true,
+      `缺主机状态应 INDETERMINATE，实 ${JSON.stringify(r2.alive)}`,
     );
+
+    // ③ 主机空 + App 空 → 正常（非死屏）。
+    const r3 = scenario.runScenarioMetrics({
+      scenarioId: 'S1-open-session-send',
+      captures: { 'open-stable': { kind: 'png', path: path.join(ART, 'ime-no-resize/frames2/frame-0001.png') } },
+      provenance: PROV,
+      hostContent: { nonEmpty: false, lineCount: 0 },
+    });
+    assert(r3.alive && r3.alive.alive === true, `主机空+App空应正常，实 ${JSON.stringify(r3.alive)}`);
   },
 });
