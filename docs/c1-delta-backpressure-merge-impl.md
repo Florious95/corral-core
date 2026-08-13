@@ -104,3 +104,31 @@ writer——否则 writer 停下来，等入队/重排的 relay 会死锁。
    都被内核 socket 缓冲整包吸收，writeFrame 从不真正阻塞，sendCh 从不积压。要验证
    背压相关逻辑，必须在真实链路或能绕过自动调窗的装置（如 e2e/delay_proxy.py 的
    SO_RCVBUF 缩窗版本）上测，本地 loopback 的黑盒实验会给出假阴性。
+
+---
+
+## 八、C1 验收（build tag 隔离的红测，leader msg_42656bdce350 裁定）
+
+关卡1 halt 后，test 席红测（`server/internal/api/delta_merge_scenario_test.go`）加
+`//go:build c1_backpressure_merge` 隔离：默认 `go test ./...` 排除它（全绿，不阻塞
+常规 CI），未来重启 C1 时显式运行验收。
+
+**验收命令**：
+
+```sh
+cd server && env -u TEAM_AGENT_* go test -tags c1_backpressure_merge ./internal/api/ -run TestDeltaMerge -v
+```
+
+**预期结果（当前 HEAD，无 C1 实现——红是预期，红了才对）**：
+
+| 测试 | 无实现 HEAD | C1 实现后 |
+|---|---|---|
+| TestDeltaMergeClientBytesEquivalent | **红**（1577472B 丢帧） | 绿（逐字节等价） |
+| TestDeltaMergeWireCap1MiB | **红**（1MiB 上限帧丢） | 绿 |
+| TestDeltaMergeRefIsolationOnWire | **红**（双 ref 丢字节） | 绿（各流独立） |
+| TestDeltaMergeIdlePathUnchanged | 绿（零回归） | 绿 |
+
+谁要重启 C1，照这三条验收：三条红转绿、idle 恒绿，即实现正确。
+
+e2e 零回归闸 `test/cases/delta_merge_bytes.test.js` 合并前后都绿（不红不碍事），
+保留即可。
