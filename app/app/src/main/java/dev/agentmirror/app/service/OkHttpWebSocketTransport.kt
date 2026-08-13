@@ -52,6 +52,13 @@ import java.util.concurrent.TimeUnit
 class OkHttpWebSocketTransport(
     url: String,
     private val client: OkHttpClient = defaultClient(),
+    /**
+     * SOCKS 拨号失败自愈钩子（缺陷⑤）：仅常驻连接走 SOCKS 选路时由 [OkHttpTransportFactory]
+     * 注入，转发 [ServiceWire.onTailnetSocksFailure] → [TsnetWire.notifySocksRouteFailure]。
+     * 只在拨号阶段失败（连接从未建立）时触发一次——已建立后的掉线不算路由失败，走正常
+     * 退避重连。配对探针与 LAN 直拨路径不注入（null）。
+     */
+    private val onSocksRouteFailure: (() -> Unit)? = null,
 ) : WebSocketTransport {
 
     /** 已建立连接（OkHttp onOpen 后为 true）。 */
@@ -121,11 +128,24 @@ class OkHttpWebSocketTransport(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            // 缺陷⑤自愈信号：只在「拨号阶段失败」（isOpen==false && 尚未终结）时触发一次。
+            // 已建立后的掉线（isOpen 曾为 true）不算路由失败，走 conn 层正常退避重连——若
+            // 也触发会与退避双管齐下重启节点，超出失败驱动的触发语义。
+            val dialPhase = !isOpen && !terminalDelivered
             isOpen = false
             // 缺陷观测点：WS 传输失败（网络断/拨号失败/读异常）。response 的 code 保留
             // （HTTP 握手失败时可见），异常 message 经 record 写入点脱敏（Bearer/token 兜底）。
             DiagLog.record("ws", "failure ex=${t.javaClass.simpleName} msg=${t.message?.take(200)}")
-            deliverTerminal { listener?.onFailure(t) }
+            if (dialPhase) {
+                deliverTerminal {
+                    listener?.onFailure(t)
+                    // 钩子只在真实拨号失败时触发（路由不通是地面真相），且必须在终结回调
+                    // 之后——conn 层先看到失败（进 RECONNECTING），TsnetWire 才重启节点。
+                    onSocksRouteFailure?.invoke()
+                }
+            } else {
+                deliverTerminal { listener?.onFailure(t) }
+            }
         }
     }
 
@@ -172,7 +192,16 @@ object OkHttpTransportFactory : TransportFactory {
         }
         // newBuilder 共享连接池/线程池，仅 socketFactory 差异——非 tailnet 目标零行为变化。
         val chosen = if (sf == null) client else client.newBuilder().socketFactory(sf).build()
-        return OkHttpWebSocketTransport(url, chosen)
+        // 缺陷⑤自愈信号钩子：仅「常驻连接」+「实际选择了 SOCKS 选路」（sf != null）时注入。
+        // 配对探针（recordConnectionPath=false）不挂——配对有独立状态机，且不能误触发自愈；
+        // LAN 路径（sf==null）不挂——官方 TS 并存/LAN 直连的失败不干预 tsnet 节点（隔离是
+        // 代码保证）。钩子转发 ServiceWire → TsnetWire，自愈唯一入口（leader 裁定）。
+        val socksHook = if (sf != null && recordConnectionPath) {
+            { ServiceWire.onTailnetSocksFailure() }
+        } else {
+            null
+        }
+        return OkHttpWebSocketTransport(url, chosen, socksHook)
     }
 }
 

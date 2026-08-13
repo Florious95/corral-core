@@ -28,6 +28,7 @@ import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.tsnet.TsnetWire
 
 /**
  * 前台服务的接线点（service 包之外唯一改动接口；UI/配对层注入）。
@@ -197,6 +198,24 @@ object ServiceWire {
      */
     fun onNetworkAvailable() {
         manager?.onNetworkAvailable()
+    }
+
+    /**
+     * 常驻连接 SOCKS 拨号失败钩子（缺陷⑤ 失败驱动自愈的信号入口）。
+     *
+     * [OkHttpTransportFactory] 在每次拨号**实际选择了 SOCKS 选路**（target 是 tailnet 段
+     * 100.64/10 且节点 Up，[TsnetDial.socketFactoryFor] 返回非 null）且该 transport **拨号
+     * 阶段失败**（连接从未建立）时调用；配对探针不挂此钩子。原样转发
+     * [TsnetWire.notifySocksRouteFailure]——失败驱动自愈**唯一入口**：不在 WS/上传器各自
+     * 写自愈（leader 裁定：自愈只能有一个地方，就是 TsnetWire；①的修复继承同一份脆弱，
+     * ⑤修好后 WebSocket 与上传一起受益）。
+     *
+     * 隔离保证（代码保证不是注释保证）：LAN 路径（[TsnetDial.socketFactoryFor] 返回 null）
+     * 的 transport 不挂钩子，其拨号失败永不走到本方法；官方 Tailscale 并存时 state 停
+     * [TsnetState.Idle]，[TsnetWire.notifySocksRouteFailure] 内直接 return。
+     */
+    fun onTailnetSocksFailure() {
+        TsnetWire.notifySocksRouteFailure()
     }
 
     /**
