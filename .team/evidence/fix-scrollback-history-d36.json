@@ -29,10 +29,26 @@
     "app/.../session/SessionViewModel.kt：SCROLLBACK 分支算实际并入行数并平移视口"
   ],
   "tests": [
-    {"argv": "go test：TestScrollbackCurrentScreenMatchesVisible / TestScrollbackHistoryMetaMatchesContent", "rc": 0, "note": "服务端 2 条红测，修前红→修后绿"},
-    {"argv": "JVM：TermViewScrollbackBoundaryTest / TermGesturePagingRedTest（真实 MotionEvent）/ SessionScrollbackPagingTest", "rc": 0, "note": "客户端 3 条红测，修前全红→修后全绿。含补页请求发出、并入后可继续滚、分页收敛三项。"},
-    {"argv": "test/cases/d36_scrollback.test.js", "rc": 0, "note": "2 条 e2e，修前红→修后绿"},
-    {"argv": "cd app && ./gradlew :app:testDebugUnitTest / cd server && go test ./... / archwiki --strict-t3", "rc": 0, "note": "全量与架构门全绿；两道强制回归门保持绿"}
+    {
+      "argv": "go test：TestScrollbackCurrentScreenMatchesVisible / TestScrollbackHistoryMetaMatchesContent",
+      "rc": 0,
+      "note": "服务端 2 条红测，修前红→修后绿"
+    },
+    {
+      "argv": "JVM：TermViewScrollbackBoundaryTest / TermGesturePagingRedTest（真实 MotionEvent）/ SessionScrollbackPagingTest",
+      "rc": 0,
+      "note": "客户端 3 条红测，修前全红→修后全绿。含补页请求发出、并入后可继续滚、分页收敛三项。"
+    },
+    {
+      "argv": "test/cases/d36_scrollback.test.js",
+      "rc": 0,
+      "note": "2 条 e2e，修前红→修后绿"
+    },
+    {
+      "argv": "cd app && ./gradlew :app:testDebugUnitTest / cd server && go test ./... / archwiki --strict-t3",
+      "rc": 0,
+      "note": "全量与架构门全绿；两道强制回归门保持绿"
+    }
   ],
   "scope_expansion": {
     "what": "leader 授权 write_scope 从 app 侧扩至 server/internal/api/ + server/internal/bridge/ + test/cases/",
@@ -40,7 +56,21 @@
   },
   "副产物_强线索": "席位报告了一条它未动的基线失败用例 d27:redundant-same-size-resize-after-input-must-not-repush-snapshot（发送 input 后出现同尺寸冗余 resize，服务端据此补发整屏 snapshot），基线即红。该机制与用户报告的「发消息后整屏逐行重刷、只在本端发送时出现、时长随 RTT」高度吻合，已转给 w-dev-repaint 核实。",
   "pending": [
-    {"item": "按新复现步骤重验", "note": "复现步骤（用户 2026-08-13 实证）：进 CLI → 大量从上往下加载 → 此时可向上滑 → 发一条消息 → 不能向上滑。四轮以来第一次拿到「能→不能」状态转移，按此定位根因"}
+    {
+      "item": "按新复现步骤重验",
+      "note": "复现步骤（用户 2026-08-13 实证）：进 CLI → 大量从上往下加载 → 此时可向上滑 → 发一条消息 → 不能向上滑。四轮以来第一次拿到「能→不能」状态转移，按此定位根因"
+    }
   ],
-  "at": "2026-08-13"
+  "at": "2026-08-13",
+  "superseded_by": {
+    "task": "feat-remote-scroll-forward",
+    "at": "2026-08-14",
+    "why": "用户 2026-08-14 重新定义：他要的是把上滑手势送到远端终端、等价于在那个 TUI 里滚鼠标滚轮，不是『App 本地缓冲怎么滚』也不是『服务端 scrollback 分页怎么对齐』。前四轮全部做错方向。",
+    "status_note": "本条 status 保持 refuted_by_user 不变——那是历史事实，不该被新任务的成功覆盖。",
+    "closure_condition": "两条一起关，条件是用户在真机上于 Claude Code 会话里上滑，能看到该 TUI 自己的上文。没有那一下，我们只是又一次『自认为懂了』——那正是前四轮翻车的方式。",
+    "commits": [
+      "1511b50c7 服务端 + 协议",
+      "be214a375 App 侧手势接入"
+    ]
+  }
 }
