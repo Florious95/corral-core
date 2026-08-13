@@ -18,6 +18,12 @@ __pycache__/
 
 # 编译二进制
 server/agentmirrord
+e2e/bin/agentmirrord
+
+# e2e 取证目录里的构建残留：截图/日志/录屏留档，Gradle 缓存与构建输出不入库
+# （2026-08-13：这两类曾被 9653be07f 整体入库，占 2.9 GB / 68093 个文件）
+e2e/artifacts/**/gradle-home/
+e2e/artifacts/**/gradle-build/
 
 # Web 端生成物
 web/vendor/
