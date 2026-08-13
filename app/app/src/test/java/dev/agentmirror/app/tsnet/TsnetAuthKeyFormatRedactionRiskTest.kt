@@ -16,28 +16,34 @@
 
 package dev.agentmirror.app.tsnet
 
+import dev.agentmirror.app.diag.DiagLog
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
+import java.io.File
 
 /**
- * 前瞻性红测（审查席，对抗立场，feat-diagnostic-log-export）：
+ * 长期回归闸（审查席，feat-diagnostic-log-export 前置依赖④修复后固化）：
  *
- * diag 模块尚未落地，这里没有真实的"诊断日志脱敏函数"可以直接测。但
- * [TsnetAuthKeys] 的契约（TsnetAuthKeys.kt KDoc）已经明确写死：
+ * [TsnetAuthKeys] 的契约（TsnetAuthKeys.kt KDoc）明确写死：
  *   「不校验厂商前缀：tailscale 官方 `tskey-*` 与 headscale 纯 hex 都必须放行」
- *
- * 也就是说，这个项目**合法接受**不带 `tskey-` 前缀的纯 hex 格式凭据
- * （headscale 自建控制面场景）。这条测试锚定这份真实契约，反证一种最常见的
- * "省事"脱敏实现——用 `tskey-\S+` 之类前缀正则去匹配要脱敏的字符串——
- * 在这个项目里**必然**漏掉 headscale 格式的 key。
- *
- * 这不是在测某个已存在的 bug，是在给开发席一个可执行的反例：
- * 日志系统的脱敏实现如果走"认前缀"的正则捷径，headscale 部署下的用户
- * 一用日志导出就会把 key 明文交出去，而 tskey- 格式的测试用例会全绿，
- * 看不出任何异常——直到线上事故发生。
+ * 也就是说这个项目**合法接受**不带 `tskey-` 前缀的纯 hex 格式凭据
+ * （headscale 自建控制面场景）。本文件历史版本曾用一个 naive 的 `tskey-\S+`
+ * 前缀正则证明"认前缀"式脱敏必然漏掉这种 key——[DiagLog.registerSecret] 改成
+ * 精确字符串匹配（不假设前缀格式）后修复了这个缺口，这里固化成回归闸：
+ * 走真实的 [DiagLog.record] → [DiagLog.exportTo] 全链路，喂一个 headscale 格式的
+ * 假 key，断言导出文件里**零命中明文**。
  */
 class TsnetAuthKeyFormatRedactionRiskTest {
+
+    @Before
+    fun setUp() = DiagLog.resetForTest()
+
+    @After
+    fun tearDown() = DiagLog.resetForTest()
 
     @Test
     fun `TsnetAuthKeys 契约确认放行不带 tskey 前缀的纯 hex key`() {
@@ -46,23 +52,30 @@ class TsnetAuthKeyFormatRedactionRiskTest {
     }
 
     @Test
-    fun `若脱敏实现走 tskey 前缀正则,headscale 格式 key 会原样漏出`() {
+    fun `registerSecret 精确匹配对 headscale 纯 hex key 生效,导出产物零命中`() {
         val headscaleStyleKey = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a1"
         check(TsnetAuthKeys.normalizeOrNull(headscaleStyleKey) != null) {
             "前提失效：这个 key 应当是本项目认可的合法格式"
         }
 
-        // 代表一种常见但错误的"捷径"实现：只认 tskey- 前缀。
-        val naiveTskeyOnlyRedactor = Regex("""tskey-\S+""")
-        val logLine = "tsnet dial failed, retried with key $headscaleStyleKey"
-        val afterNaiveRedaction = naiveTskeyOnlyRedactor.replace(logLine, "[redacted]")
+        DiagLog.registerSecret(headscaleStyleKey)
+        DiagLog.record("tsnet", "dial failed, retried with key $headscaleStyleKey")
 
-        assertTrue(
-            "naive 的 tskey- 前缀正则脱敏对 headscale 格式 key 完全无效——" +
-                "脱敏后的行原样保留了 key：$afterNaiveRedaction。" +
-                "结论：诊断日志的脱敏必须按 TsnetAuthKeys 的真实格式契约做（可见 ASCII、" +
-                "长度阈值等格式特征），不能假设凭据一定带 tskey- 前缀。",
-            afterNaiveRedaction.contains(headscaleStyleKey),
-        )
+        val out = File.createTempFile("diag-headscale-redaction", ".log")
+        try {
+            val result = DiagLog.exportTo(out)
+            assertTrue("导出应成功：$result", result is DiagLog.ExportResult.Success)
+            val exported = out.readText()
+            assertFalse(
+                "headscale 格式（非 tskey- 前缀）的 key 不得出现在导出产物明文中；exported=$exported",
+                exported.contains(headscaleStyleKey),
+            )
+            assertTrue(
+                "导出产物应留下脱敏标记，证明这条记录被处理过而非静默丢弃；exported=$exported",
+                exported.contains(DiagLog.REDACTED),
+            )
+        } finally {
+            out.delete()
+        }
     }
 }

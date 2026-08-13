@@ -126,6 +126,13 @@ data class AuthFrame(
     override val frameType: String get() = FrameType.AUTH
     override fun validate(): String? =
         if (token.isEmpty()) "auth token must be non-empty" else null
+
+    /**
+     * 安全 toString（前置任务①，w-diag-rev 对抗预审发现）：data class 默认 toString 会把
+     * token 明文吐进日志/崩溃 trace。覆盖为占位，token 值绝不出现在字符串表示里。
+     * 序列化仍走 [AuthFrame.serializer]（@Serializable 不受 toString 影响）。
+     */
+    override fun toString(): String = "AuthFrame(token=[redacted])"
 }
 
 /**
