@@ -30,5 +30,8 @@ web/vendor/
 web/dist/
 
 # ffmpeg 抽帧目录：由同目录 mp4 重出，不入库
-# （2026-08-13：abc-regression 的 764 张已入库 112 MB，本次摘除跟踪）
+# （2026-08-13：abc-regression 764 张 + flicker-*-frames 606 张，共已入库 222 MB，本次摘除跟踪）
+# 注意规则写法：*-frames/ 带连字符，故意不命中 abc-regression/keyframes/
+# —— 后者是 15 张按场景步骤命名的精选关键帧，是证据不是转储。
 e2e/artifacts/**/frames*/
+e2e/artifacts/**/*-frames/
