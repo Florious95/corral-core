@@ -91,18 +91,26 @@ leader 今晚在这两条上各栽一次（fix-d27-v3 / fix-scrollback-d36 为�
 
 > 处置原则（leader 交代）：合并定义必须回用户原话（`requirement-wiki/raw/`）；定义冲突不挑一个，并列交裁。
 
-### 2.1 D-38 — 两条立案，定义确实不同，需并列交裁
+### 2.1 D-38 — ✅ 已合并为一条（根因实测锁定，定义写准）
 
-| task id | 定义（taskbook goal 摘录） | evidence |
+| task id | 状态 | 判定 |
 |---|---|---|
-| `fix-viewport-restore-d38` | 「终端行数停留在旧视口几何」（用户截图：终端只占屏幕顶 1/4，中空黑）+ **带 leader 引入风险**（fix-ime-no-resize 改 ViewportSizeChanged 后首帧 seed 不再 emit resize，需一并处理） | 仅 `.intent.json`，无验收 |
-| `fix-bg-resume-d38` | 「viewport 没滚到底部」（后台返回显示半截，必现） | 仅 `.intent.json`（d38-bgresume.intent.json），无验收 |
+| `fix-viewport-restore-d38` | 与 `fix-bg-resume-d38` 合并 | ✅ 合并为一条 |
+| `fix-bg-resume-d38` | 旧定义「viewport 没滚到底部」**作废** | ❌ 旧定义错误，标作废 |
 
-**用户原话（raw/049 + intake draft D-38，两处一致）**：
-> 「从后台切回 App 时，对话内容总是显示在中间位置（半截），不是底部最新内容。**必现**。推测：恢复时 TermViewPresenter 的 viewportTop 没有滚到底部，或 snapshot 重放后没自动跟随最新行。」
+**合并后权威定义（leader 确证，2026-08-13；须回用户原话 + 客观数字，不用我们措辞）**：
 
-**分析**：raw/049 现象 =「半截 / 不在底部 / 没滚到底部」。`fix-bg-resume-d38` 贴合 raw；`fix-viewport-restore-d38` 描述的是「终端只占 1/4、行数停留旧几何」——这可能是同一现象的另一表述（半截 = 视口行数少），也可能是不同的缺陷（几何没恢复 vs 没滚到底部）。**两种定义不合并、不挑一，并列交 leader 裁**，依据 raw/049 原话定权威表述。
-**另注**：`fix-viewport-restore-d38` 绑定了 fix-ime-no-resize 引入的风险，若 D-38 合并收敛，该风险需有归属任务承接。
+**用户原话**：
+> 「切到后台之后，再回到前台，对话界面的输入框会跑到中间去」「终端内容仅占屏幕顶部约 1/4，中间大片空黑」
+
+**客观数字**：用户真实截图 `bottomMarginPx=1123`（健康 ≈6，差 160 倍）；内容画到 y=1676、行高 20px → 只画了 84 行，而视口装得下 140 行，**差 56 行 = 量到的空白**。
+
+**实测复现序列**：进会话 → 点输入框唤起键盘 → 切后台 → 回前台（键盘仍在屏）→ 收起键盘 → `bottomMarginPx=106`，5 秒后仍 106（稳定态非渲染延迟）。
+
+**根因**：回前台走 `onRealViewportChanged` 重算并上报，但那一刻键盘在屏，把**被挤压的几何当成了真实视口**；随后收起键盘走 `onViewportSizeChanged`，按 fix-ime-no-resize 规则不上报 → **挤压值被提拔成永久基线**。
+
+**fix-bg-resume-d38 旧定义作废原因**：它把「内容没顶到底」当成了**滚动位置问题**（viewport 没滚到底部），实际是**行数不足**——视口装得下 140 行只画了 84 行，不是没滚到底，是几何没恢复。旧定义方向错误，不得沿用。
+**另注**：合并后 fix-ime-no-resize 引入的风险（onViewportSizeChanged 不上报挤压值）由合并后本条承接，无需单独任务。
 
 ### 2.2 D-26 — 三条立案，非完全重复而是「路线三次转向」，需交裁分工
 
@@ -185,7 +193,7 @@ leader 今晚在这两条上各栽一次（fix-d27-v3 / fix-scrollback-d36 为�
 
 ---
 
-## 四、需 leader 裁定的点（订正版，已裁 4 项、挂起 2 项）
+## 四、需 leader 裁定的点（订正版，已裁 5 项、挂起 2 项）
 
 ### 已裁（leader msg_5c01e1d5dbf8）
 1. **fix-d27-v3**：✅ 不标 FALSIFIED，改标注「记录属实；所述实现曾随主干回退丢失，07f065db0 恢复服务端至 v5 后已回到 HEAD；待模拟器实测复验」。D-27 先按 HEAD 逻辑做模拟器眼见为实验证，不必先回退。
@@ -196,9 +204,10 @@ leader 今晚在这两条上各栽一次（fix-d27-v3 / fix-scrollback-d36 为�
 
 4. **gate-static-analysis 存量 7 条**：✅ 数字接受，按低优先级挂账，不插队缺陷线。
 
-### 挂起（leader 裁定：连同 w-base-v2 实测结论一起裁，此刻合并会把错定义固化）
-5. **D-38 权威定义**：raw/049 原话「半截/不在底部/没滚到底部」；`fix-viewport-restore-d38`（几何停留）与 `fix-bg-resume-d38`（没滚到底部）两种定义并列原文，不合并，等 w-base-v2 实测 D-38 真根因后一起裁。另 `fix-viewport-restore-d38` 绑定 fix-ime-no-resize 引入风险需有承接任务。
+### 已裁（本轮更新）
+5. **D-38 权威定义**：✅ 根因已实测锁定，`fix-viewport-restore-d38` 与 `fix-bg-resume-d38` **合并为一条**（见 2.1 节，用户原话 + 客观数字 + 复现序列 + 根因）。`fix-bg-resume-d38` 旧定义「viewport 没滚到底部」**作废**（错把行数不足当滚动位置问题）。
 
+### 挂起（leader 裁定：连同实测结论一起裁）
 6. **D-26 分工**：`study-herdr-agent-state`（用户裁定 herdr 路线，contract）是否为 D-26 唯一施工项；`fix-agentstate-detection-d26` partial 是否被吸收；`fix-state-detection` 是否归档改注。一并等实测裁。
 
 7. **D-28/D-29 承接**：以 `fix-pinch-preview-commit`（贴合 raw/041「捏合预览/松手生效」）为主，cluster 中 D-28/D-29 标注承接，cluster 保留 D-20/D-21 或重构。

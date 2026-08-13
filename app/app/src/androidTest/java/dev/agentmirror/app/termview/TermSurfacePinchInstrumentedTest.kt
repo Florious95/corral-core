@@ -23,6 +23,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
+import android.view.ViewGroup
 import dev.agentmirror.terminal.TerminalEmulator
 
 /**
@@ -62,78 +63,80 @@ class PinchHarnessInstrumentation : Instrumentation() {
         try {
             runOnMainSync {
                 view = TermSurfaceView(activity).apply { this.presenter = presenter }
-                activity.setContentView(view)
+                // TermSurfaceView 无 onMeasure 覆写：View 默认测量对 WRAP_CONTENT
+                // 落到 suggestedMinimumSize（常为 0）。setContentView(view) 若不显式给
+                // MATCH_PARENT×MATCH_PARENT，视图会以 0x0 完成布局——手势span/坐标计算
+                // 在退化尺寸上毫无意义，这是此前"注入回true但字格纹丝不动"的根因猜想，
+                // 本次显式撑满修正。
+                activity.setContentView(
+                    view,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+                )
             }
             waitForIdleSync()
 
             val location = IntArray(2)
             runOnMainSync { view.getLocationOnScreen(location) }
+            check(view.width > 0 && view.height > 0) {
+                "TermSurfaceView 布局后尺寸退化: ${view.width}x${view.height}（MATCH_PARENT 未生效）"
+            }
             val centerX = location[0] + view.width / 2f
             val centerY = location[1] + view.height / 2f
+            var dispatchedTouchCount = 0
+            runOnMainSync {
+                view.setOnTouchListener { _, _ -> dispatchedTouchCount++; false }
+            }
             val initialWidth = presenter.cellWidth
             val initialHeight = presenter.cellHeight
-            val downTime = SystemClock.uptimeMillis()
-            val events = spreadingPinch(downTime, centerX, centerY)
 
-            try {
-                for (event in events) {
+            // 每个事件用注入时刻的真实 SystemClock 打时间戳（而不是预先算好的固定偏移），
+            // 且相邻事件间真实 sleep 一小段——诊断假说：预先算好一串仅相差 10ms 的
+            // eventTime、却在紧邻的 for 循环里瞬间（<1ms）连续注入，事件到达时已经是
+            // "未来"时间戳，可能被判定陈旧/被系统丢弃或合并，ScaleGestureDetector 因此
+            // 从未见到跨越多帧的 span 变化。
+            val downTime = SystemClock.uptimeMillis()
+            var lastEventTime = downTime
+            fun inject(action: Int, vararg points: Pair<Float, Float>) {
+                lastEventTime = SystemClock.uptimeMillis()
+                val event = event(downTime, lastEventTime, action, *points)
+                try {
                     check(uiAutomation.injectInputEvent(event, true)) {
-                        "UiAutomation 拒绝 ${MotionEvent.actionToString(event.action)}"
+                        "UiAutomation 拒绝 ${MotionEvent.actionToString(action)}"
                     }
+                } finally {
+                    event.recycle()
                 }
-                waitForIdleSync()
-            } finally {
-                events.forEach(MotionEvent::recycle)
+                SystemClock.sleep(16) // 一帧的量级，让手势看起来像真实产生的
             }
 
+            val p0 = centerX - 40f to centerY
+            val p1 = centerX + 40f to centerY
+            inject(MotionEvent.ACTION_DOWN, p0)
+            inject(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), p0, p1)
+            inject(MotionEvent.ACTION_MOVE, centerX - 80f to centerY, centerX + 80f to centerY)
+            inject(MotionEvent.ACTION_MOVE, centerX - 140f to centerY, centerX + 140f to centerY)
+            inject(MotionEvent.ACTION_MOVE, centerX - 200f to centerY, centerX + 200f to centerY)
+            inject(
+                MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                centerX - 200f to centerY,
+                centerX + 200f to centerY,
+            )
+            inject(MotionEvent.ACTION_UP, centerX - 200f to centerY)
+            waitForIdleSync()
+
+            check(dispatchedTouchCount > 0) {
+                "TermSurfaceView.setOnTouchListener 从未被调用——事件根本没有分发到这个 View " +
+                    "（View 可能未获得窗口焦点/未在命中测试路径上），不是手势判定问题"
+            }
             check(presenter.cellWidth > initialWidth && presenter.cellHeight > initialHeight) {
-                "系统注入已成功但 TermSurfaceView 未改变字格: " +
+                "系统注入已成功且事件确实到达 View（收到 $dispatchedTouchCount 次 onTouch），" +
+                    "但 TermSurfaceView 未改变字格: " +
                     "${initialWidth}x$initialHeight -> ${presenter.cellWidth}x${presenter.cellHeight}"
             }
         } finally {
             runOnMainSync { activity.finish() }
         }
     }
-
-    private fun spreadingPinch(downTime: Long, centerX: Float, centerY: Float): List<MotionEvent> = listOf(
-        event(downTime, downTime, MotionEvent.ACTION_DOWN, centerX - 40f to centerY),
-        event(
-            downTime,
-            downTime + 10,
-            MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
-            centerX - 40f to centerY,
-            centerX + 40f to centerY,
-        ),
-        event(
-            downTime,
-            downTime + 20,
-            MotionEvent.ACTION_MOVE,
-            centerX - 80f to centerY,
-            centerX + 80f to centerY,
-        ),
-        event(
-            downTime,
-            downTime + 30,
-            MotionEvent.ACTION_MOVE,
-            centerX - 140f to centerY,
-            centerX + 140f to centerY,
-        ),
-        event(
-            downTime,
-            downTime + 40,
-            MotionEvent.ACTION_MOVE,
-            centerX - 200f to centerY,
-            centerX + 200f to centerY,
-        ),
-        event(
-            downTime,
-            downTime + 50,
-            MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
-            centerX - 200f to centerY,
-            centerX + 200f to centerY,
-        ),
-        event(downTime, downTime + 60, MotionEvent.ACTION_UP, centerX - 200f to centerY),
-    )
 
     private fun event(
         downTime: Long,
