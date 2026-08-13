@@ -61,18 +61,72 @@ val sf = TsnetDial.socketFactoryFor(TsnetWire.state, host)
 
 ## 3. 复现步骤（关卡 1）
 
-> ⚠️ 关卡 1 依赖模拟器实测，正在与 w-up-probe 协调环境共用。探针（关卡 2）已在 JVM 层自证通过，实机复现补充后更新本节。
+### 3.1 模拟器实测结果（2026-08-14，emulator-5554，API 35）
 
-**预期步骤：**
-1. 安装 App，扫 QR 配对（含 TS authkey），确认工作区列表正常渲染（连接已建立）
-2. 按 Home 键将 App 切到后台（不 kill），等待 30–60 秒
-3. 重新打开 App
-4. 观察连接状态：预期看到「连接中断，正在重连…」通知且**永不恢复**
+#### 已确认（眼见为实）
 
-**对照组（B 路径，关卡 1 必做）：**
-1. 手机安装官方 Tailscale App 并加入 tailnet
-2. App 使用服务端的 tailnet IP（100.x.x.x）直连（不配 TS authkey）
-3. 杀到后台 → 重新打开 → 确认立刻连上
+**tailnet 路径确认激活**：
+- 配对：手填 URL=`ws://100.75.207.88:19983/ws`，TS authkey 注入，点"连接"
+- App 顶栏由 "LAN" 切换为 **"tailnet"**（截图留证）
+- Session 屏显示 `alauda@MacBook-Pro app %`（通过 tailnet 连入真实主机 zsh）
+
+**DERP 连接确认**（`adb shell ss -tn state established`）：
+```
+10.0.2.16:52622  →  43.136.53.247:8444   ESTABLISHED   ← DERP TCP 已建立
+127.0.0.1:41095  ↔  127.0.0.1:47152     ESTABLISHED   ← SOCKS loopback（OkHttp→tsnet代理）
+```
+
+**SOCKS 路由证实**（GoLog，daemon 关闭后 App 重连时打出）：
+```
+I/GoLog(5967): socks5: client connection failed: connect tcp 100.75.207.88:19983: connection was refused
+```
+此日志出自 tsnet Go 层 SOCKS 代理：OkHttp 请求代理连接 100.75.207.88:19983，代理确实尝试路由，收到 "connection refused"（daemon 已停止监听）。**证明流量确实在走内嵌 tsnet SOCKS 而非直接从 emulator TCP 到 Mac。**
+
+---
+
+---
+
+#### 关卡 1 受阻原因：两堵墙（机理不同，并列记录，供后人不重走）
+
+##### 墙 ①：App 的流量根本不需要隧道（w-up-probe 发现，缺陷① 的场景）
+
+> **机理**：emulator-5554 通过 host NAT 出网，Mac 自身在 tailnet 上，所以 emulator 的 TCP 数据包经 host NAT → Mac LAN IP → Mac tailnet 接口，直达 100.75.207.88。即使 App 完全没有配 tsnet/SOCKS，上传/连接也能成功。
+>
+> **影响**：缺陷① 验证「上传必须走 SOCKS」时，无法区分「真的走了 SOCKS」还是「直通 host NAT 成功」。
+>
+> **w-up-probe 实测**：改前 APK（无 SOCKS 代理）上传到 tailnet IP < 1s 成功 —— 证明 host NAT 直达，无需隧道。
+
+##### 墙 ②：tsnet 隧道有 WireGuard 直连备路，DERP 断不掉（本席 w-tsresume-probe 发现，缺陷⑤ 的场景）
+
+> **机理**：当 tsnet 节点（emulator）和目标节点（Mac）都在同一个 tailnet 时，Tailscale 协议会协商 **WireGuard 直连**（UDP hole-punch），不通过 DERP TCP 中继。因此用 `iptables -j DROP` 封锁 DERP IP（43.136.53.247:8444）并不能切断 tsnet 的路由能力——tsnet 自动切到 WireGuard 直连路径，SOCKS 依然成功路由到 Mac。
+>
+> **实测操作**：
+> ```bash
+> adb shell iptables -I OUTPUT -d 43.136.53.247 -j DROP   # 封 DERP IP
+> adb shell iptables -I OUTPUT -p tcp --dport 8444 -j DROP # 封 DERP 端口
+> adb shell iptables -I OUTPUT -p udp --dport 3478 -j DROP # 封 STUN 端口
+> # 等待 30s，kill daemon，观察 App 重连日志
+> ```
+> **观察**：`ss -tn state established` 显示 `43.136.53.247:8444 ESTABLISHED` 持续存在（内核态未清除），且 `GoLog` 显示：
+> ```
+> I/GoLog(5967): socks5: client connection failed: connect tcp 100.75.207.88:19983: connection was refused
+> ```
+> "connection refused" 而非 "no route to host"，证明 tsnet 依然路由到了 Mac（只是 daemon 不在了），说明 WireGuard 直连绕过了 DERP DROP。
+>
+> **与墙①的区别**：墙① 是 App 层完全绕过隧道；墙② 是隧道内部自有备路（DERP → WireGuard fallback），是 Tailscale 协议设计行为。两者机理独立。
+
+**Gate 1 结论（leader 裁定：「已查明不可复现」≠ 失败）**：
+
+「永远连不上」的全流程复现必须在真实设备上（设备离 Mac 足够远，只有 DERP 可用，无 WireGuard 直连路径）。模拟器因上述两堵墙均无法模拟此场景。判据已满足：
+- 用户在真机上有决定性 A/B 差分
+- JVM 探针（关卡 2）结构性证明根因
+- GoLog 实锤：SOCKS 确实在拨，确实会被拒
+
+---
+
+### 3.2 走日志路径（后续）
+
+如诊断日志接入完成，`state 报 Up 而 SOCKS 拨号失败` + `ensureStarted 被幂等守卫拦下` 可从运行时日志直接读出，届时补充本节。
 
 ---
 

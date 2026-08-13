@@ -1,1 +1,1 @@
-{"task_id":"fix-tsnet-resume-reconnect","dispatched_to":"w-tsresume-probe","base":".team/nodes/fix-tsnet-resume-reconnect/CLAUDE.md","at":"2026-08-14","note":"缺陷⑤：内嵌 tsnet 回前台永远连不上；用户给了 A/B 差分。本轮只复现+探针+根因，不实现"}
+{"task_id":"fix-tsnet-resume-reconnect","dispatched_to":"w-tsnet-dev","base":".team/nodes/fix-tsnet-resume-reconnect/CLAUDE.md","at":"2026-08-14","note":"round2 施工：Gate1 判为『已查明不可复现于模拟器』（tsnet 掐 DERP 会 fallback WireGuard 直连），复现以用户真机 A/B 差分为准，验收走真机+诊断日志"}

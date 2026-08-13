@@ -1,0 +1,76 @@
+{
+  "task_id": "fix-tsnet-resume-reconnect",
+  "agent": "w-tsresume-probe",
+  "date": "2026-08-14",
+  "status": "gate1_proven_unreproducible_on_emulator",
+
+  "gate1": {
+    "verdict": "proven_unreproducible_on_emulator",
+    "reason": "two independent walls block emulator reproduction",
+    "wall_1": {
+      "owner": "w-up-probe",
+      "description": "App traffic does not need the tunnel at all — emulator host NAT reaches Mac tailnet IP directly, bypassing tsnet/SOCKS entirely",
+      "evidence": "w-up-probe: pre-fix APK upload to tailnet IP succeeded in <1s without SOCKS"
+    },
+    "wall_2": {
+      "owner": "w-tsresume-probe",
+      "description": "tsnet tunnel has WireGuard direct-connect fallback — blocking DERP TCP does not cut tsnet routing because tsnet negotiates WireGuard direct path when both nodes are on same tailnet",
+      "evidence": {
+        "iptables_applied": [
+          "iptables -I OUTPUT -d 43.136.53.247 -j DROP",
+          "iptables -I OUTPUT -p tcp --dport 8444 -j DROP",
+          "iptables -I OUTPUT -p udp --dport 3478 -j DROP"
+        ],
+        "ss_after_drop": "10.0.2.16:52622 → 43.136.53.247:8444 ESTABLISHED (persisted through DROP — kernel state not flushed)",
+        "goLog_after_daemon_kill": "I/GoLog(5967): socks5: client connection failed: connect tcp 100.75.207.88:19983: connection was refused",
+        "interpretation": "'connection refused' proves tsnet routed to Mac (daemon down, port closed), not 'no route to host' — WireGuard direct path active despite DERP DROP"
+      }
+    },
+    "gate1_satisfied_by": "user A/B diff on real device (authoritative) + JVM probes (structural proof)"
+  },
+
+  "gate2": {
+    "verdict": "pass",
+    "probe_file": "app/app/src/test/java/dev/agentmirror/app/tsnet/TsnetResumeReconnectProbeTest.kt",
+    "probes": [
+      {
+        "name": "probe1 state 停在 Up 且 ensureStarted 因幂等守卫不重启节点",
+        "result": "PASS",
+        "meaning": "idempotency guard at TsnetWire.kt:91 blocks restart when state is Up — backend.startCount stays 1"
+      },
+      {
+        "name": "probe2 SOCKS 端口关闭后 socketFactoryFor 仍返回 SOCKS 工厂无健康检查",
+        "result": "PASS",
+        "meaning": "socketFactoryFor only reads state, no liveness check — returns SOCKS factory even when SOCKS port is closed"
+      },
+      {
+        "name": "probe3 多次 ensureStarted 均被幂等守卫拦截 state 永久停在 Up",
+        "result": "PASS",
+        "meaning": "5 repeated ensureStarted calls all blocked — no self-heal mechanism, state permanently Up"
+      }
+    ],
+    "xml_summary": "tests=3 skipped=0 failures=0 errors=0"
+  },
+
+  "confirmed_tailnet_path_on_emulator": {
+    "description": "Flow confirmed active via tsnet SOCKS (separate from DERP-block test)",
+    "evidence": [
+      "App top-bar switched from 'LAN' to 'tailnet' after manual pairing with TS authkey",
+      "Session screen showed alauda@MacBook-Pro app % (connected via tailnet)",
+      "DERP TCP: 10.0.2.16:52622 → 43.136.53.247:8444 ESTABLISHED",
+      "SOCKS loopback: 127.0.0.1:41095 ↔ 127.0.0.1:47152 ESTABLISHED",
+      "GoLog: socks5: client connection failed: connect tcp 100.75.207.88:19983: connection was refused"
+    ]
+  },
+
+  "root_cause": {
+    "summary": "TsnetWire.state semantics mismatch: 'Up' means 'start() succeeded once', not 'SOCKS currently routable'. Three independent defects conspire: (1) idempotency guard blocks restart, (2) socketFactoryFor has no health check, (3) no foreground-resume trigger for ensureStarted.",
+    "fix_recommendation": "failure-driven restart: SOCKS CONNECT failure as trigger for notifySocksRouteFailure() → forceRestartWithCurrentKey(), 30s throttle, guarded by state.Up check to avoid false triggers on LAN path",
+    "fix_file": "docs/tsnet-resume-reconnect-rootcause.md"
+  },
+
+  "cross_task": {
+    "task": "fix-upload-transport-tsnet",
+    "note": "HttpUrlConnectionUploader inherits the same fragility (same SOCKS path). Fix in TsnetWire layer covers both upload and WebSocket. No per-uploader restart logic needed."
+  }
+}
