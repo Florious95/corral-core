@@ -213,13 +213,170 @@ key **仍然存在**（**通过**，证明这条捷径必然失效）。
 
 ---
 
+## Round 2（diag 本体已落地，`aeef16920` + 回归闸翻转 `8fa0961a7`）
+
+round1 挖到的四处泄露已修复，回归闸极性已翻转为"断言不泄露、永远绿"（详见 §1 各测试文件
+KDoc）。本轮复审静默经济、资源有界、白记三条，**全部基于对已落地代码的实测/驱动真实代码得出结论，
+不读代码猜结果**。
+
+### 一、静默经济——结论：热路径开销可忽略，设备级空闲 CPU 本轮未测通（原因见下）
+
+**代码级确认（零线程/零定时器主张）**：
+```
+grep -nE "Thread\(|Handler\(|postDelayed|Timer\(|ScheduledExecutor|CoroutineScope|launch\s*\{|GlobalScope" \
+  app/app/src/main/java/dev/agentmirror/app/diag/*.kt
+```
+零命中。`DiagLog.record`/`registerSecret`/`exportTo`/`recordCrash` 全部是同步调用（`ReentrantLock`
+临界区 + 环形缓冲追加/正则替换），没有任何后台线程、`Handler.postDelayed`、`Timer`、协程或全局态
+轮询——"零线程零定时器"的字面主张成立。
+
+**热路径开销实测（JVM，非猜测）**：`DiagLogHotPathBenchmarkTest`（新增，round2），预热 5000 次后跑
+50,000 次 `record()`（消息长度对齐 `TsnetSocks` 真实 dial-fail 行的量级），实测：
+
+```
+[DiagLog 热路径基准] 50000 次 record() 调用，总耗时=207ms，单次平均=4.15µs
+```
+
+单次 4.15µs 相对渲染帧预算（16.6ms@60fps）和 SOCKS 拨号超时窗口（秒级）都是三到四个数量级之外的
+开销，可以下结论：**diag 记录不会拖慢热路径**。这条判据满足。
+
+**设备级 idle CPU——本轮未能测通，如实说明**：
+1. 查了 `emulator-5554` 当前安装的 APK：`dumpsys package dev.agentmirror.app` 显示
+   `lastUpdateTime=2026-08-14 03:16:13`，而 diag 本体落地提交 `aeef16920` 的时间戳是
+   `2026-08-14 04:11:14`——**设备上跑的是 diag 落地之前的旧包**，此刻在它上面测 CPU/线程数
+   测的是"没有 diag 代码"的基线，对本轮判据没有意义。
+2. 查了当前是否能安全地重装：`ps aux` 显示此刻有 14 个 gradle 相关进程在跑（其他席位正在
+   共享 checkout 上构建/测试），此时跑 `assembleDebug`/`installDebug` 有很高概率撞见本轮
+   round1 已经实证过的构建竞态（见 round1 记录的一次 `compileDebugUnitTestKotlin` 瞬时失败），
+   而且会覆盖别的席位在途的构建产物。**本轮选择不重装，避免抢共享构建资源**。
+3. 结论：静默经济里"设备实测空闲 CPU 是否真零"这一项**本轮未验证**，不是"验证过没问题"，
+   是"没敢在共享 checkout 上跟别人抢构建窗口"。需要协调一个独占构建窗口（或等其他席位收工）
+   后补测：`adb shell dumpsys cpuinfo | grep agentmirror` 连续采样 + `adb shell ls
+   /proc/<pid>/task | wc -l` 前后对比。
+
+### 二、资源有界——发现一处真实缺口（高危，新发现）：导出目录无上限
+
+**位置**：`app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt:190-198`（`exportDiagLog`）
+
+```kotlin
+private fun exportDiagLog(context: android.content.Context): ExportOutcome {
+    val dir = File(context.filesDir, DiagLog.DEFAULT_STORAGE_DIR).apply { mkdirs() }
+    val file = File(dir, "diag-${System.currentTimeMillis()}.log")
+    return when (val r = DiagLog.exportTo(file)) { ... }
+}
+```
+
+**怎么坏**：`DiagLog.exportTo(file)` 确实守住了**单个文件** ≤ `maxFileBytes`（默认 1MiB，
+`DiagLogBoundedTest` 已验证）。但 `exportDiagLog` 每次导出都用时间戳造一个**全新文件名**，
+从不复用、从不清理旧文件。`DiagLog.listExports()`（KDoc 写"设置页展示历史导出用"）在
+`SettingsScreen.kt` 里搜不到任何调用点——是个没接线的死接口，**没有任何代码会删除
+`filesDir/diag/` 下的旧导出文件**。
+
+这条任务的验收判据就是"用户复现一次、导出一份日志"——**复现多次意味着导出多次**（用户很可能
+反复触发同一个缺陷来确认复现，或者被开发席要求"再导一次给我们看新变化"，这两种场景都是这个
+任务存在的直接理由，不是边缘情况）。每次导出都留下一个新文件，单文件有上限 ≠ 目录有上限。
+
+**实测证明**：新增 `DiagLogExportAccumulationTest`，复刻 `exportDiagLog` 的真实文件命名模式
+（同目录、时间戳前缀），单文件上限设为 500 字节（保持与默认 1MiB 同比例，加速验证），反复导出
+30 次：
+
+```
+BUILD SUCCESSFUL —— 30 次导出后目录里留下 30 个文件，总字节数远超单文件上限（500B）的 5 倍，
+且没有随导出次数收敛的迹象
+```
+
+单文件确实每次都 ≤500 字节（`DiagLog.exportTo` 的边界没有被打破），但目录总大小随导出次数
+**线性增长、无上限**——这正是"资源有界"红线在真实调用模式下的破防点：`DiagLog.exportTo`
+本身的红测测不出这个缺口，因为它只测"这一次导出"，没人测"重复导出会怎样"。
+
+**严重度**：高。理由：①这不是极端场景，是这个功能被使用的**唯一模式**（导出＝写盘）；
+②默认单文件上限 1MiB，如果用户在排查缺陷⑤（tsnet 回前台连不上，需要反复切前后台复现）过程中
+导出几十次，`filesDir/diag/` 可以轻松攒到几十 MiB，长期使用可以攒到不可控体量，且没有任何 UI
+提示这件事在发生；③这正是"资源有界"验收条款字面要求的场景（`taskbook.yaml` 验收第 2 条：
+"缓冲有界——写入远超容量的记录后，内存与磁盘占用不超过设定上限"——磁盘占用这里指的应该是
+用户设备上诊断功能的总足迹，不能只理解成"某一次导出的那个文件"）。
+
+**建议**：`exportDiagLog` 导出前调用 `DiagLog.listExports()` 清理超出个数/总字节上限的旧文件
+（比如只保留最近 N 份，或者总目录大小上限），或者干脆复用同一个文件名（每次导出覆盖上一份，
+`DiagLog.exportTo` 本身用的是 `appendText`，需要先删旧文件或者改成覆盖写）。这是本任务的
+前置依赖级缺口，建议参照 round1 四修的流程处理（先修再继续）。
+
+**次要提醒（低危，不阻塞）**：`DiagLog.secrets`（`registerSecret` 登记的凭据表）只增不减，
+进程存活期内理论上可以随"反复重新配对/换 TS authkey"缓慢增长；相对导出文件的问题量级小得多
+（内存里的字符串列表，不是磁盘文件），不需要本轮处理，记录在案供后续参考。
+
+### 三、白记——逐条对着两个真实缺陷验证，均满足判据
+
+**判据**：用户复现一次、导出一份日志，我们光看它能不能定位根因？
+
+**缺陷⑤**：新增 `DiagLogDefect5WhiteRecordAuditTest`，**驱动真实的 `TsnetWire` + 真实的
+`TsnetManager`**（经 `TsnetWire` 内部持有，未 mock）+ 假后端，实际触发：
+- 信号①（`state → Up`）：真实起网，由 `TsnetManager.transition` 里真实的
+  `DiagLog.record("tsnet", "state $state → $next")` 产出（不是测试手写的字符串）；
+- 信号③（`ensureStarted` 被幂等守卫拦下）：同 key 二次调用 `TsnetWire.ensureStarted`，
+  真实触发它内部的幂等守卫分支，产出真实的 `"ensureStarted 被幂等守卫拦下…"` 记录；
+- 信号②（SOCKS 拨号失败）：纯 JVM 单测无法驱动真实 socket 失败，这一行是手写的，但**格式
+  逐字对照 `TsnetSocks.kt` 的真实拼接模式**，测试 KDoc 里明确标注这一点，不冒充信号②本身的
+  记录逻辑已被验证（那部分覆盖属于 `TsnetSocksTest` 职责，不重复造轮子）。
+
+断言：导出文本里三个信号关键词同时存在，且按行号（对应真实写入时间顺序）能排出"先到 Up →
+后续 ensureStarted 被拦"的因果顺序。**跑绿**——三信号缺一不可的判据，本轮用真实代码路径核实过
+两条（①③），第三条（②）的记录格式经代码比对确认一致。**结论：缺陷⑤满足白记判据。**
+
+**缺陷②**：核对了测试席已有的 `DiagLogGridComputabilityTest`——它的第一个测试
+（`userRealParams_overflowComputableFromExport`）已经做了 leader 要求的"从导出产物本身算，
+不是看测试通过"这件事：只从导出文本里解析 `viewport_width_px`/`cell_width_nominal`/
+`cell_width_measured` 三个原始字段，**独立重新推导** `reported_cols`/`canvas_capacity_cols`/
+`overflow_px`，再和记录里的 `overflow_px` 字段做一致性断言（不是单方面信任记录值）。
+
+本席用 leader 给的真机参数独立复核了一遍算术（不依赖任何测试代码，手算）：
+`vw=1260, nominal=10 → reported=1260/10=126`；`measured=11 → capacity=1260/11=114`；
+`reported(126) > capacity(114)` → `overflow = (114+1)*11 - 1260 = 1265-1260 = 5`——与
+leader 给出的"应得 5"完全一致；修复后 `nominal=measured=11` → `reported=capacity=114` →
+`overflow=0`，与"修复后应得 0"一致。**结论：缺陷②满足白记判据，公式与字段都经得起独立验算。**
+
+### 四、round1 遗留确认：第三方库全局 Hook Log 会绕开脱敏——开发席答复"不 hook 全局 Log"已核实成立
+
+```
+grep -rnE "class.*: *Log|Log\.setLogHandler|System\.setOut|System\.setErr|Timber\.plant" app/app/src/main/java/
+grep -rn "android.util.Log" app/app/src/main/java/dev/agentmirror/app/diag/
+```
+两条搜索均零命中：全项目没有任何代码覆盖/拦截 `android.util.Log` 的全局写入路径，`DiagLog`
+自身也不包装/转发 `android.util.Log`。`DiagLog.record`/`recordCrash` 是唯一入口，只在
+round1 §1 已列出的具体调用点（tsnet/conn/service/session/termview/MainActivity）被显式调用。
+**round1 提的边界成立**：第三方库（OkHttp/gomobile）自己往 `android.util.Log` 打的日志，
+不会被这套诊断日志系统采集——它们进不了导出管道。
+
+### Round 2 小结
+
+| 主攻线 | 结论 | 证据 |
+|---|---|---|
+| 静默经济·零线程 | 成立 | 代码级 grep 零命中 |
+| 静默经济·热路径开销 | 可忽略（4.15µs/次） | `DiagLogHotPathBenchmarkTest` 实测 |
+| 静默经济·设备空闲 CPU | **未测通**（设备包过期 + 共享构建冲突回避） | 如实说明，待协调独占构建窗口补测 |
+| 资源有界·单文件 | 成立 | round1 已有的 `DiagLogBoundedTest`（测试席） |
+| 资源有界·导出目录 | **破防，高危新发现** | `DiagLogExportAccumulationTest` 实测：30 次导出 = 30 个文件，目录总量无上限 |
+| 白记·缺陷⑤ | 满足 | `DiagLogDefect5WhiteRecordAuditTest` 驱动真实代码 |
+| 白记·缺陷② | 满足 | 独立复核 + 已有测试的复算逻辑核对一致 |
+| round1 遗留·Log hook 边界 | 成立 | grep 零命中 |
+
+---
+
 ## 交付物清单
 
+**Round 1（脱敏预审，已随 diag 本体一起修复并回归闸翻转为绿）**：
+- `app/app/src/test/java/dev/agentmirror/app/conn/AuthCredentialToStringLeakTest.kt`（2 项，长期回归闸，断言不泄露）
+- `app/app/src/test/java/dev/agentmirror/app/tsnet/TsnetManagerCauseChainLeakTest.kt`（1 项，长期回归闸）
+- `app/app/src/test/java/dev/agentmirror/app/tsnet/TsnetAuthKeyFormatRedactionRiskTest.kt`（2 项，长期回归闸，走真实 `DiagLog.registerSecret` 全链路）
+
+**Round 2（静默经济 + 资源有界 + 白记复审，新增）**：
+- `app/app/src/test/kotlin/dev/agentmirror/app/diag/DiagLogHotPathBenchmarkTest.kt`（热路径开销实测：4.15µs/次）
+- `app/app/src/test/kotlin/dev/agentmirror/app/diag/DiagLogExportAccumulationTest.kt`（**导出目录无上限**，本轮最高优先级新发现）
+- `app/app/src/test/kotlin/dev/agentmirror/app/diag/DiagLogDefect5WhiteRecordAuditTest.kt`（驱动真实 `TsnetWire`/`TsnetManager` 复现缺陷⑤三信号）
 - `docs/diag-log-review.md`（本文件）
-- `app/app/src/test/java/dev/agentmirror/app/conn/AuthCredentialToStringLeakTest.kt`（红测，2 项，跑绿）
-- `app/app/src/test/java/dev/agentmirror/app/tsnet/TsnetManagerCauseChainLeakTest.kt`（红测，1 项，跑绿）
-- `app/app/src/test/java/dev/agentmirror/app/tsnet/TsnetAuthKeyFormatRedactionRiskTest.kt`（红测，2 项，跑绿）
 
-全部 5 项测试已跑：`bash -lc "env -u TEAM_AGENT_TASK_ID -u TEAM_AGENT_NAME -u TEAM_AGENT_HOME ./gradlew :app:testDebugUnitTest"`（在 `app/` 目录下），BUILD SUCCESSFUL，5/5 通过（均属于"证明漏洞存在"性质的红测，不是验收测试；发现 1/2/3 修复后对应断言需要反转为"不包含"）。
+全部 8 个新增/翻转测试类已跑绿（`bash -lc "env -u TEAM_AGENT_TASK_ID -u TEAM_AGENT_NAME -u TEAM_AGENT_HOME ./gradlew :app:testDebugUnitTest --rerun-tasks"`，BUILD SUCCESSFUL）。
 
-未使用模拟器（本轮无 UI/资源需要实测，且模拟器排队中未占用）。
+**本轮未完成项**（如实列出，不冒充已验证）：设备级空闲 CPU 实测——原因见"静默经济"节，待协调独占构建窗口后补测。
+
+模拟器 `emulator-5554` 本轮只做了只读查询（`dumpsys package`/`pidof`），未安装/未重启，未影响其他席位在途工作。
