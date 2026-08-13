@@ -205,8 +205,58 @@ class TermViewPresenter(
         // 首帧之后：挤压/复原只改可见行数（视口上推），不再 emit resize。
         val rowsBefore = visibleRows
         updateVisibleRows()
-        // 可见行数变化（挤压/复原）即需重画——视口上推露出底行，本回调是唯一信号
+        // D-38（回炉）：首帧后视口若真实增长超出内核 rows/cols（IME 收起、分屏/窗口变大、
+        // 回前台），必须重算几何——否则 emulator.rows 停在旧的挤压小值，visibleRows 被
+        // coerceIn(1, rows) 上限夹住，窗口画不满 View（用户截图：56 行空黑）。
+        // 判据见 [viewportOutgrewEmulator]：挤压恒 <= 内核，等于/小于都不触发；只有
+        // 「内核行数过时偏低」才重算并 emit——这就是 v1/v2/v3 找不到的区分判据。
+        if (viewportOutgrewEmulator()) {
+            recomputeGeometry()
+        }
+        // 可见行数变化（挤压/复原/增长恢复）即需重画——视口上推露出底行，本回调是唯一信号
         // （旧链路经 emulator.resize→flushDamage 间接唤醒，现在 resize 不再走，须直呼）。
+        if (visibleRows != rowsBefore) {
+            onFrameRequested?.invoke()
+        }
+    }
+
+    /**
+     * 真实视口变化入口（D-38 回炉修复）：回前台 / 分屏 / 窗口尺寸变更等「真实」视口事件。
+     *
+     * 与 [onViewportSizeChanged] 正交——后者首帧后一律按「挤压」处理（只更新可见行数），
+     * 处理不了「回前台时 View bounds 未变、onSizeChanged 不再触发」的情况：后台期间几何
+     * 若已过时（如 IME 收起后 emulator.rows 未更新），回前台若不主动重算就永远卡在旧的
+     * 挤压小值。调用方：TermSurfaceView.onWindowVisibilityChanged 的 VISIBLE 分支（v5 曾
+     * 用此法补同一缺口且 QA PASS，但 v5 的文件含闪烁回归元凶，见 TermSurfaceView 注释）。
+     *
+     * 判据与 [onViewportSizeChanged] 的增长分支一致（[viewportOutgrewEmulator]）：只有视口
+     * 行/列数**超出**内核时重算并 emit。挤压（<）与相等一律不动——绝不把 IME 在屏的挤压
+     * 值当真实视口 shrink 终端（v1/v2/v3 死因；回前台 IME 仍在屏时应保持挤压显示，不发 resize）。
+     *
+     * @contract
+     * @pre none
+     * @post viewportWidthPx/HeightPx 更新为入参；首帧未 seed 且尺寸为正则按首次视口 seed；
+     *       视口超出内核行列数则重算并 emit；可见行数变化即请求帧
+     * @err none
+     * @inv 挤压（视口 < 内核）不产生任何重算/emit
+     */
+    fun onRealViewportChanged(widthPx: Int, heightPx: Int) {
+        viewportWidthPx = widthPx
+        viewportHeightPx = heightPx
+        // 首帧尚未建立（onSizeChanged 未到，先来的是窗口可见事件）：按首次真实视口 seed，
+        // 之后 onViewportSizeChanged 因 viewportSeeded 已置位不再 emit——两种事件顺序只 seed 一次。
+        if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
+            viewportSeeded = true
+            recomputeGeometry()
+            updateVisibleRows()
+            onFrameRequested?.invoke()
+            return
+        }
+        val rowsBefore = visibleRows
+        if (viewportOutgrewEmulator()) {
+            recomputeGeometry()
+        }
+        updateVisibleRows()
         if (visibleRows != rowsBefore) {
             onFrameRequested?.invoke()
         }
@@ -268,6 +318,19 @@ class TermViewPresenter(
         // 缺陷②观测点：回写实测推进宽后落一条栅格快照（幂等守卫 `== cellWidth` 已保证
         // 值稳定即停止，不会每帧刷；真机收敛序列 seed 名义 10 → 回写实测 11 → 停）。
         recordGridSnapshot(measuredCellW)
+    }
+
+    /**
+     * D-38 判别（回炉）：视口行/列数是否**超出**内核当前行/列数——真实视口增长的信号。
+     *
+     * 挤压只会让视口 <= 内核（首帧被挤压 seed 时 ==，之后收缩 <）；只有真实增长（IME 收起、
+     * 分屏/窗口变大、回前台）才会让视口 > 内核，这正是「内核 rows/cols 过时偏低」的信号。
+     * 用它做重算触发条件，天然不会把挤压值当真实视口（v1/v2/v3 死因：在 View 层推断 IME）。
+     */
+    private fun viewportOutgrewEmulator(): Boolean {
+        if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return false
+        return (viewportHeightPx / cellHeight) > emulator.rows ||
+            (viewportWidthPx / cellWidth) > emulator.cols
     }
 
     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */

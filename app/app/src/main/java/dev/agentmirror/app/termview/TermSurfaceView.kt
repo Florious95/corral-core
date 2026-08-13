@@ -189,6 +189,37 @@ class TermSurfaceView @JvmOverloads constructor(
         presenter?.onViewportSizeChanged(w, h)
     }
 
+    /**
+     * D-38（回炉）：窗口从后台回前台时尺寸可能与离开前相同，系统不会因此再回调 [onSizeChanged]
+     * ——而后台期间几何可能已过时（IME 收起后 emulator.rows 未更新）。VISIBLE 时主动重放当前
+     * viewport（真实视口事件，见 [TermViewPresenter.onRealViewportChanged]），清掉旧的挤压小值。
+     *
+     * 不带任何 IME/insets 状态推断（v3 黑屏闪死因：在「IME 弹出」路径上加了状态分支；这里只
+     * 响应 VISIBLE 事件、把「是否重算」的判断交给 presenter 的 [TermViewPresenter.viewportOutgrewEmulator]——
+     * 挤压值永远不会 shrink 终端，IME 在屏回前台时保持挤压显示，不发 resize）。可见性事件上
+     * 没有尺寸变化时不出意外调用 onSizeChanged，故本 override 独立于它。
+     *
+     * @contract
+     * @pre visibility 是 Android 窗口可见性值；可在 presenter 未注入 / 尺寸未就绪时调用
+     * @post 非 VISIBLE 时撤销待执行帧并复位 framePending；VISIBLE 且尺寸为正时向 presenter
+     *       重放当前 viewport（真实视口事件）并请求整帧
+     * @err none
+     * @inv 不可见期间 framePending=false；恢复只复用当前 width/height，不猜测历史尺寸
+     */
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) {
+            if (framePending) {
+                Choreographer.getInstance().removeFrameCallback(frameCallback)
+                framePending = false
+            }
+            return
+        }
+        if (width <= 0 || height <= 0) return
+        presenter?.onRealViewportChanged(width, height)
+        postFrame()
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         presenter ?: return super.onTouchEvent(event)
