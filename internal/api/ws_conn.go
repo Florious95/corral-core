@@ -60,6 +60,11 @@ type wsConn struct {
 	// readLoop 读错误 / 客户端主动关 / 写超时 / 正常 EOF。teardown 日志带出，
 	// 用于「连接为什么断」溯源（重连假说 / 慢链路健康）。
 	closeReason string
+
+	// connMetrics 这条连接自己的计数（P0 修复：teardown 行必须报本连接的数，
+	// 不是进程累计——此前进程级累计被打在 per-conn 行上误导数轮）。
+	// 进程级累计在 Server.sendQueue（字段前缀 total.*），两者分开、字段名可一眼分辨。
+	connMetrics ConnMetrics
 }
 
 // subscription is one live mirror on this connection: the relay goroutine's
@@ -204,17 +209,26 @@ func (c *wsConn) teardown() {
 	// 发送队列健康记录（常驻产品指标，非取证临时物）：会话结束时打一行，空闲零开销。
 	// 内容只含计数，绝无 token/凭据（daemon 日志有明文 token 历史问题，纪律）。
 	// 慢链路丢 delta → 客户端不一致 → 补发快照 → 整屏重建（D-36「发消息整屏刷」假说第 12 条）。
-	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 || m.ConnectionsTotal > 0 {
+	// per-conn 与 process-level 分开报，字段前缀一眼可辨（P0：此前进程累计被打在 per-conn 行）。
+	cm := c.connMetrics
+	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 || m.ConnectionsTotal > 0 || cm.FramesSent > 0 {
 		c.s.log.Info("ws: sendq health",
 			"conn", c.id,
-			"deltas_dropped", m.DeltasDropped,
-			"snapshots_pushed", m.SnapshotsPushed,
-			"snapshots_from_resize", m.SnapshotsFromResize,
-			"subscribes_total", m.SubscribesTotal,
-			"snapshots_from_subscribe", m.SnapshotsFromSubscribe,
-			"connections_total", m.ConnectionsTotal,
-			"queue_peak", m.QueuePeak,
-			"frames_sent", m.FramesSent,
+			// 这条连接自己的数（per-connection，本行真正该报的东西）。
+			"conn.deltas_dropped", cm.DeltasDropped,
+			"conn.snapshots_pushed", cm.SnapshotsPushed,
+			"conn.snapshots_from_resize", cm.SnapshotsFromResize,
+			"conn.snapshots_from_subscribe", cm.SnapshotsFromSubscribe,
+			"conn.frames_sent", cm.FramesSent,
+			// 进程从启动到现在的累计（整体健康，非本连接）。
+			"total.deltas_dropped", m.DeltasDropped,
+			"total.snapshots_pushed", m.SnapshotsPushed,
+			"total.snapshots_from_resize", m.SnapshotsFromResize,
+			"total.subscribes", m.SubscribesTotal,
+			"total.snapshots_from_subscribe", m.SnapshotsFromSubscribe,
+			"total.connections", m.ConnectionsTotal,
+			"total.queue_peak", m.QueuePeak,
+			"total.frames_sent", m.FramesSent,
 			"close_reason", c.closeReason,
 		)
 	}
@@ -259,6 +273,7 @@ func (c *wsConn) sendBinary(data []byte) {
 	// 帧 kind 是 payload[3]（magic 2 + version 1 + kind 1）；kind=1 为 KindSnapshot。
 	if len(data) > 3 && data[3] == byte(protocol.KindSnapshot) {
 		c.s.sendQueue.recordSnapshot()
+		c.connMetrics.recordSnapshot()
 	}
 	c.sendMsg(wsMsg{typ: wsBinary, data: data})
 }
@@ -271,9 +286,11 @@ func (c *wsConn) sendMirror(data []byte) {
 	select {
 	case c.sendCh <- wsMsg{typ: wsBinary, data: data}:
 		c.s.sendQueue.recordQueued(len(c.sendCh))
+		c.connMetrics.recordFramesSent()
 	default:
 		c.s.log.Debug("ws: dropping mirror delta for slow connection", "conn", c.id)
 		c.s.sendQueue.recordDrop()
+		c.connMetrics.recordDrop()
 	}
 }
 

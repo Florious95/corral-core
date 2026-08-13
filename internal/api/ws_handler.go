@@ -90,6 +90,7 @@ func (c *wsConn) handleList(l protocol.List) {
 func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// 订阅计数（含首次与重复订阅；重复订阅 = 重连或客户端重订阅 → 推完整快照 → 整屏重建）。
 	c.s.sendQueue.recordSubscribe()
+	c.connMetrics.recordSubscribe()
 	// Ensure the catalog is populated before resolving the ref, so a client
 	// that subscribes immediately after auth (before the listing loop's first
 	// tick) can still address the pane it was just shown.
@@ -358,6 +359,7 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 	// §4.2 resize).
 	// 溯源计数：handleResize 真实 reflow 补发的快照（非首帧快照的路径来源，见 sendq_metrics）。
 	c.s.sendQueue.recordResizeSnapshot()
+	c.connMetrics.recordResizeSnapshot()
 	snap, err := snapshotWithCursor(c.ctx, br)
 	if err != nil {
 		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")

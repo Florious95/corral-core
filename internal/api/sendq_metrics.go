@@ -58,6 +58,33 @@ func (m *SendQueueMetrics) recordConnection() {
 	m.ConnectionsTotal.Add(1)
 }
 
+// ConnMetrics 单条连接自己的计数（P0 修复：teardown 行报本连接的数，字段前缀 conn.*）。
+// 单线程使用（连接自身的事件都在自己的读/写/relay goroutine 内），无需原子。
+type ConnMetrics struct {
+	DeltasDropped          int64
+	SnapshotsPushed        int64
+	SnapshotsFromResize    int64
+	SnapshotsFromSubscribe int64
+	FramesSent             int64
+}
+
+// recordDrop 记录本连接因队列满丢弃的 delta。
+func (m *ConnMetrics) recordDrop() { m.DeltasDropped++ }
+
+// recordSnapshot 记录本连接发出的快照帧（含首帧订阅）。
+func (m *ConnMetrics) recordSnapshot() { m.SnapshotsPushed++ }
+
+// recordResizeSnapshot 记录本连接由 resize 补发的快照。
+func (m *ConnMetrics) recordResizeSnapshot() { m.SnapshotsFromResize++ }
+
+// recordSubscribe 记录本连接的订阅次数（含重复订阅）。
+func (m *ConnMetrics) recordSubscribe() {
+	m.SnapshotsFromSubscribe++
+}
+
+// recordFramesSent 记录本连接发出的总帧数。
+func (m *ConnMetrics) recordFramesSent() { m.FramesSent++ }
+
 // recordDrop 递增丢弃计数。
 func (m *SendQueueMetrics) recordDrop() {
 	m.DeltasDropped.Add(1)
