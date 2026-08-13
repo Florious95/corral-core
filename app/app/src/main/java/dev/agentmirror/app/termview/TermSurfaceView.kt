@@ -84,7 +84,15 @@ class TermSurfaceView @JvmOverloads constructor(
         // 监听窗口 insets：实时记录 IME inset 高度（Android 唯一可靠的 IME 可见性来源，
         // 比几何推断可靠——分屏/多窗口也可能「宽度不变+高度变小」，不该被当成 IME）。
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            imeInsetPx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            imeInsetPx = imeBottom
+            // 同源重算（D-38 真根因，leader 硬约束）：IME inset 变化（弹起/收起/回前台恢复）时，
+            // 用「当前 View 高 + 本回调的 imeInset」调 onRealViewportChanged——height 与 imeInset
+            // 取自同一 insets 分发时刻（比 onWindowVisibilityChanged 拿缓存字段更同源）。正常 IME
+            // 弹起时稳定高不变、presenter 不 emit；竞态后内核被钉小，此处发现差异补发纠正。
+            if (visibility == VISIBLE && width > 0 && height > 0) {
+                presenter?.onRealViewportChanged(width, height + imeBottom)
+            }
             // 必须返回原 insets（或 dispatch 给子 View），否则 Compose imePadding 等后续消费被吞。
             insets
         }
