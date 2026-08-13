@@ -1,0 +1,27 @@
+{
+  "task_id": "feat-diagnostic-log-export-test",
+  "status": "pass_core_pending_wiring",
+  "seat": "w-diag-test",
+  "at": "2026-08-14",
+  "files": [
+    "app/app/src/test/kotlin/dev/agentmirror/app/diag/DiagLogRedactionTest.kt（6 条）",
+    "app/app/src/test/kotlin/dev/agentmirror/app/diag/DiagLogBoundedTest.kt（5 条）",
+    "app/app/src/test/kotlin/dev/agentmirror/app/diag/DiagLogEventCoverageTest.kt（5 条）",
+    "app/app/src/test/kotlin/dev/agentmirror/app/diag/DiagLogGridComputabilityTest.kt（3 条）"
+  ],
+  "green_16": {
+    "脱敏": "6 条。含负对照（未注册的无结构随机串如实进缓冲）——证明『零命中』不是『消息根本没落库』的假阳性。判别点在导出前的内存缓冲上零命中，若实现回退成『导出时过滤』会立刻转红。",
+    "有界": "5 条。环形覆盖最旧/保留最新、内存≤cap、磁盘≤cap 且截最旧、默认值有界。",
+    "事件字段完整": "3 条。tsnet from/to/reason、socks host/port/exc/ms、ws code/reason/permanent 均可从导出恢复。",
+    "缺陷②可算性": "2 条。从导出日志独立复算 overflow_px=5（用户真机 1260/10/11），修复后 =0。"
+  },
+  "red_3_wiring": [
+    "DiagLogEventCoverageTest.tsnetTransition_wiringProbe_emitsRecord —— 驱动真实 TsnetManager 后断言导出含 [tsnet]",
+    "DiagLogEventCoverageTest.wsClose_wiringProbe_emitsRecord —— 驱动真实 Connection 关闭后断言含 [ws]",
+    "DiagLogGridComputabilityTest.realPresenter_userParams_emitGridRecord —— 驱动真实 TermViewPresenter 后断言含 [grid]"
+  ],
+  "red_is_correct": "这三条红在 w-diag-dev 的调用点尚未合并回共享树，是先红后绿的汇合点，不是缺陷。leader 已裁定它们不算缺陷② 的验收线。",
+  "env_gotcha": "全量跑若见整批 ClassNotFoundException:xxxTest 的 initializationError，先 ./gradlew :app:cleanTest 再判——Gradle 复用了带 --tests 过滤跑的旧结果 XML，非代码问题。",
+  "grid_field_spec": "字段规格由 w-cols-dev 移交，见 docs/cols-convergence-patch-triage.md §7（七字段语义+取值时机+overflow 公式+窄接口依赖约束）。",
+  "next": "w-diag-dev 合并三处调用点后重跑，3 条应自动转绿。"
+}
