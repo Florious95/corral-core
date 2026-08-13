@@ -85,30 +85,32 @@ class TermSurfaceImeInsetViewportRestoreTest {
     }
 
     /**
-     * 核心红测：回前台 IME 在屏，View 层必须传「当前 View 高 + imeInset」（扣除 IME 的稳定高），
+     * 核心红测（「记住稳定高」方案）：回前台 IME 在屏，View 层必须**复用** IME 收起时观测的稳定高，
      * presenter 不得把挤压值当真实视口 rebase。
      *
-     * 场景：View 高被 IME 挤成 1731（86 行），imeInset=189 → 稳定高 1920（96 行）。
-     * 修复前：传 1731 → emit 86（红，86≠96）。
-     * 修复后：传 1920 → 内核已 96，不重复 emit。
+     * 序列：IME 收起（ime==0，View 高 1920=稳定高，记录）→ IME 弹起（View 高挤到 1731，86 行）→
+     * 回前台（宽度不变）→ 复用 stableHeightPx=1920 → presenter 重算 96 == 内核，不 emit。
+     * 修复前（传 height+ime 或传挤压值）：emit 86（红，86≠96）。
      */
     @Test
-    fun returningToForegroundPassesHeightPlusImeInset() {
+    fun returningToForegroundReusesObservedStableHeight() {
         val h = harness()
         assertEquals(listOf(96 to 108), h.resizeCalls)
 
-        // IME 挤压：View 实际高缩到 1731（86 行），imeInset=189（同源：一次 insets 分发）。
+        // IME 收起：记录稳定高 1920（观测事实）。
+        applyImeInset(h.view, 0)
+        assertEquals(listOf(96 to 108), h.resizeCalls) // 稳定高 1920 == 内核 96，不 emit
+
+        // IME 弹起：View 高挤到 1731（86 行），挤压路径不 emit。
         h.view.layout(0, 0, 1080, 1731)
         applyImeInset(h.view, 189)
-        // 挤压路径 + 同源重算：稳定高 1920，内核已 96，不 emit。
         assertEquals(listOf(96 to 108), h.resizeCalls)
 
-        // 回前台：IME 仍在屏。onApplyWindowInsets 或 onWindowVisibilityChanged 传 1731+189=1920。
+        // 回前台：IME 在屏，宽度不变 → 复用 stableHeightPx=1920，不把 1731 当真实视口。
         h.view.dispatchWindowVisibilityChanged(View.VISIBLE)
-        applyImeInset(h.view, 189)
 
         assertEquals(
-            "回前台必须传扣除 IME 后的稳定高（不把挤压值当真实视口）",
+            "回前台必须复用观测的稳定高（不把挤压值当真实视口）",
             listOf(96 to 108),
             h.resizeCalls,
         )
@@ -121,28 +123,33 @@ class TermSurfaceImeInsetViewportRestoreTest {
     }
 
     /**
-     * 守卫：IME 不可见（imeInset=0）时回前台，View 层传的就是当前 View 高——分屏/旋转等
-     * 真实几何变化必须正常重算并 emit，绝不能被当成 IME 忽略（leader 点名要锚的洞）。
+     * 守卫（leader 边界 + 分屏守卫合并）：宽度变化 = 真实几何变化（旋转/分屏/多窗口），
+     * **必须重新确立稳定高**，不得复用过期值。IME 在屏期间宽度变也要重算——「记住稳定高」
+     * 只在宽度不变时复用，宽度变则当前 View 高是新几何。
      */
     @Test
-    fun foregroundWithoutImePassesRealGeometryAndResizes() {
+    fun widthChangeReEstablishesStableHeight() {
         val h = harness()
         h.view.layout(0, 0, 1080, 1920)
         assertEquals(listOf(96 to 108), h.resizeCalls)
 
-        // 分屏：View 高真的变 960（48 行），IME 不可见（imeInset=0）。
+        // 建立稳定基准 1920（IME 收起观测）。
         applyImeInset(h.view, 0)
-        h.view.layout(0, 0, 1080, 960)
-        assertEquals(listOf(96 to 108), h.resizeCalls) // onSizeChanged→onViewportSizeChanged 挤压路径不 emit
+        assertEquals(listOf(96 to 108), h.resizeCalls)
 
-        // 回前台：imeInset=0，传 960 → presenter 重算 48 ≠ 96 → 必须 emit。
+        // 分屏：宽度从 1080 变 540，高度 960（48 行）。IME 在屏（imeInset=189）期间发生。
+        h.view.layout(0, 0, 540, 960)
+        applyImeInset(h.view, 189)
+        assertEquals(listOf(96 to 108), h.resizeCalls) // 挤压路径不 emit
+
+        // 回前台：宽度 540 ≠ stable 1080 → 必须重新确立，用当前 View 高 960（真实新几何），不得复用 1920。
         h.view.dispatchWindowVisibilityChanged(View.VISIBLE)
         assertEquals(
-            "IME 不可见的分屏几何变化必须重算 emit",
-            listOf(96 to 108, 48 to 108),
+            "宽度变化必须重新确立稳定高（不能用过期 1920，应重算 48 行）",
+            listOf(96 to 108, 48 to 54),
             h.resizeCalls,
         )
-        assertEquals("分屏是真实几何，非自愈场景", 0, h.presenter.geometryCorrectionCount)
+        assertEquals("宽度变化是真实几何，非自愈场景", 0, h.presenter.geometryCorrectionCount)
     }
 
     /**
