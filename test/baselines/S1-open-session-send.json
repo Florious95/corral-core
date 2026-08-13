@@ -1,6 +1,6 @@
 {
   "scenario": "S1-open-session-send",
-  "updatedAt": "2026-08-13T01:44:26.908Z",
+  "updatedAt": "2026-08-13T02:25:54.820Z",
   "provenance": {
     "buildSha": "test-sha",
     "device": "agentmirror_test_1260x2800",
@@ -32,8 +32,8 @@
         "latencyMs": 0,
         "fixture": "20-line-cjk"
       },
-      "status": "NOT_MEASURED",
-      "current": null
+      "status": "OK",
+      "current": 0.04340509259259259
     },
     "screenResponsive": {
       "baseline": {
@@ -86,8 +86,8 @@
         "latencyMs": 0,
         "fixture": "20-line-cjk"
       },
-      "status": "NOT_MEASURED",
-      "current": null
+      "status": "OK",
+      "current": 0
     },
     "bottomMarginPx": {
       "baseline": {
@@ -113,8 +113,8 @@
         "latencyMs": 0,
         "fixture": "20-line-cjk"
       },
-      "status": "NOT_MEASURED",
-      "current": null
+      "status": "OK",
+      "current": 0
     },
     "lastRowVisible": {
       "baseline": {

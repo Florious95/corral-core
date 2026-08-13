@@ -40,8 +40,10 @@ defineScenario({
   ],
 
   // 采集点 → 指标。**存活判据排最前**（leader 裁定，最高优先级）。
+  // hostContent 由执行器（w-base-v2）跑动作序列时从主机 capture-pane 获取（非纯像素判据，
+  // leader 裁定收回：存活判据必须与主机侧事实对账，拿不到主机状态 → INDETERMINATE）。
   metrics: [
-    { name: 'terminalContentAlive', capture: 'open-stable', fn: 'space.analyzeFrame', target: 'contentRatio', minRatio: 0.001, direction: 'higher-better', healthValue: 0.001 },
+    { name: 'terminalContentAlive', capture: 'open-stable', fn: 'space.analyzeFrame', target: 'contentRatio', minRatio: 0.001, direction: 'higher-better', healthValue: 0.001, requiresHost: true },
     { name: 'screenResponsive', capture: 'resp-stable', fn: 'time.analyzeSequence', target: 'movementPattern', direction: 'equals', healthValue: 'BOTTOM_APPEND' },
     { name: 'rightEdgeGapPx', capture: 'open-stable', fn: 'space.analyzeFrame', target: 'rightMarginPx', direction: 'higher-better', healthValue: 100, knownBadValue: 0 },
     { name: 'bottomMarginPx', capture: 'open-stable', fn: 'space.analyzeFrame', target: 'bottomMarginPx', direction: 'lower-better', healthValue: 6, knownBadValue: 1123 },
