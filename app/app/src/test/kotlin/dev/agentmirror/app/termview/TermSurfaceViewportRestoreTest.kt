@@ -84,23 +84,26 @@ class TermSurfaceViewportRestoreTest {
         h.view.layout(0, 0, 1080, 1857)
         assertEquals(listOf(92 to 108), h.resizeCalls)
 
-        // IME 收起，View 增长到 1920：挤压路径，只推可见行、不 emit（内核仍 92 行）。
+        // IME 收起：setImeVisible(false) 告知事件源 + View 增长到 1920。
+        // recordStableHeightIfImeClosed 记录稳定高 1920 并重放 → presenter 重算 96 ≠ 内核 92
+        // → emit 一次恢复（首帧挤压 seed 在 IME 收起时即被纠正，不必等回前台）。
+        h.view.setImeVisible(false)
         h.view.layout(0, 0, 1080, 1920)
-        assertEquals(listOf(92 to 108), h.resizeCalls)
+        assertEquals(listOf(92 to 108, 96 to 108), h.resizeCalls)
 
-        // 切后台：GONE 分支撤销待执行帧，不发 resize（resizeCalls 保持 seed 后不变）。
+        // 切后台：GONE 分支撤销待执行帧，不发 resize（resizeCalls 保持纠正后不变）。
         h.view.dispatchWindowVisibilityChanged(View.GONE)
         assertEquals(
-            "切后台不得 emit resize（保持 seed 后不变）",
-            listOf(92 to 108),
+            "切后台不得 emit resize（保持纠正后不变）",
+            listOf(92 to 108, 96 to 108),
             h.resizeCalls,
         )
 
-        // 回前台：VISIBLE → onRealViewportChanged 重放当前 View 几何（1920 → 96 行）。
+        // 回前台：VISIBLE → 复用稳定高 1920，几何已一致（96）→ 不重复 emit。
         h.view.dispatchWindowVisibilityChanged(View.VISIBLE)
 
         assertEquals(
-            "回前台必须经 onRealViewportChanged 重算并 emit 一次恢复（92→96）",
+            "回前台复用稳定高：几何已纠正（96），不重复 emit",
             listOf(92 to 108, 96 to 108),
             h.resizeCalls,
         )

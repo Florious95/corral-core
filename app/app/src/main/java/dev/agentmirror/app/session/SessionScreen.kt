@@ -36,6 +36,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -95,6 +98,7 @@ import java.io.ByteArrayOutputStream
  *
  * 薄层纪律不变：所有业务状态与动作在 [SessionViewModel]（纯 JVM 已测），本组合只做绑定。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SessionScreen(
     viewModel: SessionViewModel,
@@ -191,6 +195,11 @@ fun SessionScreen(
             viewModel = viewModel,
         )
 
+        // 候选 3（D-38）：Compose 根读 IME 可见性（与底部集群 imePadding 同源）传给 View——
+        // 键盘弹出时是 imePadding 把本 Box 挤小、View 从未与键盘重叠（其 insets 恒 0），
+        // IME 状态只能从 Compose 层拿。isImeVisible 在 @Composable 作用域读，update 块用值。
+        val imeVisible = WindowInsets.isImeVisible
+
         // 终端画布：占满中间区域；IME 弹出时本区 weight 收缩（内容重排跟随，图31 修复）。
         Box(
             modifier = Modifier
@@ -202,6 +211,9 @@ fun SessionScreen(
                     TermSurfaceView(ctx).also { it.presenter = viewModel.presenter }
                 },
                 modifier = Modifier.fillMaxSize(),
+                update = { view ->
+                    view.setImeVisible(imeVisible)
+                },
             )
             // 「回到底部」悬浮钮（锁定历史时出现，006 交互）。
             if (viewModel.showBackToBottom) {

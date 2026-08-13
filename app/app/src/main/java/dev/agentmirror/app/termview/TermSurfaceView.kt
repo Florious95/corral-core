@@ -81,41 +81,60 @@ class TermSurfaceView @JvmOverloads constructor(
     private var imeInsetPx: Int = 0
 
     /**
-     * 稳定视口基准（px）：IME 收起时观测到的 View 高度，D-38 主路径的「记住稳定高」方案。
+     * 稳定视口基准（px）：IME 收起时观测到的 View 高度，D-38 主路径「候选 3」方案。
      *
-     * 设计（leader 认可，构造上消除竞态）：稳定高是**观测事实**（IME 收起时 View 的真实高度），
-     * 不是「height + imeInset」算出来的——加法要求两个值同源，而 height 与 ime 可能来自不同时刻，
-     * 竞态结构性存在（w-base-v2 实测 count=2 的根因方向）。改为：IME 收起（ime==0）时观测记录，
-     * 回前台 IME 在屏时直接**复用**已记录的稳定高，无需计算。
+     * 设计（leader 批准，w-base-v2 数据推翻「View 能看 insets」前提后定稿）：
+     *   **IME 状态从知道它的那一层（Compose）拿，不从被挤压的 View 拿**——键盘弹出时是 Compose
+     *   imePadding 把终端 Box 挤小，View 从未与键盘重叠、其 ime inset 恒 0（正确）。因此用
+     *   [imeVisible]（Compose 根已知的事实，与 imePadding 同源）作为事件源，而非 View 的 insets。
      *
-     * 边界（leader 硬约束）：IME 在屏期间发生真实几何变化（旋转/分屏，宽度变）时稳定高过期，
-     * 必须用当前 View 高重新确立（见 [onWindowVisibilityChanged] 的宽度判据），不得复用旧值。
+     * 稳定高 = IME 收起（imeVisible==false）时观测到的 View 高度（观测事实）。写入条件（leader
+     * 硬约束，防通路时序）：**imeVisibleKnown && !imeVisible 才写**——布尔尚未到达（初始态未知）
+     * 或 IME 在屏（挤压）时都不写，避免把被挤压的高记成稳定高。
      */
     private var stableWidthPx: Int = 0
     private var stableHeightPx: Int = 0
 
-    /** 诊断：onApplyWindowInsets 被调用次数（D-38 主路径根因确认，w-base-v2 复测读出）。
-     *  若恒 0 → Compose 拦截了 insets 分发，TermSurfaceView 收不到 → 主路径只能靠主动查询。 */
-    var insetsCallbackCount: Int = 0
-        private set
+    /**
+     * IME 可见性（Compose 侧事件源，候选 3）。由 SessionScreen 在重组时经
+     * [setImeVisible] 传入——Compose 根读 WindowInsets.isImeVisible（与 imePadding 同源，
+     * 已被证实工作），显式告诉本 View「这次布局变矮是否是 IME 造成的」。
+     */
+    private var imeVisible = false
 
-    init {
-        // 监听窗口 insets：实时记录 IME inset 高度（Android 唯一可靠的 IME 可见性来源，
-        // 比几何推断可靠——分屏/多窗口也可能「宽度不变+高度变小」，不该被当成 IME）。
-        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            insetsCallbackCount++
-            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            imeInsetPx = imeBottom
-            // IME 收起（ime==0）：此刻 View 高 = 稳定高（观测事实）。记录基准并重放给 presenter——
-            // 这是「记住稳定高」的唯一写入点，回前台 IME 在屏时复用。
-            // IME 在屏（ime>0）：不在此重算（挤压路径 onViewportSizeChanged 已处理），只更新 imeInsetPx。
-            if (imeBottom == 0 && visibility == VISIBLE && width > 0 && height > 0) {
-                stableWidthPx = width
-                stableHeightPx = height
-                presenter?.onRealViewportChanged(width, height)
-            }
-            // 必须返回原 insets（或 dispatch 给子 View），否则 Compose imePadding 等后续消费被吞。
-            insets
+    /** 是否已收到过至少一次 [setImeVisible] 更新（初始态未知防护：布尔未到达时不写稳定高）。 */
+    private var imeVisibleKnown = false
+
+    /**
+     * Compose 侧传入 IME 可见性（候选 3 事件源，SessionScreen AndroidView.update 调用）。
+     *
+     * @contract
+     * @pre 任意线程/任意时序可调（Compose 重组在主线程）
+     * @post imeVisible 更新为入参；imeVisibleKnown 置位（此后稳定高写入条件可判定）
+     * @err none
+     * @inv 只改事件源状态，不动几何、不发 resize
+     */
+    fun setImeVisible(visible: Boolean) {
+        imeVisible = visible
+        imeVisibleKnown = true
+    }
+
+    /**
+     * 稳定高写入（IME 收起观测 + 重放）。候选 3 的唯一稳定高写入点。
+     *
+     * 条件（leader 硬约束）：`imeVisibleKnown && !imeVisible`——布尔已到达且 IME 收起时，
+     * 此刻 View 高 = 稳定高（观测事实），记录并重放给 presenter。初始态未知或 IME 在屏时
+     * **不写**（避免把挤压高当稳定高）。
+     *
+     * 注意：本方法在 [onViewportSizeChanged] 内被调（高度变化时刻），但**只在 imeVisibleKnown
+     * 且 IME 收起**时写——若布尔晚于高度变化到达，写入被推迟到下一次 [onViewportSizeChanged]
+     * 或 [onWindowVisibilityChanged]，不会被「布尔未到」的挤压高污染。
+     */
+    private fun recordStableHeightIfImeClosed() {
+        if (imeVisibleKnown && !imeVisible && width > 0 && height > 0) {
+            stableWidthPx = width
+            stableHeightPx = height
+            presenter?.onRealViewportChanged(width, height)
         }
     }
 
@@ -165,14 +184,11 @@ class TermSurfaceView @JvmOverloads constructor(
                 val newW = max(MIN_CELL_PX, (it.cellWidth * factor).roundToInt())
                 val newH = max(MIN_CELL_PX, (it.cellHeight * factor).roundToInt())
                 // fix-pinch-preview-commit（raw/041）：预览语义——只更新字号不 emit resize。
-                // 手势步不重排（服务端不扰动），松手时才经 onScaleEnd 发一次。
+                // 手势步不重排（服务端不扰动），松手时经 onTouchEvent 的 ACTION_UP 提交一次
+                // （不用 onScaleEnd：真机多指分阶段抬起会多触发）。
                 it.onFontSizeChanged(newW, newH)
             }
             return true
-        }
-        override fun onScaleEnd(detector: ScaleGestureDetector) {
-            // 手势结束：用最终字号发唯一一次 resize（守卫2：带最终行列数）。
-            presenter?.onPinchCommit()
         }
     })
 
@@ -229,6 +245,9 @@ class TermSurfaceView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         presenter?.onViewportSizeChanged(w, h)
+        // 候选 3：高度变化时刻尝试记录稳定高（仅在 imeVisibleKnown 且 IME 收起时写，
+        // 避免把挤压高当稳定高——布尔晚到也不污染，见 recordStableHeightIfImeClosed）。
+        recordStableHeightIfImeClosed()
     }
 
     /**
@@ -266,18 +285,31 @@ class TermSurfaceView @JvmOverloads constructor(
             return
         }
         if (width <= 0 || height <= 0) return
-        // D-38 主路径「记住稳定高」（leader 认可，构造上消除竞态）：
-        // - 宽度不变（IME 挤压/回前台 IME 在屏）：复用 IME 收起时观测的 [stableHeightPx]——
-        //   不依赖「height + ime」加法（两个值可能不同源，竞态结构性存在，w-base-v2 count=2 根因）；
-        // - 宽度变了（旋转/分屏/多窗口 = 真实几何变化）：稳定高已过期，用当前 View 高重新确立。
-        val heightForForeground =
-            if (width == stableWidthPx && stableHeightPx > 0) stableHeightPx
-            else {
-                stableWidthPx = width
-                stableHeightPx = height
-                height
-            }
-        presenter?.onRealViewportChanged(width, heightForForeground)
+        // D-38 主路径「候选 3」（leader 批准，事件源驱动）：
+        // - 宽度不变（回前台，IME 在屏或收起）：复用稳定高 [stableHeightPx]（IME 收起时由
+        //   [recordStableHeightIfImeClosed] 观测写入）。稳定高是观测事实，非「height + ime」加法，
+        //   不依赖 View 的 ime inset（w-base-v2 数据：键盘不覆盖 View，View inset 恒 0）；
+        // - 宽度变了（旋转/分屏/多窗口 = 真实几何变化）：稳定高过期，用当前 View 高重新确立；
+        // - 边界：宽度不变但稳定高从未写入（首次 IME 在屏、布尔未到达）→ 若 IME 在屏则挤压态
+        //   不重算（不发 resize，避免把挤压值当真实）；IME 收起则用当前高（= 稳定高，无害）。
+        if (stableHeightPx > 0 && width != stableWidthPx) {
+            // 已记录稳定高且宽度变 = 真实几何变化（旋转/分屏/多窗口，不管 imeVisible）：
+            // 稳定高过期，用当前 View 高重新确立（leader 边界：IME 在屏期间宽度变也必须重算）。
+            stableWidthPx = width
+            stableHeightPx = height
+            presenter?.onRealViewportChanged(width, height)
+        } else if (stableHeightPx > 0) {
+            // 已记录稳定高且宽度不变：复用（IME 在屏挤压/收起都传稳定高，不 rebase 挤压值）。
+            presenter?.onRealViewportChanged(width, stableHeightPx)
+        } else if (!imeVisibleKnown || imeVisible) {
+            // 无稳定高 + 初始态未知或 IME 在屏：不重算不 emit——View 高可能是 IME 挤压值也可能是
+            // 真实值，无从区分（leader 时序守卫：布尔未到不写稳定高、不把未确认高度当真实几何）。
+        } else {
+            // 无稳定高 + IME 收起：当前 View 高 = 稳定高（观测事实），记录并重放。
+            stableWidthPx = width
+            stableHeightPx = height
+            presenter?.onRealViewportChanged(width, height)
+        }
         postFrame()
     }
 
@@ -286,6 +318,13 @@ class TermSurfaceView @JvmOverloads constructor(
         presenter ?: return super.onTouchEvent(event)
         scaleDetector.onTouchEvent(event)
         val handled = gestureDetector.onTouchEvent(event)
+        // fix-pinch-preview-commit 提交点（raw/041）：**只有 ACTION_UP（最后一指抬起）才提交**。
+        // 不用 onScaleEnd：真机上多指分阶段抬起会让 onScaleEnd 被多次触发 → 中途额外落地
+        // （w-base-v2 实测 4→2，中途 83x67）。ACTION_UP 语义 = 全部手指离开 = 手势真正结束，
+        // 唯一且可靠；ACTION_POINTER_UP（一指抬起但仍有他指）不提交。
+        if (event.actionMasked == MotionEvent.ACTION_UP) {
+            presenter?.onPinchCommit()
+        }
         if (!handled) super.onTouchEvent(event)
         return true
     }
