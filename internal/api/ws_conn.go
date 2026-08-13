@@ -349,8 +349,11 @@ func (c *wsConn) handleFrame(data []byte) bool {
 		c.handleScrollback(t)
 	case protocol.Resize:
 		c.handleResize(t)
+	case protocol.ScrollWheel:
+		c.handleScrollWheel(t)
 	default:
-		// auth_ack, listing, list_delta, input_ack, error are server-to-client.
+		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed
+		// are server-to-client only.
 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
 	}
 	return true

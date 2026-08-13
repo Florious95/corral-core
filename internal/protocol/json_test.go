@@ -1,6 +1,7 @@
 package protocol_test
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -201,5 +202,76 @@ func TestUnmarshalWithNoPayload(t *testing.T) {
 func TestUploadRespIsNotAFrame(t *testing.T) {
 	if _, err := protocol.UnmarshalFrame([]byte(`{"v":1,"type":"upload_resp","payload":{"path":"/x"}}`)); !errors.Is(err, protocol.ErrUnknownType) {
 		t.Fatalf("upload_resp must be an unknown frame type, got err=%v", err)
+	}
+}
+
+// TestScrollWheelRoundTrip verifies scroll_wheel marshal→unmarshal is lossless.
+func TestScrollWheelRoundTrip(t *testing.T) {
+	cases := []protocol.ScrollWheel{
+		{Ref: "s1", Delta: -3},  // scroll up
+		{Ref: "s2", Delta: 1},   // scroll down (single notch)
+		{Ref: "s3", Delta: -1},  // scroll up single notch
+	}
+	for _, sw := range cases {
+		got := roundTrip(t, sw)
+		if !reflect.DeepEqual(got, sw) {
+			t.Errorf("ScrollWheel round trip mismatch:\n got %#v\nwant %#v", got, sw)
+		}
+	}
+}
+
+// TestScrollWheelValidate verifies that invalid ScrollWheel frames are rejected.
+func TestScrollWheelValidate(t *testing.T) {
+	cases := []struct {
+		name string
+		sw   protocol.ScrollWheel
+	}{
+		{"empty ref", protocol.ScrollWheel{Delta: -1}},
+		{"zero delta", protocol.ScrollWheel{Ref: "s1", Delta: 0}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.sw.Validate(); !errors.Is(err, protocol.ErrInvalidField) {
+				t.Errorf("Validate() = %v, want ErrInvalidField", err)
+			}
+		})
+	}
+}
+
+// TestPaneModeChangedIsServerToClientOnly verifies that a client cannot send
+// pane_mode_changed (it is S→C only and must be rejected as an unknown type
+// from the C→S decoder path).
+func TestPaneModeChangedIsServerToClientOnly(t *testing.T) {
+	raw := []byte(`{"v":1,"type":"pane_mode_changed","payload":{"ref":"s1","in_copy_mode":true}}`)
+	if _, err := protocol.UnmarshalFrame(raw); !errors.Is(err, protocol.ErrUnknownType) {
+		t.Fatalf("pane_mode_changed must be server-to-client only; got err=%v", err)
+	}
+}
+
+// TestPaneModeChangedMarshal verifies that PaneModeChanged can be marshaled
+// (for the S→C direction) and has correct wire shape.
+func TestPaneModeChangedMarshal(t *testing.T) {
+	frame := protocol.PaneModeChanged{Ref: "s1", InCopyMode: true}
+	data, err := protocol.MarshalFrame(frame)
+	if err != nil {
+		t.Fatalf("MarshalFrame: %v", err)
+	}
+	var env struct {
+		V       int             `json:"v"`
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Type != "pane_mode_changed" {
+		t.Errorf("type = %q, want %q", env.Type, "pane_mode_changed")
+	}
+	var p protocol.PaneModeChanged
+	if err := json.Unmarshal(env.Payload, &p); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if p.Ref != "s1" || !p.InCopyMode {
+		t.Errorf("payload = %+v", p)
 	}
 }

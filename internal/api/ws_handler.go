@@ -193,6 +193,19 @@ func (c *wsConn) handleInput(i protocol.Input) {
 		ack(false, protocol.InputFailSessionNotFound)
 		return
 	}
+	// Copy-mode safety bailout (feat-remote-scroll-forward leader Q2 mandate):
+	// if the pane is in tmux copy-mode when the user types, the keystrokes
+	// would be consumed by copy-mode commands rather than reaching the
+	// shell/TUI. Exit copy-mode first so text arrives at its intended target.
+	// This is a best-effort pre-flight: a PaneInMode failure is non-fatal
+	// (the injection proceeds; the pane will likely report ErrPaneNotFound).
+	// ExitCopyMode is idempotent — cancel on a normal pane is a tmux no-op.
+	if inMode, modeErr := br.PaneInMode(c.ctx); modeErr == nil && inMode {
+		if exitErr := br.ExitCopyMode(c.ctx); exitErr == nil {
+			c.send(&protocol.PaneModeChanged{Ref: i.Ref, InCopyMode: false})
+		}
+	}
+
 	// Named-key injection: no size gate (the closed key set is tiny and fixed),
 	// no trailing Enter, same decidable ack.
 	if len(i.Keys) > 0 {
@@ -230,6 +243,38 @@ func (c *wsConn) handleInput(i protocol.Input) {
 		return
 	}
 	ack(true, "")
+}
+
+// handleScrollWheel delivers one scroll-wheel gesture to a remote pane
+// (feat-remote-scroll-forward). No ack on success — the mirror delta stream
+// carries the visual result, and a per-notch round-trip at ~123ms RTT would
+// make the gesture feel sticky. TypeError on failure (pane gone / tmux error).
+// When the pane enters copy-mode, pushes TypePaneModeChanged so the App can
+// show a minimal indicator (leader Q2 mandate: user must know when copy-mode
+// is active to avoid "typed but nothing happened" confusion).
+func (c *wsConn) handleScrollWheel(sw protocol.ScrollWheel) {
+	if !c.subscribed(sw.Ref) {
+		c.sendError(protocol.ErrCodeSessionNotFound, "not subscribed to session")
+		return
+	}
+	c.s.ensureInitialScan(c.ctx)
+	br, ok := c.resolveBridge(sw.Ref)
+	if !ok {
+		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
+		return
+	}
+	enteredCopyMode, err := br.InjectScroll(c.ctx, sw.Delta)
+	if err != nil {
+		if errors.Is(err, bridge.ErrPaneNotFound) {
+			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		} else {
+			c.sendError(protocol.ErrCodeInternal, "scroll injection failed")
+		}
+		return
+	}
+	if enteredCopyMode {
+		c.send(&protocol.PaneModeChanged{Ref: sw.Ref, InCopyMode: true})
+	}
 }
 
 // handleScrollback fetches one line range of history (docs/protocol.md §4.2,

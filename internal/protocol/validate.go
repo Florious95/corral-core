@@ -6,18 +6,20 @@ import "fmt"
 // Validate methods enforce the contract invariants. Together they let the
 // codec (json.go / binary.go) route and check frames in one place.
 
-func (Auth) FrameType() FrameType        { return TypeAuth }
-func (AuthAck) FrameType() FrameType     { return TypeAuthAck }
-func (List) FrameType() FrameType        { return TypeList }
-func (Listing) FrameType() FrameType     { return TypeListing }
-func (ListDelta) FrameType() FrameType   { return TypeListDelta }
-func (Subscribe) FrameType() FrameType   { return TypeSubscribe }
-func (Unsubscribe) FrameType() FrameType { return TypeUnsubscribe }
-func (Input) FrameType() FrameType       { return TypeInput }
-func (InputAck) FrameType() FrameType    { return TypeInputAck }
-func (Scrollback) FrameType() FrameType  { return TypeScrollback }
-func (Resize) FrameType() FrameType      { return TypeResize }
-func (ErrorFrame) FrameType() FrameType  { return TypeError }
+func (Auth) FrameType() FrameType            { return TypeAuth }
+func (AuthAck) FrameType() FrameType         { return TypeAuthAck }
+func (List) FrameType() FrameType            { return TypeList }
+func (Listing) FrameType() FrameType         { return TypeListing }
+func (ListDelta) FrameType() FrameType       { return TypeListDelta }
+func (Subscribe) FrameType() FrameType       { return TypeSubscribe }
+func (Unsubscribe) FrameType() FrameType     { return TypeUnsubscribe }
+func (Input) FrameType() FrameType           { return TypeInput }
+func (InputAck) FrameType() FrameType        { return TypeInputAck }
+func (Scrollback) FrameType() FrameType      { return TypeScrollback }
+func (Resize) FrameType() FrameType          { return TypeResize }
+func (ErrorFrame) FrameType() FrameType      { return TypeError }
+func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
+func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
 
 // requireState returns ErrInvalidState unless s is one of the five closed
 // AgentState values.
@@ -251,6 +253,27 @@ func (e ErrorFrame) Validate() error {
 func (u UploadResp) Validate() error {
 	if u.Path == "" {
 		return fmt.Errorf("%w: upload path must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the scroll_wheel frame is well-formed: a non-empty
+// ref and a non-zero delta (zero delta has no direction and is a caller error).
+func (s ScrollWheel) Validate() error {
+	if s.Ref == "" {
+		return fmt.Errorf("%w: scroll_wheel ref must be non-empty", ErrInvalidField)
+	}
+	if s.Delta == 0 {
+		return fmt.Errorf("%w: scroll_wheel delta must be non-zero", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the pane_mode_changed frame is well-formed: a
+// non-empty ref.
+func (p PaneModeChanged) Validate() error {
+	if p.Ref == "" {
+		return fmt.Errorf("%w: pane_mode_changed ref must be non-empty", ErrInvalidField)
 	}
 	return nil
 }

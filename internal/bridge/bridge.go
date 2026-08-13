@@ -3,7 +3,8 @@ package bridge
 // bridge.go implements the single-pane terminal bridge primitive: first-frame
 // snapshot (capture-pane -e), scrollback paging (capture-pane -S/-E), whole
 // input injection with a decidable ack (send-keys / paste-buffer, requirement
-// 003), and resize (window-size latest + resize-window, requirement 005).
+// 003), resize (window-size latest + resize-window, requirement 005), and
+// scroll-wheel forwarding (feat-remote-scroll-forward).
 //
 // A Pane is mirror-and-inject only: it never kills, detaches, or otherwise
 // mutates the target pane's runtime state beyond what the caller explicitly
@@ -11,6 +12,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -286,6 +288,128 @@ func (p *Pane) Size(ctx context.Context) (int, int, error) {
 		return 0, 0, fmt.Errorf("tmux: parse pane size %q: %w", strings.TrimSpace(string(out)), err)
 	}
 	return w, h, nil
+}
+
+// scrollMouseBytes returns the raw terminal bytes for one scroll wheel event
+// in the format the running application expects based on its mouse-tracking
+// mode. SGR (DECSET 1006) encodes coordinates as decimal text; X10 (DECSET
+// 1000) encodes them as single bytes with a +32 offset. Position (1,1) is
+// used for all scroll events — most TUIs ignore the position for wheel events.
+// button 64 = scroll-up, 65 = scroll-down (standard extension for mouse wheel).
+func scrollMouseBytes(up bool, sgr bool) []byte {
+	button := 64 // scroll-up
+	if !up {
+		button = 65 // scroll-down
+	}
+	if sgr {
+		// SGR: ESC [ < button ; col ; row M
+		return []byte(fmt.Sprintf("\x1b[<%d;1;1M", button))
+	}
+	// X10: ESC [ M + byte(button+32) + byte(col+32) + byte(row+32)
+	return []byte{0x1b, '[', 'M', byte(button + 32), byte(1 + 32), byte(1 + 32)}
+}
+
+// InjectScroll delivers one scroll-wheel event to the pane
+// (feat-remote-scroll-forward). delta < 0 = up (toward history); delta > 0 =
+// down. The method atomically judges the pane's mouse-tracking state via a
+// single tmux command and routes accordingly:
+//
+//   - mouse_any_flag=1 → inject raw mouse bytes via send-keys -H; the inner
+//     if-shell -F re-verifies the flag within tmux's single command dispatch,
+//     closing the race window between the display-message query and the inject.
+//     If the flag flipped to 0 between the two calls, the empty false-branch is
+//     executed (safe no-op) instead of sending bytes to a bare shell.
+//   - mouse_any_flag=0 and pane not in copy-mode → enter copy-mode -e, then
+//     scroll; returns enteredCopyMode=true so the caller can push PaneModeChanged.
+//   - mouse_any_flag=0 and pane already in copy-mode → scroll only; returns
+//     enteredCopyMode=false (no state transition, no PaneModeChanged needed).
+//
+// No Enter is appended in any path (unlike Inject). Success is silent; the
+// caller sends TypeError on error.
+//
+// @contract
+// @pre pane 存在（requirePane 前置）；delta != 0（caller 保证，Validate 已拒绝 0）
+// @post 按 mouse_any_flag 分支执行：鼠标字节注入 或 copy-mode scroll；不追加 Enter
+// @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
+// @inv 鼠标字节路径：if-shell -F 保证 mouse_any_flag=0 时不注入字节（垃圾字节不进 shell）
+func (p *Pane) InjectScroll(ctx context.Context, delta int32) (enteredCopyMode bool, err error) {
+	if err := p.requirePane(ctx); err != nil {
+		return false, err
+	}
+
+	// Query mouse-tracking flags and copy-mode state in one tmux call.
+	out, err := runTmux(ctx, p.socket, p.timeout,
+		"display-message", "-p", "-t", p.target,
+		"#{mouse_any_flag}:#{mouse_sgr_flag}:#{pane_in_mode}")
+	if err != nil {
+		return false, err
+	}
+	parts := strings.SplitN(strings.TrimSpace(string(out)), ":", 3)
+	if len(parts) != 3 {
+		return false, fmt.Errorf("bridge: unexpected display-message output %q", strings.TrimSpace(string(out)))
+	}
+	mouseAny := parts[0] == "1"
+	mouseSGR := parts[1] == "1"
+	paneInMode := parts[2] == "1"
+
+	up := delta < 0
+	direction := "scroll-up"
+	if !up {
+		direction = "scroll-down"
+	}
+
+	if mouseAny {
+		// Mouse tracking is on: inject raw bytes. Use if-shell -F to atomically
+		// re-verify the flag within tmux's single command dispatch — if the app
+		// exited mouse mode between our display-message and this call, the empty
+		// false-branch fires (safe no-op) instead of sending bytes to a bare shell.
+		raw := scrollMouseBytes(up, mouseSGR)
+		hexStr := hex.EncodeToString(raw)
+		trueCmd := "send-keys -H -t " + p.target + " " + hexStr
+		_, err = runTmux(ctx, p.socket, p.timeout,
+			"if-shell", "-F", "-t", p.target, "#{mouse_any_flag}", trueCmd)
+		return false, err
+	}
+
+	// No mouse tracking: copy-mode fallback.
+	if !paneInMode {
+		if _, err = runTmux(ctx, p.socket, p.timeout, "copy-mode", "-e", "-t", p.target); err != nil {
+			return false, err
+		}
+		enteredCopyMode = true
+	}
+	_, err = runTmux(ctx, p.socket, p.timeout, "send-keys", "-X", "-t", p.target, direction)
+	return enteredCopyMode, err
+}
+
+// PaneInMode reports whether the pane is currently in tmux copy-mode.
+// Used by handleInput to detect and clear stale copy-mode before injecting text.
+// @contract
+// @pre pane 存在（tmux 在调用时惰性判定）
+// @post 返回 pane_in_mode 格式变量的布尔值
+// @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
+// @inv 纯只读查询
+func (p *Pane) PaneInMode(ctx context.Context) (bool, error) {
+	out, err := runTmux(ctx, p.socket, p.timeout,
+		"display-message", "-p", "-t", p.target, "#{pane_in_mode}")
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) == "1", nil
+}
+
+// ExitCopyMode sends send-keys -X cancel to exit tmux copy-mode. Used by
+// handleInput as a safety bailout: if a pane is in copy-mode when the user
+// types, the cancel restores normal input before the text is injected.
+// Idempotent: cancel on a pane not in copy-mode is a tmux no-op.
+// @contract
+// @pre pane 存在（tmux 在调用时惰性判定）
+// @post copy-mode 已退出（pane_in_mode 变为 0）
+// @err tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
+// @inv 只发 send-keys -X cancel，不触碰 pane 其他运行态
+func (p *Pane) ExitCopyMode(ctx context.Context) error {
+	_, err := runTmux(ctx, p.socket, p.timeout, "send-keys", "-X", "-t", p.target, "cancel")
+	return err
 }
 
 // Socket exposes the socket the Pane is bound to. An empty string means the

@@ -52,4 +52,16 @@ const (
 	// TypeError is a protocol-level failure (S→C): bad frame, unknown type,
 	// missing session, unsupported version, internal error.
 	TypeError FrameType = "error"
+
+	// TypeScrollWheel delivers one scroll gesture to a remote pane (C→S;
+	// feat-remote-scroll-forward). The server atomically judges the pane's
+	// mouse-tracking state and either injects raw mouse bytes or enters tmux
+	// copy-mode. No ack on success; TypeError on failure.
+	TypeScrollWheel FrameType = "scroll_wheel"
+
+	// TypePaneModeChanged notifies the client that a pane entered or exited
+	// tmux copy-mode (S→C; feat-remote-scroll-forward). The App shows or hides
+	// a minimal indicator so the user knows their keystrokes go to copy-mode
+	// rather than the shell/TUI.
+	TypePaneModeChanged FrameType = "pane_mode_changed"
 )

@@ -215,3 +215,38 @@ type ErrorFrame struct {
 type UploadResp struct {
 	Path string `json:"path"`
 }
+
+// ScrollWheel delivers one scroll gesture to a remote pane (C→S;
+// feat-remote-scroll-forward). Delta < 0 = scroll up (toward history);
+// Delta > 0 = scroll down. Each call represents one wheel-click equivalent.
+//
+// The server atomically judges the pane's mouse-tracking state via
+// tmux if-shell -F '#{mouse_any_flag}' and either injects raw mouse bytes
+// (SGR or X10 format, no Enter appended) or enters tmux copy-mode and
+// issues a scroll-up/down command. No ack on success (mirror deltas carry
+// the visual result); TypeError on failure (pane gone / tmux unreachable).
+//
+// @contract
+// @pre Ref 非空、Delta != 0
+// @post 服务端执行 if-shell 原子判定+动作；成功无 ack，失败发 TypeError
+// @err Validate 对空 Ref、Delta 0 返回 ErrInvalidField
+// @inv 不追加 Enter，不调用 Inject 路径
+type ScrollWheel struct {
+	Ref   string `json:"ref"`
+	Delta int32  `json:"delta"` // <0=up (history), >0=down
+}
+
+// PaneModeChanged notifies the client that a pane entered or exited tmux
+// copy-mode (S→C; feat-remote-scroll-forward). The App shows or hides a
+// minimal UI indicator so the user knows their keystrokes go to copy-mode
+// commands rather than the shell/TUI. No ack required.
+//
+// @contract
+// @pre Ref 非空
+// @post 客户端更新 copy-mode 指示器；无需 ack
+// @err Validate 对空 Ref 返回 ErrInvalidField
+// @inv 服务端只在 copy-mode 真实进/出时发此帧，不重复推送同状态
+type PaneModeChanged struct {
+	Ref        string `json:"ref"`
+	InCopyMode bool   `json:"in_copy_mode"`
+}
