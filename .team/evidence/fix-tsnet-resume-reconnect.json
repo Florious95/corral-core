@@ -1,0 +1,34 @@
+{
+  "task_id": "fix-tsnet-resume-reconnect",
+  "status": "blocked_on_emulator_gate1_pending",
+  "seat": "w-tsresume-probe",
+  "at": "2026-08-14",
+  "note": "本条只覆盖『复现+探针+根因』阶段，且关卡1（实机复现）未完成——本机 emulator 包与 android-35 arm64 系统镜像均缺失，正在直连 CDN 补装。修复实现未开始。写本文件是为了让看门狗停止把该席判为在途（它已交付并待命），关卡1 恢复时重开 intent。",
+  "gate2_probe": {
+    "file": "app/app/src/test/java/dev/agentmirror/app/tsnet/TsnetResumeReconnectProbeTest.kt",
+    "result": "tests=3 failures=0（全绿 = 三条缺陷条件在当前 HEAD 上成立）",
+    "asserts": [
+      "ensureStarted 的幂等守卫拦截重启",
+      "socketFactoryFor 无健康检查",
+      "state 永久停在 Up，无自愈机制"
+    ]
+  },
+  "rootcause": {
+    "location": "TsnetWire.kt:91 — if (m != null && key == currentKey && (m.state is Starting || m.state is Up)) { return }",
+    "statement": "TsnetWire.state == Up 的语义是『start() 成功过、SOCKS 端口曾经通』，不是『当前 DERP 可用、SOCKS 真实可拨通』。后台冻结期间 Go goroutine 暂停 ⇒ DERP 长连接 TCP 超时断裂；恢复后 native tsnet 不回调 Java 层 ⇒ state 永停 Up ⇒ socketFactoryFor 照常返回 SOCKS 工厂、拨号必失败；而 ensureStarted 的幂等守卫又因 state is Up 直接 return ⇒ 节点永远起不来。用户原话『永远连不上』的『永远』就落在这一行。",
+    "user_ab_differential": "A（坏）内嵌 tsnet + TS token 配对 → 切后台 → 回前台 → 永远连不上；B（好）官方 Tailscale App 建 tailnet + App 按 tailnet 地址直连 → 杀到后台 → 再打开 → 立刻连上。B 成立即洗清网络/服务端/配对凭据/UI，把范围锁死在内嵌 tsnet 生命周期。",
+    "side_fact": "w-up-probe 实测 tailscale status：用户手机同时挂两个节点——agentmirror-v2502a（内嵌 tsnet，100.114.207.123）与 v2502a（官方 App，100.69.43.120）。"
+  },
+  "fix_decision": {
+    "chosen": "失败驱动：SOCKS CONNECT 失败本身当触发源。信号路径 OkHttpTransportFactory.create → SOCKS transport onFailure → ServiceWire.onTailnetSocksFailure → TsnetWire.notifySocksRouteFailure，内部用已存的 currentKey 重启，30s 节流防重启风暴。",
+    "rejected": "端口探活驱动。leader 指出两个致命缺陷并经席位实证：(1) SOCKS listener 是本地 Go listener，DERP 死后仍在监听 ⇒ TCP 探活几乎必然成功 ⇒ 假绿、重启永不触发；(2) 用户场景是切后台回前台、网络自始至终同一条蜂窝，onNetworkAvailable 大概率一次都不响 ⇒ 自愈入口永不激活。",
+    "why_failure_driven_is_safe": "空闲时零动作，自动满足『静默经济』红线（空闲 CPU 趋近 0、无固定频率子进程派生），且触发条件即真实失败本身，不可能假绿。",
+    "first_failure_visible": "席位顶回 leader 的『静默重试让用户无感』提议，理由成立：从『永远连不上』变成『断几秒后自动恢复』本身就是修好了，抹平那几秒会撞『失败可见』红线。leader 接受，仅补充：可见 ≠ 报错吓人，UI 给『连接中断，正在重连』与给红色失败弹窗是两回事。",
+    "coexistence_safety": "官方 Tailscale 并存时 state==Idle 直接 return；LAN 路径 sf==null 不触发回调。两条隔离均有代码保证，不是注释保证。"
+  },
+  "cross_check_with_defect1": {
+    "seat_proposal": "①的修复应等⑤，或①自己处理 SOCKS 失败→重启",
+    "leader_ruling": "否。WebSocket 本来就走同一条 SOCKS，①做的是让上传与 WS 齐平——它不引入新脆弱，继承的是已经存在的那份；⑤修好后两条一起受益。自愈只能有一个地方，那地方是 TsnetWire，不许在上传器里再写一份。"
+  },
+  "next": "模拟器就绪后补关卡1（实机复现 A/B 差分，留截图/日志），然后另开实现席按失败驱动方案施工。缺陷① 的模拟器验收排在本条之前。"
+}
