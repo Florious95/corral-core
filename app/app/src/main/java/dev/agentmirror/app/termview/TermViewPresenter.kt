@@ -525,12 +525,11 @@ class TermViewPresenter(
      * 2050ms，TermRewriteClearScenarioTest）。`clear && echo`、TUI 退出、tmux clear-history
      * 同形。
      *
-     * 量级依据：WebSocket 帧是流式背靠背发送（非 request-response），整屏 recap 的分片间隔
-     * 由**吞吐**决定（远低于 RTT），正常 recap 期间分片间隔远小于本值 → 次级静默不触发、
-     * 抑制不被提前打断；而 clear 只写 1 行后流即静默，本值毫秒级触发 → 清屏结果及时可见。
-     * 200ms = 局域网 recap 分片间隔（<50ms）的数倍余量，同时远小于用户对 clear 的耐心。
-     * **此为可校准常数**：w-base-v2 正在注入延迟测失败态分片节奏，若实测分片间隔超本值，
-     * 应上调（高 RTT 下分片间隔随吞吐而非 RTT 增长，预期不会超）。
+     * **此数字必须从实测取（leader msg_9b1e529141f0），不许按人感知拍**：约束是
+     * **必须大于「整屏 recap 内部，相邻分片到达的最大间隔」**（注意：不是两波之间 765ms 那个
+     * 数——那是回显波与响应波的间隔，不是 recap 内部的分片间隔）。否则 recap 刚写完第一行、
+     * 第二个分片还在路上时会被误判 clear、露空白屏。
+     * 待 w-base-v2 测「间隔 A（recap 内部分片间隔）」后校准。当前 200ms 是待校准占位。
      */
     private val rewriteQuietMs: Long = 200L
 
