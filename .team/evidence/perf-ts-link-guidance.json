@@ -1,0 +1,28 @@
+{
+  "task_id": "perf-ts-link-guidance",
+  "agent": "w-perf-ts",
+  "status": "delivered",
+  "verdict": "pass_doc_delivered",
+  "timestamp": "2026-08-13T23:15:00+08:00",
+  "deliverable": "docs/ts-link-perf-guidance.md",
+  "sections": ["§1 链路诊断(实测+原始输出)", "§2 基线与指标(网络档C0-C3/五元组产地/棘轮/NOT_MEASURED默认失败)", "§3 优化方向D1-D6(收益排序,分只依赖自己/依赖对端,假说显式标注)", "§4 第一步(5分钟蜂窝实测+判读树)"],
+  "key_findings": [
+    "「TS直连还是DERP」前提被实测推翻:当前活跃客户端连接走ZeroTier(网络rabbit,自建GCP控制器),不是Tailscale",
+    "本次生产daemon为LAN-only降级运行(无TS_AUTHKEY):lsof零UDP零控制面连接;tsnet状态目录停在08-09 23:50;主机系统级Tailscale已卸载",
+    "连接方10.202.81.184=ZT节点a062381409=用户手机,经MAC推导算法五字节全中数学验证;当前在家DIRECT-via-LAN(192.168.31.57)",
+    "若重启用tsnet必被Clash TUN劫持:通配绑定UDP实测经海外代理出口82.21.81.136,稳态+124ms/尖刺0.5-1.5s/映射端口随目的地变化(对称NAT)→打洞必败→必上DERP且DERP再穿一遍代理;ZeroTier因显式绑定en0(netstat实测192.168.31.116:9993)而免疫",
+    "新的一击定胜负问题:蜂窝网下ZT是DIRECT还是RELAY(ZT根服务器209-266ms);§4给出5分钟实测+判读树,同时回答哪条链路/路径类型/远程RTT"
+  ],
+  "acceptance_check": {
+    "doc_four_sections": true,
+    "s1_verdict_with_raw_output": "主机侧已判(附lsof/netstat/zerotier-cli/STUN原始输出);手机侧tsnet标注NOT_MEASURED不默认通过,因主机侧无从观测且大概率不在数据路径",
+    "s2_metrics_with_sensation_probe_baseline_ratchet": true,
+    "zero_code_change": "git status仅新增docs/ts-link-perf-guidance.md,app/server/test/e2e/web零diff"
+  },
+  "measurement_provenance": "全部命令2026-08-13 22:54-23:10于daemon主机只读执行;未触碰生产daemon/用户tmux/密钥原文;STUN探针经Google+Cloudflare双服务器交叉自证",
+  "pending_user_input": [
+    "「基于ts」指ZeroTier还是内嵌Tailscale(已发leader转问,msg_2a48a06cf610)",
+    "§4蜂窝网5分钟实测需用户配合",
+    "装sendq仪表到生产daemon需用户点头(重启断线几秒)"
+  ]
+}
