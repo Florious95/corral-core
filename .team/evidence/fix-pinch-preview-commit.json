@@ -1,9 +1,33 @@
 {
   "task_id": "fix-pinch-preview-commit",
-  "status": "pass_unit_pending_visual",
+  "status": "partial",
   "agent": "w-dev-cols",
-  "summary": "P0 捏合预览/提交：一次完整捏合的 onResizeRequest 从 N 次降到恰好 1 次（合成手势 4→1，真实手势按往返审计推算 10-20→1）。raw/041 裁定实现（捏合预览、松手提交）。**单测证明发帧次数；视觉验收（闪烁是否消失）未做，等 w-base-v2 捏合注入器修好。**",
-  "evidence_classification": "pass_unit_pending_visual",
+  "summary": "P0 捏合预览/提交：单测证明合成手势 4→1（onScaleEnd 一次提交）。**但模拟器实测（w-base-v2）真实多指手势是 4→2，不达标（判据要求 1）**。中途仍有一次额外落地（108x87→83x67），松手才到最终值。帧差分修复前 5 帧/修复后 6 帧，闪烁未被显著抑制。status=partial：只修了一半（预览生效、提交点从每步→松手，但提交仍触发两次）。",
+  "evidence_classification": "partial",
+  "unit_test_finding": {
+    "proven": [
+      "合成 5 MOVE 手势：onResizeRequest 恰 1 次、带最终行列数、预览实时生效"
+    ],
+    "model_gap": "单测建模的是理想手势（一个结束点）；真实手势两根手指、两次抬起，onScaleEnd/onPinchCommit 可能被多次触发。单测证明的是「如果输入按我们建模的方式来」",
+    "structure_not_behavior": {
+      "statement": "**本次单测绿不构成修复有效的证据**——Robolectric 无法复现真机的多次触发，旧代码（onScaleEnd 提交）在 Robolectric 下对同一分阶段抬起序列也是 1 次，真机才是 2 次（w-base-v2 实测 4→2）。一个在旧代码上就通过的测试，在新代码上通过，什么也没证明。",
+      "test_role": "TermPinchPreviewCommitTest 锚的是「提交点在 ACTION_UP 而不是别处」这一**结构**，不是「真机上恰好 1 次」这一**行为**。结构测试有价值，只是别把它当行为证据。",
+      "fix_validity": "修复有效与否只能由真机/模拟器实测判定（排 w-base-v2 D-36 取证之后）"
+    },
+    "root_cause_fix": {
+      "statement": "根因：onScaleEnd 在真机多指分阶段抬起时多次触发。修复：提交点改为 onTouchEvent 的 ACTION_UP（全部手指离开 = 手势真正结束，唯一可靠）。",
+      "pending_verification": "真机复验 ACTION_UP 修复后能否 4→1、闪烁有无改善（排 w-base-v2 队列）"
+    }
+  },
+  "simulator_measurement": {
+    "by": "w-base-v2",
+    "method": "对照组 d53aba161 vs 当前 HEAD，同一份手势逐字节相同，只换 APK",
+    "before": "108x87→98x76→90x67→83x67→77x60 = 4 次",
+    "after": "108x87→83x67→77x60 = 2 次（判据要求 1，不达标）",
+    "frame_diff": "修复前 5 帧非零差分、修复后 6 帧，闪烁未被显著抑制",
+    "root_cause_pending": "多指抬起分阶段：onScaleEnd 可能被调多次；ACTION_UP/ACTION_POINTER_UP/取消路径也可能走到提交",
+    "not_implied": "resize 次数下降 ≠ 闪烁改善（实测 4→2 差分帧数反而 5→6，关系实测不成立，不是未知）"
+  },
   "claims": {
     "proven_by_unit": [
       "一次完整捏合手势 onResizeRequest 恰好被调 1 次（发生在手势结束）",
