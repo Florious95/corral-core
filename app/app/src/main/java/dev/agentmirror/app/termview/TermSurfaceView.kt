@@ -104,7 +104,6 @@ class TermSurfaceView @JvmOverloads constructor(
         // 比几何推断可靠——分屏/多窗口也可能「宽度不变+高度变小」，不该被当成 IME）。
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
             insetsCallbackCount++
-            android.util.Log.d("D38Verify", "insetsCallbackCount=$insetsCallbackCount imeBottom=${insets.getInsets(WindowInsetsCompat.Type.ime()).bottom}")
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
             imeInsetPx = imeBottom
             // IME 收起（ime==0）：此刻 View 高 = 稳定高（观测事实）。记录基准并重放给 presenter——
