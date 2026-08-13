@@ -5,7 +5,7 @@ dangerous_auto_approve: true
 fast: false
 provider_models:
   codex: gpt-5.6-sol
-  claude_code: claude-sonnet-4-6
+  claude_code: claude-sonnet-5[1m]
 ---
 
 Team config only. This is not a worker role.

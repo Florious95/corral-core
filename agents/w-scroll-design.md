@@ -5,6 +5,7 @@ provider: claude_code
 auth_mode: subscription
 permission_mode: auto_approve
 profile: claude-default
+model: claude-sonnet-5[1m]
 tools:
   - fs_read
   - fs_list
