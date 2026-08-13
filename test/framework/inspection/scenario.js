@@ -142,20 +142,50 @@ function computeAlive(opts, sc) {
   const aliveMetric = sc.metrics.find((m) => m.name === 'terminalContentAlive');
   const respMetric = sc.metrics.find((m) => m.name === 'screenResponsive');
 
-  // terminalContentAlive：contentRatio > 下限。
+  // terminalContentAlive：内容活着没有。
+  //
+  // 主判据 = **灰度方差**（leader 裁定，2026-08-13）：与主题无关的量。
+  // - 死屏：整片同一颜色 → 方差 ≈ 0。
+  // - 活着的终端：文字与背景对比 → 方差显著 > 0。
+  // - 深色活/浅色活方差都大；深色死/浅色死方差都接近 0。方差不关心底是黑是白。
+  //
+  // 实测四象限（真实语料）：
+  //   深色活 25-app-baseline variance≈9655 | 深色死 02-baseline variance≈586
+  //   浅色活 ime-normal-light variance≈9863 | 浅色死 d35-empty-light variance≈269
+  //   分离度 17-38 倍，阈值 1000（std~31）安全。
+  //
+  // 亮度（avgGray）降为辅助信号：浅色主题活屏 avgGray 也高，**不得作为唯一判据**
+  // （leader 裁定：判据里出现外观假设就要问「所有主题/尺寸/语言都成立吗」）。
   if (aliveMetric) {
     const cap = captures[Array.isArray(aliveMetric.capture) ? aliveMetric.capture[0] : aliveMetric.capture];
     if (!cap) {
       return { alive: false, reason: `terminalContentAlive: 缺采集点 ${aliveMetric.capture}` };
     }
     try {
+      const { pngToGrayBytes, probeDimensions } = require('../machine_eye/video');
+      const gray = pngToGrayBytes(cap.path);
+      const { width, height } = probeDimensions(cap.path);
+      let sum = 0, sumsq = 0;
+      for (let i = 0; i < gray.length; i++) { sum += gray[i]; sumsq += gray[i] * gray[i]; }
+      const n = gray.length;
+      const mean = sum / n;
+      const variance = sumsq / n - mean * mean;
+      // 主判据：方差 < 下限 → 死屏（无对比 = 无内容 = 从未绘制）。
+      const minVariance = aliveMetric.minVariance ?? 1000; // 实测活≥9454 / 死≤586
+      if (variance < minVariance) {
+        return { alive: false, reason: `terminalContentAlive: variance=${variance.toFixed(0)} < ${minVariance}（无对比度，疑似从未绘制/空白）` };
+      }
+      // 辅助：contentRatio（有内容像素）。若 analyzeFrame 因找不到深底 band 返回 INDET，
+      // 但方差已表明有内容 → 仍判活（不因 band 识别失败误判死）。
       const { analyzeFrame } = require('../machine_eye/space');
       const r = analyzeFrame(cap.path, cap.opts);
-      if (r.status !== 'OK') return { alive: false, reason: `terminalContentAlive: ${r.reason}` };
-      const minRatio = aliveMetric.minRatio ?? 0.001;
-      if (r.contentRatio <= minRatio) {
-        return { alive: false, reason: `terminalContentAlive: contentRatio=${r.contentRatio} ≤ ${minRatio}（屏幕无内容）` };
+      if (r.status === 'OK') {
+        const minRatio = aliveMetric.minRatio ?? 0.001;
+        if (r.contentRatio <= minRatio) {
+          return { alive: false, reason: `terminalContentAlive: contentRatio=${r.contentRatio} ≤ ${minRatio}（屏幕无内容）` };
+        }
       }
+      // INDET（找不到深底 band）但方差高 → 有内容（可能是浅色主题），判活。
     } catch (e) {
       return { alive: false, reason: `terminalContentAlive: ${e.message}` };
     }
