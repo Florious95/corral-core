@@ -49,4 +49,6 @@ internal object FrameType {
     const val SCROLLBACK = "scrollback"
     const val RESIZE = "resize"
     const val ERROR = "error"
+    const val SCROLL_WHEEL = "scroll_wheel"
+    const val PANE_MODE_CHANGED = "pane_mode_changed"
 }

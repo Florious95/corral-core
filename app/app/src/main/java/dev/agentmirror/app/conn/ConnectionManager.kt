@@ -335,6 +335,24 @@ class ConnectionManager(
     }
 
     /**
+     * 投送滚轮手势到远端 pane（缺陷④ 远端滚动投送）。
+     *
+     * fire-and-forget：服务端成功时无 ack（屏幕变化即反馈）；失败时服务端回 ErrorFrame，
+     * 由 [Listener.onFrame] 路径以 transientError 浮出。节流由调用方（SessionViewModel）负责。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空；delta 非零
+     * @post 返回 true 时 ScrollWheelFrame 已发出
+     * @err 未就绪 ⇒ 返回 false；delta=0 由帧校验兜底
+     * @inv 不登记 pending 回执（fire-and-forget）
+     */
+    fun sendScrollWheel(ref: String, delta: Int): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        return conn.send(ScrollWheelFrame(ref = ref, delta = delta))
+    }
+
+    /**
      * 上报手机行列数（只作用于已订阅会话）。
      *
      * @contract
