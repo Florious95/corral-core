@@ -189,6 +189,18 @@ func (c *wsConn) flushQueued() {
 // fail before the reply reached the wire.
 func (c *wsConn) teardown() {
 	c.cancel()
+	// 发送队列健康记录（常驻产品指标，非取证临时物）：会话结束时打一行，空闲零开销。
+	// 内容只含计数，绝无 token/凭据（daemon 日志有明文 token 历史问题，纪律）。
+	// 慢链路丢 delta → 客户端不一致 → 补发快照 → 整屏重建（D-36「发消息整屏刷」假说第 12 条）。
+	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 {
+		c.s.log.Info("ws: sendq health",
+			"conn", c.id,
+			"deltas_dropped", m.DeltasDropped,
+			"snapshots_pushed", m.SnapshotsPushed,
+			"queue_peak", m.QueuePeak,
+			"frames_sent", m.FramesSent,
+		)
+	}
 	// The connection is no longer a live client: un-count it so the listing
 	// loop parks once zero clients remain (idle-gate, taskbook
 	// #fix-daemon-idle-cpu). Only an authenticated connection was counted.
@@ -225,18 +237,26 @@ func (c *wsConn) sendError(code protocol.ErrorCode, reason string) {
 }
 
 // sendBinary enqueues one binary stream frame (snapshot/delta/scrollback).
+// 快照帧计入 c.s.sendQueue（D-36 失败态观测：补发快照次数 = 整屏重建次数）。
 func (c *wsConn) sendBinary(data []byte) {
+	// 帧 kind 是 payload[3]（magic 2 + version 1 + kind 1）；kind=1 为 KindSnapshot。
+	if len(data) > 3 && data[3] == byte(protocol.KindSnapshot) {
+		c.s.sendQueue.recordSnapshot()
+	}
 	c.sendMsg(wsMsg{typ: wsBinary, data: data})
 }
 
 // sendMirror enqueues a binary mirror frame without blocking: a slow client
 // whose queue is full drops the delta, and the next snapshot reconciles
 // (requirement 004 — the tmux pane is the source of truth, not this queue).
+// 丢弃次数与队列峰值计入 c.s.sendQueue（常驻健康指标，「丢了多少数据」本就是健康度量）。
 func (c *wsConn) sendMirror(data []byte) {
 	select {
 	case c.sendCh <- wsMsg{typ: wsBinary, data: data}:
+		c.s.sendQueue.recordQueued(len(c.sendCh))
 	default:
 		c.s.log.Debug("ws: dropping mirror delta for slow connection", "conn", c.id)
+		c.s.sendQueue.recordDrop()
 	}
 }
 

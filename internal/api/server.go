@@ -38,6 +38,9 @@ type Server struct {
 	maxInput     int
 	uploadMu     sync.Mutex
 
+	// sendQueue 发送队列健康指标（D-36 失败态观测 + 常驻健康指标，见 sendq_metrics.go）。
+	sendQueue SendQueueMetrics
+
 	// snapshot is the latest published two-level model (nil before the first
 	// scan) and seq its monotonically increasing version, guarded by snapMu.
 	// They are connection-independent: a reconnecting client lists and
