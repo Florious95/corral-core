@@ -1,0 +1,10 @@
+{
+  "task_id": "d23-d32-backgesture",
+  "status": "superseded_by_retask",
+  "worker": "w-dev-backgesture",
+  "dispatched_at": "2026-08-12T15:00:00+08:00",
+  "at": "2026-08-13",
+  "status_reason": "2026-08-13 账目审计：本任务只有 intent 没有 evidence，看门狗永久算其在途。本记录关闭该虚假在途态。",
+  "后继": "已由 fix-back-gesture 完成并落账（status=pass_user_confirmed，2026-08-12，从归档分支 v5-failed/2874c54 精确回收 5 个导航文件）。",
+  "缺陷现状": "已修，用户亲验。本 id 不再使用。"
+}
