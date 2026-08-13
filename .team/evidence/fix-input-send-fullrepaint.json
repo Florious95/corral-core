@@ -1,0 +1,19 @@
+{
+  "task_id": "fix-input-send-fullrepaint",
+  "status": "reverted_no_deliverable",
+  "worker": "w-dev-repaint",
+  "at": "2026-08-13",
+  "status_reason": "抑制机制两版均回退（其中一版实测零收益三次），任务无交付物。原为「有 intent 无 evidence」的虚假在途态，本记录用于关闭。",
+  "summary": "发消息后整屏逐行重刷，只在本端发送时出现，时长随 RTT 增长。11 条假说已排除 6 条（有实证），未收敛到单一根因。",
+  "已排除_附方法": [
+    "delta 丢帧——LLM 流式输出受生成速率限制（数百字节/秒），远低于任何合理慢链上限；20KB/s 限速下 deltas_dropped 实测 0",
+    "客户端 10s readTimeout——查 OkHttp 字节码：WebSocketReader.readHeader 在等待下一帧期间会 save→clearTimeout→restore，该超时不生效",
+    "光标判据识别整屏重写——recap 开始与 clear 完全同形（都是光标归位第 0 行）",
+    "重连/重订阅——两次独立测试中 connections_total 在测试连接内未变",
+    "DECSET 2026 同步输出——抓 114247 字节零命中；Claude Code 在 tmux 下从不发",
+    "假说空间全表见 docs/fullrepaint-hypothesis-space.md"
+  ],
+  "决定性判别手段": "对照组（teammate 发消息 vs 本端发消息），尚未执行",
+  "强线索_未追完": "基线用例 d27:redundant-same-size-resize-after-input-must-not-repush-snapshot 基线即红：发送 input 后出现同尺寸冗余 resize，服务端据此补发整屏 snapshot。该机制与用户描述高度吻合。",
+  "缺陷现状": "未修，已按用户裁定封存。"
+}

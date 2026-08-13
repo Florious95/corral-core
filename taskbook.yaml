@@ -1755,6 +1755,12 @@ tasks:
     contention: none
 
   - id: fix-state-detection
+    status: superseded
+    superseded_reason: >
+      2026-08-13 账目审计：与 fix-agentstate-detection-d26（status=superseded_by_revert）
+      及 fix-agentstate-anchor-region（status=pass_unit_tests_pending_deploy）为同一缺陷 D-26
+      的三次重复立案。以 fix-agentstate-anchor-region 为准，本条不再派单。
+      调研结论见 study-herdr-agent-state：herdr 也没有进程层信号，强项在时序/仲裁层。
     goal: >
       提升 Agent 工作状态检测准确率（D-26）。当前状态检测（working/idle/blocked 等）准确率低。
       参考开源项目 herdr（GitHub）的 CLI 状态检测实现。state_wiring 已有框架，需改进算法。
@@ -2163,6 +2169,12 @@ tasks:
     contention: none
 
   - id: fix-bg-resume-d38
+    status: superseded
+    superseded_reason: >
+      2026-08-13 账目审计：与 fix-viewport-restore-d38（status=reverted_no_deliverable）
+      及 d38-bgresume（status=superseded_by_retask）为同一缺陷 D-38 的三次重复立案。
+      以 fix-viewport-restore-d38 为准，本条不再派单。根因已闭合，复盘见
+      docs/d38-three-attempts-postmortem.md。
     goal: >
       D-38 后台返回对话显示在半截（必现）。恢复时 viewport 没滚到底部。
     acceptance:
@@ -2170,4 +2182,38 @@ tasks:
     deps: []
     write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
     evidence: ".team/evidence/fix-bg-resume-d38.json"
+    contention: none
+
+  # ↓ 2026-08-13 账目审计补立：这两条已有 evidence 但从未在任务书立案（有账无单）
+  - id: fix-agentstate-anchor-region
+    goal: >
+      D-26 Agent 状态误检的根因修复：状态规则从「全屏 strings.Contains 扫描」改为
+      「最后一个 `❯` 提示符之后」的锚点区域限定。全屏扫描会把已滚上去的历史残留
+      `esc to interrupt` 当成 working，表现为状态**持续**卡在工作中（已实测复现：
+      state=working conf=2）。无锚点时回落到底部 8 行（anchorFallbackBottomLines）。
+      注：用户 2026-08-13 已裁定服务端只保留 working/idle 两态，「完成」改为 App 侧
+      派生的未读标记——本任务只解决误检，不涉及态的增删。
+    acceptance:
+      - "cd server && env -u TEAM_AGENT_* go test ./internal/agentstate/... -> 五条红测全绿"
+      - "cd server && env -u TEAM_AGENT_* go test ./... -> 全绿"
+      - "模拟器/真机实测：制造历史残留后状态不再卡 working（**未做，因未部署**）"
+    deps: []
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/fix-agentstate-anchor-region.json"
+    contention: none
+
+  - id: fix-host-pane-geometry
+    goal: >
+      主机 tmux pane 几何记账缺陷（新立案，不挂 D-38）。根因：pane 原始几何是
+      per-connection 快照，每个订阅者各自记录订阅前尺寸；且恢复只在显式 unsubscribe
+      路径触发——异常断连（teardown / closeSubscriptions / relay 退出）不调 restoreSize，
+      多订阅者会把变形尺寸当新基线逐轮叠加。修复：pane 级原始几何单例
+      （首个订阅者 acquire 记基线、中间订阅者只增计数、最后一个 release 归零恢复），
+      四条退出路径统一走 teardownSubscription。
+    acceptance:
+      - "cd server && env -u TEAM_AGENT_* go test ./... -> 全绿"
+      - "隔离 daemon 实测：多订阅者进出后主机 pane 尺寸回到原值（**未做，因未部署**）"
+    deps: []
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/fix-host-pane-geometry.json"
     contention: none

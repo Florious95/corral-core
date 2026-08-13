@@ -1,0 +1,10 @@
+{
+  "task_id": "d38-bgresume",
+  "status": "superseded_by_retask",
+  "worker": "w-dev-bgresume",
+  "dispatched_at": "2026-08-12T15:25:00+08:00",
+  "at": "2026-08-13",
+  "status_reason": "2026-08-13 账目审计：只有 intent 没有 evidence，看门狗永久算其在途。本记录关闭该虚假在途态。",
+  "后继": "由 fix-viewport-restore-d38 接手（status=reverted_no_deliverable）。根因已闭合、三版实现全部回退，复盘见 docs/d38-three-attempts-postmortem.md。",
+  "缺陷现状": "未修，已按用户裁定封存。"
+}

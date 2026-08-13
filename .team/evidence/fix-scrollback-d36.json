@@ -1,6 +1,12 @@
 {
   "task_id": "fix-scrollback-d36",
-  "status": "pass",
+  "status": "pass_scoped_server_side_only",
+  "⚠️_本记录不关闭_D-36": {
+    "why": "本记录只覆盖服务端 scrollback 坐标平移这一段（去 -pane.Height 平移、historySize 不双计屏、line_count 用实际行数），该修复确实落地并在位（ws_handler.go:257,391 注释可核）。但 D-36 作为用户可见缺陷未修。",
+    "authoritative_record": ".team/evidence/fix-scrollback-history-d36.json（status=refuted_by_user）",
+    "user_words_20260813": "「向上滑没有好……只要发一条消息，就不能向上滑了」",
+    "audit_note": "2026-08-13 账目审计发现：同一缺陷有两条活记录，一条 pass 一条 refuted_by_user。扫状态的人会误判 D-36 有一半好了。故本条状态改为 pass_scoped_server_side_only（原值 pass）。"
+  },
   "worker": "w-d36d37-dev",
   "date": "2026-08-12",
   "summary": "D-36 向上滑动无法查看历史。根因不在客户端手势链路（TermSurfaceView.onScrollBy → presenter.onScrollBy → SessionViewModel.syncFromPresenter → requestOlderHistoryPage → manager.scrollback 已接通，测试席实锤），而在服务端 handleScrollback 的坐标平移：ws_handler.go 把协议行 `-pane.Height` 平移后传给 bridge，而 tmux capture-pane 坐标系是**顶部相对**（0=屏顶，负=屏上历史，与协议 §6.3 一致）——平移把每一页都打偏：请求当前屏(0,6)返回历史最旧行且 line_count 撒谎=6；历史页内容对但 fromLine 错位。修复：去掉 -pane.Height 平移、协议行直传 tmux；scrollbackRange 的 historySize 改为 capture(-∞..-1) 行数（不减去屏高，不再双计屏）；`requestEnd <= oldest` 分支上限改 -1（不泄漏屏上行）；scrollback 载荷裁尾空行使 line_count 与实际内容一致；bridge.go 坐标注释同步更正为顶部相对。",
