@@ -1,0 +1,17 @@
+{
+  "task_id": "fix-viewport-restore-d38-test",
+  "status": "pass",
+  "seat": "w-d38-test",
+  "at": "2026-08-14",
+  "deliverable": "app/app/src/test/kotlin/dev/agentmirror/app/termview/D38ViewportRestoreScenarioTest.kt",
+  "cases": {
+    "S1_foregroundReturnRealignsGeometry": "核心红测。判别力已在干净 v6 HEAD 单独验证：真红 expected:<140> but was:<84>，精确复现用户的 56 行空黑。",
+    "S2_imePushPushesViewportWithoutResize": "锚定守门：IME 挤压时零 resize（fix-ime-no-resize 的既有行为，三版失败里有一版把它弄坏过）",
+    "S3_geometryDisturbanceIsBoundedToOne": "把黑屏闪变成可断言的量——几何扰动计数 = resizeCalls.size 恒 1。v3 单测全绿但用户一看就废，就是因为没人能断言这个。",
+    "S4_fullHeightFirstFrameDoesNotTriggerExtraResize": "P4 的场景版守门：首帧全高健康路径零额外 resize"
+  },
+  "design_note": "驱动回前台用的是公开 API dispatchWindowVisibilityChanged，不引用修复后才存在的方法——所以这四条在修复前就能编译、能跑、且 S1 是真红。这避开了『测试引用未来 API 导致编译红』那种伪红测。",
+  "verified_by_leader": "leader 独立跑过：四条全绿；守门三条（IME 锚定/绑定期/捏合）全绿；探针验收线 P1/P2/P3/P5 FAIL、P4 PASS。",
+  "lesson_recorded_by_seat": "验收线应断言行为而非实现；能说清自己证不了什么比多报一项有用。",
+  "pending": "真机实测。S3 只是 JVM 层的黑屏闪代理指标，真机才算数。"
+}

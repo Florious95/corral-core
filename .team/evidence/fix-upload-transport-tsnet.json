@@ -1,0 +1,15 @@
+{
+  "task_id": "fix-upload-transport-tsnet",
+  "status": "pass_code_level_pending_real_device",
+  "seats": {"dev": "w-up-dev", "test": "w-up-test", "probe": "w-up-probe", "review": "w-rev-upload"},
+  "at": "2026-08-14",
+  "commits": ["fb31674d2 主修复", "807c122f9 审查席 F1"],
+  "note": "round1 记录见 fix-upload-transport-tsnet.round1.json（status=refuted_by_user_field_test）——那条是纪律①第二个实例：修复曾经落地过，但 2026-08-13 全量回退到 v6（f89d47ec8）把它整条删掉，而账面还记着『已修待验证』。",
+  "rootcause": "HttpUrlConnectionUploader 用 URL(endpoint).openConnection() 裸连，而 WS 走 TsnetDial.socketFactoryFor 的 SOCKS——两条通道不是同一条路。用户真机报错的源地址 10.4.234.175 是手机的蜂窝地址而非它的 tailnet 地址，实证上传 socket 没进隧道。",
+  "fix": "tsnet Up 且目标是 tailnet host 时复用 TsnetProxySocketFactory（OkHttp + 显式 NO_PROXY 防叠加一跳），其余保持原 HttpURLConnection 直连。照抄服务层 OkHttpWebSocketTransport.kt:161 的同款选路。",
+  "strongest_evidence": "测试席在未修复 HEAD 上拿到 AssertionError: 必须经 SOCKS 代理收到 CONNECT，实际=[]，耗时 10.006s——对上用户真机的 after 10000ms，逐字复现失败模式。修复版 5/5 绿，DEBUG-SOCKS-CONNECT host=100.101.2.3 实证 CONNECT 来自真实 uploader。",
+  "review": "w-rev-upload 4 条发现无阻塞。F1 已修（807c122f9）。F1 的前提被开发席用 javap 证伪：本仓库是 okhttp 4.12.0 JVM 版，OkHttpClient 根本没有 close()，Closeable 是 5.x 拆分后的 kotlin 新 API；正确修法是 shutdown + evictAll()。",
+  "emulator_limitation": "这台模拟器结构上不可能复现本缺陷——Mac 本身在 tailnet 上，模拟器经 host NAT 直达 100.x，根本不需要隧道。实证是没有修复的旧包上传 <1s 成功。故最终验收只能真机。",
+  "verified": "LAN 不倒退 PASS（改后 APK 走 ws://10.0.2.2:19983/ws 上传成功，logcat 无 DEBUG-SOCKS-CONNECT）；全量单测与 strict-t3 由 leader 独立跑过。",
+  "pending": "用户真机在蜂窝 + Tailscale 下传一张图。包：e2e/artifacts/apk-for-user/"
+}
