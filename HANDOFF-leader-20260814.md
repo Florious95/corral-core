@@ -1,9 +1,8 @@
-# HANDOFF · leader · 2026-08-14
+# HANDOFF · leader · 2026-08-14（第二版，覆盖前一版）
 
-> 写给**刚接手、没看过过程**的人。代号首次出现即解释，路径 / sha / pid / 端口写全。
-> 前三份交接：`HANDOFF-leader-20260812.md`、`HANDOFF-leader-20260812-night.md`、
-> `HANDOFF-leader-20260813.md`。**四份都别删，但这份优先级最高**——
-> 20260813 那份里「等用户答三件事」的状态已全部作废，见 §2。
+> 前一版写于 08-14 凌晨 02:00 左右，内容是「链路优化收工、三个 App 缺陷待开工」。
+> 本版覆盖它：**缺陷已变成五条**，团队已从 7 席扩到 12 席（其中 5 席已退役），
+> 今晚（08-13 17:00 起）共 31 个提交。
 
 ---
 
@@ -11,52 +10,45 @@
 
 ### 一句话现状
 
-**网络链路这条线昨夜收工了，成果是十倍**：自建广州 DERP 上线，
-手机↔Mac 平均 RTT 从 1221ms 降到 123ms。
-**接下来是四个纯 App 缺陷**（用户 2026-08-14 追加了「图片上传失败」），跟网络无关。
-其中一个还等用户一句确认。**用户裁定：「核心就是把这四个缺陷开发好。」**
+**五条 App 缺陷在并行推进，四条已有代码或方案落地，只剩一条真正等用户（缺陷① 要他在真机传一张图）。**
+新增第六条任务「诊断日志 + 导出」，是用户裁定的通用出路，目前是关键路径。
 
 ### 开口第一句（对用户说）
 
-> 「广州 DERP 还活着（`systemctl is-active` = active、开机自启已设），
-> 你昨晚测到的 ~50ms 稳住了吗？
-> 今天做**四个 App 缺陷**（你 2026-08-14 追加了第四条：图片上传失败）。
-> 建议顺序：① 图片上传（根因最硬、且是假账订正）→ ② 捏合右列跑屏幕外
-> → ③ 重进 CLI 输入框跑中间（三次失败前科，走回炉）→ ④ 上滑投送到远端。
-> **④ 还等你一句确认**：你说的是「上滑手势要送到远端终端、等价于在那个界面滚鼠标滚轮」，
-> 对吗？确认了我就派单。」
+> 「APK 在 `e2e/artifacts/apk-for-user/agentmirror-fix-upload-fb31674d2.apk`，
+> 装上在**蜂窝 + Tailscale** 下传一张图就行 —— 不用跑「改前」，你那张 `after 10000ms` 的截图就是改前证据。
+> 另外今晚查出一件影响整个工程的事：**这台模拟器结构上做不了任何 tailnet 验证**
+> （Mac 在 tailnet 上，模拟器经 host NAT 直达 100.x，根本不需要隧道；
+> 实证是没有修复的旧包上传 <1 秒就成功了）。历史上所有「模拟器验过 tailnet」的结论都要重新审视。」
 
 ### 必读清单（按优先级，全绝对路径）
 
-1. **本文**
-2. `/Volumes/nvme/Projects/远程Agent安卓/CLAUDE.md` —— 工程铁律（派单五步、眼见为实、回炉流程、凭据红线）
-3. `/Volumes/nvme/Projects/远程Agent安卓/docs/derp-guangzhou-deploy.md` —— **广州 DERP 部署件 + 四个测量陷阱**（§四那节比部署步骤更值钱）
-4. `/Volumes/nvme/Projects/远程Agent安卓/docs/nominal-vs-measured-cell-width.md` —— 缺陷①（右列截断）的根因
-5. `/Volumes/nvme/Projects/远程Agent安卓/docs/d38-three-attempts-postmortem.md` —— 缺陷②（输入框跑中间）三版失败复盘
-6. `/Volumes/nvme/Projects/远程Agent安卓/docs/cellular-ts-optimization.md` —— 链路实测与代码侧排序（**§3 有一节「⚠️ 订正」，以订正为准**）
-7. `/Volumes/nvme/Projects/远程Agent安卓/docs/c1-brief.md` —— C1 三席共同简报（含今日全部纪律）
-8. `/Volumes/nvme/Projects/远程Agent安卓/HANDOFF-leader-20260813.md` —— 昨日交接（**其「等用户答三件事」已作废**）
+1. 本文件
+2. `/Volumes/nvme/Projects/远程Agent安卓/CLAUDE.md` —— **今晚新增了一条凭据铁律，见 §6**
+3. `/Volumes/nvme/Projects/远程Agent安卓/taskbook.yaml` 末尾三条新任务：
+   `feat-remote-scroll-forward`、`fix-tsnet-resume-reconnect`、`feat-diagnostic-log-export`
+4. `docs/upload-transport-vpn-bypass-probe.md` —— **顶部有加粗的模拟器局限发现**
+5. `docs/d38-rootcause-probe.md` —— 缺陷③ 三次修不好的真正原因
+6. `docs/cols-convergence-patch-triage.md` —— 缺陷② 的废补丁分类 + 最小修复面
+7. `docs/remote-scroll-forward-design.md` —— 缺陷④ 协议方案 + tmux 实测
+8. `docs/tsnet-resume-reconnect-rootcause.md` —— 缺陷⑤ 根因
+9. `docs/diag-log-review.md` —— 既有代码里的四处凭据泄露路径
+10. `docs/upload-transport-diff-review.md` —— 缺陷① 的 diff 审查
 
 ### 恢复动作
 
 ```bash
-cd /Volumes/nvme/Projects/远程Agent安卓
+# 1. leader 绑定（pane 变了必须重认领，否则 add-agent/send 被 owner gate 拒）
+team-agent claim-leader --confirm      # 当前 owner_epoch = 7
 
-# 1. leader 绑定（pane 变了就要重认领，否则 add-agent/send 会被 owner gate 拒）
-.team/ta claim-leader --confirm
-
-# 2. 生产 daemon —— 2026-08-14 01:45 核实仍在跑，pid 70317，监听 *:9900
-#    停了才需要拉：
-bash .team/prod-daemon-launch.sh -host 192.168.31.116
-#    核：lsof -nP -iTCP:9900 -sTCP:LISTEN
-
-# 3. 广州 DERP —— 01:45 核实 active + enabled，不需要动
-ssh -p 52222 -i /tmp/guangzhou.pem ubuntu@43.136.53.247 'sudo systemctl is-active derper'
-#    密钥：/Users/alauda/Documents/code/安卓claude_code_开源框架/guangzhou.pem → cp 到 /tmp 并 chmod 600
-#    ⚠️ 端口是 52222 不是 22（guangzhou-app-server skill 里写的 22 是错的）
-
-# 4. 席位（5 个历史席 DEAD，3 个 C1 席在线但任务已结）
-.team/ta status
+# 2. 生产 daemon —— pid 70317，监听 *:9900。核：lsof -nP -iTCP:9900 -sTCP:LISTEN
+# 3. 广州 DERP —— 43.136.53.247，SSH 端口 52222（skill 里写的 22 是错的）
+#    密钥 /Users/alauda/Documents/code/安卓claude_code_开源框架/guangzhou.pem
+# 4. 看门狗 —— 今晚修好了自匹配 bug（见 §1），按 cwd 核活：
+#    for p in $(pgrep -f "supervisor\.sh|watchdog\.py"); do lsof -a -p $p -d cwd -Fn | grep ^n; done
+# 5. 模拟器 —— emulator 包与 android-35 arm64 镜像今晚是我手工装的（sdkmanager 卡死，见 §1）
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools
 ```
 
 ---
@@ -65,339 +57,256 @@ ssh -p 52222 -i /tmp/guangzhou.pem ubuntu@43.136.53.247 'sudo systemctl is-activ
 
 ### 角色边界
 
-- **leader 只编排不亲做**。本轮有一次越界：直接改了用户 Shadowrocket 的 SQLite 配置库
-  （已备份、已验证、方向后被证明无关）。**下次这类"改用户自己软件的配置"应先做隔离实验再动手。**
-- 跨 team 转交用全名：框架问题直投
-  `/Users/alauda/Documents/code/agent前沿探索/多agent协作::refactor-maintainability/leader`
+leader **编排**，不亲手做：不跑测试、不改产品代码、不 push。
+例外（今晚实际做过且认为正确）：**客观核对**（`git cat-file` 核 sha、亲跑一次 `go test` 验席位自报）、
+**环境 ops**（装 SDK 包、起模拟器、修看门狗）、**任务书与证据的记账**。
 
-### 客观核对，不凭自报（本轮实证）
+### 客观核对，不凭自报（今晚的实证）
 
-- **测试席的红测抓到了开发席自报「全绿」的实现里一个真 bug** ——
-  ref 切换时整条流的字节被丢、内容还串到另一条流。**自报全绿 ≠ 真绿。**
-- **顾问席 w-perf-ts 的 §1 整节作废**：它把 22:54 那半小时的 ZeroTier 快照
-  写成了常态结论，又用 STUN 探针代替真实流量下结论。
-- **leader 自己也错过两次**：① 说「Shadowrocket 那条线整个是错的」是过度更正
-  （它确实在路径里，只是不是打不通的原因）；② 把 utun4 认成 Clash，
-  实为 Shadowrocket（`scutil --nc list` 才是权威）。
+- `w-c1-dev` 报了 4 个 sha，我 `git cat-file -t` 逐个核过才认。
+- `w-scroll-design` 报「9 包全绿」，我**自己跑了一遍** `go test ./...` 才提交。
+- `w-cols-dev` 报「编译错误来自别人」，我**自己跑了** `compileDebugKotlin` 确认已通才放行。
+- **席位报「已完成」时，先看它有没有贴实际输出。** 只给结论不给输出的，退回去要输出。
 
-### 环境已知坑（**这四条会让人反复误判，务必先读**）
+### 今晚新立的四条判据（比任何具体缺陷都重要）
 
-1. **Shadowrocket 的 TUN 本地代答 ICMP** —— 经默认路由 ping 任何地址都返回
-   0.3–0.9ms、TTL=64。**测真实 RTT 必须 `ping -b en0`**，或确认 Shadowrocket 已退出。
-2. **同源问题：`nc -z` 扫端口全报"开着"** —— `62222`、`36000` 这种不存在的端口也"开着"。
-   **任何经 TUN 的连通性探测都不可信。**
-3. **Shadowrocket 引擎读编译产物不读源配置库** —— 改 `Documents/Databases/*.db` 后
-   必须在 App 里点「编译配置」，否则「配置→规则」看得见、引擎却用旧的。
-4. **Claude Code 命令行环境不稳**：某些命令输出直接回终端会报框架自身的错
-   （`claude native binary not installed`），**重定向到文件再用 Read 工具读就正常**。
-   本轮 `tailscale` / `scutil` / `.team/ta send` / `grep` 都中过。
+1. **测试链路必须先抓到真实缺陷，抓不到就不许改代码**（用户 08-14 原话）。
+   审计后发现：①③ 合格，**②⑤ 当时不合格**（断言的是结构事实/构造极端值，不是用户看到的现象），
+   已分别退回补真复现，②的补上了（超出 5px ≈ 半字宽 5.5px），⑤ 仍在补。
+2. **抓不到就加日志**（用户 08-14 原话）。→ 立 `feat-diagnostic-log-export`。
+3. **审查结论也是要被验证的对象。** `w-rev-upload` 说「`OkHttpClient` 该调 `close()`」，
+   我据此下令；`w-up-dev` 用 `javap` 证伪 —— 本仓库是 okhttp **4.12.0 JVM 版，根本没有 `close()`**。
+   **不因为它来自审查席就免检，也不因为是 leader 下的令就闭眼执行。**
+4. **探针跑得再漂亮，没执行到被测代码就不算验过**（纪律⑥）。
+   今晚拦掉两次：Go 版 upload 探针（被测对象是 Kotlin）、
+   `w-up-probe` 打算用 LAN 路径验 tailnet 修复（LAN 下改前改后同一条路，不可能命中）。
 
-### 工具的已知缺陷
+### 环境已知坑（会让人反复误判，务必先读）
 
-- **`e2e/delay_proxy.py` 迭代了四版**：前三版只加转发延迟**不产生背压**
-  （daemon 写入瞬间完成进代理的 OS 接收缓冲）。终版靠 ~20KB/s 限流 +
-  `SO_RCVBUF` 缩到 2048 才造出真背压。**动它前先读文件头。**
-- **捏合注入器在新 AVD 上完全不生效**（工具坏的，不是被测对象好）。缺陷①②要真机验。
-- **macOS loopback 的 TCP 自动调窗让「对端慢读」造不出背压** ——
-  对端完全不读，writer 照样能推 4MB+。**任何靠慢读的黑盒背压测试都是无效的**（C1 探针实证）。
+1. **⚠️ 这台模拟器做不了任何 tailnet 验证。**
+   Mac 在 tailnet 上，模拟器经 host NAT 直达 `100.x`。实证：无修复的旧包上传 **<1s 成功**。
+   → 凡「tailnet 路径」的验收，**只能真机**，或走诊断日志。
+2. **sdkmanager 会静默卡死，不是网络问题。**
+   实测：`curl` 同一 CDN 大文件 **1.25 MB/s**，而 sdkmanager 跑 3 分 21 秒 **SDK 目录增长 0 KB**。
+   老版 cmdline-tools（自报只认 SDK XML v3、实际遇到 v4）。
+   → 绕法：直接 `curl` 拉包再解压。emulator 包与 `system-images/android-35/google_apis/arm64-v8a`
+   今晚都是这么装的（原本 `emulator/` 是空目录、`system-images/` 根本不存在）。
+3. **看门狗的单实例守卫会自匹配。**
+   `pgrep -f "watchdog-supervisor.sh"` 会命中**命令行里提到该脚本名的任何进程**
+   （包括拉起它的那条命令本身），cwd 又相同 ⇒ 守卫判「已在跑」直接 exit 0。
+   **它从 08-11 起实际是死的，每次拉起都静默失败。** 今晚加了 `ps -o comm=` 只认 bash，已修并重启。
+4. **共享工作区里，任何人一次编译不过就是全队停摆。** 今晚发生两次。
+   → 已让 `w-diag-dev` 改用独立 worktree（`/tmp/am-diag`）。
+   **在主工作区绝不许 `git stash` / `git checkout` / `git merge`** —— 会带走别人的未提交改动。
+   要「改前」基线一律 `git worktree add /tmp/xxx <sha>`。
+5. **Claude Code shell 偶发 `claude native binary not installed`**（输出到终端时）。
+   → 重定向到文件再 Read 就正常。
 
 ---
 
 ## §2 排期与封存令
 
-### 用户裁定（原文，仍生效）
+用户 2026-08-14 裁定（原文）：
+> 「核心就是把这**四个**缺陷开发好。」（后又追加第五条）
+> 「持续推进，不要停下来。」
+> 「测试链路一定要先抓到真实的缺陷，抓不到就不能改代码。」
+> 「你这些东西抓不到，你就加日志。」
 
-> 「整体需全量回退到 v6 版本……**现在修改策略，在 v6 版本优化性能，无论是服务端还是 app**」
-> 「**性能优化要有基线和指标**」「**核心是优化 tailscale 的链路**」
-> 「我在本地局域网很流畅……基于 ts 就有（闪烁）。**你们复现不了也是因为网络好**」
-> 「只修缺陷零新功能」（更早的裁定，仍生效）
-
-### 已闭环
-
-- **链路优化**：广州 DERP 上线，1221ms → 123ms（§3）。**这条线收工。**
-- **C1（delta 背压合并）**：关卡 1 判定「队列不会满」，**不上线**，留档（§4.1）。
-- **仓库卫生 + 账目审计**：跟踪文件 72832 → 2433，跟踪体积 3.39 GB → 114.6 MB；
-  看门狗在途数 7 → 0（01:45 核实仍为 0）。
-
-### 当前排期（用户 2026-08-14 裁定：「核心就是把这四个缺陷开发好」）
-
-**四条全是纯 App 缺陷，跟网络无关。** 顺序按「把握度」排，不是按用户说的顺序：
-
-| 序 | 缺陷 | 根因状态 | 为什么排这个位置 | 详见 |
-|---|---|---|---|---|
-| ① | **图片上传失败** | **已闭合，且修复代码写过** | 根因实测锁死（源地址是蜂窝地址不是 tailnet 地址）；修复曾落地又被 v6 回退退掉，**捡回来即可** | §4.2 |
-| ② | 捏合后右列文字跑到屏幕外 | **已闭合** | 用户报过 4 次；两个席位独立撞上同一根因；补丁已存 | §4.3 |
-| ③ | 重进 CLI 时输入框跑到屏幕中间 | **已闭合** | 根因清楚但**三版实现全退**，必须走回炉流程 | §4.4 |
-| ④ | 上滑没投送到远端 | **定义刚变，需先设计** | 需要一条全栈都不存在的能力，且**等用户确认** | §4.5 |
-
-**约束：同一 Gradle 模块同一时刻只放一席施工。四条都在 `app/app`，必须串行。**
+**授权范围**：用户已明确授权 leader 代拍契约级议题（据此批准了缺陷④ 的实现）。
+**不要再为已裁定过的事回去问他。**
 
 ---
 
-## §3 P0 / 插队项：链路优化（已完成，但它压掉了原排期）
+## §3 五条缺陷 + 一条能力任务的逐条状态
 
-### 现象与根因（全部实测，非推断）
+| # | 缺陷 | 状态 | 卡在哪 |
+|---|---|---|---|
+| ① | 图片上传失败 | **代码已提交**（`fb31674d2` + `807c122f9`） | **等用户真机传一张图** |
+| ② | 捏合后右列跑屏幕外 | 实现落地，5 条判别红测 4 绿 1 红 | 等 `w-cols-dev` 补字形侧护栏 |
+| ③ | 重进 CLI 输入框跑中间 | 回炉步骤 2/3 完成，探针 5/5 命中 | **施工未开**，等 ② 让开 |
+| ④ | 上滑投送到远端 | **服务端已提交**（`1511b50c7`，16 条红证过的测试） | App 侧手势接入等施工权 |
+| ⑤ | 内嵌 tsnet 回前台连不上 | 根因锁死 + 探针 3/3 | **复现未成**，在设备上验，可能撞模拟器那堵墙 |
+| ⑥ | 诊断日志 + 导出 | 三席在做，前置四修进行中 | 关键路径 |
 
-用户主诉「慢链上看得见每个中间状态」的闪烁。**根因是网络，不是渲染。**
+### ① 图片上传（`fix-upload-transport-tsnet`）
 
-**打不通直连的真原因**（今晚逐条排除）：
+- **根因**：`HttpUrlConnectionUploader.kt` 用 `URL(endpoint).openConnection()` 裸连，
+  而 WS 走 `TsnetDial.socketFactoryFor` 的 SOCKS。**两条通道不是同一条路。**
+- **改法**：tsnet Up 且目标是 tailnet host 时复用 `TsnetProxySocketFactory`，其余保持直连。
+  照抄 `OkHttpWebSocketTransport.kt:161` 的同款选路。
+- **最硬的证据**：测试席在未修复 HEAD 上拿到
+  `AssertionError: 必须经 SOCKS 代理收到 CONNECT，实际=[]` **耗时 10.006s**
+  —— 对上用户真机的 `after 10000ms`，**逐字复现**。修复版 5/5 绿，
+  `DEBUG-SOCKS-CONNECT host=100.101.2.3` 实证 CONNECT 来自真实 uploader。
+- **审查**：4 条发现无阻塞。F1 已修（`807c122f9`，`shutdown + evictAll()`，
+  **不是** `close()` —— 见 §1 判据 3）。
+- **待办**：用户真机验收。包已备在
+  `e2e/artifacts/apk-for-user/agentmirror-fix-upload-fb31674d2.apk`（gitignore 内）。
 
-| 方案 | 结论 | 实测依据 |
-|---|---|---|
-| 打洞直连 | **结构上不可能** | `MappingVariesByDestIP: true`（对称 NAT）。用户公寓**网线直入、没有光猫可改桥接**，小米路由 WAN 口是 `10.0.0.122` 私网 —— NAT 在楼里/运营商那层 |
-| 路由器端口映射 / UPnP | 不够 | UPnP 已开且 `PortMapping: UPnP, NAT-PMP, PCP` 三种全可用，但只能在小米那层开洞 |
-| IPv6 | 拿不到 | `IPv6: no, but OS has support`；路由器「未检测到IPv6信息」，楼里不下发 |
-| 关掉 Shadowrocket | **无关** | 完全退出后仍 `MappingVariesByDestIP: true`、仍中继 |
+### ② 捏合右列（`fix-cols-grid-convergence`）
 
-### 止血 + 根治
+- **根因**：`presenter.cellWidth` 恒为名义值 10（`measureCells()` 从不回写），绘制按实测 ≈11 步进。
+- **真复现（用户真机参数）**：`viewportW=1260 名义10 实测11 → reportedCols=126 而 canvasCapacity=114`，
+  末列字形右缘 1265 越过画布 1260，**超出 5px 而半字宽 5.5px** —— 正是「只能看到一半」。
+- **修法**：X2（`measureCells` 回写 `setMeasuredCellWidth`，幂等）+ X1（`roundToInt→floor`）
+  + X3（护栏，带**金丝雀计数** `clipGuardEngageCount()`）。
+- **X3 的金丝雀语义（务必保住）**：**它一旦在正常路径 engage，就说明 X2 失效了。**
+  计数恒 0 = 主修复在干活；计数涨 = 有路径绕过回写，是要查的 bug，**不是「护栏立功」**。
+- **两条测试的分工（别搞混）**：
+  `USER-REAL`（1260/10/11）= **正常路径真复现**，护栏不该 engage；
+  `B-字形`（120 列画在 100px）= **异常路径护栏测试**，就该是构造值。
+- **收工判据**：判别红测 5 全绿（`USER-REAL` 期望值必须是 **114**）+ 写回约束 5 全绿
+  + 既有 63 条不掉 + BgCjk 对基线逐行对账 + `strict-t3` exit 0 + `USER-REAL` 上金丝雀 = 0。
+- **⛔ 不许 `git apply docs/reverted-to-v6/horizontal-grid-convergence.patch`**：
+  `--check` 零冲突是**陷阱**（基线与 HEAD 逐字节一致），3/4 内容是用户已否掉的 D-38/D-36/捏合预览。
 
-1. **装官方 Tailscale**（原先跑在 Shadowrocket 内置里）→ 打洞成功过一次，1221ms → 147ms，但守不住。
-2. **自建广州 DERP** → 稳定拿到十倍。
+### ③ 输入框跑中间（`fix-viewport-restore-d38`）
 
-```
-                        min      avg      max     丢包
-起点（洛杉矶公共中继）  394.3   1221.0   2298.4    0%
-现在（广州自建中继）     32.6    122.7    344.1    0%
-                        ──────────────────────────
-                         12×      10×      6.7×
-```
+- **回炉步骤 2/3 已完成**：探针 5/5 在回退态命中（`tests=5 failures=0`）。
+- **三次修不好的真正原因**：那份「已闭合根因」写的是 `onRealViewportChanged` 的行为，
+  而**探针 P5 用反射实证 v6 里根本没有这个方法** —— 它描述的是 v3 补丁的行为。
+  **按一份描述着不存在代码的诊断去修，三次都修不到点上是必然的。** 纪律①第三个实例。
+- **v6 真根因**：`viewportSeeded=true` 之后没有任何路径能调 `recomputeGeometry()` 更新
+  `emulator.rows`；`visibleRows = 140.coerceIn(1,84) = 84` → 56 行空黑，与用户 1123px 吻合。
+- **线索**：v5 曾用 `onWindowVisibilityChanged` 补过这个缺口，该文件被列为禁区、v6 回退时未捞回。
+- **验收线**：修复后 P1/P2/P3/P5 转 **FAIL**、P4 保持 **PASS**。
+- **待办**：三席并行施工（审查席 `w-d38-probe` 在岗待命，测试席与开发席未开）。
 
-**核实状态（2026-08-14 01:45 亲测）**：
-`systemctl is-active derper` = **active**；`is-enabled` = **enabled**；
-`tailscale status` → `relay "gz"`；`netcheck` → `Nearest DERP: Guangzhou 50.2ms`（lax 184.4ms）。
-原始快照：`e2e/artifacts/cellular-ts-baseline/snapshot-04-gz-derp.txt`
+### ④ 上滑投送远端（`feat-remote-scroll-forward`）
 
-### 广州 DERP 的运维参数（后继要能接管）
+- **用户重新定义推翻了前四轮全部工作**：他要的是把手势送到**远端终端**，
+  等价于在那个 TUI 里滚滚轮 —— Claude Code / vim / less 自己处理滚轮，滚本地缓冲永远看不到它们的上文。
+- **服务端已提交**（`1511b50c7`）：`TypeScrollWheel`(C→S) + `TypePaneModeChanged`(S→C)，协议只增不改。
+  `bridge.InjectScroll` 用**单次** `tmux if-shell -F '#{mouse_any_flag}'` 把判定与执行合进一次派发
+  —— 消的是真实竞态（查完 flag 到发字节之间用户可能刚 `q` 退出 vim，鼠标字节会打进裸 shell 命令行）。
+- **实测（隔离 tmux 3.6a）**：`mouse_any_flag` 裸 shell=0 / vim=1；
+  `send -M` 在服务端侧返回 `no mouse target`（**此路封死**）；`send-keys -H` 可注入；
+  `copy-mode -e` 降级可用；`send-keys -X cancel` 让 `pane_in_mode` 1→0。
+- **leader 否决过席位一条推荐**：它说「copy-mode 提示初版不做」，否掉 ——
+  裸 shell 上滑推进 copy-mode 后**用户打字会被 copy-mode 吃掉**，看到的是「敲了没反应」。
+  现在有两层保护：通知帧 + `handleInput` 转发文本前自动 `cancel`。
+- **16 条测试全部做过红证**（在无实现的 sha 上逐条编译红，无一条假绿）。
+- **已知局限（写进设计文档）**：SGR 坐标硬编码 `1;1`，多面板 TUI（nvim 分屏）可能路由错，
+  需 App 上报手势坐标才能修；`sendError` 正常路径不打服务端日志。
+- **待办**：App 侧手势接入，等 `app/app` 施工权。
 
-| 项 | 值 |
-|---|---|
-| 机器 | 腾讯云广州 `43.136.53.247`，2 核 / 1963MB RAM / **无 swap** / 磁盘 7GB 余 |
-| SSH | **端口 52222**（不是 22），user `ubuntu`，密钥 `/Users/alauda/Documents/code/安卓claude_code_开源框架/guangzhou.pem` |
-| 服务 | `derper.service`，`systemctl status/restart derper`，日志 `journalctl -u derper` |
-| 端口 | **TCP 8444**（8443 被那台机器的 nginx 占）+ **UDP 3478**（STUN） |
-| 证书 | 自签，`/var/lib/derper/certs/43.136.53.247.{crt,key}`，10 年 |
-| ACL 绑定 | `CertName: sha256-raw:92f3b9d993e883143985c101e900f7ef3e0b63fe69128cdaa70ce6ab3522f850` |
-| ACL 内容 | `docs/derp-guangzhou-acl.json`（RegionID 900，`OmitDefaultRegions: false` 保留公共 DERP 兜底） |
+### ⑤ tsnet 回前台连不上（`fix-tsnet-resume-reconnect`）
 
-**derper 的三个非显然 flag**（缺一个就起不来）：
-`-c /var/lib/derper/derper.key`（新版必填，存节点私钥）、
-`-http-port -1`（否则抢 :80，被 nginx 占着会反复重启）、
-`-certmode manual -certdir ...`。
+- **用户 A/B 差分（决定性）**：内嵌 tsnet + token 配对 → 切后台 → 回前台 → **永远连不上**；
+  官方 Tailscale App + tailnet 地址直连 → 杀到后台再开 → **立刻连上**。
+- **根因锁在一行**：`TsnetWire.kt:91`
+  `if (m != null && key == currentKey && (m.state is Starting || m.state is Up)) { return }`
+  `state == Up` 的语义是「`start()` 成功过、SOCKS 端口**曾经**通」，不是「现在能拨通」。
+  后台冻结 → DERP TCP 超时断裂 → native 不回调 Java 层 → state 永停 `Up` →
+  `socketFactoryFor` 照常返回 SOCKS 工厂、拨号必失败；而 `ensureStarted()` 又被这条幂等守卫拦下
+  ⇒ **节点永远起不来**。用户说的那个「**永远**」就落在这一行。
+- **修法已定：失败驱动，不是探活驱动。**
+  信号路径 `OkHttpTransportFactory.create → SOCKS onFailure → ServiceWire.onTailnetSocksFailure
+  → TsnetWire.notifySocksRouteFailure`，内部用已存 `currentKey` 重启，30s 节流。
+  **否决探活的理由**：SOCKS listener 是本地 Go listener，DERP 死后**仍在监听** ⇒ TCP 探活必假绿；
+  且用户场景网络自始至终同一条蜂窝，`onNetworkAvailable` 大概率一次都不响。
+- **「第一次失败对用户可见」是正确行为**（席位顶回 leader 的静默重试提议，leader 接受）：
+  从「永远连不上」变成「断几秒后自动恢复」本身就是修好了。补充：可见 ≠ 报错吓人。
+- **卡在关卡 1（实机复现）**：探针 3/3 断言的是**结构事实**，不是故障本身。
+  已要求：**先证明流量确实在走内嵌 tsnet，再断 DERP**，否则会拿到假阴性。
+  断包用 `-j DROP` 不用 `REJECT`（REJECT 回 RST，可能反而触发干净的自愈分支；
+  真机是静默超时）；且我们的 DERP 是自建广州节点 **TCP 8444 / UDP 3478**，不是 443。
+- **B 路径的诚实标注**：席位用「force-stop 冷启动」作弱对照（模拟器上装不了官方 Tailscale），
+  **不许写成复现了用户的 B**。
 
-**同机红线**：那台机器 `:443` 跑着 `claude-chat.service`（另一个项目的服务），
-**不要碰**，它的 PORT=443 是硬红线（中国出境对非标 TLS 端口劫持已实证）。
+### ⑥ 诊断日志 + 导出（`feat-diagnostic-log-export`）—— 关键路径
 
-### P0 对原排期的扰动（显式提醒）
-
-**链路这条线占了整晚，三个 App 缺陷一行代码都没动。** §2 里那三条全部未开工。
-另外 **C1（delta 背压合并）本来是「代码侧第一优先」，被链路修复推翻了** ——
-往返单价从 1.5–1.8s 降到 ~0.15s 后，C1 和 C2 的收益都缩水一个数量级。
+- **为什么存在**：用户裁定「抓不到就加日志」。**验收判据**：
+  用户真机复现一次、导出一份日志，**我们光看它就能定位根因**，不用再要截图。
+- **必须能解两条缺陷**：⑤ 要看得出「state 报 Up 而 SOCKS 拨号在失败」「`ensureStarted` 被幂等守卫拦下」；
+  ② 要**光看日志就能算出末列超出屏幕几个像素**。
+- **前置四修（审查席预审挖出的既有泄露，先修再做本体）**：
+  1. `AuthFrame` 缺安全 `toString()`，默认 `toString` 明文吐 token
+  2. `ConnectionConfig` 同上
+  3. `TsnetManager.redactAuthKey` 只洗顶层 message、**不触达 cause 链** ——
+     一句 `Log.e(TAG, msg, throwable)` 就能漏 authkey
+  4. 「认 `tskey-` 前缀」式脱敏对 **headscale 纯 hex** key 必然失效（本工程契约明确放行 headscale）
+- **设计决定（已认可）**：不 hook 全局 `Log`（diag 自持写入路径）；
+  `registerSecret` 取代前缀匹配（**从结构上解掉第 4 条**）；QR 原始串永不记录。
+- **leader 给的两个坑（要在实现里吃掉）**：`registerSecret` 注册**之前**的记录救不了（窗口有多宽要写清）；
+  **注册表自己是一份「所有已知秘密的明文集合」**，不能进缓冲/导出，`toString()` 也得安全。
+- **极性问题（务必订正）**：那三个 `*LeakTest` 现在是「跑绿 = 泄露存在」。
+  作为一次性取证可以，**作为长期回归闸必须翻成「断言不泄露且永远绿」** ——
+  否则半年后有人看到绿的 `LeakTest` 会以为一切正常。**语义反着的长期测试比没有测试更危险。**
 
 ---
 
-## §4 在途未收尾任务
+## §4 席位现状（12 席，5 席已退役）
 
-### 4.1 C1（perf-delta-backpressure-merge）—— 已判定不上线，**待 leader 收口归档**
+**在岗**：`w-cols-dev`(②开发) `w-cols-prep`(②测试) `w-d38-probe`(③审查·待命)
+`w-diag-dev`(⑥开发·worktree) `w-diag-test`(⑥测试) `w-diag-rev`(⑥审查·待 round2)
+`w-rev-upload`(①审查·完) `w-scroll-design`(④·待 App 侧) `w-tsresume-probe`(⑤复现)
+`w-up-dev` `w-up-probe` `w-up-test`（①三席·完，待命）
 
-**这是唯一有未提交代码的任务，必须先处理，否则后继会以为工作区脏了。**
+**已退役**：`w-c1-{dev,probe,test}`、`w-perf-{link,ts}`（角色文件在 `agents/retired/`）
 
-- **判定**：`w-c1-probe` 关卡 1 结论 **「sendCh(cap 256) 不会满」** →
-  合并永不触发 → **C1 不该上线**。
-  数字：LLM 流式 400–500 B/s 时 `queue_peak=1`、84 帧零缓冲；
-  即使对端不读 + 2KB 窗口 + 2000 行突发，`queue_peak` 也只到 **2**。
-- **三席状态（01:45 核实）**：`w-c1-probe` 空闲、`w-c1-dev` 空闲、`w-c1-test` 工作中
-  （它在写最后的 evidence）。**全部已 halt 并交付，没有卡死，不要去干预。**
-- **证据**：`.team/evidence/perf-delta-backpressure-merge-test.json` = `halted`；
-  `perf-delta-backpressure-merge.json` 已落盘（**status 字段待补，probe 写的格式与其它不同**）。
+**看门狗账目**：4 条在途 intent 全部指向活席位，无孤儿。
+（今晚归档了一条 08-12 的孤儿 intent `fix-viewport-restore-d38` → 死席位 `w-dev-d38`，
+移到 `.team/evidence/retired-intents/`。）
 
-**未提交的 16 项工作区改动，逐条怎么处置**：
-
-| 文件 | 性质 | 建议 |
-|---|---|---|
-| `server/internal/api/ws_conn.go` | **C1 实现**（多 ref 缓冲 + pendingWake） | **不提交**，留档 |
-| `server/internal/api/sendq_metrics.go` / `_test.go` | C1 计数器（DeltasBuffered 新增、DeltasDropped 保留） | 同上 |
-| `server/internal/api/ws_conn_merge_test.go` | C1 单测（dev 写） | 同上 |
-| `server/internal/api/delta_merge_scenario_test.go` | **红测**（test 席写，抓到了真 bug） | **值得单独提交留档** |
-| `test/cases/delta_merge_bytes.test.js` | e2e 字节等价闸 | 同上 |
-| `e2e/harness/c1_sendq_probe_test.go` | 关卡 1 探针 | **值得提交**，它是「队列不会满」的证据 |
-| `docs/c1-delta-backpressure-merge-impl.md` | dev 实现留档 | 提交 |
-| `docs/c1-probe-production-steps.md` | 生产取数步骤 | 提交 |
-| `.team/evidence/perf-delta-backpressure-merge*.json` | 证据 | 提交 |
-| `docs/cellular-ts-optimization.md` / `docs/ts-link-perf-guidance.md` / `.team/evidence/perf-cellular-ts.json` | 顾问席自己回来订正的（C1 前提被推翻） | 提交 |
-| `docs/wiki/t3-report.md` | archwiki 生成物 | 跟着走 |
-| `e2e/artifacts/c1-TestC1QueueFillsWhenWriteBlocks.daemon.log` | 探针跑出的隔离 daemon 日志 | 提交或删，无所谓 |
-
-**还有一件 dev 请示未答**：它在改 `ws_conn.go` 时，`archwiki --strict-t3` 暴露了一处
-**存量** `@inv` 契约标签缺失（`restoreOnce`，非它引入），它补上了。
-**这是独立于 C1 的有效修复，即使 C1 不上线也该留** —— 但要**单独一个提交**（纪律⑦）。
-**已核**：`cd server && go build ./...` 通过，未提交代码不污染构建。
-
-**C1 留下的三条认知资产（比代码值钱）**：
-1. `pendingWake` 时序陷阱：合并缓冲若只靠 writeLoop 每轮触发 flush，
-   sendCh 排空后 writer 阻塞在 `<-sendCh`，**缓冲里最后一段永远发不出去**。
-   解法是让「入缓冲这个动作本身」当唤醒源（零延迟，非定时器）。
-2. ref 隔离 bug：单缓冲在 ref 切换时 seal 失败会丢掉第二条流，**内容还会串**。
-3. macOS loopback 自动调窗 → 纯黑盒造不出背压（见 §1）。
-
-### 4.2 缺陷① 图片上传失败 —— **未开工，把握最大，建议第一个做**
-
-**用户 2026-08-14 真机报错（原始截图已确认）**：
-
-```
-上传失败：failed to connect to /100.75.207.88 (port 9900) from /10.4.234.175 (port 39030) after 10000ms
-                                ↑ Mac 的 tailnet 地址        ↑ 手机的蜂窝地址，不是 tailnet 地址
-```
-
-- **根因已闭合（且这次有铁证）**：源地址 `10.4.234.175` 是手机的**蜂窝运营商地址**，
-  而不是它的 tailnet 地址 `100.69.43.120`。**说明上传的 socket 根本没走隧道。**
-  同一时刻 WebSocket 是通的（daemon 侧看到源为 `100.69.43.120`）——
-  **两条通道走的不是同一条路。**
-- **代码位置**：`app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt:67`
-  当前是 `URL(endpoint).openConnection()` —— **没有 proxy 参数**，走系统网络栈直连。
-  而 WS 走 `TsnetDial.proxyFor(state)`（`app/.../tsnet/TsnetDial.kt:55`）。
-- **⚠️ 这条是假账，已订正**：`.team/evidence/fix-upload-transport-tsnet.json`
-  原 status = `pass_pending_tailnet_field_verification`，**已改为 `refuted_by_user_field_test`**。
-  原因：修复曾经落地过，但 2026-08-13 全量回退到 v6（提交 `f89d47ec8`）把 App 改动整条退掉，
-  这条修复随之消失。**`git log --all -S'TsnetProxySocketFactory' -- <uploader>` 显示它只存在于
-  `9c6727f45` 与 `0fa842ace` 两个回退前的锚点提交，HEAD 里没有。**
-  这是纪律①（回退期间立的账不能按回退前的代码算）的**第二个实例**。
-- **修复怎么做**：原方案已写在证据里 ——
-  「tsnet Up + tailnet host 时，上传复用 WS 的 `TsnetProxySocketFactory`；否则保持系统直连」。
-  从 `9c6727f45` 或 `0fa842ace` 把那段捡回来即可，**但要按当前 v6 代码重新对齐**。
-- **注意一个新变量**：用户手机现在跑的是**官方 Tailscale App**（系统级 VPN），
-  不是 App 内嵌 tsnet。**为什么系统 VPN 在的情况下上传仍然不走隧道，需要先查清**
-  —— 可能 App 声明了 VPN 排除，或内嵌 tsnet 与系统 VPN 并存导致路由混乱。
-  **不要假设原方案直接可用，先复现再修（眼见为实）。**
-- **验收**：真机在蜂窝 + TS 下上传一张图成功；且局域网下不倒退。
-
-### 4.3 缺陷② 捏合后右列文字跑到屏幕外 —— **未开工，把握大**
-
-- **根因已闭合**：`presenter.cellWidth` 恒为**名义值 10**（只有捏合会改它，
-  `measureCells()` **从不回写**），而绘制按**实测 cellW ≈ 11px** 步进 ——
-  上报给服务端的 cols 按名义值算、绘制按实测值走，**两套栅格永不收敛**。
-- **证据强度高**：用户报过 4 次；今日由 `w-dev-cols` 与 `study-web-terminal-model`
-  两个席位从两个方向**独立**撞上同一结论。
-- **文档**：`docs/nominal-vs-measured-cell-width.md`
-- **已回退的补丁**：`docs/reverted-to-v6/horizontal-grid-convergence.patch`（62630 字节）。
-  **不建议直接 apply** —— 那版是在别的上下文里写的，先读再决定。
-- **证据文件**：`.team/evidence/fix-cols-grid-convergence.json`（status = `reverted_no_deliverable`）
-- **验收红线**：捏合注入器在新 AVD 上是坏的 → **必须真机实测**，
-  且必须「改前复现 + 改后看到修复 + 不倒退」三件齐（眼见为实铁律）。
-
-### 4.4 缺陷③ 重进 CLI 时输入框跑到屏幕中间 —— **未开工，必须走回炉流程**
-
-- **根因已闭合**：回前台时 IME 仍在屏上，`onRealViewportChanged` 重算并上报，
-  把**被挤压的几何**当成了永久基线；而 `onViewportSizeChanged`（IME 收起）
-  按 `fix-ime-no-resize` 不再上报 → 挤压值成为永久基线。
-- **实测数据**：`bottomMarginPx=106`（健康值 6），5 秒后仍稳定；
-  用户真机 1123px ≈ 56 行，而 140（视口行）− 84（已绘行）= 56，**数值精确吻合**。
-- **三版失败复盘**：`docs/d38-three-attempts-postmortem.md`
-  （v1 两值取自不同时刻；v2 `imeBottom` 恒为 0 因为 Compose 的 `imePadding()`
-  作用在兄弟节点上、终端 Box 是被布局挤小的；v3 改用 Compose 事件源 → 引入黑屏闪）
-- **流程红线**：**三次失败前科 → 必须走 CLAUDE.md 的「回炉」流程**
-  （回退 → 审查席从回退的 diff 反推根因产出**根因探针** → 回退后跑探针验证诊断
-  → 三席并行 → 修完再跑探针）。
-- **补丁**：`docs/reverted-to-v6/d38-viewport-restore.patch`（65467 字节）
-
-### 4.5 缺陷④ 上滑要投送到远端当滚轮 —— **等用户一句确认，未开工**
-
-- **用户 2026-08-14 的新定义（原话）**：
-  > 「我在屏幕里面向上滑的时候，我向上滑的这个行为**没有投放到这个界面**。
-  > 也就是说我向上滑，要**类似于我在这个界面鼠标滚轮也向上滑**，它才能配合看到上面的内容。」
-  > 「之前所有的**假的复现、假的修改正确**，全部都是它本身从上往下加载了大量的 CLI 的内容，
-  > 因此我才能上上滑。」
-- **这个定义推翻了前四轮的全部工作** —— 我们一直在修「App 本地缓冲怎么滚」和
-  「服务端 scrollback 分页怎么对齐」，而用户要的是**把手势送到远端终端**。
-- **现状已核（grep 实证）**：
-  ```
-  App 往服务端发过滚轮/鼠标事件？   零处，从来没有
-  服务端 input 路径支持什么？        只有 send-keys（按键/文本）
-  bridge 有没有 copy-mode/滚动？     没有
-  ```
-  **整条链路上不存在「把滚动送到远端」这个能力。**
-- **卡在哪**：leader 已问用户确认这个理解，**用户尚未回答**。
-- **范围提醒**：严格说这不是「修缺陷」而是**补一条从来没有的能力**
-  （手势 → 滚轮事件 → 协议 → 服务端 → tmux，跨四层），
-  与「只修缺陷零新功能」的封存令有张力。**leader 的判断是该做**
-  （终端里滚轮看历史本就是终端的基本行为），但**要用户点头**。
-- **相关证据**：`.team/evidence/fix-scrollback-history-d36.json`（status = `refuted_by_user`）；
-  注意 `fix-scrollback-d36.json` 是 `pass_scoped_server_side_only`（**只覆盖服务端坐标平移那一段，不关闭 D-36**）。
-
-### 4.6 服务端未部署改动（低优先，但别忘了）
-
-`server/internal/api/sendq_metrics.go` 等仪表 + `agentstate` 锚点修复
-（`fix-agentstate-anchor-region`，status = `pass_unit_tests_pending_deploy`）**至今未部署**。
-生产 daemon 二进制编译于 **08-13 00:25**，不含这批改动。
-部署需重启 daemon（断线几秒），**要用户点头**。
+**⚠️ 看门狗 T5 探针约 4 分钟就出针**，与 CLAUDE.md 「心跳周期接近 1 小时」有张力，
+会让待命席位反复回「我没卡住」。**处置办法：给已交付的席位写 evidence 文件**
+（intent 有、evidence 无 = 判在途），写了就不再戳。
 
 ---
 
 ## §5 运维与外部
 
-### 进程与端口（2026-08-14 01:45 核实）
-
-| 对象 | 状态 | 核实方式 |
-|---|---|---|
-| 生产 daemon | **pid 70317**，`-host 192.168.31.116`，监听 `*:9900` | `pgrep -fl 'server/agentmirrord'` + `lsof -nP -iTCP:9900` |
-| 广州 derper | **active + enabled** | `ssh -p 52222 ... systemctl is-active/is-enabled derper` |
-| Mac 的 tailnet IP | **`100.75.207.88`**（旧节点 `100.103.128.78` 已 offline，建议管理台删掉） | `tailscale status` |
-| 手机 tailnet IP | `100.69.43.120`（节点名 `v2502a`） | 同上 |
-
-### 资源约束
-
-- 广州机器：1963MB RAM，**无 swap**，磁盘 82% 已用（7GB 余）。
-  **不要在上面装 Go 编译 derper** —— 用 Mac 交叉编译后 scp（本轮就是这么做的）。
-- 本地仓库：跟踪 2433 文件 / 114.6 MB；`.git` 仍 1.1 GB
-  （**历史里的 3.1GB 副本没清，决定见下**）。
-
-### 已记录的决定：不重写 git 历史
-
-量过代价：`.team/evidence/` + `docs/` + `taskbook.yaml` 里有 **54 个真实 commit sha 引用**，
-重写会全部失效。`.team/evidence/` 是任务状态的唯一权威，
-**它的 54 处引用比 800MB 值钱**，何况本机无远端，1.1GB 今天不值钱。
-**开源发布时再做**，届时用 `git-filter-repo` 的 `commit-map` 机械替换（当前未安装）。
-
-### 外部通告
-
-无。跨 team 通道见 §1。
+- **生产 daemon** pid 70317，监听 `*:9900`。**未部署**的服务端改动：
+  `sendq_metrics.go` 仪表 + `agentstate` 锚点修复 + **缺陷④ 的整套滚轮链路**。
+  部署要重启 daemon（断线几秒），**要用户点头**。
+- **广州 DERP** `43.136.53.247`，**SSH 端口 52222**（skill 写的 22 是错的），
+  TCP 8444 / UDP 3478，自签证书 `sha256-raw:92f3b9d9...22f850`。手机↔Mac 已从 1221ms 降到 ~50ms。
+  ⚠️ 该机 `:443` 跑着另一项目的 `claude-chat.service`，**不要碰**。
+- **worktree**：`/tmp/am-before`(HEAD 无①修复)、`/tmp/am-after`(fb31674d2)、`/tmp/am-diag`(⑥开发)。
+  用完 `git worktree remove`。
+- **模拟器** `emulator-5554`（AVD `agentmirror_geo_1260x2800`，1260x2800，API 35）。
+  `wedding_user_a_api35` 是别的工程的，不要碰。
 
 ---
 
 ## §6 安全约束（原文保留，不可弱化）
 
-- **密钥只存在于 `.team/current/profiles/*.env`，任何席位禁止读其原文。**
-- **`.team/current/profiles/tailnet-test.env` 全员禁读（含 leader）。** 里面是用户 tailnet 的
-  auth key，只能通过 `TS_AUTHKEY` 环境变量注入测试节点，任何形式的 cat/grep/plist/Read 都禁止。
-  取值只用 `set -a; . <file>; set +a` 注入子进程，不打印、不落日志、不入截图。
-- **查任何配置前先想凭据**：`grep -i tailscale` 一个"偏好设置"文件就把 authkey 打上了屏
-  （2026-08-13 实发，**已请用户轮换，但用户裁定保留该 key 供测试节点用**）。
-  同类禁令：无过滤 `ps aux`（暴露席位 API key）、
-  `tail .team/logs/agentmirrord-prod.log`（daemon 明文打配对 token）。
-  **Shadowrocket 的偏好 plist 与 `tailscale_keys.bin` 列入禁读。**
-- 配对 token 与 TS authkey 同级——不落日志、不上屏明文、不入截图，QR 是唯一合法出口；
-  TS authkey 传入只经 `TS_AUTHKEY` 环境变量。
-- 不许手改 App 的 SharedPreferences 来绕过配对流程。
-- **绝不触碰生产 daemon 与用户真实 tmux，只读也不行**；起隔离 daemon 必须用
-  `AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS` 收窄扫描。
-- **席位禁 git push。**
-- GPL 隔离：Termux 系 GPLv3 不可用；herdr-remote AGPL、mosh GPLv3 只借鉴算法不复制代码。
-- 测试净化前缀 `env -u TEAM_AGENT_*`。
-- 全局 CLAUDE.md：**禁止写 memory；禁止用 AskUserQuestion 工具问用户。**
-
-### 本轮新增的一条运维禁令
-
-**广州机器 `43.136.53.247` 的 `:443` 跑着另一个项目的 `claude-chat.service`，不要碰。**
-它的 `PORT=443` 是硬红线（中国出境对非标 TLS 端口劫持已 tcpdump 实证）。
-我们的 derper 用 8444，两者互不干扰。
+- 密钥只存在于 `.team/current/profiles/*.env`，**任何席位禁止读其原文**。
+- **`.team/current/profiles/tailnet-test.env` 全员禁读（含 leader）** ——
+  只能 `set -a; . <file>; set +a` 注入子进程，不打印、不落日志、不入截图。
+- **【今晚新增，已写进 CLAUDE.md】凭据已泄露 ≠ 停工**：
+  用户对该文件的长期决定是「既然泄露了，就写进文件，接下来就用它去测」。
+  再次泄露时**只做三件事：一行上报（不复述泄露的值）、就地收紧做法、继续干活**。
+  **禁止**因此停工、禁止等新 key、禁止把删本地产物当成风险处置 ——
+  片段一旦进入上下文就擦不掉，删截图减少的是执行者的不适而非真实风险。
+  轮换与否是用户的事，不是开工前置条件。
+  （今晚我违反过一次，被用户批为「掩耳盗铃」且双输，已改正并写死进规则。）
+- **报告泄露时永远不要复述泄露的值** —— 那一贴会把片段从一个上下文扩散到另一个。
+  写「authkey 的前 N 个字符出现在 X 处并被截进图，已删」即可。
+- 查任何配置前先想凭据。**Shadowrocket 偏好 plist 与 `tailscale_keys.bin` 禁读。**
+- ⚠️ 禁止 `tail .team/logs/agentmirrord-prod.log`（daemon 明文打配对 token）。
+- ⚠️ 本机禁跑无过滤 `ps aux`（暴露席位 API key），核进程一律 `pgrep -fl <精确路径>`。
+- 配对 token 与 TS authkey 同级：不落日志、不上屏明文、不入截图，**QR 是唯一合法出口**。
+- **不许手改 App 的 SharedPreferences 来绕过配对流程**（今晚拦下过一次）。
+- 绝不触碰生产 daemon 与用户真实 tmux，只读也不行；
+  起隔离 daemon 必须用 `AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS` 收窄扫描。
+- 席位禁 `git push`。
+- **GPL 隔离**：Termux 系 GPLv3 不可用；herdr-remote(AGPL)、mosh(GPLv3) 只借鉴算法、禁止复制代码。
+- 测试净化前缀 `env -u TEAM_AGENT_*`；派单必经 `.team/ta`。
+- 全局 CLAUDE.md：**禁止写 memory；禁止用 AskUserQuestion 工具问用户**。
 
 ---
 
 ## §7 给后继的一句话
 
-**今天最容易犯的错，是拿昨天的结论开工。**
+**今晚最容易犯的错，是把「席位报了绿」当成「验过了」。**
 
-昨夜的链路修复把往返单价降了十倍，**这让 C1、C2 的收益全部缩水一个数量级**，
-`docs/cellular-ts-optimization.md` 的原始排序已被作者自己订正过（§3 有「⚠️ 订正」节）。
-同理，缺陷③ 的定义在 2026-08-14 被用户彻底改写，**前四轮的工作全是修错方向**。
+今晚有四次，绿的东西其实什么都没证明：
+Go 探针跑得漂亮但一行产品代码都没执行到；
+`w-cols-prep` 的红测红在一个用户永远遇不到的构造值上；
+`w-scroll-design` 的 13 条绿测试从来没红过；
+而模拟器上「改前包上传成功」——**那不是修复不需要，是这台模拟器根本测不了隧道。**
 
-**开工前先确认三件事**：这条结论是什么时候得出的、当时的链路条件是什么、用户的定义变了没有。
+每次问一句就够了：**这条绿，是在被测对象上、用用户的参数、从红转过来的吗？**
+三个条件缺一个，它就还没有证明任何事。
