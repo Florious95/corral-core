@@ -28,43 +28,41 @@
 
 ## 二、发现
 
-### F1 — OkHttpClient 未完整关闭（中）
+### F1 — connectionPool 清理线程未显式驱逐（低）【已订正】
 
 **位置**：`HttpUrlConnectionUploader.kt:181`
 
 ```kotlin
 } finally {
-    client.dispatcher.executorService.shutdown()   // ← 只关了 dispatcher executor
+    client.dispatcher.executorService.shutdown()   // dispatcher executor 关了
+    // connectionPool.evictAll() 未调用
 }
 ```
 
-**它会怎么坏**：
+**原始判断（错误）**：曾建议改用 `client.close()`。
 
-OkHttp 的一次性 client 需要关闭 3 种资源：
-1. `dispatcher.executorService`（异步调用线程池）——本次已 `shutdown()`
-2. `connectionPool` 的清理线程——**未关**
-3. 缓存（无缓存，不适用）
+**订正**（leader 2026-08-14 实证）：本仓库依赖 `com.squareup.okhttp3:okhttp:4.12.0`（JVM canonical 版），
+`OkHttpClient` 在 OkHttp 4.x **没有 `close()` 方法**——`Closeable` 是 OkHttp 5.x
+拆分后 okhttp-kotlin 的新 API。照原建议改会直接 `Unresolved reference 'close'` 编译失败。
+`dispatcher.executorService.shutdown()` 在 OkHttp 4.x JVM 上是正确做法，不是错误用法。
 
-`OkHttpClient.close()` 才是关闭全部三者的公开 API。
+**实际遗漏**：`connectionPool.evictAll()` 未调用。`ConnectionPool(0, 1, TimeUnit.NANOSECONDS)`
+maxIdleConnections=0 使实际影响最小化（cleanup 线程发现无连接后退出），但显式
+`evictAll()` 才是完整清理。
 
-当前设置 `ConnectionPool(0, 1, TimeUnit.NANOSECONDS)` 使实际影响最小化：
-`maxIdleConnections=0` 意味着连接完成后立即被驱逐，cleanup 线程发现无连接后退出。
-因此在当前参数下**实际不泄漏**，但：
-
-- 如果未来有人改 ConnectionPool 参数（或 OkHttp 版本改了清理逻辑），就会出现真实线程泄漏
-- `dispatcher.executorService.shutdown()` 对同步 `.execute()` 调用是冗余的（同步调用不用 dispatcher executor），等于改了错的东西，漏了对的东西
-
-**严重度**：中（当前参数下零影响，但 API 用法错误，潜在隐患）
-
-**建议**：将 `finally` 块改为 `client.close()`：
+**修法**（已在提交 `807c122f9` 实现）：
 
 ```kotlin
 } finally {
-    client.close()   // 同时关 dispatcher executor + connectionPool 清理线程
+    client.dispatcher.executorService.shutdown()
+    client.connectionPool.evictAll()
 }
 ```
 
-**红测**：见 §三 `F1_OkHttpClientCloseTest`（验证 `close()` 语义，而非仅 shutdown）。
+**严重度**：低（当前参数下近零影响，但显式 evictAll 更正确）
+
+**校准教训**：审查涉及第三方库 API 时，先确认仓库实际依赖的版本/artifact，
+再谈用法对错。本仓库依赖声明在 `app/app/build.gradle.kts`，`javap` 可验类上有没有目标方法。
 
 ---
 

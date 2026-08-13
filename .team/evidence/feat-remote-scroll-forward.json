@@ -1,0 +1,55 @@
+{
+  "task_id": "feat-remote-scroll-forward",
+  "status": "server_side_pass_pending_app_side",
+  "date": "2026-08-14",
+  "worker": "w-scroll-design",
+
+  "summary": "服务端+协议层实现完成，16 条红测全部过。App 侧手势接入（TermSurfaceView.onScroll）等 app/app 施工权释放后开始。",
+
+  "deliverables": {
+    "design_doc": "docs/remote-scroll-forward-design.md",
+    "protocol": [
+      "server/internal/protocol/frametype.go  — TypeScrollWheel / TypePaneModeChanged",
+      "server/internal/protocol/frames.go     — ScrollWheel / PaneModeChanged structs + @contract",
+      "server/internal/protocol/validate.go   — FrameType() + Validate() for both",
+      "server/internal/protocol/json.go       — ScrollWheel in C→S decoder; PaneModeChanged S→C only"
+    ],
+    "bridge": [
+      "server/internal/bridge/bridge.go       — scrollMouseBytes / InjectScroll / PaneInMode / ExitCopyMode"
+    ],
+    "api": [
+      "server/internal/api/ws_handler.go      — handleScrollWheel + handleInput copy-mode bailout",
+      "server/internal/api/ws_conn.go         — case TypeScrollWheel routing"
+    ],
+    "tests": [
+      "server/internal/bridge/scroll_test.go  — 9 bridge tests (T1–T7)",
+      "server/internal/protocol/json_test.go  — 4 protocol tests (round-trip / validate / S→C-only / marshal)",
+      "server/internal/api/scroll_api_test.go — 3 API tests (unsubscribed / dead-pane / copy-mode notify)"
+    ]
+  },
+
+  "red_proof": {
+    "method": "git worktree add HEAD (no implementation)",
+    "bridge_result": "FAIL [build failed] — 10 undefined symbols (scrollMouseBytes, InjectScroll, PaneInMode, ExitCopyMode)",
+    "protocol_result": "FAIL [build failed] — 6 undefined symbols (ScrollWheel, PaneModeChanged, TypePaneModeChanged)",
+    "api_result": "FAIL [build failed] — 8 undefined symbols (ScrollWheel, TypePaneModeChanged, PaneModeChanged)",
+    "verdict": "16 tests all compile-red on HEAD; 0 tests green without implementation"
+  },
+
+  "checks": {
+    "go_test": "PASS — 9 packages all green",
+    "archwiki_strict_t3": "PASS — T1-1/T1-2/T3-1~T3-4 all exit 0"
+  },
+
+  "known_limitations": [
+    "SGR/X10 coordinates hardcoded 1;1 — affects multi-panel TUIs with coordinate routing (e.g. neovim splits); main TUIs (vim single-window, less, htop) unaffected; tracked in design doc §已知局限",
+    "sendError normal path does not log server-side — failure visible to client but server is blind; tracked in design doc §已知局限; deferred to feat-diagnostic-log-export"
+  ],
+
+  "pending": {
+    "app_side": {
+      "blocker": "app/app occupied by w-cols-dev (缺陷②) and w-diag-dev (diagnostic logs)",
+      "scope": "TermSurfaceView.onScroll → ScrollWheel frame dispatch; SessionViewModel holds subscription state; PaneModeChanged indicator UI"
+    }
+  }
+}
