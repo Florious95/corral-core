@@ -257,4 +257,49 @@ EXIT=0
 
 ---
 
-*本报告由预研席 w-cols-prep 在纯只读模式下产出；`git apply` 仅执行 `--check`；未 commit、未 push。*
+## 7. 诊断日志栅格字段规格（缺陷②开发席 2026-08-14 移交 w-diag-dev）
+
+> 目的：**拿着这份规格 + 一份导出的 `[grid]` 日志，不看代码就能算出「末列超出 View 几个像素」**。
+> 这是用户明确要的（「捏合……是不是也考虑写一下前端的日志」），由 diag 任务推进时接线，
+> 缺陷②本体不接线（leader 2026-08-14 裁定）。w-diag-dev 接线时照此规格，不用重推。
+
+### 7.1 七个字段（一条 `[grid]` 记录，空格分隔 `key=value`，值不含空格）
+
+| 字段 | 从哪读 | 什么时机读 | 单位 | 为什么必要 |
+|---|---|---|---|---|
+| `viewport_width_px` | `TermSurfaceView.width`（View 层，onDraw 时） | 每次 `onDraw`（或栅格重算时） | 像素（Int） | 复算的基准：末列右缘与它的差就是越界量 |
+| `cell_width_nominal` | `TermViewPresenter.DEFAULT_CELL_WIDTH`（=10） | 同上报 cols 的时刻 | 像素（Int） | **上报服务端 cols 用的名义格宽**——缺陷根因；修复后应被实测覆盖，但记录名义值用于判别「是否还偏」 |
+| `cell_width_measured` | `TermSurfaceView.measureCells()` 的 `cellW`（`floor(measureText("W"))`） | 每帧测量时 | 像素（Int） | **绘制列推进的真实格宽**——与名义值分歧是根因；修复后与名义值同源 |
+| `reported_cols` | `TermViewPresenter.recomputeGeometry()` 算出的 cols | cols 上抛服务端时 | 列（Int） | 上报给服务端的列数（服务端按它换行） |
+| `canvas_capacity_cols` | `viewport_width_px / cell_width_measured`（整数除） | 与 reported_cols 同帧 | 列（Int） | 画布按实测推进宽可容纳的列数——与 reported_cols 的差决定是否越界 |
+| `overflow_px` | **公式**：`if (reported_cols > canvas_capacity_cols) (canvas_capacity_cols+1) * cell_width_measured - viewport_width_px else 0` | 与上同帧 | 像素（Int） | 末列字形右缘超出画布的量——**用户主诉的量化**（真机 5px ≈ 半字宽 5.5px） |
+| `half_cell_px` | `cell_width_measured / 2.0` | 与上同帧 | 像素（Float） | 半字宽——判断越界量是否到「半个字被裁」的量级（截断可见） |
+
+### 7.2 取值时机与语义（与已落地实现对齐，接线时别改语义）
+
+- **记录应在 presenter 层栅格重算/上抛 resize 时**（`setMeasuredCellWidth` 生效后、`recomputeGeometry` 算完 cols），
+  而不是 onDraw 每帧记（否则刷屏）。一个自然的时机：cols 上抛服务端（`onResizeRequest`）时，或 `setMeasuredCellWidth` 收敛后。
+- `cell_width_nominal` 修复后：回写把 presenter.cellWidth 覆盖为实测值，**上报 cols 用实测**。
+  记录名义值（DEFAULT_CELL_WIDTH=10）的意义：**判别修复是否生效**——若日志里 nominal ≠ measured，
+  且 reported_cols = W/nominal（偏大），说明回写没生效，缺陷复发。
+- `overflow_px` 是**已算好的结果**（不是让下游复算），但字段齐全使下游能**独立复算验证**（可算性判据）。
+- **修复后**（回写生效）：`reported_cols == canvas_capacity_cols`，`overflow_px == 0`。正常路径不得出现 overflow>0。
+
+### 7.3 接线依赖约束（leader 提醒：别让 strict-t3 说话）
+
+- **termview 只依赖一个窄接口，不依赖整个 `diag` 包**：DiagLog 的 `record(tag, msg)` 若整个包暴露给
+  termview，架构维基的反向依赖面会平白变大。建议在 termview 侧定义一个窄门面
+  （如 `GridTelemetry` 接口 + 注入点），diag 包实现它，termview 只依赖接口。
+- 接线在 `diag` 任务（w-diag-dev）推进时做，缺陷②本体**不**为它加依赖。
+- 格式约定：`[grid]` tag，消息体 `key=value` 空格分隔（当前 DiagLog.record 已支持，`field()` 正则按此解析）。
+
+### 7.4 验收判据（w-diag-test 已写好的红测）
+
+- `DiagLogGridComputabilityTest.userRealParams_overflowComputableFromExport`：从导出文本独立复算 overflow，命中 5px。
+- `DiagLogGridComputabilityTest.realPresenter_userParams_emitGridRecord`：驱动真实 TermViewPresenter 后必须出现 `[grid]` 记录。
+- 这两条现在红是对的（diag 本体未落地 + termview 未接线），由 diag 任务转绿。
+
+---
+
+*本报告由预研席 w-cols-prep 在纯只读模式下产出；`git apply` 仅执行 `--check`；未 commit、未 push。
+§7 由缺陷②开发席 w-cols-dev 于 2026-08-14 追加（栅格字段规格移交 w-diag-dev）。*
