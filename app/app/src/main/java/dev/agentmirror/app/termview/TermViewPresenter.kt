@@ -35,13 +35,6 @@ import dev.agentmirror.terminal.TerminalEmulator
  * （视口上推，内容区平移，最后一行始终可见，D-20），**不再**改 rows/cols、不再上抛 resize。
  * 捏合改字号（[onFontSizeChanged]）仍按像素换算并上抛（005 契约，D-29 同族另行立案，不得误伤）。
  */
-// FORENSICS-TEMP: D-36 取证用，收工必删。
-/** D-36 取证桥接（临时诊断，w-base-v2 用，收工后移除）：持有当前存活 presenter，
- *  供 MainActivity 的调试广播接收器在外部触发时机点读一次 [TermViewPresenter.forensicsSnapshot]。 */
-object D36ForensicsBridge {
-    var current: TermViewPresenter? = null
-}
-
 class TermViewPresenter(
     private val emulator: TerminalEmulator,
     private val onResizeRequest: (rows: Int, cols: Int) -> Unit,
@@ -152,7 +145,6 @@ class TermViewPresenter(
         // 首帧必全绘由内核首次 feed/replay 的整屏脏区承载（内核构造后初始脏区=整屏，
         // 首次 flushDamage 整屏上抛），Present 不再重复标全屏。
         emulator.damageListener = DamageListener { markScreenRowsDirty(it) }
-        D36ForensicsBridge.current = this // FORENSICS-TEMP: D-36 取证用，收工必删。
     }
 
     // ---- 视口状态机 ----
