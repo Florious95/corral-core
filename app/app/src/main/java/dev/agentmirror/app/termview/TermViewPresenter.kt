@@ -226,6 +226,39 @@ class TermViewPresenter(
         onFrameRequested?.invoke()
     }
 
+    /**
+     * 测量回写（fix-cols-grid-convergence X2 根治）：View 层 [TermSurfaceView.measureCells]
+     * 每帧测得实测字形推进宽后调用，使 recomputeGeometry 的 cols 与绘制同一栅格来源。
+     *
+     * 幂等契约（反馈环收敛）：同值 no-op（不重算、不 emit、不请求帧）——每帧 measureCells
+     * 都回写，若不同值就每帧重算，收敛性完全靠"值稳定即停止"兜住：cellHeight 不变 →
+     * 测量 cellW 不变 → 同值 no-op → 至多一次 emit。cellHeight 永不被回写改动
+     * （否则 cellH→textSize→cellH 反馈环）。
+     *
+     * 权衡①裁定（FIELD.md，leader 已批）：测量值胜于捏合——测量 cellW 是 cellHeight 的
+     * 函数，与捏合 newW 无关，下次绘制必然用测量值覆盖捏合设的宽度。捏合缩放仍生效
+     * （newH 变 → cellW 变），但宽度不再能自由设（由高度间接决定）。
+     *
+     * 首帧时序（权衡②）：onViewportSizeChanged（seed 名义 10）先 emit 一次，首次 onDraw 回写
+     * 实测再 emit 一次。这是"先 seed 后回写"的一次性两段收敛：seed 保证首帧有合法尺寸、
+     * 回写保证第二次就是实测值（此后幂等）。服务端会收到两次 resize + 两次重排，但这是
+     * 从 seed（名义 10）向实测（真机 11）收敛的必要代价，且**只发生一次**；JVM 测量 stub
+     * 下 cellW=1 会在任何 view.draw 时把 cols 打成视口宽/1（见 TermColsGridConvergenceDiscriminationTest
+     * 的 JVM 约束注释）——真机走实测、CI 走归一化断言，二者不互相污染（权衡③）。
+     *
+     * @contract
+     * @pre measuredCellW > 0（正像素宽度）
+     * @post cellWidth 更新为入参；值 != 旧值则重算行列数，变化则经 [onResizeRequest] 上抛
+     * @err none
+     * @inv cellHeight 永不因回写改变；同值重复调用为纯 no-op
+     */
+    fun setMeasuredCellWidth(measuredCellW: Int) {
+        if (measuredCellW <= 0) return
+        if (measuredCellW == cellWidth) return // 幂等：值稳定即停止，反馈环收敛点
+        cellWidth = measuredCellW
+        recomputeGeometry()
+    }
+
     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */
     private fun recomputeGeometry() {
         if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return

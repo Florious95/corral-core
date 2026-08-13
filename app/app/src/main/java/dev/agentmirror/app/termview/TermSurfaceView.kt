@@ -32,6 +32,7 @@ import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -87,6 +88,21 @@ class TermSurfaceView @JvmOverloads constructor(
     }
     private var cellW: Int = 0
     private var cellH: Int = 0
+
+    /**
+     * 护栏金丝雀（X3，fix-cols-grid-convergence）：网格内容超出画布右缘时，背景矩形与
+     * 字形被收边钳进画布的**次数**。
+     *
+     * ⚠️ 金丝雀语义（leader 2026-08-14 裁定）：**X3 一旦在正常路径上 engage，就意味着 X2 失效**。
+     * 计数恒为 0 = X2 回写（[TermViewPresenter.setMeasuredCellWidth]）在干活，X3 是纯保险；
+     * 计数开始涨 = **有路径绕过了回写**，那是要查的 bug，不是护栏起作用了，很好。
+     * 护栏经常救场恰恰说明主修复漏了——不许读成「护栏很有用」。
+     * 测试可经 [clipGuardEngageCount] 断言正常路径恒 0。
+     */
+    private var clipGuardEngageCount: Int = 0
+
+    /** 护栏 engage 计数（金丝雀可观测出口；测试断言正常路径恒 0）。 */
+    fun clipGuardEngageCount(): Int = clipGuardEngageCount
 
     /** 行内文本基线相对行顶的偏移（= -ascent）。drawText 的 y 是基线、字形画在基线
      *  上方，直接用行顶 y 画会把整行字形抬出行带（首行即被裁出画布顶，fix-term-residuals）。 */
@@ -225,13 +241,24 @@ class TermSurfaceView @JvmOverloads constructor(
         // 当 2 列推进、续格又推 1 列且只铺 1 列宽矩形——背景色块内每个 CJK 留 2 列
         // 默认深底黑洞、后续格整体右漂（用户真机实拍黑块马赛克根因，fix-term-bg-cjk）。
         var x = 0
+        // 右缘护栏（X3）：网格超宽时背景矩形右缘会越过画布被 Canvas 裁。钳进画布宽 + 金丝雀计数。
+        // width > 0 guard：TermBgCjkAlignTest 走 view.draw 无 layout（width=0）时护栏必须失效
+        // （否则空画布下每个矩形都越界，计数误报、测试错乱）。只有真实视口（width>0）才兜底。
+        val guardActive = width > 0
         for (cell in cells) {
             if (cell.width == 0) {
                 x += cellW
                 continue
             }
             bgPaint.color = colorFor(cell.style.bg, background = true)
-            canvas.drawRect(x.toFloat(), rowY.toFloat(), (x + cellW * cell.width).toFloat(), (rowY + cellH).toFloat(), bgPaint)
+            val right = x + cellW * cell.width
+            val clipped = if (guardActive && right > width) {
+                clipGuardEngageCount++
+                width.toFloat()
+            } else {
+                right.toFloat()
+            }
+            canvas.drawRect(x.toFloat(), rowY.toFloat(), clipped, (rowY + cellH).toFloat(), bgPaint)
             x += cellW
         }
         drawTextRuns(canvas, cells, rowY)
@@ -282,8 +309,16 @@ class TermSurfaceView @JvmOverloads constructor(
             when (seg.slot) {
                 GlyphSlot.MONO -> {
                     // 等宽原生段：batch 一次 drawText（基线 = 行顶 + baselinePx，字形恰落行带内）。
+                    // 字形右缘护栏（X3）：段首列越界（X2 失效/异常回归，正常路径恒 0）时钳进画布，
+                    // 否则末列字形被 Canvas 裁半（用户「『它』的一半」正是字形被裁）。width>0 guard 同背景。
+                    // 段占列宽按码点 CharWidth 累计（宽字符主格 2 列但 text 仅 1 字符，length 会低估）。
                     fgPaint.color = color
-                    canvas.drawText(seg.text, seg.startCol * cellW.toFloat(), rowY + baselinePx, fgPaint)
+                    if (width > 0 && seg.startCol * cellW >= width) {
+                        clipGuardEngageCount++
+                        canvas.drawText(seg.text, (width - cellW).coerceAtLeast(0).toFloat(), rowY + baselinePx, fgPaint)
+                    } else {
+                        canvas.drawText(seg.text, seg.startCol * cellW.toFloat(), rowY + baselinePx, fgPaint)
+                    }
                 }
                 GlyphSlot.SYSTEM_FALLBACK -> {
                     g.systemPaint.color = color
@@ -348,8 +383,15 @@ class TermSurfaceView @JvmOverloads constructor(
         cellH = (metrics.descent - metrics.ascent).roundToInt()
         // ascent 为负（基线上方高度）：基线偏移 = -ascent，保证首行字形完整落在 y∈[0,cellH)。
         baselinePx = -metrics.ascent
+        // 实测字形推进宽 = 等宽栅格的唯一来源：上报 cols 与绘制列推进必须同源（fix-cols-grid-convergence）。
+        // floor（宁可少一列不可多一列）+ 下界 1px：实测 ≤ 名义时保证 cols×cellW ≤ 视口宽；
+        // 实测 > 名义（真机 11 > 名义 10）时仅靠 floor 仍会越界——根治在下一行回写。
         val textW = fgPaint.measureText("W")
-        cellW = max(1, textW.roundToInt())
+        cellW = max(1, floor(textW).toInt())
+        // X2 根治：把实测推进宽回写 presenter，recomputeGeometry 的 cols 与绘制同一栅格来源
+        // （测量值胜于捏合——测量值是 cellHeight 的函数，与捏合 newW 无关，见 FIELD.md 权衡①）。
+        // 幂等收敛由 presenter 侧 setMeasuredCellWidth 同值 no-op 兜住（反馈环不震荡）。
+        p.setMeasuredCellWidth(cellW)
         lineHeightPx = p.cellHeight
     }
 
