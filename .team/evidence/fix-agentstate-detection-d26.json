@@ -1,13 +1,17 @@
 {
   "task_id": "fix-agentstate-detection-d26",
-  "status": "partial_layer1_live_layer2_dormant",
+  "status": "superseded_by_revert",
   "result_id": "res_16d351aec3a0",
   "agent": "w-dev-d26",
-  "summary": "D-26 Agent 工作状态检测两层修复。Layer ① 补齐新版指示字形（◐◑◒◓◔◕ 半填充圆序列 + ✳），生产路径立即生效。Layer ② 新增字形无关活性判据 decideActivity（帧窗口相邻变化⇒working、全同⇒idle、<2 帧⇒unknown），已实现且 10 条单测全绿，**但生产路径未接线，当前处于休眠状态**。",
+  "superseded_reason": "方向被用户明确否决 + 被 v5 恢复删除。**不是假账**——写这份记录时 Layer①（◐◑◒◓◔◕ + ✳ 字形补进白名单）确实存在于代码中；它是「我们曾经走错方向」的证据，有保存价值，不删。",
+  "user_rejection_words": "用户原话：「你假如说认为这两种，一个是完成态，一个是工作中态，还在通过这样的字符串形式去确定它的工作状态，那就完全走偏了。并且这两个实际上都是完成的状态。」（Brewed / Churned 都是完成态，前导为同类星号字形——字形层面根本分辨不了状态）",
+  "reverted_by": "07f065db0（服务端整体恢复到 v5）：删除 activity.go + 清理 spinnerFrames 中的 ◐/✳。当前 HEAD 的 spinnerFrames 为纯 braille（⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏）。",
+  "real_root_cause": "见 fix-agentstate-anchor-region——真正的根因是「全屏扫描把历史残留 esc to interrupt 当 working」（锚点区域限定修复），不是字形白名单。字形/前缀规则从根上不可能正确，因为完成态与工作中共用同一字形（✻ Brewed for / ✻ Galloping…）。",
+  "summary": "D-26 Agent 工作状态检测两层修复。Layer ① 补齐新版指示字形（◐◑◒◓◔◕ 半填充圆序列 + ✳），生产路径立即生效。Layer ② 新增字形无关活性判据 decideActivity（帧窗口相邻变化⇒working、全同⇒idle、<2 帧⇒unknown），已实现且 10 条单测全绿，**但生产路径未接线，当前处于休眠状态**。**【2026-08-13 标注：Layer① 方向被用户否决、被 v5 恢复删除，本记录 superseded_by_revert；真正的 D-26 误检根因见 fix-agentstate-anchor-region】**",
   "直接原因_用户截图实证": "Claude Code 新版把「工作中」指示符改成 ◐ 这类半填充圆动画（tmux 窗口标题形如 \"◐w-dev-cols\"），而本工程检测仍在匹配旧的转圈/左右移动点字形。用户原话：「最新版本 Claude Code 它的工作状态已经改成这样。然后此前这个工程它检测工作中状态还是点的转圈或点的左右移动。」用户就此报过三次失败。",
   "⚠️_必须记清的实际生效范围": {
-    "layer1_生产生效": "rules.go 的 spinnerFrames 补入新字形。重编 daemon 后，含 ◐ 的 pane 立即可判 working。**这是用户真机上唯一会生效的部分。**",
-    "layer2_已实现但休眠": "activity.go 的 decideActivity + Sample.FrameHistory 可选字段。但 capturePaneOutput 仍只传单帧 ⇒ FrameHistory 为空 ⇒ decideActivity 返回 unknown ⇒ 落回规则表（字形白名单）。**治本那层在生产里没跑起来。**",
+    "layer1_已随v5回退": "rules.go 的 spinnerFrames 补入的新字形（◐/✳）**已随 07f065db0（v5 恢复）删除**。当前 HEAD 为纯 braille。此方向被用户否决，见 superseded_reason。",
+    "layer2_已实现但休眠": "activity.go 的 decideActivity + Sample.FrameHistory 可选字段。但 capturePaneOutput 仍只传单帧 ⇒ FrameHistory 为空 ⇒ decideActivity 返回 unknown ⇒ 落回规则表。**治本那层在生产里没跑起来。**",
     "seat_honesty": "席位主动披露此事，而非让「10 条红测全绿」把这个洞盖住。**若不披露，leader 会把本条记成「已修+治本」——那就是本轮第三份假 PASS，且出自 leader 之手。** 这个披露本身比修复更值钱。",
     "leader_judgment": "据此判 status 为 partial，不判 pass。接线属 server/internal/api/ 改动，席位守边界未越界（D-36 正在改该目录），另行立案。"
   },
@@ -23,17 +27,9 @@
   ],
   "pending": [
     {
-      "item": "重编 daemon",
-      "note": "服务端改动需重编才生效。生产 daemon pid 39489 是 13:40 构建的旧二进制。重编与真机验证由 leader 安排。"
-    },
-    {
-      "item": "Layer ② 生产接线",
-      "note": "需在 sampling 层把最近 N 次 capture 拼成 FrameHistory 传入。属 server/internal/api/ 改动，与 D-36 正在改的目录重叠，另行立案排期。**未接线前，上游若再改图标，本缺陷仍会复发**——这正是 Layer ② 要防的事。"
-    },
-    {
-      "item": "眼见为实",
-      "note": "改前复现、改后看到修复的真机/模拟器验证尚未做。"
+      "item": "Layer ② 生产接线（若仍需）",
+      "note": "activity.go decideActivity + FrameHistory 接线属 server/internal/api/ 改动，与 D-36 目录重叠。**但注意：真正的 D-26 误检根因已由 fix-agentstate-anchor-region 修复（锚点区域限定）**。Layer② 是否仍需接线，等锚点方案上线 + 用户实测确认误检消失后再评估。"
     }
   ],
-  "at": "2026-08-12"
+  "at": "2026-08-13"
 }
