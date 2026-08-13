@@ -1,0 +1,29 @@
+{
+  "task_id": "feat-remote-scroll-forward",
+  "status": "pass_pending_user_approval",
+  "seat": "w-scroll-design",
+  "at": "2026-08-14",
+  "scope": "contract 级：只产出协议方案书，未写一行 app/ 或 server/ 产品代码",
+  "deliverable": "docs/remote-scroll-forward-design.md",
+  "tmux_measurements": {
+    "socket": "隔离 socket /tmp/tmux-scroll-test-design 与 -design2，tmux 3.6a，未触碰生产 daemon 与用户真实 tmux",
+    "mouse_any_flag": "裸 shell = 0；vim -c 'set mouse=a' = 1",
+    "send_dash_M": "服务端侧调用返回 'no mouse target' ⇒ 方案 (b) 实测排除",
+    "send_keys_H": "可注入原始字节，可用",
+    "copy_mode_e": "scroll_position=1，-e 自动退出，降级路径可用",
+    "if_shell_atomicity": "if-shell -F '#{mouse_any_flag}' 两分支实测均正确：裸 shell 进 copy-mode 且零字节注入；vim 字节注入且不进 copy-mode",
+    "cancel": "send-keys -X cancel 实测 pane_in_mode 1→0"
+  },
+  "leader_rulings": {
+    "Q1_wire_kind": "批准新 wire kind TypeScrollWheel。复用 Input 被否：Inject() 追加 Enter 会触发命令行",
+    "Q2_mode_detection": "批准服务端侧判定，客户端无需感知",
+    "Q3_degradation": "批准 mouse_any_flag=0 → copy-mode -e + send-keys -X scroll-up/down",
+    "ack": "leader 改判为不发成功 ack（RTT ~123ms，每格一个往返会让滑动发粘），失败发错误帧以满足『失败可见』红线",
+    "copy_mode_indicator": "leader 否决席位『初版不做』的推荐，改判必须做：裸 shell 上滑推进 copy-mode 后用户打字会被 copy-mode 吃掉，表现为『敲了没反应』。两层保护 = TypePaneModeChanged 通知帧 + 服务端转发文本前 send-keys -X cancel 兜底",
+    "delta_unit": "档位数，不是绝对行数",
+    "inertia_throttle": "App 侧，协议不涉及",
+    "race_condition": "leader 追加的、席位未列的风险：mouse_any_flag 是查询那一刻的值，查完到发字节之间应用可能已退出 ⇒ 原始鼠标字节打进裸 shell 命令行。席位用 if-shell -F 把判定与执行合进单次 tmux 命令派发，实测收敛"
+  },
+  "blocked_on": "用户点头。范围提醒：这是补一条从来没有的能力（手势→事件→协议→服务端→tmux 跨四层），与『只修缺陷零新功能』封存令有张力，用户 2026-08-14 裁定『核心就是把这四个缺陷开发好』将其纳入。",
+  "next": "用户批准后开三席实现；未批准前不得改协议与 app/"
+}

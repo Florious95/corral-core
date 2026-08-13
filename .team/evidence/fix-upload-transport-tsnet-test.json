@@ -1,0 +1,17 @@
+{
+  "task_id": "fix-upload-transport-tsnet-test",
+  "status": "pass_red_to_green",
+  "seat": "w-up-test",
+  "at": "2026-08-14",
+  "deliverable": "app/app/src/test/java/dev/agentmirror/app/session/HttpUrlConnectionUploaderTsnetRouteTest.kt",
+  "cases": {
+    "upload_tsnetUp_tailnetHost_goesThroughSocks": "HEAD 上唯一红用例，w-up-dev 实现后转绿：断言 SOCKS 代理真实收到 CONNECT，且 Bearer/multipart 保留",
+    "upload_tsnetUp_lanHost_staysDirect": "LAN 直连，SOCKS 零 CONNECT",
+    "upload_tsnetUp_domainHost_staysDirect": "域名直连，SOCKS 零 CONNECT",
+    "upload_tsnetError_staysDirect": "Down 分支不倒退",
+    "upload_tsnetIdle_directConnect": "Down 分支不倒退"
+  },
+  "design_note": "断言的是『代理真实收到 CONNECT』这个行为契约，不是比较 java.net.Proxy 对象——与 WS 生产路径的真实形态（自实现握手）一致，比原计划更严。",
+  "side_finding": "红测里的系统代理诊断证实 w-up-dev 的 proxy(Proxy.NO_PROXY) 显式护栏在系统设置了 SOCKS 代理时不会叠加一跳。",
+  "next": "本席交付完成。缺陷①整体仍待真机/模拟器实测（w-up-probe），未实测前不得标记『已修』。"
+}
