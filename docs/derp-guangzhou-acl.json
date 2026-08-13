@@ -1,0 +1,23 @@
+{
+  "derpMap": {
+    "OmitDefaultRegions": false,
+    "Regions": {
+      "900": {
+        "RegionID": 900,
+        "RegionCode": "gz",
+        "RegionName": "Guangzhou",
+        "Nodes": [
+          {
+            "Name": "900a",
+            "RegionID": 900,
+            "HostName": "43.136.53.247",
+            "IPv4": "43.136.53.247",
+            "DERPPort": 8444,
+            "STUNPort": 3478,
+            "CertName": "sha256-raw:92f3b9d993e883143985c101e900f7ef3e0b63fe69128cdaa70ce6ab3522f850"
+          }
+        ]
+      }
+    }
+  }
+}
