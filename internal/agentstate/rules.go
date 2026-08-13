@@ -137,13 +137,81 @@ func splitLines(text string) []string {
 	return out
 }
 
+// anchorFallbackBottomLines bounds the fallback region when no prompt anchor
+// is found (full-screen TUI, freshly cleared screen). It is a LOW-PRIORITY
+// last resort ONLY: the main path never depends on it, because the main path
+// is anchored on the last prompt marker (a semantic boundary), not on a line
+// count. Do NOT tune this value to fix main-path behavior — a different layout
+// will just break the count again (2026-08-13: N=4 misses the real idle layout
+// whose bottom non-empty region is 6 rows; that is exactly why the main path
+// uses the prompt anchor instead). It only needs to bound the fallback so the
+// path never crashes and never scans the whole screen (which would re-import
+// the residual-text misjudgment this fix removes).
+const anchorFallbackBottomLines = 8
+
+// promptMarkerPrefix is the line prefix that marks a Claude/Codex input prompt
+// or a selectable option ("❯ 1. Yes, ..."). The LAST line starting with this
+// prefix on the screen delimits "the current UI region": everything from that
+// line down is the live UI, everything above belongs to earlier output.
+//
+// Why this anchor and not a line count (2026-08-13, leader msg_529e84b495b8):
+// "行数是版式的函数，锚点是语义的函数" — a fixed N breaks on the next layout
+// (config change, different CLI, narrow-window wrap, multi-line input box),
+// and every increase lets residual text match again. The last prompt marker is
+// a semantic boundary: whatever the layout, the current UI is below the last
+// prompt, and historical residue is always above an earlier prompt.
+const promptMarkerPrefix = "❯"
+
+// anchorRegion returns the region rules should match: from the last prompt
+// marker line down to the end of the screen. It returns the trimmed text and
+// its lines so callers pass both to rule.match.
+//
+// If no prompt marker is found (full-screen TUI, freshly cleared screen), it
+// falls back to the last anchorFallbackBottomLines non-empty lines, so the
+// path never scans the whole screen and never crashes.
+func anchorRegion(text string) (string, []string) {
+	lines := splitLines(text)
+	lastPrompt := -1
+	for i, ln := range lines {
+		if strings.HasPrefix(strings.TrimLeft(ln, " \t"), promptMarkerPrefix) {
+			lastPrompt = i
+		}
+	}
+	if lastPrompt < 0 {
+		// No prompt anchor: fall back to a bounded bottom region. This is the
+		// documented low-priority fallback — see anchorFallbackBottomLines.
+		bounded := lastNonEmptyLines(lines, anchorFallbackBottomLines)
+		return strings.Join(bounded, "\n"), bounded
+	}
+	region := lines[lastPrompt:]
+	return strings.Join(region, "\n"), region
+}
+
+// lastNonEmptyLines returns the last n non-empty lines (in screen order). Used
+// only by the no-anchor fallback in anchorRegion.
+func lastNonEmptyLines(lines []string, n int) []string {
+	var nonEmpty []string
+	for i := len(lines) - 1; i >= 0 && len(nonEmpty) < n; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			nonEmpty = append([]string{lines[i]}, nonEmpty...)
+		}
+	}
+	return nonEmpty
+}
+
 // evaluateRules runs the rule table in descending priority order and returns
 // the first match. No match yields the unknown fallback (StateUnknown with
 // unknown confidence), which is a first-class result, never an error.
+//
+// The text/lines are pre-limited to the anchor region (last prompt marker down)
+// so historical residual markers above an earlier prompt never match. This is
+// the D-26 misjudgment fix (2026-08-13): full-screen scanning matched a stale
+// "esc to interrupt" left over from a previous task and reported working on an
+// idle pane. See anchorRegion.
 func evaluateRules(rules []rule, text string) State {
-	lines := splitLines(text)
+	regionText, regionLines := anchorRegion(text)
 	for _, r := range rules {
-		if r.match(text, lines) {
+		if r.match(regionText, regionLines) {
 			return State{State: r.state, Confidence: r.confidence}
 		}
 	}
