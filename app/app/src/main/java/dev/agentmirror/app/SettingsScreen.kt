@@ -189,6 +189,10 @@ private sealed interface ExportOutcome {
  */
 private fun exportDiagLog(context: android.content.Context): ExportOutcome {
     val dir = File(context.filesDir, DiagLog.DEFAULT_STORAGE_DIR).apply { mkdirs() }
+    // round2 缺口修复：导出前先注入 storageDir，让 exportTo 内部的轮转（pruneExports 经
+    // listExports）能看到真实导出目录并清理最旧——否则 storageDir 为 null、listExports 空、
+    // 上限永远不生效（导出目录线性增长不收敛）。initialize 幂等，重复导出不重置缓冲。
+    DiagLog.initialize(dir.path)
     val file = File(dir, "diag-${System.currentTimeMillis()}.log")
     return when (val r = DiagLog.exportTo(file)) {
         is DiagLog.ExportResult.Success -> {
