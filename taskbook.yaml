@@ -2024,8 +2024,13 @@ tasks:
       - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
       - "红测：给定 View 宽度与实测字形宽，上报 cols 与画布可容纳列数必须相等；且 cols*字形宽 <= View 宽"
     deps: []
-    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/", "app/app/src/androidTest/"]
     evidence: ".team/evidence/fix-cols-grid-convergence.json"
+    scope_expanded: >
+      2026-08-14 leader 扩至测试目录：w-cols-prep 预研指出「判别红测 + 写回约束测试」
+      是开工第一产出，但测试文件原不在 write_scope 内。红测与主代码分席（测试席只写
+      src/test 与 src/androidTest，开发席只写 termview/），仍满足「同一 Gradle 模块
+      同一时刻只放一席施工」——施工权指的是主代码。
     contention: none
 
   - id: research-oss-terminal-solutions
@@ -2288,4 +2293,53 @@ tasks:
     deps: []
     write_scope: ["server/internal/api/", "test/cases/"]
     evidence: ".team/evidence/perf-delta-backpressure-merge.json"
+    contention: none
+
+  - id: feat-remote-scroll-forward
+    goal: >
+      D-36 用户 2026-08-14 重新定义（原话）：「我在屏幕里面向上滑的时候，我向上滑的这个行为
+      没有投放到这个界面。也就是说我向上滑，要类似于我在这个界面鼠标滚轮也向上滑，
+      它才能配合看到上面的内容。」「之前所有的假的复现、假的修改正确，全部都是它本身
+      从上往下加载了大量的 CLI 的内容，因此我才能上上滑。」
+      **这个定义推翻了 fix-scrollback-history-d36 的全部前提**：我们一直在修「App 本地缓冲
+      怎么滚」和「服务端 scrollback 分页怎么对齐」，而用户要的是**把滚动手势送到远端终端**，
+      等价于在该 TUI 里滚鼠标滚轮（Claude Code / vim / less 等自己处理滚轮，App 侧滚本地缓冲
+      永远看不到它们的历史）。
+      现状已 grep 实证：App 从未向服务端发过滚轮/鼠标事件；服务端 input 路径只有 send-keys；
+      bridge 无 copy-mode/滚动。**整条链路上不存在这个能力**，属于补一条从未有过的能力，
+      跨「手势 → 事件 → 协议 → 服务端 → tmux」四层。
+      范围张力：与「只修缺陷零新功能」封存令冲突，用户 2026-08-14 裁定「核心就是把这四个
+      缺陷开发好」，本条即其中之一。
+    acceptance:
+      - "关卡1（契约，必须先过）：产出协议方案书交 leader 定夺——滚轮事件怎么上线（复用 send-keys 发 SGR/正常鼠标序列，还是新增 wire kind），谁判断远端是否处于 alt-screen/mouse-tracking 模式，非 TUI 场景（裸 shell）如何降级到 tmux copy-mode。leader 未裁定前不得改协议与 app/"
+      - "关卡2（红测）：手势 → 事件的单测；远端 mouse-tracking 开/关两种模式各有一条期望字节序列的红测"
+      - "关卡3：cd server && env -u TEAM_AGENT_* go test ./... 全绿"
+      - "关卡4：python3 tools/archwiki/build_wiki.py --check --strict-t3 exit 0"
+      - "关卡5（眼见为实）：真机在 Claude Code 会话里上滑，能看到该 TUI 自己的上文，改前录到不动、改后录到动，且不倒退"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/termview/", "server/internal/api/", "server/internal/bridge/", "test/cases/"]
+    evidence: ".team/evidence/feat-remote-scroll-forward.json"
+    contention: contract
+
+  - id: fix-tsnet-resume-reconnect
+    goal: >
+      缺陷⑤（用户 2026-08-14 真机报告，附决定性 A/B 差分）：
+      **用 App 内嵌 tsnet（TS token 配对）连上后，把 App 切到后台再回前台 —— 永远连不上。**
+      对照组：改用手机上的**官方 Tailscale App** 建立 tailnet，App 侧按 tailnet 局域网地址
+      直连（不走 token/内嵌 tsnet），**杀到后台再打开可以立刻连上**。
+      **差分把范围锁死在内嵌 tsnet 的前后台生命周期上**，与 UI/几何/服务端无关。
+      候选方向（未验证，开工先证伪）：Android 后台冻结进程后内嵌 tsnet 用户态节点的
+      DERP 长连接/网卡枚举失效，回前台无重连逻辑；或 TsnetWire.state 仍停在 Up 而底层
+      节点已死，导致 socketFactoryFor 继续返回 SOCKS 工厂但拨号必失败（**状态说谎**）。
+      与缺陷①相关：①的修法是让上传复用内嵌 tsnet SOCKS，若内嵌 tsnet 在恢复后不可靠，
+      ①的修复会继承这份脆弱 —— 两条任务的结论要互相对账。
+    acceptance:
+      - "关卡1（复现）：模拟器/真机上走用户的复现步骤，改前必须亲眼看到「内嵌 tsnet 路径回前台连不上、官方 TS 局域网路径回前台秒连」的差分，留截图/日志"
+      - "关卡2（探针）：能判真假的探针——回前台后 TsnetWire.state 报的值 与 底层节点实际可拨通性 是否一致（状态说谎则命中）"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
+      - "关卡3（眼见为实）：改后同样步骤重走，回前台能连上，且官方 TS 局域网路径不倒退"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-tsnet-resume-reconnect.json"
     contention: none
