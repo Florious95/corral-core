@@ -126,6 +126,9 @@ socket 缓冲填满后 `writeFrame` 会阻塞,`sendCh` 才可能积压。
 7. **别 tail `.team/logs/agentmirrord-prod.log`** —— daemon 把配对 token 明文打进去。
 8. **不许跑无过滤的 `ps aux`**（会暴露席位 API key）,核进程用 `pgrep -fl <精确路径>`。
 9. **密钥只存在于 `.team/current/profiles/*.env`**,禁止读其原文。
+   **`.team/current/profiles/tailnet-test.env` 全员禁读**——里面是用户 tailnet 的 auth key,
+   只能 `set -a; . <file>; set +a` 注入子进程,禁止 cat/grep/Read/打印。
+   **Shadowrocket 的偏好 plist 与 `tailscale_keys.bin` 同样禁读。**
    **今天 leader 刚因为 grep 一个 plist 把用户的 TS authkey 打上屏,已请用户轮换。
    不要重蹈：任何 grep/plist/db 查询前先想一想会不会带出凭据。**
 10. **禁止 git push。**
