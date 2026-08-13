@@ -1,0 +1,29 @@
+{
+  "task_id": "fix-tsnet-resume-reconnect",
+  "status": "pass_jvm_pending_real_device",
+  "seats": {"probe": "w-tsresume-probe", "dev": "w-tsnet-dev"},
+  "at": "2026-08-14",
+  "commit": "cc7c2cfb0",
+  "user_ab_differential": "内嵌 tsnet + token 配对 → 切后台 → 回前台 → 永远连不上；官方 Tailscale App + tailnet 地址直连 → 杀到后台再开 → 立刻连上。B 成立即洗清网络/服务端/配对凭据/UI，把范围锁死在内嵌 tsnet 生命周期。",
+  "rootcause": "TsnetWire.kt:91 的幂等守卫。state==Up 的语义是『start() 成功过、SOCKS 端口曾经通』，不是『现在能拨通』。后台冻结 → DERP TCP 超时断裂 → native 不回调 Java 层 → state 永停 Up → socketFactoryFor 照常返回 SOCKS 工厂、拨号必失败；而 ensureStarted() 又被守卫拦下 ⇒ 节点永远起不来。",
+  "fix": {
+    "approach": "失败驱动。OkHttpTransportFactory（sf!=null && recordConnectionPath）→ transport 拨号阶段失败（isOpen==false && !terminalDelivered）→ ServiceWire.onTailnetSocksFailure → TsnetWire.notifySocksRouteFailure",
+    "rejected": "端口探活。SOCKS listener 是本地 Go listener，DERP 死后仍在监听 ⇒ TCP 探活几乎必然成功 ⇒ 假绿、重启永不触发。那正是根因本身『拿曾经通当现在能拨通』的翻版。",
+    "key_design": "自愈刻意不经幂等守卫，走 rebuildManager 旁路。守卫是『同 key 同态不重复起网』的用户语义，自愈是『节点已死强制重建』的系统语义——根因恰恰是这两种语义被混成了一条路，所以修复要把它们分开。",
+    "hook_precision": "钩子只在拨号阶段失败触发，已建立后掉线走正常退避（不过度反应）；仅常驻连接挂钩，配对探针不挂（配对有独立状态机）。"
+  },
+  "three_red_lines": {
+    "静默经济": "零定时器零轮询零固定频率，触发即真实拨号失败本身",
+    "防重启风暴": "30s 节流，lastRestartAtMs 初始 0L 保证首次失败立即重启、无幽灵节流",
+    "官方TS并存": "state==Idle/Starting/Error 直接 return（probe6 绿证）；LAN 路径 sf==null 不挂钩子（代码保证，非注释保证）"
+  },
+  "acceptance_line_was_wrong": {
+    "original": "leader 原定『三条探针由绿转红』",
+    "why_wrong": "那三条测的都是失败驱动方案有意保留的既有行为（幂等守卫拦截、选路无健康检查），能让它们转红的唯一修法正好是被否决的端口探活。开发席逐条映射后 halt 上报。",
+    "revised": "原三条降为回归哨兵保持绿；新增 probe4/5/6 作为修复生效判据（触发重启 / 30s 节流 / Idle 隔离）。这是补验收维度，不是削断言迁就实现。",
+    "pattern": "这是 leader 今晚第三次把验收线写成『规定实现长什么样』而非『行为要怎样』（前两次：缺陷② B-字形断言一个实现够不着的计算值、缺陷③ P5 要求必须新增某个方法名）。三次都是席位顶回来的。"
+  },
+  "verified_by_leader": "回归哨兵 3/3 绿、修复探针 3/3 绿、全量 449 条 4 失败（4 条全是缺陷③ 探针的预期 FAIL）、archwiki --strict-t3 exit 0。HEAD 编译红证由开发席在 worktree 上做（7 处 unresolved reference）。",
+  "gate1_note": "实机复现判为『已查明不可复现于模拟器』，两堵墙机理独立且都有铁证，见 fix-tsnet-resume-reconnect-probe.json 与 docs/tsnet-resume-reconnect-rootcause.md §3。复现的权威是用户真机 A/B 差分。",
+  "pending": "真机 A/B 复现实测：装修复后的包，切后台回前台确认能自愈重连，且官方 TS 那条路不倒退。"
+}
