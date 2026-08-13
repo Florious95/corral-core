@@ -44,10 +44,12 @@ import kotlin.concurrent.withLock
  * @contract
  * @pre none（对象无需前置初始化；[initialize] 仅影响磁盘导出目录，非必需）
  * @post record 追加到环形缓冲（写满覆盖最旧，容量 [maxEntries]）；registerSecret 之后
- *       record 落缓冲前脱敏；exportTo 把缓冲按时间序写文件并在超限时截断最旧行
+ *       record 落缓冲前脱敏；exportTo 把缓冲按时间序写文件、超限截断最旧行、并轮转
+ *       导出目录（超 [maxExportFiles] 删最旧）
  * @err none（record/registerSecret 不抛；exportTo 失败返回 [ExportResult.Failed]，不抛）
- * @inv 环形缓冲条数恒 ≤ [maxEntries]；落盘文件字节恒 ≤ [maxFileBytes]；已注册 secret
- *       在任意后续 record 的输出文本中零命中；本对象无任何常驻线程/定时器
+ * @inv 环形缓冲条数恒 ≤ [maxEntries]；落盘文件字节恒 ≤ [maxFileBytes]；导出目录文件数
+ *       恒 ≤ [maxExportFiles]（资源有界红线覆盖导出层）；已注册 secret 在任意后续 record
+ *       的输出文本中零命中；本对象无任何常驻线程/定时器
  */
 object DiagLog {
 
@@ -60,13 +62,17 @@ object DiagLog {
     /** 落盘文件字节上限；超限截断最旧行（资源有界红线，磁盘侧）。 */
     const val DEFAULT_MAX_FILE_BYTES = 1024 * 1024 // 1 MiB
 
+    /** 导出目录文件数上限；超出后按最旧轮转删除（round2 缺口：导出目录无上限）。 */
+    const val DEFAULT_MAX_EXPORT_FILES = 8
+
     /** 默认磁盘导出目录名（Android 注入 filesDir 子目录；纯 JVM 测试可指向临时目录）。 */
     const val DEFAULT_STORAGE_DIR = "diag"
 
     /**
      * 配置（有界边界均可注入，红测用极小值验证覆盖语义）。
      * @contract
-     * @pre maxEntries ≥ 1；maxFileBytes ≥ 1；maxLineBytes ≥ 1
+     * @pre maxEntries ≥ 1；maxFileBytes ≥ 1；maxLineBytes ≥ 1；maxExportFiles ≥ 0
+     *      （0 或负数 = 导出目录不限文件数，一般不推荐）
      * @post 各字段原样持有
      * @err none
      * @inv 不变
@@ -76,6 +82,8 @@ object DiagLog {
         val maxFileBytes: Int = DEFAULT_MAX_FILE_BYTES,
         /** 单条记录文本上限；超长截断（防单条刷爆缓冲，防御性）。 */
         val maxLineBytes: Int = 2048,
+        /** 导出目录文件数上限；超出后按最旧轮转删除（round2 缺口：导出目录无上限）。 */
+        val maxExportFiles: Int = DEFAULT_MAX_EXPORT_FILES,
     )
 
     /** 导出结果：成功带文件字节数，失败带原因（失败可见红线，不许静默）。 */
@@ -232,6 +240,8 @@ object DiagLog {
             // 磁盘有界：写完后若超限，从头截断最旧行直到不超（覆盖式追加，幂等）。
             file.appendText(snapshot.joinToString("\n") + "\n", Charsets.UTF_8)
             trimFileToCap(file)
+            // 导出目录有界（round2 缺口修复）：写完即轮转，超 maxExportFiles 删最旧。
+            pruneExports(file)
             val bytes = file.length().toInt()
             ExportResult.Success(bytes, snapshot.size)
         } catch (e: Exception) {
@@ -251,7 +261,25 @@ object DiagLog {
         file.writeText(keep.joinToString("\n"), Charsets.UTF_8)
     }
 
-    /** 导出目录里已有的诊断文件清单（设置页展示历史导出用；无则空）。 */
+    /**
+     * 导出目录文件数上限轮转：超 [Config.maxExportFiles] 时删最旧（保留最新 [cap] 个）。
+     * 用 [listExports] 取清单（接口不再是死代码），最新在前、最旧在后，删尾部超限个。
+     * @contract
+     * @pre none
+     * @post 导出目录里 .log 文件数 ≤ maxExportFiles；删除的是最旧（lastModified 最小）
+     * @err none（删除失败静默——导出主路径不因清理失败而失败，可下次轮转再清）
+     * @inv 不动 [newest] 自身；只删比它更旧且超限的文件
+     */
+    private fun pruneExports(newest: File) {
+        val cap = lock.withLock { config.maxExportFiles }
+        if (cap <= 0) return // 0/负 = 不限
+        val all = listExports() // 最新在前（lastModified 降序）
+        if (all.size <= cap) return
+        // 跳过最新 cap 个，删剩下的（最旧的超限部分）。
+        all.drop(cap).forEach { runCatching { it.delete() } }
+    }
+
+    /** 导出目录里已有的诊断文件清单（最新在前，按 lastModified 降序；无则空）。 */
     fun listExports(): List<File> {
         val dir = lock.withLock { storageDir } ?: return emptyList()
         val f = File(dir)
