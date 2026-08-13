@@ -21,6 +21,13 @@
   升级仅两种：① `contention: contract`；② 返工达上限。
 - 多模态缺陷（需看截图判断渲染效果）用 Claude 订阅席位，不用 deepseek。
 - 密钥只存在于 `.team/current/profiles/*.env`，任何席位禁止读其原文。
+- **`.team/current/profiles/tailnet-test.env` 全员禁读**（含 leader）。里面是用户 tailnet 的
+  auth key，只能通过 `TS_AUTHKEY` 环境变量注入测试节点，任何形式的 cat/grep/plist/Read 都禁止。
+  取值只用 `set -a; . <file>; set +a` 注入子进程，不打印、不落日志、不入截图。
+- **查任何配置前先想凭据**：`grep -i tailscale` 一个"偏好设置"文件就把 authkey 打上了屏
+  （2026-08-13 实发，已请用户轮换）。同类禁令：无过滤 `ps aux`（暴露席位 API key）、
+  `tail .team/logs/agentmirrord-prod.log`（daemon 明文打配对 token）。
+  **Shadowrocket 的偏好 plist 与 `tailscale_keys.bin` 列入禁读。**
 - 给席位发消息只走 `team-agent send`，禁 tmux `send-keys`。
 - 派单必经 `.team/ta`（净化包装器）。
 - 派单必写 intent，否则看门狗全盲。
