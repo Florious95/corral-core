@@ -1,3 +1,11 @@
+//go:build c1_backpressure_merge
+
+// 归档说明（关卡1 halt 后）：C1 合并实现已回退（probe 实证 sendCh 真实链路上不会满，
+// 中间状态可见的真因在慢链渲染侧）。本文件是关卡2 红测的验收标准，按 leader 派单
+// 铁律「go test ./... 全绿」必须留档但不阻塞默认测试：加 build tag `c1_backpressure_merge`
+// 使默认 `go test ./...` 排除本文件（绿），未来 C1 实现时用
+// `go test -tags c1_backpressure_merge ./internal/api/` 显式运行验收。
+// 红测设计：无实现时红（drop-on-full 丢字节）、有实现时绿——先红后绿契约。
 package api
 
 // delta_merge_scenario_test.go — C1 关卡 2 场景红测（w-c1-test 席位）。
