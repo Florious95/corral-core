@@ -47,5 +47,9 @@
     "8fa0961a7 前置四修: 既有凭据泄露路径先修再做 diag 本体",
     "aeef16920 诊断日志 + 设置页导出"
   ],
-  "next": "round2 待 w-diag-rev 复审静默经济/资源有界/白记判据；眼见为实(模拟器导出流程)待用户真机/模拟器验证"
+  "next": "round2 待 w-diag-rev 复审静默经济/资源有界/白记判据；眼见为实(模拟器导出流程)待用户真机/模拟器验证",
+  "evidence_chain_note": "缺陷⑤白记完整证据链=两条测试合起来：DiagLogEventCoverageTest.socksDialFailure_fieldsComplete（w-diag-test，驱动真实 TsnetSocks.handshake REP 异常，证明信号②记录逻辑本身对）+ DiagLogDefect5WhiteRecordAuditTest（w-diag-rev，三信号在同一导出里可排序，证明能定位缺陷⑤）。单独任何一条都不是完整判据。",
+  "maintenance_notes": [
+    "DiagLogDefect5WhiteRecordAuditTest 信号②是手写行（锚定 TsnetSocks.kt 真实拼接格式）。若日后 TsnetSocks.connect 拼接格式改动（字段改名/顺序变），该手写行不会自动同步→静默腐化。改拼接格式时须 grep 该文件核对，或更好：把拼接抽成共享格式化函数让生产与测试调用同一份（w-diag-rev 建议，当前格式已对齐）。"
+  ]
 }
