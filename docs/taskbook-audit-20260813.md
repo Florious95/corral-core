@@ -47,6 +47,22 @@
 > 凡涉及被测对象行为，必须用**真实被测对象**（真实 CLI / 真实屏幕 / 真实设备），
 > 找不到真实环境就说明白，不用模拟物凑数。
 
+> **⑦ 一条修复 = 一个提交。**
+> 席位报完工即单独提交，提交标题带 task_id，正文写清覆盖边界与未验证项。
+> 禁止把多个席位、多条缺陷的改动打进同一个提交——哪怕都标着「在途·未验证」。
+> **依据**：回炉流程要求「回退改动 → 审查席读回退的 diff 反推根因」，
+> 混合提交使这两步都要先做一次「重新认领代码」的额外工作，且认错的风险由此产生。
+> **本轮实例（用户指出，leader 承担）**：D-36 改动埋在混合锚点提交 `0fa842ace`（与 D-38、
+> 上传 tsnet、多席成果混在一起）。用户裁定 D-36 回炉时无法 `git revert`，只能人工辨认哪些行
+> 属于它，而同文件里还有别的在途改动，认错就会误伤。**混合提交同时毁掉单条回退、单条审查、
+> 单条追溯三件事，而这三件恰是回炉流程的全部依赖。**
+> **成因（如实记，非疏忽）**：leader 两次实证「未提交的工作会归零」（v4 导航实现、上传鉴权链
+> 永久丢失），急着打锚点保成果。**但保成果的正确做法是「每条各自提交」，不是「全部一起提交」。**
+> 矫枉过正：为防丢失，牺牲了可回退性与可审查性。
+
+> **⑧ 临时取证/诊断代码放独立文件，不塞进高频改动文件。**
+> （w-base-v2 提出，已在 `312a4feaf` 采纳）否则按路径 add 时会被卷走——本轮已发生三次。
+
 **两种错误的层次要区分（对后来人有用的方法论）**：
 - **D-27 那种错（方法错）**：拿回退后的代码核回退前的账——核错了对象。
 - **fix-upload-token-chain 那种错（时效错）**：方法没错，是把一个**有时效的取证结论**当成了**无时效的事实**。观测在 4cba23618 之前，「零命中」当时是真的、也确实证明了 archive 那份账是假账；错在复述时把「一个时间点的观测」说成了「任何提交里都没存在过」。引用旧取证结论前必须重跑观测。
@@ -329,6 +345,29 @@ leader 在裁定中说「真正的假账只有一份 fix-upload-token-chain—�
 - 用户对「TS 连接接近 lan」的回应是「能优化就优化，测出来延迟高就得优化」；
 - 裁定：**延迟优化不因链路质量改善而降优先级**——若实测延迟高仍须优化；
 - 这是用户裁定，须入库（待 leader 转 requirement-wiki 或 requirement-base 立案）。
+
+---
+
+## 八、混合提交受影响证据清单（纪律⑦的账面质量核对）
+
+> 核对方式：证据 JSON 声称的改动文件是否落在混合提交 `0fa842ace`（[在途·未验证] 锚点，包含 D-38/D-36/上传 tsnet/agentstate/调研文档 多席成果）里。落在其中 → 「可追溯性打折」：单独回退需人工辨认哪些行属于本任务。
+
+### 受影响证据（改动散落在混合提交中，单独回退需人工辨认）
+
+| 证据 JSON | 声称改动（落在 0fa842ace 的文件） | 影响 |
+|---|---|---|
+| `fix-scrollback-history-d36.json` | ws_handler.go（去 pane.Height 平移）、bridge.go、TermViewPresenter.kt、api_tmux_test.go、d36_scrollback.test.js | **已发生**：D-36 回炉时无法 `git revert`，只能人工认领（用户指出，纪律⑦实例） |
+| `fix-viewport-restore-d38.intent.json` | TermSurfaceView.kt（viewport restore）、TermSurfaceViewportRestoreTest.kt、TermViewViewportRestorePresenterProbeTest.kt | D-38 返工时同文件还有捏合在途改动，认错会误伤 |
+| `fix-upload-transport-tsnet.json` | HttpUrlConnectionUploader.kt（tsnet 路由）、SessionViewModel.kt、HttpUrlConnectionUploaderTsnetRouteTest.kt | 与 D-22 上传链同文件，回退需区分 |
+| `fix-agentstate-detection-d26.json` | activity.go、adapters.go、rules.go、sample.go（**方向已否决，被 07f065db0 删除**） | 已 superseded_by_revert，混合提交使其「哪个版本被删」需回溯 |
+
+### 未受影响（改动独立可回退）
+
+- 锚点方案 `fix-agentstate-anchor-region`（rules.go + anchor_red_test.go）—— 独立改动，未入混合提交。
+
+### 结论
+
+四份证据的可追溯性因混合提交打折。纪律⑦（一条修复 = 一个提交）正是为此而生。**新增证据（anchor-region）已独立提交，不受影响。**
 
 ---
 
