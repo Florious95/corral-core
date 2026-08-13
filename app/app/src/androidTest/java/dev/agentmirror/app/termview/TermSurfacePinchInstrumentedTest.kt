@@ -98,6 +98,28 @@ class PinchHarnessInstrumentation : Instrumentation() {
             val initialWidth = presenter.cellWidth
             val initialHeight = presenter.cellHeight
 
+            // 隔离对照：裸 ScaleGestureDetector（不挂在 TermSurfaceView 上）本地直接喂同一份
+            // MotionEvent（不经 UiAutomation/InputDispatcher），用来分辨问题在「这串事件本身
+            // 在这个环境/API版本下能不能被 ScaleGestureDetector 识别」还是「TermSurfaceView 接线」。
+            var bareOnScaleCalls = 0
+            var bareScaleBeginCalls = 0
+            lateinit var bareDetector: android.view.ScaleGestureDetector
+            runOnMainSync {
+                bareDetector = android.view.ScaleGestureDetector(
+                    activity,
+                    object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                        override fun onScaleBegin(detector: android.view.ScaleGestureDetector): Boolean {
+                            bareScaleBeginCalls++
+                            return true
+                        }
+                        override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
+                            bareOnScaleCalls++
+                            return true
+                        }
+                    },
+                )
+            }
+
             // 每个事件用注入时刻的真实 SystemClock 打时间戳（而不是预先算好的固定偏移），
             // 且相邻事件间真实 sleep 一小段——诊断假说：预先算好一串仅相差 10ms 的
             // eventTime、却在紧邻的 for 循环里瞬间（<1ms）连续注入，事件到达时已经是
@@ -109,6 +131,7 @@ class PinchHarnessInstrumentation : Instrumentation() {
                 lastEventTime = SystemClock.uptimeMillis()
                 val event = event(downTime, lastEventTime, action, *points)
                 try {
+                    runOnMainSync { bareDetector.onTouchEvent(event) }
                     check(uiAutomation.injectInputEvent(event, true)) {
                         "UiAutomation 拒绝 ${MotionEvent.actionToString(action)}"
                     }

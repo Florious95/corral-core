@@ -158,8 +158,10 @@ class TermSurfaceView @JvmOverloads constructor(
             when {
                 // 几何整帧/首帧：整窗失效重绘。
                 r == null -> invalidate()
-                // recap 中间态抑制：不失效，画面停在上帧稳定态。
-                r.isEmpty() -> Unit
+                // 无新脏区（takeDamage 空）：若从未画过（首帧），必须整窗失效——否则首帧空脏区
+                // 会被当成「无绘制需求」，视图空白（P0：HEAD 终端不渲染）。已画过则 no-op
+                // （Android View 不清帧，旧画面保留）。
+                r.isEmpty() -> if (!hasDrawnOnce) invalidate()
                 // 脏行级：只失效脏行所在矩形（其余行保留——partial invalidate 只重画脏区）。
                 else -> {
                     val win = p.window
@@ -197,6 +199,16 @@ class TermSurfaceView @JvmOverloads constructor(
 
     /** 帧是否已排入 Choreographer（防重复排队；doFrame 时复位；仅主线程触碰）。 */
     private var framePending = false
+
+    /**
+     * 视图是否已至少画过一次（P0 修复：首帧空脏区保护）。
+     *
+     * 抑制机制回退后 `takeFrameRepaint()` 可能返回空列表（无新脏区，正常）。若**首帧**恰为空
+     * 脏区，frameCallback 的 `r.isEmpty() -> Unit` 会跳过 invalidate → 视图从不绘制 → 终端空白
+     * （HEAD P0：内容区整体空白只有底部黑条）。onDraw 置位本标记；frameCallback 在「空脏区且
+     * 从未画过」时仍整窗失效，确保首帧必绘。已画过后空脏区为 no-op（Android View 不清帧）。
+     */
+    private var hasDrawnOnce = false
 
     /**
      * 本帧待绘制重绘范围（[TermViewPresenter.takeFrameRepaint] 的产出，帧回调写入、onDraw 消费）。
@@ -305,15 +317,17 @@ class TermSurfaceView @JvmOverloads constructor(
         measureCells()
         val win = p.window
         val repaint = pendingRepaint
-        // 本帧要画的行：null=整窗（几何/首帧）；空=无可呈现中间帧（recap 抑制，不画）；
+        // 本帧要画的行：null=整窗（几何/首帧）；空=无新脏区（已画过则保留旧画面，Android View 不清帧）；
         // 非空=只画这些脏行（脏行级渲染，fix-input-send-fullrepaint 半一；takeDamage 已裁剪到窗口）。
-        if (repaint == null) {
+        // P0 修复：空脏区 + 从未画过 → 仍整窗画（内容可能已存在于内核但无脏标记，如 presenter 在
+        // feed 后才绑定）。首帧绝不能空白。
+        if (repaint == null || (repaint.isEmpty() && !hasDrawnOnce)) {
             // 整窗重绘：清屏为终端默认背景（BCE：空白格也带背景色，必须整帧铺底色）。
             bgPaint.color = themeBgArgb()
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         }
 
-        for (range in repaint ?: listOf(win)) {
+        for (range in if (repaint == null || (repaint.isEmpty() && !hasDrawnOnce)) listOf(win) else repaint) {
             for (logical in range) {
                 val rowY = (logical - win.first) * cellH
                 drawLine(canvas, p.lineCells(logical), rowY)
@@ -336,6 +350,8 @@ class TermSurfaceView @JvmOverloads constructor(
         }
         // 本帧消费即清（下次帧回调重新写入）；残留旧清单会导致后续直接 draw 误画旧行。
         pendingRepaint = null
+        // 已成功绘制至少一次（P0 首帧保护：空脏区不再触发整窗失效，no-op 保留旧画面）。
+        hasDrawnOnce = true
     }
 
     // ---- 逐行绘制 ----
