@@ -1,0 +1,45 @@
+{
+  "task_id": "feat-diagnostic-log-export",
+  "status": "dev_landed_red_tests_green",
+  "seat": "w-diag-dev",
+  "at": "2026-08-14",
+  "note": "诊断日志 + 设置页导出落地：环形缓冲(内存4096)+落盘(1MiB)+写入点脱敏+设置页一键导出。w-diag-test 四类红测 19 条全绿；archwiki --strict-t3 exit 0；:app:testDebugUnitTest 全绿。前置四修已单独提交 8fa0961a7，本体提交 aeef16920。",
+  "deliverables": {
+    "new_package": "app/app/src/main/java/dev/agentmirror/app/diag/ (DiagLog.kt + PackageDoc.kt, 纯 JVM 零线程零定时器)",
+    "settings_export": "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt 一键导出 + FileProvider(filesDir/diag/ only)",
+    "call_points": {
+      "tsnet": "状态迁移(from→to) / start 幂等守卫拦下 / ensureStarted 被拦 / SOCKS 拨号 host:port:结果:耗时 (TsnetManager.kt / TsnetWire.kt / TsnetSocks.kt)",
+      "conn": "Connection.finish(permanent/reason) / ConnectionManager 状态迁移 (Connection.kt / ConnectionManager.kt)",
+      "service": "WS onClosed(code/reason) / onFailure(ex) (OkHttpWebSocketTransport.kt)",
+      "session": "上传目标/选路(socks|direct)/结果/耗时 (HttpUrlConnectionUploader.kt)",
+      "termview": "栅格几何快照 viewport_width_px/cell_width_nominal/cell_width_measured/reported_cols/canvas_capacity_cols/overflow_px/half_cell_px (TermViewPresenter.kt, w-cols-prep §7 规格逐字对齐)",
+      "lifecycle": "ON_CREATE/ON_START/ON_STOP + 崩溃 handler (MainActivity.kt)"
+    },
+    "redaction": {
+      "write_point": "DiagLog.record 落缓冲前脱敏，内存里已是 [REDACTED]",
+      "registerSecret": "精确匹配(覆盖 headscale hex) + 结构兜底(tskey-*/Bearer/URI userinfo 保留 host)",
+      "registry_safe": "private secrets 不进缓冲/导出，无 toString 暴露面",
+      "pre_window": "token/authkey 在 PairingConfigStore.load 与 startPersistentConnection 入口即注册，窗口压到零"
+    }
+  },
+  "leader_pitfalls": {
+    "pitfall1_pre_registration_window": "值刚解析即注册：PairingConfigStore.load (token+authkey)、TsnetWire.ensureStarted (authkey)、startPersistentConnection (token+authkey)。窗口压到零。",
+    "pitfall2_registry_self": "secrets private，不 record/export，无 toString 暴露；崩溃 dump 暴露面文档说明：crash 堆栈经 recordCrash 递归脱敏才进缓冲。"
+  },
+  "design_warnings_resolved": {
+    "crash_anr": "MainActivity 装 Thread.setDefaultUncaughtExceptionHandler，链式不替换原 handler，recordCrash cause 链递归脱敏",
+    "log_hook": "不 hook 全局 Log；diag 自持写入路径，redaction 在 record 写入点，第三方写别处的进不了导出管道",
+    "qr_raw": "QR 原始串永不记录；解析出的 token/authkey 立即 registerSecret"
+  },
+  "tests": [
+    "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest' → BUILD SUCCESSFUL",
+    "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3' → exit 0 (38 条依赖边, 20 包)",
+    "w-diag-test 四类红测: DiagLogRedactionTest 6 + DiagLogBoundedTest 5 + DiagLogEventCoverageTest 5 + DiagLogGridComputabilityTest 3 = 19 条全绿",
+    "前置四修回归闸: AuthCredentialToStringLeakTest 2/2 + TsnetManagerCauseChainLeakTest 1/1 + TsnetAuthKeyFormatRedactionRiskTest 2/2 全绿(已翻转极性)"
+  ],
+  "commits": [
+    "8fa0961a7 前置四修: 既有凭据泄露路径先修再做 diag 本体",
+    "aeef16920 诊断日志 + 设置页导出"
+  ],
+  "next": "round2 待 w-diag-rev 复审静默经济/资源有界/白记判据；眼见为实(模拟器导出流程)待用户真机/模拟器验证"
+}
