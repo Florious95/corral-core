@@ -133,35 +133,47 @@ function runScenarioMetrics(opts) {
 
 /**
  * 存活判据：终端内容还活着吗。
- * - terminalContentAlive：open-stable 帧 contentRatio > 下限（默认 0.001）。
- * - screenResponsive：主机追加新内容后 App 端帧差分非零（画面有变化）。
- * 任一不过 → alive=false + reason。
+ *
+ * **必须与主机侧事实对账，不能是纯像素函数**（leader 裁定收回 msg_4fa140896050，
+ * 2026-08-13）：任何纯像素判据都分不出「空是因为没东西可显示」和「空是因为坏了」——
+ * 两种情况屏幕上长得一模一样（深色死屏 = 暗 + 低方差，与「空但健康」深色终端同形）。
+ *
+ * 原始定义（leader 最初给，现在是正解）：
+ * > **主机 pane 有内容时，App 终端内容区必须有非背景像素。**
+ *
+ * - 主机 `capture-pane` 有 N 行内容 → App 屏幕必须有内容 → 空 = **死**
+ * - 主机确实是空的 → App 空 = **正常**
+ *
+ * 输入要求：
+ * - `opts.hostContent`：主机侧内容状态（{ nonEmpty: boolean, lineCount?: number }）。
+ *   **拿不到（如只有历史截图无主机快照）→ INDETERMINATE，不得判活也不得判死。**
+ * - 像素侧 variance/avgGray 降为**辅助**：在「主机有内容」前提下判断屏幕是否真的空。
+ *
+ * 考卷调整：P0 事故帧要配「当时主机有内容」才构成完整考题；历史语料无配套主机记录 →
+ * 标 NOT_COVERED。
  */
 function computeAlive(opts, sc) {
   const captures = opts.captures || {};
   const aliveMetric = sc.metrics.find((m) => m.name === 'terminalContentAlive');
   const respMetric = sc.metrics.find((m) => m.name === 'screenResponsive');
 
-  // terminalContentAlive：内容活着没有。
-  //
-  // 主判据 = **灰度方差**（leader 裁定，2026-08-13）：与主题无关的量。
-  // - 死屏：整片同一颜色 → 方差 ≈ 0。
-  // - 活着的终端：文字与背景对比 → 方差显著 > 0。
-  // - 深色活/浅色活方差都大；深色死/浅色死方差都接近 0。方差不关心底是黑是白。
-  //
-  // 实测四象限（真实语料）：
-  //   深色活 25-app-baseline variance≈9655 | 深色死 02-baseline variance≈586
-  //   浅色活 ime-normal-light variance≈9863 | 浅色死 d35-empty-light variance≈269
-  //   分离度 17-38 倍，阈值 1000（std~31）安全。
-  //
-  // 亮度（avgGray）降为辅助信号：浅色主题活屏 avgGray 也高，**不得作为唯一判据**
-  // （leader 裁定：判据里出现外观假设就要问「所有主题/尺寸/语言都成立吗」）。
+  // 主机侧内容状态：拿不到 → INDETERMINATE（不判活不判死）。
+  const host = opts.hostContent;
+  if (host === undefined || host === null) {
+    return { alive: null, indeterminate: true, reason: 'terminalContentAlive: 缺主机侧内容状态（hostContent）——只有历史截图无法对账，判不出' };
+  }
+
   if (aliveMetric) {
     const cap = captures[Array.isArray(aliveMetric.capture) ? aliveMetric.capture[0] : aliveMetric.capture];
     if (!cap) {
       return { alive: false, reason: `terminalContentAlive: 缺采集点 ${aliveMetric.capture}` };
     }
     try {
+      // 主机侧事实对账（leader 正解）：主机为空 → App 空 = 正常。
+      if (host.nonEmpty === false) {
+        return { alive: true, reason: `主机无内容（lineCount=${host.lineCount ?? 0}），App 空属正常` };
+      }
+      // 主机有内容 → 像素辅助判断屏幕是否真的空。
       const { pngToGrayBytes, probeDimensions } = require('../machine_eye/video');
       const gray = pngToGrayBytes(cap.path);
       const { width, height } = probeDimensions(cap.path);
@@ -170,22 +182,22 @@ function computeAlive(opts, sc) {
       const n = gray.length;
       const mean = sum / n;
       const variance = sumsq / n - mean * mean;
-      // 主判据：方差 < 下限 → 死屏（无对比 = 无内容 = 从未绘制）。
-      const minVariance = aliveMetric.minVariance ?? 1000; // 实测活≥9454 / 死≤586
+      // 辅助信号 1：variance。主机有内容但屏幕无对比（低方差）→ 死。
+      const minVariance = aliveMetric.minVariance ?? 1000;
       if (variance < minVariance) {
-        return { alive: false, reason: `terminalContentAlive: variance=${variance.toFixed(0)} < ${minVariance}（无对比度，疑似从未绘制/空白）` };
+        return { alive: false, reason: `主机有内容但 App 屏幕无对比度（variance=${variance.toFixed(0)} < ${minVariance}）——疑似死屏` };
       }
-      // 辅助：contentRatio（有内容像素）。若 analyzeFrame 因找不到深底 band 返回 INDET，
-      // 但方差已表明有内容 → 仍判活（不因 band 识别失败误判死）。
+      // 辅助信号 2：contentRatio。主机有内容但屏幕内容像素极少 → 死。
       const { analyzeFrame } = require('../machine_eye/space');
       const r = analyzeFrame(cap.path, cap.opts);
       if (r.status === 'OK') {
         const minRatio = aliveMetric.minRatio ?? 0.001;
         if (r.contentRatio <= minRatio) {
-          return { alive: false, reason: `terminalContentAlive: contentRatio=${r.contentRatio} ≤ ${minRatio}（屏幕无内容）` };
+          return { alive: false, reason: `主机有内容但 App 屏幕 contentRatio=${r.contentRatio} ≤ ${minRatio}——疑似死屏` };
         }
       }
-      // INDET（找不到深底 band）但方差高 → 有内容（可能是浅色主题），判活。
+      // INDET（找不到深底 band）但方差高 → 有内容（浅色主题），主机有内容 → 判活。
+      return { alive: true, reason: `主机有内容，App 屏幕有对比/内容（variance=${variance.toFixed(0)}, ratio=${r.status === 'OK' ? r.contentRatio : 'INDET'}）` };
     } catch (e) {
       return { alive: false, reason: `terminalContentAlive: ${e.message}` };
     }

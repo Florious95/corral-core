@@ -395,9 +395,24 @@ xxd /tmp/osc9-stream.txt | grep -i '1b 5d 39'   # 流里是否有 OSC 9
 
 ---
 
-## 九、区域限定施工方案（2026-08-13 leader 裁定：方案 B，底部非空 N 行）
+## 九、区域限定施工方案（2026-08-13 更新：固定行数 N → 锚点方案）
 
 > 根因：**全屏扫描把历史残留 `esc to interrupt` 当 working**（用户提问「从底部判定，herdr 也这么做吗」直接命中，Go 测试已实证）。修法选 **方案 B（规则侧限定）**，非 A。
+> **2026-08-13 重大更新**：固定行数 N 是脆的（版式一变就破），改用**锚点方案**（§10 真实语料支撑）：取「**最后一个 `❯` 提示符之后**」的区域 = 当前 UI 区。无需行数参数。
+
+---
+
+### ⛔ 实锤：任何基于字形/前缀的状态规则从根上不可能正确
+
+> **同一屏里，完成态 `✻ Brewed for 6s` 与工作中 `✻ Galloping…` 用的是同一个 `✻` 前缀。**
+> （2026-08-13 librarian 真实 Claude Code 会话抓取，见 §10.4，非转述。）
+
+**推论**：
+1. **两个状态共用同一个字形** → 任何「字形/前缀匹配」都无法区分完成态与工作中。
+2. 能分辨状态的是**位置**（工作信号 `esc to interrupt` 是否出现在当前 UI 区），不是内容本身。
+3. **本工程曾据字形判定状态并试图往白名单补字形（✳/◐），方向从一开始就是错的。** 补进 `spinnerFrames` 只会让完成态被判成工作中，越补越糟。
+
+**这条必须被后来人一眼看到**——否则将来还会有人提「把 ✻ 加进 working 白名单」。
 
 ### 9.1 为什么 B 不选 A（leader 裁定，理由记录）
 
@@ -408,24 +423,29 @@ xxd /tmp/osc9-stream.txt | grep -i '1b 5d 39'   # 流里是否有 OSC 9
 | 数据源 | 采样侧砍数据，**不可逆** | 保留整屏采样，**可逆** |
 | 影响面 | RecentOutput 只剩底部，其他用途被砍 | 不影响其他用途 |
 
-### 9.2 参数推导（不照抄 herdr 的 5，按我们自己的对象推）
+### 9.2 锚点方案（取代固定行数 N，2026-08-13 更新）
 
-- **Claude Code 底部状态区**：状态栏 1 行（`bypass permissions ... · esc to interrupt`）+ 提示符行（`❯`）+ 可能的输入行 → **1-2 行**；
-- **Codex 底部**：状态栏 1 行（`• Working (…) · esc to interrupt`）+ 提示符行（`❯`）→ **1-2 行**；
-- **取 N=4**（覆盖两者 + 状态栏上方可能 1-2 行余量）。
-- **边界**：屏幕非空行不足 N → 在现有行里匹配，不崩（`splitLines` 已容忍）。
+**行数是版式的函数，锚点是语义的函数。** 固定 N 会被下一种版式打破（配置变化/换 CLI/窄窗口折行/多行输入框），每次调大都让「残留文本又能命中」的老问题回来。**改用锚点**（herdr 的 `after_last_prompt_marker` 思路）：
+
+- **锚点 = 屏幕上最后一个 `❯` 提示符**。取「最后一个 `❯` 之后的所有行」= 当前 UI 区（见 §10 真实语料：working 的 `esc to interrupt`、blocked 的 `❯ 1. Yes`、idle 的状态栏，都在最后 `❯` 之后）。
+- 历史残留的 `esc to interrupt` 一定在**更早的提示符之前** → 天然排除，**无需行数参数**。
+- **blocked 同一锚点覆盖**：权限框的 `❯ 1. Yes, I trust this folder` 是选项行，也在最后 `❯` 之后 → 「按状态不同取法」的复杂度消失。
+- **兜底**：无 `❯` 锚点（全屏 TUI / 刚清屏）→ 退回 `bottom_non_empty_lines(4)`，此时 4 只在兜底路径生效，风险小。
 
 ### 9.3 改动点（已核实）
 
-- `server/internal/agentstate/rules.go`：新增函数**「取底部非空 N 行」**（`lastNonEmptyLines(lines []string, n int) []string`，从末尾向上取非空行）；`evaluateRules` 在 `rule.match` 前把 `text`/`lines` 限定为该函数结果。
+- `server/internal/agentstate/rules.go`：新增函数**「取最后一个 `❯` 提示符之后的非空行」**（`linesAfterLastPrompt(lines []string) []string`）；`evaluateRules` 在 `rule.match` 前把 `text`/`lines` 限定为该函数结果；无锚点时退回 `lastNonEmptyLines(lines, 4)`。
 - `server/internal/agentstate/adapters.go`：`Detect` 调用 `evaluateRules` 的路径不变（限定在 evaluateRules 内做，适配器无感）。
 - **不改** `capture-pane`（保留整屏采样），**不改** `RecentOutput` 语义（唯一消费方是规则匹配，见 9.5）。
 
-### 9.4 红测三条（缺一不可，一组）
+### 9.4 红测五条（缺一不可，全部用真实语料 §10）
 
-1. **残留测试（红→绿）**：屏幕有残留 `esc to interrupt`（不在底部非空 4 行内）+ 干净底部（`bypass permissions on · ❯`）→ **当前判 working（红），修复后判 idle**。你之前构造的用例直接改造。
-2. **守卫一（必做，防反向误判）**：真实工作中 `esc to interrupt` **就在底部**非空行内 → **必须仍判 working**。防止修完变「永远判空闲」。
-3. **守卫二**：`✳ Brewed for 42m 3s` 在底部 → 判 idle（完成态不被误判）。
+1. **残留测试（红→绿）**：历史残留 `esc to interrupt`（在更早的 `❯` 之前）+ 真实 idle 底部（§10.1）→ **当前判 working（红），修复后判 idle**。
+2. **守卫一**：真实 working 版式（§10.2，`esc to interrupt` 在底部 `❯` 之后）→ **必须仍判 working**。防反向误判成「永远判空闲」。
+3. **守卫二**：真实完成态 `✻ Churned for 4s` 在底部（§10.5 实测语料）→ 判 idle（完成态不被误判）。
+4. **守卫三**：真实 blocked 版式（§10.3 权限框）→ **必须仍判 blocked**（权限框的 `❯ 1. Yes, ...` 在锚点区）。
+5. **守卫四（新）**：**无 `❯` 锚点**的情况（全屏 TUI / 刚清屏）→ 退回兜底 `bottom_non_empty_lines(4)`，**不崩、不误判**。
+   ⚠️ 此条可能**无真实语料**（全屏 TUI/刚清屏版式未取到）→ **标 NOT_COVERED**，不手写版式；但代码必须保证这条路径不崩。
 
 ### 9.5 影响面核实
 
@@ -433,8 +453,66 @@ xxd /tmp/osc9-stream.txt | grep -i '1b 5d 39'   # 流里是否有 OSC 9
 
 ### 9.6 内容对比判据（用户 Ctrl+B w 动态效果）——暂不合并，保留评估
 
-区域限定是已确证根因、改动小可验证；内容对比是另一套判据，风险面不同（时钟/秒数会变、等 API 可能静止）。**一次只改一个缺陷**。区域限定上线、误检消失与否有实测结论后，再评估内容对比是否需要。
+区域限定是已确证根因、改动小可验证；内容对比是另一套判据。**2026-08-13 实测 A 已确认：完成态秒数不自己涨**（真实 Claude Code 连续 10 次 capture 内容全同）——内容对比的头号障碍（假变化）**不存在**，可行性大幅上升。但「等 API 时 spinner 是否停」的生死线仍未测（实测 B）。**一次只改一个缺陷**：区域限定上线、误检消失与否有实测结论后，再评估内容对比。
 
 ---
 
-*调研完成并拆分 2026-08-13。只写 docs/，未改 taskbook.yaml，未 commit，未碰生产代码与用户 tmux。外部源码已清理。技术判据（§4.A）leader 已批可施工；产品语义（§4.B）**已裁定**（用户，契约级解除）；OSC 9 采集**降级后置**（§8.4）；**区域限定施工方案（§9，方案 B 底部非空 4 行）已写，待 leader 过审后落代码**。`server/internal/agentstate/` 定夺前不施工。*
+## 十、真实版式语料与锚点（2026-08-13 librarian 隔离 tmux 实测）
+
+> 来源：真实 Claude Code 2.1.228（deepseek 后端），隔离 tmux socket，未碰用户 tmux。屏幕文本只取版式结构，对话内容未落文档。
+
+### 10.1 idle 版式（真实底部）
+
+```
+────────────────────────────────────────────
+❯
+────────────────────────────────────────────
+  ? for shortcuts · ← for agents          ● high · /effort
+```
+
+### 10.2 working 版式（真实，任务运行中）
+
+```
+❯ Please list 5 US states, one per line.
+✻ Galloping…
+  ⎿ Tip: Name your conversations with /rename ...
+────────────────────────────────────────────
+❯
+  esc to interrupt
+```
+
+**关键**：`esc to interrupt`（working 信号）在分隔线之下、提示符 `❯` 之下——**在「最后一个提示符之后」**。
+
+### 10.3 blocked 版式（真实权限框）
+
+```
+Accessing workspace: /private/tmp
+Quick safety check: Is this a project you created or one you trust? ...
+ Security guide
+❯ 1. Yes, I trust this folder
+   2. No, exit
+ Enter to confirm · Esc to cancel
+```
+
+**关键**：权限框的 `❯ 1. Yes, ...` 是选项行，也在「最后一个提示符之后」→ **同一锚点覆盖 blocked**。
+
+### 10.4 关键实证——同字形无法分辨状态
+
+同一屏里 `✻ Brewed for 6s`（完成态）和 `✻ Galloping…`（工作中进行时）**都用 `✻` 前缀**。坐实 FIELD.md 论点：**字形无法分辨状态，靠位置（底部 esc to interrupt 有无）+ 时序**。
+
+### 10.5 实测 A：完成态秒数不自己涨（决定性）
+
+真实 Claude Code 完成任务后，`✻ Churned for 4s` / `✻ Sautéed for 4s` **连续 10 次 capture（10 秒）内容完全相同**——秒数不自己涨。**内容对比判据的头号障碍（假变化）不存在**。
+
+### 10.6 实测 B：NOT_MEASURED（不是不适用，是该测而暂不测）
+
+**状态**：`NOT_MEASURED`。
+**是什么**：内容对比判据的生死线——「工作中是否有长时间不变的窗口」（等 API 响应时 spinner 停不停）。
+**为什么现在不测**：实测 B 为**内容对比判据**服务，而内容对比排在锚点方案后面、只是「可能更好」的备选。为还没轮到的备选方案去调 send-keys 时序，投入产出不划算（交互会话任务触发时序不可控，多次尝试失败）。
+**已够用的定性证据**：working 期间 `✢ Synthesizing…` / `✻ Galloping…` **持续在动**——内容对比在 working 期确实能工作。精确「最长不变窗口」数字，等真做内容对比时再测。
+
+---
+
+*调研完成并拆分 2026-08-13。只写 docs/，未改 taskbook.yaml，未 commit，未碰生产代码与用户 tmux。外部源码已清理。技术判据（§4.A）leader 已批可施工；产品语义（§4.B）**已裁定**（用户，契约级解除）；OSC 9 采集**降级后置**（§8.4）；**区域限定锚点方案（§9 + §10）已定稿，红测五条已设计，待落代码**。`server/internal/agentstate/` 定夺前不施工。*
+
+*调研完成并拆分 2026-08-13。只写 docs/，未改 taskbook.yaml，未 commit，未碰生产代码与用户 tmux。外部源码已清理。技术判据（§4.A）leader 已批可施工；产品语义（§4.B）**已裁定**（用户，契约级解除）；OSC 9 采集**降级后置**（§8.4）；**区域限定施工方案（§9，方案 B，锚点方案取代固定 N）已写，红测三条待扩至五条（多行输入框 + 权限框守卫），待 leader 过审后落代码**。`server/internal/agentstate/` 定夺前不施工。*

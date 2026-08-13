@@ -143,3 +143,77 @@ manager.scrollback → handleScrollback → scrollbackRange + Scrollback）：
 需 w-base-v2 在隔离 daemon + 注延迟条件下跑 S2 捏合场景 / S4 上滑场景，采集指标如下：
 - 捏合：logcat/协议层数一次捏合的 `resize` 帧数 + 累计 `snapshot` 字节数。
 - 翻页：一次 `scrollback` 请求的服务端处理耗时 + 传输字节（对比理论最少）。
+
+---
+
+## 一-A、冷启动 4→2 往返：并行化方案（2026-08-13 补充，P2 只读查证）
+
+### 现状（两条路径）
+
+**路径 A · 冷启动直进会话（深链 ACTION_OPEN_SESSION）**：
+| 步 | 请求→回复 | 往返 | 依赖 |
+|---|---|---|---|
+| 1 | auth → auth_ack | 1 | — |
+| 2 | list → listing | 1 | 需工作区列表？深链场景**不需要**（已知 ref） |
+| 3 | subscribe → snapshot | 1 | 客户端 SessionViewModel 构造时发（依赖 list 完成？——不依赖，见下） |
+| 4 | scrollback(-400,400) → scrollback | 1 | 现在**等 snapshot 到达后**才发（SessionViewModel.kt:165-167） |
+| 合计 | | **4 往返** | |
+
+**路径 B · 打开 App 看工作区列表 → 用户点会话**：list 后是**用户交互**（看列表、点选），
+往返序列是 auth(1) → list(1) → [用户点选] → subscribe+snapshot(1) → 历史(1) = 4 往返 +
+用户交互延迟。深链场景无用户交互，可省。
+
+### 关键事实（代码验证）
+
+1. **subscribe 不依赖 list**：ConnectionManager READY 后 `sendList()` + `replaySubscriptions()`
+   各自独立发送（ConnectionManager.kt:362-363）；服务端 `handleSubscribe`/`handleScrollback`
+   都只调 `ensureInitialScan`（目录填充），**不等待 listing 回复**（ws_handler.go:94,239）。
+2. **历史预取现在串行**：`onBinary(SNAPSHOT)` 里才发 `requestOlderHistoryPage()`
+   （SessionViewModel.kt:165-167）→ snapshot 往返完成后才有 prefetch 往返。**可提前到
+   subscribe 发出时并行**（服务端 scrollback 不依赖 snapshot）。
+3. **深链已知 ref**：冷启动直进会话不需要 list 的内容（ref 来自通知 EXTRA_SESSION_REF）。
+
+### 方案：深链路径 4→2
+
+| 步 | 请求→回复 | 往返 |
+|---|---|---|
+| 1 | auth → auth_ack | 1 |
+| 2 | **list ∥ subscribe ∥ scrollback 三帧同时发出**（同一 WS 顺序写，服务端各自独立处理）→ listing + snapshot + scrollback 各自回 | **1**（并发，取最慢者；snapshot 与 scrollback 并行到达） |
+| 合计 | | **2 往返** |
+
+- **省 2 往返** = TS 下 ~600-800ms（2×300-400ms）。
+- **不省 list 本身**（工作区列表仍需展示），只是**深链场景不与 list 串行等待**——subscribe 提前。
+
+### 改动面与风险（每条）
+
+| 改动 | 风险 | 评估 |
+|---|---|---|
+| A. 深链时提前 subscribe（不等 list） | 若 list 失败/会话不存在 → subscribe 报 session_not_found → 需回退到列表 | 中低：订阅失败已有明确错误帧（not_subscribed/session_not_found），可浮出 |
+| B. 历史预取提前到 subscribe 时并行 | D-36 需要历史（不能省），但**并行不省**——只是不等 snapshot 到达。风险：scrollback 早于 snapshot 到达时，客户端本地 buffer 空、prepend 无快照可对齐 | **低**：scrollback 是头插进 buffer，不依赖 snapshot；snapshot 后行号自然衔接 |
+| C. 协议改动 | **无**——三帧都是既有帧类型，纯客户端发帧时序调整 | **零协议改动** |
+
+### 结论
+
+**深链冷启动 4→2 可行，零协议改动，TS 省 ~600-800ms。** 改动集中在客户端时序
+（SessionViewModel 构造时并行发 subscribe+scrollback，不等 list/snapshot）。
+list 本身保留（工作区列表仍在）。风险主要是「深链 subscribe 失败的回退」——中低。
+
+**待判**：是否值得做（收益每次打开快 0.6-0.8 秒，非修缺陷）；深链场景占比（用户是否常用
+通知直达 vs 打开看列表）。若深链占比低，优先做「历史预取并行」（B，改动最小）也省 1 往返。
+
+---
+
+## ⚠️ 实测订正（2026-08-13，w-dev-d38）——推算的耗时不可信，必须实测
+
+本审计第 5 条估算「历史翻页全量 capture = 数百 ms/页」。**隔离 tmux 实测订正：**
+
+| 项 | 审计推算 | 实测 |
+|---|---|---|
+| 全量 capture（2000 行 = history_limit 满） | 「数百 ms/页」 | **6.6ms / 126KB** |
+| `#{history_size}` 直接字段读 | 未提及 | **5.5ms / 0 传输**，不随历史量增长 |
+
+**结论**：
+- **真正的浪费是每页 126KB 传输**（长会话多次翻页累积），不是延迟——估算差两个数量级；
+- **推算的往返次数可信**（结构可代码推导），**推算的耗时不可信**（依赖运行时 tmux/磁盘/网络），**耗时必须实测**；
+- 修法方向：`scrollbackRange`（ws_handler.go:380-394）用 `#{history_size}` 替代全量 capture 测历史量，零数据传输。**语义已实测确认**（history_size 与全量 capture 行数 62==62、1998==1998，= 历史行数不含屏，单位行）。
+- **⚠️ 立项待 D-36**：此改动落在 scrollback 路径上，而 D-36 根因未明；活跃缺陷路径上不做改动只做观察。
