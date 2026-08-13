@@ -355,9 +355,15 @@ class SessionViewModelTest {
         val h = Harness(rows = 15, cols = 50)
         // 捏合：视口 500x300 + 字号 12x24 ⇒ 12 行 41 列。
         h.vm.presenter.onViewportSizeChanged(500, 300)
+        // 预览（手势中，fix-pinch-preview-commit / raw/041）：改字号但不 emit resize——
+        // 服务端不被手势步扰动，manager 不收到 resize 帧。
         h.vm.presenter.onFontSizeChanged(12, 24)
+        assertEquals("预览阶段不得 emit resize（raw/041）", 0, h.resizeFrames().size)
+        assertEquals("预览阶段内核不 resize", 15, h.emulator.rows)
+        // 提交（手势结束）：恰好一次 resize 到达 manager 和 emulator（守卫：链路仍通）。
+        h.vm.presenter.onPinchCommit()
         val r = h.resizeFrames()
-        assertEquals(1, r.size)
+        assertEquals("提交点恰好一次 resize", 1, r.size)
         assertEquals(12, r[0].rows)
         assertEquals(41, r[0].cols)
         assertEquals(12, h.emulator.rows)

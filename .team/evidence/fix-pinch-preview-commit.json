@@ -1,0 +1,75 @@
+{
+  "task_id": "fix-pinch-preview-commit",
+  "status": "pass_unit_pending_visual",
+  "agent": "w-dev-cols",
+  "summary": "P0 捏合预览/提交：一次完整捏合的 onResizeRequest 从 N 次降到恰好 1 次（合成手势 4→1，真实手势按往返审计推算 10-20→1）。raw/041 裁定实现（捏合预览、松手提交）。**单测证明发帧次数；视觉验收（闪烁是否消失）未做，等 w-base-v2 捏合注入器修好。**",
+  "evidence_classification": "pass_unit_pending_visual",
+  "claims": {
+    "proven_by_unit": [
+      "一次完整捏合手势 onResizeRequest 恰好被调 1 次（发生在手势结束）",
+      "那一次 resize 带最终行列数（不是中间某步）",
+      "手势过程中字号实时变化（本地预览生效）"
+    ],
+    "not_proven": [
+      "闪烁是否消失（视觉验收，等 w-base-v2 修好捏合注入器）"
+    ],
+    "synthetic_lower_bound": {
+      "statement": "单测用 5 个 MOVE 事件，4→1 是合成手势下限；真实手势一次几十个 MOVE，按往返审计（docs/roundtrip-audit.md）推算为 10-20 次 → 1 次",
+      "warning": "不许把「捏合期间 resize 帧数从 N 降到 1」写成「捏合闪烁已修复」"
+    }
+  },
+  "covers_three_things": {
+    "delay_optimization": {
+      "covered": true,
+      "detail": "往返审计最大浪费点：一次捏合 10-20 往返 + 10-20 次全屏快照 → 松手 1 次（用户裁定「测出来延迟高就得优化」）"
+    },
+    "D29_pinch_flicker": {
+      "covered": "partial",
+      "detail": "raw/041 裁定实现（预览不重排、松手生效）——只做了「发帧次数」这一半（N→1），视觉那一半未验（闪烁是否消失）"
+    },
+    "D31_zoom_persist": {
+      "covered": false,
+      "detail": "未覆盖。提交时用最终字号 recomputeGeometry，但字号本身未持久化（TermSurfaceView/TermViewPresenter 无 CellSizeStore/SharedPreferences 接线）。D-31 是独立任务，不得视为被顺带修复"
+    }
+  },
+  "red_test_numbers": {
+    "before": {
+      "synthetic_5_moves": 4,
+      "resize_sequence_before": "[(96,108),(71,83),(56,67),(46,56)]"
+    },
+    "after": {
+      "synthetic_5_moves": 1,
+      "resize_sequence_after": "[(46,56)]"
+    }
+  },
+  "implementation": {
+    "TermViewPresenter.kt": "onFontSizeChanged 改预览语义（只更新字号+visibleRows+请求重画，绝不 emit resize）；新增 onPinchCommit（手势结束用最终字号 recomputeGeometry → emit 一次）",
+    "TermSurfaceView.kt": "onScale 调预览（不重排）；新增 onScaleEnd → onPinchCommit"
+  },
+  "regression": {
+    "gates_green": [
+      "TermPinchPreviewCommitTest（红测 3 条）",
+      "TermSurfacePinchGestureTest（强制门）",
+      "TermSurfaceSessionBindingRegressionTest（强制门）",
+      "TermViewImeResizePresenterProbeTest",
+      "TermViewPresenterTest",
+      "TermSurfaceImeInsetViewportRestoreTest",
+      "TermMeasuredCellWritebackTest",
+      "TermColsGridConvergenceDiscriminationTest"
+    ],
+    "adapted_tests": [
+      "TermViewImeResizePresenterProbeTest.pinchFontChangeStillRequestsResize（预览不 emit/commit emit）",
+      "TermViewPresenterTest.pinchChangesFontAndRequestsResize / pinchWithoutEffectiveChangeSkipsResize",
+      "TermSurfaceImeInsetViewportRestoreTest.pinchZoomDoesNotTriggerCorrection"
+    ],
+    "not_mine": {
+      "test": "TermScrollbackEd3ClearRedTest",
+      "reason": "w-dev-d38 的在途红测（ED3 清 scrollback，D-36「发消息不能上滑」同链），不引用我任何改动"
+    }
+  },
+  "visual_acceptance": {
+    "status": "pending",
+    "blocker": "w-base-v2 捏合注入器坏（raw sendevent 在新 AVD 不被 InputReader 识别），修好后才能模拟器验「捏合不闪烁」",
+    "gate": "不闪（screenrecord + 抽帧目检，对齐 base-v2-gate 判据）"
+  }
+}

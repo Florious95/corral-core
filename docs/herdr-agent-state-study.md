@@ -192,24 +192,109 @@ herdr 也不这么做（进程信号只用于身份/生命周期）。我们同�
   2. 屏幕无 "esc to interrupt" / "⏹"（working 判定条件不存在）
   3. 规则命中 idle（✳ 前缀 / 无 working 信号）
   4. → 状态 = Idle（时序确认：连续 2 次 refresh 仍 idle 才发布）
-  5. done 派生（§4.B，待用户）：如果用户未 seen → Done
+  5. App 派生（§4.B 已裁定）：服务端 working→idle 转变 → 置 unread（显示「完成」）；用户看过 → 清 unread（显示「空闲」）
 ```
 
-**Brewed/Churned 从文本到状态全程不经过 working**，故不可能误判。
+**Brewed/Churned 从文本到状态全程不经过 working**，故不可能误判。**服务端只报 idle，不报 done**——「完成」由 App 的 unread 布尔量表达。
 
-### 4.B 产品语义（待用户裁定，leader 不去替用户决定）
+#### 4.A.6 规则集重审（服务端取消完成态后）—— 2026-08-13 用户裁定后
 
-#### 4.B.1 「done = idle + 用户未 seen」是产品行为，不是修 bug
+**核心判断**：服务端不再产出 done 后，**所有为「识别完成态」而存在的逻辑全部可删**。逐条核实现状：
 
-- **改的是 App 显示什么**：引入「已读/未读」概念，用户会看到「有新完成的会话」这类状态。
-- 这是产品行为，**需要用户裁定**：是否要「已读/未读」的完成标记？
-- 若用户说**不要**：则 done 徽标维持现状（或退化为纯 idle），**但 D-26 误检仍能解决**——因为用户报的误检是「该 idle 时说 working」，与 done 徽标无关；技术判据（4.A.1 + 4.A.2）已覆盖。
+**① track.go 的 done 派生 —— 删**
+`Track(prev, sample)`：`prev=working && 当前=idle` → `StateDone`。用户裁定「服务端取消完成，完成≡空闲」→ **整个 done 分支删除**，Track 退化为纯 Detect（或直接不再需要 Track）。`protocol.StateDone` 常量、`listing.go statePriority` 的 done 分支同步移除。
 
-#### 4.B.2 不做它的话，D-26 能解决到什么程度（leader 判断 + librarian 确认）
+**② 服务端判 working 的规则 —— 保留但收窄**
+现状 `adapters.go`：
+- `claude-working-action-bar`（`esc to interrupt` / `⏹`）—— **保留**（正确 working 信号）；
+- `claude-working-spinner`（braille spinner 帧）—— **保留**（正确 working 信号）；
+- `codex-working-status`（`• Working (…) · esc to interrupt`）—— **保留**；
+- `codex-working-spinner` —— **保留**。
+**这些规则本意是判 working，不是判完成**。误检根因是**字形白名单污染**（leader 曾把 ✳/◐ 加进 spinnerFrames），不是规则本身——见⑤。
 
-- **能解决**：用户报的「已停止工作却显示工作中」误检（working 判定收紧 + 时序确认）。
-- **不能解决**：如果用户期望「会话完成时有个明确提示」，那需要 done 徽标/未读语义——这是 4.B 的范围。
-- **边界**：即便 4.B 不做，产品也能正常工作；done 作为「完成的可见标记」退化为不存在或维持现状。
+**③ 服务端判 idle 的规则 —— 保留**
+`claude-idle-rest-bar`（`bypass permissions on`）、`claude-idle-prompt`（`❯`）、`codex-idle-prompt`。**保留**（正确 idle 信号，Brewed/Churned 就是判到这里）。
+
+**④ blocked 规则 —— 保留（待 leader 裁服务端是否还需要）**
+`claude-blocked-permission-box`、`codex-blocked-approval`。**pending**：leader 已问用户「blocked 态服务端还要不要」，未回。若保留则这条继续用；若并入「非工作中」则删。
+
+**⑤ 字形白名单清理 —— 关键改动**
+当前 `spinnerFrames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"`（纯 braille，正确）。**✳/◐ 不得加入**——它们是 idle 字形（✳ 是 idle 前缀，◐ 是 Claude Code 2.1.228 的 busy spinner 半圆，herdr 把它放 working 但**我们实测用户场景它出现在完成态**，见 FIELD.md）。**白名单保持纯 braille，不扩充**。若历史曾混入 ✳/◐ 则回退。
+
+**删除后剩余规则集**（服务端）：
+| 适配器 | 规则 | 状态 | 处置 |
+|---|---|---|---|
+| claude | blocked-permission-box | blocked | 保留（待裁） |
+| claude | working-action-bar | working | 保留 |
+| claude | working-spinner | working | 保留 |
+| claude | idle-rest-bar | idle | 保留 |
+| claude | idle-prompt | idle | 保留 |
+| codex | blocked-approval | blocked | 保留（待裁） |
+| codex | working-status | working | 保留 |
+| codex | working-spinner | working | 保留 |
+| codex | idle-prompt | idle | 保留 |
+| — | Track done 派生 | done | **删** |
+| — | protocol.StateDone / 聚合 done 分支 | done | **删** |
+
+**结论**：规则集**不会变复杂**——删掉 done 派生链路（Track 分支 + StateDone 常量 + 聚合分支），规则表本身几乎不动（只有字形白名单治理）。服务端确实变简单。若实施中出现「为兼容旧 done 加逻辑」的倾向，那是理解错了，应停下问。
+
+### 4.B 产品语义（✅ 已裁定 2026-08-13 用户，契约级解除）
+
+#### 4.B.1 用户裁定原话（一字不改，本条锚）
+
+> 「因为完成一开始是一个进行中的结束标为完成，app 看过一次后再标为空闲。
+> **服务端取消完成**，app 端进行一个简单的逻辑，完成后标为完成，点进去看过后标为空闲，**服务端没有完成或完成等于空闲**。」
+> 「此外，服务端从空闲变成进行中，**app 端还是要从完成或空闲变成进行中**。」
+
+#### 4.B.2 完整状态机（用户裁定形态，最简）
+
+**服务端只报两态**：working / idle（blocked 待裁，见 4.B.4）。
+**App 端每个会话只维护一个布尔量 `unread`**：
+
+| 事件 | unread 变化 |
+|---|---|
+| 服务端 **working → idle** 转变 | **置** unread（=「完成」） |
+| 用户**点进去看过** | **清** unread（=「空闲」） |
+| 服务端**变回 working** | **清** unread（用户补充的原话） |
+
+**显示**：
+| 服务端状态 | unread | App 显示 |
+|---|---|---|
+| working | — | 进行中 |
+| idle | true | **完成** |
+| idle | false | 空闲 |
+
+**本质：「完成」不是状态，是未读标记。**
+
+#### 4.B.3 与 herdr 模型的交叉验证
+
+用户独立给出与 herdr 完全一致的模型：herdr 无 done 状态，Brewed/Churned 都是 Idle，Done 是 UI 派生 = `(idle + 用户未 seen)`。**用户没有看过 herdr 源码，独立得出同一结论——交叉验证成立。**
+
+#### 4.B.4 待裁定（leader 已问用户，未回；写文档不填默认值）
+
+1. **blocked（等用户输入）态服务端还要不要**：App 只需要「工作中 / 非工作中」+ 派生的完成，blocked 可并入「非工作中」；但 blocked 有独立产品价值（提示"有会话在等你回答"）。leader 倾向保留，未裁。
+2. **「看过」的定义**（进入页面即算 / 需停留）；**unread 是否跨 App 重启持久化**。leader 倾向「进入即算、不持久化」，未裁。
+
+> 注：用户补充已顺带回答「同一会话再次 working→idle 是否重标完成」= **是**（working 时已清 unread，下次 working→idle 重新置位），不再问用户。
+
+#### 4.B.5 跨端部署顺序与兼容性（2026-08-13 librarian 核实）
+
+服务端停止产 done + App 端落 unread 派生 = **跨端协议改动**。用户手机装的是旧包（v6-9653be0，期待 done）。
+
+**已核实的兼容性事实**：
+1. **旧 App 不崩**：App 枚举 `AgentState.kt` **已含 DONE**，新服务端停止产 done 只是「不再发 done」，发 working/idle/blocked 旧 App 全可解析（`fromWire` 命中闭集）。未识别值才抛 `FrameDecodeException`，但新服务端不发新值。
+2. **旧 App 功能降级**：服务端把完成态判 idle → 旧 App 显示「空闲」而非「完成」——**降级不崩**。
+3. **聚合安全**：`listing.go aggregateState` 移除 done 分支后 blocked=4/working=2/idle=1，聚合正常。
+4. **部署顺序结论**：**可先发服务端**（旧 App 降级不崩）。App 端 unread 派生是后续（需新 App 包）。
+
+**⚠️ 前置疑问（待 leader 确认）**：用户手机上连的是哪个 daemon？ps 实测有两个：pid 92111（`server/agentmirrord`，12:25 启动 = v5 恢复后）+ pid 43450（`/private/tmp` 测试隔离 daemon）。若用户连的是**旧二进制**（v5 恢复前编译，含 ◐ 白名单），则「新服务端」还没真正生效——**先确认用户连的哪个，再谈部署**。
+
+#### 4.B.6 临时裁定（leader 给出，标「待用户确认可撤销」，非用户裁定）
+
+1. **blocked 服务端保留**：已存在、规则已在、删是净损失；「有会话在等你回答」对用户可能有价值。App 端可先不展示（当非工作中），等用户表态。
+2. **「看过」= 进入会话页面即算**；**unread 不跨 App 重启持久化**（重启后全部当空闲）：用户明确说「简单的逻辑」，持久化要引入存储与失效策略。
+
+**两条均标 `leader 临时裁定，待用户确认，可撤销`**，不写成用户裁定。
 
 ---
 
@@ -310,4 +395,46 @@ xxd /tmp/osc9-stream.txt | grep -i '1b 5d 39'   # 流里是否有 OSC 9
 
 ---
 
-*调研完成并拆分 2026-08-13。只写 docs/，未改 taskbook.yaml，未 commit，未碰生产代码与用户 tmux。外部源码已清理。技术判据（§4.A）leader 已批可施工；产品语义（§4.B）待用户裁定；OSC 9 采集**降级为后置**（§8.4：先落 4.A 前两条，误检消失再看是否需要）。`server/internal/agentstate/` 定夺前不施工。*
+## 九、区域限定施工方案（2026-08-13 leader 裁定：方案 B，底部非空 N 行）
+
+> 根因：**全屏扫描把历史残留 `esc to interrupt` 当 working**（用户提问「从底部判定，herdr 也这么做吗」直接命中，Go 测试已实证）。修法选 **方案 B（规则侧限定）**，非 A。
+
+### 9.1 为什么 B 不选 A（leader 裁定，理由记录）
+
+| | 方案 A（采样侧 `capture-pane -E -5`） | 方案 B（规则侧限定） |
+|---|---|---|
+| 语义 | **物理行**，表达不了「非空」 | **非空行**，与 herdr 语义一致 |
+| 空行问题 | 状态栏上方常有空行，只抓最后 5 物理行可能抓到空白，状态栏恰在第 6 行被切 → 从误判 working 变**永远判 idle**（方向反了） | 取最后 N 个**非空**行，状态栏必在 |
+| 数据源 | 采样侧砍数据，**不可逆** | 保留整屏采样，**可逆** |
+| 影响面 | RecentOutput 只剩底部，其他用途被砍 | 不影响其他用途 |
+
+### 9.2 参数推导（不照抄 herdr 的 5，按我们自己的对象推）
+
+- **Claude Code 底部状态区**：状态栏 1 行（`bypass permissions ... · esc to interrupt`）+ 提示符行（`❯`）+ 可能的输入行 → **1-2 行**；
+- **Codex 底部**：状态栏 1 行（`• Working (…) · esc to interrupt`）+ 提示符行（`❯`）→ **1-2 行**；
+- **取 N=4**（覆盖两者 + 状态栏上方可能 1-2 行余量）。
+- **边界**：屏幕非空行不足 N → 在现有行里匹配，不崩（`splitLines` 已容忍）。
+
+### 9.3 改动点（已核实）
+
+- `server/internal/agentstate/rules.go`：新增函数**「取底部非空 N 行」**（`lastNonEmptyLines(lines []string, n int) []string`，从末尾向上取非空行）；`evaluateRules` 在 `rule.match` 前把 `text`/`lines` 限定为该函数结果。
+- `server/internal/agentstate/adapters.go`：`Detect` 调用 `evaluateRules` 的路径不变（限定在 evaluateRules 内做，适配器无感）。
+- **不改** `capture-pane`（保留整屏采样），**不改** `RecentOutput` 语义（唯一消费方是规则匹配，见 9.5）。
+
+### 9.4 红测三条（缺一不可，一组）
+
+1. **残留测试（红→绿）**：屏幕有残留 `esc to interrupt`（不在底部非空 4 行内）+ 干净底部（`bypass permissions on · ❯`）→ **当前判 working（红），修复后判 idle**。你之前构造的用例直接改造。
+2. **守卫一（必做，防反向误判）**：真实工作中 `esc to interrupt` **就在底部**非空行内 → **必须仍判 working**。防止修完变「永远判空闲」。
+3. **守卫二**：`✳ Brewed for 42m 3s` 在底部 → 判 idle（完成态不被误判）。
+
+### 9.5 影响面核实
+
+`RecentOutput` 唯一消费方 = `agentstate` 规则匹配（adapters.go Detect + DetectForKind）。方案 B 保留整屏采样，不影响任何其他用途。
+
+### 9.6 内容对比判据（用户 Ctrl+B w 动态效果）——暂不合并，保留评估
+
+区域限定是已确证根因、改动小可验证；内容对比是另一套判据，风险面不同（时钟/秒数会变、等 API 可能静止）。**一次只改一个缺陷**。区域限定上线、误检消失与否有实测结论后，再评估内容对比是否需要。
+
+---
+
+*调研完成并拆分 2026-08-13。只写 docs/，未改 taskbook.yaml，未 commit，未碰生产代码与用户 tmux。外部源码已清理。技术判据（§4.A）leader 已批可施工；产品语义（§4.B）**已裁定**（用户，契约级解除）；OSC 9 采集**降级后置**（§8.4）；**区域限定施工方案（§9，方案 B 底部非空 4 行）已写，待 leader 过审后落代码**。`server/internal/agentstate/` 定夺前不施工。*
