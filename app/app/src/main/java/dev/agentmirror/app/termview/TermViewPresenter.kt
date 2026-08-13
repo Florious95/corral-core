@@ -362,7 +362,6 @@ class TermViewPresenter(
             maxReportedRows > emulator.rows
         ) {
             geometryCorrectionCount++
-            android.util.Log.d("D38Verify", "geometryCorrectionCount=$geometryCorrectionCount")
             val rows = viewportHeightPx / cellHeight
             val cols = if (viewportWidthPx > 0 && cellWidth > 0) viewportWidthPx / cellWidth else emulator.cols
             emitResize(rows, cols)
