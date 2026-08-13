@@ -179,7 +179,9 @@ class PinchHarnessInstrumentation : Instrumentation() {
                     "${initialWidth}x$initialHeight -> ${presenter.cellWidth}x${presenter.cellHeight}\n" +
                     "逐事件字格轨迹: $trace" +
                     "\ncenter=($centerX,$centerY) viewSize=${view.width}x${view.height}" +
-                    "\nView 实际收到的事件（经过真实 InputDispatcher 转发后）: $observedTrace"
+                    "\nView 实际收到的事件（经过真实 InputDispatcher 转发后）: $observedTrace" +
+                    "\n裸 ScaleGestureDetector 对照（本地直喂同一批事件，不经 InputDispatcher）: " +
+                    "onScaleBegin=$bareScaleBeginCalls onScale=$bareOnScaleCalls"
             }
         } finally {
             runOnMainSync { activity.finish() }

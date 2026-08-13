@@ -48,9 +48,10 @@ class TermRewriteClearScenarioTest {
         emulator.feed("${E}[2J")
         emulator.feed("${E}[1;1H\$ ")
 
-        // 无任何抑制：本帧重绘范围必须立即反映清屏结果（非空，含顶部行）。
-        val repaint = presenter.takeFrameRepaint()
-        assertTrue("clear 后必须立即呈现（不等待抑制），实得 $repaint", repaint != null && repaint.isNotEmpty())
+        // 无任何抑制：本帧脏区必须立即反映清屏结果（非空，含顶部行）。
+        // takeDamage 是内核既有契约（脏行渲染/抑制均已回退，渲染层整帧重绘，脏区仅作唤醒信号）。
+        val damage = presenter.takeDamage()
+        assertTrue("clear 后必须立即有脏区（不等待抑制），实得 $damage", damage.isNotEmpty())
 
         // 清屏结果确实应用：屏幕内容只有提示符（顶部），其余行空白。
         val snapshot = emulator.snapshot()
