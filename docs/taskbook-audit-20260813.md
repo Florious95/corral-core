@@ -227,4 +227,32 @@ leader 在裁定中说「真正的假账只有一份 fix-upload-token-chain—�
 
 ---
 
+## 六、新缺陷提议：客户端从不显示光标（w-dev-repaint 附带发现 + librarian 撞库）
+
+> 本条目为**提议**，非裁定。撞库结果 + 客观代码事实如下；是否为缺陷/有意为之，**由 leader 问用户定夺**（librarian 不替用户判定）。
+
+### 撞库结果（librarian，2026-08-13）
+
+- `requirement-wiki/raw/` + `requirement-base/entries/` + `requirement-wiki/wiki/` 全库「光标/cursor」**零命中**；
+- **未找到**「明确不要光标」的裁定，也**未找到**「砍掉/删除光标功能」的记录（对比先例「删除通知开关：追溯不到用户裁定」）；
+- 结论：撞库无命中，未发现相关裁定。
+
+### 代码事实（客观，w-dev-repaint 已核实 + librarian 复核一致）
+
+- `ScreenSnapshot` 携带 `cursorX` / `cursorY` / `cursorVisible`（`app/terminal/src/main/kotlin/dev/agentmirror/terminal/TerminalEmulator.kt:22-30`），内核正常维护 cursor 状态（`setCursor` 等，269/284 行）；
+- `TermSurfaceView` / `TermViewPresenter`（termview 层）对 cursor **零引用**，`grep cursor*` 无任何 draw 路径消费它；
+- 即客观事实：**协议已把光标位置送达客户端，渲染层未消费。App 上不显示光标。**
+
+### 待 leader 问用户（不预设答案）
+
+1. 是否需要显示光标？
+2. 若要 → 新立案（如 `fix-cursor-render`），写 `ScreenSnapshot.cursorX/Y/Visible` 的渲染路径；
+3. 若不要 → 记入需求维基「明确不要光标」裁定，防后续重复立案。
+
+### 关联
+
+`[[UI视觉标准]]`（018）第 7 项终端页专项——终端渲染层是 UI 视觉标准的直接约束面。
+
+---
+
 *审计完成并订正 2026-08-13。仅写 docs/，未改 taskbook.yaml，未 commit。建议的 taskbook 改动由 leader 执行。*
