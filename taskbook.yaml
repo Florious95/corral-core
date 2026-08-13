@@ -2264,3 +2264,28 @@ tasks:
     write_scope: ["docs/"]
     evidence: ".team/evidence/perf-cellular-ts.json"
     contention: none
+
+  - id: perf-delta-backpressure-merge
+    goal: >
+      C1：delta 背压合并。服务端 ws_conn.go sendMirror 在 sendCh(cap 256) 满时丢弃 delta
+      （契约 004「下一个 snapshot 会对账」）；改为并入待发缓冲，队列排空后 flush 成一个
+      大 delta 帧（≤1MiB）。目标是用户主诉「慢链上看得见每个中间状态」——
+      合并的是本就在排队的东西，不引入定时器、零延迟代价、零协议改动、纯服务端、
+      不碰任何被回退过的 UI 路径。
+      **第一关是证伪自己**：从未证实过该队列在真实链路上会满（20KB/s 限速下
+      deltas_dropped 实测为 0）。队列不满则合并永不触发，C1 即为修一个不存在的问题。
+      故第一步是部署 sendq_metrics.go（已写好未部署）在真实 tailnet 链路上取
+      conn.queue_peak / conn.deltas_dropped，**拿到「队列会满」的实证再动代码**。
+      真实链路实测基线：应用层 srtt 1762ms、重传 10.4%、DERP 中继 HKG、
+      ICMP avg 1221ms（见 docs/cellular-ts-optimization.md）。
+    acceptance:
+      - "关卡1（前提）：真实 tailnet 链路上取到 conn.queue_peak 与 conn.deltas_dropped；队列峰值接近 256 或 dropped>0 才继续，否则 halt 报 leader 改方向"
+      - "关卡2（红测）：合并前后客户端收到的字节流逐字节相同（不依赖网络，纯单测）"
+      - "关卡3：cd server && env -u TEAM_AGENT_* go test ./... 全绿"
+      - "关卡4：python3 tools/archwiki/build_wiki.py --check --strict-t3 exit 0"
+      - "关卡5：deltas_dropped 计数器语义随丢弃路径消失而同步订正（纪律⑨：仪表要说清作用域）"
+      - "关卡6（眼见为实）：真机/模拟器上走复现步骤，慢链下中间状态个数下降且不倒退"
+    deps: []
+    write_scope: ["server/internal/api/", "test/cases/"]
+    evidence: ".team/evidence/perf-delta-backpressure-merge.json"
+    contention: none
