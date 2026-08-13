@@ -57,12 +57,17 @@ import java.util.concurrent.Executor
  * 本类在 JVM 上搭真实 SOCKS5 代理（RFC 1928 + RFC 1929 认证，同 tsnet loopback 契约），验证：
  * - [upload_tsnetUp_tailnetHost_goesThroughSocks]：Up + 100.x → 上传请求真实经 SOCKS 建连
  *   （CONNECT 到达代理）+ 请求被服务端接收成功，Bearer 与 multipart 完整保留；**这是本任务唯一
- *   在 HEAD 上为红的用例**（HEAD 上传器不读 [TsnetWire.state]，恒直连 100.x → 不可达 → Failure）。
+ *   在未修复 HEAD 上为红的用例**（HEAD 上传器不读 [TsnetWire.state]，恒直连 100.x → 不可达 → Failure）。
  * - [upload_tsnetUp_lanHost_staysDirect]：Up + 127.0.0.1 LAN → 直连，SOCKS 代理零 CONNECT
  *   （不得为了修 tailnet 把 LAN 弄坏）。
  * - [upload_tsnetUp_domainHost_staysDirect]：Up + 域名（localhost）→ 直连（仅 tailnet 段 IP 走代理）。
  * - [upload_tsnetError_staysDirect]：节点 Error → 系统直连（Down 分支不倒退闸）。
  * - [upload_tsnetIdle_directConnect]：未起网 → 系统直连（Down 分支不倒退闸）。
+ *
+ * 环境净化（纪律⑨实测教训）：本机测试 JVM 会从 shell 环境继承系统 HTTP 代理
+ * （http.proxyHost 等），桌面 JDK 的 `URL.openConnection()` 默认读取这些系统属性——于是「直连」
+ * 路径在本机可能被系统代理劫持。真机（Android）无此环境变量，直连就是直连。测试要测的是代码
+ * 选路（通道），不是桌面环境——保存并清除系统代理属性，测完还原，零副作用。
  *
  * 纪律：TsnetWire 进程级单例，@Before/@After 双向复位（TsnetWireTest 同款）；后端注入假件
  * 绝不触达 gomobile native；不读任何真实凭据，测试用假 token。
@@ -73,12 +78,9 @@ class HttpUrlConnectionUploaderTsnetRouteTest {
     private var socks: TestSocks5Server? = null
 
     /**
-     * 环境净化（shear）：本机测试 JVM 会从 shell 环境继承 Shadowrocket 的
-     * http.proxyHost=http://127.0.0.1:1082。桌面 JDK 的 `URL.openConnection()` 默认读取
-     * http.proxyHost/http.proxyPort 系统属性——于是「直连」路径在本机被系统 HTTP 代理劫持，
-     * 连不可达的 tailnet 地址也会被代理转发"成功"，污染红测判据（纪律⑨实证）。真机（Android
-     * HttpURLConnection 走全局 ProxySelector）无此环境变量，直连就是直连。测试要测的是代码
-     * 选路（通道），不是桌面环境——保存并清除系统代理属性，测完还原，零副作用。
+     * 环境净化：桌面 JDK 的 URL.openConnection() 默认读 http.proxyHost 等系统属性（本机
+     * Shadowrocket 注入 http.proxyHost=127.0.0.1:1082），会把「直连」路径劫持到系统 HTTP 代理。
+     * 保存并在用例期间清除，测完还原（真机无此环境，测的必须是代码选路而非桌面环境）。
      */
     private val ambientProxyProps = listOf(
         "http.proxyHost", "http.proxyPort", "http.nonProxyHosts",
@@ -128,47 +130,7 @@ class HttpUrlConnectionUploaderTsnetRouteTest {
     private fun attachment(name: String = "photo.png") =
         Attachment(name = name, mimeType = "image/png", bytes = byteArrayOf(1, 2, 3, 4, 5))
 
-    @Test
-    fun debug_whoConnectsToSocksWithoutTsnet() {
-        socks = TestSocks5Server()
-        // 不 bringTsnetUp——纯看有没有别的东西连到 SOCKS 端口。
-        Thread.sleep(2000)
-        println("DEBUG-NOTSOCKS connectedTargets=${socks!!.connectedTargets}")
-    }
-
-    @Test
-    fun debug_doesEnsureStartedConnectToSocks() {
-        socks = TestSocks5Server()
-        bringTsnetUp(TsnetProxy("127.0.0.1", socks!!.port, "test-cred"))
-        Thread.sleep(1500)
-        println("DEBUG-AFTER-UP connectedTargets=${socks!!.connectedTargets}")
-        // 直接问 JDK ProxySelector：它对 tailnet 目标 URL 选什么代理。
-        val uri = java.net.URI("http://100.101.2.3:${server.port}/")
-        val sel = java.net.ProxySelector.getDefault()
-        println("DEBUG-SELECTOR class=${sel?.javaClass?.name} selected=${sel?.select(uri)}")
-        println("DEBUG-EFFPROXY httpProxyHost=${System.getProperty("http.proxyHost")} httpProxyPort=${System.getProperty("http.proxyPort")} socksProxyHost=${System.getProperty("socksProxyHost")}")
-        // 用 java.net.Socket 直连（无 ProxySelector 介入），看能不能连到 100.101.2.3。
-        val s = java.net.Socket()
-        s.soTimeout = 3000
-        val t0 = System.currentTimeMillis()
-        try {
-            s.connect(java.net.InetSocketAddress("100.101.2.3", server.port), 3000)
-            println("DEBUG-RAW-CONNECT ok in ${System.currentTimeMillis() - t0}ms")
-        } catch (e: Exception) {
-            println("DEBUG-RAW-CONNECT failed: ${e.javaClass.simpleName} ${e.message}")
-        } finally {
-            s.close()
-        }
-        // 检查 java.net.http.HttpClient 与 SocketFactory 默认值（可能被 Robolectric 或 env 全局改过）。
-        println("DEBUG-SOCKETFACTORY default=${javax.net.SocketFactory.getDefault()?.javaClass?.name}")
-        println("DEBUG-NETPROPS " + System.getProperties().entries.filter { it.key.toString().lowercase().contains("proxy") }.joinToString { "${it.key}=${it.value}" })
-        val result = HttpUrlConnectionUploader().upload(
-            "http://100.101.2.3:${server.port}/", FAKE_UPLOAD_TOKEN, attachment(),
-        )
-        println("DEBUG-AFTER-UPLOAD connectedTargets=${socks!!.connectedTargets} result=$result")
-    }
-
-    // ---- 路径 1：tsnet Up + tailnet host → 经 SOCKS 建连（本缺陷，HEAD 上必须红）----
+    // ---- 路径 1：tsnet Up + tailnet host → 经 SOCKS 建连（本缺陷，未修复 HEAD 上必须红）----
 
     @Test
     fun upload_tsnetUp_tailnetHost_goesThroughSocks() {
@@ -182,11 +144,6 @@ class HttpUrlConnectionUploaderTsnetRouteTest {
 
         // 决定性断言：请求真实经 SOCKS 代理建连（CONNECT 目标 = 上传 endpoint 的 tailnet host:port）。
         val connects = socks!!.connectedTargets
-        println(
-            "DEBUG-CONNECTS=$connects RESULT=$result " +
-                "useSysProxies=${System.getProperty("java.net.useSystemProxies")} " +
-                "httpProxy=${System.getProperty("http.proxyHost")}:${System.getProperty("http.proxyPort")}",
-        )
         assertTrue("必须经 SOCKS 代理收到 CONNECT，实际=$connects", connects.contains("100.101.2.3" to server.port))
         // 且请求经代理转发后被服务端接收成功（端到端通）。
         assertTrue("经 SOCKS 的上传必须成功，实际=${result}", result is UploadOutcome.Success)
@@ -321,12 +278,6 @@ private class TestSocks5Server : AutoCloseable {
             }
             val targetPort = (input.read() shl 8) or input.read()
             connectedTargets.add(host to targetPort)
-            println("DEBUG-SOCKS-CONNECT host=$host port=$targetPort from=${client.inetAddress.hostAddress}:${client.port}")
-            val st = Thread.getAllStackTraces()
-            for ((thr, frames) in st) {
-                val f = frames.take(6).joinToString(" | ") { it.className.substringAfterLast('.') + "." + it.methodName }
-                println("DEBUG-STACK thread=${thr.name} frames=$f")
-            }
             // 转发到 127.0.0.1:<目标端口>（MockWebServer 就在那里；tailnet IP 在测试里不可路由）。
             val upstream = Socket("127.0.0.1", targetPort).apply { soTimeout = 10_000 }
             output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); output.flush()
