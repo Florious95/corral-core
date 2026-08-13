@@ -81,6 +81,7 @@ type subscription struct {
 	// @contract
 	// @pre non-nil closure captures the pane-level geometry tracker
 	// @post invoked at most once; releases one subscription on the tracker
+	// @inv the pane-level geometry release runs at most once per subscription lifetime
 	// @err Resize failures are logged and not returned to the already-unsubscribing client
 	restoreOnce sync.Once
 	restoreSize func()
