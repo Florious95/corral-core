@@ -1,6 +1,13 @@
 {
   "task_id": "fix-upload-transport-tsnet",
-  "status": "pass_pending_tailnet_field_verification",
+  "status": "refuted_by_user_field_test",
+  "⚠️_2026-08-14_订正": {
+    "previous_status": "pass_pending_tailnet_field_verification",
+    "why": "该记录立于修复落地时，但 2026-08-13 全量回退到 v6（提交 f89d47ec8）把 App 改动整条退掉，这条修复随之消失。git log --all -S\"TsnetProxySocketFactory\" 显示它只存在于 9c6727f45 与 0fa842ace 两个回退前的锚点提交，HEAD 里没有。",
+    "code_check": "HttpUrlConnectionUploader.kt:67 当前是 URL(endpoint).openConnection() —— 无 proxy 参数，走系统网络栈直连。",
+    "user_field_test_20260814": "用户真机报错：failed to connect to /100.75.207.88 (port 9900) from /10.4.234.175 after 10000ms。源地址 10.4.234.175 是手机蜂窝地址而非 tailnet 地址（100.69.43.120），证明上传 socket 没走隧道；同时 WS 是通的（daemon 侧看到源为 100.69.43.120）。**这正是原记录 status 里 pending 的那个 field verification，结果是失败。**",
+    "lesson": "纪律①：回退期间立的账不能按回退前的代码算。本条是该纪律的第二个实例。"
+  },
   "agent": "w-dev-upload-tsnet",
   "summary": "修复图片上传在 tailnet 下必然 timeout。根因：WebSocket 经 tsnet 通道拨号，而 HttpUrlConnectionUploader 走系统网络栈直连——两条通道不同，daemon 只在 tailnet 可达时 WS 通而 HTTP 上传出不去。修复后 tsnet Up + tailnet host 时上传复用 WS 的 TsnetProxySocketFactory，否则保持系统直连。",
   "用户实证": "「我现在基于 TS 的 token 以及 TS 的局域网 IP 在和你沟通，说明这条链路已经走通了」——同一时刻 WS 正常、上传 timeout，直接坐实通道差异即缺陷。失败模式为 Timeout 而非 401，反证 D-22 的 Bearer 修复有效。",
@@ -12,10 +19,26 @@
   },
   "改动": "仅 app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt（write_scope 内）。tsnet Up + tailnet host → OkHttp 复用 WS 的 TsnetProxySocketFactory；否则（LAN / 域名 / 未 Up）保持原 HttpURLConnection 系统直连，LAN 零行为变化。与 WS 读同一份 TsnetWire.state，避免两边判断不一致。",
   "tests": [
-    {"argv": "HttpUrlConnectionUploaderTsnetRouteTest（3 用例）", "rc": 0, "note": "用**真实 SOCKS5 服务器**（RFC1928+1929，同 tsnet 契约）在 JVM 上验证：①SOCKS 建连+上传成功+Bearer/multipart 保留 ②LAN 且 tsnet Up 时仍直连、零 CONNECT ③未起网直连。修复前 SOCKS 用例红，修复后全绿。"},
-    {"argv": "既有 session/tsnet/pairing/service/conn 全部单测", "rc": 0, "note": "271 passed，D-22 Bearer 链路与 D-30 均未倒退"},
-    {"argv": "TermSurfaceSessionBindingRegressionTest + TermSurfacePinchGestureTest", "rc": 0, "note": "两道强制回归门绿"},
-    {"argv": "python3 tools/archwiki/build_wiki.py --check（--strict-t3）", "rc": 0, "note": "架构门 PASS"}
+    {
+      "argv": "HttpUrlConnectionUploaderTsnetRouteTest（3 用例）",
+      "rc": 0,
+      "note": "用**真实 SOCKS5 服务器**（RFC1928+1929，同 tsnet 契约）在 JVM 上验证：①SOCKS 建连+上传成功+Bearer/multipart 保留 ②LAN 且 tsnet Up 时仍直连、零 CONNECT ③未起网直连。修复前 SOCKS 用例红，修复后全绿。"
+    },
+    {
+      "argv": "既有 session/tsnet/pairing/service/conn 全部单测",
+      "rc": 0,
+      "note": "271 passed，D-22 Bearer 链路与 D-30 均未倒退"
+    },
+    {
+      "argv": "TermSurfaceSessionBindingRegressionTest + TermSurfacePinchGestureTest",
+      "rc": 0,
+      "note": "两道强制回归门绿"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check（--strict-t3）",
+      "rc": 0,
+      "note": "架构门 PASS"
+    }
   ],
   "为什么上一轮模拟器实测没抓到": "D-22 的模拟器验收用隔离 daemon + 10.0.2.2 局域网直连，全程未经 tsnet。**验的场景和用户用的场景不是同一条路。** 这是本轮第三次「模拟器绿、真机坏」（前两次：捏合、上滑）。",
   "pending": {
