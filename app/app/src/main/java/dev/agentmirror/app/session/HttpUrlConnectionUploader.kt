@@ -139,8 +139,9 @@ class HttpUrlConnectionUploader : AttachmentUploader {
 
     /**
      * SOCKS 路径：OkHttp + 与 WS 相同的 [TsnetProxySocketFactory]。一次性 client，
-     * 零连接池（与直连路径语义一致），用完关执行器线程（进程卫生）。Content-Type 与
-     * 直连路径同源（boundary 同串），D-22 Bearer 链保持不变。
+     * 零连接池（与直连路径语义一致），用完 shutdown 执行器 + evictAll 清连接池
+     * （进程卫生，审查席 F1——JVM OkHttp 无 close()，此为正确释放）。Content-Type
+     * 与直连路径同源（boundary 同串），D-22 Bearer 链保持不变。
      */
     private fun uploadViaOkHttp(
         endpoint: String,
@@ -179,7 +180,12 @@ class HttpUrlConnectionUploader : AttachmentUploader {
                 resp.close()
             }
         } finally {
+            // 审查席 F1 复核：JVM OkHttp 4.12.0 的 OkHttpClient 无 close()（Closeable 是
+            // okhttp-kotlin 新 API，本依赖是 canonical JVM 版）。正确释放 = 停执行器 +
+            // 清连接池；代码本就 shutdown 了执行器，补 evictAll() 清连接池（一次性 client
+            // 用完即弃，ConnectionPool(0,1,ns) 下连接池本就空，但显式清是正确用法）。
             client.dispatcher.executorService.shutdown()
+            client.connectionPool.evictAll()
         }
     }
 
