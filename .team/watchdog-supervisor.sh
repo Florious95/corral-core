@@ -25,6 +25,10 @@ cd "$WS" || exit 1
 me=$$
 for p in $(pgrep -f "watchdog-supervisor.sh" 2>/dev/null); do
   [ "$p" = "$me" ] && continue
+  # 2026-08-14：只认真正在跑本脚本的 bash。pgrep -f 会命中"命令行里提到本脚本名"的
+  # 任何进程（leader 的启动命令、编辑器、grep），它们 cwd 也在本工程 ⇒ 守卫误判
+  # "已在跑"直接 exit 0，看门狗从 08-11 起实际是死的且每次拉起都静默失败。
+  [ "$(ps -o comm= -p "$p" 2>/dev/null | sed 's|.*/||')" = "bash" ] || continue
   cwd=$(lsof -p "$p" 2>/dev/null | awk '$4=="cwd"{print $NF}')
   if [ "$cwd" = "$WS" ]; then
     echo "$(date '+%F %T') supervisor 已在跑 pid=$p，本次退出" >> "$LOG"
