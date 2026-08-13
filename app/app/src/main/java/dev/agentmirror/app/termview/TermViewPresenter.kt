@@ -138,15 +138,6 @@ class TermViewPresenter(
         onResizeRequest(rows, cols)
     }
 
-    /**
-     * 几何事件（滚动/字号/视口变化）请求整窗重绘标记。
-     *
-     * fix-input-send-fullrepaint：这些事件不产生内核 damage（takeDamage 返回空），但窗口
-     * 内容整体变了必须整窗重绘；[takeFrameRepaint] 据此区分「几何整帧（null）」与
-     * 「增量脏行（区间列表）」。几何分支置位、[takeFrameRepaint] 消费即清。
-     */
-    private var fullRepaintPending = false
-
     init {
         // 接管内核脏区回调：把屏幕脏行换算为逻辑行区间后缓存，作"画面已变化"的数据驱动
         // 唤醒信号（缺陷①：增量流到达的唯一唤醒点）。渲染层不据此局部重绘——View 帧回调
@@ -214,8 +205,6 @@ class TermViewPresenter(
         if (maxTop == 0 && deltaLines > 0) {
             topLine = 0
         }
-        // 几何事件（视口平移）：整窗重绘（不产生内核 damage，须显式置位）。
-        fullRepaintPending = true
         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
         onFrameRequested?.invoke()
     }
@@ -234,8 +223,6 @@ class TermViewPresenter(
     fun onHistoryPrepend(merged: Int) {
         if (merged <= 0) return
         topLine?.let { topLine = it + merged }
-        // 几何事件（视口平移）：整窗重绘（历史并入改变全部行号，不产生 damage）。
-        fullRepaintPending = true
         onFrameRequested?.invoke()
     }
 
@@ -250,8 +237,6 @@ class TermViewPresenter(
      */
     fun onScrollToBottom() {
         topLine = null
-        // 几何事件（恢复跟随）：整窗重绘。
-        fullRepaintPending = true
         onFrameRequested?.invoke()
     }
 
@@ -300,12 +285,9 @@ class TermViewPresenter(
             recomputeGeometry()
         }
         if (visibleRows != rowsBefore) {
-            // 几何事件（可见行数变化）：整窗重绘。
-            fullRepaintPending = true
             onFrameRequested?.invoke()
         }
         // 几何事件本身即需重画（即使像素高未变——如回前台 View 高复原、onSizeChanged 未回调）。
-        fullRepaintPending = true
         onFrameRequested?.invoke()
     }
 
@@ -341,21 +323,22 @@ class TermViewPresenter(
         // 可见行数变化（挤压/复原）即需重画——视口上推露出底行，本回调是唯一信号
         // （旧链路经 emulator.resize→flushDamage 间接唤醒，现在 resize 不再走，须直呼）。
         if (visibleRows != rowsBefore) {
-            // 几何事件（挤压/复原可见行数变化）：整窗重绘（视口上推）。
-            fullRepaintPending = true
             onFrameRequested?.invoke()
         }
         // 几何自愈（D-38 真根因，leader 硬约束）：若当前像素能推出的全高 rows **大于**内核 rows，
-        // 说明内核曾被错误 emit 钉在旧小值上（回前台 IME 挤压 rebase 的竞态后果，错误状态黏住
-        // 不消失），补发一次 resize 纠正。正常路径下绝不触发——挤压时像素 rows < 内核、
-        // 复原时 == 内核，从不 > 内核；本分支是「发现基准错了，纠正一次」的兜底。
+        // 且**历史最大上报 rows 也大于内核**——说明内核曾被从更大值错误 emit 钉小（回前台 IME
+        // 挤压 rebase 的竞态后果，错误状态黏住不消失），补发一次 resize 纠正。
+        // 「历史最大」条件是首帧挤压 seed 的护栏：seed 到 92（从未到过 96）时复原 96>92 但
+        // maxReportedRows==92 不满足「历史更大」→ 不触发。只有竞态 rebase（内核曾 96 被钉到 86）
+        // 才满足 96>86 且 maxReportedRows(96)>86 → 触发。正常路径下本分支恒不走（count 恒 0）。
         if (viewportHeightPx > 0 && cellHeight > 0 &&
-            viewportHeightPx / cellHeight > emulator.rows
+            viewportHeightPx / cellHeight > emulator.rows &&
+            maxReportedRows > emulator.rows
         ) {
             geometryCorrectionCount++
             val rows = viewportHeightPx / cellHeight
             val cols = if (viewportWidthPx > 0 && cellWidth > 0) viewportWidthPx / cellWidth else emulator.cols
-            onResizeRequest(rows, cols)
+            emitResize(rows, cols)
         }
     }
 
@@ -375,8 +358,6 @@ class TermViewPresenter(
         recomputeGeometry()
         // 捏合改字格后可见行数随之变化（同一视口高 ÷ 新字格高），重排跟随新栅格。
         updateVisibleRows()
-        // 几何事件（栅格几何变了）：整窗重绘。
-        fullRepaintPending = true
         // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
         onFrameRequested?.invoke()
     }
@@ -410,8 +391,6 @@ class TermViewPresenter(
         if (measuredCellW == cellWidth) return // 幂等：已收敛，绝不重复 emit（反馈环收敛点）
         cellWidth = measuredCellW
         recomputeGeometry()
-        // 几何事件（栅格几何变了）：整窗重绘。
-        fullRepaintPending = true
         onFrameRequested?.invoke()
     }
 
@@ -437,7 +416,7 @@ class TermViewPresenter(
         val rows = viewportHeightPx / cellHeight
         val cols = viewportWidthPx / cellWidth
         if (rows != emulator.rows || cols != emulator.cols) {
-            onResizeRequest(rows, cols)
+            emitResize(rows, cols)
         }
     }
 
@@ -468,30 +447,6 @@ class TermViewPresenter(
             if (lo <= hi) lo..hi else null
         }
         return mergeRanges(clipped)
-    }
-
-    /**
-     * 取本帧要呈现的重绘范围（帧回调唯一入口）。
-     *
-     * **抑制机制已回退**（leader msg_2ca924e58b58）：整屏重写抑制（recap 中间态）经三次实测
-     * 均为零收益——对「发消息整屏刷」ED2=0 不触发、对「捏合闪烁」快照重放本身原子（reset+feed+
-     * 一次 flushDamage，一帧渲染无中间态）、协议快照是单 WS 帧不拆分；代价是 clear 等 2050ms。
-     * 回退后本方法退化回 [takeDamage] 直通，只保留「几何整帧（null）vs 增量脏行」的区分
-     * （供脏行级渲染用，fix-input-send-fullrepaint 半一，保留）。
-     *
-     * @contract
-     * @pre none
-     * @post 消费即清 [fullRepaintPending]；非空 = 脏行区间（增量），null = 几何整帧
-     * @err none
-     * @inv takeDamage 语义不变；[fullRepaintPending] 优先
-     */
-    fun takeFrameRepaint(): List<IntRange>? {
-        // 几何事件优先：整窗重绘（不排空增量脏区——下一帧增量照常消费）。
-        if (fullRepaintPending) {
-            fullRepaintPending = false
-            return null
-        }
-        return takeDamage()
     }
 
     /** 帧开始：抓一次内核快照缓存，供本帧 [lineCells] 复用（屏幕行零重复拷贝）。 */

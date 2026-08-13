@@ -1,0 +1,53 @@
+{
+  "task_id": "fix-host-pane-geometry",
+  "status": "pass_code_verified",
+  "covers": [
+    "主机 tmux pane 几何记账缺陷：异常断连后 pane 不恢复原尺寸",
+    "多订阅者叠加：第二个订阅者把首个订阅者改后的变形尺寸当新基线，逐轮叠加"
+  ],
+  "not_covers": [
+    "正常退出 + 单客户端路径（w-base-v2 五点实测本就正常：④=① pane 恢复、⑤=② 再次进入几何逐字节相同）",
+    "用户报的「回前台对话框跑到中间」（D-38）——本修复与该现象无因果证据，该现象另有线索在查"
+  ],
+  "result_id": "res_manual_fix_host_pane_geometry",
+  "agent": "w-dev-d38",
+  "summary": "主机 tmux pane 几何记账缺陷修复（新立案，不挂 D-38）。根因：pane 原始几何是 per-connection 快照、每个订阅者各自记录订阅前尺寸，且恢复只在显式 unsubscribe 路径触发——异常断连（teardown/closeSubscriptions/relay 退出）不调 restoreSize，多订阅者会把变形尺寸当新基线逐轮叠加。修复：pane 级原始几何单例（首个订阅者 acquire 记基线、中间订阅者只增计数不覆盖、最后一个 release 归零恢复），四条退出路径统一走 teardownSubscription。**本条最有价值的发现**：release 恢复 Resize 必须用 context.Background() 而非发起连接的 ctx——teardown/断连路径下 c.ctx 已取消，exec.CommandContext 会 kill 正在跑的 tmux 命令，恢复代码写了但根本没执行成功（静默失败、只留 debug 日志、单测因走正常路径而全绿）。已写入 docs/host-pane-geometry-accounting.md「为什么恢复逻辑写了也可能不生效」段。红测数字：异常断连后 108x96→80x24 恢复、多订阅后 60x40→80x24 恢复（均起真 tmux、读真 pane 尺寸，非模拟）；自证判别力：临时禁用恢复逻辑两测精确回红（80x24≠108x96、80x24≠60x40）。",
+  "判别力自证": {
+    "红测先红": "修复前 TestAbnormalTeardownRestoresPaneGeometry 红（期望 80x24 实际 108x96）、TestSecondSubscriberDoesNotRebase 红（期望 80x24 实际 60x40）",
+    "转绿": "修复后两测全绿：108x96→80x24、60x40→80x24",
+    "禁用恢复即回红": "临时禁用 release 恢复逻辑，两测精确回红（80x24≠108x96、80x24≠60x40）——证明测试真在测东西",
+    "假绿删除": "TestReentryGeometryReproduced 因单客户端两次同尺寸天然假绿（无法从 pane 数字区分真恢复与停在变形），按 leader 指示删除"
+  },
+  "同形风险扫描": {
+    "结论": "不修（leader 采纳）。服务端唯一命中「清理路径用已取消 ctx」形状的是 pane_geometry.release（已修）；bridge/stream.go detach 已用 Background（正例）；handleXxx 请求路径是低危自愈竞态；state_wiring Close 后降级 Unknown 是设计预期。详见 docs「同形风险扫描」节。"
+  },
+  "关键发现": {
+    "context_background": "release 恢复 Resize 必须用 context.Background()：teardown/断连路径下 c.ctx 已取消，exec.CommandContext 会 kill tmux 命令 → 恢复静默失败。TestAbnormalTeardown 用 c.ctx 红、Background 后绿",
+    "window_size_manual": "bridge.go 先 set-option window-size latest 再 resize-window，而 tmux 对带 -x/-y 的 resize-window 自动把 window-size 强制设回 manual（实测 show-window-options 读出 manual）——那行 set-option latest 形同虚设，待查当初为何写入（新活，见下）"
+  },
+  "tests": [
+    {
+      "argv": "cd server && go test ./internal/api/ -run 'TestFirstEntryResizesPane|TestAbnormalTeardownRestoresPaneGeometry|TestSecondSubscriberDoesNotRebase' -count=1",
+      "rc": 0,
+      "note": "守卫 TestFirstEntryResizesPane（首次进会话正常 resize 80x24→108x96，恒绿防糊弄）+ 两红测转绿，起真 tmux 读真 pane 尺寸"
+    },
+    {
+      "argv": "cd server && go test ./... -count=1",
+      "rc": 0,
+      "note": "服务端全包无回归"
+    },
+    {
+      "argv": "cd server && go vet ./internal/api/",
+      "rc": 0,
+      "note": "静态检查干净"
+    }
+  ],
+  "changed_files": [
+    "server/internal/api/pane_geometry.go（新增）",
+    "server/internal/api/server.go",
+    "server/internal/api/ws_conn.go",
+    "server/internal/api/ws_handler.go",
+    "server/internal/api/host_pane_geometry_red_test.go（新增）",
+    "docs/host-pane-geometry-accounting.md"
+  ]
+}
