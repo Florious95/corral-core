@@ -19,8 +19,17 @@ import (
 type SendQueueMetrics struct {
 	// DeltasDropped 因队列满被丢弃的 delta 帧数（sendMirror default 分支命中次数）。
 	DeltasDropped atomic.Int64
-	// SnapshotsPushed 服务端补发的快照帧数（sendBinary(SNAPSHOT) 次数，排除首帧订阅）。
+	// SnapshotsPushed 服务端补发的快照帧数（sendBinary(SNAPSHOT) 次数，含首帧订阅）。
 	SnapshotsPushed atomic.Int64
+	// SnapshotsFromResize 由 handleResize（真实 reflow）补发的快照帧数——
+	// 溯源「非首帧快照 N 次整屏重建」来自哪条路径（leader msg_871ae11b3380）。
+	SnapshotsFromResize atomic.Int64
+	// SubscribesTotal handleSubscribe 被调用次数（含首次订阅与重复订阅）。
+	SubscribesTotal atomic.Int64
+	// SnapshotsFromSubscribe 订阅路径推的快照帧数（handleSubscribe 首帧）。
+	SnapshotsFromSubscribe atomic.Int64
+	// ConnectionsTotal 建立的 WS 连接数（serveConn 计数；连接数本身可能是重连线索）。
+	ConnectionsTotal atomic.Int64
 	// QueuePeak 单连接 sendCh 达到过的最大长度（满=256 的近似压力信号）。
 	QueuePeak atomic.Int64
 	// FramesSent 发出的总帧数（发送侧活动基线）。
@@ -31,6 +40,22 @@ type SendQueueMetrics struct {
 // 保留给 sendBinary 调用处递增，用于「补发快照」计数。
 func (m *SendQueueMetrics) recordSnapshot() {
 	m.SnapshotsPushed.Add(1)
+}
+
+// recordResizeSnapshot 记录由 handleResize（真实 reflow）补发的快照（溯源用）。
+func (m *SendQueueMetrics) recordResizeSnapshot() {
+	m.SnapshotsFromResize.Add(1)
+}
+
+// recordSubscribe 记录 handleSubscribe 被调用（含首次与重复订阅）。
+func (m *SendQueueMetrics) recordSubscribe() {
+	m.SubscribesTotal.Add(1)
+	m.SnapshotsFromSubscribe.Add(1)
+}
+
+// recordConnection 记录新建了一条 WS 连接（serveConn）。
+func (m *SendQueueMetrics) recordConnection() {
+	m.ConnectionsTotal.Add(1)
 }
 
 // recordDrop 递增丢弃计数。
@@ -51,17 +76,25 @@ func (m *SendQueueMetrics) recordQueued(queuedLen int) {
 
 // Snapshot 返回当前指标的只读快照（取证/健康检查用；原子读，非精确并发一致）。
 type SendQueueMetricsSnapshot struct {
-	DeltasDropped   int64
-	SnapshotsPushed int64
-	QueuePeak       int64
-	FramesSent      int64
+	DeltasDropped          int64
+	SnapshotsPushed        int64
+	SnapshotsFromResize    int64
+	SubscribesTotal        int64
+	SnapshotsFromSubscribe int64
+	ConnectionsTotal       int64
+	QueuePeak              int64
+	FramesSent             int64
 }
 
 func (m *SendQueueMetrics) Snapshot() SendQueueMetricsSnapshot {
 	return SendQueueMetricsSnapshot{
-		DeltasDropped:   m.DeltasDropped.Load(),
-		SnapshotsPushed: m.SnapshotsPushed.Load(),
-		QueuePeak:       m.QueuePeak.Load(),
-		FramesSent:      m.FramesSent.Load(),
+		DeltasDropped:          m.DeltasDropped.Load(),
+		SnapshotsPushed:        m.SnapshotsPushed.Load(),
+		SnapshotsFromResize:    m.SnapshotsFromResize.Load(),
+		SubscribesTotal:        m.SubscribesTotal.Load(),
+		SnapshotsFromSubscribe: m.SnapshotsFromSubscribe.Load(),
+		ConnectionsTotal:       m.ConnectionsTotal.Load(),
+		QueuePeak:              m.QueuePeak.Load(),
+		FramesSent:             m.FramesSent.Load(),
 	}
 }

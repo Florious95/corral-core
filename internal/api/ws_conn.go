@@ -55,6 +55,11 @@ type wsConn struct {
 	// must never be dropped); mirror deltas use a non-blocking send that drops
 	// on overflow (the next snapshot reconciles, requirement 004).
 	sendCh chan wsMsg
+
+	// closeReason 连接关闭原因（可观测健康记录，leader msg_1f0c3455fac0）：
+	// readLoop 读错误 / 客户端主动关 / 写超时 / 正常 EOF。teardown 日志带出，
+	// 用于「连接为什么断」溯源（重连假说 / 慢链路健康）。
+	closeReason string
 }
 
 // subscription is one live mirror on this connection: the relay goroutine's
@@ -80,6 +85,8 @@ type subscription struct {
 func (s *Server) serveConn(conn *websocket.Conn) {
 	ctx, cancel := context.WithCancel(context.Background())
 	writeCtx, writeStop := context.WithCancel(context.Background())
+	// WS 连接计数（重连线索：慢网下连接数暴增 = 超时断开→重连）。
+	s.sendQueue.recordConnection()
 	c := &wsConn{
 		s:         s,
 		id:        connSeq.Add(1),
@@ -104,6 +111,8 @@ func (c *wsConn) readLoop() {
 	for {
 		typ, data, err := c.conn.Read(c.ctx)
 		if err != nil {
+			// 记录读侧关闭原因（客户端关 / 网络错误 / 上下文取消），teardown 日志带出。
+			c.closeReason = "read_error: " + err.Error()
 			return
 		}
 		if typ == wsBinary {
@@ -144,10 +153,13 @@ func (c *wsConn) writeLoop() {
 		select {
 		case m := <-c.sendCh:
 			if m.close {
+				c.closeReason = "client_close: " + m.reason
 				_ = c.conn.Close(m.code, m.reason)
 				return
 			}
 			if err := c.writeFrame(m); err != nil {
+				// 写超时/写错误 → 强制关闭：记录原因（重连假说：慢链路 30s 写超时是候选）。
+				c.closeReason = "write_error: " + err.Error()
 				_ = c.conn.CloseNow()
 				return
 			}
@@ -192,13 +204,18 @@ func (c *wsConn) teardown() {
 	// 发送队列健康记录（常驻产品指标，非取证临时物）：会话结束时打一行，空闲零开销。
 	// 内容只含计数，绝无 token/凭据（daemon 日志有明文 token 历史问题，纪律）。
 	// 慢链路丢 delta → 客户端不一致 → 补发快照 → 整屏重建（D-36「发消息整屏刷」假说第 12 条）。
-	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 {
+	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 || m.ConnectionsTotal > 0 {
 		c.s.log.Info("ws: sendq health",
 			"conn", c.id,
 			"deltas_dropped", m.DeltasDropped,
 			"snapshots_pushed", m.SnapshotsPushed,
+			"snapshots_from_resize", m.SnapshotsFromResize,
+			"subscribes_total", m.SubscribesTotal,
+			"snapshots_from_subscribe", m.SnapshotsFromSubscribe,
+			"connections_total", m.ConnectionsTotal,
 			"queue_peak", m.QueuePeak,
 			"frames_sent", m.FramesSent,
+			"close_reason", c.closeReason,
 		)
 	}
 	// The connection is no longer a live client: un-count it so the listing
