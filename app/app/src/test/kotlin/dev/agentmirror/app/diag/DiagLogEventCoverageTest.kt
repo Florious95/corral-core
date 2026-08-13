@@ -202,6 +202,25 @@ class DiagLogEventCoverageTest {
         assertTrue("缺 permanent", text.contains("permanent=$permanent"))
     }
 
+    /**
+     * crash 记录路径（recordCrash，开发席 round1 新增 API）也必须遵守写入点脱敏：
+     * cause 链消息里的配对 token 经注册后不得进缓冲/导出。
+     */
+    @Test
+    fun crashRecord_causeChain_redactsRegisteredSecret() {
+        DiagLog.registerSecret(pairToken)
+        val cause = IllegalStateException("auth failed for $pairToken")
+        val crash = RuntimeException("dial rejected", cause)
+        DiagLog.recordCrash("crash", crash)
+
+        val text = exportedText()
+        assertTrue("crash 未被记录", text.contains("[crash]"))
+        assertFalse("crash cause 链含原文配对 token", text.contains(pairToken))
+        assertTrue("crash 应保留脱敏占位符", text.contains(DiagLog.REDACTED))
+    }
+
+    private val pairToken = "pair-tok-9f3a2c7e1b5d4a8f" // 自造假凭据（绝无 .env 来源）
+
     /** 无操作监听（接线探针用）：只捕获关闭回调。 */
     private fun noopListener(
         onClose: (Pair<Boolean, String>) -> Unit = {},
