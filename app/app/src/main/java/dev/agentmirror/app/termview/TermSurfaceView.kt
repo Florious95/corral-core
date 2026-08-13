@@ -143,9 +143,15 @@ class TermSurfaceView @JvmOverloads constructor(
                 val factor = detector.scaleFactor
                 val newW = max(MIN_CELL_PX, (it.cellWidth * factor).roundToInt())
                 val newH = max(MIN_CELL_PX, (it.cellHeight * factor).roundToInt())
+                // fix-pinch-preview-commit（raw/041）：预览语义——只更新字号不 emit resize。
+                // 手势步不重排（服务端不扰动），松手时才经 onScaleEnd 发一次。
                 it.onFontSizeChanged(newW, newH)
             }
             return true
+        }
+        override fun onScaleEnd(detector: ScaleGestureDetector) {
+            // 手势结束：用最终字号发唯一一次 resize（守卫2：带最终行列数）。
+            presenter?.onPinchCommit()
         }
     })
 

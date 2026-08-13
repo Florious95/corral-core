@@ -123,7 +123,10 @@ class TermViewImeResizePresenterProbeTest {
         )
     }
 
-    // ---- 守卫：捏合改字号仍走 resize（005 契约，D-29 本轮不做，不得误伤）----
+    // ---- 守卫：捏合改字号在提交点 emit resize（005 契约 + raw/041 预览/提交拆分）----
+    // 新语义（fix-pinch-preview-commit）：onFontSizeChanged = 预览（不 emit），onPinchCommit =
+    // 手势结束用最终字号 emit 一次。005 契约「捏合改字号会 resize」仍在（提交点），
+    // 只是从「每个手势步」变成「松手一次」（raw/041 裁定）。
 
     @Test
     fun pinchFontChangeStillRequestsResize() {
@@ -132,8 +135,12 @@ class TermViewImeResizePresenterProbeTest {
         h.presenter.onViewportSizeChanged(500, 300)
         assertEquals(emptyList<Pair<Int, Int>>(), h.resizeCalls)
 
-        // 捏合放大字号 12x24：300/24=12 行、500/12=41 列 → 必须 emit（005 契约）。
+        // 预览（手势中）：改字号 12x24，但不 emit（不重排）。
         h.presenter.onFontSizeChanged(newCellWidth = 12, newCellHeight = 24)
+        assertEquals("预览阶段不得 emit resize（raw/041：预览不重排）", emptyList<Pair<Int, Int>>(), h.resizeCalls)
+
+        // 提交（手势结束）：300/24=12 行、500/12=41 列 → emit 一次（005 契约在提交点）。
+        h.presenter.onPinchCommit()
         assertEquals(listOf(12 to 41), h.resizeCalls)
     }
 }
