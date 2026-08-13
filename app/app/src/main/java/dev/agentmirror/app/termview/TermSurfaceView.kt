@@ -80,18 +80,39 @@ class TermSurfaceView @JvmOverloads constructor(
      */
     private var imeInsetPx: Int = 0
 
+    /**
+     * 稳定视口基准（px）：IME 收起时观测到的 View 高度，D-38 主路径的「记住稳定高」方案。
+     *
+     * 设计（leader 认可，构造上消除竞态）：稳定高是**观测事实**（IME 收起时 View 的真实高度），
+     * 不是「height + imeInset」算出来的——加法要求两个值同源，而 height 与 ime 可能来自不同时刻，
+     * 竞态结构性存在（w-base-v2 实测 count=2 的根因方向）。改为：IME 收起（ime==0）时观测记录，
+     * 回前台 IME 在屏时直接**复用**已记录的稳定高，无需计算。
+     *
+     * 边界（leader 硬约束）：IME 在屏期间发生真实几何变化（旋转/分屏，宽度变）时稳定高过期，
+     * 必须用当前 View 高重新确立（见 [onWindowVisibilityChanged] 的宽度判据），不得复用旧值。
+     */
+    private var stableWidthPx: Int = 0
+    private var stableHeightPx: Int = 0
+
+    /** 诊断：onApplyWindowInsets 被调用次数（D-38 主路径根因确认，w-base-v2 复测读出）。
+     *  若恒 0 → Compose 拦截了 insets 分发，TermSurfaceView 收不到 → 主路径只能靠主动查询。 */
+    var insetsCallbackCount: Int = 0
+        private set
+
     init {
         // 监听窗口 insets：实时记录 IME inset 高度（Android 唯一可靠的 IME 可见性来源，
         // 比几何推断可靠——分屏/多窗口也可能「宽度不变+高度变小」，不该被当成 IME）。
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            insetsCallbackCount++
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
             imeInsetPx = imeBottom
-            // 同源重算（D-38 真根因，leader 硬约束）：IME inset 变化（弹起/收起/回前台恢复）时，
-            // 用「当前 View 高 + 本回调的 imeInset」调 onRealViewportChanged——height 与 imeInset
-            // 取自同一 insets 分发时刻（比 onWindowVisibilityChanged 拿缓存字段更同源）。正常 IME
-            // 弹起时稳定高不变、presenter 不 emit；竞态后内核被钉小，此处发现差异补发纠正。
-            if (visibility == VISIBLE && width > 0 && height > 0) {
-                presenter?.onRealViewportChanged(width, height + imeBottom)
+            // IME 收起（ime==0）：此刻 View 高 = 稳定高（观测事实）。记录基准并重放给 presenter——
+            // 这是「记住稳定高」的唯一写入点，回前台 IME 在屏时复用。
+            // IME 在屏（ime>0）：不在此重算（挤压路径 onViewportSizeChanged 已处理），只更新 imeInsetPx。
+            if (imeBottom == 0 && visibility == VISIBLE && width > 0 && height > 0) {
+                stableWidthPx = width
+                stableHeightPx = height
+                presenter?.onRealViewportChanged(width, height)
             }
             // 必须返回原 insets（或 dispatch 给子 View），否则 Compose imePadding 等后续消费被吞。
             insets
@@ -245,18 +266,18 @@ class TermSurfaceView @JvmOverloads constructor(
             return
         }
         if (width <= 0 || height <= 0) return
-        // 扣除 IME 后的稳定窗口高：View 高已被 IME 挤过（adjustResize），height + imeInset 才是
-        // 真实视口。回前台 IME 在屏时传全高（不 rebase 到挤压值）；分屏/旋转 imeInset=0 传真实变化。
-        //
-        // 主动查询当前 IME inset，而非读缓存字段 imeInsetPx：回前台时 onApplyWindowInsets 可能
-        // 尚未重新分发（visibility 变化先于 insets），缓存 imeInsetPx 还是旧值 0 → height+0=挤压值
-        // → presenter 收到错几何 emit，只能靠自愈纠正（w-base-v2 实测 geometryCorrectionCount=2
-        // 对应「回前台」「收键盘」两点的根因）。rootWindowInsets 是同步查询，此刻能拿到真实 ime。
-        val imeBottom = ViewCompat.getRootWindowInsets(this)
-            ?.getInsets(WindowInsetsCompat.Type.ime())
-            ?.bottom
-            ?: imeInsetPx // 兜底：无 insets 时回落缓存值（至少不凭空假设 0）
-        presenter?.onRealViewportChanged(width, height + imeBottom)
+        // D-38 主路径「记住稳定高」（leader 认可，构造上消除竞态）：
+        // - 宽度不变（IME 挤压/回前台 IME 在屏）：复用 IME 收起时观测的 [stableHeightPx]——
+        //   不依赖「height + ime」加法（两个值可能不同源，竞态结构性存在，w-base-v2 count=2 根因）；
+        // - 宽度变了（旋转/分屏/多窗口 = 真实几何变化）：稳定高已过期，用当前 View 高重新确立。
+        val heightForForeground =
+            if (width == stableWidthPx && stableHeightPx > 0) stableHeightPx
+            else {
+                stableWidthPx = width
+                stableHeightPx = height
+                height
+            }
+        presenter?.onRealViewportChanged(width, heightForForeground)
         postFrame()
     }
 
