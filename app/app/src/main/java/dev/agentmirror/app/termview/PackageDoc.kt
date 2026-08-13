@@ -23,5 +23,6 @@ package dev.agentmirror.app.termview
  * 脏区合并），单测全部打在它上；[TermSurfaceView] 薄 Android 层（Canvas 画格、拖动/捏合
  * 手势、Choreographer 帧调度）。内核为 :terminal 模块；resize 协议帧由上层接线（conn/session）。
  *
+ * @consumes dev.agentmirror.app.diag
  * @consumes dev.agentmirror.terminal
  */

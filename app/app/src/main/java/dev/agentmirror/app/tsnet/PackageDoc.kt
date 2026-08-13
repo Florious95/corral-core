@@ -26,4 +26,6 @@ package dev.agentmirror.app.tsnet
  * 分层（native 隔离红线）：[TsnetBackend] 薄适配接口 → [GomobileTsnetBackend]
  * 唯一触达 native；状态机/authkey 校验/dial 选择均纯 JVM 可测。
  * 路线裁定与实测数字见 docs/decisions/app-tsnet.md。
+ *
+ * @consumes dev.agentmirror.app.diag
  */
