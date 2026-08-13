@@ -1,0 +1,25 @@
+{
+  "task_id": "study-herdr-agent-state",
+  "status": "pass",
+  "worker": "w-librarian",
+  "at": "2026-08-13",
+  "status_reason": "2026-08-13 账目审计补录：调研已完成并产出 518 行文档，但从未落 evidence（有活无账）。任务书 L1947 立案时 contention=contract。",
+  "deliverable": "docs/herdr-agent-state-study.md（518 行）",
+  "验收对照": {
+    "文件名偏差": "任务书 acceptance 写 docs/herdr-agent-state-detection.md，实际产出 docs/herdr-agent-state-study.md。内容满足，文件名不符——记录在案不追改。",
+    "机制/信号/判据+出处": "满足（§1 机制、§7 出处，含 src/detect/mod.rs 原文摘录）",
+    "许可证": "满足（herdrdev/herdr = Apache-2.0 可借鉴算法；herdr-remote = AGPL-3.0 只借鉴模型不复制代码）",
+    "不刮屏能拿到哪些结构性信号": "满足，且结论是否定的——见下",
+    "rules.go 字形白名单如何退场": "满足（§5）"
+  },
+  "核心结论_否定了立案时的预期": "herdr 判定状态**也是「区域文本匹配 + OSC title/progress」为主，没有进程/PTY 层的魔法信号**。它比我们强的不是规则，是**时序/仲裁层**。立案时假设「herdr 托管 agent 进程所以能拿结构性信号」——该假设被证伪。",
+  "herdr 状态模型": "四态 Idle / Working / Blocked / Unknown，**无 done**。「完成」在 herdr 里根本不是状态。",
+  "实证反例_否定字形判据": "同一块真实屏幕上，完成态 `✻ Brewed for 6s` 与工作态 `✻ Galloping…` 共用 `✻` 前缀——任何基于字形的状态规则都是根本错的。",
+  "leader 裁定_技术判据可施工": [
+    "working/idle 判定不再依赖 done 类文本；字形白名单不再扩充（✳/◐ 退场），working 保留 braille spinner",
+    "采纳时序确认（working→idle 需连续多次采样 + 时间窗），但参数按我方采样周期推导，不照抄 herdr 的 3次/700ms",
+    "OSC 9 progress 降级为后置：先落前两条（只依赖自己），误检消失后再看是否需要。一般原则——优先做「只依赖自己」的判据"
+  ],
+  "用户裁定_产品语义_2026-08-13": "服务端取消「完成」态，只保留 working/idle；App 侧：完成后标完成、点进去看过标空闲；服务端 idle 即空闲。且服务端 idle→working 时，App 需从「完成或空闲」一并转 working。**该裁定已给出，尚未实现。**",
+  "下游": ".team/evidence/fix-agentstate-anchor-region.json（锚点区域限定，已实现未部署）"
+}
