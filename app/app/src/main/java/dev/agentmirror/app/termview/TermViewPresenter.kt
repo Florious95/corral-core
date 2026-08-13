@@ -180,6 +180,32 @@ class TermViewPresenter(
         }
 
     /**
+     * 视口/历史内省快照（常驻只读，D-36 仪表化 + w-dev-cols 巡检层共用）。
+     *
+     * 全部是 getter 组合、零副作用：不产生 resize、不碰帧循环、不改任何状态、不暴露可变引用。
+     * 供外部（模拟器取证/w-dev-cols 巡检）直接读「本来就是数」的指标（maxTop/logicalCount/
+     * scrollbackSize/topLine），比从像素反推准确。任意线程可安全调用。
+     *
+     * @contract
+     * @pre none
+     * @post 返回当前视口状态的只读快照；不改变任何内部状态、不触发回调
+     * @err none
+     * @inv 调用前后 resize 次数/脏区/帧请求均不变（有测试锚住）
+     */
+    fun forensicsSnapshot(): ForensicsSnapshot {
+        val height = visibleRows
+        val maxTop = (logicalCount - height).coerceAtLeast(0)
+        return ForensicsSnapshot(
+            scrollbackSize = emulator.scrollback.size,
+            logicalCount = logicalCount,
+            visibleRows = height,
+            maxTop = maxTop,
+            topLine = topLine,
+            isFollowingBottom = topLine == null,
+        )
+    }
+
+    /**
      * 手指拖动改视口（正 [deltaLines] = 向上滚看更早历史，负 = 向下滚）。
      *
      * 跟随态先锁定到当前底部再滚；拖回窗口顶 == 屏幕顶即触底，自动恢复跟随（006）。
@@ -343,22 +369,45 @@ class TermViewPresenter(
     }
 
     /**
-     * 捏合改字号：重算行列数，与内核当前尺寸不一致则上抛 resize 请求。
+     * 捏合改字号（**预览语义**，fix-pinch-preview-commit / raw/041 裁定）。
+     *
+     * 捏合过程中每次 onScale 调本方法：只更新 [cellWidth]/[cellHeight] 与可见行数、
+     * 请求重画（本地预览生效），**绝不 emit resize**——服务端不被每次手势步扰动。
+     * 手势结束时 View 层调 [onPinchCommit] 才发那一次 resize。
+     *
+     * 守卫1：预览必须实时生效（字号变化可见），不能为了少发帧连预览都不做——
+     * 本方法更新字号 + 请求帧，预览即时。
      *
      * @contract
      * @pre newCellWidth / newCellHeight 为正整数
-     * @post cellWidth/cellHeight 更新为入参；行列数变化则经 [onResizeRequest] 上抛；
-     *       随后必触发一次 [onFrameRequested]（栅格几何已变，即使行列数没变）
+     * @post cellWidth/cellHeight 更新为入参；**不 emit resize**；更新可见行数并请求重画
      * @err none
-     * @inv none
+     * @inv onResizeRequest 绝不在本方法内被调用（预览不重排）
      */
     fun onFontSizeChanged(newCellWidth: Int, newCellHeight: Int) {
         cellWidth = newCellWidth
         cellHeight = newCellHeight
-        recomputeGeometry()
         // 捏合改字格后可见行数随之变化（同一视口高 ÷ 新字格高），重排跟随新栅格。
         updateVisibleRows()
         // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
+        onFrameRequested?.invoke()
+    }
+
+    /**
+     * 捏合手势结束：用最终字号发**一次** resize（fix-pinch-preview-commit / raw/041 裁定）。
+     *
+     * 一次完整捏合（多个 onScale 预览 + 手势结束）→ 本方法恰好被调一次 → [recomputeGeometry]
+     * 用**最终** cellWidth/cellHeight 算 rows/cols 并 emit 一次。守卫2：提交带最终行列数，
+     * 不是中间某步的。
+     *
+     * @contract
+     * @pre 至少一次 [onFontSizeChanged] 已调用（cellWidth/cellHeight 为最终预览值）
+     * @post 行列数与内核不一致则经 [onResizeRequest] 上抛一次（用最终字号）；随后请求重画
+     * @err none
+     * @inv 一次手势至多 emit 一次（幂等：内核已一致则 no-op）
+     */
+    fun onPinchCommit() {
+        recomputeGeometry()
         onFrameRequested?.invoke()
     }
 
@@ -521,3 +570,19 @@ class TermViewPresenter(
         const val DEFAULT_CELL_HEIGHT = 20
     }
 }
+
+/**
+ * 视口/历史内省快照（[TermViewPresenter.forensicsSnapshot] 的返回，常驻只读）。
+ *
+ * 全部字段为不可变 Int/Boolean，不暴露任何可变引用。供模拟器取证（D-36）与巡检层
+ * （w-dev-cols）直接读取「本来就是数」的视口指标。构造后不可变，调用无副作用。
+ */
+data class ForensicsSnapshot(
+    val scrollbackSize: Int,
+    val logicalCount: Int,
+    val visibleRows: Int,
+    val maxTop: Int,
+    /** 视口顶行（逻辑行）；null = 跟随底部。 */
+    val topLine: Int?,
+    val isFollowingBottom: Boolean,
+)

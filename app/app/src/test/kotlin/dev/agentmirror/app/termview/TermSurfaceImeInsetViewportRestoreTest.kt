@@ -200,10 +200,17 @@ class TermSurfaceImeInsetViewportRestoreTest {
         h.view.layout(0, 0, 1080, 1920) // seed 96 行
         assertEquals(listOf(96 to 108), h.resizeCalls)
 
-        // 捏合放大字号：cell 10x20 → 12x24。视口 1080x1920 → rows=80（1920/24）、cols=90（1080/12）。
+        // 捏合放大字号（预览）：cell 10x20 → 12x24，不 emit（raw/041 预览不重排）。
         h.presenter.onFontSizeChanged(newCellWidth = 12, newCellHeight = 24)
         assertEquals(
-            "捏合放大必须正常 emit（005 契约）",
+            "预览阶段不得 emit resize（raw/041）",
+            listOf(96 to 108),
+            h.resizeCalls,
+        )
+        // 提交（手势结束）：视口 1080x1920 → rows=80（1920/24）、cols=90（1080/12）→ emit 一次。
+        h.presenter.onPinchCommit()
+        assertEquals(
+            "捏合放大提交必须 emit（005 契约在提交点）",
             listOf(96 to 108, 80 to 90),
             h.resizeCalls,
         )

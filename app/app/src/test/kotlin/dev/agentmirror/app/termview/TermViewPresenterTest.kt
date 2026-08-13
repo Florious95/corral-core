@@ -129,8 +129,11 @@ class TermViewPresenterTest {
     fun pinchChangesFontAndRequestsResize() {
         val h = harness(rows = 15, cols = 50)
         h.presenter.onViewportSizeChanged(500, 300)
-        // 放大字号：300/24=12 行，500/12=41 列。
+        // 放大字号（预览）：300/24=12 行，500/12=41 列，但不 emit（raw/041 预览不重排）。
         h.presenter.onFontSizeChanged(newCellWidth = 12, newCellHeight = 24)
+        assertEquals("预览阶段不得 emit resize", emptyList<Pair<Int, Int>>(), h.resizeCalls)
+        // 提交（手势结束）：emit 一次。
+        h.presenter.onPinchCommit()
         assertEquals(listOf(12 to 41), h.resizeCalls)
     }
 
@@ -138,8 +141,9 @@ class TermViewPresenterTest {
     fun pinchWithoutEffectiveChangeSkipsResize() {
         val h = harness(rows = 15, cols = 50)
         h.presenter.onViewportSizeChanged(500, 300)
-        // 字号与当前网格行列数一致：不重复发 resize。
+        // 字号与当前网格行列数一致：提交时不重复发 resize（no-op skip）。
         h.presenter.onFontSizeChanged(newCellWidth = 10, newCellHeight = 20)
+        h.presenter.onPinchCommit()
         assertTrue(h.resizeCalls.isEmpty())
     }
 
