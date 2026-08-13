@@ -1,0 +1,26 @@
+{
+  "task_id": "fix-cols-grid-convergence",
+  "status": "tests_ready_impl_pending",
+  "seat": "w-cols-prep",
+  "at": "2026-08-14",
+  "note": "本条只覆盖预研+测试席交付。主代码施工未开始——铁律『一次只改一个缺陷，模拟器实测验证不倒退后才打包下一个』，须等缺陷① fix-upload-transport-tsnet 真机实测收工后才放 app/app/src/main 的施工权。round1 记录见 fix-cols-grid-convergence.round1.json（reverted_no_deliverable）。",
+  "deliverables": [
+    "docs/cols-convergence-patch-triage.md（62630 字节废补丁逐 hunk 分类）",
+    "app/app/src/test/kotlin/dev/agentmirror/app/termview/TermColsGridConvergenceDiscriminationTest.kt（判别红测）",
+    "app/app/src/test/kotlin/dev/agentmirror/app/termview/TermMeasuredCellWritebackTest.kt（写回约束）",
+    "docs/_baseline-termbgcjk-v6-20260814.txt（TermBgCjkAlignTest v6 基线，供开发席对账）"
+  ],
+  "key_finding": "git apply --check 对 docs/reverted-to-v6/horizontal-grid-convergence.patch 零冲突全过——但这是陷阱不是福音。零冲突的原因是补丁基线 blob 与 v6 HEAD 逐字节一致（f89d47ec8 实际只删了 14 个测试文件、主源码此前已回退干净），而 62630 字节里约 3/4 是用户已否掉的 D-38 / D-36 / 捏合预览改动。直接 apply 会把 v6 翻车的三件事原样带回。",
+  "extra_finding": "既有护栏只收背景矩形、未收字形侧。用户主诉『「它」一半』是字形被 Canvas 裁，不是背景没画到——这解释了此前改护栏用户仍不满意。",
+  "minimal_fix_surface": "X2（measureCells 把实测 cellW 回写 presenter，setMeasuredCellWidth 幂等，View 1 行 + presenter 1 方法）+ X1（cellW roundToInt→floor，1 行）；X3 护栏可选兜底。上报 cols 必须用实测同源值，DEFAULT_CELL_WIDTH=10 是错误源。",
+  "red_tests_actual_output": {
+    "A_结构": "FAILED — 上报 cols(108) 与画布可容纳列数(1080) 不相等 expected:<1080> but was:<108>",
+    "A_真机": "FAILED — presenter.cellWidth=10 未与画布同源：cols=108 × 列宽=11 = 1188 > View宽=1080，末列越界 108px",
+    "B_字形": "FAILED — 末列字形右缘(1190) 越过画布右边界(100)，字形被 Canvas 裁半",
+    "对照绿": "correctedCols_matchesCanvasCapacityAndFits PASS（修复后目标态）",
+    "写回约束": "2 PASS + 3 SKIPPED（setMeasuredCellWidth 尚不存在，stdout 打 [SKIP] 信号，非幽灵）",
+    "包级": "termview 69 tests：3 failed（全是要的红测）+ 3 skipped + 63 passed，既有测试零干扰"
+  },
+  "leader_ruling": "权衡①裁定：测量值胜于捏合（cellW=f(cellHeight)，捏合 newW 必被测量覆盖）。开发席若要改双槽必须推翻该测试并经 leader 批准。",
+  "incident": "该席未提交的测试文件曾有编译错误（TermColsGridConvergenceDiscriminationTest.kt:157 Unresolved reference 'cols'），打断全工程 :app:testDebugUnitTest 编译，连带阻塞缺陷①的验收。教训：未提交的测试文件也在共享工作区，编不过就是全员阻塞。已修（改用 reportedCols）。"
+}
