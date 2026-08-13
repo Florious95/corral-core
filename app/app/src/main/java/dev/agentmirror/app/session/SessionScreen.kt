@@ -199,7 +199,10 @@ fun SessionScreen(
         ) {
             AndroidView(
                 factory = { ctx ->
-                    TermSurfaceView(ctx).also { it.presenter = viewModel.presenter }
+                    TermSurfaceView(ctx).also {
+                        it.presenter = viewModel.presenter
+                        it.onRemoteScrollBy = viewModel::onScrollWheel
+                    }
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -210,6 +213,14 @@ fun SessionScreen(
                         .align(Alignment.BottomEnd)
                         .padding(Spacing.lg),
                     onClick = { viewModel.onScrollToBottom() },
+                )
+            }
+            // copy-mode 角标（缺陷④ 远端滚动投送：裸 shell 上滑进 copy-mode 后用户打字无响应）。
+            if (viewModel.inCopyMode) {
+                CopyModeIndicator(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(Spacing.sm),
                 )
             }
         }
@@ -528,6 +539,27 @@ private fun BackToBottomButton(
 
 /** 悬浮钮胶囊形状（全圆角）。 */
 private val RoundedPill = androidx.compose.foundation.shape.RoundedCornerShape(50)
+
+/**
+ * copy-mode 角标（缺陷④ 远端滚动投送）：pane 进入 tmux copy-mode 时显示，
+ * 提示用户当前打字被 copy-mode 拦截（服务端 handleInput 会自动 cancel，
+ * 但 UI 让用户「看得见自己在什么模式」，防止「敲了没反应」的困惑）。
+ */
+@Composable
+private fun CopyModeIndicator(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedPill,
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.90f),
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+    ) {
+        Text(
+            text = "copy-mode",
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 4.dp),
+        )
+    }
+}
 
 /**
  * 上传已选图片：读 URI 字节 → 构造 [Attachment] → VM 上传（URI 读取与网络都在 IO 线程，
