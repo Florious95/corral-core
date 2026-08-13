@@ -1,0 +1,282 @@
+{
+  "scenario": "S1-open-session-send",
+  "updatedAt": "2026-08-13T01:37:08.331Z",
+  "provenance": {
+    "buildSha": "test-sha",
+    "device": "agentmirror_test_1260x2800",
+    "latencyMs": 0,
+    "fixture": "20-line-cjk"
+  },
+  "metrics": {
+    "terminalContentAlive": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "higher-better",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "higher-better",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "screenResponsive": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "equals",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "equals",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "rightEdgeGapPx": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "higher-better",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "higher-better",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "bottomMarginPx": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "lower-better",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "lower-better",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "lastRowVisible": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "equals",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "equals",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "inputTop": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "higher-better",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "higher-better",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "diffPattern": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "equals",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "equals",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "reflowSignal": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "equals",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "equals",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "paneRows": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "equals",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "equals",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    },
+    "paneCols": {
+      "baseline": {
+        "baseline": null,
+        "baselineOrigin": null,
+        "direction": "equals",
+        "tolerance": 0,
+        "provenance": {
+          "buildSha": "test-sha",
+          "device": "agentmirror_test_1260x2800",
+          "latencyMs": 0,
+          "fixture": "20-line-cjk"
+        },
+        "status": "NOT_MEASURED",
+        "current": null
+      },
+      "baselineOrigin": null,
+      "direction": "equals",
+      "tolerance": 0,
+      "provenance": {
+        "buildSha": "test-sha",
+        "device": "agentmirror_test_1260x2800",
+        "latencyMs": 0,
+        "fixture": "20-line-cjk"
+      },
+      "status": "NOT_MEASURED",
+      "current": null
+    }
+  }
+}

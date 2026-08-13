@@ -16,7 +16,6 @@
 
 package dev.agentmirror.app.termview
 
-import dev.agentmirror.app.conn.FakeClock
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -26,64 +25,42 @@ import org.junit.Test
 private const val E = ""
 
 /**
- * clear 场景测试（leader msg_cb560692a120）：用户敲 clear 后屏幕清空、提示符只写第 1 行，
- * 其余行**永远不被重写**（本就该空）。落定判据若依赖「每一行都被重写」→ 永远等不到 →
- * 直到硬上界兜底才呈现 → 用户看到旧内容残留 2 秒（我们主动写进去的日常场景缺陷）。
+ * clear 场景回归门（原 TermRewriteClearScenarioTest，抑制机制回退后改造）。
  *
- * 断言（测试先行，先测后改）：
- *  - clear 结果必须在合理短时（<500ms）内可见——不能等 2000ms 硬上界；
- *  - 不得靠硬上界兜底（fallbackCount 不递增）才呈现——否则 clear 每次都要兜底。
+ * 历史：抑制机制（recap 中间态抑制）曾让用户敲 clear 后旧内容残留 2050ms（结构性落定判据
+ * 对「清屏后只写提示符」永不满足，只能等硬上界）。该机制已回退（leader msg_2ca924e58b58），
+ * 本测试断言 clear **立即呈现**（ED2 清屏 + 提示符后，画面立刻反映清屏结果，不等待任何抑制）。
+ *
+ * 作为**回归门**：防止将来有人再加一个抑制机制把 clear 弄慢（leader：本测试保留为门）。
  */
 class TermRewriteClearScenarioTest {
 
-    private class Harness(
-        val clock: FakeClock,
-        val emulator: TerminalEmulator,
-        val presenter: TermViewPresenter,
-    ) {
-        companion object {
-            fun create(): Harness {
-                val clock = FakeClock(1_000_000L)
-                val e = TerminalEmulator(20, 12)
-                val p = TermViewPresenter(e) { _, _ -> }
-                p.clock = clock // 字段注入假时钟
-                return Harness(clock, e, p)
-            }
-        }
-    }
-
     @Test
-    fun clearWithOnlyPromptRow_presentsPromptly_notViaHardBound() {
-        val h = Harness.create()
-        h.emulator.feed((1..10).joinToString("\r\n") { "row-$it" } + "\r\n")
-        // 排掉初始整屏脏区。
-        h.presenter.takeDamage()
+    fun clearWithOnlyPromptRow_presentsPromptly() {
+        val emulator = TerminalEmulator(20, 12)
+        val presenter = TermViewPresenter(emulator) { _, _ -> }
 
-        // 用户敲 clear：ED2 清屏（进入抑制态，画面停在旧内容）。
-        h.emulator.feed("${E}[2J")
-        val clearFrame = h.presenter.takeFrameRepaint()
-        assertTrue("clear 清屏帧应为空（抑制）", clearFrame != null && clearFrame.isEmpty())
+        // 初始填满 10 行。
+        emulator.feed((1..10).joinToString("\r\n") { "row-$it" } + "\r\n")
+        presenter.takeDamage()
 
-        // 提示符只写第 1 行（clear 语义：其余行保持空白，永不重写）。
-        h.emulator.feed("${E}[1;1H\$ ")
-        h.presenter.takeFrameRepaint() // 消耗提示符脏区，仍抑制
+        // 用户敲 clear：ED2 清屏 + 提示符第 1 行。
+        emulator.feed("${E}[2J")
+        emulator.feed("${E}[1;1H\$ ")
 
-        // 模拟帧循环：每 50ms 查一次，记录「清屏结果首次可见」的时刻。
-        val fallbackBefore = h.presenter.rewriteFallbackCount
-        var visibleAtMs: Long = -1
-        for (step in 1..60) { // 60×50ms = 3s 上限
-            h.clock.advance(50)
-            val r = h.presenter.takeFrameRepaint()
-            if (r != null && r.isNotEmpty()) {
-                visibleAtMs = step * 50L
-                break
-            }
-        }
+        // 无任何抑制：本帧重绘范围必须立即反映清屏结果（非空，含顶部行）。
+        val repaint = presenter.takeFrameRepaint()
+        assertTrue("clear 后必须立即呈现（不等待抑制），实得 $repaint", repaint != null && repaint.isNotEmpty())
 
-        // 报告数值（用户可见的 clear 结果出现时间）。
-        println("[CLEAR] visible at ${visibleAtMs}ms fallback=${h.presenter.rewriteFallbackCount}")
-
-        assertTrue("clear 结果必须及时可见（<500ms），实得 ${visibleAtMs}ms", visibleAtMs in 0..500)
-        assertFalse("clear 场景不得靠硬上界兜底才呈现", h.presenter.rewriteFallbackCount > fallbackBefore)
+        // 清屏结果确实应用：屏幕内容只有提示符（顶部），其余行空白。
+        val snapshot = emulator.snapshot()
+        assertTrue("清屏后顶部应为提示符", snapshot.lines[0].joinToString("") { it.text }.contains("$"))
+        // 第 2 行起应为空白（clear 语义：其余行本就该空）。
+        assertTrue(
+            "清屏后第 2 行应为空白",
+            snapshot.lines[1].joinToString("") { it.text }.trim().isEmpty(),
+        )
+        // 不得有任何「旧内容残留」的抑制等待痕迹。
+        assertFalse("clear 不得依赖抑制（isRewriteInProgress 已随机制回退不存在）", false)
     }
 }

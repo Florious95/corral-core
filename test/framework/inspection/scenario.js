@@ -45,12 +45,17 @@ function listScenarios() {
  * 计算一个场景的指标（从采集产物文件 → Layer 0 算子 → 数字）。
  * 由 w-base-v2 跑完动作序列后调用，传入采集产物路径映射。
  *
+ * 存活判据前置（leader 裁定，2026-08-13 刚发生的事故）：
+ * - `terminalContentAlive`：主机 pane 有内容时 App 终端区必须有非背景像素（contentRatio>0）。
+ * - `screenResponsive`：主机追加新内容后 App 端合理时间内必须出现变化（画面不动 = 红）。
+ * - **存活判据不过 → 后续指标一律 BLOCKED**，不得 PASS（屏幕都是死的，别的指标没意义）。
+ *
  * @param {object} opts {
  *   scenarioId, captures: {captureName: {kind:'png'|'xml'|'mp4', path}},
  *   provenance: {buildSha, device, latencyMs, fixture},
  *   latencyMs?: number,
  * }
- * @returns { { metrics: {name: {status,current,...}}, regressions } }
+ * @returns { { metrics: {name: {status,current,...}}, regressions, alive, notMeasured } }
  */
 function runScenarioMetrics(opts) {
   const sc = scenarios.get(opts.scenarioId);
@@ -92,14 +97,89 @@ function runScenarioMetrics(opts) {
     }
   }
 
+  // ---- 存活判据前置（leader 裁定，最高优先级）----
+  const alive = computeAlive(opts, sc);
+  if (!alive.alive) {
+    // 存活判据不过 → 后续指标一律 BLOCKED（屏幕死了，别的指标没意义）。
+    for (const m of sc.metrics) {
+      if (m.name === 'terminalContentAlive' || m.name === 'screenResponsive') continue; // 存活指标自己保留状态
+      // 在 metricsInput 里把对应指标标 BLOCKED。
+      const target = metricsInput.find((x) => x.name === m.name);
+      if (target) {
+        target.blocked = true;
+        target.reason = alive.reason;
+      }
+    }
+  }
+
   const result = runRatchet({
     scenarioId: opts.scenarioId,
     provenance: opts.provenance,
     metrics: metricsInput,
   });
+  // 把 BLOCKED 落到输出（存活不过 → 非存活指标标 BLOCKED）。
+  for (const m of sc.metrics) {
+    if (m.name !== 'terminalContentAlive' && m.name !== 'screenResponsive' && !alive.alive) {
+      if (result.metrics[m.name]) {
+        result.metrics[m.name].status = 'BLOCKED';
+      }
+    }
+  }
   result.notMeasured = notMeasured;
+  result.alive = alive;
   result.latencyMs = opts.latencyMs ?? 0;
   return result;
+}
+
+/**
+ * 存活判据：终端内容还活着吗。
+ * - terminalContentAlive：open-stable 帧 contentRatio > 下限（默认 0.001）。
+ * - screenResponsive：主机追加新内容后 App 端帧差分非零（画面有变化）。
+ * 任一不过 → alive=false + reason。
+ */
+function computeAlive(opts, sc) {
+  const captures = opts.captures || {};
+  const aliveMetric = sc.metrics.find((m) => m.name === 'terminalContentAlive');
+  const respMetric = sc.metrics.find((m) => m.name === 'screenResponsive');
+
+  // terminalContentAlive：contentRatio > 下限。
+  if (aliveMetric) {
+    const cap = captures[Array.isArray(aliveMetric.capture) ? aliveMetric.capture[0] : aliveMetric.capture];
+    if (!cap) {
+      return { alive: false, reason: `terminalContentAlive: 缺采集点 ${aliveMetric.capture}` };
+    }
+    try {
+      const { analyzeFrame } = require('../machine_eye/space');
+      const r = analyzeFrame(cap.path, cap.opts);
+      if (r.status !== 'OK') return { alive: false, reason: `terminalContentAlive: ${r.reason}` };
+      const minRatio = aliveMetric.minRatio ?? 0.001;
+      if (r.contentRatio <= minRatio) {
+        return { alive: false, reason: `terminalContentAlive: contentRatio=${r.contentRatio} ≤ ${minRatio}（屏幕无内容）` };
+      }
+    } catch (e) {
+      return { alive: false, reason: `terminalContentAlive: ${e.message}` };
+    }
+  }
+
+  // screenResponsive：追加后帧差分非零。
+  if (respMetric) {
+    const cap = captures[Array.isArray(respMetric.capture) ? respMetric.capture[0] : respMetric.capture];
+    if (!cap) {
+      return { alive: false, reason: `screenResponsive: 缺采集点 ${respMetric.capture}` };
+    }
+    try {
+      const { analyzeSequence } = require('../machine_eye/time');
+      const r = analyzeSequence(cap.path, cap.opts);
+      if (r.status !== 'OK') return { alive: false, reason: `screenResponsive: ${r.reason}` };
+      if (r.movementPattern === 'STATIC' && r.nonZeroDiffFrames.length === 0) {
+        return { alive: false, reason: 'screenResponsive: 主机追加后 App 画面不动（STATIC）——疑似冻结' };
+      }
+    } catch (e) {
+      return { alive: false, reason: `screenResponsive: ${e.message}` };
+    }
+  }
+
+  return { alive: true };
 }
 
 /** 单指标计算：把采集产物喂给对应 Layer 0 算子。 */

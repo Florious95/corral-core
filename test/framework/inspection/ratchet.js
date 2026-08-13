@@ -32,6 +32,7 @@ const STATUS = {
   NOT_MEASURED: 'NOT_MEASURED', // 这轮没测到（默认不通过）
   NOT_COMPARABLE: 'NOT_COMPARABLE', // 产地不同，不可比
   INDETERMINATE: 'INDETERMINATE',   // 判不出
+  BLOCKED: 'BLOCKED',           // 存活判据未过，后续指标无意义（leader 裁定）
 };
 
 /** 基线文件路径。 */
