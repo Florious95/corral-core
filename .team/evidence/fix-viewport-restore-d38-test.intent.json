@@ -1,0 +1,1 @@
+{"task_id":"fix-viewport-restore-d38-test","dispatched_to":"w-d38-test","base":".team/nodes/fix-viewport-restore-d38/CLAUDE.md","at":"2026-08-14","note":"测试席：用户场景红测（回前台重对齐、IME 不 resize 不倒退、黑屏闪可断言、首帧全高边界）"}
