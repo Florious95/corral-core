@@ -28,13 +28,10 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
-import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -68,75 +65,6 @@ class TermSurfaceView @JvmOverloads constructor(
     private var lineHeightPx: Int = 0
 
     private var backToBottomLabel: String? = null
-
-    /**
-     * 当前 IME inset 高度（px）。D-38 真根因修复：View 层从 WindowInsets 直接查询 IME 可见性
-     * 与高度（presenter 不做任何 IME 推断），回前台时用「当前 View 高 + imeInset」作为**扣除
-     * IME 后的稳定窗口高**传给 [TermViewPresenter.onRealViewportChanged]——避免把 IME 挤压值
-     * 当真实视口 rebase（分屏/旋转传真实变化，IME 在屏传扣除后的全高）。
-     *
-     * adjustResize + edge-to-edge 下 View 高度已被 IME 挤过（height = 窗口高 - IME inset），
-     * 所以「height + imeInset」= 无 IME 时的稳定高，正是 presenter 该收到的真实视口。
-     */
-    private var imeInsetPx: Int = 0
-
-    /**
-     * 稳定视口基准（px）：IME 收起时观测到的 View 高度，D-38 主路径「候选 3」方案。
-     *
-     * 设计（leader 批准，w-base-v2 数据推翻「View 能看 insets」前提后定稿）：
-     *   **IME 状态从知道它的那一层（Compose）拿，不从被挤压的 View 拿**——键盘弹出时是 Compose
-     *   imePadding 把终端 Box 挤小，View 从未与键盘重叠、其 ime inset 恒 0（正确）。因此用
-     *   [imeVisible]（Compose 根已知的事实，与 imePadding 同源）作为事件源，而非 View 的 insets。
-     *
-     * 稳定高 = IME 收起（imeVisible==false）时观测到的 View 高度（观测事实）。写入条件（leader
-     * 硬约束，防通路时序）：**imeVisibleKnown && !imeVisible 才写**——布尔尚未到达（初始态未知）
-     * 或 IME 在屏（挤压）时都不写，避免把被挤压的高记成稳定高。
-     */
-    private var stableWidthPx: Int = 0
-    private var stableHeightPx: Int = 0
-
-    /**
-     * IME 可见性（Compose 侧事件源，候选 3）。由 SessionScreen 在重组时经
-     * [setImeVisible] 传入——Compose 根读 WindowInsets.isImeVisible（与 imePadding 同源，
-     * 已被证实工作），显式告诉本 View「这次布局变矮是否是 IME 造成的」。
-     */
-    private var imeVisible = false
-
-    /** 是否已收到过至少一次 [setImeVisible] 更新（初始态未知防护：布尔未到达时不写稳定高）。 */
-    private var imeVisibleKnown = false
-
-    /**
-     * Compose 侧传入 IME 可见性（候选 3 事件源，SessionScreen AndroidView.update 调用）。
-     *
-     * @contract
-     * @pre 任意线程/任意时序可调（Compose 重组在主线程）
-     * @post imeVisible 更新为入参；imeVisibleKnown 置位（此后稳定高写入条件可判定）
-     * @err none
-     * @inv 只改事件源状态，不动几何、不发 resize
-     */
-    fun setImeVisible(visible: Boolean) {
-        imeVisible = visible
-        imeVisibleKnown = true
-    }
-
-    /**
-     * 稳定高写入（IME 收起观测 + 重放）。候选 3 的唯一稳定高写入点。
-     *
-     * 条件（leader 硬约束）：`imeVisibleKnown && !imeVisible`——布尔已到达且 IME 收起时，
-     * 此刻 View 高 = 稳定高（观测事实），记录并重放给 presenter。初始态未知或 IME 在屏时
-     * **不写**（避免把挤压高当稳定高）。
-     *
-     * 注意：本方法在 [onViewportSizeChanged] 内被调（高度变化时刻），但**只在 imeVisibleKnown
-     * 且 IME 收起**时写——若布尔晚于高度变化到达，写入被推迟到下一次 [onViewportSizeChanged]
-     * 或 [onWindowVisibilityChanged]，不会被「布尔未到」的挤压高污染。
-     */
-    private fun recordStableHeightIfImeClosed() {
-        if (imeVisibleKnown && !imeVisible && width > 0 && height > 0) {
-            stableWidthPx = width
-            stableHeightPx = height
-            presenter?.onRealViewportChanged(width, height)
-        }
-    }
 
     // ---- 绘制工具 ----
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -183,9 +111,6 @@ class TermSurfaceView @JvmOverloads constructor(
                 val factor = detector.scaleFactor
                 val newW = max(MIN_CELL_PX, (it.cellWidth * factor).roundToInt())
                 val newH = max(MIN_CELL_PX, (it.cellHeight * factor).roundToInt())
-                // fix-pinch-preview-commit（raw/041）：预览语义——只更新字号不 emit resize。
-                // 手势步不重排（服务端不扰动），松手时经 onTouchEvent 的 ACTION_UP 提交一次
-                // （不用 onScaleEnd：真机多指分阶段抬起会多触发）。
                 it.onFontSizeChanged(newW, newH)
             }
             return true
@@ -196,9 +121,10 @@ class TermSurfaceView @JvmOverloads constructor(
         override fun doFrame(frameTimeNanos: Long) {
             framePending = false
             val p = presenter ?: return
-            // 整帧全窗口重绘（P0 回退：脏行渲染两次让 App 不显示，回到确定能用的状态）。
             // 排空脏区缓冲（防无界增长）后整帧重绘。不再自续下一帧：帧循环是纯数据
-            // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线）。
+            // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线；
+            // 旧版 showBackToBottom 自续 = 锁定历史时 60fps 空转，本案顺带拆除）。
+            while (p.takeDamage().isNotEmpty()) Unit
             p.beginFrame()
             invalidate()
         }
@@ -245,72 +171,6 @@ class TermSurfaceView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         presenter?.onViewportSizeChanged(w, h)
-        // 候选 3：高度变化时刻尝试记录稳定高（仅在 imeVisibleKnown 且 IME 收起时写，
-        // 避免把挤压高当稳定高——布尔晚到也不污染，见 recordStableHeightIfImeClosed）。
-        recordStableHeightIfImeClosed()
-    }
-
-    /**
-     * 窗口可见性变化（回前台/切后台）——fix-viewport-restore-d38 的根因补齐。
-     *
-     * D-38（用户多次报告）：切后台再回前台，终端只占屏幕顶部约 1/4、下方大片空黑。
-     * 根因：**回前台时没有任何人把终端几何重新对齐到当前 View 尺寸**——View 高复原但
-     * [onSizeChanged] 未必回调（尺寸与离开前相同），presenter 的内核 rows 停在离开前
-     * （或首帧被 IME 挤压）的旧小几何上。v5 曾用本方法补这个位（当时 QA PASS），
-     * 该文件在回收导航时被列为禁区未捞回，缺口一直空着。
-     *
-     * 修复：VISIBLE 时显式调 [TermViewPresenter.onRealViewportChanged] 重放当前几何——
-     * 真实视口变化（回前台）重算 rows/cols、内核尺寸不一致则 emit 一次 resize，
-     * 把几何重新对齐到当前 View（区别于 [onSizeChanged] 的 IME/输入框挤压语义，
-     * 后者只推 visibleRows 不发 resize——两者入口正交，见 presenter 注释）。
-     *
-     * 非 VISIBLE（切后台/遮罩）时撤销待执行帧：后台期间不渲染，避免 Choreographer
-     * 在不可见窗口空转（静默经济红线；v5 同款），帧循环仍纯数据驱动、空闲零帧。
-     *
-     * @contract
-     * @pre visibility 为 Android 窗口可见性值；presenter/有效尺寸可未就绪
-     * @post VISIBLE 且尺寸正：presenter 重放当前几何、按需 emit 一次 resize 并请求整帧；
-     *       VISIBLE 但尺寸未就绪（0x0）：安全忽略（presenter 正尺寸才重算）；
-     *       非 VISIBLE：撤销待执行帧、framePending 复位
-     * @err none
-     * @inv 不可见期间 framePending=false；恢复只复用当前 width/height，不猜测历史尺寸
-     */
-    override fun onWindowVisibilityChanged(visibility: Int) {
-        super.onWindowVisibilityChanged(visibility)
-        if (visibility != VISIBLE) {
-            if (framePending) {
-                Choreographer.getInstance().removeFrameCallback(frameCallback)
-                framePending = false
-            }
-            return
-        }
-        if (width <= 0 || height <= 0) return
-        // D-38 主路径「候选 3」（leader 批准，事件源驱动）：
-        // - 宽度不变（回前台，IME 在屏或收起）：复用稳定高 [stableHeightPx]（IME 收起时由
-        //   [recordStableHeightIfImeClosed] 观测写入）。稳定高是观测事实，非「height + ime」加法，
-        //   不依赖 View 的 ime inset（w-base-v2 数据：键盘不覆盖 View，View inset 恒 0）；
-        // - 宽度变了（旋转/分屏/多窗口 = 真实几何变化）：稳定高过期，用当前 View 高重新确立；
-        // - 边界：宽度不变但稳定高从未写入（首次 IME 在屏、布尔未到达）→ 若 IME 在屏则挤压态
-        //   不重算（不发 resize，避免把挤压值当真实）；IME 收起则用当前高（= 稳定高，无害）。
-        if (stableHeightPx > 0 && width != stableWidthPx) {
-            // 已记录稳定高且宽度变 = 真实几何变化（旋转/分屏/多窗口，不管 imeVisible）：
-            // 稳定高过期，用当前 View 高重新确立（leader 边界：IME 在屏期间宽度变也必须重算）。
-            stableWidthPx = width
-            stableHeightPx = height
-            presenter?.onRealViewportChanged(width, height)
-        } else if (stableHeightPx > 0) {
-            // 已记录稳定高且宽度不变：复用（IME 在屏挤压/收起都传稳定高，不 rebase 挤压值）。
-            presenter?.onRealViewportChanged(width, stableHeightPx)
-        } else if (!imeVisibleKnown || imeVisible) {
-            // 无稳定高 + 初始态未知或 IME 在屏：不重算不 emit——View 高可能是 IME 挤压值也可能是
-            // 真实值，无从区分（leader 时序守卫：布尔未到不写稳定高、不把未确认高度当真实几何）。
-        } else {
-            // 无稳定高 + IME 收起：当前 View 高 = 稳定高（观测事实），记录并重放。
-            stableWidthPx = width
-            stableHeightPx = height
-            presenter?.onRealViewportChanged(width, height)
-        }
-        postFrame()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -318,18 +178,11 @@ class TermSurfaceView @JvmOverloads constructor(
         presenter ?: return super.onTouchEvent(event)
         scaleDetector.onTouchEvent(event)
         val handled = gestureDetector.onTouchEvent(event)
-        // fix-pinch-preview-commit 提交点（raw/041）：**只有 ACTION_UP（最后一指抬起）才提交**。
-        // 不用 onScaleEnd：真机上多指分阶段抬起会让 onScaleEnd 被多次触发 → 中途额外落地
-        // （w-base-v2 实测 4→2，中途 83x67）。ACTION_UP 语义 = 全部手指离开 = 手势真正结束，
-        // 唯一且可靠；ACTION_POINTER_UP（一指抬起但仍有他指）不提交。
-        if (event.actionMasked == MotionEvent.ACTION_UP) {
-            presenter?.onPinchCommit()
-        }
         if (!handled) super.onTouchEvent(event)
         return true
     }
 
-    /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景（整帧全窗口重绘，P0 回退）。 */
+    /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val p = presenter ?: return
@@ -371,34 +224,14 @@ class TermSurfaceView @JvmOverloads constructor(
         // 一列推进；主格矩形铺满 width 列（含续格列），续格只占位不重画。旧实现把主格
         // 当 2 列推进、续格又推 1 列且只铺 1 列宽矩形——背景色块内每个 CJK 留 2 列
         // 默认深底黑洞、后续格整体右漂（用户真机实拍黑块马赛克根因，fix-term-bg-cjk）。
-        // 右缘护栏（fix-cols-grid-convergence 修法 3）：当网格 cols 超过视口可容纳列数
-        // （A 回归/异常条件）时，末列宽字符主格矩形右缘会越过视口宽被 Canvas 裁半
-        // （用户「『它』的一半」）。此处把越界矩形收边进视口（宁可裁背景也不整字符出画布），
-        // 并上报可观测信号（约束三：护栏不许静默——测试断言 clipGuardEngageCount > 0）。
-        // 正常条件（cols 与画布同源）下任何矩形右缘 ≤ 视口宽，本护栏恒不 engage。
-        // 仅当 View 已真实布局（width>0）时启用护栏；width=0（测试直接 view.draw 未 layout）
-        // 退回原行为不裁剪，避免误伤既有整帧渲染测试（TermBgCjkAlignTest 等走 view.draw 无
-        // layout，clipRight=0 会把所有格裁掉——这正是它们 red 的原因）。
-        val clipRight = if (width > 0) width.toFloat() else Float.MAX_VALUE
         var x = 0
         for (cell in cells) {
             if (cell.width == 0) {
                 x += cellW
                 continue
             }
-            val right = (x + cellW * cell.width).toFloat()
-            // 护栏三段式：完全在视口内照画；跨越右缘收边（engage 可观测）；完全在视口外
-            // （网格超宽到列起点已出画布）直接跳过不画——收边到负数宽度是 bug，绝不画负矩形。
-            if (x < clipRight) {
-                val clippedRight = if (right > clipRight) {
-                    presenter?.onClipGuardEngaged()
-                    clipRight
-                } else {
-                    right
-                }
-                bgPaint.color = colorFor(cell.style.bg, background = true)
-                canvas.drawRect(x.toFloat(), rowY.toFloat(), clippedRight, (rowY + cellH).toFloat(), bgPaint)
-            }
+            bgPaint.color = colorFor(cell.style.bg, background = true)
+            canvas.drawRect(x.toFloat(), rowY.toFloat(), (x + cellW * cell.width).toFloat(), (rowY + cellH).toFloat(), bgPaint)
             x += cellW
         }
         drawTextRuns(canvas, cells, rowY)
@@ -516,14 +349,7 @@ class TermSurfaceView @JvmOverloads constructor(
         // ascent 为负（基线上方高度）：基线偏移 = -ascent，保证首行字形完整落在 y∈[0,cellH)。
         baselinePx = -metrics.ascent
         val textW = fgPaint.measureText("W")
-        // 修法 2（fix-cols-grid-convergence）：cellW 求法从 roundToInt() 改 floor——
-        // 宁可少一列不可多一列（对齐 web terminal.js:65）。round 会把实测 10.6px 取整到
-        // 11px，放大绘制步进更容易越界；floor 保证 cols*cellW ≤ 视口宽，最后一列整格可见。
-        cellW = max(1, floor(textW).toInt())
-        // 修法 1：把实测列推进宽回写 presenter，使上报 cols 与绘制推进同一栅格来源
-        // （根治「最右列被截」：cols 不再用名义 10px 算）。setMeasuredCellWidth 幂等——
-        // 同值直接 no-op，首次回写后收敛，至多一次 recomputeGeometry（约束一反馈环收敛）。
-        p.setMeasuredCellWidth(cellW)
+        cellW = max(1, textW.roundToInt())
         lineHeightPx = p.cellHeight
     }
 

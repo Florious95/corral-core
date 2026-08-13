@@ -17,22 +17,12 @@
 package dev.agentmirror.app.session
 
 import dev.agentmirror.app.conn.json
-import dev.agentmirror.app.tsnet.TsnetDial
-import dev.agentmirror.app.tsnet.TsnetProxySocketFactory
-import dev.agentmirror.app.tsnet.TsnetWire
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.ConnectionPool
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.net.HttpURLConnection
-import java.net.Proxy
 import java.net.URL
-import java.util.concurrent.TimeUnit
 
 /** 服务端上传回复（协议 §8：`{"path": "/绝对/路径"}`，HTTP 响应体而非 WS 帧）。 */
 @Serializable
@@ -43,23 +33,16 @@ internal data class UploadResponseDto(
 /**
  * 生产附件上传器（协议 §8 multipart）：`POST {baseUrl}/upload` → 主机绝对路径。
  *
- * 传输通道与 WebSocket 同一选路（fix-upload-transport-tsnet）：tsnet 状态 Up 且目标是
- * tailnet host（100.64/10）时经 tsnet loopback SOCKS5 建连，否则保持系统直连——
- * 根因是 WS 走 SOCKS 而上传直连，两条通道不同导致 tailnet 下上传 connectTimeout。
- *
- * 直连路径用 JDK [HttpURLConnection]（原 LAN 路径零行为变化，一次性短连接不做连接池）；
- * SOCKS 路径用 OkHttp 复用与 WS 相同的 [TsnetProxySocketFactory]（自实现 RFC 1929
- * 握手——Android libcore 内建 SOCKS 客户端对 tsnet 代理认证不生效，见 TsnetSocks KDoc）。
- * multipart 字段名取 "file"；服务端按携带 filename 的首个 part 取文件，不校验字段名
- * （见 server/internal/api/upload.go findFilePart）。响应非 2xx / JSON 无 path /
- * 网络异常 ⇒ 明确失败，绝不静默（003 静默失效猎杀）。
+ * 用 JDK [HttpURLConnection] 实现（:app 当前零 OkHttp 依赖；上传为一次性短连接，
+ * 不做连接池）。multipart 字段名取 "file"；服务端按携带 filename 的首个 part 取文件，
+ * 不校验字段名（见 server/internal/api/upload.go findFilePart）。响应非 2xx /
+ * JSON 无 path / 网络异常 ⇒ 明确失败，绝不静默（003 静默失效猎杀）。
  *
  * @contract
  * @pre baseUrl 非空 http(s) 基地址；uploadToken 为配对配置中的认证 token；attachment.bytes 非空
  * @post 成功返回 [UploadOutcome.Success]（主机绝对路径）；失败返回 [UploadOutcome.Failure]（人类可读原因）
  * @err 网络/IO 异常、非 2xx 响应、JSON 无 path 或 path 为空，全部折叠为 [UploadOutcome.Failure]，不抛出
- * @inv token 只进入 Authorization 请求头，不进入日志/结果；每次调用独立建连，finally 必断开（无连接池）；
- *      选路复用 [TsnetDial.socketFactoryFor]，与 WS 读同一份 [TsnetWire.state]，LAN/域名/未 Up 恒直连
+ * @inv token 只进入 Authorization 请求头，不进入日志/结果；每次调用独立建连，finally 必断开（无连接池）
  */
 class HttpUrlConnectionUploader : AttachmentUploader {
 
@@ -81,111 +64,38 @@ class HttpUrlConnectionUploader : AttachmentUploader {
         val body = buildMultipartBody(boundary, attachment)
 
         return try {
-            // 与 WebSocket 同一选路（fix-upload-transport-tsnet）：仅 tailnet 段 host 且节点
-            // Up 才经 tsnet loopback SOCKS5（[TsnetProxySocketFactory]，自实现握手），其余
-            // （LAN/域名/未 Up）直连——读与 [OkHttpTransportFactory] 同一份 [TsnetWire.state]，
-            // 避免两通道选路不一致。LAN 路径零行为变化。
-            val host = runCatching { java.net.URI(endpoint).host }.getOrNull()
-            val sf = TsnetDial.socketFactoryFor(TsnetWire.state, host)
-            if (sf == null) {
-                uploadViaHttpUrlConnection(endpoint, boundary, body, uploadToken)
-            } else {
-                uploadViaOkHttp(endpoint, boundary, body, uploadToken, sf)
+            val conn = URL(endpoint).openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.connectTimeout = CONNECT_TIMEOUT_MS
+                conn.readTimeout = READ_TIMEOUT_MS
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                conn.setRequestProperty("Content-Length", body.size.toString())
+                if (!uploadToken.isNullOrBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer $uploadToken")
+                }
+                conn.outputStream.use { it.write(body) }
+
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    UploadOutcome.Failure("上传失败（HTTP $code）")
+                } else {
+                    val text = conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                    val dto = try {
+                        json.decodeFromString(UploadResponseDto.serializer(), text)
+                    } catch (e: Exception) {
+                        return UploadOutcome.Failure("上传响应无法解析")
+                    }
+                    if (dto.path.isEmpty()) UploadOutcome.Failure("上传响应缺少路径")
+                    else UploadOutcome.Success(dto.path)
+                }
+            } finally {
+                conn.disconnect()
             }
         } catch (e: Exception) {
             UploadOutcome.Failure("上传失败：${e.message ?: "网络异常"}")
         }
-    }
-
-    /** 直连路径：JDK HttpURLConnection（LAN/域名/未 Up 时；保持既有行为与测试契约）。 */
-    private fun uploadViaHttpUrlConnection(
-        endpoint: String,
-        boundary: String,
-        body: ByteArray,
-        uploadToken: String?,
-    ): UploadOutcome {
-        val conn = URL(endpoint).openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "POST"
-            conn.doOutput = true
-            conn.connectTimeout = CONNECT_TIMEOUT_MS
-            conn.readTimeout = READ_TIMEOUT_MS
-            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-            conn.setRequestProperty("Content-Length", body.size.toString())
-            if (!uploadToken.isNullOrBlank()) {
-                conn.setRequestProperty("Authorization", "Bearer $uploadToken")
-            }
-            conn.outputStream.use { it.write(body) }
-            // 非 2xx 时 getInputStream() 抛异常（JDK 契约），只能经 responseCode 判定；
-            // 2xx 才读响应体。text 对非 2xx 无意义（readHttpResponse 先判 code）。
-            val code = conn.responseCode
-            val text = if (code in 200..299) {
-                conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-            } else {
-                ""
-            }
-            return readHttpResponse(code, text)
-        } finally {
-            conn.disconnect()
-        }
-    }
-
-    /**
-     * SOCKS 路径：OkHttp + 与 WS 相同的 [TsnetProxySocketFactory]。一次性 client，
-     * 零连接池（与直连路径语义一致），用完关执行器线程（进程卫生）。Content-Type 与
-     * 直连路径同源（boundary 同串），D-22 Bearer 链保持不变。
-     */
-    private fun uploadViaOkHttp(
-        endpoint: String,
-        boundary: String,
-        body: ByteArray,
-        uploadToken: String?,
-        sf: TsnetProxySocketFactory,
-    ): UploadOutcome {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
-            .readTimeout(READ_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
-            .writeTimeout(WRITE_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
-            .retryOnConnectionFailure(false)
-            // socketFactory 已自实现 SOCKS 隧道（socket.connect 拦截），显式 NO_PROXY 防
-            // 系统 ProxySelector 叠加一跳。
-            .proxy(Proxy.NO_PROXY)
-            .connectionPool(ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
-            .socketFactory(sf)
-            .build()
-        try {
-            val requestBuilder = Request.Builder()
-                .url(endpoint)
-                .post(body.toRequestBody("multipart/form-data; boundary=$boundary".toMediaType()))
-            if (!uploadToken.isNullOrBlank()) {
-                requestBuilder.header("Authorization", "Bearer $uploadToken")
-            }
-            val resp = client.newCall(requestBuilder.build()).execute()
-            try {
-                val text = resp.body?.string()
-                return when {
-                    resp.code !in 200..299 -> UploadOutcome.Failure("上传失败（HTTP ${resp.code}）")
-                    text == null -> UploadOutcome.Failure("上传响应无法解析")
-                    else -> readHttpResponse(resp.code, text)
-                }
-            } finally {
-                resp.close()
-            }
-        } finally {
-            client.dispatcher.executorService.shutdown()
-        }
-    }
-
-    /** 共享响应折叠：非 2xx / JSON 无 path / path 空 → 明确失败（两路径同一契约）。 */
-    private fun readHttpResponse(code: Int, text: String): UploadOutcome {
-        if (code !in 200..299) return UploadOutcome.Failure("上传失败（HTTP $code）")
-        val dto = try {
-            json.decodeFromString(UploadResponseDto.serializer(), text)
-        } catch (e: Exception) {
-            return UploadOutcome.Failure("上传响应无法解析")
-        }
-        if (dto.path.isEmpty()) return UploadOutcome.Failure("上传响应缺少路径")
-        return UploadOutcome.Success(dto.path)
     }
 
     /** 组装 multipart/form-data 请求体（单文件段 + 结束边界）。 */
@@ -207,6 +117,5 @@ class HttpUrlConnectionUploader : AttachmentUploader {
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 30_000
-        const val WRITE_TIMEOUT_MS = 30_000
     }
 }

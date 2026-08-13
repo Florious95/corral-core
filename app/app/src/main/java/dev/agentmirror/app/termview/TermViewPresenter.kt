@@ -39,6 +39,7 @@ class TermViewPresenter(
     private val emulator: TerminalEmulator,
     private val onResizeRequest: (rows: Int, cols: Int) -> Unit,
 ) {
+
     /** 视口顶行（逻辑行，0=最老历史）：null=跟随底部；非 null=锁定历史，冻结不变。 */
     private var topLine: Int? = null
 
@@ -62,23 +63,6 @@ class TermViewPresenter(
     /** 视图像素尺寸，捏合行列数换算的基准。 */
     private var viewportWidthPx: Int = 0
     private var viewportHeightPx: Int = 0
-
-    /**
-     * 稳定视口基准（扣除 IME inset 后的窗口像素尺寸），D-38 真根因判据的载体。
-     *
-     * 设计（leader 打回几何推断后定稿）：**presenter 不做任何关于 IME 的推断**——「回前台那一刻
-     * IME 在不在屏」是 View 层通过 WindowInsets 直接可知的事实，由 View 层扣除 IME inset 后把
-     * 稳定窗口高度传给 [onRealViewportChanged]。presenter 收到即视为真实视口，重算并更新本基准。
-     *
-     * 为什么不能几何推断：分屏/多窗口拖拽/系统栏变化都可能是「宽度不变 + 高度变小」，与 IME 挤压
-     * 同形。若 presenter 猜「小高度=IME」会把一次真实的几何变化当成 IME 忽略，制造更难查的假阴性
-     * （leader 打回理由）。raw/019 的直接翻译是「IME 从不相干 → 扣掉它」，而非「猜到它然后忽略」。
-     *
-     * 本基准由 View 层传的「扣除 IME 后高度」驱动；在首帧 seed（[onViewportSizeChanged]）与每次
-     * 真实视口变化（[onRealViewportChanged]）时更新。仅作「高度复原/增长」这类自愈判定的参照。
-     */
-    private var stableWidthPx: Int = 0
-    private var stableHeightPx: Int = 0
 
     /**
      * 首次真实视口是否已建立（raw/019：唯一合法的一次 resize 已上抛）。
@@ -109,34 +93,6 @@ class TermViewPresenter(
 
     /** 本帧内核快照缓存：beginFrame 抓一次，避免 lineCells 对屏幕行逐行深拷贝。 */
     private var frameSnapshot: ScreenSnapshot? = null
-
-    /**
-     * 几何自愈纠正累计次数（D-38 真根因，可观测探针）。
-     *
-     * 自愈规则（leader 裁定）：当「无挤压时的像素 rows > 内核 rows」时，说明内核曾被错误
-     * emit 钉在旧小值上（回前台 IME 挤压 rebase 的竞态后果），补发一次 resize 纠正。
-     * 正常路径下本值**恒为 0**——挤压时像素 rows < 内核、复原时 == 内核，从不 > 内核；
-     * 若本值在正常路径也增长，说明主路径有问题（那才是真正要修的东西，leader 硬约束）。
-     */
-    var geometryCorrectionCount: Int = 0
-        private set
-
-    /**
-     * 历史最大上报 rows（自愈判据的必要成分）。
-     *
-     * 自愈只应在「内核曾被从更大值错误钉小」时触发。区分两个同形场景：
-     *   - 首帧被 IME 挤压 seed（内核=92，从未到过更大值）→ 复原 96>92 但 maxReportedRows==92，
-     *     不满足「历史更大」→ 不触发（正常路径，leader 收工条件：count 恒 0）；
-     *   - 竞态 rebase（内核从 96 被钉到 86）→ 复原 96>86 且 maxReportedRows==96 > 86 → 触发。
-     * 用「历史最大上报 rows」而非「当前内核」做参照，才不漏掉竞态、不误伤首帧挤压 seed。
-     */
-    private var maxReportedRows: Int = 0
-
-    /** 统一 emit 出口：更新历史最大上报 rows 后调用注入的 [onResizeRequest]。 */
-    private fun emitResize(rows: Int, cols: Int) {
-        if (rows > maxReportedRows) maxReportedRows = rows
-        onResizeRequest(rows, cols)
-    }
 
     init {
         // 接管内核脏区回调：把屏幕脏行换算为逻辑行区间后缓存，作"画面已变化"的数据驱动
@@ -180,32 +136,6 @@ class TermViewPresenter(
         }
 
     /**
-     * 视口/历史内省快照（常驻只读，D-36 仪表化 + w-dev-cols 巡检层共用）。
-     *
-     * 全部是 getter 组合、零副作用：不产生 resize、不碰帧循环、不改任何状态、不暴露可变引用。
-     * 供外部（模拟器取证/w-dev-cols 巡检）直接读「本来就是数」的指标（maxTop/logicalCount/
-     * scrollbackSize/topLine），比从像素反推准确。任意线程可安全调用。
-     *
-     * @contract
-     * @pre none
-     * @post 返回当前视口状态的只读快照；不改变任何内部状态、不触发回调
-     * @err none
-     * @inv 调用前后 resize 次数/脏区/帧请求均不变（有测试锚住）
-     */
-    fun forensicsSnapshot(): ForensicsSnapshot {
-        val height = visibleRows
-        val maxTop = (logicalCount - height).coerceAtLeast(0)
-        return ForensicsSnapshot(
-            scrollbackSize = emulator.scrollback.size,
-            logicalCount = logicalCount,
-            visibleRows = height,
-            maxTop = maxTop,
-            topLine = topLine,
-            isFollowingBottom = topLine == null,
-        )
-    }
-
-    /**
      * 手指拖动改视口（正 [deltaLines] = 向上滚看更早历史，负 = 向下滚）。
      *
      * 跟随态先锁定到当前底部再滚；拖回窗口顶 == 屏幕顶即触底，自动恢复跟随（006）。
@@ -223,32 +153,7 @@ class TermViewPresenter(
         val current = topLine ?: maxTop
         val next = (current - deltaLines).coerceIn(0, maxTop)
         topLine = if (next >= maxTop) null else next
-        // D-36 鸡生蛋打破：本地 buffer 为空（打开会话初始态/ED3 清屏后）时 maxTop == 0，
-        // 上滑（deltaLines > 0）本无可滚空间、next 被钳到 0 且恒触底 → topLine 恒 null（跟随），
-        // 「滚到顶才拉历史」的补页条件（SessionViewModel.syncFromPresenter: atHistoryTop =
-        // locked && window.first == 0）永远走不到，上滑完全失效。空 buffer 上滑显式锁定到
-        // 逻辑行 0（可补页锚点），使上层补页条件命中、历史并入后 buffer 有内容可滚。
-        if (maxTop == 0 && deltaLines > 0) {
-            topLine = 0
-        }
         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
-        onFrameRequested?.invoke()
-    }
-
-    /**
-     * 历史分页头插并入 [merged] 行后，已锁定历史区的视口随之平移：头插让所有旧逻辑行号
-     * +[merged]，冻结的 [topLine] 必须同步平移，否则视口跳到并入的旧页而非停在原内容处
-     * （D-36：连续滚动的锚定保持）。跟随态（topLine == null）贴底不动，无需平移。
-     *
-     * @contract
-     * @pre [merged] >= 0（本页实际并入缓冲的历史行数，非请求 count——容量满时并入数更少）
-     * @post 锁定态 topLine += merged（并入后仍指向同一内容行）；跟随态不变；随后必触发一次 [onFrameRequested]
-     * @err none
-     * @inv none
-     */
-    fun onHistoryPrepend(merged: Int) {
-        if (merged <= 0) return
-        topLine?.let { topLine = it + merged }
         onFrameRequested?.invoke()
     }
 
@@ -267,55 +172,6 @@ class TermViewPresenter(
     }
 
     // ---- 捏合 → 行列数换算（005：让 CLI 自己重画）----
-
-    /**
-     * 真实视口变化（回前台/旋转/分屏/窗口尺寸变更）：重放当前像素几何。
-     *
-     * fix-viewport-restore-d38 判据：**两个入口语义正交**——
-     * [onViewportSizeChanged] 是布局挤压（IME/输入框），只推可见行、不重算；
-     * 本入口是真实视口变化，必须重算 rows/cols，内核尺寸不一致则 emit 一次 resize。
-     *
-     * 为什么「一律 emit」和「一律不 emit」都错、而必须给真实视口变化一个独立入口：
-     * - 一律 emit：IME 弹起/收起都会扰动服务端（用户原话「绝对难以接受」）；
-     * - 一律不 emit：回前台时没人负责把几何重新对齐到当前 View（D-38 根因）——View 高复原
-     *   但 [onSizeChanged] 未必回调，内核 rows 停在离开前/首帧被挤压的旧小几何上
-     *   （用户截图：终端只占顶部约 1/4、下方大片空黑）；emit 抑制进一步让本来能顺带纠正
-     *   的路径也不纠正，但根因是「回前台无对齐入口」，叠加因素不是病根；
-     * - 独立入口：View 层只有知道「这是回前台/窗口变更」的时点才调它（见 TermSurfaceView
-     *   onWindowVisibilityChanged），自然区分了「临时挤压」与「真实视口变化」两种语义。
-     *
-     * [visibleRowsOverride] 的清除与重算在此一举：后台期间收缩残留的挤压随像素高复原被清掉
-     * （updateVisibleRows 按当前像素重算），几何事件强制重算并（按需）emit 一次。
-     *
-     * @contract
-     * @pre 入参为当前 View 的真实像素尺寸（可为 0x0——布局尚未就绪时调用应安全忽略）
-     * @post viewportWidthPx/HeightPx 更新为入参；非正尺寸安全忽略（正尺寸才重算几何）；
-     *       visibleRows 按当前像素重算（挤压残留被清除）；内核尺寸不一致则 emit 一次 resize；
-     *       随后必触发一次 [onFrameRequested]（几何事件必重画）
-     * @err none
-     * @inv 仅当尺寸正且内核几何不一致才 emit；与 [onViewportSizeChanged] 的语义互斥
-     */
-    fun onRealViewportChanged(widthPx: Int, heightPx: Int) {
-        viewportWidthPx = widthPx
-        viewportHeightPx = heightPx
-        val rowsBefore = visibleRows
-        updateVisibleRows()
-
-        // 真实视口变化：presenter 不做 IME 推断——View 层传入的已是「扣除 IME inset 后的稳定
-        // 窗口高度」（TermSurfaceView 从 WindowInsets 拿 IME 可见性与高度），presenter 收到即视为
-        // 真实几何，重算并按需 emit（内核尺寸一致则跳过）。这样分屏/旋转/多窗口传真实变化正常
-        // 重算；回前台 IME 在屏时 View 层传扣除后的全高，不会 rebase 到挤压值。
-        if (widthPx > 0 && heightPx > 0) {
-            stableWidthPx = widthPx
-            stableHeightPx = heightPx
-            recomputeGeometry()
-        }
-        if (visibleRows != rowsBefore) {
-            onFrameRequested?.invoke()
-        }
-        // 几何事件本身即需重画（即使像素高未变——如回前台 View 高复原、onSizeChanged 未回调）。
-        onFrameRequested?.invoke()
-    }
 
     /**
      * 视图像素尺寸变化（IME/输入框挤压、复原、旋转重建后的首帧）。
@@ -338,9 +194,6 @@ class TermViewPresenter(
         // 0x0 预布局 / 非正尺寸不是真实视口：不落 seed（否则旋转重建后首帧被吞成非 resize）。
         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
             viewportSeeded = true
-            // 稳定基准 = 首帧 seed 的高度（IME 未开时的全高；若在屏则后续「真增长」分支自愈）。
-            stableWidthPx = widthPx
-            stableHeightPx = heightPx
             recomputeGeometry()
         }
         // 首帧之后：挤压/复原只改可见行数（视口上推），不再 emit resize。
@@ -351,112 +204,26 @@ class TermViewPresenter(
         if (visibleRows != rowsBefore) {
             onFrameRequested?.invoke()
         }
-        // 几何自愈（D-38 真根因，leader 硬约束）：若当前像素能推出的全高 rows **大于**内核 rows，
-        // 且**历史最大上报 rows 也大于内核**——说明内核曾被从更大值错误 emit 钉小（回前台 IME
-        // 挤压 rebase 的竞态后果，错误状态黏住不消失），补发一次 resize 纠正。
-        // 「历史最大」条件是首帧挤压 seed 的护栏：seed 到 92（从未到过 96）时复原 96>92 但
-        // maxReportedRows==92 不满足「历史更大」→ 不触发。只有竞态 rebase（内核曾 96 被钉到 86）
-        // 才满足 96>86 且 maxReportedRows(96)>86 → 触发。正常路径下本分支恒不走（count 恒 0）。
-        if (viewportHeightPx > 0 && cellHeight > 0 &&
-            viewportHeightPx / cellHeight > emulator.rows &&
-            maxReportedRows > emulator.rows
-        ) {
-            geometryCorrectionCount++
-            val rows = viewportHeightPx / cellHeight
-            val cols = if (viewportWidthPx > 0 && cellWidth > 0) viewportWidthPx / cellWidth else emulator.cols
-            emitResize(rows, cols)
-        }
     }
 
     /**
-     * 捏合改字号（**预览语义**，fix-pinch-preview-commit / raw/041 裁定）。
-     *
-     * 捏合过程中每次 onScale 调本方法：只更新 [cellWidth]/[cellHeight] 与可见行数、
-     * 请求重画（本地预览生效），**绝不 emit resize**——服务端不被每次手势步扰动。
-     * 手势结束时 View 层调 [onPinchCommit] 才发那一次 resize。
-     *
-     * 守卫1：预览必须实时生效（字号变化可见），不能为了少发帧连预览都不做——
-     * 本方法更新字号 + 请求帧，预览即时。
+     * 捏合改字号：重算行列数，与内核当前尺寸不一致则上抛 resize 请求。
      *
      * @contract
      * @pre newCellWidth / newCellHeight 为正整数
-     * @post cellWidth/cellHeight 更新为入参；**不 emit resize**；更新可见行数并请求重画
+     * @post cellWidth/cellHeight 更新为入参；行列数变化则经 [onResizeRequest] 上抛；
+     *       随后必触发一次 [onFrameRequested]（栅格几何已变，即使行列数没变）
      * @err none
-     * @inv onResizeRequest 绝不在本方法内被调用（预览不重排）
+     * @inv none
      */
     fun onFontSizeChanged(newCellWidth: Int, newCellHeight: Int) {
         cellWidth = newCellWidth
         cellHeight = newCellHeight
+        recomputeGeometry()
         // 捏合改字格后可见行数随之变化（同一视口高 ÷ 新字格高），重排跟随新栅格。
         updateVisibleRows()
         // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
         onFrameRequested?.invoke()
-    }
-
-    /**
-     * 捏合手势结束：用最终字号发**一次** resize（fix-pinch-preview-commit / raw/041 裁定）。
-     *
-     * 一次完整捏合（多个 onScale 预览 + 手势结束）→ 本方法恰好被调一次 → [recomputeGeometry]
-     * 用**最终** cellWidth/cellHeight 算 rows/cols 并 emit 一次。守卫2：提交带最终行列数，
-     * 不是中间某步的。
-     *
-     * @contract
-     * @pre 至少一次 [onFontSizeChanged] 已调用（cellWidth/cellHeight 为最终预览值）
-     * @post 行列数与内核不一致则经 [onResizeRequest] 上抛一次（用最终字号）；随后请求重画
-     * @err none
-     * @inv 一次手势至多 emit 一次（幂等：内核已一致则 no-op）
-     */
-    fun onPinchCommit() {
-        recomputeGeometry()
-        onFrameRequested?.invoke()
-    }
-
-    /**
-     * 实测字形推进宽回写（fix-cols-grid-convergence 修法 1）：View 层每帧测量出的真实
-     * 列推进宽写回 [cellWidth]，使 [recomputeGeometry] 的 cols 与绘制推进**同一栅格来源**。
-     *
-     * 这是「最右列被截」的根治点：此前 cols 用名义 [DEFAULT_CELL_WIDTH]=10 算、绘制用
-     * 实测 cellW 算，两套栅格永不收敛，cols 偏大时末列画到视口外被 Canvas 裁。
-     *
-     * **只回写 cellWidth、绝不回写 cellHeight**（收敛性 + 不动 IME 成果的双重原因）：
-     * - cellW 是 cellHeight 的函数（measureCells 里 textSize = cellHeight*0.85 决定字形度量），
-     *   回写 cellW 不改变下一次测量的 cellW → 首次回写后即幂等收敛（**至多一次**
-     *   recomputeGeometry，可证明：同值直接 return）；回写 cellH 则会触发
-     *   cellH→textSize→cellH 的反馈环（真机字体度量随字号缩放，需证明收敛，违反约束一）。
-     * - rows = viewportHeight / cellHeight 用 cellHeight 算；动 cellHeight 会扰动
-     *   fix-ime-no-resize 锚定的首帧 rows（TermViewImeResizePresenterProbeTest
-     *   断言 firstViewportEmitsInitialResize = (96 to 108)，基于默认 cellHeight=20）。
-     *
-     * @contract
-     * @pre measuredCellW > 0（View 层已 guard）
-     * @post cellWidth 更新为入参；若与旧值不同则重算行列数并按需经 [onResizeRequest] 上抛
-     *       一次（cols = viewportWidth / 实测宽，与绘制同源）、随后必触发一次 [onFrameRequested]
-     *       （栅格几何变了）；同值调用为幂等 no-op（不触发任何 emit / 帧请求——反馈环收敛点）
-     * @err none
-     * @inv 同值二次调用不产生任何副作用；cellHeight 永不被本方法改动
-     */
-    fun setMeasuredCellWidth(measuredCellW: Int) {
-        if (measuredCellW <= 0) return
-        if (measuredCellW == cellWidth) return // 幂等：已收敛，绝不重复 emit（反馈环收敛点）
-        cellWidth = measuredCellW
-        recomputeGeometry()
-        onFrameRequested?.invoke()
-    }
-
-    /**
-     * 渲染层右缘护栏已 engage 的累计次数（fix-cols-grid-convergence 修法 3 的可观测信号）。
-     *
-     * 约束三（leader）：护栏不许变成静默遮羞布——必须可观测，正常条件从不 engage。
-     * View 层 drawLine 检测到宽字符背景矩形右缘越过视口宽时递增本值并收边（把矩形裁进
-     * 视口），测试断言本值 > 0 证明护栏在异常条件（网格超宽 = A 回归）确实兜住了，
-     * 而非悄悄裁掉无人知晓。正常条件（cols 与画布同源）下本值恒为 0。
-     */
-    var clipGuardEngageCount: Int = 0
-        private set
-
-    /** View 层护栏收边时上报（可观测，非静默）：递增 [clipGuardEngageCount]。 */
-    fun onClipGuardEngaged() {
-        clipGuardEngageCount++
     }
 
     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */
@@ -465,7 +232,7 @@ class TermViewPresenter(
         val rows = viewportHeightPx / cellHeight
         val cols = viewportWidthPx / cellWidth
         if (rows != emulator.rows || cols != emulator.cols) {
-            emitResize(rows, cols)
+            onResizeRequest(rows, cols)
         }
     }
 
@@ -570,19 +337,3 @@ class TermViewPresenter(
         const val DEFAULT_CELL_HEIGHT = 20
     }
 }
-
-/**
- * 视口/历史内省快照（[TermViewPresenter.forensicsSnapshot] 的返回，常驻只读）。
- *
- * 全部字段为不可变 Int/Boolean，不暴露任何可变引用。供模拟器取证（D-36）与巡检层
- * （w-dev-cols）直接读取「本来就是数」的视口指标。构造后不可变，调用无副作用。
- */
-data class ForensicsSnapshot(
-    val scrollbackSize: Int,
-    val logicalCount: Int,
-    val visibleRows: Int,
-    val maxTop: Int,
-    /** 视口顶行（逻辑行）；null = 跟随底部。 */
-    val topLine: Int?,
-    val isFollowingBottom: Boolean,
-)
