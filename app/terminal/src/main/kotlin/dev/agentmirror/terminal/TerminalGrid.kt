@@ -55,27 +55,16 @@ internal class TerminalGrid(cols: Int, rows: Int) {
             // 宽字符放不进行尾：末格留空白，整字符落到下一行行首。
             clearWideAt(cursorY, cursorX, fill)
             grid[cursorY][cursorX] = Cell.blank(fill)
-            markDirty(cursorY) // 清末格留空白 = 真实内容变化（宽字符被拆），必须标脏
+            markDirty(cursorY)
             cursorX = 0
             lineFeed(fill)
         }
         clearWideAt(cursorY, cursorX, fill)
         if (width == 2 && cursorX + 1 < cols) clearWideAt(cursorY, cursorX + 1, fill)
         val row = grid[cursorY]
-        val newCell = Cell(String(Character.toChars(codePoint)), style, width)
-        // 同内容重写短路（fix-input-send-fullrepaint 关联，独立立案见 docs/termgrid-markdirty-redundant-repaint.md）：
-        // 新旧 Cell 完全相等（text+style+width，data class equals 含 fg/bg/bold/dim/italic/underline/
-        // strikethrough/reverse 全部属性位）时不标脏——同内容重写白标脏触发冗余重绘。
-        // 同字不同属性（颜色/粗体/下划线/反显任一变）不相等，必标脏；宽字符续格占位同样判定。
-        if (row[cursorX] != newCell) {
-            row[cursorX] = newCell
-            if (width == 2) row[cursorX + 1] = Cell("", style, 0)
-            markDirty(cursorY)
-        } else if (width == 2 && row[cursorX + 1] != Cell("", style, 0)) {
-            // 主格内容相同但续格占位不同（罕见：续格样式变化）→ 仍需标脏并修正续格。
-            row[cursorX + 1] = Cell("", style, 0)
-            markDirty(cursorY)
-        }
+        row[cursorX] = Cell(String(Character.toChars(codePoint)), style, width)
+        if (width == 2) row[cursorX + 1] = Cell("", style, 0)
+        markDirty(cursorY)
         val next = cursorX + width
         if (next >= cols) {
             cursorX = cols - 1
