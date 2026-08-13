@@ -1,9 +1,12 @@
 {
   "task_id": "fix-scrollback-history-d36",
-  "status": "pass_pending_daemon_rebuild",
+  "status": "refuted_by_user",
   "result_id": "res_17103adb1ec0",
   "agent": "w-dev-d36",
-  "summary": "D-36 向上滑看历史：协议两端一起修。服务端去掉 scrollback 坐标 pane.Height 平移、historySize 不双计屏、line_count 用实际数据行数；客户端打破「空 buffer 锁不住 → 补页条件永不走」的鸡生蛋死结，并在历史头插时保持锚定。",
+  "status_reason": "2026-08-13 用户纠正「向上滑没有好」——此前根据用户半句『向上滑好了』误升级为 pass_user_confirmed，已撤销（leader msg_f0c1788d4ad0 / msg_d632d29e4d28）。服务端恢复 v5 → 会话名恢复已用户亲验；但 D-36 本身未修，二者已切割。选 refuted_by_user 而非 pass_pending_daemon_rebuild：用户已实测推翻『修好』结论，且有明确的新复现步骤，不再是『等重编后再验』的悬置态。",
+  "user_recheck_20260813": "「向上滑**没有好**，如果第一次进入 cli，那么会大量从上往下加载，这个时候**可以向上滑**，但是**只要发一条消息，就不能向上滑了**。」——四轮以来第一次拿到「能→不能」的状态转移描述（进 CLI 可滑 → 发消息后不可滑），比之前所有终态描述都可用。**注意：此前 user_original_words「向上滑好了」为误报，用户随即纠正，不得据此结案。**",
+  "server_restore_confirmed": "服务端整体恢复到 v5（07f065db0）→ 会话名恢复，已用户亲验。**但会话名恢复 ≠ D-36 修好**，两件事已切割。",
+  "summary": "D-36 向上滑看历史：协议两端一起修。服务端去掉 scrollback 坐标 pane.Height 平移、historySize 不双计屏、line_count 用实际数据行数；客户端打破「空 buffer 锁不住 → 补页条件永不走」的鸡生蛋死结，并在历史头插时保持锚定。2026-08-13 用户纠正：「向上滑没有好」——进 CLI 首次可滑、发消息后不可滑，待继续修。",
   "用户最终定义_前四轮都按错误定义修": {
     "final": "「向上滑动就是**完全失效**的。我只有捏合缩放成比较小的情况下，它才能向上滑。也就是说，**它就加载了最小字体的一页**。」——即 App 从头到尾只有一屏。",
     "superseded": "用户此前表述为「历史仅限于我打开这个窗口积攒的历史」，leader 据此立案为「本地滚动通、只是不拉服务端历史」——**该定义是错的**，用户随即更正。",
@@ -37,8 +40,7 @@
   },
   "副产物_强线索": "席位报告了一条它未动的基线失败用例 d27:redundant-same-size-resize-after-input-must-not-repush-snapshot（发送 input 后出现同尺寸冗余 resize，服务端据此补发整屏 snapshot），基线即红。该机制与用户报告的「发消息后整屏逐行重刷、只在本端发送时出现、时长随 RTT」高度吻合，已转给 w-dev-repaint 核实。",
   "pending": [
-    {"item": "重编 daemon", "note": "服务端改动需重编才生效；生产 daemon pid 39489 为 13:40 旧二进制"},
-    {"item": "真机验证", "note": "用户在真机确认「能像 CLI 滚鼠标滚轮那样翻到最开始」"}
+    {"item": "按新复现步骤重验", "note": "复现步骤（用户 2026-08-13 实证）：进 CLI → 大量从上往下加载 → 此时可向上滑 → 发一条消息 → 不能向上滑。四轮以来第一次拿到「能→不能」状态转移，按此定位根因"}
   ],
-  "at": "2026-08-12"
+  "at": "2026-08-13"
 }
