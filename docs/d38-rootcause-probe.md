@@ -172,19 +172,28 @@ postmortem 写「Robolectric 无法模拟 Compose insets 分发链 → 三版单
 - 在 `TermSurfaceView.onWindowVisibilityChanged` VISIBLE 分支调它（v5 已经做过这件事，这次注意不要复制 v5 的黑屏闪逻辑）
 - **关键约束**：调用时序必须能区分「IME 在屏（挤压态）」vs「View 真实尺寸」——这就是 v1/v2/v3 没解决的问题。如果能用 Compose 已知的 isImeVisible 来控制"回前台时用哪个高度"，那是可行方向，但触发点必须在 VISIBLE 事件而非 IME 状态变化事件（以免走 v3 的老路）。
 
-### 5.2 修复后的探针验收
+### 5.2 探针验收（极性翻转后，永久绿）
 
-修复后运行探针，P1/P2/P3/P5 应 **FAIL**（不命中 = 缺陷消失），P4 应 **PASS**（不倒退）：
+2026-08-14 缺陷③修复提交 `3c8e2c2e3` 落地后，探针极性已翻转为**回归闸**（见探针文件头注释）：
+- P1/P2/P3/P4 均断言**正确行为**，任何时候跑都应 PASS
+- P5 已删除（结论保留在 §2）
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests "dev.agentmirror.app.termview.D38ViewportRestoreProbe"
 ```
 
-- P1 FAIL = `emulator.rows` 不再 stuck at 84，说明 geometry 被正确更新
-- P2 FAIL = `window` 不再是 84 行（应为 140 行）
-- P3 FAIL = 调用新入口后 emulator.rows 被纠正（不再是 84）
-- P4 PASS = 首帧全高时仍然不触发缺陷（不倒退）
-- P5 FAIL = `onRealViewportChanged` 方法已存在（修复有效）
+期望输出（极性翻转后实测，2026-08-14）：
+
+```xml
+<testsuite tests="4" failures="0" errors="0">
+  <testcase name="P1_emulatorRowsRecoverAfterViewGrows"/>
+  <testcase name="P2_windowCoversFullViewportNoBlankRows"/>
+  <testcase name="P3_onRealViewportChangedRecoversGeometryOnForegroundReturn"/>
+  <testcase name="P4_firstFrameFullHeightNoDefectAndNoRegressionOnIme"/>
+</testsuite>
+```
+
+失败含义：D-38 很可能重现，见探针文件头注释的排查清单。
 
 ---
 
@@ -192,8 +201,8 @@ postmortem 写「Robolectric 无法模拟 Compose insets 分发链 → 三版单
 
 | 结论 | 状态 |
 |---|---|
-| 缺陷在 v6 HEAD 上存在 | ✅ 5 探针全部命中 |
-| evidence.json 的根因描述是 patch 行为，非 v6 行为 | ✅ P5 实证（方法不存在） |
-| 三版失败复盘与 postmortem 官方描述基本一致 | ✅ 一致，有一处补充 |
+| 缺陷在 v6 HEAD 上存在（回炉探针阶段） | ✅ 原 5 探针全部命中（回炉已归档） |
+| evidence.json 的根因描述是 patch 行为，非 v6 行为 | ✅ P5 实证（方法不存在）；结论保留在 §2 |
+| 三版失败复盘与 postmortem 官方描述基本一致 | ✅ 一致，有一处补充（§4.2） |
 | 修复方向：需要"真实视口变化"入口 | ✅ 与 FIELD.md 结论相符 |
-| 修复验收标准 | ✅ 探针 P1-P5（P4 PASS 其余 FAIL） |
+| 修复后探针验收（2026-08-14，提交 3c8e2c2e3） | ✅ 4 tests, 0 failures；极性已翻转为回归闸 |
