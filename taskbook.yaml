@@ -2343,3 +2343,36 @@ tasks:
     write_scope: ["app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/test/"]
     evidence: ".team/evidence/fix-tsnet-resume-reconnect.json"
     contention: none
+
+  - id: feat-diagnostic-log-export
+    goal: >
+      用户 2026-08-14 裁定：**测试链路必须先抓到真实缺陷，抓不到就不许改代码**；
+      而抓不到的时候，出路不是放宽标准，而是**在 App 里做诊断日志 + 设置里的日志导出**——
+      「我复现了之后，你们看日志要能够抓到问题，并且真正的定位到原因，并且修正」。
+      本条把「用户真机复现一次」变成一份可分析的证据，直接解阻缺陷⑤
+      （内嵌 tsnet 回前台连不上，模拟器造不出后台冻结）以及一切只在用户真实
+      蜂窝+TS 链路上出现的缺陷。
+      能力要求：环形缓冲（内存+落盘）、有界不无限增长、设置页一键导出（分享/另存）。
+      **记录内容必须足以定位根因，不是流水账**：至少覆盖 tsnet 状态迁移与迁移原因、
+      SOCKS 拨号尝试与失败码、WS 连接/断开与关闭原因、上传尝试的源目的地址与结果、
+      前后台生命周期事件、几何/视口变更。
+      **用户 2026-08-14 追加**：缺陷②（右列文字跑到屏幕外）同样适用——
+      「你这些东西抓不到，你就加日志」。所以渲染栅格也必须可观测：
+      名义 cellWidth 与实测 cellWidth 各是多少、上报给服务端的 cols 是多少、
+      画布宽多少、末列字形右缘落在哪、超出 View 边界多少像素、捏合事件前后各值如何变化。
+      判据：**光看导出的日志，就能算出「最右列超出屏幕几个像素」**，
+      不需要再问用户要截图。
+      **凭据绝对不许入日志**：配对 token、TS authkey、Bearer 头一律脱敏，
+      这条是硬红线（2026-08-13 与 08-14 已各发生一次 authkey 泄露）。
+    acceptance:
+      - "红测：任何一条日志记录路径喂入配对 token / TS authkey / Bearer 值，导出产物中必须零命中（脱敏红测，先红后绿）"
+      - "红测：缓冲有界——写入远超容量的记录后，内存与磁盘占用不超过设定上限（资源有界红线）"
+      - "红测：tsnet 状态迁移、SOCKS 拨号失败、WS 关闭原因三类事件各有一条断言其被记录且字段完整"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
+      - "静默经济：空闲时日志子系统零 CPU、无固定频率线程/子进程；用实测数据证明"
+      - "眼见为实：模拟器上走一遍导出流程，拿到文件并打开确认内容可读、无凭据"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/diag/", "app/app/src/main/java/dev/agentmirror/app/ui/", "app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-diagnostic-log-export.json"
+    contention: none

@@ -1,0 +1,1 @@
+{"task_id":"fix-upload-transport-tsnet-review","dispatched_to":"w-rev-upload","base":".team/nodes/fix-upload-transport-tsnet/CLAUDE.md","at":"2026-08-14","note":"补漏：①的 diff 从未被第二双眼睛审过就进了主线（fb31674d2），本席对抗性审查"}
