@@ -35,13 +35,16 @@ import org.robolectric.annotation.Config
  * > 一次完整捏合手势（多个 onScale + 一个手势结束），`onResizeRequest` 必须恰好被调用 1 次，
  * > 且发生在手势结束时。
  *
- * 当前实现（TermSurfaceView.onScale → presenter.onFontSizeChanged → onResizeRequest）每个
- * onScale 都 emit —— 一次捏合 = N 次（N 是手势步数）。本红测当前必红，红的实际数字 = N。
- *
  * 守卫（leader 必做）：
  * 1. 手势过程中**字号必须实时变化**（本地预览生效），不能为了少发帧连预览都不做。
  * 2. 手势结束后那**一次** resize 必须带**最终**行列数，不是中间某步的。
  * 3. 回归门 TermSurfacePinchGestureTest 保持绿（手势结束检测器复位）。
+ *
+ * ⚠️ 作用边界（leader 裁定，2026-08-13）：本测试是**结构测试**，不是行为证据。
+ * 它锚的是「提交点在 ACTION_UP 而不是别处」这一**结构**——Robolectric 的 ScaleGestureDetector
+ * 在旧代码（onScaleEnd 提交）下对同一分阶段抬起序列也是 1 次，真机才是 2 次（w-base-v2 实测）。
+ * **一个在旧代码上就通过的测试，在新代码上通过，什么也没证明。** 修复有效与否只能由
+ * 真机/模拟器实测判定（排 w-base-v2 队列）。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
