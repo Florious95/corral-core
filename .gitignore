@@ -28,3 +28,7 @@ e2e/artifacts/**/gradle-build/
 # Web 端生成物
 web/vendor/
 web/dist/
+
+# ffmpeg 抽帧目录：由同目录 mp4 重出，不入库
+# （2026-08-13：abc-regression 的 764 张已入库 112 MB，本次摘除跟踪）
+e2e/artifacts/**/frames*/
