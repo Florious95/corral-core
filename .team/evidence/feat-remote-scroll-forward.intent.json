@@ -1,1 +1,1 @@
-{"task_id":"feat-remote-scroll-forward","dispatched_to":"w-scroll-design","base":".team/nodes/feat-remote-scroll-forward/CLAUDE.md","at":"2026-08-14","note":"contract 级：只产出协议方案书，leader 未裁定前不施工"}
+{"task_id":"feat-remote-scroll-forward","dispatched_to":"w-scroll-design","base":".team/nodes/feat-remote-scroll-forward/CLAUDE.md","at":"2026-08-14","note":"round2：契约已由用户授权 leader 裁定放行，本轮实现服务端+协议+红测，App 侧手势接入待 app/app 施工权释放"}
