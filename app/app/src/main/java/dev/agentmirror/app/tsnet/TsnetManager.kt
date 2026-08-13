@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.tsnet
 
+import dev.agentmirror.app.diag.DiagLog
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -83,7 +84,13 @@ class TsnetManager(
      */
     @Synchronized
     fun start(stateDir: String, hostname: String, authKey: String): Boolean {
-        if (state is TsnetState.Starting || state is TsnetState.Up) return false
+        if (state is TsnetState.Starting || state is TsnetState.Up) {
+            // 缺陷⑤观测点：幂等守卫拦下重复 start。真实缺陷场景是 state 停在 Up（语义
+            // 「曾经通」）而自愈路径被这条 guard 堵死——diag 记录被拦时的当前态，日志里
+            // 能看出「ensureStarted 被调用但被拦下」。
+            DiagLog.record("tsnet", "start 被幂等守卫拦下 state=$state（key 指纹相同）")
+            return false
+        }
         val key = TsnetAuthKeys.normalizeOrNull(authKey)
         if (key == null) {
             transition(TsnetState.Error("authkey 结构非法（空白或含不可见字符）"))
@@ -133,6 +140,9 @@ class TsnetManager(
 
     /** 统一状态落点：先写 state 再回调（回调方见到的 state 与参数一致）。 */
     private fun transition(next: TsnetState) {
+        // 缺陷⑤观测点：每次迁移带原因（from→to）。能看出节点状态如何、何时走到 Up 又停在
+        // Up；SOCKS 拨号失败但 state 仍是 Up 的错位在日志里一目了然。
+        DiagLog.record("tsnet", "state $state → $next")
         state = next
         onState(next)
     }

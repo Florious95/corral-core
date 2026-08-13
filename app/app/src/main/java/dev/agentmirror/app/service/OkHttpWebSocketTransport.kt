@@ -19,6 +19,7 @@ package dev.agentmirror.app.service
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.tsnet.TsnetDial
 import dev.agentmirror.app.tsnet.TsnetWire
 import dev.agentmirror.app.tsnet.ConnectionPath
@@ -114,11 +115,16 @@ class OkHttpWebSocketTransport(
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             isOpen = false
+            // 缺陷观测点：WS 关闭带 code/reason（对端关闭 / 本端关闭握手完成）。
+            DiagLog.record("ws", "closed code=$code reason=${reason.take(200)}")
             deliverTerminal { listener?.onClosed(code, reason) }
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             isOpen = false
+            // 缺陷观测点：WS 传输失败（网络断/拨号失败/读异常）。response 的 code 保留
+            // （HTTP 握手失败时可见），异常 message 经 record 写入点脱敏（Bearer/token 兜底）。
+            DiagLog.record("ws", "failure ex=${t.javaClass.simpleName} msg=${t.message?.take(200)}")
             deliverTerminal { listener?.onFailure(t) }
         }
     }

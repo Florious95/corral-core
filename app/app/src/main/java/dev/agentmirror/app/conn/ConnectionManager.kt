@@ -16,6 +16,8 @@
 
 package dev.agentmirror.app.conn
 
+import dev.agentmirror.app.diag.DiagLog
+
 /**
  * 连接层对外状态（docs/protocol.md §3 生命周期）。
  */
@@ -456,6 +458,9 @@ class ConnectionManager(
 
     private fun setState(s: ConnectionState) {
         if (state != s) {
+            // 缺陷观测点：连接状态迁移（CONNECTING→AUTHENTICATING→READY→RECONNECTING→STOPPED）。
+            // 配合 ws 层的关闭原因记录，能重建"何时连上、何时掉、为何掉"的完整时间线。
+            DiagLog.record("ws", "conn state $state → $s")
             state = s
             listener?.onStateChanged(s)
         }

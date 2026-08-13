@@ -17,6 +17,7 @@
 package dev.agentmirror.app.session
 
 import dev.agentmirror.app.conn.json
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.tsnet.TsnetDial
 import dev.agentmirror.app.tsnet.TsnetProxySocketFactory
 import dev.agentmirror.app.tsnet.TsnetWire
@@ -87,6 +88,9 @@ class HttpUrlConnectionUploader : AttachmentUploader {
         val boundary = "AgentMirrorBoundary${System.currentTimeMillis()}"
         val body = buildMultipartBody(boundary, attachment)
 
+        val start = System.currentTimeMillis()
+        // 缺陷观测点：上传目标地址、选路走了 SOCKS 还是直连、结果、耗时。
+        // 选路在拨号前决定（sf==null → 直连），记录的是实际路径；结果在 finally 统一落。
         return try {
             // 与 WebSocket 同一选路（fix-upload-transport-tsnet）：仅 tailnet 段 host 且节点
             // Up 才经 tsnet loopback SOCKS5（[TsnetProxySocketFactory]，自实现握手），其余
@@ -94,12 +98,22 @@ class HttpUrlConnectionUploader : AttachmentUploader {
             // 避免两通道选路不一致。LAN 路径零行为变化。
             val host = runCatching { java.net.URI(endpoint).host }.getOrNull()
             val sf = TsnetDial.socketFactoryFor(TsnetWire.state, host)
-            if (sf == null) {
+            val viaSocks = sf != null
+            DiagLog.record("upload", "attempt endpoint=$endpoint host=$host via=${if (viaSocks) "socks" else "direct"}")
+            val outcome = if (sf == null) {
                 uploadViaHttpUrlConnection(endpoint, boundary, body, uploadToken)
             } else {
                 uploadViaOkHttp(endpoint, boundary, body, uploadToken, sf)
             }
+            DiagLog.record(
+                "upload",
+                "result ${if (outcome is UploadOutcome.Success) "ok" else "fail"} " +
+                    "via=${if (viaSocks) "socks" else "direct"} ms=${System.currentTimeMillis() - start} " +
+                    "detail=${outcome.toString().take(200)}",
+            )
+            outcome
         } catch (e: Exception) {
+            DiagLog.record("upload", "fail ex=${e.javaClass.simpleName} msg=${e.message?.take(200)}")
             UploadOutcome.Failure("上传失败：${e.message ?: "网络异常"}")
         }
     }
