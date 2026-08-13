@@ -111,6 +111,54 @@ globalRegistry.define({
   },
 });
 
+// ---- 考卷8：四象限方差判据（leader 裁定 + w-dev-repaint 事故）----
+
+globalRegistry.define({
+  name: 'inspection:R8-alive-variance-four-quadrants',
+  tags: ['inspection', 'alive'],
+  localOnly: true,
+  description: '四象限方差：深活/深死/浅活/浅死，方差分离、主题无关',
+  async fn() {
+    const path = require('path');
+    const ART = path.resolve(__dirname, '../../e2e/artifacts');
+    const { pngToGrayBytes, probeDimensions } = require('../framework/machine_eye/video');
+
+    function variance(p) {
+      const gray = pngToGrayBytes(p);
+      const { width, height } = probeDimensions(p);
+      let sum = 0, sumsq = 0;
+      for (let i = 0; i < gray.length; i++) { sum += gray[i]; sumsq += gray[i] * gray[i]; }
+      const n = gray.length, mean = sum / n;
+      return sumsq / n - mean * mean;
+    }
+
+    // 四象限真实语料。
+    const darkAlive = variance(path.join(ART, 'd38-viewport-restore/25-app-baseline-realcc.png'));
+    const darkDead = variance(path.join(ART, 'd38-verify/02-baseline.png'));
+    const lightAlive = variance(path.join(ART, 'ui-review/ime-normal-light.png'));
+    const lightDead = variance(path.join(ART, 'ui-review/d35-empty-light.png'));
+
+    console.log(`[R8] 深活=${darkAlive.toFixed(0)} 深死=${darkDead.toFixed(0)} 浅活=${lightAlive.toFixed(0)} 浅死=${lightDead.toFixed(0)}`);
+
+    // 主判据：方差阈值 1000。
+    assert(darkAlive > 1000 && lightAlive > 1000, `活屏方差应 >1000，实 深活${darkAlive.toFixed(0)}/浅活${lightAlive.toFixed(0)}`);
+    assert(darkDead < 1000 && lightDead < 1000, `死屏方差应 <1000，实 深死${darkDead.toFixed(0)}/浅死${lightDead.toFixed(0)}`);
+
+    // 分离度：活/死至少 5 倍（实测 17-38 倍）。
+    assert(Math.min(darkAlive, lightAlive) / Math.max(darkDead, lightDead) > 5,
+      `活/死方差分离度应 >5，实 ${Math.min(darkAlive, lightAlive).toFixed(0)}/${Math.max(darkDead, lightDead).toFixed(0)}`);
+
+    // 完整 computeAlive 路径：深死帧判死。
+    const { scenario } = require('../framework/inspection/index');
+    const result = scenario.runScenarioMetrics({
+      scenarioId: 'S1-open-session-send',
+      captures: { 'open-stable': { kind: 'png', path: path.join(ART, 'd38-verify/02-baseline.png') } },
+      provenance: { buildSha: 'test', device: 'test', latencyMs: 0, fixture: 'test' },
+    });
+    assert(result.alive && result.alive.alive === false, `深死帧应判死，实 ${JSON.stringify(result.alive)}`);
+  },
+});
+
 // ---- 考卷7：存活判据 BLOCKED（leader 裁定，最高优先级）----
 
 globalRegistry.define({
