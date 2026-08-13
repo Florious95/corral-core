@@ -36,11 +36,19 @@ enum class ConnectionState {
     STOPPED,
 }
 
-/** 连接配置：目标 URL 与配对 token（token 只上行一次，不回显、不落日志）。 */
+/**
+ * 连接配置：目标 URL 与配对 token（token 只上行一次，不回显、不落日志）。
+ *
+ * [toString] 安全覆盖（前置任务②，w-diag-rev 对抗预审发现）：data class 默认 toString
+ * 会把 token 明文吐进日志/崩溃 trace。url 保留（诊断仍能看出拨号目标），token 替换为
+ * [redacted]。序列化仍走手写/编译器生成路径，不受影响。
+ */
 data class ConnectionConfig(
     val url: String,
     val token: String,
-)
+) {
+    override fun toString(): String = "ConnectionConfig(url=$url, token=[redacted])"
+}
 
 /**
  * 重连策略 + 订阅簿记（docs/protocol.md §3 重连语义、004 无状态铁律）。

@@ -119,10 +119,8 @@ class TsnetManager(
     }
 
     /** 后端错误的 UI 安全文案：精确替换本次归一化 key，不记录也不返回原凭证。 */
-    private fun redactAuthKey(error: Throwable, authKey: String): String {
-        val reason = error.message ?: error.javaClass.simpleName
-        return reason.replace(authKey, "[redacted]")
-    }
+    private fun redactAuthKey(error: Throwable, authKey: String): String =
+        redactCauseChain(error, authKey).replace("\n", " ")
 
     /** 停节点回 Idle。Starting 期间调用依赖代次机制让迟到结果自清理。 */
     @Synchronized
@@ -138,4 +136,27 @@ class TsnetManager(
         state = next
         onState(next)
     }
+}
+
+/**
+ * 递归清洗整条 cause 链（前置任务③，w-diag-rev 对抗预审发现）：
+ * 原 [TsnetManager.redactAuthKey] 只替换顶层 `error.message`，一旦 authkey 出现在被
+ * 包裹的 **cause** 里（gomobile/native 层"重包装再抛"的常见模式），`Log.e(TAG, msg,
+ * throwable)` 打印整条链就会把 key 原样带出。
+ *
+ * 语义：逐层取 `message`（null 回落类名）做 `[authKey] → "[redacted]"` 替换，按
+ * `\ncaused by: ` 拼接；返回**不含 authKey** 的多行文本。任何要落日志/落 diag 的
+ * 异常路径必须先过本函数，**绝不把原始 Throwable 直接丢给 Log**。
+ * @contract
+ * @pre none（error 任意 Throwable，authKey 为待脱敏的归一化 key）
+ * @post 返回串遍历整条 cause 链且每个可见层都做过替换；返回串不含 authKey 原文
+ * @err none（不抛异常；cause 循环（环）由 [generateSequence] 天然截断于重复节点）
+ * @inv 顶层 message 与全部 cause message 均被处理；类名兜底（message 为 null 时）
+ */
+internal fun redactCauseChain(error: Throwable, authKey: String): String {
+    val chain = generateSequence(error) { it.cause }
+        .map { it.message ?: it.javaClass.simpleName }
+        .joinToString("\ncaused by: ") { it.replace(authKey, "[redacted]") }
+    // 空串兜底：异常无 message 且类名也被替换成空（authKey 恰等于类名，极端情况）。
+    return chain.ifEmpty { "start failed" }
 }
