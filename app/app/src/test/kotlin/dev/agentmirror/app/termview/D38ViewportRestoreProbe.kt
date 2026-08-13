@@ -18,61 +18,30 @@ package dev.agentmirror.app.termview
 
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 根因探针 · D-38「回前台输入框跑到屏幕中间」（fix-viewport-restore-d38 回炉审查席产物）。
+ * D-38 回归闸（fix-viewport-restore-d38，2026-08-14 回炉审查席产物）。
  *
  * ══════════════════════════════════════════════════════════════
- * 阅读说明（重要）
+ * 历史背景（重要，看到红需要先读这里）
  * ══════════════════════════════════════════════════════════════
- * 本文件是「回炉流程」审查席的**验收标准**，不是修复本身。
+ * 本文件原为「回炉流程」审查席产出的**取证探针**，在 v6 回退 HEAD 上所有断言均 PASS，
+ * 以证明 D-38 缺陷存在。2026-08-14 缺陷③修复提交 `3c8e2c2e3` 落地后，极性反转为
+ * **回归闸**：断言修复后的正确行为，失败即代表 D-38 重现。
  *
- * 在当前 v6 HEAD（已回退）上跑 → 全部 PASS  = "命中" = 诊断正确，缺陷存在。
- * 修复后跑                      → 全部 FAIL  = "不命中" = 修复有效，缺陷消失。
- *
- * 任何一个 FAIL 在 v6 HEAD 上出现 → 停下报 leader，绝不改探针迁就诊断。
- * 任何一个 PASS 在修复后仍然存在 → 修复没有击中根因，继续排查。
- *
- * ══════════════════════════════════════════════════════════════
- * 已闭合根因（evidence.json 原文）——本探针需要"证伪或坐实"的对象
- * ══════════════════════════════════════════════════════════════
- * evidence.json 写：
- *   「回前台时 IME 仍在屏上，onRealViewportChanged 重算并上报，
- *     把被挤压的几何当成了永久基线；而 onViewportSizeChanged（IME 收起）
- *     按 fix-ime-no-resize 不再上报 → 挤压值成为永久基线。」
- *
- * ⚠️ 审查席发现：onRealViewportChanged 是 v3 patch 新增的方法，
- *    当前 v6 HEAD 的 TermViewPresenter 里根本不存在该方法。
- *    所以 evidence.json 描述的是 **patch 里的行为**，而非 **v6 的根因**。
- *    这是纪律①（回退期间立的账不能按回退前的代码来判）的第三个实例。
+ * 修复核心（详见 docs/d38-rootcause-probe.md）：
+ *   `TermViewPresenter.viewportOutgrewEmulator()` —— 只有视口像素行/列数**超出**内核时
+ *   重算并 emit，挤压（<= 内核）永不触发。这个判据天然区分「临时 IME 挤压」和
+ *   「真实视口增长/回前台」，无需知道 IME 是否在屏（v1/v2/v3 都在推断 IME，都翻了）。
  *
  * ══════════════════════════════════════════════════════════════
- * v6 真正的根因（从代码和实测数字反推）
+ * 读取须知（若看到失败）
  * ══════════════════════════════════════════════════════════════
- * v6 TermViewPresenter.onViewportSizeChanged 两条路径：
- *   1. 首帧（viewportSeeded=false）：seed → recomputeGeometry() → emitResize(rows, cols)
- *   2. 首帧之后：只调 updateVisibleRows()，更新 visibleRowsOverride，**不动 emulator.rows**
- *
- * v6 TermSurfaceView：
- *   - onSizeChanged → presenter.onViewportSizeChanged （走路径 2 if already seeded）
- *   - 无 onWindowVisibilityChanged override（v5 有，被列为禁区未捞回）
- *
- * visibleRows getter（v6）：
- *   visibleRowsOverride?.coerceIn(1, emulator.rows) ?: emulator.rows
- *   ← 上限是 emulator.rows！IME 收起后 visibleRowsOverride 增长，
- *     但 emulator.rows 没更新 → visibleRows 被夹在旧的小值。
- *
- * 真正根因：
- *   **回前台时（乃至任何时刻），没有任何代码路径能在 viewportSeeded=true 之后
- *   调用 recomputeGeometry() 来更新 emulator.rows**——除了 onFontSizeChanged（捏合）。
- *   v5 用 onWindowVisibilityChanged 补了这个缺口，该文件被列为禁区未捞回，
- *   缺口一直空着。fix-ime-no-resize 进一步堵死了唯一能"顺带纠正"的路径。
- *
- * 实测数字（w-base-v2，与用户截图吻合）：
- *   首帧 IME 挤压 → emulator.rows=84；IME 收起后 → visibleRowsOverride=140；
- *   visibleRows = 140.coerceIn(1,84) = 84；空白 = (140-84)×20 = 1120px ≈ 1123px（吻合）。
+ * 测试红 = D-38「切后台再回前台输入框跑到屏幕中间」很可能重现。请检查：
+ *   1. TermViewPresenter.onViewportSizeChanged 的 viewportOutgrewEmulator() 分支是否仍在
+ *   2. TermViewPresenter.onRealViewportChanged 是否仍有 viewportOutgrewEmulator() 触发
+ *   3. visibleRows getter 的 coerceIn(1, emulator.rows) 上限是否随 emulator.rows 正确更新
  */
 class D38ViewportRestoreProbe {
 
@@ -93,167 +62,153 @@ class D38ViewportRestoreProbe {
     }
 
     /**
-     * 探针 P1（核心）：IME 挤压后 View 增长，emulator.rows 不跟着增长。
+     * P1（回归闸）：IME 挤压后 View 增长，emulator.rows 必须随之恢复。
      *
-     * 模拟序列：进入 CLI 时 IME 弹起 → 首帧被挤压 seed(84 行) → IME 收起 View 增长(140 行)。
+     * 历史：取证探针断言「emulator.rows 卡在 84」（v6 BUG）。
+     * 翻转后断言：增长触发 viewportOutgrewEmulator() → recomputeGeometry() → emulator.rows=140。
      *
-     * v6 PASS（命中）：emulator.rows 仍为 84；window 被夹在 84 行而非 140 行。
-     * 修复后 FAIL（不命中）：修复会调 recomputeGeometry() 更新 emulator.rows=140，
-     *   断言 84 不再成立。
+     * 失败含义：D-38 重现——View 增长后 emulator.rows 仍然停在旧的挤压小值，
+     *   visibleRows 被夹住，用户看到下方大片空黑。
      */
     @Test
-    fun PROBE_P1_emulatorRowsStuckAtSqueezedValueAfterViewGrows() {
+    fun P1_emulatorRowsRecoverAfterViewGrows() {
         val h = harness()
 
-        // 首帧被 IME 挤压（1680px / 20px = 84 行）→ seed，emit 一次 resize(84,108)。
-        h.presenter.onViewportSizeChanged(1080, 1680)
-        assertEquals("首帧 seed: emulator.rows 应为 84", 84, h.emulator.rows)
-        assertEquals("首帧 seed: 应 emit resize(84,108)", listOf(84 to 108), h.resizeCalls)
+        // 首帧被 IME 挤压到 84 行，seed 一次 resize。
+        h.presenter.onViewportSizeChanged(1080, 1680) // 1680/20 = 84 行
+        assertEquals("首帧 seed: emulator.rows=84", 84, h.emulator.rows)
+        assertEquals("首帧 seed: 应 emit (84,108)", listOf(84 to 108), h.resizeCalls)
 
-        // IME 收起，View 增长到 2800px（140 行）。
-        // fix-ime-no-resize：只调 updateVisibleRows()，不调 recomputeGeometry()。
+        // IME 收起，View 增长到 140 行。
+        // viewportOutgrewEmulator(): 2800/20=140 > emulator.rows(84) → true → recomputeGeometry()
         h.presenter.onViewportSizeChanged(1080, 2800)
 
-        // PROBE 命中条件 ①：emulator.rows 仍为 84（服务端对终端几何的认知未更新）。
         assertEquals(
-            "PROBE P1 命中: IME 收起后 emulator.rows 仍为 84，服务端只知道 84 行",
-            84,
+            "P1 PASS = D-38 已修复: IME 收起后 emulator.rows 应恢复到 140（不再卡在 84）",
+            140,
             h.emulator.rows,
         )
-        // PROBE 命中条件 ②：resize 回调序列不变（确认 fix-ime-no-resize 生效，第二次未 emit）。
         assertEquals(
-            "PROBE P1 命中: fix-ime-no-resize 吞掉了增长事件，resize 回调序列不变",
-            listOf(84 to 108),
+            "P1 PASS: resize 回调序列 = 首帧 seed(84) + 增长恢复(140)",
+            listOf(84 to 108, 140 to 108),
             h.resizeCalls,
         )
     }
 
     /**
-     * 探针 P2（窗口被夹住）：visibleRows 被 emulator.rows 上限夹住，导致 window 显示行数不足。
+     * P2（回归闸）：window 必须覆盖完整视口，无空黑行。
      *
-     * 验证 v6 visibleRows getter：override.coerceIn(1, emulator.rows)
-     * 当 override=140, emulator.rows=84 → visibleRows=84，window 只覆盖 84 行（56 行空白）。
+     * 历史：取证探针断言「windowRows=84，空白=56行」（v6 BUG，与用户截图 1123px 吻合）。
+     * 翻转后断言：windowRows=140，空白=0。
      *
-     * v6 PASS（命中）：window 长度 = 84（非 140）。
-     * 修复后 FAIL：window 长度 = 140。
+     * 失败含义：D-38 重现——window 仍被旧的 emulator.rows 夹住，用户看到顶部约 1/4 空黑。
      */
     @Test
-    fun PROBE_P2_windowCappedByStaleEmulatorRows() {
+    fun P2_windowCoversFullViewportNoBlankRows() {
         val h = harness()
 
-        // 完整序列：挤压 seed → 增长（被 fix-ime-no-resize 吞）。
-        h.presenter.onViewportSizeChanged(1080, 1680) // seed 84 行
-        h.presenter.onViewportSizeChanged(1080, 2800) // grow 140 行，visibleRowsOverride=140
+        h.presenter.onViewportSizeChanged(1080, 1680) // seed 84
+        h.presenter.onViewportSizeChanged(1080, 2800) // grow → viewportOutgrewEmulator() → 140
 
         val win = h.presenter.window
         val windowRows = win.last - win.first + 1
 
-        // PROBE: window 长度被 emulator.rows(84) 夹住，而非 viewportRows(140)。
-        // 即：用户只看到 84 行，下方 56 行（1120px）是空黑。
         assertEquals(
-            "PROBE P2 命中: window 被 emulator.rows(84) 夹住，显示 84 行而非 viewportRows(140)",
-            84,
+            "P2 PASS = D-38 已修复: window 应覆盖完整视口 140 行（不被旧 emulator.rows 夹住）",
+            140,
             windowRows,
         )
 
-        // 辅助观测：emulator.rows 与 viewportRows 的差值 = 空白行数（实证 1120/20=56）。
-        val viewportRows = 2800 / 20 // = 140（默认 cellHeight=20）
-        val blankRows = viewportRows - windowRows
+        val viewportRows = 2800 / 20 // = 140
         assertEquals(
-            "PROBE P2 命中: 空白行数 = 56（1120px，与用户截图吻合）",
-            56,
-            blankRows,
+            "P2 PASS: 空白行数应为 0（viewportRows - windowRows）",
+            0,
+            viewportRows - windowRows,
         )
     }
 
     /**
-     * 探针 P3（回前台无补救）：模拟"回前台触发 onSizeChanged"（即再次调 onViewportSizeChanged），
-     * 证明 v6 无论额外触发多少次 onViewportSizeChanged，emulator.rows 都不会被纠正。
+     * P3（回归闸）：onRealViewportChanged 路径——回前台时 onSizeChanged 未触发场景的恢复。
      *
-     * 这是 fix-ime-no-resize 的"叠加因素"：即使回前台触发了 onSizeChanged → onViewportSizeChanged，
-     * 走的也是「只更新 visibleRowsOverride」路径，emulator.rows 永远不被纠正。
+     * 历史：取证探针断言「多次调 onViewportSizeChanged 也无法修复」（v6 BUG）。
+     * 翻转后测试的是 onRealViewportChanged（修复新增的回前台专用入口）：
+     *   View 尺寸在后台期间未变（onSizeChanged 不触发），回前台由 onWindowVisibilityChanged
+     *   → onRealViewportChanged 触发，viewportOutgrewEmulator() 重算恢复几何。
      *
-     * v6 PASS（命中）：额外的 onViewportSizeChanged(2800) 调用不改变 emulator.rows。
-     * 修复后 FAIL：修复会走另一个入口（onRealViewportChanged 或等价），emulator.rows 被纠正。
+     * 失败含义：D-38 重现——回前台路径（onRealViewportChanged）失效，
+     *   尺寸未变时回前台几何无法恢复。
      */
     @Test
-    fun PROBE_P3_foregroundReturnViaSizeChangedCannotRecoverGeometry() {
+    fun P3_onRealViewportChangedRecoversGeometryOnForegroundReturn() {
         val h = harness()
 
-        // 挤压 seed → 增长（被吞）。
+        // 首帧被挤压 seed（84 行），IME 未收起（View 尺寸未恢复）。
         h.presenter.onViewportSizeChanged(1080, 1680) // seed 84
-        h.presenter.onViewportSizeChanged(1080, 2800) // grow, swallowed
+        assertEquals("seed: emulator.rows=84", 84, h.emulator.rows)
 
-        // 模拟"回前台时 onSizeChanged 重新触发"（即 View 尺寸未变，但就算重新触发也一样）。
-        h.presenter.onViewportSizeChanged(1080, 2800) // 再调一次，模拟回前台
-        h.presenter.onViewportSizeChanged(1080, 2800) // 多调几次确认幂等
+        // 后台期间 View 尺寸未变，onSizeChanged 不触发。
+        // 回前台：TermSurfaceView.onWindowVisibilityChanged → onRealViewportChanged(1080, 2800)。
+        // viewportOutgrewEmulator(): 2800/20=140 > 84 → true → recomputeGeometry() → emit(140,108)。
+        h.presenter.onRealViewportChanged(1080, 2800)
 
-        // PROBE: emulator.rows 仍为 84，多次 onViewportSizeChanged 无济于事。
         assertEquals(
-            "PROBE P3 命中: 无论调多少次 onViewportSizeChanged(2800)，emulator.rows 仍为 84",
-            84,
+            "P3 PASS = D-38 已修复: onRealViewportChanged 路径下 emulator.rows 恢复到 140",
+            140,
             h.emulator.rows,
         )
         assertEquals(
-            "PROBE P3 命中: resize 回调序列仍只有首帧的 (84,108)，后续调用均被 fix-ime-no-resize 吞掉",
-            listOf(84 to 108),
+            "P3 PASS: resize 回调 = seed(84) + 回前台恢复(140)",
+            listOf(84 to 108, 140 to 108),
             h.resizeCalls,
         )
+
+        val windowRows = h.presenter.window.let { it.last - it.first + 1 }
+        assertEquals("P3 PASS: window 恢复到 140 行", 140, windowRows)
     }
 
     /**
-     * 探针 P4（首帧被 IME 挤压是触发条件）：如果首帧不被挤压，则 emulator.rows 从一开始就正确，
-     * 后续 IME 弹起/收起不影响 emulator.rows（fix-ime-no-resize 正常工作）。
+     * P4（不倒退守卫）：首帧全高时 fix-ime-no-resize 成果不受影响。
      *
-     * 这个探针验证"首帧被 IME 挤压 seed 小值"才是触发 D-38 的前提条件。
-     * 如果首帧是全高，缺陷不触发（fix-ime-no-resize 合法工作）。
+     * 历史：取证探针断言「首帧全高时缺陷不触发」（边界验证），修复前后均 PASS。
+     * 本条既是不倒退守卫，也是 fix-ime-no-resize 契约的回归闸：
+     *   - 首帧 140 行 → IME 挤压到 84 行 → IME 收起到 140 行
+     *   - viewportOutgrewEmulator()：84 < 140（不触发）；140 == 140（不触发）
+     *   - resize 回调全程只有首帧那一次，fix-ime-no-resize 成果完整保留
      *
-     * v6 PASS（命中）：首帧全高 seed → emulator.rows=140；IME 挤压/收起 emulator.rows 不变。
-     * 修复后仍 PASS（应同样命中，此探针验证不倒退）。
+     * 失败含义：fix-ime-no-resize 被破坏，或 D-38 修复引入了新的误 emit。
      */
     @Test
-    fun PROBE_P4_ifFirstFrameIsFullHeightNoDefect() {
+    fun P4_firstFrameFullHeightNoDefectAndNoRegressionOnIme() {
         val h = harness()
 
-        // 首帧全高（无 IME）→ seed 140 行，这是健康情况。
+        // 首帧全高（无 IME），seed 140 行。
         h.presenter.onViewportSizeChanged(1080, 2800) // 2800/20 = 140 行
         assertEquals("首帧全高: emulator.rows=140", 140, h.emulator.rows)
-        assertEquals("首帧全高: emit resize(140,108)", listOf(140 to 108), h.resizeCalls)
+        assertEquals("首帧全高: emit (140,108)", listOf(140 to 108), h.resizeCalls)
 
-        // IME 弹起，挤压到 84 行。
-        h.presenter.onViewportSizeChanged(1080, 1680) // 1680/20 = 84 行
-        // fix-ime-no-resize: 不 emit，emulator.rows 仍 140（正确）。
-        assertEquals("IME 挤压后: emulator.rows 仍为 140（首帧是全高，缺陷不触发）", 140, h.emulator.rows)
-        assertEquals("IME 挤压后: resize 回调不变", listOf(140 to 108), h.resizeCalls)
+        // IME 弹起，挤压到 84 行。viewportOutgrewEmulator(): 84 < 140 → false → 不触发。
+        h.presenter.onViewportSizeChanged(1080, 1680)
+        assertEquals("IME 挤压: emulator.rows 仍为 140（fix-ime-no-resize 成果）", 140, h.emulator.rows)
+        assertEquals("IME 挤压: 无新 resize", listOf(140 to 108), h.resizeCalls)
 
-        // IME 收起，复原到 140 行。
+        // IME 收起，复原到 140 行。viewportOutgrewEmulator(): 140 == 140 → false → 不触发。
         h.presenter.onViewportSizeChanged(1080, 2800)
-        assertEquals("IME 收起后: emulator.rows 仍为 140", 140, h.emulator.rows)
+        assertEquals("IME 收起: emulator.rows 仍为 140", 140, h.emulator.rows)
+        assertEquals("IME 收起: 无新 resize（fix-ime-no-resize 成果）", listOf(140 to 108), h.resizeCalls)
 
-        // 关键：window 长度正确 = 140，无空白（缺陷未触发）。
-        val windowRows = h.presenter.window.let { it.last - it.first + 1 }
-        assertEquals("PROBE P4 命中: 首帧全高时 window=140，缺陷不触发", 140, windowRows)
-    }
-
-    /**
-     * 探针 P5（确认不存在 onRealViewportChanged）：v6 TermViewPresenter 是否不含
-     * onRealViewportChanged 方法——这直接否定了 evidence.json 的根因描述。
-     *
-     * 此探针用反射检查方法存在性，明确记录 v6 和修复后的差异。
-     *
-     * v6 PASS（命中）：方法不存在 → evidence 描述的是 patch 里的行为。
-     * 修复后 FAIL（不命中）：方法存在 → 修复有效。
-     */
-    @Test
-    fun PROBE_P5_onRealViewportChangedDoesNotExistInV6() {
-        val methods = TermViewPresenter::class.java.declaredMethods.map { it.name }
-
-        // 断言 v6 里该方法不存在（confirm evidence.json 描述是对 patch 的描述，非 v6）。
-        assertTrue(
-            "PROBE P5 命中: v6 TermViewPresenter 无 onRealViewportChanged 方法。" +
-            "evidence.json 「onRealViewportChanged 把挤压几何当基线」描述的是 v3 patch 的行为，" +
-            "v6 里该方法根本不存在。已实际方法列表：$methods",
-            "onRealViewportChanged" !in methods,
+        // window 全程正确 = 140 行，无空黑。
+        assertEquals(
+            "P4 PASS: window=140 行，D-38 不触发，fix-ime-no-resize 成果完整保留",
+            140,
+            h.presenter.window.let { it.last - it.first + 1 },
         )
     }
+
+    // P5 已删除。
+    // 历史意义保留在 docs/d38-rootcause-probe.md §2：
+    //   「evidence.json 的已闭合根因描述了 v3 patch 里的 onRealViewportChanged 行为，
+    //    v6 回退 HEAD 里该方法不存在——这解释了为什么按那份诊断修了三次都没成。」
+    //   （纪律①第三个实例：回退期间立的账不能按回退前的代码来判。）
+    // 第四版修复加入了 onRealViewportChanged，P3 通过该方法验证了它的行为，P5 的历史价值
+    // 已转移给 P3 和文档，不再需要以反射测试的形式存在于代码里。
 }
