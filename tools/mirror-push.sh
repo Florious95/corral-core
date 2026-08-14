@@ -22,6 +22,23 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 GH=git@github.com:Florious95
+ME='Florious95 <281215401+Florious95@users.noreply.github.com>'
+
+# 署名归位（用户 2026-08-14 裁定「Contributor 应该是我」）。
+# 本地 249 个 commit 的 author 是 alauda@MacBook-Pro.local —— 本机主机名邮箱，
+# GitHub 关联不到任何账号，于是贡献者显示成一个陌生人而不是仓库主人。
+# 这里改的只是【推上去的那一份】；本地 sha 一律不动 ——
+# taskbook / .team/evidence / HANDOFF 全靠 sha 互相引用，重写本地历史会把这条链整体打断。
+cat > "$WORK/mailmap" <<MAILMAP
+$ME Alauda <alauda@MacBook-Pro.local>
+$ME Alauda <codebaton@team-agent.net>
+MAILMAP
+
+# 同时摘掉 Co-Authored-By: Claude —— 210 个 commit 带着它，
+# 不摘的话 Claude 会以共同作者身份出现在贡献者列表里。
+STRIP_COAUTHOR='commit.message = b"\n".join(
+    l for l in commit.message.split(b"\n") if not l.startswith(b"Co-Authored-By: Claude")
+).rstrip() + b"\n"'
 
 # 凭据兜底闸：过滤完还能找到 .env / 密钥文件就中止，绝不推上去。
 # 这条不是冗余 —— 过滤规则是人写的，人会写错，而推上去的历史撤不回来。
@@ -42,7 +59,8 @@ cd "$WORK/core"
 python3 "$FR" --force --invert-paths \
   --path .team/ --path agents/ --path e2e/artifacts/ --path e2e/bin/ --path server/ \
   --path-glob '*/build/*' --path-glob '*/.gradle/*' \
-  --path-glob '*.env' --path-glob '*.apk' >/dev/null
+  --path-glob '*.env' --path-glob '*.apk' \
+  --mailmap "$WORK/mailmap" --commit-callback "$STRIP_COAUTHOR" >/dev/null
 guard
 git remote add origin "$GH/corral-core.git"
 git branch -M main
@@ -52,11 +70,12 @@ echo "==> corral-serve（服务端 daemon）"
 git clone --no-hardlinks --quiet "$SRC" "$WORK/serve"
 cd "$WORK/serve"
 python3 "$FR" --force --subdirectory-filter server >/dev/null
-python3 "$FR" --force --invert-paths --path-glob 'agentmirrord*' --path-glob '*.env' >/dev/null
+python3 "$FR" --force --invert-paths --path-glob 'agentmirrord*' --path-glob '*.env' \
+  --mailmap "$WORK/mailmap" --commit-callback "$STRIP_COAUTHOR" >/dev/null
 guard
 cp "$SRC/LICENSE" ./LICENSE
 git add LICENSE
-git -c user.name=Alauda -c user.email=codebaton@team-agent.net \
+git -c user.name=Florious95 -c user.email=281215401+Florious95@users.noreply.github.com \
     commit -q -m "补入 Apache-2.0 LICENSE（拆仓时随服务端一起带上）" || true
 git remote add origin "$GH/corral-serve.git"
 git branch -M main
