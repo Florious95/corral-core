@@ -14,10 +14,12 @@ package api
 //     process-tree descent from #{pane_pid} (≤500ms, single ps). Wrapper panes
 //     (pane_current_command=bash) resolve to claude/codex this way.
 //  2. Sample — a bounded `tmux -S <socket> capture-pane -p -t <id> -e` tail for
-//     RecentOutput (the rule tables match on-screen markers, state-parser §5).
-//  3. Track — agentstate.Track(prev, sample): the done ≈ working→idle edge,
-//     folded against the last published state. Per-ref prev memory is held
-//     here, keyed by the same stable session ref the catalog uses.
+//     RecentOutput (the round-4 existence signal "esc to interrupt" matches on
+//     the on-screen action bar, anchored below the last prompt marker).
+//  3. Track — agentstate.Track(prev, sample): the round-4 DERIVATIVE decision.
+//     It compares the current sample against the pane's last frame (keyed by
+//     the stable session ref the catalog uses): changed = working, unchanged =
+//     idle. Per-ref derivative memory is held internally, keyed by Ref.
 //
 // ## Hot-path isolation (requirement 008) — sampling/cache strategy
 //
@@ -315,6 +317,7 @@ func (p *wiredStateProvider) refresh(ref string, pn discovery.Pane, prev protoco
 			cmd = c
 		}
 		decided := agentstate.Track(prev, agentstate.Sample{
+			Ref:           ref, // stable per-pane identity: the derivative tracker keys its frame memory on this
 			PaneCommand:   cmd,
 			PaneTitle:     pn.PaneTitle,
 			RecentOutput:  out,
