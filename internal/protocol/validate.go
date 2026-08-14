@@ -164,9 +164,10 @@ func (u Unsubscribe) Validate() error {
 }
 
 // Validate reports whether the input request is well-formed: a ReqID >= 1, a
-// non-empty ref, and at most one of Text / Keys (a frame carrying both is a
-// protocol error; neither means a bare Enter, both are legal alone). Every key
-// must be in the closed Key set.
+// non-empty ref, and at most one of (Text/AttachmentPath) / Keys (a frame
+// carrying both a key press and text or an attachment is a protocol error;
+// neither present means a bare Enter, any combination of Text/AttachmentPath
+// alone is legal). Every key must be in the closed Key set.
 func (i Input) Validate() error {
 	if i.ReqID == 0 {
 		return fmt.Errorf("%w: input req_id must be >= 1", ErrInvalidField)
@@ -174,8 +175,8 @@ func (i Input) Validate() error {
 	if i.Ref == "" {
 		return fmt.Errorf("%w: input ref must be non-empty", ErrInvalidField)
 	}
-	if i.Text != "" && len(i.Keys) > 0 {
-		return fmt.Errorf("%w: input carries both text and keys; at most one is allowed", ErrInvalidField)
+	if (i.Text != "" || i.AttachmentPath != "") && len(i.Keys) > 0 {
+		return fmt.Errorf("%w: input carries both text/attachment_path and keys; at most one is allowed", ErrInvalidField)
 	}
 	for _, k := range i.Keys {
 		if !k.IsValid() {

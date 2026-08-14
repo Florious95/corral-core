@@ -167,15 +167,19 @@ func (c *wsConn) handleUnsubscribe(u protocol.Unsubscribe) {
 	c.subscribeCancel(u.Ref)
 }
 
-// handleInput injects one whole text line OR a set of named special keys, and
-// MUST answer with input_ack (requirement 003 send-must-arrive): ok:true once
-// the input entered the pane, or a machine-readable failure reason. Every
-// failure class in §7.3 is decidable and surfaced.
+// handleInput injects one whole text line (optionally with an image
+// attachment) OR a set of named special keys, and MUST answer with input_ack
+// (requirement 003 send-must-arrive): ok:true once the input entered the
+// pane, or a machine-readable failure reason. Every failure class in §7.3 is
+// decidable and surfaced.
 //
 // The Keys path (R-1 shortcut bar, requirement 017) sends named keys without
 // an Enter — "press that key once" — unlike the text path's "inject then
-// Enter". Text and Keys are mutually exclusive; the frame validator (Input.
-// Validate) already rejected a frame carrying both, so at most one branch runs.
+// Enter". (Text or AttachmentPath) and Keys are mutually exclusive; the frame
+// validator (Input.Validate) already rejected a frame carrying both, so at
+// most one branch runs. AttachmentPath (feat-image-upload-inline) routes
+// through bridge.Pane.InjectWithAttachment, which is byte-identical to the
+// plain Inject path when AttachmentPath is empty.
 func (c *wsConn) handleInput(i protocol.Input) {
 	ack := func(ok bool, reason protocol.InputFailReason) {
 		c.send(&protocol.InputAck{ReqID: i.ReqID, OK: ok, Reason: reason})
@@ -232,7 +236,7 @@ func (c *wsConn) handleInput(i protocol.Input) {
 		ack(false, protocol.InputFailTooLarge)
 		return
 	}
-	if err := br.Inject(c.ctx, i.Text); err != nil {
+	if err := br.InjectWithAttachment(c.ctx, i.Text, i.AttachmentPath); err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			ack(false, protocol.InputFailSessionNotFound)
 		} else {

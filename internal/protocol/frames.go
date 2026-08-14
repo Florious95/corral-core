@@ -146,16 +146,33 @@ type Unsubscribe struct {
 // exclusive (a frame carrying both is a protocol error, docs/protocol.md §4.2);
 // neither present means a bare Enter, matching the pre-Keys behavior.
 //
+// AttachmentPath is an additive optional field (feat-image-upload-inline,
+// requirement 042): the host-absolute path of an image the client already
+// uploaded via POST /upload. When set, the server injects it as a separate
+// bracketed paste ahead of Text — via bridge.Pane.InjectWithAttachment,
+// never combined into the same paste as Text — so Claude Code's own
+// paste-path recognition inlines it as `[Image #N]` instead of leaving a
+// bare path string in the pane. AttachmentPath is empty in the overwhelming
+// common case (plain text messages) and does not change Text's existing
+// semantics; an empty AttachmentPath behaves byte-identically to the
+// pre-existing Text-only path. AttachmentPath and Keys are mutually
+// exclusive, same rule as Text and Keys.
+//
 // @contract
-// @pre ReqID >= 1、Ref 非空、Text 与 Keys 至多一个非空、Keys 中每个键都属闭集
+// @pre ReqID >= 1、Ref 非空、(Text 或 AttachmentPath 非空) 与 Keys 至多一类非空、Keys 中每个键都属闭集
 // @post 该帧在 wire 上合法（Validate 通过）且不附带服务端状态变更
-// @err Validate 对 ReqID 0、空 Ref、text+keys 并存、未知 key 返回 ErrInvalidField
-// @inv 空 Text 且空 Keys 是合法的裸 Enter，服务端必须接受
+// @err Validate 对 ReqID 0、空 Ref、(text/attachment)+keys 并存、未知 key 返回 ErrInvalidField
+// @inv 空 Text 且空 Keys 且空 AttachmentPath 是合法的裸 Enter，服务端必须接受；
+//
+//	AttachmentPath 为空时的行为与本字段引入前逐字节一致
 type Input struct {
 	ReqID uint32 `json:"req_id"`
 	Ref   string `json:"ref"`
 	Text  string `json:"text,omitempty"`
 	Keys  []Key  `json:"keys,omitempty"`
+	// AttachmentPath is the host-absolute path of an uploaded image to inject
+	// ahead of Text as its own bracketed paste (feat-image-upload-inline).
+	AttachmentPath string `json:"attachment_path,omitempty"`
 }
 
 // InputAck is the decidable receipt of an Input (S→C; requirement 003 send-
