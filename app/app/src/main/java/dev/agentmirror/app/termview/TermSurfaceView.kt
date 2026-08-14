@@ -32,6 +32,7 @@ import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
+import dev.agentmirror.terminal.TextStyle
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -341,7 +342,7 @@ class TermSurfaceView @JvmOverloads constructor(
                 x += cellW
                 continue
             }
-            bgPaint.color = colorFor(cell.style.bg, background = true)
+            bgPaint.color = resolvedBg(cell.style)
             val right = x + cellW * cell.width
             val clipped = if (guardActive && right > width) {
                 clipGuardEngageCount++
@@ -367,7 +368,7 @@ class TermSurfaceView @JvmOverloads constructor(
     private fun drawTextRuns(canvas: Canvas, cells: List<Cell>, rowY: Int) {
         var runStartCol = 0
         var col = 0
-        var runStyle: TerminalColor? = null
+        var runColor: Int? = null
         val sb = StringBuilder()
         for (cell in cells) {
             if (cell.width == 0) {
@@ -375,27 +376,30 @@ class TermSurfaceView @JvmOverloads constructor(
                 // 1 列，换色 run 的起始列随之右漂（背景色块内文字错位重叠根因）。
                 continue
             }
+            // run 切分键必须是 resolvedFg 的最终取色，不能只看 cell.style.fg：反显格
+            // fg 字段不变（只有 inverse 翻了），若仍按 fg 分段，两个 inverse 不同但 fg
+            // 相同的格会被并进同一个 draw run、只取到其中一格的颜色（另一格画错）。
+            val color = resolvedFg(cell.style)
             // 同色段延续：append；颜色切换：flush 上一段再开新段。
-            if (runStyle != cell.style.fg && sb.isNotEmpty()) {
-                drawGlyphRuns(canvas, sb.toString(), runStartCol, rowY, runStyle ?: TerminalColor.Default)
+            if (runColor != null && runColor != color && sb.isNotEmpty()) {
+                drawGlyphRuns(canvas, sb.toString(), runStartCol, rowY, runColor)
                 sb.clear()
                 runStartCol = col
             } else if (sb.isEmpty()) {
                 runStartCol = col
             }
-            runStyle = cell.style.fg
+            runColor = color
             sb.append(cell.text)
             col += cell.width
         }
         if (sb.isNotEmpty()) {
-            drawGlyphRuns(canvas, sb.toString(), runStartCol, rowY, runStyle ?: TerminalColor.Default)
+            drawGlyphRuns(canvas, sb.toString(), runStartCol, rowY, runColor ?: themeFgArgb())
         }
     }
 
-    /** 画一个颜色段：按字形槽位切成子段后分槽绘制。 */
-    private fun drawGlyphRuns(canvas: Canvas, text: String, startCol: Int, rowY: Int, fg: TerminalColor) {
+    /** 画一个颜色段：按字形槽位切成子段后分槽绘制。[color] 已在调用方按 inverse 解析完毕。 */
+    private fun drawGlyphRuns(canvas: Canvas, text: String, startCol: Int, rowY: Int, color: Int) {
         val g = glyphs()
-        val color = colorFor(fg, background = false)
         for (seg in g.runBuilder.build(text, startCol)) {
             when (seg.slot) {
                 GlyphSlot.MONO -> {
@@ -509,6 +513,15 @@ class TermSurfaceView @JvmOverloads constructor(
             if (color.index in 0..15) ANSI_COLORS[color.index] ?: Color.GRAY
             else XTERM_256.getOrElse(color.index) { Color.GRAY }
     }
+
+    /** SGR 7 反显：背景画笔改取 fg 字段（作为"前景默认"语义解析，即 background=false），
+     *  前景画笔改取 bg 字段（作为"背景默认"语义解析）——两个字段与 background 旗标一起互换，
+     *  这样 [TerminalColor.Default] 才会在反显下正确解出对侧默认色，而非塌缩成同一个默认值。 */
+    private fun resolvedBg(style: TextStyle): Int =
+        if (style.inverse) colorFor(style.fg, background = false) else colorFor(style.bg, background = true)
+
+    private fun resolvedFg(style: TextStyle): Int =
+        if (style.inverse) colorFor(style.bg, background = true) else colorFor(style.fg, background = false)
 
     private fun themeBgArgb(): Int = DEFAULT_BG
     private fun themeFgArgb(): Int = DEFAULT_FG
