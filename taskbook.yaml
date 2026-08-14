@@ -2744,3 +2744,75 @@ tasks:
     deps: []
     write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "server/internal/", "app/app/src/test/"]
     evidence: ".team/evidence/fix-image-upload-input-box.json"
+
+  - id: feat-remote-scroll-mouse-wheel
+    title: "④ 重开的方向已由用户定死：把上滑手势变成【给窗口发鼠标滚轮指令】"
+    status: todo
+    owner: null
+    contention: contract
+    origin: "2026-08-14 用户裁定（取代 feat-remote-scroll-forward 前十轮的全部方向）"
+    context: |
+      **用户原话（这是唯一权威，前十轮的方向全部作废）**：
+      「我在 Mac 上用鼠标滚轮往上滑，你可以看到它是可以往上滑的。要不然的话，
+      它也不会出现那个 Jump to Bottom。那实际上你要做的不是，你要加上滑这个动作，
+      实际上就是要把鼠标上滑的这个行为改成滚轮往上滑，给它给这个窗口发这样的指令。」
+
+      **用户附了证据**：Mac 上滚轮上滑，Claude Code 出现 "Jump to Bottom" 提示
+      ——证明 **Claude Code 自己就有滚动能力，只是没人给它发滚轮事件**。
+
+      **这与 leader 2026-08-14 的实测吻合**（在自己跑着 Claude Code 的 tmux pane 上）：
+        alternate_on = 1     alt-screen TUI
+        history_size = 0     tmux 里零行 scrollback
+        mouse_any_flag = 1   **它自己已经开着鼠标上报**
+      ⇒ 第 8~10 轮做的「读 tmux scrollback 推快照」对它读的是空历史，已全轮归档
+        （docs/archive/scroll-rounds-8-10/）。
+      ⇒ 而更早那条「SGR 鼠标字节注入是死路」的结论**也是错的**：
+        当时测的 less/vim 是 mouse=0，没开鼠标上报当然没反应。
+
+      **所以新方向**：手势 → 鼠标滚轮事件 → 送到 pane 里那个开着 mouse 上报的程序。
+
+      **从归档里可以直接复用、不要重造的**：
+      - 手势层符号错（上滑发正值＝协议的"向下"）与手势层丢帧（不足一行的位移被丢弃、
+        无累加器，700px 拖动只送达 3 行）——两个真 bug，与架构无关，补丁在
+        docs/archive/scroll-rounds-8-10/diffs/rounds-8-10.patch，红测在同目录 tests/
+      - copy-mode 滚动的结果进不了 pipe-pane 推流（字节级实证）——任何新方案都不能依赖它送画面
+    open_questions:
+      - "leader 问过但用户尚未回答：除 Claude Code 外是否还需要在别的 TUI（vim/htop/lazygit）里上滑？这决定要不要做 mouse_any_flag 判别与降级路径"
+      - "鼠标事件怎么送达：tmux send-keys -M 无法外部合成（已实证）；候选是把 SGR 1006 序列写进 pane 的 pty。需实测在 mouse_any_flag=1 的程序上是否被解析"
+      - "非 mouse 上报的程序（裸 shell）怎么办：不发、还是回落 tmux copy-mode？"
+    acceptance:
+      - "开工前先消掉部署分歧：生产 daemon pid 86755 跑的是已回退代码编出的二进制（见 docs/archive/scroll-rounds-8-10/README.md §四）"
+      - "先实测：在 mouse_any_flag=1 的真实 Claude Code pane 上注入 SGR 滚轮序列，观测它是否真的滚动（禁止靠推断定案，前十轮全栽在这）"
+      - "判据只认用户可见结果：画面里的字真的往上走、能看到上文；不许断言'调用了 InjectScroll'或'tmux 里滚了'"
+      - "复用归档里的手势层符号与守恒红测，不要重写"
+      - "眼见为实：用户真机验收（模拟器暂停中，且模拟器曾在裸 shell 上给出错误的绿）"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "server/internal/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-remote-scroll-mouse-wheel.json"
+
+  - id: fix-terminal-right-margin
+    title: "右边缘留白偏大：修完溢出后变成用不满宽度，与 Mac 上 CLI 的边距不一致"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 用户真机反馈：「边缘还是可以往外扩一扩……我的屏幕截图右边还是缩了一点点，它右边再往外扩一点点就好了，就和 Mac 电脑上看到的那个边缘那个空隙是一致的了」"
+    context: |
+      **这是 feat-font-size-setting-drop-pinch 之后出现的新状态，方向是对的、过头了一点。**
+      修复前：上报的 cols 偏大 ⇒ 末列字形被挤出屏幕（缺陷②）。
+      修复后：几何一次算对 ⇒ 不再溢出，但右侧留白比 Mac 上的 CLI 更宽，
+      即**现在偏保守，宽度没用满**。
+
+      候选成因（未验，禁止先入为主）：
+      - cols 用了 floor 除法，余数全部变成右侧留白；余数接近一整列时浪费明显
+      - 画布本身可能有额外 padding / 边距
+      - 与 fix-font-size-scale-unit 耦合：字号偏大时列数少，同样的余数占比更显眼
+        ⇒ **可能字号量纲修完后本条自动缓解，先修那条再看**
+    acceptance:
+      - "先取数：用户真机 grid 记录里的 viewport_width_px / cell_width_measured / reported_cols / canvas_capacity_cols，算出右侧实际留白像素"
+      - "与 Mac 上 CLI 的等效留白做对照（用户可给截图，按字宽折算）"
+      - "红测：给定视口宽与实测字宽，断言 cols 取满且右侧留白 < 一个字宽"
+      - "不倒退：不许为了用满宽度把末列又挤出屏幕——缺陷② 的红测必须保持绿"
+      - "眼见为实：用户真机截图确认右边距与 Mac 观感一致"
+    deps: ["fix-font-size-scale-unit"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-terminal-right-margin.json"
