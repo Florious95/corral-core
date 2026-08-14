@@ -6,6 +6,29 @@
 - 严重度：**阻断**——账本 `state-detection-v1` 已推进到 t.oracle（顾问席），
   但席位加不出来，整张账本卡死在「现在可以动的任务有 1 个却无席可派」。
 
+## ✅ 已关闭（2026-08-15 框架 leader 裁定，msg_d1cc394c7ba8）
+
+**非框架缺陷，驱动器形态问题。** 已按 owner-pane 子进程改造。
+
+框架 leader 裁定：`add-agent` / `start-agent` 的 owner gate **设计如此**——只有持有
+该 workspace team owner 绑定的 pane 才能供给席位，worker 席位调用一律被拒。
+**这条不该改**（改了等于任何席位都能给自己加帮手）。
+
+根因在本工程文档没写清：**驱动器不能做成一个席位，必须是 owner pane 启的子进程**：
+
+```
+# 在 leader 自己的 pane 里
+nohup python3 <驱动器路径> > driver.stdout 2>&1 &
+```
+
+驱动器继承 owner 身份，add-agent / clone-agent 都能用；leader 本人不进循环，
+只在驱动器停下来时才出手。参考驱动器：
+`~/.claude/skills/ledger-orchestration/reference/ledger-driver.py`。
+
+skill 已补上这一节（`SKILL.md` §「驱动器必须是 owner pane 启的子进程」），后面装的人不会再踩。
+
+
+
 ## 现象
 
 编排席（worker pane `%66`，`TEAM_AGENT_AGENT_ID=orchestrator`）对 t.oracle 的顾问席执行：
