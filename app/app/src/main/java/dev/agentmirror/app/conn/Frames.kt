@@ -294,14 +294,23 @@ data class UnsubscribeFrame(
  * 整条文本注入 C→S（send-keys 语义，非逐键）；text 为空 = 仅回车，允许。
  *
  * keys（R-1 快捷键条，017 裁定，可选字段前向兼容增量不 bump 版本）：携带时发送命名
- * 特殊键且**不附加回车**（快捷键条语义 = 按一下那个键）。text 与 keys 一帧至多其一，
- * 两者都有判协议错误（契约 §4.2）；两者皆无 = 仅回车（既有语义不变）。
+ * 特殊键且**不附加回车**（快捷键条语义 = 按一下那个键）。(text 或 attachmentPath) 与 keys
+ * 一帧至多其一，两者都有判协议错误（契约 §4.2）；三者皆无 = 仅回车（既有语义不变）。
+ *
+ * attachmentPath（feat-image-upload-inline，需求 042，可选字段前向兼容增量不 bump 版本）：
+ * 已上传图片的主机绝对路径。服务端收到非空 attachmentPath 时按三步序列注入
+ * （见 server/internal/bridge/bridge.go: InjectWithAttachment）——单独一次 bracketed
+ * paste 只贴路径本身（不掺 text），再单独发 text（若非空），最后一次 Enter 提交；
+ * 这样 Claude Code 自己的粘贴路径识别才会把它内联成 `[Image #N]`，而不是把路径和文字
+ * 混进同一次粘贴导致识别失败、甚至撞上粘贴异步处理与 Enter 的时序竞态
+ * （fix-image-upload-input-box 回炉记录：两者混在一次 paste 里，Enter 会被吞，消息卡在
+ * 输入框发不出去）。attachmentPath 为空时行为与该字段引入前逐字节一致。
  *
  * @contract
- * @pre reqId ≥ 1、ref 非空、text 与 keys 至多一个非空
- * @post 该帧在 wire 上合法（validate 通过）；空 text 且空 keys 是合法的裸 Enter
- * @err validate() 对 reqId ≤ 0 / 空 ref / text+keys 并存返回非空原因
- * @inv keys 注入不附加回车
+ * @pre reqId ≥ 1、ref 非空、(text 或 attachmentPath) 与 keys 至多一类非空
+ * @post 该帧在 wire 上合法（validate 通过）；空 text 空 keys 空 attachmentPath 是合法的裸 Enter
+ * @err validate() 对 reqId ≤ 0 / 空 ref / (text/attachmentPath)+keys 并存返回非空原因
+ * @inv keys 注入不附加回车；attachmentPath 为空时与该字段引入前逐字节一致
  */
 @Serializable
 data class InputFrame(
@@ -309,14 +318,15 @@ data class InputFrame(
     @SerialName("ref") val ref: String,
     @SerialName("text") val text: String = "",
     @SerialName("keys") val keys: List<InputKey> = emptyList(),
+    @SerialName("attachment_path") val attachmentPath: String = "",
 ) : FramePayload {
     override val frameType: String get() = FrameType.INPUT
     override fun validate(): String? = when {
         reqId <= 0 -> "input req_id must be >= 1"
         ref.isEmpty() -> "input ref must be non-empty"
-        // 契约 §4.2：text 与 keys 互斥，一帧至多其一（对齐 Go validate.go）。
-        text.isNotEmpty() && keys.isNotEmpty() ->
-            "input carries both text and keys; at most one is allowed"
+        // 契约 §4.2：(text/attachmentPath) 与 keys 互斥，一帧至多其一（对齐 Go validate.go）。
+        (text.isNotEmpty() || attachmentPath.isNotEmpty()) && keys.isNotEmpty() ->
+            "input carries both text/attachment_path and keys; at most one is allowed"
         else -> null
     }
 }
@@ -458,3 +468,4 @@ data class PaneModeChangedFrame(
     override val frameType: String get() = FrameType.PANE_MODE_CHANGED
     override fun validate(): String? = if (ref.isEmpty()) "pane_mode_changed ref must be non-empty" else null
 }
+

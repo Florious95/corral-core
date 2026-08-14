@@ -227,7 +227,10 @@ class ConnectionManager(
     }
 
     /**
-     * 注入整条文本（input 以 input_ack 完结：必达回执）。text 为空 = 仅回车。
+     * 注入整条文本，可选带一个图片附件路径（input 以 input_ack 完结：必达回执）。
+     * text 为空且 attachmentPath 为空 = 仅回车。attachmentPath 非空时服务端按三步序列
+     * 注入（先单独粘贴路径内联成 `[Image #N]`，再发 text，最后一次 Enter；feat-image
+     * -upload-inline），text 本身**不**掺路径、不被强加换行——那是服务端的事。
      * @return false = 当前不可发送（未就绪/校验不过）；true = 已送出，结果以
      * [Listener.onInputResult] 判定（超时 = 明确失败）。
      *
@@ -235,13 +238,13 @@ class ConnectionManager(
      * @pre 当前处于 READY 且 connection 非空
      * @post 返回 true 时 input 帧已发出且 pendingInputs 登记了超时期限；结果必达 [Listener.onInputResult]
      * @err 未就绪 / 编码校验不过 ⇒ 返回 false；已送出则超时 / 掉线 / stop 经 onInputResult 判失败
-     * @inv ref 不变；req_id 单调递增（nextReqId）
+     * @inv ref 不变；req_id 单调递增（nextReqId）；attachmentPath 为空时与该参数引入前逐字节一致
      */
-    fun sendInput(ref: String, text: String): Boolean {
+    fun sendInput(ref: String, text: String, attachmentPath: String = ""): Boolean {
         val conn = connection ?: return false
         if (!conn.isReady) return false
         val reqId = nextReqId++
-        val frame = InputFrame(reqId = reqId, ref = ref, text = text)
+        val frame = InputFrame(reqId = reqId, ref = ref, text = text, attachmentPath = attachmentPath)
         if (!conn.send(frame)) return false
         pendingInputs[reqId] = PendingInput(clock.nowMs() + inputTimeoutMs)
         return true
