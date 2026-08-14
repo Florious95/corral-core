@@ -447,7 +447,7 @@ internal fun AttachmentButton(
 }
 
 /**
- * 快捷键条（R-1，017）：输入条上方，最小集 Esc / Ctrl-C / Tab / ↑ ↓ ← →。
+ * 快捷键条（R-1，017）：输入条上方，最小集 Esc / Tab / ↑ ↓ ← → / Ctrl-C（2026-08-15 裁定）。
  *
  * 键帽升级为 tonal Surface 芯片：ripple 点击态 + M3 最小 48dp 触控目标（Surface onClick
  * 自动外扩触控区，视觉高度不变，018 §一.4/一.6）；窄屏横向滚动不折行。
@@ -491,22 +491,22 @@ internal fun KeyBar(enabled: Boolean, onKey: (InputKey) -> Unit) {
     }
 }
 
-/** 快捷键条条目：显示文案 + 线上键值 + 无障碍语义标注（017 R-1 最小集顺序）。 */
+/** 快捷键条条目：显示文案 + 线上键值 + 无障碍语义标注（2026-08-15 裁定顺序）。 */
 private data class KeyBarEntry(
     val label: String,
     val key: InputKey,
     val contentDescription: String,
 )
 
-/** 快捷键条最小集（017 R-1 原文顺序：Esc / Ctrl-C / Tab / ↑ ↓ ← →）。 */
+/** 快捷键条最小集（2026-08-15 用户裁定顺序：Esc / Tab / ↑ ↓ ← → / Ctrl-C）。 */
 private val KEY_BAR_ENTRIES = listOf(
     KeyBarEntry("Esc", InputKey.ESC, "Esc 键：中断当前步骤"),
-    KeyBarEntry("Ctrl-C", InputKey.CTRL_C, "Ctrl-C 键：发送中断信号"),
     KeyBarEntry("Tab", InputKey.TAB, "Tab 键：补全"),
     KeyBarEntry("↑", InputKey.UP, "上方向键"),
     KeyBarEntry("↓", InputKey.DOWN, "下方向键"),
     KeyBarEntry("←", InputKey.LEFT, "左方向键"),
     KeyBarEntry("→", InputKey.RIGHT, "右方向键"),
+    KeyBarEntry("Ctrl-C", InputKey.CTRL_C, "Ctrl-C 键：发送中断信号"),
 )
 
 /**
