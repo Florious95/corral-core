@@ -23,8 +23,8 @@
     "③ time.Sleep 跑在 wsConn 的读循环里（ws_conn.go:347 handleFrame → handleInput 同步调用）：发图后这条连接的帧处理被阻塞约 2 秒，期间用户的输入/滚动指令不会被处理。镜像输出走独立 goroutine 不受影响。"
   ],
   "separated_out": "本轮交付时工作区里混进了一份与本任务无关、无人派单、未验收的 WIP：PaneSizeChanged 帧 + Server.fanoutPaneReflow（多客户端共用 pane 时的尺寸广播）。leader 已完整剥离并存档到 docs/archive/pane-reflow-wip/pane-size-changed-wip.patch，剥离后 server + app 双门复跑全绿。来源未查明，未随本次进入生产。",
-  "commit": "d597da97e",
-  "apk": "agentmirror-image-inline-d597da97e.apk",
+  "commit": "86ec49c0c",
+  "apk": "agentmirror-attach-preview-86ec49c0c.apk",
   "user_verification": {
     "at": "2026-08-14T14:45:14Z",
     "by": "用户真机实测（非席位自报、非模拟器）。用户原话：「没问题了」",
@@ -33,11 +33,10 @@
     "cost_half_also_verified": "用户发来这张截图时，leader 侧收到的就是内联的 [Image #262]，全程零次 Read 调用 —— 成本那半（每多一次 Read = 一次完整 LLM 请求）当场自证"
   },
   "deployed": {
-    "pid": 10313,
-    "started_at": "2026-08-14T22:41:18+08:00",
+    "pid": 4140,
+    "started_at": "2026-08-14T23:57:32+08:00",
     "listen": "0.0.0.0:9900",
-    "InjectWithAttachment_count": 2,
-    "backup": "server/agentmirrord.bak-preAttach-*"
+    "attach_preview_count": 4
   },
   "round3_attach_preview": {
     "requirement": "requirement-base/entries/057-发图预贴与一次性注入的例外.md（commit 752abfe3e）",
@@ -53,6 +52,13 @@
       "mutation_result": "TestConsumeAttachPreviewMatchingPathHits 应声转红 —— 本轮红测挡住了 leader 的探针，前两轮的缺口没有再出现"
     },
     "seat_self_caught_false_signal": "TestInputWithMatchingPreviewSkipsRepaste 最初用「数 cat pane 里路径出现次数」证明没重贴，实测发现 cat 在 cooked-mode 下对任何成功提交的行天然回显两次（tty 本地回显 + cat 自己写回 stdout），与有没有重贴无关。该计数法测的是错误的东西，已删除并改到 bridge 层用 fake-tmux 直接看 argv。",
-    "ruling_compliance": "057 五款逐条落地：只对带图子场景 ✓；预贴只贴路径不掺文字 ✓；不清理 CLI 残留（采纳 B）✓；附件改可累加、显示「已附加 N 张图」✓；手感同量级 ✓"
+    "ruling_compliance": "057 五款逐条落地：只对带图子场景 ✓；预贴只贴路径不掺文字 ✓；不清理 CLI 残留（采纳 B）✓；附件改可累加、显示「已附加 N 张图」✓；手感同量级 ✓",
+    "user_verification": {
+      "at": "2026-08-15T00:07:15+08:00",
+      "by": "用户真机实测（非席位自报、非模拟器）",
+      "quote": "「确实很快，不错不错，基本上很少有纯图片的。」「明白了，那我没什么疑问了，就这样吧。」",
+      "screenshot": "upload-20260814T160715-1000022735.jpg",
+      "note": "用户同时给出了一条对优先级有用的使用事实：【纯图片不带文字的场景很少】。这直接降低了 fix-paste-settle-signal 的紧迫度——那 2 秒只在这个罕见路径上出现。"
+    }
   }
 }
