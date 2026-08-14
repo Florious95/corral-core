@@ -151,6 +151,22 @@ class PairingViewModel(
     /** tailnet 候选已就位，但必须等 tsnet Up 后才创建拨号探针。 */
     private var waitingForTsnet = false
 
+    /**
+     * 本次尝试是否走 tsnet 起网（[beginAttempt] 经 [mustWaitForTsnet] 判定）。
+     *
+     * 缺陷⑤ 收口裁定（2026-08-14）：tsnet 路径上 RECONNECTING **不判死**，交给超时预算
+     * 兜底——内嵌 tsnet 起网要 5~6s，netstack 刚就绪时首拨可能连失败多次（用户真机日志：
+     * tsnet Up 后 SocketTimeout → SOCKS general failure → 第 3 次才 dial ok），期间任何
+     * 一次拨号失败若判死会把配对页锁死红框（READY 到达时已 Failed，Success 分支被挡）。
+     * 走 tsnet 意味着正在拉起用户态网络栈，本就该给预算窗口；预算到了照样红框可见
+     * （003「失败可见」防的是永远转圈，不是晚 15 秒）。
+     *
+     * LAN/直拨路径（非 tsnet）本标记为 false：RECONNECTING 仍立即判 UNREACHABLE 快速
+     * 失败——地址填错是这条路最常见的错，即时反馈最有价值（原设计意图保留，防过度修复
+     * 红测② 守住）。
+     */
+    private var tsnetBackedAttempt = false
+
     // ---- 入口 ----
 
     /** 扫码文本进入：解析 → 校验 → 识别值回填手填表单 → 立即自动发起试配对（含候选逐试）。 */
@@ -258,7 +274,15 @@ class PairingViewModel(
         }
         if (!waitingForTsnet && pairingStatus is PairingStatus.Pairing && now - pairingStartedAt > attemptBudgetMs) {
             // fix-pairing-candidates：超时也逐试推进（有候选时每候选 3s；无候选保持旧版 15s 单次失败）。
-            advanceAttempt(PairingFailCause.TIMEOUT, "配对超时：请检查服务端地址与网络后重试")
+            // 缺陷⑤ 收口裁定（leader 2026-08-14）：超时文案按路径区分——tsnet 路径超时是「tailnet
+            // 通道未就绪」（真实原因，非地址错），LAN 路径超时保留「检查地址」（地址错是这条路
+            // 最常见的错）。LAN 路径通常 RECONNECTING 立即判死不走到超时，此处兜底区分。
+            val message = if (tsnetBackedAttempt) {
+                "配对超时：tailnet 通道未能就绪。地址无需修改，请点重试。"
+            } else {
+                "配对超时：请检查服务端地址与网络后重试"
+            }
+            advanceAttempt(PairingFailCause.TIMEOUT, message)
         }
     }
 
@@ -294,12 +318,14 @@ class PairingViewModel(
                 failPairing(PairingFailCause.REJECTED, "配对被拒绝：服务端未接受该配对信息")
             }
             ConnectionState.RECONNECTING -> {
-                // 配对阶段任何掉线/拨号失败（地址不可达正是缺陷 A 场景）都不可无限退避等超时：
-                // 立即显式失败（003 失败可见、静默失效最高罪）。fix-pairing-candidates：
-                // 有候选时推进到下一候选自动逐试（每候选 3s 预算）；无候选保持旧版立即失败。
-                if (pairingStatus is PairingStatus.Pairing) {
+                // LAN/直拨路径（非 tsnet）：任何掉线/拨号失败都不可无限退避等超时——立即显式
+                // 失败（003 失败可见、静默失效最高罪；地址填错是这条路最常见的错，即时反馈最
+                // 有价值）。fix-pairing-candidates：有候选推进逐试，无候选立即失败。
+                if (pairingStatus is PairingStatus.Pairing && !tsnetBackedAttempt) {
                     advanceAttempt(PairingFailCause.UNREACHABLE, "配对失败：服务端地址不可达，请检查地址后重试")
                 }
+                // tsnet 路径：不判死，由 [onTick] 超时预算兜底（见 [tsnetBackedAttempt] KDoc）。
+                // 这里保持 Pairing 态，等 conn 层退避后的下一次拨号成功即 READY 解锁。
             }
             // CONNECTING/AUTHENTICATING：配对态统一显示「连接中…」，无需单态。
             else -> Unit
@@ -345,6 +371,7 @@ class PairingViewModel(
         pendingConfig = null
         formError = null
         waitingForTsnet = false
+        tsnetBackedAttempt = false
         // 每次新序列从队列头开始：attemptIndex 必须归零，否则 retryCandidate/retry 的新序列
         // beginAttempt 时用旧序列的推进值判 `attemptIndex >= size` 直接误落「全部候选失败」。
         attemptIndex = 0
@@ -374,6 +401,8 @@ class PairingViewModel(
         pendingConfig = null
         recognizedUrl = url
         pairingStatus = PairingStatus.Pairing(url)
+        // 本次尝试是否走 tsnet 起网（决定 RECONNECTING 是否判死，见 [tsnetBackedAttempt]）。
+        tsnetBackedAttempt = mustWaitForTsnet(url)
         if (mustWaitForTsnet(url)) {
             when (val state = tsState) {
                 is TsnetState.Up -> startProbe()
@@ -412,6 +441,7 @@ class PairingViewModel(
         // 先置 Idle 再停旧探针：旧探针 stop 的同步 STOPPED 回调看到非 Pairing 不误报拒绝。
         pairingStatus = PairingStatus.Idle
         waitingForTsnet = false
+        tsnetBackedAttempt = false
         stopProbe()
         if (attemptQueue.size <= 1) {
             failPairing(cause, message)

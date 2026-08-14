@@ -26,6 +26,7 @@ import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.WebSocketTransport
 import dev.agentmirror.app.pairing.PairingConfig
+import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.pairing.startPersistentConnection
 import dev.agentmirror.app.service.NoopTransportFactory
 import dev.agentmirror.app.service.ServiceWire
@@ -194,6 +195,52 @@ class ColdStartReconnectTest {
         executor.runAll()
         assertEquals(1, created.size)
         assertTrue("首拨必须发生在 tsnet Up 后，实际=$statesAtDial", statesAtDial.single() is TsnetState.Up)
+    }
+
+    /**
+     * 红测 T4（leader 2026-08-14 缺口补）：给定一份含 tsAuthKey 的配置，走冷启动装配路径
+     * [startPersistentConnection] → [TsnetWire.ensureStarted] → backend.start 被调用——钉
+     * 用户「杀掉 App 再开连不上」场景。
+     *
+     * 注（可测试性缺陷，已报 leader）：完整链路是 MainActivity.load()（真实
+     * SharedPreferencesPairingConfigStore，Android Keystore cipher）→ startPersistentConnection。
+     * 但 Robolectric 不提供 AndroidKeyStore provider（SharedPreferencesPairingConfigStoreTest
+     * 注释实证），MainActivity 硬编码真实 store 不可注入 ⇒ store.load 回 tsAuthKey 这一步
+     * 无法在 JVM 用假 cipher 走通。故本测试从 store.round-trip（已由
+     * SharedPreferencesPairingConfigStoreTest 覆盖）+ 装配入口（本条）两端验证：
+     * - 落盘侧：saveThenLoad_roundTripsTsAuthKey 已证含 key 配置能持久化读回；
+     * - 装配侧：本条直接传含 tsAuthKey 的 PairingConfig，断言冷启动装配拉起 tsnet。
+     * 中间「MainActivity 从 store 读」是产品硬编码，不可注入，是待改的可测试性缺陷（报 leader）。
+     */
+    @Test
+    fun coldStart_persistedTsAuthKey_triggersTsnetStart() {
+        val executor = ManualExecutor()
+        var backendStarted = false
+        TsnetWire.environment = TsnetWire.Environment("/tmp/ts-cold-start", "agentmirror-test")
+        TsnetWire.executorForTest = executor
+        TsnetWire.backendFactory = {
+            object : TsnetBackend {
+                override fun start(stateDir: String, hostname: String, authKey: String): TsnetProxy {
+                    backendStarted = true
+                    return TsnetProxy("127.0.0.1", 1080, "fake-cred")
+                }
+
+                override fun close() = Unit
+            }
+        }
+        ServiceWire.transportFactory = NoopTransportFactory
+
+        // 等价「配对成功落盘后冷启动读回」的含 tsAuthKey 配置，走装配入口（MainActivity.onCreate 同款）。
+        startPersistentConnection(
+            PairingConfig("ws://100.101.2.3:9900/ws", "tok-cold-t4", "fake-auth-key"),
+        )
+        executor.runAll()
+        assertTrue(
+            "T4 命中：含 tsAuthKey 的配置在冷启动装配时必须拉起 tsnet（backend.start 被调用）",
+            backendStarted,
+        )
+        // 冷启动装配后连接被创建（tailnet 目标等 tsnet Up 后拨号）。
+        assertEquals("http://100.101.2.3:9900", ServiceWire.uploadBaseUrl)
     }
 
     @Test

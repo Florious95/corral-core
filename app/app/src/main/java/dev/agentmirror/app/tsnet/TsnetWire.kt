@@ -53,13 +53,6 @@ object TsnetWire {
     @Volatile
     var executorForTest: Executor? = null
 
-    /**
-     * 仅测试用：注入时钟源推进 30s 节流窗口（生产 null = 墙钟）。
-     * 用 lambda 而非 conn.Clock，保持 tsnet 包零依赖边（架构卡：tsnet 依赖边为空）。
-     */
-    @Volatile
-    var clockForTest: (() -> Long)? = null
-
     /** 当前节点状态（transport 工厂按它选路；写入只在 manager 回调）。 */
     @Volatile
     var state: TsnetState = TsnetState.Idle
@@ -82,12 +75,6 @@ object TsnetWire {
     private var currentKey: String? = null
 
     /**
-     * 上次失败驱动重启的时刻（墙钟/注入时钟）。初始 0L：首次 SOCKS 失败立即重启，
-     * 无幽灵节流（欠账式节流只在发生过一次重启后才生效，符合「首次失败必须可见」）。
-     */
-    private var lastRestartAtMs = 0L
-
-    /**
      * 确保节点以 [authKey] 起网（扫码/手填/冷启动三入口共用）：
      * - 同 key 且已在 Starting/Up：幂等 no-op（重复扫码/冷启动不重复起网）；
      * - 换 key：停旧节点重建重起（重新配对语义，同 ServiceWire.setConfig 重建先例）；
@@ -100,7 +87,8 @@ object TsnetWire {
         // 「值在内存」到「registerSecret 生效」的窗口压到零——本方法内任何 record 都已被
         // 脱敏兜住。注册表本身绝不进缓冲/导出（private，无 toString 暴露面）。
         DiagLog.registerSecret(key)
-        if (environment == null) {
+        val env = environment
+        if (env == null) {
             onState(TsnetState.Error("tsnet 环境未初始化（内部接线缺陷，请重启 App）"))
             return
         }
@@ -113,59 +101,9 @@ object TsnetWire {
             DiagLog.record("tsnet", "ensureStarted 被幂等守卫拦下（重复 key，state=${m.state}）")
             return
         }
-        // 换 key 或上次失败：停旧建新（[rebuildManager]）。stop() 的 Idle 回调经 onState
-        // 短暂可见，随后 Starting 覆盖。
-        rebuildManager(key)
-    }
-
-    /**
-     * 失败驱动自愈（缺陷⑤，leader 裁定：SOCKS CONNECT 失败本身当触发源，替代被否决的
-     * 端口探活）。常驻连接走 SOCKS 选路且拨号阶段失败 → [ServiceWire.onTailnetSocksFailure]
-     * → 本方法。
-     *
-     * 语义：SOCKS 拨号失败是地面真相——DERP 断裂后 [state] 仍停 Up（native 不回调 Java
-     * 层），只有真实拨号失败能暴露「状态说谎」。三守卫逐层把关：
-     * - state 非 [TsnetState.Up] 直接 return：官方 Tailscale 并存（Idle）、起网中（Starting）、
-     *   启动失败（Error）都不干预（共存隔离是代码保证不是注释保证）；
-     * - 30s 节流（[RESTART_THROTTLE_MS]）：连环拨号失败不能打成连环重启（防风暴）；
-     * - [currentKey] 缺失不重启（未配对态无网可起）。
-     *
-     * 重启走 [rebuildManager]，**刻意不经幂等守卫**——守卫是「同 key 同态不重复起网」的
-     * 用户语义，自愈是「节点已死强制重建」的系统语义，两条路径分离（w-diag-dev 提醒的
-     * 守卫误伤点在这里规避）。本方法在 manager 锁内（[synchronized]），stop 后重建。
-     *
-     * @contract
-     * @pre 无（任意线程可调；内部同步串行化）
-     * @post state==Up 且过节流时节点被 stop+重建（旧节点关闭、新节点异步起网）；否则 no-op
-     * @err none（不抛异常；环境/currentKey 缺失时静默 return，状态已由守卫兜住）
-     * @inv 不记录/不透出 key 值（用已存的 [currentKey]，不接收调用方参数）
-     */
-    @Synchronized
-    fun notifySocksRouteFailure() {
-        if (state !is TsnetState.Up) return
-        val now = (clockForTest ?: { System.currentTimeMillis() })()
-        if (now - lastRestartAtMs < RESTART_THROTTLE_MS) return
-        val key = currentKey ?: return
-        lastRestartAtMs = now
-        // 缺陷⑤判据信号（w-diag-dev 建议 tag/文案）：日志里能串成「socks dial fail →
-        // 触发重启 → state 迁移 → 新拨号结果」。不携带 key 片段（注册表脱敏已兜底）。
-        DiagLog.record("tsnet", "restart reason=socks-route-failure（SOCKS 拨号失败触发自愈，节点重建）")
-        rebuildManager(key)
-    }
-
-    /**
-     * 用 [authKey] 重建节点：停旧节点 → 新建 manager → 起网。[ensureStarted] 的「换 key
-     * 或上次失败」分支与 [notifySocksRouteFailure] 共用（重启路径唯一，不散落到调用方——
-     * 自愈只能有一个地方，leader 裁定）。
-     *
-     * 调用方必须已持有本对象锁（[synchronized] 方法内）；[environment] 未注入时 no-op
-     * （防御：正常路径 ensureStarted 已判空，notifySocksRouteFailure 的 state==Up 隐含
-     * 已注入，双保险）。
-     */
-    private fun rebuildManager(authKey: String) {
-        val env = environment ?: return
-        manager?.stop()
-        currentKey = authKey
+        // 换 key 或上次失败：停旧建新。stop() 的 Idle 回调经 onState 短暂可见，随后 Starting 覆盖。
+        m?.stop()
+        currentKey = key
         val exec = executorForTest
         val created = if (exec != null) {
             TsnetManager(backend = backendFactory(), executor = exec, onState = ::onState)
@@ -173,7 +111,7 @@ object TsnetWire {
             TsnetManager(backend = backendFactory(), onState = ::onState)
         }
         manager = created
-        created.start(stateDirForKey(env.stateDir, authKey), env.hostname, authKey)
+        created.start(stateDirForKey(env.stateDir, key), env.hostname, key)
     }
 
     /**
@@ -253,13 +191,8 @@ object TsnetWire {
         environment = null
         backendFactory = { GomobileTsnetBackend() }
         executorForTest = null
-        clockForTest = null
-        lastRestartAtMs = 0L
         stateListener = null
         settledListener = null
         state = TsnetState.Idle
     }
-
-    /** 失败驱动自愈的重启节流下限（leader 裁定 ≥30s）：连环拨号失败不能打成连环重启。 */
-    private const val RESTART_THROTTLE_MS = 30_000L
 }
