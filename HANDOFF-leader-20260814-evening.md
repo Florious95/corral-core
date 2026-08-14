@@ -200,7 +200,21 @@ TermSurfaceView.kt:446   val sizePx = fontSizeSp * resources.displayMetrics.scal
 附带一个待 leader 裁的设计问题：**终端字号该不该受系统 sp 缩放影响？**
 终端用户要的是"一屏看多少内容"，而 sp 会被无障碍设置放大，两者诉求冲突。
 
-**② 主题（`feat-terminal-theme-selection`）——这是两件事，只做后一件不会让白底消失**
+**② 主题（`feat-terminal-theme-selection`）——白底与"白底上看不见字"是同一根因的两面**
+
+用户 19:36 第二张截图（跑的是 **Cursor Grok 不是 Claude Code**，证明不是某个 CLI 专属）：
+浅底块上的字几乎完全看不见。leader 查出的硬事实：
+```
+TermSurfaceView.kt:485  DEFAULT_FG = 0xFFE8E8E8   ← 接近白
+TermSurfaceView.kt:486  DEFAULT_BG = 0xFF0D1626   ← 深蓝黑，不是标准黑
+反显 SGR 7 的处理：全 App grep 零命中
+```
+⇒ **统一解释**：那些 CLI 以为自己在浅色终端，于是显式设浅色背景、
+**而前景留给"默认值"**（它期望默认是深色）。我们的默认前景接近白 ⇒ 浅底浅字 ⇒ 看不见。
+⇒ 也印证用户那句「和日常看到的黑底主题、白色主题都不一样」——我们的底色是自造的深蓝黑。
+⇒ **顺手记的第二个候选缺陷**：反显 SGR 7 零命中，可能压根没实现。实测后再决定是否并入。
+
+**下面这条仍然成立：这是两件事，只做后一件不会让白底消失**
 - **甲**：白底**不是我们画的，是 Claude Code 自己画的**。它探测终端背景色选明暗主题，
   现在猜成了浅色终端。leader grep 实证：**服务端与 App 侧都没有任何 `COLORFGBG` / OSC 11
   背景查询的处理**。这是**假设不是结论**，要实测证否。
