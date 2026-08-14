@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 App 缺陷修复的 QA 测试席。在安卓模拟器上验证以下 5 个修复。

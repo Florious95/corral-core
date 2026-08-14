@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是回炉流程的审查席（task_id: `rootcause-flicker-v5`）。

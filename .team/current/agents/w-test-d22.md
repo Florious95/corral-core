@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 D-22 图片上传 401 的**场景**席（task_id: `fix-upload-token-chain`），负责**场景红测**。

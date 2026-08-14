@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 D-36 向上滑看历史的开发席（task_id: `fix-scrollback-history-d36`）。

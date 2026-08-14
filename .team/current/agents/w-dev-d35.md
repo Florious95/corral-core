@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 D-35 的**开发席**（task_id: `fix-rendering-d34-d35`）。三席并行中你负责**改代码**。

@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 D-22 图片上传 401 的**开发席**（task_id: `fix-upload-token-chain`）。

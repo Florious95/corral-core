@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是「输入框变高致终端重绘」的**测试席**（task_id: `fix-ime-no-resize`），负责**场景红测**。

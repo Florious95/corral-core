@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是需求维基管理员（librarian）。契约：**常驻**，至 leader 明确收口。

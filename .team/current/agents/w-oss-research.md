@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是开源终端方案调研席（task_id: `research-oss-terminal-solutions`）。
