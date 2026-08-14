@@ -119,13 +119,37 @@
             "cwd": ".",
             "expected_exit_code": 0,
             "artifacts": []
+          },
+          {
+            "acceptance_id": "A-arch-test",
+            "argv": [
+              "go",
+              "test",
+              "./..."
+            ],
+            "cwd": "server",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-arch-no-spinner",
+            "argv": [
+              "sh",
+              "-c",
+              "! grep -rn 'spinnerFrames' server/internal/"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
           }
         ],
         "judgment": [],
         "required": [
           "A-arch-dir",
           "A-arch-build",
-          "A-arch-no-statedone"
+          "A-arch-no-statedone",
+          "A-arch-test",
+          "A-arch-no-spinner"
         ]
       }
     },
