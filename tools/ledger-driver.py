@@ -204,15 +204,36 @@ def provision_seats(l):
     return True
 
 
-def check_mech(l, tid):
-    """机械判据是唯一的通过凭据——不看席位自报。"""
-    for m in l["tasks"][tid]["acceptance"].get("mechanical", []):
-        r = subprocess.run(m["argv"], cwd=os.path.join(REPO, m["cwd"]),
-                           capture_output=True, text=True)
-        ok = r.returncode == m["expected_exit_code"]
-        log(f"  判据 {m['acceptance_id']}: exit={r.returncode} 期望={m['expected_exit_code']} {'通过' if ok else '未过'}")
-        if not ok:
+def check_required(l, tid):
+    """按 required 逐条求值——**静默跳过是唯一不可接受的行为**。
+
+    机械判据由驱动器自己跑命令拿退出码（不采信席位自报）。
+    人裁判据驱动器**无权代判**：遇到就停下交人，并显式打印未求值条数。
+    只遍历 mechanical、不读 required，会在有人裁的账本上产生假绿
+    （外部 team 实测：日志「判据通过 → succeeded」而 required 里那条裁定一字未提）。
+    """
+    acc = l["tasks"][tid]["acceptance"]
+    required = acc.get("required", [])
+    mech = {m["acceptance_id"]: m for m in acc.get("mechanical", [])}
+    judg = {j["acceptance_id"]: j for j in acc.get("judgment", [])}
+    pending = []
+    for aid in required:
+        if aid in mech:
+            m = mech[aid]
+            r = subprocess.run(m["argv"], cwd=m["cwd"], capture_output=True, text=True)
+            ok = r.returncode == m["expected_exit_code"]
+            log(f"  机械判据 {aid}: exit={r.returncode} 期望={m['expected_exit_code']} {'通过' if ok else '未过'}")
+            if not ok:
+                return False
+        elif aid in judg:
+            pending.append(aid)
+            log(f"  人裁判据 {aid}: **驱动器无权代判**，judge_role={judg[aid].get('judge_role')}")
+        else:
+            log(f"  !! required 里的 {aid} 在 mechanical/judgment 里都找不到")
             return False
+    if pending:
+        log(f"  ⇒ {len(pending)} 条人裁判据未求值，任务不置 succeeded，交人：{pending}")
+        return False
     return True
 
 
@@ -252,13 +273,13 @@ def main():
             log(f"  投递 {msg_id}；等 {tid} / {msg_id}（事件驱动，非轮询）")
             wait_task(msg_id, tid)   # 等不到也不停——判据才是唯一凭据
             l = load()
-            if check_mech(l, tid):
+            if check_required(l, tid):
                 l["tasks"][tid]["state"] = "succeeded"
                 l["revision"] = l.get("revision", 0) + 1
                 save(l)
                 log(f"{tid}: 判据通过 → succeeded（revision {l['revision']}）")
             else:
-                log(f"{tid}: 判据未过，停。这不是 driver 能自己决定的事。")
+                log(f"{tid}: 判据未过或有人裁未求值，停。这不是 driver 能自己决定的事。")
                 return 5
         if once:
             return 0
