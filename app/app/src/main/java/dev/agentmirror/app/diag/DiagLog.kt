@@ -302,6 +302,21 @@ object DiagLog {
     /** 当前缓冲条数（测试断言 / 有界红测）。 */
     fun size(): Int = lock.withLock { buffer.size }
 
+    /**
+     * App 内展示消费入口（feat-diag-inapp-view）：最近 [limit] 条已脱敏文本，格式与
+     * [exportTo] 落盘的行一致（`时间戳 [TAG] message`）。**只返回字符串**——不暴露
+     * [Entry] 或缓冲本身，UI 层拿不到脱敏前的任何东西（脱敏不许绕过红线）。
+     *
+     * @contract
+     * @pre limit 任意（≤0 返回空表）
+     * @post 返回缓冲末尾（最新）至多 limit 条，顺序保持时间序（旧→新）
+     * @err none
+     * @inv 不改变缓冲状态；返回值全部经 record 写入点脱敏
+     */
+    fun recentLines(limit: Int): List<String> = lock.withLock {
+        if (limit <= 0) emptyList() else buffer.takeLast(limit).map { it.line }
+    }
+
     /** 当前缓冲内容快照（测试断言 / 有界红测；导出前预检）。 */
     fun snapshotForTest(): List<String> = lock.withLock { buffer.map { it.line } }
 
