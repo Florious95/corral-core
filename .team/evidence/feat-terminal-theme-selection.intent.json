@@ -1,0 +1,1 @@
+{"task_id":"feat-terminal-theme-selection","dispatched_to":"w-theme","base":".team/nodes/feat-terminal-theme-selection/CLAUDE.md","at":"2026-08-14","note":"甲阶段（查白底成因）先行，乙阶段（调色板形态）等 leader 裁。:app 被 w-font-dev 占用，本轮只调查+改 server/，不写 app/。关键分野：CLI 发的是索引色还是 truecolor —— truecolor 则调色板改不动它。"}
