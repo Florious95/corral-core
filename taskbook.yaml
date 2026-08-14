@@ -2808,7 +2808,7 @@ tasks:
 
   - id: fix-terminal-right-margin
     title: "右边缘留白偏大：修完溢出后变成用不满宽度，与 Mac 上 CLI 的边距不一致"
-    status: todo
+    status: pass_user_verified   # 2026-08-14 用户真机截图确认：空隙已加上，末列不再跑出屏幕。commit 33518d757
     owner: null
     contention: none
     discovered: "2026-08-14 用户真机反馈：「边缘还是可以往外扩一扩……我的屏幕截图右边还是缩了一点点，它右边再往外扩一点点就好了，就和 Mac 电脑上看到的那个边缘那个空隙是一致的了」"
