@@ -2763,7 +2763,7 @@ tasks:
 
   - id: feat-remote-scroll-mouse-wheel
     title: "④ 重开的方向已由用户定死：把上滑手势变成【给窗口发鼠标滚轮指令】"
-    status: todo
+    status: pass_user_verified   # 2026-08-14 用户真机实测：「丝滑，特别满意」。服务端 commit f9a4cedf8 + daemon pid 48296 已部署
     owner: null
     contention: contract
     origin: "2026-08-14 用户裁定（取代 feat-remote-scroll-forward 前十轮的全部方向）"

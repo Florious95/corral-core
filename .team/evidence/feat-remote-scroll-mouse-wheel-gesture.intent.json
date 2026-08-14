@@ -1,0 +1,1 @@
+{"task_id":"feat-remote-scroll-mouse-wheel","dispatched_to":"w-font-dev","base":".team/nodes/feat-remote-scroll-mouse-wheel/CLAUDE.md","at":"2026-08-14","note":"手势层丢帧修复：TermSurfaceView.onScroll 对不足一行的亚像素位移直接 return，无累加器，慢速滑动整段被吞。符号链路经 leader 三段核对确认正确，本轮不动符号。"}

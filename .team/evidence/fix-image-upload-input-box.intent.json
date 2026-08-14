@@ -1,0 +1,1 @@
+{"task_id":"fix-image-upload-input-box","dispatched_to":"w-img-probe","base":".team/nodes/fix-image-upload-input-box/CLAUDE.md","at":"2026-08-14","note":"只读探针轮：查清 Claude Code 把图变成 [Image #N] 的机制（剪贴板直读 / 粘贴文本路径识别 / 终端图像协议 三选一），并判定该机制能否用 PTY 字节触达。不改产品代码、不 commit。用户裁定：模仿它在输入框里的呈现方式即可。"}

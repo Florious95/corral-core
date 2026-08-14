@@ -1,0 +1,1 @@
+{"task_id":"fix-terminal-right-margin","dispatched_to":"w-font-dev","base":".team/nodes/fix-terminal-right-margin/CLAUDE.md","at":"2026-08-14","note":"用户 2026-08-14 晚裁定：右侧现在完全贴边、有跑出屏幕的风险，要留出与 Mac CLI 一致的空隙。同轮并做字号档位下探（用户裁定：不改 sp→px 映射，只加更小档位），两件同属 termview，同一席串行做。"}
