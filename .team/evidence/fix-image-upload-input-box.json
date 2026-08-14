@@ -1,6 +1,6 @@
 {
   "task_id": "fix-image-upload-input-box",
-  "status": "implemented_pending_user_verification",
+  "status": "pass_user_verified",
   "round": 2,
   "at": "2026-08-14T14:10:00Z",
   "user_expectation": "「图片能发送、能上屏、同时它能一次性读取」（2026-08-14 回炉后裁定）",
@@ -23,6 +23,20 @@
     "③ time.Sleep 跑在 wsConn 的读循环里（ws_conn.go:347 handleFrame → handleInput 同步调用）：发图后这条连接的帧处理被阻塞约 2 秒，期间用户的输入/滚动指令不会被处理。镜像输出走独立 goroutine 不受影响。"
   ],
   "separated_out": "本轮交付时工作区里混进了一份与本任务无关、无人派单、未验收的 WIP：PaneSizeChanged 帧 + Server.fanoutPaneReflow（多客户端共用 pane 时的尺寸广播）。leader 已完整剥离并存档到 docs/archive/pane-reflow-wip/pane-size-changed-wip.patch，剥离后 server + app 双门复跑全绿。来源未查明，未随本次进入生产。",
-  "commit": "待填",
-  "apk": "agentmirror-image-attach-inline-91cb20000.apk（sha256 ede9c9c54446573fff21e7659977c73d0ba6279827124f7080340a9bd4bf0b81，含被剥离前的 reflow，需重打）"
+  "commit": "d597da97e",
+  "apk": "agentmirror-image-inline-d597da97e.apk",
+  "user_verification": {
+    "at": "2026-08-14T14:45:14Z",
+    "by": "用户真机实测（非席位自报、非模拟器）。用户原话：「没问题了」",
+    "screenshot": "upload-20260814T144514-1000022730.jpg",
+    "capture": "❯ 把这些通道给删除了。[Image #30] —— 文字在场 + 内联成功 + 消息真提交",
+    "cost_half_also_verified": "用户发来这张截图时，leader 侧收到的就是内联的 [Image #262]，全程零次 Read 调用 —— 成本那半（每多一次 Read = 一次完整 LLM 请求）当场自证"
+  },
+  "deployed": {
+    "pid": 10313,
+    "started_at": "2026-08-14T22:41:18+08:00",
+    "listen": "0.0.0.0:9900",
+    "InjectWithAttachment_count": 2,
+    "backup": "server/agentmirrord.bak-preAttach-*"
+  }
 }
