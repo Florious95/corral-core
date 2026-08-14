@@ -2590,7 +2590,13 @@ tasks:
       - "红测：字号变更后重启 App，断言仍是所选字号（持久化）"
       - "红测：纯 CJK 双宽内容下末列字形右缘不超出画布宽度（吸收 fix-cols-cjk-doublewidth）"
       - "红测：cellHeight 使用实测值而非 DEFAULT_CELL_HEIGHT（吸收 fix-cellheight-writeback）"
-      - "眼见为实：模拟器上切换字号，截图证明无闪烁、首帧即最终尺寸、右列完整；改前需先复现捏合后的切字与闪烁作对照"
+      - "眼见为实（2026-08-14 用户指令：暂停模拟器，改走 web 端 + 真机）：
+          ① web 端验协议层与几何计算（cols/rows 正确、resize 次数、字号持久化）——这层 web 能覆盖；
+          ② 安卓特有的渲染时序与生命周期（无闪烁、首帧即最终尺寸、CJK 末列、IME/后台回前台）
+             **web 覆盖不了**，由用户真机验收并导出诊断日志作为证据；
+          ③ 禁止用模拟器截图充当上述任一项的证据。
+          附记：模拟器 2026-08-14 曾给出错误的绿（在裸 shell 上验滚动全绿，而用户实际用的是
+          alt-screen 的 Claude Code），真机才是权威被测对象。"
       - "不倒退：删除捏合后，既有 TermSurfacePinchGestureTest 等测试需一并清理，但终端渲染/输入/重连基本功能全绿"
       - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
       - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
