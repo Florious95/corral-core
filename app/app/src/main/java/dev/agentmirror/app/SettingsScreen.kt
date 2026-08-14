@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -107,6 +108,7 @@ internal fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.pageH)
                 .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainer,
@@ -167,9 +169,10 @@ internal fun SettingsScreen(
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     },
                                 ),
+                                contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm),
                                 modifier = Modifier.weight(1f),
                             ) {
-                                Text("$sp")
+                                Text("$sp", maxLines = 1, softWrap = false)
                             }
                         }
                     }
