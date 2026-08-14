@@ -46,6 +46,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.diag.DiagLogViewScreen
 import dev.agentmirror.app.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -64,6 +65,11 @@ internal fun SettingsScreen(
     onBack: () -> Unit,
     onRePair: () -> Unit,
 ) {
+    var showDiagView by remember { mutableStateOf(false) }
+    if (showDiagView) {
+        DiagLogViewScreen(onBack = { showDiagView = false })
+        return
+    }
     BackHandler(onBack = onBack)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -151,6 +157,12 @@ internal fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("导出诊断日志")
+                    }
+                    Button(
+                        onClick = { showDiagView = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("查看诊断日志")
                     }
                     exportStatus?.let {
                         Text(
