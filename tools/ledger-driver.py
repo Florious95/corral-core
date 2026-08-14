@@ -35,6 +35,7 @@ ROLE_SEAT = {
     "r.dev-app": "dev-keybar",
 }
 MAX_WAIT = 3600    # 单任务最长等待秒数（墙钟兜底，wait 本身无 --timeout）
+WAIT_EACH = 1800   # 每个候选 id 各自的墙钟上限（两个候选合计不超过 MAX_WAIT）
 
 
 def log(msg):
@@ -131,16 +132,31 @@ def send(seat, text):
     return m.group(1) if m else None
 
 
-def wait_task(task_id):
-    """事件驱动等待：report_result 提交时唤醒（DS-01，0.5.65 起）。
-    注册可先于结果落库，所以不存在「先落库后注册」的竞态。
-    ⚠️ wait 目前没有 --timeout（框架方已排期），所以外面套一个墙钟兜底。"""
-    try:
-        r = subprocess.run([TA, "wait", "--task", task_id, "--workspace", REPO, "--json"],
-                           capture_output=True, text=True, cwd=REPO, timeout=MAX_WAIT)
-    except subprocess.TimeoutExpired:
-        return False
-    return r.returncode == 0
+def wait_task(msg_id, tid):
+    """事件驱动等待（DS-01，0.5.65 起）。**等不到不算失败。**
+
+    🔴 wait --task 认的是**席位 report_result 自报的账本任务 id**，
+    不保证等于 send 返回的 message_id——两者不等价时 wait 永不返回，
+    而 wait 本身没有 --timeout，**失败形态是挂死不是报错**（实发 2026-08-15）。
+    所以两个 id 都试、各自套墙钟；都没等到也**不当失败**，直接落到机械判据去判。
+
+    依据是这套东西自己的铁律：**判据是唯一凭据，wait 只是省电。**
+    等待机制猜错最多浪费一次墙钟，不该让整条流水线挂死。
+    （改法采自 ledger-orchestration reference，2026-08-15 同步。）
+    """
+    for cand in [tid, msg_id]:
+        if not cand:
+            continue
+        try:
+            r = subprocess.run([TA, "wait", "--task", cand, "--workspace", REPO, "--json"],
+                               capture_output=True, text=True, cwd=REPO, timeout=WAIT_EACH)
+            if r.returncode == 0:
+                log(f"  wait 命中 task={cand}")
+                return True
+        except subprocess.TimeoutExpired:
+            log(f"  wait 超时 task={cand}（{WAIT_EACH}s）")
+    log("  两个 id 都没等到，落到机械判据判定")
+    return False
 
 
 def provision_seats(l):
@@ -173,8 +189,9 @@ def provision_seats(l):
         if not role_file:
             log(f"  !! 席位 {seat} 缺角色文件，停。")
             return False
+        # 同 send()：不传 --json，reference 用文本输出判 ok: True（实发 2026-08-15 同类 bug）
         rr = subprocess.run([TA, "add-agent", seat, "--role-file", role_file,
-                             "--workspace", REPO, "--json"],
+                             "--workspace", REPO],
                             capture_output=True, text=True, cwd=REPO)
         out = rr.stdout or ""
         if "ok: True" not in out:
@@ -229,11 +246,8 @@ def main():
             # reference 的 send() 注释说「返回 message_id（即 task id）」——这个等价是错的。
             # 实发 2026-08-15：驱动器卡在 wait --task msg_d5f761155aa8 上永不醒，
             # 而同一时刻 wait --task t.oracle 立即返回 res_c052d53f5738 completed。
-            log(f"  投递 {msg_id}；等 {tid}（事件驱动，非轮询）")
-            woke = wait_task(tid)
-            if not woke:
-                log(f"{tid}: wait 超时或非零返回（{MAX_WAIT}s 墙钟兜底，wait 本身无 --timeout），停。")
-                return 4
+            log(f"  投递 {msg_id}；等 {tid} / {msg_id}（事件驱动，非轮询）")
+            wait_task(msg_id, tid)   # 等不到也不停——判据才是唯一凭据
             l = load()
             if check_mech(l, tid):
                 l["tasks"][tid]["state"] = "succeeded"
