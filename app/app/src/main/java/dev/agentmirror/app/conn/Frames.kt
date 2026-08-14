@@ -58,6 +58,7 @@ sealed interface FramePayload {
                     FrameType.RESIZE -> json.decodeFromJsonElement(ResizeFrame.serializer(), el)
                     FrameType.ERROR -> json.decodeFromJsonElement(ErrorFrame.serializer(), el)
                     FrameType.SCROLL_WHEEL -> json.decodeFromJsonElement(ScrollWheelFrame.serializer(), el)
+                    FrameType.ATTACH_PREVIEW -> json.decodeFromJsonElement(AttachPreviewFrame.serializer(), el)
                     FrameType.PANE_MODE_CHANGED -> json.decodeFromJsonElement(PaneModeChangedFrame.serializer(), el)
                     else -> throw FrameDecodeException(
                         FrameError.UNSUPPORTED_TYPE,
@@ -108,6 +109,7 @@ sealed interface FramePayload {
                     json.encodeToJsonElement(ErrorFrame.serializer(), frame)
                 }
                 is ScrollWheelFrame -> json.encodeToJsonElement(ScrollWheelFrame.serializer(), frame)
+                is AttachPreviewFrame -> json.encodeToJsonElement(AttachPreviewFrame.serializer(), frame)
                 // PaneModeChangedFrame is S→C only; client never encodes it upstream.
                 is PaneModeChangedFrame -> throw FrameEncodeException(
                     FrameError.INVALID_FIELD,
@@ -443,6 +445,37 @@ data class ScrollWheelFrame(
     override fun validate(): String? = when {
         ref.isEmpty() -> "scroll_wheel ref must be non-empty"
         delta == 0 -> "scroll_wheel delta must be non-zero"
+        else -> null
+    }
+}
+
+/**
+ * 发图预贴 C→S（需求 057，对 003 第 1 条"一次性注入"的显式例外）：图片一上传成功就贴进
+ * CLI pane（不回车），让 Claude Code 的解码/缩放/重编码在用户打字期间悄悄跑完，而不是等
+ * 点发送才贴、让用户等那 1 秒。path 只能是图片路径本身，绝不能掺文字——掺了会落回
+ * Claude Code 那条慢分支（fork osascript 查剪贴板），紧随其后的 Enter 会被吞
+ * （见 fix-image-upload-input-box 回炉记录）。
+ *
+ * 服务端成功无 ack（镜像流里能看到 `[Image #N]` 就是反馈，同 ScrollWheel 的路数）；
+ * 失败发 ErrorFrame。**服务端从不清理 pane 里已贴的内容**（需求 057 第 3 款）：
+ * 选了图不发，那个占位符会留在 CLI 输入框里——这不是静默残留，App 是 pane 的镜像，
+ * 用户屏幕上看得见。
+ *
+ * @contract
+ * @pre ref 非空、path 非空
+ * @post 服务端把 path 贴进 pane（bracketed paste，不回车）；成功无回执，失败见 ErrorFrame
+ * @err validate() 对空 ref / 空 path 返回非空原因
+ * @inv 从不清理 pane 已有内容；path 永不与其它内容共享同一次粘贴
+ */
+@Serializable
+data class AttachPreviewFrame(
+    @SerialName("ref") val ref: String,
+    @SerialName("path") val path: String,
+) : FramePayload {
+    override val frameType: String get() = FrameType.ATTACH_PREVIEW
+    override fun validate(): String? = when {
+        ref.isEmpty() -> "attach_preview ref must be non-empty"
+        path.isEmpty() -> "attach_preview path must be non-empty"
         else -> null
     }
 }

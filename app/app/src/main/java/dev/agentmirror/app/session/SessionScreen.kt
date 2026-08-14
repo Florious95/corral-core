@@ -342,10 +342,11 @@ private fun InputBar(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         // 需求 042：路径不进输入框文本，改用这条轻量指示——发送前用户能看到"带了图"，
-        // 但看不到、也不用手删主机绝对路径。
-        if (viewModel.pendingAttachmentPath != null) {
+        // 但看不到、也不用手删主机绝对路径。需求 057 第 4 款：附件可累加，指示按张数走。
+        val attachedCount = viewModel.pendingAttachmentPaths.size
+        if (attachedCount > 0) {
             Text(
-                text = "已附加 1 张图",
+                text = "已附加 $attachedCount 张图",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = Spacing.sm + 40.dp, vertical = 2.dp),

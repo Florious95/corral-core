@@ -356,6 +356,23 @@ class ConnectionManager(
     }
 
     /**
+     * 发图预贴（需求 057）：图片一上传成功就调用，把路径贴进 CLI pane，让解码在用户
+     * 打字期间悄悄跑完。同 [sendScrollWheel]，无 ack，成功与否看镜像流里 `[Image #N]`
+     * 有没有出现；失败会有 ErrorFrame。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空；ref/path 非空
+     * @post 返回 true 时 AttachPreviewFrame 已发出；无回执跟踪
+     * @err 未就绪 ⇒ 返回 false；path/ref 非法由帧校验兜底
+     * @inv 不改变附件累加簿记（那是 VM 层的事）
+     */
+    fun sendAttachPreview(ref: String, path: String): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        return conn.send(AttachPreviewFrame(ref = ref, path = path))
+    }
+
+    /**
      * 上报手机行列数（只作用于已订阅会话）。
      *
      * @contract

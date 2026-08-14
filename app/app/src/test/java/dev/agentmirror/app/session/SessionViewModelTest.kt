@@ -18,6 +18,7 @@ package dev.agentmirror.app.session
 
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import dev.agentmirror.app.conn.AttachPreviewFrame
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.BinaryFrameCodec
 import dev.agentmirror.app.conn.BinaryKind
@@ -91,6 +92,7 @@ class SessionViewModelTest {
         fun keyFrames(): List<InputFrame> = inputFrames().filter { it.keys.isNotEmpty() }
         fun scrollbackFrames(): List<ScrollbackFrame> = sentFrames().filterIsInstance<ScrollbackFrame>()
         fun resizeFrames(): List<ResizeFrame> = sentFrames().filterIsInstance<ResizeFrame>()
+        fun attachPreviewFrames(): List<AttachPreviewFrame> = sentFrames().filterIsInstance<AttachPreviewFrame>()
 
         fun snap(text: String) = transport.deliverBinary(
             BinaryFrameCodec.encode(BinaryFrame(BinaryKind.SNAPSHOT, "s1", text.toByteArray())),
@@ -327,29 +329,52 @@ class SessionViewModelTest {
     //      路径走独立 attachment_path 字段，不拼进 text，回炉记录见类注释）----
 
     @Test
-    fun attachmentUploadDoesNotTouchDraftText() {
-        // 需求 042：上传成功后，路径记入 pendingAttachmentPath，textFieldValue 保持用户原样草稿——
-        // 不出现路径字符串。
+    fun attachmentUploadDoesNotTouchDraftTextAndSendsPreviewImmediately() {
+        // 需求 042：上传成功后，路径记入 pendingAttachmentPaths，textFieldValue 保持用户原样草稿——
+        // 不出现路径字符串。需求 057：上传成功那一刻立刻发 AttachPreviewFrame 贴进 CLI pane，
+        // 不等到发送。
         val h = Harness()
         h.vm.textFieldValue = TextFieldValue("see ", TextRange(4))
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1, 2)))
         assertTrue(h.vm.uploadStatus is UploadStatus.Success)
         assertEquals("see ", h.vm.textFieldValue.text) // 草稿一字未变
         assertFalse(h.vm.textFieldValue.text.contains("/host/img.png")) // 路径没有落进可见文本
-        assertEquals("/host/img.png", h.vm.pendingAttachmentPath) // 路径记在独立状态里
+        assertEquals(listOf("/host/img.png"), h.vm.pendingAttachmentPaths) // 路径记在独立状态里
         assertEquals("http://host:0", h.uploader.lastBaseUrl)
         assertEquals("a.png", h.uploader.lastAttachment?.name)
+
+        val previews = h.attachPreviewFrames()
+        assertEquals(1, previews.size)
+        assertEquals("s1", previews[0].ref)
+        assertEquals("/host/img.png", previews[0].path)
     }
 
     @Test
-    fun uploadFailureSurfacesErrorAndKeepsDraftAndAttachment() {
+    fun uploadFailureSurfacesErrorAndKeepsDraftAndAttachmentAndSendsNoPreview() {
         val h = Harness()
         h.uploader.result = UploadOutcome.Failure("HTTP 500")
         h.vm.textFieldValue = TextFieldValue("keep")
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
         assertTrue(h.vm.uploadStatus is UploadStatus.Failed)
         assertEquals("keep", h.vm.textFieldValue.text)
-        assertEquals(null, h.vm.pendingAttachmentPath) // 失败不留下半个附件
+        assertEquals(emptyList<String>(), h.vm.pendingAttachmentPaths) // 失败不留下半个附件
+        assertTrue("上传失败不应发预贴帧", h.attachPreviewFrames().isEmpty())
+    }
+
+    @Test
+    fun secondUploadAccumulatesRatherThanOverwrites() {
+        // 需求 057 第 4 款：附件语义从"单附件覆盖"改为"可累加"——连选两张就是两张，
+        // 两张都已经各自贴进 pane 了（各发一次 AttachPreviewFrame），不是"后选覆盖前选"。
+        val h = Harness()
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.uploader.result = UploadOutcome.Success("/host/img2.png")
+        h.vm.uploadAttachment(Attachment("b.png", "image/png", byteArrayOf(2)))
+
+        assertEquals(listOf("/host/img.png", "/host/img2.png"), h.vm.pendingAttachmentPaths)
+        val previews = h.attachPreviewFrames()
+        assertEquals(2, previews.size)
+        assertEquals("/host/img.png", previews[0].path)
+        assertEquals("/host/img2.png", previews[1].path)
     }
 
     @Test
@@ -368,6 +393,21 @@ class SessionViewModelTest {
         assertFalse("text 不应含换行", sent[0].text.contains("\n"))
         assertFalse("text 不应含路径", sent[0].text.contains("/host/img.png"))
         assertEquals("/host/img.png", sent[0].attachmentPath) // 路径走独立字段
+    }
+
+    @Test
+    fun sendDraftWithMultipleAttachmentsUsesMostRecentPathForField() {
+        // 累加多张时，input 帧的 attachment_path 只带最新一次预贴的路径——服务端只需要
+        // 最新那次的时间戳核对沉降补差额（其余早前的图已经各自贴在 pane 里了，不需要
+        // 再逐张确认）。
+        val h = Harness()
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.uploader.result = UploadOutcome.Success("/host/img2.png")
+        h.vm.uploadAttachment(Attachment("b.png", "image/png", byteArrayOf(2)))
+        h.vm.sendDraft()
+        val sent = h.inputFrames()
+        assertEquals(1, sent.size)
+        assertEquals("/host/img2.png", sent[0].attachmentPath)
     }
 
     @Test
@@ -404,7 +444,7 @@ class SessionViewModelTest {
         h.vm.sendDraft()
         val first = h.inputFrames().single()
         h.ackOk(first.reqId)
-        assertEquals(null, h.vm.pendingAttachmentPath) // 发送成功后附件已清空
+        assertEquals(emptyList<String>(), h.vm.pendingAttachmentPaths) // 发送成功后附件已清空
 
         h.vm.textFieldValue = TextFieldValue("second")
         h.vm.sendDraft()
@@ -426,7 +466,7 @@ class SessionViewModelTest {
         val first = h.inputFrames().single()
         h.ackFail(first.reqId, "inject_failed")
         assertTrue(h.vm.inputStatus is InputStatus.Failed)
-        assertEquals("/host/img.png", h.vm.pendingAttachmentPath) // 附件没被静默丢掉
+        assertEquals(listOf("/host/img.png"), h.vm.pendingAttachmentPaths) // 附件没被静默丢掉
 
         h.vm.sendDraft() // 重发：同一份草稿+附件
         val sent = h.inputFrames()

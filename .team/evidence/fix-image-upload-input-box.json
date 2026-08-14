@@ -38,5 +38,21 @@
     "listen": "0.0.0.0:9900",
     "InjectWithAttachment_count": 2,
     "backup": "server/agentmirrord.bak-preAttach-*"
+  },
+  "round3_attach_preview": {
+    "requirement": "requirement-base/entries/057-发图预贴与一次性注入的例外.md（commit 752abfe3e）",
+    "design": "上传成功即发 AttachPreview{Ref,Path} 贴路径并按 pane 记时间戳；点发送只送文字+Enter；沉降在用户打字期间完成",
+    "e2e_numbers": {
+      "RUN1_纯文字基线": "31.06ms",
+      "RUN2_预贴+打字3s+发送": "33.04ms（与基线相差不到 2ms，肉眼零等待）",
+      "RUN3_预贴+立刻发不打字": "2.0400075s（补差额分支正确兜住，未被静默优化掉）"
+    },
+    "leader_independent_verification": {
+      "gates": "go clean -testcache 后 go build/vet/test 全绿（9 包）；:app:testDebugUnitTest 0 失败；archwiki --strict-t3 exit 0",
+      "mutation": "leader 变异（与席位两次都不同）：把 consumeAttachPreview 改成不消费（删掉 delete）",
+      "mutation_result": "TestConsumeAttachPreviewMatchingPathHits 应声转红 —— 本轮红测挡住了 leader 的探针，前两轮的缺口没有再出现"
+    },
+    "seat_self_caught_false_signal": "TestInputWithMatchingPreviewSkipsRepaste 最初用「数 cat pane 里路径出现次数」证明没重贴，实测发现 cat 在 cooked-mode 下对任何成功提交的行天然回显两次（tty 本地回显 + cat 自己写回 stdout），与有没有重贴无关。该计数法测的是错误的东西，已删除并改到 bridge 层用 fake-tmux 直接看 argv。",
+    "ruling_compliance": "057 五款逐条落地：只对带图子场景 ✓；预贴只贴路径不掺文字 ✓；不清理 CLI 残留（采纳 B）✓；附件改可累加、显示「已附加 N 张图」✓；手感同量级 ✓"
   }
 }
