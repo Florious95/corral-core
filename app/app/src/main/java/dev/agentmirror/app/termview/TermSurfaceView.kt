@@ -206,8 +206,17 @@ class TermSurfaceView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        presenter?.onViewportSizeChanged(w, h)
+        presenter?.onViewportSizeChanged(usableWidthPx(w), h)
     }
+
+    /**
+     * 右侧留白（fix-terminal-right-margin，用户原话：「和 Mac 电脑上看到的那个边缘的空隙
+     * 是一致的」——修完溢出后末列贴着屏幕右边，缺一个观感上的空隙）。喂给 presenter 算
+     * cols 前预留固定 dp 空隙，cols 因此变少是预期结果，不补偿（红线：不许把末列又挤出屏幕）。
+     * 只动传给 presenter 的宽度，不改 View 自身绘制宽度——presenter 算出的 cols 天然不会
+     * 用到留白那部分像素。只影响水平方向，行数/高度不受影响。
+     */
+    private fun usableWidthPx(w: Int): Int = (w - dp(RIGHT_MARGIN_DP)).roundToInt().coerceAtLeast(0)
 
     /**
      * D-38（回炉）：窗口从后台回前台时尺寸可能与离开前相同，系统不会因此再回调 [onSizeChanged]
@@ -243,7 +252,7 @@ class TermSurfaceView @JvmOverloads constructor(
             return
         }
         if (width <= 0 || height <= 0) return
-        presenter?.onRealViewportChanged(width, height)
+        presenter?.onRealViewportChanged(usableWidthPx(width), height)
         postFrame()
     }
 
@@ -484,6 +493,8 @@ class TermSurfaceView @JvmOverloads constructor(
         /** 终端默认前景/背景色（主题定制任务替换处）。 */
         const val DEFAULT_FG = 0xFFE8E8E8.toInt()
         const val DEFAULT_BG = 0xFF0D1626.toInt()
+        /** 右侧留白（fix-terminal-right-margin），见 [usableWidthPx]。 */
+        const val RIGHT_MARGIN_DP = 4f
         /** 终端基础 16 色调色板（XTerm 近似，主题定制任务可替换）。 */
         val ANSI_COLORS: Map<Int, Int> = mapOf(
             0 to Color.rgb(0, 0, 0),
