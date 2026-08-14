@@ -7,16 +7,21 @@
 
 ## §0 compact 后先做什么
 
-**一句话现状**：本轮全部代码已提交并出包，**10 个席位已全部退役**，工作区代码区干净。
-用户正在真机上测 `agentmirror-fontsize-v1.apk`，**等他的测试结果**。他明确说「我测完 compact 进行后续工作」。
+**一句话现状**：用户已在真机测完 `agentmirror-fontsize-v1.apk`，**三条主症状全消**
+（闪烁 / 内容跑出屏幕 / 大小不持久），架构方向被证实是对的。随后他一口气提了 **5 条新问题**，
+全部已定位并写进 taskbook（144 条），**其中 2 条已修并提交，3 条卡在"必须先取用户真机的一个数"**。
+用户明确说：「我们现在就是把问题给定位清楚，把接下来的任务书给弄清楚，然后你就开始交接了。」
+⇒ **本次交接的定位是：问题已定位、任务书已就绪，等下一轮开工。**
+
+**⚠️ 桌面那个 APK 已经落后于 HEAD**：`agentmirror-fontsize-v1.apk` 打包于 commit `ff58c409c`，
+**不含**其后提交的设置页 UI 修复（`ff8a99d88`）。下一轮出包必须重打。
 
 **开口第一句**（compact 后对用户说这个）：
 
-> 「桌面上是 `agentmirror-fontsize-v1.apk`（唯一一个包）。等你两条结果：
-> **① 切到最小字号 12sp，最右列的字完不完整**；**② 切后台放久再回前台，画面是否还只占屏幕一部分**。
-> 不对就：设置 → 查看诊断日志 → 复制全部 → 粘给我，这次补了视口记录，能直接判断是
-> 『该重算而没重算』还是『重算了但算错了』。
-> 另外 ④ 上滑仍未修（已归档待议），要不要现在开？」
+> 「问题都定位完了，任务书 144 条已就绪。**有 3 条卡在同一个数上**：你手机上的
+> `cell_width_measured`——设置 → 查看诊断日志 → 复制全部，把带 `grid` 的那行给我，
+> 字号量纲、右边距这两条当场就能算准。
+> 另外桌面那个包已经落后了（不含设置页 UI 修复），要不要我先重打一个给你？」
 
 **必读清单**（按优先级）：
 1. 本文
@@ -163,6 +168,56 @@ READY 状态下一次瞬时 EOF 触发它拆掉健康节点重建，把瞬时故
 
 ---
 
+## §3-D 【本次交接新增】用户真机测完后提的 5 条问题
+
+> 全部已写进 `taskbook.yaml`（144 条，末 5 条即本节）。
+> **共同点：其中 3 条卡在同一个数据上——用户真机 `grid` 日志里的 `cell_width_measured`。**
+> 一次取数可同时解锁 `fix-font-size-scale-unit` 与 `fix-terminal-right-margin`。
+
+### 先说好消息（别把它读丢了）
+用户原话：「尺寸这个问题就相当于已经完全把上面几个问题解决了——第一个是闪烁，
+第二个是部分跑到屏幕外面，第三个是一致性。」
+⇒ `feat-font-size-setting-drop-pinch`（commit `196cf4228`）**三条主症状全消，方向正确，不要推翻。**
+
+| taskbook id | 状态 | 卡在哪 / 下一步 |
+|---|---|---|
+| 设置页 UI（两位数折行 + 卡片贴边） | ✅ **已修已提交** `ff8a99d88`，leader 核过全量绿 | 无，但**桌面 APK 不含它**，需重打包 |
+| `fix-font-size-scale-unit` | 🔴 根因已定位，禁止动手 | **等用户真机 `cell_width_measured`** |
+| `fix-terminal-right-margin` | 🔴 未验因 | 同上；且**建议先修量纲再看本条是否自动缓解** |
+| `feat-terminal-theme-selection` | 🔴 `contention: contract` | **先做甲（查白底成因）再决定乙（调色板形态）** |
+| `fix-image-upload-input-box` | 🔴 `contention: contract` | **先实测 Claude Code 是否支持内联附图** |
+| `feat-remote-scroll-mouse-wheel` | 🔴 `contention: contract`，方向已由用户定死 | 见下 |
+
+### 三条最容易被下一轮做错的，单独强调
+
+**① 字号量纲（`fix-font-size-scale-unit`）——不是"选项不够多"**
+```
+TermSurfaceView.kt:446   val sizePx = fontSizeSp * resources.displayMetrics.scaledDensity
+旧世界（已删的捏合时代）  textSize = DEFAULT_CELL_HEIGHT(20) × 0.85 = 17【物理像素】
+```
+预设用 **sp**（受系统字体缩放），旧世界用**物理像素**。3.0x 密度下 12sp = 36px ≈ 旧字号 2.1 倍。
+**"最小档"比用户一直在用的字号还大一倍——整个刻度盘错了量纲。**
+附带一个待 leader 裁的设计问题：**终端字号该不该受系统 sp 缩放影响？**
+终端用户要的是"一屏看多少内容"，而 sp 会被无障碍设置放大，两者诉求冲突。
+
+**② 主题（`feat-terminal-theme-selection`）——这是两件事，只做后一件不会让白底消失**
+- **甲**：白底**不是我们画的，是 Claude Code 自己画的**。它探测终端背景色选明暗主题，
+  现在猜成了浅色终端。leader grep 实证：**服务端与 App 侧都没有任何 `COLORFGBG` / OSC 11
+  背景查询的处理**。这是**假设不是结论**，要实测证否。
+- **乙**：App 自己的调色板主题选择（用户要的功能）。
+  若 Claude Code 发的是 truecolor 背景，调色板改不了它 ⇒ **先做甲定案，再决定乙的形态。**
+
+**③ ④ 上滑（`feat-remote-scroll-mouse-wheel`）——方向已由用户定死，不要再自由发挥**
+用户原话：「你要做的实际上就是要把鼠标上滑这个行为改成滚轮往上滑，**给这个窗口发这样的指令**。」
+用户附证据：Mac 上滚轮上滑，Claude Code 出现 **"Jump to Bottom"**
+⇒ **它自己就有滚动能力，只是没人给它发滚轮事件。**
+与 leader 实测吻合（`alt=1 / hist=0 / mouse_any_flag=1`）。
+⇒ 前十轮的 scrollback 方向全部作废（已归档），**更早那条「SGR 注入是死路」的结论也是错的**
+（当时测的 less/vim 是 `mouse=0`）。
+**开工前必须先消掉部署分歧**（见 §3-A 末尾）。
+
+---
+
 ## §4 在途未收尾任务
 
 > **无常驻进程在跑**。席位已全部退役，没有 pid 可查。
@@ -228,7 +283,13 @@ READY 状态下一次瞬时 EOF 触发它拆掉健康节点重建，把瞬时故
 
 ## §5 运维与外部
 
-### 生产环境（实测值）
+### 生产环境（实测值，2026-08-14 19:40 复核）
+- **席位**：`w-font-dev` **已重开并在跑**（role 文件从 `agents/retired/` 恢复），
+  其余仍全部退役。coordinator 曾因"全席退役 ⇒ 会话零窗口被收 ⇒ 报 session_missing"而停止，
+  已用 `.team/ta restart . --team remote-agent-android` 恢复，会话 `team-remote-agent-android` 正常。
+  **这是竞态不是故障**：后续若再全席退役，预期会再次出现同样的 coordinator 停止，照此恢复即可。
+- 已清理一个残留 tmux 会话 `scrollqa`（w-scroll-qa 那次 socket 事故的产物，cwd 指向
+  `/private/tmp/e2e-scroll-qa.RIGwaK/`，非用户会话）。
 - **daemon**：pid **86755**，`./agentmirrord -host 192.168.31.116`，监听 `*:9900`
   - 二进制 sha256 `14001c9d2b754ec964ee7f57aa6988723eba8e1875fd0b62280d5597faa20557`
   - 日志 `/tmp/agentmirrord-fix4.log`（**只 grep 目标行，禁止 tail 全文**，见 §6）
