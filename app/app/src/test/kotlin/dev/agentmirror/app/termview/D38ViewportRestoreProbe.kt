@@ -58,6 +58,9 @@ class D38ViewportRestoreProbe {
             resizeCalls.add(r to c)
             emulator.resize(c, r)
         }
+        // 防静默失效守卫要求先 seed（feat-font-size-setting-drop-pinch）：喂入与旧
+        // DEFAULT_CELL_WIDTH/HEIGHT 相同的值（10x20），保持本文件既有断言数值不变。
+        presenter.seedCellMetrics(10, 20)
         return Harness(emulator, presenter, resizeCalls)
     }
 

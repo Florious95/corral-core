@@ -74,16 +74,6 @@ class TermViewFrameWakeTest {
         assertTrue("回到底部必须请求帧", h.frameRequests > 0)
     }
 
-    /** 捏合字号变化改变栅格几何，必须请求帧重画。 */
-    @Test
-    fun fontSizeChangeTriggersFrameRequest() {
-        val h = Harness()
-        h.presenter.onViewportSizeChanged(500, 300)
-        h.frameRequests = 0
-        h.presenter.onFontSizeChanged(newCellWidth = 12, newCellHeight = 24)
-        assertTrue("字号变化必须请求帧", h.frameRequests > 0)
-    }
-
     /** 静默经济红线：无数据、无手势时不许有任何自发帧请求（空闲零帧循环）。 */
     @Test
     fun idlePresenterMakesNoSpontaneousFrameRequests() {

@@ -38,8 +38,7 @@ import org.junit.Test
  * 期望修复行为：
  *   - 首帧真实视口建立行列数：emit 一次（首次进入 CLI 的唯一一次，保留）；
  *   - IME 弹起 / 输入框 1→2→3 行使 View 高度收缩：不再 emit（本任务核心）；
- *   - 键盘收起 View 高度复原：不再 emit（同裁定「此后键盘/输入框不触发 resize」）；
- *   - 捏合改字号（onFontSizeChanged）：仍 emit（005 契约，D-29 本轮不做，不得误伤）。
+ *   - 键盘收起 View 高度复原：不再 emit（同裁定「此后键盘/输入框不触发 resize」）。
  *
  * 数值对齐 w-test-ime 场景红测（cellWidth=10, cellHeight=20 presenter 默认字格）：
  *   - 首帧视口 1080x1920 → 96 行 108 列；
@@ -68,6 +67,9 @@ class TermViewImeResizePresenterProbeTest {
             resizeCalls.add(r to c)
             emulator.resize(c, r)
         }
+        // 防静默失效守卫要求先 seed（feat-font-size-setting-drop-pinch）：喂入与旧
+        // DEFAULT_CELL_WIDTH/HEIGHT 相同的值（10x20），保持本文件既有断言数值不变。
+        presenter.seedCellMetrics(10, 20)
         return Harness(emulator, presenter, resizeCalls)
     }
 
@@ -123,17 +125,4 @@ class TermViewImeResizePresenterProbeTest {
         )
     }
 
-    // ---- 守卫：捏合改字号仍走 resize（005 契约，D-29 本轮不做，不得误伤）----
-
-    @Test
-    fun pinchFontChangeStillRequestsResize() {
-        val h = harness(rows = 15, cols = 50)
-        // 首帧视口 500x300：300/20=15 行、500/10=50 列，与内核一致 → 无 resize（no-op skip）。
-        h.presenter.onViewportSizeChanged(500, 300)
-        assertEquals(emptyList<Pair<Int, Int>>(), h.resizeCalls)
-
-        // 捏合放大字号 12x24：300/24=12 行、500/12=41 列 → 必须 emit（005 契约）。
-        h.presenter.onFontSizeChanged(newCellWidth = 12, newCellHeight = 24)
-        assertEquals(listOf(12 to 41), h.resizeCalls)
-    }
 }

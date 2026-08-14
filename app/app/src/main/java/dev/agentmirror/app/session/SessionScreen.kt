@@ -71,6 +71,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.InputKey
+import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.TermSurfaceView
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.theme.MonoFontFamily
@@ -200,6 +201,11 @@ fun SessionScreen(
             AndroidView(
                 factory = { ctx ->
                     TermSurfaceView(ctx).also {
+                        // 契约④（进入会话前尺寸即定）：先落定持久化字号，presenter 注入时
+                        // 才会用它实测出正确的 cellW/cellH（顺序颠倒则 seed 用默认字号）。
+                        val savedSp = SharedPreferencesFontSizeStore(ctx).load()
+                            ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
+                        it.fontSizeSp = savedSp.toFloat()
                         it.presenter = viewModel.presenter
                         it.onRemoteScrollBy = viewModel::onScrollWheel
                     }

@@ -157,8 +157,8 @@ class DiagLogGridComputabilityTest {
             reported.add(r to c)
             emulator.resize(c, r)
         }
-        presenter.onViewportSizeChanged(1260, 480) // 用户真机宽：名义 10 → cols=126
-        presenter.setMeasuredCellWidth(11) // 回写实测宽 → cols 收敛到 114
+        presenter.seedCellMetrics(11, 22) // 一次算对（feat-font-size-setting-drop-pinch）：实测值直接喂入
+        presenter.onViewportSizeChanged(1260, 480) // 用户真机宽：cols=1260/11=114，无收敛
 
         val text = exportedText()
         assertTrue(

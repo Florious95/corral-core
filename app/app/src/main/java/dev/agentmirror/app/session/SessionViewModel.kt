@@ -61,9 +61,10 @@ class SessionViewModel(
     /** 终端内核：snapshot 重放 + delta 追加 + 本地 scrollback（006 本地化滚动）。 */
     val emulator = TerminalEmulator(initialCols, initialRows)
 
-    /** 视口状态机：跟随/锁定、捏合行列数换算、脏区（渲染逻辑与 View 分离）。 */
+    /** 视口状态机：跟随/锁定、字号→行列数换算、脏区（渲染逻辑与 View 分离）。 */
     val presenter = TermViewPresenter(emulator) { rows, cols ->
-        // 005：捏合换算出的新行列数先上报协议，再同步内核（让 CLI 自己重画）。
+        // feat-font-size-setting-drop-pinch：字号选定后实测算出的行列数先上报协议，
+        // 再同步内核（让 CLI 自己重画）；几何只在进入会话时算一次（seedCellMetrics）。
         if (manager.resize(ref, rows, cols)) {
             emulator.resize(cols, rows)
         }

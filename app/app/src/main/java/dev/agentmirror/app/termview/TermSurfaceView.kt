@@ -26,8 +26,8 @@ import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.GestureDetector
 import android.view.MotionEvent
-import android.view.ScaleGestureDetector
 import android.view.View
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
@@ -37,12 +37,14 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * 终端画布视图：Canvas 逐格绘制 + 拖动/捏合手势 + Choreographer 帧调度（薄层，业务状态全在 [TermViewPresenter]）。
+ * 终端画布视图：Canvas 逐格绘制 + 拖动手势 + Choreographer 帧调度（薄层，业务状态全在 [TermViewPresenter]）。
  *
  * 帧循环纯数据驱动：presenter 的脏区只作"画面已变化"的触发信号（[TermViewPresenter.takeDamage]
  * 排空即弃，防缓冲无界增长），之后整帧重绘可见窗口全部行（每帧工作量 = 窗口行数，非脏行数，006）；
- * 拖动滚动只改本地视口零网络，捏合字号经 presenter 换算 rows/cols 后由上层发协议 resize 帧（005）。
- * 绘制全部逻辑收敛在本类（等宽字体测量/同色 run 合并/宽字符/BCE 背景），供 Presenter 单测隔离。
+ * 拖动滚动只改本地视口零网络。字号（[fontSizeSp]，Settings 持久化，取代原 005 捏合）经
+ * [applyFontMetrics] 实测换算 cellWidth/cellHeight 后写回 presenter，视口建立时presenter
+ * 据此算 rows/cols 并由上层发协议 resize 帧。绘制全部逻辑收敛在本类（等宽字体测量/同色 run
+ * 合并/宽字符/BCE 背景），供 Presenter 单测隔离。
  */
 class TermSurfaceView @JvmOverloads constructor(
     context: Context,
@@ -51,15 +53,30 @@ class TermSurfaceView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     /** 视口状态机；由上层注入（与内核同构，渲染/手势全部委托给它）。
-     *  注入即接管其帧请求回调（缺陷①：增量流/滚动/字号变化经 presenter 唤醒本 View）。 */
+     *  注入即接管其帧请求回调（缺陷①：增量流/滚动变化经 presenter 唤醒本 View），并立即
+     *  用当前 [fontSizeSp] 实测一次字格尺寸（[applyFontMetrics]，供本 View 自己绘制用）。
+     *  已 seed 过的 presenter（如测试直接注入实测值）不会被覆盖——见 [applyFontMetrics]
+     *  内部对 [TermViewPresenter.cellMetricsSeeded] 的判断：显式 seed 优先于 View 默认字号。 */
     var presenter: TermViewPresenter? = null
         set(value) {
             field?.onFrameRequested = null // 换 presenter 时摘旧钩，避免旧实例继续唤醒
             field = value
             if (value != null) {
                 value.onFrameRequested = { requestFrameFromAnyThread() }
+                applyFontMetrics()
                 postFrame()
             }
+        }
+
+    /**
+     * 用户设置字号（sp，Settings 持久化——问题③：捏合后大小未延续；见
+     * [dev.agentmirror.app.termview.SharedPreferencesFontSizeStore]）。唯一决定单元格像素
+     * 尺寸的独立输入（契约①④），设置即触发 [applyFontMetrics] 重新实测。
+     */
+    var fontSizeSp: Float = SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP.toFloat()
+        set(value) {
+            field = value
+            applyFontMetrics()
         }
 
     /**
@@ -103,8 +120,9 @@ class TermSurfaceView @JvmOverloads constructor(
      * 护栏金丝雀（X3，fix-cols-grid-convergence）：网格内容超出画布右缘时，背景矩形与
      * 字形被收边钳进画布的**次数**。
      *
-     * ⚠️ 金丝雀语义（leader 2026-08-14 裁定）：**X3 一旦在正常路径上 engage，就意味着 X2 失效**。
-     * 计数恒为 0 = X2 回写（[TermViewPresenter.setMeasuredCellWidth]）在干活，X3 是纯保险；
+     * ⚠️ 金丝雀语义（leader 2026-08-14 裁定）：**X3 一旦在正常路径上 engage，就意味着实测度量失效**。
+     * 计数恒为 0 = [applyFontMetrics] 的实测写回（[TermViewPresenter.seedCellMetrics]）在干活，
+     * X3 是纯保险；
      * 计数开始涨 = **有路径绕过了回写**，那是要查的 bug，不是护栏起作用了，很好。
      * 护栏经常救场恰恰说明主修复漏了——不许读成「护栏很有用」。
      * 测试可经 [clipGuardEngageCount] 断言正常路径恒 0。
@@ -130,18 +148,6 @@ class TermSurfaceView @JvmOverloads constructor(
                 remoteScroll(deltaLines) // 远端路径；降级判断由 SessionViewModel 负责
             } else {
                 presenter?.onScrollBy(deltaLines) // 本地缓冲路径（测试/预览，无 VM 注入时）
-            }
-            return true
-        }
-    })
-
-    private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-        override fun onScale(detector: ScaleGestureDetector): Boolean {
-            presenter?.let {
-                val factor = detector.scaleFactor
-                val newW = max(MIN_CELL_PX, (it.cellWidth * factor).roundToInt())
-                val newH = max(MIN_CELL_PX, (it.cellHeight * factor).roundToInt())
-                it.onFontSizeChanged(newW, newH)
             }
             return true
         }
@@ -222,6 +228,13 @@ class TermSurfaceView @JvmOverloads constructor(
      */
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
+        // 仪表（leader 2026-08-14 补充裁定）：一进来就记，不等后续分支——「有没有被调用」
+        // 是排查 Activity ON_STOP/ON_START 与本回调是否对得上的第一手证据（窗口级可见性
+        // 与 Activity 生命周期不是一回事，长后台被系统回收 Surface 时尤其可能对不上）。
+        DiagLog.record(
+            "viewport",
+            "source=windowVisibility visibility=$visibility width=$width height=$height",
+        )
         if (visibility != VISIBLE) {
             if (framePending) {
                 Choreographer.getInstance().removeFrameCallback(frameCallback)
@@ -237,7 +250,6 @@ class TermSurfaceView @JvmOverloads constructor(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         presenter ?: return super.onTouchEvent(event)
-        scaleDetector.onTouchEvent(event)
         val handled = gestureDetector.onTouchEvent(event)
         if (!handled) super.onTouchEvent(event)
         return true
@@ -251,7 +263,6 @@ class TermSurfaceView @JvmOverloads constructor(
         bgPaint.color = themeBgArgb()
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-        measureCells()
         val win = p.window
         for (logical in win) {
             val rowY = (logical - win.first) * cellH
@@ -418,26 +429,38 @@ class TermSurfaceView @JvmOverloads constructor(
 
     // ---- 测量与配色 ----
 
-    private fun measureCells() {
+    /**
+     * 字号 → 单元格像素尺寸的唯一计算点（feat-font-size-setting-drop-pinch 契约①②④）：
+     * [fontSizeSp] 直接换算 textSize（不再由 cellHeight 反推——旧 cellH→textSize→cellH
+     * 反馈环随捏合一起拆除），再用 measureText/fontMetrics 实测 cellW/cellH。在 presenter
+     * 注入或字号变化时调用，早于首次 [onSizeChanged]——不再是每帧重复测量+回写收敛
+     * （旧 measureCells 每帧执行的「先播种后回写」模式已消失）。
+     *
+     * 本 View 的绘制字段（[cellW]/[cellH]/[baselinePx]/[lineHeightPx]）无条件更新——绘制
+     * 只认自己实测的字号。但只在 presenter **尚未** seed 过时才写回它
+     * （[TermViewPresenter.seedCellMetrics]）：presenter 已被显式 seed 过（如测试直接注入
+     * 实测值、或本 View 换绑一个已建立几何的会话 presenter）时不得覆盖——显式 seed 优先。
+     */
+    private fun applyFontMetrics() {
         val p = presenter ?: return
-        val size = p.cellHeight * 0.85f
+        val sizePx = fontSizeSp * resources.displayMetrics.scaledDensity
         // 主字体 textSize 决定格宽（等宽栅格基准）；回退槽字体同尺寸，逐格居中使用同指标。
-        fgPaint.textSize = size
-        glyphs().setTextSize(size)
+        fgPaint.textSize = sizePx
+        glyphs().setTextSize(sizePx)
         val metrics = fgPaint.fontMetrics
-        cellH = (metrics.descent - metrics.ascent).roundToInt()
+        // 下界 1px（同 cellW 的 max(1, …)）：字格不可能是 0px 高——JVM 测试环境（Robolectric
+        // legacy graphics）的 fontMetrics 在部分路径下是 stub，可能诚实地测出 descent==ascent==0，
+        // 若不设下界会让 recomputeGeometry 的既有 guard 永久跳过、真机上则本就不会发生。
+        cellH = max(1, (metrics.descent - metrics.ascent).roundToInt())
         // ascent 为负（基线上方高度）：基线偏移 = -ascent，保证首行字形完整落在 y∈[0,cellH)。
         baselinePx = -metrics.ascent
-        // 实测字形推进宽 = 等宽栅格的唯一来源：上报 cols 与绘制列推进必须同源（fix-cols-grid-convergence）。
-        // floor（宁可少一列不可多一列）+ 下界 1px：实测 ≤ 名义时保证 cols×cellW ≤ 视口宽；
-        // 实测 > 名义（真机 11 > 名义 10）时仅靠 floor 仍会越界——根治在下一行回写。
+        // 实测字形推进宽 = 等宽栅格的唯一来源：上报 cols 与绘制列推进必须同源。
         val textW = fgPaint.measureText("W")
         cellW = max(1, floor(textW).toInt())
-        // X2 根治：把实测推进宽回写 presenter，recomputeGeometry 的 cols 与绘制同一栅格来源
-        // （测量值胜于捏合——测量值是 cellHeight 的函数，与捏合 newW 无关，见 FIELD.md 权衡①）。
-        // 幂等收敛由 presenter 侧 setMeasuredCellWidth 同值 no-op 兜住（反馈环不震荡）。
-        p.setMeasuredCellWidth(cellW)
-        lineHeightPx = p.cellHeight
+        lineHeightPx = cellH
+        if (!p.cellMetricsSeeded) {
+            p.seedCellMetrics(cellW, cellH)
+        }
     }
 
     /** 终端色（Indexed/真彩/默认）→ Android ARGB 色值。
@@ -458,7 +481,6 @@ class TermSurfaceView @JvmOverloads constructor(
     private fun dp(v: Float): Float = v * resources.displayMetrics.density
 
     private companion object {
-        const val MIN_CELL_PX = 4
         /** 终端默认前景/背景色（主题定制任务替换处）。 */
         const val DEFAULT_FG = 0xFFE8E8E8.toInt()
         const val DEFAULT_BG = 0xFF0D1626.toInt()
