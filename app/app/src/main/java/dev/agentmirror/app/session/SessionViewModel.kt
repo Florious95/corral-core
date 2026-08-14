@@ -19,7 +19,6 @@ package dev.agentmirror.app.session
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.BinaryKind
@@ -44,7 +43,8 @@ import dev.agentmirror.terminal.TerminalEmulator
  * - 增量：delta → [TerminalEmulator.feed]；历史页 → [TerminalEmulator.prependHistory]；
  * - 滚动到顶：[syncFromPresenter] 收敛 presenter 视口信号 → 按页拉更老历史；
  * - 发送：`send-keys` 一次性注入，input_ack 必达回执（003 第二条）；
- * - 附件：multipart HTTP 上传（协议 §8）→ 主机绝对路径插入光标处。
+ * - 附件：multipart HTTP 上传（协议 §8）→ 主机绝对路径记入 [pendingAttachmentPath]（不落草稿文本，
+ *   需求 042），[sendDraft] 发送时才带换行拼进最终 input.text。
  */
 class SessionViewModel(
     private val manager: ConnectionManager,
@@ -89,6 +89,13 @@ class SessionViewModel(
 
     /** 附件上传状态机（成功路径注入 / 失败明确报错）。 */
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
+
+    /**
+     * 待发送附件的主机绝对路径（fix-image-upload-input-box，需求 042）：上传成功后落在
+     * 这里，**不写入 [textFieldValue]**——输入框只显示轻量指示，不显示路径字符串。
+     * [sendDraft] 发送时才把它（带换行）拼进最终 input.text；发送成功或另选新附件时清空。
+     */
+    var pendingAttachmentPath by mutableStateOf<String?>(null)
 
     /** 连接状态（顶部条提示；重连由 conn 层自动，VM 只映射）。 */
     var connectionState by mutableStateOf(ConnectionState.STOPPED)
@@ -216,6 +223,8 @@ class SessionViewModel(
             inputStatus = InputStatus.Sent
             if (!pendingSendIsKey) {
                 textFieldValue = TextFieldValue("")
+                // 附件已随本条消息发出（composeOutgoingText 已拼入）：清空，避免跟着下一条重复发送。
+                pendingAttachmentPath = null
             }
         } else {
             // 失败明确报错：输入框保留内容（可重发）。
@@ -241,11 +250,18 @@ class SessionViewModel(
      * 发送草稿：一次性注入并回车（R-2 多行不拆分：含 \n 的文本整段一条 input.text，
      * 服务端 paste-buffer -p 括号粘贴路径处理）；回执经 [onInputResult] 判定（必达）。
      *
+     * 有待发附件（[pendingAttachmentPath]）时，路径带换行拼进最终 input.text（[composeOutgoingText]），
+     * 命中 R-2 的多行分支——服务端 `pasteMultiline`/`paste-buffer -d -p` 由 tmux 自己插入
+     * bracketed-paste 标记，Claude Code 侧据此把路径识别成一次粘贴、内联为 `[Image #N]`
+     * （fix-image-upload-input-box 探针实证），无需 leader 侧再调一次 Read 才能看到图。
+     * 没有附件时 text 就是草稿原文，不强加换行（不改变普通文本消息的既有行为）。
+     *
      * @contract
      * @pre connectionState 为 READY，且 inputStatus 非 Sending
-     * @post 注入成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent] 或 [InputStatus.Failed]
-     * @err 未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿
-     * @inv 在途不回发（发送闸）
+     * @post 注入成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent]（并清空
+     *       [pendingAttachmentPath]）或 [InputStatus.Failed]（保留附件，可重发）
+     * @err 未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿与附件
+     * @inv 在途不回发（发送闸）；无附件时发出的 text 不含额外换行
      */
     fun sendDraft() {
         if (inputStatus is InputStatus.Sending) return // 在途不回发
@@ -254,13 +270,24 @@ class SessionViewModel(
             inputStatus = InputStatus.Failed("连接未就绪，无法发送")
             return
         }
-        val text = textFieldValue.text
+        val text = composeOutgoingText()
         if (manager.sendInput(ref, text)) {
             pendingSendIsKey = false
             inputStatus = InputStatus.Sending
         } else {
             inputStatus = InputStatus.Failed("发送失败：连接不可用")
         }
+    }
+
+    /**
+     * 拼出真正要发的 input.text：无附件 = 草稿原文（零改动，防一刀切回归）；
+     * 有附件 = 草稿 + 换行 + 附件路径（草稿为空时就是「路径 + 换行」，trim 后就是纯路径，
+     * 命中 Claude Code 的粘贴路径识别）。
+     */
+    private fun composeOutgoingText(): String {
+        val attachment = pendingAttachmentPath ?: return textFieldValue.text
+        val draft = textFieldValue.text
+        return if (draft.isEmpty()) "$attachment\n" else "$draft\n$attachment"
     }
 
     /**
@@ -290,13 +317,15 @@ class SessionViewModel(
     }
 
     /**
-     * 上传附件（协议 §8 multipart）→ 主机绝对路径插入光标处，不自动发送。
+     * 上传附件（协议 §8 multipart）→ 主机绝对路径记入 [pendingAttachmentPath]，**不写入
+     * 可见的 [textFieldValue]**（需求 042「不填入输入框文本」），不自动发送。
      *
      * @contract
      * @pre baseUrl 已注入（连接配置已落地），且 uploadStatus 非 Uploading
-     * @post 成功：路径插入光标处并置 [UploadStatus.Success]；失败：置 [UploadStatus.Failed] 且不修改草稿
+     * @post 成功：[pendingAttachmentPath] 置为新路径（覆盖上一个未发送的附件，当前只支持单附件）
+     *       并置 [UploadStatus.Success]；失败：置 [UploadStatus.Failed] 且不改草稿、不改附件
      * @err 未配置上传地址 / 上传失败均置 [UploadStatus.Failed] 明确报错
-     * @inv 在途不重传；上传不自动发送草稿
+     * @inv 在途不重传；上传不自动发送草稿；草稿文本本身不被本函数修改
      */
     fun uploadAttachment(attachment: Attachment) {
         if (uploadStatus is UploadStatus.Uploading) return
@@ -310,7 +339,7 @@ class SessionViewModel(
         val outcome = uploader.upload(base, uploadToken, attachment)
         uploadStatus = when (outcome) {
             is UploadOutcome.Success -> {
-                insertPathAtCursor(outcome.path)
+                pendingAttachmentPath = outcome.path
                 UploadStatus.Success(outcome.path)
             }
             is UploadOutcome.Failure -> UploadStatus.Failed(outcome.reason)
@@ -393,14 +422,6 @@ class SessionViewModel(
             historyRequestInFlight = true
             historyNextFromLine = historyRequestedFromLine - HISTORY_PAGE
         }
-    }
-
-    /** 把主机绝对路径插入输入框光标处（选择区折叠到起点），不自动发送。 */
-    private fun insertPathAtCursor(path: String) {
-        val tv = textFieldValue
-        val insertAt = tv.selection.min
-        val newText = tv.text.substring(0, insertAt) + path + tv.text.substring(insertAt)
-        textFieldValue = TextFieldValue(newText, selection = TextRange(insertAt + path.length))
     }
 
     /** 协议 reason / 本地判定 → 人类可读错误文案（明确报错）。 */
