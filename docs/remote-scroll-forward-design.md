@@ -505,24 +505,43 @@ func TestPaneModeChangedNotification(t *testing.T) {
 
 ## 已知局限（实现阶段补录，含用户实测后更新）
 
-### 滚动支持分档（2026-08-14 取证后订正）
+### 滚动支持分档（2026-08-14 取证后订正；2026-08-14 二次订正——见下方"订正记录"）
 
-原方案设计了两条路径：① `mouse_any_flag=1` → SGR/X10 字节注入；② `mouse_any_flag=0` → copy-mode。
-**实测证伪了路径①**：
+**订正记录（feat-remote-scroll-mouse-wheel，2026-08-14，本工程第 8 次「验的不是真正的被测对象」）**：
+下面这版"实测证伪了路径①"的结论是错的——错在被测对象，不是错在字节格式本身。
+原实验只把 `send-keys -H` 字节打进了 `less` 和 `vim(mouse=a)`，从没打进 Claude Code 自己，
+却把"less/vim 不响应"直接推广成"对 TUI 无效"；同一批实验还顺手把 Claude Code 分进了
+③档表格的①"非 alt-screen TUI，copy-mode 有效 ✓"——这个分类后来被 feat-remote-scroll-forward
+rounds 8-10 推翻：Claude Code 实测是 `alt_on=1/history_size=0`，copy-mode 根本没有 scrollback
+可滚，①档"有效"从一开始就不成立。换句话说，"字节注入没用"和"copy-mode 对 Claude Code 有效"
+这两个判断，都是在从未真正测过 Claude Code 的前提下下的。
 
-- `tmux send-keys -H <SGR字节>` 对运行中的 TUI（less/vim with mouse=a）均无响应
-- `tmux send-keys "k"`（键名）可正常移动 less 内容
-- tmux 自身的 WheelUpPane 绑定用的是 `send-keys -M`（转发当前真实鼠标事件），只在鼠标事件绑定回调里有效，无法从外部合成
+feat-remote-scroll-mouse-wheel 用真实 `claude` pane（不是 less/vim）重跑了同一个字节注入实验：
+`mouse_any_flag=1` 时打 `ESC[<64;1;1M`（SGR 1006 滚轮上）5 次，capture-pane 看到画面顶行从
+`line 157` 变成 `line 152`，且出现 `Jump to bottom` 指示——**真的滚了**。对照组（同样字节打进
+`mouse_any_flag=0` 的裸壳）确认没有滚动，只是把字面量字符污染进了命令行，证明这不是字节格式
+本身失效，而是原实验从没在正确的目标上跑过。`server/internal/bridge/bridge.go: InjectScroll`
+已按这个订正结果**恢复**原方案①的裸字节注入分支——不再是本节曾经写的"合并成 copy-mode 统一路径"。
 
-因此实现将两条路径合并为 copy-mode 统一路径，并按以下三档如实分档：
+原方案设计了两条路径：① `mouse_any_flag=1` → SGR/X10 字节注入；② `mouse_any_flag=0` → copy-mode，
+这是**现在恢复生效的设计**。以下原文保留，作为"当初怎么被测错的"的记录，不删改，只加订正标注：
+
+> - `tmux send-keys -H <SGR字节>` 对运行中的 TUI（less/vim with mouse=a）均无响应
+>   **⚠️ 只测过 less/vim，从未测过 Claude Code；对 Claude Code 这条结论不成立，见上方订正记录**
+> - `tmux send-keys "k"`（键名）可正常移动 less 内容
+> - tmux 自身的 WheelUpPane 绑定用的是 `send-keys -M`（转发当前真实鼠标事件），只在鼠标事件绑定
+>   回调里有效，无法从外部合成——**这条与 Claude Code 无关：`send-keys -H` 是独立于 `-M` 的原始字节
+>   通道，不经过 tmux 的鼠标事件回调，第一轮验证时把两者的适用范围搞混了**
+
+分档表格（①档"copy-mode 有效"已被 rounds 8-10 推翻，现改走裸字节注入路径）：
 
 | 档位 | 场景 | 效果 |
 |---|---|---|
-| **① 非 alt-screen TUI（Claude Code）** | 用户核心场景：claude-code 在 pane 里串流输出，不切换备用屏 | **copy-mode 有效 ✓**，可看 tmux scrollback 里的历史输出 |
-| **② alt-screen 应用（vim / less / htop）** | 进入备用屏（DECSET 1049），pane 没有 scrollback 内容 | **copy-mode 无内容可滚 ✗**，本方案不支持；不假装支持 |
-| **③ 裸 shell** | 纯 shell，不切备用屏 | **copy-mode 有效 ✓** |
+| **① 非 alt-screen TUI（Claude Code）** | 用户核心场景：claude-code 在 pane 里串流输出 | ~~copy-mode 有效 ✓~~ 实际 `alt_on=1/hist=0`，copy-mode 无内容可滚。**现走 `mouse_any_flag=1` 裸字节注入路径，已用真实 pane 实测有效 ✓** |
+| **② alt-screen 应用（vim / less / htop）** | 进入备用屏（DECSET 1049），pane 没有 scrollback 内容，且 mouse_any_flag=1 时字节注入对这两个具体程序也无响应 | **copy-mode 无内容可滚 ✗，字节注入也无效 ✗**，本方案不支持；不假装支持 |
+| **③ 裸 shell** | 纯 shell，不切备用屏，mouse_any_flag=0 | **copy-mode 有效 ✓**；字节注入分支不会触碰这一档（`mouse_any_flag=0` 时绝不发送裸字节，防止污染命令行——已有红测覆盖） |
 
-**档位②用户遇到时的解释**：你在 vim/less 里上滑看不到内容，是因为这类程序切了备用屏，tmux 的 scrollback 里没有它的历史。这是 tmux 的架构约束，不是 App 的 bug。
+**档位②用户遇到时的解释**：你在 vim/less 里上滑看不到内容，是因为这类程序切了备用屏，tmux 的 scrollback 里没有它的历史，而这两个具体程序对合成的鼠标字节也不响应。这是 tmux 架构约束叠加这两个程序自身的行为，不是 App 的 bug。
 
 **未来线索（不在本轮做）**：实测发现 `send-keys "k"` 能让 less 向上滚，说明「发应用自己的滚动按键」可行（如 less 发 `k`，vim 发 `Ctrl-U`），但需要知道 pane 里跑的是什么以及该应用的按键约定，属于 app-specific 逻辑，超出本轮范围。
 
@@ -530,7 +549,7 @@ func TestPaneModeChangedNotification(t *testing.T) {
 
 | 局限 | 影响 | 计划处置 |
 |---|---|---|
-| **SGR/X10 字节注入对 TUI 无效** | 原方案通道①已实测证伪；改为 copy-mode 统一路径，分档如上表 | 已在实现中修正；未来若找到可外部合成的 tmux 鼠标事件接口再考虑 |
+| **SGR/X10 字节注入对 Claude Code 无效** | ~~原方案通道①已实测证伪；改为 copy-mode 统一路径，分档如上表~~ **已推翻（feat-remote-scroll-mouse-wheel，2026-08-14）：原实验只测了 less/vim，从未测过 Claude Code；用真实 `claude` pane 重测证明字节注入有效，`InjectScroll` 已恢复该分支** | 已在实现中修正（第二次修正，方向摆回原方案） |
 | **`sendError` 正常路径不打服务端日志** | 客户端能看到 `ErrorFrame`，服务端侧失败路径不可见 | 等 `feat-diagnostic-log-export` 统一处理 |
 | **远端投送引入至少一个 RTT 的延迟** | 手势→发帧→服务端查 tmux→注入→远端重绘→mirror delta 回来，至少 ~123ms（广州 DERP 节点）。**为什么不做乐观本地滚动**：会导致双重滚动；copy-mode 坐标系与本地缓冲无法对齐 | 如体感太钝：① 降低 DERP 延迟；② Tailscale 直连 |
 
