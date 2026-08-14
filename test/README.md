@@ -3,6 +3,10 @@
 完全独立于产品代码的测试工程。**产品不知道测试的存在**；测试单方向消费
 `docs/protocol.md` 定义的 WebSocket 协议与 `server/` 的 daemon 二进制。
 
+**写新用例前先读** [`docs/use-case-design.md`](../docs/use-case-design.md)：
+需求基派生的 UC-ID、测试层（L0 即本目录）、补测优先序。`cases/*.test.js`
+的 `name` 建议带对应 UC-ID（如 `uc-p06:wrong-token-rejected`），旧名字不强制改。
+
 ## 快速开始
 
 ```bash
