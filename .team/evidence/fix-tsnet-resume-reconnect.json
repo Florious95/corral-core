@@ -1,29 +1,17 @@
-{
-  "task_id": "fix-tsnet-resume-reconnect",
-  "status": "pass_jvm_pending_real_device",
-  "seats": {"probe": "w-tsresume-probe", "dev": "w-tsnet-dev"},
-  "at": "2026-08-14",
-  "commit": "cc7c2cfb0",
-  "user_ab_differential": "内嵌 tsnet + token 配对 → 切后台 → 回前台 → 永远连不上；官方 Tailscale App + tailnet 地址直连 → 杀到后台再开 → 立刻连上。B 成立即洗清网络/服务端/配对凭据/UI，把范围锁死在内嵌 tsnet 生命周期。",
-  "rootcause": "TsnetWire.kt:91 的幂等守卫。state==Up 的语义是『start() 成功过、SOCKS 端口曾经通』，不是『现在能拨通』。后台冻结 → DERP TCP 超时断裂 → native 不回调 Java 层 → state 永停 Up → socketFactoryFor 照常返回 SOCKS 工厂、拨号必失败；而 ensureStarted() 又被守卫拦下 ⇒ 节点永远起不来。",
-  "fix": {
-    "approach": "失败驱动。OkHttpTransportFactory（sf!=null && recordConnectionPath）→ transport 拨号阶段失败（isOpen==false && !terminalDelivered）→ ServiceWire.onTailnetSocksFailure → TsnetWire.notifySocksRouteFailure",
-    "rejected": "端口探活。SOCKS listener 是本地 Go listener，DERP 死后仍在监听 ⇒ TCP 探活几乎必然成功 ⇒ 假绿、重启永不触发。那正是根因本身『拿曾经通当现在能拨通』的翻版。",
-    "key_design": "自愈刻意不经幂等守卫，走 rebuildManager 旁路。守卫是『同 key 同态不重复起网』的用户语义，自愈是『节点已死强制重建』的系统语义——根因恰恰是这两种语义被混成了一条路，所以修复要把它们分开。",
-    "hook_precision": "钩子只在拨号阶段失败触发，已建立后掉线走正常退避（不过度反应）；仅常驻连接挂钩，配对探针不挂（配对有独立状态机）。"
-  },
-  "three_red_lines": {
-    "静默经济": "零定时器零轮询零固定频率，触发即真实拨号失败本身",
-    "防重启风暴": "30s 节流，lastRestartAtMs 初始 0L 保证首次失败立即重启、无幽灵节流",
-    "官方TS并存": "state==Idle/Starting/Error 直接 return（probe6 绿证）；LAN 路径 sf==null 不挂钩子（代码保证，非注释保证）"
-  },
-  "acceptance_line_was_wrong": {
-    "original": "leader 原定『三条探针由绿转红』",
-    "why_wrong": "那三条测的都是失败驱动方案有意保留的既有行为（幂等守卫拦截、选路无健康检查），能让它们转红的唯一修法正好是被否决的端口探活。开发席逐条映射后 halt 上报。",
-    "revised": "原三条降为回归哨兵保持绿；新增 probe4/5/6 作为修复生效判据（触发重启 / 30s 节流 / Idle 隔离）。这是补验收维度，不是削断言迁就实现。",
-    "pattern": "这是 leader 今晚第三次把验收线写成『规定实现长什么样』而非『行为要怎样』（前两次：缺陷② B-字形断言一个实现够不着的计算值、缺陷③ P5 要求必须新增某个方法名）。三次都是席位顶回来的。"
-  },
-  "verified_by_leader": "回归哨兵 3/3 绿、修复探针 3/3 绿、全量 449 条 4 失败（4 条全是缺陷③ 探针的预期 FAIL）、archwiki --strict-t3 exit 0。HEAD 编译红证由开发席在 worktree 上做（7 处 unresolved reference）。",
-  "gate1_note": "实机复现判为『已查明不可复现于模拟器』，两堵墙机理独立且都有铁证，见 fix-tsnet-resume-reconnect-probe.json 与 docs/tsnet-resume-reconnect-rootcause.md §3。复现的权威是用户真机 A/B 差分。",
-  "pending": "真机 A/B 复现实测：装修复后的包，切后台回前台确认能自愈重连，且官方 TS 那条路不倒退。"
-}
+{"task_id":"fix-tsnet-resume-reconnect","status":"pass_user_verified","closed_at":"2026-08-14T08:20:41Z",
+ "verified_by":"用户真机实测（非席位自报，非模拟器）",
+ "root_causes":[
+  {"id":"R1","desc":"WebSocket 的 OkHttp 未设 Proxy.NO_PROXY，继承手机系统代理（127.0.0.1:7892），让 tsnet SOCKS 去连一个在 tsnet netstack 内不存在的 loopback 地址 ⇒ dial ok 但握手 unexpected EOF ⇒ 死循环",
+   "note":"同一 bug 已在 HttpUrlConnectionUploader:174 修过（缺陷①），旁边这条 WebSocket 路径漏扫。修法为 sf!=null 分支追加 .proxy(Proxy.NO_PROXY)，判据＝是否自建 SOCKS 隧道，由代码形状保证"},
+  {"id":"R2","desc":"配对页 RECONNECTING 分支无 tsnet 起网窗口保护 ⇒ 起网期间任一次拨号失败即判 UNREACHABLE 并锁死 Failed，随后 READY 被 is-Pairing 守卫挡住永不解锁",
+   "note":"这解释了用户最早那组 A/B：外部 TS App 第一次就拨通、从不进 RECONNECTING，所以从没锁上过"},
+  {"id":"R3","desc":"因 R2 永不到达 Success，而 configStore.save 是全工程唯一保存点且只在成功路径 ⇒ tsAuthKey 从不落盘 ⇒ 冷启动 config.tsAuthKey 为空 ⇒ ensureStarted 不被调用 ⇒ 无 tsnet ⇒ 拿蜂窝地址直连 tailnet 地址永远超时",
+   "note":"用户 15:37 日志铁证：整段零条 [tsnet]、零条 [socks]"}],
+ "removed":{"notifySocksRouteFailure":"自愈删除。根因证伪（真根因是 R1 而非节点假死），且用户 15:11 日志实锤有害：READY 状态下一次瞬时 EOF 触发它拆掉健康节点重建，当时 key 无效导致重建失败 ⇒ 把瞬时故障变成永久断线"},
+ "user_field_evidence":[
+  {"at":"2026-08-14T15:xx","symptom":"后台→前台","result":"已消除，用户确认"},
+  {"at":"2026-08-14T16:19:28","symptom":"杀掉 App 冷启动","result":"已消除",
+   "log":"ON_CREATE 16:19:28.801 → [tsnet] Idle→Starting 16:19:28.826 → Up 16:19:34.202 → [socks] dial ok host=100.75.207.88 port=9900 → READY 16:19:34.661（冷启动到可用 5.9s）"}],
+ "gap_closed_by_field":"fix-mainactivity-store-injectable 所指的「MainActivity 从 store 读回配置」这一环，JVM 因 Android Keystore 不可注入而无断言；本次真机日志中 ON_CREATE 后 25ms 出现 [tsnet] Idle→Starting，即该环工作的直接证据。可测试性缺陷本身仍待修，风险已降。",
+ "tests":["PairingTsnetWindowProbeTest T1/T2/T3（含三次连续拨号失败后 READY 应解锁，复刻用户真实时序）","ColdStartReconnectTest.coldStart_persistedTsAuthKey_triggersTsnetStart（T4）","SystemProxyLeakProbeTest T1/T2（T2 为防过度修复：无 tsnet 时系统代理仍生效）"],
+ "apk":"agentmirror-fix5-v2.apk"}
