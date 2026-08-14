@@ -1,0 +1,22 @@
+{
+  "task_id": "fix-terminal-right-margin",
+  "status": "pass_user_verified",
+  "closed_at": "2026-08-14T12:49:37Z",
+  "verified_by": "用户真机实测 + 截图（upload-20260814T124937-1000022717.jpg）。用户原话：「那个右边的空隙加上去了，并且基本上不太会再跑到屏幕外面去了」",
+  "symptom_before": "上一轮把几何一次算对后不再溢出，但变成零留白紧贴屏幕右缘；用户报「已经完全贴着了，有跑到屏幕外面的风险」，要求与 Mac 终端的边距一致。",
+  "fix": "改动点选在 TermSurfaceView → Presenter 的边界：新增私有 usableWidthPx()，传宽度给 presenter 前先减 RIGHT_MARGIN_DP=4dp；TermViewPresenter.recomputeGeometry 一行未动。选这个位置的理由：既有红测几乎都直接调 presenter.onViewportSizeChanged(字面宽度,...) 绕过 View，只在边界加 margin 才能让它们零改动继续通过——实测 470 个旧用例改动前后一个没动。",
+  "redline_held": "加留白只让 cols 变小，不会把末列重新挤出屏幕；缺陷② fix-cols-grid-convergence 的红测保持绿。",
+  "leader_independent_verification": {
+    "not_taking_seat_self_report": true,
+    "gates": "./gradlew :app:testDebugUnitTest --rerun-tasks → 471 用例 0 失败（非缓存）",
+    "mutation": "leader 独立变异：RIGHT_MARGIN_DP 4f → 0f（即修复前状态）→ exactMultipleViewportWidth_leavesRightGapSmallerThanOneCell 应声转红；还原后复跑绿",
+    "apk_bytecode": "dexdump 核实 RIGHT_MARGIN_DP ×1、usableWidthPx ×4 确在包内"
+  },
+  "tests": [
+    "TermRightMarginTest.exactMultipleViewportWidth_leavesRightGapSmallerThanOneCell",
+    "TermRightMarginTest.typicalViewportWidth_leavesRightGapSmallerThanOneCell"
+  ],
+  "commit": "33518d757",
+  "apk": "agentmirror-margin-fontsize-306b61e02.apk",
+  "note_on_boundary_math": "视口宽恰为字宽整数倍时，留白严格小于一个字宽是不可能的——整数网格里唯一能腾出空隙的办法就是整让一列。红测因此断言 0 < leftover ≤ 一个字宽，而非 < 一个字宽。数学原因已写入代码注释。"
+}
