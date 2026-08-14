@@ -117,6 +117,9 @@ class SessionViewModel(
      */
     var inCopyMode by mutableStateOf(false)
 
+    /** 节流窗口内累积的 deltaLines 总量；窗口到点时一并发出（消除"无反应"假象）。 */
+    private var pendingScrollDelta = 0
+
     /** 上次向服务端发出 ScrollWheelFrame 的时间戳（ms）；用于 50ms 节流。 */
     private var lastScrollSentMs = 0L
 
@@ -338,14 +341,15 @@ class SessionViewModel(
      *
      * 50ms 节流说明：GestureDetector 在快速滑动时每 ~16ms 触发一次 onScroll；不节流时
      * 每帧都发帧，链路负担大；50ms 约保留 20fps 的手势密度，足以响应滑动速度。
-     * 超出窗口的事件被丢弃（非累加），因为每个滚轮档位都是相对偏移，丢中间帧不影响方向正确性。
+     * 窗口内的事件**累加**到 pendingScrollDelta，窗口到点时把累计量一并发出——
+     * 不累加则一次完整滑动只送出 ~6 帧 × 1–2 行 ≈ 10 行，用户体感是"没反应"。
      *
      * @contract
      * @pre deltaLines 非零（调用方 TermSurfaceView 在 deltaLines==0 时不调用此方法）
-     * @post READY 时：间隔 ≥50ms 则发一帧 ScrollWheelFrame(delta=-deltaLines)；否则丢弃
+     * @post READY 时：每次累加 deltaLines；间隔 ≥50ms 时发一帧 ScrollWheelFrame(delta=-accumulated)
      *       非 READY 时：presenter.onScrollBy(deltaLines) 本地降级
-     * @err 帧校验失败由 conn 层静默（delta 不会为 0，由 deltaLines≠0 保证）
-     * @inv lastScrollSentMs 单调递增；connectionState 不被本方法改变
+     * @err 帧校验失败由 conn 层静默（累计量为 0 时不发帧）
+     * @inv lastScrollSentMs 单调递增；pendingScrollDelta 发出后归零；connectionState 不被本方法改变
      */
     fun onScrollWheel(deltaLines: Int) {
         if (connectionState != ConnectionState.READY) {
@@ -353,13 +357,17 @@ class SessionViewModel(
             presenter.onScrollBy(deltaLines)
             return
         }
+        pendingScrollDelta += deltaLines
         val nowMs = System.currentTimeMillis()
         if (nowMs - lastScrollSentMs < SCROLL_THROTTLE_MS) return
         lastScrollSentMs = nowMs
+        val toSend = pendingScrollDelta
+        pendingScrollDelta = 0
+        if (toSend == 0) return
         // 协议约定：delta<0=向上看历史（scroll-up）。
         // 手势约定：deltaLines>0=presenter 向更早历史滚（正值=看旧内容），
-        // 因此 delta=-deltaLines 使两端符号语义对齐。
-        manager.sendScrollWheel(ref, -deltaLines)
+        // 因此 delta=-toSend 使两端符号语义对齐。
+        manager.sendScrollWheel(ref, -toSend)
     }
 
     /** 离开会话页时释放：退订镜像（conn 层幂等），停用连接由服务/接线层决定。 */

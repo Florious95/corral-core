@@ -503,13 +503,36 @@ func TestPaneModeChangedNotification(t *testing.T) {
 
 ---
 
-## 已知局限（实现阶段补录，待后续任务处理）
+## 已知局限（实现阶段补录，含用户实测后更新）
+
+### 滚动支持分档（2026-08-14 取证后订正）
+
+原方案设计了两条路径：① `mouse_any_flag=1` → SGR/X10 字节注入；② `mouse_any_flag=0` → copy-mode。
+**实测证伪了路径①**：
+
+- `tmux send-keys -H <SGR字节>` 对运行中的 TUI（less/vim with mouse=a）均无响应
+- `tmux send-keys "k"`（键名）可正常移动 less 内容
+- tmux 自身的 WheelUpPane 绑定用的是 `send-keys -M`（转发当前真实鼠标事件），只在鼠标事件绑定回调里有效，无法从外部合成
+
+因此实现将两条路径合并为 copy-mode 统一路径，并按以下三档如实分档：
+
+| 档位 | 场景 | 效果 |
+|---|---|---|
+| **① 非 alt-screen TUI（Claude Code）** | 用户核心场景：claude-code 在 pane 里串流输出，不切换备用屏 | **copy-mode 有效 ✓**，可看 tmux scrollback 里的历史输出 |
+| **② alt-screen 应用（vim / less / htop）** | 进入备用屏（DECSET 1049），pane 没有 scrollback 内容 | **copy-mode 无内容可滚 ✗**，本方案不支持；不假装支持 |
+| **③ 裸 shell** | 纯 shell，不切备用屏 | **copy-mode 有效 ✓** |
+
+**档位②用户遇到时的解释**：你在 vim/less 里上滑看不到内容，是因为这类程序切了备用屏，tmux 的 scrollback 里没有它的历史。这是 tmux 的架构约束，不是 App 的 bug。
+
+**未来线索（不在本轮做）**：实测发现 `send-keys "k"` 能让 less 向上滚，说明「发应用自己的滚动按键」可行（如 less 发 `k`，vim 发 `Ctrl-U`），但需要知道 pane 里跑的是什么以及该应用的按键约定，属于 app-specific 逻辑，超出本轮范围。
+
+---
 
 | 局限 | 影响 | 计划处置 |
 |---|---|---|
-| **SGR/X10 坐标写死 `1;1`** | 对 neovim 分屏、自实现坐标路由的多面板 TUI，滚轮会被路由到左上角 split 而非用户当前窗格。主流 TUI（vim 单窗、less、htop、claude-code）只看 button code（64/65），不受影响。用户核心痛点是「零投送」，1;1 先解决从 0 到 1。 | App 侧上报手势起点坐标后，服务端改用实际坐标替换 1;1，留作后续 |
-| **`sendError` 正常路径不打服务端日志** | 客户端能看到 `ErrorFrame`，但服务端侧对旧客户端发未知类型、死亡 pane 等失败路径是「瞎的」，无可观测指标。与「失败可见」红线有张力：客户端侧可见，服务端侧不可见。 | 等 `feat-diagnostic-log-export` 统一处理日志分层时一并解决，届时 `sendError` 可按错误等级决定是否写结构化日志 |
-| **远端投送引入至少一个 RTT 的延迟** | 改前：上滑→本地缓冲立刻动，零延迟。改后：手势→发帧→服务端查 tmux→注入→远端重绘→mirror delta 回来→屏幕才动，至少一个完整往返（当前链路约 123ms，广州 DERP 节点）。用户对滑动跟手极其敏感，体感上比本地缓冲钝。**为什么不做乐观本地滚动**：乐观滚动（先滚本地，再等远端权威结果）会导致双重滚动（本地滚一次、远端 mirror delta 回来又滚一次），体验更差；且 copy-mode 路径下「本地在本地缓冲，远端在 copy-mode 里」两套坐标系无法对齐。接受单向延迟。 | 如用户真机试用后觉得体感太钝，考虑：① 降低 DERP 延迟（接入更近节点）；② 换 Tailscale 直连；③ 专项评估乐观滚动代价。到时要有 RTT 数据，不能靠感觉猜 |
+| **SGR/X10 字节注入对 TUI 无效** | 原方案通道①已实测证伪；改为 copy-mode 统一路径，分档如上表 | 已在实现中修正；未来若找到可外部合成的 tmux 鼠标事件接口再考虑 |
+| **`sendError` 正常路径不打服务端日志** | 客户端能看到 `ErrorFrame`，服务端侧失败路径不可见 | 等 `feat-diagnostic-log-export` 统一处理 |
+| **远端投送引入至少一个 RTT 的延迟** | 手势→发帧→服务端查 tmux→注入→远端重绘→mirror delta 回来，至少 ~123ms（广州 DERP 节点）。**为什么不做乐观本地滚动**：会导致双重滚动；copy-mode 坐标系与本地缓冲无法对齐 | 如体感太钝：① 降低 DERP 延迟；② Tailscale 直连 |
 
 ---
 

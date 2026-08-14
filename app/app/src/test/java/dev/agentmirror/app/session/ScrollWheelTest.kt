@@ -222,6 +222,34 @@ class ScrollWheelTest {
         assertFalse("inCopyMode must stay false for wrong ref", h.vm.inCopyMode)
     }
 
+    // ---- T-sw10: 节流窗口累加——窗口内多次调用、到点发累计量 ----------------
+
+    /**
+     * 连续滑动产生 N 次 onScroll 回调（~16ms 间隔），50ms 内只发一帧：
+     * 若直接丢弃则该帧只携带首次的 deltaLines（~1–2 行），
+     * 若累加则该帧携带窗口内所有 deltaLines 之和——才能反映真实位移幅度。
+     *
+     * 断言：窗口内 3 次调用（deltaLines=5, 7 在首帧之后）+ 窗口外 1 次（deltaLines=1），
+     * 共产生 2 帧：第一帧 delta=-3（首次立即发），第二帧 delta=-(5+7+1)=-13（累计发送）。
+     */
+    @Test
+    fun `throttle window accumulates deltaLines and sends sum on window expiry`() {
+        val h = Harness()
+
+        h.vm.onScrollWheel(3) // 第一帧：立即发出 delta=-3，窗口开始
+        h.vm.onScrollWheel(5) // 窗口内：累加 5，不发
+        h.vm.onScrollWheel(7) // 窗口内：累加 12，不发
+
+        Thread.sleep(60)      // 窗口过期
+
+        h.vm.onScrollWheel(1) // 触发发送：累加 1 后 pending=13，发出 delta=-13
+
+        val frames = h.scrollWheelFrames()
+        assertEquals("two frames: one immediate + one accumulated", 2, frames.size)
+        assertEquals("first frame carries only its own deltaLines", -3, frames[0].delta)
+        assertEquals("second frame carries accumulated sum 5+7+1=13", -13, frames[1].delta)
+    }
+
     // ---- T-sw7: 协议层 ScrollWheelFrame validate -------------------------
 
     @Test
