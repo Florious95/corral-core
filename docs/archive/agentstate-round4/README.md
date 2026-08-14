@@ -71,6 +71,34 @@
 
 四席各取所需：`t.oracle` 用本目录做根因探针，`t.impl` 重建后让这三个变绿。
 
+## 七、被归档的测试为什么必须一起走（058 补刀 2026-08-15）
+
+**归档代码却留下强制它存在的测试 = 腐败会自我复制。**
+
+本目录多归档两个化石测试文件（`api-state-wiring-fossil-tests.go`、`api-connected-idle-fossil-test.go`）。
+它们在 live 时是三条红测：
+- `TestStateProviderTitleSignalDrivesState` —— 喂**静态** PaneTitle `"⠙ w-librarian"` 就断言 working、
+  `"✳ w-librarian"` 就断言 idle。**这正是 058 判定为错的那个做法——单帧认字形。**
+  它不是探针，是把缺陷钉死的**化石**：谁想让 `go test ./...` 绿，谁就必须把 `spinnerFrames`
+  白名单重新写回来。
+- `TestStateWiringWrapperProcessTreeBlocksListing` —— 断言 wrapper 进程树 + 屏文本 `Do you want
+  to proceed?` → blocked。同样把「屏文本规则引擎」这个被否定的决策函数钉死：谁想绿它，谁就得
+  复活 `rules.go` 的表驱动 + 锚点区域。
+- `TestConnectedIdleEconomySamplingRateFairnessAndVisibility` —— 采样公平性/60s 可见性**机制**
+  部分本身有效（节流、FIFO、60s 界），但 blocked/working **检测**断言同上面一条，依赖被否定的
+  决策层。
+
+**机理**：这三条不是「验收新判据正确」的探针，而是「强制旧判据继续存在」的地基。任何让它们
+变绿的代码都必然是回退——不是往新判据走，是往旧结构走。这就是「先删再做」要打断的正反馈循环。
+
+**处置**：不改断言让它通过、不 `t.Skip` 留在原地（t.Skip 只是让化石休眠，谁一旦取消 skip 就又
+被钉死）；**整体归档**。live 的 `go test ./...` 现在全绿，但这个绿是「没有旧判据」的绿，不是
+「旧判据通过」的绿——后者的绿才是骗人的。
+
+**留给 t.oracle 的接线**：这三条里**唯一仍然有效的部分是「PaneTitle 必须到达决策函数」这个
+接线**——新判据同样需要它（058 边界 1：取数保留）。但接线的验证不该绑定任何字形语义：新探针
+应喂任意 PaneTitle 断言「它被读进决策函数」，而非「⠙ → working」。接线验证由 oracle 重写。
+
 ## 六、这是回炉流程第 2 步的输入，不是垃圾桶
 
 按 [[053]]/[[054]] 回炉流程，审查席（`t.oracle`）读本次被回退的 diff 反推根因，产出**根因探针**；
