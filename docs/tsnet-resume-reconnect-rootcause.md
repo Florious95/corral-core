@@ -298,10 +298,99 @@ private fun forceRestartWithCurrentKey() {
 
 ---
 
-## 7. 相关代码位置速查
+---
+
+## 7. 更硬的根因：系统代理渗入 tsnet SOCKS 路径（2026-08-14 用户真机日志新证）
+
+> **本节覆盖并补充 §2–§5 的结构性分析。两者独立，可同时存在。**
+
+### 7.1 真机日志证据（6/6 相关性）
+
+用户真机（Android + Clash/Shadowrocket 常驻），复现手段：TS token 配对 → 长时间后台 → 回前台 → 连接重试循环连不上。
+
+```
+12:00:01.425  [socks] dial ok  host=127.0.0.1  port=7892  via=127.0.0.1:37557  ms=88
+12:00:06.453  [ws] failure  ex=IOException  msg=unexpected end of stream on http://100.75.207.88:9900/...
+              （同样模式重复 5 次）
+12:00:33.194  [socks] dial ok  host=100.75.207.88  port=9900  via=127.0.0.1:41873  ms=1391
+12:00:33.229  [ws] CONNECTING → AUTHENTICATING
+12:00:33.347  [ws] AUTHENTICATING → READY   ← 唯一一次目标是真服务器的，立刻 READY
+```
+
+**6 次 SOCKS 拨号，5 次目标是 127.0.0.1:7892（Clash/Shadowrocket 本地代理端口），全部随后 "unexpected end of stream"。唯一 1 次目标是 100.75.207.88:9900，立刻 READY。相关性 6/6。**
+
+### 7.2 推断链（leader 核查代码后确认）
+
+```
+OkHttpTransportFactory.create(url, sf != null)
+  → client.newBuilder().socketFactory(sf).build()   ← 无 .proxy(Proxy.NO_PROXY)
+  → OkHttp 继承 ProxySelector.getDefault()          ← 系统代理（Clash）返回 127.0.0.1:7892
+  → OkHttp 用 tsnet socketFactory 连接 127.0.0.1:7892
+  → tsnet SOCKS 路由到 host loopback 上的 Clash
+  → Clash 尝试 HTTP CONNECT 到 100.75.207.88:9900
+  → Clash 无法路由 Tailscale IP                      ← unexpected end of stream
+```
+
+**代码缺失点（`OkHttpTransportFactory.kt:194`）**：
+
+```kotlin
+// 现状（有缺陷）
+val chosen = if (sf == null) client else client.newBuilder().socketFactory(sf).build()
+
+// 修法（leader 裁定）
+val chosen = if (sf == null) client else client.newBuilder().socketFactory(sf).proxy(Proxy.NO_PROXY).build()
+```
+
+对照：`HttpUrlConnectionUploader.kt:174` 的上传路径已有 `.proxy(Proxy.NO_PROXY)`（缺陷① 时补上的），注释明确写「显式 NO_PROXY 防系统 ProxySelector 叠加一跳」。WebSocket 路径遗漏了同样的保护。
+
+### 7.3 JVM 探针（T1/T2）自证输出
+
+探针文件：`app/app/src/test/java/dev/agentmirror/app/service/SystemProxyLeakProbeTest.kt`
+
+**运行命令**：
+```bash
+cd app && ./gradlew :app:testDebugUnitTest \
+  --tests "dev.agentmirror.app.service.SystemProxyLeakProbeTest"
+```
+
+**当前 HEAD XML 结果**：
+```xml
+<testsuite name="dev.agentmirror.app.service.SystemProxyLeakProbeTest"
+           tests="2" skipped="0" failures="1" errors="0">
+  <testcase name="T1 tsnet socketFactory 注入时系统代理不应被访问">
+    <failure>expected:&lt;0&gt; but was:&lt;1&gt;   ← 记账代理被访问 1 次，确认缺陷</failure>
+  </testcase>
+  <testcase name="T2 无 tsnet socketFactory 时系统代理应正常生效（防过度修复）"/>
+                                                  ← PASS，sf==null 路径行为正常
+</testsuite>
+```
+
+| 探针 | 当前 HEAD | 修法后期望 |
+|------|-----------|----------|
+| T1（红测）：sf!=null 时记账代理被访问次数 == 0 | **FAIL（红）** `was:1` | PASS（绿） |
+| T2（防过度修复）：sf==null 时记账代理被访问次数 > 0 | PASS（绿） | PASS（绿，修法不动此分支）|
+
+### 7.4 notifySocksRouteFailure 自愈机制的有害性判定
+
+**结论：有害（Harmful），非「无用但无害」。**
+
+**已在用户日志中触发**：SOCKS 端口从 37557（第 1–5 次）变为 41873（第 6 次），说明 tsnet 节点被重建了一次。重建后，第 6 次连接目标变为 100.75.207.88:9900（直达服务器）并成功——说明重建后恰巧绕开了 Clash（可能是 Clash 在此期间重启或 ProxySelector 的返回值暂时为 NO_PROXY）。
+
+**有害三点**：
+
+1. **延迟累积**：每次 `forceRestartWithCurrentKey` 需停旧节点 + 重建新节点 + WireGuard 重握手，耗时约 3–10 秒。5 次失败的窗口（12:00:01 → 12:00:33，32 秒）中大部分是节点重建延迟，而非 ConnectivityManager 退避。
+2. **健康节点被误杀**：tsnet 节点从未坏过（SOCKS 代理一直在监听），重建是无效操作，浪费了 WireGuard 握手资源。
+3. **无根因修复时形成重启循环**：若不加 NO_PROXY，每次重建后新 OkHttpClient 仍继承 ProxySelector → 仍连到 Clash → 继续 notifySocksRouteFailure → 继续重建。节流（30s）是唯一保护。
+
+**处置建议**：先修 NO_PROXY（根因，彻底消除触发源），然后评估 notifySocksRouteFailure 是否仍有存在价值（为真正的 DERP 死亡场景兜底）。如保留，需缩小触发条件（增加「tsnet 实际不可达」验证，区分代理路由失败 vs tsnet 自身故障）。
+
+---
+
+## 8. 相关代码位置速查
 
 | 文件 | 行号 | 内容 |
 |------|------|------|
+| `OkHttpTransportFactory.kt` | 194 | **缺失 `.proxy(Proxy.NO_PROXY)`（§7 新根因，修法目标）** |
 | `TsnetWire.kt` | 91 | 幂等守卫（`m.state is Up → return`） |
 | `OkHttpWebSocketTransport.kt` | 161 | `socketFactoryFor(TsnetWire.state, host)` 无健康检查 |
 | `TsnetDial.kt` | 68–69 | `socketFactoryFor` 只看 state，不 ping 代理 |

@@ -557,7 +557,7 @@ private fun TsTokenCard(viewModel: PairingViewModel) {
 private fun tsStateLine(state: TsnetState): Pair<String, Boolean> = when (state) {
     TsnetState.Idle -> "填入 auth key 后点「连接」，或直接扫携带 key 的二维码，自动加入 tailnet。" to false
     TsnetState.Starting -> "tailnet 入网中…" to false
-    is TsnetState.Up -> "已入网：tailnet 通道就绪，100.x 地址可直连。" to false
+    is TsnetState.Up -> "已入网：节点已连接，数据通道需要几秒建立。" to false
     is TsnetState.Error -> "入网失败：${state.reason}" to true
 }
 
