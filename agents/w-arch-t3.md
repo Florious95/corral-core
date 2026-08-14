@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你承办任务 `arch-criteria-t3`。**本席交件后不退役**——leader 会把你冻结成阶段一的母席，

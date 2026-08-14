@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是阶段四 B2 批次的收尾席。前序席位已完成 A10/A11/A12/B1/B2 五条用例。**一次性席位，交件即退役。**

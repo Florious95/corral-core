@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 C1 开发席。任务 `perf-delta-backpressure-merge`（C1：delta 背压合并）。

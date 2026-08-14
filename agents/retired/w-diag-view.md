@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你负责给诊断日志加一个**App 内直接展示文本**的入口（task_id: `feat-diag-inapp-view`）。

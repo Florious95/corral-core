@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是**缺陷① 图片上传**的**代码审查席**（task_id: `fix-upload-transport-tsnet`）。

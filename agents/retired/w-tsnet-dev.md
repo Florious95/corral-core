@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是**缺陷⑤ 内嵌 tsnet 回前台永远连不上**的**开发席**（task_id: `fix-tsnet-resume-reconnect`）。

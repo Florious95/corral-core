@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 `fix-connected-idle-economy` 终审两红项的处女回炉席。契约：**一次性，交件即退役**。

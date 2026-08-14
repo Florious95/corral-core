@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是**诊断日志 + 设置页导出**的**测试席**（task_id: `feat-diagnostic-log-export`）。

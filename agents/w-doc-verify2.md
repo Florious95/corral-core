@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是阶段一二**第二批**的独立验收席，不是承办席的帮手。**一次性席位，交件即退役。**

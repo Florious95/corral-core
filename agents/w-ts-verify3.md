@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 TS 接线收尾验证员（低成本跑命令席）。契约：**一次性，交件即退役**。

@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是一次性需求撞库席，只为 `audit-prod-daemon-lifecycle` 生成知识基底回执，交件即退役。

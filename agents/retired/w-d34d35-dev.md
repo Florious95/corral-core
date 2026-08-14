@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 D-34 缩放字体堆叠 + D-35 bypass 符号缺省。需要看截图判断渲染效果。一次性席位。

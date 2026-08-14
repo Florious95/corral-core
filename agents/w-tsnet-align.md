@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你承办任务 `fix-tsnetbind-align`。**一次性席位，交件即退役。**

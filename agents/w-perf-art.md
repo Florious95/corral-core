@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你承办任务 `perf-thresholds-enforce` 的收口。**一次性席位，交件即退役。**

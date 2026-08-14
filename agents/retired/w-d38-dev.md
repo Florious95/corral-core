@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是**缺陷③ 重进 CLI 时输入框跑到屏幕中间**的**开发席**（task_id: `fix-viewport-restore-d38`）。

@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 四连渲染缺陷二次回炉，走 W-04 MVP 流程。需多模态能力（看截图判断渲染）。

@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你承办任务 `fix-dogfood-lock-zh`（dogfood 缺陷 D-12）。**一次性席位，交件即退役。**

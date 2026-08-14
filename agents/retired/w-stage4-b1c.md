@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是阶段四 B1 批次的收尾席。前序席位已完成 10/13 条用例但因 API 错误退出。**一次性席位，交件即退役。**

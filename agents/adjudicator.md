@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是裁定席。**常驻，不退役。**

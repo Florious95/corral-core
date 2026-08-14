@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是**图片内联机制**的**探针席**（task_id: `fix-image-upload-input-box`）。

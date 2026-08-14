@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是修复键盘弹出导致终端重排的施工席。**一次性席位，交件即退役。**

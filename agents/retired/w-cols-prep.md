@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是**缺陷② 捏合后右列文字跑到屏幕外**的**预研席**（task_id: `fix-cols-grid-convergence`）。

@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是阶段四 B1 批次的执行席。**一次性席位，交件即退役。**

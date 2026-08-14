@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是真机模拟试用官（Opus 5 识图席，测试设计+执行两段式）。契约：**一次性，交件即退役**。

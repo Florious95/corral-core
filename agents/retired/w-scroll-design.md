@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是**缺陷④ 上滑要投送到远端当滚轮**的**协议设计席**（task_id: `feat-remote-scroll-forward`）。
