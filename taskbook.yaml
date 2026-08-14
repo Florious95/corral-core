@@ -2725,7 +2725,7 @@ tasks:
 
   - id: fix-image-upload-input-box
     title: "发图后文件名落进输入框；且需 leader 额外 Read 一次，每次多烧一整轮 LLM 请求"
-    status: todo
+    status: pass_user_verified   # 2026-08-14 用户真机「没问题了」；文字+[Image #N] 内联+真提交三条同时成立。commit d597da97e，daemon pid 10313
     owner: null
     contention: contract
     discovered: "2026-08-14 用户反馈 + 截图（upload-20260814T112827）"
@@ -2832,3 +2832,71 @@ tasks:
     deps: ["fix-font-size-scale-unit"]
     write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
     evidence: ".team/evidence/fix-terminal-right-margin.json"
+
+  - id: fix-paste-settle-signal
+    title: "发图那 2 秒沉降延时是猜的阈值、无单测保护、且阻塞连接读循环"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 leader 独立变异发现（fix-image-upload-input-box 第 2 轮交付时）"
+    context: |
+      `bridge.go: InjectWithAttachment` 在最后一次 `send-keys Enter` 前 `time.Sleep(pasteSettleDelay)`
+      等 2 秒。这 2 秒是整个发图内联修复真正起作用的那一环——Claude Code 收到 bracketed paste 后
+      要解码/缩放/重编码/写 ~/.claude/image-cache，Enter 在这段异步 I/O 完成前到达会被静默吞掉。
+
+      **三条缺口，按严重度排：**
+
+      ① **无单测保护（最严重）**：leader 把 `time.Sleep(pasteSettleDelay)` 整行删掉，
+         server 全部测试仍然通过。**谁下次顺手清理掉它，门全绿而功能当场废。**
+         根因是 `time.Sleep` 硬编码、时钟不可注入；不注入时钟就测不了竞态。
+         目前唯一保护它的是端到端实测，而端到端不在门里。
+
+      ② **2000ms 是实测阈值不是理论上界**：500ms 不够、2000ms 够（w-img-probe 实测）。
+         更大的图 / 更慢的机器可能仍不够，届时症状退回「消息卡在输入框发不出去」，
+         而且**不会有任何报错**——跟修复前一模一样，会被误判成回归。
+
+      ③ **阻塞连接读循环**：`ws_conn.go:347 handleFrame → handleInput` 是同步调用，
+         发图后这条 WS 连接的帧处理被阻塞约 2 秒，期间用户的输入/滚动指令不被处理。
+         （镜像输出走独立 goroutine，画面刷新不受影响。）
+
+      **建议方向（未定夺）**：等一个明确的「粘贴已处理完成」信号而不是固定 sleep——
+      例如轮询 capture-pane 直到输入行出现 `[Image #N]`，带上界超时兜底。
+      这样 ①（可断言可注入）②（自适应真实耗时）③（可做成非阻塞）三条一起解。
+      **但轮询判据是 Claude Code 专属字面量**，对别的 CLI 要有降级路径，这是要先想清楚的地方。
+    acceptance:
+      - "红测：时钟可注入，断言『Enter 在沉降完成之前不得发出』——先红后绿"
+      - "定点变异自证：删掉沉降等待，该红测必须转红（当前变异是全绿的，这就是本任务的起点）"
+      - "不倒退：无附件路径的 argv 与耗时不受影响"
+      - "眼见为实：用户真机发一张【大图】，确认仍能提交（当前只验过普通截图尺寸）"
+    deps: ["fix-image-upload-input-box"]
+    write_scope: ["server/internal/bridge/", "server/internal/api/"]
+    evidence: ".team/evidence/fix-paste-settle-signal.json"
+
+  - id: decide-pane-reflow-wip
+    title: "工作区里混进过一份无人派单的多客户端 pane 尺寸广播 WIP，要不要"
+    status: todo
+    owner: null
+    contention: contract
+    discovered: "2026-08-14 leader 在交付 fix-image-upload-input-box 第 2 轮时发现并剥离"
+    context: |
+      `PaneSizeChanged` 帧 + `Server.fanoutPaneReflow`：手机与 Web 同时订阅同一个 pane 时，
+      后改尺寸的一端胜出，对端把本地网格改成同一行列、且不上行 resize，避免两端互顶。
+      代码是完整的（含契约注释、validate、往返测试、App 侧 applyRemoteSize/noteRemoteSize），
+      但**本轮无人派单、无人验收，来源未查明**。
+      leader 已完整剥离并存档：`docs/archive/pane-reflow-wip/pane-size-changed-wip.patch`，
+      剥离后 server + app 双门复跑全绿，未随 d597da97e 进入生产。
+
+      **为什么不直接丢掉**：它解决的是一个真实存在的矛盾——
+      「两端共用一个 pane、两块屏尺寸不同」。这与主题那轮遇到的
+      「两块屏底色不同」是同一个形状的问题（见 feat-terminal-theme-selection 的
+      why_not_pursued）。将来做多端并存时会重新撞上。
+
+      **为什么不直接合进去**：影响面是协议 + 双端渲染，且改的是「谁说了算」这类归属规则，
+      属契约级；且当前用户只用 App 单端，收益为零而风险非零。
+    acceptance:
+      - "先查来源：问清是哪一轮哪个席位的产出，有没有对应的需求条目（撞库：requirement-base 有无相关裁定）"
+      - "若要：按正常流程重新派单——红测先行 + 双端实测 + 用户真机验收，不许直接把存档 patch 合进去"
+      - "若不要：明确关闭并在证据里写清为什么（不要让后来的人再发现一次、再纠结一次）"
+    deps: []
+    write_scope: ["docs/", "taskbook.yaml"]
+    evidence: ".team/evidence/decide-pane-reflow-wip.json"
