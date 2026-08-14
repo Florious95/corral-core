@@ -1,0 +1,50 @@
+{
+  "task_id": "feat-remote-scroll-mouse-wheel",
+  "status": "pass_user_verified",
+  "closed_at": "2026-08-14T12:45:00Z",
+  "verified_by": "用户真机实测（非席位自报，非模拟器）。用户原话：「丝滑，特别满意」",
+  "rounds_before": 10,
+  "why_ten_rounds_failed": "docs/remote-scroll-forward-design.md:513 曾写「原方案①鼠标字节注入实测证伪」，那次实测打的是 less 和 vim —— 两个都没开鼠标上报（mouse_any_flag=0），收到鼠标字节当然没反应。从未针对 Claude Code 验证过。这条错误结论被写进 scroll_test.go 的断言，于是第 1~10 轮全部绕开了唯一对的那条路，改去读 tmux scrollback；而 Claude Code 是 alt_on=1/history_size=0，读的是空历史。本工程「验证的不是真正的被测对象」的第 8 次，也是最贵的一次。",
+  "root_cause_of_final_symptom": "用户 2026-08-14 20:30 报「上滑无效」时，代码侧其实已经修好。无效的原因是【部署与源码分歧】：生产 daemon pid 86755 起于 14:44:43，其二进制 sha 14001c9d2b754ec9 中 injectWheelBytes 出现 0 次。旧二进制对所有 pane 一律走 copy-mode，而 Claude Code 的 copy-mode 里没有可滚的历史。这条分歧在 docs/archive/scroll-rounds-8-10/README.md §四 已被点名，当天咬人两次。",
+  "sign_chain_verified_by_leader": [
+    "手指下拖 → GestureDetector distanceY < 0（AOSP: scrollY = 上一点 − 当前点）",
+    "TermSurfaceView.kt:144  deltaLines = round(-dy / lineHeightPx) → 正值",
+    "SessionViewModel.kt:371 manager.sendScrollWheel(ref, -toSend) → delta 负值",
+    "protocol/frames.go:220  delta<0 = scroll up (toward history)",
+    "bridge.go:53 injectWheelBytes(up = delta<0) → SGR button 64",
+    "结论：两次取负不是 bug，是两层各自约定在对齐；符号链路正确，未改一行"
+  ],
+  "probe_evidence": {
+    "by": "w-img-probe，隔离 socket /tmp/e2e-w-img-probe/sock2，起真实 claude pane",
+    "experiment": "灌 200 行后 capture-pane 顶行 = line 157；send-keys -H 1b 5b 3c 36 34 3b 34 30 3b 32 30 4d（ESC[<64;40;20M）×5 → 顶行变 line 152，底部出现 'Jump to bottom (ctrl+End) ↓'",
+    "control": "同一 session 内裸 bash（mouse_any_flag=0）灌相同 200 行、打相同字节 → 零滚动；且字节被行编辑器啃成 '64;40;20M' 字面量打进命令行",
+    "control_conclusion": "mouse_any_flag=0 时绝不能发字节 —— 不是无害的『没反应』，是会污染用户正在敲的命令行。故分支判断是硬不变量，非优化项。"
+  },
+  "leader_independent_verification": {
+    "not_taking_seat_self_report": true,
+    "gates": "go build / vet / test ./internal/bridge -count=1 全绿（非缓存）",
+    "mutation": "leader 自做的变异与席位所做不同：把 mouse_any_flag 判据反相 ==\"1\" → ==\"0\"，5 条用例应声转红（含防污染的 TestInjectScrollArgvExactShapeBareShell），还原后复跑全绿"
+  },
+  "deployment": {
+    "old_pid": 86755,
+    "old_sha16": "14001c9d2b754ec9",
+    "old_injectWheelBytes": 0,
+    "new_pid": 48296,
+    "new_sha16": "30f2b3d3876516be",
+    "new_injectWheelBytes": 2,
+    "backup": "server/agentmirrord.bak-preScrollWheel-20260814204320",
+    "started_at": "2026-08-14T20:43:39+08:00",
+    "listen": "0.0.0.0:9900",
+    "note": "自本次起，部署与源码的分歧已消除。交接文档 §3-A 末尾那条警告可以撤。"
+  },
+  "known_gap": "TermSurfaceView.kt:145 `if (deltaLines == 0) return` —— 不足一行的亚像素位移被整个丢弃，View 层无累加器（VM 层的 pendingScrollDelta 累的是已取整的行数，够不着）。leader 据此预测手感会「钝」，用户实测反馈是「丝滑」——预测偏保守。缺陷仍然真实（极慢速小幅滑动会被吞），但优先级据此下调。已派 w-font-dev 修，非阻塞。",
+  "tests": [
+    "TestInjectScrollMouseTrackingNeverEntersCopyMode",
+    "TestInjectScrollArgvExactShapeMouseTrackingOn",
+    "TestInjectScrollArgvExactShapeBareShell（防污染回归）",
+    "TestInjectScrollEntersCopyModeForBareShell",
+    "TestInjectScrollDoesNotEnterCopyModeWhenAlreadyInIt"
+  ],
+  "commit": "f9a4cedf8",
+  "supersedes": "feat-remote-scroll-forward（第 1~10 轮，已整轮归档于 docs/archive/scroll-rounds-8-10/）"
+}

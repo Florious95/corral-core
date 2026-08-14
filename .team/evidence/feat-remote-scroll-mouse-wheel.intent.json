@@ -1,0 +1,1 @@
+{"task_id":"feat-remote-scroll-mouse-wheel","dispatched_to":"w-img-probe","base":".team/nodes/feat-remote-scroll-mouse-wheel/CLAUDE.md","at":"2026-08-14","note":"只读实证轮：在隔离 tmux 的真实 Claude Code pane 上注入 SGR 1006 滚轮字节，判定它是否真的滚动。这是④ 前十轮从未做过的那个实验。本轮不改产品代码。"}
