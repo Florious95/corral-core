@@ -23,18 +23,21 @@ import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
 
 /**
- * 终端视口状态机：跟随/锁定历史、可见行窗口、捏合行列数换算、脏区合并（渲染逻辑与 Android View 分离的可测核心）。
+ * 终端视口状态机：跟随/锁定历史、可见行窗口、字格像素→行列数换算、脏区合并（渲染逻辑与 Android View 分离的可测核心）。
  *
  * 本地滚动（006）：滚动只改视口顶行（本地 scrollback 行号，零网络）。跟随底部时 [topLine] 为 null，
  * 新输出到达窗口自动贴底；用户上滚即锁定历史，[topLine] 冻结为具体逻辑行号，锁定态新输出到达不动视口；
- * 拖回底部或点"回到底部"恢复跟随。捏合字号（005）→ 像素尺寸换算 rows/cols → 经 [onResizeRequest]
- * 上抛（协议 resize 帧由上层接线，conn/session 归属其他任务）。
+ * 拖回底部或点"回到底部"恢复跟随。
+ *
+ * 字号→尺寸（feat-font-size-setting-drop-pinch，取代原 005 捏合）：字号是设置页选定、进入会话前
+ * 已持久化的独立输入；View 层用实测字形度量（measureText/fontMetrics）换算出 cellWidth/cellHeight
+ * 后经 [seedCellMetrics] 一次性写入，早于任何视口事件——几何只算一次，不再有「名义值播种→实测值
+ * 回写」两段收敛（该模式随捏合一起拆除，原注释描述的真机收敛序列不再存在）。
  *
  * resize 抑制（raw/019 裁定②，fix-ime-no-resize）：[onViewportSizeChanged] 只在**首次真实视口**
  * 建立时换算一次 rows/cols 并上抛（「仅首次进入 CLI 时 resize 一次」）；此后 IME 弹起 / 输入框
  * 变高引起的视口收缩（及复原）只更新 [visibleRows]（可见行数）——渲染窗口随之下移/上推露出底行
  * （视口上推，内容区平移，最后一行始终可见，D-20），**不再**改 rows/cols、不再上抛 resize。
- * 捏合改字号（[onFontSizeChanged]）仍按像素换算并上抛（005 契约，D-29 同族另行立案，不得误伤）。
  */
 class TermViewPresenter(
     private val emulator: TerminalEmulator,
@@ -55,13 +58,13 @@ class TermViewPresenter(
      */
     var onFrameRequested: (() -> Unit)? = null
 
-    /** 当前等宽字格像素尺寸（View 层测量/捏合后设置）。 */
+    /** 当前等宽字格像素尺寸（View 层实测字形度量后经 [seedCellMetrics] 写入）。 */
     var cellWidth: Int = DEFAULT_CELL_WIDTH
         private set
     var cellHeight: Int = DEFAULT_CELL_HEIGHT
         private set
 
-    /** 视图像素尺寸，捏合行列数换算的基准。 */
+    /** 视图像素尺寸，字号→行列数换算的基准。 */
     private var viewportWidthPx: Int = 0
     private var viewportHeightPx: Int = 0
 
@@ -78,6 +81,17 @@ class TermViewPresenter(
      * 不算真实视口，不置位（旋转重建 VM 后重新走本门，保证旋转仍是合法 resize）。
      */
     private var viewportSeeded = false
+
+    /**
+     * [seedCellMetrics] 是否已调用（防静默失效守卫：区分"字号已实测落定"与"仍是构造期
+     * DEFAULT_CELL_WIDTH/HEIGHT 占位值"）。[onViewportSizeChanged]/[onRealViewportChanged]
+     * 的首次真实视口分支必须先检查本标志，未置位则显式抛异常，不许用占位值悄悄算几何。
+     *
+     * 公开只读（[TermSurfaceView.presenter] 注入时据此判断是否需要自动补 seed——已被
+     * 显式 seed 过的 presenter 不应被 View 的默认字号悄悄覆盖）。
+     */
+    var cellMetricsSeeded: Boolean = false
+        private set
 
     /**
      * 当前可见行数（≤ 内核行数）；null = 未挤压，取 [TerminalEmulator.rows]。
@@ -177,7 +191,7 @@ class TermViewPresenter(
         onFrameRequested?.invoke()
     }
 
-    // ---- 捏合 → 行列数换算（005：让 CLI 自己重画）----
+    // ---- 字号 → 行列数换算（feat-font-size-setting-drop-pinch：让 CLI 自己重画）----
 
     /**
      * 视图像素尺寸变化（IME/输入框挤压、复原、旋转重建后的首帧）。
@@ -195,12 +209,29 @@ class TermViewPresenter(
      * @inv 像素/字格任一非正时不做换算（recomputeGeometry 提前返回）
      */
     fun onViewportSizeChanged(widthPx: Int, heightPx: Int) {
+        // 仪表（leader 2026-08-14 补充裁定）：一进来就记入参与旧值——这是排查「回前台后
+        // 只画上面三分之一」这类问题时判断「到底有没有被调用」的第一手证据，不等后续分支。
+        DiagLog.record(
+            "viewport",
+            "source=onViewportSizeChanged oldW=$viewportWidthPx oldH=$viewportHeightPx " +
+                "newW=$widthPx newH=$heightPx viewportSeeded=$viewportSeeded " +
+                "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+        )
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
+        var resized = false
         // 0x0 预布局 / 非正尺寸不是真实视口：不落 seed（否则旋转重建后首帧被吞成非 resize）。
         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
+            // 防静默失效（leader 2026-08-14 补充裁定）：未先 seedCellMetrics 就不许用
+            // DEFAULT_CELL_WIDTH/HEIGHT 占位值悄悄算几何——那等于把刚拆掉的「名义值播种」
+            // 换个更隐蔽的形式（连"两次上报"这个可观察信号都没有）请回来。
+            check(cellMetricsSeeded) {
+                "TermViewPresenter.onViewportSizeChanged 在 seedCellMetrics 之前被调用" +
+                    "（当前 cellWidth=$cellWidth cellHeight=$cellHeight 仍是占位值）——" +
+                    "字号选定后必须先调用 seedCellMetrics 喂入实测字形度量，不许静默用占位值继续算 rows/cols"
+            }
             viewportSeeded = true
-            recomputeGeometry()
+            resized = recomputeGeometry()
         }
         // 首帧之后：挤压/复原只改可见行数（视口上推），不再 emit resize。
         val rowsBefore = visibleRows
@@ -210,14 +241,19 @@ class TermViewPresenter(
         // coerceIn(1, rows) 上限夹住，窗口画不满 View（用户截图：56 行空黑）。
         // 判据见 [viewportOutgrewEmulator]：挤压恒 <= 内核，等于/小于都不触发；只有
         // 「内核行数过时偏低」才重算并 emit——这就是 v1/v2/v3 找不到的区分判据。
-        if (viewportOutgrewEmulator()) {
-            recomputeGeometry()
+        val outgrew = viewportOutgrewEmulator()
+        if (outgrew) {
+            resized = recomputeGeometry() || resized
         }
         // 可见行数变化（挤压/复原/增长恢复）即需重画——视口上推露出底行，本回调是唯一信号
         // （旧链路经 emulator.resize→flushDamage 间接唤醒，现在 resize 不再走，须直呼）。
         if (visibleRows != rowsBefore) {
             onFrameRequested?.invoke()
         }
+        // 仪表：结果与守卫状态，含守卫算出的"若重算会得到的候选行列数"——即使守卫拦下也记，
+        // 让「该重算而没重算」（candidate != emulator 但 outgrewGuard=false）与「重算了但算
+        // 错了」（resized=true 但 emulatorRows/Cols 仍不对）能光看日志区分开。
+        recordViewportResult(source = "onViewportSizeChanged", resized = resized, outgrewGuard = outgrew)
     }
 
     /**
@@ -241,83 +277,83 @@ class TermViewPresenter(
      * @inv 挤压（视口 < 内核）不产生任何重算/emit
      */
     fun onRealViewportChanged(widthPx: Int, heightPx: Int) {
+        // 仪表（leader 2026-08-14 补充裁定）：一进来就记——用户报「回前台后只画上面三分之一」，
+        // 长后台（3.7 分钟）被系统回收 Surface 时 Activity ON_STOP/ON_START 与本回调（源自
+        // View.onWindowVisibilityChanged）是否对得上，现在无从判断，光看日志就要能回答。
+        DiagLog.record(
+            "viewport",
+            "source=onRealViewportChanged oldW=$viewportWidthPx oldH=$viewportHeightPx " +
+                "newW=$widthPx newH=$heightPx viewportSeeded=$viewportSeeded " +
+                "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+        )
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
+        var resized = false
+        var outgrew = false
         // 首帧尚未建立（onSizeChanged 未到，先来的是窗口可见事件）：按首次真实视口 seed，
         // 之后 onViewportSizeChanged 因 viewportSeeded 已置位不再 emit——两种事件顺序只 seed 一次。
         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
+            // 防静默失效：同 onViewportSizeChanged 的守卫，理由见其注释。
+            check(cellMetricsSeeded) {
+                "TermViewPresenter.onRealViewportChanged 在 seedCellMetrics 之前被调用" +
+                    "（当前 cellWidth=$cellWidth cellHeight=$cellHeight 仍是占位值）——" +
+                    "字号选定后必须先调用 seedCellMetrics 喂入实测字形度量，不许静默用占位值继续算 rows/cols"
+            }
             viewportSeeded = true
-            recomputeGeometry()
+            resized = recomputeGeometry()
             updateVisibleRows()
             onFrameRequested?.invoke()
+            recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = true)
             return
         }
         val rowsBefore = visibleRows
-        if (viewportOutgrewEmulator()) {
-            recomputeGeometry()
+        outgrew = viewportOutgrewEmulator()
+        if (outgrew) {
+            resized = recomputeGeometry()
         }
         updateVisibleRows()
         if (visibleRows != rowsBefore) {
             onFrameRequested?.invoke()
         }
+        recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = outgrew)
+    }
+
+    /** 仪表：视口事件处理结果的统一落记（[onViewportSizeChanged]/[onRealViewportChanged] 共用）。 */
+    private fun recordViewportResult(source: String, resized: Boolean, outgrewGuard: Boolean) {
+        DiagLog.record(
+            "viewport",
+            "source=$source result resized=$resized outgrewGuard=$outgrewGuard " +
+                "candidateRows=${if (cellHeight > 0) viewportHeightPx / cellHeight else -1} " +
+                "candidateCols=${if (cellWidth > 0) viewportWidthPx / cellWidth else -1} " +
+                "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+        )
     }
 
     /**
-     * 捏合改字号：重算行列数，与内核当前尺寸不一致则上抛 resize 请求。
+     * 字号 → 单元尺寸的唯一写入口（feat-font-size-setting-drop-pinch 契约①②④）：View 层
+     * 用实测字形度量（measureText/fontMetrics，禁止查表配常量）算出的 cellWidth/cellHeight，
+     * 在 presenter 注入或字号变化时调用一次，且必须早于任何 [onViewportSizeChanged]。
+     *
+     * 不在此处调用 [recomputeGeometry]/[onResizeRequest]：几何计算统一由视口事件
+     * （[onViewportSizeChanged] 首次调用）承担，本方法只落定尺寸——避免同一次「进入会话」
+     * 产生两次不同上报（旧「名义值播种 → 实测值回写」两段收敛模式已随捏合一起拆除）。
      *
      * @contract
-     * @pre newCellWidth / newCellHeight 为正整数
-     * @post cellWidth/cellHeight 更新为入参；行列数变化则经 [onResizeRequest] 上抛；
-     *       随后必触发一次 [onFrameRequested]（栅格几何已变，即使行列数没变）
-     * @err none
-     * @inv none
+     * @pre cellW / cellH 为实测值（非查表常量）；非正值不拒绝——JVM 测试环境（Robolectric
+     *      legacy graphics）的字形度量在部分路径下是 stub，可能诚实地测出 0（见下）
+     * @post cellWidth/cellHeight 更新为入参；[cellMetricsSeeded] 置位（解除
+     *       [onViewportSizeChanged]/[onRealViewportChanged] 的防静默失效守卫）；
+     *       不触发重算/上抛/请求帧
+     * @err none（不校验正负——本方法只负责「记下调用方测出的值」，不负责评判测量质量；
+     *      非正值会让 [recomputeGeometry] 的既有 guard 继续跳过几何计算，行为等同「尚未
+     *      有可用几何」，但不影响 [cellMetricsSeeded]：防静默失效守卫防的是「没测就用
+     *      DEFAULT 占位值硬算」，不是「测出了一个退化值」——二者不是同一件事）
+     * @inv 正常生命周期内应在首次 [onViewportSizeChanged] 之前调用（进入会话前尺寸即定，契约④）
      */
-    fun onFontSizeChanged(newCellWidth: Int, newCellHeight: Int) {
-        cellWidth = newCellWidth
-        cellHeight = newCellHeight
-        recomputeGeometry()
-        // 捏合改字格后可见行数随之变化（同一视口高 ÷ 新字格高），重排跟随新栅格。
-        updateVisibleRows()
-        // 栅格几何变了（即使行列数没变，格子像素尺寸也变了），必须重画。
-        onFrameRequested?.invoke()
-        // 缺陷②观测点：捏合事件后落一条栅格快照（前后对比即「捏合前后各值如何变化」）。
-        recordGridSnapshot(newCellWidth)
-    }
-
-    /**
-     * 测量回写（fix-cols-grid-convergence X2 根治）：View 层 [TermSurfaceView.measureCells]
-     * 每帧测得实测字形推进宽后调用，使 recomputeGeometry 的 cols 与绘制同一栅格来源。
-     *
-     * 幂等契约（反馈环收敛）：同值 no-op（不重算、不 emit、不请求帧）——每帧 measureCells
-     * 都回写，若不同值就每帧重算，收敛性完全靠"值稳定即停止"兜住：cellHeight 不变 →
-     * 测量 cellW 不变 → 同值 no-op → 至多一次 emit。cellHeight 永不被回写改动
-     * （否则 cellH→textSize→cellH 反馈环）。
-     *
-     * 权衡①裁定（FIELD.md，leader 已批）：测量值胜于捏合——测量 cellW 是 cellHeight 的
-     * 函数，与捏合 newW 无关，下次绘制必然用测量值覆盖捏合设的宽度。捏合缩放仍生效
-     * （newH 变 → cellW 变），但宽度不再能自由设（由高度间接决定）。
-     *
-     * 首帧时序（权衡②）：onViewportSizeChanged（seed 名义 10）先 emit 一次，首次 onDraw 回写
-     * 实测再 emit 一次。这是"先 seed 后回写"的一次性两段收敛：seed 保证首帧有合法尺寸、
-     * 回写保证第二次就是实测值（此后幂等）。服务端会收到两次 resize + 两次重排，但这是
-     * 从 seed（名义 10）向实测（真机 11）收敛的必要代价，且**只发生一次**；JVM 测量 stub
-     * 下 cellW=1 会在任何 view.draw 时把 cols 打成视口宽/1（见 TermColsGridConvergenceDiscriminationTest
-     * 的 JVM 约束注释）——真机走实测、CI 走归一化断言，二者不互相污染（权衡③）。
-     *
-     * @contract
-     * @pre measuredCellW > 0（正像素宽度）
-     * @post cellWidth 更新为入参；值 != 旧值则重算行列数，变化则经 [onResizeRequest] 上抛
-     * @err none
-     * @inv cellHeight 永不因回写改变；同值重复调用为纯 no-op
-     */
-    fun setMeasuredCellWidth(measuredCellW: Int) {
-        if (measuredCellW <= 0) return
-        if (measuredCellW == cellWidth) return // 幂等：值稳定即停止，反馈环收敛点
-        cellWidth = measuredCellW
-        recomputeGeometry()
-        // 缺陷②观测点：回写实测推进宽后落一条栅格快照（幂等守卫 `== cellWidth` 已保证
-        // 值稳定即停止，不会每帧刷；真机收敛序列 seed 名义 10 → 回写实测 11 → 停）。
-        recordGridSnapshot(measuredCellW)
+    fun seedCellMetrics(cellW: Int, cellH: Int) {
+        cellWidth = cellW
+        cellHeight = cellH
+        cellMetricsSeeded = true
     }
 
     /**
@@ -333,32 +369,35 @@ class TermViewPresenter(
             (viewportWidthPx / cellWidth) > emulator.cols
     }
 
-    /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。 */
-    private fun recomputeGeometry() {
-        if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return
+    /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。
+     *  每次重算落一条栅格快照（[recordGridSnapshot]），可观测缺陷②是否回归。
+     *  @return 是否实际上抛了 resize（供调用方仪表落记，见 [recordViewportResult]）。 */
+    private fun recomputeGeometry(): Boolean {
+        if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return false
         val rows = viewportHeightPx / cellHeight
         val cols = viewportWidthPx / cellWidth
-        if (rows != emulator.rows || cols != emulator.cols) {
+        val changed = rows != emulator.rows || cols != emulator.cols
+        if (changed) {
             onResizeRequest(rows, cols)
         }
+        recordGridSnapshot(cellWidth)
+        return changed
     }
 
     /**
-     * 缺陷②观测点：上报栅格几何（w-cols-prep 第 5 条测试规格，字段名逐字对齐）。
+     * 缺陷②可观测性金丝雀（w-cols-prep 第 5 条测试规格，字段名逐字对齐；沿用旧字段名
+     * 保持日志消费方兼容，语义已变）：单一实测来源架构下 cell_width_nominal 与
+     * cell_width_measured 恒相等（[cellWidth] 本身就是实测值，不再有另一套"名义值"），
+     * 故 reported_cols 与 canvas_capacity_cols 结构性恒相等、overflow_px 结构性恒为 0——
+     * 这条日志因此变成「① ② 契约仍在生效」的持续证据，而非诊断工具。
      *
-     * 调用方：TermSurfaceView.measureCells()（绘制层每次量完实测推进宽后喂进来）；
-     * **变更守卫**——只在本栅格任一关键量（视口宽 / 名义字格宽 / 实测推进宽）变化时
-     * 落一条，避免每帧重复记录刷爆环形缓冲（静默经济红线）。捏合/视口变化自然触发
-     * 一次记录，前后对比即「捏合事件前后各值如何变化」。
+     * 调用方：[recomputeGeometry]（几何每次重算即落一条，含 [seedCellMetrics] 生效后的
+     * 首次视口建立）。**变更守卫**——只在本栅格任一关键量（视口宽/字格宽）变化时落一条，
+     * 避免重复记录刷爆环形缓冲（静默经济红线）。
      *
-     * 字段（w-cols-prep 第 5 条规格）：viewport_width_px = 终端 View 像素宽；
-     * cell_width_nominal = 上报 cols 用的字格宽（[cellWidth]）；cell_width_measured =
-     * 绘制层实测推进宽（measureCells 的 fgPaint.measureText）；reported_cols =
-     * floor(viewport_width_px / cell_width_nominal)；canvas_capacity_cols =
-     * floor(viewport_width_px / cell_width_measured)；overflow_px = reported_cols >
-     * canvas_capacity_cols 时 (canvas_capacity_cols+1)*cell_width_measured -
-     * viewport_width_px，否则 0（容量边界列右缘越屏量，半字宽量级，非 reported 末列的
-     * 整列量——1260 真机：115*11-1260=5px 才对得上用户主诉）。
+     * 字段：viewport_width_px = 终端 View 像素宽；cell_width_nominal = cell_width_measured
+     * = [cellWidth]（单一来源）；reported_cols = floor(viewport_width_px / cellWidth)；
+     * canvas_capacity_cols 同 reported_cols；overflow_px 结构性恒为 0。
      */
     fun recordGridSnapshot(measuredCellW: Int) {
         val vw = viewportWidthPx
@@ -478,7 +517,8 @@ class TermViewPresenter(
     }
 
     private companion object {
-        /** 初始等宽字格像素（View 测量前的占位，典型 6x13 密集字形）。 */
+        /** [seedCellMetrics] 落定前的占位值（构造后到 View 注入 presenter 之间的间隙，
+         *  正常生命周期内不会被任何几何计算实际使用）。 */
         const val DEFAULT_CELL_WIDTH = 10
         const val DEFAULT_CELL_HEIGHT = 20
     }
