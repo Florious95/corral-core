@@ -14,14 +14,13 @@ import (
 )
 
 // statePriority ranks agent states by attention demand (requirement 012):
-// blocked > done > working > idle. unknown ranks lowest and is never selected
-// (it is skipped before any comparison).
+// blocked > working > idle. unknown ranks lowest and is never selected (it is
+// skipped before any comparison). The done slot was removed (user ruling
+// 2026-08-13: the server has no done; see the 058 archive).
 func statePriority(s protocol.AgentState) int {
 	switch s {
 	case protocol.StateBlocked:
 		return 4
-	case protocol.StateDone:
-		return 3
 	case protocol.StateWorking:
 		return 2
 	case protocol.StateIdle:

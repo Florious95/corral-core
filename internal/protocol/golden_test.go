@@ -49,14 +49,14 @@ var (
 		{"list_delta.json", protocol.ListDelta{
 			Seq: 45,
 			AddedSessions: []protocol.Session{
-				{Ref: "s4", Name: "claude", Cwd: "/proj/c", State: protocol.StateDone, Rows: 25, Cols: 100},
+				{Ref: "s4", Name: "claude", Cwd: "/proj/c", State: protocol.StateIdle, Rows: 25, Cols: 100},
 			},
 			RemovedRefs: []string{"s1"},
 			ChangedSessions: []protocol.Session{
-				{Ref: "s2", Name: "codex", Cwd: "/proj/a", State: protocol.StateDone, Rows: 24, Cols: 80},
+				{Ref: "s2", Name: "codex", Cwd: "/proj/a", State: protocol.StateIdle, Rows: 24, Cols: 80},
 			},
 			ChangedWorkspaces: []protocol.Workspace{
-				{Cwd: "/proj/a", SessionCount: 2, AggregateState: protocol.StateDone},
+				{Cwd: "/proj/a", SessionCount: 2, AggregateState: protocol.StateIdle},
 			},
 		}},
 		{"subscribe.json", protocol.Subscribe{Ref: "s1", Rows: 40, Cols: 100}},

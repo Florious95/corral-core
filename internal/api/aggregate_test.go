@@ -1,12 +1,15 @@
 package api
 
 // aggregate_test.go pins requirement 012's workspace aggregate rules — the
-// ranking order blocked > done > working > idle, unknown exclusion, all-unknown
+// ranking order blocked > working > idle, unknown exclusion, all-unknown
 // aggregation, and the empty workspace — directly on statePriority,
 // aggregateState, and wsAggregate (listing.go). These are the server's single
 // source of the aggregation rule (protocol.md §5.2), which the scenario audit
 // flagged as zero direct coverage (docs/scenario-coverage.md D-5). Pure logic
 // tests: no tmux, no WebSocket.
+//
+// The done slot was removed (user ruling 2026-08-13; see
+// docs/archive/agentstate-round4/).
 
 import (
 	"context"
@@ -30,8 +33,8 @@ func (m scriptedStates) State(_ context.Context, p discovery.Pane) protocol.Agen
 }
 
 // TestStatePriorityFullOrdering pins the 012 priority table directly: blocked
-// ranks above done above working above idle, and unknown (plus any unlisted
-// future value) ranks lowest at 0.
+// ranks above working above idle, and unknown (plus any unlisted future value)
+// ranks lowest at 0.
 func TestStatePriorityFullOrdering(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -39,7 +42,6 @@ func TestStatePriorityFullOrdering(t *testing.T) {
 		want  int
 	}{
 		{name: "blocked", state: protocol.StateBlocked, want: 4},
-		{name: "done", state: protocol.StateDone, want: 3},
 		{name: "working", state: protocol.StateWorking, want: 2},
 		{name: "idle", state: protocol.StateIdle, want: 1},
 		{name: "unknown", state: protocol.StateUnknown, want: 0},
@@ -59,21 +61,18 @@ func TestStatePriorityFullOrdering(t *testing.T) {
 // protocol.md §5.2).
 func TestAggregateBlockedWinsOverAllKnown(t *testing.T) {
 	got := aggregateState([]protocol.AgentState{
-		protocol.StateIdle, protocol.StateWorking, protocol.StateDone, protocol.StateBlocked,
+		protocol.StateIdle, protocol.StateWorking, protocol.StateBlocked,
 	})
 	if got != protocol.StateBlocked {
 		t.Fatalf("aggregate = %q, want blocked", got)
 	}
 }
 
-// TestAggregateDoneBeatsWorkingAndIdle pins rule 1's middle ordering: done
-// ranks above working, which ranks above idle.
-func TestAggregateDoneBeatsWorkingAndIdle(t *testing.T) {
-	got := aggregateState([]protocol.AgentState{protocol.StateIdle, protocol.StateWorking, protocol.StateDone})
-	if got != protocol.StateDone {
-		t.Fatalf("aggregate = %q, want done", got)
-	}
-	got = aggregateState([]protocol.AgentState{protocol.StateIdle, protocol.StateWorking})
+// TestAggregateWorkingBeatsIdle pins rule 1's remaining ordering: working
+// ranks above idle (the done slot that out-ranked working was removed; see
+// the 058 archive).
+func TestAggregateWorkingBeatsIdle(t *testing.T) {
+	got := aggregateState([]protocol.AgentState{protocol.StateIdle, protocol.StateWorking})
 	if got != protocol.StateWorking {
 		t.Fatalf("aggregate = %q, want working", got)
 	}

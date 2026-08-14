@@ -55,13 +55,13 @@ func TestControlFramesRoundTrip(t *testing.T) {
 		{"list_delta added", protocol.ListDelta{
 			Seq: 43,
 			AddedSessions: []protocol.Session{
-				{Ref: "s4", Name: "claude", Cwd: "/proj/c", State: protocol.StateDone, Rows: 25, Cols: 100},
+				{Ref: "s4", Name: "claude", Cwd: "/proj/c", State: protocol.StateIdle, Rows: 25, Cols: 100},
 			},
 		}},
 		{"list_delta removed", protocol.ListDelta{Seq: 44, RemovedRefs: []string{"s1"}}},
 		{"list_delta changed", protocol.ListDelta{Seq: 45,
-			ChangedSessions:   []protocol.Session{{Ref: "s2", Name: "codex", Cwd: "/proj/a", State: protocol.StateDone, Rows: 24, Cols: 80}},
-			ChangedWorkspaces: []protocol.Workspace{{Cwd: "/proj/a", SessionCount: 2, AggregateState: protocol.StateDone}},
+			ChangedSessions:   []protocol.Session{{Ref: "s2", Name: "codex", Cwd: "/proj/a", State: protocol.StateIdle, Rows: 24, Cols: 80}},
+			ChangedWorkspaces: []protocol.Workspace{{Cwd: "/proj/a", SessionCount: 2, AggregateState: protocol.StateIdle}},
 		}},
 		{"subscribe", protocol.Subscribe{Ref: "s1", Rows: 40, Cols: 100}},
 		{"unsubscribe", protocol.Unsubscribe{Ref: "s1"}},

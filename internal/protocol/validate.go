@@ -22,7 +22,7 @@ func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
 func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
 func (AttachPreview) FrameType() FrameType   { return TypeAttachPreview }
 
-// requireState returns ErrInvalidState unless s is one of the five closed
+// requireState returns ErrInvalidState unless s is one of the four closed
 // AgentState values.
 func requireState(s AgentState) error {
 	if !s.IsValid() {
