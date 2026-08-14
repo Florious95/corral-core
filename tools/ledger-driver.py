@@ -117,9 +117,11 @@ def dispatch_text(l, tid):
 
 def send(seat, text):
     """返回 message_id（即 task id），供 team-agent wait 事件驱动等待。
-    走 .team/ta 净化包装器，收件人用绝对路径 FQN。"""
+    走 .team/ta 净化包装器，收件人用绝对路径 FQN。
+    注意：不传 --json——reference 对 send 用文本输出，检查 ok: True / message_id: 文本。
+    （传 --json 会输出 "ok": true，和 ok: True 对不上，send 会误判失败——实发 2026-08-15。）"""
     fqn = f"{REPO}::{TEAM}/{seat}"
-    r = subprocess.run([TA, "send", fqn, text, "--workspace", REPO, "--json"],
+    r = subprocess.run([TA, "send", fqn, text, "--workspace", REPO],
                        capture_output=True, text=True, cwd=REPO)
     out = r.stdout or ""
     if "ok: True" not in out:
