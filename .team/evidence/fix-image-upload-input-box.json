@@ -1,32 +1,28 @@
 {
   "task_id": "fix-image-upload-input-box",
-  "status": "reverted_root_cause_identified",
-  "at": "2026-08-14T13:40:00Z",
-  "user_ruling": "「回炉就是要回退，这一波图片……基本上属于不可用的代码，它的多个方面都是有问题的」",
-  "reverted_commit": "d249a7fca（由 e7febc2b3 回退）",
-  "regression_worse_than_before": "改前：路径塞进 App 输入框 ⇒ 整条单行 ⇒ send-keys -l + Enter ⇒ 发得出去（只是丑、要多读一次）。改后：文字+路径含 \\n ⇒ 走 paste-buffer -d -p ⇒ Enter 不提交，内容卡在 CLI 输入框里发不出去。用户范围界定：「纯文本不会有这个问题，有图片才会」——坏的精确落在 paste-buffer 分支。",
-  "root_cause_probe": {
-    "by": "w-img-probe，隔离 socket /tmp/e2e-w-img-probe/sock3，真实 claude pane",
-    "judgment_criterion": "只认 capture-pane 里【内容离开输入框 + 出现 ⏺ 回复 + 底部 Ctx token 数真的变大】，不认命令返回 0、不认「机制被触发」",
-    "results": [
-      "① send-keys -l 单行 + Enter → 提交（基线）",
-      "② paste-buffer -d -p（\"caption\\n/fake/path/img.png\"）+ Enter → 【不提交】，Ctx 纹丝不动（26166 长期不变），3 次 Ctrl-U 才清干净 —— 命中，用户症状完整复现",
-      "③ 同②但 Enter 发两次 → 仍不提交。双发 Enter 不是修法",
-      "④ 同②但 Enter 前延时：500ms 不够，2000ms 够 → 提交成功（Ctx 26166→26228）",
-      "⑤ 纯路径（无 \\n）+ 零延时 Enter → 提交成功（Ctx 26228→26377）",
-      "⑥ 新方案三步（贴纯路径 → send-keys -l 发文字 → Enter），全程零延时 → 提交成功（Ctx 26377→26499）",
-      "⑦ 纯多行但内容不像图片路径（\"line one\\nline two plain text\"）+ 零延时 → 提交成功（26499→26584）",
-      "⑧ 首尾包换行但 trim 后仍是纯路径 + 零延时 → 提交成功（26584→26641）"
-    ]
+  "status": "implemented_pending_user_verification",
+  "round": 2,
+  "at": "2026-08-14T14:10:00Z",
+  "user_expectation": "「图片能发送、能上屏、同时它能一次性读取」（2026-08-14 回炉后裁定）",
+  "solution": "三步序列：paste-buffer -d -p 只贴纯路径（不掺文字）→ send-keys -l 单独送文字（文字非空时）→ 等 pasteSettleDelay 后一次 send-keys Enter",
+  "seat_self_correction_round1_probe_was_false_positive": "第 1 轮探针得出「纯路径零延时可提交」，用的是【不存在的假路径】/fake/path/imgpure.png。Claude Code 对读不到的文件几乎瞬间失败，根本没进异步窗口，所以显得安全。真实图片要解码、缩放、重编码、写 ~/.claude/image-cache —— 那段 I/O 才是真正的竞态窗口。席位在第 2 轮真实产品链路上自己发现并推翻了自己的结论。这是当日第 10 次「验证的不是真正的被测对象」，也是唯一一次由席位自己逮到自己的。",
+  "end_to_end_evidence": {
+    "how": "隔离 tmux + 真实编译的 agentmirrord（走仓库已有的 AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS 隔离口子）+ 最小 WS 客户端 import 真实 internal/protocol，走真实 POST /upload → 真实 Input{Text,AttachmentPath} → 真实 input_ack。全链路无一处手搓 tmux 命令代替产品代码。",
+    "run_a_caption_plus_image": "capture-pane：`❯ FINAL_A_describe_this_image[Image #5]` + `⎿ [Image #5]` + `⏺` 回复里 Claude 真的描述出了截图内容（状态栏/标题/按键条/输入框布局）+ Ctx 34751→35745",
+    "run_b_plain_control": "无附件纯文本零延时秒提交，Ctx 35745 不受影响，不倒退",
+    "three_criteria_all_met": "[Image #N] 内联 ✓ / 文字在场 ✓ / 消息真提交（输入框清空 + ⏺ + Ctx 变大）✓"
   },
-  "exact_root_cause": "不是「含不含 \\n」这种表面归因，是【trim 后的整段内容是不是一个能直接当绝对路径读的字符串】。Claude Code 的粘贴识别（L5S/i0f）：trim 后整段本身是绝对路径 ⇒ 走同步本地文件读取，很快；trim 后不是绝对路径、但结尾仍匹配图片后缀正则 ⇒ 认为可能是相对路径，转去 fork 一个 osascript 子进程查系统剪贴板的文件 URL 做兜底比对，墙钟耗时几百毫秒到一两秒。Enter 在这个异步兜底跑完前到达就被吞掉 —— 这解释了为什么 500ms 不够而 2000ms 够。不是键名解析问题（无需再测 C-m / -H 0d），问题在提交动作与这段异步 I/O 之间没有先后保证。",
-  "leader_failure_mode": "探针实证过「路径会不会被识别成一次粘贴」——会。但没验「粘贴之后那个 Enter 还提不提交」。一条链只验了前半段就下了可行的结论。验收判据本该是「用户可见结果：消息发出去了」，我用的是「机制被触发了」。这是当日第 9 次「验证的不是真正的被测对象」，也是第一次由 leader 自己的验收判据不全导致，不是席位的问题。",
-  "next_round_verdict": "回炉是对的：「draft+\\n+path 一次性塞进 Inject()」已证实不安全，不该再往这个方向修。但【新方案没有死】——探针端到端零延时验过⑥。新方案三步各自避开了那条慢分支：①只贴纯路径走同步快分支；②文字走 send-keys -l 根本不经过粘贴识别；③Enter。重开时从 docs/archive/image-attach-round1/server-wip-attachment-path.patch 续，不要重造。",
-  "guardrail_for_future": "若以后还要在一次 paste 里混内容，护栏是【等一个明确的「粘贴已处理完成」信号，而不是固定 sleep 猜时间】。无脑加 Enter 次数、换按键编码，两条本轮都验证过无效。",
-  "archived_diffs": [
-    "docs/archive/image-attach-round1/app-round1-attachment-state.patch",
-    "docs/archive/image-attach-round1/server-wip-attachment-path.patch",
-    "docs/archive/image-attach-round1/server-wip-attachment-path-full.patch",
-    "docs/archive/image-attach-round1/round1-wip-full-at-halt.patch"
-  ]
+  "leader_independent_verification": {
+    "gates": "server go build/vet/test 全绿；app :app:testDebugUnitTest 0 失败；archwiki --strict-t3 exit 0（仓库根跑）",
+    "mutation": "leader 变异（与席位所做不同）：删掉 time.Sleep(pasteSettleDelay)",
+    "mutation_result": "【全部测试仍然通过】—— 承重墙无单测保护，见 known_gaps"
+  },
+  "known_gaps": [
+    "① 2s 沉降延时无任何单测保护：删掉它门全绿而功能当场废。根因是 time.Sleep 硬编码、时钟不可注入，不注入时钟就测不了竞态。目前唯一保护它的是端到端实测。",
+    "② 2000ms 是实测出的阈值不是理论上界：500ms 不够、2000ms 够。更大的图 / 更慢的机器可能仍不够。健壮做法是等一个明确的「粘贴已处理完成」信号（例如轮询 capture-pane 直到出现 [Image #N]）而不是固定 sleep。",
+    "③ time.Sleep 跑在 wsConn 的读循环里（ws_conn.go:347 handleFrame → handleInput 同步调用）：发图后这条连接的帧处理被阻塞约 2 秒，期间用户的输入/滚动指令不会被处理。镜像输出走独立 goroutine 不受影响。"
+  ],
+  "separated_out": "本轮交付时工作区里混进了一份与本任务无关、无人派单、未验收的 WIP：PaneSizeChanged 帧 + Server.fanoutPaneReflow（多客户端共用 pane 时的尺寸广播）。leader 已完整剥离并存档到 docs/archive/pane-reflow-wip/pane-size-changed-wip.patch，剥离后 server + app 双门复跑全绿。来源未查明，未随本次进入生产。",
+  "commit": "待填",
+  "apk": "agentmirror-image-attach-inline-91cb20000.apk（sha256 ede9c9c54446573fff21e7659977c73d0ba6279827124f7080340a9bd4bf0b81，含被剥离前的 reflow，需重打）"
 }

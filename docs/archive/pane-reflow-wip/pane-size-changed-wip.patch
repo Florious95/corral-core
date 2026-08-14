@@ -1,0 +1,231 @@
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt b/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+index ec20ed622..1477f9f1e 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+@@ -51,4 +51,5 @@ internal object FrameType {
+     const val ERROR = "error"
+     const val SCROLL_WHEEL = "scroll_wheel"
+     const val PANE_MODE_CHANGED = "pane_mode_changed"
++    const val PANE_SIZE_CHANGED = "pane_size_changed"
+ }
+diff --git a/server/internal/api/server.go b/server/internal/api/server.go
+index b9f1bae3c..022928ebe 100644
+--- a/server/internal/api/server.go
++++ b/server/internal/api/server.go
+@@ -370,6 +370,37 @@ func (s *Server) unregisterTracker(c *wsConn) {
+ 	s.trackersMu.Unlock()
+ }
+ 
++// fanoutPaneReflow tells every other subscriber of ref that the shared pane
++// changed size, then pushes the same snapshot so their grid can rebuild.
++// The originating connection already received its snapshot and is skipped.
++func (s *Server) fanoutPaneReflow(except *wsConn, ref string, rows, cols uint16, snap []byte) {
++	body, err := protocol.MarshalFrame(protocol.PaneSizeChanged{Ref: ref, Rows: rows, Cols: cols})
++	if err != nil {
++		s.log.Error("resize: marshal pane_size_changed", "err", err)
++		return
++	}
++	s.trackersMu.Lock()
++	defer s.trackersMu.Unlock()
++	for c := range s.trackers {
++		if c == except || !c.subscribed(ref) {
++			continue
++		}
++		select {
++		case c.sendCh <- wsMsg{typ: wsText, data: body}:
++		default:
++			s.log.Debug("resize: dropping pane_size_changed for slow connection")
++		}
++		if len(snap) == 0 {
++			continue
++		}
++		select {
++		case c.sendCh <- wsMsg{typ: wsBinary, data: snap}:
++		default:
++			s.log.Debug("resize: dropping peer snapshot for slow connection")
++		}
++	}
++}
++
+ // fanout sends one list_delta to every live client. A slow client whose send
+ // channel is full drops the delta; the client re-lists on seq discontinuity
+ // (docs/protocol.md §4.2), so a slow client heals itself without stalling the
+diff --git a/server/internal/protocol/frametype.go b/server/internal/protocol/frametype.go
+index 881afb022..478d442a5 100644
+--- a/server/internal/protocol/frametype.go
++++ b/server/internal/protocol/frametype.go
+@@ -64,4 +64,8 @@ const (
+ 	// a minimal indicator so the user knows their keystrokes go to copy-mode
+ 	// rather than the shell/TUI.
+ 	TypePaneModeChanged FrameType = "pane_mode_changed"
++
++	// TypePaneSizeChanged notifies other subscribers that the shared pane
++	// geometry changed (S→C). Phone and web follow whoever last resized.
++	TypePaneSizeChanged FrameType = "pane_size_changed"
+ )
+diff --git a/server/internal/protocol/json_test.go b/server/internal/protocol/json_test.go
+index fde5e2cd5..8aa7cfc97 100644
+--- a/server/internal/protocol/json_test.go
++++ b/server/internal/protocol/json_test.go
+@@ -275,3 +275,36 @@ func TestPaneModeChangedMarshal(t *testing.T) {
+ 		t.Errorf("payload = %+v", p)
+ 	}
+ }
++
++func TestPaneSizeChangedIsServerToClientOnly(t *testing.T) {
++	raw := []byte(`{"v":1,"type":"pane_size_changed","payload":{"ref":"s1","rows":24,"cols":80}}`)
++	if _, err := protocol.UnmarshalFrame(raw); !errors.Is(err, protocol.ErrUnknownType) {
++		t.Fatalf("pane_size_changed must be server-to-client only; got err=%v", err)
++	}
++}
++
++func TestPaneSizeChangedMarshal(t *testing.T) {
++	frame := protocol.PaneSizeChanged{Ref: "s1", Rows: 24, Cols: 80}
++	data, err := protocol.MarshalFrame(frame)
++	if err != nil {
++		t.Fatalf("MarshalFrame: %v", err)
++	}
++	var env struct {
++		V       int             `json:"v"`
++		Type    string          `json:"type"`
++		Payload json.RawMessage `json:"payload"`
++	}
++	if err := json.Unmarshal(data, &env); err != nil {
++		t.Fatalf("unmarshal envelope: %v", err)
++	}
++	if env.Type != "pane_size_changed" {
++		t.Errorf("type = %q, want %q", env.Type, "pane_size_changed")
++	}
++	var p protocol.PaneSizeChanged
++	if err := json.Unmarshal(env.Payload, &p); err != nil {
++		t.Fatalf("unmarshal payload: %v", err)
++	}
++	if p.Ref != "s1" || p.Rows != 24 || p.Cols != 80 {
++		t.Errorf("payload = %+v", p)
++	}
++}
+diff --git a/server/internal/api/ws_handler.go b/server/internal/api/ws_handler.go
+index 5ee4edd52..5d238dbf7 100644
+--- a/server/internal/api/ws_handler.go
++++ b/server/internal/api/ws_handler.go
+@@ -115,6 +115,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
+ 	// Initial client dims reshape the pane so the CLI redraws for the phone
+ 	// (requirement 005). A resize failure is not fatal: the mirror continues at
+ 	// the pane's current size, and the real existence check happens below.
++	beforeW, beforeH, beforeErr := br.Size(c.ctx)
+ 	if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
+ 		c.logErr("subscribe resize", err)
+ 	}
+@@ -144,6 +145,11 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
+ 		return
+ 	}
+ 	c.sendBinary(frame)
++	if w, h, err := br.Size(c.ctx); err == nil && w > 0 && h > 0 {
++		if beforeErr != nil || beforeW != w || beforeH != h {
++			c.s.fanoutPaneReflow(c, s.Ref, uint16(h), uint16(w), frame)
++		}
++	}
+ 
+ 	subCtx, cancel := context.WithCancel(c.ctx)
+ 	sub := &subscription{ref: s.Ref, cancel: cancel, detach: detach}
+@@ -167,15 +173,19 @@ func (c *wsConn) handleUnsubscribe(u protocol.Unsubscribe) {
+ 	c.subscribeCancel(u.Ref)
+ }
+ 
+-// handleInput injects one whole text line OR a set of named special keys, and
+-// MUST answer with input_ack (requirement 003 send-must-arrive): ok:true once
+-// the input entered the pane, or a machine-readable failure reason. Every
+-// failure class in §7.3 is decidable and surfaced.
++// handleInput injects one whole text line (optionally with an image
++// attachment) OR a set of named special keys, and MUST answer with input_ack
++// (requirement 003 send-must-arrive): ok:true once the input entered the
++// pane, or a machine-readable failure reason. Every failure class in §7.3 is
++// decidable and surfaced.
+ //
+ // The Keys path (R-1 shortcut bar, requirement 017) sends named keys without
+ // an Enter — "press that key once" — unlike the text path's "inject then
+-// Enter". Text and Keys are mutually exclusive; the frame validator (Input.
+-// Validate) already rejected a frame carrying both, so at most one branch runs.
++// Enter". (Text or AttachmentPath) and Keys are mutually exclusive; the frame
++// validator (Input.Validate) already rejected a frame carrying both, so at
++// most one branch runs. AttachmentPath (feat-image-upload-inline) routes
++// through bridge.Pane.InjectWithAttachment, which is byte-identical to the
++// plain Inject path when AttachmentPath is empty.
+ func (c *wsConn) handleInput(i protocol.Input) {
+ 	ack := func(ok bool, reason protocol.InputFailReason) {
+ 		c.send(&protocol.InputAck{ReqID: i.ReqID, OK: ok, Reason: reason})
+@@ -232,7 +242,7 @@ func (c *wsConn) handleInput(i protocol.Input) {
+ 		ack(false, protocol.InputFailTooLarge)
+ 		return
+ 	}
+-	if err := br.Inject(c.ctx, i.Text); err != nil {
++	if err := br.InjectWithAttachment(c.ctx, i.Text, i.AttachmentPath); err != nil {
+ 		if errors.Is(err, bridge.ErrPaneNotFound) {
+ 			ack(false, protocol.InputFailSessionNotFound)
+ 		} else {
+@@ -420,6 +430,11 @@ func (c *wsConn) handleResize(r protocol.Resize) {
+ 		return
+ 	}
+ 	c.sendBinary(frame)
++	rows, cols := r.Rows, r.Cols
++	if afterH > 0 && afterW > 0 {
++		rows, cols = uint16(afterH), uint16(afterW)
++	}
++	c.s.fanoutPaneReflow(c, r.Ref, rows, cols, frame)
+ }
+ 
+ // scrollbackRange converges a scrollback request (protocol from_line/count,
+diff --git a/server/internal/protocol/frames.go b/server/internal/protocol/frames.go
+index 2514dc167..08cd53f51 100644
+--- a/server/internal/protocol/frames.go
++++ b/server/internal/protocol/frames.go
+@@ -146,16 +146,33 @@ type Unsubscribe struct {
+ // exclusive (a frame carrying both is a protocol error, docs/protocol.md §4.2);
+ // neither present means a bare Enter, matching the pre-Keys behavior.
+ //
++// AttachmentPath is an additive optional field (feat-image-upload-inline,
++// requirement 042): the host-absolute path of an image the client already
++// uploaded via POST /upload. When set, the server injects it as a separate
++// bracketed paste ahead of Text — via bridge.Pane.InjectWithAttachment,
++// never combined into the same paste as Text — so Claude Code's own
++// paste-path recognition inlines it as `[Image #N]` instead of leaving a
++// bare path string in the pane. AttachmentPath is empty in the overwhelming
++// common case (plain text messages) and does not change Text's existing
++// semantics; an empty AttachmentPath behaves byte-identically to the
++// pre-existing Text-only path. AttachmentPath and Keys are mutually
++// exclusive, same rule as Text and Keys.
++//
+ // @contract
+-// @pre ReqID >= 1、Ref 非空、Text 与 Keys 至多一个非空、Keys 中每个键都属闭集
++// @pre ReqID >= 1、Ref 非空、(Text 或 AttachmentPath 非空) 与 Keys 至多一类非空、Keys 中每个键都属闭集
+ // @post 该帧在 wire 上合法（Validate 通过）且不附带服务端状态变更
+-// @err Validate 对 ReqID 0、空 Ref、text+keys 并存、未知 key 返回 ErrInvalidField
+-// @inv 空 Text 且空 Keys 是合法的裸 Enter，服务端必须接受
++// @err Validate 对 ReqID 0、空 Ref、(text/attachment)+keys 并存、未知 key 返回 ErrInvalidField
++// @inv 空 Text 且空 Keys 且空 AttachmentPath 是合法的裸 Enter，服务端必须接受；
++//
++//	AttachmentPath 为空时的行为与本字段引入前逐字节一致
+ type Input struct {
+ 	ReqID uint32 `json:"req_id"`
+ 	Ref   string `json:"ref"`
+ 	Text  string `json:"text,omitempty"`
+ 	Keys  []Key  `json:"keys,omitempty"`
++	// AttachmentPath is the host-absolute path of an uploaded image to inject
++	// ahead of Text as its own bracketed paste (feat-image-upload-inline).
++	AttachmentPath string `json:"attachment_path,omitempty"`
+ }
+ 
+ // InputAck is the decidable receipt of an Input (S→C; requirement 003 send-
+@@ -250,3 +267,12 @@ type PaneModeChanged struct {
+ 	Ref        string `json:"ref"`
+ 	InCopyMode bool   `json:"in_copy_mode"`
+ }
++
++// PaneSizeChanged notifies other live subscribers that the shared tmux pane
++// was resized (S→C). Clients apply the new grid locally and must not echo a
++// resize frame, or phone and web will fight. No ack.
++type PaneSizeChanged struct {
++	Ref  string `json:"ref"`
++	Rows uint16 `json:"rows"`
++	Cols uint16 `json:"cols"`
++}

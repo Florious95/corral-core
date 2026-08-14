@@ -323,29 +323,116 @@ class SessionViewModelTest {
         assertEquals(InputStatus.Sent, h.vm.inputStatus)
     }
 
-    // ---- 附件管线（003 附加输入能力）----
+    // ---- 附件管线（003 附加输入能力 / 需求 042：不填入输入框文本 / feat-image-upload-inline：
+    //      路径走独立 attachment_path 字段，不拼进 text，回炉记录见类注释）----
 
     @Test
-    fun attachmentPathInsertedAtCursor() {
+    fun attachmentUploadDoesNotTouchDraftText() {
+        // 需求 042：上传成功后，路径记入 pendingAttachmentPath，textFieldValue 保持用户原样草稿——
+        // 不出现路径字符串。
         val h = Harness()
         h.vm.textFieldValue = TextFieldValue("see ", TextRange(4))
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1, 2)))
-        // 成功：path 插入光标处，不自动发送（用户可补文字）。
         assertTrue(h.vm.uploadStatus is UploadStatus.Success)
-        assertEquals("see /host/img.png", h.vm.textFieldValue.text)
-        assertEquals(4 + "/host/img.png".length, h.vm.textFieldValue.selection.start)
+        assertEquals("see ", h.vm.textFieldValue.text) // 草稿一字未变
+        assertFalse(h.vm.textFieldValue.text.contains("/host/img.png")) // 路径没有落进可见文本
+        assertEquals("/host/img.png", h.vm.pendingAttachmentPath) // 路径记在独立状态里
         assertEquals("http://host:0", h.uploader.lastBaseUrl)
         assertEquals("a.png", h.uploader.lastAttachment?.name)
     }
 
     @Test
-    fun uploadFailureSurfacesErrorAndKeepsDraft() {
+    fun uploadFailureSurfacesErrorAndKeepsDraftAndAttachment() {
         val h = Harness()
         h.uploader.result = UploadOutcome.Failure("HTTP 500")
         h.vm.textFieldValue = TextFieldValue("keep")
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
         assertTrue(h.vm.uploadStatus is UploadStatus.Failed)
         assertEquals("keep", h.vm.textFieldValue.text)
+        assertEquals(null, h.vm.pendingAttachmentPath) // 失败不留下半个附件
+    }
+
+    @Test
+    fun sendDraftWithAttachmentSendsSeparateFieldNotSplicedText() {
+        // feat-image-upload-inline（回炉后方案）：text 就是草稿原文，路径走 input 帧的
+        // 独立 attachment_path 字段——不拼进 text、不强加换行。上一版把两者拼进同一条
+        // 含 \n 的 text 一次性粘贴，命中了 Claude Code 粘贴处理的异步兜底分支，跟 Enter
+        // 撞时序竞态，消息卡在输入框发不出去（用户实测复现）；这条红测钉住"不能再拼"。
+        val h = Harness()
+        h.vm.textFieldValue = TextFieldValue("look at this")
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.vm.sendDraft()
+        val sent = h.inputFrames()
+        assertEquals(1, sent.size)
+        assertEquals("look at this", sent[0].text) // 纯草稿，不含路径、不含换行
+        assertFalse("text 不应含换行", sent[0].text.contains("\n"))
+        assertFalse("text 不应含路径", sent[0].text.contains("/host/img.png"))
+        assertEquals("/host/img.png", sent[0].attachmentPath) // 路径走独立字段
+    }
+
+    @Test
+    fun sendDraftWithOnlyAttachmentSendsEmptyTextAndPath() {
+        // 没打字、只发图：text 是空串，attachment_path 是路径——服务端据此只走①③
+        // （贴路径 + Enter），不发一个空的 send-keys -l --。
+        val h = Harness()
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.vm.sendDraft()
+        val sent = h.inputFrames()
+        assertEquals(1, sent.size)
+        assertEquals("", sent[0].text)
+        assertEquals("/host/img.png", sent[0].attachmentPath)
+    }
+
+    @Test
+    fun plainTextWithoutAttachmentSendsEmptyAttachmentPath() {
+        // 不倒退：没有附件时，普通文本消息原样发出，attachment_path 为空——防止②被写成一刀切。
+        val h = Harness()
+        h.vm.textFieldValue = TextFieldValue("ls -la")
+        h.vm.sendDraft()
+        val sent = h.inputFrames()
+        assertEquals(1, sent.size)
+        assertEquals("ls -la", sent[0].text)
+        assertEquals("", sent[0].attachmentPath)
+    }
+
+    @Test
+    fun attachmentIsClearedAfterSuccessfulSendAndNotResentNextMessage() {
+        // 不倒退：附件状态在发送成功后清空，不会跟着下一条消息重复发出。
+        val h = Harness()
+        h.vm.textFieldValue = TextFieldValue("first")
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.vm.sendDraft()
+        val first = h.inputFrames().single()
+        h.ackOk(first.reqId)
+        assertEquals(null, h.vm.pendingAttachmentPath) // 发送成功后附件已清空
+
+        h.vm.textFieldValue = TextFieldValue("second")
+        h.vm.sendDraft()
+        val sent = h.inputFrames()
+        assertEquals(2, sent.size)
+        assertEquals("second", sent[1].text)
+        assertEquals("", sent[1].attachmentPath) // 第二条不含第一次的附件路径
+    }
+
+    @Test
+    fun attachmentSurvivesSendFailureAndIsResent() {
+        // leader 独立变异逮到的缺口：KDoc（sendDraft）写了"发送失败保留附件，可重发"，
+        // 必须有断言盯着——只查字段非空挡不住"字段还在但 compose 不再用它"，所以第二段
+        // 必须真的重发一次、断言重发那一帧的 attachment_path 确实又带上了这个路径。
+        val h = Harness()
+        h.vm.textFieldValue = TextFieldValue("retry me")
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.vm.sendDraft()
+        val first = h.inputFrames().single()
+        h.ackFail(first.reqId, "inject_failed")
+        assertTrue(h.vm.inputStatus is InputStatus.Failed)
+        assertEquals("/host/img.png", h.vm.pendingAttachmentPath) // 附件没被静默丢掉
+
+        h.vm.sendDraft() // 重发：同一份草稿+附件
+        val sent = h.inputFrames()
+        assertEquals(2, sent.size)
+        assertEquals("retry me", sent[1].text)
+        assertEquals("/host/img.png", sent[1].attachmentPath) // 重发的帧里附件真的又带上了
     }
 
     // ---- resize（005：让 CLI 自己重画）----
