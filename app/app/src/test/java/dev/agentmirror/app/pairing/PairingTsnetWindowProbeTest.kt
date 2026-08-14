@@ -20,6 +20,7 @@ import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.FakeClock
 import dev.agentmirror.app.conn.FakeWebSocketTransport
+import dev.agentmirror.app.conn.ReconnectPolicy
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.tsnet.TsnetProxy
 import dev.agentmirror.app.tsnet.TsnetState
@@ -27,6 +28,7 @@ import dev.agentmirror.app.tsnet.TsnetWire
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -49,10 +51,17 @@ import org.junit.Test
  */
 class PairingTsnetWindowProbeTest {
 
+    @Before
+    fun setUp() {
+        // 独立卫生项（非红测① 主根因）：复位进程级单例，防与 Robolectric 测试类同跑时串扰
+        // （TsnetWire 是进程级全局，ColdStartReconnectTest 等会设 environment/backendFactory/
+        // executorForTest）。红测① 本身不设这些，但跨类跑时可能被前序测试污染。
+        TsnetWire.resetForTest()
+    }
+
     @After
     fun tearDown() {
-        // 复位进程级单例（防与 Robolectric 测试类同跑时串扰——TsnetWire 是进程级全局，
-        // ColdStartReconnectTest 等会设 environment/backendFactory/executorForTest）。
+        // 复位进程级单例（防与 Robolectric 测试类同跑时串扰）。
         TsnetWire.resetForTest()
     }
 
@@ -90,6 +99,14 @@ class PairingTsnetWindowProbeTest {
                         t
                     },
                     clock = clock,
+                    // 确定性退避：random 恒 0.5 ⇒ 抖动偏移 0.2*(0.5*2-1)=0 ⇒ delay 恒 1s/2s/4s。
+                    // 为什么必须注入（根因，2026-08-14 w-tsnet-dev）：本测试的 pumpPastReconnectDelay
+                    // 固定推进 4s 驱动 conn 重连；而 ReconnectPolicy 默认 random 是真随机，
+                    // attempt2 退避 = 4s±20% = 3200~4800ms，抖动 >4000ms 那一半时第三次推进
+                    // (now < pendingReconnectAt) 不触发重连 ⇒ 第 4 次拨号不发生 ⇒ 断言随机失败
+                    // 约 1/3。注入 0.5 让 delay 完全确定，三次推进必然触发三次重连。若某次重构
+                    // "顺手"改回真随机，本测试会回到约 1/3 概率红——这个 0.5 不是魔数。
+                    policy = ReconnectPolicy(random = { 0.5 }),
                 )
             },
             nowMs = { clock.nowMs() },
