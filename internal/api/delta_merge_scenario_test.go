@@ -1,11 +1,30 @@
 //go:build c1_backpressure_merge
 
-// 归档说明（关卡1 halt 后）：C1 合并实现已回退（probe 实证 sendCh 真实链路上不会满，
-// 中间状态可见的真因在慢链渲染侧）。本文件是关卡2 红测的验收标准，按 leader 派单
-// 铁律「go test ./... 全绿」必须留档但不阻塞默认测试：加 build tag `c1_backpressure_merge`
-// 使默认 `go test ./...` 排除本文件（绿），未来 C1 实现时用
-// `go test -tags c1_backpressure_merge ./internal/api/` 显式运行验收。
-// 红测设计：无实现时红（drop-on-full 丢字节）、有实现时绿——先红后绿契约。
+// 归档说明（关卡1 halt 后，leader msg_cb13c80e8b80 裁定 build tag 隔离、tag 名以
+// c1_backpressure_merge 为准，本文件归 w-c1-test 独占）：
+//
+// 这是 C1（delta 背压合并）的**验收红测**。C1 已在**关卡1 halt**：w-c1-probe 真实
+// 链路实测 sendCh(cap 256) 永不满——LLM 流式 queue_peak=1、极端本地背压也只到 2，
+// 合并永不触发。中间状态可见的真因在慢链渲染侧（分散到达的 delta 按到达时刻各渲染
+// 一次），与队列压力无关。因此本文件在**无 C1 实现的当前 HEAD 上按设计就是红的——
+// 红了才对**（满队列丢帧 → 客户端字节缺失）。
+//
+// 为什么红（先红后绿契约）：本文件只用未实现/实现两侧都存在的稳定接口
+// （NewServer / serveConn / sendMirror / writeLoop / EncodeBinary / DecodeBinary /
+// wsMsg）。未实现合并 → 满队列丢帧 → 字节流缺失（红）；有合并实现 → 满队列并入
+// 缓冲 → 字节流逐字节等价（绿）。
+//
+// build tag 使默认 `go test ./...` 排除本文件（server 面绿，满足 leader 铁律「全绿」），
+// 不阻塞常规 CI。未来重启 C1 时用下面的命令显式运行验收：
+//
+//	cd server && env -u TEAM_AGENT_* go test -tags c1_backpressure_merge ./internal/api/ -run TestDeltaMerge -v
+//
+// 预期结果（当前 HEAD，无 C1 实现，2026-08-14 实跑）：**三条红、一条绿**——
+//	红 TestDeltaMergeClientBytesEquivalent：1577472B 应逐字节等价，实收 1051648B（丢帧）
+//	红 TestDeltaMergeWireCap1MiB：3016748B 应完整到达，实收 1050368B（丢帧）
+//	红 TestDeltaMergeRefIsolationOnWire：双 ref 各自流应零丢失，实收 1050368B（beta 流丢）
+//	绿 TestDeltaMergeIdlePathUnchanged：队列不满零回归，帧数==生产数（合并不触发）
+// C1 实现后全部转绿。详见 docs/c1-delta-backpressure-merge-impl.md §八。
 package api
 
 // delta_merge_scenario_test.go — C1 关卡 2 场景红测（w-c1-test 席位）。

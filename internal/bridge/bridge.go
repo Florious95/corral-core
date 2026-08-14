@@ -12,7 +12,6 @@ package bridge
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -290,87 +289,51 @@ func (p *Pane) Size(ctx context.Context) (int, int, error) {
 	return w, h, nil
 }
 
-// scrollMouseBytes returns the raw terminal bytes for one scroll wheel event
-// in the format the running application expects based on its mouse-tracking
-// mode. SGR (DECSET 1006) encodes coordinates as decimal text; X10 (DECSET
-// 1000) encodes them as single bytes with a +32 offset. Position (1,1) is
-// used for all scroll events — most TUIs ignore the position for wheel events.
-// button 64 = scroll-up, 65 = scroll-down (standard extension for mouse wheel).
-func scrollMouseBytes(up bool, sgr bool) []byte {
-	button := 64 // scroll-up
-	if !up {
-		button = 65 // scroll-down
-	}
-	if sgr {
-		// SGR: ESC [ < button ; col ; row M
-		return []byte(fmt.Sprintf("\x1b[<%d;1;1M", button))
-	}
-	// X10: ESC [ M + byte(button+32) + byte(col+32) + byte(row+32)
-	return []byte{0x1b, '[', 'M', byte(button + 32), byte(1 + 32), byte(1 + 32)}
-}
-
 // InjectScroll delivers one scroll-wheel event to the pane
 // (feat-remote-scroll-forward). delta < 0 = up (toward history); delta > 0 =
-// down. The method atomically judges the pane's mouse-tracking state via a
-// single tmux command and routes accordingly:
+// down. Always uses tmux copy-mode; see inline rationale.
 //
-//   - mouse_any_flag=1 → inject raw mouse bytes via send-keys -H; the inner
-//     if-shell -F re-verifies the flag within tmux's single command dispatch,
-//     closing the race window between the display-message query and the inject.
-//     If the flag flipped to 0 between the two calls, the empty false-branch is
-//     executed (safe no-op) instead of sending bytes to a bare shell.
-//   - mouse_any_flag=0 and pane not in copy-mode → enter copy-mode -e, then
-//     scroll; returns enteredCopyMode=true so the caller can push PaneModeChanged.
-//   - mouse_any_flag=0 and pane already in copy-mode → scroll only; returns
-//     enteredCopyMode=false (no state transition, no PaneModeChanged needed).
+//   - pane not in copy-mode → enter copy-mode -e, then scroll N lines;
+//     returns enteredCopyMode=true so the caller can push PaneModeChanged.
+//   - pane already in copy-mode → scroll only; returns enteredCopyMode=false.
 //
-// No Enter is appended in any path (unlike Inject). Success is silent; the
-// caller sends TypeError on error.
+// Note: the original design intended a mouse_any_flag=1 branch that injected
+// raw SGR/X10 bytes via `send-keys -H`. That was proved ineffective (see
+// docs/remote-scroll-forward-design.md §已知局限): tmux forwards real mouse
+// events via `send-keys -M` which requires a live mouse-event callback and
+// cannot be synthesised externally. Direct byte injection writes to the PTY
+// but bypasses tmux's mouse pipeline; confirmed by experiment that less and
+// vim with mouse=a do not respond. copy-mode is used for all panes instead.
+//
+// Effective tiers:
+//
+//	① Non-alt-screen TUI (Claude Code)  → copy-mode works ✓
+//	② Alt-screen apps (vim/less/htop)   → copy-mode has no scrollback ✗
+//	③ Bare shell                         → copy-mode works ✓
 //
 // @contract
-// @pre pane 存在（requirePane 前置）；delta != 0（caller 保证，Validate 已拒绝 0）
-// @post 按 mouse_any_flag 分支执行：鼠标字节注入 或 copy-mode scroll；不追加 Enter
+// @pre pane 存在（requirePane 前置）；delta != 0（Validate 已拒绝 0）
+// @post pane 处于 copy-mode 并已滚动 abs(delta) 行；不追加 Enter
 // @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
-// @inv 鼠标字节路径：if-shell -F 保证 mouse_any_flag=0 时不注入字节（垃圾字节不进 shell）
+// @inv copy-mode 进入幂等（已在 copy-mode 时直接 scroll）
 func (p *Pane) InjectScroll(ctx context.Context, delta int32) (enteredCopyMode bool, err error) {
 	if err := p.requirePane(ctx); err != nil {
 		return false, err
 	}
 
-	// Query mouse-tracking flags and copy-mode state in one tmux call.
+	// Query copy-mode state only — mouse_any_flag no longer routes differently.
 	out, err := runTmux(ctx, p.socket, p.timeout,
-		"display-message", "-p", "-t", p.target,
-		"#{mouse_any_flag}:#{mouse_sgr_flag}:#{pane_in_mode}")
+		"display-message", "-p", "-t", p.target, "#{pane_in_mode}")
 	if err != nil {
 		return false, err
 	}
-	parts := strings.SplitN(strings.TrimSpace(string(out)), ":", 3)
-	if len(parts) != 3 {
-		return false, fmt.Errorf("bridge: unexpected display-message output %q", strings.TrimSpace(string(out)))
-	}
-	mouseAny := parts[0] == "1"
-	mouseSGR := parts[1] == "1"
-	paneInMode := parts[2] == "1"
+	paneInMode := strings.TrimSpace(string(out)) == "1"
 
 	up := delta < 0
 	direction := "scroll-up"
 	if !up {
 		direction = "scroll-down"
 	}
-
-	if mouseAny {
-		// Mouse tracking is on: inject raw bytes. Use if-shell -F to atomically
-		// re-verify the flag within tmux's single command dispatch — if the app
-		// exited mouse mode between our display-message and this call, the empty
-		// false-branch fires (safe no-op) instead of sending bytes to a bare shell.
-		raw := scrollMouseBytes(up, mouseSGR)
-		hexStr := hex.EncodeToString(raw)
-		trueCmd := "send-keys -H -t " + p.target + " " + hexStr
-		_, err = runTmux(ctx, p.socket, p.timeout,
-			"if-shell", "-F", "-t", p.target, "#{mouse_any_flag}", trueCmd)
-		return false, err
-	}
-
 	// No mouse tracking: copy-mode fallback.
 	if !paneInMode {
 		if _, err = runTmux(ctx, p.socket, p.timeout, "copy-mode", "-e", "-t", p.target); err != nil {
@@ -378,7 +341,12 @@ func (p *Pane) InjectScroll(ctx context.Context, delta int32) (enteredCopyMode b
 		}
 		enteredCopyMode = true
 	}
-	_, err = runTmux(ctx, p.socket, p.timeout, "send-keys", "-X", "-t", p.target, direction)
+	count := delta
+	if count < 0 {
+		count = -count
+	}
+	_, err = runTmux(ctx, p.socket, p.timeout,
+		"send-keys", "-X", "-N", strconv.Itoa(int(count)), "-t", p.target, direction)
 	return enteredCopyMode, err
 }
 

@@ -2,15 +2,15 @@ package bridge
 
 // scroll_test.go: red tests for InjectScroll, PaneInMode, ExitCopyMode.
 // All tests use an isolated tmux socket (newTestTMUX) — production daemon
-// (pid 70317) and user tmux are never touched (bridge red line).
+// and user tmux are never touched (bridge red line).
 //
-// T1: mouse_any_flag=0 → copy-mode entered, zero raw bytes to pane shell
-// T2: mouse_any_flag=1 (vim+mouse) → bytes injected, no copy-mode
-// T3: scrollMouseBytes SGR format
-// T4: scrollMouseBytes X10 format
+// T1: bare shell (mouse_any_flag=0) → copy-mode entered
+// T2: vim+mouse (mouse_any_flag=1) → copy-mode entered (unified path;
+//     send-keys -H mouse bytes proved ineffective, see design doc §已知局限)
 // T5: PaneInMode reports correctly
 // T6: ExitCopyMode exits copy-mode (pane_in_mode 1→0)
 // T7: InjectScroll on dead pane → ErrPaneNotFound
+// T8: already-in-copy-mode → scroll only (enteredCopyMode=false)
 
 import (
 	"context"
@@ -32,40 +32,6 @@ func queryFlag(t *testing.T, tt *testTMUX, pane *Pane, format string) string {
 // waitForPane waits until the pane's running program has settled (brief sleep
 // so e.g. vim has time to draw its screen and set mouse flags).
 func waitForPane(d time.Duration) { time.Sleep(d) }
-
-// TestScrollMouseBytesSGR verifies the SGR scroll-up byte sequence.
-func TestScrollMouseBytesSGR(t *testing.T) {
-	// SGR scroll-up: ESC [ < 64 ; 1 ; 1 M
-	got := scrollMouseBytes(true, true)
-	want := "\x1b[<64;1;1M"
-	if string(got) != want {
-		t.Errorf("SGR scroll-up: got %q want %q", string(got), want)
-	}
-
-	// SGR scroll-down: ESC [ < 65 ; 1 ; 1 M
-	got = scrollMouseBytes(false, true)
-	want = "\x1b[<65;1;1M"
-	if string(got) != want {
-		t.Errorf("SGR scroll-down: got %q want %q", string(got), want)
-	}
-}
-
-// TestScrollMouseBytesX10 verifies the X10 scroll byte sequence.
-func TestScrollMouseBytesX10(t *testing.T) {
-	// X10 scroll-up: ESC [ M \x60 \x21 \x21  (button=64, col=1+32=33, row=1+32=33)
-	got := scrollMouseBytes(true, false)
-	want := []byte{0x1b, '[', 'M', 0x60, 0x21, 0x21}
-	if string(got) != string(want) {
-		t.Errorf("X10 scroll-up: got %v want %v", got, want)
-	}
-
-	// X10 scroll-down: ESC [ M \x61 \x21 \x21  (button=65+32=97=0x61)
-	got = scrollMouseBytes(false, false)
-	want = []byte{0x1b, '[', 'M', 0x61, 0x21, 0x21}
-	if string(got) != string(want) {
-		t.Errorf("X10 scroll-down: got %v want %v", got, want)
-	}
-}
 
 // TestInjectScrollEntersCopyModeForBareShell verifies that when mouse_any_flag=0
 // (bare shell), InjectScroll enters copy-mode (no raw bytes reach the pane's
@@ -125,10 +91,12 @@ func TestInjectScrollDoesNotEnterCopyModeWhenAlreadyInIt(t *testing.T) {
 	}
 }
 
-// TestInjectScrollMouseTrackingPath verifies that when mouse_any_flag=1
-// (app has mouse tracking enabled), InjectScroll injects bytes via
-// send-keys -H and does NOT enter copy-mode.
-func TestInjectScrollMouseTrackingPath(t *testing.T) {
+// TestInjectScrollMouseTrackingPathFallsToCopyMode verifies that even when
+// mouse_any_flag=1 (app has mouse tracking), InjectScroll uses copy-mode.
+// Rationale: send-keys -H mouse bytes are silently ineffective (proved by
+// experiment — less/vim do not respond); copy-mode is the only reliable path
+// for non-alt-screen panes regardless of mouse_any_flag.
+func TestInjectScrollMouseTrackingPathFallsToCopyMode(t *testing.T) {
 	tt := newTestTMUX(t)
 	// vim with set mouse=a: mouse_any_flag=1
 	pane := tt.newPane(t, "vim -c 'set mouse=a' /dev/null")
@@ -145,12 +113,12 @@ func TestInjectScrollMouseTrackingPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InjectScroll (mouse tracking): %v", err)
 	}
-	if enteredCopyMode {
-		t.Error("expected enteredCopyMode=false when mouse tracking is active")
+	// Unified path: always enters copy-mode.
+	if !enteredCopyMode {
+		t.Error("expected enteredCopyMode=true (unified copy-mode path regardless of mouse_any_flag)")
 	}
-	// Must NOT be in copy-mode.
-	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "0" {
-		t.Error("pane_in_mode should be 0 (not in copy-mode) on mouse tracking path")
+	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "1" {
+		t.Error("pane_in_mode should be 1 (in copy-mode) on unified path")
 	}
 }
 
