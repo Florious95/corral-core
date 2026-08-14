@@ -43,8 +43,9 @@ import dev.agentmirror.terminal.TerminalEmulator
  * - 增量：delta → [TerminalEmulator.feed]；历史页 → [TerminalEmulator.prependHistory]；
  * - 滚动到顶：[syncFromPresenter] 收敛 presenter 视口信号 → 按页拉更老历史；
  * - 发送：`send-keys` 一次性注入，input_ack 必达回执（003 第二条）；
- * - 附件：multipart HTTP 上传（协议 §8）→ 主机绝对路径记入 [pendingAttachmentPath]（不落草稿文本，
- *   需求 042），[sendDraft] 发送时经 input 帧的独立 attachment_path 字段送出。
+ * - 附件：multipart HTTP 上传（协议 §8）→ 上传成功立刻贴进 CLI pane（需求 057 发图预贴）→
+ *   路径累加进 [pendingAttachmentPaths]（不落草稿文本，需求 042），[sendDraft] 发送时经
+ *   input 帧的独立 attachment_path 字段带上最新一次预贴路径。
  */
 class SessionViewModel(
     private val manager: ConnectionManager,
@@ -91,13 +92,21 @@ class SessionViewModel(
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
 
     /**
-     * 待发送附件的主机绝对路径（fix-image-upload-input-box，需求 042）：上传成功后落在
-     * 这里，**不写入 [textFieldValue]**——输入框只显示轻量指示，不显示路径字符串。
-     * [sendDraft] 发送时把它作为 input 帧的独立 attachment_path 字段送出（**不**拼进
-     * text/不强加换行——那条路径已被证实会跟 Claude Code 自己的粘贴处理撞时序竞态，
-     * 回炉记录见 fix-image-upload-input-box）；发送成功或另选新附件时清空，失败保留可重发。
+     * 已贴进本会话 CLI pane、尚未确认发送的图片路径（需求 057）：上传成功那一刻就
+     * 经 [ConnectionManager.sendAttachPreview] 贴进 pane（不等发送），**不写入
+     * [textFieldValue]**——输入框只显示"已附加 N 张图"这类轻量指示，不显示路径字符串。
+     *
+     * **可累加**（需求 057 第 4 款）：连选两张就是两张，都已经贴进 pane 了，App 这边只是
+     * 记账，不做"覆盖上一张"。[sendDraft] 发送时把列表最后一个路径经 input 帧的
+     * attachment_path 字段送出（服务端只需要最新一次预贴的时间戳来算沉降补差额，
+     * 不需要逐张路径）；发送成功后清空整个列表，失败保留可重发。
+     *
+     * **选了图不发、或离开会话，不清理 pane。**（需求 057 第 3 款）App 是 pane 的镜像，
+     * 那个 `[Image #N]` 占位符在用户屏幕上看得见，不是静默残留；主动去读 CLI 渲染出来
+     * 的 UI 文本再决定要不要清，是一类新的、会随 Claude Code 占位符格式变化而静默失效
+     * 的脆弱性——代价大于收益，故不做。
      */
-    var pendingAttachmentPath by mutableStateOf<String?>(null)
+    var pendingAttachmentPaths by mutableStateOf<List<String>>(emptyList())
 
     /** 连接状态（顶部条提示；重连由 conn 层自动，VM 只映射）。 */
     var connectionState by mutableStateOf(ConnectionState.STOPPED)
@@ -228,7 +237,7 @@ class SessionViewModel(
             if (!pendingSendIsKey) {
                 textFieldValue = TextFieldValue("")
                 // 附件已随本条消息发出：清空，避免跟着下一条重复发送。
-                pendingAttachmentPath = null
+                pendingAttachmentPaths = emptyList()
             }
         } else {
             // 失败明确报错：输入框保留内容（可重发）。
@@ -254,20 +263,23 @@ class SessionViewModel(
      * 发送草稿：一次性注入并回车（R-2 多行不拆分：含 \n 的文本整段一条 input.text，
      * 服务端 paste-buffer -p 括号粘贴路径处理）；回执经 [onInputResult] 判定（必达）。
      *
-     * 有待发附件（[pendingAttachmentPath]）时，路径经 input 帧的独立 attachment_path
-     * 字段送出——**不**拼进 text、**不**强加换行。text 就是草稿原文，纯发图时甚至可以是
-     * 空串。服务端收到非空 attachment_path 按三步序列注入：单独一次粘贴路径（内联成
-     * `[Image #N]`）→ 单独发 text（若非空）→ 一次 Enter 提交。这是回炉后的方案：
+     * 有待发附件（[pendingAttachmentPaths]）时已经在上传成功那一刻贴进 CLI pane 了
+     * （需求 057，[uploadAttachment] 里做的）——发送这一步只需要把最新一次预贴的路径
+     * 经 input 帧的 attachment_path 字段带上（服务端据此算沉降补差额：常见路径零等待，
+     * 只有选完图立刻发才补差额），**不**拼进 text、**不**强加换行。text 就是草稿原文。
+     *
+     * 服务端命中预贴记录时只发 text + 回车（不重贴，因为已经贴过了）；命中不了（比如
+     * 没走过预贴的老客户端）会退回一次性"贴路径→发文字→等满沉降→回车"的兼容路径。
      * 上一版把路径和文字拼进同一条含 `\n` 的 text 一次性粘贴，会命中 Claude Code 粘贴
      * 处理的异步兜底分支（trim 后不是纯绝对路径时会 fork `osascript` 查剪贴板），跟紧
      * 随其后的 Enter 撞时序竞态——Enter 到达时兜底还没跑完，被吞掉，消息卡在输入框发
-     * 不出去（用户实测复现，见 fix-image-upload-input-box 回炉记录）。三步序列里粘贴的
-     * 只是纯路径，走的是同步快分支，不会撞上这堵墙。
+     * 不出去（用户实测复现，见 fix-image-upload-input-box 回炉记录），这两条路都不会
+     * 撞上那堵墙。
      *
      * @contract
      * @pre connectionState 为 READY，且 inputStatus 非 Sending
      * @post 注入成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent]（并清空
-     *       [pendingAttachmentPath]）或 [InputStatus.Failed]（保留附件，可重发）
+     *       [pendingAttachmentPaths]）或 [InputStatus.Failed]（保留附件，可重发）
      * @err 未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿与附件
      * @inv 在途不回发（发送闸）；text 永远是草稿原文，不因附件被改写
      */
@@ -279,7 +291,9 @@ class SessionViewModel(
             return
         }
         val text = textFieldValue.text
-        val attachmentPath = pendingAttachmentPath.orEmpty()
+        // 服务端只需要"最新一次预贴的是哪个路径"来核对沉降时间戳；早于它的路径已经
+        // 贴在 pane 里但不需要再单独确认——多张图一起提交，靠最新那次的时间戳兜底。
+        val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
         if (manager.sendInput(ref, text, attachmentPath)) {
             pendingSendIsKey = false
             inputStatus = InputStatus.Sending
@@ -315,15 +329,18 @@ class SessionViewModel(
     }
 
     /**
-     * 上传附件（协议 §8 multipart）→ 主机绝对路径记入 [pendingAttachmentPath]，**不写入
-     * 可见的 [textFieldValue]**（需求 042「不填入输入框文本」），不自动发送。
+     * 上传附件（协议 §8 multipart）→ 主机绝对路径**立刻**经 [ConnectionManager.sendAttachPreview]
+     * 贴进 CLI pane（需求 057：上传成功那一刻贴，不等发送，让解码在用户打字期间跑完），
+     * 并记进 [pendingAttachmentPaths]（累加，**不写入**可见的 [textFieldValue]——需求 042
+     * 「不填入输入框文本」管的是这个草稿框，不是 CLI 那边），不自动发送整条消息。
      *
      * @contract
      * @pre baseUrl 已注入（连接配置已落地），且 uploadStatus 非 Uploading
-     * @post 成功：[pendingAttachmentPath] 置为新路径（覆盖上一个未发送的附件，当前只支持单附件）
-     *       并置 [UploadStatus.Success]；失败：置 [UploadStatus.Failed] 且不改草稿、不改附件
+     * @post 成功：路径追加进 [pendingAttachmentPaths]（连选两张就是两张，不覆盖）并发出
+     *       AttachPreviewFrame，置 [UploadStatus.Success]；失败：置 [UploadStatus.Failed]
+     *       且不改草稿、不改附件列表、不发预贴帧
      * @err 未配置上传地址 / 上传失败均置 [UploadStatus.Failed] 明确报错
-     * @inv 在途不重传；上传不自动发送草稿；草稿文本本身不被本函数修改
+     * @inv 在途不重传；上传不自动发送草稿；草稿文本本身不被本函数修改；从不清理 CLI pane
      */
     fun uploadAttachment(attachment: Attachment) {
         if (uploadStatus is UploadStatus.Uploading) return
@@ -337,7 +354,8 @@ class SessionViewModel(
         val outcome = uploader.upload(base, uploadToken, attachment)
         uploadStatus = when (outcome) {
             is UploadOutcome.Success -> {
-                pendingAttachmentPath = outcome.path
+                pendingAttachmentPaths = pendingAttachmentPaths + outcome.path
+                manager.sendAttachPreview(ref, outcome.path)
                 UploadStatus.Success(outcome.path)
             }
             is UploadOutcome.Failure -> UploadStatus.Failed(outcome.reason)
