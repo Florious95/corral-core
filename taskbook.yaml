@@ -2835,7 +2835,8 @@ tasks:
 
   - id: fix-paste-settle-signal
     title: "发图那 2 秒沉降延时是猜的阈值、无单测保护、且阻塞连接读循环"
-    status: todo
+    status: todo   # 2026-08-15 降优先级：057 预贴落地后，那 2 秒只在【选完图立刻发、不打字】这条路径上出现，
+                   # 而用户明确说「基本上很少有纯图片的」。缺口仍真实（阈值是猜的、失败不报错），但不紧迫。
     owner: null
     contention: none
     discovered: "2026-08-14 leader 独立变异发现（fix-image-upload-input-box 第 2 轮交付时）"
