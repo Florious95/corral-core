@@ -116,7 +116,8 @@
           "A-ct-index",
           "A-ct-no-orphan"
         ]
-      }
+      },
+      "state": "succeeded"
     },
     "t.refresh-oracle": {
       "title": "顾问：刷新模型的判据基底摘要 + 红测（进入即刷/下拉刷/零周期）",
@@ -344,6 +345,6 @@
   },
   "fanout_aggregation": {},
   "audit": {},
-  "revision": 1,
+  "revision": 2,
   "content_sha256": "sha256:7ad49b4bbd2ec71867dfc523794cc24f1a2828a5714e24781caae8a66f8a75c8"
 }

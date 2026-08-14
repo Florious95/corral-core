@@ -33,3 +33,15 @@
   ✓ t.verify  (succeeded) — 对照席：零上下文定点变异，验红测真的会红
   没有任务。
 
+[03:33:37] 前沿: ['t.contract', 't.refresh-oracle']
+[03:33:38] 派 t.contract → advisor
+[03:33:38]   投递 msg_9d4a28cc5bd0；等 t.contract / msg_9d4a28cc5bd0（事件驱动，非轮询）
+[03:33:59] 前沿: ['t.contract', 't.refresh-oracle']
+[03:33:59] 派 t.contract → advisor
+[03:33:59]   投递 msg_bf631b5ee5a8；等 t.contract / msg_bf631b5ee5a8（事件驱动，非轮询）
+[03:36:24] 前沿: ['t.contract', 't.refresh-oracle']
+[03:36:24] 派 t.contract → advisor
+[03:36:24]   投递 msg_f0e6db3feb08；等 t.contract / msg_f0e6db3feb08（事件驱动，非轮询）
+[03:40:01] 前沿: ['t.contract', 't.refresh-oracle']
+[03:40:01] 派 t.contract → advisor
+[03:40:01]   投递 msg_030961cdb100；等 t.contract / msg_030961cdb100（事件驱动，非轮询）
