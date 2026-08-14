@@ -1,466 +1,469 @@
 {
-  "schema_version": "ledger.v2",
-  "ledger_id": "ledger.state-detection.v1",
-  "run": {
-    "desired_state": "running"
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.state-detection.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.dev-state": {
+   "provider": "claude_code",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/state-v4/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
   },
-  "roles": {
-    "r.dev-state": {
-      "provider": "claude_code",
-      "seat_policy": "fresh",
-      "artifact_landing": {
-        "path": ".team/nodes/state-v4/",
-        "form": "committed"
-      },
-      "retirement_condition": {
-        "artifacts_persisted": true,
-        "ledger_updated": true
-      }
-    },
-    "r.advisor": {
-      "provider": "claude_code",
-      "seat_policy": "resident_reuse",
-      "artifact_landing": {
-        "path": ".team/nodes/state-oracle/",
-        "form": "committed"
-      },
-      "retirement_condition": {
-        "artifacts_persisted": true,
-        "ledger_updated": true
-      }
-    },
-    "r.control": {
-      "provider": "claude_code",
-      "seat_policy": "fresh",
-      "artifact_landing": {
-        "path": ".team/nodes/state-control/",
-        "form": "committed"
-      },
-      "retirement_condition": {
-        "artifacts_persisted": true,
-        "ledger_updated": true
-      }
-    },
-    "r.dev-app": {
-      "provider": "claude_code",
-      "seat_policy": "fresh",
-      "artifact_landing": {
-        "path": ".team/nodes/keybar/",
-        "form": "committed"
-      },
-      "retirement_condition": {
-        "artifacts_persisted": true,
-        "ledger_updated": true
-      }
-    }
+  "r.advisor": {
+   "provider": "claude_code",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/state-oracle/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
   },
-  "tasks": {
-    "t.archive": {
-      "title": "归档回退 agentstate（058 裁定的强制前置）",
-      "owner": {
-        "role": "r.dev-state"
-      },
-      "resources": {
-        "worktree_id": "wt-server",
-        "write_paths": [
-          "server/internal/agentstate/",
-          "server/internal/protocol/",
-          "docs/archive/agentstate-round4/"
-        ],
-        "environment_fidelity": {
-          "runs_real_cli": true,
-          "injects_latency": false,
-          "carries_long_history": false
-        },
-        "provenance": {
-          "identity": "repo:remote-agent-android",
-          "revision": "f57ae7060"
-        }
-      },
-      "handoff": {
-        "route": "report_result",
-        "required_artifacts": [
-          "docs/archive/agentstate-round4/README.md"
-        ]
-      },
-      "state": "succeeded",
-      "acceptance": {
-        "mechanical": [
-          {
-            "acceptance_id": "A-arch-dir",
-            "argv": [
-              "test",
-              "-f",
-              "docs/archive/agentstate-round4/README.md"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": [
-              "docs/archive/agentstate-round4/README.md"
-            ]
-          },
-          {
-            "acceptance_id": "A-arch-build",
-            "argv": [
-              "go",
-              "build",
-              "./..."
-            ],
-            "cwd": "server",
-            "expected_exit_code": 0,
-            "artifacts": []
-          },
-          {
-            "acceptance_id": "A-arch-no-statedone",
-            "argv": [
-              "sh",
-              "-c",
-              "! grep -rn 'StateDone' server/internal/protocol/"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": []
-          },
-          {
-            "acceptance_id": "A-arch-test",
-            "argv": [
-              "go",
-              "test",
-              "./..."
-            ],
-            "cwd": "server",
-            "expected_exit_code": 0,
-            "artifacts": []
-          },
-          {
-            "acceptance_id": "A-arch-no-spinner",
-            "argv": [
-              "sh",
-              "-c",
-              "! grep -rn 'spinnerFrames' server/internal/"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": []
-          }
-        ],
-        "judgment": [],
-        "required": [
-          "A-arch-dir",
-          "A-arch-build",
-          "A-arch-no-statedone",
-          "A-arch-test",
-          "A-arch-no-spinner"
-        ]
-      }
-    },
-    "t.oracle": {
-      "title": "顾问：产出判据基底摘要 + 根因探针红测（回退后必须命中）",
-      "owner": {
-        "role": "r.advisor"
-      },
-      "resources": {
-        "worktree_id": "wt-oracle",
-        "read_paths": [
-          "requirement-base/entries/058-状态检测先归档回退再重建.md",
-          "requirement-base/entries/025-工作状态检测准确率.md",
-          "docs/herdr-agent-state-study.md",
-          "docs/archive/agentstate-round4/README.md",
-          "docs/orchestration/编排方法论.md"
-        ],
-        "write_paths": [
-          ".team/nodes/state-oracle/"
-        ],
-        "environment_fidelity": {
-          "runs_real_cli": true,
-          "injects_latency": false,
-          "carries_long_history": false
-        },
-        "provenance": {
-          "identity": "repo:remote-agent-android",
-          "revision": "f57ae7060"
-        }
-      },
-      "handoff": {
-        "route": "report_result",
-        "required_artifacts": [
-          ".team/nodes/state-oracle/判据基底摘要.md",
-          ".team/nodes/state-oracle/probe-red.log"
-        ]
-      },
-      "acceptance": {
-        "mechanical": [
-          {
-            "acceptance_id": "A-oracle-summary",
-            "argv": [
-              "test",
-              "-f",
-              ".team/nodes/state-oracle/判据基底摘要.md"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": [
-              ".team/nodes/state-oracle/判据基底摘要.md"
-            ]
-          },
-          {
-            "acceptance_id": "A-oracle-redlog",
-            "argv": [
-              "test",
-              "-s",
-              ".team/nodes/state-oracle/probe-red.log"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": [
-              ".team/nodes/state-oracle/probe-red.log"
-            ]
-          }
-        ],
-        "judgment": [],
-        "required": [
-          "A-oracle-summary",
-          "A-oracle-redlog"
-        ]
-      }
-    },
-    "t.impl": {
-      "title": "重建状态判定：差分/存在判据，零字形白名单，只留 working/idle",
-      "owner": {
-        "role": "r.dev-state"
-      },
-      "resources": {
-        "worktree_id": "wt-server",
-        "read_paths": [
-          ".team/nodes/state-oracle/判据基底摘要.md",
-          "requirement-base/entries/058-状态检测先归档回退再重建.md"
-        ],
-        "write_paths": [
-          "server/internal/agentstate/",
-          "server/internal/protocol/",
-          "server/internal/api/"
-        ],
-        "environment_fidelity": {
-          "runs_real_cli": true,
-          "injects_latency": false,
-          "carries_long_history": false
-        },
-        "provenance": {
-          "identity": "repo:remote-agent-android",
-          "revision": "f57ae7060"
-        }
-      },
-      "handoff": {
-        "route": "report_result",
-        "required_artifacts": []
-      },
-      "acceptance": {
-        "mechanical": [
-          {
-            "acceptance_id": "A-impl-test",
-            "argv": [
-              "go",
-              "test",
-              "./..."
-            ],
-            "cwd": "server",
-            "expected_exit_code": 0,
-            "artifacts": []
-          },
-          {
-            "acceptance_id": "A-impl-no-glyph-whitelist",
-            "argv": [
-              "sh",
-              "-c",
-              "! grep -rn 'spinnerFrames' server/internal/"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": []
-          }
-        ],
-        "judgment": [],
-        "required": [
-          "A-impl-test",
-          "A-impl-no-glyph-whitelist"
-        ]
-      }
-    },
-    "t.verify": {
-      "title": "对照席：零上下文定点变异，验红测真的会红",
-      "owner": {
-        "role": "r.control"
-      },
-      "resources": {
-        "worktree_id": "wt-control",
-        "read_paths": [
-          ".team/nodes/state-oracle/判据基底摘要.md"
-        ],
-        "write_paths": [
-          ".team/nodes/state-control/"
-        ],
-        "environment_fidelity": {
-          "runs_real_cli": true,
-          "injects_latency": false,
-          "carries_long_history": false
-        },
-        "provenance": {
-          "identity": "repo:remote-agent-android",
-          "revision": "f57ae7060"
-        }
-      },
-      "handoff": {
-        "route": "report_result",
-        "required_artifacts": [
-          ".team/nodes/state-control/mutation-report.md"
-        ]
-      },
-      "acceptance": {
-        "mechanical": [
-          {
-            "acceptance_id": "A-ctl-report",
-            "argv": [
-              "test",
-              "-s",
-              ".team/nodes/state-control/mutation-report.md"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": [
-              ".team/nodes/state-control/mutation-report.md"
-            ]
-          }
-        ],
-        "judgment": [
-          {
-            "acceptance_id": "A-ctl-verdict",
-            "provider": "claude_code",
-            "judge_role": "r.advisor",
-            "input_revision": 1,
-            "input_artifacts": [
-              ".team/nodes/state-control/mutation-report.md"
-            ],
-            "verdict_values": [
-              "supports",
-              "refutes",
-              "inconclusive"
-            ],
-            "veto": true,
-            "judge_must_not_be": [
-              "r.dev-state",
-              "r.control"
-            ]
-          }
-        ],
-        "required": [
-          "A-ctl-report",
-          "A-ctl-verdict"
-        ]
-      }
-    },
-    "t.keybar": {
-      "title": "键条顺序改为 Esc / Tab / 方向键 / Ctrl-C",
-      "owner": {
-        "role": "r.dev-app"
-      },
-      "resources": {
-        "worktree_id": "wt-app",
-        "write_paths": [
-          "app/app/src/main/java/dev/agentmirror/app/session/",
-          "app/app/src/test/"
-        ],
-        "environment_fidelity": {
-          "runs_real_cli": true,
-          "injects_latency": false,
-          "carries_long_history": false
-        },
-        "provenance": {
-          "identity": "repo:remote-agent-android",
-          "revision": "f57ae7060"
-        }
-      },
-      "handoff": {
-        "route": "report_result",
-        "required_artifacts": []
-      },
-      "acceptance": {
-        "mechanical": [
-          {
-            "acceptance_id": "A-keybar-test",
-            "argv": [
-              "./gradlew",
-              ":app:testDebugUnitTest",
-              "--rerun-tasks",
-              "--console=plain"
-            ],
-            "cwd": "app",
-            "expected_exit_code": 0,
-            "artifacts": []
-          }
-        ],
-        "judgment": [],
-        "required": [
-          "A-keybar-test"
-        ]
-      },
-      "state": "succeeded"
-    }
+  "r.control": {
+   "provider": "claude_code",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/state-control/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
   },
-  "dependencies": [
-    {
-      "from": "t.archive",
-      "to": "t.oracle",
-      "condition": "requires_success"
-    },
-    {
-      "from": "t.oracle",
-      "to": "t.impl",
-      "condition": "requires_success"
-    },
-    {
-      "from": "t.impl",
-      "to": "t.verify",
-      "condition": "requires_success"
-    }
-  ],
-  "parallelism": [],
-  "handoff": {
-    "send_command": "team-agent send",
-    "result_route": "leader",
-    "required_envelope_fields": [
-      "task_id",
-      "status"
+  "r.dev-app": {
+   "provider": "claude_code",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/keybar/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.archive": {
+   "title": "归档回退 agentstate（058 裁定的强制前置）",
+   "owner": {
+    "role": "r.dev-state"
+   },
+   "resources": {
+    "worktree_id": "wt-server",
+    "write_paths": [
+     "server/internal/agentstate/",
+     "server/internal/protocol/",
+     "docs/archive/agentstate-round4/"
     ],
-    "missing_result": "席位未回结构化完成回报与证据 JSON 时，任务不得进入下一依赖节点",
-    "delivery_uncertain": "投递不确定时重发并要求去重"
-  },
-  "acceptance": {
-    "mechanical_exit_code_is_authoritative": true,
-    "judgment_requires_distinct_provider": false
-  },
-  "fallback": {},
-  "evidence_policy": {
-    "required_fields": [
-      "reported_by",
-      "revision",
-      "supports_or_refutes",
-      "observed_at",
-      "freshness"
-    ],
-    "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code）或结构化人裁，禁止写成一句话"
-  },
-  "resource_isolation": {
-    "default_write_scope": ".team/nodes",
-    "rules": [],
-    "read_only_shared": [
-      "requirement-base/entries/058-状态检测先归档回退再重建.md",
-      "requirement-base/entries/025-工作状态检测准确率.md",
-      "docs/herdr-agent-state-study.md",
-      "docs/orchestration/编排方法论.md",
-      ".team/nodes/state-oracle/判据基底摘要.md",
-      ".team/nodes/state-control/mutation-report.md"
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f57ae7060"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "docs/archive/agentstate-round4/README.md"
     ]
+   },
+   "state": "succeeded",
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-arch-dir",
+      "argv": [
+       "test",
+       "-f",
+       "docs/archive/agentstate-round4/README.md"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": [
+       "docs/archive/agentstate-round4/README.md"
+      ]
+     },
+     {
+      "acceptance_id": "A-arch-build",
+      "argv": [
+       "go",
+       "build",
+       "./..."
+      ],
+      "cwd": "server",
+      "expected_exit_code": 0,
+      "artifacts": []
+     },
+     {
+      "acceptance_id": "A-arch-no-statedone",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -rn 'StateDone' server/internal/protocol/"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": []
+     },
+     {
+      "acceptance_id": "A-arch-test",
+      "argv": [
+       "go",
+       "test",
+       "./..."
+      ],
+      "cwd": "server",
+      "expected_exit_code": 0,
+      "artifacts": []
+     },
+     {
+      "acceptance_id": "A-arch-no-spinner",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -rn 'spinnerFrames' server/internal/"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": []
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-arch-dir",
+     "A-arch-build",
+     "A-arch-no-statedone",
+     "A-arch-test",
+     "A-arch-no-spinner"
+    ]
+   }
   },
-  "fanout_aggregation": {},
-  "audit": {}
+  "t.oracle": {
+   "title": "顾问：产出判据基底摘要 + 根因探针红测（回退后必须命中）",
+   "owner": {
+    "role": "r.advisor"
+   },
+   "resources": {
+    "worktree_id": "wt-oracle",
+    "read_paths": [
+     "requirement-base/entries/058-状态检测先归档回退再重建.md",
+     "requirement-base/entries/025-工作状态检测准确率.md",
+     "docs/herdr-agent-state-study.md",
+     "docs/archive/agentstate-round4/README.md",
+     "docs/orchestration/编排方法论.md"
+    ],
+    "write_paths": [
+     ".team/nodes/state-oracle/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f57ae7060"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     ".team/nodes/state-oracle/判据基底摘要.md",
+     ".team/nodes/state-oracle/probe-red.log"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-oracle-summary",
+      "argv": [
+       "test",
+       "-f",
+       ".team/nodes/state-oracle/判据基底摘要.md"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": [
+       ".team/nodes/state-oracle/判据基底摘要.md"
+      ]
+     },
+     {
+      "acceptance_id": "A-oracle-redlog",
+      "argv": [
+       "test",
+       "-s",
+       ".team/nodes/state-oracle/probe-red.log"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": [
+       ".team/nodes/state-oracle/probe-red.log"
+      ]
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-oracle-summary",
+     "A-oracle-redlog"
+    ]
+   },
+   "state": "succeeded"
+  },
+  "t.impl": {
+   "title": "重建状态判定：差分/存在判据，零字形白名单，只留 working/idle",
+   "owner": {
+    "role": "r.dev-state"
+   },
+   "resources": {
+    "worktree_id": "wt-server",
+    "read_paths": [
+     ".team/nodes/state-oracle/判据基底摘要.md",
+     "requirement-base/entries/058-状态检测先归档回退再重建.md"
+    ],
+    "write_paths": [
+     "server/internal/agentstate/",
+     "server/internal/protocol/",
+     "server/internal/api/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f57ae7060"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": []
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-impl-test",
+      "argv": [
+       "go",
+       "test",
+       "./..."
+      ],
+      "cwd": "server",
+      "expected_exit_code": 0,
+      "artifacts": []
+     },
+     {
+      "acceptance_id": "A-impl-no-glyph-whitelist",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -rn 'spinnerFrames' server/internal/"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": []
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-impl-test",
+     "A-impl-no-glyph-whitelist"
+    ]
+   }
+  },
+  "t.verify": {
+   "title": "对照席：零上下文定点变异，验红测真的会红",
+   "owner": {
+    "role": "r.control"
+   },
+   "resources": {
+    "worktree_id": "wt-control",
+    "read_paths": [
+     ".team/nodes/state-oracle/判据基底摘要.md"
+    ],
+    "write_paths": [
+     ".team/nodes/state-control/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f57ae7060"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     ".team/nodes/state-control/mutation-report.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-ctl-report",
+      "argv": [
+       "test",
+       "-s",
+       ".team/nodes/state-control/mutation-report.md"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": [
+       ".team/nodes/state-control/mutation-report.md"
+      ]
+     }
+    ],
+    "judgment": [
+     {
+      "acceptance_id": "A-ctl-verdict",
+      "provider": "claude_code",
+      "judge_role": "r.advisor",
+      "input_revision": 1,
+      "input_artifacts": [
+       ".team/nodes/state-control/mutation-report.md"
+      ],
+      "verdict_values": [
+       "supports",
+       "refutes",
+       "inconclusive"
+      ],
+      "veto": true,
+      "judge_must_not_be": [
+       "r.dev-state",
+       "r.control"
+      ]
+     }
+    ],
+    "required": [
+     "A-ctl-report",
+     "A-ctl-verdict"
+    ]
+   }
+  },
+  "t.keybar": {
+   "title": "键条顺序改为 Esc / Tab / 方向键 / Ctrl-C",
+   "owner": {
+    "role": "r.dev-app"
+   },
+   "resources": {
+    "worktree_id": "wt-app",
+    "write_paths": [
+     "app/app/src/main/java/dev/agentmirror/app/session/",
+     "app/app/src/test/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f57ae7060"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": []
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-keybar-test",
+      "argv": [
+       "./gradlew",
+       ":app:testDebugUnitTest",
+       "--rerun-tasks",
+       "--console=plain"
+      ],
+      "cwd": "app",
+      "expected_exit_code": 0,
+      "artifacts": []
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-keybar-test"
+    ]
+   },
+   "state": "succeeded"
+  }
+ },
+ "dependencies": [
+  {
+   "from": "t.archive",
+   "to": "t.oracle",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.oracle",
+   "to": "t.impl",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.impl",
+   "to": "t.verify",
+   "condition": "requires_success"
+  }
+ ],
+ "parallelism": [],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "席位未回结构化完成回报与证据 JSON 时，任务不得进入下一依赖节点",
+  "delivery_uncertain": "投递不确定时重发并要求去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {},
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code）或结构化人裁，禁止写成一句话"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "requirement-base/entries/058-状态检测先归档回退再重建.md",
+   "requirement-base/entries/025-工作状态检测准确率.md",
+   "docs/herdr-agent-state-study.md",
+   "docs/orchestration/编排方法论.md",
+   ".team/nodes/state-oracle/判据基底摘要.md",
+   ".team/nodes/state-control/mutation-report.md"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 2,
+ "content_sha256": "sha256:7edc3c9c2e074498e779c46fff250ba8c7d6ab1934361a0bd1cda5a82f346d53"
 }
