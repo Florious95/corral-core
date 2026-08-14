@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是修复终端尺寸管理的开发席。**一次性席位，交件即退役。**

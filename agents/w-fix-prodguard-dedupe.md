@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 `audit-prod-daemon-lifecycle` 终审红项的处女回炉席。契约：**一次性，交件即退役**。

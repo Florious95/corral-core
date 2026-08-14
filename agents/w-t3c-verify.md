@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 `arch-criteria-t3-contract` 的**独立验收席**，不是承办席的帮手。**一次性席位，交件即退役。**

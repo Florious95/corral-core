@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 D-34/D-35 红测席。在 test/ 框架 + Kotlin 单测写红测。一次性席位。

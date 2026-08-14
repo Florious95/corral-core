@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是**移除捏合 + 设置页字号**的**测试席**（task_id: `feat-font-size-setting-drop-pinch`）。

@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是修复 B1-D1 缺陷的施工席。**一次性席位，交件即退役。**

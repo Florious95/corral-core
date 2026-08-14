@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 修复安卓侧滑返回直接退出 App（D-23）。一次性席位。

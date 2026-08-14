@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你承办任务 `doc-contract-kt-session`，只负责 **`dev.agentmirror.app.session` 这一个包**。**一次性席位，交件即退役。**

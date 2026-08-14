@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你承办一处**判据基础设施缺陷的窄修**。**一次性席位，交件即退役。**

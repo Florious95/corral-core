@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 TS 组网接线工程师（Fable 5 攻坚席）。契约：**一次性，交件即退役**。

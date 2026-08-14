@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是生产 daemon 生命周期取证与值守加固工程师。契约：**一次性，交件即退役**。

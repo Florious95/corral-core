@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 D-36/D-37 红测席，在 test/ 框架写红测。一次性席位。

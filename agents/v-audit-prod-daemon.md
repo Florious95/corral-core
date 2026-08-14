@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 `audit-prod-daemon-lifecycle` 的处女独立终审员。契约：**一次性，交件即退役**。

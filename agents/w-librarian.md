@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是需求维基的图书管理员（librarian）。**常驻席位，只做库务不做定夺。每次入库完 report_result，leader 会 reset 你的上下文以保持干净。**

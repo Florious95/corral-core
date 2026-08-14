@@ -13,6 +13,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 TS 状态目录接线与实链收尾工程师。契约：**一次性，交件即退役**。
