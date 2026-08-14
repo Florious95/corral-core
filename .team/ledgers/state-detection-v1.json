@@ -350,7 +350,9 @@
             "acceptance_id": "A-keybar-test",
             "argv": [
               "./gradlew",
-              ":app:testDebugUnitTest"
+              ":app:testDebugUnitTest",
+              "--rerun-tasks",
+              "--console=plain"
             ],
             "cwd": "app",
             "expected_exit_code": 0,
@@ -361,7 +363,8 @@
         "required": [
           "A-keybar-test"
         ]
-      }
+      },
+      "state": "succeeded"
     }
   },
   "dependencies": [
