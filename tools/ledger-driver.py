@@ -116,7 +116,7 @@ def dispatch_text(l, tid):
 
 
 def send(seat, text):
-    """返回 message_id（即 task id），供 team-agent wait 事件驱动等待。
+    """返回 message_id（**仅作投递凭据，不是 wait 的键**——见 main 里的说明）。
     走 .team/ta 净化包装器，收件人用绝对路径 FQN。
     注意：不传 --json——reference 对 send 用文本输出，检查 ok: True / message_id: 文本。
     （传 --json 会输出 "ok": true，和 ok: True 对不上，send 会误判失败——实发 2026-08-15。）"""
@@ -220,12 +220,17 @@ def main():
                 log(f"{tid}: 角色 {role} 没有对应席位，停。")
                 return 2
             log(f"派 {tid} → {seat}")
-            task_id = send(seat, dispatch_text(l, tid))
-            if not task_id:
+            msg_id = send(seat, dispatch_text(l, tid))
+            if not msg_id:
                 log(f"{tid}: 投递失败，停。")
                 return 3
-            log(f"  等 {task_id}（事件驱动，非轮询）")
-            woke = wait_task(task_id)
+            # 🔴 wait 的键是【账本任务 id】，不是 send 返回的 message_id。
+            # 席位 report_result 带的 task_id 就是账本 id，wait --task 匹配的正是它。
+            # reference 的 send() 注释说「返回 message_id（即 task id）」——这个等价是错的。
+            # 实发 2026-08-15：驱动器卡在 wait --task msg_d5f761155aa8 上永不醒，
+            # 而同一时刻 wait --task t.oracle 立即返回 res_c052d53f5738 completed。
+            log(f"  投递 {msg_id}；等 {tid}（事件驱动，非轮询）")
+            woke = wait_task(tid)
             if not woke:
                 log(f"{tid}: wait 超时或非零返回（{MAX_WAIT}s 墙钟兜底，wait 本身无 --timeout），停。")
                 return 4
