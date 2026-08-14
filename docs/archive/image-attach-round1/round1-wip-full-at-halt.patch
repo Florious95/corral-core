@@ -1,0 +1,294 @@
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt b/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
+index 0b4f3b6e7..e593b87ee 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
+@@ -367,6 +367,13 @@ class ConnectionManager(
+         return conn.send(ResizeFrame(ref = ref, rows = rows, cols = cols))
+     }
+ 
++    /** 对端改了共享 pane 尺寸：只更新重放簿记，不上行。 */
++    fun noteRemoteSize(ref: String, rows: Int, cols: Int) {
++        if (activeSubscriptions.containsKey(ref)) {
++            activeSubscriptions[ref] = rows to cols
++        }
++    }
++
+     // ---- 内部 ----
+ 
+     private fun attemptConnect() {
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt b/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+index ec20ed622..1477f9f1e 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+@@ -51,4 +51,5 @@ internal object FrameType {
+     const val ERROR = "error"
+     const val SCROLL_WHEEL = "scroll_wheel"
+     const val PANE_MODE_CHANGED = "pane_mode_changed"
++    const val PANE_SIZE_CHANGED = "pane_size_changed"
+ }
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt b/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
+index b3b7ea423..63a1ca54c 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
+@@ -59,6 +59,7 @@ sealed interface FramePayload {
+                     FrameType.ERROR -> json.decodeFromJsonElement(ErrorFrame.serializer(), el)
+                     FrameType.SCROLL_WHEEL -> json.decodeFromJsonElement(ScrollWheelFrame.serializer(), el)
+                     FrameType.PANE_MODE_CHANGED -> json.decodeFromJsonElement(PaneModeChangedFrame.serializer(), el)
++                    FrameType.PANE_SIZE_CHANGED -> json.decodeFromJsonElement(PaneSizeChangedFrame.serializer(), el)
+                     else -> throw FrameDecodeException(
+                         FrameError.UNSUPPORTED_TYPE,
+                         "unknown frame type: $type",
+@@ -113,6 +114,10 @@ sealed interface FramePayload {
+                     FrameError.INVALID_FIELD,
+                     "pane_mode_changed is server-to-client only, never sent upstream",
+                 )
++                is PaneSizeChangedFrame -> throw FrameEncodeException(
++                    FrameError.INVALID_FIELD,
++                    "pane_size_changed is server-to-client only, never sent upstream",
++                )
+             }
+         }
+     }
+@@ -458,3 +463,21 @@ data class PaneModeChangedFrame(
+     override val frameType: String get() = FrameType.PANE_MODE_CHANGED
+     override fun validate(): String? = if (ref.isEmpty()) "pane_mode_changed ref must be non-empty" else null
+ }
++
++/**
++ * 共享 pane 几何变更 S→C：手机与 Web 同时订阅时，后改尺寸的一端胜出，
++ * 对端把本地网格改成同一行列，**不上行 resize**，避免两端互顶。
++ */
++@Serializable
++data class PaneSizeChangedFrame(
++    @SerialName("ref") val ref: String,
++    @SerialName("rows") val rows: Int,
++    @SerialName("cols") val cols: Int,
++) : FramePayload {
++    override val frameType: String get() = FrameType.PANE_SIZE_CHANGED
++    override fun validate(): String? = when {
++        ref.isEmpty() -> "pane_size_changed ref must be non-empty"
++        rows < 1 || cols < 1 -> "pane_size_changed rows/cols must be >= 1"
++        else -> null
++    }
++}
+diff --git a/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt b/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
+index 8a8d4b3ce..d6f543e40 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt
+@@ -29,6 +29,7 @@ import dev.agentmirror.app.conn.ErrorFrame
+ import dev.agentmirror.app.conn.FrameError
+ import dev.agentmirror.app.conn.FramePayload
+ import dev.agentmirror.app.conn.PaneModeChangedFrame
++import dev.agentmirror.app.conn.PaneSizeChangedFrame
+ import dev.agentmirror.app.conn.InputKey
+ import dev.agentmirror.app.termview.TermViewPresenter
+ import dev.agentmirror.terminal.TerminalEmulator
+@@ -65,6 +66,9 @@ class SessionViewModel(
+     val presenter = TermViewPresenter(emulator) { rows, cols ->
+         // feat-font-size-setting-drop-pinch：字号选定后实测算出的行列数先上报协议，
+         // 再同步内核（让 CLI 自己重画）；几何只在进入会话时算一次（seedCellMetrics）。
++        if (rows == adoptedRows && cols == adoptedCols) return
++        adoptedRows = null
++        adoptedCols = null
+         if (manager.resize(ref, rows, cols)) {
+             emulator.resize(cols, rows)
+         }
+@@ -118,6 +122,10 @@ class SessionViewModel(
+      */
+     var inCopyMode by mutableStateOf(false)
+ 
++    /** 刚从对端同步来的行列；与本地视口算出的相同则不再上行 resize。 */
++    private var adoptedRows: Int? = null
++    private var adoptedCols: Int? = null
++
+     /** 节流窗口内累积的 deltaLines 总量；窗口到点时一并发出（消除"无反应"假象）。 */
+     private var pendingScrollDelta = 0
+ 
+@@ -172,6 +180,7 @@ class SessionViewModel(
+             is ErrorFrame -> transientError = "协议错误：${frame.code.wire}${frame.reason.takeIf { it.isNotEmpty() }?.let { "（$it）" } ?: ""}"
+             // 缺陷④：远端 pane copy-mode 状态变更（进入/退出），驱动 UI 角标。
+             is PaneModeChangedFrame -> if (frame.ref == ref) inCopyMode = frame.inCopyMode
++            is PaneSizeChangedFrame -> if (frame.ref == ref) applyRemoteSize(frame.rows, frame.cols)
+             else -> Unit
+         }
+     }
+@@ -403,6 +412,14 @@ class SessionViewModel(
+         textFieldValue = TextFieldValue(newText, selection = TextRange(insertAt + path.length))
+     }
+ 
++    private fun applyRemoteSize(rows: Int, cols: Int) {
++        if (rows < 1 || cols < 1) return
++        adoptedRows = rows
++        adoptedCols = cols
++        emulator.resize(cols, rows)
++        manager.noteRemoteSize(ref, rows, cols)
++    }
++
+     /** 协议 reason / 本地判定 → 人类可读错误文案（明确报错）。 */
+     private fun mapInputReason(reason: String?): String = when (reason) {
+         null, "" -> "发送失败"
+diff --git a/server/internal/api/server.go b/server/internal/api/server.go
+index b9f1bae3c..022928ebe 100644
+--- a/server/internal/api/server.go
++++ b/server/internal/api/server.go
+@@ -370,6 +370,37 @@ func (s *Server) unregisterTracker(c *wsConn) {
+ 	s.trackersMu.Unlock()
+ }
+ 
++// fanoutPaneReflow tells every other subscriber of ref that the shared pane
++// changed size, then pushes the same snapshot so their grid can rebuild.
++// The originating connection already received its snapshot and is skipped.
++func (s *Server) fanoutPaneReflow(except *wsConn, ref string, rows, cols uint16, snap []byte) {
++	body, err := protocol.MarshalFrame(protocol.PaneSizeChanged{Ref: ref, Rows: rows, Cols: cols})
++	if err != nil {
++		s.log.Error("resize: marshal pane_size_changed", "err", err)
++		return
++	}
++	s.trackersMu.Lock()
++	defer s.trackersMu.Unlock()
++	for c := range s.trackers {
++		if c == except || !c.subscribed(ref) {
++			continue
++		}
++		select {
++		case c.sendCh <- wsMsg{typ: wsText, data: body}:
++		default:
++			s.log.Debug("resize: dropping pane_size_changed for slow connection")
++		}
++		if len(snap) == 0 {
++			continue
++		}
++		select {
++		case c.sendCh <- wsMsg{typ: wsBinary, data: snap}:
++		default:
++			s.log.Debug("resize: dropping peer snapshot for slow connection")
++		}
++	}
++}
++
+ // fanout sends one list_delta to every live client. A slow client whose send
+ // channel is full drops the delta; the client re-lists on seq discontinuity
+ // (docs/protocol.md §4.2), so a slow client heals itself without stalling the
+diff --git a/server/internal/api/ws_handler.go b/server/internal/api/ws_handler.go
+index 5ee4edd52..ad77be5f1 100644
+--- a/server/internal/api/ws_handler.go
++++ b/server/internal/api/ws_handler.go
+@@ -144,6 +144,9 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
+ 		return
+ 	}
+ 	c.sendBinary(frame)
++	if w, h, err := br.Size(c.ctx); err == nil && w > 0 && h > 0 {
++		c.s.fanoutPaneReflow(c, s.Ref, uint16(h), uint16(w), frame)
++	}
+ 
+ 	subCtx, cancel := context.WithCancel(c.ctx)
+ 	sub := &subscription{ref: s.Ref, cancel: cancel, detach: detach}
+@@ -420,6 +423,11 @@ func (c *wsConn) handleResize(r protocol.Resize) {
+ 		return
+ 	}
+ 	c.sendBinary(frame)
++	rows, cols := r.Rows, r.Cols
++	if afterH > 0 && afterW > 0 {
++		rows, cols = uint16(afterH), uint16(afterW)
++	}
++	c.s.fanoutPaneReflow(c, r.Ref, rows, cols, frame)
+ }
+ 
+ // scrollbackRange converges a scrollback request (protocol from_line/count,
+diff --git a/server/internal/protocol/frames.go b/server/internal/protocol/frames.go
+index 2514dc167..edf0c9ab5 100644
+--- a/server/internal/protocol/frames.go
++++ b/server/internal/protocol/frames.go
+@@ -250,3 +250,12 @@ type PaneModeChanged struct {
+ 	Ref        string `json:"ref"`
+ 	InCopyMode bool   `json:"in_copy_mode"`
+ }
++
++// PaneSizeChanged notifies other live subscribers that the shared tmux pane
++// was resized (S→C). Clients apply the new grid locally and must not echo a
++// resize frame, or phone and web will fight. No ack.
++type PaneSizeChanged struct {
++	Ref  string `json:"ref"`
++	Rows uint16 `json:"rows"`
++	Cols uint16 `json:"cols"`
++}
+diff --git a/server/internal/protocol/frametype.go b/server/internal/protocol/frametype.go
+index 881afb022..478d442a5 100644
+--- a/server/internal/protocol/frametype.go
++++ b/server/internal/protocol/frametype.go
+@@ -64,4 +64,8 @@ const (
+ 	// a minimal indicator so the user knows their keystrokes go to copy-mode
+ 	// rather than the shell/TUI.
+ 	TypePaneModeChanged FrameType = "pane_mode_changed"
++
++	// TypePaneSizeChanged notifies other subscribers that the shared pane
++	// geometry changed (S→C). Phone and web follow whoever last resized.
++	TypePaneSizeChanged FrameType = "pane_size_changed"
+ )
+diff --git a/server/internal/protocol/json_test.go b/server/internal/protocol/json_test.go
+index fde5e2cd5..8aa7cfc97 100644
+--- a/server/internal/protocol/json_test.go
++++ b/server/internal/protocol/json_test.go
+@@ -275,3 +275,36 @@ func TestPaneModeChangedMarshal(t *testing.T) {
+ 		t.Errorf("payload = %+v", p)
+ 	}
+ }
++
++func TestPaneSizeChangedIsServerToClientOnly(t *testing.T) {
++	raw := []byte(`{"v":1,"type":"pane_size_changed","payload":{"ref":"s1","rows":24,"cols":80}}`)
++	if _, err := protocol.UnmarshalFrame(raw); !errors.Is(err, protocol.ErrUnknownType) {
++		t.Fatalf("pane_size_changed must be server-to-client only; got err=%v", err)
++	}
++}
++
++func TestPaneSizeChangedMarshal(t *testing.T) {
++	frame := protocol.PaneSizeChanged{Ref: "s1", Rows: 24, Cols: 80}
++	data, err := protocol.MarshalFrame(frame)
++	if err != nil {
++		t.Fatalf("MarshalFrame: %v", err)
++	}
++	var env struct {
++		V       int             `json:"v"`
++		Type    string          `json:"type"`
++		Payload json.RawMessage `json:"payload"`
++	}
++	if err := json.Unmarshal(data, &env); err != nil {
++		t.Fatalf("unmarshal envelope: %v", err)
++	}
++	if env.Type != "pane_size_changed" {
++		t.Errorf("type = %q, want %q", env.Type, "pane_size_changed")
++	}
++	var p protocol.PaneSizeChanged
++	if err := json.Unmarshal(env.Payload, &p); err != nil {
++		t.Fatalf("unmarshal payload: %v", err)
++	}
++	if p.Ref != "s1" || p.Rows != 24 || p.Cols != 80 {
++		t.Errorf("payload = %+v", p)
++	}
++}
+diff --git a/server/internal/protocol/validate.go b/server/internal/protocol/validate.go
+index cbf60a116..409680fe8 100644
+--- a/server/internal/protocol/validate.go
++++ b/server/internal/protocol/validate.go
+@@ -20,6 +20,7 @@ func (Resize) FrameType() FrameType          { return TypeResize }
+ func (ErrorFrame) FrameType() FrameType      { return TypeError }
+ func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
+ func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
++func (PaneSizeChanged) FrameType() FrameType { return TypePaneSizeChanged }
+ 
+ // requireState returns ErrInvalidState unless s is one of the five closed
+ // AgentState values.
+@@ -277,3 +278,13 @@ func (p PaneModeChanged) Validate() error {
+ 	}
+ 	return nil
+ }
++
++func (p PaneSizeChanged) Validate() error {
++	if p.Ref == "" {
++		return fmt.Errorf("%w: pane_size_changed ref must be non-empty", ErrInvalidField)
++	}
++	if p.Rows == 0 || p.Cols == 0 {
++		return fmt.Errorf("%w: pane_size_changed rows/cols must be >= 1", ErrInvalidField)
++	}
++	return nil
++}
