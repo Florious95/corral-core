@@ -4,8 +4,9 @@
 `docs/protocol.md` 定义的 WebSocket 协议与 `server/` 的 daemon 二进制。
 
 **写新用例前先读** [`docs/use-case-design.md`](../docs/use-case-design.md)：
-需求基派生的 UC-ID、测试层（L0 即本目录）、补测优先序。`cases/*.test.js`
-的 `name` 建议带对应 UC-ID（如 `uc-p06:wrong-token-rejected`），旧名字不强制改。
+需求基派生的 UC-ID、§11 历史缺陷回归账、§12 用户日组合场景。
+测试层 L0 即本目录。`cases/*.test.js` 的 `name` 建议带对应 UC-ID
+（如 `uc-p06:wrong-token-rejected`），旧名字不强制改。零件绿不能代替 DAY 组合。
 
 ## 快速开始
 
