@@ -1,7 +1,7 @@
 {
   "schema": "agentmirror-gate-report-v1",
   "conclusion": "fail",
-  "generated_at": "2026-08-11T04:48:08+00:00",
+  "generated_at": "2026-08-13T18:09:30+00:00",
   "baseline_accept": {
     "applied": false,
     "reason": null
@@ -11,26 +11,34 @@
       "name": "server",
       "ok": true,
       "skipped": false,
-      "cases": 315,
-      "duration_ms": 9979,
+      "cases": 337,
+      "duration_ms": 16328,
       "failures": [],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
         "baseline": 315,
-        "current": 315,
-        "action": "same"
+        "current": 337,
+        "action": "up"
       }
     },
     {
       "name": "app",
       "ok": false,
       "skipped": false,
-      "cases": 771,
-      "duration_ms": 31484,
+      "cases": 452,
+      "duration_ms": 67954,
       "failures": [
         {
-          "test": "lint:ApplySharedPref:app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt:131",
+          "test": "unparseable junit xml: app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.BackGestureNavTest.xml",
+          "category": "unclassified"
+        },
+        {
+          "test": "unparseable junit xml: app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.service.ForegroundServiceEconomyTest.xml",
+          "category": "unclassified"
+        },
+        {
+          "test": "gradle test (exit 1)",
           "category": "unclassified"
         },
         {
@@ -52,50 +60,14 @@
         {
           "test": "lint:NewerVersionAvailable:app/app/build.gradle.kts:122",
           "category": "unclassified"
-        },
-        {
-          "test": "lint:ObsoleteSdkInt:app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt:52",
-          "category": "unclassified"
-        },
-        {
-          "test": "lint:ObsoleteSdkInt:app/app/src/main/res/mipmap-anydpi-v26:?",
-          "category": "unclassified"
-        },
-        {
-          "test": "lint:UnusedResources:app/app/src/main/res/values/colors.xml:18",
-          "category": "unclassified"
-        },
-        {
-          "test": "lint:MonochromeLauncherIcon:app/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml:16",
-          "category": "unclassified"
-        },
-        {
-          "test": "lint:MonochromeLauncherIcon:app/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml:16",
-          "category": "unclassified"
-        },
-        {
-          "test": "lint:UseKtx:app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt:74",
-          "category": "unclassified"
-        },
-        {
-          "test": "lint:UseKtx:app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt:88",
-          "category": "unclassified"
-        },
-        {
-          "test": "lint:UseKtx:app/app/src/main/java/dev/agentmirror/app/pairing/PairingConfigStore.kt:126",
-          "category": "unclassified"
-        },
-        {
-          "test": "lint:UseKtx:app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt:187",
-          "category": "unclassified"
         }
       ],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": 757,
-        "current": 771,
-        "action": "up"
+        "baseline": 771,
+        "current": 452,
+        "action": "down"
       }
     },
     {
@@ -103,7 +75,7 @@
       "ok": true,
       "skipped": false,
       "cases": 1,
-      "duration_ms": 3989,
+      "duration_ms": 9791,
       "failures": [],
       "skip_reason": null,
       "detail": null,
@@ -114,6 +86,8 @@
       }
     }
   ],
-  "issues": [],
-  "summary": "结论 fail：3 套件共 1087 用例。红：本次非全绿，详见 suites/issues。"
+  "issues": [
+    "ratchet-down: app cases 771->452 (基线棘轮只增不减，显式接受需 --accept-baseline=<理由>)"
+  ],
+  "summary": "结论 fail：3 套件共 790 用例。红：本次非全绿，详见 suites/issues。"
 }
