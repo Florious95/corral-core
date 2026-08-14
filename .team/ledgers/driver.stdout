@@ -1,0 +1,35 @@
+[02:29:49] 前沿: ['t.oracle']
+[02:29:49] 派 t.oracle → advisor
+[02:29:49]   !! send 失败: l notify when the worker receives it. Do not poll the worker terminal with capture-pane.",
+  "sender": "leader",
+  "stage": null,
+  "status": "queued",
+  "target": "advisor",
+  "verification": null
+}
+
+[02:29:49] t.oracle: 投递失败，停。
+[02:31:30] 前沿: ['t.oracle']
+[02:31:30] 派 t.oracle → advisor
+[02:31:31]   等 msg_d5f761155aa8（事件驱动，非轮询）
+[02:58:47] 前沿: ['t.impl']
+[02:58:47] 派 t.impl → dev-state
+[02:58:47]   投递 msg_909a642c28d8；等 t.impl（事件驱动，非轮询）
+[03:17:17]   判据 A-impl-test: exit=0 期望=0 通过
+[03:17:17]   判据 A-impl-no-glyph-whitelist: exit=0 期望=0 通过
+[03:17:17] t.impl: 判据通过 → succeeded（revision 3）
+[03:17:17] 前沿: ['t.verify']
+[03:17:17] 派 t.verify → control
+[03:17:17]   投递 msg_ea5cce774648；等 t.verify（事件驱动，非轮询）
+[03:19:07]   判据 A-ctl-report: exit=0 期望=0 通过
+[03:19:07] t.verify: 判据通过 → succeeded（revision 4）
+[03:19:07] 前沿为空。
+[03:19:07] == 计划（谁在等什么） ==
+✓ 已完成：
+  ✓ t.archive  (succeeded) — 归档回退 agentstate（058 裁定的强制前置）
+  ✓ t.impl  (succeeded) — 重建状态判定：差分/存在判据，零字形白名单，只留 working/idle
+  ✓ t.keybar  (succeeded) — 键条顺序改为 Esc / Tab / 方向键 / Ctrl-C
+  ✓ t.oracle  (succeeded) — 顾问：产出判据基底摘要 + 根因探针红测（回退后必须命中）
+  ✓ t.verify  (succeeded) — 对照席：零上下文定点变异，验红测真的会红
+  没有任务。
+

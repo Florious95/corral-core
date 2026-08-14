@@ -285,7 +285,8 @@
      "A-impl-test",
      "A-impl-no-glyph-whitelist"
     ]
-   }
+   },
+   "state": "succeeded"
   },
   "t.verify": {
    "title": "对照席：零上下文定点变异，验红测真的会红",
@@ -357,7 +358,8 @@
      "A-ctl-report",
      "A-ctl-verdict"
     ]
-   }
+   },
+   "state": "succeeded"
   },
   "t.keybar": {
    "title": "键条顺序改为 Esc / Tab / 方向键 / Ctrl-C",
@@ -464,6 +466,6 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 2,
- "content_sha256": "sha256:7edc3c9c2e074498e779c46fff250ba8c7d6ab1934361a0bd1cda5a82f346d53"
+ "revision": 4,
+ "content_sha256": "sha256:7ad49b4bbd2ec71867dfc523794cc24f1a2828a5714e24781caae8a66f8a75c8"
 }
