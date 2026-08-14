@@ -111,7 +111,8 @@ def dispatch_text(l, tid):
         "  文档里没有的才 team_orchestrator.send_message(to=\"advisor\", content=..., presentation={\"sink\":\"casefile\",\"class\":\"message\"})。",
         "  只有「任务定义要改」或「判据本身是错的」才直达 leader。",
         "",
-        "收到先回一句「已收到」，然后不要停，同一回合干完。",
+        "收到**不要**向 leader 回「已收到」——那句会默认注入他的屏幕，每个任务漏一次。"
+        "要回就带 presentation={\"sink\":\"casefile\",\"class\":\"progress\"}。然后不要停，同一回合干完。",
     ]
     return "\n".join(lines)
 
