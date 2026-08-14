@@ -66,6 +66,13 @@ type Server struct {
 	trackersMu sync.Mutex
 	trackers   map[*wsConn]struct{}
 
+	// attachPreviews records the most recent AttachPreview (requirement 057)
+	// per ref, keyed by ref, so a later Input.AttachmentPath can look up how
+	// long ago its image was pasted and skip re-pasting + skip (most of) the
+	// settle wait. See attach_preview.go for the record/consume methods.
+	attachPreviewsMu sync.Mutex
+	attachPreviews   map[string]attachPreviewEntry
+
 	// loopCtx/loopStop own the periodic scan goroutine (started by NewServer,
 	// stopped by Close). The goroutine is started exactly once by NewServer, so
 	// no sync.Once guard is needed here (a previously present loopOnce field was
@@ -110,6 +117,7 @@ func NewServer(opts Options) *Server {
 		catalog:        newSessionCatalog(),
 		paneGeoms:      make(map[string]*paneGeometry),
 		trackers:       make(map[*wsConn]struct{}),
+		attachPreviews: make(map[string]attachPreviewEntry),
 	}
 	if s.tokenValidator == nil {
 		s.tokenValidator = staticToken{token: opts.Token}

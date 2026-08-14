@@ -147,7 +147,7 @@ func (p *Pane) Inject(ctx context.Context, text string) error {
 // the same paste call. If text is non-empty it is then typed literally via
 // a second, separate send-keys -l (not bracketed — this follows the
 // already-inlined image rather than being part of its paste). The function
-// then waits pasteSettleDelay before sending the one Enter that commits the
+// then waits PasteSettleDelay before sending the one Enter that commits the
 // whole sequence: Claude Code's paste handling does real async work (decode
 // + resize + re-encode + cache-write to ~/.claude/image-cache) after the
 // bracketed-paste bytes land, and an Enter that arrives before that settles
@@ -155,10 +155,10 @@ func (p *Pane) Inject(ctx context.Context, text string) error {
 // fully pasted and inlined but never submitted. This was found and fixed by
 // running the real product path (real daemon → real WS Input frame →
 // InjectWithAttachment → real `claude` pane) against real images, not
-// synthetic fake paths — see doc comment on pasteSettleDelay.
+// synthetic fake paths — see doc comment on PasteSettleDelay.
 // @contract
 // @pre pane 存在（requirePane 前置检查）；attachmentPath 为空时等价于 Inject(ctx, text)
-// @post attachmentPath 非空：先 paste-buffer -d -p 注入路径（不回车）；text 非空时再单独一次 send-keys -l 注入文字；等 pasteSettleDelay 后发一次 send-keys Enter 提交；text 为空时跳过 send-keys -l 那一步
+// @post attachmentPath 非空：先 paste-buffer -d -p 注入路径（不回车）；text 非空时再单独一次 send-keys -l 注入文字；等 PasteSettleDelay 后发一次 send-keys Enter 提交；text 为空时跳过 send-keys -l 那一步
 // @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
 // @inv attachmentPath 为空时与 Inject 逐字节一致；路径与文字永不共享同一次 paste-buffer
 func (p *Pane) InjectWithAttachment(ctx context.Context, text, attachmentPath string) error {
@@ -168,41 +168,78 @@ func (p *Pane) InjectWithAttachment(ctx context.Context, text, attachmentPath st
 	if err := p.requirePane(ctx); err != nil {
 		return err
 	}
-	text = strings.ReplaceAll(text, "\r", "")
-
 	if err := p.pasteViaBuffer(ctx, attachmentPath); err != nil {
 		return err
 	}
+	return p.finishAfterPaste(ctx, text, PasteSettleDelay)
+}
+
+// InjectAfterPreview commits a message whose image was already pasted ahead
+// of time via PastePreview (requirement 057's two-step flow: paste at
+// upload-success, confirm at send). It does NOT paste anything itself — the
+// `[Image #N]` is already in the pane — it only types text (if non-empty)
+// and sends Enter, waiting out remaining first. remaining is the caller's
+// job to compute (see api.Server's preview bookkeeping): typically 0 when
+// the user spent long enough typing a caption to cover PasteSettleDelay on
+// its own, matching plain Inject's "no added wait" feel; non-zero only for
+// the "picked an image and sent immediately, no typing" edge case.
+// @contract
+// @pre pane 存在（requirePane 前置检查）；调用方已确认该 pane 有一次尚在沉降窗口内、路径匹配的 PastePreview（本函数不重新校验路径，只信调用方算好的 remaining）
+// @post 等 remaining（可为 0）后，text 非空则先 send-keys -l 注入文字，再一次 send-keys Enter 提交
+// @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
+// @inv 不调用 pasteViaBuffer；不追加换行；remaining<=0 时零等待直接提交
+func (p *Pane) InjectAfterPreview(ctx context.Context, text string, remaining time.Duration) error {
+	if err := p.requirePane(ctx); err != nil {
+		return err
+	}
+	return p.finishAfterPaste(ctx, text, remaining)
+}
+
+// PastePreview pastes path alone into the pane (bracketed paste, no Enter,
+// no wait) so Claude Code's own paste-path recognition inlines it as
+// `[Image #N]` and starts its async decode/cache-write immediately —
+// requirement 057's "paste at upload-success" step. Never combine caption
+// text into this call (see requirement 057 clause 2 / doc comment on
+// protocol.AttachPreview): that falls back to Claude Code's slow
+// clipboard-lookup branch and the eventual Enter gets swallowed.
+// @contract
+// @pre pane 存在（requirePane 前置检查）
+// @post path 已 paste-buffer -d -p 注入 pane，不追加 Enter，不等待
+// @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
+// @inv 从不清理 pane 已有内容；path 不与其它内容共享同一次 paste-buffer
+func (p *Pane) PastePreview(ctx context.Context, path string) error {
+	if err := p.requirePane(ctx); err != nil {
+		return err
+	}
+	return p.pasteViaBuffer(ctx, path)
+}
+
+// finishAfterPaste is the shared tail of InjectWithAttachment and
+// InjectAfterPreview: optional literal caption text, then wait, then the one
+// Enter that commits the message. wait is PasteSettleDelay for the
+// full-paste-here-and-now path, or a caller-computed remainder for the
+// preview-already-pasted path — see doc comment on PasteSettleDelay for why
+// this wait exists at all (it is not a UI animation delay; Claude Code does
+// real async decode/cache-write work after a paste lands).
+func (p *Pane) finishAfterPaste(ctx context.Context, text string, wait time.Duration) error {
+	text = strings.ReplaceAll(text, "\r", "")
 	if text != "" {
 		if _, err := runTmux(ctx, p.socket, p.timeout, "send-keys", "-t", p.target, "-l", "--", text); err != nil {
 			return err
 		}
 	}
-	// pasteSettleDelay: Claude Code decodes/resizes/re-encodes the real image
-	// and writes it to ~/.claude/image-cache before its paste handling is
-	// done "settling" — this is genuine async I/O, not just a UI animation,
-	// and an Enter that arrives before it finishes is silently swallowed
-	// (confirmed via the real product path against a real `claude` pane: a
-	// zero-delay Enter after pasting a real, successfully-cached image left
-	// the message stuck in the input box even though `[Image #N]` and the
-	// cache file both appeared — the earlier probe's "zero-delay is safe for
-	// a pure path" finding only held for a *nonexistent* fake path, which
-	// fails the read near-instantly and never enters this async window; it
-	// does not hold for a real image). 2s matches the delay already proven
-	// sufficient for the slower combined-caption+path race in the same
-	// investigation; sending after it reliably submits (verified end-to-end,
-	// including Claude actually describing the real image content in one
-	// shot — no extra Read call).
-	time.Sleep(pasteSettleDelay)
+	if wait > 0 {
+		time.Sleep(wait)
+	}
 	_, err := runTmux(ctx, p.socket, p.timeout, "send-keys", "-t", p.target, "Enter")
 	return err
 }
 
-// pasteSettleDelay is how long InjectWithAttachment waits after pasting the
+// PasteSettleDelay is how long InjectWithAttachment waits after pasting the
 // image path before sending Enter, so Claude Code's own async image
 // decode/cache-write has time to finish (see InjectWithAttachment doc
 // comment for the failure mode this avoids).
-const pasteSettleDelay = 2 * time.Second
+const PasteSettleDelay = 2 * time.Second
 
 // namedKeys maps a wire special-key name (protocol.Key value, R-1 shortcut
 // bar) to the tmux send-keys named key. The closed set is enforced at the

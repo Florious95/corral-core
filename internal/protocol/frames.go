@@ -147,16 +147,29 @@ type Unsubscribe struct {
 // neither present means a bare Enter, matching the pre-Keys behavior.
 //
 // AttachmentPath is an additive optional field (feat-image-upload-inline,
-// requirement 042): the host-absolute path of an image the client already
-// uploaded via POST /upload. When set, the server injects it as a separate
-// bracketed paste ahead of Text — via bridge.Pane.InjectWithAttachment,
-// never combined into the same paste as Text — so Claude Code's own
-// paste-path recognition inlines it as `[Image #N]` instead of leaving a
-// bare path string in the pane. AttachmentPath is empty in the overwhelming
-// common case (plain text messages) and does not change Text's existing
-// semantics; an empty AttachmentPath behaves byte-identically to the
-// pre-existing Text-only path. AttachmentPath and Keys are mutually
-// exclusive, same rule as Text and Keys.
+// requirement 042; two-step preview added by requirement 057): the
+// host-absolute path of an image the client already uploaded via
+// POST /upload. AttachmentPath is empty in the overwhelming common case
+// (plain text messages) and does not change Text's existing semantics; an
+// empty AttachmentPath behaves byte-identically to the pre-existing
+// Text-only path. AttachmentPath and Keys are mutually exclusive, same rule
+// as Text and Keys.
+//
+// Two ways a non-empty AttachmentPath is handled, both ending in the same
+// `[Image #N]` result — which one runs is decided server-side, transparent
+// to the client:
+//   - Preview-confirmed (requirement 057, the common path when the client
+//     already sent AttachPreview for this exact ref+path): the image is
+//     already pasted into the pane. The server waits out whatever remains
+//     of the settle window since that preview (often zero — the user's own
+//     typing time already covered it) and injects only Text + Enter.
+//   - Fallback (AttachmentPath 057, path is empty, stale, or does not match
+//     any recorded preview — including plain old clients that never call
+//     AttachPreview): the server pastes the path itself, as its own
+//     bracketed paste ahead of Text — via bridge.Pane.InjectWithAttachment,
+//     never combined into the same paste as Text — then waits the full
+//     settle window before Enter. This is the original feat-image-upload-inline
+//     behavior, kept as the compatibility path.
 //
 // @contract
 // @pre ReqID >= 1、Ref 非空、(Text 或 AttachmentPath 非空) 与 Keys 至多一类非空、Keys 中每个键都属闭集
@@ -170,9 +183,49 @@ type Input struct {
 	Ref   string `json:"ref"`
 	Text  string `json:"text,omitempty"`
 	Keys  []Key  `json:"keys,omitempty"`
-	// AttachmentPath is the host-absolute path of an uploaded image to inject
-	// ahead of Text as its own bracketed paste (feat-image-upload-inline).
+	// AttachmentPath is the host-absolute path of an uploaded image; see the
+	// two handling modes documented above.
 	AttachmentPath string `json:"attachment_path,omitempty"`
+}
+
+// AttachPreview pastes an image path into a pane ahead of send (C→S;
+// requirement 057, the explicit exception to requirement 003's clause 1):
+// "点加号选择图片之后就应该可以上传到对方主机了...点发送就直接上屏" — the
+// server pastes Path into the pane the moment upload succeeds (Claude Code's
+// own paste-path recognition inlines it as `[Image #N]` and starts decoding
+// it in the background) instead of waiting until send, so the decode time is
+// covered by whatever the user types next instead of adding to send latency.
+//
+// Path must be exactly the image path — never combined with caption text in
+// the same paste (requirement 057 clause 2): mixing text into the pasted
+// buffer falls back to Claude Code's slower clipboard-lookup branch and the
+// following Enter gets silently swallowed (see the fix-image-upload-input-box
+// round-1 postmortem this requirement's clause 2 exists to prevent).
+//
+// Requirement 057 clause 4: attachments accumulate — a pane may carry more
+// than one pasted-but-unsent `[Image #N]` at once (the client sends one
+// AttachPreview per picked image; the server never clears a pane's existing
+// paste before adding another). Requirement 057 clause 3: the server never
+// clears an unconfirmed preview either — if the user never sends, the
+// `[Image #N]` placeholder is left in the pane. This is intentional: the
+// client mirrors the pane, so the placeholder is visible to the user, not a
+// silent leftover; reading the pane's rendered UI to decide whether it is
+// safe to clear would be a new, silently-breakable dependency on Claude
+// Code's own placeholder text format, judged not worth it for a visible
+// (not silent) loose end.
+//
+// No ack on success — the mirror delta stream carries the `[Image #N]`
+// result, same doctrine as ScrollWheel. TypeError on failure (pane gone /
+// tmux unreachable).
+//
+// @contract
+// @pre Ref 非空、Path 非空
+// @post 服务端把 Path 贴进 pane（bracketed paste，不回车）并记下 (Ref, Path, 时间戳)，供后续 Input.AttachmentPath 命中同一 Path 时复用做补差额；成功无 ack，失败发 TypeError
+// @err Validate 对空 Ref、空 Path 返回 ErrInvalidField
+// @inv 从不清理 pane 里已贴的内容（requirement 057 clause 3）；Path 永不与其它内容共享同一次 paste
+type AttachPreview struct {
+	Ref  string `json:"ref"`
+	Path string `json:"path"`
 }
 
 // InputAck is the decidable receipt of an Input (S→C; requirement 003 send-

@@ -64,4 +64,10 @@ const (
 	// a minimal indicator so the user knows their keystrokes go to copy-mode
 	// rather than the shell/TUI.
 	TypePaneModeChanged FrameType = "pane_mode_changed"
+
+	// TypeAttachPreview pastes an image path into a pane ahead of send (C→S;
+	// requirement 057, the explicit exception to requirement 003's clause 1).
+	// No ack on success (the mirror delta stream carries the `[Image #N]`
+	// result); TypeError on failure.
+	TypeAttachPreview FrameType = "attach_preview"
 )

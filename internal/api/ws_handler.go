@@ -177,9 +177,21 @@ func (c *wsConn) handleUnsubscribe(u protocol.Unsubscribe) {
 // an Enter — "press that key once" — unlike the text path's "inject then
 // Enter". (Text or AttachmentPath) and Keys are mutually exclusive; the frame
 // validator (Input.Validate) already rejected a frame carrying both, so at
-// most one branch runs. AttachmentPath (feat-image-upload-inline) routes
-// through bridge.Pane.InjectWithAttachment, which is byte-identical to the
-// plain Inject path when AttachmentPath is empty.
+// most one branch runs.
+//
+// AttachmentPath (feat-image-upload-inline; two-step preview added by
+// requirement 057) routes one of two ways, chosen here by consumeAttachPreview:
+//   - a matching AttachPreview was recorded for this ref+path ⇒
+//     bridge.Pane.InjectAfterPreview, which does NOT re-paste (already done at
+//     upload time) and only waits out whatever remains of
+//     bridge.PasteSettleDelay since that preview — typically zero, once the
+//     user's own typing covered it (requirement 057 clause 5: normal path is
+//     zero wait, not "a little wait").
+//   - no match (empty path, stale preview, or a client that never called
+//     AttachPreview) ⇒ bridge.Pane.InjectWithAttachment, the original
+//     paste-here-and-now-then-wait-the-full-delay path — the compatibility
+//     fallback requirement 057 keeps rather than dropping. Byte-identical to
+//     plain Inject when AttachmentPath is empty.
 func (c *wsConn) handleInput(i protocol.Input) {
 	ack := func(ok bool, reason protocol.InputFailReason) {
 		c.send(&protocol.InputAck{ReqID: i.ReqID, OK: ok, Reason: reason})
@@ -236,7 +248,13 @@ func (c *wsConn) handleInput(i protocol.Input) {
 		ack(false, protocol.InputFailTooLarge)
 		return
 	}
-	if err := br.InjectWithAttachment(c.ctx, i.Text, i.AttachmentPath); err != nil {
+	var err error
+	if elapsed, ok := c.s.consumeAttachPreview(i.Ref, i.AttachmentPath); i.AttachmentPath != "" && ok {
+		err = br.InjectAfterPreview(c.ctx, i.Text, remainingSettleDelay(elapsed))
+	} else {
+		err = br.InjectWithAttachment(c.ctx, i.Text, i.AttachmentPath)
+	}
+	if err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			ack(false, protocol.InputFailSessionNotFound)
 		} else {
@@ -247,6 +265,35 @@ func (c *wsConn) handleInput(i protocol.Input) {
 		return
 	}
 	ack(true, "")
+}
+
+// handleAttachPreview pastes an image path into a pane ahead of send
+// (requirement 057): the moment upload succeeds, not at send time, so Claude
+// Code's async decode/cache-write runs in the background while the user
+// keeps typing. No ack on success (the mirror delta stream carries the
+// `[Image #N]` result, same doctrine as ScrollWheel); TypeError on failure.
+// Never clears anything already in the pane (requirement 057 clause 3): an
+// unconfirmed preview is left visible, not silently wiped.
+func (c *wsConn) handleAttachPreview(m protocol.AttachPreview) {
+	if !c.subscribed(m.Ref) {
+		c.sendError(protocol.ErrCodeSessionNotFound, "not subscribed to session")
+		return
+	}
+	c.s.ensureInitialScan(c.ctx)
+	br, ok := c.resolveBridge(m.Ref)
+	if !ok {
+		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
+		return
+	}
+	if err := br.PastePreview(c.ctx, m.Path); err != nil {
+		if errors.Is(err, bridge.ErrPaneNotFound) {
+			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		} else {
+			c.sendError(protocol.ErrCodeInternal, "attach preview failed")
+		}
+		return
+	}
+	c.s.recordAttachPreview(m.Ref, m.Path)
 }
 
 // handleScrollWheel delivers one scroll-wheel gesture to a remote pane

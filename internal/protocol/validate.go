@@ -20,6 +20,7 @@ func (Resize) FrameType() FrameType          { return TypeResize }
 func (ErrorFrame) FrameType() FrameType      { return TypeError }
 func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
 func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
+func (AttachPreview) FrameType() FrameType   { return TypeAttachPreview }
 
 // requireState returns ErrInvalidState unless s is one of the five closed
 // AgentState values.
@@ -182,6 +183,18 @@ func (i Input) Validate() error {
 		if !k.IsValid() {
 			return fmt.Errorf("%w: unknown input key %q", ErrInvalidField, k)
 		}
+	}
+	return nil
+}
+
+// Validate reports whether the attach_preview frame is well-formed: a
+// non-empty ref and a non-empty path.
+func (p AttachPreview) Validate() error {
+	if p.Ref == "" {
+		return fmt.Errorf("%w: attach_preview ref must be non-empty", ErrInvalidField)
+	}
+	if p.Path == "" {
+		return fmt.Errorf("%w: attach_preview path must be non-empty", ErrInvalidField)
 	}
 	return nil
 }

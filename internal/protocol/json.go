@@ -105,6 +105,8 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[ErrorFrame](env)
 	case TypeScrollWheel:
 		return decodeTyped[ScrollWheel](env)
+	case TypeAttachPreview:
+		return decodeTyped[AttachPreview](env)
 	// TypePaneModeChanged is S→C only; a client sending it is a protocol error.
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, env.Type)

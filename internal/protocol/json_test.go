@@ -238,6 +238,56 @@ func TestScrollWheelValidate(t *testing.T) {
 	}
 }
 
+// TestAttachPreviewRoundTrip verifies requirement 057's new C→S frame
+// encodes/decodes byte-for-byte.
+func TestAttachPreviewRoundTrip(t *testing.T) {
+	cases := []protocol.AttachPreview{
+		{Ref: "s1", Path: "/host/img.png"},
+		{Ref: "s2", Path: "/host/uploads/photo.jpg"},
+	}
+	for _, ap := range cases {
+		got := roundTrip(t, ap)
+		if !reflect.DeepEqual(got, ap) {
+			t.Errorf("AttachPreview round trip mismatch:\n got %#v\nwant %#v", got, ap)
+		}
+	}
+}
+
+// TestAttachPreviewValidate verifies that invalid AttachPreview frames are
+// rejected: empty ref, empty path.
+func TestAttachPreviewValidate(t *testing.T) {
+	cases := []struct {
+		name string
+		ap   protocol.AttachPreview
+	}{
+		{"empty ref", protocol.AttachPreview{Path: "/host/img.png"}},
+		{"empty path", protocol.AttachPreview{Ref: "s1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.ap.Validate(); !errors.Is(err, protocol.ErrInvalidField) {
+				t.Errorf("Validate() = %v, want ErrInvalidField", err)
+			}
+		})
+	}
+}
+
+// TestInputWithAttachmentPathValidatesLikeText verifies AttachmentPath alone
+// (no Text) is legal, and AttachmentPath together with Keys is rejected the
+// same way Text+Keys already was (requirement 057 extends the existing
+// mutual-exclusivity rule to the new field).
+func TestInputWithAttachmentPathValidatesLikeText(t *testing.T) {
+	// AttachmentPath alone: legal.
+	if err := (protocol.Input{ReqID: 1, Ref: "s1", AttachmentPath: "/host/img.png"}).Validate(); err != nil {
+		t.Errorf("Input with only AttachmentPath should validate, got %v", err)
+	}
+	// AttachmentPath + Keys: rejected, same rule as Text + Keys.
+	bad := protocol.Input{ReqID: 1, Ref: "s1", AttachmentPath: "/host/img.png", Keys: []protocol.Key{protocol.KeyEsc}}
+	if err := bad.Validate(); !errors.Is(err, protocol.ErrInvalidField) {
+		t.Errorf("Input with AttachmentPath+Keys should reject, got %v", err)
+	}
+}
+
 // TestPaneModeChangedIsServerToClientOnly verifies that a client cannot send
 // pane_mode_changed (it is S→C only and must be rejected as an unknown type
 // from the C→S decoder path).

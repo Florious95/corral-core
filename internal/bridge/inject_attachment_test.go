@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeTmuxAttachScript writes a fake tmux that answers list-panes
@@ -245,5 +246,140 @@ func TestInjectWithAttachmentDeadPaneFails(t *testing.T) {
 
 	if err := p.InjectWithAttachment(context.Background(), "x", "/fake/path.png"); !isErrPaneNotFound(err) {
 		t.Fatalf("InjectWithAttachment on dead pane: want ErrPaneNotFound, got %v", err)
+	}
+}
+
+// --- requirement 057: two-step preview (PastePreview / InjectAfterPreview) ---
+
+// TestPastePreviewArgvOnlyPastesNoSendKeys pins PastePreview to exactly
+// load-buffer + paste-buffer -d -p — no send-keys call at all (no Enter, no
+// text): it is purely the "paste ahead of send" half of requirement 057.
+func TestPastePreviewArgvOnlyPastesNoSendKeys(t *testing.T) {
+	script, argvLog, stdinLog := fakeTmuxAttachScript(t)
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", argvLog)
+	t.Setenv("STDIN_LOG", stdinLog)
+
+	p := NewPane("/sock/x", "%0")
+	if err := p.PastePreview(context.Background(), "/host/preview.png"); err != nil {
+		t.Fatalf("PastePreview: %v", err)
+	}
+
+	got := readLoggedArgv(t, argvLog)
+	want := []string{
+		"load-buffer -b <buf> -",
+		"paste-buffer -b <buf> -t %0 -d -p",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("tmux calls = %q, want %q (no send-keys at all)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("call %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+	content, err := os.ReadFile(stdinLog)
+	if err != nil {
+		t.Fatalf("read stdin log: %v", err)
+	}
+	if string(content) != "/host/preview.png" {
+		t.Errorf("pasted buffer = %q, want exactly the path", content)
+	}
+}
+
+// TestInjectAfterPreviewNeverPastes is the mechanism-level proof that the
+// preview-confirmed send path (requirement 057) never re-pastes: not
+// load-buffer, not paste-buffer, regardless of remaining wait or caption
+// text. This is the direct counterpart to the API-layer functional test
+// (TestInputWithMatchingPreviewSkipsRepaste in attach_preview_api_test.go),
+// which deliberately does not try to prove this by counting occurrences in a
+// `cat` pane — `cat`'s own cooked-mode echo doubles any completed line on
+// its own, making occurrence-counting an unreliable proxy for "did a paste
+// happen". This test proves it directly at the tmux-argv level instead.
+func TestInjectAfterPreviewNeverPastes(t *testing.T) {
+	script, argvLog, stdinLog := fakeTmuxAttachScript(t)
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", argvLog)
+	t.Setenv("STDIN_LOG", stdinLog)
+
+	p := NewPane("/sock/x", "%0")
+	if err := p.InjectAfterPreview(context.Background(), "already previewed caption", 0); err != nil {
+		t.Fatalf("InjectAfterPreview: %v", err)
+	}
+
+	got := readLoggedArgv(t, argvLog)
+	want := []string{
+		"send-keys -t %0 -l -- already previewed caption",
+		"send-keys -t %0 Enter",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("tmux calls = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("call %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+	for _, line := range got {
+		if strings.Contains(line, "load-buffer") || strings.Contains(line, "paste-buffer") {
+			t.Errorf("InjectAfterPreview must never paste, got %q", line)
+		}
+	}
+}
+
+// TestInjectAfterPreviewZeroRemainingIsNearInstant and
+// TestInjectAfterPreviewWaitsExactRemaining prove the remainder-wait math is
+// wired through to a real time.Sleep — not silently ignored, and not
+// silently replaced by the full delay every time (leader's second required
+// mutation direction: "补差额改成无条件睡满").
+func TestInjectAfterPreviewZeroRemainingIsNearInstant(t *testing.T) {
+	script, argvLog, stdinLog := fakeTmuxAttachScript(t)
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", argvLog)
+	t.Setenv("STDIN_LOG", stdinLog)
+
+	p := NewPane("/sock/x", "%0")
+	start := time.Now()
+	if err := p.InjectAfterPreview(context.Background(), "x", 0); err != nil {
+		t.Fatalf("InjectAfterPreview: %v", err)
+	}
+	// Generous slack (subprocess spawn overhead for two fake-tmux calls, not
+	// the wait itself) — the assertion only needs to rule out "silently
+	// waited the full 2s PasteSettleDelay" (leader's second mutation
+	// direction), not pin sub-second precision.
+	if elapsed := time.Since(start); elapsed > PasteSettleDelay/2 {
+		t.Errorf("InjectAfterPreview with remaining=0 took %v, want well under half of PasteSettleDelay (%v)", elapsed, PasteSettleDelay)
+	}
+}
+
+func TestInjectAfterPreviewWaitsExactRemaining(t *testing.T) {
+	script, argvLog, stdinLog := fakeTmuxAttachScript(t)
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", argvLog)
+	t.Setenv("STDIN_LOG", stdinLog)
+
+	p := NewPane("/sock/x", "%0")
+	const wait = 400 * time.Millisecond
+	start := time.Now()
+	if err := p.InjectAfterPreview(context.Background(), "x", wait); err != nil {
+		t.Fatalf("InjectAfterPreview: %v", err)
+	}
+	elapsed := time.Since(start)
+	if elapsed < wait {
+		t.Errorf("InjectAfterPreview with remaining=%v took only %v, want >= %v", wait, elapsed, wait)
+	}
+	// Slack is generous (subprocess spawn overhead for the fake-tmux calls,
+	// not the wait itself) — the assertion only needs to rule out "silently
+	// upgraded to the full 2s PasteSettleDelay", not pin exact timing.
+	if elapsed > PasteSettleDelay {
+		t.Errorf("InjectAfterPreview with remaining=%v took %v, want well under the full %v PasteSettleDelay", wait, elapsed, PasteSettleDelay)
 	}
 }
