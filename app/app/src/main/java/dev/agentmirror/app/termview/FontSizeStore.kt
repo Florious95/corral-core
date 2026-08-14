@@ -50,8 +50,11 @@ class SharedPreferencesFontSizeStore(context: Context) : FontSizeStore {
         private const val PREFS_NAME = "term_font_size"
         private const val KEY_FONT_SIZE_SP = "font_size_sp"
 
-        /** Settings 页可选预设字号（sp）。 */
-        val PRESET_SIZES_SP: List<Int> = listOf(12, 14, 16, 18, 20)
+        /**
+         * Settings 页可选预设字号（sp）——fix-font-size-scale-unit：用户裁定不改 sp→物理像素
+         * 映射，只向下扩展档位（4/6/8/10），原 12/14/16/18/20 保留。
+         */
+        val PRESET_SIZES_SP: List<Int> = listOf(4, 6, 8, 10, 12, 14, 16, 18, 20)
 
         /** 从未设置过时的默认字号（sp）。 */
         const val DEFAULT_FONT_SIZE_SP = 14

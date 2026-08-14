@@ -20,6 +20,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -146,9 +147,10 @@ internal fun SettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         SharedPreferencesFontSizeStore.PRESET_SIZES_SP.forEach { sp ->
                             val selected = sp == fontSizeSp
@@ -169,8 +171,7 @@ internal fun SettingsScreen(
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     },
                                 ),
-                                contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm),
-                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                             ) {
                                 Text("$sp", maxLines = 1, softWrap = false)
                             }
