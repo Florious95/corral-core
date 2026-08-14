@@ -2376,3 +2376,225 @@ tasks:
     write_scope: ["app/app/src/main/java/dev/agentmirror/app/diag/", "app/app/src/main/java/dev/agentmirror/app/ui/", "app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
     evidence: ".team/evidence/feat-diagnostic-log-export.json"
     contention: none
+
+  - id: fix-cellheight-writeback
+    title: "cellHeight 从不回写测量值：rows 上报偏大，底部内容被画到画布外（缺陷② 的纵轴镜像）"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 由 w-scroll-dev 在④ 只读调研中发现，非用户报障"
+    context: |
+      **和缺陷②（fix-cols-grid-convergence）是同一个 bug 的另一个轴。**
+      ② 修的是：measureCells() 实测 cellWidth 后回写给 presenter（setMeasuredCellWidth），
+      使上报的 cols 与画布实际能容纳的列数一致。
+      **cellHeight 那条回写通路从来没做过：**
+        TermViewPresenter.kt:339  rows = viewportHeightPx / cellHeight  ← cellHeight 恒为
+                                  DEFAULT_CELL_HEIGHT=20（只有捏合缩放会改它）
+        TermSurfaceView.kt:428    cellH = descent - ascent              ← 真实值只存 View 私有字段
+        TermSurfaceView.kt:262    rowY = (logical - win.first) * cellH  ← 画字用真实值
+      于是「报给服务端有多少行」用偏小的 nominal 高度算（rows 偏大），
+      而「画布上每行占多高」用真实高度 ⇒ 最下面几行被画到画布下缘之外。
+      预测体感：底部内容/输入区被吃掉一截，或最新几行要手动下滚才看得到。
+      **④ 依赖此项**：TermSurfaceView.onScroll 的 lineHeightPx = presenter.cellHeight，
+      行高被低估 ⇒ 同样像素位移被算成更多行 ⇒ deltaLines 量级偏大（符号已在第 9 轮修对，量未必准）。
+      **未闭合的取证**：真实字形高度与 20px 差多少，至今没有数字。
+      Robolectric LEGACY 图形对 fontMetrics 返回全 0，JVM 上量不出来，
+      需模拟器/真机实测或切 NATIVE 图形模式。不许用推断的数字代替。
+
+      **2026-08-14 用户答复：从未遇到过底部内容显示不全、或最新几行要手动下滚才可见。**
+      这条负面观测把本任务降档，并给出一个更可能的解释：
+      nominal 20px 很可能当初就是照着 textSize=20×0.85=17px 等宽字体的
+      descent-ascent（典型 20~21px）定的，本来就接近准确 ⇒ 误差接近零 ⇒ 从不表现。
+      而② 的宽度轴差 10%（10 vs 11），是因为等宽字体字符步进宽度约为 em 的 0.6 倍，
+      那 1px 被 126 列放大成 12 列的偏差，所以肉眼可见。
+      **结论：回写通路缺失是真的（结构性缺陷），但实际影响可能为零。**
+      **因此本任务的第一步不是修，是量**——量出来若差 ≤1px 就只补注释说明
+      「nominal 与实测同量级，回写通路刻意未做」，不动代码；差得多才修。
+      禁止在没有那个数字之前动手改代码。
+    acceptance:
+      - "先量后改：拿到真实测量 cellHeight 与 nominal 20px 的实际差值（模拟器/真机实证，禁止推断）"
+      - "红测：给定 viewportHeightPx 与真实字高，断言上报的 rows 与画布实际能完整容纳的行数一致（先红后绿）"
+      - "红测：不倒退——缺陷② 的 cellWidth 回写与 cols 收敛行为不受影响"
+      - "眼见为实：模拟器上截图证明底部行完整、不再被画布下缘裁切；改前必须先复现裁切"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
+    deps: ["fix-cols-grid-convergence"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-cellheight-writeback.json"
+
+  - id: fix-local-scroll-degrade-sign
+    title: "断线降级时上滑完全无效：presenter 与手势层符号约定相反"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 由 w-scroll-dev 在④ 第10轮写不倒退测试时实测发现，非用户报障"
+    context: |
+      连接非 READY 时，SessionViewModel.onScrollWheel 走本地降级路径
+      `presenter.onScrollBy(deltaLines)`。但两侧符号约定相反：
+        - TermSurfaceView.onScroll 产出的是【协议原生符号】：上滑为负
+        - presenter.onScrollBy 要求【正值＝看更早历史】
+      于是上滑传入负值 → 被 coerceIn 夹回跟随底部 → topLine 保持 null ⇒ **完全无效**。
+      已由 TermSurfaceRemoteScrollSignTest 的不倒退用例实锤（用 300 行 scrollback
+      排除「没历史可锁」的干扰项，证明是符号被夹住而非无内容）。
+      **用户影响**：断线/重连中途上滑，画面一动不动，而这恰恰是最想翻看上文的时刻。
+      注：第 9 轮修的是【远端路径】符号（已修好并经模拟器实证），本条是【本地降级路径】，
+      两者独立。第 9 轮 KDoc 里已写明「presenter 符号约定相反、本轮不修」，现在有断言了。
+    acceptance:
+      - "红测：非 READY 状态上滑，断言 presenter 视口真的向更早历史移动（先红后绿）"
+      - "红测：不倒退——第 9 轮的远端路径符号（上滑发负 delta / 下滑发正 delta）不受影响"
+      - "红测：不倒退——第 10 轮的像素守恒断言不受影响"
+      - "眼见为实：模拟器上断开连接后上滑，截图证明画面真的滚动；改前必须先复现无效"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: ["feat-remote-scroll-forward"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-local-scroll-degrade-sign.json"
+
+  - id: investigate-short-swipe-deadzone
+    title: "短距离上滑死区未解释：150px 以下 0 帧，而 touch slop 只有 20px"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 w-scroll-qa 在④ 第10轮复测中发现并自证；假设已被自己的测量推翻"
+    context: |
+      模拟器实测（adb input swipe 合成事件，时长统一 3000ms）：
+        700px → 34 帧，正常     300px → 15 帧，正常
+        150px → 0 帧            130 / 100 / 50px → 全部 0 帧
+      断点在 150~300px 之间。
+      **最初假设（Android touch slop 地板）已被测量推翻**：
+      `adb shell dumpsys input` 读出 TapSlop = 20.0px；`wm density` = 480（3.0x），
+      AOSP 默认 8dp×3 = 24px，两个独立读数互证同一量级。
+      20px 解释不了 150~300px 的死区，差 7~15 倍。
+      第 10 轮新加的 pendingScrollPx 是 Float，数学上不丢亚像素；
+      且实测是 onScroll **压根没被调用**，不是 deltaLines 算成 0 —— 问题在手势识别之前那一关。
+
+      **关键存疑：这个死区可能只存在于合成事件下。**
+      `adb input swipe` 生成的 MotionEvent 采样密度与真手指完全不同，
+      而真正的被测对象是一根手指。本工程 2026-08-14 已四次栽在
+      「测了替身而不是真正的被测对象」（capture-pane 替 pipe-pane、自建 client 替工厂、
+      注协议帧替手势层、Int.MIN_VALUE 骗过 `<0` 断言），这是第五个候选替身，
+      只是这次替身是测试手段本身。
+      **因此下一步不是继续在模拟器上做实验，是先拿到真手指的结果。**
+    acceptance:
+      - "先取真机数据：用户在真机上做一次很轻很短（1~2cm）的上滑，报告动没动"
+      - "真机上不复现 ⇒ 判定为合成事件伪影，关闭本项并在④ 证据里注明模拟器该量级不可信"
+      - "真机上复现 ⇒ 才继续查；届时禁止再用 adb input swipe 作判据，须用真实触摸录制回放"
+      - "禁止在没有真机结果之前改代码"
+    deps: ["feat-remote-scroll-forward"]
+    write_scope: ["e2e/", "docs/"]
+    evidence: ".team/evidence/investigate-short-swipe-deadzone.json"
+
+  - id: fix-cols-cjk-doublewidth
+    title: "② 复发：中文双宽字符行最右列仍被切掉半个字（2026-08-14 用户实测）"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 用户自证：「可能是我之前看错了，边缘在屏幕外的问题依然存在」，附截图，末字「条」右半被切"
+    context: |
+      用户 2026-08-14 上午曾报② 已 OK，当日下午自行更正：问题仍在。
+      截图特征：**整屏是中文（双宽字符）**，行末「条」贴在右边缘、右半被切，
+      下一行从「)」开始。
+      与已闭合的 `fix-cols-grid-convergence` 的关系存疑，两种可能，**禁止先入为主**：
+        a. ② 的修复（measureCells 回写 cellWidth）本身回退了或盖不住此场景
+        b. 这是【另一个缺陷】：② 修的是等宽拉丁的单元宽，而 CJK 占两格，
+           若双宽步进不是恰好 2×cellWidth，误差沿整行累积，末格被挤出画布
+      GlyphRunBuilder.kt:101 已有「双宽码点用两个 ASCII '?' 占两格」的处理，
+      说明双宽在渲染层是被显式对待的——那条路径是否与 cols 计算一致，未查。
+
+      **取证工具已就位但可能不够**：DiagLog 的 grid 记录（TermViewPresenter.kt:377）已含
+        viewport_width_px / cell_width_nominal / cell_width_measured /
+        reported_cols / canvas_capacity_cols / overflow_px / half_cell_px
+      **但它是按等宽拉丁 cellWidth 算的。** 若真因在 CJK 双宽步进，
+      overflow_px 可能显示 0 而屏幕仍在切字。
+      **届时「日志说没事而屏幕在切字」本身就是结论**——说明仪表没覆盖出问题的场景，
+      要先补仪表再谈修复（纪律⑨：新仪表必须先证明它测的是你以为的东西）。
+    acceptance:
+      - "先取数：用户粘一行 grid 记录（等 feat-diag-inapp-view 落地后即可十秒取得）"
+      - "分野：overflow_px > 0 ⇒ 走 a 路线（cellWidth 回写失效）；overflow_px == 0 而屏幕仍切 ⇒ 走 b 路线（仪表未覆盖 CJK，先补仪表）"
+      - "红测：给定一行纯 CJK 内容，断言末列字形右缘不超出画布宽度（先红后绿）"
+      - "红测：不倒退——等宽拉丁场景的 cols 收敛行为不变"
+      - "眼见为实：模拟器上用【纯中文内容】复现切字并截图，改后同样内容不再切"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: ["fix-cols-grid-convergence", "feat-diag-inapp-view"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-cols-cjk-doublewidth.json"
+
+  - id: fix-mainactivity-store-injectable
+    title: "可测试性缺陷：MainActivity 硬编码 Keystore store，冷启动读配置这一环 JVM 上验不了"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 w-tsnet-dev 写⑤ 的 T4 冷启动红测时撞上，如实上报而非绕过"
+    context: |
+      用户症状链：配对存 key → **MainActivity 从 store 读回** → PersistentConnection 见非空 key
+      → ensureStarted → tsnet 起网 → 能连上。
+      两端都已有断言：
+        - 落盘侧 `saveThenLoad_roundTripsTsAuthKey`：store 能持久化并读回 tsAuthKey
+        - 装配侧 `ColdStartReconnectTest.coldStart_persistedTsAuthKey_triggersTsnetStart`：
+          给定含 key 的配置，冷启动装配确实拉起 tsnet
+      **中间那一环没有断言**：`MainActivity:87` 硬编码真实 `SharedPreferencesPairingConfigStore`
+      （Android Keystore cipher），而 Robolectric 不提供 AndroidKeyStore provider，无法注入假 cipher。
+      当前风险评估为低——该环与 ws url / token 的读取共用同一条代码路径，而那条路径
+      在真机上反复被证明有效（App 冷启动能带着已存配置连上 LAN 地址）。
+      **但它确实是用户症状链上唯一没有断言的一环**，不许因为"应该没问题"而永久搁置。
+    acceptance:
+      - "让 MainActivity 的 configStore 可注入（构造参数 / 工厂 / 内部可见的 seam 均可，选最小改动）"
+      - "红测：注入假 store（含 tsAuthKey）走冷启动完整链路，断言 ensureStarted 被调用——补上中间那一环"
+      - "红测：不倒退——真实 Keystore 路径在真机/instrumented 上仍正常（不许为了可测试性把加密存储换掉）"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: ["fix-tsnet-resume-reconnect"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/MainActivity.kt", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-mainactivity-store-injectable.json"
+
+  - id: feat-font-size-setting-drop-pinch
+    title: "移除捏合缩放，改为设置页字号选择；字号→单元尺寸走实测度量，进入前定尺寸"
+    status: todo
+    owner: null
+    contention: contract
+    origin: "2026-08-14 用户裁定（架构决策，非缺陷单）"
+    context: |
+      **用户原话**：「移除捏合相关代码，并行在设置加字体大小设置，字体大小和尺寸相关联，
+      此后不再捏合调整……直接改字体大小，背后直接和尺寸关联，进入直接以对应尺寸加载，
+      根本上避免上面问题」。
+
+      **捏合关联的三个从未修好的问题**（用户列举）：
+        1. 捏合后闪烁，且延迟明显
+        2. 边缘在屏幕外（＝缺陷②）
+        3. 捏合后大小未延续（不持久化）
+
+      **用户的关键现场证据**：「我进入对话，这个问题是没有的」——
+      ② 在进入会话时【不出现】，只在捏合之后出现。
+      ⇒ 初始计算是对的，**坏的是重算路径**。leader 最初判断"删捏合不会自动修好②"，
+      被这条证据推翻，已收回。
+
+      **代码层的对应（已核实）**：
+        TermViewPresenter.onFontSizeChanged(L275)  捏合路径：cellWidth = 名义值 → recomputeGeometry() → 按名义值上报 cols
+        TermViewPresenter.setMeasuredCellWidth(L313) 实测回写：下一帧测得实测值 → 不同则再上报一次
+        注释原文：「真机收敛序列 seed 名义 10 → 回写实测 11 → 停」
+      ⇒ **每次几何变化都先向服务端上报一个错的列数再纠正。**
+      进入会话时这次收敛发生在画面出现之前，所以用户看不到；捏合时发生在眼前，所以看得到。
+
+      **另一个被本任务顺带拆掉的结构**（今日发现）：
+        TermViewPresenter.kt:294 注释：「否则 cellH→textSize→cellH 反馈环」
+        textSize = cellHeight × 0.85，而 cellHeight = descent - ascent
+        ⇒ 回写 cellHeight 会成环，所以它被钉死在 DEFAULT_CELL_HEIGHT=20，从不实测。
+      本方案把字号变成【用户选定的独立输入】，textSize 不再由 cellHeight 推导 ⇒ 环断开 ⇒
+      cellWidth 与 cellHeight 都能用实测值。这使 `fix-cellheight-writeback` 一并消解。
+    hard_requirements:
+      - "字号 → 单元尺寸【必须走实测字形度量】（measureText / fontMetrics），禁止查表配常量——否则② 会在固定字号下原样活下来"
+      - "禁止保留「先用名义值播种、再靠实测回写收敛」的模式：几何只算一次，且算的时候就用实测值，不许先上报一个错的 cols 再纠正"
+      - "字号必须持久化（用户列举的问题 3：捏合后大小未延续）"
+      - "进入会话前尺寸即已确定，首帧就是最终尺寸（用户列举的问题 1：闪烁与延迟的根治方式）"
+    acceptance:
+      - "红测：给定字号，断言上报的 cols 与画布实际能完整容纳的列数一致（先红后绿）"
+      - "红测：全流程只上报一次 resize，不存在「名义值 → 实测值」两次上报（钉死播种-收敛模式已消失）"
+      - "红测：字号变更后重启 App，断言仍是所选字号（持久化）"
+      - "红测：纯 CJK 双宽内容下末列字形右缘不超出画布宽度（吸收 fix-cols-cjk-doublewidth）"
+      - "红测：cellHeight 使用实测值而非 DEFAULT_CELL_HEIGHT（吸收 fix-cellheight-writeback）"
+      - "眼见为实：模拟器上切换字号，截图证明无闪烁、首帧即最终尺寸、右列完整；改前需先复现捏合后的切字与闪烁作对照"
+      - "不倒退：删除捏合后，既有 TermSurfacePinchGestureTest 等测试需一并清理，但终端渲染/输入/重连基本功能全绿"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
+    supersedes: ["fix-cellheight-writeback", "fix-cols-cjk-doublewidth"]
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-font-size-setting-drop-pinch.json"
