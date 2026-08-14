@@ -333,30 +333,9 @@ private fun TopBar(
     }
 }
 
-/** 底部输入条：附件轻量指示（若有）+ 加号（附件） + 草稿框（圆角胶囊） + 发送。 */
+/** 底部输入条：加号（附件） + 草稿框（圆角胶囊） + 发送。 */
 @Composable
 private fun InputBar(
-    viewModel: SessionViewModel,
-    onPickImage: () -> Unit,
-    onTakePhoto: () -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // 需求 042：路径不进输入框文本，改用这条轻量指示——发送前用户能看到"带了图"，
-        // 但看不到、也不用手删主机绝对路径。
-        if (viewModel.pendingAttachmentPath != null) {
-            Text(
-                text = "已附加 1 张图",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Spacing.sm + 40.dp, vertical = 2.dp),
-            )
-        }
-        InputBarRow(viewModel, onPickImage, onTakePhoto)
-    }
-}
-
-@Composable
-private fun InputBarRow(
     viewModel: SessionViewModel,
     onPickImage: () -> Unit,
     onTakePhoto: () -> Unit,
@@ -521,7 +500,7 @@ private fun StatusArea(viewModel: SessionViewModel) {
         InputStatus.Idle -> null
     } ?: when (val u = viewModel.uploadStatus) {
         is UploadStatus.Uploading -> "上传中…"
-        is UploadStatus.Success -> "已附加图片"
+        is UploadStatus.Success -> "已注入 ${u.path}"
         is UploadStatus.Failed -> u.message
         UploadStatus.Idle -> null
     } ?: viewModel.transientError

@@ -1,0 +1,192 @@
+diff --git a/server/internal/api/ws_handler.go b/server/internal/api/ws_handler.go
+index 5ee4edd52..b9024f741 100644
+--- a/server/internal/api/ws_handler.go
++++ b/server/internal/api/ws_handler.go
+@@ -167,15 +167,19 @@ func (c *wsConn) handleUnsubscribe(u protocol.Unsubscribe) {
+ 	c.subscribeCancel(u.Ref)
+ }
+ 
+-// handleInput injects one whole text line OR a set of named special keys, and
+-// MUST answer with input_ack (requirement 003 send-must-arrive): ok:true once
+-// the input entered the pane, or a machine-readable failure reason. Every
+-// failure class in §7.3 is decidable and surfaced.
++// handleInput injects one whole text line (optionally with an image
++// attachment) OR a set of named special keys, and MUST answer with input_ack
++// (requirement 003 send-must-arrive): ok:true once the input entered the
++// pane, or a machine-readable failure reason. Every failure class in §7.3 is
++// decidable and surfaced.
+ //
+ // The Keys path (R-1 shortcut bar, requirement 017) sends named keys without
+ // an Enter — "press that key once" — unlike the text path's "inject then
+-// Enter". Text and Keys are mutually exclusive; the frame validator (Input.
+-// Validate) already rejected a frame carrying both, so at most one branch runs.
++// Enter". (Text or AttachmentPath) and Keys are mutually exclusive; the frame
++// validator (Input.Validate) already rejected a frame carrying both, so at
++// most one branch runs. AttachmentPath (feat-image-upload-inline) routes
++// through bridge.Pane.InjectWithAttachment, which is byte-identical to the
++// plain Inject path when AttachmentPath is empty.
+ func (c *wsConn) handleInput(i protocol.Input) {
+ 	ack := func(ok bool, reason protocol.InputFailReason) {
+ 		c.send(&protocol.InputAck{ReqID: i.ReqID, OK: ok, Reason: reason})
+@@ -232,7 +236,7 @@ func (c *wsConn) handleInput(i protocol.Input) {
+ 		ack(false, protocol.InputFailTooLarge)
+ 		return
+ 	}
+-	if err := br.Inject(c.ctx, i.Text); err != nil {
++	if err := br.InjectWithAttachment(c.ctx, i.Text, i.AttachmentPath); err != nil {
+ 		if errors.Is(err, bridge.ErrPaneNotFound) {
+ 			ack(false, protocol.InputFailSessionNotFound)
+ 		} else {
+diff --git a/server/internal/bridge/bridge.go b/server/internal/bridge/bridge.go
+index 0035311e6..3fbb26d6a 100644
+--- a/server/internal/bridge/bridge.go
++++ b/server/internal/bridge/bridge.go
+@@ -121,7 +121,7 @@ func (p *Pane) Inject(ctx context.Context, text string) error {
+ 
+ 	var err error
+ 	if strings.Contains(text, "\n") {
+-		err = p.pasteMultiline(ctx, text)
++		err = p.pasteViaBuffer(ctx, text)
+ 	} else {
+ 		_, err = runTmux(ctx, p.socket, p.timeout, "send-keys", "-t", p.target, "-l", "--", text)
+ 	}
+@@ -133,6 +133,50 @@ func (p *Pane) Inject(ctx context.Context, text string) error {
+ 	return err
+ }
+ 
++// InjectWithAttachment sends a message that combines an image path with
++// optional caption text (feat-image-upload-inline). attachmentPath == "" is
++// byte-identical to calling Inject(ctx, text) directly — this delegates to it
++// unchanged, so the no-attachment path is untouched by this feature.
++//
++// With attachmentPath set: the path alone is pasted via pasteViaBuffer
++// (load-buffer + paste-buffer -d -p, bracketed paste, no Enter) so Claude
++// Code's own paste-path recognition inlines it as `[Image #N]`. That
++// recognition requires the pasted buffer to be exactly the path (Claude
++// Code trims and checks the whole buffer ends in a known image extension —
++// feat-image-upload-inline probe), so caption text is NEVER combined into
++// the same paste call. If text is non-empty it is then typed literally via
++// a second, separate send-keys -l (not bracketed — this follows the
++// already-inlined image rather than being part of its paste). Exactly one
++// Enter commits the whole sequence at the end, matching Inject's contract.
++// @contract
++// @pre pane 存在（requirePane 前置检查）；attachmentPath 为空时等价于 Inject(ctx, text)
++// @post attachmentPath 非空：先 paste-buffer -d -p 注入路径（不回车）；text 非空时再单独一次
++//
++//	send-keys -l 注入文字；最后一次 send-keys Enter 提交；text 为空时跳过 send-keys -l 那一步
++//
++// @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
++// @inv attachmentPath 为空时与 Inject 逐字节一致；路径与文字永不共享同一次 paste-buffer
++func (p *Pane) InjectWithAttachment(ctx context.Context, text, attachmentPath string) error {
++	if attachmentPath == "" {
++		return p.Inject(ctx, text)
++	}
++	if err := p.requirePane(ctx); err != nil {
++		return err
++	}
++	text = strings.ReplaceAll(text, "\r", "")
++
++	if err := p.pasteViaBuffer(ctx, attachmentPath); err != nil {
++		return err
++	}
++	if text != "" {
++		if _, err := runTmux(ctx, p.socket, p.timeout, "send-keys", "-t", p.target, "-l", "--", text); err != nil {
++			return err
++		}
++	}
++	_, err := runTmux(ctx, p.socket, p.timeout, "send-keys", "-t", p.target, "Enter")
++	return err
++}
++
+ // namedKeys maps a wire special-key name (protocol.Key value, R-1 shortcut
+ // bar) to the tmux send-keys named key. The closed set is enforced at the
+ // protocol boundary; this table is the bridge's own defensive lookup, so an
+@@ -179,10 +223,14 @@ func (p *Pane) SendKeys(ctx context.Context, keys ...string) error {
+ 	return err
+ }
+ 
+-// pasteMultiline injects a multi-line message via a named tmux buffer: it is
+-// pasted verbatim (bracketed paste, so the target CLI treats it as one paste
+-// rather than a burst of keystrokes) and the buffer is deleted on the spot.
+-func (p *Pane) pasteMultiline(ctx context.Context, text string) error {
++// pasteViaBuffer injects text via a named tmux buffer: it is pasted verbatim
++// (bracketed paste, so the target CLI treats it as one paste rather than a
++// burst of keystrokes) and the buffer is deleted on the spot. Despite the
++// original multi-line use case, this works identically for any string —
++// InjectWithAttachment reuses it to paste a single-line image path, which
++// depends on the same bracketed-paste behavior to be recognized by Claude
++// Code's own paste-path detection (feat-image-upload-inline).
++func (p *Pane) pasteViaBuffer(ctx context.Context, text string) error {
+ 	buf := newBufferName()
+ 	// load-buffer -b <name> - reads the buffer from stdin.
+ 	if err := p.loadBuffer(ctx, buf, text); err != nil {
+diff --git a/server/internal/protocol/frames.go b/server/internal/protocol/frames.go
+index 2514dc167..bb54590a5 100644
+--- a/server/internal/protocol/frames.go
++++ b/server/internal/protocol/frames.go
+@@ -146,16 +146,33 @@ type Unsubscribe struct {
+ // exclusive (a frame carrying both is a protocol error, docs/protocol.md §4.2);
+ // neither present means a bare Enter, matching the pre-Keys behavior.
+ //
++// AttachmentPath is an additive optional field (feat-image-upload-inline,
++// requirement 042): the host-absolute path of an image the client already
++// uploaded via POST /upload. When set, the server injects it as a separate
++// bracketed paste ahead of Text — via bridge.Pane.InjectWithAttachment,
++// never combined into the same paste as Text — so Claude Code's own
++// paste-path recognition inlines it as `[Image #N]` instead of leaving a
++// bare path string in the pane. AttachmentPath is empty in the overwhelming
++// common case (plain text messages) and does not change Text's existing
++// semantics; an empty AttachmentPath behaves byte-identically to the
++// pre-existing Text-only path. AttachmentPath and Keys are mutually
++// exclusive, same rule as Text and Keys.
++//
+ // @contract
+-// @pre ReqID >= 1、Ref 非空、Text 与 Keys 至多一个非空、Keys 中每个键都属闭集
++// @pre ReqID >= 1、Ref 非空、(Text 或 AttachmentPath 非空) 与 Keys 至多一类非空、Keys 中每个键都属闭集
+ // @post 该帧在 wire 上合法（Validate 通过）且不附带服务端状态变更
+-// @err Validate 对 ReqID 0、空 Ref、text+keys 并存、未知 key 返回 ErrInvalidField
+-// @inv 空 Text 且空 Keys 是合法的裸 Enter，服务端必须接受
++// @err Validate 对 ReqID 0、空 Ref、(text/attachment)+keys 并存、未知 key 返回 ErrInvalidField
++// @inv 空 Text 且空 Keys 且空 AttachmentPath 是合法的裸 Enter，服务端必须接受；
++//
++//	AttachmentPath 为空时的行为与本字段引入前逐字节一致
+ type Input struct {
+ 	ReqID uint32 `json:"req_id"`
+ 	Ref   string `json:"ref"`
+ 	Text  string `json:"text,omitempty"`
+ 	Keys  []Key  `json:"keys,omitempty"`
++	// AttachmentPath is the host-absolute path of an uploaded image to inject
++	// ahead of Text as its own bracketed paste (feat-image-upload-inline).
++	AttachmentPath string `json:"attachment_path,omitempty"`
+ }
+ 
+ // InputAck is the decidable receipt of an Input (S→C; requirement 003 send-
+diff --git a/server/internal/protocol/validate.go b/server/internal/protocol/validate.go
+index cbf60a116..780b76d29 100644
+--- a/server/internal/protocol/validate.go
++++ b/server/internal/protocol/validate.go
+@@ -164,9 +164,10 @@ func (u Unsubscribe) Validate() error {
+ }
+ 
+ // Validate reports whether the input request is well-formed: a ReqID >= 1, a
+-// non-empty ref, and at most one of Text / Keys (a frame carrying both is a
+-// protocol error; neither means a bare Enter, both are legal alone). Every key
+-// must be in the closed Key set.
++// non-empty ref, and at most one of (Text/AttachmentPath) / Keys (a frame
++// carrying both a key press and text or an attachment is a protocol error;
++// neither present means a bare Enter, any combination of Text/AttachmentPath
++// alone is legal). Every key must be in the closed Key set.
+ func (i Input) Validate() error {
+ 	if i.ReqID == 0 {
+ 		return fmt.Errorf("%w: input req_id must be >= 1", ErrInvalidField)
+@@ -174,8 +175,8 @@ func (i Input) Validate() error {
+ 	if i.Ref == "" {
+ 		return fmt.Errorf("%w: input ref must be non-empty", ErrInvalidField)
+ 	}
+-	if i.Text != "" && len(i.Keys) > 0 {
+-		return fmt.Errorf("%w: input carries both text and keys; at most one is allowed", ErrInvalidField)
++	if (i.Text != "" || i.AttachmentPath != "") && len(i.Keys) > 0 {
++		return fmt.Errorf("%w: input carries both text/attachment_path and keys; at most one is allowed", ErrInvalidField)
+ 	}
+ 	for _, k := range i.Keys {
+ 		if !k.IsValid() {
