@@ -24,8 +24,9 @@ driver 不做账本没写的决定。
 import json, hashlib, subprocess, sys, time, os, re
 
 REPO = "/Volumes/nvme/Projects/远程Agent安卓"
-LEDGER = os.path.join(REPO, ".team/ledgers/state-detection-v1.json")
-LOG = os.path.join(REPO, ".team/ledgers/driver.log")
+LEDGER = (sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith(".json")
+          else os.path.join(REPO, ".team/ledgers/state-detection-v1.json"))
+# ↑ 允许传账本路径：一个驱动器跑多张账本，不必改常量重开一份LOG = os.path.join(REPO, ".team/ledgers/driver.log")
 TA = os.path.join(REPO, ".team/ta")   # 净化包装器，禁裸 team-agent
 TEAM = "remote-agent-android"
 ROLE_SEAT = {
