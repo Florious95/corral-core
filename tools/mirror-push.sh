@@ -6,7 +6,13 @@
 #   每次都要重新过滤一遍再强推，手工做必然会忘、会做错、会漏掉排除项。
 #
 # 排除项及其理由（改之前先读）：
-#   .team/ agents/   编排与席位配置，用户 2026-08-14 裁定「不用上传，没有版本管理需求」
+#   .team/ 除 evidence 外全部  编排与席位配置/运行时，用户 2026-08-14 裁定「不用上传」。
+#                    ⚠️ .team/evidence/ 是例外，必须上传 —— CLAUDE.md 原文：
+#                    「任务状态的唯一权威是 taskbook.yaml + .team/evidence/」。
+#                    taskbook 说「做了什么」，evidence 说「凭什么算做完」（根因/判据/实测数字/谁验的）。
+#                    只传前者 = 备份了结论没备份依据。2026-08-14 首次推送漏了这个，用户当场发现。
+#                    .team/runtime 单独 1.6 GB / 69189 文件，.team/logs 里 daemon 明文打配对 token —— 这两个永不上传。
+#   agents/          席位角色文件
 #   e2e/artifacts/   99 MB 的截图录屏，一次性证据不是代码
 #   */build/ .gradle 构建产物；历史里曾有 178 MB 的 gradle jar，超过 GitHub 单文件 100 MB 硬限
 #   *.env            席位 API key。三个 .env 从基线 commit 就在历史里，
@@ -56,8 +62,24 @@ guard() {
 echo "==> corral-core（当前 App + 需求维基 + 任务书 + 文档）"
 git clone --no-hardlinks --quiet "$SRC" "$WORK/core"
 cd "$WORK/core"
+# .team/ 下逐项点名排除，而不是整目录排除 —— 目的是把 .team/evidence/ 留下来。
+# 用点名而不是 glob：glob 会在新增子目录时静默把它一起带上去，而那里面可能有凭据。
+# 新增 .team 子目录时必须显式决定它的去留，这个"必须显式"就是这里的设计意图。
+TEAM_EXCLUDE=(
+  --path .team/current/ --path .team/runtime/ --path .team/logs/ --path .team/nodes/
+  --path .team/recheck-20260811/ --path .team/__pycache__/ --path .team/adjudicator/
+  --path .team/verify-t3/ --path .team/ta --path .team/orch.wake
+  --path .team/orchestrator.py --path .team/orchestrator-state.json
+  --path .team/leader-sink.py --path .team/leader-inbox.log
+  --path .team/llm-leader-boot.md --path .team/escalations-for-human.md
+  --path .team/outbox-relay.sh --path .team/prod-daemon-launch.sh
+  --path .team/watchdog.py --path .team/watchdog.sh --path .team/watchdog.log
+  --path .team/watchdog-supervisor.sh
+)
+
 python3 "$FR" --force --invert-paths \
-  --path .team/ --path agents/ --path e2e/artifacts/ --path e2e/bin/ --path server/ \
+  "${TEAM_EXCLUDE[@]}" \
+  --path agents/ --path e2e/artifacts/ --path e2e/bin/ --path server/ \
   --path-glob '*/build/*' --path-glob '*/.gradle/*' \
   --path-glob '*.env' --path-glob '*.apk' \
   --mailmap "$WORK/mailmap" --commit-callback "$STRIP_COAUTHOR" >/dev/null
