@@ -2604,3 +2604,35 @@ tasks:
     deps: []
     write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt", "app/app/src/test/"]
     evidence: ".team/evidence/feat-font-size-setting-drop-pinch.json"
+
+  - id: fix-shared-gradle-build-dir
+    title: "多席共用一个 gradle build 目录：一夜产生三次假警报，其中一次差点被当成回归上报用户"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 无人值守验收期间，leader 连续三次取不到一致读数后定位"
+    context: |
+      同一工作区内多个席位并行跑 `./gradlew :app:testDebugUnitTest`，共用同一个
+      `app/build/` 目录，互相污染中间产物与 test-results，导致读数不可信。
+
+      **当晚实发的三次假警报**：
+        1. 一次跑出一大片 `initializationError`（ConnCodec / DiagLog / Glyph* 等与改动无关的包）
+        2. 一次 `mergeDebugResources FAILED`，重跑立刻 BUILD SUCCESSFUL
+        3. 一次 54 failed；另有席位报 469/470 绿，而 leader 同时刻跑出完全不同的数字
+      清场（要求全体停跑）+ 清理 test-results 后重跑，真实结果是 **469 测试 1 红**。
+      **其中第 1 次 leader 差点当成回归上报给用户。**
+
+      更隐蔽的一层：席位为了排查而做的"隔离单跑"同样污染别人——w-font-dev 主动指出
+      它那组 3 次 PairingTsnetWindowProbeTest 隔离重跑「大概率也是撞车源之一，请勿采信为独立观测」。
+      **也就是说：在共用 build 目录的前提下，"隔离跑"这个概念本身是失效的。**
+
+      当前临时规矩（口头，已广播）：同一时刻只允许一席跑 gradle，跑前在频道声明。
+      这靠自律，不靠机制，无人值守下迟早失效。
+    acceptance:
+      - "机制上保证并行安全：每席独立 build 目录（GRADLE_USER_HOME / --project-cache-dir / 独立 worktree 任选），不靠自律"
+      - "验收专用通道：leader 取权威读数时使用与所有席位都隔离的构建环境"
+      - "红测/演示：两席同时跑全量，双方读数都正确且互不影响"
+      - "把结论写进 CLAUDE.md 派单纪律，替换掉当前那条靠自律的口头规矩"
+    deps: []
+    write_scope: ["CLAUDE.md", ".team/", "tools/"]
+    evidence: ".team/evidence/fix-shared-gradle-build-dir.json"
