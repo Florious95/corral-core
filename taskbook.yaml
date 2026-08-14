@@ -2636,3 +2636,111 @@ tasks:
     deps: []
     write_scope: ["CLAUDE.md", ".team/", "tools/"]
     evidence: ".team/evidence/fix-shared-gradle-build-dir.json"
+
+  - id: fix-font-size-scale-unit
+    title: "字号最小档仍比旧字号大一倍多：预设用 sp，旧世界用物理像素，量纲选错"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 用户真机反馈：「我把字体调到最小，还是比之前的字体大很多」「最小的字体都不够特别小，导致我看的内容很少」"
+    context: |
+      **前提：架构方向是对的，别推翻。** 用户同一条反馈的前半句是
+      「尺寸这个问题就相当于已经完全把上面几个问题解决了——第一个是闪烁，第二个是部分跑到
+      屏幕外面，第三个是一致性」。feat-font-size-setting-drop-pinch 的三条主症状全消。
+      本条只是刻度盘的量纲错了，不是方案错了。
+
+      **根因（leader 已核代码）**：
+        TermSurfaceView.kt:446   val sizePx = fontSizeSp * resources.displayMetrics.scaledDensity
+        旧世界（已删的捏合时代）  textSize = DEFAULT_CELL_HEIGHT(20) × 0.85 = 17【物理像素】
+      预设 12/14/16/18/20 用的是 **sp**（受系统字体缩放影响），旧世界用的是**物理像素**。
+      用户手机若为 3.0x 密度，12sp = 36px ≈ 旧字号的 2.1 倍。
+      **所以"最小档"比他一直在用的字号还大一倍——不是选项不够多，是整个刻度盘错了量纲。**
+
+      **⛔ 未闭合的取证，动手前必须先拿到**：用户手机真实的 px/sp 比值。
+      取法：让用户在 App 里 设置 → 查看诊断日志 → 复制全部，找 `grid` 那条记录里的
+      `cell_width_measured`（那是当前字号下实测的字形推进宽，单位物理像素）。
+      配合当时选中的档位（sp 值）即可反算 scaledDensity，据此定准确档位。
+      **不许拍脑袋改数字**——本工程 2026-08-14 已七次栽在"没测量就下结论"上。
+
+      **一个待定的设计问题（拿到数后一并裁）**：终端字号是否应该受系统 sp 缩放影响？
+      终端用户要的是"一屏能看多少内容"，而 sp 会被系统无障碍设置放大——两者诉求冲突。
+      候选：改用 dp/px 直接控制；或保留 sp 但把范围下探到覆盖旧字号。此问需 leader 裁定。
+    acceptance:
+      - "先取数：拿到用户真机 grid 记录里的 cell_width_measured + 当时档位，反算 px/sp 比值（禁止推断）"
+      - "最小档必须 ≤ 旧世界的等效字号（textSize 17 物理像素），用户诉求是'看到更多内容'"
+      - "红测：给定档位与 px/sp 比值，断言算出的 textSize 落在预期物理像素区间"
+      - "眼见为实：用户真机切到最小档，截图证明一屏内容量明显多于当前"
+      - "不倒退：feat-font-size-setting-drop-pinch 的 11 个用例与 5 处定点变异全部保持有效"
+    deps: ["feat-font-size-setting-drop-pinch"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-font-size-scale-unit.json"
+
+  - id: feat-terminal-theme-selection
+    title: "终端主题可选（黑/白等 CLI 常见主题）；并查清用户消息为何渲染成白底"
+    status: todo
+    owner: null
+    contention: contract
+    discovered: "2026-08-14 用户反馈：「我发的是白色的底，这不太符合它的，这显示不太舒服」「你要把 CLI 常见的一些主题在设置里面列出来，然后都可选……就像 Claude Code 它自身 CLI 也有多个主题」"
+    context: |
+      **这是两件事，只做后一件不会让白底消失——这一点必须先讲清楚，否则会白做一轮。**
+
+      **(a) 白底的成因（leader 已初查，未定案）**：
+      那个浅色块**不是我们画的，是 Claude Code 自己画的**。它有明暗主题，
+      会探测终端背景色来决定用哪套。现在渲染出浅色块，说明**它以为自己跑在浅色终端里**。
+      探测途径通常是 OSC 11 背景色查询或 `COLORFGBG` 环境变量。
+      leader grep 实证：**服务端与 App 侧都没有任何 COLORFGBG / OSC 11 背景查询的处理**
+      （`server/internal/` 与 `app/.../termview/` 全无命中）。
+      ⇒ 假设：我们不回答这个查询，Claude Code 猜错。**这是假设不是结论，要实测证否。**
+
+      **(b) App 自己的主题调色板（用户要的功能）**：
+      设置页列出 CLI 常见主题供选。注意：**这不能替代 (a)**——
+      若 Claude Code 发的是 truecolor 背景，调色板改不了它；若是索引色，
+      改索引映射又会波及其他用途。**先做 (a) 定案，再决定 (b) 的形态。**
+    acceptance:
+      - "(a) 先证否：实测 Claude Code 在本 App 终端里如何选择明暗主题（OSC 11 / COLORFGBG / 其他），给出观测证据而非推断"
+      - "(a) 若确因未回答背景查询：补上回答/设置 COLORFGBG，实测用户消息块变为深色"
+      - "(b) 主题选择：设置页可选，持久化；至少覆盖深色/浅色两套完整 ANSI 16 色 + 前景/背景"
+      - "红测：切换主题后调色板实际生效（断言渲染取色，不断言'调用了 setTheme'）"
+      - "眼见为实：用户真机截图确认用户消息块不再是刺眼白底"
+      - "不倒退：GlyphFallbackPolicy / 双宽 / BCE 背景等既有渲染行为不变"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt", "server/internal/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-terminal-theme-selection.json"
+
+  - id: fix-image-upload-input-box
+    title: "发图后文件名落进输入框；且需 leader 额外 Read 一次，每次多烧一整轮 LLM 请求"
+    status: todo
+    owner: null
+    contention: contract
+    discovered: "2026-08-14 用户反馈 + 截图（upload-20260814T112827）"
+    context: |
+      **用户原话**：「要解决一下我发一张图，它出现在输入框的问题，它不应该出现在输入框。
+      并且……我在节点上给你发张图的话，你在那条消息直接就把图片给读了。但是我给你发图的话，
+      你需要还有一个额外的读的动作，那这样的话就有额外的费用，因为它都是一次完整的 LM 请求，
+      它会把全面的内容全部都加载一遍。」
+
+      **两个子问题，成本那条更值钱**：
+      1. **UI**：上传后文件名 `upload-20260814T112812-1000022709.jpg` 被塞进了输入框，
+         用户还得自己删。截图可见输入框里就是这个文件名。
+      2. **成本**：App 发图 ⇒ pane 里出现一个**路径字符串** ⇒ leader 必须再调一次 Read
+         才能看到图。而用户在 Mac 上直接拖图给 Claude Code 时，图是**内联附件**，零额外往返。
+         **每多一次 Read＝一次完整 LLM 请求，把整个上下文重新加载一遍**——
+         用户当前上下文已达 1M 的 62%，这个代价很实。
+
+      **一个待验的候选修法（假设，未测）**：App 插入的不是裸路径，而是 Claude Code 的
+      文件引用语法（如 `@/path/to/image.jpg`）。若 Claude Code 对 `@` 引用的图片会内联附上，
+      则一次往返即可，成本问题消失。**必须实测确认 Claude Code 是否对图片支持这个语法**，
+      不要假定。若不支持，则本条只能优化 UI，成本那半需另想办法（或明确告知用户不可解）。
+
+      **注意 PTY 的结构性限制**：App 与 Claude Code 之间隔着 tmux/PTY，
+      没有传输"图片内容块"的通道，只能传字节。所以"像 Mac 上那样内联"未必可达——
+      **如果实测证明不可达，如实告诉用户不可解，不要造一个假的解法。**
+    acceptance:
+      - "先实测：Claude Code 对 `@<图片路径>` 是否内联附图（给出观测证据）"
+      - "若可行：App 改为插入该语法，实测 leader 无需额外 Read 即可看到图"
+      - "若不可行：如实结论化，并至少修掉 UI 问题（文件名不落输入框）"
+      - "UI：上传完成后输入框保持干净，用户不需要手动删除文件名"
+      - "眼见为实：用户真机发一张图，截图证明输入框干净 + leader 侧一次往返内看到图"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "server/internal/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-image-upload-input-box.json"
