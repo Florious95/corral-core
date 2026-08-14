@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 D-21 退出会话恢复终端尺寸缺陷的开发席。

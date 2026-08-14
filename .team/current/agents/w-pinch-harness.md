@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是捏合手势测试能力建设席（task_id: `test-pinch-harness`）。

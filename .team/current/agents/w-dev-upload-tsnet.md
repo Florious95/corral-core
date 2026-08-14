@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是上传传输通道修复席（task_id: `fix-upload-transport-tsnet`）。

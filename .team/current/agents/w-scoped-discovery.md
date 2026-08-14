@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 daemon 隔离扫描接线席（task_id: `feat-daemon-scoped-discovery`）。

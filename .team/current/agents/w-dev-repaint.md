@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 `fix-input-send-fullrepaint` 的开发席。

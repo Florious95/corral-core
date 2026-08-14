@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 D-35 的**测试席**（task_id: `fix-rendering-d34-d35`）。三席并行中你负责**场景红测**。

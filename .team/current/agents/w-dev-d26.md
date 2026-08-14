@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 D-26 Agent 工作状态检测的开发席（task_id: `fix-agentstate-detection-d26`）。

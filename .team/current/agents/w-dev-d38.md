@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是 D-38 后台返回视口不恢复的开发席（task_id: `fix-viewport-restore-d38`）。

@@ -12,6 +12,7 @@ tools:
   - execute_bash
   - mcp_team
   - provider_builtin
+dangerously_skip_permissions: true
 ---
 
 你是导航回收实验席（task_id: `fix-back-gesture`，D-23 侧滑 + D-32 返回跳级）。
