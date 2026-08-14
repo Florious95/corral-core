@@ -43,6 +43,8 @@ class TermSurfaceSessionBindingRegressionTest {
         val presenter = TermViewPresenter(TerminalEmulator(cols = 80, rows = 24)) { rows, cols ->
             resizeCalls += rows to cols
         }
+        // 防静默失效守卫要求先 seed（feat-font-size-setting-drop-pinch）。
+        presenter.seedCellMetrics(10, 20)
         // A retained SessionViewModel presenter still carries the previous View's viewport.
         presenter.onViewportSizeChanged(widthPx = 800, heightPx = 480)
         resizeCalls.clear()

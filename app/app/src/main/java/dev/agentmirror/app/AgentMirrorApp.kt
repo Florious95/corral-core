@@ -59,6 +59,7 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
  * @consumes dev.agentmirror.app.pairing
  * @consumes dev.agentmirror.app.service
  * @consumes dev.agentmirror.app.session
+ * @consumes dev.agentmirror.app.termview
  * @consumes dev.agentmirror.app.ui.theme
  * @consumes dev.agentmirror.app.workspace
  */

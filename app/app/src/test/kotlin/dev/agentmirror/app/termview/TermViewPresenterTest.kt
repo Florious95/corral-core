@@ -27,7 +27,7 @@ import org.junit.Test
 private const val E = "\\u001b"
 
 /**
- * TermViewPresenter 测试：视口状态机（跟随/锁定/触底）、捏合 resize 换算、脏区合并。
+ * TermViewPresenter 测试：视口状态机（跟随/锁定/触底）、视口→行列数换算、脏区合并。
  *
  * 渲染核心可测性（term-view 知识基底 §1）：渲染逻辑与 Android View 分离，
  * 单测全部打在纯 JVM 的 Presenter 上；TermSurfaceView 只做画格与手势。
@@ -45,6 +45,9 @@ class TermViewPresenterTest {
         val emulator = TerminalEmulator(cols, rows)
         val resizeCalls = mutableListOf<Pair<Int, Int>>()
         val presenter = TermViewPresenter(emulator) { r, c -> resizeCalls.add(r to c) }
+        // 防静默失效守卫要求先 seed（feat-font-size-setting-drop-pinch）：喂入与旧
+        // DEFAULT_CELL_WIDTH/HEIGHT 相同的值（10x20），保持本文件既有断言数值不变。
+        presenter.seedCellMetrics(10, 20)
         return Harness(emulator, presenter, resizeCalls)
     }
 
@@ -121,26 +124,6 @@ class TermViewPresenterTest {
         assertEquals("b", text(h.presenter.lineCells(1)))
         assertEquals("c", text(h.presenter.lineCells(2)))
         assertFalse(h.presenter.isFollowingBottom)
-    }
-
-    // ---- 捏合 → 行列数换算（005）----
-
-    @Test
-    fun pinchChangesFontAndRequestsResize() {
-        val h = harness(rows = 15, cols = 50)
-        h.presenter.onViewportSizeChanged(500, 300)
-        // 放大字号：300/24=12 行，500/12=41 列。
-        h.presenter.onFontSizeChanged(newCellWidth = 12, newCellHeight = 24)
-        assertEquals(listOf(12 to 41), h.resizeCalls)
-    }
-
-    @Test
-    fun pinchWithoutEffectiveChangeSkipsResize() {
-        val h = harness(rows = 15, cols = 50)
-        h.presenter.onViewportSizeChanged(500, 300)
-        // 字号与当前网格行列数一致：不重复发 resize。
-        h.presenter.onFontSizeChanged(newCellWidth = 10, newCellHeight = 20)
-        assertTrue(h.resizeCalls.isEmpty())
     }
 
     // ---- 脏区合并（60fps 工作量 = 脏行数而非全屏）----

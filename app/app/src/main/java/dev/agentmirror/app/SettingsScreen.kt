@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,6 +48,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.diag.DiagLogViewScreen
+import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -75,6 +77,10 @@ internal fun SettingsScreen(
     val scope = rememberCoroutineScope()
     var exportStatus by remember { mutableStateOf<String?>(null) }
     var exportError by remember { mutableStateOf<String?>(null) }
+    val fontSizeStore = remember { SharedPreferencesFontSizeStore(context) }
+    var fontSizeSp by remember {
+        mutableStateOf(fontSizeStore.load() ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP)
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,6 +125,53 @@ internal fun SettingsScreen(
                     )
                     Button(onClick = onRePair, modifier = Modifier.fillMaxWidth()) {
                         Text("重新配对")
+                    }
+                }
+            }
+
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                ) {
+                    Text("字体大小", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    ) {
+                        SharedPreferencesFontSizeStore.PRESET_SIZES_SP.forEach { sp ->
+                            val selected = sp == fontSizeSp
+                            Button(
+                                onClick = {
+                                    fontSizeSp = sp
+                                    fontSizeStore.save(sp)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (selected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    contentColor = if (selected) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                ),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("$sp")
+                            }
+                        }
                     }
                 }
             }

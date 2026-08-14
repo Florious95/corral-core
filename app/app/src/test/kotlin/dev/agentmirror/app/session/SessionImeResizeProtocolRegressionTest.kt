@@ -43,7 +43,9 @@ import org.robolectric.annotation.Config
  * - 首次拿到真实视口：允许发一次 resize（唯一合法帧）；
  * - 此后 IME 弹起 / 输入框一行→两行→三行（视口逐级收缩 63px）：不得再发 resize 帧。
  *
- * 首帧期望 (96, 108)：视口 1080x1920 ÷ presenter 默认字格 10x20 = 96 行 108 列。
+ * 首帧具体 rows/cols 值不再断言固定数字（feat-font-size-setting-drop-pinch：字格尺寸
+ * 由 View 实测字形度量得出，不再有 presenter 默认字格 10x20 可依赖）——断言改为「首帧
+ * 恰好一次 resize，后续 IME 挤压不追加」，与本测试真正要守的契约一致。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -71,23 +73,20 @@ class SessionImeResizeProtocolRegressionTest {
             presenter = viewModel.presenter
         }
 
-        // 首次真实视口：唯一允许的一次 resize（1920 高 ÷ 20px 字格 = 96 行）。
+        // 首次真实视口：唯一允许的一次 resize（具体 rows/cols 由实测字格决定，不再硬编码）。
         surface.layout(0, 0, 1080, 1920)
-        assertEquals(
-            "首次真实视口应恰好发一次 resize",
-            listOf(96 to 108),
-            resizeFrames(transport),
-        )
+        val firstResize = resizeFrames(transport)
+        assertEquals("首次真实视口应恰好发一次 resize", 1, firstResize.size)
 
         // IME 弹起后视口逐级收缩（FIELD 实测每级 63px），模拟输入框一行→两行→三行。
-        // rows 会逐级变小（92、89…），但协议不得再产生 resize 帧。
+        // rows 会逐级变小，但协议不得再产生 resize 帧。
         surface.layout(0, 0, 1080, 1857)
         surface.layout(0, 0, 1080, 1794)
         surface.layout(0, 0, 1080, 1731)
 
         assertEquals(
             "输入框变高（IME 弹起 / 一行→两行→三行）不得再发 resize 协议帧",
-            listOf(96 to 108),
+            firstResize,
             resizeFrames(transport),
         )
     }

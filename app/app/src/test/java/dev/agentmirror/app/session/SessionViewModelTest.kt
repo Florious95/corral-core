@@ -351,11 +351,11 @@ class SessionViewModelTest {
     // ---- resize（005：让 CLI 自己重画）----
 
     @Test
-    fun pinchResizeReachesManagerAndEmulator() {
+    fun seededFontSizeResizeReachesManagerAndEmulator() {
         val h = Harness(rows = 15, cols = 50)
-        // 捏合：视口 500x300 + 字号 12x24 ⇒ 12 行 41 列。
+        // feat-font-size-setting-drop-pinch：字号实测值一次性 seed，视口建立时一次算对 ⇒ 12 行 41 列。
+        h.vm.presenter.seedCellMetrics(12, 24)
         h.vm.presenter.onViewportSizeChanged(500, 300)
-        h.vm.presenter.onFontSizeChanged(12, 24)
         val r = h.resizeFrames()
         assertEquals(1, r.size)
         assertEquals(12, r[0].rows)
