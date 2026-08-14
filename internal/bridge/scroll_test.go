@@ -4,9 +4,16 @@ package bridge
 // All tests use an isolated tmux socket (newTestTMUX) — production daemon
 // and user tmux are never touched (bridge red line).
 //
-// T1: bare shell (mouse_any_flag=0) → copy-mode entered
-// T2: vim+mouse (mouse_any_flag=1) → copy-mode entered (unified path;
-//     send-keys -H mouse bytes proved ineffective, see design doc §已知局限)
+// T1: bare shell (mouse_any_flag=0) → copy-mode entered, zero raw bytes sent
+// T2: vim+mouse (mouse_any_flag=1) → raw SGR wheel bytes sent, copy-mode
+//     never entered (see feat-remote-scroll-mouse-wheel probe: the earlier
+//     "send-keys -H is ineffective" verdict was measured against less/vim
+//     only and never re-tested against Claude Code; re-run against a real
+//     `claude` pane produced a visible scroll + "Jump to bottom" indicator)
+// T3: fake-tmux argv pin — mouse_any_flag=1 dispatches the exact SGR hex
+//     bytes, not just "some send-keys call"
+// T4: mutation self-check — hardcoding the branch to always report
+//     mouse_any_flag=1 must turn the mouse_any_flag=0 contamination test red
 // T5: PaneInMode reports correctly
 // T6: ExitCopyMode exits copy-mode (pane_in_mode 1→0)
 // T7: InjectScroll on dead pane → ErrPaneNotFound
@@ -14,6 +21,9 @@ package bridge
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -91,12 +101,21 @@ func TestInjectScrollDoesNotEnterCopyModeWhenAlreadyInIt(t *testing.T) {
 	}
 }
 
-// TestInjectScrollMouseTrackingPathFallsToCopyMode verifies that even when
-// mouse_any_flag=1 (app has mouse tracking), InjectScroll uses copy-mode.
-// Rationale: send-keys -H mouse bytes are silently ineffective (proved by
-// experiment — less/vim do not respond); copy-mode is the only reliable path
-// for non-alt-screen panes regardless of mouse_any_flag.
-func TestInjectScrollMouseTrackingPathFallsToCopyMode(t *testing.T) {
+// TestInjectScrollMouseTrackingNeverEntersCopyMode verifies that when
+// mouse_any_flag=1 (app has mouse tracking, e.g. vim with mouse=a or Claude
+// Code), InjectScroll takes the raw-byte path and never enters copy-mode.
+// This is the real-pane behavioral half of the mouse_any_flag=1 assertion;
+// TestInjectScrollArgvExactShapeMouseTrackingOn (below) pins the exact SGR
+// hex bytes dispatched, per leader's requirement to assert the constructed
+// tmux args, not just that "some send-keys call" happened.
+//
+// vim itself does not visibly react to the injected bytes (see the doc
+// comment on InjectScroll: the original "ineffective" experiment measured
+// exactly this — less/vim do not respond to synthesised SGR bytes). That is
+// unrelated to what this test checks: whether *our code* still reaches for
+// copy-mode when mouse tracking is on. It must not, regardless of whether
+// the target app acts on the bytes.
+func TestInjectScrollMouseTrackingNeverEntersCopyMode(t *testing.T) {
 	tt := newTestTMUX(t)
 	// vim with set mouse=a: mouse_any_flag=1
 	pane := tt.newPane(t, "vim -c 'set mouse=a' /dev/null")
@@ -113,12 +132,130 @@ func TestInjectScrollMouseTrackingPathFallsToCopyMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InjectScroll (mouse tracking): %v", err)
 	}
-	// Unified path: always enters copy-mode.
-	if !enteredCopyMode {
-		t.Error("expected enteredCopyMode=true (unified copy-mode path regardless of mouse_any_flag)")
+	if enteredCopyMode {
+		t.Error("expected enteredCopyMode=false: mouse_any_flag=1 must take the raw-byte path, not copy-mode")
 	}
-	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "1" {
-		t.Error("pane_in_mode should be 1 (in copy-mode) on unified path")
+	if queryFlag(t, tt, pane, "#{pane_in_mode}") != "0" {
+		t.Error("pane_in_mode should stay 0: copy-mode must never be entered when mouse_any_flag=1")
+	}
+}
+
+// fakeTmuxScrollScript writes a fake tmux that answers list-panes and
+// display-message deterministically (mouseFlag controls #{mouse_any_flag};
+// #{pane_in_mode} is always "0", i.e. not yet in copy-mode) and appends every
+// copy-mode / send-keys invocation's argv (socket flag stripped) to logPath,
+// one line per call — so a test can assert on the exact bytes tmux received,
+// not merely that some call happened.
+func fakeTmuxScrollScript(t *testing.T, mouseFlag string) (script, logPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	logPath = filepath.Join(dir, "argv.log")
+	script = filepath.Join(dir, "fake-tmux")
+	body := fmt.Sprintf(`#!/bin/sh
+case "$3" in
+  list-panes) echo "%%0"; exit 0;;
+  display-message)
+    case "$*" in
+      *mouse_any_flag*) echo "%s"; exit 0;;
+      *pane_in_mode*) echo "0"; exit 0;;
+      *) exit 1;;
+    esac
+    ;;
+  copy-mode) shift 2; echo "$@" >> "$ARGS_LOG"; exit 0;;
+  send-keys) shift 2; echo "$@" >> "$ARGS_LOG"; exit 0;;
+  *) exit 1;;
+esac
+`, mouseFlag)
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+	return script, logPath
+}
+
+// sgrWheelHexLine builds the exact space-separated hex byte line InjectScroll
+// must dispatch for one SGR-1006 wheel event, computed independently of the
+// production fmt.Sprintf call so this test does not just mirror the
+// implementation. button is 64 (up) or 65 (down); coordinate is fixed 1;1.
+func sgrWheelHexLine(button int) string {
+	// "\x1b[<%d;1;1M" — %d is always two ASCII digits (64 or 65).
+	chars := []byte{0x1b, '[', '<',
+		byte('0' + button/10), byte('0' + button%10),
+		';', '1', ';', '1', 'M'}
+	hex := make([]string, len(chars))
+	for i, c := range chars {
+		hex[i] = fmt.Sprintf("%02x", c)
+	}
+	return strings.Join(hex, " ")
+}
+
+// TestInjectScrollArgvExactShapeMouseTrackingOn pins the exact tmux argv for
+// the mouse_any_flag=1 path: one send-keys -H call carrying count SGR wheel
+// events back to back, and confirms copy-mode is never invoked.
+func TestInjectScrollArgvExactShapeMouseTrackingOn(t *testing.T) {
+	script, logPath := fakeTmuxScrollScript(t, "1")
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", logPath)
+
+	p := NewPane("/sock/x", "%0")
+	enteredCopyMode, err := p.InjectScroll(context.Background(), 2) // scroll down x2
+	if err != nil {
+		t.Fatalf("InjectScroll: %v", err)
+	}
+	if enteredCopyMode {
+		t.Error("expected enteredCopyMode=false on the mouse-tracking path")
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read argv log: %v", err)
+	}
+	one := sgrWheelHexLine(65) // down
+	want := "send-keys -H -t %0 " + one + " " + one
+	if got := strings.TrimSpace(string(data)); got != want {
+		t.Errorf("send-keys argv = %q, want %q", got, want)
+	}
+}
+
+// TestInjectScrollArgvExactShapeBareShell pins the exact tmux argv for the
+// mouse_any_flag=0 path: copy-mode is entered, scrolling goes through
+// send-keys -X, and — the anti-contamination assertion — no -H raw-byte call
+// is ever issued. This is the regression guard for "裸壳被打进字面量字节".
+func TestInjectScrollArgvExactShapeBareShell(t *testing.T) {
+	script, logPath := fakeTmuxScrollScript(t, "0")
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", logPath)
+
+	p := NewPane("/sock/x", "%0")
+	enteredCopyMode, err := p.InjectScroll(context.Background(), -3) // scroll up x3
+	if err != nil {
+		t.Fatalf("InjectScroll: %v", err)
+	}
+	if !enteredCopyMode {
+		t.Error("expected enteredCopyMode=true on the bare-shell path")
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read argv log: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	want := []string{"copy-mode -e -t %0", "send-keys -X -N 3 -t %0 scroll-up"}
+	if len(lines) != len(want) {
+		t.Fatalf("tmux calls = %q, want %q", lines, want)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Errorf("call %d = %q, want %q", i, lines[i], want[i])
+		}
+	}
+	for _, line := range lines {
+		if strings.Contains(line, "-H") {
+			t.Errorf("mouse_any_flag=0 must never dispatch a -H raw-byte call, got %q", line)
+		}
 	}
 }
 

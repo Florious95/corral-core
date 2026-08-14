@@ -291,37 +291,58 @@ func (p *Pane) Size(ctx context.Context) (int, int, error) {
 
 // InjectScroll delivers one scroll-wheel event to the pane
 // (feat-remote-scroll-forward). delta < 0 = up (toward history); delta > 0 =
-// down. Always uses tmux copy-mode; see inline rationale.
+// down. Routes on mouse_any_flag (feat-remote-scroll-mouse-wheel):
 //
-//   - pane not in copy-mode → enter copy-mode -e, then scroll N lines;
-//     returns enteredCopyMode=true so the caller can push PaneModeChanged.
-//   - pane already in copy-mode → scroll only; returns enteredCopyMode=false.
+//   - mouse_any_flag=1 (app has mouse tracking on, e.g. Claude Code) →
+//     forward abs(delta) raw SGR-1006 wheel events via `send-keys -H`.
+//     No copy-mode entered; enteredCopyMode is always false on this path.
+//   - mouse_any_flag=0 (bare shell, or an alt-screen app with no mouse
+//     tracking) → copy-mode fallback: enter copy-mode -e if not already in
+//     it (returns enteredCopyMode=true so the caller can push
+//     PaneModeChanged), then scroll abs(delta) lines via send-keys -X.
 //
-// Note: the original design intended a mouse_any_flag=1 branch that injected
-// raw SGR/X10 bytes via `send-keys -H`. That was proved ineffective (see
-// docs/remote-scroll-forward-design.md §已知局限): tmux forwards real mouse
-// events via `send-keys -M` which requires a live mouse-event callback and
-// cannot be synthesised externally. Direct byte injection writes to the PTY
-// but bypasses tmux's mouse pipeline; confirmed by experiment that less and
-// vim with mouse=a do not respond. copy-mode is used for all panes instead.
-//
-// Effective tiers:
-//
-//	① Non-alt-screen TUI (Claude Code)  → copy-mode works ✓
-//	② Alt-screen apps (vim/less/htop)   → copy-mode has no scrollback ✗
-//	③ Bare shell                         → copy-mode works ✓
-//
+// History (2026-08-14, corrected 2026-08-14 after feat-remote-scroll-mouse-wheel
+// probe): an earlier design tried the mouse_any_flag=1 raw-byte path and
+// declared it "proved ineffective", collapsing both branches into copy-mode
+// for every pane. That verdict was never actually about Claude Code — the
+// experiment behind it only drove `less` and `vim (mouse=a)`, both
+// alt-screen apps, and generalized the negative result to "TUI" as a whole.
+// It also misclassified Claude Code as tier① "non-alt-screen, copy-mode
+// works ✓", a claim feat-remote-scroll-forward's rounds 8-10 had already
+// falsified (Claude Code runs alt_on=1/history_size=0, so copy-mode has
+// nothing to scroll into). Re-running the raw-byte experiment against an
+// actual `claude` pane (mouse_any_flag=1) — not less/vim — produced a
+// visible scroll and a "Jump to bottom" indicator; a control group on a bare
+// shell (mouse_any_flag=0) confirmed the same bytes never reach it. See
+// feat-remote-scroll-mouse-wheel probe notes for the capture-pane evidence.
 // @contract
 // @pre pane 存在（requirePane 前置）；delta != 0（Validate 已拒绝 0）
-// @post pane 处于 copy-mode 并已滚动 abs(delta) 行；不追加 Enter
+// @post mouse_any_flag=1 时已发送 abs(delta) 个 SGR 滚轮字节，pane 运行态不变（enteredCopyMode=false）；mouse_any_flag=0 时 pane 处于 copy-mode 并已滚动 abs(delta) 行；均不追加 Enter
 // @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
-// @inv copy-mode 进入幂等（已在 copy-mode 时直接 scroll）
+// @inv mouse_any_flag=0 时绝不发送原始字节（防止污染裸壳命令行）；copy-mode 进入幂等（已在 copy-mode 时直接 scroll）
 func (p *Pane) InjectScroll(ctx context.Context, delta int32) (enteredCopyMode bool, err error) {
 	if err := p.requirePane(ctx); err != nil {
 		return false, err
 	}
 
-	// Query copy-mode state only — mouse_any_flag no longer routes differently.
+	count := delta
+	if count < 0 {
+		count = -count
+	}
+
+	mouseOut, err := runTmux(ctx, p.socket, p.timeout,
+		"display-message", "-p", "-t", p.target, "#{mouse_any_flag}")
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(string(mouseOut)) == "1" {
+		// App has mouse tracking on: forward real wheel bytes. copy-mode is
+		// never entered on this path — see doc comment for why the earlier
+		// "ineffective" verdict did not apply to Claude Code.
+		return false, p.injectWheelBytes(ctx, delta < 0, int(count))
+	}
+
+	// No mouse tracking: copy-mode fallback.
 	out, err := runTmux(ctx, p.socket, p.timeout,
 		"display-message", "-p", "-t", p.target, "#{pane_in_mode}")
 	if err != nil {
@@ -329,25 +350,47 @@ func (p *Pane) InjectScroll(ctx context.Context, delta int32) (enteredCopyMode b
 	}
 	paneInMode := strings.TrimSpace(string(out)) == "1"
 
-	up := delta < 0
 	direction := "scroll-up"
-	if !up {
+	if delta >= 0 {
 		direction = "scroll-down"
 	}
-	// No mouse tracking: copy-mode fallback.
 	if !paneInMode {
 		if _, err = runTmux(ctx, p.socket, p.timeout, "copy-mode", "-e", "-t", p.target); err != nil {
 			return false, err
 		}
 		enteredCopyMode = true
 	}
-	count := delta
-	if count < 0 {
-		count = -count
-	}
 	_, err = runTmux(ctx, p.socket, p.timeout,
 		"send-keys", "-X", "-N", strconv.Itoa(int(count)), "-t", p.target, direction)
 	return enteredCopyMode, err
+}
+
+// injectWheelBytes sends count SGR-1006 mouse-wheel events (button 64 = up,
+// 65 = down) as raw bytes in one `send-keys -H` call — never via
+// `paste-buffer -p`, which wraps its payload in bracketed-paste markers
+// (ESC[200~/ESC[201~) and would corrupt the mouse escape sequence. Coordinate
+// 1;1 is always in bounds regardless of pane size; the receiving app acts on
+// the wheel button code, not the reported cell.
+// @contract
+// @pre 调用方已确认 mouse_any_flag=1（本函数不重复校验）
+// @post 已发送 count 个 SGR 滚轮事件（一次 send-keys -H 调用），不追加 Enter
+// @err server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
+// @inv 只发送裸字节，不进入/退出 copy-mode
+func (p *Pane) injectWheelBytes(ctx context.Context, up bool, count int) error {
+	button := 65
+	if up {
+		button = 64
+	}
+	seq := fmt.Sprintf("\x1b[<%d;1;1M", button)
+	hex := make([]string, 0, len(seq)*count)
+	for i := 0; i < count; i++ {
+		for j := 0; j < len(seq); j++ {
+			hex = append(hex, fmt.Sprintf("%02x", seq[j]))
+		}
+	}
+	args := append([]string{"send-keys", "-H", "-t", p.target}, hex...)
+	_, err := runTmux(ctx, p.socket, p.timeout, args...)
+	return err
 }
 
 // PaneInMode reports whether the pane is currently in tmux copy-mode.
