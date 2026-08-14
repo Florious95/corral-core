@@ -161,6 +161,13 @@
       },
       "resources": {
         "worktree_id": "wt-oracle",
+        "read_paths": [
+          "requirement-base/entries/058-状态检测先归档回退再重建.md",
+          "requirement-base/entries/025-工作状态检测准确率.md",
+          "docs/herdr-agent-state-study.md",
+          "docs/archive/agentstate-round4/README.md",
+          "docs/orchestration/编排方法论.md"
+        ],
         "write_paths": [
           ".team/nodes/state-oracle/"
         ],
@@ -224,6 +231,10 @@
       },
       "resources": {
         "worktree_id": "wt-server",
+        "read_paths": [
+          ".team/nodes/state-oracle/判据基底摘要.md",
+          "requirement-base/entries/058-状态检测先归档回退再重建.md"
+        ],
         "write_paths": [
           "server/internal/agentstate/",
           "server/internal/protocol/",
@@ -282,6 +293,9 @@
       },
       "resources": {
         "worktree_id": "wt-control",
+        "read_paths": [
+          ".team/nodes/state-oracle/判据基底摘要.md"
+        ],
         "write_paths": [
           ".team/nodes/state-control/"
         ],
