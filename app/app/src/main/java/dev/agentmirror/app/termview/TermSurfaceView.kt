@@ -92,6 +92,19 @@ class TermSurfaceView @JvmOverloads constructor(
     /** 像素高度对应一逻辑行的行高（视口向下滚动超过一行时对齐整格）。 */
     private var lineHeightPx: Int = 0
 
+    /**
+     * 手势层像素余数累加器（feat-remote-scroll-mouse-wheel 丢帧修复）：GestureDetector
+     * 每次 onScroll 的 dy 是"距上次回调的增量"，触屏高频采样下单次增量常常不足一整行；
+     * 若直接 roundToInt 判 0 就丢、不留余数，多次不足一行的增量永远凑不成一行——慢速/
+     * 阅读式拖动九成以上位移在这一层就消失了（实测 700px 拖动只送达 3 行）。
+     *
+     * 本字段累加每次 -dy（未取整的像素），取出的整行数发出后从累加器里扣掉，余下不足
+     * 一行的量留着等下一次回调继续累加——像素永不凭空消失，只是"够一行才发一次"。
+     * SessionViewModel 的节流累加器管的是"发送节奏"、累加的是已取整的行数，管不到这里
+     * 丢失的亚行像素，两层累加器职责不重叠。
+     */
+    private var pendingScrollPx: Float = 0f
+
     private var backToBottomLabel: String? = null
 
     // ---- 绘制工具 ----
@@ -137,12 +150,25 @@ class TermSurfaceView @JvmOverloads constructor(
     private var baselinePx: Float = 0f
 
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
-        override fun onDown(e: MotionEvent): Boolean = true
+        override fun onDown(e: MotionEvent): Boolean {
+            // 新手势开始：清空上一次手势收尾时留下的不足一行的余数。上一次手势可能早已
+            // 结束，把它的残留位移带进一个时间/方向都无关的新手势，会让新手势"平白多出"
+            // 一点用户看不出来源的偏移；清零的代价是跨手势边界丢一点不足一行的像素
+            // （< lineHeightPx，视觉上不可感知），比制造一个不可解释的偏移更安全。
+            pendingScrollPx = 0f
+            return true
+        }
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
             // GestureDetector 的 distanceY 是”上一点 - 当前点”：手指下拖为负；
             // Presenter 的正值才是看更早历史，因此必须反号以保持内容跟手移动。
-            val deltaLines = (-dy / lineHeightPx.toFloat()).roundToInt()
+            if (lineHeightPx <= 0) return true // 度量还没来（首帧前）：不除，避免 Infinity/NaN
+            // 像素余数累加（见 pendingScrollPx 字段注释）：先把本次增量并入累加器，再从
+            // 累加器里取出能凑出的整行数，取出多少扣多少，不清零整个累加器——不足一行的
+            // 部分留给下一次回调，像素不会在这一层消失。
+            pendingScrollPx += -dy
+            val deltaLines = (pendingScrollPx / lineHeightPx.toFloat()).toInt() // 向零截断，符号随累加器
             if (deltaLines == 0) return true
+            pendingScrollPx -= deltaLines * lineHeightPx.toFloat()
             val remoteScroll = onRemoteScrollBy
             if (remoteScroll != null) {
                 remoteScroll(deltaLines) // 远端路径；降级判断由 SessionViewModel 负责
