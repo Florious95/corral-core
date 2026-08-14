@@ -119,13 +119,17 @@ def dispatch_text(l, tid):
     return "\n".join(lines)
 
 
-def send(seat, text):
+def send(seat, text, tid):
     """返回 message_id（**仅作投递凭据，不是 wait 的键**——见 main 里的说明）。
     走 .team/ta 净化包装器，收件人用绝对路径 FQN。
     注意：不传 --json——reference 对 send 用文本输出，检查 ok: True / message_id: 文本。
     （传 --json 会输出 "ok": true，和 ok: True 对不上，send 会误判失败——实发 2026-08-15。）"""
     fqn = f"{REPO}::{TEAM}/{seat}"
-    r = subprocess.run([TA, "send", fqn, text, "--workspace", REPO],
+    # --task 是框架强制的注册键（0.5.66 起就有，只是没进 --help；cli/emit.rs:864）。
+    # 不带时席位 report_result 会以 task_id="manual" 落库、被判 invalid，wait 永远等不到。
+    # ⚠️ 派单正文里「要求席位自报 task_id」**同时保留**：框架强制 + 席位守约互为兜底，
+    #    任一条失效另一条还在（2026-08-15 双方共识）。
+    r = subprocess.run([TA, "send", "--task", tid, fqn, text, "--workspace", REPO],
                        capture_output=True, text=True, cwd=REPO)
     out = r.stdout or ""
     if "ok: True" not in out:
@@ -261,7 +265,7 @@ def main():
                 log(f"{tid}: 角色 {role} 没有对应席位，停。")
                 return 2
             log(f"派 {tid} → {seat}")
-            msg_id = send(seat, dispatch_text(l, tid))
+            msg_id = send(seat, dispatch_text(l, tid), tid)
             if not msg_id:
                 log(f"{tid}: 投递失败，停。")
                 return 3
