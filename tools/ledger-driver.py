@@ -139,7 +139,29 @@ def send(seat, text, tid):
     return m.group(1) if m else None
 
 
-def wait_task(msg_id, tid):
+def seat_busy(seat):
+    """席位此刻是否真的在干活。凭据取 team-agent status 的 worker_state。
+
+    用途有两个，都是 2026-08-15 实发：
+    ① **不朝正在干活的席位重复派单**。driver.log 里 t.contract 被连派三次，
+       就是这个病：wait 等不到 → 落判据 → 判据没过 → 重启 → 再派一次。
+       重复派单会把半条正文粘进席位输入框，比不派单更糟。
+    ② **wait 墙钟到点时，先问席位在不在干**。在干就继续等；
+       不在干才落到判据。否则驱动器会在席位还在编译 app/ 的时候
+       自己也去跑 `gradlew --rerun-tasks`，两边抢同一个 Gradle 锁。
+
+    查不到状态一律返回 False（宁可多等一轮判据，也不要凭猜挂死）。
+    """
+    try:
+        r = subprocess.run([TA, "status", seat, "--json", "--workspace", REPO],
+                           capture_output=True, text=True, cwd=REPO, timeout=60)
+        st = json.loads(r.stdout).get("agents", {}).get(seat, {})
+        return st.get("worker_state") == "BUSY"
+    except Exception:
+        return False
+
+
+def wait_task(msg_id, tid, seat=None):
     """事件驱动等待（DS-01，0.5.65 起）。**等不到不算失败。**
 
     🔴 wait --task 认的是**席位 report_result 自报的账本任务 id**，
@@ -154,14 +176,22 @@ def wait_task(msg_id, tid):
     for cand in [tid, msg_id]:
         if not cand:
             continue
-        try:
-            r = subprocess.run([TA, "wait", "--task", cand, "--workspace", REPO, "--json"],
-                               capture_output=True, text=True, cwd=REPO, timeout=WAIT_EACH)
-            if r.returncode == 0:
-                log(f"  wait 命中 task={cand}")
-                return True
-        except subprocess.TimeoutExpired:
-            log(f"  wait 超时 task={cand}（{WAIT_EACH}s）")
+        while True:
+            try:
+                r = subprocess.run([TA, "wait", "--task", cand, "--workspace", REPO, "--json"],
+                                   capture_output=True, text=True, cwd=REPO, timeout=WAIT_EACH)
+                if r.returncode == 0:
+                    log(f"  wait 命中 task={cand}")
+                    return True
+                break
+            except subprocess.TimeoutExpired:
+                # 墙钟到点 ≠ 席位没在干。先问一句再决定，否则会在人家
+                # 还在编译的时候去跑判据（抢 Gradle 锁 + 必然判未过 → 白停一次）。
+                if seat and seat_busy(seat):
+                    log(f"  wait 超时 task={cand}（{WAIT_EACH}s），但席位 {seat} 仍 BUSY → 继续等")
+                    continue
+                log(f"  wait 超时 task={cand}（{WAIT_EACH}s），席位不忙 → 换下一个候选")
+                break
     log("  两个 id 都没等到，落到机械判据判定")
     return False
 
@@ -264,18 +294,24 @@ def main():
             if not seat:
                 log(f"{tid}: 角色 {role} 没有对应席位，停。")
                 return 2
-            log(f"派 {tid} → {seat}")
-            msg_id = send(seat, dispatch_text(l, tid), tid)
-            if not msg_id:
-                log(f"{tid}: 投递失败，停。")
-                return 3
+            if seat_busy(seat):
+                # 席位已经在干这一单了（多半是上一轮派过、驱动器被重启）。
+                # 再派一次等于把半条正文粘进它的输入框——重复派单比不派更糟。
+                log(f"跳过派单：{seat} 仍 BUSY，认定 {tid} 已在手上，直接等")
+                msg_id = None
+            else:
+                log(f"派 {tid} → {seat}")
+                msg_id = send(seat, dispatch_text(l, tid), tid)
+                if not msg_id:
+                    log(f"{tid}: 投递失败，停。")
+                    return 3
             # 🔴 wait 的键是【账本任务 id】，不是 send 返回的 message_id。
             # 席位 report_result 带的 task_id 就是账本 id，wait --task 匹配的正是它。
             # reference 的 send() 注释说「返回 message_id（即 task id）」——这个等价是错的。
             # 实发 2026-08-15：驱动器卡在 wait --task msg_d5f761155aa8 上永不醒，
             # 而同一时刻 wait --task t.oracle 立即返回 res_c052d53f5738 completed。
             log(f"  投递 {msg_id}；等 {tid} / {msg_id}（事件驱动，非轮询）")
-            wait_task(msg_id, tid)   # 等不到也不停——判据才是唯一凭据
+            wait_task(msg_id, tid, seat)   # 等不到也不停——判据才是唯一凭据
             l = load()
             if check_required(l, tid):
                 l["tasks"][tid]["state"] = "succeeded"
