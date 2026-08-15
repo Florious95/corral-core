@@ -1,14 +1,15 @@
 package protocol
 
 // Key is one named special key the client can inject via Input.Keys (R-1
-// shortcut bar, requirement 017). The seven values form a closed set; a new
-// key requires a protocol version bump. Each maps to a tmux send-keys named
-// key in the bridge layer — the protocol never carries raw terminal bytes in a
-// control frame (that is the binary channel's job).
+// shortcut bar, requirement 017; backspace added by requirement 059
+// passthrough). The values form a closed set; a new key requires a protocol
+// version bump. Each maps to a tmux send-keys named key in the bridge layer —
+// the protocol never carries raw terminal bytes in a control frame (that is
+// the binary channel's job).
 //
-// The closed set is Esc / Ctrl-C / Tab / Up / Down / Left / Right — the keys
-// Claude Code depends on daily. Arrow/vertical-bar values are chosen to read
-// unambiguously on the wire.
+// The closed set is Esc / Ctrl-C / Tab / Up / Down / Left / Right / Backspace
+// — the keys Claude Code depends on daily. Arrow/vertical-bar values are
+// chosen to read unambiguously on the wire.
 type Key string
 
 const (
@@ -26,13 +27,17 @@ const (
 	KeyLeft Key = "left"
 	// KeyRight is the right arrow (menu selection).
 	KeyRight Key = "right"
+	// KeyBackspace is the delete/backspace key (requirement 059 passthrough:
+	// the virtual keyboard delete key goes straight to the CLI, not consumed
+	// locally).
+	KeyBackspace Key = "backspace"
 )
 
-// IsValid reports whether k is one of the seven closed key values. The codec
+// IsValid reports whether k is one of the eight closed key values. The codec
 // rejects any other value on decode so a typo is caught at the boundary.
 func (k Key) IsValid() bool {
 	switch k {
-	case KeyEsc, KeyCtrlC, KeyTab, KeyUp, KeyDown, KeyLeft, KeyRight:
+	case KeyEsc, KeyCtrlC, KeyTab, KeyUp, KeyDown, KeyLeft, KeyRight, KeyBackspace:
 		return true
 	}
 	return false

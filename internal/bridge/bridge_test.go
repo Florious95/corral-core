@@ -419,6 +419,120 @@ func TestSendKeysAcceptedOnLivePane(t *testing.T) {
 	}
 }
 
+// TestTypeKeysArgvExactShape verifies the passthrough primitive injects each
+// key literal in its own send-keys -l call and never appends an Enter (the
+// whole-input "inject + Enter" binding that requirement 059 replaces).
+func TestTypeKeysArgvExactShape(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "argv.log")
+	script := filepath.Join(dir, "fake-tmux")
+	if err := os.WriteFile(script, []byte(`#!/bin/sh
+case "$3" in
+  list-panes) echo "%0"; exit 0;;
+  send-keys) shift 2; echo "$@" >> "$ARGS_LOG"; exit 0;;
+  *) exit 1;;
+esac
+`), 0o755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", logPath)
+
+	p := NewPane("/sock/x", "%0")
+	if err := p.TypeKeys(context.Background(), "l", "s"); err != nil {
+		t.Fatalf("TypeKeys: %v", err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read argv log: %v", err)
+	}
+	got := strings.Split(strings.TrimSpace(string(data)), "\n")
+	// Each key is its own send-keys -l invocation, no Enter in any of them.
+	want := []string{
+		"send-keys -t %0 -l -- l",
+		"send-keys -t %0 -l -- s",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("TypeKeys argv lines = %d, want %d: %q", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("TypeKeys argv[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// TestTypeKeysDeadPaneFails verifies the passthrough primitive keeps the
+// decidable ack (requirement 003): a dead pane fails with ErrPaneNotFound.
+func TestTypeKeysDeadPaneFails(t *testing.T) {
+	tt := newTestTMUX(t)
+	p := tt.deadPane(t)
+
+	if err := p.TypeKeys(context.Background(), "x"); !errors.Is(err, ErrPaneNotFound) {
+		t.Fatalf("TypeKeys dead pane: want ErrPaneNotFound, got %v", err)
+	}
+}
+
+// TestTypeKeysAcceptedOnLivePane is the real-tmux positive control: typed
+// literals land on screen without an Enter (so they stay in the CLI input box),
+// and the pane stays functional afterward.
+func TestTypeKeysAcceptedOnLivePane(t *testing.T) {
+	tt := newTestTMUX(t)
+	p := tt.newPane(t, "bash")
+
+	if err := p.TypeKeys(context.Background(), "e", "c", "h", "o"); err != nil {
+		t.Fatalf("TypeKeys: %v", err)
+	}
+	// No Enter appended: the typed text must remain in the pane's input line
+	// (not yet executed). We can't easily read the prompt line in a generic
+	// shell, so assert the pane is still alive and accepts a normal Inject.
+	if err := p.Inject(context.Background(), ""); err != nil {
+		t.Fatalf("Inject after TypeKeys: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !bytes.Contains(mustSnapshot(t, p), []byte("echo")) {
+		if time.Now().After(deadline) {
+			t.Fatal("typed literal never reached the pane")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// TestBackspaceKeyMapsToBSpace verifies the backspace wire key maps to tmux
+// BSpace (requirement 059 passthrough of the virtual-keyboard delete key).
+func TestBackspaceKeyMapsToBSpace(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "argv.log")
+	script := filepath.Join(dir, "fake-tmux")
+	if err := os.WriteFile(script, []byte(`#!/bin/sh
+case "$3" in
+  list-panes) echo "%0"; exit 0;;
+  send-keys) shift 2; echo "$@" >> "$ARGS_LOG"; exit 0;;
+  *) exit 1;;
+esac
+`), 0o755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", logPath)
+
+	p := NewPane("/sock/x", "%0")
+	if err := p.SendKeys(context.Background(), "backspace"); err != nil {
+		t.Fatalf("SendKeys backspace: %v", err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read argv log: %v", err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "send-keys -t %0 -- BSpace" {
+		t.Errorf("send-keys argv = %q, want %q", got, "send-keys -t %0 -- BSpace")
+	}
+}
+
 func TestRunTmuxTimeout(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "slow-tmux")

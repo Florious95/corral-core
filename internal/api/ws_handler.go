@@ -167,17 +167,21 @@ func (c *wsConn) handleUnsubscribe(u protocol.Unsubscribe) {
 	c.subscribeCancel(u.Ref)
 }
 
-// handleInput injects one whole text line (optionally with an image
-// attachment) OR a set of named special keys, and MUST answer with input_ack
-// (requirement 003 send-must-arrive): ok:true once the input entered the
-// pane, or a machine-readable failure reason. Every failure class in §7.3 is
-// decidable and surfaced.
+// handleInput delivers passthrough input (requirement 059, replacing 003
+// clause 1's whole-line injection) OR a set of named special keys, and MUST
+// answer with input_ack (requirement 003 send-must-arrive): ok:true once the
+// input entered the pane, or a machine-readable failure reason. Every failure
+// class in §7.3 is decidable and surfaced.
+//
+// Passthrough semantics (059): the CLI input box is the draft, so a non-empty
+// Text is TYPED into the pane without an Enter (TypeKeys); an empty Text with
+// no attachment is a bare Enter — the send button only commits what is already
+// in the CLI input box. This replaces the old "inject whole line then Enter".
 //
 // The Keys path (R-1 shortcut bar, requirement 017) sends named keys without
-// an Enter — "press that key once" — unlike the text path's "inject then
-// Enter". (Text or AttachmentPath) and Keys are mutually exclusive; the frame
-// validator (Input.Validate) already rejected a frame carrying both, so at
-// most one branch runs.
+// an Enter — "press that key once". (Text or AttachmentPath) and Keys are
+// mutually exclusive; the frame validator (Input.Validate) already rejected a
+// frame carrying both, so at most one branch runs.
 //
 // AttachmentPath (feat-image-upload-inline; two-step preview added by
 // requirement 057) routes one of two ways, chosen here by consumeAttachPreview:
@@ -248,11 +252,23 @@ func (c *wsConn) handleInput(i protocol.Input) {
 		ack(false, protocol.InputFailTooLarge)
 		return
 	}
+	// 直通输入（059，取代 003 第1条「一次性注入」）：App 键盘每键直通，CLI 输入框即草稿。
+	// 三种路径：
+	//   1. AttachmentPath 非空 → 提交带图（预贴路径已在 pane，发文字[若有]+Enter 提交；
+	//      命中预贴记录走 InjectAfterPreview 只补沉降，未命中走 InjectWithAttachment 兼容）；
+	//   2. Text 非空且无附件 → 直通：文本打到 CLI 输入框，**不追加 Enter**（TypeKeys）；
+	//   3. Text 为空且无附件 → 裸 Enter：发送键只提交。
 	var err error
-	if elapsed, ok := c.s.consumeAttachPreview(i.Ref, i.AttachmentPath); i.AttachmentPath != "" && ok {
-		err = br.InjectAfterPreview(c.ctx, i.Text, remainingSettleDelay(elapsed))
+	if i.AttachmentPath != "" {
+		if elapsed, ok := c.s.consumeAttachPreview(i.Ref, i.AttachmentPath); ok {
+			err = br.InjectAfterPreview(c.ctx, i.Text, remainingSettleDelay(elapsed))
+		} else {
+			err = br.InjectWithAttachment(c.ctx, i.Text, i.AttachmentPath)
+		}
+	} else if i.Text != "" {
+		err = br.TypeKeys(c.ctx, i.Text)
 	} else {
-		err = br.InjectWithAttachment(c.ctx, i.Text, i.AttachmentPath)
+		err = br.Inject(c.ctx, "")
 	}
 	if err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {

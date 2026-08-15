@@ -246,13 +246,14 @@ const PasteSettleDelay = 2 * time.Second
 // protocol boundary; this table is the bridge's own defensive lookup, so an
 // unknown name is a hard error (ErrInvalidKey), never a silent no-op.
 var namedKeys = map[string]string{
-	"esc":    "Escape",
-	"ctrl_c": "C-c",
-	"tab":    "Tab",
-	"up":     "Up",
-	"down":   "Down",
-	"left":   "Left",
-	"right":  "Right",
+	"esc":      "Escape",
+	"ctrl_c":   "C-c",
+	"tab":      "Tab",
+	"up":       "Up",
+	"down":     "Down",
+	"left":     "Left",
+	"right":    "Right",
+	"backspace": "BSpace",
 }
 
 // SendKeys sends named special keys to the pane (R-1 shortcut bar, requirement
@@ -285,6 +286,31 @@ func (p *Pane) SendKeys(ctx context.Context, keys ...string) error {
 	args := append([]string{"send-keys", "-t", p.target, "--"}, named...)
 	_, err := runTmux(ctx, p.socket, p.timeout, args...)
 	return err
+}
+
+// TypeKeys sends each key literal to the pane one keystroke at a time via
+// `send-keys -l` (requirement 059 passthrough). It is the per-key typing
+// primitive: unlike Inject it NEVER appends an Enter, and unlike SendKeys it
+// injects literal characters (not named special keys) — the keystrokes land in
+// the CLI's own input box as a live draft, exactly the "键入即直达" model.
+// The caller is responsible for draining acked keys between sends if it needs
+// strict ordering; each key is its own send-keys invocation so an ack is
+// decidable per keystroke (requirement 003's 发送必达 holds per key).
+// @contract
+// @pre pane 存在（requirePane 前置检查）；keys 为要逐字注入的字符序列
+// @post 每个字符经 send-keys -l 逐次注入 pane，不追加 Enter（草稿停留在 CLI 输入框）
+// @err pane 不存在→ErrPaneNotFound；server 不可达/超时→ErrServerUnreachable/ErrTmuxTimeout
+// @inv 从不追加 Enter；每次注入一个字符，不共享 send-keys 调用
+func (p *Pane) TypeKeys(ctx context.Context, keys ...string) error {
+	if err := p.requirePane(ctx); err != nil {
+		return err
+	}
+	for _, k := range keys {
+		if _, err := runTmux(ctx, p.socket, p.timeout, "send-keys", "-t", p.target, "-l", "--", k); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // pasteViaBuffer injects text via a named tmux buffer: it is pasted verbatim

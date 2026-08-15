@@ -44,8 +44,9 @@ func TestSubscribeSnapshotThenDelta(t *testing.T) {
 	assertSnapshotCursorSuffix(t, te, snap.Data)
 
 	// Inject output; the delta stream must carry it (positive control: the
-	// pipe is actually attached).
+	// pipe is actually attached). 直通（059）：文本先键入，再裸 Enter 提交执行。
 	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "MIRROR_MARK_77"})
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
 	te.waitForMirror("MIRROR_MARK_77")
 }
 
@@ -269,7 +270,9 @@ func TestScrollbackConvergedRange(t *testing.T) {
 	// subscribed session). Subscribe first, then inject to build history.
 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
 	_ = te.readBinaryFrame() // snapshot
+	// 直通（059）：文本先键入（不回车），再裸 Enter 提交执行。
 	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "for i in $(seq 1 60); do echo SCBK_$i; done"})
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
 	// Wait for the tail on screen.
 	te.waitForMirror("SCBK_60")
 
@@ -331,7 +334,9 @@ func TestScrollbackExactHeaderBytes(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
 	_ = te.readBinaryFrame() // snapshot
+	// 直通（059）：文本先键入（不回车），再裸 Enter 提交执行。
 	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "for i in $(seq 1 30); do echo SCBKX_$i; done"})
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
 	te.waitForMirror("SCBKX_30")
 
 	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 5, Ref: te.ref(), FromLine: -20, Count: 10})
@@ -577,5 +582,87 @@ func TestStateNeverGatesMirror(t *testing.T) {
 	ia := ack.(protocol.InputAck)
 	if !ia.OK {
 		t.Fatalf("input ack under unknown state: %s", ia.Reason)
+	}
+}
+
+// TestPassthroughNoEnter is the wire-level red test for requirement 059
+// passthrough: a non-empty Input.Text is TYPED into the pane WITHOUT appending
+// an Enter (TypeKeys), so the CLI input box keeps the text as a live draft
+// instead of submitting it. The leader added this as a mandatory criterion
+// (A-pi-wire-server): without the passthrough routing, a text frame would have
+// gone through Inject (send-keys -l + Enter) and the typed command would
+// EXECUTE immediately, producing its output before any separate submit.
+//
+// Proof in two phases against a `bash` pane:
+//   1. Send Text="echo NOENTER_MARK_059" (the keystroke). With passthrough the
+//      command lands on the prompt line as a draft; the `echo` output must NOT
+//      appear yet (a bare Enter from the old Inject path would run it and the
+//      marker would show).
+//   2. Send Text="" (bare-Enter submit). Now the command executes and the
+//      marker appears — proving the submit is what triggered it, not the
+//      keystroke frame.
+func TestPassthroughNoEnter(t *testing.T) {
+	te := startTmuxEnv(t, "bash")
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
+	_ = te.readBinaryFrame() // snapshot
+
+	const marker = "NOENTER_MARK_059"
+	cmd := "echo " + marker
+
+	// Phase 1: type the command (keystroke frame), NO Enter. bash echoes the
+	// DRAFT "echo NOENTER_MARK_059" onto the prompt line, but must NOT run it:
+	// the mirror must NOT contain a newline-terminated output line of just the
+	// marker (that only appears once Enter submits the command). The draft text
+	// contains the marker as a substring, so we assert on the standalone output
+	// line, not raw containment.
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: cmd})
+
+	// Accumulate mirror deltas until we've seen either the executed output line
+	// (would mean Enter was appended) or enough to conclude the draft only. We
+	// read a bounded set of frames (mirror deltas arrive in chunks; bash echoes
+	// "echo NOENTER_MARK_059" as several deltas). Control frames (input_ack) are
+	// skipped. Each read uses a fresh short context (no accumulated deadline), so
+	// the connection stays writable for the submit. Once the output line appears
+	// → Enter was appended (bad).
+	ran := false
+	seenDraft := false
+	var acc bytes.Buffer
+	for i := 0; i < 20 && !ran && !seenDraft; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		typ, data, err := te.wsEnv.conn.Read(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("read draft: %v", err)
+		}
+		if typ != websocket.MessageBinary {
+			continue // input_ack or other control frame
+		}
+		p, err := protocol.DecodeBinary(data)
+		if err != nil {
+			t.Fatalf("decode mirror frame: %v", err)
+		}
+		acc.Write(p.Data)
+		if bytes.Contains(acc.Bytes(), []byte("\n"+marker)) {
+			ran = true // executed output present
+			break
+		}
+		if bytes.Contains(acc.Bytes(), []byte(cmd)) {
+			seenDraft = true
+		}
+	}
+	if ran {
+		t.Fatalf("keystroke frame executed the command (%q output appeared without a submit Enter) — text path still appends Enter; mirror=%q", marker, acc.String())
+	}
+	if !seenDraft {
+		t.Fatalf("draft %q did not land on screen; mirror=%q", cmd, acc.String())
+	}
+
+	// Phase 2: submit (bare Enter). The command runs and the output line appears.
+	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
+	te.waitForMirror("\n" + marker)
+	ack := te.wsEnv.readControlDraining()
+	ia := ack.(protocol.InputAck)
+	if !ia.OK {
+		t.Fatalf("submit input_ack not ok: %s", ia.Reason)
 	}
 }
