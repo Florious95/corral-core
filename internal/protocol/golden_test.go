@@ -127,6 +127,22 @@ func TestBinaryGoldenFixtures(t *testing.T) {
 	}
 }
 
+// TestBackspaceKeyIsInClosedSet verifies the backspace wire key (requirement
+// 059 passthrough) is a valid protocol Key and round-trips on the wire.
+func TestBackspaceKeyIsInClosedSet(t *testing.T) {
+	if !protocol.KeyBackspace.IsValid() {
+		t.Fatal("KeyBackspace must be a valid closed-set key (requirement 059)")
+	}
+	frame := protocol.Input{ReqID: 1, Ref: "s1", Keys: []protocol.Key{protocol.KeyBackspace}}
+	wire, err := protocol.MarshalFrame(frame)
+	if err != nil {
+		t.Fatalf("MarshalFrame(backspace input): %v", err)
+	}
+	if !bytes.Contains(wire, []byte(`"keys":["backspace"]`)) {
+		t.Errorf("marshal backspace input = %s, want keys [backspace]", wire)
+	}
+}
+
 // readTestData loads one golden fixture from the testdata directory next to
 // this test file.
 func readTestData(t *testing.T, name string) []byte {
