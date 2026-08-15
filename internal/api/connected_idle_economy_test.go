@@ -5,29 +5,21 @@ package api
 // discovery must accept an explicit socket-directory scope, and state samples
 // must enter one fleet-wide scheduler instead of fanning out per pane.
 //
-// The 058 archive removed the fairness/visibility test that asserted blocked/
-// working DETECTION (it depended on the archived screen-rule decision layer);
-// it is archived to docs/archive/agentstate-round4/api-connected-idle-fossil-test.go.
-// The fairness/VISIBILITY mechanism itself — fixed-burst dispatch, FIFO reach,
-// 60s bound — is re-verifiable with a scripted fake provider once t.impl
-// rebuilds detection; the detection-dependent assertions are not re-pinned
-// here.
+// 060 uproot (2026-08-15): the agent-state sampling scheduler was removed
+// wholesale with the state pipeline (requirement 060: 二级菜单改为实时流并取代
+// 状态判定). The sampling-fairness test is archived to scratch/archive-level2/.
+// The discovery-isolation tests below are kept — they pin the scoped-discovery
+// seam, which the level-1 menu still needs.
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
-
-	"github.com/agentmirror/agentmirror/internal/discovery"
-	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
 // TestConnectedIdleEconomyScopedDiscoverySeamExists is the isolation red
@@ -188,64 +180,3 @@ esac
 		}
 	}
 }
-
-// TestConnectedIdleEconomySamplingDoesNotFanOutFleet is the sampling red
-// test. With no pacing permit, a stable fleet may launch at most the first
-// global sample, regardless of whether it contains 3, 27, or 200 panes. The
-// old per-entry TTL implementation launches one sampler for every pane here.
-func TestConnectedIdleEconomySamplingDoesNotFanOutFleet(t *testing.T) {
-	for _, panes := range []int{3, 27, 200} {
-		t.Run(fmt.Sprintf("panes_%d", panes), func(t *testing.T) {
-			p := NewStateProvider(discardLogger())
-			defer p.Close()
-			p.ttl = time.Hour
-
-			var samples atomic.Int64
-			p.sample = func(context.Context, discovery.Pane) ([]byte, time.Duration, error) {
-				samples.Add(1)
-				return nil, 0, errors.New("counted sample")
-			}
-
-			fleet := make([]discovery.Pane, panes)
-			for i := range fleet {
-				fleet[i] = discovery.Pane{
-					Socket:  "/isolated/not-opened",
-					Session: fmt.Sprintf("s-%03d", i),
-					PaneID:  fmt.Sprintf("%%%d", i),
-					CWD:     "/isolated",
-					Command: "claude",
-				}
-			}
-			// Seed a previously sampled, unchanged fleet whose entire TTL has
-			// expired. This is the exact old steady-state shape: the next
-			// listing used to launch one refresh for every cached pane.
-			p.mu.Lock()
-			for _, pn := range fleet {
-				p.cache[sessionRef(pn)] = &stateCacheEntry{
-					pane:          pn,
-					state:         protocol.StateWorking,
-					prev:          protocol.StateWorking,
-					lastRequested: p.now(),
-					lastRefresh:   p.now().Add(-2 * p.ttl),
-				}
-			}
-			p.mu.Unlock()
-			for _, pn := range fleet {
-				_ = p.State(context.Background(), pn)
-			}
-
-			// Wait only for evidence of a forbidden second dispatch. This is
-			// below the production scheduler interval, so a fixed-rate
-			// implementation stays at zero or one while the old fan-out turns
-			// red without a timing-sensitive expectation that every goroutine ran.
-			deadline := time.Now().Add(100 * time.Millisecond)
-			for samples.Load() <= 1 && time.Now().Before(deadline) {
-				time.Sleep(time.Millisecond)
-			}
-			if got := samples.Load(); got > 1 {
-				t.Fatalf("%d-pane stable fleet dispatched %d samples without a global pacing permit; want <= 1", panes, got)
-			}
-		})
-	}
-}
-

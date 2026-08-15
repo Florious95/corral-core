@@ -28,7 +28,6 @@ server/
     ├── bridge/           # 单 pane 终端桥：快照/增量流/注入/resize（任务 term-bridge）
     ├── protocol/         # WS 帧类型（任务 protocol-spec）
     ├── api/              # WS 服务 + 图片上传（任务 ws-api）
-    ├── agentstate/       # per-agent 状态适配器（任务 state-parser）
     ├── pairing/          # token + QR 配对（任务 pairing-security）
     └── tsnetd/           # tsnet 内嵌监听（任务 tsnet-embed）
 ```

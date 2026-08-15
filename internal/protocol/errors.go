@@ -22,9 +22,6 @@ var (
 	// ErrInvalidField means a required field is missing or a value is outside
 	// its closed set.
 	ErrInvalidField = errors.New("protocol: invalid or missing required field")
-	// ErrInvalidState means an agent state string is not one of the four
-	// closed values.
-	ErrInvalidState = errors.New("protocol: invalid agent state")
 	// ErrBadMagic means a binary frame did not start with BinaryMagic.
 	ErrBadMagic = errors.New("protocol: bad binary frame magic")
 	// ErrUnknownKind means a binary frame carried an unknown kind byte.

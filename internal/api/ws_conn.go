@@ -373,7 +373,6 @@ func (c *wsConn) classifyCodecError(err error) {
 	case errors.Is(err, protocol.ErrBadPayload),
 		errors.Is(err, protocol.ErrInvalidField),
 		errors.Is(err, protocol.ErrMissingVersion),
-		errors.Is(err, protocol.ErrInvalidState),
 		errors.Is(err, protocol.ErrInvalidRef),
 		errors.Is(err, protocol.ErrInvalidGeometry),
 		errors.Is(err, protocol.ErrInvalidCount):

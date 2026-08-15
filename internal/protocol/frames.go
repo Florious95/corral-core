@@ -63,16 +63,13 @@ type List struct {
 }
 
 // Workspace is one first-level group of the two-level model (requirement
-// 002): it aggregates every session whose cwd equals Cwd. AggregateState is
-// computed server-side and is authoritative — the client renders it and never
-// recomputes the aggregation rule. In a full Listing, Sessions carries the
-// group's members; in a ListDelta's ChangedWorkspaces it is empty and only the
-// aggregate/count are meaningful.
+// 002): it aggregates every session whose cwd equals Cwd. In a full Listing,
+// Sessions carries the group's members; in a ListDelta's ChangedWorkspaces it
+// is empty and only the session count is meaningful.
 type Workspace struct {
-	Cwd            string     `json:"cwd"`
-	SessionCount   int        `json:"session_count"`
-	AggregateState AgentState `json:"aggregate_state"`
-	Sessions       []Session  `json:"sessions,omitempty"`
+	Cwd          string    `json:"cwd"`
+	SessionCount int       `json:"session_count"`
+	Sessions     []Session `json:"sessions,omitempty"`
 }
 
 // Session is one second-level entry of the model (requirement 002): a single
@@ -81,12 +78,11 @@ type Workspace struct {
 // distinct from the display-only Name. Rows/Cols are the pane's current
 // dimensions.
 type Session struct {
-	Ref   string     `json:"ref"`
-	Name  string     `json:"name"`
-	Cwd   string     `json:"cwd"`
-	State AgentState `json:"state"`
-	Rows  uint16     `json:"rows"`
-	Cols  uint16     `json:"cols"`
+	Ref  string `json:"ref"`
+	Name string `json:"name"`
+	Cwd  string `json:"cwd"`
+	Rows uint16 `json:"rows"`
+	Cols uint16 `json:"cols"`
 }
 
 // Listing is the full two-level workspace/session model (S→C, reply to List).

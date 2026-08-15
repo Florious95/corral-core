@@ -22,15 +22,6 @@ func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
 func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
 func (AttachPreview) FrameType() FrameType   { return TypeAttachPreview }
 
-// requireState returns ErrInvalidState unless s is one of the four closed
-// AgentState values.
-func requireState(s AgentState) error {
-	if !s.IsValid() {
-		return fmt.Errorf("%w: %q", ErrInvalidState, s)
-	}
-	return nil
-}
-
 // Validate reports whether the auth frame is well-formed: a non-empty token.
 func (a Auth) Validate() error {
 	if a.Token == "" {
@@ -60,14 +51,11 @@ func (l List) Validate() error {
 	return nil
 }
 
-// Validate checks a workspace: non-empty cwd, a valid aggregate state, a
-// non-negative count, and every member session valid.
+// Validate checks a workspace: non-empty cwd, a non-negative count, and every
+// member session valid.
 func (w Workspace) Validate() error {
 	if w.Cwd == "" {
 		return fmt.Errorf("%w: workspace cwd must be non-empty", ErrInvalidField)
-	}
-	if err := requireState(w.AggregateState); err != nil {
-		return err
 	}
 	if w.SessionCount < 0 {
 		return fmt.Errorf("%w: workspace session_count must be >= 0", ErrInvalidField)
@@ -80,17 +68,14 @@ func (w Workspace) Validate() error {
 	return nil
 }
 
-// Validate checks a session entry: a non-empty ref and cwd, a valid state,
-// and nonzero dimensions.
+// Validate checks a session entry: a non-empty ref and cwd, and nonzero
+// dimensions.
 func (s Session) Validate() error {
 	if s.Ref == "" {
 		return fmt.Errorf("%w: session ref must be non-empty", ErrInvalidField)
 	}
 	if s.Cwd == "" {
 		return fmt.Errorf("%w: session cwd must be non-empty", ErrInvalidField)
-	}
-	if err := requireState(s.State); err != nil {
-		return err
 	}
 	if s.Rows == 0 || s.Cols == 0 {
 		return fmt.Errorf("%w: session rows/cols must be >= 1", ErrInvalidField)

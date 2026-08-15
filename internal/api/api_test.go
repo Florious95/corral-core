@@ -98,11 +98,6 @@ func TestListReturnsFullListing(t *testing.T) {
 	if ws.Cwd != "/ws/a" || ws.SessionCount != 2 {
 		t.Fatalf("workspace = %+v, want cwd /ws/a count 2", ws)
 	}
-	// Aggregate: both panes are unknown (default state provider), so the
-	// workspace aggregates to unknown (012 rule 3).
-	if ws.AggregateState != protocol.StateUnknown {
-		t.Errorf("aggregate_state = %q, want %q", ws.AggregateState, protocol.StateUnknown)
-	}
 	if len(ws.Sessions) != 2 {
 		t.Fatalf("workspace has %d sessions, want 2", len(ws.Sessions))
 	}

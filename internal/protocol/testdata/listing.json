@@ -8,13 +8,11 @@
       {
         "cwd": "/proj/a",
         "session_count": 2,
-        "aggregate_state": "blocked",
         "sessions": [
           {
             "ref": "s1",
             "name": "claude",
             "cwd": "/proj/a",
-            "state": "working",
             "rows": 40,
             "cols": 100
           },
@@ -22,7 +20,6 @@
             "ref": "s2",
             "name": "codex",
             "cwd": "/proj/a",
-            "state": "blocked",
             "rows": 24,
             "cols": 80
           }
@@ -31,13 +28,11 @@
       {
         "cwd": "/proj/b",
         "session_count": 1,
-        "aggregate_state": "unknown",
         "sessions": [
           {
             "ref": "s3",
             "name": "claude",
             "cwd": "/proj/b",
-            "state": "unknown",
             "rows": 30,
             "cols": 90
           }

@@ -28,7 +28,6 @@ type Server struct {
 	log *slog.Logger
 
 	tokenValidator TokenValidator
-	stateProvider  StateProvider
 	discoverer     Discoverer
 
 	listInterval time.Duration
@@ -95,7 +94,7 @@ type Server struct {
 // their safe defaults when unset. The discovery loop starts immediately.
 // @contract
 // @pre Options 任何字段可零值；全部按 Options 上文档的默认回退
-// @post 返回已装配的 Server；discovery loop 已以 goroutine 启动；TokenValidator/StateProvider/Discoverer 缺省时装入安全默认
+// @post 返回已装配的 Server；discovery loop 已以 goroutine 启动；TokenValidator/Discoverer 缺省时装入安全默认
 // @err none — 构造不返回 error；无效配置在运行时暴露
 // @inv 生命周期由 Close 终结；loop 在零连接时挂起（idle-gate）
 func NewServer(opts Options) *Server {
@@ -107,7 +106,6 @@ func NewServer(opts Options) *Server {
 	s := &Server{
 		log:            log,
 		tokenValidator: opts.TokenValidator,
-		stateProvider:  opts.StateProvider,
 		discoverer:     opts.Discoverer,
 		listInterval:   opts.ListInterval,
 		uploadDir:      opts.UploadDir,
@@ -121,9 +119,6 @@ func NewServer(opts Options) *Server {
 	}
 	if s.tokenValidator == nil {
 		s.tokenValidator = staticToken{token: opts.Token}
-	}
-	if s.stateProvider == nil {
-		s.stateProvider = unknownState{}
 	}
 	if s.discoverer == nil {
 		// Copy the explicit scope (or the e2e-only env bridge) so a later
@@ -234,7 +229,7 @@ func (s *Server) rebuildCatalog(ctx context.Context) error {
 		return fmt.Errorf("api: discover: %w", err)
 	}
 	s.catalog.rebuild(model)
-	snap := buildSnapshot(s.catalog, s.stateProvider, ctx)
+	snap := buildSnapshot(s.catalog)
 	s.setSnapshot(snap)
 	return nil
 }

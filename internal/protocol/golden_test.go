@@ -34,29 +34,29 @@ var (
 			ReqID: 7, Seq: 42,
 			Workspaces: []protocol.Workspace{
 				{
-					Cwd: "/proj/a", SessionCount: 2, AggregateState: protocol.StateBlocked,
+					Cwd: "/proj/a", SessionCount: 2,
 					Sessions: []protocol.Session{
-						{Ref: "s1", Name: "claude", Cwd: "/proj/a", State: protocol.StateWorking, Rows: 40, Cols: 100},
-						{Ref: "s2", Name: "codex", Cwd: "/proj/a", State: protocol.StateBlocked, Rows: 24, Cols: 80},
+						{Ref: "s1", Name: "claude", Cwd: "/proj/a", Rows: 40, Cols: 100},
+						{Ref: "s2", Name: "codex", Cwd: "/proj/a", Rows: 24, Cols: 80},
 					},
 				},
-				{Cwd: "/proj/b", SessionCount: 1, AggregateState: protocol.StateUnknown,
+				{Cwd: "/proj/b", SessionCount: 1,
 					Sessions: []protocol.Session{
-						{Ref: "s3", Name: "claude", Cwd: "/proj/b", State: protocol.StateUnknown, Rows: 30, Cols: 90},
+						{Ref: "s3", Name: "claude", Cwd: "/proj/b", Rows: 30, Cols: 90},
 					}},
 			},
 		}},
 		{"list_delta.json", protocol.ListDelta{
 			Seq: 45,
 			AddedSessions: []protocol.Session{
-				{Ref: "s4", Name: "claude", Cwd: "/proj/c", State: protocol.StateIdle, Rows: 25, Cols: 100},
+				{Ref: "s4", Name: "claude", Cwd: "/proj/c", Rows: 25, Cols: 100},
 			},
 			RemovedRefs: []string{"s1"},
 			ChangedSessions: []protocol.Session{
-				{Ref: "s2", Name: "codex", Cwd: "/proj/a", State: protocol.StateIdle, Rows: 24, Cols: 80},
+				{Ref: "s2", Name: "codex", Cwd: "/proj/a", Rows: 24, Cols: 80},
 			},
 			ChangedWorkspaces: []protocol.Workspace{
-				{Cwd: "/proj/a", SessionCount: 2, AggregateState: protocol.StateIdle},
+				{Cwd: "/proj/a", SessionCount: 2},
 			},
 		}},
 		{"subscribe.json", protocol.Subscribe{Ref: "s1", Rows: 40, Cols: 100}},

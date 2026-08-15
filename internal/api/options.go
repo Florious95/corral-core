@@ -2,12 +2,11 @@ package api
 
 // options.go declares the configuration surface of the WebSocket API server:
 // every tunable cmd/agentmirrord wires in (pairing token, upload directory,
-// size limits, listing cadence) plus the two extension seams — the token
-// validator (default staticToken, pairing generates the token itself) and the
-// agent-state provider (default unknownState, production wiredStateProvider
-// via NewStateProvider). Zero values fall back to the defaults documented on
-// each field, so a minimal NewServer(&Options{Token: t}) is enough to bring up
-// a fully functional service.
+// size limits, listing cadence) plus the extension seam — the token validator
+// (default staticToken, pairing generates the token itself). Zero values fall
+// back to the defaults documented on each field, so a minimal
+// NewServer(&Options{Token: t}) is enough to bring up a fully functional
+// service.
 
 import (
 	"log/slog"
@@ -58,14 +57,6 @@ type Options struct {
 	// token itself (task pairing-security), it does not replace this
 	// validator.
 	TokenValidator TokenValidator
-
-	// StateProvider maps each discovered pane to its normalized agent state.
-	// The default is unknownState, always returning protocol.StateUnknown
-	// (requirement 008 first-class value); the production wiring is
-	// wiredStateProvider via NewStateProvider, assembled by cmd/agentmirrord
-	// (task fix-state-wiring). State failures must never affect mirroring or
-	// input — this interface is the seam that guarantees it.
-	StateProvider StateProvider
 
 	// Discoverer produces the tmux workspace snapshot the listing loop
 	// consumes. The default scans every tmux server socket on the host

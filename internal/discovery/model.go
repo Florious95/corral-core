@@ -31,11 +31,10 @@ type Pane struct {
 	// falls back to Session. Never a grouping key (grouping is CWD, 002).
 	WindowName string
 
-	// PaneTitle is the pane's OSC title (#{pane_title}). Claude Code writes a
-	// braille spinner (working) or a ✳ (idle) here — the state signal the
-	// agentstate adapters key on (task fix-state-detection, D-26). It is
-	// additive input for the state pipeline; a missing/empty title degrades to
-	// screen-rule fallback, never a scan failure (008).
+	// PaneTitle is the pane's OSC title (#{pane_title}). It is carried as
+	// opaque display data (requirement 060: the title is shown verbatim, never
+	// parsed for state — the agent-state pipeline was removed). A missing or
+	// empty title is not a scan failure.
 	PaneTitle string
 
 	// PaneID is tmux's unique pane identifier for this server (e.g. "%0").

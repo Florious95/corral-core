@@ -567,23 +567,6 @@ func TestRealResizeStillRepushesSnapshot(t *testing.T) {
 	t.Fatal("real resize did not re-push a snapshot (convergence would be lost)")
 }
 
-// TestStateNeverGatesMirror verifies the 008 isolation law structurally: with
-// the default (always-unknown) state provider, a subscribe still delivers a
-// snapshot and input still acks — state never blocks the mirror path.
-func TestStateNeverGatesMirror(t *testing.T) {
-	te := startTmuxEnv(t, "cat")
-	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
-	snap := te.readBinaryFrame()
-	if snap.Kind != protocol.KindSnapshot {
-		t.Fatalf("snapshot not delivered under unknown state, got kind %d", snap.Kind)
-	}
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "hi"})
-	ack := te.wsEnv.readControlDraining()
-	ia := ack.(protocol.InputAck)
-	if !ia.OK {
-		t.Fatalf("input ack under unknown state: %s", ia.Reason)
-	}
-}
 
 // TestPassthroughNoEnter is the wire-level red test for requirement 059
 // passthrough: a non-empty Input.Text is TYPED into the pane WITHOUT appending
