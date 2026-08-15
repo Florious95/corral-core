@@ -17,7 +17,6 @@
 package dev.agentmirror.app
 
 import android.content.Context
-import android.content.Intent
 import dev.agentmirror.app.service.NotificationHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -30,15 +29,16 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * 导航壳 Robolectric 测试（fix-app-nav 验收 `--tests "*Nav*"`，D-2+D-3 合并修复）。
+ * 导航壳 Robolectric 测试（fix-app-nav 验收 `--tests "*Nav*"`，D-3 合并修复）。
  *
- * 红测先行：前三条在当前代码（MainActivity 不读 intent / 无 onNewIntent 处理 / remember
- * 丢导航态）下均为红，修复后绿。基建：Robolectric 4.16.1（maven 实测存在）；
- * [Config] sdk=[34] 避开 compileSdk 36 的 Robolectric 支持面差异（知识基底 §3 兼容性小样
- * 验证）。后续 seams 任务共用此基建。
+ * 基建：Robolectric 4.16.1（maven 实测存在）；[Config] sdk=[34] 避开 compileSdk 36 的
+ * Robolectric 支持面差异（知识基底 §3 兼容性小样验证）。
  *
  * 断言面：直接读 MainActivity.navState（导航态提升到 Activity 的设计，见 [MainNavState]），
  * 不依赖 Compose 渲染断言——渲染面更薄、更稳。
+ *
+ * 060 uproot（2026-08-15）：深链（ACTION_OPEN_SESSION 通知深链）随状态通知整体拔除，
+ * 相关深链测试一并移除；本文件只保留导航壳自身的重建保态与 launcher 防御。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -51,34 +51,6 @@ class MainActivityNavTest {
         RuntimeEnvironment.getApplication()
             .getSharedPreferences("pairing_config", Context.MODE_PRIVATE)
             .edit().clear().commit()
-    }
-
-    /** 构造通知深链 intent（与 NotificationHelper.openSessionPendingIntent 同 action/extra）。 */
-    private fun deepLinkIntent(ref: String): Intent =
-        Intent(RuntimeEnvironment.getApplication(), MainActivity::class.java).apply {
-            action = NotificationHelper.ACTION_OPEN_SESSION
-            putExtra(NotificationHelper.EXTRA_SESSION_REF, ref)
-            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        }
-
-    // ---- D-2 深链：冷启动直达 + 在屏 onNewIntent 切换 ----
-
-    @Test
-    fun deepLinkColdStart_navigatesToRef() {
-        // 红测：当前 MainActivity 不读 intent，activeSession 恒 null（审计 D-2 断链）。
-        val controller = Robolectric.buildActivity(MainActivity::class.java, deepLinkIntent("ref-A"))
-        val activity = controller.setup().get()
-        assertEquals("ref-A" to "ref-A", activity.navState.activeSession)
-    }
-
-    @Test
-    fun onNewIntent_switchesToNewRef() {
-        // 红测：无 onNewIntent 处理，深链不切换会话（审计 D-2：MainActivity 无 onNewIntent）。
-        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
-        val activity = controller.get()
-        activity.navState.activeSession = "ref-A" to "Agent A" // 模拟已在会话页
-        controller.newIntent(deepLinkIntent("ref-B")) // singleTop 在屏：Robolectric 经 onNewIntent 投递
-        assertEquals("ref-B" to "ref-B", activity.navState.activeSession)
     }
 
     // ---- D-3 重建保态：旋转/进程回收重建后仍停在会话页 ----
@@ -99,16 +71,6 @@ class MainActivityNavTest {
     fun launcherIntent_doesNotOpenSession() {
         // 普通 launcher 启动（无深链 action）不得误入会话页。
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
-        assertNull(activity.navState.activeSession)
-    }
-
-    @Test
-    fun deepLinkWithoutRef_isIgnored() {
-        // 深链 action 但缺 ref：忽略不导航（缺字段不猜，回工作区）。
-        val intent = deepLinkIntent("ref-A").apply {
-            removeExtra(NotificationHelper.EXTRA_SESSION_REF)
-        }
-        val activity = Robolectric.buildActivity(MainActivity::class.java, intent).setup().get()
         assertNull(activity.navState.activeSession)
     }
 }

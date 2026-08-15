@@ -339,7 +339,7 @@ class ColdStartReconnectTest {
         )
         assertEquals("晚挂载 VM 必须收到全量 listing 数据", 1, vm.uiState.value.workspaces.size)
         assertEquals("/proj/a", vm.uiState.value.workspaces.single().cwd)
-        assertEquals(1, vm.uiState.value.workspaces.single().sessions.size)
+        assertEquals(1, vm.uiState.value.workspaces.single().sessionCount)
     }
 
     // ---- 红测四：双 start 幂等守卫（D10 多订阅替换语义的坑）----

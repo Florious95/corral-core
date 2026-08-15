@@ -25,10 +25,8 @@ import androidx.compose.ui.test.moveBy
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.up
-import dev.agentmirror.app.conn.AgentState
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ListingFrame
-import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.conn.Workspace
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import org.junit.Assert.assertEquals
@@ -68,10 +66,6 @@ class WorkspaceRefreshTest {
             Workspace(
                 cwd = "/proj/a",
                 sessionCount = 1,
-                aggregateState = AgentState.WORKING,
-                sessions = listOf(
-                    Session(ref = "s1", name = "claude", cwd = "/proj/a", state = AgentState.WORKING, rows = 24, cols = 80),
-                ),
             ),
         ),
     )
@@ -90,7 +84,6 @@ class WorkspaceRefreshTest {
                     selectedWorkspaceCwd = null,
                     onSelectWorkspace = {},
                     onBackToList = {},
-                    onOpenSession = { _, _ -> },
                     onOpenSettings = {},
                 )
             }

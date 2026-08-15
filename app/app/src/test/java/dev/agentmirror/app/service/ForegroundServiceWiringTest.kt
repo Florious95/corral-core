@@ -249,7 +249,7 @@ class ForegroundServiceWiringTest {
         driveReadyWithListing(factory.created[1], seq = 7)
         assertEquals("恢复后首屏必须回到被杀前的列表（004 无状态免疫）", 1, vm2.uiState.value.workspaces.size)
         assertEquals("/proj/a", vm2.uiState.value.workspaces.single().cwd)
-        assertEquals("s1", vm2.uiState.value.workspaces.single().sessions.single().ref)
+        assertEquals(1, vm2.uiState.value.workspaces.single().sessionCount)
     }
 
     // ---- 红测三：连接归属断言（连接由服务承接，不在屏组合各自持有）----

@@ -32,9 +32,9 @@ import dev.agentmirror.app.conn.FramePayload
 /**
  * 常驻连接前台服务（004/011 Android 前台服务路线；fg-service 知识基底 §1）。
  *
- * 职责是**承载生命周期**，不含业务逻辑（薄 Android 层，业务在纯 JVM 的 [StateWatcher]）：
- * - [onCreate]：建通知渠道，构造 [StateWatcher]（状态沿→状态通知），把本服务监听挂到
- *   [ServiceWire.serviceListener]（连接事件 → 常驻通知文案 + 状态守望）。
+ * 职责是**承载生命周期**，不含业务逻辑（薄 Android 层）：
+ * - [onCreate]：建通知渠道，把本服务监听挂到 [ServiceWire.serviceListener]
+ *   （连接事件 → 常驻通知文案）。
  * - [onStartCommand]：startForeground（dataSync 类型，API 29+；低版本走无类型重载，见下）
  *   + 确保共享连接启动（[ServiceWire.managerOrNull] 已存在则复用）+ 驱动时钟泵。
  * - [onDestroy]：停时钟泵、解绑 [ServiceWire.serviceListener]、释放连接（幂等）。
@@ -69,23 +69,15 @@ import dev.agentmirror.app.conn.FramePayload
  */
 class MirrorForegroundService : Service() {
 
-    /** 通知助手：两条渠道 + 常驻/状态通知。 */
+    /** 通知助手：常驻通知渠道。 */
     private lateinit var notifications: NotificationHelper
-
-    /** 状态守望：listing/delta 流 → 状态沿变化通知。 */
-    private lateinit var stateWatcher: StateWatcher
 
     override fun onCreate() {
         super.onCreate()
         notifications = NotificationHelper(this)
         notifications.createChannels()
 
-        stateWatcher = StateWatcher(
-            onNotify = { ref, name, state -> notifications.notifyState(ref, name, state) },
-            onClear = { ref -> notifications.cancelState(ref) },
-        )
-
-        // 本服务监听挂到 ServiceWire.serviceListener：连接事件（状态→通知文案、帧→状态守望）
+        // 本服务监听挂到 ServiceWire.serviceListener：连接事件（状态→通知文案）
         // 与 UI 的 uiConnector 并行扇出。manager 不在 onCreate 建——连接归属 ServiceWire 单例，
         // 服务只在 onStartCommand 确保其启动（004：状态唯一来源是 prefs/conn 层，非本服务）。
         ServiceWire.serviceListener = connListener
@@ -179,11 +171,11 @@ class MirrorForegroundService : Service() {
         }
 
         override fun onFrame(frame: FramePayload) {
-            stateWatcher.onFrame(frame)
+            // 060 uproot：状态守望随状态判定拔除；控制帧本服务不再消费（常驻通知只跟随连接状态）。
         }
 
         override fun onBinary(frame: BinaryFrame) {
-            // 镜像通道与状态层严格解耦（008）：本服务只关心控制帧状态，忽略镜像字节。
+            // 镜像通道与状态层严格解耦（008）：本服务只关心连接状态，忽略镜像字节。
         }
 
         override fun onLocalDecodeError(code: FrameError, message: String) {
