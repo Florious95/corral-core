@@ -1,0 +1,593 @@
+{
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.level2-livestream.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.advisor": {
+   "provider": "claude_code",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/level2-livestream/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "advisor",
+    "team": "remote-agent-android"
+   }
+  },
+  "r.dev-server": {
+   "provider": "claude_code",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/level2-server/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "dev-state",
+    "team": "remote-agent-android"
+   }
+  },
+  "r.dev-app": {
+   "provider": "claude_code",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/level2-app/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "dev-keybar",
+    "team": "remote-agent-android"
+   }
+  },
+  "r.control": {
+   "provider": "claude_code",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/level2-verify/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "control",
+    "team": "remote-agent-android"
+   }
+  },
+  "r.leader": {
+   "provider": "human",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/level2-escalation/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.design": {
+   "title": "产出二级菜单实时流的实现方案 + 根因探针。契约见 requirement-base/entries/060。🔴 三条不变量，方案里必须逐条写死怎么保证：①pane 标题原样显示，一个字符都不解析、不匹配、不映射、不美化——◐/✳ 这类前缀是 Agent CLI 自己定的、随时会变，前四轮全部死在造符号识别层上；②会话身份只用 tmux 结构字段 session_name/window_index/window_name，禁止从标题字符串里抠；③实时流只在二级菜单打开时拉数据，关掉即停（工程常识红线①：空闲 CPU 趋近 0），且不 attach tmux 客户端（用 list-panes -a 或 control mode），避免多客户端参与尺寸谈判压小用户真实窗口。🔴 形态裁定：二级菜单可点，点一行进那个会话——它是通往三级终端的唯一入口，做成只读整个 App 就进不去任何会话了。产物：/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/实现方案.md 与 probe.sh。probe.sh 是根因探针，断言上面三条不变量在世界里成立；现在跑必须是红的（还没实现），实现完必须转绿。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属，传了会压掉默认归属让编排器空等）。",
+   "owner": {
+    "role": "r.advisor"
+   },
+   "resources": {
+    "worktree_id": "wt-l2-design",
+    "write_paths": [
+     ".team/nodes/level2-livestream/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/060-二级菜单改为实时流并取代状态判定.md",
+     ".team/nodes/level2-locate/拔除清单.md",
+     "server/internal/",
+     "app/app/src/main/java/dev/agentmirror/app/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f1c5a27c8"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/实现方案.md",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/probe.sh"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-d-plan",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/实现方案.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-d-probe",
+      "argv": [
+       "test",
+       "-x",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/probe.sh"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-d-red",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;r=subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/probe.sh'],timeout=600);sys.exit(0 if r.returncode!=0 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-d-plan",
+     "A-d-probe",
+     "A-d-red"
+    ]
+   },
+   "state": "planned"
+  },
+  "t.server": {
+   "title": "服务端实现二级菜单实时流：按 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/实现方案.md 落地。数据源 tmux list-panes -a（或 control mode），推给客户端的每一行必须带：原样 pane 标题字符串 + 结构字段 session_name/window_index/window_name。🔴 标题一个字符都不解析。🔴 无订阅者时不得拉数据（空闲 CPU 趋近 0）。🔴 不得 attach tmux 客户端。必须写出这四个具名测试并全部 PASS：TestLevel2TitleVerbatim（标题逐字节原样透传，含 ◐/✳ 前缀）、TestLevel2IdentityStructural（身份只来自结构字段，改标题不影响身份）、TestLevel2StopsWhenNoSubscriber（无订阅者时零 tmux 调用）、TestLevel2NoTmuxAttach（命令集合里永不出现 attach）。⛔ 禁止启动安卓模拟器。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.dev-server"
+   },
+   "resources": {
+    "worktree_id": "wt-l2-server",
+    "write_paths": [
+     "server/internal/",
+     "server/cmd/",
+     ".team/nodes/level2-server/"
+    ],
+    "read_paths": [
+     ".team/nodes/level2-livestream/实现方案.md",
+     "requirement-base/entries/060-二级菜单改为实时流并取代状态判定.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f1c5a27c8"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-server/实现说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-s-verbatim",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestLevel2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestLevel2TitleVerbatim'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-s-identity",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestLevel2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestLevel2IdentityStructural'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-s-idle",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestLevel2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestLevel2StopsWhenNoSubscriber'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-s-noattach",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestLevel2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestLevel2NoTmuxAttach'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-s-suite",
+      "argv": [
+       "go",
+       "test",
+       "./...",
+       "-count=1",
+       "-timeout",
+       "1800s"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-s-verbatim",
+     "A-s-identity",
+     "A-s-idle",
+     "A-s-noattach",
+     "A-s-suite"
+    ]
+   },
+   "state": "planned",
+   "parallel": {
+    "group": "g.impl"
+   }
+  },
+  "t.app": {
+   "title": "App 端实现二级菜单实时流：按 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/实现方案.md 落地。二级菜单渲染服务端推来的每一行，**标题原样画出来**（含 ◐/✳ 前缀），点一行进那个会话。🔴 标题一个字符都不解析、不匹配、不映射、不美化；🔴 跳转用的会话身份只能来自结构字段 session_name/window_index/window_name，禁止从标题字符串里抠；🔴 离开二级菜单必须退订，不得在后台持续拉数据。🔴 拔除后二级菜单目前是空的，这次是重建，不要复活旧的列表模型/状态徽章/下拉刷新——一级菜单的刷新模型是对的，不要动它。必须写出这三个具名测试并全部 PASS：Level2LiveStreamRenderTest、Level2NavigationIdentityTest、Level2StreamLifecycleTest。⛔ 禁止启动安卓模拟器。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.dev-app"
+   },
+   "resources": {
+    "worktree_id": "wt-l2-app",
+    "write_paths": [
+     "app/app/src/main/",
+     "app/app/src/test/",
+     ".team/nodes/level2-app/"
+    ],
+    "read_paths": [
+     ".team/nodes/level2-livestream/实现方案.md",
+     "requirement-base/entries/060-二级菜单改为实时流并取代状态判定.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f1c5a27c8"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-app/实现说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-a-render",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew',':app:testDebugUnitTest','--tests','*Level2LiveStreamRenderTest','--rerun-tasks','--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-a-identity",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew',':app:testDebugUnitTest','--tests','*Level2NavigationIdentityTest','--rerun-tasks','--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-a-lifecycle",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew',':app:testDebugUnitTest','--tests','*Level2StreamLifecycleTest','--rerun-tasks','--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-a-suite",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew',':app:testDebugUnitTest','--rerun-tasks','--console=plain'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-a-render",
+     "A-a-identity",
+     "A-a-lifecycle",
+     "A-a-suite"
+    ]
+   },
+   "state": "planned",
+   "parallel": {
+    "group": "g.impl"
+   }
+  },
+  "t.verify": {
+   "title": "对照席：零上下文定点变异，验上面那些红测真的会红。🔴 你不实现任何东西，也不修任何东西。做两件事：①跑根因探针 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/probe.sh，它现在必须是绿的（实现完成了）；②写一份 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-verify/mutate-and-check.sh：对实现做一处定向破坏（例如把 pane 标题透传改成去掉首字符、或把身份改成从标题字符串里抠），跑具名测试必须变红，恢复后必须变绿；两头都成立才 exit 0，否则非零。🔴 破坏必须自动恢复，脚本跑完工作区必须干净。🔴 判据自检那句话：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.control"
+   },
+   "resources": {
+    "worktree_id": "wt-l2-verify",
+    "write_paths": [
+     ".team/nodes/level2-verify/"
+    ],
+    "read_paths": [
+     ".team/nodes/level2-livestream/probe.sh",
+     ".team/nodes/level2-livestream/实现方案.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f1c5a27c8"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-verify/mutate-and-check.sh",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-verify/定点变异报告.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-v-probe-green",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/probe.sh'],timeout=900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-v-mutation",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-verify/mutate-and-check.sh'],timeout=3000).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-v-clean",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;r=subprocess.run(['git','status','--porcelain','server','app'],cwd='/Volumes/nvme/Projects/远程Agent安卓',capture_output=True,text=True,timeout=120);sys.exit(0 if not [l for l in r.stdout.splitlines() if l.startswith(' M') or l.startswith('MM')] else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-v-probe-green",
+     "A-v-mutation",
+     "A-v-clean"
+    ]
+   },
+   "state": "planned"
+  },
+  "t.package": {
+   "title": "打包给用户手动验收：assembleDebug 出 APK，并证明它不是旧产物（源码里没有任何 .kt 比 APK 新），且 dex 里确实含新的实时流符号。🔴 不要改任何实现代码，你只打包。⛔ 禁止启动安卓模拟器。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.dev-app"
+   },
+   "resources": {
+    "worktree_id": "wt-l2-package",
+    "write_paths": [
+     "app/app/build/",
+     ".team/nodes/level2-package/"
+    ],
+    "read_paths": [
+     ".team/nodes/level2-app/实现说明.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "f1c5a27c8"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-package/打包说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-p-build",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew',':app:assembleDebug','--console=plain'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-p-fresh",
+      "argv": [
+       "python3",
+       "-c",
+       "import os,glob,sys;apk='/Volumes/nvme/Projects/远程Agent安卓/app/app/build/outputs/apk/debug/app-debug.apk';\nsys.exit(1) if not os.path.exists(apk) else None;t=os.path.getmtime(apk);newer=[f for f in glob.glob('/Volumes/nvme/Projects/远程Agent安卓/app/app/src/**/*.kt',recursive=True) if os.path.getmtime(f)>t];print(newer);sys.exit(1 if newer else 0)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-p-dex",
+      "argv": [
+       "sh",
+       "-c",
+       "unzip -p /Volumes/nvme/Projects/远程Agent安卓/app/app/build/outputs/apk/debug/app-debug.apk 'classes*.dex' | strings | grep -q -i 'level2'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     },
+     {
+      "acceptance_id": "A-p-orch-hygiene",
+      "argv": [
+       "python3",
+       "-c",
+       "import sqlite3,sys;db='/Volumes/nvme/Projects/远程Agent安卓/.team/runtime/team.db';ids={'t.design','t.server','t.app','t.verify','t.package'};c=sqlite3.connect('file:'+db+'?mode=ro',uri=True);bad=[r[0] for r in c.execute('select task_id from results') if r[0] in ids];print('bad:',bad);sys.exit(1 if bad else 0)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-p-build",
+     "A-p-fresh",
+     "A-p-dex",
+     "A-p-orch-hygiene"
+    ]
+   },
+   "state": "planned"
+  }
+ },
+ "dependencies": [
+  {
+   "from": "t.design",
+   "to": "t.server",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.design",
+   "to": "t.app",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.server",
+   "to": "t.verify",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.app",
+   "to": "t.verify",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.verify",
+   "to": "t.package",
+   "condition": "requires_success"
+  }
+ ],
+ "parallelism": [
+  {
+   "group": "g.impl",
+   "max_concurrency": 2
+  }
+ ],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "席位未回结构化完成回报时，任务不得进入下一依赖节点；完成与否仍以机械判据为准",
+  "delivery_uncertain": "投递不确定时重发并要求去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {
+  "F.ask-advisor": {
+   "agent": {
+    "role": "r.leader"
+   },
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed"
+   ],
+   "max_attempts": 1,
+   "action": "escalate_to_advisor_then_leader",
+   "silent_substitution": false
+  }
+ },
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code）或结构化人裁，禁止写成一句话"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "requirement-base/entries/060-二级菜单改为实时流并取代状态判定.md",
+   ".team/nodes/level2-locate/拔除清单.md",
+   ".team/nodes/level2-livestream/实现方案.md",
+   ".team/nodes/level2-livestream/probe.sh"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 1
+}
