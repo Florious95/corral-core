@@ -102,7 +102,7 @@ fi
 echo "===== App 端 ====="
 
 # L2-8 App 有 Level2ViewModel（消费 Level2Frame，title 不加工）
-if grep -q 'Level2ViewModel\|Level2Entry' "$APP_MAIN/dev/agentmirror/app/workspace/" 2>/dev/null; then
+if grep -rq 'Level2ViewModel\|Level2Entry' "$APP_MAIN/dev/agentmirror/app/workspace/" 2>/dev/null; then
   pass "L2-8 App 有 Level2ViewModel（消费 Level2Frame）"
 else
   fail "L2-8 App 缺 Level2ViewModel（未实现二级实时流视图）"
