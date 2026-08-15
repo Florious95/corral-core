@@ -351,9 +351,24 @@ def main():
                 log(f"跳过派单：{seat} 仍 BUSY 且本版本已派过，认定 {tid} 已在手上，直接等")
                 msg_id = None
             else:
+                # 🔴 **绝不朝 BUSY 席位投递**（2026-08-15 框架队根因闭合后的硬要求）。
+                # 机制：席位 BUSY 时 Enter#1 已提交入队、输入框随即变空，
+                # 而投递侧的消费判据看的是**屏幕上的 token**，队列里的它不在屏幕上，
+                # 于是判「未消费」并照常再按 2 次 Enter，**队列项被自己人删掉**。
+                # 指纹是转录里的 enqueue:N / remove:N / 零消费——我这边实测到过 2/2。
+                # ⇒ BUSY 是唯一会触发这条路径的条件，所以等到 idle 再投，不是省事是避雷。
+                waited = 0
+                while seat_busy(seat) and waited < MAX_WAIT:
+                    if waited == 0:
+                        log(f"  {seat} 仍 BUSY，**押住不投**，等它 idle 再派 {tid}"
+                            f"（朝忙席位投递会被投递侧的重按 Enter 删掉）")
+                    time.sleep(60)
+                    waited += 60
                 if seat_busy(seat):
-                    log(f"注意：{seat} 仍 BUSY，但账本已改到 revision {l.get('revision', 0)}"
-                        f"（本版本未派过）⇒ 必须派，否则席位手上是过期任务")
+                    log(f"{tid}: 等了 {waited}s，{seat} 仍 BUSY，停下交人。绝不硬投。")
+                    return 8
+                if waited:
+                    log(f"  {seat} 已转 idle（等了 {waited}s），现在投递安全")
                 log(f"派 {tid} → {seat}")
                 msg_id = send(seat, dispatch_text(l, tid), tid)
                 if not msg_id:
