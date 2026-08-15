@@ -13,6 +13,14 @@
 # 用法：把所有 team-agent 调用换成本包装器，尤其是 add-agent / start-agent / reset-agent。
 #   .team/ta add-agent w-foo --role agents/w-foo.md --workspace .
 # 直连实测可用；若将来直连不可达，改这里 pin 一个已验证的代理即可，调用方无需变更。
+# 2026-08-15：把框架队的 tmux 追踪 shim 强制放进 PATH。
+# 理由：leader 的 Claude Code 进程启动早于 shim 安装，PATH 是继承的追不回来；
+# 而 `send` 的注入是 team-agent 进程自己调 tmux，不经 coordinator。
+# 不在这里兜住，leader→席位这条（正是出问题的那条）路径就不会被记录。
+# 摘除方式：删掉下面两行即可，调用方无需变更。
+[ -x /Users/alauda/ta-tmux-shim/bin/tmux ] && PATH="/Users/alauda/ta-tmux-shim/bin:$PATH"
+export PATH TA_TRACE_TAG="${TA_TRACE_TAG:-remote-agent-android}"
+
 TA_BIN="$(command -v team-agent)"
 exec env \
   -u HTTPS_PROXY -u https_proxy \
