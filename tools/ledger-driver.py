@@ -140,7 +140,17 @@ def send(seat, text, tid):
 
 
 def token_landed(seat, token):
-    """派单是否真的作为 user turn 进了席位转录——**目前唯一确定性的送达判据**。
+    """派单是否已作为 user turn 进了席位转录——这是**消费判据，不是送达判据**。
+
+    🔴 **送达 ≠ 消费**（2026-08-15 框架队到现场纠正，我原先把它当送达判据用错了）。
+       Claude Code 在忙时会**收下并排队**：消息成功送达、tmux 层 Enter 全发出 rc=0，
+       但要等当前这一轮长任务跑完才作为 user turn 落进转录。
+       ⇒ 席位 BUSY 时，一条**正常排队**的消息**必然**判 False。
+       ⇒ 不加 BUSY 门的话，这个函数会把**每一条发给忙席位的消息**都报成卡住。
+       实证：我据此误报过一次「卡在输入框」，框架队黑匣子显示该条与对照条
+       paste/Enter 时序逐毫秒一致（+2.144/+3.939/+5.677 vs +2.144/+3.890/+5.549），
+       且席位输入框当时是空的。
+       ⇒ 只有**席位 IDLE 且转录无 token** 才是真没送到。判 False + BUSY 一律当排队。
 
     `send` 返回 ok 不是送达，框架侧记 delivered 也不是：实测存在整条派单
     **原样躺在席位输入框里、席位一个字没收到**，而两处都显示成功
@@ -340,9 +350,14 @@ def main():
                     return 3
                 time.sleep(5)   # 给上屏留时间，太快查会假阴
                 if not token_landed(seat, msg_id):
-                    log(f"{tid}: 派单未进 {seat} 转录（token_landed=False）——"
-                        f"send 说 ok 但席位很可能一个字没收到。停下交人，**不重发**。")
-                    return 7
+                    # 判 False 有两种，必须先分清，否则每条发给忙席位的消息都成假阳。
+                    if seat_busy(seat):
+                        log(f"  {tid}: 转录暂无 token，但 {seat} 仍 BUSY ⇒ "
+                            f"**排队中，不是丢失**。继续等，不重发。")
+                    else:
+                        log(f"{tid}: {seat} 已 IDLE 且转录无 token ⇒ 真没送到。"
+                            f"停下交人，**不重发**（重发会粘连）。")
+                        return 7
             # 🔴 wait 的键是【账本任务 id】，不是 send 返回的 message_id。
             # 席位 report_result 带的 task_id 就是账本 id，wait --task 匹配的正是它。
             # reference 的 send() 注释说「返回 message_id（即 task id）」——这个等价是错的。
