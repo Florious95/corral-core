@@ -1,0 +1,250 @@
+{
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.level2-uproot.v1",
+  "run": {
+    "desired_state": "running"
+  },
+  "roles": {
+    "r.advisor": {
+      "provider": "claude_code",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/level2-locate/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    },
+    "r.dev-state": {
+      "provider": "claude_code",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/level2-uproot/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    }
+  },
+  "tasks": {
+    "t.locate": {
+      "title": "精确定位「二级菜单旧模型 + 状态判定」的全部代码，产出**拔除清单**。清单必须逐文件逐符号列出，并对每一项标注：删 / 改 / 保留，以及理由。🔴 必须区分两类：①属于旧模型（列表+状态徽章+二级刷新）⇒ 拔；②与三级终端流共用（WebSocket 传输、帧编解码）⇒ 保留，拔了会伤三级。🔴 一级菜单的刷新模型是对的，不在拔除范围。契约见 requirement-base/entries/060。清单落到 .team/nodes/level2-locate/拔除清单.md，并附一份 .team/nodes/level2-locate/verify.sh：拔完之后跑它，所有该消失的符号必须一个都搜不到（这是拔干净的机械判据，现在跑必须失败）。",
+      "owner": {
+        "role": "r.advisor"
+      },
+      "resources": {
+        "worktree_id": "wt-l2-locate",
+        "write_paths": [
+          ".team/nodes/level2-locate/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/060-二级菜单改为实时流并取代状态判定.md",
+          "requirement-base/entries/058-状态检测先归档回退再重建.md",
+          "docs/rulings/20260815-用户裁定原文-直通输入与刷新模型.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "139bbfb19"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/level2-locate/拔除清单.md",
+          ".team/nodes/level2-locate/verify.sh"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-lo-list",
+            "argv": [
+              "test",
+              "-s",
+              ".team/nodes/level2-locate/拔除清单.md"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-lo-script",
+            "argv": [
+              "test",
+              "-x",
+              ".team/nodes/level2-locate/verify.sh"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-lo-red",
+            "argv": [
+              "sh",
+              "-c",
+              "! bash .team/nodes/level2-locate/verify.sh"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-lo-list",
+          "A-lo-script",
+          "A-lo-red"
+        ]
+      },
+      "state": "planned"
+    },
+    "t.uproot": {
+      "title": "按拔除清单执行归档回退：把要拔的代码归档到 scratch/archive-level2/ 后从主干删除。🔴 归档不是备份，是根因探针的输入——失败的 diff 是信息不是垃圾，别直接 rm。🔴 拔完之后二级菜单暂时没有内容是**预期的**，不要顺手造一个占位实现填坑：占位实现会变成下一轮的化石。编译过、测试过即可。拔干净的判据是 verify.sh 转绿。",
+      "owner": {
+        "role": "r.dev-state"
+      },
+      "resources": {
+        "worktree_id": "wt-l2-uproot",
+        "write_paths": [
+          "app/app/src/main/java/dev/agentmirror/app/",
+          "app/app/src/test/",
+          "server/internal/",
+          "scratch/archive-level2/",
+          ".team/nodes/level2-uproot/"
+        ],
+        "read_paths": [
+          ".team/nodes/level2-locate/拔除清单.md",
+          "requirement-base/entries/060-二级菜单改为实时流并取代状态判定.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "139bbfb19"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/level2-uproot/归档说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-lu-clean",
+            "argv": [
+              "bash",
+              ".team/nodes/level2-locate/verify.sh"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-lu-archived",
+            "argv": [
+              "sh",
+              "-c",
+              "test -d scratch/archive-level2 && test \"$(ls -A scratch/archive-level2)\""
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-lu-app",
+            "argv": [
+              "./gradlew",
+              ":app:testDebugUnitTest",
+              "--rerun-tasks",
+              "--console=plain"
+            ],
+            "cwd": "app",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-lu-server",
+            "argv": [
+              "go",
+              "test",
+              "./...",
+              "-count=1"
+            ],
+            "cwd": "server",
+            "expected_exit_code": 0,
+            "artifacts": []
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-lu-clean",
+          "A-lu-archived",
+          "A-lu-app",
+          "A-lu-server"
+        ]
+      },
+      "state": "planned"
+    }
+  },
+  "dependencies": [
+    {
+      "from": "t.locate",
+      "to": "t.uproot",
+      "condition": "requires_success"
+    }
+  ],
+  "parallelism": [],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "席位未回结构化完成回报与证据 JSON 时，任务不得进入下一依赖节点",
+    "delivery_uncertain": "投递不确定时重发并要求去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {},
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code）或结构化人裁，禁止写成一句话"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "requirement-base/entries/060-二级菜单改为实时流并取代状态判定.md",
+      "requirement-base/entries/058-状态检测先归档回退再重建.md",
+      "docs/rulings/20260815-用户裁定原文-直通输入与刷新模型.md",
+      ".team/nodes/level2-locate/拔除清单.md"
+    ]
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 1
+}
