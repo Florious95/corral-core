@@ -14,7 +14,7 @@ import json, hashlib, subprocess, sys, time, os, re, glob
 
 REPO = "/Volumes/nvme/Projects/远程Agent安卓"        # 改我
 LEDGER = (sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith(".json")
-          else os.path.join(REPO, ".team/ledgers/passthrough-input-v3.json"))   # 改我
+          else os.path.join(REPO, ".team/ledgers/level2-uproot-v1.json"))   # 改我
 LOG = os.path.join(REPO, ".team/ledgers/driver.log")       # 改我
 TEAM = "remote-agent-android"                # 改我：runtime key，不是显示名
 TA = os.path.join(REPO, ".team/ta")   # 改我：本工程若强制走净化包装器，改成 ".team/ta" 等绝对/相对路径
@@ -24,6 +24,8 @@ MAX_WAIT = 3600    # 单任务最长等待秒数
 WAIT_EACH = 60     # wait 只当省电，短试即可
 POLL = 20
 IDLE_CONFIRM = 3
+DELIVERY_WAIT = 90   # 送达确认最长等多久（轮询，不是单次采样）
+DELIVERY_POLL = 2
 
 
 def log(msg):
@@ -197,6 +199,51 @@ def token_landed(seat, token):
     return False
 
 
+def confirm_delivery(seat, token, deadline_s=None, probe_token=None, probe_busy=None):
+    """确认这条派单送到了没有——**轮询到期，不是固定 sleep 后单次采样**。
+
+    🔴 2026-08-15 远程Agent安卓 team 实发：原实现是 `sleep 5` 后查一次，查不到就中止。
+    实测该 token 在判定后 **1.1 秒** 才作为 user turn 落进转录 ——
+    投递完全正常、席位正在 BUSY 干活，**而驱动器已经自己死了**。
+    「对一个异步落盘事件做单次采样」本身就是竞态，5 秒调成 10 秒也只是把概率挪一挪。
+
+    两个信号，谁先到算谁（他们建议的，我采纳）：
+      · **席位转 BUSY** —— 更早、更便宜（一次 status 调用），不用等转录落盘。
+        它成立的前提是**我们只朝 idle 席位派单**（见 dispatch_decision，busy 时一律不 send），
+        所以派单后转 BUSY 只可能是这条派单引起的。
+      · **token 作为 user turn 进转录** —— 更硬，但落盘有延迟。
+
+    两个都等不到才算没送到 —— 那时才停下交人，且**绝不重发**（重发会造成粘连）。
+    probe_* 供测试注入，生产不传。
+    """
+    deadline_s = DELIVERY_WAIT if deadline_s is None else deadline_s
+    pt = probe_token or (lambda: token_landed(seat, token))
+    pb = probe_busy or (lambda: seat_state(seat) == "BUSY")
+    t0 = time.time()
+    while True:
+        if pb():
+            return "busy"
+        if pt():
+            return "token"
+        if time.time() - t0 >= deadline_s:
+            return None
+        time.sleep(DELIVERY_POLL)
+
+
+def dispatch_decision(dispatched, busy):
+    """纯判定：本版本派过吗 × 席位忙吗 ⇒ 该怎么办。
+
+    抽成纯函数是为了**能复现**：这条逻辑的缺陷不需要席位、不需要框架，
+    给定两个布尔就能证。原先它埋在 main() 的分支里，谁都验不了它。
+
+    返回 "skip"（本版本已派过，等它干完）/ "hold"（本版本没派过但席位忙，押住等 idle）
+    / "send"（派）。
+    """
+    if dispatched:
+        return "skip"
+    return "hold" if busy else "send"
+
+
 def dispatch_mark(l, tid):
     """派单水位：ledger_id + task_id + revision。
 
@@ -305,13 +352,15 @@ def main():
             # 但「本版本没派过就硬投」同样不对：朝 BUSY 席位投递正是框架侧消息被删的触发条件
             # （Enter#1 入队 ⇒ 输入框变空 ⇒ 消费判据看屏幕判「未消费」⇒ 再按两次 Enter ⇒ 队列项被删）。
             # ⇒ 第三条路：**押住不投，等它 idle 再投**；等不到就停下交人，绝不硬投。
-            if not dispatched_this_revision(l, tid):
-                if seat_state(seat) == "BUSY":
-                    log(f"{seat} BUSY 且 {tid}@r{l['revision']} 本版本未派过 ⇒ 押住等 idle，不跳过也不硬投")
-                    if not wait_idle(seat):
-                        log(f"{tid}: 等不到 {seat} 空闲，停下交人（绝不朝 BUSY 席位硬投）")
-                        return 7
-            else:
+            # 判定走 dispatch_decision（纯函数，有确定性复现，见 test_dispatch_decision）
+            act = dispatch_decision(dispatched_this_revision(l, tid),
+                                    seat_state(seat) == "BUSY")
+            if act == "hold":
+                log(f"{seat} BUSY 且 {tid}@r{l['revision']} 本版本未派过 ⇒ 押住等 idle，不跳过也不硬投")
+                if not wait_idle(seat):
+                    log(f"{tid}: 等不到 {seat} 空闲，停下交人（绝不朝 BUSY 席位硬投）")
+                    return 7
+            elif act == "skip":
                 log(f"跳过派单：{seat} 手上就是 {tid}@r{l['revision']}（本版本已派过）")
                 wait_seat(seat)
                 l = load()
@@ -328,12 +377,14 @@ def main():
             if not task_id:
                 log(f"{tid}: 投递失败，停。")
                 return 3
-            # 🔴 先验这条到底送进去没有，再谈等。见 token_landed 的注释。
-            time.sleep(5)  # 给注入留出上屏时间，否则查早了必然查不到
-            if token_landed(seat, task_id):
+            # 🔴 送达确认：轮询到期，**不是固定 sleep 后单次采样**。
+            sig = confirm_delivery(seat, task_id)
+            if sig == "busy":
+                log(f"  ✅ {seat} 已转 BUSY ⇒ 送达（比等转录落盘早，且更便宜）")
+            elif sig == "token":
                 log(f"  ✅ {task_id} 已进 {seat} 转录（user turn）")
             else:
-                log(f"  🔴 {task_id} **未进** {seat} 转录 ⇒ 疑似尾部截断，这条没送到。"
+                log(f"  🔴 {DELIVERY_WAIT}s 内既没转 BUSY 也没进转录 ⇒ 这条没送到。"
                     f"不重发（重发会造成粘连），停下交人。")
                 return 6
             log(f"  等 {seat} 干完（wait 短试 + 席位状态兜底）")
