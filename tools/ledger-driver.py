@@ -17,9 +17,9 @@ LEDGER = (sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith(".json")
           else os.path.join(REPO, ".team/ledgers/passthrough-input-v3.json"))   # 改我
 LOG = os.path.join(REPO, ".team/ledgers/driver.log")       # 改我
 TEAM = "remote-agent-android"                # 改我：runtime key，不是显示名
+TA = os.path.join(REPO, ".team/ta")   # 改我：本工程若强制走净化包装器，改成 ".team/ta" 等绝对/相对路径
 ROLE_SEAT = {"r.advisor": "advisor", "r.dev-state": "dev-state",
              "r.control": "control", "r.dev-app": "dev-keybar"}   # 改我：账本 owner.role → 席位名
-TA = os.path.join(REPO, ".team/ta")   # 改我：本工程强制走净化包装器（禁裸 team-agent）
 MAX_WAIT = 3600    # 单任务最长等待秒数
 WAIT_EACH = 60     # wait 只当省电，短试即可
 POLL = 20
@@ -173,7 +173,7 @@ def wait_task(task_id, tid):
 def token_landed(seat, token):
     """token 是否真的作为 user turn 进了席位转录。
 
-    🔴 2026-08-15 取证（标准修复/投递取证-20260815.md）：注入是「粘贴 → 等 2000ms → Enter」，
+    🔴 2026-08-15 取证（讨论team-agent 工程的投递取证报告）：注入是「粘贴 → 等 2000ms → Enter」，
     负载高时 Enter 落在粘贴将完成而未完成之际，**消息尾部被截断**，而 token 恰在尾部。
     后果：席位收到一份没有 token 的正文，framework 侧记 delivered，这边看到「活干完了、账本不动」。
     27 条投递里 6 条畸形（22%），切口都在极靠后（丢 1.7%–9%）——**余量只剩百分之几**。
@@ -194,6 +194,35 @@ def token_landed(seat, token):
                 continue
             if o.get("type") == "user":
                 return True
+    return False
+
+
+def dispatch_mark(l, tid):
+    """派单水位：ledger_id + task_id + revision。
+
+    只有「这一版本的这个任务派过」才算派过。账本改了 revision 就必须重派——
+    否则扩权/改判据这类裁定会永远送不到席位（远程Agent安卓 team 实发）。
+    """
+    d = os.path.join(REPO, ".team", "ledgers", ".dispatched")
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, f"{l['ledger_id']}.{tid}.r{l.get('revision', 0)}")
+
+
+def dispatched_this_revision(l, tid):
+    return os.path.exists(dispatch_mark(l, tid))
+
+
+def wait_idle(seat):
+    """押住等席位空闲——**不跳过也不硬投**。
+
+    朝 BUSY 席位投递是框架侧消息被删的触发条件，所以宁可等；
+    等不到就停下交人，把「没送到」变成显式失败，而不是静默停住。
+    """
+    t0 = time.time()
+    while time.time() - t0 < MAX_WAIT:
+        if seat_state(seat) != "BUSY":
+            return True
+        time.sleep(POLL)
     return False
 
 
@@ -266,11 +295,24 @@ def main():
             if not seat:
                 log(f"{tid}: 角色 {role} 没有对应席位，停。")
                 return 2
-            # 🔴 席位 BUSY 就不要再派（远程Agent安卓 team 的做法，2026-08-15 我方采纳）：
-            # BUSY 说明这任务已经在它手上，再派一条只会挤进同一个输入框造成粘连。
-            # 我方实证：driver 重启后对 BUSY 的 fixer2 重复派了一次 t.fix-exitcode。
-            if seat_state(seat) == "BUSY":
-                log(f"跳过派单：{seat} 仍 BUSY，认定 {tid} 已在手上，直接等")
+            # 🔴 忙席位只有在「本版本已经派过」时才可以跳过。
+            #
+            # 「BUSY 就跳过」的前提是**忙席位手上拿的是当前版本的任务**。账本一改前提就没了：
+            # 远程Agent安卓 team 2026-08-15 实发——席位发 blocking 求裁定（此时它 BUSY），
+            # leader 裁定扩权改了 revision，驱动器见 BUSY 跳过 ⇒ **裁定根本没送到席位** ⇒
+            # 席位空转到 idle、判据失败、驱动器停，**而日志上伪装成「席位没干活」**。
+            #
+            # 但「本版本没派过就硬投」同样不对：朝 BUSY 席位投递正是框架侧消息被删的触发条件
+            # （Enter#1 入队 ⇒ 输入框变空 ⇒ 消费判据看屏幕判「未消费」⇒ 再按两次 Enter ⇒ 队列项被删）。
+            # ⇒ 第三条路：**押住不投，等它 idle 再投**；等不到就停下交人，绝不硬投。
+            if not dispatched_this_revision(l, tid):
+                if seat_state(seat) == "BUSY":
+                    log(f"{seat} BUSY 且 {tid}@r{l['revision']} 本版本未派过 ⇒ 押住等 idle，不跳过也不硬投")
+                    if not wait_idle(seat):
+                        log(f"{tid}: 等不到 {seat} 空闲，停下交人（绝不朝 BUSY 席位硬投）")
+                        return 7
+            else:
+                log(f"跳过派单：{seat} 手上就是 {tid}@r{l['revision']}（本版本已派过）")
                 wait_seat(seat)
                 l = load()
                 if check_required(l, tid):
@@ -281,6 +323,8 @@ def main():
                 return 5
             log(f"派 {tid} → {seat}")
             task_id = send(seat, dispatch_text(l, tid), tid)
+            if task_id:
+                open(dispatch_mark(l, tid), "w").close()   # 本版本已派过，供下轮判跳过
             if not task_id:
                 log(f"{tid}: 投递失败，停。")
                 return 3
