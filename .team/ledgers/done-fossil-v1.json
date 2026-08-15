@@ -20,7 +20,7 @@
   },
   "tasks": {
     "t.done-fossil": {
-      "title": "清 ③ 的尾巴：App 侧仍保留 AgentState.DONE(\"done\")，golden 测试仍断言 DONE，而服务端 StateDone 已在 55bcada2a 删除。用户裁定「去除完成这个状态，就是工作和空闲」。删掉 App 的 DONE 枚举，同步改 golden fixture 与 ConnCodecTest。🔴 只删 DONE：BLOCKED 与 UNKNOWN 不动（UNKNOWN 是一等公民兜底值）。若发现 BLOCKED 也应删，写进回报交 leader，不要自行扩大范围。",
+      "title": "清 ③ 的尾巴：删 App 侧 AgentState.DONE(\"done\")，并同步清掉它的全部引用。服务端 StateDone 已在 55bcada2a 删除；用户裁定「去除完成这个状态，就是工作和空闲」。leader 已裁定扩大写路径到下列 4 个引用点（席位 2026-08-15 上报的阻塞，裁定：扩路径不动判据）：\n  StateBadgeStyle.kt（of() 的 DONE 分支）／StateBadge.kt（tones.done）／StateWatcher.kt（needsAttention 去掉 DONE，只留 BLOCKED）／NotificationHelper.kt（去掉「任务已完成」通知）。\n🔴 NotificationHelper 那条通知随 DONE 一起消失是正确的——DONE 永不产生，该通知本就是死代码，这不算扩大范围。\n🔴 只删 DONE：BLOCKED 与 UNKNOWN 不动（UNKNOWN 是一等公民兜底值）。若认为 BLOCKED 也该删，写进回报交 leader，不要自行扩大。\n🔴 **禁止改 WorkspaceViewModel.kt 与 WorkspaceScreen.kt** —— 另一席位的 ④ 刷新模型实现正以未提交状态躺在这两个文件里，动它就会抹掉别人的活。写路径按文件放行，不是按目录。",
       "owner": {
         "role": "r.dev-state"
       },
@@ -28,6 +28,10 @@
         "worktree_id": "wt-done-fossil",
         "write_paths": [
           "app/app/src/main/java/dev/agentmirror/app/conn/",
+          "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadgeStyle.kt",
+          "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadge.kt",
+          "app/app/src/main/java/dev/agentmirror/app/service/StateWatcher.kt",
+          "app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt",
           "app/app/src/test/",
           ".team/nodes/done-fossil/"
         ],
@@ -135,5 +139,5 @@
   },
   "fanout_aggregation": {},
   "audit": {},
-  "revision": 1
+  "revision": 2
 }
