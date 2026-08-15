@@ -1,43 +1,29 @@
 #!/usr/bin/env python3
-"""账本驱动的编排 driver（远程Agent安卓适配版）。
+"""账本驱动的编排 driver。
 
-语义照抄 reference：~/.claude/skills/ledger-orchestration/reference/ledger-driver.py。
 账本是唯一真理：派单正文、写盘范围、读取范围、机械判据命令全部从账本派生，
 driver 不做账本没写的决定。
 
 一轮 = ledger-eval 算前沿 → 对每个可动任务派单 → 等席位干完 → 跑机械判据 →
 判据过则把 state 置 succeeded、重算 sha、进下一轮。
 
-用法（在 leader 自己的 owner pane 里）:
-  cd /Volumes/nvme/Projects/远程Agent安卓
-  nohup python3 tools/ledger-driver.py > driver.stdout 2>&1 &
-日志: .team/ledgers/driver.log
-
-⚠️ 适配约束（leader 2026-08-15 msg_0b3440a9e458 交代，逐条照做）:
-  - 一律走 .team/ta（净化包装器，unset 代理环境变量），不用裸 team-agent。
-  - 不抄 reference 的 wait_seat()（IDLE_CONFIRM/POLL 未定义，死代码）。
-  - ROLE_SEAT 全：r.advisor/r.dev-state/r.control/r.dev-app。
-  - REPO 写死仓库根（判据 cwd 是相对路径，进程工作目录必须是仓库根）。
-  - 只做 reference 语义的适配，不加功能：不写轮询、不写事件面、不写重试。
-    「停」不是缺陷，是把决定权交回给 leader。
+用法: python3 ledger-driver.py [--once]
+日志: 见 LOG 常量
 """
 import json, hashlib, subprocess, sys, time, os, re, glob
 
-REPO = "/Volumes/nvme/Projects/远程Agent安卓"
+REPO = "/Volumes/nvme/Projects/远程Agent安卓"        # 改我
 LEDGER = (sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith(".json")
-          else os.path.join(REPO, ".team/ledgers/state-detection-v1.json"))
-# ↑ 允许传账本路径：一个驱动器跑多张账本，不必改常量重开一份
-LOG = os.path.join(REPO, ".team/ledgers/driver.log")
-TA = os.path.join(REPO, ".team/ta")   # 净化包装器，禁裸 team-agent
-TEAM = "remote-agent-android"
-ROLE_SEAT = {
-    "r.advisor": "advisor",
-    "r.dev-state": "dev-state",
-    "r.control": "control",
-    "r.dev-app": "dev-keybar",
-}
-MAX_WAIT = 3600    # 单任务最长等待秒数（墙钟兜底，wait 本身无 --timeout）
-WAIT_EACH = 1800   # 每个候选 id 各自的墙钟上限（两个候选合计不超过 MAX_WAIT）
+          else os.path.join(REPO, ".team/ledgers/passthrough-input-v3.json"))   # 改我
+LOG = os.path.join(REPO, ".team/ledgers/driver.log")       # 改我
+TEAM = "remote-agent-android"                # 改我：runtime key，不是显示名
+ROLE_SEAT = {"r.advisor": "advisor", "r.dev-state": "dev-state",
+             "r.control": "control", "r.dev-app": "dev-keybar"}   # 改我：账本 owner.role → 席位名
+TA = os.path.join(REPO, ".team/ta")   # 改我：本工程强制走净化包装器（禁裸 team-agent）
+MAX_WAIT = 3600    # 单任务最长等待秒数
+WAIT_EACH = 60     # wait 只当省电，短试即可
+POLL = 20
+IDLE_CONFIRM = 3
 
 
 def log(msg):
@@ -87,7 +73,7 @@ def dispatch_text(l, tid):
     lines = [
         f"[账本任务 {tid}] {t['title']}",
         "",
-        f"账本: {LEDGER}。**账本是唯一真理**，下面每一项都从它派生。",
+        f"账本: {LEDGER}（revision {l['revision']}）。**账本是唯一真理**，下面每一项都从它派生。",
         "",
         "## 只准写这些路径",
     ] + [f"- {p}" for p in res.get("write_paths", [])] + [
@@ -104,181 +90,127 @@ def dispatch_text(l, tid):
         "- 不跑 git commit / push；不发 team-agent send。",
         "- 卡住不要绕过去也不要猜：把「卡在哪、试了什么、缺什么」写进回报，同一回合继续做能做的部分。",
         "- **做不到于是改了任务定义，必须显式报出来，不许静默改。**",
-        "- 🔴 report_result 必须带结构化参数 presentation={\"sink\":\"casefile\",\"class\":\"stage_result\"}，",
-        "  且 task_id 填本任务的账本 id（如 " + tid + "）。",
-        "  中途进度用 send_message 带 presentation={\"sink\":\"casefile\",\"class\":\"progress\"}。",
-        "  presentation 是**参数**不是正文文字，写进正文不生效。只有硬卡住需要 leader 当场介入才用默认 sink（class=\"blocking\"）。",
-        "- 🔴 完成凭据是机械判据退出码和落盘物，不用向 leader 证明你做完了。",
-        "- 🔴 有疑问**直接问顾问席**，不要问 leader：先读 .team/nodes/state-oracle/判据基底摘要.md（如已存在），",
-        "  文档里没有的才 team_orchestrator.send_message(to=\"advisor\", content=..., presentation={\"sink\":\"casefile\",\"class\":\"message\"})。",
-        "  只有「任务定义要改」或「判据本身是错的」才直达 leader。",
+        "- 🔴 **干完不要调 report_result，直接停在那儿就行。**",
+        "  理由：驱动器不采信任何自报——完成与否由它自己跑机械判据拿退出码决定。",
+        "  而 report_result 会让框架另发一条「结果已入库」通知**强制打到 leader 屏上**",
+        "  （2026-08-15 两队实证：`presentation={\"sink\":\"casefile\"}` 压得住消息本体，"
+        "**压不住这条通知**）。",
+        "  ⇒ 调它对判定零贡献，却必然打断 leader 一次。**唯一的作用是制造噪音，所以不要调。**",
+        "  你的完成凭据只有两样：**机械判据的退出码**和**落盘物**。不用向任何人证明你做完了。",
+        "- 🔴 **只有一种情况才发消息给 leader：硬卡住、且卡点需要 leader 裁定**",
+        "  （任务定义要改、判据本身是错的、要动 write_paths 之外的文件）。",
+        "  那时用 `send_message(to=\"leader\", ...)`，不带 presentation（走默认 sink，就是要它上屏）。",
+        "  **这条通道故意留得很窄：窄到你用它时，leader 被打断是应该的。**",
+        "- 🔴 有疑问但**不需要裁定** ⇒ 问顾问席，不要问 leader：",
+        "  `send_message(to=\"advisor\", content=..., presentation={\"sink\":\"casefile\",\"class\":\"message\"})`。",
+        "  顾问写了 <顾问产出的基底文档>，先读它，文档里没有的才问。",
         "",
-        "收到**不要**向 leader 回「已收到」——那句会默认注入他的屏幕，每个任务漏一次。"
-        "要回就带 presentation={\"sink\":\"casefile\",\"class\":\"progress\"}。然后不要停，同一回合干完。",
+        "**不要回「已收到」**——驱动器靠校验你的转录判送达，不靠你回话；回一句只会白打断 leader 一次。",
+        "收到就直接开工，同一回合干完。",
     ]
     return "\n".join(lines)
 
 
+def seat_state(seat):
+    r = subprocess.run([TA, "status", "--json", "--team", TEAM],
+                       capture_output=True, text=True, cwd=REPO)
+    try:
+        return json.loads(r.stdout)["agents"][seat]["worker_state"]
+    except Exception:
+        return "UNKNOWN"
+
+
 def send(seat, text, tid):
-    """返回 message_id（**仅作投递凭据，不是 wait 的键**——见 main 里的说明）。
-    走 .team/ta 净化包装器，收件人用绝对路径 FQN。
-    注意：不传 --json——reference 对 send 用文本输出，检查 ok: True / message_id: 文本。
-    （传 --json 会输出 "ok": true，和 ok: True 对不上，send 会误判失败——实发 2026-08-15。）"""
-    fqn = f"{REPO}::{TEAM}/{seat}"
-    # --task 是框架强制的注册键（0.5.66 起就有，只是没进 --help；cli/emit.rs:864）。
-    # 不带时席位 report_result 会以 task_id="manual" 落库、被判 invalid，wait 永远等不到。
-    # ⚠️ 派单正文里「要求席位自报 task_id」**同时保留**：框架强制 + 席位守约互为兜底，
-    #    任一条失效另一条还在（2026-08-15 双方共识）。
-    r = subprocess.run([TA, "send", "--task", tid, fqn, text, "--workspace", REPO],
+    """派单必须带 --task <账本任务 id>。
+
+    `--task` 在 `send --help` 的 usage 行里**没有**，但实现里一直有（cli/emit.rs:864）。
+    缺它时席位 report_result 落成 task_id="manual"、被框架判 invalid_results，
+    `wait --task` 永远等不到——**而活其实干完了**。所以派单侧带上它，
+    同时在正文里要求席位自报同一个 id，两边对得上才算数。
+
+    ⚠️ 2026-08-15 起 `--task` 会打 deprecation 警告（sunset: next compatibility release），
+    官方建议改用「位置参数 TO + 返回的 message id」。**现在还能用，但要盯着换。**
+
+    🔴 无论 --task 带没带，`ok: True` **都不是送达凭据**：消息可能整条卡在输入框、
+    或尾部被截断。送达凭据只有 token_landed()。wait 只当省电，正确性押在机械判据上。
+    """
+    r = subprocess.run([TA, "send", "--task", tid,
+                        f"{REPO}::{TEAM}/{seat}", text],
                        capture_output=True, text=True, cwd=REPO)
     out = r.stdout or ""
     if "ok: True" not in out:
-        log(f"  !! send 失败: {out[-200:]}")
         return None
     m = re.search(r"message_id:\s*(\S+)", out)
     return m.group(1) if m else None
 
 
-def token_landed(seat, token):
-    """派单是否已作为 user turn 进了席位转录——这是**消费判据，不是送达判据**。
-
-    🔴 **送达 ≠ 消费**（2026-08-15 框架队到现场纠正，我原先把它当送达判据用错了）。
-       Claude Code 在忙时会**收下并排队**：消息成功送达、tmux 层 Enter 全发出 rc=0，
-       但要等当前这一轮长任务跑完才作为 user turn 落进转录。
-       ⇒ 席位 BUSY 时，一条**正常排队**的消息**必然**判 False。
-       ⇒ 不加 BUSY 门的话，这个函数会把**每一条发给忙席位的消息**都报成卡住。
-       实证：我据此误报过一次「卡在输入框」，框架队黑匣子显示该条与对照条
-       paste/Enter 时序逐毫秒一致（+2.144/+3.939/+5.677 vs +2.144/+3.890/+5.549），
-       且席位输入框当时是空的。
-       ⇒ 只有**席位 IDLE 且转录无 token** 才是真没送到。判 False + BUSY 一律当排队。
-
-    `send` 返回 ok 不是送达，框架侧记 delivered 也不是：实测存在整条派单
-    **原样躺在席位输入框里、席位一个字没收到**，而两处都显示成功
-    （ledger-orchestration 队 2026-08-15 靠这一层拦下一次真阳性）。
-
-    🔴 判 False 就**停下交人，绝不重发**。重发会把两条挤进同一个输入框，
-       粘连比滞留难查得多。滞留那条晚点被按键放出去，最多是"做了一份过期活"。
-    🔴 只数 type == "user" 的行：assistant 引用 token 的行会让计数虚高，
-       那是"它提到了这条消息"，不是"它收到了这条消息"。
-    ⚠️ 只对 provider 为 claude/claude_code 的席位成立（转录是 claude 的 jsonl）。
-       本工程五席全是 claude_code，成立。
-    （实现取自 ledger-orchestration reference driver，2026-08-15。）
-    """
-    root = os.path.join(REPO, ".team/runtime/provider-config", seat, "claude/projects")
-    for f in glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True):
-        try:
-            with open(f, encoding="utf-8", errors="replace") as fh:
-                for line in fh:
-                    if token not in line:
-                        continue
-                    try:
-                        o = json.loads(line)
-                    except Exception:
-                        continue
-                    if o.get("type") == "user":
-                        return True
-        except OSError:
-            continue
-    return False
-
-
-def seat_busy(seat):
-    """席位此刻是否真的在干活。凭据取 team-agent status 的 worker_state。
-
-    用途有两个，都是 2026-08-15 实发：
-    ① **不朝正在干活的席位重复派单**。driver.log 里 t.contract 被连派三次，
-       就是这个病：wait 等不到 → 落判据 → 判据没过 → 重启 → 再派一次。
-       重复派单会把半条正文粘进席位输入框，比不派单更糟。
-    ② **wait 墙钟到点时，先问席位在不在干**。在干就继续等；
-       不在干才落到判据。否则驱动器会在席位还在编译 app/ 的时候
-       自己也去跑 `gradlew --rerun-tasks`，两边抢同一个 Gradle 锁。
-
-    查不到状态一律返回 False（宁可多等一轮判据，也不要凭猜挂死）。
-    """
-    try:
-        r = subprocess.run([TA, "status", seat, "--json", "--workspace", REPO],
-                           capture_output=True, text=True, cwd=REPO, timeout=60)
-        st = json.loads(r.stdout).get("agents", {}).get(seat, {})
-        return st.get("worker_state") == "BUSY"
-    except Exception:
-        return False
-
-
-def wait_task(msg_id, tid, seat=None):
-    """事件驱动等待（DS-01，0.5.65 起）。**等不到不算失败。**
+def wait_task(task_id, tid):
+    """事件驱动等待（DS-01，0.5.65 起）。
 
     🔴 wait --task 认的是**席位 report_result 自报的账本任务 id**，
-    不保证等于 send 返回的 message_id——两者不等价时 wait 永不返回，
-    而 wait 本身没有 --timeout，**失败形态是挂死不是报错**（实发 2026-08-15）。
-    所以两个 id 都试、各自套墙钟；都没等到也**不当失败**，直接落到机械判据去判。
-
-    依据是这套东西自己的铁律：**判据是唯一凭据，wait 只是省电。**
-    等待机制猜错最多浪费一次墙钟，不该让整条流水线挂死。
-    （改法采自 ledger-orchestration reference，2026-08-15 同步。）
+    不保证等于派单返回的 message_id——两者不等价时 wait 永不返回，
+    而 wait 本身没有 --timeout，失败形态是**挂死不是报错**。
+    所以：两个 id 都试，各自套墙钟；都没等到也**不当失败**，
+    直接落到机械判据去判——判据才是唯一凭据，wait 只是省电。
     """
-    for cand in [tid, msg_id]:
+    for cand in [tid, task_id]:
         if not cand:
             continue
-        while True:
-            try:
-                r = subprocess.run([TA, "wait", "--task", cand, "--workspace", REPO, "--json"],
-                                   capture_output=True, text=True, cwd=REPO, timeout=WAIT_EACH)
-                if r.returncode == 0:
-                    log(f"  wait 命中 task={cand}")
-                    return True
-                break
-            except subprocess.TimeoutExpired:
-                # 墙钟到点 ≠ 席位没在干。先问一句再决定，否则会在人家
-                # 还在编译的时候去跑判据（抢 Gradle 锁 + 必然判未过 → 白停一次）。
-                if seat and seat_busy(seat):
-                    log(f"  wait 超时 task={cand}（{WAIT_EACH}s），但席位 {seat} 仍 BUSY → 继续等")
-                    continue
-                log(f"  wait 超时 task={cand}（{WAIT_EACH}s），席位不忙 → 换下一个候选")
-                break
+        try:
+            r = subprocess.run([TA, "wait", "--task", cand,
+                                "--workspace", REPO, "--json"],
+                               capture_output=True, text=True, cwd=REPO,
+                               timeout=WAIT_EACH)
+            if r.returncode == 0:
+                log(f"  wait 命中 task={cand}")
+                return True
+        except subprocess.TimeoutExpired:
+            log(f"  wait 超时 task={cand}（{WAIT_EACH}s）")
     log("  两个 id 都没等到，落到机械判据判定")
     return False
 
 
-def provision_seats(l):
-    """席位供给：账本 roles 里声明的席位若不存在则 add-agent。
-    必须在 owner pane 跑（owner gate 只认持有绑定的 pane）——驱动器就是 owner pane 子进程。"""
-    # 角色 → 席位名 → 角色文件（席位名即角色文件名的 stem）
-    seat_role_file = {
-        "advisor": ".team/current/agents/advisor.md",
-        "dev-state": ".team/current/agents/dev-state.md",
-        "control": ".team/current/agents/control.md",
-        "dev-keybar": ".team/current/agents/dev-keybar.md",
-    }
-    # 从账本 roles 声明的角色算出需要的席位
-    needed = set()
-    for rk in l.get("roles", {}):
-        if rk in ROLE_SEAT:
-            needed.add(ROLE_SEAT[rk])
-    if not needed:
-        return True
-    # 查现有席位
-    r = subprocess.run([TA, "status", "--json", "--workspace", REPO],
-                       capture_output=True, text=True, cwd=REPO)
-    try:
-        existing = set(json.loads(r.stdout).get("agents", {}).keys())
-    except Exception:
-        existing = set()
-    missing = needed - existing
-    for seat in missing:
-        role_file = seat_role_file.get(seat)
-        if not role_file:
-            log(f"  !! 席位 {seat} 缺角色文件，停。")
-            return False
-        # 同 send()：不传 --json，reference 用文本输出判 ok: True（实发 2026-08-15 同类 bug）
-        rr = subprocess.run([TA, "add-agent", seat, "--role-file", role_file,
-                             "--workspace", REPO],
-                            capture_output=True, text=True, cwd=REPO)
-        out = rr.stdout or ""
-        if "ok: True" not in out:
-            log(f"  !! add-agent {seat} 失败: {out[-200:]}")
-            return False
-        log(f"  add-agent {seat} → ok")
-    return True
+def token_landed(seat, token):
+    """token 是否真的作为 user turn 进了席位转录。
+
+    🔴 2026-08-15 取证（标准修复/投递取证-20260815.md）：注入是「粘贴 → 等 2000ms → Enter」，
+    负载高时 Enter 落在粘贴将完成而未完成之际，**消息尾部被截断**，而 token 恰在尾部。
+    后果：席位收到一份没有 token 的正文，framework 侧记 delivered，这边看到「活干完了、账本不动」。
+    27 条投递里 6 条畸形（22%），切口都在极靠后（丢 1.7%–9%）——**余量只剩百分之几**。
+
+    所以「wait 超时」有两种完全不同的原因，必须分开：
+      token 进去了 ⇒ 席位在干活或已干完，**重发只会把两条挤进同一个输入框造成粘连**；
+      token 没进去 ⇒ 这条根本没送到，**必须重发**。
+    以前不分，一律重发——那正是粘连的原料，把偶发问题变成必发问题。
+    """
+    root = f"{REPO}/.team/runtime/provider-config/{seat}/claude/projects"
+    for f in glob.glob(f"{root}/**/*.jsonl", recursive=True):
+        for line in open(f, encoding="utf-8", errors="replace"):
+            if token not in line:
+                continue
+            try:
+                o = json.loads(line)
+            except Exception:
+                continue
+            if o.get("type") == "user":
+                return True
+    return False
+
+
+def wait_seat(seat):
+    """席位状态兜底：先等它转 BUSY，再等连续 IDLE_CONFIRM 次非 BUSY。"""
+    t0, saw, idle = time.time(), False, 0
+    while time.time() - t0 < MAX_WAIT:
+        s = seat_state(seat)
+        if s == "BUSY":
+            saw, idle = True, 0
+        elif saw:
+            idle += 1
+            if idle >= IDLE_CONFIRM:
+                return True
+        time.sleep(POLL)
+    log(f"  !! {seat} 超时 {MAX_WAIT}s，saw_busy={saw}")
+    return False
 
 
 def check_required(l, tid):
@@ -328,78 +260,49 @@ def main():
             return 0
         log(f"前沿: {todo}")
         l = load()
-        if not provision_seats(l):
-            log("席位供给失败，停。")
-            return 6
         for tid in todo:
             role = l["tasks"][tid]["owner"]["role"]
             seat = ROLE_SEAT.get(role)
             if not seat:
                 log(f"{tid}: 角色 {role} 没有对应席位，停。")
                 return 2
-            # 跳过派单的前提是「忙席位手上拿的是**当前版本**的任务」。
-            # 账本一改，这个前提就不成立——实发 2026-08-15：dev-state 因写阻塞上报而 BUSY，
-            # 我改完账本重启驱动器，驱动器看它 BUSY 就跳过，**扩权裁定根本没送到**，
-            # 席位空等到 idle，判据必红，整条链断在这里。
-            # 所以按「账本 id + 任务 id + revision」记派单水位：这个版本派过才允许跳。
-            mark_dir = os.path.join(REPO, ".team/ledgers/.dispatched")
-            os.makedirs(mark_dir, exist_ok=True)
-            mark = os.path.join(mark_dir, f"{l['ledger_id']}.{tid}.r{l.get('revision', 0)}")
-            if seat_busy(seat) and os.path.exists(mark):
-                # 席位已经在干这一单的当前版本（多半是上一轮派过、驱动器被重启）。
-                # 再派一次等于把半条正文粘进它的输入框——重复派单比不派更糟。
-                log(f"跳过派单：{seat} 仍 BUSY 且本版本已派过，认定 {tid} 已在手上，直接等")
-                msg_id = None
+            # 🔴 席位 BUSY 就不要再派（远程Agent安卓 team 的做法，2026-08-15 我方采纳）：
+            # BUSY 说明这任务已经在它手上，再派一条只会挤进同一个输入框造成粘连。
+            # 我方实证：driver 重启后对 BUSY 的 fixer2 重复派了一次 t.fix-exitcode。
+            if seat_state(seat) == "BUSY":
+                log(f"跳过派单：{seat} 仍 BUSY，认定 {tid} 已在手上，直接等")
+                wait_seat(seat)
+                l = load()
+                if check_required(l, tid):
+                    l["tasks"][tid]["state"] = "succeeded"; l["revision"] += 1; save(l)
+                    log(f"{tid}: 判据通过 → succeeded（revision {l['revision']}）")
+                    continue
+                log(f"{tid}: 判据未过，停。")
+                return 5
+            log(f"派 {tid} → {seat}")
+            task_id = send(seat, dispatch_text(l, tid), tid)
+            if not task_id:
+                log(f"{tid}: 投递失败，停。")
+                return 3
+            # 🔴 先验这条到底送进去没有，再谈等。见 token_landed 的注释。
+            time.sleep(5)  # 给注入留出上屏时间，否则查早了必然查不到
+            if token_landed(seat, task_id):
+                log(f"  ✅ {task_id} 已进 {seat} 转录（user turn）")
             else:
-                # 🔴 **绝不朝 BUSY 席位投递**（2026-08-15 框架队根因闭合后的硬要求）。
-                # 机制：席位 BUSY 时 Enter#1 已提交入队、输入框随即变空，
-                # 而投递侧的消费判据看的是**屏幕上的 token**，队列里的它不在屏幕上，
-                # 于是判「未消费」并照常再按 2 次 Enter，**队列项被自己人删掉**。
-                # 指纹是转录里的 enqueue:N / remove:N / 零消费——我这边实测到过 2/2。
-                # ⇒ BUSY 是唯一会触发这条路径的条件，所以等到 idle 再投，不是省事是避雷。
-                waited = 0
-                while seat_busy(seat) and waited < MAX_WAIT:
-                    if waited == 0:
-                        log(f"  {seat} 仍 BUSY，**押住不投**，等它 idle 再派 {tid}"
-                            f"（朝忙席位投递会被投递侧的重按 Enter 删掉）")
-                    time.sleep(60)
-                    waited += 60
-                if seat_busy(seat):
-                    log(f"{tid}: 等了 {waited}s，{seat} 仍 BUSY，停下交人。绝不硬投。")
-                    return 8
-                if waited:
-                    log(f"  {seat} 已转 idle（等了 {waited}s），现在投递安全")
-                log(f"派 {tid} → {seat}")
-                msg_id = send(seat, dispatch_text(l, tid), tid)
-                if not msg_id:
-                    log(f"{tid}: 投递失败，停。")
-                    return 3
-                open(mark, "w").close()   # 记下「这个 revision 已派过」
-                time.sleep(5)   # 给上屏留时间，太快查会假阴
-                if not token_landed(seat, msg_id):
-                    # 判 False 有两种，必须先分清，否则每条发给忙席位的消息都成假阳。
-                    if seat_busy(seat):
-                        log(f"  {tid}: 转录暂无 token，但 {seat} 仍 BUSY ⇒ "
-                            f"**排队中，不是丢失**。继续等，不重发。")
-                    else:
-                        log(f"{tid}: {seat} 已 IDLE 且转录无 token ⇒ 真没送到。"
-                            f"停下交人，**不重发**（重发会粘连）。")
-                        return 7
-            # 🔴 wait 的键是【账本任务 id】，不是 send 返回的 message_id。
-            # 席位 report_result 带的 task_id 就是账本 id，wait --task 匹配的正是它。
-            # reference 的 send() 注释说「返回 message_id（即 task id）」——这个等价是错的。
-            # 实发 2026-08-15：驱动器卡在 wait --task msg_d5f761155aa8 上永不醒，
-            # 而同一时刻 wait --task t.oracle 立即返回 res_c052d53f5738 completed。
-            log(f"  投递 {msg_id}；等 {tid} / {msg_id}（事件驱动，非轮询）")
-            wait_task(msg_id, tid, seat)   # 等不到也不停——判据才是唯一凭据
+                log(f"  🔴 {task_id} **未进** {seat} 转录 ⇒ 疑似尾部截断，这条没送到。"
+                    f"不重发（重发会造成粘连），停下交人。")
+                return 6
+            log(f"  等 {seat} 干完（wait 短试 + 席位状态兜底）")
+            wait_task(task_id, tid)
+            wait_seat(seat)
             l = load()
             if check_required(l, tid):
                 l["tasks"][tid]["state"] = "succeeded"
-                l["revision"] = l.get("revision", 0) + 1
+                l["revision"] += 1
                 save(l)
                 log(f"{tid}: 判据通过 → succeeded（revision {l['revision']}）")
             else:
-                log(f"{tid}: 判据未过或有人裁未求值，停。这不是 driver 能自己决定的事。")
+                log(f"{tid}: 判据未过，停。这不是 driver 能自己决定的事。")
                 return 5
         if once:
             return 0
