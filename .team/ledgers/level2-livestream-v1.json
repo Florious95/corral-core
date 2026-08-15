@@ -349,7 +349,7 @@
    }
   },
   "t.verify": {
-   "title": "对照席：零上下文定点变异，验上面那些红测真的会红。🔴 你不实现任何东西，也不修任何东西。做两件事：①跑根因探针 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/probe.sh，它现在必须是绿的（实现完成了）；②写一份 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-verify/mutate-and-check.sh：对实现做一处定向破坏（例如把 pane 标题透传改成去掉首字符、或把身份改成从标题字符串里抠），跑具名测试必须变红，恢复后必须变绿；两头都成立才 exit 0，否则非零。🔴 破坏必须自动恢复，脚本跑完工作区必须干净。🔴 判据自检那句话：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "title": "对照席：零上下文定点变异，验上面那些红测真的会红。🔴【leader 裁定，2026-08-16，已落纸不必再申请授权】你上报的 probe.sh L2-8 判据 bug 属实，我已核过（grep 对目录缺 -r，BSD grep 返回 exit 2 且被 2>/dev/null 吞掉，故 L2-8 无论实现在不在都判 FAIL）。该行已由 leader 修复并提交（commit 4aa198891），probe.sh 现已 11/11 全绿。判据是 leader 的量具，产出方与裁判方都不改自己那把尺，所以这一行由 leader 改，不是你的活；你的 fix-l2-8.sh 不要应用，也不要再改 probe.sh。🔴 你仍然不实现任何东西、不修任何东西。剩下要做的只有两件：①跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-livestream/probe.sh 确认它现在是绿的；②补交 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/level2-verify/定点变异报告.md —— 写清你那次定点变异破坏了什么、哪个具名测试变红、恢复后是否变绿、跑了几次结果是否稳定。mutate-and-check.sh 你已经写好且三次全 PASS，不用重写。🔴 判据自检那句话：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属）。",
    "owner": {
     "role": "r.control"
    },
@@ -589,5 +589,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 1
+ "revision": 2
 }
