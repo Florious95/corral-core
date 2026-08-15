@@ -70,13 +70,12 @@ class StateBadgeTest {
         StateBadge(state = state)
     }
 
-    // ---- 映射双射：五值闭集各得其样（008 语义源） ----
+    // ---- 映射双射：四值闭集各得其样（008 语义源） ----
 
     @Test
     fun styleMapping_coversAllAgentStates() {
-        // StateBadgeStyle.of 是 AgentState→Style 双射：五值一一对应，不遗漏不撞样。
+        // StateBadgeStyle.of 是 AgentState→Style 双射：四值一一对应，不遗漏不撞样。
         assertEquals(StateBadgeStyle.BLOCKED, StateBadgeStyle.of(AgentState.BLOCKED))
-        assertEquals(StateBadgeStyle.DONE, StateBadgeStyle.of(AgentState.DONE))
         assertEquals(StateBadgeStyle.WORKING, StateBadgeStyle.of(AgentState.WORKING))
         assertEquals(StateBadgeStyle.IDLE, StateBadgeStyle.of(AgentState.IDLE))
         assertEquals(StateBadgeStyle.UNKNOWN, StateBadgeStyle.of(AgentState.UNKNOWN))
@@ -84,16 +83,16 @@ class StateBadgeTest {
 
     @Test
     fun styleLabels_areAllDistinct() {
-        // 五态 label 两两不同：纯文案也能区分状态（D9 每态文案可辨，不依赖颜色）。
+        // 四态 label 两两不同：纯文案也能区分状态（D9 每态文案可辨，不依赖颜色）。
         val labels = AgentState.entries.map { StateBadgeStyle.of(it).label }.toSet()
-        assertEquals(5, labels.size)
+        assertEquals(4, labels.size)
     }
 
     @Test
     fun styles_areDistinctPerState() {
-        // 集合级：五态得到五个不同 StateBadgeStyle（无两态共样）。
+        // 集合级：四态得到四个不同 StateBadgeStyle（无两态共样）。
         val styles = AgentState.entries.map { StateBadgeStyle.of(it) }.toSet()
-        assertEquals(5, styles.size)
+        assertEquals(4, styles.size)
         assertNotEquals(StateBadgeStyle.UNKNOWN, StateBadgeStyle.BLOCKED) // 占位防语义漂移
     }
 
@@ -104,13 +103,6 @@ class StateBadgeTest {
         renderBadge(AgentState.BLOCKED)
         compose.onNodeWithText("需人").assertExists() // 文案
         compose.onNodeWithContentDescription("状态：需人").assertExists() // R-7 语义
-    }
-
-    @Test
-    fun badge_done_labelAndSemantics() {
-        renderBadge(AgentState.DONE)
-        compose.onNodeWithText("完成").assertExists()
-        compose.onNodeWithContentDescription("状态：完成").assertExists()
     }
 
     @Test

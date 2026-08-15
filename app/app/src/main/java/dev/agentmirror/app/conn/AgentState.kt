@@ -25,10 +25,14 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
 /**
- * 会话生命周期状态（五值闭集，docs/protocol.md §7.1）。
+ * 会话生命周期状态（四值闭集，docs/protocol.md §7.1）。
  *
  * 状态只出现在控制帧（listing / list_delta），永不进入二进制镜像通道；
  * 状态层与镜像层严格解耦（008 隔离铁律）：状态判不出不影响镜像与输入。
+ *
+ * 2026-08-15（用户裁定「去除完成这个状态，就是工作和空闲」，058）：完成态已删。
+ * 服务端不再产完成；App 侧同步移除对应枚举。完成语义由 idle + unread 派生，
+ * 不在状态值域内。
  *
  * - [UNKNOWN] 是一等公民线上值（wire "unknown"），不是错误：适配器判不出状态时服务端
  *   下发它，客户端解码它，均不报错、不阻断镜像与输入。
@@ -47,9 +51,6 @@ enum class AgentState(val wire: String) {
 
     /** 等待输入（如提示符），需要人。 */
     BLOCKED("blocked"),
-
-    /** 任务完成。 */
-    DONE("done"),
 
     /** 一等公民兜底值；不参与聚合、不阻断镜像与输入。 */
     UNKNOWN("unknown");

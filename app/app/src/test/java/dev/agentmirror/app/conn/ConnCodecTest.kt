@@ -93,14 +93,14 @@ class ConnCodecTest {
         assertEquals(45L, f.seq)
         assertEquals(1, f.addedSessions.size)
         assertEquals("s4", f.addedSessions[0].ref)
-        assertEquals(AgentState.DONE, f.addedSessions[0].state)
+        assertEquals(AgentState.IDLE, f.addedSessions[0].state)
         assertEquals(listOf("s1"), f.removedRefs)
         assertEquals(1, f.changedSessions.size)
         assertEquals("s2", f.changedSessions[0].ref)
-        assertEquals(AgentState.DONE, f.changedSessions[0].state)
+        assertEquals(AgentState.IDLE, f.changedSessions[0].state)
         assertEquals(1, f.changedWorkspaces.size)
         assertEquals("/proj/a", f.changedWorkspaces[0].cwd)
-        assertEquals(AgentState.DONE, f.changedWorkspaces[0].aggregateState)
+        assertEquals(AgentState.IDLE, f.changedWorkspaces[0].aggregateState)
         reencodeEquiv(f)
     }
 
@@ -196,7 +196,7 @@ class ConnCodecTest {
             AuthAckFrame(ok = false, reason = "bad token"),
             ListFrame(7),
             ListingFrame(7, 42, listOf(Workspace("/a", 1, AgentState.IDLE, listOf(Session("s1", "c", "/a", AgentState.WORKING, 40, 100))))),
-            ListDeltaFrame(1, addedSessions = listOf(Session("s4", "c", "/c", AgentState.DONE, 25, 100))),
+            ListDeltaFrame(1, addedSessions = listOf(Session("s4", "c", "/c", AgentState.IDLE, 25, 100))),
             SubscribeFrame("s1", 40, 100),
             UnsubscribeFrame("s1"),
             InputFrame(9, "s1", "/model opus"),

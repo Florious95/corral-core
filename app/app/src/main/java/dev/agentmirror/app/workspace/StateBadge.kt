@@ -40,13 +40,12 @@ import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.ui.theme.StateTone
 
-/** 由徽章语义取五态色调（色板在 Theme 深浅双套 token 化，018 §一.1/一.5）。 */
+/** 由徽章语义取四态色调（色板在 Theme 深浅双套 token 化，018 §一.1/一.5）。 */
 @Composable
 private fun StateBadgeStyle.tone(): StateTone {
     val tones = LocalStateTones.current
     return when (this) {
         StateBadgeStyle.BLOCKED -> tones.blocked
-        StateBadgeStyle.DONE -> tones.done
         StateBadgeStyle.WORKING -> tones.working
         StateBadgeStyle.IDLE -> tones.idle
         StateBadgeStyle.UNKNOWN -> tones.unknown
@@ -58,7 +57,7 @@ private fun StateBadgeStyle.tone(): StateTone {
  *
  * 设计决策（018 §一.5 状态可视）：旧版高饱和实底白字在列表里五个「色块」互相打架；
  * 改 tonal 语法——淡容器底 + 深内容字，视觉重量退到辅层级，扫读靠左侧高饱和圆点。
- * 色弱可辨不依赖色相：五态文案各异 + contentDescription（017 R-7），深浅双套各自配色。
+ * 色弱可辨不依赖色相：四态文案各异 + contentDescription（017 R-7），深浅双套各自配色。
  * 工作区聚合状态与单会话状态共用；unknown 灰显一等公民不阻塞渲染（008）。
  */
 @Composable
