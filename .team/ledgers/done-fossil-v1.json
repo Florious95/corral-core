@@ -1,0 +1,139 @@
+{
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.done-fossil.v1",
+  "run": {
+    "desired_state": "running"
+  },
+  "roles": {
+    "r.dev-state": {
+      "provider": "claude_code",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/done-fossil/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    }
+  },
+  "tasks": {
+    "t.done-fossil": {
+      "title": "清 ③ 的尾巴：App 侧仍保留 AgentState.DONE(\"done\")，golden 测试仍断言 DONE，而服务端 StateDone 已在 55bcada2a 删除。用户裁定「去除完成这个状态，就是工作和空闲」。删掉 App 的 DONE 枚举，同步改 golden fixture 与 ConnCodecTest。🔴 只删 DONE：BLOCKED 与 UNKNOWN 不动（UNKNOWN 是一等公民兜底值）。若发现 BLOCKED 也应删，写进回报交 leader，不要自行扩大范围。",
+      "owner": {
+        "role": "r.dev-state"
+      },
+      "resources": {
+        "worktree_id": "wt-done-fossil",
+        "write_paths": [
+          "app/app/src/main/java/dev/agentmirror/app/conn/",
+          "app/app/src/test/",
+          ".team/nodes/done-fossil/"
+        ],
+        "read_paths": [
+          "docs/rulings/20260815-用户裁定原文-直通输入与刷新模型.md",
+          "requirement-base/entries/058-状态检测先归档回退再重建.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "fedf3129b"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/done-fossil/清理说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-df-no-done",
+            "argv": [
+              "sh",
+              "-c",
+              "! grep -rn 'DONE' app/app/src/main/java/dev/agentmirror/app/conn/AgentState.kt"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-df-app-test",
+            "argv": [
+              "./gradlew",
+              ":app:testDebugUnitTest",
+              "--rerun-tasks",
+              "--console=plain"
+            ],
+            "cwd": "app",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-df-server-clean",
+            "argv": [
+              "sh",
+              "-c",
+              "! grep -rn 'StateDone' server/"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-df-no-done",
+          "A-df-app-test",
+          "A-df-server-clean"
+        ]
+      },
+      "state": "planned"
+    }
+  },
+  "dependencies": [],
+  "parallelism": [],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "席位未回结构化完成回报与证据 JSON 时，任务不得进入下一依赖节点",
+    "delivery_uncertain": "投递不确定时重发并要求去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {},
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code）或结构化人裁，禁止写成一句话"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "docs/rulings/20260815-用户裁定原文-直通输入与刷新模型.md",
+      "requirement-base/entries/058-状态检测先归档回退再重建.md"
+    ]
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 1
+}
