@@ -265,6 +265,97 @@
         ]
       },
       "state": "planned"
+    },
+    "t.pt-package": {
+      "title": "打包给用户手动验收：assembleDebug 出 APK，并证明它不是旧产物（session/ 下没有任何 .kt 比 APK 新）。同时构建服务端二进制供 leader 部署。APK 落到 .team/artifacts/apk/app-debug.apk。此包必须同时含①直通输入与④刷新模型。",
+      "owner": {
+        "role": "r.dev-app"
+      },
+      "resources": {
+        "worktree_id": "wt-pt-package",
+        "write_paths": [
+          ".team/artifacts/apk/",
+          "app/app/build/",
+          "server/bin/"
+        ],
+        "read_paths": [
+          ".team/nodes/passthrough-oracle/判据基底摘要.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "2ae7b53bc"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/artifacts/apk/app-debug.apk"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-pk-build",
+            "argv": [
+              "./gradlew",
+              ":app:assembleDebug",
+              "--rerun-tasks",
+              "--console=plain"
+            ],
+            "cwd": "app",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-pk-landed",
+            "argv": [
+              "test",
+              "-s",
+              ".team/artifacts/apk/app-debug.apk"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-pk-not-stale",
+            "argv": [
+              "sh",
+              "-c",
+              "[ -z \"$(find app/app/src/main/java/dev/agentmirror/app/session -name '*.kt' -newer .team/artifacts/apk/app-debug.apk)\" ]"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": []
+          },
+          {
+            "acceptance_id": "A-pk-server",
+            "argv": [
+              "go",
+              "build",
+              "-o",
+              "bin/agentmirrord",
+              "./cmd/agentmirrord"
+            ],
+            "cwd": "server",
+            "expected_exit_code": 0,
+            "artifacts": []
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-pk-build",
+          "A-pk-landed",
+          "A-pk-not-stale",
+          "A-pk-server"
+        ]
+      },
+      "state": "planned"
     }
   },
   "dependencies": [
@@ -276,6 +367,11 @@
     {
       "from": "t.pt-impl",
       "to": "t.pt-verify",
+      "condition": "requires_success"
+    },
+    {
+      "from": "t.pt-verify",
+      "to": "t.pt-package",
       "condition": "requires_success"
     }
   ],
@@ -316,10 +412,11 @@
       "app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt",
       "server/internal/bridge/bridge.go",
       "server/internal/protocol/keys.go",
-      ".team/nodes/passthrough-oracle/判据基底摘要.md"
+      ".team/nodes/passthrough-oracle/判据基底摘要.md",
+      ".team/nodes/passthrough-control/mutation-report.md"
     ]
   },
   "fanout_aggregation": {},
   "audit": {},
-  "revision": 1
+  "revision": 2
 }
