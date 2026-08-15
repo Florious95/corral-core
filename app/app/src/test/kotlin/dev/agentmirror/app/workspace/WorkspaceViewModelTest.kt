@@ -97,7 +97,7 @@ class WorkspaceViewModelTest {
         assertEquals(2, vm.uiState.value.workspaces.single().sessions.size)
 
         // 新 listing 是权威全量，覆盖此前 delta 拼出的状态。
-        vm.onFrame(listing(workspaceOf("/b", count = 1, aggregate = AgentState.DONE, sessions = listOf(session("s9", "n9", "/b", AgentState.DONE)))))
+        vm.onFrame(listing(workspaceOf("/b", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s9", "n9", "/b", AgentState.IDLE)))))
         val s = vm.uiState.value
         assertEquals(1, s.workspaces.size)
         assertEquals("/b", s.workspaces.single().cwd)
@@ -222,7 +222,7 @@ class WorkspaceViewModelTest {
         vm.onFrame(
             listing(
                 workspaceOf("/a", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s1", "n1", "/a", AgentState.IDLE))),
-                workspaceOf("/b", count = 1, aggregate = AgentState.DONE, sessions = listOf(session("s2", "n2", "/b", AgentState.DONE))),
+                workspaceOf("/b", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s2", "n2", "/b", AgentState.IDLE))),
             ),
         )
 

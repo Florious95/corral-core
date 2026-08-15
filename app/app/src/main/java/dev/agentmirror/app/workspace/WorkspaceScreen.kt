@@ -38,16 +38,20 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,10 +75,13 @@ import dev.agentmirror.app.ui.theme.Spacing
  *
  * @contract
  * @pre viewModel 提供当前工作区模型；selectedWorkspaceCwd 可为 null 或暂未出现在模型中的 cwd
- * @post null cwd 渲染一级列表；非空 cwd 渲染对应会话列表（模型暂缺时为空表）；选择/返回经回调上抛
+ * @post null cwd 渲染一级列表；非空 cwd 渲染对应会话列表（模型暂缺时为空表）；选择/返回经回调上抛；
+ *       首次进入即触发一次全量刷新（2026-08-15 用户裁定：每次到一级/二级自动刷一遍拉最新）
  * @err none
- * @inv 聚合状态不在 UI 重算；工作区选择态只读自入参，屏内不另建 remember 状态
+ * @inv 聚合状态不在 UI 重算；工作区选择态只读自入参，屏内不另建 remember 状态；
+ *       零周期性自动刷新（无周期拉取结构，刷新只发生在进入/下拉时）
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkspaceScreen(
     viewModel: WorkspaceViewModel,
@@ -86,6 +93,15 @@ fun WorkspaceScreen(
     onOpenSettings: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
+    val refreshing by viewModel.refreshing.collectAsState()
+
+    // 进入即刷（2026-08-15 用户裁定：每次到一级/二级自动刷一遍拉最新；leader 澄清：返回也算
+    // 到达）。LaunchedEffect 以 selectedWorkspaceCwd 为键——一级⇄二级每次切换都触发一次刷新：
+    // null → cwd 进入二级刷、cwd → null 返回一级刷、app 首次进入一级也刷。每次切换只刷一次，
+    // 不周期重复（零周期禁令）。下拉手动刷见 PullToRefreshBox.onRefresh。
+    LaunchedEffect(selectedWorkspaceCwd) {
+        viewModel.refresh()
+    }
 
     Column(
         modifier = Modifier
@@ -101,35 +117,46 @@ fun WorkspaceScreen(
         )
         ConnectionBanner(connection = state.connection)
 
-        // 一级⇄二级转场：以选中 cwd 为键横向滑动（进入右滑入，返回左滑入），018 §一.6。
-        AnimatedContent(
-            targetState = selectedWorkspaceCwd,
-            transitionSpec = {
-                if (targetState != null) {
-                    (slideInHorizontally { it / 4 } + fadeIn())
-                        .togetherWith(slideOutHorizontally { -it / 4 } + fadeOut())
-                } else {
-                    (slideInHorizontally { -it / 4 } + fadeIn())
-                        .togetherWith(slideOutHorizontally { it / 4 } + fadeOut())
+        // 下拉手动刷（2026-08-15 用户裁定）：手指下滑触发一次全量刷新（PullToRefreshBox
+        // 的 onRefresh → viewModel.refresh）。isRefreshing 驱动指示器，新 listing 到达后由
+        // ViewModel 复位。两级的公共容器（一级/二级都允许下拉刷）。
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("workspace-pull-refresh"),
+        ) {
+            // 一级⇄二级转场：以选中 cwd 为键横向滑动（进入右滑入，返回左滑入），018 §一.6。
+            AnimatedContent(
+                targetState = selectedWorkspaceCwd,
+                transitionSpec = {
+                    if (targetState != null) {
+                        (slideInHorizontally { it / 4 } + fadeIn())
+                            .togetherWith(slideOutHorizontally { -it / 4 } + fadeOut())
+                    } else {
+                        (slideInHorizontally { -it / 4 } + fadeIn())
+                            .togetherWith(slideOutHorizontally { it / 4 } + fadeOut())
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+                label = "workspace-level",
+            ) { cwd ->
+                val workspace = state.workspaces.firstOrNull { it.cwd == cwd }
+                when {
+                    cwd != null -> SessionList(
+                        sessions = workspace?.sessions.orEmpty(),
+                        onOpenSession = onOpenSession,
+                    )
+                    // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
+                    state.isLoading -> LoadingContent()
+                    state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
+                    state.isEmpty -> EmptyGuideContent()
+                    else -> WorkspaceList(
+                        workspaces = state.workspaces,
+                        onOpenWorkspace = { onSelectWorkspace(it.cwd) },
+                    )
                 }
-            },
-            modifier = Modifier.fillMaxSize(),
-            label = "workspace-level",
-        ) { cwd ->
-            val workspace = state.workspaces.firstOrNull { it.cwd == cwd }
-            when {
-                cwd != null -> SessionList(
-                    sessions = workspace?.sessions.orEmpty(),
-                    onOpenSession = onOpenSession,
-                )
-                // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
-                state.isLoading -> LoadingContent()
-                state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
-                state.isEmpty -> EmptyGuideContent()
-                else -> WorkspaceList(
-                    workspaces = state.workspaces,
-                    onOpenWorkspace = { onSelectWorkspace(it.cwd) },
-                )
             }
         }
     }
