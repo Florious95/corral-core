@@ -275,6 +275,49 @@ class ConnectionManager(
     }
 
     /**
+     * 直通输入（059）：把单个按键字符（或一段上屏文本）发到 CLI 输入框，**不追加回车**。
+     *
+     * 服务端 handleInput 对非空 text 走 TypeKeys 逐键注入（草稿在 CLI 输入框），
+     * 空 text 才是提交（Enter）。因此本方法传 text=内容、不传 keys，注入即打字不提交。
+     * 与 [sendInput] 同款决定性链路（input_ack 必达，超时/掉线判失败）。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空
+     * @post 返回 true 时 input 帧（text=char，无 keys）已发出且 pendingInputs 登记超时期限
+     * @err 未就绪 / 编码校验不过 ⇒ 返回 false
+     * @inv 不追加回车；text 与 keys 互斥（本方法只用 text）
+     */
+    fun sendKeystroke(ref: String, char: String): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        val reqId = nextReqId++
+        val frame = InputFrame(reqId = reqId, ref = ref, text = char)
+        if (!conn.send(frame)) return false
+        pendingInputs[reqId] = PendingInput(clock.nowMs() + inputTimeoutMs)
+        return true
+    }
+
+    /**
+     * 直通删除键（059）：虚拟键盘删除键经 keys 通道发 backspace 命名键到 CLI，**不追加回车**。
+     * 服务端 SendKeys 映射 backspace → tmux BSpace，删除 CLI 输入框光标前字符。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空
+     * @post 返回 true 时 input 帧（keys=[backspace]）已发出且 pendingInputs 登记超时期限
+     * @err 未就绪 / 编码校验不过 ⇒ 返回 false
+     * @inv 不追加回车；keys 与 text 互斥（本方法只用 keys）
+     */
+    fun sendBackspace(ref: String): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        val reqId = nextReqId++
+        val frame = InputFrame(reqId = reqId, ref = ref, keys = listOf(InputKey.BACKSPACE))
+        if (!conn.send(frame)) return false
+        pendingInputs[reqId] = PendingInput(clock.nowMs() + inputTimeoutMs)
+        return true
+    }
+
+    /**
      * 订阅会话镜像；记簿待重放，已就绪则立发。
      *
      * @contract

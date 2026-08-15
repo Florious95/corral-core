@@ -42,10 +42,11 @@ import dev.agentmirror.terminal.TerminalEmulator
  * - 进入：构造函数即 [ConnectionManager.subscribe] → 首帧 snapshot 重放 + 预取历史；
  * - 增量：delta → [TerminalEmulator.feed]；历史页 → [TerminalEmulator.prependHistory]；
  * - 滚动到顶：[syncFromPresenter] 收敛 presenter 视口信号 → 按页拉更老历史；
- * - 发送：`send-keys` 一次性注入，input_ack 必达回执（003 第二条）；
+ * - 直通输入（059）：键盘每键经 [onPassthroughInput] 直通 CLI 输入框（草稿在 CLI）；
+ *   [sendDraft] 发送只提交（裸 Enter），不再整条注入；input_ack 必达回执（003 第二条）；
  * - 附件：multipart HTTP 上传（协议 §8）→ 上传成功立刻贴进 CLI pane（需求 057 发图预贴）→
- *   路径累加进 [pendingAttachmentPaths]（不落草稿文本，需求 042），[sendDraft] 发送时经
- *   input 帧的独立 attachment_path 字段带上最新一次预贴路径。
+ *   路径累加进 [pendingAttachmentPaths]，[sendDraft] 提交时经 input 帧的独立
+ *   attachment_path 字段带上最新一次预贴路径。
  */
 class SessionViewModel(
     private val manager: ConnectionManager,
@@ -73,31 +74,19 @@ class SessionViewModel(
 
     // ---- 可观察 UI 状态（Compose 直接读）----
 
-    /** 输入条草稿（本地编辑零网络，003 第一条）。 */
-    var textFieldValue by mutableStateOf(TextFieldValue(""))
-
-    /** 发送回执状态机（必达：ok 清框 / fail+超时保留内容并报错）。 */
+    /** 发送回执状态机（必达：ok 显示已发送 / fail+超时明确报错）。 */
     var inputStatus by mutableStateOf<InputStatus>(InputStatus.Idle)
-
-    /**
-     * 在途发送是否为快捷键（keys）而非草稿（text）。
-     *
-     * 草稿发送 ok 回执要清空输入框；快捷键发送（R-1，017）ok 回执**不动草稿**——
-     * 用户点 Esc/Ctrl-C 打断 agent 时往往正打着字。本标记在送出时置位、回执时消费，
-     * 区分同一发送闸（InputStatus.Sending）下的两种回执语义。
-     */
-    private var pendingSendIsKey = false
 
     /** 附件上传状态机（成功路径注入 / 失败明确报错）。 */
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
 
     /**
      * 已贴进本会话 CLI pane、尚未确认发送的图片路径（需求 057）：上传成功那一刻就
-     * 经 [ConnectionManager.sendAttachPreview] 贴进 pane（不等发送），**不写入
-     * [textFieldValue]**——输入框只显示"已附加 N 张图"这类轻量指示，不显示路径字符串。
+     * 经 [ConnectionManager.sendAttachPreview] 贴进 pane（不等发送）。直通模型下草稿在
+     * CLI，本地输入框不显示路径字符串，只显示"已附加 N 张图"这类轻量指示。
      *
      * **可累加**（需求 057 第 4 款）：连选两张就是两张，都已经贴进 pane 了，App 这边只是
-     * 记账，不做"覆盖上一张"。[sendDraft] 发送时把列表最后一个路径经 input 帧的
+     * 记账，不做"覆盖上一张"。[sendDraft] 提交时把列表最后一个路径经 input 帧的
      * attachment_path 字段送出（服务端只需要最新一次预贴的时间戳来算沉降补差额，
      * 不需要逐张路径）；发送成功后清空整个列表，失败保留可重发。
      *
@@ -231,16 +220,12 @@ class SessionViewModel(
         // 发送态阻塞并发发送（UI 置灰），且 conn 层对每次投递只回执一次 ⇒ 在途回执即本页的。
         if (inputStatus !is InputStatus.Sending) return
         if (ok) {
-            // 003 发送必达：回执可见 + 清输入框。快捷键回执（R-1，017）不动草稿——
-            // 用户点 Esc/Ctrl-C 打断 agent 时往往正打着字（见 pendingSendIsKey）。
+            // 003 发送必达：回执可见。直通模型下草稿在 CLI，本地无草稿可清；
+            // 提交已发出，附件清单清空（避免跟着下一条重复发送）。
             inputStatus = InputStatus.Sent
-            if (!pendingSendIsKey) {
-                textFieldValue = TextFieldValue("")
-                // 附件已随本条消息发出：清空，避免跟着下一条重复发送。
-                pendingAttachmentPaths = emptyList()
-            }
+            pendingAttachmentPaths = emptyList()
         } else {
-            // 失败明确报错：输入框保留内容（可重发）。
+            // 失败明确报错（CLI 草稿仍在，可直接重发）。
             inputStatus = InputStatus.Failed(mapInputReason(reason))
         }
     }
@@ -260,28 +245,20 @@ class SessionViewModel(
     // ---- 用户动作 ----
 
     /**
-     * 发送草稿：一次性注入并回车（R-2 多行不拆分：含 \n 的文本整段一条 input.text，
-     * 服务端 paste-buffer -p 括号粘贴路径处理）；回执经 [onInputResult] 判定（必达）。
+     * 直通输入（059）：发送键只提交——CLI 输入框即草稿（用户逐键直通已把内容打在
+     * CLI 输入框里），发送 = 裸 Enter。不再读取任何本地草稿文本整条注入（那正是被
+     * 取代的 003 第1条"一次性注入"）。
      *
-     * 有待发附件（[pendingAttachmentPaths]）时已经在上传成功那一刻贴进 CLI pane 了
-     * （需求 057，[uploadAttachment] 里做的）——发送这一步只需要把最新一次预贴的路径
-     * 经 input 帧的 attachment_path 字段带上（服务端据此算沉降补差额：常见路径零等待，
-     * 只有选完图立刻发才补差额），**不**拼进 text、**不**强加换行。text 就是草稿原文。
-     *
-     * 服务端命中预贴记录时只发 text + 回车（不重贴，因为已经贴过了）；命中不了（比如
-     * 没走过预贴的老客户端）会退回一次性"贴路径→发文字→等满沉降→回车"的兼容路径。
-     * 上一版把路径和文字拼进同一条含 `\n` 的 text 一次性粘贴，会命中 Claude Code 粘贴
-     * 处理的异步兜底分支（trim 后不是纯绝对路径时会 fork `osascript` 查剪贴板），跟紧
-     * 随其后的 Enter 撞时序竞态——Enter 到达时兜底还没跑完，被吞掉，消息卡在输入框发
-     * 不出去（用户实测复现，见 fix-image-upload-input-box 回炉记录），这两条路都不会
-     * 撞上那堵墙。
+     * 有待发附件（[pendingAttachmentPaths]）时路径已经在上传成功那一刻贴进 CLI pane 了
+     * （需求 057），提交这一步只需带最新一次预贴路径（服务端据此算沉降补差额：常见
+     * 路径零等待，只有选完图立刻发才补差额）；text 为空，服务端只发 Enter。
      *
      * @contract
      * @pre connectionState 为 READY，且 inputStatus 非 Sending
-     * @post 注入成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent]（并清空
-     *       [pendingAttachmentPaths]）或 [InputStatus.Failed]（保留附件，可重发）
-     * @err 未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿与附件
-     * @inv 在途不回发（发送闸）；text 永远是草稿原文，不因附件被改写
+     * @post 提交成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent]
+     *       （并清空 [pendingAttachmentPaths]）或 [InputStatus.Failed]（保留附件，可重发）
+     * @err 未就绪 / 提交失败置 [InputStatus.Failed]
+     * @inv 在途不回发（发送闸）；不携带任何本地草稿文本（059 取代 003 第1条）
      */
     fun sendDraft() {
         if (inputStatus is InputStatus.Sending) return // 在途不回发
@@ -290,12 +267,10 @@ class SessionViewModel(
             inputStatus = InputStatus.Failed("连接未就绪，无法发送")
             return
         }
-        val text = textFieldValue.text
-        // 服务端只需要"最新一次预贴的是哪个路径"来核对沉降时间戳；早于它的路径已经
-        // 贴在 pane 里但不需要再单独确认——多张图一起提交，靠最新那次的时间戳兜底。
+        // 服务端只需要"最新一次预贴的是哪个路径"来核对沉降时间戳；多张图一起提交，
+        // 靠最新那次的时间戳兜底。text 为空 = 裸 Enter 提交（059：发送只提交）。
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
-        if (manager.sendInput(ref, text, attachmentPath)) {
-            pendingSendIsKey = false
+        if (manager.sendInput(ref, "", attachmentPath)) {
             inputStatus = InputStatus.Sending
         } else {
             inputStatus = InputStatus.Failed("发送失败：连接不可用")
@@ -305,13 +280,13 @@ class SessionViewModel(
     /**
      * 点按快捷键条（R-1，017）：注入 keys 帧，**不附加回车**。
      *
-     * 走既有 input→input_ack 决定性链路（003 发送必达：ack 失败/超时可见），与草稿共用
-     * 发送闸（在途不回发）；回执 ok 只显示已发送、不动草稿（用户在打字）。
+     * 走既有 input→input_ack 决定性链路（003 发送必达：ack 失败/超时可见），与提交共用
+     * 发送闸（在途不回发）；回执 ok 显示已发送。
      *
      * @contract
      * @pre connectionState 为 READY，且 inputStatus 非 Sending
-     * @post 注入成功置 [InputStatus.Sending] 并标记本回执为快捷键（回执 ok 不动草稿）
-     * @err 未就绪 / 注入失败置 [InputStatus.Failed] 并保留草稿
+     * @post 注入成功置 [InputStatus.Sending]
+     * @err 未就绪 / 注入失败置 [InputStatus.Failed]
      * @inv 在途不回发（发送闸）
      */
     fun sendKey(key: InputKey) {
@@ -321,7 +296,6 @@ class SessionViewModel(
             return
         }
         if (manager.sendInputKeys(ref, key)) {
-            pendingSendIsKey = true
             inputStatus = InputStatus.Sending
         } else {
             inputStatus = InputStatus.Failed("发送失败：连接不可用")
@@ -329,18 +303,84 @@ class SessionViewModel(
     }
 
     /**
+     * 直通输入（059）：键盘每键（含虚拟键盘删除键）直接进 Agent CLI 输入框。
+     *
+     * Compose 屏在每次 onValueChange 调用本方法，把本地输入框的增量（新旧值）转成
+     * 服务端注入：新增字符直通（[sendPassthrough]），删除字符直通 backspace。CLI 输入框
+     * 即草稿，App 本地不留草稿文本（见屏幕 InputBarRow 的镜像字段）。
+     *
+     * CJK 组合期（leader 判断，非用户裁定）：输入法组合期归输入法本地，不上行；上屏
+     * 那一刻（组合结束）把整串直通。见 [preCompositionText]。
+     *
+     * @contract
+     * @pre oldValue/newValue 为输入框前后值（Compose onValueChange 参数）
+     * @post 非组合期把新增/删除增量直通到 CLI；组合期不上行，组合结束直通整串
+     * @err none（连接未就绪时 [sendPassthrough] 静默丢——CLI 没有可编辑的草稿，直通无意义）
+     * @inv 不改任何本地草稿状态；每键一次 sendInput（服务端逐键注入不回车）
+     */
+    fun onPassthroughInput(oldValue: TextFieldValue, newValue: TextFieldValue) {
+        val wasComposing = oldValue.composition != null
+        val isComposing = newValue.composition != null
+        when {
+            // 组合开始：记住基线（本地输入框此刻文本），组合期不上行。
+            !wasComposing && isComposing -> preCompositionText = oldValue.text
+            // 组合中：归输入法本地，不上行。
+            wasComposing && isComposing -> Unit
+            // 组合结束（上屏）：直通整串（新文本相对组合前基线的增量）。
+            wasComposing && !isComposing -> {
+                val base = preCompositionText ?: oldValue.text
+                preCompositionText = null
+                sendPassthroughDelta(base, newValue.text)
+            }
+            // 非组合普通按键：按增量直通（新增字符 / 删除）。
+            else -> sendPassthroughDelta(oldValue.text, newValue.text)
+        }
+    }
+
+    /** 直通一次文本增量到 CLI（新增字符串或 N 次 backspace）。 */
+    private fun sendPassthroughDelta(oldText: String, newText: String) {
+        when (val delta = TextDelta.of(oldText, newText)) {
+            is TextDelta.Typed -> sendPassthrough(delta.text)
+            is TextDelta.Deleted -> repeat(delta.count) { sendBackspace() }
+            is TextDelta.Replaced -> {
+                repeat(delta.deletedCount) { sendBackspace() }
+                sendPassthrough(delta.typedText)
+            }
+            TextDelta.None -> Unit
+        }
+    }
+
+    /**
+     * 直通一段文本到 CLI 输入框（不回车）。连接未就绪时静默丢（CLI 无草稿可编辑，
+     * 直通无意义）；不走输入状态闸（直通不是"发送"，每键独立、必达回执但 UI 不阻塞）。
+     */
+    private fun sendPassthrough(content: String) {
+        if (connectionState != ConnectionState.READY) return
+        manager.sendKeystroke(ref, content)
+    }
+
+    /** 直通删除键（059）：虚拟键盘删除键经 keys 通道发 backspace 命名键到 CLI。 */
+    private fun sendBackspace() {
+        if (connectionState != ConnectionState.READY) return
+        manager.sendBackspace(ref)
+    }
+
+    /** 组合期起始基线文本（CJK 上屏整串直通用）；null = 非组合期。 */
+    private var preCompositionText: String? = null
+
+    /**
      * 上传附件（协议 §8 multipart）→ 主机绝对路径**立刻**经 [ConnectionManager.sendAttachPreview]
      * 贴进 CLI pane（需求 057：上传成功那一刻贴，不等发送，让解码在用户打字期间跑完），
-     * 并记进 [pendingAttachmentPaths]（累加，**不写入**可见的 [textFieldValue]——需求 042
-     * 「不填入输入框文本」管的是这个草稿框，不是 CLI 那边），不自动发送整条消息。
+     * 并记进 [pendingAttachmentPaths]（累加——需求 042「不填入输入框文本」管的是 CLI 输入框，
+     * 直通模型下路径不掺入逐键直通的文字），不自动提交整条消息。
      *
      * @contract
      * @pre baseUrl 已注入（连接配置已落地），且 uploadStatus 非 Uploading
      * @post 成功：路径追加进 [pendingAttachmentPaths]（连选两张就是两张，不覆盖）并发出
      *       AttachPreviewFrame，置 [UploadStatus.Success]；失败：置 [UploadStatus.Failed]
-     *       且不改草稿、不改附件列表、不发预贴帧
+     *       且不改附件列表、不发预贴帧
      * @err 未配置上传地址 / 上传失败均置 [UploadStatus.Failed] 明确报错
-     * @inv 在途不重传；上传不自动发送草稿；草稿文本本身不被本函数修改；从不清理 CLI pane
+     * @inv 在途不重传；上传不自动提交；直通文字不被本函数改写；从不清理 CLI pane
      */
     fun uploadAttachment(attachment: Attachment) {
         if (uploadStatus is UploadStatus.Uploading) return
@@ -458,5 +498,47 @@ class SessionViewModel(
 
         /** ScrollWheelFrame 发送节流窗口（ms）：GestureDetector 约每 16ms 触发，节流到 ~20fps。 */
         const val SCROLL_THROTTLE_MS = 50L
+    }
+}
+
+/**
+ * 输入框前后值的一次文本增量（直通输入 059 用）。
+ *
+ * 移动输入法下 onValueChange 给出的新旧值通常只在光标处增删一个字符或一段上屏文本；
+ * [of] 用公共前缀/后缀剥离中间差异区，映射为新增 / 删除 / 中间替换三态。
+ */
+internal sealed interface TextDelta {
+    /** 新增了一段文本（含 CJK 上屏整串）。 */
+    data class Typed(val text: String) : TextDelta
+
+    /** 删除了 [count] 个字符（虚拟键盘删除键）。 */
+    data class Deleted(val count: Int) : TextDelta
+
+    /** 光标处中间替换：先删 [deletedCount] 个字符再键入 [typedText]。 */
+    data class Replaced(val deletedCount: Int, val typedText: String) : TextDelta
+
+    /** 无差异。 */
+    data object None : TextDelta
+
+    companion object {
+        /** 直通 backspace 的 wire 载荷（059）；与 VM 的 BACKSPACE_CHAR 同值。 */
+        const val BACKSPACE = ""
+
+        fun of(old: String, new: String): TextDelta {
+            if (old == new) return None
+            val maxCommon = minOf(old.length, new.length)
+            var p = 0
+            while (p < maxCommon && old[p] == new[p]) p++
+            var s = 0
+            while (s < maxCommon - p && old[old.length - 1 - s] == new[new.length - 1 - s]) s++
+            val oldMid = old.substring(p, old.length - s)
+            val newMid = new.substring(p, new.length - s)
+            return when {
+                oldMid.isEmpty() && newMid.isNotEmpty() -> Typed(newMid)
+                newMid.isEmpty() && oldMid.isNotEmpty() -> Deleted(oldMid.length)
+                oldMid.isEmpty() && newMid.isEmpty() -> None
+                else -> Replaced(deletedCount = oldMid.length, typedText = newMid)
+            }
+        }
     }
 }
