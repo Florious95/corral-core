@@ -1,0 +1,21 @@
+[16:52:56] 前沿: ['t.locate']
+[16:52:56] 跳过派单：advisor 手上就是 t.locate@r1（本版本已派过）
+[17:02:40]   机械判据 A-lo-list: exit=0 期望=0 通过
+[17:02:40]   机械判据 A-lo-script: exit=0 期望=0 通过
+[17:02:40]   机械判据 A-lo-red: exit=0 期望=0 通过
+[17:02:40] t.locate: 判据通过 → succeeded（revision 2）
+[17:02:40] 前沿: ['t.uproot']
+[17:02:40] 派 t.uproot → dev-state
+[17:02:49]   ✅ msg_d6a853bd5950 已进 dev-state 转录（user turn）
+[17:02:49]   等 dev-state 干完（wait 短试 + 席位状态兜底）
+[17:03:49]   wait 超时 task=t.uproot（60s）
+[17:04:49]   wait 超时 task=msg_d6a853bd5950（60s）
+[17:04:49]   两个 id 都没等到，落到机械判据判定
+[17:39:41]   机械判据 A-lu-clean: exit=0 期望=0 通过
+[17:39:41]   机械判据 A-lu-archived: exit=0 期望=0 通过
+[17:40:06]   机械判据 A-lu-app: exit=0 期望=0 通过
+[17:40:29]   机械判据 A-lu-server: exit=0 期望=0 通过
+[17:40:29] t.uproot: 判据通过 → succeeded（revision 3）
+[17:40:29] ledger-eval exit=4，停。
+error: 引擎状态推导失败：state_error TerminalProofIncomplete
+
