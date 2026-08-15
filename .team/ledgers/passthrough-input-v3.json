@@ -122,10 +122,10 @@
           "A-po-probe-is-red"
         ]
       },
-      "state": "planned"
+      "state": "succeeded"
     },
     "t.pt-impl": {
-      "title": "实现①直通输入：手机键盘每一次按键（含虚拟键盘删除键）直接进 Agent CLI 输入框；草稿态归 CLI 输入框，发送键仍是唯一提交动作。显式取代 003 第1条的整条一次性注入。CJK 输入法组合期归输入法本地、上屏那一刻直通整串（此条是 leader 判断非用户裁定，发现更好做法须上报）。",
+      "title": "实现①直通输入：手机键盘每一次按键（含虚拟键盘删除键）直接进 Agent CLI 输入框；草稿态归 CLI 输入框，发送键仍是唯一提交动作。显式取代 003 第1条的整条一次性注入。CJK 输入法组合期归输入法本地、上屏那一刻直通整串（此条是 leader 判断非用户裁定，发现更好做法须上报）。\n\n【leader 裁定 2026-08-15，回应 advisor 与 dev-keybar 两席独立上报的扩权请求】\n选 A 扩权，判据不降级。B（降级为结构判据+用户手测）不可选：用户要手测，前提是给他的包真的能按键，否则交付的是一个结构齐全但按键不通的 APK 而判据全绿。\n扩权文件（按文件放行，不按目录）：ws_handler.go / Keys.kt / ConnectionManager.kt。\n🔴 禁止改 app/.../conn/AgentState.kt 及 StateBadgeStyle/StateBadge/StateWatcher/NotificationHelper —— dev-state 正在这些文件里清 ③ 的 DONE 化石，动它就是抹别人的活。\n🔴 「结构判据全绿」不等于做成了。dev-keybar 自报 S1-S4 已绿而 wire 级未通，这说明判据当前挡不住「没做成」。新增 A-pi-wire-server 强制一条命名测试真的 PASS：\n  必须在 server/internal/api/ 下写出并通过名为 TestPassthroughNoEnter 的测试，证明按键路径注入后不追加回车。判据核的是输出里出现 `--- PASS: TestPassthroughNoEnter`，所以「测试不存在时 go test -run 返回 0」那种假绿在这里不成立。\n此外对照席会对 wire 路径做定点变异——判据若在破坏后仍绿，会被当场抓出来。",
       "owner": {
         "role": "r.dev-app"
       },
@@ -136,7 +136,10 @@
           "app/app/src/test/",
           "server/internal/bridge/",
           "server/internal/protocol/",
-          ".team/nodes/passthrough-impl/"
+          ".team/nodes/passthrough-impl/",
+          "server/internal/api/ws_handler.go",
+          "app/app/src/main/java/dev/agentmirror/app/conn/Keys.kt",
+          "app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt"
         ],
         "read_paths": [
           ".team/nodes/passthrough-oracle/判据基底摘要.md",
@@ -194,13 +197,25 @@
             "cwd": "server",
             "expected_exit_code": 0,
             "artifacts": []
+          },
+          {
+            "acceptance_id": "A-pi-wire-server",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/api/ -run TestPassthroughNoEnter -count=1 -v 2>&1 | grep -q -- '--- PASS: TestPassthroughNoEnter'"
+            ],
+            "cwd": "server",
+            "expected_exit_code": 0,
+            "artifacts": []
           }
         ],
         "judgment": [],
         "required": [
           "A-pi-probe-green",
           "A-pi-app-test",
-          "A-pi-server-test"
+          "A-pi-server-test",
+          "A-pi-wire-server"
         ]
       },
       "state": "planned"
@@ -418,5 +433,6 @@
   },
   "fanout_aggregation": {},
   "audit": {},
-  "revision": 2
+  "revision": 3,
+  "content_sha256": "sha256:788c28e42c8a2402f26010d333656be25ad26ffc53f88882044518d2538282a4"
 }
