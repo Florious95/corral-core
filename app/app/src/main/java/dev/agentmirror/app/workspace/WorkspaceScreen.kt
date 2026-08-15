@@ -46,15 +46,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
@@ -90,6 +93,7 @@ fun WorkspaceScreen(
     onSelectWorkspace: (cwd: String) -> Unit,
     onBackToList: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSession: (ref: String, name: String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
@@ -126,8 +130,28 @@ fun WorkspaceScreen(
                 .fillMaxSize()
                 .testTag("workspace-pull-refresh"),
         ) {
-            // 一级列表 + 加载/空/错态。060 uproot：二级会话列表（SessionList）随状态判定
-            // 整体拔除，待二级实时流重建；此处只渲染一级工作区列表。
+            // 二级实时流（060 重建）：选中工作区（selectedWorkspaceCwd 非空）时渲染服务端
+            // 推来的会话行（标题原样 + 结构 ref 点行进三级）。Level2ViewModel 构造即订阅、
+            // 离开即退订（DisposableEffect onDispose）。
+            val level2Cwd = selectedWorkspaceCwd
+            if (level2Cwd != null) {
+                val l2Vm = remember(level2Cwd) {
+                    ServiceWire.managerOrNull()?.let { Level2ViewModel(it, level2Cwd) }
+                }
+                DisposableEffect(l2Vm) {
+                    onDispose { l2Vm?.dispose() }
+                }
+                if (l2Vm != null) {
+                    Level2LiveStreamScreen(
+                        sessions = l2Vm.sessions,
+                        onOpenSession = onOpenSession,
+                    )
+                } else {
+                    LoadingContent()
+                }
+                return@PullToRefreshBox
+            }
+            // 一级列表 + 加载/空/错态。060 uproot：一级菜单刷新模型保留（进入即刷 + 下拉刷）。
             AnimatedContent(
                 targetState = state.workspaces,
                 transitionSpec = { fadeIn().togetherWith(fadeOut()) },

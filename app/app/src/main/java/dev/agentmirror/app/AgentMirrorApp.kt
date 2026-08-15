@@ -164,6 +164,8 @@ fun AgentMirrorApp(
                         onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
                         onBackToList = { navState.selectedWorkspaceCwd = null },
                         onOpenSettings = { navState.showSettings = true },
+                        // 二级实时流（060）：点一行用 ref（结构身份）进三级终端（唯一入口）。
+                        onOpenSession = { ref, name -> navState.activeSession = ref to name },
                     )
                 }
             }

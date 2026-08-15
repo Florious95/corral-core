@@ -60,6 +60,9 @@ sealed interface FramePayload {
                     FrameType.SCROLL_WHEEL -> json.decodeFromJsonElement(ScrollWheelFrame.serializer(), el)
                     FrameType.ATTACH_PREVIEW -> json.decodeFromJsonElement(AttachPreviewFrame.serializer(), el)
                     FrameType.PANE_MODE_CHANGED -> json.decodeFromJsonElement(PaneModeChangedFrame.serializer(), el)
+                    FrameType.LEVEL2 -> json.decodeFromJsonElement(Level2Frame.serializer(), el)
+                    FrameType.LEVEL2_SUBSCRIBE -> json.decodeFromJsonElement(Level2SubscribeFrame.serializer(), el)
+                    FrameType.LEVEL2_UNSUBSCRIBE -> json.decodeFromJsonElement(Level2UnsubscribeFrame.serializer(), el)
                     else -> throw FrameDecodeException(
                         FrameError.UNSUPPORTED_TYPE,
                         "unknown frame type: $type",
@@ -115,6 +118,13 @@ sealed interface FramePayload {
                     FrameError.INVALID_FIELD,
                     "pane_mode_changed is server-to-client only, never sent upstream",
                 )
+                // Level2Frame is S→C only; client never encodes it upstream.
+                is Level2Frame -> throw FrameEncodeException(
+                    FrameError.INVALID_FIELD,
+                    "level2 is server-to-client only, never sent upstream",
+                )
+                is Level2SubscribeFrame -> json.encodeToJsonElement(Level2SubscribeFrame.serializer(), frame)
+                is Level2UnsubscribeFrame -> json.encodeToJsonElement(Level2UnsubscribeFrame.serializer(), frame)
             }
         }
     }
@@ -205,6 +215,11 @@ data class Session(
     @SerialName("cwd") val cwd: String,
     @SerialName("rows") val rows: Int,
     @SerialName("cols") val cols: Int,
+    /**
+     * pane_title 原样透传（060 二级实时流）：服务端不解析、App 渲染原样画。零解析——
+     * 一个字符都不 trim/strip/匹配/映射/美化。默认空串兼容旧帧（一级 listing 无 title）。
+     */
+    @SerialName("title") val title: String = "",
 )
 
 /**
@@ -500,5 +515,51 @@ data class PaneModeChangedFrame(
 ) : FramePayload {
     override val frameType: String get() = FrameType.PANE_MODE_CHANGED
     override fun validate(): String? = if (ref.isEmpty()) "pane_mode_changed ref must be non-empty" else null
+}
+
+/**
+ * 二级菜单实时流 S→C（060）：服务端把单个工作区的会话全量快照推给二级菜单订阅者。
+ *
+ * 每次 scan 后全量替换该工作区视图（行数少，全量免 diff）；[seq] 单调递增，客户端可检测
+ * 跳变触发重连。每个 [Session] 的 [Session.title] 是 pane_title 原样（零解析），[Session.ref]
+ * 是结构字段身份（socket+paneid），[Session.name] 是 window_name（fallback session_name）。
+ *
+ * @contract
+ * @pre workspace 非空、seq ≥ 1、sessions 为服务端权威快照
+ * @post 客户端以 sessions 整体替换该工作区的二级视图
+ * @err validate() 对空 workspace / seq ≤ 0 返回非空原因
+ * @inv sessions 每项 title 原样（App 零解析）；ref 永不来自标题字符串
+ */
+@Serializable
+data class Level2Frame(
+    @SerialName("workspace") val workspace: String,
+    @SerialName("seq") val seq: Long,
+    @SerialName("sessions") val sessions: List<Session>,
+) : FramePayload {
+    override val frameType: String get() = FrameType.LEVEL2
+    override fun validate(): String? = when {
+        workspace.isEmpty() -> "level2 workspace must be non-empty"
+        seq <= 0 -> "level2 seq must be >= 1"
+        else -> null
+    }
+}
+
+/** 二级菜单订阅 C→S（060）：客户端进入二级菜单时发，服务端开始推该工作区实时流。 */
+@Serializable
+data class Level2SubscribeFrame(
+    @SerialName("workspace") val workspace: String,
+) : FramePayload {
+    override val frameType: String get() = FrameType.LEVEL2_SUBSCRIBE
+    override fun validate(): String? =
+        if (workspace.isEmpty()) "level2_subscribe workspace must be non-empty" else null
+}
+
+/** 二级菜单退订 C→S（060）：客户端离开二级菜单时发，服务端停止推。 */
+@Serializable
+data class Level2UnsubscribeFrame(
+    @SerialName("workspace") val workspace: String,
+) : FramePayload {
+    override val frameType: String get() = FrameType.LEVEL2_UNSUBSCRIBE
+    override fun validate(): String? = null
 }
 

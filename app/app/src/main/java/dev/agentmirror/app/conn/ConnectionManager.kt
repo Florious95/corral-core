@@ -351,6 +351,30 @@ class ConnectionManager(
     }
 
     /**
+     * 二级菜单订阅（060）：进入二级菜单时发 [Level2SubscribeFrame]，服务端开始推该工作区
+     * 的实时流（Level2Frame）。fire-and-forget：服务端有订阅者才 scan、零订阅者 park。
+     *
+     * @contract
+     * @pre 连接已启动（非 STOPPED）
+     * @post 连接就绪时 Level2SubscribeFrame 已发出；未就绪则静默（重连后由 UI 重挂订阅）
+     * @err 无（不抛异常）
+     * @inv 不登记 pending 回执；订阅/退订幂等
+     */
+    fun subscribeLevel2(workspace: String): Boolean {
+        if (state == ConnectionState.STOPPED) return false
+        val conn = connection ?: return true
+        if (!conn.isReady) return true
+        return conn.send(Level2SubscribeFrame(workspace = workspace))
+    }
+
+    /** 二级菜单退订（060）：离开二级菜单时发 [Level2UnsubscribeFrame]，服务端停止推。幂等。 */
+    fun unsubscribeLevel2(workspace: String): Boolean {
+        val conn = connection ?: return true
+        if (!conn.isReady) return true
+        return conn.send(Level2UnsubscribeFrame(workspace = workspace))
+    }
+
+    /**
      * 请求全量列表。
      *
      * @contract
