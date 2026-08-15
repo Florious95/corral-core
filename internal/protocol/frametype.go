@@ -70,4 +70,21 @@ const (
 	// No ack on success (the mirror delta stream carries the `[Image #N]`
 	// result); TypeError on failure.
 	TypeAttachPreview FrameType = "attach_preview"
+
+	// TypeLevel2Subscribe starts the second-level live stream (C→S; requirement
+	// 060: 二级菜单改为实时流). The client sends it on entering the second-level
+	// menu; while ≥1 level-2 subscriber exists the server scans tmux and pushes
+	// TypeLevel2Frame. Workspace (a cwd) scopes the push to one workspace; empty
+	// means all workspaces.
+	TypeLevel2Subscribe FrameType = "level2_subscribe"
+
+	// TypeLevel2Unsubscribe stops the second-level live stream (C→S). Idempotent.
+	// Sent on leaving the second-level menu; at zero subscribers the server
+	// parks the scan loop (idle CPU ≈ 0).
+	TypeLevel2Unsubscribe FrameType = "level2_unsubscribe"
+
+	// TypeLevel2Frame is the server-pushed second-level live snapshot (S→C;
+	// requirement 060). Each scan pushes a full replace of one workspace's
+	// sessions; Seq lets the client detect a gap and re-subscribe.
+	TypeLevel2Frame FrameType = "level2_frame"
 )

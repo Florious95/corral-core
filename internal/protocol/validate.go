@@ -21,6 +21,9 @@ func (ErrorFrame) FrameType() FrameType      { return TypeError }
 func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
 func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
 func (AttachPreview) FrameType() FrameType   { return TypeAttachPreview }
+func (Level2Subscribe) FrameType() FrameType   { return TypeLevel2Subscribe }
+func (Level2Unsubscribe) FrameType() FrameType { return TypeLevel2Unsubscribe }
+func (Level2Frame) FrameType() FrameType       { return TypeLevel2Frame }
 
 // Validate reports whether the auth frame is well-formed: a non-empty token.
 func (a Auth) Validate() error {
@@ -273,6 +276,32 @@ func (s ScrollWheel) Validate() error {
 func (p PaneModeChanged) Validate() error {
 	if p.Ref == "" {
 		return fmt.Errorf("%w: pane_mode_changed ref must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the level2 subscribe frame is well-formed. The
+// workspace may be empty (subscribe all) or any cwd string; there is no
+// invalid value.
+func (s Level2Subscribe) Validate() error { return nil }
+
+// Validate reports whether the level2 unsubscribe frame is well-formed. It
+// has no fields; always valid.
+func (s Level2Unsubscribe) Validate() error { return nil }
+
+// Validate checks a level2 live frame: a non-empty workspace, a seq >= 1, and
+// every session valid.
+func (f Level2Frame) Validate() error {
+	if f.Workspace == "" {
+		return fmt.Errorf("%w: level2_frame workspace must be non-empty", ErrInvalidField)
+	}
+	if f.Seq == 0 {
+		return fmt.Errorf("%w: level2_frame seq must be >= 1", ErrInvalidField)
+	}
+	for _, s := range f.Sessions {
+		if err := s.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

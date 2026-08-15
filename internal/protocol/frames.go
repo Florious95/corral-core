@@ -77,12 +77,18 @@ type Workspace struct {
 // client uses to address subscribe / input / scrollback / resize; it is
 // distinct from the display-only Name. Rows/Cols are the pane's current
 // dimensions.
+//
+// Title is the pane's OSC title, transmitted VERBATIM (requirement 060:
+// 二级菜单 = Ctrl-B w 的重绘, 标题原样显示, 一个字符都不解析). It is display-only:
+// never used for identity — Ref/Name come from tmux structural fields, and the
+// client must never derive any addressing from Title.
 type Session struct {
-	Ref  string `json:"ref"`
-	Name string `json:"name"`
-	Cwd  string `json:"cwd"`
-	Rows uint16 `json:"rows"`
-	Cols uint16 `json:"cols"`
+	Ref   string `json:"ref"`
+	Name  string `json:"name"`
+	Cwd   string `json:"cwd"`
+	Title string `json:"title"`
+	Rows  uint16 `json:"rows"`
+	Cols  uint16 `json:"cols"`
 }
 
 // Listing is the full two-level workspace/session model (S→C, reply to List).
@@ -315,4 +321,45 @@ type ScrollWheel struct {
 type PaneModeChanged struct {
 	Ref        string `json:"ref"`
 	InCopyMode bool   `json:"in_copy_mode"`
+}
+
+// Level2Subscribe starts the second-level live stream (C→S; requirement 060).
+// The client sends it on entering the second-level menu. Workspace is a cwd
+// that scopes the push to one workspace; empty means all workspaces.
+//
+// @contract
+// @pre Workspace 可为空（订阅全部）或任意 cwd 字符串
+// @post 服务端把该连接计入 level2 订阅者；有订阅者时扫描 tmux 并推 TypeLevel2Frame
+// @err none — Workspace 为空合法
+// @inv 零订阅者时服务端零 tmux 调用（idle-gate）
+type Level2Subscribe struct {
+	Workspace string `json:"workspace"`
+}
+
+// Level2Unsubscribe stops the second-level live stream (C→S; requirement 060).
+// The client sends it on leaving the second-level menu. Idempotent: unsubscribing
+// when not subscribed is not an error.
+//
+// @contract
+// @pre none
+// @post 服务端把该连接移出 level2 订阅者；最后一名订阅者退出后扫描循环 park
+// @err none
+// @inv 可重复调用；与 Level2Subscribe 配对使用
+type Level2Unsubscribe struct{}
+
+// Level2Frame is the server-pushed second-level live snapshot (S→C; requirement
+// 060). It carries one workspace's sessions as a full replace; Seq increments
+// each scan so the client can detect a gap and re-subscribe (requirement 004
+// stateless replay). Sessions carry Ref (structural identity), Name, and Title
+// (verbatim pane title, zero parsing).
+//
+// @contract
+// @pre Workspace 非空、Seq >= 1
+// @post 客户端以 Sessions 整体替换该工作区的二级视图
+// @err none
+// @inv Title 逐字节原样透传，服务端不做任何字符串处理
+type Level2Frame struct {
+	Workspace string    `json:"workspace"`
+	Seq       uint64    `json:"seq"`
+	Sessions  []Session `json:"sessions"`
 }
