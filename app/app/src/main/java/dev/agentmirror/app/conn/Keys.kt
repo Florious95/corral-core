@@ -25,12 +25,13 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
 /**
- * input 帧 keys 命名键闭集（docs/protocol.md §4.2 input.keys，R-1 快捷键条，017 裁定）。
+ * input 帧 keys 命名键闭集（docs/protocol.md §4.2 input.keys，R-1 快捷键条 017 裁定；
+ * backspace 由直通输入 059 加入）。
  *
- * 闭集七键：esc / ctrl_c / tab / up / down / left / right（对应 tmux 命名键
- * Escape / C-c / Tab / Up / Down / Left / Right——Claude Code 日常硬依赖）。
- * 新增键须 bump 协议版本；与 Go 参考实现 keys.go IsValid() 对齐，未识别键按坏帧拒绝
- * （闭集外即错，防协议漂移）。
+ * 闭集八键：esc / ctrl_c / tab / up / down / left / right / backspace（对应 tmux 命名键
+ * Escape / C-c / Tab / Up / Down / Left / Right / BSpace——Claude Code 日常硬依赖 +
+ * 删除键直通）。新增键须 bump 协议版本；与 Go 参考实现 keys.go IsValid() 对齐，未识别键
+ * 按坏帧拒绝（闭集外即错，防协议漂移）。
  *
  * 使用约束（契约 §4.2，InputFrame.validate 兜底）：
  * - text 与 keys 一帧至多其一（互斥，两者都有判协议错误）；
@@ -57,7 +58,10 @@ enum class InputKey(val wire: String) {
     LEFT("left"),
 
     /** →（菜单选择）。 */
-    RIGHT("right");
+    RIGHT("right"),
+
+    /** 删除键（直通输入 059：虚拟键盘删除键同样直通 CLI，不经 App 本地消费）。 */
+    BACKSPACE("backspace");
 
     companion object {
         /**

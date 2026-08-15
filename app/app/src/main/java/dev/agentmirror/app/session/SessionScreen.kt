@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -362,6 +363,10 @@ private fun InputBarRow(
     onPickImage: () -> Unit,
     onTakePhoto: () -> Unit,
 ) {
+    // 直通模型（059）：本地输入框只是键盘捕获载体 + IME 组合期显示，**不是草稿**。
+    // 每键经 onPassthroughInput 直通 CLI 输入框（CLI 才是草稿）；mirror 只保留 IME
+    // 组合期需要的当前值（CJK 组合期归输入法本地），组合结束上屏整串直通后镜像复位。
+    var mirror by remember { mutableStateOf(TextFieldValue("")) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -375,8 +380,12 @@ private fun InputBarRow(
             onTakePhoto = onTakePhoto,
         )
         OutlinedTextField(
-            value = viewModel.textFieldValue,
-            onValueChange = { viewModel.textFieldValue = it },
+            value = mirror,
+            onValueChange = {
+                // 每键直通：把增量送到 CLI 输入框；mirror 保留 IME 组合期显示值。
+                viewModel.onPassthroughInput(mirror, it)
+                mirror = it
+            },
             placeholder = {
                 Text("输入指令…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             },
@@ -391,9 +400,13 @@ private fun InputBarRow(
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             ),
         )
-        // 发送：一次性注入并回车（本地先校验可发送性，未就绪立即报错）。
+        // 发送只提交（059）：CLI 输入框即草稿，发送 = Enter。镜像同步清空（提交已把
+        // CLI 输入框清空，App 是 pane 的镜子，不保留本地残影）。
         TextButton(
-            onClick = { viewModel.sendDraft() },
+            onClick = {
+                viewModel.sendDraft()
+                mirror = TextFieldValue("")
+            },
             enabled = viewModel.inputStatus !is InputStatus.Sending,
         ) {
             Text(

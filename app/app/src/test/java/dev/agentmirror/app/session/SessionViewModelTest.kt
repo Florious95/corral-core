@@ -16,7 +16,6 @@
 
 package dev.agentmirror.app.session
 
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import dev.agentmirror.app.conn.AttachPreviewFrame
 import dev.agentmirror.app.conn.BinaryFrame
@@ -204,56 +203,78 @@ class SessionViewModelTest {
         assertTrue(h.vm.showBackToBottom)
     }
 
-    // ---- 发送必达（003 第二条）----
+    // ---- 直通输入（059）：发送只提交 + 每键直通 ----
 
     @Test
-    fun inputAckOkClearsDraftAndShowsSent() {
+    fun sendDraft_isBareEnterSubmit_only() {
+        // 直通模型（059）：CLI 输入框即草稿，发送键只提交（裸 Enter），不再整条注入文本。
+        // 红测：sendDraft 发出的 input 帧 text 必须为空（只回车），且不携带本地草稿文本。
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("ls -la")
         h.vm.sendDraft()
         assertEquals(InputStatus.Sending, h.vm.inputStatus)
         val sent = h.inputFrames().last()
-        assertEquals("ls -la", sent.text)
+        assertEquals("", sent.text) // 裸 Enter：text 为空
+        assertTrue(sent.keys.isEmpty())
+        assertEquals("", sent.attachmentPath)
         h.ackOk(sent.reqId)
-        // 回执可见：ok ⇒ 清输入框 + 显示已发送。
         assertEquals(InputStatus.Sent, h.vm.inputStatus)
-        assertEquals("", h.vm.textFieldValue.text)
     }
 
     @Test
-    fun inputAckFailureKeepsDraftAndShowsError() {
+    fun sendDraftAckFailureShowsError() {
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("ls")
         h.vm.sendDraft()
         val sent = h.inputFrames().last()
         h.ackFail(sent.reqId, "session_not_found")
-        // 失败明确报错：输入框保留内容。
         val st = h.vm.inputStatus
         assertTrue(st is InputStatus.Failed)
         assertTrue((st as InputStatus.Failed).message.contains("会话已不存在"))
-        assertEquals("ls", h.vm.textFieldValue.text)
     }
 
     @Test
-    fun inputTimeoutKeepsDraftAndShowsError() {
+    fun sendDraftTimeoutShowsError() {
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("slow")
         h.vm.sendDraft()
         h.tick()
         val st = h.vm.inputStatus
         assertTrue(st is InputStatus.Failed)
         assertTrue((st as InputStatus.Failed).message.contains("超时"))
-        assertEquals("slow", h.vm.textFieldValue.text)
     }
 
     @Test
     fun sendWhileDisconnectedFailsVisiblyWithoutFrame() {
         val h = Harness()
         h.transport.peerClose(1006, "dropped")
-        h.vm.textFieldValue = TextFieldValue("x")
         h.vm.sendDraft()
         assertTrue(h.vm.inputStatus is InputStatus.Failed)
         assertTrue(h.inputFrames().isEmpty())
+    }
+
+    @Test
+    fun passthroughTypedChar_sendsOneCharText() {
+        // 直通（059）：每个按键单独直通到 CLI 输入框（不回车，text 单字符）。
+        val h = Harness()
+        h.vm.onPassthroughInput(tv(""), tv("l"))
+        h.vm.onPassthroughInput(tv("l"), tv("ls"))
+        val sent = h.inputFrames()
+        assertEquals(2, sent.size)
+        assertEquals("l", sent[0].text)
+        assertTrue(sent[0].keys.isEmpty())
+        assertEquals("s", sent[1].text)
+        // 直通不占发送闸：inputStatus 不进入 Sending。
+        assertEquals(InputStatus.Idle, h.vm.inputStatus)
+    }
+
+    @Test
+    fun passthroughDelete_sendsBackspaceKey() {
+        // 直通（059）：虚拟键盘删除键直通 CLI（经 keys 通道 backspace 命名键，不本地消费）。
+        val h = Harness()
+        h.vm.onPassthroughInput(tv("ls"), tv("l"))
+        val sent = h.inputFrames()
+        assertEquals(1, sent.size)
+        // 删除 = keys=[backspace]（服务端 SendKeys 映射 tmux BSpace，不回车）。
+        assertTrue(sent[0].text.isEmpty())
+        assertEquals(listOf(InputKey.BACKSPACE), sent[0].keys)
     }
 
     // ---- 快捷键条（R-1，017）：keys 帧 + 必达回执 ----
@@ -272,16 +293,14 @@ class SessionViewModelTest {
     }
 
     @Test
-    fun sendKeyAckOkKeepsDraft() {
-        // keys 回执 ok：只显示已发送，不动草稿（用户点 Esc/Ctrl-C 打断时往往正打着字）。
+    fun sendKeyAckOkShowsSent() {
+        // keys 回执 ok：显示已发送（直通模型下无本地草稿概念，只断言回执与无 text 帧）。
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("ls -la")
         h.vm.sendKey(InputKey.CTRL_C)
         val sent = h.keyFrames().last()
         h.ackOk(sent.reqId)
         assertEquals(InputStatus.Sent, h.vm.inputStatus)
-        assertEquals("ls -la", h.vm.textFieldValue.text) // 草稿保留
-        // 未发出任何 text 帧。
+        // 未发出任何 text 帧（keys 帧互斥 text）。
         assertTrue(h.inputFrames().none { it.keys.isEmpty() })
     }
 
@@ -310,36 +329,31 @@ class SessionViewModelTest {
     // ---- R-2 多行不拆分（017 裁定）----
 
     @Test
-    fun multilineTextSentAsSingleFrame() {
-        // R-2：含 \n 的输入**不拆分**，整段一条 input.text 发送（服务端 paste-buffer -p
-        // 括号粘贴路径处理）。锁定防回归：禁止出现按行拆分的多次 send。
+    fun passthroughMultiline_typesEachLineDelta() {
+        // 直通（059）：多行文本经 onPassthroughInput 逐键/逐段直通（不回车），不再是
+        // sendDraft 的一次性整条注入。每段 text 是增量而非整条草稿。
         val h = Harness()
-        val multiline = "line one\nline two\nline three"
-        h.vm.textFieldValue = TextFieldValue(multiline)
-        h.vm.sendDraft()
+        h.vm.onPassthroughInput(tv(""), tv("line one\n"))
+        h.vm.onPassthroughInput(tv("line one\n"), tv("line one\nline two"))
         val sent = h.inputFrames()
-        assertEquals(1, sent.size) // 单帧不拆分
-        assertEquals(multiline, sent[0].text) // 整段原样（含换行）
-        assertTrue(sent[0].keys.isEmpty())
-        h.ackOk(sent[0].reqId)
-        assertEquals(InputStatus.Sent, h.vm.inputStatus)
+        assertEquals(2, sent.size)
+        assertEquals("line one\n", sent[0].text)
+        assertEquals("line two", sent[1].text)
+        assertTrue(sent.all { it.keys.isEmpty() })
     }
 
     // ---- 附件管线（003 附加输入能力 / 需求 042：不填入输入框文本 / feat-image-upload-inline：
     //      路径走独立 attachment_path 字段，不拼进 text，回炉记录见类注释）----
 
     @Test
-    fun attachmentUploadDoesNotTouchDraftTextAndSendsPreviewImmediately() {
-        // 需求 042：上传成功后，路径记入 pendingAttachmentPaths，textFieldValue 保持用户原样草稿——
-        // 不出现路径字符串。需求 057：上传成功那一刻立刻发 AttachPreviewFrame 贴进 CLI pane，
-        // 不等到发送。
+    fun attachmentUploadDoesNotTouchTextAndSendsPreviewImmediately() {
+        // 需求 042 + 直通（059）：上传成功后路径记入 pendingAttachmentPaths，不掺入直通文本
+        // （本地无草稿字段）。需求 057：上传成功那一刻立刻发 AttachPreviewFrame 贴进 CLI pane。
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("see ", TextRange(4))
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1, 2)))
         assertTrue(h.vm.uploadStatus is UploadStatus.Success)
-        assertEquals("see ", h.vm.textFieldValue.text) // 草稿一字未变
-        assertFalse(h.vm.textFieldValue.text.contains("/host/img.png")) // 路径没有落进可见文本
-        assertEquals(listOf("/host/img.png"), h.vm.pendingAttachmentPaths) // 路径记在独立状态里
+        // 路径记在独立状态里（不掺入任何直通文本帧）。
+        assertEquals(listOf("/host/img.png"), h.vm.pendingAttachmentPaths)
         assertEquals("http://host:0", h.uploader.lastBaseUrl)
         assertEquals("a.png", h.uploader.lastAttachment?.name)
 
@@ -350,13 +364,11 @@ class SessionViewModelTest {
     }
 
     @Test
-    fun uploadFailureSurfacesErrorAndKeepsDraftAndAttachmentAndSendsNoPreview() {
+    fun uploadFailureSurfacesErrorAndSendsNoPreview() {
         val h = Harness()
         h.uploader.result = UploadOutcome.Failure("HTTP 500")
-        h.vm.textFieldValue = TextFieldValue("keep")
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
         assertTrue(h.vm.uploadStatus is UploadStatus.Failed)
-        assertEquals("keep", h.vm.textFieldValue.text)
         assertEquals(emptyList<String>(), h.vm.pendingAttachmentPaths) // 失败不留下半个附件
         assertTrue("上传失败不应发预贴帧", h.attachPreviewFrames().isEmpty())
     }
@@ -379,18 +391,15 @@ class SessionViewModelTest {
 
     @Test
     fun sendDraftWithAttachmentSendsSeparateFieldNotSplicedText() {
-        // feat-image-upload-inline（回炉后方案）：text 就是草稿原文，路径走 input 帧的
-        // 独立 attachment_path 字段——不拼进 text、不强加换行。上一版把两者拼进同一条
-        // 含 \n 的 text 一次性粘贴，命中了 Claude Code 粘贴处理的异步兜底分支，跟 Enter
-        // 撞时序竞态，消息卡在输入框发不出去（用户实测复现）；这条红测钉住"不能再拼"。
+        // 直通（059）+ feat-image-upload-inline：提交 = 裸 Enter（text 空），路径走
+        // input 帧独立 attachment_path 字段——不拼进 text、不强加换行（上一版把两者拼进
+        // 同一条含 \n 的 text 一次性粘贴会撞粘贴时序竞态，见 fix-image-upload-input-box）。
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("look at this")
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
         h.vm.sendDraft()
         val sent = h.inputFrames()
         assertEquals(1, sent.size)
-        assertEquals("look at this", sent[0].text) // 纯草稿，不含路径、不含换行
-        assertFalse("text 不应含换行", sent[0].text.contains("\n"))
+        assertEquals("", sent[0].text) // 裸 Enter：text 为空（不注入草稿）
         assertFalse("text 不应含路径", sent[0].text.contains("/host/img.png"))
         assertEquals("/host/img.png", sent[0].attachmentPath) // 路径走独立字段
     }
@@ -412,8 +421,8 @@ class SessionViewModelTest {
 
     @Test
     fun sendDraftWithOnlyAttachmentSendsEmptyTextAndPath() {
-        // 没打字、只发图：text 是空串，attachment_path 是路径——服务端据此只走①③
-        // （贴路径 + Enter），不发一个空的 send-keys -l --。
+        // 没打字、只发图：text 是空串，attachment_path 是路径——服务端据此只发 Enter
+        // + 沉降（预贴路径已在 CLI pane）。
         val h = Harness()
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
         h.vm.sendDraft()
@@ -425,42 +434,36 @@ class SessionViewModelTest {
 
     @Test
     fun plainTextWithoutAttachmentSendsEmptyAttachmentPath() {
-        // 不倒退：没有附件时，普通文本消息原样发出，attachment_path 为空——防止②被写成一刀切。
+        // 不倒退：没有附件时，提交 = 裸 Enter（text 空），attachment_path 为空。
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("ls -la")
         h.vm.sendDraft()
         val sent = h.inputFrames()
         assertEquals(1, sent.size)
-        assertEquals("ls -la", sent[0].text)
+        assertEquals("", sent[0].text)
         assertEquals("", sent[0].attachmentPath)
     }
 
     @Test
     fun attachmentIsClearedAfterSuccessfulSendAndNotResentNextMessage() {
-        // 不倒退：附件状态在发送成功后清空，不会跟着下一条消息重复发出。
+        // 不倒退：附件状态在提交成功后清空，不会跟着下一条消息重复发出。
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("first")
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
         h.vm.sendDraft()
         val first = h.inputFrames().single()
         h.ackOk(first.reqId)
-        assertEquals(emptyList<String>(), h.vm.pendingAttachmentPaths) // 发送成功后附件已清空
+        assertEquals(emptyList<String>(), h.vm.pendingAttachmentPaths) // 提交成功后附件已清空
 
-        h.vm.textFieldValue = TextFieldValue("second")
         h.vm.sendDraft()
         val sent = h.inputFrames()
         assertEquals(2, sent.size)
-        assertEquals("second", sent[1].text)
         assertEquals("", sent[1].attachmentPath) // 第二条不含第一次的附件路径
     }
 
     @Test
     fun attachmentSurvivesSendFailureAndIsResent() {
         // leader 独立变异逮到的缺口：KDoc（sendDraft）写了"发送失败保留附件，可重发"，
-        // 必须有断言盯着——只查字段非空挡不住"字段还在但 compose 不再用它"，所以第二段
-        // 必须真的重发一次、断言重发那一帧的 attachment_path 确实又带上了这个路径。
+        // 必须有断言盯着——重发那一帧的 attachment_path 确实又带上了这个路径。
         val h = Harness()
-        h.vm.textFieldValue = TextFieldValue("retry me")
         h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
         h.vm.sendDraft()
         val first = h.inputFrames().single()
@@ -468,10 +471,9 @@ class SessionViewModelTest {
         assertTrue(h.vm.inputStatus is InputStatus.Failed)
         assertEquals(listOf("/host/img.png"), h.vm.pendingAttachmentPaths) // 附件没被静默丢掉
 
-        h.vm.sendDraft() // 重发：同一份草稿+附件
+        h.vm.sendDraft() // 重发：同一份附件
         val sent = h.inputFrames()
         assertEquals(2, sent.size)
-        assertEquals("retry me", sent[1].text)
         assertEquals("/host/img.png", sent[1].attachmentPath) // 重发的帧里附件真的又带上了
     }
 
@@ -500,4 +502,9 @@ class SessionViewModelTest {
         assertEquals(ConnectionState.RECONNECTING, h.vm.connectionState)
         assertTrue(h.vm.connectionBanner!!.contains("重连"))
     }
+
+    // ---- 夹具 ----
+
+    /** TextFieldValue 便捷构造（无组合区）。 */
+    private fun tv(text: String) = TextFieldValue(text)
 }
