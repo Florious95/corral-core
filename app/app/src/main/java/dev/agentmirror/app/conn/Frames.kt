@@ -185,14 +185,15 @@ data class ListFrame(
 }
 
 /**
- * 一级分组（按 cwd 聚合）与二级会话条目。aggregate_state 由服务端权威计算，
- * 客户端只渲染不重算。delta 的 changed_workspaces 中 sessions 可省略。
+ * 一级分组（按 cwd 聚合）与二级会话条目。delta 的 changed_workspaces 中 sessions
+ * 可省略。
+ *
+ * 060 uproot（2026-08-15）：会话状态相关字段随状态判定整体拔除。
  */
 @Serializable
 data class Workspace(
     @SerialName("cwd") val cwd: String,
     @SerialName("session_count") val sessionCount: Int,
-    @SerialName("aggregate_state") val aggregateState: AgentState,
     @SerialName("sessions") val sessions: List<Session> = emptyList(),
 )
 
@@ -202,7 +203,6 @@ data class Session(
     @SerialName("ref") val ref: String,
     @SerialName("name") val name: String,
     @SerialName("cwd") val cwd: String,
-    @SerialName("state") val state: AgentState,
     @SerialName("rows") val rows: Int,
     @SerialName("cols") val cols: Int,
 )
@@ -214,7 +214,7 @@ data class Session(
  * @pre reqId ≥ 1 且 seq ≥ 1
  * @post workspaces 为服务端权威快照；客户端只渲染不重算聚合
  * @err validate() 对 reqId/seq ≤ 0 返回非空原因
- * @inv seq 单调递增；[AgentState] 值必须属闭集
+ * @inv seq 单调递增
  */
 @Serializable
 data class ListingFrame(

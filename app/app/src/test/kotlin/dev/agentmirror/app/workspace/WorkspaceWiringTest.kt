@@ -19,10 +19,8 @@ package dev.agentmirror.app.workspace
 import androidx.compose.ui.test.junit4.createComposeRule
 import dev.agentmirror.app.AgentMirrorApp
 import dev.agentmirror.app.MainNavState
-import dev.agentmirror.app.conn.AgentState
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ListingFrame
-import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.conn.Workspace
 import dev.agentmirror.app.service.ServiceWire
 import org.junit.Assert.assertEquals
@@ -57,7 +55,7 @@ class WorkspaceWiringTest {
     /** 直进工作区：showPairing=false + activeSession=null → 工作区分支在屏。 */
     private fun navState() = MainNavState(initialShowPairing = false)
 
-    /** 含一个真实会话的 listing（缺陷现场：app 已收到含真实会话的 listing 但渲染不出）。 */
+    /** 含一个工作区的 listing（缺陷现场：app 已收到 listing 但渲染不出）。 */
     private fun listing(): ListingFrame = ListingFrame(
         reqId = 1,
         seq = 42,
@@ -65,10 +63,6 @@ class WorkspaceWiringTest {
             Workspace(
                 cwd = "/proj/a",
                 sessionCount = 1,
-                aggregateState = AgentState.WORKING,
-                sessions = listOf(
-                    Session(ref = "s1", name = "claude", cwd = "/proj/a", state = AgentState.WORKING, rows = 24, cols = 80),
-                ),
             ),
         ),
     )
@@ -103,8 +97,7 @@ class WorkspaceWiringTest {
         assertEquals(ConnectionUi.READY, s.connection)
         assertEquals(1, s.workspaces.size)
         assertEquals("/proj/a", s.workspaces.single().cwd)
-        assertEquals(1, s.workspaces.single().sessions.size)
-        assertEquals("s1", s.workspaces.single().sessions.single().ref)
+        assertEquals(1, s.workspaces.single().sessionCount)
     }
 
     @Test

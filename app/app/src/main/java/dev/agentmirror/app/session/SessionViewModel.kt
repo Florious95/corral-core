@@ -149,9 +149,9 @@ class SessionViewModel(
 
     init {
         // 注意：本 VM 不调用 manager.setListener(self)——共享连接（ServiceWire 单例）由
-        // fg-service 持有一个包装监听（服务 StateWatcher/通知 + uiConnector 扇出）。本 VM
+        // fg-service 持有一个包装监听（服务常驻通知 + uiConnector 扇出）。本 VM
         // 实现 Listener 是让接线层把 uiConnector 扇出的回调原样路由进来；自行 setListener
-        // 会顶掉服务层包装、破坏状态守望与通知。同模块测试对测试自建 manager 显式 setListener。
+        // 会顶掉服务层包装、破坏常驻通知。同模块测试对测试自建 manager 显式 setListener。
         connectionState = manager.state()
         onStateChanged(manager.state())
         // 进入即订阅：conn 层记簿，READY 立发，重连自动重放（004 无状态）。

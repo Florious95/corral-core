@@ -60,25 +60,25 @@ import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 
 /**
- * 工作区两级导航（需求 001 舰队视角 → 002 两级分组），018 全面重设计版。
+ * 工作区一级菜单（需求 001 舰队视角 → 002 一级分组），018 全面重设计版。
  *
  * 图28 实锤缺陷修复清单：
  * - safe-area：顶栏 statusBarsPadding、列表 navigationBarsPadding（018 §一.2）；
- * - 标题栏：一级「工作区」/二级目录名，AnimatedContent 平滑切换（此前无标题栏）；
- * - 行层级：主（目录名）/辅（全路径中段省略）/次（徽章+会话数）三级分明（此前四行撑爆）；
- * - 加载态：CONNECTING 且无数据时专门设计（此前直接渲染空 LazyColumn = 白屏）；
- * - 转场：一二级横向滑动 + 淡入淡出；行点击 ripple（Surface onClick）。
+ * - 标题栏：一级「工作区」；
+ * - 行层级：主（目录名）/辅（全路径中段省略）/次（会话数）三级分明（此前四行撑爆）；
+ * - 加载态：CONNECTING 且无数据时专门设计（此前直接渲染空 LazyColumn = 白屏）。
  *
- * 状态全部来自 [WorkspaceViewModel]；聚合字段是服务端权威值，本屏只渲染不重算（012）。
- * [selectedWorkspaceCwd] 由根导航壳持有（D-32）；[onSelectWorkspace]/[onBackToList]
- * 只请求上层迁移层级，本屏不再私存二级选择态。
+ * 状态全部来自 [WorkspaceViewModel]；session_count 是服务端权威值，本屏只渲染不重算。
+ *
+ * 060 uproot（2026-08-15）：二级会话列表（SessionList）随状态判定整体拔除，待二级
+ * 实时流重建；本屏只渲染一级工作区列表。
  *
  * @contract
  * @pre viewModel 提供当前工作区模型；selectedWorkspaceCwd 可为 null 或暂未出现在模型中的 cwd
- * @post null cwd 渲染一级列表；非空 cwd 渲染对应会话列表（模型暂缺时为空表）；选择/返回经回调上抛；
- *       首次进入即触发一次全量刷新（2026-08-15 用户裁定：每次到一级/二级自动刷一遍拉最新）
+ * @post 渲染一级工作区列表（加载/空/错态分支）；选择/返回经回调上抛；
+ *       首次进入即触发一次全量刷新（2026-08-15 用户裁定：每次到一级自动刷一遍拉最新）
  * @err none
- * @inv 聚合状态不在 UI 重算；工作区选择态只读自入参，屏内不另建 remember 状态；
+ * @inv session_count 不在 UI 重算；工作区选择态只读自入参，屏内不另建 remember 状态；
  *       零周期性自动刷新（无周期拉取结构，刷新只发生在进入/下拉时）
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,7 +89,6 @@ fun WorkspaceScreen(
     connectionPath: ConnectionPath? = null,
     onSelectWorkspace: (cwd: String) -> Unit,
     onBackToList: () -> Unit,
-    onOpenSession: (ref: String, name: String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -127,33 +126,21 @@ fun WorkspaceScreen(
                 .fillMaxSize()
                 .testTag("workspace-pull-refresh"),
         ) {
-            // 一级⇄二级转场：以选中 cwd 为键横向滑动（进入右滑入，返回左滑入），018 §一.6。
+            // 一级列表 + 加载/空/错态。060 uproot：二级会话列表（SessionList）随状态判定
+            // 整体拔除，待二级实时流重建；此处只渲染一级工作区列表。
             AnimatedContent(
-                targetState = selectedWorkspaceCwd,
-                transitionSpec = {
-                    if (targetState != null) {
-                        (slideInHorizontally { it / 4 } + fadeIn())
-                            .togetherWith(slideOutHorizontally { -it / 4 } + fadeOut())
-                    } else {
-                        (slideInHorizontally { -it / 4 } + fadeIn())
-                            .togetherWith(slideOutHorizontally { it / 4 } + fadeOut())
-                    }
-                },
+                targetState = state.workspaces,
+                transitionSpec = { fadeIn().togetherWith(fadeOut()) },
                 modifier = Modifier.fillMaxSize(),
                 label = "workspace-level",
-            ) { cwd ->
-                val workspace = state.workspaces.firstOrNull { it.cwd == cwd }
+            ) { workspaces ->
                 when {
-                    cwd != null -> SessionList(
-                        sessions = workspace?.sessions.orEmpty(),
-                        onOpenSession = onOpenSession,
-                    )
                     // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
                     state.isLoading -> LoadingContent()
                     state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
                     state.isEmpty -> EmptyGuideContent()
                     else -> WorkspaceList(
-                        workspaces = state.workspaces,
+                        workspaces = workspaces,
                         onOpenWorkspace = { onSelectWorkspace(it.cwd) },
                     )
                 }
@@ -393,7 +380,6 @@ private fun WorkspaceList(
                 WorkspaceRow(
                     cwd = ws.cwd,
                     sessionCount = ws.sessionCount,
-                    aggregateState = ws.aggregateState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
@@ -408,49 +394,3 @@ private fun WorkspaceList(
     }
 }
 
-/** 二级：选中 cwd 下的会话列表（ref 寻址、name 展示；unknown 灰显不阻塞，008）。 */
-@Composable
-private fun SessionList(
-    sessions: List<SessionUi>,
-    onOpenSession: (ref: String, name: String) -> Unit,
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding(),
-    ) {
-        items(sessions, key = { it.ref }) { s ->
-            Surface(
-                onClick = { onOpenSession(s.ref, s.name) },
-                color = MaterialTheme.colorScheme.background,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 56.dp)
-                        .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // 会话名等宽单行中段省略：tmux 会话名首尾都是辨识信息
-                    // （前缀=类型、尾缀=序号），中段省略两头都保（018 §一.3）。
-                    Text(
-                        text = s.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontFamily = MonoFontFamily,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.MiddleEllipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StateBadge(state = s.state)
-                }
-            }
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
-                thickness = 0.5.dp,
-                modifier = Modifier.padding(start = Spacing.pageH),
-            )
-        }
-    }
-}

@@ -24,9 +24,6 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -227,73 +224,18 @@ object Spacing {
 }
 
 /**
- * 单个会话状态的三色调（tonal 徽章）：底、字、点。
- *
- * 视觉语法：淡容器底 + 深内容字（比高饱和实底更「M3 现代」且深浅双套都可读），
- * 左侧实心圆点保留高饱和原色供扫读——色弱可辨性不依赖颜色本身：五态文案各异
- * （StateBadgeStyle.label）+ contentDescription 语义（017 R-7），颜色只是加速器。
- */
-@Immutable
-data class StateTone(
-    val container: Color,
-    val content: Color,
-    val dot: Color,
-)
-
-/** 五态徽章色板（008 语义：blocked 醒目 / done 完成 / working 活跃 / idle 中性 / unknown 灰）。 */
-@Immutable
-data class StateTones(
-    val working: StateTone,
-    val blocked: StateTone,
-    val done: StateTone,
-    val idle: StateTone,
-    val unknown: StateTone,
-)
-
-/** 浅色套五态徽章：淡容器 + 深字（白底可读），点色取中饱和原色。 */
-val LightStateTones = StateTones(
-    working = StateTone(Color(0xFFD8E2FF), Color(0xFF0C3B7D), Color(0xFF1E63D0)),
-    blocked = StateTone(Color(0xFFFFDAD6), Color(0xFF8C0009), Color(0xFFC62828)),
-    done = StateTone(Color(0xFFC8ECC9), Color(0xFF1B5E20), Color(0xFF2E7D32)),
-    idle = StateTone(Color(0xFFE1E5EA), Color(0xFF414A54), Color(0xFF78848F)),
-    unknown = StateTone(Color(0xFFECEDF1), Color(0xFF5C616B), Color(0xFF9AA0A6)),
-)
-
-/** 深色套五态徽章：深容器 + 浅字（近黑底可读），点色提亮。 */
-val DarkStateTones = StateTones(
-    working = StateTone(Color(0xFF1E4487), Color(0xFFD9E2FF), Color(0xFF8FB7FF)),
-    blocked = StateTone(Color(0xFF7F1D14), Color(0xFFFFDAD6), Color(0xFFFF8A80)),
-    done = StateTone(Color(0xFF1E4B24), Color(0xFFCDEECD), Color(0xFF7FD98A)),
-    idle = StateTone(Color(0xFF333D48), Color(0xFFD3DCE4), Color(0xFF93A1AE)),
-    unknown = StateTone(Color(0xFF2A2F37), Color(0xFFB9BEC8), Color(0xFF8A8F98)),
-)
-
-/**
- * 五态徽章色板注入点。默认浅色套：单测（StateBadgeTest 等）裸 MaterialTheme 包裹
- * 不经 [AgentMirrorTheme] 也能渲染，不因缺 provider 崩溃。
- *
- * @contract
- * @pre none
- * @post `current` 始终为可用 [StateTones]：未被 [AgentMirrorTheme] 覆盖时取浅色套
- *       默认值 [LightStateTones]
- * @err none
- * @inv 值非空（不因缺 provider 抛异常），默认 [LightStateTones]
- */
-val LocalStateTones = staticCompositionLocalOf { LightStateTones }
-
-/**
- * 全局 Material3 主题入口：色板/字阶/圆角/徽章色板一站注入，深浅随系统。
+ * 全局 Material3 主题入口：色板/字阶/圆角一站注入，深浅随系统。
  *
  * 状态栏图标颜色适配（018 §一.2）由 MainActivity enableEdgeToEdge 的 auto 样式承担
  * （浅色套深图标/深色套浅图标），主题层不重复管理窗口。
  *
+ * 060 uproot（2026-08-15）：状态徽章色板随状态判定整体拔除，
+ * 主题不再注入徽章色板。
+ *
  * @contract
  * @pre none（`darkTheme` / `content` 无前置约束）
- * @post 按 `darkTheme` 注入对应徽章色板（深 [DarkStateTones] / 浅 [LightStateTones]），
- *       并以 MaterialTheme 渲染对应 colorScheme / typography / shapes
+ * @post 以 MaterialTheme 渲染对应 colorScheme / typography / shapes
  * @err none
- * @inv 注入的 [LocalStateTones] 与 colorScheme 属同一套（`darkTheme=true` 时深色
- *       scheme + [DarkStateTones]，`false` 时浅色 scheme + [LightStateTones]）
  */
 @Composable
 fun AgentMirrorTheme(
@@ -301,13 +243,10 @@ fun AgentMirrorTheme(
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val stateTones = if (darkTheme) DarkStateTones else LightStateTones
-    CompositionLocalProvider(LocalStateTones provides stateTones) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = AppTypography,
-            shapes = AppShapes,
-            content = content,
-        )
-    }
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = AppTypography,
+        shapes = AppShapes,
+        content = content,
+    )
 }

@@ -17,14 +17,13 @@
 package dev.agentmirror.app.workspace
 
 /**
- * 工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」、002「两级分组」。
+ * 工作区：一级菜单（舰队 → 工作区），对应需求 001「舰队视角」、002「一级分组」。
  *
  * - [WorkspaceViewModel]：纯 JVM 视图模型，消费 conn 层 listing/list_delta 帧流 →
- *   UI 状态；聚合字段（session_count / aggregate_state）为服务端权威值，只渲染不重算（012）。
- * - [WorkspaceScreen] / [StateBadge]：薄 Compose 渲染层；状态徽章五值（008）。
+ *   UI 状态；session_count 为服务端权威值，只渲染不重算。
+ * - [WorkspaceScreen] / [WorkspaceRow]：薄 Compose 渲染层（一级工作区列表）。
  *
- * 二级导航经 [WorkspaceScreen] 的 onOpenSession 回调把 (ref, name) 交给根路由
- * [AgentMirrorApp]，由其挂载 [SessionRoute] 进入会话页。
+ * 060 uproot（2026-08-15）：二级会话列表随状态判定整体拔除，待二级实时流重建。
  *
  * @consumes dev.agentmirror.app.conn
  * @consumes dev.agentmirror.app.tsnet

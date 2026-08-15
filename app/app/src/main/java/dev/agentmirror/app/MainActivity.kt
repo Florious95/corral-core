@@ -102,7 +102,6 @@ class MainActivity : ComponentActivity() {
         }
         // 工作区 VM 与 Activity 同生命周期；列表状态由 conn 层 READY+全量 listing 恢复（004 无状态）。
         workspaceViewModel = WorkspaceViewModel()
-        handleDeepLink(intent) // D-2：冷启动直达（ACTION_OPEN_SESSION+EXTRA_SESSION_REF）
         setContent {
             AgentMirrorApp(navState = navState, workspaceViewModel = workspaceViewModel)
         }
@@ -112,7 +111,6 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleDeepLink(intent)
     }
 
     /** D-3：Activity 重建（旋转/进程回收）前保存导航态。 */
@@ -132,15 +130,6 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         DiagLog.record("lifecycle", "ON_STOP")
         super.onStop()
-    }
-
-    /** 消费通知深链：匹配 action 且带 ref 才导航；缺 ref 忽略（halt 纪律：缺字段不猜）。 */
-    private fun handleDeepLink(intent: Intent?) {
-        if (intent?.action != NotificationHelper.ACTION_OPEN_SESSION) return
-        val ref = intent.getStringExtra(NotificationHelper.EXTRA_SESSION_REF) ?: return
-        // 通知 PendingIntent 只带 ref 不带 name：展示名以 ref 兜底（会话名由列表/通知标题给，
-        // 深链直达时列表尚未加载，ref 是唯一可寻址键）。
-        navState.activeSession = ref to ref
     }
 
     // fix-reconnect-stale-config 扩权（leader 裁定）：Activity 销毁时注销网络回调。

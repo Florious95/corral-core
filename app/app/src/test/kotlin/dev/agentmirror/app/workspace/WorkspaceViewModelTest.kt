@@ -16,12 +16,10 @@
 
 package dev.agentmirror.app.workspace
 
-import dev.agentmirror.app.conn.AgentState
 import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
-import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.conn.Workspace
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,38 +29,24 @@ import org.junit.Test
 /**
  * WorkspaceViewModel 纯 JVM 单测（验收 --tests "*Workspace*"）。
  *
- * 消费 conn 层 listing/list_delta 帧流 → UI 状态；聚合字段（session_count / aggregate_state）
- * 全部来自服务端权威值，客户端只渲染不重算（012 裁定）。红测先行：先列行为，后落实现。
+ * 060 uproot（2026-08-15）：二级会话列表模型与聚合状态随状态判定整体拔除，本 VM 只
+ * 维护一级工作区（cwd → session_count）。二级会话增删（added/changed/removed sessions）
+ * 是二级实时流的数据源，不在本一级 VM 消费；一级只消费 changed_workspaces 的 session_count。
  */
 class WorkspaceViewModelTest {
 
-    // ---- listing：全量列表 → 两级渲染 ----
+    // ---- listing：全量列表 → 一级渲染 ----
 
     @Test
-    fun listing_rendersTwoLevels() {
+    fun listing_rendersOneLevel() {
         val vm = WorkspaceViewModel()
         vm.onFrame(
             ListingFrame(
                 reqId = 1,
                 seq = 42,
                 workspaces = listOf(
-                    Workspace(
-                        cwd = "/proj/a",
-                        sessionCount = 2,
-                        aggregateState = AgentState.BLOCKED,
-                        sessions = listOf(
-                            session("s1", "claude", "/proj/a", AgentState.WORKING),
-                            session("s2", "codex", "/proj/a", AgentState.BLOCKED),
-                        ),
-                    ),
-                    Workspace(
-                        cwd = "/proj/b",
-                        sessionCount = 1,
-                        aggregateState = AgentState.UNKNOWN,
-                        sessions = listOf(
-                            session("s3", "claude", "/proj/b", AgentState.UNKNOWN),
-                        ),
-                    ),
+                    Workspace(cwd = "/proj/a", sessionCount = 2),
+                    Workspace(cwd = "/proj/b", sessionCount = 1),
                 ),
             ),
         )
@@ -70,171 +54,54 @@ class WorkspaceViewModelTest {
         val s = vm.uiState.value
         assertEquals(2, s.workspaces.size)
 
-        // 一级：cwd 聚合条目携带会话数徽章 + 聚合状态徽章。
+        // 一级：cwd 聚合条目携带会话数。
         val a = s.workspaces[0]
         assertEquals("/proj/a", a.cwd)
         assertEquals(2, a.sessionCount)
-        assertEquals(AgentState.BLOCKED, a.aggregateState)
-
-        // 二级：该 cwd 下会话列表；ref 寻址、name 展示。
-        assertEquals(2, a.sessions.size)
-        assertEquals("s1", a.sessions[0].ref)
-        assertEquals("claude", a.sessions[0].name)
-        assertEquals(AgentState.WORKING, a.sessions[0].state)
-
-        // 全 unknown 工作区：聚合 unknown、会话 unknown，渲染侧灰显但绝不阻塞（008）。
         val b = s.workspaces[1]
-        assertEquals(AgentState.UNKNOWN, b.aggregateState)
-        assertEquals(1, b.sessions.size)
-        assertEquals(AgentState.UNKNOWN, b.sessions[0].state)
+        assertEquals("/proj/b", b.cwd)
+        assertEquals(1, b.sessionCount)
     }
 
     @Test
     fun listing_isFullReplace_clearsDeltaState() {
         val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s1", "n1", "/a", AgentState.IDLE)))))
-        vm.onFrame(delta(added = listOf(session("s2", "n2", "/a", AgentState.WORKING))))
-        assertEquals(2, vm.uiState.value.workspaces.single().sessions.size)
+        vm.onFrame(listing(workspaceOf("/a", count = 1)))
+        vm.onFrame(ListDeltaFrame(seq = 43, changedWorkspaces = listOf(Workspace(cwd = "/a", sessionCount = 2))))
+        assertEquals(2, vm.uiState.value.workspaces.single().sessionCount)
 
         // 新 listing 是权威全量，覆盖此前 delta 拼出的状态。
-        vm.onFrame(listing(workspaceOf("/b", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s9", "n9", "/b", AgentState.IDLE)))))
+        vm.onFrame(listing(workspaceOf("/b", count = 1)))
         val s = vm.uiState.value
         assertEquals(1, s.workspaces.size)
         assertEquals("/b", s.workspaces.single().cwd)
-        assertEquals(1, s.workspaces.single().sessions.size)
+        assertEquals(1, s.workspaces.single().sessionCount)
     }
 
-    // ---- delta：增删改会话 ----
+    // ---- delta：只消费 changed_workspaces 的 session_count ----
 
     @Test
-    fun delta_addsSessionToExistingWorkspace() {
+    fun delta_changedWorkspaces_updatesSessionCount() {
         val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 1, aggregate = AgentState.WORKING, sessions = listOf(session("s1", "n1", "/a", AgentState.WORKING)))))
+        vm.onFrame(listing(workspaceOf("/a", count = 2)))
 
-        vm.onFrame(delta(added = listOf(session("s2", "n2", "/a", AgentState.IDLE))))
-
-        val w = vm.uiState.value.workspaces.single()
-        assertEquals(2, w.sessions.size)
-        assertEquals("s2", w.sessions[1].ref)
-        assertEquals(AgentState.IDLE, w.sessions[1].state)
-        // session_count 是服务端权威值，客户端在收到 changed_workspaces 前不擅自改。
-        assertEquals(1, w.sessionCount)
-    }
-
-    @Test
-    fun delta_addedSession_createsNewWorkspace() {
-        val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s1", "n1", "/a", AgentState.IDLE)))))
-
-        // 新 cwd 通过 added_sessions 出现（无对应 changed_workspaces 的兜底路径）。
-        vm.onFrame(delta(added = listOf(session("s3", "n3", "/b", AgentState.BLOCKED))))
-
-        val ws = vm.uiState.value.workspaces
-        assertEquals(2, ws.size)
-        assertEquals("/b", ws[1].cwd)
-        assertEquals(1, ws[1].sessions.size)
-        assertEquals("s3", ws[1].sessions.single().ref)
-        // 兜底占位：未知权威聚合前，用该会话自身状态做渲染占位（012：不自行推导聚合）。
-        assertEquals(AgentState.BLOCKED, ws[1].aggregateState)
-    }
-
-    @Test
-    fun delta_addedSession_thenChangedWorkspaces_correctsMetadata() {
-        val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s1", "n1", "/a", AgentState.IDLE)))))
-
-        // 正常链路：同一 delta 内 added_sessions + changed_workspaces（两组互不相交，允许同现）。
-        vm.onFrame(
-            ListDeltaFrame(
-                seq = 3,
-                addedSessions = listOf(session("s2", "n2", "/a", AgentState.WORKING)),
-                changedWorkspaces = listOf(Workspace(cwd = "/a", sessionCount = 2, aggregateState = AgentState.WORKING)),
-            ),
-        )
-
-        val w = vm.uiState.value.workspaces.single()
-        assertEquals(2, w.sessionCount)
-        assertEquals(AgentState.WORKING, w.aggregateState)
-        assertEquals(2, w.sessions.size)
-    }
-
-    @Test
-    fun delta_removesSession_keepsWorkspaceWhenNonEmpty() {
-        val vm = WorkspaceViewModel()
-        vm.onFrame(
-            listing(
-                workspaceOf(
-                    "/a",
-                    count = 2,
-                    aggregate = AgentState.BLOCKED,
-                    sessions = listOf(session("s1", "n1", "/a", AgentState.BLOCKED), session("s2", "n2", "/a", AgentState.IDLE)),
-                ),
-            ),
-        )
-
-        vm.onFrame(delta(removed = listOf("s1")))
-
-        val w = vm.uiState.value.workspaces.single()
-        assertEquals(1, w.sessions.size)
-        assertEquals("s2", w.sessions.single().ref)
-    }
-
-    @Test
-    fun delta_removingLastSession_dropsEmptyWorkspace() {
-        val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s1", "n1", "/a", AgentState.IDLE)))))
-
-        // 协议 delta 无 removed_workspaces 通道：会话全走后，空工作区从列表消失（渲染必需）。
-        vm.onFrame(delta(removed = listOf("s1")))
-
-        assertTrue(vm.uiState.value.workspaces.isEmpty())
-    }
-
-    @Test
-    fun delta_changedSession_replacesByRef() {
-        val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 1, aggregate = AgentState.WORKING, sessions = listOf(session("s1", "n1", "/a", AgentState.WORKING)))))
-
-        vm.onFrame(delta(changed = listOf(session("s1", "n1-renamed", "/a", AgentState.BLOCKED))))
-
-        val s1 = vm.uiState.value.workspaces.single().sessions.single()
-        assertEquals("n1-renamed", s1.name)
-        assertEquals(AgentState.BLOCKED, s1.state)
-    }
-
-    @Test
-    fun delta_changedWorkspaces_updatesMetadata_keepsSessionsWhenOmitted() {
-        val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 2, aggregate = AgentState.WORKING, sessions = listOf(session("s1", "n1", "/a", AgentState.WORKING), session("s2", "n2", "/a", AgentState.IDLE)))))
-
-        // changed_workspaces 中 sessions 可省略，只携带 cwd/count/aggregate 语义（协议 §5.3）。
-        vm.onFrame(delta(changedWorkspaces = listOf(Workspace(cwd = "/a", sessionCount = 1, aggregateState = AgentState.BLOCKED))))
+        // changed_workspaces 覆盖 session_count（服务端权威）。
+        vm.onFrame(ListDeltaFrame(seq = 43, changedWorkspaces = listOf(Workspace(cwd = "/a", sessionCount = 1))))
 
         val w = vm.uiState.value.workspaces.single()
         assertEquals(1, w.sessionCount)
-        assertEquals(AgentState.BLOCKED, w.aggregateState)
-        assertEquals(2, w.sessions.size)
     }
 
     @Test
-    fun delta_movesSessionAcrossWorkspaces_whenCwdChanges() {
+    fun delta_addedSessions_ignoredByLevelOne() {
         val vm = WorkspaceViewModel()
-        vm.onFrame(
-            listing(
-                workspaceOf("/a", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s1", "n1", "/a", AgentState.IDLE))),
-                workspaceOf("/b", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s2", "n2", "/b", AgentState.IDLE))),
-            ),
-        )
+        vm.onFrame(listing(workspaceOf("/a", count = 1)))
 
-        // changed_sessions 携不同 cwd：会话迁居到新工作区；旧工作区变空后被剪除（协议无
-        // removed_workspaces 通道，渲染必需）。
-        vm.onFrame(delta(changed = listOf(session("s1", "n1", "/b", AgentState.WORKING))))
+        // 二级会话增删不进一级 VM（二级实时流的数据源）。
+        vm.onFrame(ListDeltaFrame(seq = 43, addedSessions = emptyList()))
 
-        val ws = vm.uiState.value.workspaces
-        assertEquals(1, ws.size)
-        assertEquals("/b", ws.single().cwd)
-        assertEquals(2, ws.single().sessions.size)
-        assertEquals("s1", ws.single().sessions.first { it.ref == "s1" }.ref)
+        assertEquals(1, vm.uiState.value.workspaces.size)
+        assertEquals(1, vm.uiState.value.workspaces.single().sessionCount)
     }
 
     // ---- 无关帧：忽略不崩溃 ----
@@ -243,7 +110,7 @@ class WorkspaceViewModelTest {
     fun onFrame_ignoresUnrelatedFrames() {
         val vm = WorkspaceViewModel()
         vm.onFrame(AuthAckFrame(ok = true))
-        vm.onFrame(listing(workspaceOf("/a", count = 1, aggregate = AgentState.IDLE, sessions = listOf(session("s1", "n1", "/a", AgentState.IDLE)))))
+        vm.onFrame(listing(workspaceOf("/a", count = 1)))
 
         // 无关帧不破坏状态，listing 仍正常渲染。
         vm.onFrame(AuthAckFrame(ok = false, reason = "rejected"))
@@ -290,7 +157,7 @@ class WorkspaceViewModelTest {
     fun reconnectKeepsLastKnownList_butFlagsDisconnected() {
         val vm = WorkspaceViewModel()
         vm.onConnectionStateChanged(ConnectionState.READY)
-        vm.onFrame(listing(workspaceOf("/a", count = 1, aggregate = AgentState.WORKING, sessions = listOf(session("s1", "n1", "/a", AgentState.WORKING)))))
+        vm.onFrame(listing(workspaceOf("/a", count = 1)))
 
         vm.onConnectionStateChanged(ConnectionState.RECONNECTING)
 
@@ -302,24 +169,8 @@ class WorkspaceViewModelTest {
 
     // ---- 夹具 ----
 
-    private fun session(ref: String, name: String, cwd: String, state: AgentState) =
-        Session(ref = ref, name = name, cwd = cwd, state = state, rows = 24, cols = 80)
-
-    private fun workspaceOf(cwd: String, count: Int, aggregate: AgentState, sessions: List<Session>) =
-        Workspace(cwd = cwd, sessionCount = count, aggregateState = aggregate, sessions = sessions)
+    private fun workspaceOf(cwd: String, count: Int) =
+        Workspace(cwd = cwd, sessionCount = count)
 
     private fun listing(vararg ws: Workspace) = ListingFrame(reqId = 1, seq = 42, workspaces = ws.toList())
-
-    private fun delta(
-        added: List<Session> = emptyList(),
-        removed: List<String> = emptyList(),
-        changed: List<Session> = emptyList(),
-        changedWorkspaces: List<Workspace> = emptyList(),
-    ) = ListDeltaFrame(
-        seq = 43,
-        addedSessions = added,
-        removedRefs = removed,
-        changedSessions = changed,
-        changedWorkspaces = changedWorkspaces,
-    )
 }

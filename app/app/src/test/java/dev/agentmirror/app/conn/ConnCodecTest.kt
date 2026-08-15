@@ -73,17 +73,13 @@ class ConnCodecTest {
         val w0 = f.workspaces[0]
         assertEquals("/proj/a", w0.cwd)
         assertEquals(2, w0.sessionCount)
-        assertEquals(AgentState.BLOCKED, w0.aggregateState)
         assertEquals(2, w0.sessions.size)
         assertEquals("s1", w0.sessions[0].ref)
         assertEquals("claude", w0.sessions[0].name)
-        assertEquals(AgentState.WORKING, w0.sessions[0].state)
         assertEquals(40, w0.sessions[0].rows)
         assertEquals(100, w0.sessions[0].cols)
         val w1 = f.workspaces[1]
         assertEquals("/proj/b", w1.cwd)
-        assertEquals(AgentState.UNKNOWN, w1.aggregateState)
-        assertEquals(AgentState.UNKNOWN, w1.sessions[0].state)
         reencodeEquiv(f)
     }
 
@@ -93,14 +89,11 @@ class ConnCodecTest {
         assertEquals(45L, f.seq)
         assertEquals(1, f.addedSessions.size)
         assertEquals("s4", f.addedSessions[0].ref)
-        assertEquals(AgentState.IDLE, f.addedSessions[0].state)
         assertEquals(listOf("s1"), f.removedRefs)
         assertEquals(1, f.changedSessions.size)
         assertEquals("s2", f.changedSessions[0].ref)
-        assertEquals(AgentState.IDLE, f.changedSessions[0].state)
         assertEquals(1, f.changedWorkspaces.size)
         assertEquals("/proj/a", f.changedWorkspaces[0].cwd)
-        assertEquals(AgentState.IDLE, f.changedWorkspaces[0].aggregateState)
         reencodeEquiv(f)
     }
 
@@ -195,8 +188,8 @@ class ConnCodecTest {
             AuthAckFrame(ok = true),
             AuthAckFrame(ok = false, reason = "bad token"),
             ListFrame(7),
-            ListingFrame(7, 42, listOf(Workspace("/a", 1, AgentState.IDLE, listOf(Session("s1", "c", "/a", AgentState.WORKING, 40, 100))))),
-            ListDeltaFrame(1, addedSessions = listOf(Session("s4", "c", "/c", AgentState.IDLE, 25, 100))),
+            ListingFrame(7, 42, listOf(Workspace("/a", 1, listOf(Session("s1", "c", "/a", 40, 100))))),
+            ListDeltaFrame(1, addedSessions = listOf(Session("s4", "c", "/c", 25, 100))),
             SubscribeFrame("s1", 40, 100),
             UnsubscribeFrame("s1"),
             InputFrame(9, "s1", "/model opus"),
@@ -263,25 +256,6 @@ class ConnCodecTest {
     @Test
     fun testRedListMissingReqId() {
         assertDecodeFails(FrameError.INVALID_FIELD, """{"v":1,"type":"list","payload":{}}""")
-    }
-
-    @Test
-    fun testRedSessionBadState() {
-        assertDecodeFails(
-            FrameError.INVALID_STATE,
-            """{"v":1,"type":"listing","payload":{"req_id":1,"seq":1,"workspaces":""" +
-                """[{"cwd":"/x","session_count":1,"aggregate_state":"working","sessions":""" +
-                """[{"ref":"s1","name":"c","cwd":"/x","state":"flying","rows":24,"cols":80}]}]}}""",
-        )
-    }
-
-    @Test
-    fun testRedWorkspaceBadAggregate() {
-        assertDecodeFails(
-            FrameError.INVALID_STATE,
-            """{"v":1,"type":"listing","payload":{"req_id":1,"seq":1,"workspaces":""" +
-                """[{"cwd":"/x","session_count":1,"aggregate_state":"zombie"}]}}""",
-        )
     }
 
     @Test

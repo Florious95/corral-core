@@ -163,7 +163,6 @@ fun AgentMirrorApp(
                         connectionPath = ServiceWire.connectionPath(),
                         onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
                         onBackToList = { navState.selectedWorkspaceCwd = null },
-                        onOpenSession = { ref, name -> navState.activeSession = ref to name },
                         onOpenSettings = { navState.showSettings = true },
                     )
                 }

@@ -16,11 +16,9 @@
 
 package dev.agentmirror.app.workspace
 
-import dev.agentmirror.app.conn.AgentState
 import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ListingFrame
-import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.conn.Workspace
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,7 +41,7 @@ import org.junit.Test
  */
 class WorkspaceViewModelRefreshTest {
 
-    /** 含一个工作区+一个会话的最小 listing。 */
+    /** 含一个工作区的最小 listing。 */
     private fun listing(): ListingFrame = ListingFrame(
         reqId = 1,
         seq = 42,
@@ -51,10 +49,6 @@ class WorkspaceViewModelRefreshTest {
             Workspace(
                 cwd = "/proj/a",
                 sessionCount = 1,
-                aggregateState = AgentState.WORKING,
-                sessions = listOf(
-                    Session(ref = "s1", name = "claude", cwd = "/proj/a", state = AgentState.WORKING, rows = 24, cols = 80),
-                ),
             ),
         ),
     )

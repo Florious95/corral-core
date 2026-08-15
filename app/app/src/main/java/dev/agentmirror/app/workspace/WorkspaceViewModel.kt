@@ -16,7 +16,6 @@
 
 package dev.agentmirror.app.workspace
 
-import dev.agentmirror.app.conn.AgentState
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
@@ -24,8 +23,6 @@ import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
-import dev.agentmirror.app.conn.Session
-import dev.agentmirror.app.conn.Workspace
 import dev.agentmirror.app.service.ServiceWire
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,23 +50,15 @@ enum class ConnectionUi {
     STOPPED,
 }
 
-/** 二级会话条目（渲染层薄模型）；ref 是寻址键，name 是展示标签（可重名，002）。 */
-data class SessionUi(
-    val ref: String,
-    val name: String,
-    val state: AgentState,
-)
-
 /**
- * 一级工作区条目：cwd 聚合。聚合字段以服务端权威值为准——added_sessions 新建工作区在
- * changed_workspaces 纠正前，以该会话自身状态做渲染占位（见 [WorkspaceViewModel]）；
- * 客户端只渲染不重算（012）。
+ * 一级工作区条目：cwd 聚合。session_count 以服务端权威值为准，客户端只渲染不重算。
+ *
+ * 060 uproot（2026-08-15）：二级会话列表模型（会话条目 / sessions）与聚合状态随
+ * 状态判定整体拔除；一级菜单只保留 cwd 与会话数。
  */
 data class WorkspaceUi(
     val cwd: String,
     val sessionCount: Int,
-    val aggregateState: AgentState,
-    val sessions: List<SessionUi>,
 )
 
 /** 工作区首页整体 UI 状态（唯一渲染源）。 */
@@ -89,7 +78,7 @@ data class WorkspaceUiState(
 }
 
 /**
- * 工作区两级导航的纯 JVM 视图模型（知识基底 §1 分层：ViewModel 消费 conn 层
+ * 工作区一级菜单的纯 JVM 视图模型（知识基底 §1 分层：ViewModel 消费 conn 层
  * listing/list_delta 帧流 → UI 状态，Compose 屏只做薄渲染）。
  *
  * 输入侧是回调（由接线层把 [ConnectionManager.Listener.onFrame] /
@@ -97,24 +86,21 @@ data class WorkspaceUiState(
  * 等一致性恢复已由 conn 层 ConnectionManager 自动重新 list（conn 知识基底 §1），本层
  * 只按顺序渲染收到的 listing / list_delta，不自行推导聚合。
  *
- * 刷新模型（2026-08-15 用户裁定）：[refresh] 是进入一级/二级与下拉共用的主动拉新入口，
+ * 刷新模型（2026-08-15 用户裁定）：[refresh] 是进入一级与下拉共用的主动拉新入口，
  * 置刷新在途标记并发出一次全量列表请求；新 [ListingFrame] 到达后复位。**零周期性自动刷新**
  * （禁令）——本类无周期拉取结构（无无限循环/周期定时器/固定延迟协程）；主动刷新只在
  * 用户进入/下拉时发生。
  *
- * 聚合语义（docs/protocol.md §5 + requirement 012）：
- * - session_count / aggregate_state 是服务端权威值，客户端只渲染、不重算；
- * - delta 无 removed_workspaces 通道：会话全走的空工作区由本层从一级列表移除（渲染必需）；
- * - changed_workspaces 中 sessions 可省略，只携带 cwd/count/aggregate 语义。
+ * 060 uproot（2026-08-15）：二级会话列表模型（会话条目 / 落位逻辑等）
+ * 与聚合状态随状态判定整体拔除。本 VM 只维护一级工作区（cwd → session_count）。
  *
  * @contract
  * @pre none（任意时刻可构造；任意帧可到达，无关帧被忽略）
- * @post 收到 ListingFrame 整体替换两级模型；收到 ListDeltaFrame 按四组字段增量落位；
- *       [onConnectionStateChanged] 把 [ConnectionState] 映射为 UI 四态；
+ * @post 收到 ListingFrame 整体替换一级工作区模型；收到 ListDeltaFrame 按 changed_workspaces
+ *       增量更新 session_count；[onConnectionStateChanged] 把 [ConnectionState] 映射为 UI 四态；
  *       [refresh] 置刷新在途标记并发出一次全量列表请求
  * @err none（无异常面；无关帧走 else 分支忽略，不破坏状态）
- * @inv 工作区保服务端下发顺序（LinkedHashMap 插入序）；聚合字段以服务端权威值为准，
- *       added_sessions 新建工作区的单会话占位由后续 changed_workspaces 纠正；
+ * @inv 工作区保服务端下发顺序（LinkedHashMap 插入序）；session_count 以服务端权威值为准；
  *       零周期性自动刷新（无周期拉取结构）
  */
 class WorkspaceViewModel(
@@ -136,7 +122,7 @@ class WorkspaceViewModel(
     /**
      * 全量列表刷新入口（2026-08-15 用户裁定刷新模型）。
      *
-     * 进入一级/二级的 LaunchedEffect 与下拉手势共调本入口：置刷新在途标记并发出一次
+     * 进入一级的 LaunchedEffect 与下拉手势共调本入口：置刷新在途标记并发出一次
      * [ConnectionManager.list] 请求；新 [ListingFrame] 到达后由 [applyListing] 复位标记。
      * 刷新不重复换列表——conn 层 READY 后自动 list 的既有语义保留，本入口是**主动**拉新。
      *
@@ -151,15 +137,8 @@ class WorkspaceViewModel(
         requestList()
     }
 
-    /** 内部模型：cwd → 可变工作区（保服务端下发顺序；sessions 按 ref 索引）。 */
-    private val workspaceModels = LinkedHashMap<String, WorkspaceModel>()
-
-    private class WorkspaceModel(
-        val cwd: String,
-        var sessionCount: Int,
-        var aggregateState: AgentState,
-        val sessions: LinkedHashMap<String, SessionUi> = LinkedHashMap(),
-    )
+    /** 内部模型：cwd → session_count（保服务端下发顺序）。 */
+    private val workspaceCounts = LinkedHashMap<String, Int>()
 
     // ---- ConnectionManager.Listener（接线层经 ServiceWire.uiConnector 原样路由进来）----
     // 与 SessionViewModel 同款接线语义：VM 实现 Listener 供接线层把 uiConnector 扇出的回调
@@ -200,95 +179,36 @@ class WorkspaceViewModel(
     private fun applyListing(frame: ListingFrame) {
         // 新 listing 到达 = 刷新完成：复位刷新在途标记（进入/下拉刷共用语义）。
         _refreshing.value = false
-        workspaceModels.clear()
+        workspaceCounts.clear()
         for (w in frame.workspaces) {
-            val model = WorkspaceModel(w.cwd, w.sessionCount, w.aggregateState)
-            for (s in w.sessions) model.sessions[s.ref] = s.toUi()
-            workspaceModels[w.cwd] = model
+            workspaceCounts[w.cwd] = w.sessionCount
         }
         publish()
     }
 
-    // ---- delta：按协议 §5.3 四组字段增量落位 ----
+    // ---- delta：按协议 §5.3 增量更新一级工作区 ----
 
     private fun applyDelta(frame: ListDeltaFrame) {
-        // 1. 增/改：added_sessions 与 changed_sessions 都按 ref 落位（upsert）。
-        //    added 携带"完整当前值"，可新建工作区；changed 按 replace 应用。
-        for (s in frame.addedSessions) upsertSession(s, createdByAdd = true)
-        for (s in frame.changedSessions) upsertSession(s, createdByAdd = false)
-        // 2. 删：removed_refs 按 ref 从所在工作区移除（count 是服务端权威，不在此递减）。
-        for (ref in frame.removedRefs) removeSessionByRef(ref)
-        // 3. 元数据：changed_workspaces 覆盖 session_count / aggregate_state（服务端权威）。
-        //    sessions 可省略；对未见过的 cwd 忽略（一致流下不会出现，防御性跳过）。
+        // 二级会话增删（added/changed/removed sessions）是二级实时流的数据源，
+        // 不在本一级 VM 消费；一级只关心 changed_workspaces 里的 session_count 元数据。
         for (w in frame.changedWorkspaces) {
-            workspaceModels[w.cwd]?.let { m ->
-                m.sessionCount = w.sessionCount
-                m.aggregateState = w.aggregateState
-                if (w.sessions.isNotEmpty()) {
-                    m.sessions.clear()
-                    for (s in w.sessions) m.sessions[s.ref] = s.toUi()
-                }
-            }
+            workspaceCounts[w.cwd] = w.sessionCount
         }
-        pruneEmptyWorkspaces()
+        // 一级菜单的 session_count 是服务端权威值；removed 会话对一级的意义由
+        // changed_workspaces 携带（无 removed_workspaces 通道，服务端保证覆盖）。
         publish()
     }
 
-    /** 按 ref 落位会话：新 cwd 建占位工作区；ref 换 cwd 时迁居到新工作区。 */
-    private fun upsertSession(s: Session, createdByAdd: Boolean) {
-        val oldHome = findRefHome(s.ref)
-        if (oldHome != null && oldHome != s.cwd) {
-            workspaceModels[oldHome]?.sessions?.remove(s.ref)
-        }
-        val target = workspaceModels[s.cwd] ?: WorkspaceModel(
-            cwd = s.cwd,
-            // 占位值：无权威元数据前，单会话工作区的聚合恒等于该会话自身状态（012 规则 3
-            // 亦兼容：单 unknown 会话 → 聚合 unknown），后续 changed_workspaces 会纠正。
-            sessionCount = 0,
-            aggregateState = s.state,
-        ).also { workspaceModels[s.cwd] = it }
-        target.sessions[s.ref] = s.toUi()
-        // added_sessions 新建工作区且尚无权威 count 时，兜底按已知会话数占位（012：不推导聚合）。
-        if (createdByAdd && oldHome == null && target.sessionCount == 0) {
-            target.sessionCount = target.sessions.size
-        }
-    }
-
-    /** 按 ref 删除会话；空工作区交由 [pruneEmptyWorkspaces] 统一清理。 */
-    private fun removeSessionByRef(ref: String) {
-        findRefHome(ref)?.let { workspaceModels[it]?.sessions?.remove(ref) }
-    }
-
-    /** 定位 ref 当前所在工作区 cwd；不存在返回 null。 */
-    private fun findRefHome(ref: String): String? {
-        for ((cwd, m) in workspaceModels) {
-            if (m.sessions.containsKey(ref)) return cwd
-        }
-        return null
-    }
-
-    /** 会话全走的空工作区从一级列表移除（协议无 removed_workspaces 通道，渲染必需）。 */
-    private fun pruneEmptyWorkspaces() {
-        workspaceModels.entries.removeAll { it.value.sessions.isEmpty() }
-    }
-
-    /** 把内部模型快照发布为 UI 状态（保序、按 ref 入表顺序）。 */
+    /** 把内部模型快照发布为 UI 状态（保序）。 */
     private fun publish() {
         _uiState.update {
             it.copy(
-                workspaces = workspaceModels.values.map { m ->
-                    WorkspaceUi(
-                        cwd = m.cwd,
-                        sessionCount = m.sessionCount,
-                        aggregateState = m.aggregateState,
-                        sessions = m.sessions.values.toList(),
-                    )
+                workspaces = workspaceCounts.map { (cwd, count) ->
+                    WorkspaceUi(cwd = cwd, sessionCount = count)
                 },
             )
         }
     }
-
-    private fun Session.toUi() = SessionUi(ref = ref, name = name, state = state)
 
     private fun ConnectionState.toUi(): ConnectionUi = when (this) {
         ConnectionState.CONNECTING, ConnectionState.AUTHENTICATING -> ConnectionUi.CONNECTING
