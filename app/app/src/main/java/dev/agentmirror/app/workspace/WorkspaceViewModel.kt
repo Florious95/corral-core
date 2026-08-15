@@ -26,6 +26,7 @@ import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.conn.Workspace
+import dev.agentmirror.app.service.ServiceWire
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -96,6 +97,11 @@ data class WorkspaceUiState(
  * 等一致性恢复已由 conn 层 ConnectionManager 自动重新 list（conn 知识基底 §1），本层
  * 只按顺序渲染收到的 listing / list_delta，不自行推导聚合。
  *
+ * 刷新模型（2026-08-15 用户裁定）：[refresh] 是进入一级/二级与下拉共用的主动拉新入口，
+ * 置刷新在途标记并发出一次全量列表请求；新 [ListingFrame] 到达后复位。**零周期性自动刷新**
+ * （禁令）——本类无周期拉取结构（无无限循环/周期定时器/固定延迟协程）；主动刷新只在
+ * 用户进入/下拉时发生。
+ *
  * 聚合语义（docs/protocol.md §5 + requirement 012）：
  * - session_count / aggregate_state 是服务端权威值，客户端只渲染、不重算；
  * - delta 无 removed_workspaces 通道：会话全走的空工作区由本层从一级列表移除（渲染必需）；
@@ -104,19 +110,46 @@ data class WorkspaceUiState(
  * @contract
  * @pre none（任意时刻可构造；任意帧可到达，无关帧被忽略）
  * @post 收到 ListingFrame 整体替换两级模型；收到 ListDeltaFrame 按四组字段增量落位；
- *       [onConnectionStateChanged] 把 [ConnectionState] 映射为 UI 四态
+ *       [onConnectionStateChanged] 把 [ConnectionState] 映射为 UI 四态；
+ *       [refresh] 置刷新在途标记并发出一次全量列表请求
  * @err none（无异常面；无关帧走 else 分支忽略，不破坏状态）
  * @inv 工作区保服务端下发顺序（LinkedHashMap 插入序）；聚合字段以服务端权威值为准，
- *       added_sessions 新建工作区的单会话占位由后续 changed_workspaces 纠正
+ *       added_sessions 新建工作区的单会话占位由后续 changed_workspaces 纠正；
+ *       零周期性自动刷新（无周期拉取结构）
  */
 class WorkspaceViewModel(
     initialConnection: ConnectionUi = ConnectionUi.CONNECTING,
+    private val requestList: () -> Unit = { ServiceWire.managerOrNull()?.list() },
 ) : ConnectionManager.Listener {
 
     private val _uiState = MutableStateFlow(WorkspaceUiState(connection = initialConnection))
 
     /** 唯一渲染源（Compose 屏 collectAsState 消费）。 */
     val uiState: StateFlow<WorkspaceUiState> = _uiState.asStateFlow()
+
+    /** 刷新请求在途标记（进入即刷 / 下拉刷共用；新 listing 到达复位）。 */
+    private val _refreshing = MutableStateFlow(false)
+
+    /** 刷新在途标记（Compose 下拉指示器消费）。 */
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /**
+     * 全量列表刷新入口（2026-08-15 用户裁定刷新模型）。
+     *
+     * 进入一级/二级的 LaunchedEffect 与下拉手势共调本入口：置刷新在途标记并发出一次
+     * [ConnectionManager.list] 请求；新 [ListingFrame] 到达后由 [applyListing] 复位标记。
+     * 刷新不重复换列表——conn 层 READY 后自动 list 的既有语义保留，本入口是**主动**拉新。
+     *
+     * @contract
+     * @pre none（连接未就绪时 list() 内部自判返回 false，不抛）
+     * @post 刷新标记置位；经 [requestList] 发出一次全量列表请求（连接就绪时）
+     * @err none（[requestList] 默认实现经 managerOrNull 空安全，不抛）
+     * @inv 本方法只发请求，不改列表；列表只在 [applyListing] 时整体替换
+     */
+    fun refresh() {
+        _refreshing.value = true
+        requestList()
+    }
 
     /** 内部模型：cwd → 可变工作区（保服务端下发顺序；sessions 按 ref 索引）。 */
     private val workspaceModels = LinkedHashMap<String, WorkspaceModel>()
@@ -165,6 +198,8 @@ class WorkspaceViewModel(
     // ---- listing：权威全量，整体替换 ----
 
     private fun applyListing(frame: ListingFrame) {
+        // 新 listing 到达 = 刷新完成：复位刷新在途标记（进入/下拉刷共用语义）。
+        _refreshing.value = false
         workspaceModels.clear()
         for (w in frame.workspaces) {
             val model = WorkspaceModel(w.cwd, w.sessionCount, w.aggregateState)
