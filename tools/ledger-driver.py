@@ -337,17 +337,29 @@ def main():
             if not seat:
                 log(f"{tid}: 角色 {role} 没有对应席位，停。")
                 return 2
-            if seat_busy(seat):
-                # 席位已经在干这一单了（多半是上一轮派过、驱动器被重启）。
+            # 跳过派单的前提是「忙席位手上拿的是**当前版本**的任务」。
+            # 账本一改，这个前提就不成立——实发 2026-08-15：dev-state 因写阻塞上报而 BUSY，
+            # 我改完账本重启驱动器，驱动器看它 BUSY 就跳过，**扩权裁定根本没送到**，
+            # 席位空等到 idle，判据必红，整条链断在这里。
+            # 所以按「账本 id + 任务 id + revision」记派单水位：这个版本派过才允许跳。
+            mark_dir = os.path.join(REPO, ".team/ledgers/.dispatched")
+            os.makedirs(mark_dir, exist_ok=True)
+            mark = os.path.join(mark_dir, f"{l['ledger_id']}.{tid}.r{l.get('revision', 0)}")
+            if seat_busy(seat) and os.path.exists(mark):
+                # 席位已经在干这一单的当前版本（多半是上一轮派过、驱动器被重启）。
                 # 再派一次等于把半条正文粘进它的输入框——重复派单比不派更糟。
-                log(f"跳过派单：{seat} 仍 BUSY，认定 {tid} 已在手上，直接等")
+                log(f"跳过派单：{seat} 仍 BUSY 且本版本已派过，认定 {tid} 已在手上，直接等")
                 msg_id = None
             else:
+                if seat_busy(seat):
+                    log(f"注意：{seat} 仍 BUSY，但账本已改到 revision {l.get('revision', 0)}"
+                        f"（本版本未派过）⇒ 必须派，否则席位手上是过期任务")
                 log(f"派 {tid} → {seat}")
                 msg_id = send(seat, dispatch_text(l, tid), tid)
                 if not msg_id:
                     log(f"{tid}: 投递失败，停。")
                     return 3
+                open(mark, "w").close()   # 记下「这个 revision 已派过」
                 time.sleep(5)   # 给上屏留时间，太快查会假阴
                 if not token_landed(seat, msg_id):
                     # 判 False 有两种，必须先分清，否则每条发给忙席位的消息都成假阳。

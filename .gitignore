@@ -35,3 +35,4 @@ web/dist/
 # —— 后者是 15 张按场景步骤命名的精选关键帧，是证据不是转储。
 e2e/artifacts/**/frames*/
 e2e/artifacts/**/*-frames/
+.team/ledgers/.dispatched/
