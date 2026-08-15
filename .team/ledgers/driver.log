@@ -45,3 +45,116 @@
 [03:40:01] 前沿: ['t.contract', 't.refresh-oracle']
 [03:40:01] 派 t.contract → advisor
 [03:40:01]   投递 msg_030961cdb100；等 t.contract / msg_030961cdb100（事件驱动，非轮询）
+[14:26:28] 前沿: ['t.refresh-oracle']
+[14:26:29] 派 t.refresh-oracle → advisor
+[14:26:29]   投递 msg_bb235e01cf88；等 t.refresh-oracle / msg_bb235e01cf88（事件驱动，非轮询）
+[14:35:09]   wait 命中 task=t.refresh-oracle
+[14:35:09]   机械判据 A-ro-summary: exit=0 期望=0 通过
+[14:35:09]   机械判据 A-ro-redlog: exit=0 期望=0 通过
+[14:35:09] t.refresh-oracle: 判据通过 → succeeded（revision 3）
+[14:35:09] 前沿: ['t.refresh-impl']
+[14:35:09] 派 t.refresh-impl → dev-keybar
+[14:35:09]   投递 msg_69927e556ed8；等 t.refresh-impl / msg_69927e556ed8（事件驱动，非轮询）
+[15:05:09]   wait 超时 task=t.refresh-impl（1800s）
+[15:07:46] 前沿: ['t.refresh-impl']
+[15:07:47] 跳过派单：dev-keybar 仍 BUSY，认定 t.refresh-impl 已在手上，直接等
+[15:07:47]   投递 None；等 t.refresh-impl / None（事件驱动，非轮询）
+[15:11:04]   wait 命中 task=t.refresh-impl
+[15:11:32]   机械判据 A-ri-test: exit=1 期望=0 未过
+[15:11:32] t.refresh-impl: 判据未过或有人裁未求值，停。这不是 driver 能自己决定的事。
+[15:11:32] 前沿: ['t.pt-oracle']
+[15:11:32] 派 t.pt-oracle → advisor
+[15:11:32]   投递 msg_92a7d9ed0b40；等 t.pt-oracle / msg_92a7d9ed0b40（事件驱动，非轮询）
+[15:16:32] 前沿: ['t.done-fossil']
+[15:16:32] 派 t.done-fossil → dev-state
+[15:16:33]   投递 msg_1e5bbdfd77a8；等 t.done-fossil / msg_1e5bbdfd77a8（事件驱动，非轮询）
+[15:18:15]   wait 命中 task=t.pt-oracle
+[15:18:15]   机械判据 A-po-summary: exit=0 期望=0 通过
+[15:18:15]   机械判据 A-po-probe-exists: exit=0 期望=0 通过
+[15:18:15]   机械判据 A-po-probe-is-red: exit=0 期望=0 通过
+[15:18:15] t.pt-oracle: 判据通过 → succeeded（revision 3）
+[15:18:15] 前沿: ['t.pt-impl']
+[15:18:16] 派 t.pt-impl → dev-keybar
+[15:18:16]   投递 msg_bb91c18bca38；等 t.pt-impl / msg_bb91c18bca38（事件驱动，非轮询）
+[15:18:54] 前沿: ['t.done-fossil']
+[15:18:54] 跳过派单：dev-state 仍 BUSY，认定 t.done-fossil 已在手上，直接等
+[15:18:54]   投递 None；等 t.done-fossil / None（事件驱动，非轮询）
+[15:48:54]   wait 超时 task=t.done-fossil（1800s），席位不忙 → 换下一个候选
+[15:48:54]   两个 id 都没等到，落到机械判据判定
+[15:48:54]   机械判据 A-df-no-done: exit=1 期望=0 未过
+[15:48:54] t.done-fossil: 判据未过或有人裁未求值，停。这不是 driver 能自己决定的事。
+[15:49:15] 前沿: ['t.refresh-impl']
+[15:49:15] 跳过派单：dev-keybar 仍 BUSY，认定 t.refresh-impl 已在手上，直接等
+[15:49:15]   投递 None；等 t.refresh-impl / None（事件驱动，非轮询）
+[15:49:15]   wait 命中 task=t.refresh-impl
+[15:49:43]   机械判据 A-ri-test: exit=1 期望=0 未过
+[15:49:43] t.refresh-impl: 判据未过或有人裁未求值，停。这不是 driver 能自己决定的事。
+[15:49:43] 前沿: ['t.pt-impl']
+[15:49:44] 跳过派单：dev-keybar 仍 BUSY，认定 t.pt-impl 已在手上，直接等
+[15:49:44]   投递 None；等 t.pt-impl / None（事件驱动，非轮询）
+[15:50:11] 前沿: ['t.done-fossil']
+[15:50:12] 派 t.done-fossil → dev-state
+[15:50:17]   投递 msg_c069ea660e90；等 t.done-fossil / msg_c069ea660e90（事件驱动，非轮询）
+[16:03:04]   wait 命中 task=t.done-fossil
+[16:03:04]   机械判据 A-df-no-done: exit=0 期望=0 通过
+[16:03:34]   机械判据 A-df-app-test: exit=0 期望=0 通过
+[16:03:36]   机械判据 A-df-server-clean: exit=0 期望=0 通过
+[16:03:36] t.done-fossil: 判据通过 → succeeded（revision 3）
+[16:03:36] ledger-eval exit=4，停。
+error: 引擎状态推导失败：state_error TerminalProofIncomplete
+
+[16:03:36] 前沿: ['t.refresh-impl']
+[16:03:36] 派 t.refresh-impl → dev-keybar
+[16:03:41]   投递 msg_60cf2606de28；等 t.refresh-impl / msg_60cf2606de28（事件驱动，非轮询）
+[16:03:41]   wait 命中 task=t.refresh-impl
+[16:04:10]   机械判据 A-ri-test: exit=0 期望=0 通过
+[16:04:10]   机械判据 A-ri-no-periodic: exit=0 期望=0 通过
+[16:04:10] t.refresh-impl: 判据通过 → succeeded（revision 4）
+[16:04:10] 前沿: ['t.refresh-verify']
+[16:04:10] 派 t.refresh-verify → control
+[16:04:15]   投递 msg_4e96271c53f8；等 t.refresh-verify / msg_4e96271c53f8（事件驱动，非轮询）
+[16:06:55]   wait 命中 task=t.refresh-verify
+[16:06:55]   机械判据 A-rv-report: exit=0 期望=0 通过
+[16:06:55] t.refresh-verify: 判据通过 → succeeded（revision 5）
+[16:06:55] ledger-eval exit=4，停。
+error: 引擎状态推导失败：state_error TerminalProofIncomplete
+
+[16:06:55] 前沿: ['t.pt-impl']
+[16:06:56]   dev-keybar 仍 BUSY，**押住不投**，等它 idle 再派 t.pt-impl（朝忙席位投递会被投递侧的重按 Enter 删掉）
+[16:07:56]   dev-keybar 已转 idle（等了 60s），现在投递安全
+[16:07:56] 派 t.pt-impl → dev-keybar
+[16:08:01]   投递 msg_a285aeec05b0；等 t.pt-impl / msg_a285aeec05b0（事件驱动，非轮询）
+[16:08:01]   wait 命中 task=t.pt-impl
+[16:08:01]   机械判据 A-pi-probe-green: exit=0 期望=0 通过
+[16:08:29]   机械判据 A-pi-app-test: exit=0 期望=0 通过
+[16:08:53]   机械判据 A-pi-server-test: exit=0 期望=0 通过
+[16:08:54]   机械判据 A-pi-wire-server: exit=0 期望=0 通过
+[16:08:54] t.pt-impl: 判据通过 → succeeded（revision 4）
+[16:08:54] 前沿: ['t.pt-verify']
+[16:08:55] 派 t.pt-verify → control
+[16:09:00] t.pt-verify: control 已 IDLE 且转录无 token ⇒ 真没送到。停下交人，**不重发**（重发会粘连）。
+[16:13:47] 前沿: ['t.pt-verify']
+[16:13:47] 派 t.pt-verify → control
+[16:13:53]   投递 msg_e8008a38f000；等 t.pt-verify / msg_e8008a38f000（事件驱动，非轮询）
+[16:13:53]   wait 命中 task=t.pt-verify
+[16:13:53]   机械判据 A-pv-report: exit=0 期望=0 通过
+[16:13:53]   机械判据 A-pv-restored: exit=0 期望=0 通过
+[16:13:53] t.pt-verify: 判据通过 → succeeded（revision 5）
+[16:13:53] 前沿: ['t.pt-package']
+[16:13:53]   dev-keybar 仍 BUSY，**押住不投**，等它 idle 再派 t.pt-package（朝忙席位投递会被投递侧的重按 Enter 删掉）
+[16:15:53]   dev-keybar 已转 idle（等了 120s），现在投递安全
+[16:15:53] 派 t.pt-package → dev-keybar
+[16:15:59]   投递 msg_839fdd64d830；等 t.pt-package / msg_839fdd64d830（事件驱动，非轮询）
+[16:16:48] 前沿: ['t.pt-package']
+[16:16:48] 跳过派单：dev-keybar 仍 BUSY，认定 t.pt-package 已在手上，直接等
+[16:18:56]   机械判据 A-pk-build: exit=0 期望=0 通过
+[16:18:56]   机械判据 A-pk-landed: exit=0 期望=0 通过
+[16:18:57]   机械判据 A-pk-not-stale: exit=0 期望=0 通过
+[16:19:04]   机械判据 A-pk-server: exit=0 期望=0 通过
+[16:19:04] t.pt-package: 判据通过 → succeeded（revision 6）
+[16:19:04] ledger-eval exit=4，停。
+error: 引擎状态推导失败：state_error TerminalProofIncomplete
+
+[16:38:32] 前沿: ['t.locate']
+[16:38:33] 派 t.locate → advisor
+[16:38:38]   🔴 msg_f3214d36dfb8 **未进** advisor 转录 ⇒ 疑似尾部截断，这条没送到。不重发（重发会造成粘连），停下交人。

@@ -1,143 +1,144 @@
 {
-  "schema_version": "ledger.v2",
-  "ledger_id": "ledger.done-fossil.v1",
-  "run": {
-    "desired_state": "running"
-  },
-  "roles": {
-    "r.dev-state": {
-      "provider": "claude_code",
-      "seat_policy": "fresh",
-      "artifact_landing": {
-        "path": ".team/nodes/done-fossil/",
-        "form": "committed"
-      },
-      "retirement_condition": {
-        "artifacts_persisted": true,
-        "ledger_updated": true
-      }
-    }
-  },
-  "tasks": {
-    "t.done-fossil": {
-      "title": "清 ③ 的尾巴：删 App 侧 AgentState.DONE(\"done\")，并同步清掉它的全部引用。服务端 StateDone 已在 55bcada2a 删除；用户裁定「去除完成这个状态，就是工作和空闲」。leader 已裁定扩大写路径到下列 4 个引用点（席位 2026-08-15 上报的阻塞，裁定：扩路径不动判据）：\n  StateBadgeStyle.kt（of() 的 DONE 分支）／StateBadge.kt（tones.done）／StateWatcher.kt（needsAttention 去掉 DONE，只留 BLOCKED）／NotificationHelper.kt（去掉「任务已完成」通知）。\n🔴 NotificationHelper 那条通知随 DONE 一起消失是正确的——DONE 永不产生，该通知本就是死代码，这不算扩大范围。\n🔴 只删 DONE：BLOCKED 与 UNKNOWN 不动（UNKNOWN 是一等公民兜底值）。若认为 BLOCKED 也该删，写进回报交 leader，不要自行扩大。\n🔴 **禁止改 WorkspaceViewModel.kt 与 WorkspaceScreen.kt** —— 另一席位的 ④ 刷新模型实现正以未提交状态躺在这两个文件里，动它就会抹掉别人的活。写路径按文件放行，不是按目录。",
-      "owner": {
-        "role": "r.dev-state"
-      },
-      "resources": {
-        "worktree_id": "wt-done-fossil",
-        "write_paths": [
-          "app/app/src/main/java/dev/agentmirror/app/conn/",
-          "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadgeStyle.kt",
-          "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadge.kt",
-          "app/app/src/main/java/dev/agentmirror/app/service/StateWatcher.kt",
-          "app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt",
-          "app/app/src/test/",
-          ".team/nodes/done-fossil/"
-        ],
-        "read_paths": [
-          "docs/rulings/20260815-用户裁定原文-直通输入与刷新模型.md",
-          "requirement-base/entries/058-状态检测先归档回退再重建.md"
-        ],
-        "environment_fidelity": {
-          "runs_real_cli": true,
-          "injects_latency": false,
-          "carries_long_history": false
-        },
-        "provenance": {
-          "identity": "repo:remote-agent-android",
-          "revision": "fedf3129b"
-        }
-      },
-      "handoff": {
-        "route": "report_result",
-        "required_artifacts": [
-          ".team/nodes/done-fossil/清理说明.md"
-        ]
-      },
-      "acceptance": {
-        "mechanical": [
-          {
-            "acceptance_id": "A-df-no-done",
-            "argv": [
-              "sh",
-              "-c",
-              "! grep -rn 'DONE' app/app/src/main/java/dev/agentmirror/app/conn/AgentState.kt"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": []
-          },
-          {
-            "acceptance_id": "A-df-app-test",
-            "argv": [
-              "./gradlew",
-              ":app:testDebugUnitTest",
-              "--rerun-tasks",
-              "--console=plain"
-            ],
-            "cwd": "app",
-            "expected_exit_code": 0,
-            "artifacts": []
-          },
-          {
-            "acceptance_id": "A-df-server-clean",
-            "argv": [
-              "sh",
-              "-c",
-              "! grep -rn 'StateDone' server/"
-            ],
-            "cwd": ".",
-            "expected_exit_code": 0,
-            "artifacts": []
-          }
-        ],
-        "judgment": [],
-        "required": [
-          "A-df-no-done",
-          "A-df-app-test",
-          "A-df-server-clean"
-        ]
-      },
-      "state": "planned"
-    }
-  },
-  "dependencies": [],
-  "parallelism": [],
-  "handoff": {
-    "send_command": "team-agent send",
-    "result_route": "leader",
-    "required_envelope_fields": [
-      "task_id",
-      "status"
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.done-fossil.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.dev-state": {
+   "provider": "claude_code",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/done-fossil/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.done-fossil": {
+   "title": "清 ③ 的尾巴：删 App 侧 AgentState.DONE(\"done\")，并同步清掉它的全部引用。服务端 StateDone 已在 55bcada2a 删除；用户裁定「去除完成这个状态，就是工作和空闲」。leader 已裁定扩大写路径到下列 4 个引用点（席位 2026-08-15 上报的阻塞，裁定：扩路径不动判据）：\n  StateBadgeStyle.kt（of() 的 DONE 分支）／StateBadge.kt（tones.done）／StateWatcher.kt（needsAttention 去掉 DONE，只留 BLOCKED）／NotificationHelper.kt（去掉「任务已完成」通知）。\n🔴 NotificationHelper 那条通知随 DONE 一起消失是正确的——DONE 永不产生，该通知本就是死代码，这不算扩大范围。\n🔴 只删 DONE：BLOCKED 与 UNKNOWN 不动（UNKNOWN 是一等公民兜底值）。若认为 BLOCKED 也该删，写进回报交 leader，不要自行扩大。\n🔴 **禁止改 WorkspaceViewModel.kt 与 WorkspaceScreen.kt** —— 另一席位的 ④ 刷新模型实现正以未提交状态躺在这两个文件里，动它就会抹掉别人的活。写路径按文件放行，不是按目录。",
+   "owner": {
+    "role": "r.dev-state"
+   },
+   "resources": {
+    "worktree_id": "wt-done-fossil",
+    "write_paths": [
+     "app/app/src/main/java/dev/agentmirror/app/conn/",
+     "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadgeStyle.kt",
+     "app/app/src/main/java/dev/agentmirror/app/workspace/StateBadge.kt",
+     "app/app/src/main/java/dev/agentmirror/app/service/StateWatcher.kt",
+     "app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt",
+     "app/app/src/test/",
+     ".team/nodes/done-fossil/"
     ],
-    "missing_result": "席位未回结构化完成回报与证据 JSON 时，任务不得进入下一依赖节点",
-    "delivery_uncertain": "投递不确定时重发并要求去重"
-  },
-  "acceptance": {
-    "mechanical_exit_code_is_authoritative": true,
-    "judgment_requires_distinct_provider": false
-  },
-  "fallback": {},
-  "evidence_policy": {
-    "required_fields": [
-      "reported_by",
-      "revision",
-      "supports_or_refutes",
-      "observed_at",
-      "freshness"
+    "read_paths": [
+     "docs/rulings/20260815-用户裁定原文-直通输入与刷新模型.md",
+     "requirement-base/entries/058-状态检测先归档回退再重建.md"
     ],
-    "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code）或结构化人裁，禁止写成一句话"
-  },
-  "resource_isolation": {
-    "default_write_scope": ".team/nodes",
-    "rules": [],
-    "read_only_shared": [
-      "docs/rulings/20260815-用户裁定原文-直通输入与刷新模型.md",
-      "requirement-base/entries/058-状态检测先归档回退再重建.md"
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "fedf3129b"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     ".team/nodes/done-fossil/清理说明.md"
     ]
-  },
-  "fanout_aggregation": {},
-  "audit": {},
-  "revision": 2
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-df-no-done",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -rn 'DONE' app/app/src/main/java/dev/agentmirror/app/conn/AgentState.kt"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": []
+     },
+     {
+      "acceptance_id": "A-df-app-test",
+      "argv": [
+       "./gradlew",
+       ":app:testDebugUnitTest",
+       "--rerun-tasks",
+       "--console=plain"
+      ],
+      "cwd": "app",
+      "expected_exit_code": 0,
+      "artifacts": []
+     },
+     {
+      "acceptance_id": "A-df-server-clean",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -rn 'StateDone' server/"
+      ],
+      "cwd": ".",
+      "expected_exit_code": 0,
+      "artifacts": []
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-df-no-done",
+     "A-df-app-test",
+     "A-df-server-clean"
+    ]
+   },
+   "state": "succeeded"
+  }
+ },
+ "dependencies": [],
+ "parallelism": [],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "席位未回结构化完成回报与证据 JSON 时，任务不得进入下一依赖节点",
+  "delivery_uncertain": "投递不确定时重发并要求去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {},
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code）或结构化人裁，禁止写成一句话"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "docs/rulings/20260815-用户裁定原文-直通输入与刷新模型.md",
+   "requirement-base/entries/058-状态检测先归档回退再重建.md"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 3,
+ "content_sha256": "sha256:ab6764d3a435d1913e08857696687a08f613db280d5dcaf6dd2e71242acbdb92"
 }

@@ -1,0 +1,34 @@
+# 刷新模型根因探针 · 红测日志
+
+- 判据命令：`bash .team/nodes/refresh-oracle/run-probe.sh`
+- 红测对象：live 源码（app/app/src/main/java/dev/agentmirror/app/workspace/）
+- 执行时刻：2026-08-15（t.refresh-oracle）
+- 期望：**红**（非 0）——当前被测对象缺刷新模型
+
+## 输出（raw）
+
+```
+FAIL R1 workspace 包无任何 list() 调用点（进入一级/二级均不会刷新）
+FAIL R2 缺下拉刷新（pullRefresh/onRefresh 与 list() 未共存，或两者皆无）
+PASS R3 workspace 包零周期性自动刷新
+----
+probe: 2 FAIL (exit 1) —— 刷新模型未满足或被测对象坏
+```
+
+## 解读
+
+- **R1 红**：`ConnectionManager.list()` 在主源码 **零调用点**（全仓库只有 conn 层定义处，
+  workspace/session 包无任何 `list()` 调用）→ 进入一级/二级均不会拉全量 → 这正是用户
+  「所有界面都不刷新」的代码侧根因。
+- **R2 红**：workspace 包无 `pullRefresh`/`onRefresh`/`PullToRefresh` → 用户连手动下拉
+  刷新都没有入口。
+- **R3 绿**：workspace 包当前无周期结构 → 零周期禁令现状已满足（注意 session 包
+  SessionScreen.kt:163 的 `while(true)` 是本地视口泵 `syncFromPresenter`，非列表刷新，
+  R3 只扫 workspace 包，不误伤）。
+
+## 判据自检依据（对照席可自行复现）
+
+- 把 workspace 包任一文件加一行 `while (true) { }` → R3 转 FAIL → 判据转非 0。
+- 实现时若 R1/R2 的 `list()` 调用点与下拉入口落地 → R1/R2 转 PASS → 全 PASS 判据转 0。
+
+退出码：`probe exit=1`（红测命中）。

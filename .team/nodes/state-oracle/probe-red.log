@@ -1,0 +1,46 @@
+===== t.oracle 根因探针红测 probe-red.log =====
+时间: 2026-08-15 02:45:03   工作区: repo root
+判据命令: bash .team/nodes/state-oracle/run-probe.sh --source docs/archive/agentstate-round4
+命令退出码: PROBE EXIT=1  (≠0 = 红测命中)
+
+------ 诊断(058+025+herdr §9/§10) ------
+信息不在字形里,在导数里。三次修复都在调一张不含答案的白名单(spinnerFrames)。
+实证: 字形改版(braille→◐/✳)白名单静默失明; 同字形 ✻ 无法分辨完成态与工作中。
+探针必须落在「那一段变没变/有没有」,不是「里面有没有某个字符」。零字形白名单。
+
+------ 探针清单(零字形差分/存在判据) ------
+R1 TestProbeRotatingTitleReadsWorking    : 标题◐→◑在动 → 必须 working; 旧实现两帧单帧认字形 → idle = RED
+R2 TestProbeRotatingBottomBlockReadsWorking: 底部块◐→◑在动 → 必须 working; 旧实现两帧 → idle = RED
+G1 TestGuardRealWorkingStillWorking       : 真实working(esc to interrupt在锚点区)→ 必须 working = 守卫绿
+G2 TestGuardRealDoneNotWorking            : 真实完成态(✻ Churned,无工作信号)→ 必须非working = 守卫绿
+
+------ 在归档化石上的实际运行输出(红测本体) ------
+-----------------------------------------------------------------
+PROBE TARGET SOURCE: /Volumes/nvme/Projects/远程Agent安卓/docs/archive/agentstate-round4
+=== RUN   TestProbeRotatingTitleReadsWorking
+    probe_test.go:44: R1: 单帧 Detect 标题◐=idle 标题◑=idle
+    probe_test.go:52: R1: 时序 Track 标题 ◐→◑ 后 → idle
+    probe_test.go:54: RED R1: 标题在动（◐→◑）的工作 pane 经时序判 idle（要 working）——字形白名单对字形改版静默失明
+--- FAIL: TestProbeRotatingTitleReadsWorking (0.00s)
+=== RUN   TestProbeRotatingBottomBlockReadsWorking
+    probe_test.go:69: R2: 单帧 Detect ◐=idle ◑=idle
+    probe_test.go:77: R2: 时序 Track 底部块 ◐→◑ 后 → idle
+    probe_test.go:79: RED R2: 底部块在动（◐→◑）经时序判 idle（要 working）——判据在算字形，不在算导数
+--- FAIL: TestProbeRotatingBottomBlockReadsWorking (0.00s)
+=== RUN   TestGuardRealWorkingStillWorking
+    probe_test.go:91: G1: 真实 working 版式 → working
+--- PASS: TestGuardRealWorkingStillWorking (0.00s)
+=== RUN   TestGuardRealDoneNotWorking
+    probe_test.go:106: G2: 真实完成态 → idle
+--- PASS: TestGuardRealDoneNotWorking (0.00s)
+FAIL
+FAIL	stateoracleprobe/probe	0.224s
+FAIL
+PROBE EXIT=1
+-----------------------------------------------------------------
+
+结论: R1/R2 在回退后的化石上命中(红, go test 非0) → 诊断正确,可继续 t.impl。
+      G1/G2 通过 → 探针不误伤真实 working / 完成态。
+退出码含义: 探针红=断言 Fatalf → go test FAIL → PROBE EXIT=1(权威)。
+判据命令: bash .team/nodes/state-oracle/run-probe.sh(对 live 代码跑,退出码权威)
+判据自检: 基线绿(0)且变异红(非0)才有效; 跑完判据命令载体仍为化石(自检通过)。

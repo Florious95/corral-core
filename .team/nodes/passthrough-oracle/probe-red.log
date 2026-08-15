@@ -1,0 +1,44 @@
+# 直通输入根因探针 · 红测日志
+
+- 判据命令：`bash .team/nodes/passthrough-oracle/run-probe.sh`
+- 红测对象：live 源码（当前未实现直通输入）
+  - `server/internal/bridge/bridge.go`
+  - `server/internal/protocol/keys.go`
+  - `app/.../session/SessionViewModel.kt`
+  - `app/.../session/SessionScreen.kt`
+- 执行时刻：2026-08-15（t.pt-oracle）
+- 期望：**红**（非 0）——当前未实现树上必须失败（因果证明）
+
+## 输出（raw）
+
+```
+FAIL S1 服务端缺逐键注入不回车原语（唯一 send-keys -l 路径仍与 Enter 绑定）
+FAIL S2 服务端缺删除键 backspace 映射（删除键仍本地消费，未直通）
+FAIL S3 App 发送路径仍整条注入草稿文本（293:        val text = textFieldValue.text
+297:        if (manager.sendInput(ref, text, attachmentPath)) {）
+FAIL S4 App 键盘输入仍累积本地草稿（379:            onValueChange = { viewModel.textFieldValue = it },）
+----
+probe: 4 FAIL (exit 1) —— 直通输入未实现或被测对象坏
+```
+
+退出码：`probe exit=1`（红测命中）。
+
+## 解读（每条红测对应的根因）
+
+- **S1 红（逐键直通缺位）**：bridge.go 唯一 `send-keys -l` 路径在 `Inject()`（line 126）与
+  `finishAfterPaste()`（line 227），两个函数体内**都紧跟 `"Enter"` 提交**（line 132 / line 234）——
+  注入与提交绑成一个动作，正是被 059 取代的一次性注入。服务端没有「逐键注入不回车」的原语。
+- **S2 红（删除键未达远端）**：keys.go 闭集只有 esc/ctrl_c/tab/up/down/left/right，
+  全仓库 grep `backspace` **零命中**——删除键根本没有 wire 通道到服务端，只能在 App 本地消费。
+- **S3 红（发送仍整条注入）**：SessionViewModel `sendDraft()`（line 293/297）取
+  `textFieldValue.text` 整条 `sendInput(ref, text, attachmentPath)` —— App 侧一次性注入残余。
+- **S4 红（键盘仍本地累积）**：SessionScreen `InputBarRow`（line 379）
+  `onValueChange = { viewModel.textFieldValue = it }` —— 键盘输入累积进 App 本地草稿，
+  不是逐键直通。
+
+## 判据自检（已实测，非推演）
+
+- **红测对「正确实现」会绿**：构造模拟已实现的 4 文件副本（服务端含 `SendKeyLiteral`
+  逐键不回车原语 + backspace 映射；App 发送只 `sendKeys` 不再整条注入、键盘 `onValueChange`
+  改调 `sendChar` 直通），跑同脚本 → **S1/S2/S3/S4 全 PASS，exit 0**。证明判据不是恒红。
+- **真实树（未实现）全红**：上文 4 FAIL。红↔绿两侧可复现，判据有效（因果证明成立）。
