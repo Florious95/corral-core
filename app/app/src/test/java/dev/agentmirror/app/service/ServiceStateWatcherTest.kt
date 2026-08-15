@@ -29,8 +29,11 @@ import org.junit.Test
  * StateWatcher 纯 JVM 单测（验收 --tests "*Service*"，类名含 Service）。
  *
  * 红测先行（fg-service 知识基底 §4）：→blocked 沿触发一次且仅一次、同状态不重复、
- * unknown 永不通知、会话消失清除其通知，各一条；另补 done 沿、离开 blocked 清除、
- * 初始基线不通知、断连期间变化在重连时补齐触发、blocked→done 刷新，共 10 条。
+ * unknown 永不通知、会话消失清除其通知，各一条；另补离开 blocked 清除、
+ * 初始基线不通知、断连期间变化在重连时补齐触发，共 8 条。
+ *
+ * 2026-08-15（用户裁定「去除完成这个状态」，058）：done 沿相关测试随 StateWatcher 的
+ * done 支持一并移除——done 不再触发通知（服务端不产 done）。
  */
 class ServiceStateWatcherTest {
 
@@ -68,7 +71,7 @@ class ServiceStateWatcherTest {
     private fun removed(vararg refs: String): ListDeltaFrame =
         ListDeltaFrame(seq = 1, removedRefs = refs.toList())
 
-    // ---- 沿触发：→blocked / →done ----
+    // ---- 沿触发：→blocked ----
 
     /** →blocked 沿触发一次且仅一次；同状态重复 delta 不重复推送。 */
     @Test
@@ -80,16 +83,6 @@ class ServiceStateWatcherTest {
 
         assertEquals(listOf(Triple("s1", "claude", AgentState.BLOCKED)), notifies)
         assertTrue(clears.isEmpty())
-    }
-
-    /** →done 沿触发（第二种需要注意的沿）。 */
-    @Test
-    fun transitionToDone_fires() {
-        val w = freshWatcher()
-        w.onFrame(listing(ws("/a", session("s1", "claude", "/a", AgentState.WORKING))))
-        w.onFrame(changed(session("s1", "claude", "/a", AgentState.DONE)))
-
-        assertEquals(listOf(Triple("s1", "claude", AgentState.DONE)), notifies)
     }
 
     /** unknown 永不通知：不因首次见/变化而通知。 */
@@ -127,27 +120,21 @@ class ServiceStateWatcherTest {
         assertEquals(listOf("s1"), clears)
     }
 
-    /** blocked→done：状态仍是"需要注意"，刷新通知内容（沿变化，非重复抑制）。 */
+    /** blocked 进入后状态未变（同状态重复）→ 抑制，不重复推送（原 blocked→done 刷新路径随 done 删除）。 */
     @Test
-    fun blockedToDone_refreshesNotification() {
+    fun blockedRepeat_suppressed() {
         val w = freshWatcher()
         w.onFrame(listing(ws("/a", session("s1", "claude", "/a", AgentState.WORKING))))
         w.onFrame(changed(session("s1", "claude", "/a", AgentState.BLOCKED)))
-        w.onFrame(changed(session("s1", "claude", "/a", AgentState.DONE)))
+        w.onFrame(changed(session("s1", "claude", "/a", AgentState.BLOCKED)))
 
-        assertEquals(
-            listOf(
-                Triple("s1", "claude", AgentState.BLOCKED),
-                Triple("s1", "claude", AgentState.DONE),
-            ),
-            notifies,
-        )
+        assertEquals(listOf(Triple("s1", "claude", AgentState.BLOCKED)), notifies)
         assertTrue(clears.isEmpty())
     }
 
     // ---- 基线语义：初始 listing 不通知，重连补齐 ----
 
-    /** 初始 listing 是基线：已处于 blocked/done 的会话不通知（沿变化才通知，非全量罗列）。 */
+    /** 初始 listing 是基线：已处于需要注意态（blocked）的会话不通知（沿变化才通知，非全量罗列）。 */
     @Test
     fun initialListing_establishesBaseline_noFire() {
         val w = freshWatcher()
@@ -156,7 +143,7 @@ class ServiceStateWatcherTest {
                 ws(
                     "/a",
                     session("s1", "claude", "/a", AgentState.BLOCKED),
-                    session("s2", "codex", "/a", AgentState.DONE),
+                    session("s2", "codex", "/a", AgentState.IDLE),
                 ),
             ),
         )

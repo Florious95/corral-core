@@ -25,13 +25,13 @@ import dev.agentmirror.app.conn.ListingFrame
  * 状态守望者（纯 JVM，服务核心逻辑，验收单测全部打在这里）。
  *
  * 消费 conn 层 listing / list_delta 帧流，检测会话状态**沿变化**，向调用方输出两类事件：
- * - [onNotify]：会话**首次进入** blocked/done（需要人注意）时触发一次；同状态重复推送抑制；
- *   unknown 永不通知；blocked→done 仍属沿变化，刷新通知内容。
- * - [onClear]：会话离开 blocked/done（状态恢复）或会话消失（removed_refs / listing 缺席）时触发。
+ * - [onNotify]：会话**首次进入** blocked（需要人注意）时触发一次；同状态重复推送抑制；
+ *   unknown 永不通知。done 已随 2026-08-15 用户裁定删除（见 [AgentState]）。
+ * - [onClear]：会话离开 blocked（状态恢复）或会话消失（removed_refs / listing 缺席）时触发。
  *
  * 语义（对齐 003 标准四「需要时被唤醒」）：
  * - **初始 listing 是基线**：只记录各会话当前状态，不触发任何通知——沿变化才通知，
- *   非全量罗列（否则每次服务冷启动都会把已 blocked/done 的舰队会话全量轰炸一遍）。
+ *   非全量罗列（否则每次服务冷启动都会把已 blocked 的舰队会话全量轰炸一遍）。
  * - **断连期间的状态变化在重连 listing 时补齐触发**：本对象持有最近已知状态（跨断连保留，
  *   服务进程存活期间持续），重连全量列表与旧状态逐会话比对：变化一次触发、未变化抑制——
  *   不因断连丢唤醒，也不因重连重复轰炸。
@@ -40,8 +40,8 @@ import dev.agentmirror.app.conn.ListingFrame
  *
  * @contract
  * @pre 首个 listing 建立基线、不触发通知；此后 listing/delta 逐会话比对旧状态
- * @post 状态沿变化进入 blocked/done 且非重复 → 触发一次 onNotify；同状态重复/未变化抑制；
- *       离开 blocked/done 或会话消失 → onClear；unknown 永不通知
+ * @post 状态沿变化进入 blocked 且非重复 → 触发一次 onNotify；同状态重复/未变化抑制；
+ *       离开 blocked 或会话消失 → onClear；unknown 永不通知
  * @err none
  * @inv lastState/notified 只含已知 ref；同一 ref 的通知与清除交替出现
  */
@@ -109,16 +109,15 @@ class StateWatcher(
 
     /**
      * 沿变化判定（一次且仅一次的抑制逻辑核心）：
-     * - 状态**变化**进入 blocked/done，且当前通知内容不是该状态 → [onNotify]；
+     * - 状态**变化**进入 blocked，且当前通知内容不是该状态 → [onNotify]；
      *   - 首次进入（未通知）→ 通知；
-     *   - blocked→done 等"仍需要注意但状态变了"→ 刷新通知内容；
      *   - 状态未变（prev==curr，同状态重复推送）→ 抑制；
      *   - 已通知同状态且未变 → 抑制。
-     * - 离开 blocked/done（状态恢复）→ [onClear]，无需人再注意。
+     * - 离开 blocked（状态恢复）→ [onClear]，无需人再注意。
      */
     private fun handle(ref: String, name: String, prev: AgentState?, curr: AgentState) {
         val changed = prev != curr
-        val needsAttention = curr == AgentState.BLOCKED || curr == AgentState.DONE
+        val needsAttention = curr == AgentState.BLOCKED
         if (needsAttention) {
             if (changed && notified[ref] != curr) {
                 notified[ref] = curr

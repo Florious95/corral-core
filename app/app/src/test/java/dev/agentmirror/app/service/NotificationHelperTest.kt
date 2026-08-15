@@ -135,16 +135,8 @@ class NotificationHelperTest {
     }
 
     @Test
-    fun notifyState_done_textCompleted() {
-        helper.createChannels()
-        helper.notifyState("ref-A", "Agent A", AgentState.DONE)
-        val n = shadowOf(nm).getNotification(NotificationHelper.stateNotificationId("ref-A"))
-        assertEquals("任务已完成", shadowOf(n).contentText)
-    }
-
-    @Test
     fun notifyState_otherStates_prefixedWireText() {
-        // blocked/done 之外的状态（working/idle/unknown）落到"状态：{wire}"——永不带 ref/token。
+        // blocked 之外的状态（working/idle/unknown）落到"状态：{wire}"——永不带 ref/token。
         helper.createChannels()
         helper.notifyState("ref-A", "Agent A", AgentState.WORKING)
         val n = shadowOf(nm).getNotification(NotificationHelper.stateNotificationId("ref-A"))
@@ -169,7 +161,7 @@ class NotificationHelperTest {
 
     @Test
     fun stateNotificationId_stablePerRef() {
-        // 同 ref → 同一稳定 id（blocked→done 只刷新不换 id）；且在 ID_STATE_BASE 之上。
+        // 同 ref → 同一稳定 id（同状态更新不换 id）；且在 ID_STATE_BASE 之上。
         assertEquals(
             NotificationHelper.stateNotificationId("ref-A"),
             NotificationHelper.stateNotificationId("ref-A"),

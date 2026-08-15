@@ -21,7 +21,7 @@ import dev.agentmirror.app.conn.AgentState
 /**
  * 会话状态徽章语义（requirement 008 裁定，docs/protocol.md §5.2 优先级表同源）。
  *
- * 五值闭集（[AgentState]）各自对应一种视觉与文案；[UNKNOWN] 是一等公民、灰显，
+ * 四值闭集（[AgentState]，done 已删）各自对应一种视觉与文案；[UNKNOWN] 是一等公民、灰显，
  * 绝不阻塞列表渲染（008 状态/镜像解耦）。文案与色板是渲染侧的单一事实来源。
  */
 enum class StateBadgeStyle(
@@ -30,9 +30,6 @@ enum class StateBadgeStyle(
 ) {
     /** 等待输入、需要人：醒目（红）。 */
     BLOCKED("需人"),
-
-    /** 任务完成：完成色（绿）。 */
-    DONE("完成"),
 
     /** 正在产出：活跃色（蓝）。 */
     WORKING("工作中"),
@@ -47,7 +44,6 @@ enum class StateBadgeStyle(
         /** 由线上状态映射为徽章语义（[AgentState] → [StateBadgeStyle] 双射）。 */
         fun of(state: AgentState): StateBadgeStyle = when (state) {
             AgentState.BLOCKED -> BLOCKED
-            AgentState.DONE -> DONE
             AgentState.WORKING -> WORKING
             AgentState.IDLE -> IDLE
             AgentState.UNKNOWN -> UNKNOWN

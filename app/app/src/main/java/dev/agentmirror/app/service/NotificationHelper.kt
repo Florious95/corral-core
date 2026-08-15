@@ -32,13 +32,16 @@ import dev.agentmirror.app.conn.AgentState
  *
  * - [CHANNEL_PERSISTENT] 常驻通知渠道（IMPORTANCE_LOW，无声）：前台服务必须在通知栏常驻，
  *   随连接状态更新内容（已连接/重连中…），不可滑走（setOngoing）。
- * - [CHANNEL_STATE] 状态通知渠道（IMPORTANCE_HIGH，可提醒）：blocked/done 沿变化时的唤醒通知，
- *   按会话 ref 取稳定通知 id，同 ref 更新同一通知（blocked→done 只刷新内容不再响铃），
- *   点按深链到对应会话页（[ACTION_OPEN_SESSION] 路由，消费方是 [MainActivity] 的
+ * - [CHANNEL_STATE] 状态通知渠道（IMPORTANCE_HIGH，可提醒）：blocked 沿变化时的唤醒通知，
+ *   按会话 ref 取稳定通知 id，同 ref 更新同一通知，点按深链到对应会话页
+ *   （[ACTION_OPEN_SESSION] 路由，消费方是 [MainActivity] 的
  *   handleDeepLink，经 [MainActivity.navState] 路由到会话页）。
  *
  * 静默失效猎杀：发送/取消一律 try-catch，失败落 Log.w 可判定，绝不静默吞。
  * 线程安全：NotificationManager.notify/cancel 线程安全，可在 conn 收件线程直接调用。
+ *
+ * 2026-08-15（用户裁定「去除完成这个状态」）：done 通知随 DONE 枚举一并移除——服务端不再产
+ * done，该通知本就是死代码（见 [AgentState]）。
  */
 class NotificationHelper(context: Context) {
 
@@ -91,14 +94,13 @@ class NotificationHelper(context: Context) {
     }
 
     /**
-     * 状态通知：blocked/done 沿变化唤醒。ref → 稳定 id，同 ref 更新同一通知
-     * （blocked→done 刷新内容，setOnlyAlertOnce 不重复响铃）。失败落日志可判定。
+     * 状态通知：blocked 沿变化唤醒。ref → 稳定 id，同 ref 更新同一通知
+     * （setOnlyAlertOnce 不重复响铃）。失败落日志可判定。
      */
     fun notifyState(ref: String, name: String, state: AgentState) {
         try {
             val text = when (state) {
                 AgentState.BLOCKED -> "需要你输入"
-                AgentState.DONE -> "任务已完成"
                 else -> "状态：${state.wire}"
             }
             nm.notify(
