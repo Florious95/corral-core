@@ -21,7 +21,7 @@ driver 不做账本没写的决定。
   - 只做 reference 语义的适配，不加功能：不写轮询、不写事件面、不写重试。
     「停」不是缺陷，是把决定权交回给 leader。
 """
-import json, hashlib, subprocess, sys, time, os, re
+import json, hashlib, subprocess, sys, time, os, re, glob
 
 REPO = "/Volumes/nvme/Projects/远程Agent安卓"
 LEDGER = (sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith(".json")
@@ -137,6 +137,39 @@ def send(seat, text, tid):
         return None
     m = re.search(r"message_id:\s*(\S+)", out)
     return m.group(1) if m else None
+
+
+def token_landed(seat, token):
+    """派单是否真的作为 user turn 进了席位转录——**目前唯一确定性的送达判据**。
+
+    `send` 返回 ok 不是送达，框架侧记 delivered 也不是：实测存在整条派单
+    **原样躺在席位输入框里、席位一个字没收到**，而两处都显示成功
+    （ledger-orchestration 队 2026-08-15 靠这一层拦下一次真阳性）。
+
+    🔴 判 False 就**停下交人，绝不重发**。重发会把两条挤进同一个输入框，
+       粘连比滞留难查得多。滞留那条晚点被按键放出去，最多是"做了一份过期活"。
+    🔴 只数 type == "user" 的行：assistant 引用 token 的行会让计数虚高，
+       那是"它提到了这条消息"，不是"它收到了这条消息"。
+    ⚠️ 只对 provider 为 claude/claude_code 的席位成立（转录是 claude 的 jsonl）。
+       本工程五席全是 claude_code，成立。
+    （实现取自 ledger-orchestration reference driver，2026-08-15。）
+    """
+    root = os.path.join(REPO, ".team/runtime/provider-config", seat, "claude/projects")
+    for f in glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True):
+        try:
+            with open(f, encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if token not in line:
+                        continue
+                    try:
+                        o = json.loads(line)
+                    except Exception:
+                        continue
+                    if o.get("type") == "user":
+                        return True
+        except OSError:
+            continue
+    return False
 
 
 def seat_busy(seat):
@@ -305,6 +338,11 @@ def main():
                 if not msg_id:
                     log(f"{tid}: 投递失败，停。")
                     return 3
+                time.sleep(5)   # 给上屏留时间，太快查会假阴
+                if not token_landed(seat, msg_id):
+                    log(f"{tid}: 派单未进 {seat} 转录（token_landed=False）——"
+                        f"send 说 ok 但席位很可能一个字没收到。停下交人，**不重发**。")
+                    return 7
             # 🔴 wait 的键是【账本任务 id】，不是 send 返回的 message_id。
             # 席位 report_result 带的 task_id 就是账本 id，wait --task 匹配的正是它。
             # reference 的 send() 注释说「返回 message_id（即 task id）」——这个等价是错的。
