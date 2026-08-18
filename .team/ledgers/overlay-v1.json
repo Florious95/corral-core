@@ -183,10 +183,26 @@
      "A-f-red"
     ]
    },
-   "state": "planned"
+   "state": "succeeded",
+   "attempts": [
+    {
+     "attempt_id": "att-t.feas-seq1-t1787065518317",
+     "delivery_id": "del-t.feas-seq1-t1787065518317",
+     "state": "succeeded",
+     "writeback_revision": 2,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-f-doc",
+      "acceptance_success.acceptance_id=A-f-four",
+      "acceptance_success.acceptance_id=A-f-probe",
+      "acceptance_success.acceptance_id=A-f-size",
+      "acceptance_success.acceptance_id=A-f-red",
+      "acceptance_success.writeback_revision=2"
+     ]
+    }
+   ]
   },
   "t.srv": {
-   "title": "服务端实现悬浮窗的**独立抓屏流**（契约 064）。按 .team/nodes/ov-design/可行性结论.md 选定的路径落地。🔴 这条流与二级菜单的列表流**分开**，各订各的，不共用。🔴 **打开才订阅，关掉即停**：零订阅者时不得为这条流做任何抓屏或起任何 tmux 客户端（工程常识红线①：空闲 CPU 趋近 0）。悬浮窗绝大多数时间是关着的。🔴 **只读**：不发按键、不改任何用户 pane 的状态。必须写出这三个具名测试并全部 PASS：TestOverlayNoResourceWithoutSubscriber（无订阅者时零抓屏、零客户端）/ TestOverlayFramesAreNonEmpty（有订阅者时推出的帧非空）/ TestOverlayFramesChangeOverTime（若干帧之间内容会变——证明是动态流不是静态截图）。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
+   "title": "服务端实现悬浮窗的**独立抓屏流**（契约 064）。按 .team/nodes/ov-design/可行性结论.md 选定的路径落地。🔴 这条流与二级菜单的列表流**分开**，各订各的，不共用。🔴 **打开才订阅，关掉即停**：零订阅者时不得为这条流做任何抓屏或起任何 tmux 客户端（工程常识红线①：空闲 CPU 趋近 0）。悬浮窗绝大多数时间是关着的。🔴 **只读**：不发按键、不改任何用户 pane 的状态。必须写出这三个具名测试并全部 PASS：TestOverlayNoResourceWithoutSubscriber（无订阅者时零抓屏、零客户端）/ TestOverlayFramesAreNonEmpty（有订阅者时推出的帧非空）/ TestOverlayFramesChangeOverTime（若干帧之间内容会变——证明是动态流不是静态截图）。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。\n🔴【r5 重开 · leader 已定位到这一步，接着往下查】你的四条单测全绿，但**跨端探针 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh 判红**：订阅 overlay_subscribe 后 **6 秒内一帧 overlay_frame 都没到**。\nleader 已核过、可以排除的（别重复查）：\n  · 协议对得上：protocol 里 TypeOverlaySubscribe / TypeOverlayFrame 都在，探针发的收的就是这两个；\n  · ws 层接上了：ws_conn.go 里 case protocol.OverlaySubscribe → handleOverlaySubscribe；\n  · nil 兜底建了生产抓屏器：server.go 里 opts.OverlayCapturer == nil ⇒ overlay.NewTmux(log, dirs)。\n⇒ **东西都在，但端到端出不来帧。** 这正是「验东西在那儿，没验东西起作用」——单测绿不等于链路通。\n🔴 请沿着这条链往下查并修到探针转绿。至少要能回答：\n  ①探针那个隔离 agentmirrord 的 DiscoverySocketDirs 里到底有没有可枚举的 tmux socket？没有的话抓屏器抓谁？\n  ②scratch 会话是在订阅时才起吗？起它 + choose-tree + 第一帧，总耗时是否超过探针的 6 秒等待？\n  ③抓屏 interval（defaultOverlayInterval）是多少？是否本身就 > 6 秒？\n🔴 如果结论是**探针的等待窗口太短**（而不是实现有问题），**不要自己改探针把它调绿**——探针是判据、是别人给你出的题，产出方改自己的判据等于骗判据。这种情况发一条 class=\"blocking\" 说清楚，由 leader 裁定是否放宽窗口。\n🔴 修好后自己先跑一遍那个探针确认转绿，再收工。",
    "owner": {
     "role": "r.server"
    },
@@ -275,7 +291,22 @@
    "state": "planned",
    "parallel": {
     "group": "g4"
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.srv-seq3-t1787066120187",
+     "delivery_id": "del-t.srv-seq3-t1787066120187",
+     "state": "succeeded",
+     "writeback_revision": 4,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-s-idle",
+      "acceptance_success.acceptance_id=A-s-nonempty",
+      "acceptance_success.acceptance_id=A-s-anim",
+      "acceptance_success.acceptance_id=A-s-suite",
+      "acceptance_success.writeback_revision=4"
+     ]
+    }
+   ]
   },
   "t.app": {
    "title": "App 实现会话内悬浮窗（契约 064）。用户原话：「在会话当中，在右上角点击查看这个窗口。它是一个悬浮窗口，然后点击窗口的其他地方，它就会消失。」🔴 入口在**会话内**（三级终端画面）右上角一个按钮；点击浮出**覆盖在终端之上**的悬浮窗；**点击悬浮窗以外的任何地方即消失**。🔴 内容是服务端推来的抓屏帧，**原样渲染**（等宽字体、保留 tmux 的树线与对齐），不要重排、不要美化。🔴 关闭时必须**退订**，不得在后台继续收流。🔴 悬浮窗只负责看：不发按键、不切换会话。**点击其中某一行是否跳转，本次不实现**（契约未定义）。必须写出这三个具名测试并全部 PASS：OverlayOpensFromSessionTopRightTest / OverlayDismissOnOutsideTapTest / OverlayUnsubscribesOnCloseTest。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
@@ -364,10 +395,25 @@
      "A-a-suite"
     ]
    },
-   "state": "planned",
+   "state": "succeeded",
    "parallel": {
     "group": "g4"
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.app-seq2-t1787066119699",
+     "delivery_id": "del-t.app-seq2-t1787066119699",
+     "state": "succeeded",
+     "writeback_revision": 3,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-a-open",
+      "acceptance_success.acceptance_id=A-a-dismiss",
+      "acceptance_success.acceptance_id=A-a-unsub",
+      "acceptance_success.acceptance_id=A-a-suite",
+      "acceptance_success.writeback_revision=3"
+     ]
+    }
+   ]
   },
   "t.verify": {
    "title": "对照席：验最硬的那条约束，以及判据真会咬人。🔴 不实现、不修任何东西。三件事：①跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh，现在必须**绿**；②跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh，必须**绿** —— 这是本条最硬的约束：**打开/关闭悬浮窗，用户所有真实会话的窗口行列数一个都不能变**。⛔ 在你自己起的隔离 tmux server 上验，绝不碰用户真实 tmux。③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/ov-mutate.sh：定点破坏（例如让抓屏路径去 attach 用户会话、或让关闭后不退订），对应具名测试必须变红，恢复后变绿，两头成立才 exit 0，工作区跑完必须干净。并写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/报告.md 记录三项结果。🔴 自检：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
@@ -456,7 +502,23 @@
      "A-v-rep"
     ]
    },
-   "state": "planned"
+   "state": "planned",
+   "attempts": [
+    {
+     "attempt_id": "att-t.verify-seq4-t1787066825511",
+     "delivery_id": "del-t.verify-seq4-t1787066825511",
+     "state": "acceptance_pending",
+     "artifact_refs": [
+      "acceptance_failure.acceptance_id=A-v-probe",
+      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)\"]",
+      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+      "acceptance_failure.exit_code=1",
+      "acceptance_failure.expected_exit_code=0",
+      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+      "acceptance_failure.stderr_tail(末20行)=file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/[eval1]:48\n  throw new Error(`订阅后没有 overlay_frame（当前无悬浮窗流，预期红）：${e.message}`);\n        ^\n\nError: 订阅后没有 overlay_frame（当前无悬浮窗流，预期红）：timeout 6000ms waiting overlay_frame\n    at file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/[eval1]:48:9\n\nNode.js v22.22.2"
+     ]
+    }
+   ]
   },
   "t.pkg": {
    "title": "打包给用户手动验收。assembleDebug 出 APK，证明不是旧产物（没有任何 .kt 比 APK 新）。🔴 收口判据是悬浮窗跨端探针 + 尺寸不变判据，不是「dex 里有某个符号」。🔴 不要改任何实现代码。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
@@ -630,5 +692,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 1
+ "revision": 5
 }
