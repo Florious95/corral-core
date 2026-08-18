@@ -1,0 +1,631 @@
+{
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.overlay-fix.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.advisor": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov2-probe/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "advisor",
+    "team": "grok-l2"
+   }
+  },
+  "r.server": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov2-srv/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "dev-server",
+    "team": "grok-l2"
+   }
+  },
+  "r.app": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov2-app/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "dev-app",
+    "team": "grok-l2"
+   }
+  },
+  "r.control": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov2-ver/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "control",
+    "team": "grok-l2"
+   }
+  },
+  "r.leader": {
+   "provider": "human",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov2-esc/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.probe": {
+   "title": "写加强版探针。🔴 前提:leader 上一轮的探针**验错了东西**——它断言「两帧非空且内容不同」，而一堆 ANSI 乱码完全满足这个条件。用户真机上看到的是裸控制序列 `[?1049h` `(B[m` `[K` `[30m[43m` 被当文本画出来、画面不断向下追加、且内容来自错误的 socket（还把我们自己的 scratch 会话 am-overlay 列了进去）。契约见 requirement-base/entries/065。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh，**三条断言都要有**：\n  ①**无裸控制序列**：渲染后的帧文本中不得出现 ESC[ / `[?1049` / `[K` / `(B[m` 这类字面量；\n  ②**socket 正确且无自我映照**：帧中必须出现**目标 socket 下真实存在的会话名**，且**不得出现** scratch 会话名（am-overlay）与其辅助 pane 名（tree / sleep / ov-spin）；\n  ③**替换而非追加**：连续若干次刷新后帧行数保持有界（≤ 终端行数），不出现同一棵树重复多份。\n🔴 **现在跑必须红**（当前这版实现正是坏的，是最好的红样本）。把红在哪一条写进说明。另产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/说明.md 记录三条各自的红证据。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
+   "owner": {
+    "role": "r.advisor"
+   },
+   "resources": {
+    "worktree_id": "wt5.probe",
+    "write_paths": [
+     ".team/nodes/ov2-probe/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/065-悬浮窗三缺陷与判据加强.md",
+     "server/internal/",
+     "app/app/src/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "bff0dc6fc"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-p-exec",
+      "argv": [
+       "test",
+       "-x",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-p-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-p-three",
+      "argv": [
+       "sh",
+       "-c",
+       "grep -c 'ESC\\|1049\\|am-overlay\\|行数\\|bounded' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh | awk '$1>=3'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-p-red",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;r=subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh'],timeout=900);sys.exit(0 if r.returncode!=0 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-p-exec",
+     "A-p-doc",
+     "A-p-three",
+     "A-p-red"
+    ]
+   },
+   "state": "planned"
+  },
+  "t.srv": {
+   "title": "服务端修缺陷 1（socket 作用域 + 自我映照）。契约 065。\n🔴 悬浮窗流必须按**客户端指定的 socket** 取数：`overlay_subscribe` 要能带目标 socket，服务端按它建 scratch 客户端并抓屏，**不许用「第一个发现的」或写死的那个**。用户实测：在不同会话点开，看到的都是同一个 socket 的内容。\n🔴 **排除观测装置本身**：抓屏用的 scratch 会话（am-overlay）及其辅助 pane（tree / sleep / ov-spin）不得出现在输出里。它是观测装置，不是被观测对象。\n必须写出并 PASS：TestOverlayHonorsRequestedSocket / TestOverlayExcludesScratchSession。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
+   "owner": {
+    "role": "r.server"
+   },
+   "resources": {
+    "worktree_id": "wt5.srv",
+    "write_paths": [
+     "server/internal/",
+     "server/cmd/",
+     ".team/nodes/ov2-srv/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/065-悬浮窗三缺陷与判据加强.md",
+     ".team/nodes/ov2-probe/probe-ov2.sh"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "bff0dc6fc"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-srv/实现说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-s-sock",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestOverlay -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestOverlayHonorsRequestedSocket'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-s-noself",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestOverlay -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestOverlayExcludesScratchSession'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-s-suite",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-s-sock",
+     "A-s-noself",
+     "A-s-suite"
+    ]
+   },
+   "state": "planned",
+   "parallel": {
+    "group": "g5"
+   }
+  },
+  "t.app": {
+   "title": "App 修缺陷 2 与 3（ANSI 未渲染 / 画面追加不替换）。契约 065。\n🔴 现在 App 把 PTY 裸字节当**文本**画了出来，用户看到字面量 `[?1049h` `(B[m` `[K` `[30m[43m`；又因为 `[?1049h`（切备用屏）与 `[H[2J`（清屏归位）没被解释，每次刷新是**追加**不是**替换**，画面不断向下重复。\n🔴 **本项目已经有一条终端渲染路径（三级终端流），请复用它**，不要另写一份渲染——另写必然与三级行为漂移，而漂移是静默的。若你判断不能复用，**说明理由并发 class=\"blocking\"** 交 leader 裁定，不要默默另写一套。\n🔴 订阅时要把**当前会话所属的 socket** 带给服务端（配合 t.srv）。\n必须写出并 PASS：OverlayRendersThroughTerminalEmulatorTest（渲染结果不含裸控制序列）/ OverlayScreenReplacesNotAppendsTest（连续多帧后行数有界、不重复堆叠）/ OverlaySubscribeCarriesCurrentSocketTest。🔴 064 已通过的那两条不许弄坏：OverlayDismissOnOutsideTapTest / OverlayUnsubscribesOnCloseTest 必须仍 PASS。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt5.app",
+    "write_paths": [
+     "app/app/src/main/",
+     "app/app/src/test/",
+     ".team/nodes/ov2-app/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/065-悬浮窗三缺陷与判据加强.md",
+     ".team/nodes/ov2-probe/probe-ov2.sh"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "bff0dc6fc"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-app/实现说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-a-ansi",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayRendersThroughTerminalEmulatorTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-a-replace",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayScreenReplacesNotAppendsTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-a-sock",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlaySubscribeCarriesCurrentSocketTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-a-keep1",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayDismissOnOutsideTapTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-a-keep2",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayUnsubscribesOnCloseTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-a-suite",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2500
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-a-ansi",
+     "A-a-replace",
+     "A-a-sock",
+     "A-a-keep1",
+     "A-a-keep2",
+     "A-a-suite"
+    ]
+   },
+   "state": "planned",
+   "parallel": {
+    "group": "g5"
+   }
+  },
+  "t.ver": {
+   "title": "对照席：验加强版探针转绿、且尺寸不变没被破坏。🔴 不实现、不修任何东西。\n①跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh，必须**绿**（三条断言全过）；\n②跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh，必须**仍然绿**（064 的硬约束不许被这轮修改破坏）；\n③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-ver/ov2-mutate.sh：定点破坏（例如把 scratch 排除去掉、或让渲染绕过终端模拟器），对应具名测试必须变红、恢复后变绿，两头成立才 exit 0，工作区跑完必须干净；并写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-ver/报告.md。\n🔴 自检：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
+   "owner": {
+    "role": "r.control"
+   },
+   "resources": {
+    "worktree_id": "wt5.ver",
+    "write_paths": [
+     ".team/nodes/ov2-ver/"
+    ],
+    "read_paths": [
+     ".team/nodes/ov2-probe/probe-ov2.sh",
+     ".team/nodes/ov-design/size-invariance.sh"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "bff0dc6fc"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-ver/ov2-mutate.sh",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-ver/报告.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-v-probe",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh'],timeout=900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-v-size",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh'],timeout=900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-v-mut",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-ver/ov2-mutate.sh'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2500
+     },
+     {
+      "acceptance_id": "A-v-rep",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-ver/报告.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-v-probe",
+     "A-v-size",
+     "A-v-mut",
+     "A-v-rep"
+    ]
+   },
+   "state": "planned"
+  },
+  "t.pkg": {
+   "title": "打包给用户手动验收。assembleDebug 出 APK，证明不是旧产物。🔴 收口判据是加强版探针 + 尺寸不变，不是「dex 里有某个符号」。🔴 不要改任何实现代码。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt5.pkg",
+    "write_paths": [
+     "app/app/build/",
+     ".team/nodes/ov2-pkg/"
+    ],
+    "read_paths": [
+     ".team/nodes/ov2-app/实现说明.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "bff0dc6fc"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-pkg/打包说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-k-build",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:assembleDebug', '--console=plain'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2500
+     },
+     {
+      "acceptance_id": "A-k-fresh",
+      "argv": [
+       "python3",
+       "-c",
+       "import os,glob,sys;apk='/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/build/outputs/apk/debug/app-debug.apk';sys.exit(1) if not os.path.exists(apk) else None;t=os.path.getmtime(apk);n=[f for f in glob.glob('/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/src/**/*.kt',recursive=True) if os.path.getmtime(f)>t];print(n);sys.exit(1 if n else 0)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-k-probe",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh'],timeout=900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-k-size",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh'],timeout=900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-k-build",
+     "A-k-fresh",
+     "A-k-probe",
+     "A-k-size"
+    ]
+   },
+   "state": "planned"
+  }
+ },
+ "dependencies": [
+  {
+   "from": "t.probe",
+   "to": "t.srv",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.probe",
+   "to": "t.app",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.srv",
+   "to": "t.ver",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.app",
+   "to": "t.ver",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.ver",
+   "to": "t.pkg",
+   "condition": "requires_success"
+  }
+ ],
+ "parallelism": [
+  {
+   "group": "g5",
+   "max_concurrency": 2
+  }
+ ],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "完成以机械判据为准",
+  "delivery_uncertain": "重发并去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {
+  "F.esc": {
+   "agent": {
+    "role": "r.leader"
+   },
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed"
+   ],
+   "max_attempts": 1,
+   "action": "escalate_to_leader",
+   "silent_substitution": false
+  }
+ },
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "requirement-base/entries/065-悬浮窗三缺陷与判据加强.md",
+   "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md",
+   ".team/nodes/ov2-probe/probe-ov2.sh"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 1
+}

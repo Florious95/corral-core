@@ -6,7 +6,7 @@
 """
 import glob, json, os, subprocess, time
 REPO = "/Volumes/nvme/Projects/远程Agent安卓"
-LEDGER = f"{REPO}/.team/ledgers/overlay-v1.json"   # 当前在跑的账本，换账本改这一行
+LEDGER = f"{REPO}/.team/ledgers/overlay-fix-v1.json"   # 当前在跑的账本，换账本改这一行
 
 def my_driver():
     """只认 cwd 落在本工程的那个 ledger-run。"""
@@ -51,7 +51,7 @@ def driver_phase():
     是驱动器自己跑的，那几分钟里席位本来就该是空闲的。
     只看「有没有席位 working」会把每一次跑判据都报成异常——误报多了，真出事时没人当真。"""
     try:
-        tail = open(f"{REPO}/.team/ledgers/ov-drive.log", encoding="utf-8", errors="replace").read()[-4000:]
+        tail = open(f"{REPO}/.team/ledgers/ov2-drive.log", encoding="utf-8", errors="replace").read()[-4000:]
     except Exception:
         return ""
     for line in reversed(tail.splitlines()):
