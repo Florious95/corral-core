@@ -1,883 +1,940 @@
 {
- "schema_version": "ledger.v2",
- "ledger_id": "ledger.level2-list-status.v1",
- "run": {
-  "desired_state": "running"
- },
- "roles": {
-  "r.advisor": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/l2-design/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "advisor",
-    "team": "grok-l2"
-   }
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.level2-list-status.v1",
+  "run": {
+    "desired_state": "running"
   },
-  "r.server": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/l2-server/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "dev-server",
-    "team": "grok-l2"
-   }
-  },
-  "r.app": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/l2-app/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "dev-app",
-    "team": "grok-l2"
-   }
-  },
-  "r.control": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/l2-verify/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "control",
-    "team": "grok-l2"
-   }
-  },
-  "r.leader": {
-   "provider": "human",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/l2-escalation/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   }
-  }
- },
- "tasks": {
-  "t.rollback": {
-   "title": "回炉第一步：把上一版 level2 实现归档后**从工作树删除**。上一版（服务端 82865233c / App 53ac62866）在用户真机上二级菜单全空，按回炉流程处理，不在坏基线上改。\n🔴【r2 澄清，上一轮卡在这里】归档你已经做完了（scratch/archive-level2-v1/ 齐全，质量没问题），**缺的是第二步：真的把那些文件从仓根工作树里删掉。**\n🔴 你上一轮说「不碰仓根共享树」——**这个顾虑是我的任务书造成的，现在解除**：账本里的 `worktree_id: wt.rollback` **只是并发互斥标签，不是沙箱**，它不给你另一棵树。本格的 `write_paths` 已经把 `server/` 和 `app/app/src/` 授权给你了，**你就是要直接改仓根工作树**。同一时刻不会有别的席位动这两个目录，这正是那个标签保证的。\n🔴 具体做什么：把 82865233c 与 53ac62866 引入的 level2 实现从工作树移除，回到 f1c5a27c8 的状态——服务端 `server/internal/`、`server/cmd/` 里搜不到 level2；App `app/app/src` 下找不到 Level2* 文件。两边都要能编译、测试全过。\n⛔ **不要 git commit**（本工程提交由 leader 做）。⛔ 不要 rm 归档目录。⛔ 不要造占位实现填坑——回退后二级菜单是空的，这是预期状态。⛔ 禁止启动安卓模拟器。⛔ 禁止碰用户真实 tmux 与生产 daemon。\n🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳核状态。唯一例外是被卡住需要裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
-   "owner": {
-    "role": "r.advisor"
-   },
-   "resources": {
-    "worktree_id": "wt.rollback",
-    "write_paths": [
-     "server/",
-     "app/app/src/",
-     "scratch/archive-level2-v1/",
-     ".team/nodes/l2-design/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+  "roles": {
+    "r.advisor": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/l2-design/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "advisor",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "c006fbbbd"
+    "r.server": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/l2-server/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "dev-server",
+        "team": "grok-l2"
+      }
+    },
+    "r.app": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/l2-app/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "dev-app",
+        "team": "grok-l2"
+      }
+    },
+    "r.control": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/l2-verify/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "control",
+        "team": "grok-l2"
+      }
+    },
+    "r.leader": {
+      "provider": "human",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/l2-escalation/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/scratch/archive-level2-v1/归档说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-rb-archived",
-      "argv": [
-       "sh",
-       "-c",
-       "test -d /Volumes/nvme/Projects/远程Agent安卓/scratch/archive-level2-v1 && test \"$(ls -A /Volumes/nvme/Projects/远程Agent安卓/scratch/archive-level2-v1)\""
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-rb-server-clean",
-      "argv": [
-       "sh",
-       "-c",
-       "! grep -rqi level2 /Volumes/nvme/Projects/远程Agent安卓/server/internal/ /Volumes/nvme/Projects/远程Agent安卓/server/cmd/"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-rb-app-clean",
-      "argv": [
-       "sh",
-       "-c",
-       "! find /Volumes/nvme/Projects/远程Agent安卓/app/app/src -name 'Level2*' | grep -q ."
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-rb-go",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-rb-app",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2600
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-rb-archived",
-     "A-rb-server-clean",
-     "A-rb-app-clean",
-     "A-rb-go",
-     "A-rb-app"
-    ]
-   },
-   "state": "succeeded",
-   "attempts": [
+  },
+  "tasks": {
+    "t.rollback": {
+      "title": "回炉第一步：把上一版 level2 实现归档后**从工作树删除**。上一版（服务端 82865233c / App 53ac62866）在用户真机上二级菜单全空，按回炉流程处理，不在坏基线上改。\n🔴【r2 澄清，上一轮卡在这里】归档你已经做完了（scratch/archive-level2-v1/ 齐全，质量没问题），**缺的是第二步：真的把那些文件从仓根工作树里删掉。**\n🔴 你上一轮说「不碰仓根共享树」——**这个顾虑是我的任务书造成的，现在解除**：账本里的 `worktree_id: wt.rollback` **只是并发互斥标签，不是沙箱**，它不给你另一棵树。本格的 `write_paths` 已经把 `server/` 和 `app/app/src/` 授权给你了，**你就是要直接改仓根工作树**。同一时刻不会有别的席位动这两个目录，这正是那个标签保证的。\n🔴 具体做什么：把 82865233c 与 53ac62866 引入的 level2 实现从工作树移除，回到 f1c5a27c8 的状态——服务端 `server/internal/`、`server/cmd/` 里搜不到 level2；App `app/app/src` 下找不到 Level2* 文件。两边都要能编译、测试全过。\n⛔ **不要 git commit**（本工程提交由 leader 做）。⛔ 不要 rm 归档目录。⛔ 不要造占位实现填坑——回退后二级菜单是空的，这是预期状态。⛔ 禁止启动安卓模拟器。⛔ 禁止碰用户真实 tmux 与生产 daemon。\n🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳核状态。唯一例外是被卡住需要裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+      "owner": {
+        "role": "r.advisor"
+      },
+      "resources": {
+        "worktree_id": "wt.rollback",
+        "write_paths": [
+          "server/",
+          "app/app/src/",
+          "scratch/archive-level2-v1/",
+          ".team/nodes/l2-design/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "c006fbbbd"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/scratch/archive-level2-v1/归档说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-rb-archived",
+            "argv": [
+              "sh",
+              "-c",
+              "test -d /Volumes/nvme/Projects/远程Agent安卓/scratch/archive-level2-v1 && test \"$(ls -A /Volumes/nvme/Projects/远程Agent安卓/scratch/archive-level2-v1)\""
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-rb-server-clean",
+            "argv": [
+              "sh",
+              "-c",
+              "! grep -rqi level2 /Volumes/nvme/Projects/远程Agent安卓/server/internal/ /Volumes/nvme/Projects/远程Agent安卓/server/cmd/"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-rb-app-clean",
+            "argv": [
+              "sh",
+              "-c",
+              "! find /Volumes/nvme/Projects/远程Agent安卓/app/app/src -name 'Level2*' | grep -q ."
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-rb-go",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-rb-app",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2600
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-rb-archived",
+          "A-rb-server-clean",
+          "A-rb-app-clean",
+          "A-rb-go",
+          "A-rb-app"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.rollback-seq1-t1787054027375",
+          "delivery_id": "del-t.rollback-seq1-t1787054027375",
+          "state": "succeeded",
+          "writeback_revision": 3,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-rb-archived",
+            "acceptance_success.acceptance_id=A-rb-server-clean",
+            "acceptance_success.acceptance_id=A-rb-app-clean",
+            "acceptance_success.acceptance_id=A-rb-go",
+            "acceptance_success.acceptance_id=A-rb-app",
+            "acceptance_success.writeback_revision=3"
+          ]
+        }
+      ]
+    },
+    "t.design": {
+      "title": "回炉第二步 + 设计。两件事。①**反推上一版为什么全空**：看 scratch/archive-level2-v1/ 里归档的那份 diff，找出「服务端有数据但 App 一片空白」的根因（订阅没建立？帧字段对不上？App 侧解出来是空？——这三种在现象上一模一样），写进 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/上一版空白根因.md，并**标明你的判断边界**：查到哪儿为止、从哪一步起是推测。②按契约 061 出实现方案，并产出**跨端联调探针** probe.sh。🔴 探针必须断言「世界变了」，不是「东西在那儿」：要真起服务端、真订阅、真收到带真实 pane 标题与状态的行才算绿；文件存在、符号存在一律不算。上一版就是死在「dex 里有 level2 符号」这种判据上——符号在，装上去还是空的。🔴 现在跑这条探针必须是**红**的（刚回退，功能不存在），实现完必须转绿。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。",
+      "owner": {
+        "role": "r.advisor"
+      },
+      "resources": {
+        "worktree_id": "wt.design",
+        "write_paths": [
+          ".team/nodes/l2-design/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md",
+          "scratch/archive-level2-v1/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "c006fbbbd"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/实现方案.md",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/上一版空白根因.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-dz-plan",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/实现方案.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-dz-rootcause",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/上一版空白根因.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-dz-probe",
+            "argv": [
+              "test",
+              "-x",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-dz-red",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;r=subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh'],timeout=900);sys.exit(0 if r.returncode!=0 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-dz-plan",
+          "A-dz-rootcause",
+          "A-dz-probe",
+          "A-dz-red"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.design-seq2-t1787054336145",
+          "delivery_id": "del-t.design-seq2-t1787054336145",
+          "state": "succeeded",
+          "writeback_revision": 4,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-dz-plan",
+            "acceptance_success.acceptance_id=A-dz-rootcause",
+            "acceptance_success.acceptance_id=A-dz-probe",
+            "acceptance_success.acceptance_id=A-dz-red",
+            "acceptance_success.writeback_revision=4"
+          ]
+        }
+      ]
+    },
+    "t.server": {
+      "title": "服务端实现（契约 061）。数据源 tmux：会话名/窗口/socket/工作目录**用格式串直接取结构字段**，不解析渲染出来的 Ctrl-B w 画面。状态从 pane_title 前面的符号判：**认不出就是「未知」，绝不回落成「空闲」**——前四轮就是猜一个 idle 顶上，结果是自信的错误。🔴 未知符号必须记日志，且**必须记下该符号的 Unicode 码点 + 完整原始标题**；只写「符号未知」等于什么都没说，你不知道该往表里加什么。轮询 2 秒、**变更时才推送**、**零订阅者时一次 tmux 都不调**、只推变更必须配**低频心跳**（否则客户端分不清「没变化」和「连接死了」）。必须写出这六个具名测试并全部 PASS：TestL2StructuralFields / TestL2UnknownGlyphStaysUnknown / TestL2UnknownGlyphLogsCodepoint / TestL2NoPollWithoutSubscriber / TestL2PushOnChangeOnly / TestL2Heartbeat。⛔ 禁止启动安卓模拟器（用户令，未解除）。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。",
+      "owner": {
+        "role": "r.server"
+      },
+      "resources": {
+        "worktree_id": "wt.server",
+        "write_paths": [
+          "server/internal/",
+          "server/cmd/",
+          ".team/nodes/l2-server/"
+        ],
+        "read_paths": [
+          ".team/nodes/l2-design/实现方案.md",
+          "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "c006fbbbd"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-server/实现说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-sv-struct",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2StructuralFields'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-sv-unknown",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2UnknownGlyphStaysUnknown'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-sv-codepoint",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2UnknownGlyphLogsCodepoint'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-sv-nopoll",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2NoPollWithoutSubscriber'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-sv-onchange",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2PushOnChangeOnly'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-sv-heartbeat",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2Heartbeat'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-sv-suite",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-sv-struct",
+          "A-sv-unknown",
+          "A-sv-codepoint",
+          "A-sv-nopoll",
+          "A-sv-onchange",
+          "A-sv-heartbeat",
+          "A-sv-suite"
+        ]
+      },
+      "state": "succeeded",
+      "parallel": {
+        "group": "g.impl"
+      },
+      "attempts": [
+        {
+          "attempt_id": "att-t.server-seq4-t1787055007349",
+          "delivery_id": "del-t.server-seq4-t1787055007349",
+          "state": "succeeded",
+          "writeback_revision": 5,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-sv-struct",
+            "acceptance_success.acceptance_id=A-sv-unknown",
+            "acceptance_success.acceptance_id=A-sv-codepoint",
+            "acceptance_success.acceptance_id=A-sv-nopoll",
+            "acceptance_success.acceptance_id=A-sv-onchange",
+            "acceptance_success.acceptance_id=A-sv-heartbeat",
+            "acceptance_success.acceptance_id=A-sv-suite",
+            "acceptance_success.writeback_revision=5"
+          ]
+        }
+      ]
+    },
+    "t.app": {
+      "title": "App 实现（契约 061）。二级菜单是**一个列表**，形态与现在一致：每行显示会话标识，**右侧一个状态标：进行中 / 空闲 / 未知**，点一行进入该会话（三级终端）。🔴 状态为未知时就显示「未知」，不许显示成空闲。🔴 跳转身份只能用结构字段（session_name / window_index / window_name），**不得从标题字符串里抠**。🔴 App **只接收服务端推送，自己不轮询**（省手机损耗，这是用户明确要求）。必须写出这四个具名测试并全部 PASS：L2ListRendersStatusTest / L2UnknownStatusTest / L2NavigationIdentityTest / L2PushOnlyNoPollTest。⛔ 禁止启动安卓模拟器（用户令，未解除）。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。\n🔴【r6 澄清 · 所有席位必读】账本里的 `worktree_id`（如 wt.app）**只是并发互斥标签，不是叫你建 git worktree，也不给你另一棵树**。它保证的只有一件事：同一时刻不会有别的席位改同一批文件。**你必须直接在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也是在仓根跑的。⛔ 不要 `git worktree add`，不要进 .worktrees/ 下面写东西——写在那里判据一条都看不见。\n🔴【r6 · 给 dev-app 的特别说明】你上一轮把实现和四个测试写进了 `.worktrees/wt.app/`，所以仓根什么都没有，判据 A-ap-push 报 `No tests found` 判红。**不是你没干活，是干在了判据看不见的地方。**⚠️ **但不要把那棵树整个搬回仓根**：它的基线是 `1d3f60602`，**早于回炉提交 `b89c09373`**，里面还带着我们刚刚回退掉的 v1 实现（Level2LiveStreamScreen.kt / Level2StreamLifecycleTest.kt / Level2NavigationIdentityTest.kt / Level2LiveStreamRenderTest.kt 等老文件）。整棵搬回来 = 把刚拔掉的东西又装回去。\n正确做法：**在仓根当前 HEAD 上重做**。你可以读 `.worktrees/wt.app/` 里自己上一轮写的 L2*.kt 当草稿参考，但只把**属于本次新设计**的内容落到仓根，且不得复活任何 Level2* 的 v1 老文件。服务端已经落地（commit c9898b2fd），线协议是 `level2_frame` + 心跳，你按它对接。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt.app",
+        "write_paths": [
+          "app/app/src/main/",
+          "app/app/src/test/",
+          ".team/nodes/l2-app/"
+        ],
+        "read_paths": [
+          ".team/nodes/l2-design/实现方案.md",
+          "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "c006fbbbd"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-app/实现说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-ap-list",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2ListRendersStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2600
+          },
+          {
+            "acceptance_id": "A-ap-unknown",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2UnknownStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2600
+          },
+          {
+            "acceptance_id": "A-ap-nav",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2NavigationIdentityTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2600
+          },
+          {
+            "acceptance_id": "A-ap-push",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2PushOnlyNoPollTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2600
+          },
+          {
+            "acceptance_id": "A-ap-suite",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2600
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-ap-list",
+          "A-ap-unknown",
+          "A-ap-nav",
+          "A-ap-push",
+          "A-ap-suite"
+        ]
+      },
+      "state": "succeeded",
+      "parallel": {
+        "group": "g.impl"
+      },
+      "attempts": [
+        {
+          "attempt_id": "att-t.app-seq3-t1787055006937",
+          "delivery_id": "del-t.app-seq3-t1787055006937",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=A-ap-list",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2ListRendersStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2ListRendersStatusTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 6s",
+            "acceptance_failure.acceptance_id=A-ap-unknown",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2UnknownStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2UnknownStatusTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 7s",
+            "acceptance_failure.acceptance_id=A-ap-nav",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2NavigationIdentityTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2NavigationIdentityTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 6s",
+            "acceptance_failure.acceptance_id=A-ap-push",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2PushOnlyNoPollTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2PushOnlyNoPollTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5s"
+          ]
+        },
+        {
+          "attempt_id": "att-t.app-seq3-t1787055006937",
+          "delivery_id": "del-t.app-seq3-t1787055006937",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=A-ap-list",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2ListRendersStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2ListRendersStatusTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 6s",
+            "acceptance_failure.acceptance_id=A-ap-unknown",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2UnknownStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2UnknownStatusTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5s",
+            "acceptance_failure.acceptance_id=A-ap-nav",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2NavigationIdentityTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2NavigationIdentityTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5s",
+            "acceptance_failure.acceptance_id=A-ap-push",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2PushOnlyNoPollTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2PushOnlyNoPollTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5s"
+          ]
+        },
+        {
+          "attempt_id": "att-t.app-seq1-t1787056766959",
+          "delivery_id": "del-t.app-seq1-t1787056766959",
+          "state": "succeeded",
+          "writeback_revision": 7,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-ap-list",
+            "acceptance_success.acceptance_id=A-ap-unknown",
+            "acceptance_success.acceptance_id=A-ap-nav",
+            "acceptance_success.acceptance_id=A-ap-push",
+            "acceptance_success.acceptance_id=A-ap-suite",
+            "acceptance_success.writeback_revision=7"
+          ]
+        }
+      ]
+    },
+    "t.e2e": {
+      "title": "对照席：跨端联调 + 定点变异。🔴 你不实现任何功能，不修任何东西。三件事：①跑 .team/nodes/l2-design/probe.sh，它现在必须**绿**（实现完成了）；②写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/mutate-and-check.sh：对实现做一处定向破坏（例如把未知符号回落成空闲、或把身份改成从标题字符串里抠），跑对应的具名测试必须**变红**，恢复后必须**变绿**；两头都成立才 exit 0。破坏必须自动恢复，跑完工作区必须干净。③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/定点变异报告.md：破坏了什么、哪条测试变红、恢复后是否变绿、跑了几次是否稳定。🔴 自检那句话：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。\n🔴【r6 澄清 · 所有席位必读】账本里的 `worktree_id`（如 wt.app）**只是并发互斥标签，不是叫你建 git worktree，也不给你另一棵树**。它保证的只有一件事：同一时刻不会有别的席位改同一批文件。**你必须直接在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也是在仓根跑的。⛔ 不要 `git worktree add`，不要进 .worktrees/ 下面写东西——写在那里判据一条都看不见。",
+      "owner": {
+        "role": "r.control"
+      },
+      "resources": {
+        "worktree_id": "wt.verify",
+        "write_paths": [
+          ".team/nodes/l2-verify/"
+        ],
+        "read_paths": [
+          ".team/nodes/l2-design/probe.sh",
+          ".team/nodes/l2-design/实现方案.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "c006fbbbd"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/mutate-and-check.sh",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/定点变异报告.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-e2-probe-green",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh'],timeout=900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-e2-mutation",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/mutate-and-check.sh'],timeout=3000).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 3100
+          },
+          {
+            "acceptance_id": "A-e2-report",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/定点变异报告.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-e2-clean",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓 && test -z \"$(git status --porcelain server app | grep -E '^ M|^MM')\""
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-e2-probe-green",
+          "A-e2-mutation",
+          "A-e2-report",
+          "A-e2-clean"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.e2e-seq2-t1787057291161",
+          "delivery_id": "del-t.e2e-seq2-t1787057291161",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=A-e2-clean",
+            "acceptance_failure.argv=[\"sh\", \"-c\", \"cd /Volumes/nvme/Projects/远程Agent安卓 && test -z \\\"$(git status --porcelain server app | grep -E '^ M|^MM')\\\"\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ]
+        },
+        {
+          "attempt_id": "att-t.e2e-seq1-t1787057834776",
+          "delivery_id": "del-t.e2e-seq1-t1787057834776",
+          "state": "succeeded",
+          "writeback_revision": 8,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-e2-probe-green",
+            "acceptance_success.acceptance_id=A-e2-mutation",
+            "acceptance_success.acceptance_id=A-e2-report",
+            "acceptance_success.acceptance_id=A-e2-clean",
+            "acceptance_success.writeback_revision=8"
+          ]
+        }
+      ]
+    },
+    "t.package": {
+      "title": "打包给用户手动验收。assembleDebug 出 APK，并证明它不是旧产物（没有任何 .kt 比 APK 新）。🔴 收口判据是**跨端联调探针**，不是「dex 里有某个符号」——上一版就是这么放行的，用户装上去是空的。🔴 不要改任何实现代码，你只打包。⛔ 禁止启动安卓模拟器（用户令，未解除）。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。\n🔴【r6 澄清 · 所有席位必读】账本里的 `worktree_id`（如 wt.app）**只是并发互斥标签，不是叫你建 git worktree，也不给你另一棵树**。它保证的只有一件事：同一时刻不会有别的席位改同一批文件。**你必须直接在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也是在仓根跑的。⛔ 不要 `git worktree add`，不要进 .worktrees/ 下面写东西——写在那里判据一条都看不见。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt.package",
+        "write_paths": [
+          "app/app/build/",
+          ".team/nodes/l2-package/"
+        ],
+        "read_paths": [
+          ".team/nodes/l2-app/实现说明.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "c006fbbbd"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-package/打包说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-pk-build",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:assembleDebug', '--console=plain'],timeout=2400).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2600
+          },
+          {
+            "acceptance_id": "A-pk-fresh",
+            "argv": [
+              "python3",
+              "-c",
+              "import os,glob,sys;apk='/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/build/outputs/apk/debug/app-debug.apk';sys.exit(1) if not os.path.exists(apk) else None;t=os.path.getmtime(apk);n=[f for f in glob.glob('/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/src/**/*.kt',recursive=True) if os.path.getmtime(f)>t];print(n);sys.exit(1 if n else 0)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-pk-e2e",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh'],timeout=900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-pk-build",
+          "A-pk-fresh",
+          "A-pk-e2e"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.package-seq2-t1787058024556",
+          "delivery_id": "del-t.package-seq2-t1787058024556",
+          "state": "succeeded",
+          "writeback_revision": 9,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-pk-build",
+            "acceptance_success.acceptance_id=A-pk-fresh",
+            "acceptance_success.acceptance_id=A-pk-e2e",
+            "acceptance_success.writeback_revision=9"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": [
     {
-     "attempt_id": "att-t.rollback-seq1-t1787054027375",
-     "delivery_id": "del-t.rollback-seq1-t1787054027375",
-     "state": "succeeded",
-     "writeback_revision": 3,
-     "artifact_refs": [
-      "acceptance_success.acceptance_id=A-rb-archived",
-      "acceptance_success.acceptance_id=A-rb-server-clean",
-      "acceptance_success.acceptance_id=A-rb-app-clean",
-      "acceptance_success.acceptance_id=A-rb-go",
-      "acceptance_success.acceptance_id=A-rb-app",
-      "acceptance_success.writeback_revision=3"
-     ]
-    }
-   ]
-  },
-  "t.design": {
-   "title": "回炉第二步 + 设计。两件事。①**反推上一版为什么全空**：看 scratch/archive-level2-v1/ 里归档的那份 diff，找出「服务端有数据但 App 一片空白」的根因（订阅没建立？帧字段对不上？App 侧解出来是空？——这三种在现象上一模一样），写进 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/上一版空白根因.md，并**标明你的判断边界**：查到哪儿为止、从哪一步起是推测。②按契约 061 出实现方案，并产出**跨端联调探针** probe.sh。🔴 探针必须断言「世界变了」，不是「东西在那儿」：要真起服务端、真订阅、真收到带真实 pane 标题与状态的行才算绿；文件存在、符号存在一律不算。上一版就是死在「dex 里有 level2 符号」这种判据上——符号在，装上去还是空的。🔴 现在跑这条探针必须是**红**的（刚回退，功能不存在），实现完必须转绿。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。",
-   "owner": {
-    "role": "r.advisor"
-   },
-   "resources": {
-    "worktree_id": "wt.design",
-    "write_paths": [
-     ".team/nodes/l2-design/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md",
-     "scratch/archive-level2-v1/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
-    },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "c006fbbbd"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/实现方案.md",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/上一版空白根因.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-dz-plan",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/实现方案.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-dz-rootcause",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/上一版空白根因.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-dz-probe",
-      "argv": [
-       "test",
-       "-x",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-dz-red",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;r=subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh'],timeout=900);sys.exit(0 if r.returncode!=0 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-dz-plan",
-     "A-dz-rootcause",
-     "A-dz-probe",
-     "A-dz-red"
-    ]
-   },
-   "state": "succeeded",
-   "attempts": [
-    {
-     "attempt_id": "att-t.design-seq2-t1787054336145",
-     "delivery_id": "del-t.design-seq2-t1787054336145",
-     "state": "succeeded",
-     "writeback_revision": 4,
-     "artifact_refs": [
-      "acceptance_success.acceptance_id=A-dz-plan",
-      "acceptance_success.acceptance_id=A-dz-rootcause",
-      "acceptance_success.acceptance_id=A-dz-probe",
-      "acceptance_success.acceptance_id=A-dz-red",
-      "acceptance_success.writeback_revision=4"
-     ]
-    }
-   ]
-  },
-  "t.server": {
-   "title": "服务端实现（契约 061）。数据源 tmux：会话名/窗口/socket/工作目录**用格式串直接取结构字段**，不解析渲染出来的 Ctrl-B w 画面。状态从 pane_title 前面的符号判：**认不出就是「未知」，绝不回落成「空闲」**——前四轮就是猜一个 idle 顶上，结果是自信的错误。🔴 未知符号必须记日志，且**必须记下该符号的 Unicode 码点 + 完整原始标题**；只写「符号未知」等于什么都没说，你不知道该往表里加什么。轮询 2 秒、**变更时才推送**、**零订阅者时一次 tmux 都不调**、只推变更必须配**低频心跳**（否则客户端分不清「没变化」和「连接死了」）。必须写出这六个具名测试并全部 PASS：TestL2StructuralFields / TestL2UnknownGlyphStaysUnknown / TestL2UnknownGlyphLogsCodepoint / TestL2NoPollWithoutSubscriber / TestL2PushOnChangeOnly / TestL2Heartbeat。⛔ 禁止启动安卓模拟器（用户令，未解除）。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。",
-   "owner": {
-    "role": "r.server"
-   },
-   "resources": {
-    "worktree_id": "wt.server",
-    "write_paths": [
-     "server/internal/",
-     "server/cmd/",
-     ".team/nodes/l2-server/"
-    ],
-    "read_paths": [
-     ".team/nodes/l2-design/实现方案.md",
-     "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
-    },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "c006fbbbd"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-server/实现说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-sv-struct",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2StructuralFields'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-sv-unknown",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2UnknownGlyphStaysUnknown'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-sv-codepoint",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2UnknownGlyphLogsCodepoint'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-sv-nopoll",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2NoPollWithoutSubscriber'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-sv-onchange",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2PushOnChangeOnly'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-sv-heartbeat",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2Heartbeat'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-sv-suite",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-sv-struct",
-     "A-sv-unknown",
-     "A-sv-codepoint",
-     "A-sv-nopoll",
-     "A-sv-onchange",
-     "A-sv-heartbeat",
-     "A-sv-suite"
-    ]
-   },
-   "state": "succeeded",
-   "parallel": {
-    "group": "g.impl"
-   },
-   "attempts": [
-    {
-     "attempt_id": "att-t.server-seq4-t1787055007349",
-     "delivery_id": "del-t.server-seq4-t1787055007349",
-     "state": "succeeded",
-     "writeback_revision": 5,
-     "artifact_refs": [
-      "acceptance_success.acceptance_id=A-sv-struct",
-      "acceptance_success.acceptance_id=A-sv-unknown",
-      "acceptance_success.acceptance_id=A-sv-codepoint",
-      "acceptance_success.acceptance_id=A-sv-nopoll",
-      "acceptance_success.acceptance_id=A-sv-onchange",
-      "acceptance_success.acceptance_id=A-sv-heartbeat",
-      "acceptance_success.acceptance_id=A-sv-suite",
-      "acceptance_success.writeback_revision=5"
-     ]
-    }
-   ]
-  },
-  "t.app": {
-   "title": "App 实现（契约 061）。二级菜单是**一个列表**，形态与现在一致：每行显示会话标识，**右侧一个状态标：进行中 / 空闲 / 未知**，点一行进入该会话（三级终端）。🔴 状态为未知时就显示「未知」，不许显示成空闲。🔴 跳转身份只能用结构字段（session_name / window_index / window_name），**不得从标题字符串里抠**。🔴 App **只接收服务端推送，自己不轮询**（省手机损耗，这是用户明确要求）。必须写出这四个具名测试并全部 PASS：L2ListRendersStatusTest / L2UnknownStatusTest / L2NavigationIdentityTest / L2PushOnlyNoPollTest。⛔ 禁止启动安卓模拟器（用户令，未解除）。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。\n🔴【r6 澄清 · 所有席位必读】账本里的 `worktree_id`（如 wt.app）**只是并发互斥标签，不是叫你建 git worktree，也不给你另一棵树**。它保证的只有一件事：同一时刻不会有别的席位改同一批文件。**你必须直接在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也是在仓根跑的。⛔ 不要 `git worktree add`，不要进 .worktrees/ 下面写东西——写在那里判据一条都看不见。\n🔴【r6 · 给 dev-app 的特别说明】你上一轮把实现和四个测试写进了 `.worktrees/wt.app/`，所以仓根什么都没有，判据 A-ap-push 报 `No tests found` 判红。**不是你没干活，是干在了判据看不见的地方。**⚠️ **但不要把那棵树整个搬回仓根**：它的基线是 `1d3f60602`，**早于回炉提交 `b89c09373`**，里面还带着我们刚刚回退掉的 v1 实现（Level2LiveStreamScreen.kt / Level2StreamLifecycleTest.kt / Level2NavigationIdentityTest.kt / Level2LiveStreamRenderTest.kt 等老文件）。整棵搬回来 = 把刚拔掉的东西又装回去。\n正确做法：**在仓根当前 HEAD 上重做**。你可以读 `.worktrees/wt.app/` 里自己上一轮写的 L2*.kt 当草稿参考，但只把**属于本次新设计**的内容落到仓根，且不得复活任何 Level2* 的 v1 老文件。服务端已经落地（commit c9898b2fd），线协议是 `level2_frame` + 心跳，你按它对接。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt.app",
-    "write_paths": [
-     "app/app/src/main/",
-     "app/app/src/test/",
-     ".team/nodes/l2-app/"
-    ],
-    "read_paths": [
-     ".team/nodes/l2-design/实现方案.md",
-     "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
-    },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "c006fbbbd"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-app/实现说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-ap-list",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2ListRendersStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2600
-     },
-     {
-      "acceptance_id": "A-ap-unknown",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2UnknownStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2600
-     },
-     {
-      "acceptance_id": "A-ap-nav",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2NavigationIdentityTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2600
-     },
-     {
-      "acceptance_id": "A-ap-push",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2PushOnlyNoPollTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2600
-     },
-     {
-      "acceptance_id": "A-ap-suite",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2600
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-ap-list",
-     "A-ap-unknown",
-     "A-ap-nav",
-     "A-ap-push",
-     "A-ap-suite"
-    ]
-   },
-   "state": "planned",
-   "parallel": {
-    "group": "g.impl"
-   },
-   "attempts": [
-    {
-     "attempt_id": "att-t.app-seq3-t1787055006937",
-     "delivery_id": "del-t.app-seq3-t1787055006937",
-     "state": "acceptance_pending",
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=A-ap-list",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2ListRendersStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2ListRendersStatusTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 6s",
-      "acceptance_failure.acceptance_id=A-ap-unknown",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2UnknownStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2UnknownStatusTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 7s",
-      "acceptance_failure.acceptance_id=A-ap-nav",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2NavigationIdentityTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2NavigationIdentityTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 6s",
-      "acceptance_failure.acceptance_id=A-ap-push",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2PushOnlyNoPollTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2PushOnlyNoPollTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5s"
-     ]
+      "from": "t.rollback",
+      "to": "t.design",
+      "condition": "requires_success"
     },
     {
-     "attempt_id": "att-t.app-seq3-t1787055006937",
-     "delivery_id": "del-t.app-seq3-t1787055006937",
-     "state": "acceptance_pending",
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=A-ap-list",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2ListRendersStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2ListRendersStatusTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 6s",
-      "acceptance_failure.acceptance_id=A-ap-unknown",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2UnknownStatusTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2UnknownStatusTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5s",
-      "acceptance_failure.acceptance_id=A-ap-nav",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2NavigationIdentityTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2NavigationIdentityTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5s",
-      "acceptance_failure.acceptance_id=A-ap-push",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2PushOnlyNoPollTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/app",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':app:testDebugUnitTest'.\n> No tests found for given includes: [*L2PushOnlyNoPollTest](--tests filter)\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5s"
-     ]
-    }
-   ]
-  },
-  "t.e2e": {
-   "title": "对照席：跨端联调 + 定点变异。🔴 你不实现任何功能，不修任何东西。三件事：①跑 .team/nodes/l2-design/probe.sh，它现在必须**绿**（实现完成了）；②写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/mutate-and-check.sh：对实现做一处定向破坏（例如把未知符号回落成空闲、或把身份改成从标题字符串里抠），跑对应的具名测试必须**变红**，恢复后必须**变绿**；两头都成立才 exit 0。破坏必须自动恢复，跑完工作区必须干净。③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/定点变异报告.md：破坏了什么、哪条测试变红、恢复后是否变绿、跑了几次是否稳定。🔴 自检那句话：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。\n🔴【r6 澄清 · 所有席位必读】账本里的 `worktree_id`（如 wt.app）**只是并发互斥标签，不是叫你建 git worktree，也不给你另一棵树**。它保证的只有一件事：同一时刻不会有别的席位改同一批文件。**你必须直接在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也是在仓根跑的。⛔ 不要 `git worktree add`，不要进 .worktrees/ 下面写东西——写在那里判据一条都看不见。",
-   "owner": {
-    "role": "r.control"
-   },
-   "resources": {
-    "worktree_id": "wt.verify",
-    "write_paths": [
-     ".team/nodes/l2-verify/"
-    ],
-    "read_paths": [
-     ".team/nodes/l2-design/probe.sh",
-     ".team/nodes/l2-design/实现方案.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+      "from": "t.design",
+      "to": "t.server",
+      "condition": "requires_success"
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "c006fbbbd"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/mutate-and-check.sh",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/定点变异报告.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-e2-probe-green",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh'],timeout=900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-e2-mutation",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/mutate-and-check.sh'],timeout=3000).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 3100
-     },
-     {
-      "acceptance_id": "A-e2-report",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-verify/定点变异报告.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-e2-clean",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓 && test -z \"$(git status --porcelain server app | grep -E '^ M|^MM')\""
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-e2-probe-green",
-     "A-e2-mutation",
-     "A-e2-report",
-     "A-e2-clean"
-    ]
-   },
-   "state": "planned"
-  },
-  "t.package": {
-   "title": "打包给用户手动验收。assembleDebug 出 APK，并证明它不是旧产物（没有任何 .kt 比 APK 新）。🔴 收口判据是**跨端联调探针**，不是「dex 里有某个符号」——上一版就是这么放行的，用户装上去是空的。🔴 不要改任何实现代码，你只打包。⛔ 禁止启动安卓模拟器（用户令，未解除）。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 干完调一次 report_result 唤醒编排器，但**不要传 task_id 参数**（留空走框架默认归属；传了会压掉默认归属让编排器空等）。🔴 静默纪律：**不得给 leader 发任何消息**——不发开工、不发进度、不发收到、不发完成通知。leader 有独立心跳在核状态，你推的每条都是纯噪音且打断他一次。完成与否由机械判据跑一遍世界决定，你说了不算。唯一例外：被卡住、必须 leader 裁定才能继续（判据自相矛盾 / 任务书与契约冲突 / 缺字段判不出），这时发一条 class=\"blocking\"，一次说清卡在哪、试过什么、要裁什么。halt 是默认，判不出就停下问，绝不猜。\n🔴【r6 澄清 · 所有席位必读】账本里的 `worktree_id`（如 wt.app）**只是并发互斥标签，不是叫你建 git worktree，也不给你另一棵树**。它保证的只有一件事：同一时刻不会有别的席位改同一批文件。**你必须直接在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也是在仓根跑的。⛔ 不要 `git worktree add`，不要进 .worktrees/ 下面写东西——写在那里判据一条都看不见。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt.package",
-    "write_paths": [
-     "app/app/build/",
-     ".team/nodes/l2-package/"
-    ],
-    "read_paths": [
-     ".team/nodes/l2-app/实现说明.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+    {
+      "from": "t.design",
+      "to": "t.app",
+      "condition": "requires_success"
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "c006fbbbd"
+    {
+      "from": "t.server",
+      "to": "t.e2e",
+      "condition": "requires_success"
+    },
+    {
+      "from": "t.app",
+      "to": "t.e2e",
+      "condition": "requires_success"
+    },
+    {
+      "from": "t.e2e",
+      "to": "t.package",
+      "condition": "requires_success"
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-package/打包说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-pk-build",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:assembleDebug', '--console=plain'],timeout=2400).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2600
-     },
-     {
-      "acceptance_id": "A-pk-fresh",
-      "argv": [
-       "python3",
-       "-c",
-       "import os,glob,sys;apk='/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/build/outputs/apk/debug/app-debug.apk';sys.exit(1) if not os.path.exists(apk) else None;t=os.path.getmtime(apk);n=[f for f in glob.glob('/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/src/**/*.kt',recursive=True) if os.path.getmtime(f)>t];print(n);sys.exit(1 if n else 0)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-pk-e2e",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2-design/probe.sh'],timeout=900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-pk-build",
-     "A-pk-fresh",
-     "A-pk-e2e"
-    ]
-   },
-   "state": "planned"
-  }
- },
- "dependencies": [
-  {
-   "from": "t.rollback",
-   "to": "t.design",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.design",
-   "to": "t.server",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.design",
-   "to": "t.app",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.server",
-   "to": "t.e2e",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.app",
-   "to": "t.e2e",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.e2e",
-   "to": "t.package",
-   "condition": "requires_success"
-  }
- ],
- "parallelism": [
-  {
-   "group": "g.impl",
-   "max_concurrency": 2
-  }
- ],
- "handoff": {
-  "send_command": "team-agent send",
-  "result_route": "leader",
-  "required_envelope_fields": [
-   "task_id",
-   "status"
   ],
-  "missing_result": "完成与否以机械判据为准；席位不回报只影响唤醒时机，不影响判定",
-  "delivery_uncertain": "投递不确定时重发并要求去重"
- },
- "acceptance": {
-  "mechanical_exit_code_is_authoritative": true,
-  "judgment_requires_distinct_provider": false
- },
- "fallback": {
-  "F.escalate": {
-   "agent": {
-    "role": "r.leader"
-   },
-   "triggers": [
-    "blocked_on_unknown",
-    "provider_unavailable",
-    "result_deadline_elapsed"
-   ],
-   "max_attempts": 1,
-   "action": "escalate_to_leader",
-   "silent_substitution": false
-  }
- },
- "evidence_policy": {
-  "required_fields": [
-   "reported_by",
-   "revision",
-   "supports_or_refutes",
-   "observed_at",
-   "freshness"
+  "parallelism": [
+    {
+      "group": "g.impl",
+      "max_concurrency": 2
+    }
   ],
-  "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code），禁止写成一句话"
- },
- "resource_isolation": {
-  "default_write_scope": ".team/nodes",
-  "rules": [],
-  "read_only_shared": [
-   "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md",
-   ".team/nodes/l2-design/实现方案.md",
-   ".team/nodes/l2-design/probe.sh",
-   ".team/nodes/l2-design/上一版空白根因.md"
-  ]
- },
- "fanout_aggregation": {},
- "audit": {},
- "revision": 6
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "完成与否以机械判据为准；席位不回报只影响唤醒时机，不影响判定",
+    "delivery_uncertain": "投递不确定时重发并要求去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {
+    "F.escalate": {
+      "agent": {
+        "role": "r.leader"
+      },
+      "triggers": [
+        "blocked_on_unknown",
+        "provider_unavailable",
+        "result_deadline_elapsed"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_leader",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令（argv+cwd+expected_exit_code），禁止写成一句话"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md",
+      ".team/nodes/l2-design/实现方案.md",
+      ".team/nodes/l2-design/probe.sh",
+      ".team/nodes/l2-design/上一版空白根因.md"
+    ]
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 9
 }
