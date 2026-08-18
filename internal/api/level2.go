@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
-// level2.go implements the second-level menu stream (requirement 061).
+// level2.go implements the second-level menu stream (requirement 061/062).
 // Identity comes from tmux structural fields (session_name / window_name /
-// socket / pane_id / cwd). Status is classified from the first Unicode scalar
-// of pane_title against a closed glyph table. An unrecognized glyph is
-// "unknown" — never idle — and the log records the codepoint plus the full
-// original title.
+// socket / pane_id / cwd). Status is classified by registered detectors plus
+// the shared three-state fallback in detect.go: no leading glyph is idle;
+// an unclaimed leading glyph is unknown and the log records the codepoint
+// plus the full original title.
 //
 // The loop scans only while ≥1 subscriber exists (zero subscribers ⇒ zero
 // tmux calls). It pushes a Level2Frame only when that connection's snapshot
@@ -30,11 +29,6 @@ const (
 	// defaultLevel2Heartbeat is the 061 keep-alive: without it the client
 	// cannot tell "no change" from "connection dead".
 	defaultLevel2Heartbeat = 8 * time.Second
-
-	// pane_title prefix glyphs (requirement 061 symbol table). New CLI glyphs
-	// are added here — callers must not guess idle.
-	glyphWorking = '\u25D0' // ◐
-	glyphIdle    = '\u2733' // ✳
 )
 
 // level2Entry is one row the server pushes to a level-2 subscriber.
@@ -46,39 +40,6 @@ type level2Entry struct {
 	status string
 	rows   uint16
 	cols   uint16
-}
-
-// classifyPaneTitle maps the first Unicode scalar of pane_title to a status.
-// Empty title or a glyph not in the table is unknown (never idle).
-// known is false when the glyph is not in the table (including empty title).
-func classifyPaneTitle(title string) (status string, first rune, known bool) {
-	if title == "" {
-		return protocol.SessionStatusUnknown, 0, false
-	}
-	r, _ := utf8.DecodeRuneInString(title)
-	switch r {
-	case glyphWorking:
-		return protocol.SessionStatusWorking, r, true
-	case glyphIdle:
-		return protocol.SessionStatusIdle, r, true
-	default:
-		return protocol.SessionStatusUnknown, r, false
-	}
-}
-
-func formatCodepoint(r rune) string {
-	return fmt.Sprintf("U+%04X", uint32(r))
-}
-
-func (s *Server) logUnknownGlyph(title string, first rune) {
-	// Operands then verdict (diagnostic log discipline): the raw codepoint
-	// and the full original title must be in the line, or the table cannot
-	// be updated.
-	s.log.Warn("level2: pane_title glyph unknown",
-		"codepoint", formatCodepoint(first),
-		"title", title,
-		"status", protocol.SessionStatusUnknown,
-	)
 }
 
 // level2Loop is the idle-gated scan for the second-level stream. While ≥1
