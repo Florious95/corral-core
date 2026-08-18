@@ -1,642 +1,689 @@
 {
- "schema_version": "ledger.v2",
- "ledger_id": "ledger.whitelist.v1",
- "run": {
-  "desired_state": "running"
- },
- "roles": {
-  "r.advisor": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/wl-probe/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "advisor",
-    "team": "grok-l2"
-   }
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.whitelist.v1",
+  "run": {
+    "desired_state": "running"
   },
-  "r.server": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/wl-srv/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "dev-server",
-    "team": "grok-l2"
-   }
-  },
-  "r.app": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/wl-np/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "dev-app",
-    "team": "grok-l2"
-   }
-  },
-  "r.control": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/wl-ver/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "control",
-    "team": "grok-l2"
-   }
-  },
-  "r.leader": {
-   "provider": "human",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/wl-esc/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   }
-  }
- },
- "tasks": {
-  "t.probe": {
-   "title": "写白名单根因探针。契约 requirement-base/entries/068（先通读，里面那张实测表是全部依据）。\n背景：现在二级菜单把 tmux 里**所有** pane 都当节点，裸 shell 也进列表。要改成只认五家：Claude Code / Codex / Copilot / Grok / Cursor。\n🔴 判别依据已经实测定死，**不许改回标题匹配**：Codex 与 Cursor **根本不设 pane 标题**（标题就是主机名），与空 shell 完全同形；`#{pane_current_command}` 对五家里四家返回 bash/node。**唯一可用依据 = 遍历 pane_pid 及其全部后代进程、取 comm 的 basename**（grok 在第 2 层，codex 在第 1 层，深度不限）。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh，在**自己的隔离 tmux socket**上造真夹具：在临时目录里造五个可执行 shell 脚本，**文件名分别是 claude / codex / copilot / grok / cursor-agent**，内容只 `exec sleep 600`；各起一个 pane 跑它们，**另起一个 pane 跑裸 bash 作阴性对照**。（这样造出来的 comm 与真 CLI 同形——实测 cursor-agent 本身就是个 bash 脚本，comm 即脚本全路径。）\n四条断言全部要有：①五家全部被识别为节点，provider 各自正确；②**裸 bash 那个 pane 不在结果里**（阴性控制，只有正控不算数）；③给一条**全路径** comm（如 /opt/homebrew/…/bin/codex）必须命中——**此条须先在「整串相等」的写法上验红**，macOS 的 ps comm 给全路径；④实现文件里 grep 不到 argv 读法（-f / args= / command=）。\n🔴 **现在跑必须红**（当前实现没有白名单，裸 bash 一定会进列表，是最好的红样本）。把红在哪几条、现场输出是什么写进 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/说明.md。\n⛔ 不要顺手去改产品代码，这一格只产探针。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验必须自起隔离 server：`mkdir -p /tmp/wl-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**（建 socket 失败时 tmux 不报错，会静默回退到用户真实 tmux）。\n⛔⛔ 遍历进程只取 comm，**禁止取 argv**：ps 一律窄字段 `-o pid=,ppid=,comm=`，不得用 -f / args= / command=（实发：pgrep -fl 把席位 API key 打上屏）。",
-   "owner": {
-    "role": "r.advisor"
-   },
-   "resources": {
-    "worktree_id": "wt6.probe",
-    "write_paths": [
-     ".team/nodes/wl-probe/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/068-节点白名单按进程comm过滤.md",
-     "server/internal/",
-     "tools/nodeprobe/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+  "roles": {
+    "r.advisor": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/wl-probe/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "advisor",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "5c890cbec"
+    "r.server": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/wl-srv/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "dev-server",
+        "team": "grok-l2"
+      }
+    },
+    "r.app": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/wl-np/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "dev-app",
+        "team": "grok-l2"
+      }
+    },
+    "r.control": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/wl-ver/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "control",
+        "team": "grok-l2"
+      }
+    },
+    "r.leader": {
+      "provider": "human",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/wl-esc/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-p-exec",
-      "argv": [
-       "test",
-       "-x",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-p-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-p-red",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;r=subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh'],timeout=600).returncode;sys.exit(0 if r!=0 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-p-negctl",
-      "argv": [
-       "sh",
-       "-c",
-       "grep -q 'bash' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh && grep -qE 'cursor-agent' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-p-exec",
-     "A-p-doc",
-     "A-p-red",
-     "A-p-negctl"
-    ]
-   },
-   "state": "succeeded",
-   "attempts": [
+  },
+  "tasks": {
+    "t.probe": {
+      "title": "写白名单根因探针。契约 requirement-base/entries/068（先通读，里面那张实测表是全部依据）。\n背景：现在二级菜单把 tmux 里**所有** pane 都当节点，裸 shell 也进列表。要改成只认五家：Claude Code / Codex / Copilot / Grok / Cursor。\n🔴 判别依据已经实测定死，**不许改回标题匹配**：Codex 与 Cursor **根本不设 pane 标题**（标题就是主机名），与空 shell 完全同形；`#{pane_current_command}` 对五家里四家返回 bash/node。**唯一可用依据 = 遍历 pane_pid 及其全部后代进程、取 comm 的 basename**（grok 在第 2 层，codex 在第 1 层，深度不限）。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh，在**自己的隔离 tmux socket**上造真夹具：在临时目录里造五个可执行 shell 脚本，**文件名分别是 claude / codex / copilot / grok / cursor-agent**，内容只 `exec sleep 600`；各起一个 pane 跑它们，**另起一个 pane 跑裸 bash 作阴性对照**。（这样造出来的 comm 与真 CLI 同形——实测 cursor-agent 本身就是个 bash 脚本，comm 即脚本全路径。）\n四条断言全部要有：①五家全部被识别为节点，provider 各自正确；②**裸 bash 那个 pane 不在结果里**（阴性控制，只有正控不算数）；③给一条**全路径** comm（如 /opt/homebrew/…/bin/codex）必须命中——**此条须先在「整串相等」的写法上验红**，macOS 的 ps comm 给全路径；④实现文件里 grep 不到 argv 读法（-f / args= / command=）。\n🔴 **现在跑必须红**（当前实现没有白名单，裸 bash 一定会进列表，是最好的红样本）。把红在哪几条、现场输出是什么写进 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/说明.md。\n⛔ 不要顺手去改产品代码，这一格只产探针。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验必须自起隔离 server：`mkdir -p /tmp/wl-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**（建 socket 失败时 tmux 不报错，会静默回退到用户真实 tmux）。\n⛔⛔ 遍历进程只取 comm，**禁止取 argv**：ps 一律窄字段 `-o pid=,ppid=,comm=`，不得用 -f / args= / command=（实发：pgrep -fl 把席位 API key 打上屏）。",
+      "owner": {
+        "role": "r.advisor"
+      },
+      "resources": {
+        "worktree_id": "wt6.probe",
+        "write_paths": [
+          ".team/nodes/wl-probe/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/068-节点白名单按进程comm过滤.md",
+          "server/internal/",
+          "tools/nodeprobe/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "5c890cbec"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-p-exec",
+            "argv": [
+              "test",
+              "-x",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-p-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-p-red",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;r=subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh'],timeout=600).returncode;sys.exit(0 if r!=0 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-p-negctl",
+            "argv": [
+              "sh",
+              "-c",
+              "grep -q 'bash' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh && grep -qE 'cursor-agent' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-p-exec",
+          "A-p-doc",
+          "A-p-red",
+          "A-p-negctl"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.probe-seq1-t1787091980752",
+          "delivery_id": "del-t.probe-seq1-t1787091980752",
+          "state": "succeeded",
+          "writeback_revision": 2,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-p-exec",
+            "acceptance_success.acceptance_id=A-p-doc",
+            "acceptance_success.acceptance_id=A-p-red",
+            "acceptance_success.acceptance_id=A-p-negctl",
+            "acceptance_success.writeback_revision=2"
+          ]
+        }
+      ]
+    },
+    "t.srv": {
+      "title": "服务端实现白名单过滤。契约 requirement-base/entries/068。探针在 .team/nodes/wl-probe/probe-wl.sh（只读，不许改它让判据变绿）。\n做三件事：\n① 新增 **provider 身份识别**：遍历 pane_pid 及其全部后代进程取 comm 的 basename，与白名单求交。白名单落成**一份数据文件** tools/nodeprobe/fixtures/providers.tsv（每行：comm-basename \\t provider-id \\t 显示名），**Go 与 Rust 共读这一份**（063 的规矩：两份语料会静默漂移）。\n② 非白名单 pane **不进二级菜单列表**（不是显示「未知」，是根本不出现）。\n③ **provider 身份先于状态判定**：先由 comm 定是哪一家，再派给那一家自己的检测器判工作/空闲。⛔ 不得再让各家检测器在同一串标题上竞争认领——那正是「认错家」的来源。「未知」语义收窄为：**已知是哪一家、但该家检测器认不出这串标题**，日志必须含 provider + 码位 + 全标题。\n🔴 共享层零 CLI 字面量（沿用 062 §5）：detect.go 里 grep 五家名字必须零命中，五家各自一个文件。\n🔴 静默经济：轮询开销要有界。全机 ps 每 2 秒一次不可接受，自己想办法（缓存 + pane 集合变化时重扫），并在说明里写清实测开销。\n配套写 Go 测试，测试名必须包含 TestProviderWhitelist。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-srv/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验必须自起隔离 server：`mkdir -p /tmp/wl-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**（建 socket 失败时 tmux 不报错，会静默回退到用户真实 tmux）。\n⛔⛔ 遍历进程只取 comm，**禁止取 argv**：ps 一律窄字段 `-o pid=,ppid=,comm=`，不得用 -f / args= / command=（实发：pgrep -fl 把席位 API key 打上屏）。\n\n🔴 **追加（用户 2026-08-19，契约 068 §7）：一级菜单同样过滤。**一级菜单（socket/工作区列表）只列**含至少一个白名单节点**的 socket；白名单命中数为 0 的 socket 不进一级菜单。⛔ 不得为一级菜单另写一套判别——一二级必须调用**同一个** provider 识别函数，否则会出现「一级有、点进去二级空」这种自相矛盾的世界。配套 Go 测试名须含 TestProviderWhitelistLevel1。",
+      "owner": {
+        "role": "r.server"
+      },
+      "resources": {
+        "worktree_id": "wt6.srv",
+        "write_paths": [
+          "server/",
+          "tools/nodeprobe/fixtures/",
+          ".team/nodes/wl-srv/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/068-节点白名单按进程comm过滤.md",
+          ".team/nodes/wl-probe/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "5c890cbec"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/providers.tsv",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-srv/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-s-corpus",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/providers.tsv"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-s-five",
+            "argv": [
+              "python3",
+              "-c",
+              "import sys;ls=[l.split('\\t')[0].strip() for l in open(r'/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/providers.tsv',encoding='utf-8') if l.strip() and not l.startswith('#')];sys.exit(0 if {'claude','codex','copilot','grok','cursor-agent'}<=set(ls) else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-s-single",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;o=subprocess.run(['find','.','-name','providers.tsv','-not','-path','./.git/*'],cwd=r'/Volumes/nvme/Projects/远程Agent安卓',capture_output=True,text=True).stdout.split();sys.exit(0 if len(o)==1 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-s-decoupled",
+            "argv": [
+              "sh",
+              "-c",
+              "! grep -riE 'claude|codex|copilot|grok|cursor' /Volumes/nvme/Projects/远程Agent安卓/server/internal/api/detect.go"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-s-noargv",
+            "argv": [
+              "python3",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/artifacts/check-noargv.py"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-s-test",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -run TestProviderWhitelist -count=1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-s-suite",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-s-l1",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -run TestProviderWhitelistLevel1 -count=1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-s-corpus",
+          "A-s-five",
+          "A-s-single",
+          "A-s-decoupled",
+          "A-s-noargv",
+          "A-s-test",
+          "A-s-suite",
+          "A-s-l1"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.srv-seq2-t1787092593769",
+          "delivery_id": "del-t.srv-seq2-t1787092593769",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=A-s-single",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;o=subprocess.run(['git','ls-files','*providers.tsv'],cwd=r'/Volumes/nvme/Projects/远程Agent安卓',capture_output=True,text=True).stdout.split();sys.exit(0 if len(o)==1 else 1)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=",
+            "acceptance_failure.acceptance_id=A-s-noargv",
+            "acceptance_failure.argv=[\"sh\", \"-c\", \"! grep -rnE 'args=|command=|pgrep -f|ps -f' /Volumes/nvme/Projects/远程Agent安卓/server/internal/\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ]
+        },
+        {
+          "attempt_id": "att-t.srv-seq1-t1787093744539",
+          "delivery_id": "del-t.srv-seq1-t1787093744539",
+          "state": "succeeded",
+          "writeback_revision": 4,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-s-corpus",
+            "acceptance_success.acceptance_id=A-s-five",
+            "acceptance_success.acceptance_id=A-s-single",
+            "acceptance_success.acceptance_id=A-s-decoupled",
+            "acceptance_success.acceptance_id=A-s-noargv",
+            "acceptance_success.acceptance_id=A-s-test",
+            "acceptance_success.acceptance_id=A-s-suite",
+            "acceptance_success.acceptance_id=A-s-l1",
+            "acceptance_success.writeback_revision=4"
+          ]
+        }
+      ]
+    },
+    "t.np": {
+      "title": "nodeprobe（Rust）跟上白名单。契约 requirement-base/entries/068 + 063。\n读 t.srv 产出的 **tools/nodeprobe/fixtures/providers.tsv**（⛔ 不许再抄一份，全仓必须只有这一份），在 Rust 侧实现同一套：遍历 pane_pid 后代取 comm basename → 白名单求交 → 非白名单不输出为节点。结构化输出里每个节点要带 provider 字段。\n加一个 parity 测试：Go 与 Rust 对同一份语料给出同样的 provider 判定。\n🔴 basename 匹配，不得整串相等——macOS 的 ps comm 给全路径，整串相等在 macOS 上永远不命中。\n产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-np/说明.md，含 `ls -la $(which nodeprobe)` 的量具身份。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验必须自起隔离 server：`mkdir -p /tmp/wl-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**（建 socket 失败时 tmux 不报错，会静默回退到用户真实 tmux）。\n⛔⛔ 遍历进程只取 comm，**禁止取 argv**：ps 一律窄字段 `-o pid=,ppid=,comm=`，不得用 -f / args= / command=（实发：pgrep -fl 把席位 API key 打上屏）。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt6.np",
+        "write_paths": [
+          "tools/nodeprobe/",
+          ".team/nodes/wl-np/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/068-节点白名单按进程comm过滤.md",
+          "tools/nodeprobe/fixtures/",
+          "server/internal/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "5c890cbec"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-np/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-n-build",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe && cargo build --release"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-n-test",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe && cargo test -q"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-n-single",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;o=subprocess.run(['find','.','-name','providers.tsv','-not','-path','./.git/*'],cwd=r'/Volumes/nvme/Projects/远程Agent安卓',capture_output=True,text=True).stdout.split();sys.exit(0 if len(o)==1 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-n-provider",
+            "argv": [
+              "sh",
+              "-c",
+              "grep -rq 'provider' /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/src/"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-n-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-np/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-n-build",
+          "A-n-test",
+          "A-n-single",
+          "A-n-provider",
+          "A-n-doc"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.np-seq2-t1787094043298",
+          "delivery_id": "del-t.np-seq2-t1787094043298",
+          "state": "succeeded",
+          "writeback_revision": 5,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-n-build",
+            "acceptance_success.acceptance_id=A-n-test",
+            "acceptance_success.acceptance_id=A-n-single",
+            "acceptance_success.acceptance_id=A-n-provider",
+            "acceptance_success.acceptance_id=A-n-doc",
+            "acceptance_success.writeback_revision=5"
+          ]
+        }
+      ]
+    },
+    "t.ver": {
+      "title": "验收：探针必须由红转绿，且不倒退。契约 requirement-base/entries/068。\n① 跑 .team/nodes/wl-probe/probe-wl.sh，**必须 exit 0**（它在 t.probe 那一格是红的，现在必须绿——这才叫修到点上）。\n② go 全套 + cargo 全套都要绿。\n③ **静默经济实测**：让服务端带二级菜单订阅空跑 60 秒，量它的 CPU 占用，写进说明。超标就判红并说明超在哪。\n④ 阴性复核：在隔离 socket 上只起裸 shell，确认结果里**零节点**（不是「未知节点」，是零）。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md，四条各自的实测输出都要贴。\n⛔ 探针只读，不许为了变绿改探针。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验必须自起隔离 server：`mkdir -p /tmp/wl-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**（建 socket 失败时 tmux 不报错，会静默回退到用户真实 tmux）。\n⛔⛔ 遍历进程只取 comm，**禁止取 argv**：ps 一律窄字段 `-o pid=,ppid=,comm=`，不得用 -f / args= / command=（实发：pgrep -fl 把席位 API key 打上屏）。\n\n🔴 **追加：一级菜单过滤的阴阳性实测（契约 068 §7）。**在隔离 socket 上造两个 socket：A 只含裸 shell，B 含任一白名单 CLI。断言 **A 不出现在一级菜单、B 出现**。只有正控不算数。实测输出贴进说明。",
+      "owner": {
+        "role": "r.control"
+      },
+      "resources": {
+        "worktree_id": "wt6.ver",
+        "write_paths": [
+          ".team/nodes/wl-ver/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/068-节点白名单按进程comm过滤.md",
+          ".team/nodes/wl-probe/",
+          "server/",
+          "tools/nodeprobe/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "5c890cbec"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-v-probe",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh'],timeout=900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-v-go",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-v-rust",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe && cargo test -q"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-v-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-v-cost",
+            "argv": [
+              "sh",
+              "-c",
+              "grep -qE 'CPU|cpu' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-v-l1doc",
+            "argv": [
+              "sh",
+              "-c",
+              "grep -qE '一级|level1|Level1' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-v-probe",
+          "A-v-go",
+          "A-v-rust",
+          "A-v-doc",
+          "A-v-cost",
+          "A-v-l1doc"
+        ]
+      },
+      "state": "planned",
+      "attempts": [
+        {
+          "attempt_id": "att-t.ver-seq3-t1787094519289",
+          "delivery_id": "del-t.ver-seq3-t1787094519289",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=A-v-go",
+            "acceptance_failure.argv=[\"sh\", \"-c\", \"cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": [
     {
-     "attempt_id": "att-t.probe-seq1-t1787091980752",
-     "delivery_id": "del-t.probe-seq1-t1787091980752",
-     "state": "succeeded",
-     "writeback_revision": 2,
-     "artifact_refs": [
-      "acceptance_success.acceptance_id=A-p-exec",
-      "acceptance_success.acceptance_id=A-p-doc",
-      "acceptance_success.acceptance_id=A-p-red",
-      "acceptance_success.acceptance_id=A-p-negctl",
-      "acceptance_success.writeback_revision=2"
-     ]
-    }
-   ]
-  },
-  "t.srv": {
-   "title": "服务端实现白名单过滤。契约 requirement-base/entries/068。探针在 .team/nodes/wl-probe/probe-wl.sh（只读，不许改它让判据变绿）。\n做三件事：\n① 新增 **provider 身份识别**：遍历 pane_pid 及其全部后代进程取 comm 的 basename，与白名单求交。白名单落成**一份数据文件** tools/nodeprobe/fixtures/providers.tsv（每行：comm-basename \\t provider-id \\t 显示名），**Go 与 Rust 共读这一份**（063 的规矩：两份语料会静默漂移）。\n② 非白名单 pane **不进二级菜单列表**（不是显示「未知」，是根本不出现）。\n③ **provider 身份先于状态判定**：先由 comm 定是哪一家，再派给那一家自己的检测器判工作/空闲。⛔ 不得再让各家检测器在同一串标题上竞争认领——那正是「认错家」的来源。「未知」语义收窄为：**已知是哪一家、但该家检测器认不出这串标题**，日志必须含 provider + 码位 + 全标题。\n🔴 共享层零 CLI 字面量（沿用 062 §5）：detect.go 里 grep 五家名字必须零命中，五家各自一个文件。\n🔴 静默经济：轮询开销要有界。全机 ps 每 2 秒一次不可接受，自己想办法（缓存 + pane 集合变化时重扫），并在说明里写清实测开销。\n配套写 Go 测试，测试名必须包含 TestProviderWhitelist。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-srv/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验必须自起隔离 server：`mkdir -p /tmp/wl-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**（建 socket 失败时 tmux 不报错，会静默回退到用户真实 tmux）。\n⛔⛔ 遍历进程只取 comm，**禁止取 argv**：ps 一律窄字段 `-o pid=,ppid=,comm=`，不得用 -f / args= / command=（实发：pgrep -fl 把席位 API key 打上屏）。\n\n🔴 **追加（用户 2026-08-19，契约 068 §7）：一级菜单同样过滤。**一级菜单（socket/工作区列表）只列**含至少一个白名单节点**的 socket；白名单命中数为 0 的 socket 不进一级菜单。⛔ 不得为一级菜单另写一套判别——一二级必须调用**同一个** provider 识别函数，否则会出现「一级有、点进去二级空」这种自相矛盾的世界。配套 Go 测试名须含 TestProviderWhitelistLevel1。",
-   "owner": {
-    "role": "r.server"
-   },
-   "resources": {
-    "worktree_id": "wt6.srv",
-    "write_paths": [
-     "server/",
-     "tools/nodeprobe/fixtures/",
-     ".team/nodes/wl-srv/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/068-节点白名单按进程comm过滤.md",
-     ".team/nodes/wl-probe/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+      "from": "t.probe",
+      "to": "t.srv",
+      "condition": "requires_success"
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "5c890cbec"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/providers.tsv",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-srv/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-s-corpus",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/providers.tsv"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-s-five",
-      "argv": [
-       "python3",
-       "-c",
-       "import sys;ls=[l.split('\\t')[0].strip() for l in open(r'/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/providers.tsv',encoding='utf-8') if l.strip() and not l.startswith('#')];sys.exit(0 if {'claude','codex','copilot','grok','cursor-agent'}<=set(ls) else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-s-single",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;o=subprocess.run(['find','.','-name','providers.tsv','-not','-path','./.git/*'],cwd=r'/Volumes/nvme/Projects/远程Agent安卓',capture_output=True,text=True).stdout.split();sys.exit(0 if len(o)==1 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-s-decoupled",
-      "argv": [
-       "sh",
-       "-c",
-       "! grep -riE 'claude|codex|copilot|grok|cursor' /Volumes/nvme/Projects/远程Agent安卓/server/internal/api/detect.go"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-s-noargv",
-      "argv": [
-       "python3",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/artifacts/check-noargv.py"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-s-test",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -run TestProviderWhitelist -count=1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-s-suite",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-s-l1",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -run TestProviderWhitelistLevel1 -count=1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-s-corpus",
-     "A-s-five",
-     "A-s-single",
-     "A-s-decoupled",
-     "A-s-noargv",
-     "A-s-test",
-     "A-s-suite",
-     "A-s-l1"
-    ]
-   },
-   "state": "planned",
-   "attempts": [
     {
-     "attempt_id": "att-t.srv-seq2-t1787092593769",
-     "delivery_id": "del-t.srv-seq2-t1787092593769",
-     "state": "acceptance_pending",
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=A-s-single",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;o=subprocess.run(['git','ls-files','*providers.tsv'],cwd=r'/Volumes/nvme/Projects/远程Agent安卓',capture_output=True,text=True).stdout.split();sys.exit(0 if len(o)==1 else 1)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=",
-      "acceptance_failure.acceptance_id=A-s-noargv",
-      "acceptance_failure.argv=[\"sh\", \"-c\", \"! grep -rnE 'args=|command=|pgrep -f|ps -f' /Volumes/nvme/Projects/远程Agent安卓/server/internal/\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)="
-     ]
-    }
-   ]
-  },
-  "t.np": {
-   "title": "nodeprobe（Rust）跟上白名单。契约 requirement-base/entries/068 + 063。\n读 t.srv 产出的 **tools/nodeprobe/fixtures/providers.tsv**（⛔ 不许再抄一份，全仓必须只有这一份），在 Rust 侧实现同一套：遍历 pane_pid 后代取 comm basename → 白名单求交 → 非白名单不输出为节点。结构化输出里每个节点要带 provider 字段。\n加一个 parity 测试：Go 与 Rust 对同一份语料给出同样的 provider 判定。\n🔴 basename 匹配，不得整串相等——macOS 的 ps comm 给全路径，整串相等在 macOS 上永远不命中。\n产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-np/说明.md，含 `ls -la $(which nodeprobe)` 的量具身份。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验必须自起隔离 server：`mkdir -p /tmp/wl-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**（建 socket 失败时 tmux 不报错，会静默回退到用户真实 tmux）。\n⛔⛔ 遍历进程只取 comm，**禁止取 argv**：ps 一律窄字段 `-o pid=,ppid=,comm=`，不得用 -f / args= / command=（实发：pgrep -fl 把席位 API key 打上屏）。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt6.np",
-    "write_paths": [
-     "tools/nodeprobe/",
-     ".team/nodes/wl-np/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/068-节点白名单按进程comm过滤.md",
-     "tools/nodeprobe/fixtures/",
-     "server/internal/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+      "from": "t.srv",
+      "to": "t.np",
+      "condition": "requires_success"
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "5c890cbec"
+    {
+      "from": "t.np",
+      "to": "t.ver",
+      "condition": "requires_success"
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-np/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-n-build",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe && cargo build --release"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-n-test",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe && cargo test -q"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-n-single",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;o=subprocess.run(['find','.','-name','providers.tsv','-not','-path','./.git/*'],cwd=r'/Volumes/nvme/Projects/远程Agent安卓',capture_output=True,text=True).stdout.split();sys.exit(0 if len(o)==1 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-n-provider",
-      "argv": [
-       "sh",
-       "-c",
-       "grep -rq 'provider' /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/src/"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-n-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-np/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-n-build",
-     "A-n-test",
-     "A-n-single",
-     "A-n-provider",
-     "A-n-doc"
-    ]
-   },
-   "state": "planned",
-   "attempts": []
-  },
-  "t.ver": {
-   "title": "验收：探针必须由红转绿，且不倒退。契约 requirement-base/entries/068。\n① 跑 .team/nodes/wl-probe/probe-wl.sh，**必须 exit 0**（它在 t.probe 那一格是红的，现在必须绿——这才叫修到点上）。\n② go 全套 + cargo 全套都要绿。\n③ **静默经济实测**：让服务端带二级菜单订阅空跑 60 秒，量它的 CPU 占用，写进说明。超标就判红并说明超在哪。\n④ 阴性复核：在隔离 socket 上只起裸 shell，确认结果里**零节点**（不是「未知节点」，是零）。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md，四条各自的实测输出都要贴。\n⛔ 探针只读，不许为了变绿改探针。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验必须自起隔离 server：`mkdir -p /tmp/wl-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**（建 socket 失败时 tmux 不报错，会静默回退到用户真实 tmux）。\n⛔⛔ 遍历进程只取 comm，**禁止取 argv**：ps 一律窄字段 `-o pid=,ppid=,comm=`，不得用 -f / args= / command=（实发：pgrep -fl 把席位 API key 打上屏）。\n\n🔴 **追加：一级菜单过滤的阴阳性实测（契约 068 §7）。**在隔离 socket 上造两个 socket：A 只含裸 shell，B 含任一白名单 CLI。断言 **A 不出现在一级菜单、B 出现**。只有正控不算数。实测输出贴进说明。",
-   "owner": {
-    "role": "r.control"
-   },
-   "resources": {
-    "worktree_id": "wt6.ver",
-    "write_paths": [
-     ".team/nodes/wl-ver/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/068-节点白名单按进程comm过滤.md",
-     ".team/nodes/wl-probe/",
-     "server/",
-     "tools/nodeprobe/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
-    },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "5c890cbec"
+  ],
+  "parallelism": [
+    {
+      "group": "g6",
+      "max_concurrency": 1
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-v-probe",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-probe/probe-wl.sh'],timeout=900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-v-go",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-v-rust",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe && cargo test -q"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-v-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-v-cost",
-      "argv": [
-       "sh",
-       "-c",
-       "grep -qE 'CPU|cpu' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-v-l1doc",
-      "argv": [
-       "sh",
-       "-c",
-       "grep -qE '一级|level1|Level1' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/wl-ver/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
+  ],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
     ],
-    "judgment": [],
-    "required": [
-     "A-v-probe",
-     "A-v-go",
-     "A-v-rust",
-     "A-v-doc",
-     "A-v-cost",
-     "A-v-l1doc"
+    "missing_result": "完成以机械判据为准",
+    "delivery_uncertain": "重发并去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {
+    "F.esc": {
+      "agent": {
+        "role": "r.leader"
+      },
+      "triggers": [
+        "blocked_on_unknown",
+        "provider_unavailable",
+        "result_deadline_elapsed"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_leader",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "requirement-base/entries/068-节点白名单按进程comm过滤.md",
+      "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
+      "requirement-base/entries/063-节点判活工具nodeprobe.md",
+      ".team/nodes/wl-probe/probe-wl.sh"
     ]
-   },
-   "state": "planned",
-   "attempts": []
-  }
- },
- "dependencies": [
-  {
-   "from": "t.probe",
-   "to": "t.srv",
-   "condition": "requires_success"
   },
-  {
-   "from": "t.srv",
-   "to": "t.np",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.np",
-   "to": "t.ver",
-   "condition": "requires_success"
-  }
- ],
- "parallelism": [
-  {
-   "group": "g6",
-   "max_concurrency": 1
-  }
- ],
- "handoff": {
-  "send_command": "team-agent send",
-  "result_route": "leader",
-  "required_envelope_fields": [
-   "task_id",
-   "status"
-  ],
-  "missing_result": "完成以机械判据为准",
-  "delivery_uncertain": "重发并去重"
- },
- "acceptance": {
-  "mechanical_exit_code_is_authoritative": true,
-  "judgment_requires_distinct_provider": false
- },
- "fallback": {
-  "F.esc": {
-   "agent": {
-    "role": "r.leader"
-   },
-   "triggers": [
-    "blocked_on_unknown",
-    "provider_unavailable",
-    "result_deadline_elapsed"
-   ],
-   "max_attempts": 1,
-   "action": "escalate_to_leader",
-   "silent_substitution": false
-  }
- },
- "evidence_policy": {
-  "required_fields": [
-   "reported_by",
-   "revision",
-   "supports_or_refutes",
-   "observed_at",
-   "freshness"
-  ],
-  "missing_evidence": "判据必须是可重跑命令"
- },
- "resource_isolation": {
-  "default_write_scope": ".team/nodes",
-  "rules": [],
-  "read_only_shared": [
-   "requirement-base/entries/068-节点白名单按进程comm过滤.md",
-   "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
-   "requirement-base/entries/063-节点判活工具nodeprobe.md",
-   ".team/nodes/wl-probe/probe-wl.sh"
-  ]
- },
- "fanout_aggregation": {},
- "audit": {},
- "revision": 3
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 5
 }

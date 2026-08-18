@@ -15,6 +15,9 @@ pub const STATE_UNKNOWN: &str = "unknown";
 pub const PROVIDER_UNKNOWN: &str = "unknown";
 pub const PROVIDER_GROK: &str = "grok";
 pub const PROVIDER_CLAUDE: &str = "claude_code";
+pub const PROVIDER_CODEX: &str = "codex";
+pub const PROVIDER_COPILOT: &str = "copilot";
+pub const PROVIDER_CURSOR: &str = "cursor";
 
 const GROK_THINK: &str = " - Thinking - ";
 const GROK_WAIT: &str = " - Waiting for response";
@@ -85,26 +88,33 @@ fn fallback(title: &str) -> Class {
     }
 }
 
-/// Classify a pane title. Detectors first (Claude Code, then Grok), then fallback.
-/// Unclaimed leading glyph stays unknown — never rewritten to idle.
+/// Title-only classify (fixture corpus). Live nodes use classify_for after
+/// comm identity so detectors never compete on one title.
 pub fn classify(title: &str) -> Class {
-    if let Some(state) = claude_match(title) {
-        return Class {
-            state,
-            provider: PROVIDER_CLAUDE,
-            first: first_non_space(title),
-            known: true,
-        };
-    }
-    if let Some(state) = grok_match(title) {
-        return Class {
-            state,
-            provider: PROVIDER_GROK,
-            first: first_non_space(title),
-            known: true,
-        };
-    }
     fallback(title)
+}
+
+/// Dispatch the detector for a known provider. Unclaimed → unknown.
+pub fn classify_for(provider: &str, title: &str) -> Class {
+    let hit = match provider {
+        PROVIDER_CLAUDE => claude_match(title),
+        PROVIDER_GROK => grok_match(title),
+        _ => None,
+    };
+    if let Some(state) = hit {
+        return Class {
+            state,
+            provider: intern_expect(provider),
+            first: first_non_space(title),
+            known: true,
+        };
+    }
+    Class {
+        state: STATE_UNKNOWN,
+        provider: intern_expect(provider),
+        first: first_non_space(title),
+        known: false,
+    }
 }
 
 pub fn classify_tsv_line(line: &str) -> Option<(String, Class, &'static str, &'static str)> {
@@ -116,7 +126,11 @@ pub fn classify_tsv_line(line: &str) -> Option<(String, Class, &'static str, &'s
     let title = parts.next()?.to_string();
     let want_state = parts.next()?;
     let want_provider = parts.next()?;
-    let got = classify(&title);
+    let got = if want_provider == PROVIDER_UNKNOWN {
+        fallback(&title)
+    } else {
+        classify_for(want_provider, &title)
+    };
     Some((
         title,
         got,
@@ -132,6 +146,9 @@ fn intern_expect(s: &str) -> &'static str {
         "unknown" => STATE_UNKNOWN,
         "grok" => PROVIDER_GROK,
         "claude_code" => PROVIDER_CLAUDE,
+        "codex" => PROVIDER_CODEX,
+        "copilot" => PROVIDER_COPILOT,
+        "cursor" => PROVIDER_CURSOR,
         _ => STATE_UNKNOWN,
     }
 }
