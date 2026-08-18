@@ -135,27 +135,44 @@ class WorkspaceViewModel(
     /** 二级菜单快照（由 [onFrame] 吃 level2_frame / level2_heartbeat）。 */
     val level2: StateFlow<L2UiState> = _level2.asStateFlow()
 
+    /**
+     * 按工作区 cwd 记住上一次非空/已到达的二级快照（062 §四）。
+     * 离开不清这项；再进同一 cwd 立即画它，不先发空列表。
+     */
+    private val level2Cache = LinkedHashMap<String, L2UiState>()
+
     private var subscribedWorkspace: String? = null
     private var lastLevel2AtMs: Long = 0L
 
     /**
-     * 进入二级：订该 cwd 的推送。同 cwd 再进幂等。不调用 [requestList]。
+     * 进入二级：立刻画该 cwd 的缓存（没有才空），再订推送。同 cwd 再进幂等。
+     * 不调用 [requestList]。不先清空再画。
+     *
+     * @post [level2] 为该 cwd 缓存，或首次进入时为空；已发订阅
+     * @inv 有缓存时本方法不会把 [level2].sessions 写成空表
      */
     fun enterLevel2(cwd: String) {
         if (subscribedWorkspace == cwd) return
-        subscribedWorkspace?.let { unsubscribeLevel2(it) }
+        subscribedWorkspace?.let { prev ->
+            rememberLevel2(prev, _level2.value)
+            unsubscribeLevel2(prev)
+        }
         subscribedWorkspace = cwd
         lastLevel2AtMs = 0L
-        _level2.value = L2UiState()
+        // 有缓存就立刻画旧列表；从未进过才允许空态。禁止先写空再写缓存。
+        publishLevel2(level2Cache[cwd] ?: L2UiState())
         subscribeLevel2(cwd)
     }
 
-    /** 离开二级：退订并清空快照。幂等。 */
+    /**
+     * 离开二级：退订，**保留**该 cwd 缓存，不清空已发布的列表。
+     * 再进同一工作区时 [enterLevel2] 直接画缓存。
+     */
     fun leaveLevel2() {
         val ws = subscribedWorkspace ?: return
+        rememberLevel2(ws, _level2.value)
         subscribedWorkspace = null
         lastLevel2AtMs = 0L
-        _level2.value = L2UiState()
         unsubscribeLevel2(ws)
     }
 
@@ -272,11 +289,23 @@ class WorkspaceViewModel(
             return
         }
         lastLevel2AtMs = nowMs()
-        _level2.value = L2UiState(
+        val next = L2UiState(
             sessions = frame.sessions.map { it.toL2Entry() },
             seq = frame.seq,
             banner = null,
         )
+        rememberLevel2(ws, next)
+        publishLevel2(next)
+    }
+
+    /** 记下该 cwd 最近一次快照。空表不覆盖已有缓存（避免「先空白」写进记忆）。 */
+    private fun rememberLevel2(cwd: String, state: L2UiState) {
+        if (state.sessions.isEmpty()) return
+        level2Cache[cwd] = state
+    }
+
+    private fun publishLevel2(state: L2UiState) {
+        _level2.value = state
     }
 
     private fun applyLevel2Heartbeat(frame: Level2HeartbeatFrame) {
