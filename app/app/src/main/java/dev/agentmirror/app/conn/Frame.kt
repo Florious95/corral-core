@@ -52,4 +52,9 @@ internal object FrameType {
     const val SCROLL_WHEEL = "scroll_wheel"
     const val ATTACH_PREVIEW = "attach_preview"
     const val PANE_MODE_CHANGED = "pane_mode_changed"
+    /** S→C 二级全量快照。必须是 `level2_frame`（061；不得写成 `level2`）。 */
+    const val LEVEL2_FRAME = "level2_frame"
+    const val LEVEL2_HEARTBEAT = "level2_heartbeat"
+    const val LEVEL2_SUBSCRIBE = "level2_subscribe"
+    const val LEVEL2_UNSUBSCRIBE = "level2_unsubscribe"
 }

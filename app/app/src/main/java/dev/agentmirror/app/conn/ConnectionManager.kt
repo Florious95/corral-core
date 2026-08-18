@@ -102,6 +102,9 @@ class ConnectionManager(
     /** 活跃订阅簿记：ref → (rows, cols)，重连后重放。 */
     private val activeSubscriptions = LinkedHashMap<String, Pair<Int, Int>>()
 
+    /** 二级订阅簿记：workspace cwd；READY / 重连后重发 level2_subscribe。 */
+    private val activeLevel2 = LinkedHashSet<String>()
+
     /** 上次见过的 listing seq；list_delta 连续性据此判定。 */
     private var lastSeenSeq: Long? = null
 
@@ -351,6 +354,26 @@ class ConnectionManager(
     }
 
     /**
+     * 二级菜单订阅（061）：进入二级时发 [Level2SubscribeFrame]。App 只订不轮。
+     * 未就绪先簿记，READY 后重放。
+     */
+    fun subscribeLevel2(workspace: String): Boolean {
+        if (state == ConnectionState.STOPPED) return false
+        activeLevel2.add(workspace)
+        val conn = connection ?: return true
+        if (!conn.isReady) return true
+        return conn.send(Level2SubscribeFrame(workspace = workspace))
+    }
+
+    /** 二级退订：离开二级时发 [Level2UnsubscribeFrame]，并移出重放簿记。幂等。 */
+    fun unsubscribeLevel2(workspace: String): Boolean {
+        activeLevel2.remove(workspace)
+        val conn = connection ?: return true
+        if (!conn.isReady) return true
+        return conn.send(Level2UnsubscribeFrame(workspace = workspace))
+    }
+
+    /**
      * 请求全量列表。
      *
      * @contract
@@ -506,6 +529,9 @@ class ConnectionManager(
         val conn = connection ?: return
         for ((ref, dims) in activeSubscriptions) {
             conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
+        }
+        for (workspace in activeLevel2) {
+            conn.send(Level2SubscribeFrame(workspace = workspace))
         }
     }
 

@@ -164,6 +164,7 @@ fun AgentMirrorApp(
                         onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
                         onBackToList = { navState.selectedWorkspaceCwd = null },
                         onOpenSettings = { navState.showSettings = true },
+                        onOpenSession = { ref, name -> navState.activeSession = ref to name },
                     )
                 }
             }

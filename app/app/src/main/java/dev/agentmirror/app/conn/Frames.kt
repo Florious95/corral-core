@@ -60,6 +60,10 @@ sealed interface FramePayload {
                     FrameType.SCROLL_WHEEL -> json.decodeFromJsonElement(ScrollWheelFrame.serializer(), el)
                     FrameType.ATTACH_PREVIEW -> json.decodeFromJsonElement(AttachPreviewFrame.serializer(), el)
                     FrameType.PANE_MODE_CHANGED -> json.decodeFromJsonElement(PaneModeChangedFrame.serializer(), el)
+                    FrameType.LEVEL2_FRAME -> json.decodeFromJsonElement(Level2Frame.serializer(), el)
+                    FrameType.LEVEL2_HEARTBEAT -> json.decodeFromJsonElement(Level2HeartbeatFrame.serializer(), el)
+                    FrameType.LEVEL2_SUBSCRIBE -> json.decodeFromJsonElement(Level2SubscribeFrame.serializer(), el)
+                    FrameType.LEVEL2_UNSUBSCRIBE -> json.decodeFromJsonElement(Level2UnsubscribeFrame.serializer(), el)
                     else -> throw FrameDecodeException(
                         FrameError.UNSUPPORTED_TYPE,
                         "unknown frame type: $type",
@@ -115,6 +119,16 @@ sealed interface FramePayload {
                     FrameError.INVALID_FIELD,
                     "pane_mode_changed is server-to-client only, never sent upstream",
                 )
+                is Level2Frame -> throw FrameEncodeException(
+                    FrameError.INVALID_FIELD,
+                    "level2_frame is server-to-client only, never sent upstream",
+                )
+                is Level2HeartbeatFrame -> throw FrameEncodeException(
+                    FrameError.INVALID_FIELD,
+                    "level2_heartbeat is server-to-client only, never sent upstream",
+                )
+                is Level2SubscribeFrame -> json.encodeToJsonElement(Level2SubscribeFrame.serializer(), frame)
+                is Level2UnsubscribeFrame -> json.encodeToJsonElement(Level2UnsubscribeFrame.serializer(), frame)
             }
         }
     }
@@ -205,6 +219,16 @@ data class Session(
     @SerialName("cwd") val cwd: String,
     @SerialName("rows") val rows: Int,
     @SerialName("cols") val cols: Int,
+    /** pane_title 原样。App 禁止从本字段抠状态或身份。一级 listing 可缺省。 */
+    @SerialName("title") val title: String = "",
+    /** 只许 working / idle / unknown。缺省或乱值一律当 unknown，不得回落 idle。 */
+    @SerialName("status") val status: String = "",
+    /** tmux session_name 结构字段；缺省空。跳转身份只用结构字段。 */
+    @SerialName("session_name") val sessionName: String = "",
+    /** tmux window_index 结构字段（字符串）；缺省空。 */
+    @SerialName("window_index") val windowIndex: String = "",
+    /** tmux window_name 结构字段；缺省空。展示名优先于 [name]。 */
+    @SerialName("window_name") val windowName: String = "",
 )
 
 /**
@@ -500,5 +524,63 @@ data class PaneModeChangedFrame(
 ) : FramePayload {
     override val frameType: String get() = FrameType.PANE_MODE_CHANGED
     override fun validate(): String? = if (ref.isEmpty()) "pane_mode_changed ref must be non-empty" else null
+}
+
+/**
+ * 二级菜单全量快照 S→C（061）。wire type 必须是 [FrameType.LEVEL2_FRAME]（`level2_frame`）。
+ *
+ * @contract
+ * @pre workspace 非空、seq ≥ 1
+ * @post 客户端以 sessions 整体替换该工作区的二级视图
+ * @inv title 原样；身份与状态不从 title 推导
+ */
+@Serializable
+data class Level2Frame(
+    @SerialName("workspace") val workspace: String,
+    @SerialName("seq") val seq: Long,
+    @SerialName("sessions") val sessions: List<Session>,
+) : FramePayload {
+    override val frameType: String get() = FrameType.LEVEL2_FRAME
+    override fun validate(): String? = when {
+        workspace.isEmpty() -> "level2_frame workspace must be non-empty"
+        seq <= 0 -> "level2_frame seq must be >= 1"
+        else -> null
+    }
+}
+
+/**
+ * 二级低频心跳 S→C（061）：本周期无变更时推，App 用来区分「没变化」和「连接死了」。
+ * 无 sessions，不得清列表。
+ */
+@Serializable
+data class Level2HeartbeatFrame(
+    @SerialName("workspace") val workspace: String,
+    @SerialName("seq") val seq: Long,
+) : FramePayload {
+    override val frameType: String get() = FrameType.LEVEL2_HEARTBEAT
+    override fun validate(): String? = when {
+        workspace.isEmpty() -> "level2_heartbeat workspace must be non-empty"
+        seq <= 0 -> "level2_heartbeat seq must be >= 1"
+        else -> null
+    }
+}
+
+/** 二级订阅 C→S：进入二级菜单时发。 */
+@Serializable
+data class Level2SubscribeFrame(
+    @SerialName("workspace") val workspace: String,
+) : FramePayload {
+    override val frameType: String get() = FrameType.LEVEL2_SUBSCRIBE
+    override fun validate(): String? =
+        if (workspace.isEmpty()) "level2_subscribe workspace must be non-empty" else null
+}
+
+/** 二级退订 C→S：离开二级菜单时发。幂等。 */
+@Serializable
+data class Level2UnsubscribeFrame(
+    @SerialName("workspace") val workspace: String,
+) : FramePayload {
+    override val frameType: String get() = FrameType.LEVEL2_UNSUBSCRIBE
+    override fun validate(): String? = null
 }
 

@@ -21,8 +21,11 @@ import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.conn.Level2Frame
+import dev.agentmirror.app.conn.Level2HeartbeatFrame
 import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.service.ServiceWire
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,21 +94,29 @@ data class WorkspaceUiState(
  * （禁令）——本类无周期拉取结构（无无限循环/周期定时器/固定延迟协程）；主动刷新只在
  * 用户进入/下拉时发生。
  *
- * 060 uproot（2026-08-15）：二级会话列表模型（会话条目 / 落位逻辑等）
- * 与聚合状态随状态判定整体拔除。本 VM 只维护一级工作区（cwd → session_count）。
+ * 061：二级状态挂在本 VM（已接 [ServiceWire.uiConnector]），禁止再 new 独立 Listener
+ * 去 [ConnectionManager.setListener]。
  *
  * @contract
  * @pre none（任意时刻可构造；任意帧可到达，无关帧被忽略）
  * @post 收到 ListingFrame 整体替换一级工作区模型；收到 ListDeltaFrame 按 changed_workspaces
- *       增量更新 session_count；[onConnectionStateChanged] 把 [ConnectionState] 映射为 UI 四态；
- *       [refresh] 置刷新在途标记并发出一次全量列表请求
- * @err none（无异常面；无关帧走 else 分支忽略，不破坏状态）
- * @inv 工作区保服务端下发顺序（LinkedHashMap 插入序）；session_count 以服务端权威值为准；
- *       零周期性自动刷新（无周期拉取结构）
+ *       增量更新 session_count；收到 Level2Frame 全量替换 [level2]；收到 Level2HeartbeatFrame
+ *       只刷新 seq / 最后收包时刻，不清列表
+ * @err 解码失败记 type+原因；workspace 对不上记两边 cwd，不改列表
+ * @inv 工作区保服务端下发顺序；二级只收推送，本类无周期 list / 无定时向服务端拉状态
  */
 class WorkspaceViewModel(
     initialConnection: ConnectionUi = ConnectionUi.CONNECTING,
     private val requestList: () -> Unit = { ServiceWire.managerOrNull()?.list() },
+    private val subscribeLevel2: (String) -> Unit = { cwd ->
+        ServiceWire.managerOrNull()?.subscribeLevel2(cwd)
+        Unit
+    },
+    private val unsubscribeLevel2: (String) -> Unit = { cwd ->
+        ServiceWire.managerOrNull()?.unsubscribeLevel2(cwd)
+        Unit
+    },
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) : ConnectionManager.Listener {
 
     private val _uiState = MutableStateFlow(WorkspaceUiState(connection = initialConnection))
@@ -118,6 +129,54 @@ class WorkspaceViewModel(
 
     /** 刷新在途标记（Compose 下拉指示器消费）。 */
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _level2 = MutableStateFlow(L2UiState())
+
+    /** 二级菜单快照（由 [onFrame] 吃 level2_frame / level2_heartbeat）。 */
+    val level2: StateFlow<L2UiState> = _level2.asStateFlow()
+
+    private var subscribedWorkspace: String? = null
+    private var lastLevel2AtMs: Long = 0L
+
+    /**
+     * 进入二级：订该 cwd 的推送。同 cwd 再进幂等。不调用 [requestList]。
+     */
+    fun enterLevel2(cwd: String) {
+        if (subscribedWorkspace == cwd) return
+        subscribedWorkspace?.let { unsubscribeLevel2(it) }
+        subscribedWorkspace = cwd
+        lastLevel2AtMs = 0L
+        _level2.value = L2UiState()
+        subscribeLevel2(cwd)
+    }
+
+    /** 离开二级：退订并清空快照。幂等。 */
+    fun leaveLevel2() {
+        val ws = subscribedWorkspace ?: return
+        subscribedWorkspace = null
+        lastLevel2AtMs = 0L
+        _level2.value = L2UiState()
+        unsubscribeLevel2(ws)
+    }
+
+    /**
+     * 心跳/帧超时检查（UI 带 now 调用，本 VM 不自起定时器）。
+     * 超时只改横幅，不清列表，不向服务端发帧。
+     */
+    fun checkLevel2Quiet(now: Long = nowMs(), quietTimeoutMs: Long = 20_000L) {
+        val ws = subscribedWorkspace ?: return
+        if (lastLevel2AtMs == 0L) return
+        val quietFor = now - lastLevel2AtMs
+        val banner = if (quietFor >= quietTimeoutMs) {
+            "二级状态已停更 ${quietFor}ms（last_at=$lastLevel2AtMs now=$now workspace=$ws）"
+        } else {
+            null
+        }
+        val current = _level2.value
+        if (current.banner != banner) {
+            _level2.value = current.copy(banner = banner)
+        }
+    }
 
     /**
      * 全量列表刷新入口（2026-08-15 用户裁定刷新模型）。
@@ -148,30 +207,34 @@ class WorkspaceViewModel(
     /** 连接态回调（Listener 入口）：委托 [onConnectionStateChanged] 保持公开 API 不变。 */
     override fun onStateChanged(state: ConnectionState) = onConnectionStateChanged(state)
 
-    /** 帧回调（Listener 入口）：只消费 listing / list_delta，其余帧忽略（本屏不关心）。 */
     override fun onFrame(frame: FramePayload) {
         when (frame) {
             is ListingFrame -> applyListing(frame)
             is ListDeltaFrame -> applyDelta(frame)
-            else -> Unit // 无关帧（auth_ack/input_ack/error/…）不影响列表渲染。
+            is Level2Frame -> applyLevel2(frame)
+            is Level2HeartbeatFrame -> applyLevel2Heartbeat(frame)
+            else -> Unit
         }
     }
 
-    // 镜像/解码错误/输入回执/重连通知归会话页与服务层，工作区列表不消费（空实现防泄漏）。
-
     override fun onBinary(frame: BinaryFrame) = Unit
 
-    override fun onLocalDecodeError(code: FrameError, message: String) = Unit
+    override fun onLocalDecodeError(code: FrameError, message: String) {
+        DiagLog.record("level2", "decode failed code=$code reason=$message")
+        if (subscribedWorkspace != null) {
+            _level2.update { it.copy(banner = "二级帧解码失败 code=$code reason=$message") }
+        }
+    }
 
     override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) = Unit
 
     override fun onReconnect(attempt: Int, delayMs: Long) = Unit
 
-    // ---- 输入侧（接线层回调入口，公开 API）----
-
-    /** 连接状态回调入口：把 conn 层 ConnectionState 映射为 UI 四态。 */
     fun onConnectionStateChanged(state: ConnectionState) {
         _uiState.update { it.copy(connection = state.toUi()) }
+        if (state == ConnectionState.READY) {
+            subscribedWorkspace?.let { subscribeLevel2(it) }
+        }
     }
 
     // ---- listing：权威全量，整体替换 ----
@@ -197,6 +260,36 @@ class WorkspaceViewModel(
         // 一级菜单的 session_count 是服务端权威值；removed 会话对一级的意义由
         // changed_workspaces 携带（无 removed_workspaces 通道，服务端保证覆盖）。
         publish()
+    }
+
+    private fun applyLevel2(frame: Level2Frame) {
+        val ws = subscribedWorkspace
+        if (ws == null || frame.workspace != ws) {
+            DiagLog.record(
+                "level2",
+                "workspace mismatch frame=${frame.workspace} subscribed=${ws ?: "<none>"} seq=${frame.seq}",
+            )
+            return
+        }
+        lastLevel2AtMs = nowMs()
+        _level2.value = L2UiState(
+            sessions = frame.sessions.map { it.toL2Entry() },
+            seq = frame.seq,
+            banner = null,
+        )
+    }
+
+    private fun applyLevel2Heartbeat(frame: Level2HeartbeatFrame) {
+        val ws = subscribedWorkspace
+        if (ws == null || frame.workspace != ws) {
+            DiagLog.record(
+                "level2",
+                "heartbeat workspace mismatch frame=${frame.workspace} subscribed=${ws ?: "<none>"} seq=${frame.seq}",
+            )
+            return
+        }
+        lastLevel2AtMs = nowMs()
+        _level2.update { it.copy(seq = frame.seq, banner = null) }
     }
 
     /** 把内部模型快照发布为 UI 状态（保序）。 */

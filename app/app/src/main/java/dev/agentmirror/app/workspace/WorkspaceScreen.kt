@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -70,16 +71,12 @@ import dev.agentmirror.app.ui.theme.Spacing
  *
  * 状态全部来自 [WorkspaceViewModel]；session_count 是服务端权威值，本屏只渲染不重算。
  *
- * 060 uproot（2026-08-15）：二级会话列表（SessionList）随状态判定整体拔除，待二级
- * 实时流重建；本屏只渲染一级工作区列表。
+ * 061：选中工作区后渲染二级列表（标识 + 状态标）。二级状态读 [WorkspaceViewModel.level2]。
  *
  * @contract
- * @pre viewModel 提供当前工作区模型；selectedWorkspaceCwd 可为 null 或暂未出现在模型中的 cwd
- * @post 渲染一级工作区列表（加载/空/错态分支）；选择/返回经回调上抛；
- *       首次进入即触发一次全量刷新（2026-08-15 用户裁定：每次到一级自动刷一遍拉最新）
- * @err none
- * @inv session_count 不在 UI 重算；工作区选择态只读自入参，屏内不另建 remember 状态；
- *       零周期性自动刷新（无周期拉取结构，刷新只发生在进入/下拉时）
+ * @pre viewModel 提供当前工作区模型；selectedWorkspaceCwd 可为 null
+ * @post 渲染一级或二级列表；选择/返回/开会话经回调上抛
+ * @inv 二级不向服务端轮询状态（只订一次、只收推送）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,9 +87,11 @@ fun WorkspaceScreen(
     onSelectWorkspace: (cwd: String) -> Unit,
     onBackToList: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.uiState.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
+    val level2 by viewModel.level2.collectAsState()
 
     // 进入即刷（2026-08-15 用户裁定：每次到一级/二级自动刷一遍拉最新；leader 澄清：返回也算
     // 到达）。LaunchedEffect 以 selectedWorkspaceCwd 为键——一级⇄二级每次切换都触发一次刷新：
@@ -126,8 +125,26 @@ fun WorkspaceScreen(
                 .fillMaxSize()
                 .testTag("workspace-pull-refresh"),
         ) {
-            // 一级列表 + 加载/空/错态。060 uproot：二级会话列表（SessionList）随状态判定
-            // 整体拔除，待二级实时流重建；此处只渲染一级工作区列表。
+            val level2Cwd = selectedWorkspaceCwd
+            if (level2Cwd != null) {
+                DisposableEffect(level2Cwd) {
+                    viewModel.enterLevel2(level2Cwd)
+                    onDispose { viewModel.leaveLevel2() }
+                }
+                LaunchedEffect(level2Cwd) {
+                    while (true) {
+                        kotlinx.coroutines.delay(1_000)
+                        viewModel.checkLevel2Quiet()
+                    }
+                }
+                L2SessionList(
+                    sessions = level2.sessions,
+                    banner = level2.banner,
+                    onOpenSession = onOpenSession,
+                )
+                return@PullToRefreshBox
+            }
+            // 一级列表 + 加载/空/错态。
             AnimatedContent(
                 targetState = state.workspaces,
                 transitionSpec = { fadeIn().togetherWith(fadeOut()) },
