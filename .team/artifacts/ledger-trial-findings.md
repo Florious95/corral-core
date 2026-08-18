@@ -25,3 +25,23 @@
 - 影响：不阻塞。但 `ready` 这个字段在这种情况下**与世界不一致**，
   如果有人拿它做门禁（"ready 才开工"），会卡住一个健康的队伍。
 - 量具：同上
+
+## F-03 驱动器的停机通知用了外部 team key `annot`，在本工作区必然投不出去
+
+- 日期：2026-08-18
+- 现象：`ledger-run --drive` 正常停机（判据红），日志尾部：
+  ```
+  "通知未送达：team key `annot` is not a runtime key in target workspace
+   `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)"
+  ```
+- 关键事实：**我的账本里 `annot` 出现 0 次**（`grep -c annot` = 0）。
+  账本里所有 `roles[].seat.team` 都是 `grok-l2`。⇒ `annot` 不是我给的，是驱动器自己带的
+  （`annot` 是编排队自己工作区的 team 名）。
+- 影响：**不阻塞**（我有 30 分钟心跳，从日志里读到了停机原因），
+  但它让「跑完/停机必须通知 leader」这条功能在外部工程里**必然失效**——
+  而这条恰恰是我 2026-08-16 提的诉求、他们采纳并实现的那条。
+  没有心跳的使用方会完全看不见停机。
+- 建议方向（不替他们定）：通知的 team key 应从账本 `roles[<owner.role>].seat.team` 取，
+  不要用任何默认值/活跃 team。这和 skill 里「`results --case` 必须显式传 `--team`，
+  不要依赖当前活跃 team」是同一条。
+- 量具：`ledger-run` md5 见下次报告时补；本次未记，属我方疏漏（量具身份纪律）。
