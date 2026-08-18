@@ -280,21 +280,20 @@ class WorkspaceViewModel(
     }
 
     private fun applyLevel2(frame: Level2Frame) {
+        // 快照整表替换，status 以本帧为准（同一会话身份 working→idle 必须换徽章）。
+        // 即使当前没订着这个 cwd（离开二级的缝里），也先写入缓存，避免再进去仍是旧状态。
+        val incoming = frame.sessions.map { it.toL2Entry() }
+        val next = L2UiState(sessions = incoming, seq = frame.seq, banner = null)
+        rememberLevel2(frame.workspace, next)
         val ws = subscribedWorkspace
         if (ws == null || frame.workspace != ws) {
             DiagLog.record(
                 "level2",
-                "workspace mismatch frame=${frame.workspace} subscribed=${ws ?: "<none>"} seq=${frame.seq}",
+                "workspace mismatch frame=${frame.workspace} subscribed=${ws ?: "<none>"} seq=${frame.seq} cached=${incoming.size}",
             )
             return
         }
         lastLevel2AtMs = nowMs()
-        val next = L2UiState(
-            sessions = frame.sessions.map { it.toL2Entry() },
-            seq = frame.seq,
-            banner = null,
-        )
-        rememberLevel2(ws, next)
         publishLevel2(next)
     }
 

@@ -1,804 +1,860 @@
 {
- "schema_version": "ledger.v2",
- "ledger_id": "ledger.overlay.v1",
- "run": {
-  "desired_state": "running"
- },
- "roles": {
-  "r.advisor": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/ov-design/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "advisor",
-    "team": "grok-l2"
-   }
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.overlay.v1",
+  "run": {
+    "desired_state": "running"
   },
-  "r.server": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/ov-server/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "dev-server",
-    "team": "grok-l2"
-   }
-  },
-  "r.app": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/ov-app/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "dev-app",
-    "team": "grok-l2"
-   }
-  },
-  "r.control": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/ov-verify/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "control",
-    "team": "grok-l2"
-   }
-  },
-  "r.leader": {
-   "provider": "human",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/ov-esc/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   }
-  }
- },
- "tasks": {
-  "t.feas": {
-   "title": "先把可行性钉死，再谈实现。契约 requirement-base/entries/064。用户要的是**抓屏保真**：悬浮窗里看到的必须是 `Ctrl-B w`（choose-tree）那一页本身——tmux 自己画的树线、对齐、**以及转圈符号的动画**，不是我们按结构字段重画一个长得差不多的树。\n🔴 难点：choose-tree **不是某个 pane 的内容**，是 tmux **客户端**画的覆盖层，`capture-pane` 抓不到；要抓就得有客户端处于那个模式，而多一个客户端可能参与尺寸协商、**把用户真实窗口压小**。\n候选路径（**leader 的推测，未验证，你必须证实或证伪**）：单开一个专用 scratch tmux 会话，在它的 pane 里跑 choose-tree，再抓那个 pane；理由是它与用户会话不共用窗口。\n🔴 四个未知点，**逐条给结论，不许含糊**（写进 可行性结论.md）：①choose-tree 跑在 pane 里时 capture-pane 能否抓到它画的内容；②它是否随 pane 标题变化**自动重绘**（转圈动画全靠这个），还是只在按键时重绘；③专用会话的客户端对其他会话的尺寸是否**真的零影响**（注意 tmux 3.x 的 `window-size` 选项默认值会影响结论，实测，不要想当然）；④抓屏频率 / 动画流畅度 / CPU 三者怎么取舍，给一个建议值和依据。\n🔴 **做不到零尺寸影响就发 class=\"blocking\" 交 leader 裁定**，不许悄悄降级成自绘、也不许悄悄接受副作用——用户真实窗口被压小是不可接受的，宁可不做这个功能。\n产物：/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md（四条逐条结论+实测命令与输出）、/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh（跨端探针：订阅悬浮窗流后必须收到**非空的抓屏帧**，且**若干秒内至少有两帧内容不同**——这条是证明它是动态的、不是静态截图；现在跑必须红）、/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh（尺寸不变判据：在**自己起的隔离 tmux server** 上，开前采一次全部窗口的 `#{window_width}x#{window_height}`，开启抓屏路径并持续若干秒，关闭后再采一次，**逐窗口必须完全相等**，任何一个变了就非零退出；现在跑应当能跑通并给出基线）。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
-   "owner": {
-    "role": "r.advisor"
-   },
-   "resources": {
-    "worktree_id": "wt4.feas",
-    "write_paths": [
-     ".team/nodes/ov-design/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md",
-     "server/internal/",
-     "app/app/src/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+  "roles": {
+    "r.advisor": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/ov-design/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "advisor",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "653713581"
+    "r.server": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/ov-server/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "dev-server",
+        "team": "grok-l2"
+      }
+    },
+    "r.app": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/ov-app/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "dev-app",
+        "team": "grok-l2"
+      }
+    },
+    "r.control": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/ov-verify/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "control",
+        "team": "grok-l2"
+      }
+    },
+    "r.leader": {
+      "provider": "human",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/ov-esc/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-f-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-f-four",
-      "argv": [
-       "sh",
-       "-c",
-       "test $(grep -c '^#\\{1,3\\} *[①1-4]' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md) -ge 4 || test $(grep -c '①\\|②\\|③\\|④' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md) -ge 4"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-f-probe",
-      "argv": [
-       "test",
-       "-x",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-f-size",
-      "argv": [
-       "test",
-       "-x",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-f-red",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;r=subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900);sys.exit(0 if r.returncode!=0 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-f-doc",
-     "A-f-four",
-     "A-f-probe",
-     "A-f-size",
-     "A-f-red"
-    ]
-   },
-   "state": "succeeded",
-   "attempts": [
+  },
+  "tasks": {
+    "t.feas": {
+      "title": "先把可行性钉死，再谈实现。契约 requirement-base/entries/064。用户要的是**抓屏保真**：悬浮窗里看到的必须是 `Ctrl-B w`（choose-tree）那一页本身——tmux 自己画的树线、对齐、**以及转圈符号的动画**，不是我们按结构字段重画一个长得差不多的树。\n🔴 难点：choose-tree **不是某个 pane 的内容**，是 tmux **客户端**画的覆盖层，`capture-pane` 抓不到；要抓就得有客户端处于那个模式，而多一个客户端可能参与尺寸协商、**把用户真实窗口压小**。\n候选路径（**leader 的推测，未验证，你必须证实或证伪**）：单开一个专用 scratch tmux 会话，在它的 pane 里跑 choose-tree，再抓那个 pane；理由是它与用户会话不共用窗口。\n🔴 四个未知点，**逐条给结论，不许含糊**（写进 可行性结论.md）：①choose-tree 跑在 pane 里时 capture-pane 能否抓到它画的内容；②它是否随 pane 标题变化**自动重绘**（转圈动画全靠这个），还是只在按键时重绘；③专用会话的客户端对其他会话的尺寸是否**真的零影响**（注意 tmux 3.x 的 `window-size` 选项默认值会影响结论，实测，不要想当然）；④抓屏频率 / 动画流畅度 / CPU 三者怎么取舍，给一个建议值和依据。\n🔴 **做不到零尺寸影响就发 class=\"blocking\" 交 leader 裁定**，不许悄悄降级成自绘、也不许悄悄接受副作用——用户真实窗口被压小是不可接受的，宁可不做这个功能。\n产物：/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md（四条逐条结论+实测命令与输出）、/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh（跨端探针：订阅悬浮窗流后必须收到**非空的抓屏帧**，且**若干秒内至少有两帧内容不同**——这条是证明它是动态的、不是静态截图；现在跑必须红）、/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh（尺寸不变判据：在**自己起的隔离 tmux server** 上，开前采一次全部窗口的 `#{window_width}x#{window_height}`，开启抓屏路径并持续若干秒，关闭后再采一次，**逐窗口必须完全相等**，任何一个变了就非零退出；现在跑应当能跑通并给出基线）。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
+      "owner": {
+        "role": "r.advisor"
+      },
+      "resources": {
+        "worktree_id": "wt4.feas",
+        "write_paths": [
+          ".team/nodes/ov-design/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md",
+          "server/internal/",
+          "app/app/src/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "653713581"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-f-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-f-four",
+            "argv": [
+              "sh",
+              "-c",
+              "test $(grep -c '^#\\{1,3\\} *[①1-4]' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md) -ge 4 || test $(grep -c '①\\|②\\|③\\|④' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/可行性结论.md) -ge 4"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-f-probe",
+            "argv": [
+              "test",
+              "-x",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-f-size",
+            "argv": [
+              "test",
+              "-x",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-f-red",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;r=subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900);sys.exit(0 if r.returncode!=0 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-f-doc",
+          "A-f-four",
+          "A-f-probe",
+          "A-f-size",
+          "A-f-red"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.feas-seq1-t1787065518317",
+          "delivery_id": "del-t.feas-seq1-t1787065518317",
+          "state": "succeeded",
+          "writeback_revision": 2,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-f-doc",
+            "acceptance_success.acceptance_id=A-f-four",
+            "acceptance_success.acceptance_id=A-f-probe",
+            "acceptance_success.acceptance_id=A-f-size",
+            "acceptance_success.acceptance_id=A-f-red",
+            "acceptance_success.writeback_revision=2"
+          ]
+        }
+      ]
+    },
+    "t.srv": {
+      "title": "服务端实现悬浮窗的**独立抓屏流**（契约 064）。按 .team/nodes/ov-design/可行性结论.md 选定的路径落地。🔴 这条流与二级菜单的列表流**分开**，各订各的，不共用。🔴 **打开才订阅，关掉即停**：零订阅者时不得为这条流做任何抓屏或起任何 tmux 客户端（工程常识红线①：空闲 CPU 趋近 0）。悬浮窗绝大多数时间是关着的。🔴 **只读**：不发按键、不改任何用户 pane 的状态。必须写出这三个具名测试并全部 PASS：TestOverlayNoResourceWithoutSubscriber（无订阅者时零抓屏、零客户端）/ TestOverlayFramesAreNonEmpty（有订阅者时推出的帧非空）/ TestOverlayFramesChangeOverTime（若干帧之间内容会变——证明是动态流不是静态截图）。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。\n🔴【r5 重开 · leader 已定位到这一步，接着往下查】你的四条单测全绿，但**跨端探针 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh 判红**：订阅 overlay_subscribe 后 **6 秒内一帧 overlay_frame 都没到**。\nleader 已核过、可以排除的（别重复查）：\n  · 协议对得上：protocol 里 TypeOverlaySubscribe / TypeOverlayFrame 都在，探针发的收的就是这两个；\n  · ws 层接上了：ws_conn.go 里 case protocol.OverlaySubscribe → handleOverlaySubscribe；\n  · nil 兜底建了生产抓屏器：server.go 里 opts.OverlayCapturer == nil ⇒ overlay.NewTmux(log, dirs)。\n⇒ **东西都在，但端到端出不来帧。** 这正是「验东西在那儿，没验东西起作用」——单测绿不等于链路通。\n🔴 请沿着这条链往下查并修到探针转绿。至少要能回答：\n  ①探针那个隔离 agentmirrord 的 DiscoverySocketDirs 里到底有没有可枚举的 tmux socket？没有的话抓屏器抓谁？\n  ②scratch 会话是在订阅时才起吗？起它 + choose-tree + 第一帧，总耗时是否超过探针的 6 秒等待？\n  ③抓屏 interval（defaultOverlayInterval）是多少？是否本身就 > 6 秒？\n🔴 如果结论是**探针的等待窗口太短**（而不是实现有问题），**不要自己改探针把它调绿**——探针是判据、是别人给你出的题，产出方改自己的判据等于骗判据。这种情况发一条 class=\"blocking\" 说清楚，由 leader 裁定是否放宽窗口。\n🔴 修好后自己先跑一遍那个探针确认转绿，再收工。",
+      "owner": {
+        "role": "r.server"
+      },
+      "resources": {
+        "worktree_id": "wt4.srv",
+        "write_paths": [
+          "server/internal/",
+          "server/cmd/",
+          ".team/nodes/ov-server/"
+        ],
+        "read_paths": [
+          ".team/nodes/ov-design/可行性结论.md",
+          "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "653713581"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-server/实现说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-s-idle",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestOverlay -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestOverlayNoResourceWithoutSubscriber'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-s-nonempty",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestOverlay -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestOverlayFramesAreNonEmpty'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-s-anim",
+            "argv": [
+              "sh",
+              "-c",
+              "go test ./internal/... -run TestOverlay -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestOverlayFramesChangeOverTime'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1000
+          },
+          {
+            "acceptance_id": "A-s-suite",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1900
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-s-idle",
+          "A-s-nonempty",
+          "A-s-anim",
+          "A-s-suite"
+        ]
+      },
+      "state": "succeeded",
+      "parallel": {
+        "group": "g4"
+      },
+      "attempts": [
+        {
+          "attempt_id": "att-t.srv-seq3-t1787066120187",
+          "delivery_id": "del-t.srv-seq3-t1787066120187",
+          "state": "succeeded",
+          "writeback_revision": 4,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-s-idle",
+            "acceptance_success.acceptance_id=A-s-nonempty",
+            "acceptance_success.acceptance_id=A-s-anim",
+            "acceptance_success.acceptance_id=A-s-suite",
+            "acceptance_success.writeback_revision=4"
+          ]
+        },
+        {
+          "attempt_id": "att-t.srv-seq1-t1787068959276",
+          "delivery_id": "del-t.srv-seq1-t1787068959276",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=A-s-suite",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/server",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ]
+        },
+        {
+          "attempt_id": "att-t.srv-seq1-t1787070173948",
+          "delivery_id": "del-t.srv-seq1-t1787070173948",
+          "state": "succeeded",
+          "writeback_revision": 8,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-s-idle",
+            "acceptance_success.acceptance_id=A-s-nonempty",
+            "acceptance_success.acceptance_id=A-s-anim",
+            "acceptance_success.acceptance_id=A-s-suite",
+            "acceptance_success.writeback_revision=8"
+          ]
+        }
+      ]
+    },
+    "t.app": {
+      "title": "App 实现会话内悬浮窗（契约 064）。用户原话：「在会话当中，在右上角点击查看这个窗口。它是一个悬浮窗口，然后点击窗口的其他地方，它就会消失。」🔴 入口在**会话内**（三级终端画面）右上角一个按钮；点击浮出**覆盖在终端之上**的悬浮窗；**点击悬浮窗以外的任何地方即消失**。🔴 内容是服务端推来的抓屏帧，**原样渲染**（等宽字体、保留 tmux 的树线与对齐），不要重排、不要美化。🔴 关闭时必须**退订**，不得在后台继续收流。🔴 悬浮窗只负责看：不发按键、不切换会话。**点击其中某一行是否跳转，本次不实现**（契约未定义）。必须写出这三个具名测试并全部 PASS：OverlayOpensFromSessionTopRightTest / OverlayDismissOnOutsideTapTest / OverlayUnsubscribesOnCloseTest。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt4.app",
+        "write_paths": [
+          "app/app/src/main/",
+          "app/app/src/test/",
+          ".team/nodes/ov-app/"
+        ],
+        "read_paths": [
+          ".team/nodes/ov-design/可行性结论.md",
+          "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "653713581"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-app/实现说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-a-open",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayOpensFromSessionTopRightTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1800
+          },
+          {
+            "acceptance_id": "A-a-dismiss",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayDismissOnOutsideTapTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1800
+          },
+          {
+            "acceptance_id": "A-a-unsub",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayUnsubscribesOnCloseTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1800
+          },
+          {
+            "acceptance_id": "A-a-suite",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2500
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-a-open",
+          "A-a-dismiss",
+          "A-a-unsub",
+          "A-a-suite"
+        ]
+      },
+      "state": "succeeded",
+      "parallel": {
+        "group": "g4"
+      },
+      "attempts": [
+        {
+          "attempt_id": "att-t.app-seq2-t1787066119699",
+          "delivery_id": "del-t.app-seq2-t1787066119699",
+          "state": "succeeded",
+          "writeback_revision": 3,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-a-open",
+            "acceptance_success.acceptance_id=A-a-dismiss",
+            "acceptance_success.acceptance_id=A-a-unsub",
+            "acceptance_success.acceptance_id=A-a-suite",
+            "acceptance_success.writeback_revision=3"
+          ]
+        }
+      ]
+    },
+    "t.verify": {
+      "title": "对照席：验最硬的那条约束，以及判据真会咬人。🔴 不实现、不修任何东西。三件事：①跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh，现在必须**绿**；②跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh，必须**绿** —— 这是本条最硬的约束：**打开/关闭悬浮窗，用户所有真实会话的窗口行列数一个都不能变**。⛔ 在你自己起的隔离 tmux server 上验，绝不碰用户真实 tmux。③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/ov-mutate.sh：定点破坏（例如让抓屏路径去 attach 用户会话、或让关闭后不退订），对应具名测试必须变红，恢复后变绿，两头成立才 exit 0，工作区跑完必须干净。并写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/报告.md 记录三项结果。🔴 自检：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
+      "owner": {
+        "role": "r.control"
+      },
+      "resources": {
+        "worktree_id": "wt4.ver",
+        "write_paths": [
+          ".team/nodes/ov-verify/"
+        ],
+        "read_paths": [
+          ".team/nodes/ov-design/probe-overlay.sh",
+          ".team/nodes/ov-design/size-invariance.sh",
+          ".team/nodes/ov-design/可行性结论.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "653713581"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/ov-mutate.sh",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/报告.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-v-probe",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-v-size",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh'],timeout=900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-v-mut",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/ov-mutate.sh'],timeout=2400).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2500
+          },
+          {
+            "acceptance_id": "A-v-rep",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/报告.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-v-probe",
+          "A-v-size",
+          "A-v-mut",
+          "A-v-rep"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.verify-seq4-t1787066825511",
+          "delivery_id": "del-t.verify-seq4-t1787066825511",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=A-v-probe",
+            "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/[eval1]:48\n  throw new Error(`订阅后没有 overlay_frame（当前无悬浮窗流，预期红）：${e.message}`);\n        ^\n\nError: 订阅后没有 overlay_frame（当前无悬浮窗流，预期红）：timeout 6000ms waiting overlay_frame\n    at file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/[eval1]:48:9\n\nNode.js v22.22.2"
+          ]
+        },
+        {
+          "attempt_id": "att-t.verify-seq3-t1787071013061",
+          "delivery_id": "del-t.verify-seq3-t1787071013061",
+          "state": "succeeded",
+          "writeback_revision": 10,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-v-probe",
+            "acceptance_success.acceptance_id=A-v-size",
+            "acceptance_success.acceptance_id=A-v-mut",
+            "acceptance_success.acceptance_id=A-v-rep",
+            "acceptance_success.writeback_revision=10"
+          ]
+        }
+      ]
+    },
+    "t.pkg": {
+      "title": "打包给用户手动验收。assembleDebug 出 APK，证明不是旧产物（没有任何 .kt 比 APK 新）。🔴 收口判据是悬浮窗跨端探针 + 尺寸不变判据，不是「dex 里有某个符号」。🔴 不要改任何实现代码。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt4.pkg",
+        "write_paths": [
+          "app/app/build/",
+          ".team/nodes/ov-pkg/"
+        ],
+        "read_paths": [
+          ".team/nodes/ov-app/实现说明.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "653713581"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-pkg/打包说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-p-build",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:assembleDebug', '--console=plain'],timeout=2400).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2500
+          },
+          {
+            "acceptance_id": "A-p-fresh",
+            "argv": [
+              "python3",
+              "-c",
+              "import os,glob,sys;apk='/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/build/outputs/apk/debug/app-debug.apk';sys.exit(1) if not os.path.exists(apk) else None;t=os.path.getmtime(apk);n=[f for f in glob.glob('/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/src/**/*.kt',recursive=True) if os.path.getmtime(f)>t];print(n);sys.exit(1 if n else 0)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-p-probe",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-p-size",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh'],timeout=900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-p-build",
+          "A-p-fresh",
+          "A-p-probe",
+          "A-p-size"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.pkg-seq4-t1787071312672",
+          "delivery_id": "del-t.pkg-seq4-t1787071312672",
+          "state": "succeeded",
+          "writeback_revision": 11,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-p-build",
+            "acceptance_success.acceptance_id=A-p-fresh",
+            "acceptance_success.acceptance_id=A-p-probe",
+            "acceptance_success.acceptance_id=A-p-size",
+            "acceptance_success.writeback_revision=11"
+          ]
+        }
+      ]
+    },
+    "t.stale": {
+      "title": "🔴【用户真机实报的缺陷，优先于本账本其余未完成项】二级菜单显示**过期状态**：明明空闲，徽章仍显示「进行中」。\n用户给了两个实例（截图）：`developer-d83`、以及本工程的 `advisor`。两者共同点是**都曾经在工作、现在已空闲**。\nleader 已排除的（别重复查）：\n  · 判定规则没错：两个标题首字符都不是盲文、无 Thinking/Waiting 标记、以 ' - grok' 结尾 ⇒ 按 062 应判 idle；Go 侧 grokDetector.Match 的分支我读过，结论正确；Rust 版 nodeprobe 对同样标题也判 idle。\n  · 服务端不是旧的：现役 daemon 构建于 8月18 22:11，**比所有探测器源码（21:45–22:01）都新**，且二进制里含 resetLevel2PushState（订阅即清推送水位 ⇒ 下一拍推全量快照）。\n  · 三态跨端探针 probe-tristate.sh 独立跑过绿。\n⇒ **剩下的嫌疑在 App 侧**：很可能是「缓存优先 + 原地替换」里，替换**只按会话身份合并了行、没更新 state 字段**，于是渲染的是该行上次工作时的徽章，一直冻着。\n🔴 请定位并修。修的时候**不许把缓存优先撤掉**——那是用户明确要保留的行为（进菜单不许先空白）。要的是「先画旧的 + 新数据到达后连状态一起换掉」，两者都要。\n必须新增这个具名测试并 PASS：**L2StaleStatusReplacedTest** —— 给定缓存里某会话 state=working，收到新快照该会话 state=idle 后，暴露给 UI 的状态必须变成 idle。🔴 这条测试要先在**修复前**的代码上验红（不红就是没抓到真因，别急着改）。\n同时 L2CacheFirstNoBlankFrameTest / L2CacheReplacedInPlaceTest 必须仍然 PASS（不许为修这条把那两条弄坏）。\n🔴 worktree_id 只是互斥标签，必须在仓根干活，不要 git worktree add。🔴 静默纪律：不给 leader 发进度，唯一例外是被卡住需裁定（class=blocking）。🔴 干完调一次 report_result，不要传 task_id 参数。⛔ 禁止启动安卓模拟器。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt4.stale",
+        "write_paths": [
+          "app/app/src/main/",
+          "app/app/src/test/",
+          ".team/nodes/ov-stale/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
+          "server/internal/api/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "653713581"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-stale/修复说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-st-new",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2StaleStatusReplacedTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1900
+          },
+          {
+            "acceptance_id": "A-st-keep-cache",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2CacheFirstNoBlankFrameTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1900
+          },
+          {
+            "acceptance_id": "A-st-keep-inplace",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2CacheReplacedInPlaceTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1900
+          },
+          {
+            "acceptance_id": "A-st-suite",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2500
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-st-new",
+          "A-st-keep-cache",
+          "A-st-keep-inplace",
+          "A-st-suite"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.stale-seq2-t1787070174392",
+          "delivery_id": "del-t.stale-seq2-t1787070174392",
+          "state": "succeeded",
+          "writeback_revision": 9,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-st-new",
+            "acceptance_success.acceptance_id=A-st-keep-cache",
+            "acceptance_success.acceptance_id=A-st-keep-inplace",
+            "acceptance_success.acceptance_id=A-st-suite",
+            "acceptance_success.writeback_revision=9"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": [
     {
-     "attempt_id": "att-t.feas-seq1-t1787065518317",
-     "delivery_id": "del-t.feas-seq1-t1787065518317",
-     "state": "succeeded",
-     "writeback_revision": 2,
-     "artifact_refs": [
-      "acceptance_success.acceptance_id=A-f-doc",
-      "acceptance_success.acceptance_id=A-f-four",
-      "acceptance_success.acceptance_id=A-f-probe",
-      "acceptance_success.acceptance_id=A-f-size",
-      "acceptance_success.acceptance_id=A-f-red",
-      "acceptance_success.writeback_revision=2"
-     ]
-    }
-   ]
-  },
-  "t.srv": {
-   "title": "服务端实现悬浮窗的**独立抓屏流**（契约 064）。按 .team/nodes/ov-design/可行性结论.md 选定的路径落地。🔴 这条流与二级菜单的列表流**分开**，各订各的，不共用。🔴 **打开才订阅，关掉即停**：零订阅者时不得为这条流做任何抓屏或起任何 tmux 客户端（工程常识红线①：空闲 CPU 趋近 0）。悬浮窗绝大多数时间是关着的。🔴 **只读**：不发按键、不改任何用户 pane 的状态。必须写出这三个具名测试并全部 PASS：TestOverlayNoResourceWithoutSubscriber（无订阅者时零抓屏、零客户端）/ TestOverlayFramesAreNonEmpty（有订阅者时推出的帧非空）/ TestOverlayFramesChangeOverTime（若干帧之间内容会变——证明是动态流不是静态截图）。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。\n🔴【r5 重开 · leader 已定位到这一步，接着往下查】你的四条单测全绿，但**跨端探针 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh 判红**：订阅 overlay_subscribe 后 **6 秒内一帧 overlay_frame 都没到**。\nleader 已核过、可以排除的（别重复查）：\n  · 协议对得上：protocol 里 TypeOverlaySubscribe / TypeOverlayFrame 都在，探针发的收的就是这两个；\n  · ws 层接上了：ws_conn.go 里 case protocol.OverlaySubscribe → handleOverlaySubscribe；\n  · nil 兜底建了生产抓屏器：server.go 里 opts.OverlayCapturer == nil ⇒ overlay.NewTmux(log, dirs)。\n⇒ **东西都在，但端到端出不来帧。** 这正是「验东西在那儿，没验东西起作用」——单测绿不等于链路通。\n🔴 请沿着这条链往下查并修到探针转绿。至少要能回答：\n  ①探针那个隔离 agentmirrord 的 DiscoverySocketDirs 里到底有没有可枚举的 tmux socket？没有的话抓屏器抓谁？\n  ②scratch 会话是在订阅时才起吗？起它 + choose-tree + 第一帧，总耗时是否超过探针的 6 秒等待？\n  ③抓屏 interval（defaultOverlayInterval）是多少？是否本身就 > 6 秒？\n🔴 如果结论是**探针的等待窗口太短**（而不是实现有问题），**不要自己改探针把它调绿**——探针是判据、是别人给你出的题，产出方改自己的判据等于骗判据。这种情况发一条 class=\"blocking\" 说清楚，由 leader 裁定是否放宽窗口。\n🔴 修好后自己先跑一遍那个探针确认转绿，再收工。",
-   "owner": {
-    "role": "r.server"
-   },
-   "resources": {
-    "worktree_id": "wt4.srv",
-    "write_paths": [
-     "server/internal/",
-     "server/cmd/",
-     ".team/nodes/ov-server/"
-    ],
-    "read_paths": [
-     ".team/nodes/ov-design/可行性结论.md",
-     "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
-    },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "653713581"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-server/实现说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-s-idle",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestOverlay -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestOverlayNoResourceWithoutSubscriber'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-s-nonempty",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestOverlay -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestOverlayFramesAreNonEmpty'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-s-anim",
-      "argv": [
-       "sh",
-       "-c",
-       "go test ./internal/... -run TestOverlay -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestOverlayFramesChangeOverTime'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1000
-     },
-     {
-      "acceptance_id": "A-s-suite",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1900
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-s-idle",
-     "A-s-nonempty",
-     "A-s-anim",
-     "A-s-suite"
-    ]
-   },
-   "state": "planned",
-   "parallel": {
-    "group": "g4"
-   },
-   "attempts": [
-    {
-     "attempt_id": "att-t.srv-seq3-t1787066120187",
-     "delivery_id": "del-t.srv-seq3-t1787066120187",
-     "state": "succeeded",
-     "writeback_revision": 4,
-     "artifact_refs": [
-      "acceptance_success.acceptance_id=A-s-idle",
-      "acceptance_success.acceptance_id=A-s-nonempty",
-      "acceptance_success.acceptance_id=A-s-anim",
-      "acceptance_success.acceptance_id=A-s-suite",
-      "acceptance_success.writeback_revision=4"
-     ]
+      "from": "t.feas",
+      "to": "t.srv",
+      "condition": "requires_success"
     },
     {
-     "attempt_id": "att-t.srv-seq1-t1787068959276",
-     "delivery_id": "del-t.srv-seq1-t1787068959276",
-     "state": "acceptance_pending",
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=A-s-suite",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/server",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)="
-     ]
-    }
-   ]
-  },
-  "t.app": {
-   "title": "App 实现会话内悬浮窗（契约 064）。用户原话：「在会话当中，在右上角点击查看这个窗口。它是一个悬浮窗口，然后点击窗口的其他地方，它就会消失。」🔴 入口在**会话内**（三级终端画面）右上角一个按钮；点击浮出**覆盖在终端之上**的悬浮窗；**点击悬浮窗以外的任何地方即消失**。🔴 内容是服务端推来的抓屏帧，**原样渲染**（等宽字体、保留 tmux 的树线与对齐），不要重排、不要美化。🔴 关闭时必须**退订**，不得在后台继续收流。🔴 悬浮窗只负责看：不发按键、不切换会话。**点击其中某一行是否跳转，本次不实现**（契约未定义）。必须写出这三个具名测试并全部 PASS：OverlayOpensFromSessionTopRightTest / OverlayDismissOnOutsideTapTest / OverlayUnsubscribesOnCloseTest。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt4.app",
-    "write_paths": [
-     "app/app/src/main/",
-     "app/app/src/test/",
-     ".team/nodes/ov-app/"
-    ],
-    "read_paths": [
-     ".team/nodes/ov-design/可行性结论.md",
-     "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+      "from": "t.feas",
+      "to": "t.app",
+      "condition": "requires_success"
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "653713581"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-app/实现说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-a-open",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayOpensFromSessionTopRightTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1800
-     },
-     {
-      "acceptance_id": "A-a-dismiss",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayDismissOnOutsideTapTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1800
-     },
-     {
-      "acceptance_id": "A-a-unsub",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*OverlayUnsubscribesOnCloseTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1800
-     },
-     {
-      "acceptance_id": "A-a-suite",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2500
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-a-open",
-     "A-a-dismiss",
-     "A-a-unsub",
-     "A-a-suite"
-    ]
-   },
-   "state": "succeeded",
-   "parallel": {
-    "group": "g4"
-   },
-   "attempts": [
     {
-     "attempt_id": "att-t.app-seq2-t1787066119699",
-     "delivery_id": "del-t.app-seq2-t1787066119699",
-     "state": "succeeded",
-     "writeback_revision": 3,
-     "artifact_refs": [
-      "acceptance_success.acceptance_id=A-a-open",
-      "acceptance_success.acceptance_id=A-a-dismiss",
-      "acceptance_success.acceptance_id=A-a-unsub",
-      "acceptance_success.acceptance_id=A-a-suite",
-      "acceptance_success.writeback_revision=3"
-     ]
-    }
-   ]
-  },
-  "t.verify": {
-   "title": "对照席：验最硬的那条约束，以及判据真会咬人。🔴 不实现、不修任何东西。三件事：①跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh，现在必须**绿**；②跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh，必须**绿** —— 这是本条最硬的约束：**打开/关闭悬浮窗，用户所有真实会话的窗口行列数一个都不能变**。⛔ 在你自己起的隔离 tmux server 上验，绝不碰用户真实 tmux。③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/ov-mutate.sh：定点破坏（例如让抓屏路径去 attach 用户会话、或让关闭后不退订），对应具名测试必须变红，恢复后变绿，两头成立才 exit 0，工作区跑完必须干净。并写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/报告.md 记录三项结果。🔴 自检：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
-   "owner": {
-    "role": "r.control"
-   },
-   "resources": {
-    "worktree_id": "wt4.ver",
-    "write_paths": [
-     ".team/nodes/ov-verify/"
-    ],
-    "read_paths": [
-     ".team/nodes/ov-design/probe-overlay.sh",
-     ".team/nodes/ov-design/size-invariance.sh",
-     ".team/nodes/ov-design/可行性结论.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+      "from": "t.srv",
+      "to": "t.verify",
+      "condition": "requires_success"
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "653713581"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/ov-mutate.sh",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/报告.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-v-probe",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-v-size",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh'],timeout=900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-v-mut",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/ov-mutate.sh'],timeout=2400).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2500
-     },
-     {
-      "acceptance_id": "A-v-rep",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-verify/报告.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-v-probe",
-     "A-v-size",
-     "A-v-mut",
-     "A-v-rep"
-    ]
-   },
-   "state": "planned",
-   "attempts": [
     {
-     "attempt_id": "att-t.verify-seq4-t1787066825511",
-     "delivery_id": "del-t.verify-seq4-t1787066825511",
-     "state": "acceptance_pending",
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=A-v-probe",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/[eval1]:48\n  throw new Error(`订阅后没有 overlay_frame（当前无悬浮窗流，预期红）：${e.message}`);\n        ^\n\nError: 订阅后没有 overlay_frame（当前无悬浮窗流，预期红）：timeout 6000ms waiting overlay_frame\n    at file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/[eval1]:48:9\n\nNode.js v22.22.2"
-     ]
-    }
-   ]
-  },
-  "t.pkg": {
-   "title": "打包给用户手动验收。assembleDebug 出 APK，证明不是旧产物（没有任何 .kt 比 APK 新）。🔴 收口判据是悬浮窗跨端探针 + 尺寸不变判据，不是「dex 里有某个符号」。🔴 不要改任何实现代码。\n🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。\n🔴 静默纪律：不得给 leader 发进度消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。\n🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。\n⛔ 禁止启动安卓模拟器。⛔⛔ **绝不碰用户真实 tmux**（默认 socket）——要做 tmux 实验就自己起一个隔离 server：`mkdir -p /tmp/ov-<你的名字>` → `unset TMUX` → `tmux -S /tmp/ov-<名>/sock new-session -d` → **`tmux -S <sock> list-sessions` 自检会话确实在自己的 socket 上**，不在就立刻停手。（tmux 建 socket 失败时不报错，会静默回退到默认 socket，也就是用户的真实 tmux。）\n⛔ 遍历进程时只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt4.pkg",
-    "write_paths": [
-     "app/app/build/",
-     ".team/nodes/ov-pkg/"
-    ],
-    "read_paths": [
-     ".team/nodes/ov-app/实现说明.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+      "from": "t.app",
+      "to": "t.verify",
+      "condition": "requires_success"
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "653713581"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-pkg/打包说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-p-build",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:assembleDebug', '--console=plain'],timeout=2400).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2500
-     },
-     {
-      "acceptance_id": "A-p-fresh",
-      "argv": [
-       "python3",
-       "-c",
-       "import os,glob,sys;apk='/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/build/outputs/apk/debug/app-debug.apk';sys.exit(1) if not os.path.exists(apk) else None;t=os.path.getmtime(apk);n=[f for f in glob.glob('/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/src/**/*.kt',recursive=True) if os.path.getmtime(f)>t];print(n);sys.exit(1 if n else 0)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-p-probe",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-p-size",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh'],timeout=900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-p-build",
-     "A-p-fresh",
-     "A-p-probe",
-     "A-p-size"
-    ]
-   },
-   "state": "planned"
-  },
-  "t.stale": {
-   "title": "🔴【用户真机实报的缺陷，优先于本账本其余未完成项】二级菜单显示**过期状态**：明明空闲，徽章仍显示「进行中」。\n用户给了两个实例（截图）：`developer-d83`、以及本工程的 `advisor`。两者共同点是**都曾经在工作、现在已空闲**。\nleader 已排除的（别重复查）：\n  · 判定规则没错：两个标题首字符都不是盲文、无 Thinking/Waiting 标记、以 ' - grok' 结尾 ⇒ 按 062 应判 idle；Go 侧 grokDetector.Match 的分支我读过，结论正确；Rust 版 nodeprobe 对同样标题也判 idle。\n  · 服务端不是旧的：现役 daemon 构建于 8月18 22:11，**比所有探测器源码（21:45–22:01）都新**，且二进制里含 resetLevel2PushState（订阅即清推送水位 ⇒ 下一拍推全量快照）。\n  · 三态跨端探针 probe-tristate.sh 独立跑过绿。\n⇒ **剩下的嫌疑在 App 侧**：很可能是「缓存优先 + 原地替换」里，替换**只按会话身份合并了行、没更新 state 字段**，于是渲染的是该行上次工作时的徽章，一直冻着。\n🔴 请定位并修。修的时候**不许把缓存优先撤掉**——那是用户明确要保留的行为（进菜单不许先空白）。要的是「先画旧的 + 新数据到达后连状态一起换掉」，两者都要。\n必须新增这个具名测试并 PASS：**L2StaleStatusReplacedTest** —— 给定缓存里某会话 state=working，收到新快照该会话 state=idle 后，暴露给 UI 的状态必须变成 idle。🔴 这条测试要先在**修复前**的代码上验红（不红就是没抓到真因，别急着改）。\n同时 L2CacheFirstNoBlankFrameTest / L2CacheReplacedInPlaceTest 必须仍然 PASS（不许为修这条把那两条弄坏）。\n🔴 worktree_id 只是互斥标签，必须在仓根干活，不要 git worktree add。🔴 静默纪律：不给 leader 发进度，唯一例外是被卡住需裁定（class=blocking）。🔴 干完调一次 report_result，不要传 task_id 参数。⛔ 禁止启动安卓模拟器。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt4.stale",
-    "write_paths": [
-     "app/app/src/main/",
-     "app/app/src/test/",
-     ".team/nodes/ov-stale/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
-     "server/internal/api/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+    {
+      "from": "t.verify",
+      "to": "t.pkg",
+      "condition": "requires_success"
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "653713581"
+    {
+      "from": "t.stale",
+      "to": "t.pkg",
+      "condition": "requires_success"
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-stale/修复说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-st-new",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2StaleStatusReplacedTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1900
-     },
-     {
-      "acceptance_id": "A-st-keep-cache",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2CacheFirstNoBlankFrameTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1900
-     },
-     {
-      "acceptance_id": "A-st-keep-inplace",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2CacheReplacedInPlaceTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1900
-     },
-     {
-      "acceptance_id": "A-st-suite",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2500
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-st-new",
-     "A-st-keep-cache",
-     "A-st-keep-inplace",
-     "A-st-suite"
-    ]
-   },
-   "state": "planned"
-  }
- },
- "dependencies": [
-  {
-   "from": "t.feas",
-   "to": "t.srv",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.feas",
-   "to": "t.app",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.srv",
-   "to": "t.verify",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.app",
-   "to": "t.verify",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.verify",
-   "to": "t.pkg",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.stale",
-   "to": "t.pkg",
-   "condition": "requires_success"
-  }
- ],
- "parallelism": [
-  {
-   "group": "g4",
-   "max_concurrency": 2
-  }
- ],
- "handoff": {
-  "send_command": "team-agent send",
-  "result_route": "leader",
-  "required_envelope_fields": [
-   "task_id",
-   "status"
   ],
-  "missing_result": "完成以机械判据为准",
-  "delivery_uncertain": "重发并去重"
- },
- "acceptance": {
-  "mechanical_exit_code_is_authoritative": true,
-  "judgment_requires_distinct_provider": false
- },
- "fallback": {
-  "F.esc": {
-   "agent": {
-    "role": "r.leader"
-   },
-   "triggers": [
-    "blocked_on_unknown",
-    "provider_unavailable",
-    "result_deadline_elapsed"
-   ],
-   "max_attempts": 1,
-   "action": "escalate_to_leader",
-   "silent_substitution": false
-  }
- },
- "evidence_policy": {
-  "required_fields": [
-   "reported_by",
-   "revision",
-   "supports_or_refutes",
-   "observed_at",
-   "freshness"
+  "parallelism": [
+    {
+      "group": "g4",
+      "max_concurrency": 2
+    }
   ],
-  "missing_evidence": "判据必须是可重跑命令"
- },
- "resource_isolation": {
-  "default_write_scope": ".team/nodes",
-  "rules": [],
-  "read_only_shared": [
-   "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md",
-   ".team/nodes/ov-design/可行性结论.md",
-   ".team/nodes/ov-design/probe-overlay.sh",
-   ".team/nodes/ov-design/size-invariance.sh"
-  ]
- },
- "fanout_aggregation": {},
- "audit": {},
- "revision": 7
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "完成以机械判据为准",
+    "delivery_uncertain": "重发并去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {
+    "F.esc": {
+      "agent": {
+        "role": "r.leader"
+      },
+      "triggers": [
+        "blocked_on_unknown",
+        "provider_unavailable",
+        "result_deadline_elapsed"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_leader",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "requirement-base/entries/064-会话内悬浮窗展示节点总览实时流.md",
+      ".team/nodes/ov-design/可行性结论.md",
+      ".team/nodes/ov-design/probe-overlay.sh",
+      ".team/nodes/ov-design/size-invariance.sh"
+    ]
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 11
 }

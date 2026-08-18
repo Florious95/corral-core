@@ -105,6 +105,9 @@ class ConnectionManager(
     /** 二级订阅簿记：workspace cwd；READY / 重连后重发 level2_subscribe。 */
     private val activeLevel2 = LinkedHashSet<String>()
 
+    /** 悬浮窗抓屏流是否应订着；READY / 重连后重放。 */
+    private var overlayWanted = false
+
     /** 上次见过的 listing seq；list_delta 连续性据此判定。 */
     private var lastSeenSeq: Long? = null
 
@@ -374,6 +377,26 @@ class ConnectionManager(
     }
 
     /**
+     * 会话内悬浮窗订阅（064）：打开时发 [OverlaySubscribeFrame]。关掉必须 [unsubscribeOverlay]。
+     * 未就绪先簿记，READY 后重放。
+     */
+    fun subscribeOverlay(): Boolean {
+        if (state == ConnectionState.STOPPED) return false
+        overlayWanted = true
+        val conn = connection ?: return true
+        if (!conn.isReady) return true
+        return conn.send(OverlaySubscribeFrame())
+    }
+
+    /** 悬浮窗退订：关闭时发 [OverlayUnsubscribeFrame]。幂等。关后不得继续收流。 */
+    fun unsubscribeOverlay(): Boolean {
+        overlayWanted = false
+        val conn = connection ?: return true
+        if (!conn.isReady) return true
+        return conn.send(OverlayUnsubscribeFrame())
+    }
+
+    /**
      * 请求全量列表。
      *
      * @contract
@@ -532,6 +555,9 @@ class ConnectionManager(
         }
         for (workspace in activeLevel2) {
             conn.send(Level2SubscribeFrame(workspace = workspace))
+        }
+        if (overlayWanted) {
+            conn.send(OverlaySubscribeFrame())
         }
     }
 

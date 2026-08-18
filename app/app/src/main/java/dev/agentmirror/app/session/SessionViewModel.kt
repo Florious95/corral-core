@@ -27,6 +27,7 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ErrorFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.conn.OverlayFrame
 import dev.agentmirror.app.conn.PaneModeChangedFrame
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.termview.TermViewPresenter
@@ -78,6 +79,14 @@ class SessionViewModel(
     var inputStatus by mutableStateOf<InputStatus>(InputStatus.Idle)
 
     /** 附件上传状态机（成功路径注入 / 失败明确报错）。 */
+
+    /** 会话内悬浮窗是否打开（064）。开才订 overlay 流。 */
+    var overlayOpen by mutableStateOf(false)
+        private set
+
+    /** 服务端推来的抓屏原文，原样渲染；关闭即清空。 */
+    var overlayText by mutableStateOf("")
+        private set
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
 
     /**
@@ -181,8 +190,32 @@ class SessionViewModel(
             is ErrorFrame -> transientError = "协议错误：${frame.code.wire}${frame.reason.takeIf { it.isNotEmpty() }?.let { "（$it）" } ?: ""}"
             // 缺陷④：远端 pane copy-mode 状态变更（进入/退出），驱动 UI 角标。
             is PaneModeChangedFrame -> if (frame.ref == ref) inCopyMode = frame.inCopyMode
+            is OverlayFrame -> if (overlayOpen) overlayText = frame.text
             else -> Unit
         }
+    }
+
+    /**
+     * 打开悬浮窗：订 overlay 流。只看不操作。
+     *
+     * @post [overlayOpen]=true；已发 overlay_subscribe
+     */
+    fun openOverlay() {
+        if (overlayOpen) return
+        overlayOpen = true
+        manager.subscribeOverlay()
+    }
+
+    /**
+     * 关闭悬浮窗：退订 overlay 流，不得后台继续收。
+     *
+     * @post [overlayOpen]=false；[overlayText] 清空；已发 overlay_unsubscribe
+     */
+    fun closeOverlay() {
+        if (!overlayOpen) return
+        overlayOpen = false
+        overlayText = ""
+        manager.unsubscribeOverlay()
     }
 
     override fun onBinary(frame: BinaryFrame) {
@@ -458,6 +491,7 @@ class SessionViewModel(
 
     /** 离开会话页时释放：退订镜像（conn 层幂等），停用连接由服务/接线层决定。 */
     fun dispose() {
+        closeOverlay()
         manager.unsubscribe(ref)
     }
 

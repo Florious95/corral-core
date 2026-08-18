@@ -57,4 +57,7 @@ internal object FrameType {
     const val LEVEL2_HEARTBEAT = "level2_heartbeat"
     const val LEVEL2_SUBSCRIBE = "level2_subscribe"
     const val LEVEL2_UNSUBSCRIBE = "level2_unsubscribe"
+    const val OVERLAY_FRAME = "overlay_frame"
+    const val OVERLAY_SUBSCRIBE = "overlay_subscribe"
+    const val OVERLAY_UNSUBSCRIBE = "overlay_unsubscribe"
 }
