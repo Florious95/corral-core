@@ -1,0 +1,1337 @@
+commit 53ac62866eb75e641484f5644d539f932f328644
+Author: Florious95 <281215401+Florious95@users.noreply.github.com>
+Date:   Sun Aug 16 04:30:55 2026 +0800
+
+    App：二级菜单实时流，标题原样画、点一行进会话
+    
+    契约 060。Level2ViewModel + Level2LiveStreamScreen 消费 Level2Frame，标题原样渲染
+    （含 ◐/✳ 前缀，无任何字符串操作），跳转身份只用结构字段，离开菜单即退订。
+    
+    三个具名测试（leader 自跑）：
+      Level2LiveStreamRenderTest    标题原样渲染
+      Level2NavigationIdentityTest  跳转身份来自结构字段而非标题解析
+      Level2StreamLifecycleTest     进订阅、离退订
+    :app:testDebugUnitTest 全套通过。
+
+diff --git a/app/.kotlin/errors/errors-1786823782827.log b/app/.kotlin/errors/errors-1786823782827.log
+new file mode 100644
+index 000000000..536d97a14
+--- /dev/null
++++ b/app/.kotlin/errors/errors-1786823782827.log
+@@ -0,0 +1,258 @@
++kotlin version: 2.2.0
++error message: org.jetbrains.kotlin.util.FileAnalysisException: While analysing /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt:64:27: java.lang.IllegalStateException: Could not read file: /Volumes/nvme/Projects/远程Agent安卓/app/app/build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/debug/processDebugResources/R.jar!/dev/agentmirror/app/R.class; size in bytes: 459; file type: CLASS
++	at org.jetbrains.kotlin.util.AnalysisExceptionsKt.wrapIntoFileAnalysisExceptionIfNeeded(AnalysisExceptions.kt:57)
++	at org.jetbrains.kotlin.fir.FirCliExceptionHandler.handleExceptionOnFileAnalysis(Utils.kt:257)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformFile(FirDeclarationsResolveTransformer.kt:1870)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformFile(FirAbstractBodyResolveTransformerDispatcher.kt:60)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformFile(FirAbstractBodyResolveTransformerDispatcher.kt:27)
++	at org.jetbrains.kotlin.fir.declarations.FirFile.transform(FirFile.kt:47)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirBodyResolveTransformerAdapter.transformFile(FirBodyResolveTransformerAdapters.kt:41)
++	at org.jetbrains.kotlin.fir.declarations.FirFile.transform(FirFile.kt:47)
++	at org.jetbrains.kotlin.fir.resolve.transformers.FirTransformerBasedResolveProcessor.processFile(FirResolveProcessor.kt:48)
++	at org.jetbrains.kotlin.fir.resolve.transformers.FirTotalResolveProcessor.process(FirTotalResolveProcessor.kt:36)
++	at org.jetbrains.kotlin.fir.pipeline.AnalyseKt.runResolution(analyse.kt:24)
++	at org.jetbrains.kotlin.fir.pipeline.FirUtilsKt.resolveAndCheckFir(firUtils.kt:76)
++	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmFrontendPipelinePhase.executePhase(JvmFrontendPipelinePhase.kt:174)
++	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmFrontendPipelinePhase.executePhase(JvmFrontendPipelinePhase.kt:56)
++	at org.jetbrains.kotlin.cli.pipeline.PipelinePhase.phaseBody(PipelinePhase.kt:68)
++	at org.jetbrains.kotlin.cli.pipeline.PipelinePhase.phaseBody(PipelinePhase.kt:58)
++	at org.jetbrains.kotlin.config.phaser.NamedCompilerPhase.invoke(CompilerPhase.kt:102)
++	at org.jetbrains.kotlin.backend.common.phaser.CompositePhase.invoke(PhaseBuilders.kt:22)
++	at org.jetbrains.kotlin.config.phaser.CompilerPhaseKt.invokeToplevel(CompilerPhase.kt:53)
++	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.runPhasedPipeline(AbstractCliPipeline.kt:109)
++	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.execute(AbstractCliPipeline.kt:68)
++	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecutePhased(K2JVMCompiler.kt:78)
++	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecutePhased(K2JVMCompiler.kt:44)
++	at org.jetbrains.kotlin.cli.common.CLICompiler.execImpl(CLICompiler.kt:90)
++	at org.jetbrains.kotlin.cli.common.CLICompiler.exec(CLICompiler.kt:352)
++	at org.jetbrains.kotlin.incremental.IncrementalJvmCompilerRunnerBase.runCompiler(IncrementalJvmCompilerRunnerBase.kt:175)
++	at org.jetbrains.kotlin.incremental.IncrementalJvmCompilerRunnerBase.runCompiler(IncrementalJvmCompilerRunnerBase.kt:38)
++	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.doCompile(IncrementalCompilerRunner.kt:504)
++	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compileImpl(IncrementalCompilerRunner.kt:421)
++	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compileNonIncrementally(IncrementalCompilerRunner.kt:306)
++	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compile(IncrementalCompilerRunner.kt:133)
++	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.execIncrementalCompiler(CompileServiceImpl.kt:679)
++	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.access$execIncrementalCompiler(CompileServiceImpl.kt:93)
++	at org.jetbrains.kotlin.daemon.CompileServiceImpl.compile(CompileServiceImpl.kt:1806)
++	at jdk.internal.reflect.GeneratedMethodAccessor13.invoke(Unknown Source)
++	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.rmi/sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:360)
++	at java.rmi/sun.rmi.transport.Transport$1.run(Transport.java:200)
++	at java.rmi/sun.rmi.transport.Transport$1.run(Transport.java:197)
++	at java.base/java.security.AccessController.doPrivileged(AccessController.java:712)
++	at java.rmi/sun.rmi.transport.Transport.serviceCall(Transport.java:196)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport.handleMessages(TCPTransport.java:587)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run0(TCPTransport.java:828)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.lambda$run$0(TCPTransport.java:705)
++	at java.base/java.security.AccessController.doPrivileged(AccessController.java:399)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(TCPTransport.java:704)
++	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
++	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
++	at java.base/java.lang.Thread.run(Thread.java:840)
++Caused by: java.lang.IllegalStateException: Could not read file: /Volumes/nvme/Projects/远程Agent安卓/app/app/build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/debug/processDebugResources/R.jar!/dev/agentmirror/app/R.class; size in bytes: 459; file type: CLASS
++	at org.jetbrains.kotlin.load.kotlin.VirtualFileKotlinClass$Factory.logFileReadingErrorMessage(VirtualFileKotlinClass.kt:85)
++	at org.jetbrains.kotlin.load.kotlin.VirtualFileKotlinClass$Factory.create$lambda$3(VirtualFileKotlinClass.kt:76)
++	at org.jetbrains.kotlin.util.PerformanceManager.measureSideTime$compiler_common(PerformanceManager.kt:268)
++	at org.jetbrains.kotlin.util.PerformanceManagerKt.tryMeasureSideTime(PerformanceManager.kt:321)
++	at org.jetbrains.kotlin.load.kotlin.VirtualFileKotlinClass$Factory.create$frontend_common_jvm(VirtualFileKotlinClass.kt:57)
++	at org.jetbrains.kotlin.load.kotlin.KotlinBinaryClassCache$Companion.getKotlinBinaryClassOrClassFileContent$lambda$0(KotlinBinaryClassCache.kt:98)
++	at org.jetbrains.kotlin.com.intellij.mock.MockApplication.runReadAction(MockApplication.java:194)
++	at org.jetbrains.kotlin.load.kotlin.KotlinBinaryClassCache$Companion.getKotlinBinaryClassOrClassFileContent(KotlinBinaryClassCache.kt:97)
++	at org.jetbrains.kotlin.load.kotlin.KotlinBinaryClassCache$Companion.getKotlinBinaryClassOrClassFileContent$default(KotlinBinaryClassCache.kt:78)
++	at org.jetbrains.kotlin.load.kotlin.VirtualFileFinder.findKotlinClassOrContent(VirtualFileFinder.kt:40)
++	at org.jetbrains.kotlin.fir.java.deserialization.JvmClassFileBasedSymbolProvider.extractClassMetadata(JvmClassFileBasedSymbolProvider.kt:171)
++	at org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.findAndDeserializeClass(AbstractFirDeserializedSymbolProvider.kt:229)
++	at org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.classCache$lambda$5(AbstractFirDeserializedSymbolProvider.kt:163)
++	at org.jetbrains.kotlin.fir.caches.FirThreadUnsafeCacheWithPostCompute.getValue(FirThreadUnsafeCachesFactory.kt:75)
++	at org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.getClass(AbstractFirDeserializedSymbolProvider.kt:315)
++	at org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.getClass$default(AbstractFirDeserializedSymbolProvider.kt:298)
++	at org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.getClassLikeSymbolByClassId(AbstractFirDeserializedSymbolProvider.kt:372)
++	at org.jetbrains.kotlin.fir.resolve.providers.impl.FirCachingCompositeSymbolProvider.computeClass(FirCachingCompositeSymbolProvider.kt:147)
++	at org.jetbrains.kotlin.fir.resolve.providers.impl.FirCachingCompositeSymbolProvider.access$computeClass(FirCachingCompositeSymbolProvider.kt:27)
++	at org.jetbrains.kotlin.fir.resolve.providers.impl.FirCachingCompositeSymbolProvider$special$$inlined$createCache$1.invoke(FirCachesFactory.kt:163)
++	at org.jetbrains.kotlin.fir.resolve.providers.impl.FirCachingCompositeSymbolProvider$special$$inlined$createCache$1.invoke(FirCachesFactory.kt:147)
++	at org.jetbrains.kotlin.fir.caches.FirThreadUnsafeCache.getValue(FirThreadUnsafeCachesFactory.kt:57)
++	at org.jetbrains.kotlin.fir.resolve.providers.impl.FirCachingCompositeSymbolProvider.getClassLikeSymbolByClassId(FirCachingCompositeSymbolProvider.kt:174)
++	at org.jetbrains.kotlin.fir.scopes.impl.FirAbstractImportingScope.processClassifiersFromImportsByName(FirAbstractImportingScope.kt:53)
++	at org.jetbrains.kotlin.fir.scopes.impl.FirAbstractSimpleImportingScope.processClassifiersByNameWithSubstitution(FirAbstractSimpleImportingScope.kt:30)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.ScopeBasedTowerLevel.processObjectsByName(TowerLevels.kt:538)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.TowerLevelHandler.handleLevel(TowerLevelHandler.kt:57)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.FirBaseTowerResolveTask.processLevel(FirTowerResolveTask.kt:204)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.FirBaseTowerResolveTask.access$processLevel(FirTowerResolveTask.kt:62)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.FirTowerResolveTask.runResolverForNoReceiver(FirTowerResolveTask.kt:631)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.FirTowerResolveTask.runResolverForNoReceiver$default(FirTowerResolveTask.kt:336)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.FirTowerResolver$enqueueResolutionTasks$2.invokeSuspend(FirTowerResolver.kt:78)
++	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.TowerResolveManager.resumeTask(TowerResolveManager.kt:77)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.TowerResolveManager.runTasks(TowerResolveManager.kt:83)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.FirTowerResolver.runResolver(FirTowerResolver.kt:52)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.FirTowerResolver.runResolver$default(FirTowerResolver.kt:41)
++	at org.jetbrains.kotlin.fir.resolve.calls.tower.FirTowerResolver.runResolver(FirTowerResolver.kt:38)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.collectCandidates(FirCallResolver.kt:209)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.collectCandidates$default(FirCallResolver.kt:174)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.resolveVariableAccessAndSelectCandidateImpl$lambda$7(FirCallResolver.kt:282)
++	at kotlin.UnsafeLazyImpl.getValue(Lazy.kt:100)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.resolveVariableAccessAndSelectCandidateImpl$lambda$8(FirCallResolver.kt:281)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.resolveVariableAccessAndSelectCandidateImpl(FirCallResolver.kt:311)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.resolveVariableAccessAndSelectCandidate(FirCallResolver.kt:258)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.resolveQualifiedAccessAndSelectCandidate(FirExpressionsResolveTransformer.kt:321)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformQualifiedAccessExpression(FirExpressionsResolveTransformer.kt:183)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformAsExplicitReceiver(FirExpressionsResolveTransformer.kt:300)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExplicitReceiverOf(FirExpressionsResolveTransformer.kt:288)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.resolveVariableAccessAndSelectCandidateImpl(FirCallResolver.kt:278)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.resolveVariableAccessAndSelectCandidate(FirCallResolver.kt:258)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.resolveQualifiedAccessAndSelectCandidate(FirExpressionsResolveTransformer.kt:321)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformQualifiedAccessExpression(FirExpressionsResolveTransformer.kt:183)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformAsExplicitReceiver(FirExpressionsResolveTransformer.kt:300)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExplicitReceiverOf(FirExpressionsResolveTransformer.kt:288)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.resolveVariableAccessAndSelectCandidateImpl(FirCallResolver.kt:278)
++	at org.jetbrains.kotlin.fir.resolve.calls.FirCallResolver.resolveVariableAccessAndSelectCandidate(FirCallResolver.kt:258)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.resolveQualifiedAccessAndSelectCandidate(FirExpressionsResolveTransformer.kt:321)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformQualifiedAccessExpression(FirExpressionsResolveTransformer.kt:183)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformQualifiedAccessExpression(FirExpressionsResolveTransformer.kt:101)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformPropertyAccessExpression(FirAbstractBodyResolveTransformerDispatcher.kt:177)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformPropertyAccessExpression(FirAbstractBodyResolveTransformerDispatcher.kt:27)
++	at org.jetbrains.kotlin.fir.expressions.FirPropertyAccessExpression.transform(FirPropertyAccessExpression.kt:43)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformInplace(FirTransformerUtil.kt:20)
++	at org.jetbrains.kotlin.fir.expressions.impl.FirArgumentListImpl.transformArguments(FirArgumentListImpl.kt:31)
++	at org.jetbrains.kotlin.fir.expressions.impl.FirArgumentListImpl.transformChildren(FirArgumentListImpl.kt:26)
++	at org.jetbrains.kotlin.fir.expressions.impl.FirArgumentListImpl.transformChildren(FirArgumentListImpl.kt:17)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformElement(FirAbstractBodyResolveTransformerDispatcher.kt:92)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformElement(FirAbstractBodyResolveTransformerDispatcher.kt:27)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformer.transformArgumentList(FirTransformer.kt:167)
++	at org.jetbrains.kotlin.fir.expressions.FirArgumentList.transform(FirArgumentList.kt:29)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirPartialBodyResolveTransformer.transformElement(FirPartialBodyResolveTransformer.kt:36)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirPartialBodyResolveTransformer.transformElement(FirPartialBodyResolveTransformer.kt:13)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformer.transformArgumentList(FirTransformer.kt:167)
++	at org.jetbrains.kotlin.fir.expressions.FirArgumentList.transform(FirArgumentList.kt:29)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCallInternal$resolve(FirExpressionsResolveTransformer.kt:566)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:503)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:65)
++	at org.jetbrains.kotlin.fir.expressions.FirFunctionCall.transform(FirFunctionCall.kt:45)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformSingle(FirTransformerUtil.kt:13)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformAsExplicitReceiver(FirExpressionsResolveTransformer.kt:303)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExplicitReceiverOf(FirExpressionsResolveTransformer.kt:288)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCallInternal$resolve(FirExpressionsResolveTransformer.kt:558)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:503)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:65)
++	at org.jetbrains.kotlin.fir.expressions.FirFunctionCall.transform(FirFunctionCall.kt:45)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformSingle(FirTransformerUtil.kt:13)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformAsExplicitReceiver(FirExpressionsResolveTransformer.kt:303)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExplicitReceiverOf(FirExpressionsResolveTransformer.kt:288)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCallInternal$resolve(FirExpressionsResolveTransformer.kt:558)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:503)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:65)
++	at org.jetbrains.kotlin.fir.expressions.FirFunctionCall.transform(FirFunctionCall.kt:45)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformSingle(FirTransformerUtil.kt:13)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformAsExplicitReceiver(FirExpressionsResolveTransformer.kt:303)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExplicitReceiverOf(FirExpressionsResolveTransformer.kt:288)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCallInternal$resolve(FirExpressionsResolveTransformer.kt:558)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:503)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:65)
++	at org.jetbrains.kotlin.fir.expressions.FirFunctionCall.transform(FirFunctionCall.kt:45)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformSingle(FirTransformerUtil.kt:13)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformAsExplicitReceiver(FirExpressionsResolveTransformer.kt:303)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExplicitReceiverOf(FirExpressionsResolveTransformer.kt:288)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCallInternal$resolve(FirExpressionsResolveTransformer.kt:558)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:503)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:65)
++	at org.jetbrains.kotlin.fir.expressions.FirFunctionCall.transform(FirFunctionCall.kt:45)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformSingle(FirTransformerUtil.kt:13)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformAsExplicitReceiver(FirExpressionsResolveTransformer.kt:303)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExplicitReceiverOf(FirExpressionsResolveTransformer.kt:288)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCallInternal$resolve(FirExpressionsResolveTransformer.kt:558)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:503)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:65)
++	at org.jetbrains.kotlin.fir.expressions.FirFunctionCall.transform(FirFunctionCall.kt:45)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformSingle(FirTransformerUtil.kt:13)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformAsExplicitReceiver(FirExpressionsResolveTransformer.kt:303)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExplicitReceiverOf(FirExpressionsResolveTransformer.kt:288)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCallInternal$resolve(FirExpressionsResolveTransformer.kt:558)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformFunctionCall(FirExpressionsResolveTransformer.kt:503)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformFunctionCall(FirAbstractBodyResolveTransformerDispatcher.kt:195)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformFunctionCall(FirAbstractBodyResolveTransformerDispatcher.kt:27)
++	at org.jetbrains.kotlin.fir.expressions.FirFunctionCall.transform(FirFunctionCall.kt:45)
++	at org.jetbrains.kotlin.fir.expressions.impl.FirReturnExpressionImpl.transformResult(FirReturnExpressionImpl.kt:56)
++	at org.jetbrains.kotlin.fir.expressions.impl.FirReturnExpressionImpl.transformChildren(FirReturnExpressionImpl.kt:45)
++	at org.jetbrains.kotlin.fir.expressions.impl.FirReturnExpressionImpl.transformChildren(FirReturnExpressionImpl.kt:30)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformExpression(FirExpressionsResolveTransformer.kt:90)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformExpression(FirAbstractBodyResolveTransformerDispatcher.kt:141)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirControlFlowStatementsResolveTransformer.transformJump(FirControlFlowStatementsResolveTransformer.kt:181)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirControlFlowStatementsResolveTransformer.transformReturnExpression(FirControlFlowStatementsResolveTransformer.kt:202)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformReturnExpression(FirAbstractBodyResolveTransformerDispatcher.kt:737)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformReturnExpression(FirAbstractBodyResolveTransformerDispatcher.kt:27)
++	at org.jetbrains.kotlin.fir.expressions.FirReturnExpression.transform(FirReturnExpression.kt:35)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformSingle(FirTransformerUtil.kt:13)
++	at org.jetbrains.kotlin.fir.expressions.impl.FirSingleExpressionBlock.transformStatements(FirSingleExpressionBlock.kt:52)
++	at org.jetbrains.kotlin.fir.expressions.FirExpressionUtilKt.transformStatementsIndexed(FirExpressionUtil.kt:91)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformBlockInCurrentScope$resolve(FirExpressionsResolveTransformer.kt:735)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirExpressionsResolveTransformer.transformBlock(FirExpressionsResolveTransformer.kt:726)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformBlock(FirAbstractBodyResolveTransformerDispatcher.kt:222)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformBlock(FirAbstractBodyResolveTransformerDispatcher.kt:27)
++	at org.jetbrains.kotlin.fir.expressions.FirBlock.transform(FirBlock.kt:33)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirPartialBodyResolveTransformer.transformElement(FirPartialBodyResolveTransformer.kt:36)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirPartialBodyResolveTransformer.transformElement(FirPartialBodyResolveTransformer.kt:13)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformer.transformBlock(FirTransformer.kt:183)
++	at org.jetbrains.kotlin.fir.expressions.FirBlock.transform(FirBlock.kt:33)
++	at org.jetbrains.kotlin.fir.declarations.impl.FirSimpleFunctionImpl.transformBody(FirSimpleFunctionImpl.kt:114)
++	at org.jetbrains.kotlin.fir.declarations.impl.FirSimpleFunctionImpl.transformBody(FirSimpleFunctionImpl.kt:32)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformFunction(FirDeclarationsResolveTransformer.kt:1050)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformFunctionWithGivenSignature(FirDeclarationsResolveTransformer.kt:987)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.access$transformFunctionWithGivenSignature(FirDeclarationsResolveTransformer.kt:64)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformSimpleFunction$lambda$67$lambda$66$lambda$65(FirDeclarationsResolveTransformer.kt:979)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.BodyResolveContext.withParameters(BodyResolveContext.kt:1361)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.BodyResolveContext.forFunctionBody(BodyResolveContext.kt:769)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformSimpleFunction(FirDeclarationsResolveTransformer.kt:977)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformSimpleFunction(FirAbstractBodyResolveTransformerDispatcher.kt:574)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformSimpleFunction(FirAbstractBodyResolveTransformerDispatcher.kt:27)
++	at org.jetbrains.kotlin.fir.declarations.FirSimpleFunction.transform(FirSimpleFunction.kt:55)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformInplace(FirTransformerUtil.kt:20)
++	at org.jetbrains.kotlin.fir.declarations.impl.FirRegularClassImpl.transformDeclarations(FirRegularClassImpl.kt:92)
++	at org.jetbrains.kotlin.fir.declarations.impl.FirRegularClassImpl.transformChildren(FirRegularClassImpl.kt:74)
++	at org.jetbrains.kotlin.fir.declarations.impl.FirRegularClassImpl.transformChildren(FirRegularClassImpl.kt:30)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformElement(FirAbstractBodyResolveTransformerDispatcher.kt:92)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformDeclarationContent(FirAbstractBodyResolveTransformerDispatcher.kt:462)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformDeclarationContent(FirDeclarationsResolveTransformer.kt:84)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.doTransformRegularClass$lambda$59(FirDeclarationsResolveTransformer.kt:906)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.withRegularClass$lambda$60(FirDeclarationsResolveTransformer.kt:915)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.BodyResolveContext.withRegularClass$lambda$18$lambda$17(BodyResolveContext.kt:1749)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.BodyResolveContext.withScopesForClass(BodyResolveContext.kt:591)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.BodyResolveContext.withRegularClass(BodyResolveContext.kt:467)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.withRegularClass(FirDeclarationsResolveTransformer.kt:914)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.doTransformRegularClass(FirDeclarationsResolveTransformer.kt:905)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformRegularClass(FirDeclarationsResolveTransformer.kt:806)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformRegularClass(FirAbstractBodyResolveTransformerDispatcher.kt:547)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformRegularClass(FirAbstractBodyResolveTransformerDispatcher.kt:27)
++	at org.jetbrains.kotlin.fir.declarations.FirRegularClass.transform(FirRegularClass.kt:53)
++	at org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformInplace(FirTransformerUtil.kt:20)
++	at org.jetbrains.kotlin.fir.declarations.impl.FirFileImpl.transformDeclarations(FirFileImpl.kt:81)
++	at org.jetbrains.kotlin.fir.declarations.impl.FirFileImpl.transformChildren(FirFileImpl.kt:66)
++	at org.jetbrains.kotlin.fir.declarations.impl.FirFileImpl.transformChildren(FirFileImpl.kt:29)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformElement(FirAbstractBodyResolveTransformerDispatcher.kt:92)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirAbstractBodyResolveTransformerDispatcher.transformDeclarationContent(FirAbstractBodyResolveTransformerDispatcher.kt:462)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformDeclarationContent(FirDeclarationsResolveTransformer.kt:84)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.doTransformFile$lambda$57(FirDeclarationsResolveTransformer.kt:878)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.withFile(FirDeclarationsResolveTransformer.kt:891)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.doTransformFile(FirDeclarationsResolveTransformer.kt:877)
++	at org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer.transformFile(FirDeclarationsResolveTransformer.kt:784)
++	... 47 more
++Caused by: java.lang.RuntimeException: java.io.FileNotFoundException: /Volumes/nvme/Projects/远程Agent安卓/app/app/build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/debug/processDebugResources/R.jar (No such file or directory)
++	at org.jetbrains.kotlin.com.intellij.util.io.FileAccessorCache.createHandle(FileAccessorCache.java:56)
++	at org.jetbrains.kotlin.com.intellij.util.io.FileAccessorCache.get(FileAccessorCache.java:39)
++	at org.jetbrains.kotlin.cli.jvm.compiler.jarfs.FastJarHandler.contentsToByteArray(FastJarHandler.kt:112)
++	at org.jetbrains.kotlin.cli.jvm.compiler.jarfs.FastJarVirtualFile.contentsToByteArray(FastJarVirtualFile.kt:89)
++	at org.jetbrains.kotlin.com.intellij.openapi.vfs.VirtualFile.contentsToByteArray(VirtualFile.java:627)
++	at org.jetbrains.kotlin.load.kotlin.VirtualFileKotlinClass$Factory.create$lambda$3(VirtualFileKotlinClass.kt:61)
++	... 230 more
++Caused by: java.io.FileNotFoundException: /Volumes/nvme/Projects/远程Agent安卓/app/app/build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/debug/processDebugResources/R.jar (No such file or directory)
++	at java.base/java.io.RandomAccessFile.open0(Native Method)
++	at java.base/java.io.RandomAccessFile.open(RandomAccessFile.java:344)
++	at java.base/java.io.RandomAccessFile.<init>(RandomAccessFile.java:259)
++	at java.base/java.io.RandomAccessFile.<init>(RandomAccessFile.java:213)
++	at org.jetbrains.kotlin.cli.jvm.compiler.jarfs.FastJarFileSystem$cachedOpenFileHandles$1.createAccessor(FastJarFileSystem.kt:31)
++	at org.jetbrains.kotlin.cli.jvm.compiler.jarfs.FastJarFileSystem$cachedOpenFileHandles$1.createAccessor(FastJarFileSystem.kt:28)
++	at org.jetbrains.kotlin.com.intellij.util.io.FileAccessorCache.createHandle(FileAccessorCache.java:45)
++	... 235 more
++
++
+diff --git a/app/.kotlin/errors/errors-1786823809463.log b/app/.kotlin/errors/errors-1786823809463.log
+new file mode 100644
+index 000000000..0ab2d29d0
+--- /dev/null
++++ b/app/.kotlin/errors/errors-1786823809463.log
+@@ -0,0 +1,154 @@
++kotlin version: 2.2.0
++error message: Daemon compilation failed: null
++java.lang.Exception
++	at org.jetbrains.kotlin.daemon.common.CompileService$CallResult$Error.get(CompileService.kt:69)
++	at org.jetbrains.kotlin.daemon.common.CompileService$CallResult$Error.get(CompileService.kt:65)
++	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.compileWithDaemon(GradleKotlinCompilerWork.kt:240)
++	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.compileWithDaemonOrFallbackImpl(GradleKotlinCompilerWork.kt:159)
++	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.run(GradleKotlinCompilerWork.kt:111)
++	at org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction.execute(GradleCompilerRunnerWithWorkers.kt:74)
++	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:63)
++	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:66)
++	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:62)
++	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:100)
++	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:62)
++	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
++	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
++	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
++	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:59)
++	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:174)
++	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:194)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:127)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:169)
++	at org.gradle.internal.Factories$1.create(Factories.java:31)
++	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:263)
++	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:127)
++	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:132)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:164)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:133)
++	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539)
++	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
++	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
++	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:48)
++	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
++	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
++	at java.base/java.lang.Thread.run(Thread.java:840)
++Caused by: java.lang.AssertionError: java.lang.Exception: Could not close incremental caches in /Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin: class-fq-name-to-source.tab, proto.tab
++	at org.jetbrains.kotlin.com.google.common.io.Closer.close(Closer.java:218)
++	at org.jetbrains.kotlin.incremental.IncrementalCachesManager.close(IncrementalCachesManager.kt:55)
++	at kotlin.io.CloseableKt.closeFinally(Closeable.kt:46)
++	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compileNonIncrementally(IncrementalCompilerRunner.kt:298)
++	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compile(IncrementalCompilerRunner.kt:133)
++	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.execIncrementalCompiler(CompileServiceImpl.kt:679)
++	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.access$execIncrementalCompiler(CompileServiceImpl.kt:93)
++	at org.jetbrains.kotlin.daemon.CompileServiceImpl.compile(CompileServiceImpl.kt:1806)
++	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
++	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
++	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.rmi/sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:360)
++	at java.rmi/sun.rmi.transport.Transport$1.run(Transport.java:200)
++	at java.rmi/sun.rmi.transport.Transport$1.run(Transport.java:197)
++	at java.base/java.security.AccessController.doPrivileged(AccessController.java:712)
++	at java.rmi/sun.rmi.transport.Transport.serviceCall(Transport.java:196)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport.handleMessages(TCPTransport.java:587)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run0(TCPTransport.java:828)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.lambda$run$0(TCPTransport.java:705)
++	at java.base/java.security.AccessController.doPrivileged(AccessController.java:399)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(TCPTransport.java:704)
++	... 3 more
++Caused by: java.lang.Exception: Could not close incremental caches in /Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin: class-fq-name-to-source.tab, proto.tab
++	at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:95)
++	at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.close(BasicMapsOwner.kt:53)
++	at org.jetbrains.kotlin.com.google.common.io.Closer.close(Closer.java:205)
++	... 24 more
++	Suppressed: java.lang.IllegalStateException: Storage for [/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab] is already registered
++		at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:410)
++		at org.jetbrains.kotlin.com.intellij.util.io.PagedFileStorage.<init>(PagedFileStorage.java:72)
++		at org.jetbrains.kotlin.com.intellij.util.io.ResizeableMappedFile.<init>(ResizeableMappedFile.java:68)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentBTreeEnumerator.<init>(PersistentBTreeEnumerator.java:128)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentEnumerator.createDefaultEnumerator(PersistentEnumerator.java:52)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:165)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:140)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.buildImplementation(PersistentMapBuilder.java:88)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.build(PersistentMapBuilder.java:71)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:46)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:72)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.createMap(LazyStorage.kt:62)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.getStorageOrCreateNew(LazyStorage.kt:59)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.set(LazyStorage.kt:80)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.applyChanges(InMemoryStorage.kt:108)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.close(InMemoryStorage.kt:136)
++		at org.jetbrains.kotlin.incremental.storage.PersistentStorageWrapper.close(PersistentStorage.kt:124)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:87)
++		... 26 more
++		Suppressed: java.lang.Exception: Storage[/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab] registration stack trace
++			at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:437)
++			... 45 more
++	Suppressed: java.lang.IllegalStateException: Storage for [/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab] is already registered
++		at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:410)
++		at org.jetbrains.kotlin.com.intellij.util.io.PagedFileStorage.<init>(PagedFileStorage.java:72)
++		at org.jetbrains.kotlin.com.intellij.util.io.ResizeableMappedFile.<init>(ResizeableMappedFile.java:68)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentBTreeEnumerator.<init>(PersistentBTreeEnumerator.java:128)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentEnumerator.createDefaultEnumerator(PersistentEnumerator.java:52)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:165)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:140)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.buildImplementation(PersistentMapBuilder.java:88)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.build(PersistentMapBuilder.java:71)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:46)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:72)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.createMap(LazyStorage.kt:62)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.getStorageOrCreateNew(LazyStorage.kt:59)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.set(LazyStorage.kt:80)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.applyChanges(InMemoryStorage.kt:108)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.close(InMemoryStorage.kt:136)
++		at org.jetbrains.kotlin.incremental.storage.PersistentStorageWrapper.close(PersistentStorage.kt:124)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:87)
++		... 26 more
++		Suppressed: java.lang.Exception: Storage[/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab] registration stack trace
++			at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:437)
++			... 45 more
++	Suppressed: java.lang.Exception: Could not close incremental caches in /Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/lookups: id-to-file.tab
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:95)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.close(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.LookupStorage.close(LookupStorage.kt:155)
++		... 25 more
++		Suppressed: java.lang.IllegalStateException: Storage for [/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/lookups/id-to-file.tab] is already registered
++			at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:410)
++			at org.jetbrains.kotlin.com.intellij.util.io.PagedFileStorage.<init>(PagedFileStorage.java:72)
++			at org.jetbrains.kotlin.com.intellij.util.io.ResizeableMappedFile.<init>(ResizeableMappedFile.java:68)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentBTreeEnumerator.<init>(PersistentBTreeEnumerator.java:128)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentEnumerator.createDefaultEnumerator(PersistentEnumerator.java:52)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:165)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:140)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.buildImplementation(PersistentMapBuilder.java:88)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.build(PersistentMapBuilder.java:71)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:46)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:72)
++			at org.jetbrains.kotlin.incremental.storage.LazyStorage.createMap(LazyStorage.kt:62)
++			at org.jetbrains.kotlin.incremental.storage.LazyStorage.getStorageOrCreateNew(LazyStorage.kt:59)
++			at org.jetbrains.kotlin.incremental.storage.LazyStorage.set(LazyStorage.kt:80)
++			at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.applyChanges(InMemoryStorage.kt:108)
++			at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.close(InMemoryStorage.kt:136)
++			at org.jetbrains.kotlin.incremental.storage.PersistentStorageWrapper.close(PersistentStorage.kt:124)
++			at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++			at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++			at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:87)
++			... 27 more
++			Suppressed: java.lang.Exception: Storage[/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/lookups/id-to-file.tab] registration stack trace
++				at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:437)
++				... 46 more
++
++
+diff --git a/app/.kotlin/errors/errors-1786823809916.log b/app/.kotlin/errors/errors-1786823809916.log
+new file mode 100644
+index 000000000..df47813b2
+--- /dev/null
++++ b/app/.kotlin/errors/errors-1786823809916.log
+@@ -0,0 +1,182 @@
++kotlin version: 2.2.0
++error message: Daemon compilation failed: null
++java.lang.Exception
++	at org.jetbrains.kotlin.daemon.common.CompileService$CallResult$Error.get(CompileService.kt:69)
++	at org.jetbrains.kotlin.daemon.common.CompileService$CallResult$Error.get(CompileService.kt:65)
++	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.compileWithDaemon(GradleKotlinCompilerWork.kt:240)
++	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.compileWithDaemonOrFallbackImpl(GradleKotlinCompilerWork.kt:159)
++	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.run(GradleKotlinCompilerWork.kt:111)
++	at org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction.execute(GradleCompilerRunnerWithWorkers.kt:74)
++	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:63)
++	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:66)
++	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:62)
++	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:100)
++	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:62)
++	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
++	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
++	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
++	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
++	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:59)
++	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:174)
++	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:194)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:127)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:169)
++	at org.gradle.internal.Factories$1.create(Factories.java:31)
++	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:263)
++	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:127)
++	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:132)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:164)
++	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:133)
++	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539)
++	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
++	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
++	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:48)
++	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
++	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
++	at java.base/java.lang.Thread.run(Thread.java:840)
++Caused by: java.lang.AssertionError: java.lang.Exception: Could not close incremental caches in /Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin: class-attributes.tab, source-to-classes.tab, internal-name-to-source.tab
++	at org.jetbrains.kotlin.com.google.common.io.Closer.close(Closer.java:218)
++	at org.jetbrains.kotlin.incremental.IncrementalCachesManager.close(IncrementalCachesManager.kt:55)
++	at kotlin.io.CloseableKt.closeFinally(Closeable.kt:46)
++	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compileNonIncrementally(IncrementalCompilerRunner.kt:298)
++	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compile(IncrementalCompilerRunner.kt:133)
++	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.execIncrementalCompiler(CompileServiceImpl.kt:679)
++	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.access$execIncrementalCompiler(CompileServiceImpl.kt:93)
++	at org.jetbrains.kotlin.daemon.CompileServiceImpl.compile(CompileServiceImpl.kt:1806)
++	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
++	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
++	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.rmi/sun.rmi.server.UnicastServerRef.dispatch(UnicastServerRef.java:360)
++	at java.rmi/sun.rmi.transport.Transport$1.run(Transport.java:200)
++	at java.rmi/sun.rmi.transport.Transport$1.run(Transport.java:197)
++	at java.base/java.security.AccessController.doPrivileged(AccessController.java:712)
++	at java.rmi/sun.rmi.transport.Transport.serviceCall(Transport.java:196)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport.handleMessages(TCPTransport.java:587)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run0(TCPTransport.java:828)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.lambda$run$0(TCPTransport.java:705)
++	at java.base/java.security.AccessController.doPrivileged(AccessController.java:399)
++	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(TCPTransport.java:704)
++	... 3 more
++Caused by: java.lang.Exception: Could not close incremental caches in /Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin: class-attributes.tab, source-to-classes.tab, internal-name-to-source.tab
++	at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:95)
++	at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.close(BasicMapsOwner.kt:53)
++	at org.jetbrains.kotlin.com.google.common.io.Closer.close(Closer.java:205)
++	... 24 more
++	Suppressed: java.lang.IllegalStateException: Storage for [/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab] is already registered
++		at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:410)
++		at org.jetbrains.kotlin.com.intellij.util.io.PagedFileStorage.<init>(PagedFileStorage.java:72)
++		at org.jetbrains.kotlin.com.intellij.util.io.ResizeableMappedFile.<init>(ResizeableMappedFile.java:68)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentBTreeEnumerator.<init>(PersistentBTreeEnumerator.java:128)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentEnumerator.createDefaultEnumerator(PersistentEnumerator.java:52)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:165)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:140)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.buildImplementation(PersistentMapBuilder.java:88)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.build(PersistentMapBuilder.java:71)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:46)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:72)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.createMap(LazyStorage.kt:62)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.getStorageOrCreateNew(LazyStorage.kt:59)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.set(LazyStorage.kt:80)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.applyChanges(InMemoryStorage.kt:108)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.close(InMemoryStorage.kt:136)
++		at org.jetbrains.kotlin.incremental.storage.PersistentStorageWrapper.close(PersistentStorage.kt:124)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:87)
++		... 26 more
++		Suppressed: java.lang.Exception: Storage[/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab] registration stack trace
++			at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:437)
++			... 45 more
++	Suppressed: java.lang.IllegalStateException: Storage for [/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab] is already registered
++		at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:410)
++		at org.jetbrains.kotlin.com.intellij.util.io.PagedFileStorage.<init>(PagedFileStorage.java:72)
++		at org.jetbrains.kotlin.com.intellij.util.io.ResizeableMappedFile.<init>(ResizeableMappedFile.java:68)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentBTreeEnumerator.<init>(PersistentBTreeEnumerator.java:128)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentEnumerator.createDefaultEnumerator(PersistentEnumerator.java:52)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:165)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:140)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.buildImplementation(PersistentMapBuilder.java:88)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.build(PersistentMapBuilder.java:71)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:46)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:72)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.createMap(LazyStorage.kt:62)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.getStorageOrCreateNew(LazyStorage.kt:59)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.set(LazyStorage.kt:80)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.applyChanges(InMemoryStorage.kt:108)
++		at org.jetbrains.kotlin.incremental.storage.AppendableInMemoryStorage.applyChanges(InMemoryStorage.kt:179)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.close(InMemoryStorage.kt:136)
++		at org.jetbrains.kotlin.incremental.storage.AppendableSetBasicMap.close(BasicMap.kt:157)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:87)
++		... 26 more
++		Suppressed: java.lang.Exception: Storage[/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab] registration stack trace
++			at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:437)
++			... 46 more
++	Suppressed: java.lang.IllegalStateException: Storage for [/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab] is already registered
++		at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:410)
++		at org.jetbrains.kotlin.com.intellij.util.io.PagedFileStorage.<init>(PagedFileStorage.java:72)
++		at org.jetbrains.kotlin.com.intellij.util.io.ResizeableMappedFile.<init>(ResizeableMappedFile.java:68)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentBTreeEnumerator.<init>(PersistentBTreeEnumerator.java:128)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentEnumerator.createDefaultEnumerator(PersistentEnumerator.java:52)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:165)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:140)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.buildImplementation(PersistentMapBuilder.java:88)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.build(PersistentMapBuilder.java:71)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:46)
++		at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:72)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.createMap(LazyStorage.kt:62)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.getStorageOrCreateNew(LazyStorage.kt:59)
++		at org.jetbrains.kotlin.incremental.storage.LazyStorage.set(LazyStorage.kt:80)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.applyChanges(InMemoryStorage.kt:108)
++		at org.jetbrains.kotlin.incremental.storage.AppendableInMemoryStorage.applyChanges(InMemoryStorage.kt:179)
++		at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.close(InMemoryStorage.kt:136)
++		at org.jetbrains.kotlin.incremental.storage.PersistentStorageWrapper.close(PersistentStorage.kt:124)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:87)
++		... 26 more
++		Suppressed: java.lang.Exception: Storage[/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab] registration stack trace
++			at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:437)
++			... 46 more
++	Suppressed: java.lang.Exception: Could not close incremental caches in /Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/lookups: lookups.tab
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:95)
++		at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.close(BasicMapsOwner.kt:53)
++		at org.jetbrains.kotlin.incremental.LookupStorage.close(LookupStorage.kt:155)
++		... 25 more
++		Suppressed: java.lang.IllegalStateException: Storage for [/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/lookups/lookups.tab] is already registered
++			at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:410)
++			at org.jetbrains.kotlin.com.intellij.util.io.PagedFileStorage.<init>(PagedFileStorage.java:72)
++			at org.jetbrains.kotlin.com.intellij.util.io.ResizeableMappedFile.<init>(ResizeableMappedFile.java:68)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentBTreeEnumerator.<init>(PersistentBTreeEnumerator.java:128)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentEnumerator.createDefaultEnumerator(PersistentEnumerator.java:52)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:165)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapImpl.<init>(PersistentMapImpl.java:140)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.buildImplementation(PersistentMapBuilder.java:88)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentMapBuilder.build(PersistentMapBuilder.java:71)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:46)
++			at org.jetbrains.kotlin.com.intellij.util.io.PersistentHashMap.<init>(PersistentHashMap.java:72)
++			at org.jetbrains.kotlin.incremental.storage.LazyStorage.createMap(LazyStorage.kt:62)
++			at org.jetbrains.kotlin.incremental.storage.LazyStorage.getStorageOrCreateNew(LazyStorage.kt:59)
++			at org.jetbrains.kotlin.incremental.storage.LazyStorage.set(LazyStorage.kt:80)
++			at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.applyChanges(InMemoryStorage.kt:108)
++			at org.jetbrains.kotlin.incremental.storage.AppendableInMemoryStorage.applyChanges(InMemoryStorage.kt:179)
++			at org.jetbrains.kotlin.incremental.storage.InMemoryStorage.close(InMemoryStorage.kt:136)
++			at org.jetbrains.kotlin.incremental.storage.AppendableSetBasicMap.close(BasicMap.kt:157)
++			at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++			at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner$close$1.invoke(BasicMapsOwner.kt:53)
++			at org.jetbrains.kotlin.incremental.storage.BasicMapsOwner.forEachMapSafe(BasicMapsOwner.kt:87)
++			... 27 more
++			Suppressed: java.lang.Exception: Storage[/Volumes/nvme/Projects/远程Agent安卓/app/terminal/build/kotlin/compileKotlin/cacheable/caches-jvm/lookups/lookups.tab] registration stack trace
++				at org.jetbrains.kotlin.com.intellij.util.io.FilePageCache.registerPagedFileStorage(FilePageCache.java:437)
++				... 47 more
++
++
+diff --git a/app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt b/app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt
+index bbbb2fe95..b2cd8ecb9 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt
+@@ -164,6 +164,8 @@ fun AgentMirrorApp(
+                         onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
+                         onBackToList = { navState.selectedWorkspaceCwd = null },
+                         onOpenSettings = { navState.showSettings = true },
++                        // 二级实时流（060）：点一行用 ref（结构身份）进三级终端（唯一入口）。
++                        onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                     )
+                 }
+             }
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt b/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
+index ef307b1de..9f46af4e4 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
+@@ -350,6 +350,30 @@ class ConnectionManager(
+         return conn.send(UnsubscribeFrame(ref = ref))
+     }
+ 
++    /**
++     * 二级菜单订阅（060）：进入二级菜单时发 [Level2SubscribeFrame]，服务端开始推该工作区
++     * 的实时流（Level2Frame）。fire-and-forget：服务端有订阅者才 scan、零订阅者 park。
++     *
++     * @contract
++     * @pre 连接已启动（非 STOPPED）
++     * @post 连接就绪时 Level2SubscribeFrame 已发出；未就绪则静默（重连后由 UI 重挂订阅）
++     * @err 无（不抛异常）
++     * @inv 不登记 pending 回执；订阅/退订幂等
++     */
++    fun subscribeLevel2(workspace: String): Boolean {
++        if (state == ConnectionState.STOPPED) return false
++        val conn = connection ?: return true
++        if (!conn.isReady) return true
++        return conn.send(Level2SubscribeFrame(workspace = workspace))
++    }
++
++    /** 二级菜单退订（060）：离开二级菜单时发 [Level2UnsubscribeFrame]，服务端停止推。幂等。 */
++    fun unsubscribeLevel2(workspace: String): Boolean {
++        val conn = connection ?: return true
++        if (!conn.isReady) return true
++        return conn.send(Level2UnsubscribeFrame(workspace = workspace))
++    }
++
+     /**
+      * 请求全量列表。
+      *
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt b/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+index 166ac2c76..dad88651d 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+@@ -52,4 +52,7 @@ internal object FrameType {
+     const val SCROLL_WHEEL = "scroll_wheel"
+     const val ATTACH_PREVIEW = "attach_preview"
+     const val PANE_MODE_CHANGED = "pane_mode_changed"
++    const val LEVEL2 = "level2"
++    const val LEVEL2_SUBSCRIBE = "level2_subscribe"
++    const val LEVEL2_UNSUBSCRIBE = "level2_unsubscribe"
+ }
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt b/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
+index 73f87fffd..3c786d247 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
+@@ -60,6 +60,9 @@ sealed interface FramePayload {
+                     FrameType.SCROLL_WHEEL -> json.decodeFromJsonElement(ScrollWheelFrame.serializer(), el)
+                     FrameType.ATTACH_PREVIEW -> json.decodeFromJsonElement(AttachPreviewFrame.serializer(), el)
+                     FrameType.PANE_MODE_CHANGED -> json.decodeFromJsonElement(PaneModeChangedFrame.serializer(), el)
++                    FrameType.LEVEL2 -> json.decodeFromJsonElement(Level2Frame.serializer(), el)
++                    FrameType.LEVEL2_SUBSCRIBE -> json.decodeFromJsonElement(Level2SubscribeFrame.serializer(), el)
++                    FrameType.LEVEL2_UNSUBSCRIBE -> json.decodeFromJsonElement(Level2UnsubscribeFrame.serializer(), el)
+                     else -> throw FrameDecodeException(
+                         FrameError.UNSUPPORTED_TYPE,
+                         "unknown frame type: $type",
+@@ -115,6 +118,13 @@ sealed interface FramePayload {
+                     FrameError.INVALID_FIELD,
+                     "pane_mode_changed is server-to-client only, never sent upstream",
+                 )
++                // Level2Frame is S→C only; client never encodes it upstream.
++                is Level2Frame -> throw FrameEncodeException(
++                    FrameError.INVALID_FIELD,
++                    "level2 is server-to-client only, never sent upstream",
++                )
++                is Level2SubscribeFrame -> json.encodeToJsonElement(Level2SubscribeFrame.serializer(), frame)
++                is Level2UnsubscribeFrame -> json.encodeToJsonElement(Level2UnsubscribeFrame.serializer(), frame)
+             }
+         }
+     }
+@@ -205,6 +215,11 @@ data class Session(
+     @SerialName("cwd") val cwd: String,
+     @SerialName("rows") val rows: Int,
+     @SerialName("cols") val cols: Int,
++    /**
++     * pane_title 原样透传（060 二级实时流）：服务端不解析、App 渲染原样画。零解析——
++     * 一个字符都不 trim/strip/匹配/映射/美化。默认空串兼容旧帧（一级 listing 无 title）。
++     */
++    @SerialName("title") val title: String = "",
+ )
+ 
+ /**
+@@ -502,3 +517,49 @@ data class PaneModeChangedFrame(
+     override fun validate(): String? = if (ref.isEmpty()) "pane_mode_changed ref must be non-empty" else null
+ }
+ 
++/**
++ * 二级菜单实时流 S→C（060）：服务端把单个工作区的会话全量快照推给二级菜单订阅者。
++ *
++ * 每次 scan 后全量替换该工作区视图（行数少，全量免 diff）；[seq] 单调递增，客户端可检测
++ * 跳变触发重连。每个 [Session] 的 [Session.title] 是 pane_title 原样（零解析），[Session.ref]
++ * 是结构字段身份（socket+paneid），[Session.name] 是 window_name（fallback session_name）。
++ *
++ * @contract
++ * @pre workspace 非空、seq ≥ 1、sessions 为服务端权威快照
++ * @post 客户端以 sessions 整体替换该工作区的二级视图
++ * @err validate() 对空 workspace / seq ≤ 0 返回非空原因
++ * @inv sessions 每项 title 原样（App 零解析）；ref 永不来自标题字符串
++ */
++@Serializable
++data class Level2Frame(
++    @SerialName("workspace") val workspace: String,
++    @SerialName("seq") val seq: Long,
++    @SerialName("sessions") val sessions: List<Session>,
++) : FramePayload {
++    override val frameType: String get() = FrameType.LEVEL2
++    override fun validate(): String? = when {
++        workspace.isEmpty() -> "level2 workspace must be non-empty"
++        seq <= 0 -> "level2 seq must be >= 1"
++        else -> null
++    }
++}
++
++/** 二级菜单订阅 C→S（060）：客户端进入二级菜单时发，服务端开始推该工作区实时流。 */
++@Serializable
++data class Level2SubscribeFrame(
++    @SerialName("workspace") val workspace: String,
++) : FramePayload {
++    override val frameType: String get() = FrameType.LEVEL2_SUBSCRIBE
++    override fun validate(): String? =
++        if (workspace.isEmpty()) "level2_subscribe workspace must be non-empty" else null
++}
++
++/** 二级菜单退订 C→S（060）：客户端离开二级菜单时发，服务端停止推。 */
++@Serializable
++data class Level2UnsubscribeFrame(
++    @SerialName("workspace") val workspace: String,
++) : FramePayload {
++    override val frameType: String get() = FrameType.LEVEL2_UNSUBSCRIBE
++    override fun validate(): String? = null
++}
++
+diff --git a/app/app/src/main/java/dev/agentmirror/app/workspace/Level2LiveStreamScreen.kt b/app/app/src/main/java/dev/agentmirror/app/workspace/Level2LiveStreamScreen.kt
+new file mode 100644
+index 000000000..bd17bd17d
+--- /dev/null
++++ b/app/app/src/main/java/dev/agentmirror/app/workspace/Level2LiveStreamScreen.kt
+@@ -0,0 +1,107 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.defaultMinSize
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.navigationBarsPadding
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.items
++import androidx.compose.material3.HorizontalDivider
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Surface
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.testTag
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import dev.agentmirror.app.ui.theme.MonoFontFamily
++import dev.agentmirror.app.ui.theme.Spacing
++
++/**
++ * 二级菜单实时流渲染（060 t.app）：服务端推来的会话行，**标题原样画**（一个字符都不解析）。
++ *
++ * - 每行主文本 = `title`（pane_title 原样，含 ◐/✳ 前缀与尾空格），**零字符串处理**；
++ * - 每行次行 = `name`（结构字段展示名，window_name fallback session_name），可做次级标签；
++ * - 点行 → [onOpenSession](ref, name)，ref 是结构字段身份（socket+paneid），**title 不参与
++ *   寻址**——三级终端唯一入口。
++ *
++ * 不复活：无状态徽章、无下拉刷新、无二级 diff 模型（060 重建纪律）。
++ *
++ * @contract
++ * @pre sessions 为服务端 Level2Frame 的全量快照（title 原样）
++ * @post 每行 title 原样渲染；点行回调 [onOpenSession] 携带结构 ref
++ * @err none
++ * @inv 对 title 不做任何 startsWith/contains/trim/replace/removePrefix/substring
++ */
++@Composable
++internal fun Level2LiveStreamScreen(
++    sessions: List<Level2Entry>,
++    onOpenSession: (ref: String, name: String) -> Unit,
++) {
++    LazyColumn(
++        modifier = Modifier
++            .fillMaxSize()
++            .navigationBarsPadding(),
++    ) {
++        items(sessions, key = { it.ref }) { entry ->
++            // Surface onClick：ripple 点击态 + 48dp 最小触控目标（018 §一.4）。
++            Surface(
++                onClick = { onOpenSession(entry.ref, entry.name) },
++                color = MaterialTheme.colorScheme.background,
++                modifier = Modifier.testTag("l2-row-${entry.ref}"),
++            ) {
++                Row(
++                    modifier = Modifier
++                        .fillMaxWidth()
++                        .defaultMinSize(minHeight = 56.dp)
++                        .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
++                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
++                    verticalAlignment = Alignment.CenterVertically,
++                ) {
++                    // 标题原样画：pane_title 逐字节，不 trim/不剥前缀/不匹配/不映射。
++                    Text(
++                        text = entry.title,
++                        style = MaterialTheme.typography.bodyLarge,
++                        fontFamily = MonoFontFamily,
++                        color = MaterialTheme.colorScheme.onSurface,
++                        maxLines = 1,
++                        overflow = TextOverflow.Ellipsis,
++                        modifier = Modifier.weight(1f),
++                    )
++                    // 结构字段展示名（window_name fallback session_name），次级标签。
++                    Text(
++                        text = entry.name,
++                        style = MaterialTheme.typography.labelMedium,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant,
++                    )
++                }
++            }
++            HorizontalDivider(
++                color = MaterialTheme.colorScheme.outlineVariant,
++                thickness = 0.5.dp,
++                modifier = Modifier.padding(start = Spacing.pageH),
++            )
++        }
++    }
++}
+diff --git a/app/app/src/main/java/dev/agentmirror/app/workspace/Level2ViewModel.kt b/app/app/src/main/java/dev/agentmirror/app/workspace/Level2ViewModel.kt
+new file mode 100644
+index 000000000..416afd96c
+--- /dev/null
++++ b/app/app/src/main/java/dev/agentmirror/app/workspace/Level2ViewModel.kt
+@@ -0,0 +1,96 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.setValue
++import dev.agentmirror.app.conn.BinaryFrame
++import dev.agentmirror.app.conn.ConnectionManager
++import dev.agentmirror.app.conn.ConnectionState
++import dev.agentmirror.app.conn.FrameError
++import dev.agentmirror.app.conn.FramePayload
++import dev.agentmirror.app.conn.Level2Frame
++
++/**
++ * 二级菜单实时流条目（060）：服务端推的单个 pane 行。
++ *
++ * [ref] 是结构字段身份（socket+paneid），App 用它进三级终端——**永不来自 title**。
++ * [name] 是展示名（window_name，fallback session_name）。[title] 是 pane_title **原样**
++ * （一个字符都不解析/匹配/映射/美化），渲染时直接 Text(title)。
++ */
++data class Level2Entry(
++    val ref: String,
++    val name: String,
++    val title: String,
++    val rows: Int,
++    val cols: Int,
++)
++
++/**
++ * 二级菜单实时流 ViewModel（060 重建，不复活旧列表模型）。
++ *
++ * 消费服务端 [Level2Frame]（单个工作区会话全量快照）→ [sessions] 全量替换。标题零解析。
++ * 生命周期：构造即 [ConnectionManager.subscribeLevel2]（进入二级菜单自动订阅）；[dispose]
++ * 时 [ConnectionManager.unsubscribeLevel2]（离开即退订，不后台持续拉取）。
++ *
++ * @contract
++ * @pre 构造时传入目标工作区 cwd（一级选中的工作区）
++ * @post 构造即发 Level2Subscribe；收到 Level2Frame 全量替换 [sessions]；[dispose] 发
++ *       Level2Unsubscribe 并停止消费
++ * @err none（无关帧忽略；连接未就绪时订阅/退订静默幂等）
++ * @inv [Level2Entry.title] 原样，不做任何字符串处理；[ref] 只来自结构字段
++ */
++class Level2ViewModel(
++    private val manager: ConnectionManager,
++    private val workspace: String,
++) : ConnectionManager.Listener {
++
++    /** 二级菜单会话行（服务端 Level2Frame 全量替换）。 */
++    var sessions by mutableStateOf<List<Level2Entry>>(emptyList())
++        private set
++
++    init {
++        manager.subscribeLevel2(workspace)
++    }
++
++    /** ConnectionManager.Listener：只消费 Level2Frame（本工作区实时流），其余帧忽略。 */
++    override fun onFrame(frame: FramePayload) {
++        if (frame !is Level2Frame) return
++        if (frame.workspace != workspace) return // 只收本工作区流
++        sessions = frame.sessions.map { s ->
++            Level2Entry(
++                ref = s.ref,
++                name = s.name,
++                title = s.title, // 原样，零加工
++                rows = s.rows,
++                cols = s.cols,
++            )
++        }
++    }
++
++    override fun onStateChanged(state: ConnectionState) = Unit
++    override fun onBinary(frame: BinaryFrame) = Unit
++    override fun onLocalDecodeError(code: FrameError, message: String) = Unit
++    override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) = Unit
++    override fun onReconnect(attempt: Int, delayMs: Long) = Unit
++
++    /** 离开二级菜单：退订实时流（不再后台拉取）。幂等。 */
++    fun dispose() {
++        manager.unsubscribeLevel2(workspace)
++    }
++}
+diff --git a/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt b/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt
+index ae9aabc7e..27b3847c1 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt
+@@ -46,15 +46,18 @@ import androidx.compose.material3.Text
+ import androidx.compose.material3.TextButton
+ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+ import androidx.compose.runtime.Composable
++import androidx.compose.runtime.DisposableEffect
+ import androidx.compose.runtime.LaunchedEffect
+ import androidx.compose.runtime.collectAsState
+ import androidx.compose.runtime.getValue
++import androidx.compose.runtime.remember
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.platform.testTag
+ import androidx.compose.ui.text.style.TextAlign
+ import androidx.compose.ui.text.style.TextOverflow
+ import androidx.compose.ui.unit.dp
++import dev.agentmirror.app.service.ServiceWire
+ import dev.agentmirror.app.tsnet.ConnectionPath
+ import dev.agentmirror.app.ui.theme.MonoFontFamily
+ import dev.agentmirror.app.ui.theme.Spacing
+@@ -90,6 +93,7 @@ fun WorkspaceScreen(
+     onSelectWorkspace: (cwd: String) -> Unit,
+     onBackToList: () -> Unit,
+     onOpenSettings: () -> Unit,
++    onOpenSession: (ref: String, name: String) -> Unit,
+ ) {
+     val state by viewModel.uiState.collectAsState()
+     val refreshing by viewModel.refreshing.collectAsState()
+@@ -126,8 +130,28 @@ fun WorkspaceScreen(
+                 .fillMaxSize()
+                 .testTag("workspace-pull-refresh"),
+         ) {
+-            // 一级列表 + 加载/空/错态。060 uproot：二级会话列表（SessionList）随状态判定
+-            // 整体拔除，待二级实时流重建；此处只渲染一级工作区列表。
++            // 二级实时流（060 重建）：选中工作区（selectedWorkspaceCwd 非空）时渲染服务端
++            // 推来的会话行（标题原样 + 结构 ref 点行进三级）。Level2ViewModel 构造即订阅、
++            // 离开即退订（DisposableEffect onDispose）。
++            val level2Cwd = selectedWorkspaceCwd
++            if (level2Cwd != null) {
++                val l2Vm = remember(level2Cwd) {
++                    ServiceWire.managerOrNull()?.let { Level2ViewModel(it, level2Cwd) }
++                }
++                DisposableEffect(l2Vm) {
++                    onDispose { l2Vm?.dispose() }
++                }
++                if (l2Vm != null) {
++                    Level2LiveStreamScreen(
++                        sessions = l2Vm.sessions,
++                        onOpenSession = onOpenSession,
++                    )
++                } else {
++                    LoadingContent()
++                }
++                return@PullToRefreshBox
++            }
++            // 一级列表 + 加载/空/错态。060 uproot：一级菜单刷新模型保留（进入即刷 + 下拉刷）。
+             AnimatedContent(
+                 targetState = state.workspaces,
+                 transitionSpec = { fadeIn().togetherWith(fadeOut()) },
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2LiveStreamRenderTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2LiveStreamRenderTest.kt
+new file mode 100644
+index 000000000..8fee4a021
+--- /dev/null
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2LiveStreamRenderTest.kt
+@@ -0,0 +1,78 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import androidx.compose.ui.test.junit4.createComposeRule
++import androidx.compose.ui.test.onNodeWithText
++import dev.agentmirror.app.ui.theme.AgentMirrorTheme
++import org.junit.Assert.assertEquals
++import org.junit.Rule
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
++import org.robolectric.annotation.GraphicsMode
++
++/**
++ * 二级菜单实时流渲染红测（060 t.app A-a-*）。
++ *
++ * 断言：收到 Level2Frame → 每行 title 原样渲染（含 ◐/✳ 前缀），文本逐字节等于输入——
++ * **一个字符都不解析**。渲染用 createComposeRule 驱动 [WorkspaceScreen] 的二级分支，
++ * title 直接 Text(title)。
++ *
++ * 红测先行：修复前无 Level2ViewModel / 二级渲染 → 编译失败即红。
++ */
++@RunWith(RobolectricTestRunner::class)
++@Config(sdk = [34])
++@GraphicsMode(GraphicsMode.Mode.NATIVE)
++class Level2LiveStreamRenderTest {
++
++    @get:Rule
++    val compose = createComposeRule()
++
++    private fun entry(ref: String, name: String, title: String) =
++        Level2Entry(ref = ref, name = name, title = title, rows = 24, cols = 80)
++
++    @Test
++    fun titleRenderedVerbatimIncludingPrefixGlyphs() {
++        // 服务端原样推来的标题：含 ◐/✳ 前缀 + 尾空格（不可被 trim 掉）。
++        val titles = listOf(
++            "◐  claude  正在工作",
++            "✳  codex  输入中  ",
++        )
++        val sessions = listOf(
++            entry("ref-1", "claude", titles[0]),
++            entry("ref-2", "codex", titles[1]),
++        )
++
++        var openedRef: String? = null
++        var openedName: String? = null
++        compose.setContent {
++            AgentMirrorTheme {
++                Level2LiveStreamScreen(
++                    sessions = sessions,
++                    onOpenSession = { ref, name -> openedRef = ref; openedName = name },
++                )
++            }
++        }
++
++        // 标题逐字节原样：含前缀字形与尾空格，一个字符都不改。
++        compose.onNodeWithText(titles[0]).assertExists("标题必须原样渲染（含 ◐ 前缀与尾内容）")
++        compose.onNodeWithText(titles[1]).assertExists("标题必须原样渲染（含 ✳ 前缀与尾空格）")
++        assertEquals("标题渲染不得丢失前缀字符", "◐", titles[0].substring(0, 1))
++    }
++}
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2NavigationIdentityTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2NavigationIdentityTest.kt
+new file mode 100644
+index 000000000..13723efe3
+--- /dev/null
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2NavigationIdentityTest.kt
+@@ -0,0 +1,76 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import androidx.compose.ui.test.junit4.createComposeRule
++import androidx.compose.ui.test.onNodeWithTag
++import androidx.compose.ui.test.performClick
++import dev.agentmirror.app.ui.theme.AgentMirrorTheme
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertNull
++import org.junit.Rule
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
++import org.robolectric.annotation.GraphicsMode
++
++/**
++ * 二级菜单导航身份红测（060 t.app A-a-*）。
++ *
++ * 断言：点一行用 ref（结构字段身份，socket+paneid）导航，跳转**不依赖 title 内容**——
++ * 两个 ref 不同但 title 相同的行，点各自必须进各自 ref 的会话。
++ *
++ * 红测先行：修复前二级不可点（拔除后无 onOpenSession）→ 编译/运行失败即红。
++ */
++@RunWith(RobolectricTestRunner::class)
++@Config(sdk = [34])
++@GraphicsMode(GraphicsMode.Mode.NATIVE)
++class Level2NavigationIdentityTest {
++
++    @get:Rule
++    val compose = createComposeRule()
++
++    @Test
++    fun clickUsesRefIdentityNotTitleContent() {
++        // 两个会话 ref 不同、title 完全一致——身份必须只来自 ref（结构字段）。
++        val refA = "/sockA%0"
++        val refB = "/sockB%1"
++        val sharedTitle = "◐  same-looking-agent"
++        val sessions = listOf(
++            Level2Entry(ref = refA, name = "claude", title = sharedTitle, rows = 24, cols = 80),
++            Level2Entry(ref = refB, name = "codex", title = sharedTitle, rows = 24, cols = 80),
++        )
++
++        var openedRef: String? = null
++        var openedName: String? = null
++        compose.setContent {
++            AgentMirrorTheme {
++                Level2LiveStreamScreen(
++                    sessions = sessions,
++                    onOpenSession = { ref, name -> openedRef = ref; openedName = name },
++                )
++            }
++        }
++
++        // 点第二行（相同 title 的另一会话）：必须进 refB，不能因 title 相同而混淆。
++        compose.onNodeWithTag("l2-row-$refB").performClick()
++        assertEquals("点行必须用 ref（结构身份）导航", refB, openedRef)
++        assertEquals("点行应带上结构字段展示名", "codex", openedName)
++        assertNull("title 内容不得影响身份（未点第一行就不该开 refA）", openedRef?.takeIf { it == refA })
++    }
++}
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2StreamLifecycleTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2StreamLifecycleTest.kt
+new file mode 100644
+index 000000000..3b5f42705
+--- /dev/null
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2StreamLifecycleTest.kt
+@@ -0,0 +1,99 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import dev.agentmirror.app.conn.ConnectionConfig
++import dev.agentmirror.app.conn.ConnectionManager
++import dev.agentmirror.app.conn.FakeClock
++import dev.agentmirror.app.conn.FakeWebSocketTransport
++import dev.agentmirror.app.conn.FrameCodec
++import dev.agentmirror.app.conn.FramePayload
++import dev.agentmirror.app.conn.Level2Frame
++import dev.agentmirror.app.conn.Level2SubscribeFrame
++import dev.agentmirror.app.conn.Level2UnsubscribeFrame
++import dev.agentmirror.app.conn.Session
++import dev.agentmirror.app.conn.TransportFactory
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++/**
++ * 二级菜单流生命周期红测（060 t.app A-a-*）。
++ *
++ * 断言：进入二级 → 发 Level2Subscribe；退出 → 发 Level2Unsubscribe；退订后 VM dispose
++ * 不再有拉取（无定时器/后台轮询）。
++ *
++ * 红测先行：修复前无 Level2ViewModel → 编译失败即红。
++ */
++class Level2StreamLifecycleTest {
++
++    private class Harness(workspace: String = "/proj/a") {
++        val transport = FakeWebSocketTransport()
++        val manager = ConnectionManager(
++            config = ConnectionConfig(url = "ws://host:0/ws", token = "tok"),
++            transportFactory = TransportFactory { transport },
++            clock = FakeClock(),
++        )
++        lateinit var vm: Level2ViewModel
++
++        init {
++            manager.start()
++            transport.deliverText("""{"v":1,"type":"auth_ack","payload":{"ok":true}}""")
++            vm = Level2ViewModel(manager, workspace)
++            manager.setListener(vm)
++        }
++
++        fun sentFrames(): List<FramePayload> =
++            transport.sentText.mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() }
++
++        fun level2Frame(sessions: List<Session>) = Level2Frame(
++            workspace = "/proj/a",
++            seq = 1,
++            sessions = sessions,
++        )
++    }
++
++    @Test
++    fun enteringSubscribesLevel2() {
++        val h = Harness()
++        // 构造即发 Level2Subscribe（进入二级菜单自动订阅）。
++        assertTrue(
++            "进入二级必须发 Level2Subscribe",
++            h.sentFrames().any { it is Level2SubscribeFrame },
++        )
++    }
++
++    @Test
++    fun leavingUnsubscribesLevel2() {
++        val h = Harness()
++        h.vm.dispose()
++        assertTrue(
++            "离开二级必须发 Level2Unsubscribe",
++            h.sentFrames().any { it is Level2UnsubscribeFrame },
++        )
++    }
++
++    @Test
++    fun receivingLevel2FrameReplacesEntriesVerbatim() {
++        val h = Harness()
++        val entry = Session(ref = "ref-1", name = "claude", cwd = "/proj/a", rows = 24, cols = 80, title = "◐  live")
++        h.vm.onFrame(h.level2Frame(listOf(entry)))
++        assertEquals(1, h.vm.sessions.size)
++        assertEquals("ref-1", h.vm.sessions[0].ref)
++        assertEquals("◐  live", h.vm.sessions[0].title) // title 原样，零加工
++    }
++}
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt
+index 22a761f09..da3cdcfd5 100644
+--- a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt
+@@ -85,6 +85,7 @@ class WorkspaceRefreshTest {
+                     onSelectWorkspace = {},
+                     onBackToList = {},
+                     onOpenSettings = {},
++                    onOpenSession = { _, _ -> },
+                 )
+             }
+         }

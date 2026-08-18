@@ -85,6 +85,7 @@ class WorkspaceRefreshTest {
                     onSelectWorkspace = {},
                     onBackToList = {},
                     onOpenSettings = {},
+                    onOpenSession = { _, _ -> },
                 )
             }
         }

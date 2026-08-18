@@ -1,0 +1,28 @@
+commit 82865233cf2629d2099640a48e947ac3d554c0d3
+Author: Florious95 <281215401+Florious95@users.noreply.github.com>
+Date:   Sun Aug 16 04:30:55 2026 +0800
+
+    服务端：二级菜单实时流，pane 标题原样透传
+    
+    契约 060。数据源 tmux list-panes -a，推给客户端的每行带原样 pane 标题字符串 +
+    结构字段 session_name/window_index/window_name。标题一个字符都不解析。
+    
+    四个具名测试（leader 自跑，不采信席位自报）：
+      TestLevel2TitleVerbatim          标题逐字节原样透传，含 ◐/✳ 前缀
+      TestLevel2IdentityStructural     身份只来自结构字段，改标题不影响身份
+      TestLevel2StopsWhenNoSubscriber  无订阅者时零 tmux 调用（工程红线①空闲 CPU 趋近 0）
+      TestLevel2NoTmuxAttach           命令集合里永不出现 attach（不参与尺寸谈判）
+    go test ./... 全套通过。
+
+ server/internal/api/level2.go                     | 206 +++++++++++++++++++++
+ server/internal/api/level2_test.go                | 209 ++++++++++++++++++++++
+ server/internal/api/server.go                     |  18 ++
+ server/internal/api/ws_conn.go                    |  21 ++-
+ server/internal/protocol/frames.go                |  57 +++++-
+ server/internal/protocol/frametype.go             |  17 ++
+ server/internal/protocol/json.go                  |   6 +
+ server/internal/protocol/json_test.go             |  11 ++
+ server/internal/protocol/testdata/list_delta.json |   2 +
+ server/internal/protocol/testdata/listing.json    |   3 +
+ server/internal/protocol/validate.go              |  29 +++
+ 11 files changed, 572 insertions(+), 7 deletions(-)
