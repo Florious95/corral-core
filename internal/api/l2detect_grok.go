@@ -10,7 +10,7 @@ import (
 // Idle titles keep the last task summary; never classify from summary text.
 
 func init() {
-	registerL2Detector(grokDetector{})
+	registerL2Detector("grok", grokDetector{})
 }
 
 type grokDetector struct{}

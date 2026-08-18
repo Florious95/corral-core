@@ -5,11 +5,12 @@ package overlay
 
 import "context"
 
-// Capturer is the idle-gated overlay source. Start may create a tmux client;
-// Stop must tear it down. Zero subscribers ⇒ the API loop never calls Start
-// and must call Stop, so CaptureCount/ClientCount stay 0.
+// Capturer is the idle-gated overlay source. Start may create a tmux client
+// on the requested socket (never "first discovered"). Stop must tear it down.
+// Zero subscribers ⇒ the API loop never calls Start and must call Stop, so
+// CaptureCount/ClientCount stay 0.
 type Capturer interface {
-	Start(ctx context.Context) error
+	Start(ctx context.Context, socket string) error
 	Snapshot(ctx context.Context) ([]byte, error)
 	Stop()
 	CaptureCount() int64

@@ -316,7 +316,12 @@ func (h Level2Heartbeat) Validate() error {
 
 // Validate checks a level2 live frame: a non-empty workspace, a seq >= 1, and
 // every session valid.
-func (OverlaySubscribe) Validate() error   { return nil }
+func (s OverlaySubscribe) Validate() error {
+	if strings.TrimSpace(s.Socket) == "" {
+		return fmt.Errorf("%w: overlay_subscribe socket must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
 func (OverlayUnsubscribe) Validate() error { return nil }
 
 func (f OverlayFrame) Validate() error {

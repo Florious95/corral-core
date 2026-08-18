@@ -37,7 +37,12 @@ func TestL2FixtureCorpusParity(t *testing.T) {
 			t.Fatalf("%s:%d: want title<TAB>state[<TAB>provider], got %q", path, lineNo, line)
 		}
 		title, want := parts[0], parts[1]
-		got, _, _ := classifyPaneTitle(title)
+		var got string
+		if len(parts) >= 3 && parts[2] != "" && parts[2] != "unknown" {
+			got, _, _ = classifyForProvider(parts[2], title)
+		} else {
+			got, _, _ = classifyFallback(title)
+		}
 		if got != want {
 			t.Errorf("%s:%d title=%q: go=%q want=%q", path, lineNo, title, got, want)
 		}

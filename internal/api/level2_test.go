@@ -99,6 +99,7 @@ func TestL2StructuralFields(t *testing.T) {
 	}}
 	e := startWS(t, Options{
 		Token:           "test-token",
+		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
@@ -143,6 +144,7 @@ func TestL2UnknownGlyphStaysUnknown(t *testing.T) {
 	}}
 	e := startWS(t, Options{
 		Token:           "test-token",
+		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
@@ -177,6 +179,7 @@ func TestL2UnknownGlyphLogsCodepoint(t *testing.T) {
 	}}
 	e := startWS(t, Options{
 		Token:           "test-token",
+		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
@@ -191,18 +194,19 @@ func TestL2UnknownGlyphLogsCodepoint(t *testing.T) {
 	var logs string
 	for time.Now().Before(deadline) {
 		logs = buf.String()
-		if strings.Contains(logs, "U+003F") && strings.Contains(logs, title) {
+		if strings.Contains(logs, "U+003F") && strings.Contains(logs, title) && strings.Contains(logs, "claude_code") {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("unknown-glyph log missing operands: want codepoint=U+003F and title=%q; got %q", title, logs)
+	t.Fatalf("unknown-glyph log missing operands: want provider=claude_code codepoint=U+003F title=%q; got %q", title, logs)
 }
 
 func TestL2NoPollWithoutSubscriber(t *testing.T) {
 	cd := &countingDiscoverer{model: testModel()}
 	e := startWS(t, Options{
 		Token:           "test-token",
+		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      cd,
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
@@ -244,6 +248,7 @@ func TestL2PushOnChangeOnly(t *testing.T) {
 	}}
 	e := startWS(t, Options{
 		Token:           "test-token",
+		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
@@ -287,6 +292,7 @@ func TestL2Heartbeat(t *testing.T) {
 	}}
 	e := startWS(t, Options{
 		Token:           "test-token",
+		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
 		ListInterval:    time.Hour,
 		Level2Interval:  20 * time.Millisecond,
@@ -322,7 +328,7 @@ func TestLevel2TitleVerbatim(t *testing.T) {
 			}},
 		},
 	}}
-	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour})
+	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour, ProviderFinder: staticProvider("claude_code")})
 	e.auth()
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
 	got := waitLevel2Frame(t, e, 5*time.Second)
@@ -350,7 +356,7 @@ func TestLevel2IdentityStructural(t *testing.T) {
 			}},
 		},
 	}}
-	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour})
+	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour, ProviderFinder: staticProvider("claude_code")})
 	e.auth()
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
 	got := waitLevel2Frame(t, e, 5*time.Second)

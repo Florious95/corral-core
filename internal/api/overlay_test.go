@@ -23,7 +23,7 @@ type countingOverlay struct {
 	n        atomic.Int64
 }
 
-func (c *countingOverlay) Start(context.Context) error {
+func (c *countingOverlay) Start(_ context.Context, _ string) error {
 	c.clients.Store(1)
 	return nil
 }
@@ -60,7 +60,7 @@ func TestOverlayNoResourceWithoutSubscriber(t *testing.T) {
 		t.Fatalf("no subscriber: captures=%d clients=%d → want 0/0 (idle gate broken)", gotCap, gotCli)
 	}
 
-	e.sendFrame(protocol.OverlaySubscribe{})
+	e.sendFrame(protocol.OverlaySubscribe{Socket: "test-sock"})
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) && cap.ClientCount() == 0 {
 		time.Sleep(10 * time.Millisecond)
@@ -97,7 +97,7 @@ func TestOverlayFramesAreNonEmpty(t *testing.T) {
 	cap := &countingOverlay{}
 	e := startWS(t, overlayTestOpts(cap))
 	e.auth()
-	e.sendFrame(protocol.OverlaySubscribe{})
+	e.sendFrame(protocol.OverlaySubscribe{Socket: "test-sock"})
 	got := waitOverlayFrame(t, e, 3*time.Second)
 	if got.Text == "" || len([]rune(got.Text)) == 0 {
 		t.Fatalf("overlay_frame text empty: %+v", got)
@@ -111,7 +111,7 @@ func TestOverlayFramesChangeOverTime(t *testing.T) {
 	cap := &countingOverlay{}
 	e := startWS(t, overlayTestOpts(cap))
 	e.auth()
-	e.sendFrame(protocol.OverlaySubscribe{})
+	e.sendFrame(protocol.OverlaySubscribe{Socket: "test-sock"})
 	first := waitOverlayFrame(t, e, 3*time.Second)
 	deadline := time.Now().Add(3 * time.Second)
 	var second protocol.OverlayFrame
@@ -178,7 +178,7 @@ func TestOverlayLiveFirstFrameWithinProbeWindow(t *testing.T) {
 	})
 	e.auth()
 	t0 := time.Now()
-	e.sendFrame(protocol.OverlaySubscribe{})
+	e.sendFrame(protocol.OverlaySubscribe{Socket: sock})
 	first := waitOverlayFrame(t, e, 6*time.Second)
 	firstDur := time.Since(t0)
 	if strings.TrimSpace(first.Text) == "" {
@@ -195,6 +195,123 @@ func TestOverlayLiveFirstFrameWithinProbeWindow(t *testing.T) {
 	if first.Text == second.Text {
 		t.Fatalf("two frames identical: %q", first.Text)
 	}
+}
+
+func TestOverlayHonorsRequestedSocket(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not in PATH")
+	}
+	root := "/tmp/ov2-dev-server"
+	dirA, dirB := root+"/a", root+"/b"
+	sockA, sockB := dirA+"/sock", dirB+"/sock"
+	_ = os.RemoveAll(root)
+	if err := os.MkdirAll(dirA, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dirB, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		killIsolatedTmux(sockA)
+		killIsolatedTmux(sockB)
+		_ = os.RemoveAll(root)
+	})
+	startIsolatedSession(t, sockA, "sess-aaa", "cli-a")
+	startIsolatedSession(t, sockB, "sess-bbb", "cli-b")
+
+	cap := overlay.NewTmux(nil, []string{dirA, dirB})
+	e := startWS(t, Options{
+		Token:           "test-token",
+		Discoverer:      &mutableDiscoverer{model: &discovery.Model{}},
+		ListInterval:    time.Hour,
+		OverlayInterval: 100 * time.Millisecond,
+		OverlayCapturer: cap,
+	})
+	e.auth()
+
+	e.sendFrame(protocol.OverlaySubscribe{Socket: sockA})
+	fa := waitOverlayFrame(t, e, 6*time.Second)
+	if !strings.Contains(fa.Text, "sess-aaa") {
+		t.Fatalf("socket A frame missing sess-aaa (requested=%s):\n%s", sockA, fa.Text)
+	}
+	if strings.Contains(fa.Text, "sess-bbb") {
+		t.Fatalf("socket A frame leaked sess-bbb (first-found bug? requested=%s):\n%s", sockA, fa.Text)
+	}
+
+	e.sendFrame(protocol.OverlayUnsubscribe{})
+	e.sendFrame(protocol.OverlaySubscribe{Socket: sockB})
+	deadline := time.Now().Add(6 * time.Second)
+	fb := waitTyped(t, e, deadline, func(typed protocol.Typed) bool {
+		f, ok := typed.(protocol.OverlayFrame)
+		return ok && strings.Contains(f.Text, "sess-bbb")
+	}).(protocol.OverlayFrame)
+	if !strings.Contains(fb.Text, "sess-bbb") {
+		t.Fatalf("socket B frame missing sess-bbb (requested=%s):\n%s", sockB, fb.Text)
+	}
+	if strings.Contains(fb.Text, "sess-aaa") {
+		t.Fatalf("socket B frame leaked sess-aaa (stuck on first socket? requested=%s):\n%s", sockB, fb.Text)
+	}
+}
+
+func TestOverlayExcludesScratchSession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not in PATH")
+	}
+	dir := "/tmp/ov2-dev-server-excl"
+	sock := dir + "/sock"
+	_ = os.RemoveAll(dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		killIsolatedTmux(sock)
+		_ = os.RemoveAll(dir)
+	})
+	startIsolatedSession(t, sock, "sess-user", "cli")
+
+	cap := overlay.NewTmux(nil, []string{dir})
+	e := startWS(t, Options{
+		Token:           "test-token",
+		Discoverer:      &mutableDiscoverer{model: &discovery.Model{}},
+		ListInterval:    time.Hour,
+		OverlayInterval: 100 * time.Millisecond,
+		OverlayCapturer: cap,
+	})
+	e.auth()
+	e.sendFrame(protocol.OverlaySubscribe{Socket: sock})
+	got := waitOverlayFrame(t, e, 6*time.Second)
+	if !strings.Contains(got.Text, "sess-user") {
+		t.Fatalf("frame missing user session sess-user:\n%s", got.Text)
+	}
+	for _, tok := range []string{overlay.ScratchSession, "ov-spin", "tree*", "sleep*"} {
+		if strings.Contains(got.Text, tok) {
+			t.Fatalf("frame contains observer token %q (self-reflection):\n%s", tok, got.Text)
+		}
+	}
+}
+
+func startIsolatedSession(t *testing.T, sock, session, window string) {
+	t.Helper()
+	cmd := exec.Command("tmux", "-S", sock, "new-session", "-d", "-s", session, "-n", window, "tail", "-f", "/dev/null")
+	cmd.Env = isolatedTmuxEnv()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("new-session %s: %v %s", sock, err, out)
+	}
+	list := exec.Command("tmux", "-S", sock, "list-sessions", "-F", "#{session_name}")
+	list.Env = isolatedTmuxEnv()
+	got, err := list.CombinedOutput()
+	if err != nil {
+		t.Fatalf("list-sessions %s: %v %s", sock, err, got)
+	}
+	if !strings.Contains(string(got), session) {
+		t.Fatalf("自检失败：会话 %s 不在隔离 socket %s（got=%q）", session, sock, got)
+	}
+}
+
+func killIsolatedTmux(sock string) {
+	cmd := exec.Command("tmux", "-S", sock, "kill-server")
+	cmd.Env = isolatedTmuxEnv()
+	_ = cmd.Run()
 }
 
 func isolatedTmuxEnv() []string {

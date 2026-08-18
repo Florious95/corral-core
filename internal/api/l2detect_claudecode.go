@@ -5,7 +5,7 @@ import "github.com/agentmirror/agentmirror/internal/protocol"
 // l2detect_claudecode.go — Claude Code title glyphs only (requirement 062).
 
 func init() {
-	registerL2Detector(claudeCodeDetector{})
+	registerL2Detector("claude_code", claudeCodeDetector{})
 }
 
 type claudeCodeDetector struct{}

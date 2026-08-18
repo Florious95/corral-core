@@ -18,9 +18,12 @@ import (
 )
 
 const (
-	scratchSession = "am-overlay"
+	// ScratchSession is the dedicated choose-tree host. It is the observation
+	// apparatus (requirement 065) and must never appear in overlay frames.
+	ScratchSession = "am-overlay"
 	ScratchCols    = 80
 	ScratchRows    = 24
+	scratchFilter  = "#{!=:#{session_name}," + ScratchSession + "}"
 
 	tmuxCmdTimeout   = 1500 * time.Millisecond
 	snapshotWait     = 80 * time.Millisecond
@@ -64,19 +67,29 @@ func NewTmux(log *slog.Logger, socketDirs []string) *Tmux {
 func (t *Tmux) CaptureCount() int64 { return t.captures.Load() }
 func (t *Tmux) ClientCount() int64  { return t.clients.Load() }
 
-func (t *Tmux) Start(ctx context.Context) error {
+func (t *Tmux) Start(ctx context.Context, requested string) error {
 	t0 := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.started && t.cmd != nil && t.cmd.Process != nil && t.cmd.ProcessState == nil {
+	if t.started && t.cmd != nil && t.cmd.Process != nil && t.cmd.ProcessState == nil && sameSocketPath(t.sock, requested) {
 		return nil
 	}
-	t.teardownLocked()
+	if t.started && t.sock != requested {
+		t.log.Info("overlay: switch socket",
+			"from", t.sock,
+			"to", requested,
+			"from_eq_to", t.sock == requested,
+		)
+		t.teardownLocked()
+	} else {
+		t.teardownLocked()
+	}
 
-	sock, err := t.pickSocket(ctx)
+	sock, err := t.resolveRequested(ctx, requested)
 	pickDur := time.Since(t0)
 	if err != nil {
-		t.log.Warn("overlay: pickSocket failed",
+		t.log.Warn("overlay: resolveRequested failed",
+			"requested", requested,
 			"dirs", t.socketDirs(),
 			"dir_count", len(t.socketDirs()),
 			"dur", pickDur,
@@ -84,6 +97,11 @@ func (t *Tmux) Start(ctx context.Context) error {
 		)
 		return err
 	}
+	t.log.Info("overlay: socket selected",
+		"requested", requested,
+		"used", sock,
+		"match", requested == sock || sameSocketPath(requested, sock),
+	)
 	t.sock = sock
 	t1 := time.Now()
 	if err := t.ensureScratch(ctx, sock); err != nil {
@@ -93,7 +111,7 @@ func (t *Tmux) Start(ctx context.Context) error {
 
 	// Attach must outlive this Start call: bind it to ctx (the overlay loop
 	// lifetime), not a per-command timeout. Stop() kills the process.
-	cmd := exec.CommandContext(ctx, "tmux", "-S", sock, "attach-session", "-t", scratchSession)
+	cmd := exec.CommandContext(ctx, "tmux", "-S", sock, "attach-session", "-t", ScratchSession)
 	cmd.Env = overlayChildEnv()
 	t2 := time.Now()
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: ScratchRows, Cols: ScratchCols})
@@ -126,13 +144,13 @@ func (t *Tmux) Start(ctx context.Context) error {
 		return fmt.Errorf("overlay: no scratch client after attach sock=%s client_wait=%s", sock, clientWait)
 	}
 	t4 := time.Now()
-	if err := runTmux(ctx, sock, "choose-tree", "-t", scratchSession+":0.0"); err != nil {
+	if err := runTmux(ctx, sock, "choose-tree", "-f", scratchFilter, "-t", ScratchSession+":0.0"); err != nil {
 		t.teardownLocked()
 		return fmt.Errorf("overlay choose-tree: %w", err)
 	}
 	t.log.Info("overlay: scratch client started",
 		"socket", sock,
-		"session", scratchSession,
+		"session", ScratchSession,
 		"client", t.client,
 		"winsize", fmt.Sprintf("%dx%d", ScratchCols, ScratchRows),
 		"pick_ms", pickDur.Milliseconds(),
@@ -159,12 +177,13 @@ func (t *Tmux) Snapshot(ctx context.Context) ([]byte, error) {
 	client := t.client
 	t.mu.Unlock()
 
-	title := fmt.Sprintf("%c ov-spin %d", spinner[spin%len(spinner)], spin)
+	title := fmt.Sprintf("%c %d", spinner[spin%len(spinner)], spin)
 	// Only our scratch pane title — never a user pane. Do not hold t.mu
 	// across these calls: a full PTY used to deadlock here (tmux blocked
 	// writing the client, Snapshot blocked in refresh-client holding mu
-	// so nobody could Read).
-	errPane := runTmux(ctx, sock, "select-pane", "-t", scratchSession+":0.0", "-T", title)
+	// so nobody could Read). Title must not contain scratch tokens
+	// (am-overlay / tree / sleep / ov-spin) — 065 forbids self-reflection.
+	errPane := runTmux(ctx, sock, "select-pane", "-t", ScratchSession+":0.0", "-T", title)
 	var errRef error
 	if client != "" {
 		errRef = runTmux(ctx, sock, "refresh-client", "-t", client)
@@ -180,6 +199,7 @@ func (t *Tmux) Snapshot(ctx context.Context) ([]byte, error) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	usedFallback := false
+	out = stripObserver(out)
 	if len(bytes.TrimSpace(out)) == 0 {
 		// PTY sometimes yields 0 this tick; still emit the title we just
 		// painted so the stream is observably dynamic (feasibility: refresh
@@ -271,44 +291,78 @@ func (t *Tmux) socketDirs() []string {
 	return t.dirs
 }
 
-func (t *Tmux) pickSocket(ctx context.Context) (string, error) {
-	dirs := t.socketDirs()
-	var tried []string
+func (t *Tmux) resolveRequested(ctx context.Context, requested string) (string, error) {
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return "", fmt.Errorf("overlay: requested socket empty (refuse first-found)")
+	}
+	if err := runTmux(ctx, requested, "list-sessions"); err != nil {
+		return "", fmt.Errorf("overlay: requested socket not reachable requested=%s err=%w", requested, err)
+	}
+	if !t.socketAllowed(requested) {
+		return "", fmt.Errorf("overlay: requested socket %s outside allowed dirs %v", requested, t.socketDirs())
+	}
+	return requested, nil
+}
+
+func (t *Tmux) socketAllowed(sock string) bool {
+	dirs := t.dirs
+	if dirs == nil {
+		dirs = defaultSocketDirs()
+	}
+	if len(dirs) == 0 {
+		return false
+	}
 	for _, dir := range dirs {
-		ents, err := os.ReadDir(dir)
-		if err != nil {
-			tried = append(tried, dir+"(readdir:"+err.Error()+")")
-			continue
-		}
-		for _, e := range ents {
-			if e.IsDir() {
-				continue
-			}
-			sock := filepath.Join(dir, e.Name())
-			if err := runTmux(ctx, sock, "list-sessions"); err == nil {
-				t.log.Debug("overlay: pickSocket",
-					"sock", sock,
-					"dirs", dirs,
-					"dir_count", len(dirs),
-				)
-				return sock, nil
-			}
-			tried = append(tried, sock)
+		if socketUnderDir(dir, sock) {
+			return true
 		}
 	}
-	return "", fmt.Errorf("overlay: no reachable tmux socket dirs=%d tried=%v", len(dirs), tried)
+	return false
+}
+
+func socketUnderDir(dir, sock string) bool {
+	d, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		d = filepath.Clean(dir)
+	}
+	s, err := filepath.EvalSymlinks(sock)
+	if err != nil {
+		s = filepath.Clean(sock)
+	}
+	rel, err := filepath.Rel(d, s)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func sameSocketPath(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ea, errA := filepath.EvalSymlinks(a)
+	eb, errB := filepath.EvalSymlinks(b)
+	if errA != nil {
+		ea = filepath.Clean(a)
+	}
+	if errB != nil {
+		eb = filepath.Clean(b)
+	}
+	return ea == eb
 }
 
 func (t *Tmux) ensureScratch(ctx context.Context, sock string) error {
-	if err := runTmux(ctx, sock, "has-session", "-t", scratchSession); err != nil {
-		if err := runTmux(ctx, sock, "new-session", "-d", "-s", scratchSession, "-n", "tree",
+	if err := runTmux(ctx, sock, "has-session", "-t", ScratchSession); err != nil {
+		if err := runTmux(ctx, sock, "new-session", "-d", "-s", ScratchSession, "-n", "tree",
 			"-x", fmt.Sprintf("%d", ScratchCols), "-y", fmt.Sprintf("%d", ScratchRows),
 			"sleep", "3600"); err != nil {
 			return fmt.Errorf("overlay new-session scratch: %w", err)
 		}
 	}
-	_ = runTmux(ctx, sock, "set-option", "-t", scratchSession, "-w", "window-size", "manual")
-	_ = runTmux(ctx, sock, "resize-window", "-t", scratchSession+":0",
+	_ = runTmux(ctx, sock, "set-option", "-t", ScratchSession, "-w", "window-size", "manual")
+	_ = runTmux(ctx, sock, "set-option", "-t", ScratchSession, "status", "off")
+	_ = runTmux(ctx, sock, "resize-window", "-t", ScratchSession+":0",
 		"-x", fmt.Sprintf("%d", ScratchCols), "-y", fmt.Sprintf("%d", ScratchRows))
 	return nil
 }
@@ -324,7 +378,7 @@ func (t *Tmux) clientName(ctx context.Context, sock string) (string, error) {
 			continue
 		}
 		name, sess, ok := strings.Cut(line, " ")
-		if ok && sess == scratchSession && name != "" {
+		if ok && sess == ScratchSession && name != "" {
 			return name, nil
 		}
 	}
@@ -370,4 +424,34 @@ func errString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// stripObserver drops observation-apparatus tokens from a captured frame
+// (requirement 065). The scratch session and its helper pane names must not
+// appear in output even if choose-tree filter misses a status/title remnant.
+func stripObserver(raw []byte) []byte {
+	if len(raw) == 0 {
+		return raw
+	}
+	banned := []string{ScratchSession, "ov-spin"}
+	// Split on CR/LF without using bufio; keep non-banned pieces joined by \n.
+	parts := bytes.FieldsFunc(raw, func(r rune) bool { return r == '\n' || r == '\r' })
+	var keep [][]byte
+	for _, p := range parts {
+		s := string(p)
+		drop := false
+		for _, tok := range banned {
+			if strings.Contains(s, tok) {
+				drop = true
+				break
+			}
+		}
+		if !drop {
+			keep = append(keep, p)
+		}
+	}
+	if len(keep) == 0 {
+		return nil
+	}
+	return bytes.Join(keep, []byte{'\n'})
 }

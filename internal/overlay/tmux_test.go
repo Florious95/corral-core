@@ -43,7 +43,7 @@ func TestTmuxScratchIsolated(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	t0 := time.Now()
-	if err := cap.Start(ctx); err != nil {
+	if err := cap.Start(ctx, sock); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	startDur := time.Since(t0)

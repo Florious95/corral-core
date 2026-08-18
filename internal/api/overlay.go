@@ -22,7 +22,7 @@ func (s *Server) overlayLoop(ctx context.Context) {
 	}()
 	for {
 		if s.countOverlay() == 0 {
-			s.overlayLastHash = ""
+			s.overlayLastHash = make(map[string]string)
 			if s.overlay != nil {
 				s.overlay.Stop()
 			}
@@ -77,8 +77,35 @@ func (s *Server) publishOverlay(ctx context.Context) {
 	if s.countOverlay() == 0 || s.overlay == nil {
 		return
 	}
-	if err := s.overlay.Start(ctx); err != nil {
+	s.trackersMu.Lock()
+	bySock := make(map[string][]*wsConn)
+	for c := range s.trackers {
+		if !c.overlayActive() {
+			continue
+		}
+		sock := c.overlaySocket()
+		bySock[sock] = append(bySock[sock], c)
+	}
+	s.trackersMu.Unlock()
+	if len(bySock) == 0 {
+		return
+	}
+	for sock, conns := range bySock {
+		s.publishOverlaySocket(ctx, sock, conns)
+	}
+}
+
+func (s *Server) publishOverlaySocket(ctx context.Context, sock string, conns []*wsConn) {
+	if sock == "" {
+		s.log.Warn("overlay: skip empty socket (refuse first-found)",
+			"conns", len(conns),
+			"subscribers", s.countOverlay(),
+		)
+		return
+	}
+	if err := s.overlay.Start(ctx, sock); err != nil {
 		s.log.Warn("overlay: start failed", "err", err,
+			"requested", sock,
 			"subscribers", s.countOverlay(),
 			"clients", overlayClients(s.overlay),
 		)
@@ -86,11 +113,12 @@ func (s *Server) publishOverlay(ctx context.Context) {
 	}
 	raw, err := s.overlay.Snapshot(ctx)
 	if err != nil {
-		s.log.Warn("overlay: snapshot failed", "err", err)
+		s.log.Warn("overlay: snapshot failed", "err", err, "requested", sock)
 		return
 	}
 	if len(raw) == 0 {
 		s.log.Debug("overlay: empty snapshot skipped",
+			"requested", sock,
 			"captures", overlayCaptures(s.overlay),
 			"bytes", 0,
 		)
@@ -98,9 +126,10 @@ func (s *Server) publishOverlay(ctx context.Context) {
 	}
 	sum := sha256.Sum256(raw)
 	cur := hex.EncodeToString(sum[:])
-	prev := s.overlayLastHash
+	prev := s.overlayLastHash[sock]
 	changed := prev != cur
 	s.log.Debug("overlay: frame hash",
+		"requested", sock,
 		"prev", prev,
 		"cur", cur,
 		"bytes", len(raw),
@@ -109,7 +138,7 @@ func (s *Server) publishOverlay(ctx context.Context) {
 	if !changed {
 		return
 	}
-	s.overlayLastHash = cur
+	s.overlayLastHash[sock] = cur
 	seq := s.nextSeq()
 	frame := protocol.OverlayFrame{
 		Seq:  seq,
@@ -117,16 +146,9 @@ func (s *Server) publishOverlay(ctx context.Context) {
 		Rows: overlay.ScratchRows,
 		Cols: overlay.ScratchCols,
 	}
-	s.trackersMu.Lock()
-	conns := make([]*wsConn, 0, len(s.trackers))
-	for c := range s.trackers {
-		if c.overlayActive() {
-			conns = append(conns, c)
-		}
-	}
-	s.trackersMu.Unlock()
 	if prev == "" {
 		s.log.Info("overlay: first frame",
+			"requested", sock,
 			"bytes", len(raw),
 			"seq", seq,
 			"subscribers", s.countOverlay(),
@@ -137,6 +159,7 @@ func (s *Server) publishOverlay(ctx context.Context) {
 	}
 	if len(conns) == 0 {
 		s.log.Info("overlay: frame ready but no overlay-active conn",
+			"requested", sock,
 			"bytes", len(raw),
 			"subscribers", s.countOverlay(),
 			"trackers", trackerCount(s),
@@ -169,21 +192,29 @@ func overlayClients(c overlay.Capturer) int64 {
 	return c.ClientCount()
 }
 
-func (c *wsConn) handleOverlaySubscribe(protocol.OverlaySubscribe) {
-	if c.overlayActive() {
-		select {
-		case c.s.overlayWakeCh <- struct{}{}:
-		default:
-		}
+func (c *wsConn) handleOverlaySubscribe(req protocol.OverlaySubscribe) {
+	already := c.overlayActive()
+	prev := c.overlaySocket()
+	c.setOverlay(true, req.Socket)
+	c.s.log.Info("overlay: subscribe",
+		"requested", req.Socket,
+		"prev", prev,
+		"already", already,
+		"switched", already && prev != req.Socket,
+	)
+	if !already {
+		c.s.markOverlay()
 		return
 	}
-	c.setOverlay(true)
-	c.s.markOverlay()
+	select {
+	case c.s.overlayWakeCh <- struct{}{}:
+	default:
+	}
 }
 
 func (c *wsConn) handleOverlayUnsubscribe(protocol.OverlayUnsubscribe) {
 	if c.overlayActive() {
-		c.setOverlay(false)
+		c.setOverlay(false, "")
 		c.s.unmarkOverlay()
 	}
 }
@@ -194,8 +225,19 @@ func (c *wsConn) overlayActive() bool {
 	return c.overlayOn
 }
 
-func (c *wsConn) setOverlay(on bool) {
+func (c *wsConn) overlaySocket() string {
+	c.overlayMu.Lock()
+	defer c.overlayMu.Unlock()
+	return c.overlaySock
+}
+
+func (c *wsConn) setOverlay(on bool, sock string) {
 	c.overlayMu.Lock()
 	defer c.overlayMu.Unlock()
 	c.overlayOn = on
+	if on {
+		c.overlaySock = sock
+	} else {
+		c.overlaySock = ""
+	}
 }

@@ -19,7 +19,7 @@ func TestL2ClaudeCodeDetectorWorking(t *testing.T) {
 		if !claimed || st != protocol.SessionStatusWorking {
 			t.Fatalf("Match(%q): status=%q claimed=%v → want working claimed=true", title, st, claimed)
 		}
-		st2, _, known := classifyPaneTitle(title)
+		st2, _, known := classifyForProvider("claude_code", title)
 		if st2 != protocol.SessionStatusWorking || !known {
 			t.Fatalf("classify(%q): status=%q known=%v → want working", title, st2, known)
 		}
@@ -33,7 +33,7 @@ func TestL2ClaudeCodeDetectorIdle(t *testing.T) {
 	if !claimed || st != protocol.SessionStatusIdle {
 		t.Fatalf("Match(%q): status=%q claimed=%v → want idle claimed=true", title, st, claimed)
 	}
-	st2, _, known := classifyPaneTitle(title)
+	st2, _, known := classifyForProvider("claude_code", title)
 	if st2 != protocol.SessionStatusIdle || !known {
 		t.Fatalf("classify(%q): status=%q known=%v → want idle", title, st2, known)
 	}

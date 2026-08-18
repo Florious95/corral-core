@@ -85,7 +85,7 @@ func TestControlFramesRoundTrip(t *testing.T) {
 			},
 		}},
 		{"level2_heartbeat", protocol.Level2Heartbeat{Workspace: "/proj/a", Seq: 8}},
-		{"overlay_subscribe", protocol.OverlaySubscribe{}},
+		{"overlay_subscribe", protocol.OverlaySubscribe{Socket: "/tmp/ov-a/sock"}},
 		{"overlay_unsubscribe", protocol.OverlayUnsubscribe{}},
 		{"overlay_frame", protocol.OverlayFrame{Seq: 1, Text: "(0) - ovp: 1 windows", Rows: 24, Cols: 80}},
 	}

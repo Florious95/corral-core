@@ -18,9 +18,9 @@ func TestL2NoGlyphIsIdle(t *testing.T) {
 			t.Fatalf("fallback title=%q first=U+%04X: status=%q known=%v → want idle known=true",
 				title, first, st, known)
 		}
-		st2, _, known2 := classifyPaneTitle(title)
+		st2, _, known2 := classifyFallback(title)
 		if st2 != protocol.SessionStatusIdle || !known2 {
-			t.Fatalf("classify title=%q: status=%q known=%v → want idle known=true",
+			t.Fatalf("fallback title=%q: status=%q known=%v → want idle known=true",
 				title, st2, known2)
 		}
 	}
@@ -36,9 +36,9 @@ func TestL2NoGlyphIsIdle(t *testing.T) {
 
 func TestL2UnknownGlyphOnlyWhenGlyphPresent(t *testing.T) {
 	title := "※probe-unknown-full-title"
-	st, first, known := classifyPaneTitle(title)
+	st, first, known := classifyForProvider("claude_code", title)
 	if st != protocol.SessionStatusUnknown {
-		t.Fatalf("status=%q, want unknown (leading glyph present, unclaimed)", st)
+		t.Fatalf("status=%q, want unknown (known family, unclaimed title)", st)
 	}
 	if known {
 		t.Fatal("unclaimed leading glyph must set known=false")
@@ -52,9 +52,9 @@ func TestL2UnknownGlyphOnlyWhenGlyphPresent(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	logUnknownGlyph(log, title, first)
+	logUnknownForProvider(log, "claude_code", title, first)
 	logs := buf.String()
-	if !strings.Contains(logs, "U+203B") || !strings.Contains(logs, title) {
-		t.Fatalf("unknown log missing operands: want U+203B and title=%q; got %q", title, logs)
+	if !strings.Contains(logs, "U+203B") || !strings.Contains(logs, title) || !strings.Contains(logs, "claude_code") {
+		t.Fatalf("unknown log missing operands: want provider + U+203B + title=%q; got %q", title, logs)
 	}
 }

@@ -62,8 +62,9 @@ type wsConn struct {
 	level2Snap     string
 	level2PushedAt time.Time
 
-	overlayMu sync.Mutex
-	overlayOn bool
+	overlayMu   sync.Mutex
+	overlayOn   bool
+	overlaySock string
 
 	// send is the writer queue. Control frames use a blocking send (a reply
 	// must never be dropped); mirror deltas use a non-blocking send that drops
@@ -260,7 +261,7 @@ func (c *wsConn) teardown() {
 		c.s.unmarkLevel2()
 	}
 	if c.overlayActive() {
-		c.setOverlay(false)
+		c.setOverlay(false, "")
 		c.s.unmarkOverlay()
 	}
 	c.subsMu.Lock()

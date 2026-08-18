@@ -111,7 +111,9 @@ type Server struct {
 	overlayWakeCh      chan struct{}
 	overlayInterval    time.Duration
 	overlay            overlay.Capturer
-	overlayLastHash    string
+	overlayLastHash    map[string]string
+
+	providerFinder ProviderFinder
 }
 
 // NewServer constructs the API server from Options. Zero values use the
@@ -177,9 +179,14 @@ func NewServer(opts Options) *Server {
 		s.level2Heartbeat = defaultLevel2Heartbeat
 	}
 	s.overlayWakeCh = make(chan struct{}, 1)
+	s.overlayLastHash = make(map[string]string)
 	s.overlayInterval = opts.OverlayInterval
 	if s.overlayInterval <= 0 {
 		s.overlayInterval = defaultOverlayInterval
+	}
+	s.providerFinder = opts.ProviderFinder
+	if s.providerFinder == nil {
+		s.providerFinder = newProcFinder()
 	}
 	s.overlay = opts.OverlayCapturer
 	if s.overlay == nil {
@@ -279,7 +286,7 @@ func (s *Server) rebuildCatalog(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("api: discover: %w", err)
 	}
-	s.catalog.rebuild(model)
+	s.catalog.rebuild(filterModel(s, model))
 	snap := buildSnapshot(s.catalog)
 	s.setSnapshot(snap)
 	return nil

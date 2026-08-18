@@ -14,7 +14,7 @@ func TestL2GrokDetectorWorking(t *testing.T) {
 	if !claimed || st != protocol.SessionStatusWorking {
 		t.Fatalf("Match(%q): status=%q claimed=%v → want working claimed=true", title, st, claimed)
 	}
-	st2, first, known := classifyPaneTitle(title)
+	st2, first, known := classifyForProvider("grok", title)
 	if st2 != protocol.SessionStatusWorking || !known {
 		t.Fatalf("classify(%q): status=%q known=%v first=U+%04X → want working", title, st2, known, first)
 	}
@@ -36,7 +36,7 @@ func TestL2GrokDetectorIdle(t *testing.T) {
 	if !claimed || st != protocol.SessionStatusIdle {
 		t.Fatalf("Match(%q): status=%q claimed=%v → want idle claimed=true (not unknown)", title, st, claimed)
 	}
-	st2, _, known := classifyPaneTitle(title)
+	st2, _, known := classifyForProvider("grok", title)
 	if st2 != protocol.SessionStatusIdle || !known {
 		t.Fatalf("classify(%q): status=%q known=%v → want idle, not unknown", title, st2, known)
 	}
@@ -47,7 +47,7 @@ func TestL2GrokDetectorIdle(t *testing.T) {
 	if !claimed || st != protocol.SessionStatusIdle {
 		t.Fatalf("Match(%q): status=%q claimed=%v → want idle (summary ≠ mark)", summaryThink, st, claimed)
 	}
-	st2, _, known = classifyPaneTitle(summaryThink)
+	st2, _, known = classifyForProvider("grok", summaryThink)
 	if st2 != protocol.SessionStatusIdle || !known {
 		t.Fatalf("classify(%q): status=%q → want idle (must not flip on summary text)", summaryThink, st2)
 	}

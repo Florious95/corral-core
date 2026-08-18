@@ -87,13 +87,14 @@ type Workspace struct {
 // SessionStatusWorking / SessionStatusIdle / SessionStatusUnknown. The client
 // must not re-derive status from Title.
 type Session struct {
-	Ref    string `json:"ref"`
-	Name   string `json:"name"`
-	Cwd    string `json:"cwd"`
-	Title  string `json:"title"`
-	Status string `json:"status,omitempty"`
-	Rows   uint16 `json:"rows"`
-	Cols   uint16 `json:"cols"`
+	Ref      string `json:"ref"`
+	Name     string `json:"name"`
+	Cwd      string `json:"cwd"`
+	Title    string `json:"title"`
+	Status   string `json:"status,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	Rows     uint16 `json:"rows"`
+	Cols     uint16 `json:"cols"`
 }
 
 // Closed set for Session.Status (requirement 061). Unknown glyphs stay
@@ -392,15 +393,18 @@ type Level2Heartbeat struct {
 	Seq       uint64 `json:"seq"`
 }
 
-// OverlaySubscribe starts the overlay capture stream (C→S; requirement 064).
-// The client sends it when the in-session floating window opens.
+// OverlaySubscribe starts the overlay capture stream (C→S; requirement 064/065).
+// The client sends it when the in-session floating window opens, naming the
+// tmux server socket of the session the user is currently viewing.
 //
 // @contract
-// @pre none
-// @post 该连接计入 overlay 订阅者；有订阅者时服务端为 scratch 会话挂专用客户端并推 TypeOverlayFrame
-// @err none
-// @inv 与 level2_* 分订；零订阅者时零抓屏、零 tmux 客户端
-type OverlaySubscribe struct{}
+// @pre Socket 非空，且是用户当前会话所属的 tmux server socket 路径
+// @post 该连接计入 overlay 订阅者；有订阅者时服务端在 *该 socket* 上为 scratch 挂专用客户端并推 TypeOverlayFrame
+// @err Validate 对空 Socket 返回 ErrInvalidField
+// @inv 与 level2_* 分订；零订阅者时零抓屏、零 tmux 客户端；不得回退到「第一个发现的」socket
+type OverlaySubscribe struct {
+	Socket string `json:"socket"`
+}
 
 // OverlayUnsubscribe stops the overlay capture stream (C→S; requirement 064).
 // Sent when the floating window closes. Idempotent.

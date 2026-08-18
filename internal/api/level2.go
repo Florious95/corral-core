@@ -11,10 +11,10 @@ import (
 
 // level2.go implements the second-level menu stream (requirement 061/062).
 // Identity comes from tmux structural fields (session_name / window_name /
-// socket / pane_id / cwd). Status is classified by registered detectors plus
-// the shared three-state fallback in detect.go: no leading glyph is idle;
-// an unclaimed leading glyph is unknown and the log records the codepoint
-// plus the full original title.
+// socket / pane_id / cwd). A pane is listed only after comm-basename
+// whitelist identity (068). Status is then dispatched to that family's
+// detector; unclaimed titles are unknown and the log records provider,
+// codepoint, and the full original title.
 //
 // The loop scans only while ≥1 subscriber exists (zero subscribers ⇒ zero
 // tmux calls). It pushes a Level2Frame only when that connection's snapshot
@@ -33,13 +33,14 @@ const (
 
 // level2Entry is one row the server pushes to a level-2 subscriber.
 type level2Entry struct {
-	ref    string
-	name   string
-	cwd    string
-	title  string
-	status string
-	rows   uint16
-	cols   uint16
+	ref      string
+	name     string
+	cwd      string
+	title    string
+	status   string
+	provider string
+	rows     uint16
+	cols     uint16
 }
 
 // level2Loop is the idle-gated scan for the second-level stream. While ≥1
@@ -103,8 +104,8 @@ func (s *Server) countLevel2() int64 {
 func level2SnapKey(sessions []protocol.Session) string {
 	var b strings.Builder
 	for _, sess := range sessions {
-		fmt.Fprintf(&b, "%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%d\x1e%d\x1f",
-			sess.Ref, sess.Name, sess.Cwd, sess.Title, sess.Status, sess.Rows, sess.Cols)
+		fmt.Fprintf(&b, "%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%d\x1e%d\x1f",
+			sess.Ref, sess.Name, sess.Cwd, sess.Title, sess.Status, sess.Provider, sess.Rows, sess.Cols)
 	}
 	return b.String()
 }
@@ -121,25 +122,32 @@ func (s *Server) publishLevel2(ctx context.Context) {
 		s.log.Warn("level2: discover failed", "err", err)
 		return
 	}
+	byPID := identifyModel(s, model)
+
 	byCWD := make(map[string][]level2Entry)
 	for _, ws := range model.Workspaces {
 		for _, p := range ws.Panes {
+			prov := byPID[p.PanePID]
+			if prov == "" {
+				continue
+			}
 			name := p.WindowName
 			if name == "" {
 				name = p.Session
 			}
-			status, first, known := classifyPaneTitle(p.PaneTitle)
+			status, first, known := classifyForProvider(prov, p.PaneTitle)
 			if !known {
-				s.logUnknownGlyph(p.PaneTitle, first)
+				s.logUnknownForProvider(prov, p.PaneTitle, first)
 			}
 			byCWD[ws.CWD] = append(byCWD[ws.CWD], level2Entry{
-				ref:    sessionRef(p),
-				name:   name,
-				cwd:    p.CWD,
-				title:  p.PaneTitle, // verbatim; status is a separate field
-				status: status,
-				rows:   uint16(p.Height),
-				cols:   uint16(p.Width),
+				ref:      sessionRef(p),
+				name:     name,
+				cwd:      p.CWD,
+				title:    p.PaneTitle, // verbatim; status is a separate field
+				status:   status,
+				provider: prov,
+				rows:     uint16(p.Height),
+				cols:     uint16(p.Width),
 			})
 		}
 	}
@@ -160,13 +168,14 @@ func (s *Server) publishLevel2(ctx context.Context) {
 		sessions := make([]protocol.Session, 0, len(entries))
 		for _, e := range entries {
 			sessions = append(sessions, protocol.Session{
-				Ref:    e.ref,
-				Name:   e.name,
-				Cwd:    e.cwd,
-				Title:  e.title,
-				Status: e.status,
-				Rows:   e.rows,
-				Cols:   e.cols,
+				Ref:      e.ref,
+				Name:     e.name,
+				Cwd:      e.cwd,
+				Title:    e.title,
+				Status:   e.status,
+				Provider: e.provider,
+				Rows:     e.rows,
+				Cols:     e.cols,
 			})
 		}
 		key := level2SnapKey(sessions)
