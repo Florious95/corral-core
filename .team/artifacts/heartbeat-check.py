@@ -9,8 +9,18 @@ REPO = "/Volumes/nvme/Projects/远程Agent安卓"
 # 账本/日志按 mtime 取最新，不硬编码——硬编码会让心跳一直读一张过期账本，
 # 而那种坏法是静默的（读数看着正常，只是量的是别的东西）。
 # 选中的是哪一张必须打出来：让选错可见，而不是让它安静地错。
-LEDGER = max(glob.glob(f"{REPO}/.team/ledgers/*.json"), key=os.path.getmtime)
-DRIVELOG = max(glob.glob(f"{REPO}/.team/ledgers/*-drive.log"), key=os.path.getmtime)
+# 当前在跑的账本由 .team/ledgers/ACTIVE 显式登记（起驱动器时写）。
+# ⛔ 不要改回「按 mtime 猜最新」——写一张新账本就会把心跳指到没在跑的那张，
+#   而且这种坏法完全静默：读数看着正常，只是量的是别的东西。
+_active = f"{REPO}/.team/ledgers/ACTIVE"
+if os.path.exists(_active):
+    LEDGER = open(_active).read().strip()
+else:
+    LEDGER = max(glob.glob(f"{REPO}/.team/ledgers/*.json"), key=os.path.getmtime)
+DRIVELOG = LEDGER.replace(".team/ledgers/", ".team/ledgers/").rsplit("/",1)[0] + "/" + \
+           os.path.basename(LEDGER)[:-5].split("-v")[0] + "-drive.log"
+if not os.path.exists(DRIVELOG):
+    DRIVELOG = max(glob.glob(f"{REPO}/.team/ledgers/*-drive.log"), key=os.path.getmtime)
 
 def my_driver():
     """只认 cwd 落在本工程的那个 ledger-run。"""
