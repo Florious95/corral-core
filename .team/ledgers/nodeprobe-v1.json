@@ -433,6 +433,83 @@
    "parallel": {
     "group": "g3"
    }
+  },
+  "t.accuracy": {
+   "title": "测准确率，不是测能不能跑。🔴 用户明确要问的是：**这套判活方案的正确率到底有多高**。正控+反控各一次只能证明方法不是恒定输出，**证明不了准确率**——一个 90% 的方法和一个 55% 的方法都能通过一次正反控。\n做法：在本 team 自己的 tmux socket 上采**至少 20 个带标签的样本**（≥10 个已知工作态、≥10 个已知空闲态）。每个样本必须有**独立于被测方法的真值来源**：例如你主动给某席位发一条一次性无害消息使其工作 ⇒ 真值 working；确认它回完并静置一段时间 ⇒ 真值 idle。🔴 真值不能由 nodeprobe 自己给，那是自证。\n对每个样本跑 tools/nodeprobe.sh 记录判定，算出：命中率、假 working 数、假 idle 数、unknown 数。\n🔴 **允许多信号取或**（用户明确：不一定是一个判据）。若单一信号达不到高准确率，就给组合方案（例如 标题前导符号 OR 会话文件 mtime 增量），并**分别报单信号与组合后的命中率**，让人看得见组合的增益。\n🔴 **unknown 单独计，不许并进任何一边**。把 unknown 算成 idle 会让准确率虚高，而那正是二级菜单前四轮的死法。\n产物：/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/准确率报告.md（样本表：时间 / 节点 / 真值 / 判定 / 所用信号，以及命中率、假阳、假阴、unknown 各自的数）；以及 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/accuracy.sh：可重跑的采样+统计脚本，**退出码即判据：命中率 < 0.9 就非零退出**。\n⛔⛔ 遍历进程树只能取 comm，禁止取 args/命令行（实发：pgrep -fl 当场把席位 API key 打上屏）。禁止无过滤 ps aux、禁止打印任何 env。\n🔴 worktree_id 只是并发互斥标签，必须在仓根干活，不要 git worktree add。\n🔴 静默纪律：不得给 leader 发进度消息，唯一例外是被卡住需裁定（class=blocking）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。",
+   "owner": {
+    "role": "r.control"
+   },
+   "resources": {
+    "worktree_id": "wt3.acc",
+    "write_paths": [
+     ".team/nodes/np-accuracy/"
+    ],
+    "read_paths": [
+     "tools/nodeprobe/",
+     ".team/nodes/np-research/判活方法对比.md",
+     "requirement-base/entries/063-节点判活工具nodeprobe.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "4f214b3ed"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/准确率报告.md",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/accuracy.sh"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-ac-report",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/准确率报告.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300
+     },
+     {
+      "acceptance_id": "A-ac-samples",
+      "argv": [
+       "sh",
+       "-c",
+       "test $(grep -ci 'working\\|idle' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/准确率报告.md) -ge 20"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300
+     },
+     {
+      "acceptance_id": "A-ac-hit",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/accuracy.sh'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2500
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-ac-report",
+     "A-ac-samples",
+     "A-ac-hit"
+    ]
+   },
+   "state": "planned"
   }
  },
  "dependencies": [
@@ -449,6 +526,11 @@
   {
    "from": "t.impl",
    "to": "t.verify",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.impl",
+   "to": "t.accuracy",
    "condition": "requires_success"
   }
  ],
