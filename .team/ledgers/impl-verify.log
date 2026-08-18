@@ -1,0 +1,14 @@
+--- go 具名测试 ---
+  PASS TestLevel2TitleVerbatim
+  PASS TestLevel2IdentityStructural
+  PASS TestLevel2StopsWhenNoSubscriber
+  PASS TestLevel2NoTmuxAttach
+--- go 全套 ---
+  PASS suite
+--- gradle 具名测试 ---
+  PASS Level2LiveStreamRenderTest
+  PASS Level2NavigationIdentityTest
+  PASS Level2StreamLifecycleTest
+--- gradle 全套 ---
+  PASS suite
+DONE
