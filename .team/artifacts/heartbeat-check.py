@@ -44,4 +44,24 @@ print("席位: " + (", ".join(f"{k}={v}" for k, v in seats) if seats else "⚠�
 # ⚠️ 排除 leader 自己那一窗：我在跑心跳，我必然是 working，
 # 把它算进去会让「席位全空闲」永远看起来健康。
 busy = [k for k, v in (seats or []) if v == "working" and k != "claude_code"]
-print("判读: " + ("健康" if pid and busy else "⚠️ 需要看日志尾部再判"))
+
+def driver_phase():
+    """驱动器最后一条日志说明它在干什么。
+    席位全空闲**不等于**没进展：判据（gradle/go 全套、变异脚本、尺寸不变实验）
+    是驱动器自己跑的，那几分钟里席位本来就该是空闲的。
+    只看「有没有席位 working」会把每一次跑判据都报成异常——误报多了，真出事时没人当真。"""
+    try:
+        tail = open(f"{REPO}/.team/ledgers/ov-drive.log", encoding="utf-8", errors="replace").read()[-4000:]
+    except Exception:
+        return ""
+    for line in reversed(tail.splitlines()):
+        for k in ("判据 acceptance", "等待 wait", "派单", "写回", "轮次"):
+            if k in line:
+                return k
+    return ""
+
+phase = driver_phase()
+if pid and (busy or phase in ("判据 acceptance", "等待 wait", "派单", "写回", "轮次")):
+    print(f"判读: 健康（{'席位在跑: ' + ','.join(busy) if busy else '驱动器在: ' + phase}）")
+else:
+    print("判读: ⚠️ 需要看日志尾部再判")
