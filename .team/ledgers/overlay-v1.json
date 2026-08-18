@@ -305,6 +305,20 @@
       "acceptance_success.acceptance_id=A-s-suite",
       "acceptance_success.writeback_revision=4"
      ]
+    },
+    {
+     "attempt_id": "att-t.srv-seq1-t1787068959276",
+     "delivery_id": "del-t.srv-seq1-t1787068959276",
+     "state": "acceptance_pending",
+     "artifact_refs": [
+      "acceptance_failure.acceptance_id=A-s-suite",
+      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)\"]",
+      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/server",
+      "acceptance_failure.exit_code=1",
+      "acceptance_failure.expected_exit_code=0",
+      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+      "acceptance_failure.stderr_tail(末20行)="
+     ]
     }
    ]
   },
@@ -606,6 +620,95 @@
     ]
    },
    "state": "planned"
+  },
+  "t.stale": {
+   "title": "🔴【用户真机实报的缺陷，优先于本账本其余未完成项】二级菜单显示**过期状态**：明明空闲，徽章仍显示「进行中」。\n用户给了两个实例（截图）：`developer-d83`、以及本工程的 `advisor`。两者共同点是**都曾经在工作、现在已空闲**。\nleader 已排除的（别重复查）：\n  · 判定规则没错：两个标题首字符都不是盲文、无 Thinking/Waiting 标记、以 ' - grok' 结尾 ⇒ 按 062 应判 idle；Go 侧 grokDetector.Match 的分支我读过，结论正确；Rust 版 nodeprobe 对同样标题也判 idle。\n  · 服务端不是旧的：现役 daemon 构建于 8月18 22:11，**比所有探测器源码（21:45–22:01）都新**，且二进制里含 resetLevel2PushState（订阅即清推送水位 ⇒ 下一拍推全量快照）。\n  · 三态跨端探针 probe-tristate.sh 独立跑过绿。\n⇒ **剩下的嫌疑在 App 侧**：很可能是「缓存优先 + 原地替换」里，替换**只按会话身份合并了行、没更新 state 字段**，于是渲染的是该行上次工作时的徽章，一直冻着。\n🔴 请定位并修。修的时候**不许把缓存优先撤掉**——那是用户明确要保留的行为（进菜单不许先空白）。要的是「先画旧的 + 新数据到达后连状态一起换掉」，两者都要。\n必须新增这个具名测试并 PASS：**L2StaleStatusReplacedTest** —— 给定缓存里某会话 state=working，收到新快照该会话 state=idle 后，暴露给 UI 的状态必须变成 idle。🔴 这条测试要先在**修复前**的代码上验红（不红就是没抓到真因，别急着改）。\n同时 L2CacheFirstNoBlankFrameTest / L2CacheReplacedInPlaceTest 必须仍然 PASS（不许为修这条把那两条弄坏）。\n🔴 worktree_id 只是互斥标签，必须在仓根干活，不要 git worktree add。🔴 静默纪律：不给 leader 发进度，唯一例外是被卡住需裁定（class=blocking）。🔴 干完调一次 report_result，不要传 task_id 参数。⛔ 禁止启动安卓模拟器。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt4.stale",
+    "write_paths": [
+     "app/app/src/main/",
+     "app/app/src/test/",
+     ".team/nodes/ov-stale/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
+     "server/internal/api/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "653713581"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-stale/修复说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-st-new",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2StaleStatusReplacedTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-st-keep-cache",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2CacheFirstNoBlankFrameTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-st-keep-inplace",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2CacheReplacedInPlaceTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-st-suite",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2500
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-st-new",
+     "A-st-keep-cache",
+     "A-st-keep-inplace",
+     "A-st-suite"
+    ]
+   },
+   "state": "planned"
   }
  },
  "dependencies": [
@@ -631,6 +734,11 @@
   },
   {
    "from": "t.verify",
+   "to": "t.pkg",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.stale",
    "to": "t.pkg",
    "condition": "requires_success"
   }
@@ -692,5 +800,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 5
+ "revision": 7
 }
