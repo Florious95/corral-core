@@ -7,7 +7,7 @@ package api
 //
 // 060 uproot (2026-08-15): the agent-state sampling scheduler was removed
 // wholesale with the state pipeline (requirement 060: 二级菜单改为实时流并取代
-// 状态判定). The sampling-fairness test is archived to scratch/archive-level2/.
+// 状态判定). The sampling-fairness test is archived under scratch/ (uproot bundle).
 // The discovery-isolation tests below are kept — they pin the scoped-discovery
 // seam, which the level-1 menu still needs.
 

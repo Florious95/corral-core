@@ -87,19 +87,6 @@ type Server struct {
 	// runs a fresh full scan immediately instead of waiting for the next tick.
 	authed atomic.Int64
 	wakeCh chan struct{}
-
-	// level2Subscribers counts connections currently viewing the second-level
-	// menu (requirement 060). The level2Loop polls only while this is > 0; at
-	// zero it parks and spawns no scan subprocesses (idle CPU ≈ 0). level2WakeCh
-	// is a capacity-1 signal that the count just went 0→1, so the first
-	// subscriber's stream is fresh immediately.
-	level2Subscribers atomic.Int64
-	level2WakeCh      chan struct{}
-
-	// level2Interval is how often the level2 loop scans while subscribers exist.
-	// Distinct from listInterval so the live stream can be fresher than the
-	// level-1 menu cadence.
-	level2Interval time.Duration
 }
 
 // NewServer constructs the API server from Options. Zero values use the
@@ -153,13 +140,8 @@ func NewServer(opts Options) *Server {
 	// channel. Capacity 1: a wake that finds the slot occupied is dropped —
 	// the loop is already about to run, so one scan covers both clients.
 	s.wakeCh = make(chan struct{}, 1)
-	// Same reasoning for the level2 live stream: the 0→1 subscriber wake must
-	// never send on a nil channel, and a dropped wake is fine (a scan is coming).
-	s.level2WakeCh = make(chan struct{}, 1)
-	s.level2Interval = defaultLevel2Interval
 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
 	go s.listingLoop(s.loopCtx)
-	go s.level2Loop(s.loopCtx)
 	return s
 }
 

@@ -8,7 +8,6 @@
         "ref": "s4",
         "name": "claude",
         "cwd": "/proj/c",
-        "title": "",
         "rows": 25,
         "cols": 100
       }
@@ -21,7 +20,6 @@
         "ref": "s2",
         "name": "codex",
         "cwd": "/proj/a",
-        "title": "",
         "rows": 24,
         "cols": 80
       }
