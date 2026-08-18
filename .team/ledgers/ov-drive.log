@@ -1,53 +1,19 @@
-[ledger-run 2026-08-18T15:05:06Z] 开工 start | ledger_id=ledger.overlay.v1 revision=1 账本=.team/ledgers/overlay-v1.json 墙钟上限=14400s 派单死线=90s
-[ledger-run 2026-08-18T15:05:18Z] 轮次 round | 第 1 轮开始：前沿 ["t.feas"]（墙钟已跑 11s / 上限 14400s）
-[ledger-run 2026-08-18T15:05:18Z] 派单 dispatch | task=t.feas 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/advisor 席位=advisor attempt=att-t.feas-seq1-t1787065518317 delivery=del-t.feas-seq1-t1787065518317
-[ledger-run 2026-08-18T15:05:18Z] 投递回执 send-ok | task=t.feas case_id=ledger_overlay_v1__t.feas__r1 message_id=msg_9898f50099a8 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-18T15:05:18Z] 派单落地 dispatch-landed | task=t.feas 席位 advisor 的收件箱已多出这条派单
-[ledger-run 2026-08-18T15:05:18Z] 等待 wait | task=t.feas 在等的 key（case_id）=ledger_overlay_v1__t.feas__r1 team=grok-l2 预算=950s
-[ledger-run 2026-08-18T15:13:30Z] 已唤醒 wait-signaled | task=t.feas 等到结果了
-[ledger-run 2026-08-18T15:13:30Z] 判据 acceptance | task=t.feas 在跑 required=["A-f-doc", "A-f-four", "A-f-probe", "A-f-size", "A-f-red"]
-[ledger-run 2026-08-18T15:15:19Z] 判据通过留档 acceptance-success | task=t.feas 成功 attempt 落进 attempts[] writeback_revision=2 passed=["A-f-doc", "A-f-four", "A-f-probe", "A-f-size", "A-f-red"]
-[ledger-run 2026-08-18T15:15:19Z] 原子写回 writeback-atomic | task=t.feas state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=2 hash=3ff04eaeab8e4222）——中途死也不会留下半份账本，进度不会全废
-[ledger-run 2026-08-18T15:15:19Z] 写回 writeback | task=t.feas state=succeeded revision=1 → 2
-[ledger-run 2026-08-18T15:15:19Z] 轮次 round | 第 2 轮开始：前沿 ["t.app", "t.srv"]（墙钟已跑 613s / 上限 14400s）
-[ledger-run 2026-08-18T15:15:19Z] 派单 dispatch | task=t.app 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-app 席位=dev-app attempt=att-t.app-seq2-t1787066119699 delivery=del-t.app-seq2-t1787066119699
-[ledger-run 2026-08-18T15:15:20Z] 投递回执 send-ok | task=t.app case_id=ledger_overlay_v1__t.app__r2 message_id=msg_7c3bfe9f87a8 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-18T15:15:20Z] 派单落地 dispatch-landed | task=t.app 席位 dev-app 的收件箱已多出这条派单
-[ledger-run 2026-08-18T15:15:20Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq3-t1787066120187 delivery=del-t.srv-seq3-t1787066120187
-[ledger-run 2026-08-18T15:15:20Z] 投递回执 send-ok | task=t.srv case_id=ledger_overlay_v1__t.srv__r2 message_id=msg_76f417dc1600 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-18T15:15:20Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
-[ledger-run 2026-08-18T15:15:20Z] 等待 wait | task=t.app 在等的 key（case_id）=ledger_overlay_v1__t.app__r2 team=grok-l2 预算=1800s
-[ledger-run 2026-08-18T15:22:59Z] 已唤醒 wait-signaled | task=t.app 等到结果了
-[ledger-run 2026-08-18T15:22:59Z] 判据 acceptance | task=t.app 在跑 required=["A-a-open", "A-a-dismiss", "A-a-unsub", "A-a-suite"]
-[ledger-run 2026-08-18T15:25:09Z] 判据通过留档 acceptance-success | task=t.app 成功 attempt 落进 attempts[] writeback_revision=3 passed=["A-a-open", "A-a-dismiss", "A-a-unsub", "A-a-suite"]
-[ledger-run 2026-08-18T15:25:09Z] 原子写回 writeback-atomic | task=t.app state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=3 hash=cd930dcce5b323c1）——中途死也不会留下半份账本，进度不会全废
-[ledger-run 2026-08-18T15:25:09Z] 写回 writeback | task=t.app state=succeeded revision=2 → 3
-[ledger-run 2026-08-18T15:25:09Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_overlay_v1__t.srv__r2 team=grok-l2 预算=1000s
-[ledger-run 2026-08-18T15:25:09Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
-[ledger-run 2026-08-18T15:25:09Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-idle", "A-s-nonempty", "A-s-anim", "A-s-suite"]
-[ledger-run 2026-08-18T15:27:05Z] 判据通过留档 acceptance-success | task=t.srv 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-s-idle", "A-s-nonempty", "A-s-anim", "A-s-suite"]
-[ledger-run 2026-08-18T15:27:05Z] 原子写回 writeback-atomic | task=t.srv state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=4 hash=7046014b03990cfa）——中途死也不会留下半份账本，进度不会全废
-[ledger-run 2026-08-18T15:27:05Z] 写回 writeback | task=t.srv state=succeeded revision=3 → 4
-[ledger-run 2026-08-18T15:27:05Z] 轮次 round | 第 3 轮开始：前沿 ["t.verify"]（墙钟已跑 1318s / 上限 14400s）
-[ledger-run 2026-08-18T15:27:05Z] 派单 dispatch | task=t.verify 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/control 席位=control attempt=att-t.verify-seq4-t1787066825511 delivery=del-t.verify-seq4-t1787066825511
-[ledger-run 2026-08-18T15:27:05Z] 投递回执 send-ok | task=t.verify case_id=ledger_overlay_v1__t.verify__r4 message_id=msg_ee8251ca9928 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-18T15:27:05Z] 派单落地 dispatch-landed | task=t.verify 席位 control 的收件箱已多出这条派单
-[ledger-run 2026-08-18T15:27:05Z] 等待 wait | task=t.verify 在等的 key（case_id）=ledger_overlay_v1__t.verify__r4 team=grok-l2 预算=950s
-[ledger-run 2026-08-18T15:31:30Z] 已唤醒 wait-signaled | task=t.verify 等到结果了
-[ledger-run 2026-08-18T15:31:30Z] 判据 acceptance | task=t.verify 在跑 required=["A-v-probe", "A-v-size", "A-v-mut", "A-v-rep"]
-[ledger-run 2026-08-18T15:33:49Z] 判据失败诊断 acceptance-diagnostic | task=t.verify 判据 A-v-probe 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
-file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/[eval1]:48
-  throw new Error(`订阅后没有 overlay_frame（当前无悬浮窗流，预期红）：${e.message}`);
-        ^
+租约抢占：pid=58750 stole from pid=50962 reason=holder pid 50962 不存在（判定已死） at=1787068956
 
-Error: 订阅后没有 overlay_frame（当前无悬浮窗流，预期红）：timeout 6000ms waiting overlay_frame
-    at file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/[eval1]:48:9
+[ledger-run 2026-08-18T16:02:36Z] 开工 start | ledger_id=ledger.overlay.v1 revision=6 账本=.team/ledgers/overlay-v1.json 墙钟上限=14400s 派单死线=90s
+[ledger-run 2026-08-18T16:02:39Z] 轮次 round | 第 1 轮开始：前沿 ["t.srv"]（墙钟已跑 2s / 上限 14400s）
+[ledger-run 2026-08-18T16:02:39Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq1-t1787068959276 delivery=del-t.srv-seq1-t1787068959276
+[ledger-run 2026-08-18T16:02:39Z] 投递回执 send-ok | task=t.srv case_id=ledger_overlay_v1__t.srv__r6 message_id=msg_fb53223068a8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T16:02:39Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
+[ledger-run 2026-08-18T16:02:39Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_overlay_v1__t.srv__r6 team=grok-l2 预算=1000s
+[ledger-run 2026-08-18T16:11:24Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
+[ledger-run 2026-08-18T16:11:24Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-idle", "A-s-nonempty", "A-s-anim", "A-s-suite"]
+[ledger-run 2026-08-18T16:13:30Z] 判据失败诊断 acceptance-diagnostic | task=t.srv 判据 A-s-suite 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓/server argv=["python3", "-c", "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
 
-Node.js v22.22.2
-[ledger-run 2026-08-18T15:33:49Z] 原子写回 writeback-atomic | task=t.verify 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=4 hash=fce44d2ca24988cb）——中途死也不会留下半份账本，进度不会全废
-[ledger-run 2026-08-18T15:33:49Z] 判据红 acceptance-red | task=t.verify required 未全过——冻结这一格，其余分支继续
-[ledger-run 2026-08-18T15:33:49Z] 停机 halt | 第 3 轮零进展（没有任何任务写回）：前沿不会自己变，继续转只会重发同一条派单——停下来交人
-[ledger-run 2026-08-18T15:33:49Z] 收工 finish | 停机原因=Failed 写回=["t.feas", "t.app", "t.srv"] 冻结=["t.verify"] 不可判=[] 墙钟已跑 1722s
-[ledger-run 2026-08-18T15:33:49Z] 通知 notify-begin | 正在把停机原因发给 leader
-[ledger-run 2026-08-18T15:33:49Z] 通知 notify-fail | 通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)
-{"ok":true,"ledger_id":"ledger.overlay.v1","revision_before":1,"revision_after":4,"wrote_back":["t.feas","t.app","t.srv"],"unjudgeable":[],"frozen":["t.verify"],"preflight_rejected":false,"notices_sent":["ledger_id: ledger.overlay.v1 | revision: 4 | 停机原因: Failed | 最后失败判据: t.verify 判据未过 ｜ t.verify：判据 A-v-probe 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/probe-overlay.sh'],timeout=900).returncode)\"] error=exit_code_mismatch: expected 0, observed 1（stderr 末20行见账本 tasks.t.verify.attempts[].artifact_refs） ｜ 未干完的任务（非 Succeeded）: t.pkg=Planned, t.verify=Planned | 各任务终态: t.app=Succeeded, t.feas=Succeeded, t.pkg=Planned, t.srv=Succeeded, t.verify=Planned","通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)"]}
+[ledger-run 2026-08-18T16:13:30Z] 原子写回 writeback-atomic | task=t.srv 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=6 hash=0cfae2027a691fbf）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T16:13:30Z] 判据红 acceptance-red | task=t.srv required 未全过——冻结这一格，其余分支继续
+[ledger-run 2026-08-18T16:13:30Z] 停机 halt | 第 1 轮零进展（没有任何任务写回）：前沿不会自己变，继续转只会重发同一条派单——停下来交人
+[ledger-run 2026-08-18T16:13:30Z] 收工 finish | 停机原因=Failed 写回=[] 冻结=["t.srv"] 不可判=[] 墙钟已跑 653s
+[ledger-run 2026-08-18T16:13:30Z] 通知 notify-begin | 正在把停机原因发给 leader
+[ledger-run 2026-08-18T16:13:30Z] 通知 notify-fail | 通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)
+{"ok":true,"ledger_id":"ledger.overlay.v1","revision_before":6,"revision_after":6,"wrote_back":[],"unjudgeable":[],"frozen":["t.srv"],"preflight_rejected":false,"notices_sent":["ledger_id: ledger.overlay.v1 | revision: 6 | 停机原因: Failed | 最后失败判据: t.srv 判据未过 ｜ t.srv：判据 A-s-suite 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓/server argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)\"] error=exit_code_mismatch: expected 0, observed 1（stderr 末20行见账本 tasks.t.srv.attempts[].artifact_refs） ｜ 未干完的任务（非 Succeeded）: t.pkg=Planned, t.srv=Planned, t.verify=Planned | 各任务终态: t.app=Succeeded, t.feas=Succeeded, t.pkg=Planned, t.srv=Planned, t.verify=Planned","通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)"]}
