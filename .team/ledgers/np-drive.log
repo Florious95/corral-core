@@ -4,3 +4,65 @@
 [ledger-run 2026-08-18T14:26:41Z] 投递回执 send-ok | task=t.research case_id=ledger_nodeprobe_v1__t.research__r2 message_id=msg_c43c85266c38 —— 回执成功≠席位收到，下一步查收件箱确认落地
 [ledger-run 2026-08-18T14:26:41Z] 派单落地 dispatch-landed | task=t.research 席位 advisor 的收件箱已多出这条派单
 [ledger-run 2026-08-18T14:26:41Z] 等待 wait | task=t.research 在等的 key（case_id）=ledger_nodeprobe_v1__t.research__r2 team=grok-l2 预算=950s
+[ledger-run 2026-08-18T14:27:33Z] 已唤醒 wait-signaled | task=t.research 等到结果了
+[ledger-run 2026-08-18T14:27:33Z] 判据 acceptance | task=t.research 在跑 required=["A-rs-doc", "A-rs-fix", "A-rs-probe", "A-rs-red"]
+[ledger-run 2026-08-18T14:27:59Z] 判据通过留档 acceptance-success | task=t.research 成功 attempt 落进 attempts[] writeback_revision=3 passed=["A-rs-doc", "A-rs-fix", "A-rs-probe", "A-rs-red"]
+[ledger-run 2026-08-18T14:27:59Z] 原子写回 writeback-atomic | task=t.research state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=3 hash=f3576793ebfea2be）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T14:27:59Z] 写回 writeback | task=t.research state=succeeded revision=2 → 3
+[ledger-run 2026-08-18T14:27:59Z] 轮次 round | 第 2 轮开始：前沿 ["t.impl"]（墙钟已跑 81s / 上限 10200s）
+[ledger-run 2026-08-18T14:27:59Z] 派单 dispatch | task=t.impl 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.impl-seq2-t1787063279567 delivery=del-t.impl-seq2-t1787063279567
+[ledger-run 2026-08-18T14:27:59Z] 投递回执 send-ok | task=t.impl case_id=ledger_nodeprobe_v1__t.impl__r3 message_id=msg_d7edb781d610 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T14:28:00Z] 派单落地 dispatch-landed | task=t.impl 席位 dev-server 的收件箱已多出这条派单
+[ledger-run 2026-08-18T14:28:00Z] 等待 wait | task=t.impl 在等的 key（case_id）=ledger_nodeprobe_v1__t.impl__r3 team=grok-l2 预算=1900s
+[ledger-run 2026-08-18T14:34:35Z] 已唤醒 wait-signaled | task=t.impl 等到结果了
+[ledger-run 2026-08-18T14:34:35Z] 判据 acceptance | task=t.impl 在跑 required=["A-im-build", "A-im-corpus", "A-im-sh", "A-im-json", "A-im-noargv"]
+[ledger-run 2026-08-18T14:35:04Z] 判据通过留档 acceptance-success | task=t.impl 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-im-build", "A-im-corpus", "A-im-sh", "A-im-json", "A-im-noargv"]
+[ledger-run 2026-08-18T14:35:04Z] 原子写回 writeback-atomic | task=t.impl state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=4 hash=7432bd7c2e6eb738）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T14:35:04Z] 写回 writeback | task=t.impl state=succeeded revision=3 → 4
+[ledger-run 2026-08-18T14:35:04Z] 轮次 round | 第 3 轮开始：前沿 ["t.accuracy", "t.parity", "t.verify"]（墙钟已跑 506s / 上限 10200s）
+[ledger-run 2026-08-18T14:35:04Z] 派单 dispatch | task=t.accuracy 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/control 席位=control attempt=att-t.accuracy-seq3-t1787063704550 delivery=del-t.accuracy-seq3-t1787063704550
+[ledger-run 2026-08-18T14:35:04Z] 投递回执 send-ok | task=t.accuracy case_id=ledger_nodeprobe_v1__t.accuracy__r4 message_id=msg_3d2ba9ae8660 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T14:35:04Z] 派单落地 dispatch-landed | task=t.accuracy 席位 control 的收件箱已多出这条派单
+[ledger-run 2026-08-18T14:35:05Z] 派单 dispatch | task=t.parity 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-app 席位=dev-app attempt=att-t.parity-seq4-t1787063704985 delivery=del-t.parity-seq4-t1787063704985
+[ledger-run 2026-08-18T14:35:05Z] 投递回执 send-ok | task=t.parity case_id=ledger_nodeprobe_v1__t.parity__r4 message_id=msg_3a24c1dacd98 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T14:35:05Z] 派单落地 dispatch-landed | task=t.parity 席位 dev-app 的收件箱已多出这条派单
+[ledger-run 2026-08-18T14:35:05Z] 派单 dispatch | task=t.verify 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/control 席位=control attempt=att-t.verify-seq5-t1787063705385 delivery=del-t.verify-seq5-t1787063705385
+[ledger-run 2026-08-18T14:35:05Z] 投递回执 send-ok | task=t.verify case_id=ledger_nodeprobe_v1__t.verify__r4 message_id=msg_342fd94003e0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T14:35:05Z] 派单落地 dispatch-landed | task=t.verify 席位 control 的收件箱已多出这条派单
+[ledger-run 2026-08-18T14:35:05Z] 等待 wait | task=t.accuracy 在等的 key（case_id）=ledger_nodeprobe_v1__t.accuracy__r4 team=grok-l2 预算=300s
+[ledger-run 2026-08-18T14:40:05Z] 无信号 wait-no-signal | task=t.accuracy 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-18T14:40:05Z] 判据 acceptance | task=t.accuracy 在跑 required=["A-ac-report", "A-ac-samples", "A-ac-hit"]
+[ledger-run 2026-08-18T14:40:38Z] 判据失败诊断 acceptance-diagnostic | task=t.accuracy 判据 A-ac-report 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["test", "-s", "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/准确率报告.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-18T14:40:38Z] 判据失败诊断 acceptance-diagnostic | task=t.accuracy 判据 A-ac-samples 失败：exit_code=2 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "test $(grep -ci 'working\\|idle' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/准确率报告.md) -ge 20"] error=exit_code_mismatch: expected 0, observed 2 stderr(末20行)=
+grep: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/准确率报告.md: No such file or directory
+sh: line 0: test: -ge: unary operator expected
+[ledger-run 2026-08-18T14:40:38Z] 判据失败诊断 acceptance-diagnostic | task=t.accuracy 判据 A-ac-hit 失败：exit_code=127 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import subprocess,sys;sys.exit(subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/accuracy.sh'],timeout=2400).returncode)"] error=exit_code_mismatch: expected 0, observed 127 stderr(末20行)=
+bash: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-accuracy/accuracy.sh: No such file or directory
+[ledger-run 2026-08-18T14:40:38Z] 原子写回 writeback-atomic | task=t.accuracy 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=4 hash=03eea38fba93d441）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T14:40:38Z] 判据不可判 acceptance-unjudgeable | task=t.accuracy 判据自己跑不起来（命令不存在/判据超时）——不是活坏，记不可判
+[ledger-run 2026-08-18T14:40:38Z] 等待 wait | task=t.parity 在等的 key（case_id）=ledger_nodeprobe_v1__t.parity__r4 team=grok-l2 预算=1000s
+[ledger-run 2026-08-18T14:40:38Z] 已唤醒 wait-signaled | task=t.parity 等到结果了
+[ledger-run 2026-08-18T14:40:38Z] 判据 acceptance | task=t.parity 在跑 required=["A-pa-test", "A-pa-single", "A-pa-suite"]
+[ledger-run 2026-08-18T14:41:08Z] 判据通过留档 acceptance-success | task=t.parity 成功 attempt 落进 attempts[] writeback_revision=5 passed=["A-pa-test", "A-pa-single", "A-pa-suite"]
+[ledger-run 2026-08-18T14:41:09Z] 原子写回 writeback-atomic | task=t.parity state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=5 hash=a66e34bbbe1f72f0）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T14:41:09Z] 写回 writeback | task=t.parity state=succeeded revision=4 → 5
+[ledger-run 2026-08-18T14:41:09Z] 等待 wait | task=t.verify 在等的 key（case_id）=ledger_nodeprobe_v1__t.verify__r4 team=grok-l2 预算=950s
+[ledger-run 2026-08-18T14:43:29Z] 已唤醒 wait-signaled | task=t.verify 等到结果了
+[ledger-run 2026-08-18T14:43:29Z] 判据 acceptance | task=t.verify 在跑 required=["A-vf-report", "A-vf-mut", "A-vf-bothsides"]
+[ledger-run 2026-08-18T14:44:00Z] 判据通过留档 acceptance-success | task=t.verify 成功 attempt 落进 attempts[] writeback_revision=6 passed=["A-vf-report", "A-vf-mut", "A-vf-bothsides"]
+[ledger-run 2026-08-18T14:44:00Z] 原子写回 writeback-atomic | task=t.verify state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=6 hash=9ae71261689ec685）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T14:44:00Z] 写回 writeback | task=t.verify state=succeeded revision=5 → 6
+[ledger-run 2026-08-18T14:44:00Z] 轮次 round | 第 4 轮开始：前沿 ["t.accuracy"]（墙钟已跑 1043s / 上限 10200s）
+[ledger-run 2026-08-18T14:44:00Z] 在飞 in-flight | task=t.accuracy case_id=ledger_nodeprobe_v1__t.accuracy__r4 本次驱动循环已派过：接着等它的结果，⛔ 不重派
+[ledger-run 2026-08-18T14:44:00Z] 等待 wait | task=t.accuracy 在等的 key（case_id）=ledger_nodeprobe_v1__t.accuracy__r4 team=grok-l2 预算=300s
+[ledger-run 2026-08-18T14:44:00Z] 已唤醒 wait-signaled | task=t.accuracy 等到结果了
+[ledger-run 2026-08-18T14:44:00Z] 判据 acceptance | task=t.accuracy 在跑 required=["A-ac-report", "A-ac-samples", "A-ac-hit"]
+[ledger-run 2026-08-18T14:44:30Z] 判据通过留档 acceptance-success | task=t.accuracy 成功 attempt 落进 attempts[] writeback_revision=7 passed=["A-ac-report", "A-ac-samples", "A-ac-hit"]
+[ledger-run 2026-08-18T14:44:30Z] 延后落盘 writeback-deferred | task=t.accuracy 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-18T14:44:30Z] 写回 writeback | task=t.accuracy state=succeeded revision=6 → 7
+[ledger-run 2026-08-18T14:44:30Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.research", "t.impl", "t.parity", "t.verify", "t.accuracy"] 冻结=[] 不可判=[] 墙钟已跑 1072s
+[ledger-run 2026-08-18T14:44:30Z] 通知 notify-begin | 正在把停机原因发给 leader
+[ledger-run 2026-08-18T14:44:30Z] 通知 notify-fail | 通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)
+[ledger-run 2026-08-18T14:44:30Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=7 hash=a3128163c9658b3d）——中途死也不会留下半份账本，进度不会全废
+{"ok":true,"ledger_id":"ledger.nodeprobe.v1","revision_before":2,"revision_after":7,"wrote_back":["t.research","t.impl","t.parity","t.verify","t.accuracy"],"unjudgeable":[],"frozen":[],"preflight_rejected":false,"notices_sent":["ledger_id: ledger.nodeprobe.v1 | revision: 7 | 停机原因: AllSucceeded | 最后失败判据: t.accuracy：曾失败 3 次，最后一次通过（历史失败已被后续尝试推翻） | 各任务终态: t.accuracy=Succeeded, t.impl=Succeeded, t.parity=Succeeded, t.research=Succeeded, t.verify=Succeeded","通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)"]}
