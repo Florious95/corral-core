@@ -1,0 +1,631 @@
+{
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.l2-tristate.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.advisor": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/l2b-design/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "advisor",
+    "team": "grok-l2"
+   }
+  },
+  "r.server": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/l2b-server/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "dev-server",
+    "team": "grok-l2"
+   }
+  },
+  "r.app": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/l2b-app/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "dev-app",
+    "team": "grok-l2"
+   }
+  },
+  "r.control": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/l2b-verify/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "control",
+    "team": "grok-l2"
+   }
+  },
+  "r.leader": {
+   "provider": "human",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/l2b-esc/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.rule": {
+   "title": "按契约 062 出三态规则方案 + 探针。🔴 根因不是缺 Grok 符号，是 061 只定义了「工作符号」、没定义「没有符号」，于是所有空闲席位都被判成未知（用户真机实测：Grok 全未知；Claude Code 也是进去才对）。三态：①前导是已知工作符号 ⇒ 进行中；②**没有任何前导符号 ⇒ 空闲**（这条是新增，是修复核心）；③有符号但不在表里 ⇒ 未知 + 记 Unicode 码点与完整原始标题。🔴 未知必须稀有。符号表见契约 062 第三节（已实测：Grok 工作态前导是盲文点阵 U+2800–U+28FF，实测 ⠼ U+283C，且标题含 ' - Thinking - ' 或 ' - Waiting for response'；空闲态无前导符号、以 ' - grok' 结尾，且**保留上次任务摘要**，所以不能拿摘要内容判活）。产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/方案.md 与 probe-tristate.sh。🔴 探针要断言世界变了：至少覆盖「Grok 空闲标题判空闲、不判未知」「Grok 工作标题判进行中」「无法识别的前导符号判未知且日志有码点」三种输入。**现在跑必须红**（当前实现会把空闲判成未知）。🔴 账本里的 `worktree_id` **只是并发互斥标签，不是 git worktree**，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.advisor"
+   },
+   "resources": {
+    "worktree_id": "wt2.rule",
+    "write_paths": [
+     ".team/nodes/l2b-design/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
+     "server/internal/",
+     "app/app/src/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "b3ba21530"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/方案.md",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/probe-tristate.sh"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-r-plan",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/方案.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-r-probe",
+      "argv": [
+       "test",
+       "-x",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/probe-tristate.sh"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-r-red",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;r=subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/probe-tristate.sh'],timeout=900);sys.exit(0 if r.returncode!=0 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-r-plan",
+     "A-r-probe",
+     "A-r-red"
+    ]
+   },
+   "state": "planned"
+  },
+  "t.srv": {
+   "title": "服务端实现三态规则（契约 062）。🔴 无前导符号 ⇒ **空闲**，不再判未知——这是本次修复的核心。🔴 未知只留给「有一个前导符号但不在表里」，且必须记 Unicode 码点 + 完整原始标题。补齐 Grok 符号：盲文点阵 U+2800–U+28FF 为工作态；标题含 ' - Thinking - ' 或 ' - Waiting for response' 亦为工作态。Claude Code 保持：◐ U+25D0 同族为工作态，✳ U+2733 为空闲。🔴【模块解耦，用户 2026-08-18 裁定】**每个 Agent CLI 一个独立探测器文件，各带各的具名测试**，不许写成一张 if-else 大表。共享层只做三态兜底且**不得出现任何具体 CLI 的字面量**（不得出现 grok / claude 这类串）——接一个新 CLI 应当只需新增一个探测器文件 + 一个测试文件。理由：符号识别层是本项目四轮翻车的位置且注定被反复改，耦合时加 Grok 会**静默**碰坏 Claude Code 的判定。必须写出这六个具名测试并全部 PASS：TestL2GrokDetectorWorking / TestL2GrokDetectorIdle / TestL2ClaudeCodeDetectorWorking / TestL2ClaudeCodeDetectorIdle / TestL2NoGlyphIsIdle（共享层兜底）/ TestL2UnknownGlyphOnlyWhenGlyphPresent。⛔ 禁止启动安卓模拟器。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 账本里的 `worktree_id` **只是并发互斥标签，不是 git worktree**，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.server"
+   },
+   "resources": {
+    "worktree_id": "wt2.srv",
+    "write_paths": [
+     "server/internal/",
+     "server/cmd/",
+     ".team/nodes/l2b-server/"
+    ],
+    "read_paths": [
+     ".team/nodes/l2b-design/方案.md",
+     "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "b3ba21530"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-server/实现说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-s-grok-work",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2GrokDetectorWorking'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-s-grok-idle",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2GrokDetectorIdle'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-s-cc-work",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2ClaudeCodeDetectorWorking'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-s-cc-idle",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2ClaudeCodeDetectorIdle'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-s-noglyph",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2NoGlyphIsIdle'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-s-unknown",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestL2 -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2UnknownGlyphOnlyWhenGlyphPresent'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-s-decoupled",
+      "argv": [
+       "sh",
+       "-c",
+       "D=$(ls server/internal/*/detect*.go server/internal/*/*detector*.go 2>/dev/null | head -1); test -n \"$D\" || exit 1; ! grep -riE 'grok|claude' \"$D\""
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300
+     },
+     {
+      "acceptance_id": "A-s-suite",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-s-grok-work",
+     "A-s-grok-idle",
+     "A-s-cc-work",
+     "A-s-cc-idle",
+     "A-s-noglyph",
+     "A-s-unknown",
+     "A-s-decoupled",
+     "A-s-suite"
+    ]
+   },
+   "state": "planned",
+   "parallel": {
+    "group": "g2"
+   }
+  },
+  "t.app": {
+   "title": "App 实现「进入二级菜单先画缓存」（契约 062 第四节）。用户原话：「每到第二级菜单都是完全空白，先空白再刷新，等刷新完成才出现列表。之前是展示旧的再刷新新的，**我希望展示旧的这一点能够保留**。」🔴 进入二级菜单**立即渲染上一次的列表**（本地缓存），同时后台建订阅；新数据到达后**原地替换，不清空重画**。🔴 只有缓存为空（首次进入该工作区）才允许显示空态。🔴 可机械验证的口径：**从进入到首帧有内容之间，不得出现空列表帧**。必须写出这两个具名测试并 PASS：L2CacheFirstNoBlankFrameTest（有缓存时进入，观察到的帧序列里不含空列表帧）/ L2CacheReplacedInPlaceTest（新数据到达后原地替换、不经过空态）。⛔ 禁止启动安卓模拟器。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 账本里的 `worktree_id` **只是并发互斥标签，不是 git worktree**，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt2.app",
+    "write_paths": [
+     "app/app/src/main/",
+     "app/app/src/test/",
+     ".team/nodes/l2b-app/"
+    ],
+    "read_paths": [
+     ".team/nodes/l2b-design/方案.md",
+     "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "b3ba21530"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-app/实现说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-a-cache",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2CacheFirstNoBlankFrameTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-a-inplace",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--tests', '*L2CacheReplacedInPlaceTest', '--rerun-tasks', '--console=plain'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-a-suite",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:testDebugUnitTest', '--rerun-tasks', '--console=plain'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2500
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-a-cache",
+     "A-a-inplace",
+     "A-a-suite"
+    ]
+   },
+   "state": "planned",
+   "parallel": {
+    "group": "g2"
+   }
+  },
+  "t.verify": {
+   "title": "对照席：验判据真会咬人。🔴 不实现、不修任何东西。三件事：①跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/probe-tristate.sh，现在必须绿；②写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-verify/mutate2.sh：做一处定向破坏（例如把「无符号」改回判未知、或把盲文从工作表里删掉），对应具名测试必须变红，恢复后变绿，两头成立才 exit 0，工作区跑完必须干净；③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-verify/报告.md。🔴 自检：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。🔴 账本里的 `worktree_id` **只是并发互斥标签，不是 git worktree**，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.control"
+   },
+   "resources": {
+    "worktree_id": "wt2.verify",
+    "write_paths": [
+     ".team/nodes/l2b-verify/"
+    ],
+    "read_paths": [
+     ".team/nodes/l2b-design/probe-tristate.sh",
+     ".team/nodes/l2b-design/方案.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "b3ba21530"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-verify/mutate2.sh",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-verify/报告.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-v-green",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/probe-tristate.sh'],timeout=900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-v-mut",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-verify/mutate2.sh'],timeout=3000).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 3100
+     },
+     {
+      "acceptance_id": "A-v-rep",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-verify/报告.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-v-clean",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓 && test -z \"$(git status --porcelain server app | grep -E '^ M|^MM')\""
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-v-green",
+     "A-v-mut",
+     "A-v-rep",
+     "A-v-clean"
+    ]
+   },
+   "state": "planned"
+  },
+  "t.pkg": {
+   "title": "打包给用户手动验收。assembleDebug 出 APK，证明不是旧产物。🔴 收口判据是三态探针，不是符号存在。🔴 不要改任何实现代码。⛔ 禁止启动安卓模拟器。⛔ 禁止碰用户真实 tmux 与生产 daemon。🔴 账本里的 `worktree_id` **只是并发互斥标签，不是 git worktree**，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需 leader 裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt2.pkg",
+    "write_paths": [
+     "app/app/build/",
+     ".team/nodes/l2b-package/"
+    ],
+    "read_paths": [
+     ".team/nodes/l2b-app/实现说明.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "b3ba21530"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-package/打包说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-p-build",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['./gradlew', ':app:assembleDebug', '--console=plain'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/app",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2500
+     },
+     {
+      "acceptance_id": "A-p-fresh",
+      "argv": [
+       "python3",
+       "-c",
+       "import os,glob,sys;apk='/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/build/outputs/apk/debug/app-debug.apk';sys.exit(1) if not os.path.exists(apk) else None;t=os.path.getmtime(apk);n=[f for f in glob.glob('/Volumes/nvme/Projects/远程Agent安卓'+'/app/app/src/**/*.kt',recursive=True) if os.path.getmtime(f)>t];print(n);sys.exit(1 if n else 0)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-p-probe",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/l2b-design/probe-tristate.sh'],timeout=900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-p-build",
+     "A-p-fresh",
+     "A-p-probe"
+    ]
+   },
+   "state": "planned"
+  }
+ },
+ "dependencies": [
+  {
+   "from": "t.rule",
+   "to": "t.srv",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.rule",
+   "to": "t.app",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.srv",
+   "to": "t.verify",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.app",
+   "to": "t.verify",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.verify",
+   "to": "t.pkg",
+   "condition": "requires_success"
+  }
+ ],
+ "parallelism": [
+  {
+   "group": "g2",
+   "max_concurrency": 2
+  }
+ ],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "完成以机械判据为准",
+  "delivery_uncertain": "重发并去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {
+  "F.esc": {
+   "agent": {
+    "role": "r.leader"
+   },
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed"
+   ],
+   "max_attempts": 1,
+   "action": "escalate_to_leader",
+   "silent_substitution": false
+  }
+ },
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
+   "requirement-base/entries/061-二级菜单列表加状态与服务端推送.md",
+   ".team/nodes/l2b-design/probe-tristate.sh"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 1
+}
