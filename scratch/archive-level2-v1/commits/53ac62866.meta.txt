@@ -1,0 +1,16 @@
+commit 53ac62866eb75e641484f5644d539f932f328644
+Author:     Florious95 <281215401+Florious95@users.noreply.github.com>
+AuthorDate: Sun Aug 16 04:30:55 2026 +0800
+Commit:     Florious95 <281215401+Florious95@users.noreply.github.com>
+CommitDate: Sun Aug 16 04:30:55 2026 +0800
+
+    App：二级菜单实时流，标题原样画、点一行进会话
+    
+    契约 060。Level2ViewModel + Level2LiveStreamScreen 消费 Level2Frame，标题原样渲染
+    （含 ◐/✳ 前缀，无任何字符串操作），跳转身份只用结构字段，离开菜单即退订。
+    
+    三个具名测试（leader 自跑）：
+      Level2LiveStreamRenderTest    标题原样渲染
+      Level2NavigationIdentityTest  跳转身份来自结构字段而非标题解析
+      Level2StreamLifecycleTest     进订阅、离退订
+    :app:testDebugUnitTest 全套通过。

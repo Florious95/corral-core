@@ -52,4 +52,7 @@ internal object FrameType {
     const val SCROLL_WHEEL = "scroll_wheel"
     const val ATTACH_PREVIEW = "attach_preview"
     const val PANE_MODE_CHANGED = "pane_mode_changed"
+    const val LEVEL2 = "level2"
+    const val LEVEL2_SUBSCRIBE = "level2_subscribe"
+    const val LEVEL2_UNSUBSCRIBE = "level2_unsubscribe"
 }

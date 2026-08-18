@@ -1,0 +1,15 @@
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt
+app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
+app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
+app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt
+app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt
+server/internal/api/server.go
+server/internal/api/ws_conn.go
+server/internal/protocol/frames.go
+server/internal/protocol/frametype.go
+server/internal/protocol/json.go
+server/internal/protocol/json_test.go
+server/internal/protocol/testdata/list_delta.json
+server/internal/protocol/testdata/listing.json
+server/internal/protocol/validate.go
