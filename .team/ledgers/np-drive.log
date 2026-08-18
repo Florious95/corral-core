@@ -1,0 +1,6 @@
+[ledger-run 2026-08-18T14:12:11Z] 开工 start | ledger_id=ledger.nodeprobe.v1 revision=1 账本=.team/ledgers/nodeprobe-v1.json 墙钟上限=9600s 派单死线=90s
+[ledger-run 2026-08-18T14:12:19Z] 轮次 round | 第 1 轮开始：前沿 ["t.research"]（墙钟已跑 8s / 上限 9600s）
+[ledger-run 2026-08-18T14:12:19Z] 派单 dispatch | task=t.research 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/advisor 席位=advisor attempt=att-t.research-seq1-t1787062339523 delivery=del-t.research-seq1-t1787062339523
+[ledger-run 2026-08-18T14:12:19Z] 投递回执 send-ok | task=t.research case_id=ledger_nodeprobe_v1__t.research__r1 message_id=msg_b7d0d5a65b10 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T14:12:19Z] 派单落地 dispatch-landed | task=t.research 席位 advisor 的收件箱已多出这条派单
+[ledger-run 2026-08-18T14:12:19Z] 等待 wait | task=t.research 在等的 key（case_id）=ledger_nodeprobe_v1__t.research__r1 team=grok-l2 预算=950s
