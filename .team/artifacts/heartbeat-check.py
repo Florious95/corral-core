@@ -12,26 +12,25 @@ REPO = "/Volumes/nvme/Projects/远程Agent安卓"
 # 当前在跑的账本由 .team/ledgers/ACTIVE 显式登记（起驱动器时写）。
 # ⛔ 不要改回「按 mtime 猜最新」——写一张新账本就会把心跳指到没在跑的那张，
 #   而且这种坏法完全静默：读数看着正常，只是量的是别的东西。
+# ACTIVE 一行一张在跑的账本，可多张并行。并行时必须逐张报：
+# 只报一张的话，另一张停了心跳不会响——而「没人告诉你它停了」正是 P0-A 的形状。
 _active = f"{REPO}/.team/ledgers/ACTIVE"
 if os.path.exists(_active):
-    LEDGER = open(_active).read().strip()
+    LEDGERS = [x.strip() for x in open(_active) if x.strip()]
 else:
-    LEDGER = max(glob.glob(f"{REPO}/.team/ledgers/*.json"), key=os.path.getmtime)
-DRIVELOG = LEDGER.replace(".team/ledgers/", ".team/ledgers/").rsplit("/",1)[0] + "/" + \
-           os.path.basename(LEDGER)[:-5].split("-v")[0] + "-drive.log"
-if not os.path.exists(DRIVELOG):
-    DRIVELOG = max(glob.glob(f"{REPO}/.team/ledgers/*-drive.log"), key=os.path.getmtime)
+    LEDGERS = [max(glob.glob(f"{REPO}/.team/ledgers/*.json"), key=os.path.getmtime)]
 
-def my_driver():
-    """只认 cwd 落在本工程的那个 ledger-run。"""
+def my_drivers():
+    """只认 cwd 落在本工程的 ledger-run，返回全部（可能并行多个）。"""
     out = subprocess.run(["pgrep", "-x", "ledger-run"], capture_output=True, text=True).stdout.split()
+    found = []
     for pid in out:
         r = subprocess.run(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"], capture_output=True, text=True)
         for line in r.stdout.splitlines():
             if line.startswith("n") and line[1:] == REPO:
                 et = subprocess.run(["ps", "-o", "etime=", "-p", pid], capture_output=True, text=True).stdout.strip()
-                return pid, et
-    return None, None
+                found.append((pid, et))
+    return found
 
 def seat_states():
     """每席真实工作态：用 nodeprobe 读 pane 标题。
@@ -47,13 +46,20 @@ def seat_states():
         return None
     return [(n["name"], n["state"]) for n in nodes]
 
-pid, et = my_driver()
+drivers = my_drivers()
 seats = seat_states()
-l = json.load(open(LEDGER))
-states = " ".join(f"{k.replace('t.','')}={v['state'][:4]}" for k, v in l["tasks"].items())
 print(f"UTC {time.strftime('%H:%M:%S', time.gmtime())}")
-print(f"驱动器: {'在跑 pid=' + pid + ' etime=' + et if pid else '⚠️ 本工程无驱动器'}")
-print(f"账本 {os.path.basename(LEDGER)[:-5]} r{l['revision']}: {states}")
+if drivers:
+    print("驱动器: " + ", ".join(f"pid={p} etime={e}" for p, e in drivers) + f"（共 {len(drivers)} 个，账本 {len(LEDGERS)} 张）")
+else:
+    print("驱动器: ⚠️ 本工程无驱动器")
+# 驱动器数 < 账本数 ⇒ 有账本掉队了，必须显式喊出来
+if drivers and len(drivers) < len(LEDGERS):
+    print(f"⚠️ 驱动器数({len(drivers)}) < 在跑账本数({len(LEDGERS)})：有账本掉队，逐张对下面的终态")
+for LEDGER in LEDGERS:
+    l = json.load(open(LEDGER))
+    states = " ".join(f"{k.replace('t.','')}={v['state'][:4]}" for k, v in l["tasks"].items())
+    print(f"  账本 {os.path.basename(LEDGER)[:-5]} r{l['revision']}: {states}")
 print("席位: " + (", ".join(f"{k}={v}" for k, v in seats) if seats else "⚠️ nodeprobe 不可用"))
 # ⚠️ 排除 leader 自己那一窗：我在跑心跳，我必然是 working，
 # 把它算进去会让「席位全空闲」永远看起来健康。
@@ -64,10 +70,13 @@ def driver_phase():
     席位全空闲**不等于**没进展：判据（gradle/go 全套、变异脚本、尺寸不变实验）
     是驱动器自己跑的，那几分钟里席位本来就该是空闲的。
     只看「有没有席位 working」会把每一次跑判据都报成异常——误报多了，真出事时没人当真。"""
-    try:
-        tail = open(DRIVELOG, encoding="utf-8", errors="replace").read()[-4000:]
-    except Exception:
-        return ""
+    tail = ""
+    for lg in glob.glob(f"{REPO}/.team/ledgers/*-drive.log"):
+        try:
+            if os.path.getmtime(lg) > time.time() - 3600:
+                tail += open(lg, encoding="utf-8", errors="replace").read()[-4000:]
+        except Exception:
+            pass
     for line in reversed(tail.splitlines()):
         for k in ("判据 acceptance", "等待 wait", "派单", "写回", "轮次"):
             if k in line:
@@ -75,7 +84,7 @@ def driver_phase():
     return ""
 
 phase = driver_phase()
-if pid and (busy or phase in ("判据 acceptance", "等待 wait", "派单", "写回", "轮次")):
+if drivers and (busy or phase in ("判据 acceptance", "等待 wait", "派单", "写回", "轮次")):
     print(f"判读: 健康（{'席位在跑: ' + ','.join(busy) if busy else '驱动器在: ' + phase}）")
 else:
     print("判读: ⚠️ 需要看日志尾部再判")
