@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/overlay"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
 )
@@ -102,6 +103,15 @@ type Server struct {
 	// heartbeat).
 	level2Interval  time.Duration
 	level2Heartbeat time.Duration
+
+	// overlaySubscribers / overlayWakeCh / overlayInterval gate the 064
+	// capture stream: only while ≥1 overlay subscriber exists may we start a
+	// scratch tmux client. overlayLastHash skips unchanged PTY dumps.
+	overlaySubscribers atomic.Int64
+	overlayWakeCh      chan struct{}
+	overlayInterval    time.Duration
+	overlay            overlay.Capturer
+	overlayLastHash    string
 }
 
 // NewServer constructs the API server from Options. Zero values use the
@@ -166,9 +176,20 @@ func NewServer(opts Options) *Server {
 	if s.level2Heartbeat <= 0 {
 		s.level2Heartbeat = defaultLevel2Heartbeat
 	}
+	s.overlayWakeCh = make(chan struct{}, 1)
+	s.overlayInterval = opts.OverlayInterval
+	if s.overlayInterval <= 0 {
+		s.overlayInterval = defaultOverlayInterval
+	}
+	s.overlay = opts.OverlayCapturer
+	if s.overlay == nil {
+		dirs := resolvedDiscoverySocketDirs(opts.DiscoverySocketDirs)
+		s.overlay = overlay.NewTmux(log, dirs)
+	}
 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
 	go s.listingLoop(s.loopCtx)
 	go s.level2Loop(s.loopCtx)
+	go s.overlayLoop(s.loopCtx)
 	return s
 }
 
@@ -186,6 +207,9 @@ func NewServer(opts Options) *Server {
 // @inv 幂等：重复调用安全；不 close 任何 WebSocket 连接
 func (s *Server) Close() {
 	s.loopStop()
+	if s.overlay != nil {
+		s.overlay.Stop()
+	}
 	// Snapshot the tracked connections under the lock, then drain each outside
 	// it: closeSubscriptions takes a per-connection subsMu, so taking
 	// trackersMu here too would invert lock order with registerTracker.

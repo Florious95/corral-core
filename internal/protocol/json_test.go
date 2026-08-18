@@ -85,6 +85,9 @@ func TestControlFramesRoundTrip(t *testing.T) {
 			},
 		}},
 		{"level2_heartbeat", protocol.Level2Heartbeat{Workspace: "/proj/a", Seq: 8}},
+		{"overlay_subscribe", protocol.OverlaySubscribe{}},
+		{"overlay_unsubscribe", protocol.OverlayUnsubscribe{}},
+		{"overlay_frame", protocol.OverlayFrame{Seq: 1, Text: "(0) - ovp: 1 windows", Rows: 24, Cols: 80}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -216,9 +219,9 @@ func TestUploadRespIsNotAFrame(t *testing.T) {
 // TestScrollWheelRoundTrip verifies scroll_wheel marshal→unmarshal is lossless.
 func TestScrollWheelRoundTrip(t *testing.T) {
 	cases := []protocol.ScrollWheel{
-		{Ref: "s1", Delta: -3},  // scroll up
-		{Ref: "s2", Delta: 1},   // scroll down (single notch)
-		{Ref: "s3", Delta: -1},  // scroll up single notch
+		{Ref: "s1", Delta: -3}, // scroll up
+		{Ref: "s2", Delta: 1},  // scroll down (single notch)
+		{Ref: "s3", Delta: -1}, // scroll up single notch
 	}
 	for _, sw := range cases {
 		got := roundTrip(t, sw)

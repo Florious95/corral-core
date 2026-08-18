@@ -115,6 +115,12 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[Level2Frame](env)
 	case TypeLevel2Heartbeat:
 		return decodeTyped[Level2Heartbeat](env)
+	case TypeOverlaySubscribe:
+		return decodeTyped[OverlaySubscribe](env)
+	case TypeOverlayUnsubscribe:
+		return decodeTyped[OverlayUnsubscribe](env)
+	case TypeOverlayFrame:
+		return decodeTyped[OverlayFrame](env)
 	// TypePaneModeChanged is S→C only; a client sending it is a protocol error.
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, env.Type)

@@ -11,6 +11,8 @@ package api
 import (
 	"log/slog"
 	"time"
+
+	"github.com/agentmirror/agentmirror/internal/overlay"
 )
 
 // Defaults for every tunable that can be left zero. They mirror what
@@ -81,6 +83,15 @@ type Options struct {
 	// Level2Heartbeat is how long an unchanged snapshot may sit before the
 	// server pushes a level2_heartbeat (requirement 061). Zero defaults to 8s.
 	Level2Heartbeat time.Duration
+
+	// OverlayInterval is how often the overlay loop refreshes the scratch
+	// client while subscribers exist (requirement 064). Zero defaults to 100ms.
+	OverlayInterval time.Duration
+
+	// OverlayCapturer captures choose-tree via a dedicated scratch-session
+	// client. Nil builds the production tmux capturer scoped to the same
+	// socket dirs as discovery (never the host default when dirs are set).
+	OverlayCapturer overlay.Capturer
 
 	// UploadDir is where POST /upload files are written. Zero defaults to
 	// $HOME/Downloads/agentmirror-uploads (created on demand).

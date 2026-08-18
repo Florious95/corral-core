@@ -62,6 +62,9 @@ type wsConn struct {
 	level2Snap     string
 	level2PushedAt time.Time
 
+	overlayMu sync.Mutex
+	overlayOn bool
+
 	// send is the writer queue. Control frames use a blocking send (a reply
 	// must never be dropped); mirror deltas use a non-blocking send that drops
 	// on overflow (the next snapshot reconciles, requirement 004).
@@ -256,6 +259,10 @@ func (c *wsConn) teardown() {
 		c.setLevel2(false, "")
 		c.s.unmarkLevel2()
 	}
+	if c.overlayActive() {
+		c.setOverlay(false)
+		c.s.unmarkOverlay()
+	}
 	c.subsMu.Lock()
 	subs := c.subs
 	c.subs = make(map[string]*subscription)
@@ -374,9 +381,13 @@ func (c *wsConn) handleFrame(data []byte) bool {
 		c.handleLevel2Subscribe(t)
 	case protocol.Level2Unsubscribe:
 		c.handleLevel2Unsubscribe(t)
+	case protocol.OverlaySubscribe:
+		c.handleOverlaySubscribe(t)
+	case protocol.OverlayUnsubscribe:
+		c.handleOverlayUnsubscribe(t)
 	default:
 		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed,
-		// level2_frame, level2_heartbeat are server-to-client only.
+		// level2_frame, level2_heartbeat, overlay_frame are server-to-client only.
 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
 	}
 	return true

@@ -90,4 +90,17 @@ const (
 	// TypeLevel2Heartbeat is the low-frequency keep-alive (S→C; requirement
 	// 061) when a subscribed snapshot has not changed.
 	TypeLevel2Heartbeat FrameType = "level2_heartbeat"
+
+	// TypeOverlaySubscribe starts the overlay capture stream (C→S; requirement
+	// 064). Independent of the level-2 list stream. At ≥1 subscriber the server
+	// attaches a dedicated scratch-session client and pushes TypeOverlayFrame.
+	TypeOverlaySubscribe FrameType = "overlay_subscribe"
+
+	// TypeOverlayUnsubscribe stops the overlay capture stream (C→S). Idempotent.
+	// At zero subscribers the server tears down the scratch client (idle CPU ≈ 0).
+	TypeOverlayUnsubscribe FrameType = "overlay_unsubscribe"
+
+	// TypeOverlayFrame is one captured choose-tree screen (S→C; requirement 064).
+	// Text is the PTY bytes of the dedicated client (not a self-drawn tree).
+	TypeOverlayFrame FrameType = "overlay_frame"
 )

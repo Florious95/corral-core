@@ -1,30 +1,36 @@
 package protocol
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // FrameType methods map each payload Go type to its wire discriminator, and
 // Validate methods enforce the contract invariants. Together they let the
 // codec (json.go / binary.go) route and check frames in one place.
 
-func (Auth) FrameType() FrameType            { return TypeAuth }
-func (AuthAck) FrameType() FrameType         { return TypeAuthAck }
-func (List) FrameType() FrameType            { return TypeList }
-func (Listing) FrameType() FrameType         { return TypeListing }
-func (ListDelta) FrameType() FrameType       { return TypeListDelta }
-func (Subscribe) FrameType() FrameType       { return TypeSubscribe }
-func (Unsubscribe) FrameType() FrameType     { return TypeUnsubscribe }
-func (Input) FrameType() FrameType           { return TypeInput }
-func (InputAck) FrameType() FrameType        { return TypeInputAck }
-func (Scrollback) FrameType() FrameType      { return TypeScrollback }
-func (Resize) FrameType() FrameType          { return TypeResize }
-func (ErrorFrame) FrameType() FrameType      { return TypeError }
-func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
-func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
-func (AttachPreview) FrameType() FrameType   { return TypeAttachPreview }
-func (Level2Subscribe) FrameType() FrameType   { return TypeLevel2Subscribe }
-func (Level2Unsubscribe) FrameType() FrameType { return TypeLevel2Unsubscribe }
-func (Level2Frame) FrameType() FrameType       { return TypeLevel2Frame }
-func (Level2Heartbeat) FrameType() FrameType   { return TypeLevel2Heartbeat }
+func (Auth) FrameType() FrameType               { return TypeAuth }
+func (AuthAck) FrameType() FrameType            { return TypeAuthAck }
+func (List) FrameType() FrameType               { return TypeList }
+func (Listing) FrameType() FrameType            { return TypeListing }
+func (ListDelta) FrameType() FrameType          { return TypeListDelta }
+func (Subscribe) FrameType() FrameType          { return TypeSubscribe }
+func (Unsubscribe) FrameType() FrameType        { return TypeUnsubscribe }
+func (Input) FrameType() FrameType              { return TypeInput }
+func (InputAck) FrameType() FrameType           { return TypeInputAck }
+func (Scrollback) FrameType() FrameType         { return TypeScrollback }
+func (Resize) FrameType() FrameType             { return TypeResize }
+func (ErrorFrame) FrameType() FrameType         { return TypeError }
+func (ScrollWheel) FrameType() FrameType        { return TypeScrollWheel }
+func (PaneModeChanged) FrameType() FrameType    { return TypePaneModeChanged }
+func (AttachPreview) FrameType() FrameType      { return TypeAttachPreview }
+func (Level2Subscribe) FrameType() FrameType    { return TypeLevel2Subscribe }
+func (Level2Unsubscribe) FrameType() FrameType  { return TypeLevel2Unsubscribe }
+func (Level2Frame) FrameType() FrameType        { return TypeLevel2Frame }
+func (Level2Heartbeat) FrameType() FrameType    { return TypeLevel2Heartbeat }
+func (OverlaySubscribe) FrameType() FrameType   { return TypeOverlaySubscribe }
+func (OverlayUnsubscribe) FrameType() FrameType { return TypeOverlayUnsubscribe }
+func (OverlayFrame) FrameType() FrameType       { return TypeOverlayFrame }
 
 // Validate reports whether the auth frame is well-formed: a non-empty token.
 func (a Auth) Validate() error {
@@ -310,6 +316,19 @@ func (h Level2Heartbeat) Validate() error {
 
 // Validate checks a level2 live frame: a non-empty workspace, a seq >= 1, and
 // every session valid.
+func (OverlaySubscribe) Validate() error   { return nil }
+func (OverlayUnsubscribe) Validate() error { return nil }
+
+func (f OverlayFrame) Validate() error {
+	if f.Seq == 0 {
+		return fmt.Errorf("%w: overlay_frame seq must be >= 1", ErrInvalidField)
+	}
+	if strings.TrimSpace(f.Text) == "" {
+		return fmt.Errorf("%w: overlay_frame text must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
 func (f Level2Frame) Validate() error {
 	if f.Workspace == "" {
 		return fmt.Errorf("%w: level2_frame workspace must be non-empty", ErrInvalidField)

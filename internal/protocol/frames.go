@@ -391,3 +391,38 @@ type Level2Heartbeat struct {
 	Workspace string `json:"workspace"`
 	Seq       uint64 `json:"seq"`
 }
+
+// OverlaySubscribe starts the overlay capture stream (C→S; requirement 064).
+// The client sends it when the in-session floating window opens.
+//
+// @contract
+// @pre none
+// @post 该连接计入 overlay 订阅者；有订阅者时服务端为 scratch 会话挂专用客户端并推 TypeOverlayFrame
+// @err none
+// @inv 与 level2_* 分订；零订阅者时零抓屏、零 tmux 客户端
+type OverlaySubscribe struct{}
+
+// OverlayUnsubscribe stops the overlay capture stream (C→S; requirement 064).
+// Sent when the floating window closes. Idempotent.
+//
+// @contract
+// @pre none
+// @post 该连接移出 overlay 订阅者；最后一名退出后拆掉 scratch 客户端
+// @err none
+// @inv 可重复调用
+type OverlayUnsubscribe struct{}
+
+// OverlayFrame is one captured choose-tree screen (S→C; requirement 064).
+// Text is the dedicated client's PTY contents (tree lines, titles, spinner).
+//
+// @contract
+// @pre Seq >= 1 且 Text 非空
+// @post 客户端原样渲染 Text
+// @err Validate 对空 Text 或 Seq=0 返回 ErrInvalidField
+// @inv 不是按结构字段自绘的树
+type OverlayFrame struct {
+	Seq  uint64 `json:"seq"`
+	Text string `json:"text"`
+	Rows uint16 `json:"rows,omitempty"`
+	Cols uint16 `json:"cols,omitempty"`
+}
