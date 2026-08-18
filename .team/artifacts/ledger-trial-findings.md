@@ -45,3 +45,24 @@
   不要用任何默认值/活跃 team。这和 skill 里「`results --case` 必须显式传 `--team`，
   不要依赖当前活跃 team」是同一条。
 - 量具：`ledger-run` md5 见下次报告时补；本次未记，属我方疏漏（量具身份纪律）。
+
+## F-04 🔴 grok 席位的 worker_state / last_output_at 失灵，会诱发错误的 P0
+
+- 日期：2026-08-18
+- 量具：team-agent `0.5.66+integrate.10137cda`，md5 前 12 位 `feb3e3487f6d`
+- 现象：`t.design` 于 11:58:56 派给 advisor，`inbox` 记 `status=delivered / delivered_at=11:59:00.350`。
+  此后 4 分钟：
+  - `status --json` 持续报 `advisor PROBABLY_IDLE`，`last_output_at` **冻在 11:58:59**（早于送达 1.35 秒，
+    那是上一格 t.rollback 的收尾输出）
+  - 而 grok 自己的会话文件 `~/.grok/sessions/**/chat_history.jsonl`、`updates.jsonl`
+    **在 12:03 仍在被写**，且该 `message_id` 在其中命中 3 处
+  ⇒ **席位一直在干活，框架的状态字段说它 idle。**
+- 危害：这正是「活着但没在干活」的**假阳性**。按试用期纪律，
+  「席位全 idle + 驱动器活着 + 无写回」要按 P0 上报——我差一点据此给框架队发了一份
+  针对健康运行的 P0，白烧对方上下文。
+- 我方已做的收紧：心跳的判据从 `worker_state` 改为 **grok 会话文件 mtime**
+  （`~/.grok/sessions` 下最近写入时间），因为它反映的是世界，不是框架的推断。
+- 附带教训（我方的，不是他们的）：我第一次查转录查的是
+  `.team/runtime/provider-config/advisor/claude/**.jsonl` —— 那 5 个文件全是 8/15–16 的、
+  属于**老 claude team 的同名席位**。拿老 team 的转录去量新 grok 席位，必然得到「命中 0」。
+  **没有量具身份的读数不作为裁定依据**，这次是自己撞上的。
