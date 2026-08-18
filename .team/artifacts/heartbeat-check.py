@@ -19,20 +19,29 @@ def my_driver():
                 return pid, et
     return None, None
 
-def grok_activity(window=600):
-    fs = glob.glob(os.path.expanduser("~/.grok/sessions/**/*.jsonl"), recursive=True)
-    now = time.time()
-    if not fs: return None, 0
-    newest = max(os.path.getmtime(f) for f in fs)
-    return int(now - newest), sum(1 for f in fs if now - os.path.getmtime(f) < window)
+def seat_states():
+    """每席真实工作态：用 nodeprobe 读 pane 标题。
+    ⚠️ 不要用 ~/.grok/sessions 的 mtime——那个目录是**全机共享**的，
+    本机别的工作区也有 grok 席位在写，读到的活动与本 team 无关（同 pgrep -x 全机匹配那类错）。"""
+    sock = os.environ.get("TMUX", "").split(",")[0]
+    if not sock:
+        return None
+    try:
+        out = subprocess.run(["nodeprobe", "-S", sock], capture_output=True, text=True, timeout=30).stdout
+        nodes = json.loads(out)["nodes"]
+    except Exception:
+        return None
+    return [(n["name"], n["state"]) for n in nodes]
 
 pid, et = my_driver()
-age, n = grok_activity()
+seats = seat_states()
 l = json.load(open(LEDGER))
 states = " ".join(f"{k.replace('t.','')}={v['state'][:4]}" for k, v in l["tasks"].items())
 print(f"UTC {time.strftime('%H:%M:%S', time.gmtime())}")
 print(f"驱动器: {'在跑 pid=' + pid + ' etime=' + et if pid else '⚠️ 本工程无驱动器'}")
 print(f"账本 r{l['revision']}: {states}")
-print(f"grok 活动: 最近写入距今 {age}s, 近 600s 内 {n} 个会话文件被写")
-print("判读: " + ("健康" if pid and age is not None and age < 600
-                 else "⚠️ 需要看日志尾部再判"))
+print("席位: " + (", ".join(f"{k}={v}" for k, v in seats) if seats else "⚠️ nodeprobe 不可用"))
+# ⚠️ 排除 leader 自己那一窗：我在跑心跳，我必然是 working，
+# 把它算进去会让「席位全空闲」永远看起来健康。
+busy = [k for k, v in (seats or []) if v == "working" and k != "claude_code"]
+print("判读: " + ("健康" if pid and busy else "⚠️ 需要看日志尾部再判"))
