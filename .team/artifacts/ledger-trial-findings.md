@@ -66,3 +66,23 @@
   `.team/runtime/provider-config/advisor/claude/**.jsonl` —— 那 5 个文件全是 8/15–16 的、
   属于**老 claude team 的同名席位**。拿老 team 的转录去量新 grok 席位，必然得到「命中 0」。
   **没有量具身份的读数不作为裁定依据**，这次是自己撞上的。
+
+## F-05 我方自伤三连：心跳的量具连坏三次（记在这里是为了不再犯，不是给对方的）
+
+同一天内，判活这件事我用错了三把尺。三次都不是世界错了，是量具错了：
+
+1. **`worker_state` / `last_output_at` 对 grok 席位失灵**（见 F-04）——席位在干活，字段冻住报 idle。
+2. **`find -newermt '-30 minutes'` 在 macOS BSD find 上永远返回 0**。
+   实测：同一时刻 `ls` 显示会话文件正在被写、python 量出「最近写入距今 1 秒、近 600 秒 39 个文件」，
+   而 `find -newermt` 报 0。**这条会稳定地把健康运行判成卡死，并按心跳规则自动发 P0。**
+3. **`pgrep -x ledger-run | head -1` 是全机匹配**。本机同时有三个驱动器在跑：
+   `远程Agent安卓`（我的）、`agent前沿探索/多agent协作`、`无等编排`。
+   `head -1` 取到的常是别人的进程，于是 etime 读数完全无意义（一度读到 24 秒，
+   而我自己的那个已经跑了 21 分钟）。
+
+⇒ 收紧：量具固化进 `.team/artifacts/heartbeat-check.py`，心跳只调它，**不许在心跳文案里手写 ps/pgrep/find**。
+   驱动器按 **cwd 认领**，活动信号用 **python 比 mtime**，不用 find 的相对时间。
+
+⇒ 这条的通用形状值得记：**「判据自己坏了」和「被测对象坏了」在输出上完全同形**，
+   都是一个不好看的读数。区别只有一个办法能看出来——**用第二种独立方法量同一件事**。
+   本次三条全是靠交叉验证（ls vs find、python vs find、lsof cwd vs pgrep）抓出来的。
