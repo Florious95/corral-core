@@ -17,7 +17,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "advisor",
+    "agent": "fav-advisor",
     "team": "grok-l2"
    }
   },
@@ -33,7 +33,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "dev-app",
+    "agent": "fav-dev-app",
     "team": "grok-l2"
    }
   },
@@ -49,7 +49,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "control",
+    "agent": "fav-control",
     "team": "grok-l2"
    }
   },
