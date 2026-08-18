@@ -6,7 +6,11 @@
 """
 import glob, json, os, subprocess, time
 REPO = "/Volumes/nvme/Projects/远程Agent安卓"
-LEDGER = f"{REPO}/.team/ledgers/overlay-fix-v1.json"   # 当前在跑的账本，换账本改这一行
+# 账本/日志按 mtime 取最新，不硬编码——硬编码会让心跳一直读一张过期账本，
+# 而那种坏法是静默的（读数看着正常，只是量的是别的东西）。
+# 选中的是哪一张必须打出来：让选错可见，而不是让它安静地错。
+LEDGER = max(glob.glob(f"{REPO}/.team/ledgers/*.json"), key=os.path.getmtime)
+DRIVELOG = max(glob.glob(f"{REPO}/.team/ledgers/*-drive.log"), key=os.path.getmtime)
 
 def my_driver():
     """只认 cwd 落在本工程的那个 ledger-run。"""
@@ -39,7 +43,7 @@ l = json.load(open(LEDGER))
 states = " ".join(f"{k.replace('t.','')}={v['state'][:4]}" for k, v in l["tasks"].items())
 print(f"UTC {time.strftime('%H:%M:%S', time.gmtime())}")
 print(f"驱动器: {'在跑 pid=' + pid + ' etime=' + et if pid else '⚠️ 本工程无驱动器'}")
-print(f"账本 r{l['revision']}: {states}")
+print(f"账本 {os.path.basename(LEDGER)[:-5]} r{l['revision']}: {states}")
 print("席位: " + (", ".join(f"{k}={v}" for k, v in seats) if seats else "⚠️ nodeprobe 不可用"))
 # ⚠️ 排除 leader 自己那一窗：我在跑心跳，我必然是 working，
 # 把它算进去会让「席位全空闲」永远看起来健康。
@@ -51,7 +55,7 @@ def driver_phase():
     是驱动器自己跑的，那几分钟里席位本来就该是空闲的。
     只看「有没有席位 working」会把每一次跑判据都报成异常——误报多了，真出事时没人当真。"""
     try:
-        tail = open(f"{REPO}/.team/ledgers/ov2-drive.log", encoding="utf-8", errors="replace").read()[-4000:]
+        tail = open(DRIVELOG, encoding="utf-8", errors="replace").read()[-4000:]
     except Exception:
         return ""
     for line in reversed(tail.splitlines()):
