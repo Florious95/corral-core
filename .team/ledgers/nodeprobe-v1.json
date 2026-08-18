@@ -1,0 +1,513 @@
+{
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.nodeprobe.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.advisor": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/np-research/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "advisor",
+    "team": "grok-l2"
+   }
+  },
+  "r.impl": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/np-impl/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "dev-server",
+    "team": "grok-l2"
+   }
+  },
+  "r.parity": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/np-parity/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "dev-app",
+    "team": "grok-l2"
+   }
+  },
+  "r.control": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/np-verify/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "control",
+    "team": "grok-l2"
+   }
+  },
+  "r.leader": {
+   "provider": "human",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/np-esc/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.research": {
+   "title": "确定「检测某个节点是否在工作」**绝对靠谱**的办法，并产出判例语料。契约见 requirement-base/entries/063。🔴 这是本任务的核心，不要跳过直接抄现成的：team-agent 自己的判活字段**已被实测证伪**（2026-08-18：四个 grok 席位持续干活期间，status 一律报 PROBABLY_IDLE、last_output_at 冻住）。候选方法见契约第四节（pane_title 前导符号 / pane 内容哈希变化 / 进程树 CPU 增量 / CLI 会话文件 mtime / tmux 标志），**不完备，你自己补**。🔴 选定必须有**正控与反控**：已知在工作的节点必须判 working，已知空闲的必须判 idle。**只有正控不算数——一个恒返回 working 的方法也能通过正控。**你可以在本 team 自己的 tmux socket 上做实验（socket 路径从 `team-agent status --json` 的 attach 命令里取）。⛔ 绝不碰用户真实 tmux。⛔⛔ 本任务涉及遍历进程树：**只能取进程的 comm，禁止取 args/命令行**。实发事故：2026-08-18 leader 用 `pgrep -fl` 当场把席位 API key 打上了屏。读 argv 的工具就是凭据泄露器。同理禁止 `ps aux` 无过滤、禁止打印任何 env。\n产物：/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-research/判活方法对比.md（每种方法的正控/反控结果与取舍理由）、/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/titles.tsv（判例语料：每行 `原始标题<TAB>期望state<TAB>期望provider`，至少覆盖 grok 工作/空闲、claude_code 工作/空闲、未知前导符号、无前导符号 六类）、/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-research/probe-np.sh（探针：现在必须红，因为 tools/nodeprobe 还不存在）。🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.advisor"
+   },
+   "resources": {
+    "worktree_id": "wt3.res",
+    "write_paths": [
+     ".team/nodes/np-research/",
+     "tools/nodeprobe/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/063-节点判活工具nodeprobe.md",
+     "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
+     "server/internal/api/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "4f214b3ed"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-research/判活方法对比.md",
+     "/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/titles.tsv",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-research/probe-np.sh"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-rs-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-research/判活方法对比.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-rs-fix",
+      "argv": [
+       "sh",
+       "-c",
+       "test -s /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/titles.tsv && test $(wc -l < /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures/titles.tsv) -ge 6"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-rs-probe",
+      "argv": [
+       "test",
+       "-x",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-research/probe-np.sh"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-rs-red",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;r=subprocess.run(['bash','/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-research/probe-np.sh'],timeout=900);sys.exit(0 if r.returncode!=0 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-rs-doc",
+     "A-rs-fix",
+     "A-rs-probe",
+     "A-rs-red"
+    ]
+   },
+   "state": "planned"
+  },
+  "t.impl": {
+   "title": "用 **Rust** 实现节点判活工具 `tools/nodeprobe/`（cargo crate），并包装成 `tools/nodeprobe.sh`。输入 tmux socket（-S 路径 或 -L 名字），输出契约 063 第二节那个结构化 JSON：每个节点给出 session / window_index / window_name / pane_id / name / provider / state / evidence。🔴 state 只有三个取值：working / idle / unknown。**判不出就是 unknown，绝不回落 idle**，且 unknown 必须带证据（前导符号是什么、码点、原始标题），让人能据此把新 CLI 加进去。🔴 provider 判不出也是 unknown，不许猜。🔴 判活方法照 .team/nodes/np-research/判活方法对比.md 选定的那个，不要自己另选。🔴 **只读**：不 attach、不发按键、不改任何 pane 状态、不做任何修复动作。⛔⛔ 本任务涉及遍历进程树：**只能取进程的 comm，禁止取 args/命令行**。实发事故：2026-08-18 leader 用 `pgrep -fl` 当场把席位 API key 打上了屏。读 argv 的工具就是凭据泄露器。同理禁止 `ps aux` 无过滤、禁止打印任何 env。\n必须用语料 tools/nodeprobe/fixtures/titles.tsv 写一个单元测试 `fixtures_corpus`，逐行跑、全过。🔴 前置条件是所有节点都在 tmux 下运行（用户明确）；不在 tmux 下的不在范围内，遇到就如实标 unknown。🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.impl"
+   },
+   "resources": {
+    "worktree_id": "wt3.impl",
+    "write_paths": [
+     "tools/",
+     ".team/nodes/np-impl/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/063-节点判活工具nodeprobe.md",
+     ".team/nodes/np-research/判活方法对比.md",
+     "tools/nodeprobe/fixtures/titles.tsv",
+     "server/internal/api/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "4f214b3ed"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-impl/实现说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-im-build",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['cargo', 'build', '--release'],timeout=1800).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-im-corpus",
+      "argv": [
+       "sh",
+       "-c",
+       "cargo test fixtures_corpus -- --nocapture 2>&1 | grep -q 'test result: ok'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     },
+     {
+      "acceptance_id": "A-im-sh",
+      "argv": [
+       "test",
+       "-x",
+       "/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe.sh"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-im-json",
+      "argv": [
+       "sh",
+       "-c",
+       "S=$(cd /Volumes/nvme/Projects/远程Agent安卓 && .team/ta status --json 2>/dev/null | python3 -c \"import sys,json,re;d=json.load(sys.stdin);a=d.get('attach_commands') or [d.get('leader_attach_command','')];m=re.search(r'-S (\\\\S+)',' '.join(a));print(m.group(1) if m else '')\"); test -n \"$S\" && /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe.sh -S \"$S\" | python3 -c \"import sys,json;d=json.load(sys.stdin);ns=d['nodes'];assert ns,'nodes 为空';assert all(n['state'] in ('working','idle','unknown') for n in ns),'state 取值非法';print('nodes',len(ns))\""
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600
+     },
+     {
+      "acceptance_id": "A-im-noargv",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -rnE 'ps +a?u?x|pgrep +-f|/proc/[^/]*/cmdline|\\\\bargs\\\\(\\\\)|cmdline' /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/src/"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-im-build",
+     "A-im-corpus",
+     "A-im-sh",
+     "A-im-json",
+     "A-im-noargv"
+    ]
+   },
+   "state": "planned"
+  },
+  "t.parity": {
+   "title": "对齐 Go 与 Rust 两份判定，防静默漂移。服务端已有 Go 版探测器（server/internal/api/l2detect_*.go，契约 062），现在多了 Rust 版 —— **两份实现必然漂移，而漂移是静默的**：某天改了 Go 忘了改 Rust，二级菜单和诊断工具会对同一个标题给出不同判定，而两边测试各自都绿。🔴 做法：让 **Go 侧也跑同一份语料** tools/nodeprobe/fixtures/titles.tsv，写一个具名测试 `TestL2FixtureCorpusParity`，逐行读语料、对每个标题断言 Go 的判定等于语料里的期望值。语料是单一真相：加一个新 CLI 就往语料里加样本，两边同时被约束。🔴 不要复制一份语料到 server 下——必须读同一个文件，复制就等于又造了一次漂移。🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.parity"
+   },
+   "resources": {
+    "worktree_id": "wt3.par",
+    "write_paths": [
+     "server/internal/",
+     ".team/nodes/np-parity/"
+    ],
+    "read_paths": [
+     "tools/nodeprobe/fixtures/titles.tsv",
+     "requirement-base/entries/063-节点判活工具nodeprobe.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "4f214b3ed"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-parity/对齐说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-pa-test",
+      "argv": [
+       "sh",
+       "-c",
+       "go test ./internal/... -run TestL2FixtureCorpusParity -count=1 -timeout 900s -v | grep -q -- '--- PASS: TestL2FixtureCorpusParity'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1000
+     },
+     {
+      "acceptance_id": "A-pa-single",
+      "argv": [
+       "sh",
+       "-c",
+       "test $(find /Volumes/nvme/Projects/远程Agent安卓/server /Volumes/nvme/Projects/远程Agent安卓/tools -name titles.tsv | wc -l) -eq 1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300
+     },
+     {
+      "acceptance_id": "A-pa-suite",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['go', 'test', './...', '-count=1', '-timeout', '1800s'],timeout=1900).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/server",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1900
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-pa-test",
+     "A-pa-single",
+     "A-pa-suite"
+    ]
+   },
+   "state": "planned",
+   "parallel": {
+    "group": "g3"
+   }
+  },
+  "t.verify": {
+   "title": "对照席：验这个工具真的靠谱，不是自说自话。🔴 你不实现、不修任何东西。三件事：①**正控**：让本 team 里某个席位真的动起来（给它发一条无害的一次性消息，例如请它思考 30 秒再回一句话），在它工作期间跑 /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe.sh，该节点必须判 working；②**反控**：等它回完、确认空闲后再跑一次，同一节点必须判 idle。**只有正控不算数——一个恒返回 working 的方法也能通过正控，两头夹住才可信。**③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/正反控报告.md：两次的原始 JSON 片段、时间、结论；并写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/np-mutate.sh：对 Rust 实现做一处定向破坏（例如把 unknown 回落成 idle），语料测试必须变红，恢复后变绿，两头成立才 exit 0，且破坏必须自动恢复。🔴 自检：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。⛔⛔ 本任务涉及遍历进程树：**只能取进程的 comm，禁止取 args/命令行**。实发事故：2026-08-18 leader 用 `pgrep -fl` 当场把席位 API key 打上了屏。读 argv 的工具就是凭据泄露器。同理禁止 `ps aux` 无过滤、禁止打印任何 env。🔴 `worktree_id` 只是并发互斥标签，不是 git worktree，不给你另一棵树。**必须在仓根 /Volumes/nvme/Projects/远程Agent安卓 干活**，判据也在仓根跑。⛔ 不要 git worktree add，不要写进 .worktrees/。🔴 静默纪律：不得给 leader 发任何消息（不发开工/进度/收到/完成）。leader 有独立心跳。唯一例外是被卡住需裁定，发一条 class=\"blocking\"。🔴 干完调一次 report_result，但**不要传 task_id 参数**（留空走框架默认归属）。",
+   "owner": {
+    "role": "r.control"
+   },
+   "resources": {
+    "worktree_id": "wt3.ver",
+    "write_paths": [
+     ".team/nodes/np-verify/"
+    ],
+    "read_paths": [
+     "tools/nodeprobe/",
+     ".team/nodes/np-research/判活方法对比.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "4f214b3ed"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/正反控报告.md",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/np-mutate.sh"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-vf-report",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/正反控报告.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-vf-mut",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/np-mutate.sh'],timeout=2400).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2500
+     },
+     {
+      "acceptance_id": "A-vf-bothsides",
+      "argv": [
+       "sh",
+       "-c",
+       "grep -q '正控' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/正反控报告.md && grep -q '反控' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/正反控报告.md && grep -q 'working' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/正反控报告.md && grep -q 'idle' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/np-verify/正反控报告.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-vf-report",
+     "A-vf-mut",
+     "A-vf-bothsides"
+    ]
+   },
+   "state": "planned",
+   "parallel": {
+    "group": "g3"
+   }
+  }
+ },
+ "dependencies": [
+  {
+   "from": "t.research",
+   "to": "t.impl",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.impl",
+   "to": "t.parity",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.impl",
+   "to": "t.verify",
+   "condition": "requires_success"
+  }
+ ],
+ "parallelism": [
+  {
+   "group": "g3",
+   "max_concurrency": 2
+  }
+ ],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "完成以机械判据为准",
+  "delivery_uncertain": "重发并去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {
+  "F.esc": {
+   "agent": {
+    "role": "r.leader"
+   },
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed"
+   ],
+   "max_attempts": 1,
+   "action": "escalate_to_leader",
+   "silent_substitution": false
+  }
+ },
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "requirement-base/entries/063-节点判活工具nodeprobe.md",
+   "requirement-base/entries/062-状态三态规则与二级菜单缓存优先.md",
+   ".team/nodes/np-research/判活方法对比.md",
+   "tools/nodeprobe/fixtures/titles.tsv"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 1
+}
