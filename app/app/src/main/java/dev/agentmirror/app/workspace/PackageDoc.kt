@@ -19,11 +19,9 @@ package dev.agentmirror.app.workspace
 /**
  * 工作区：一级菜单（舰队 → 工作区），对应需求 001「舰队视角」、002「一级分组」。
  *
- * - [WorkspaceViewModel]：纯 JVM 视图模型，消费 conn 层 listing/list_delta 帧流 →
- *   UI 状态；session_count 为服务端权威值，只渲染不重算。
- * - [WorkspaceScreen] / [WorkspaceRow]：薄 Compose 渲染层（一级工作区列表）。
- *
- * 060 uproot（2026-08-15）：二级会话列表随状态判定整体拔除，待二级实时流重建。
+ * - [WorkspaceViewModel]：纯 JVM 视图模型，消费 listing/list_delta 与
+ *   level2_frame / level2_heartbeat。二级只收推送，不轮询。
+ * - [WorkspaceScreen] / [WorkspaceRow] / [L2SessionList]：一级工作区 + 二级会话列表。
  *
  * @consumes dev.agentmirror.app.conn
  * @consumes dev.agentmirror.app.tsnet
