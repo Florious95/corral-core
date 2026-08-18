@@ -1,4 +1,6 @@
 pub mod classify;
+pub mod proctree;
+pub mod providers;
 
 use classify::{classify, format_codepoint, Class, STATE_UNKNOWN};
 use serde::Serialize;
@@ -143,7 +145,7 @@ pub fn list_panes(spec: &SocketSpec) -> Result<Vec<RawPane>, String> {
     cmd.arg("list-panes")
         .arg("-a")
         .arg("-F")
-        .arg("#{session_name}\u{1f}#{window_index}\u{1f}#{window_name}\u{1f}#{pane_id}\u{1f}#{pane_tty}\u{1f}#{pane_title}");
+        .arg("#{session_name}\u{1f}#{window_index}\u{1f}#{window_name}\u{1f}#{pane_id}\u{1f}#{pane_pid}\u{1f}#{pane_title}");
     let out = cmd
         .output()
         .map_err(|e| format!("tmux list-panes spawn: {e}"))?;
@@ -164,14 +166,14 @@ pub fn list_panes(spec: &SocketSpec) -> Result<Vec<RawPane>, String> {
         let window_index = it.next().unwrap_or("0").parse().unwrap_or(0);
         let window_name = it.next().unwrap_or("").to_string();
         let pane_id = it.next().unwrap_or("").to_string();
-        let pane_tty = it.next().unwrap_or("").to_string();
+        let pane_pid = it.next().unwrap_or("0").parse().unwrap_or(0);
         let title = it.next().unwrap_or("").to_string();
         panes.push(RawPane {
             session,
             window_index,
             window_name,
             pane_id,
-            pane_tty,
+            pane_pid,
             title,
         });
     }
@@ -183,48 +185,25 @@ pub struct RawPane {
     pub window_index: u32,
     pub window_name: String,
     pub pane_id: String,
-    pub pane_tty: String,
+    pub pane_pid: i32,
     pub title: String,
-}
-
-/// comm names on this tty only (basename). Never reads process argument vectors.
-pub fn comms_on_tty(tty: &str) -> Vec<String> {
-    let spec = tty.trim().strip_prefix("/dev/").unwrap_or(tty.trim());
-    if spec.is_empty() {
-        return Vec::new();
-    }
-    let out = Command::new("ps")
-        .arg("-t")
-        .arg(spec)
-        .arg("-o")
-        .arg("comm=")
-        .output();
-    let Ok(o) = out else {
-        return Vec::new();
-    };
-    if !o.status.success() {
-        return Vec::new();
-    }
-    String::from_utf8_lossy(&o.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            Path::new(s)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(s)
-                .to_string()
-        })
-        .collect()
 }
 
 pub fn probe(spec: SocketSpec) -> Result<Report, String> {
     let panes = list_panes(&spec)?;
+    let snap = proctree::read_table();
     let mut nodes = Vec::with_capacity(panes.len());
     for p in panes {
-        let class = classify(&p.title);
-        let comms = comms_on_tty(&p.pane_tty);
+        let comms = match snap.as_ref() {
+            Some(s) if p.pane_pid > 0 => proctree::walk_comms(s, p.pane_pid),
+            _ => Vec::new(),
+        };
+        let ident = providers::match_comms(&comms);
+        let class = if let Some(e) = ident {
+            classify::classify_for(&e.id, &p.title)
+        } else {
+            continue;
+        };
         let evidence = evidence_for(&p.title, &class, comms);
         let name = if p.window_name.is_empty() {
             p.session.clone()
