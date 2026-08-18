@@ -1,0 +1,11 @@
+[mcp_servers.team_orchestrator]
+command = "/Users/alauda/.team-agent/runtime/0.5.66+integrate.10137cda/bin/team-agent"
+args = [
+    "mcp-server",
+    "--workspace",
+    "/Volumes/nvme/Projects/远程Agent安卓",
+]
+enabled = true
+
+[mcp_servers.team_orchestrator.env]
+TEAM_AGENT_WORKSPACE = "/Volumes/nvme/Projects/远程Agent安卓"

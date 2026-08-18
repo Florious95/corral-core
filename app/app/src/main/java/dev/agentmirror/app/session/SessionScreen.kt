@@ -31,14 +31,17 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -63,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
@@ -180,10 +184,13 @@ fun SessionScreen(
         viewModel.dismissTransient()
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
+    ) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
     ) {
         TopBar(
             name = name,
@@ -268,6 +275,55 @@ fun SessionScreen(
             }
         }
     }
+        if (viewModel.overlayOpen) {
+            SessionOverlay(
+                text = viewModel.overlayText,
+                onDismiss = viewModel::closeOverlay,
+            )
+        }
+    }
+}
+
+/**
+ * 会话内悬浮窗（064）：盖在终端之上，等宽原样画抓屏；点窗外即关。只看，不发键。
+ */
+@Composable
+internal fun SessionOverlay(
+    text: String,
+    onDismiss: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.45f))
+            .testTag("session-overlay-scrim")
+            .clickable(onClick = onDismiss),
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 56.dp, end = Spacing.sm, start = Spacing.sm, bottom = Spacing.lg)
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.72f)
+                .testTag("session-overlay")
+                .clickable(enabled = false, onClick = {}),
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = MonoFontFamily,
+                color = MaterialTheme.colorScheme.onSurface,
+                softWrap = false,
+                modifier = Modifier
+                    .padding(Spacing.sm)
+                    .horizontalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState())
+                    .testTag("session-overlay-text"),
+            )
+        }
+    }
 }
 
 /**
@@ -316,6 +372,12 @@ private fun TopBar(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(end = Spacing.sm),
                     )
+                }
+                TextButton(
+                    onClick = viewModel::openOverlay,
+                    modifier = Modifier.testTag("session-overlay-open"),
+                ) {
+                    Text("查看", style = MaterialTheme.typography.labelLarge)
                 }
             }
             // 连接状态横幅：READY 时平滑收起；断连/重连中明确提示（conn 层自动重连，这里只反映）。

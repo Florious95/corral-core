@@ -64,6 +64,9 @@ sealed interface FramePayload {
                     FrameType.LEVEL2_HEARTBEAT -> json.decodeFromJsonElement(Level2HeartbeatFrame.serializer(), el)
                     FrameType.LEVEL2_SUBSCRIBE -> json.decodeFromJsonElement(Level2SubscribeFrame.serializer(), el)
                     FrameType.LEVEL2_UNSUBSCRIBE -> json.decodeFromJsonElement(Level2UnsubscribeFrame.serializer(), el)
+                    FrameType.OVERLAY_FRAME -> json.decodeFromJsonElement(OverlayFrame.serializer(), el)
+                    FrameType.OVERLAY_SUBSCRIBE -> json.decodeFromJsonElement(OverlaySubscribeFrame.serializer(), el)
+                    FrameType.OVERLAY_UNSUBSCRIBE -> json.decodeFromJsonElement(OverlayUnsubscribeFrame.serializer(), el)
                     else -> throw FrameDecodeException(
                         FrameError.UNSUPPORTED_TYPE,
                         "unknown frame type: $type",
@@ -129,6 +132,12 @@ sealed interface FramePayload {
                 )
                 is Level2SubscribeFrame -> json.encodeToJsonElement(Level2SubscribeFrame.serializer(), frame)
                 is Level2UnsubscribeFrame -> json.encodeToJsonElement(Level2UnsubscribeFrame.serializer(), frame)
+                is OverlayFrame -> throw FrameEncodeException(
+                    FrameError.INVALID_FIELD,
+                    "overlay_frame is server-to-client only, never sent upstream",
+                )
+                is OverlaySubscribeFrame -> json.encodeToJsonElement(OverlaySubscribeFrame.serializer(), frame)
+                is OverlayUnsubscribeFrame -> json.encodeToJsonElement(OverlayUnsubscribeFrame.serializer(), frame)
             }
         }
     }
@@ -582,5 +591,33 @@ data class Level2UnsubscribeFrame(
 ) : FramePayload {
     override val frameType: String get() = FrameType.LEVEL2_UNSUBSCRIBE
     override fun validate(): String? = null
+}
+
+/**
+ * 会话内悬浮窗抓屏帧 S→C（064）。[text] 是服务端抓到的 choose-tree 画面，App 原样画。
+ */
+@Serializable
+data class OverlayFrame(
+    @SerialName("text") val text: String = "",
+    @SerialName("seq") val seq: Long = 1,
+) : FramePayload {
+    override val frameType: String get() = FrameType.OVERLAY_FRAME
+    override fun validate(): String? = if (seq <= 0) "overlay_frame seq must be >= 1" else null
+}
+
+/** 打开悬浮窗时订抓屏流 C→S（064）。payload 可空。 */
+@Serializable
+class OverlaySubscribeFrame : FramePayload {
+    override val frameType: String get() = FrameType.OVERLAY_SUBSCRIBE
+    override fun equals(other: Any?) = other is OverlaySubscribeFrame
+    override fun hashCode(): Int = frameType.hashCode()
+}
+
+/** 关闭悬浮窗时退订 C→S（064）。幂等。 */
+@Serializable
+class OverlayUnsubscribeFrame : FramePayload {
+    override val frameType: String get() = FrameType.OVERLAY_UNSUBSCRIBE
+    override fun equals(other: Any?) = other is OverlayUnsubscribeFrame
+    override fun hashCode(): Int = frameType.hashCode()
 }
 
