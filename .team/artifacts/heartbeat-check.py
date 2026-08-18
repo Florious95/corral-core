@@ -6,7 +6,7 @@
 """
 import glob, json, os, subprocess, time
 REPO = "/Volumes/nvme/Projects/远程Agent安卓"
-LEDGER = f"{REPO}/.team/ledgers/l2-list-status-v1.json"
+LEDGER = f"{REPO}/.team/ledgers/l2-tristate-v1.json"   # 当前在跑的账本，换账本改这一行
 
 def my_driver():
     """只认 cwd 落在本工程的那个 ledger-run。"""
