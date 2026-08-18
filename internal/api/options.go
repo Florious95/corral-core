@@ -74,6 +74,14 @@ type Options struct {
 	// frames. Zero defaults to 2s.
 	ListInterval time.Duration
 
+	// Level2Interval is how often the level-2 loop scans tmux while subscribers
+	// exist (requirement 061). Zero defaults to 2s.
+	Level2Interval time.Duration
+
+	// Level2Heartbeat is how long an unchanged snapshot may sit before the
+	// server pushes a level2_heartbeat (requirement 061). Zero defaults to 8s.
+	Level2Heartbeat time.Duration
+
 	// UploadDir is where POST /upload files are written. Zero defaults to
 	// $HOME/Downloads/agentmirror-uploads (created on demand).
 	UploadDir string

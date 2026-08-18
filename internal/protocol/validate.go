@@ -21,6 +21,10 @@ func (ErrorFrame) FrameType() FrameType      { return TypeError }
 func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
 func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
 func (AttachPreview) FrameType() FrameType   { return TypeAttachPreview }
+func (Level2Subscribe) FrameType() FrameType   { return TypeLevel2Subscribe }
+func (Level2Unsubscribe) FrameType() FrameType { return TypeLevel2Unsubscribe }
+func (Level2Frame) FrameType() FrameType       { return TypeLevel2Frame }
+func (Level2Heartbeat) FrameType() FrameType   { return TypeLevel2Heartbeat }
 
 // Validate reports whether the auth frame is well-formed: a non-empty token.
 func (a Auth) Validate() error {
@@ -79,6 +83,9 @@ func (s Session) Validate() error {
 	}
 	if s.Rows == 0 || s.Cols == 0 {
 		return fmt.Errorf("%w: session rows/cols must be >= 1", ErrInvalidField)
+	}
+	if s.Status != "" && s.Status != SessionStatusWorking && s.Status != SessionStatusIdle && s.Status != SessionStatusUnknown {
+		return fmt.Errorf("%w: session status %q is not working/idle/unknown", ErrInvalidField, s.Status)
 	}
 	return nil
 }
@@ -273,6 +280,47 @@ func (s ScrollWheel) Validate() error {
 func (p PaneModeChanged) Validate() error {
 	if p.Ref == "" {
 		return fmt.Errorf("%w: pane_mode_changed ref must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the level2 subscribe frame is well-formed.
+// Workspace must be a non-empty cwd (requirement 061).
+func (s Level2Subscribe) Validate() error {
+	if s.Workspace == "" {
+		return fmt.Errorf("%w: level2_subscribe workspace must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether the level2 unsubscribe frame is well-formed. The
+// workspace may be empty (idempotent unbind).
+func (s Level2Unsubscribe) Validate() error { return nil }
+
+// Validate checks a level2 heartbeat: non-empty workspace and seq >= 1.
+func (h Level2Heartbeat) Validate() error {
+	if h.Workspace == "" {
+		return fmt.Errorf("%w: level2_heartbeat workspace must be non-empty", ErrInvalidField)
+	}
+	if h.Seq == 0 {
+		return fmt.Errorf("%w: level2_heartbeat seq must be >= 1", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate checks a level2 live frame: a non-empty workspace, a seq >= 1, and
+// every session valid.
+func (f Level2Frame) Validate() error {
+	if f.Workspace == "" {
+		return fmt.Errorf("%w: level2_frame workspace must be non-empty", ErrInvalidField)
+	}
+	if f.Seq == 0 {
+		return fmt.Errorf("%w: level2_frame seq must be >= 1", ErrInvalidField)
+	}
+	for _, s := range f.Sessions {
+		if err := s.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

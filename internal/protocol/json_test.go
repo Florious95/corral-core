@@ -73,6 +73,18 @@ func TestControlFramesRoundTrip(t *testing.T) {
 		{"scrollback", protocol.Scrollback{ReqID: 5, Ref: "s1", FromLine: -300, Count: 100}},
 		{"resize", protocol.Resize{Ref: "s1", Rows: 48, Cols: 120}},
 		{"error frame", protocol.ErrorFrame{Code: protocol.ErrCodeSessionNotFound, Reason: "session s1 vanished"}},
+		{"level2_subscribe scoped", protocol.Level2Subscribe{Workspace: "/proj/a"}},
+		{"level2_unsubscribe", protocol.Level2Unsubscribe{}},
+		{"level2_unsubscribe scoped", protocol.Level2Unsubscribe{Workspace: "/proj/a"}},
+		{"level2_frame", protocol.Level2Frame{
+			Workspace: "/proj/a",
+			Seq:       7,
+			Sessions: []protocol.Session{
+				{Ref: "s1", Name: "claude", Cwd: "/proj/a", Title: "◐ w-librarian", Status: protocol.SessionStatusWorking, Rows: 24, Cols: 80},
+				{Ref: "s2", Name: "codex", Cwd: "/proj/a", Title: "✳ dev-state", Status: protocol.SessionStatusIdle, Rows: 24, Cols: 80},
+			},
+		}},
+		{"level2_heartbeat", protocol.Level2Heartbeat{Workspace: "/proj/a", Seq: 8}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

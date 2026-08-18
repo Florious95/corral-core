@@ -77,13 +77,32 @@ type Workspace struct {
 // client uses to address subscribe / input / scrollback / resize; it is
 // distinct from the display-only Name. Rows/Cols are the pane's current
 // dimensions.
+//
+// Title is the pane's OSC title, transmitted VERBATIM (requirement 061:
+// 不 trim、不剥前缀). It is display-only: never used for identity — Ref/Name
+// come from tmux structural fields, and the client must never derive any
+// addressing from Title.
+//
+// Status is the server-classified badge (requirement 061). It is only one of
+// SessionStatusWorking / SessionStatusIdle / SessionStatusUnknown. The client
+// must not re-derive status from Title.
 type Session struct {
-	Ref  string `json:"ref"`
-	Name string `json:"name"`
-	Cwd  string `json:"cwd"`
-	Rows uint16 `json:"rows"`
-	Cols uint16 `json:"cols"`
+	Ref    string `json:"ref"`
+	Name   string `json:"name"`
+	Cwd    string `json:"cwd"`
+	Title  string `json:"title"`
+	Status string `json:"status,omitempty"`
+	Rows   uint16 `json:"rows"`
+	Cols   uint16 `json:"cols"`
 }
+
+// Closed set for Session.Status (requirement 061). Unknown glyphs stay
+// unknown — never fall back to idle.
+const (
+	SessionStatusWorking = "working"
+	SessionStatusIdle    = "idle"
+	SessionStatusUnknown = "unknown"
+)
 
 // Listing is the full two-level workspace/session model (S→C, reply to List).
 // Seq is a monotonically increasing listing sequence: if a ListDelta arrives
@@ -315,4 +334,60 @@ type ScrollWheel struct {
 type PaneModeChanged struct {
 	Ref        string `json:"ref"`
 	InCopyMode bool   `json:"in_copy_mode"`
+}
+
+// Level2Subscribe starts the second-level live stream (C→S; requirement 061).
+// The client sends it on entering the second-level menu. Workspace is a cwd
+// that MUST equal a first-level listing cwd.
+//
+// @contract
+// @pre Workspace 非空，且等于一级 listing 的 cwd
+// @post 服务端把该连接计入 level2 订阅者；有订阅者时扫描 tmux 并推 TypeLevel2Frame
+// @err Validate 对空 Workspace 返回 ErrInvalidField
+// @inv 零订阅者时服务端零 tmux 调用（idle-gate）
+type Level2Subscribe struct {
+	Workspace string `json:"workspace"`
+}
+
+// Level2Unsubscribe stops the second-level live stream (C→S; requirement 061).
+// The client sends it on leaving the second-level menu. Idempotent: unsubscribing
+// when not subscribed is not an error.
+//
+// @contract
+// @pre none
+// @post 服务端把该连接移出 level2 订阅者；最后一名订阅者退出后扫描循环 park
+// @err none
+// @inv 可重复调用；与 Level2Subscribe 配对使用
+type Level2Unsubscribe struct {
+	Workspace string `json:"workspace,omitempty"`
+}
+
+// Level2Frame is the server-pushed second-level snapshot (S→C; requirement 061).
+// It carries one workspace's sessions as a full replace, pushed only when the
+// snapshot changed. Sessions carry structural identity, verbatim Title, and
+// Status classified from the title prefix glyph.
+//
+// @contract
+// @pre Workspace 非空、Seq >= 1
+// @post 客户端以 Sessions 整体替换该工作区的二级视图
+// @err none
+// @inv Title 逐字节原样透传；Status 只来自服务端符号表
+type Level2Frame struct {
+	Workspace string    `json:"workspace"`
+	Seq       uint64    `json:"seq"`
+	Sessions  []Session `json:"sessions"`
+}
+
+// Level2Heartbeat is the low-frequency keep-alive (S→C; requirement 061) sent
+// when a subscribed snapshot has not changed. Without it the client cannot
+// tell "no change" from "connection dead".
+//
+// @contract
+// @pre Workspace 非空、Seq >= 1
+// @post 客户端刷新二级存活时间，不清空列表
+// @err none
+// @inv 不含 sessions
+type Level2Heartbeat struct {
+	Workspace string `json:"workspace"`
+	Seq       uint64 `json:"seq"`
 }

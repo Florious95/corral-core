@@ -51,6 +51,17 @@ type wsConn struct {
 	subsMu sync.Mutex
 	subs   map[string]*subscription
 
+	// level2Mu guards the second-level live-stream subscription state (061).
+	// level2On records whether this connection is viewing the level-2 menu;
+	// level2WS is the workspace cwd; level2Snap/level2PushedAt track the last
+	// pushed snapshot so we send frames only on change and heartbeats when
+	// the snapshot is still the same.
+	level2Mu       sync.Mutex
+	level2On       bool
+	level2WS       string
+	level2Snap     string
+	level2PushedAt time.Time
+
 	// send is the writer queue. Control frames use a blocking send (a reply
 	// must never be dropped); mirror deltas use a non-blocking send that drops
 	// on overflow (the next snapshot reconciles, requirement 004).
@@ -239,6 +250,12 @@ func (c *wsConn) teardown() {
 	if c.authed.Load() {
 		c.s.unmarkAuthed()
 	}
+	// If this connection was viewing the level-2 menu, un-count it so the
+	// level2 loop parks once zero subscribers remain (061 idle gate).
+	if c.level2Active() {
+		c.setLevel2(false, "")
+		c.s.unmarkLevel2()
+	}
 	c.subsMu.Lock()
 	subs := c.subs
 	c.subs = make(map[string]*subscription)
@@ -353,9 +370,13 @@ func (c *wsConn) handleFrame(data []byte) bool {
 		c.handleScrollWheel(t)
 	case protocol.AttachPreview:
 		c.handleAttachPreview(t)
+	case protocol.Level2Subscribe:
+		c.handleLevel2Subscribe(t)
+	case protocol.Level2Unsubscribe:
+		c.handleLevel2Unsubscribe(t)
 	default:
-		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed
-		// are server-to-client only.
+		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed,
+		// level2_frame, level2_heartbeat are server-to-client only.
 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
 	}
 	return true
