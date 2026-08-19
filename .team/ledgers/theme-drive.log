@@ -1,0 +1,62 @@
+[ledger-run 2026-08-19T17:44:58Z] 常驻开工 resident-start | 账本=.team/ledgers/theme-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T17:44:58Z] 开工 start | ledger_id=ledger.theme.v1 revision=2 账本=.team/ledgers/theme-v1.json 墙钟上限=1800s 派单死线=90s
+[ledger-run 2026-08-19T17:45:01Z] 轮次 round | 第 1 轮开始：前沿 ["t.plan"]（墙钟已跑 3s / 上限 1800s）
+[ledger-run 2026-08-19T17:45:01Z] 派单 dispatch | task=t.plan 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/theme-v1-plan 席位=theme-v1-plan attempt=att-t.plan-seq1-t1787161501777 delivery=del-t.plan-seq1-t1787161501777
+[ledger-run 2026-08-19T17:45:01Z] 投递回执 send-ok | task=t.plan case_id=ledger_theme_v1__t.plan__r2 message_id=msg_2887d0eb2490 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T17:45:02Z] 派单落地 dispatch-landed | task=t.plan 席位 theme-v1-plan 的收件箱已多出这条派单
+[ledger-run 2026-08-19T17:45:02Z] 等待 wait | task=t.plan 在等的 key（case_id）=ledger_theme_v1__t.plan__r2 team=grok-l2 预算=600s
+[ledger-run 2026-08-19T17:55:01Z] 无信号 wait-no-signal | task=t.plan 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-19T17:55:01Z] 判据 acceptance | task=t.plan 在跑 required=["A-plan-doc", "A-plan-sections", "A-plan-table"]
+[ledger-run 2026-08-19T17:55:02Z] 判据失败诊断 acceptance-diagnostic | task=t.plan 判据 A-plan-doc 失败：exit_code=1 (期望 0) cwd=.worktrees/theme-plan argv=["test", "-s", "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-19T17:55:02Z] 判据失败诊断 acceptance-diagnostic | task=t.plan 判据 A-plan-sections 失败：exit_code=1 (期望 0) cwd=.worktrees/theme-plan argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md';s=io.open(p,encoding='utf-8').read();need=['iTerm2-Color-Schemes','Mark Badolato','AGPL','NOTICE','density','083'];miss=[n for n in need if n not in s];print('MISSING',miss) or sys.exit(1 if miss else 0)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md'
+[ledger-run 2026-08-19T17:55:02Z] 判据失败诊断 acceptance-diagnostic | task=t.plan 判据 A-plan-table 失败：exit_code=1 (期望 0) cwd=.worktrees/theme-plan argv=["python3", "-c", "import sys,io,re;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md';s=io.open(p,encoding='utf-8').read();rows=[l for l in s.splitlines() if l.count('|')>=3];print('table rows',len(rows)) or sys.exit(0 if len(rows)>=25 else 1)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md'
+[ledger-run 2026-08-19T17:55:02Z] 原子写回 writeback-atomic | task=t.plan 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=2 hash=85123c57e4b957b7）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T17:55:02Z] 判据红 acceptance-red | task=t.plan required 未全过——还没等到结果，只冻内存，接着等席位（健康长线）
+[ledger-run 2026-08-19T17:55:02Z] 在飞 in-flight | 第 1 轮没有写回，但有 1 条派单还在飞（ledger_theme_v1__t.plan__r2）——那是【还没干完】，不是【没人在干】，继续等（墙钟已跑 603s / 上限 1800s）
+[ledger-run 2026-08-19T17:55:02Z] 轮次 round | 第 2 轮开始：前沿 ["t.plan"]（墙钟已跑 603s / 上限 1800s）
+[ledger-run 2026-08-19T17:55:02Z] 在飞 in-flight | task=t.plan case_id=ledger_theme_v1__t.plan__r2 本次驱动循环已派过：接着等它的结果，⛔ 不重派
+[ledger-run 2026-08-19T17:55:02Z] 等待 wait | task=t.plan 在等的 key（case_id）=ledger_theme_v1__t.plan__r2 team=grok-l2 预算=600s
+resident-exit signal=term reason=human_stop
+[ledger-run 2026-08-19T18:02:40Z] 常驻开工 resident-start | 账本=.team/ledgers/theme-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T18:02:40Z] 开工 start | ledger_id=ledger.theme.v1 revision=3 账本=.team/ledgers/theme-v1.json 墙钟上限=1800s 派单死线=90s
+[ledger-run 2026-08-19T18:02:41Z] 轮次 round | 第 1 轮开始：前沿 ["t.plan"]（墙钟已跑 0s / 上限 1800s）
+[ledger-run 2026-08-19T18:02:41Z] 派单 dispatch | task=t.plan 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/theme-v1-plan 席位=theme-v1-plan attempt=att-t.plan-seq1-t1787162561143 delivery=del-t.plan-seq1-t1787162561143
+[ledger-run 2026-08-19T18:02:41Z] 投递回执 send-ok | task=t.plan case_id=ledger_theme_v1__t.plan__r3 message_id=msg_d8657fcc91f0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T18:02:41Z] 派单落地 dispatch-landed | task=t.plan 席位 theme-v1-plan 的收件箱已多出这条派单
+[ledger-run 2026-08-19T18:02:41Z] 等待 wait | task=t.plan 在等的 key（case_id）=ledger_theme_v1__t.plan__r3 team=grok-l2 预算=600s
+[ledger-run 2026-08-19T18:12:41Z] 无信号 wait-no-signal | task=t.plan 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-19T18:12:41Z] 判据 acceptance | task=t.plan 在跑 required=["A-plan-doc", "A-plan-sections", "A-plan-table"]
+[ledger-run 2026-08-19T18:12:41Z] 判据失败诊断 acceptance-diagnostic | task=t.plan 判据 A-plan-doc 失败：exit_code=1 (期望 0) cwd=.worktrees/theme-plan argv=["test", "-s", "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-19T18:12:41Z] 判据失败诊断 acceptance-diagnostic | task=t.plan 判据 A-plan-sections 失败：exit_code=1 (期望 0) cwd=.worktrees/theme-plan argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md';s=io.open(p,encoding='utf-8').read();need=['iTerm2-Color-Schemes','Mark Badolato','AGPL','NOTICE','density','083'];miss=[n for n in need if n not in s];print('MISSING',miss) or sys.exit(1 if miss else 0)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md'
+[ledger-run 2026-08-19T18:12:41Z] 判据失败诊断 acceptance-diagnostic | task=t.plan 判据 A-plan-table 失败：exit_code=1 (期望 0) cwd=.worktrees/theme-plan argv=["python3", "-c", "import sys,io,re;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md';s=io.open(p,encoding='utf-8').read();rows=[l for l in s.splitlines() if l.count('|')>=3];print('table rows',len(rows)) or sys.exit(0 if len(rows)>=25 else 1)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-plan/方案.md'
+[ledger-run 2026-08-19T18:12:41Z] 原子写回 writeback-atomic | task=t.plan 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=3 hash=dbf28ef82dda6346）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T18:12:41Z] 判据红 acceptance-red | task=t.plan required 未全过——还没等到结果，只冻内存，接着等席位（健康长线）
+[ledger-run 2026-08-19T18:12:41Z] 在飞 in-flight | 第 1 轮没有写回，但有 1 条派单还在飞（ledger_theme_v1__t.plan__r3）——那是【还没干完】，不是【没人在干】，继续等（墙钟已跑 600s / 上限 1800s）
+[ledger-run 2026-08-19T18:12:41Z] 轮次 round | 第 2 轮开始：前沿 ["t.plan"]（墙钟已跑 600s / 上限 1800s）
+[ledger-run 2026-08-19T18:12:41Z] 在飞 in-flight | task=t.plan case_id=ledger_theme_v1__t.plan__r3 本次驱动循环已派过：接着等它的结果，⛔ 不重派
+[ledger-run 2026-08-19T18:12:41Z] 等待 wait | task=t.plan 在等的 key（case_id）=ledger_theme_v1__t.plan__r3 team=grok-l2 预算=600s
+[ledger-run 2026-08-19T18:13:21Z] 已唤醒 wait-signaled | task=t.plan 等到结果了
+[ledger-run 2026-08-19T18:13:21Z] 判据 acceptance | task=t.plan 在跑 required=["A-plan-doc", "A-plan-sections", "A-plan-table"]
+[ledger-run 2026-08-19T18:13:22Z] 判据通过留档 acceptance-success | task=t.plan 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-plan-doc", "A-plan-sections", "A-plan-table"]
+[ledger-run 2026-08-19T18:13:22Z] 延后落盘 writeback-deferred | task=t.plan 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-19T18:13:22Z] 写回 writeback | task=t.plan state=succeeded revision=3 → 4
+[ledger-run 2026-08-19T18:13:22Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.plan"] 冻结=[] 不可判=[] 墙钟已跑 641s
+[ledger-run 2026-08-19T18:13:22Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T18:13:22Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-19T18:13:22Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=4 hash=a6b541c1f42c980d）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T18:13:22Z] 挂起 park | token=parked ledger_id=ledger.theme.v1 revision=4 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.theme.v1 | revision: 4 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 ｜ t.plan：曾失败 3 次，最后一次通过（历史失败已被后续尝试推翻） | 各任务终态: t.plan=Succeeded
+resident-exit signal=term reason=human_stop
