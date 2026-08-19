@@ -1,20 +1,10 @@
-租约抢占：pid=1184 stole from pid=19348 reason=holder pid 19348 不存在（判定已死） at=1787107144
+租约抢占：pid=4293 stole from pid=15314 reason=holder pid 15314 不存在（判定已死） at=1787109156
 
-[ledger-run 2026-08-19T02:39:04Z] 开工 start | ledger_id=ledger.refresh.v1 revision=2 账本=.team/ledgers/refresh-v1.json 墙钟上限=9300s 派单死线=90s
-[ledger-run 2026-08-19T02:39:05Z] 轮次 round | 第 1 轮开始：前沿 ["t.srv"]（墙钟已跑 0s / 上限 9300s）
-[ledger-run 2026-08-19T02:39:05Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq1-t1787107145236 delivery=del-t.srv-seq1-t1787107145236
-[ledger-run 2026-08-19T02:39:05Z] 投递回执 send-ok | task=t.srv case_id=ledger_refresh_v1__t.srv__r2 message_id=msg_11fdf3520f90 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-19T02:39:05Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
-[ledger-run 2026-08-19T02:39:05Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_refresh_v1__t.srv__r2 team=grok-l2 预算=950s
-[ledger-run 2026-08-19T02:39:05Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
-[ledger-run 2026-08-19T02:39:05Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-test", "A-s-suite", "A-s-doc"]
-租约抢占：pid=15314 stole from pid=1184 reason=holder pid 1184 不存在（判定已死） at=1787107215
-
-[ledger-run 2026-08-19T02:40:15Z] 开工 start | ledger_id=ledger.refresh.v1 revision=2 账本=.team/ledgers/refresh-v1.json 墙钟上限=9300s 派单死线=90s
-[ledger-run 2026-08-19T02:40:15Z] 轮次 round | 第 1 轮开始：前沿 ["t.srv"]（墙钟已跑 0s / 上限 9300s）
-[ledger-run 2026-08-19T02:40:15Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq1-t1787107215589 delivery=del-t.srv-seq1-t1787107215589
-[ledger-run 2026-08-19T02:40:15Z] 投递回执 send-ok | task=t.srv case_id=ledger_refresh_v1__t.srv__r2 message_id=msg_290c54665c18 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-19T02:40:15Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
-[ledger-run 2026-08-19T02:40:15Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_refresh_v1__t.srv__r2 team=grok-l2 预算=950s
-[ledger-run 2026-08-19T02:40:15Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
-[ledger-run 2026-08-19T02:40:15Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-test", "A-s-suite", "A-s-doc"]
+[ledger-run 2026-08-19T03:12:36Z] 开工 start | ledger_id=ledger.refresh.v1 revision=3 账本=.team/ledgers/refresh-v1.json 墙钟上限=9300s 派单死线=90s
+[ledger-run 2026-08-19T03:12:37Z] 轮次 round | 第 1 轮开始：前沿 ["t.srv"]（墙钟已跑 0s / 上限 9300s）
+[ledger-run 2026-08-19T03:12:37Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq1-t1787109157360 delivery=del-t.srv-seq1-t1787109157360
+[ledger-run 2026-08-19T03:12:37Z] 投递回执 send-ok | task=t.srv case_id=ledger_refresh_v1__t.srv__r3 message_id=msg_04756edd4000 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T03:12:37Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
+[ledger-run 2026-08-19T03:12:37Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_refresh_v1__t.srv__r3 team=grok-l2 预算=950s
+[ledger-run 2026-08-19T03:13:25Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
+[ledger-run 2026-08-19T03:13:25Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-test", "A-s-suite", "A-s-doc"]

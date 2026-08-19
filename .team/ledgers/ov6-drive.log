@@ -1,0 +1,6 @@
+[ledger-run 2026-08-19T03:37:31Z] 开工 start | ledger_id=ledger.overlay-layout.v1 revision=1 账本=.team/ledgers/overlay-layout-v1.json 墙钟上限=4800s 派单死线=90s
+[ledger-run 2026-08-19T03:37:34Z] 轮次 round | 第 1 轮开始：前沿 ["t.layout"]（墙钟已跑 3s / 上限 4800s）
+[ledger-run 2026-08-19T03:37:34Z] 派单 dispatch | task=t.layout 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/fav-dev-app 席位=fav-dev-app attempt=att-t.layout-seq1-t1787110654943 delivery=del-t.layout-seq1-t1787110654943
+[ledger-run 2026-08-19T03:37:35Z] 投递回执 send-ok | task=t.layout case_id=ledger_overlay-layout_v1__t.layout__r1 message_id=msg_7b6e1e3f9c70 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T03:37:35Z] 派单落地 dispatch-landed | task=t.layout 席位 fav-dev-app 的收件箱已多出这条派单
+[ledger-run 2026-08-19T03:37:35Z] 等待 wait | task=t.layout 在等的 key（case_id）=ledger_overlay-layout_v1__t.layout__r1 team=grok-l2 预算=2400s

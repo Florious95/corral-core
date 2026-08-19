@@ -1,0 +1,6 @@
+[ledger-run 2026-08-19T03:51:33Z] 开工 start | ledger_id=ledger.fav-star.v1 revision=1 账本=.team/ledgers/fav-star-v1.json 墙钟上限=4800s 派单死线=90s
+[ledger-run 2026-08-19T03:51:36Z] 轮次 round | 第 1 轮开始：前沿 ["t.star"]（墙钟已跑 3s / 上限 4800s）
+[ledger-run 2026-08-19T03:51:36Z] 派单 dispatch | task=t.star 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-app 席位=dev-app attempt=att-t.star-seq1-t1787111496792 delivery=del-t.star-seq1-t1787111496792
+[ledger-run 2026-08-19T03:51:36Z] 投递回执 send-ok | task=t.star case_id=ledger_fav-star_v1__t.star__r1 message_id=msg_bf7c1f235d10 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T03:51:37Z] 派单落地 dispatch-landed | task=t.star 席位 dev-app 的收件箱已多出这条派单
+[ledger-run 2026-08-19T03:51:37Z] 等待 wait | task=t.star 在等的 key（case_id）=ledger_fav-star_v1__t.star__r1 team=grok-l2 预算=2400s
