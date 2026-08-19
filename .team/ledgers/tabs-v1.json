@@ -1,0 +1,199 @@
+{
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.tabs.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.app": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/tabs/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "tabs-v1-tabs",
+    "team": "grok-l2"
+   }
+  },
+  "r.leader": {
+   "provider": "human",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/tabs-esc/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.tabs": {
+   "title": "三栏改**底部标签栏**。契约 requirement-base/entries/067-收藏与三栏布局.md **§4.1（已推翻旧裁定，先读那一节）**。手测照 .claude/skills/emulator-manual-test/SKILL.md。\n用户实测反馈：装了包**找不到收藏在哪**。原来做的是左右滑动三页，**没有任何可见入口** ⇒ 等于没做。\n要做的：**底部标签栏（Bottom Navigation），三个标签：收藏 / 会话 / 设置**，默认选中「会话」。点标签切换。滑动手势可以保留，但**不得作为唯一入口**。\n🔴 判据是「**用户一眼能看见收藏在哪**」，不是「三个页面存在」——旧实现三个页面都在，照样找不到。\n🔴 不要动收藏本身的行为（点星→实心→左栏出现→点进会话，这条已验通，⛔ 别改坏）。\n🔴 **必须模拟器截图自证**：①底部三个标签可见 ②点「收藏」切过去 ③点「设置」切过去 ④冷启动落在「会话」。四张，**必须是四个不同现场**（上一轮有人交了三张 md5 相同的图充数），存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/tabs/。说明写同目录 说明.md。\n配套测试名须含 `BottomTabs`。\n✅ 模拟器已解禁。AVD `agentmirror_geo_1260x2800` 在跑，adb=~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。角色文件里「禁止启动模拟器」那句已作废。\n🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。\n⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/tabs/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt12.tabs",
+    "write_paths": [
+     "app/",
+     ".team/nodes/tabs/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/067-收藏与三栏布局.md",
+     ".claude/skills/emulator-manual-test/SKILL.md",
+     "app/app/src/",
+     ".team/nodes/tabs/BASE.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "8aab9d5fc"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/tabs/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-tb-test",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*BottomTabs*'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-tb-shots",
+      "argv": [
+       "python3",
+       "-c",
+       "import glob,hashlib,sys;g=glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/tabs/*.png');h={hashlib.md5(open(f,'rb').read()).hexdigest() for f in g};sys.exit(0 if len(g)>=4 and len(h)>=4 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-tb-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/tabs/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-tb-suite",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-tb-apk",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q assembleDebug && test -s app/build/outputs/apk/debug/app-debug.apk"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-tb-test",
+     "A-tb-shots",
+     "A-tb-doc",
+     "A-tb-suite",
+     "A-tb-apk"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
+  }
+ },
+ "dependencies": [],
+ "parallelism": [
+  {
+   "group": "g12",
+   "max_concurrency": 1
+  }
+ ],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "完成以机械判据为准",
+  "delivery_uncertain": "重发并去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {
+  "F.esc": {
+   "agent": {
+    "role": "r.leader"
+   },
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed"
+   ],
+   "max_attempts": 1,
+   "action": "escalate_to_leader",
+   "silent_substitution": false
+  }
+ },
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "requirement-base/entries/067-收藏与三栏布局.md",
+   ".claude/skills/emulator-manual-test/SKILL.md"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 2
+}
