@@ -104,7 +104,9 @@ internal fun L2SessionList(
                     tag = "l2-star-${entry.ref}",
                 )
                 Surface(
-                    onClick = { onOpenSession(entry.ref, entry.navigationName) },
+                    // 077：顶栏显示名必须复用 076 §3a identityLabel（sessionDisplayName），
+                    // 身份仍走 ref。勿改回 navigationName，否则 claude_code 窗口顶栏又变旧名。
+                    onClick = { onOpenSession(entry.ref, entry.identityLabel) },
                     color = MaterialTheme.colorScheme.background,
                     modifier = Modifier
                         .weight(1f)

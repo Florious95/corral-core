@@ -243,7 +243,14 @@ class TermSurfaceView @JvmOverloads constructor(
      * 只动传给 presenter 的宽度，不改 View 自身绘制宽度——presenter 算出的 cols 天然不会
      * 用到留白那部分像素。只影响水平方向，行数/高度不受影响。
      */
-    private fun usableWidthPx(w: Int): Int = (w - dp(RIGHT_MARGIN_DP)).roundToInt().coerceAtLeast(0)
+    /**
+     * 左内容缘（view 坐标）。坏基线是 0：第 0 列贴 clip 边，SYSTEM_FALLBACK 居中
+     * 的 `●` 左溢被 Canvas 裁半。见 [TermLeftEdge]。
+     */
+    internal fun contentLeftPx(): Int = TermLeftEdge.contentLeftPx(resources.displayMetrics.density)
+
+    private fun usableWidthPx(w: Int): Int =
+        (w - contentLeftPx() - dp(RIGHT_MARGIN_DP)).roundToInt().coerceAtLeast(0)
 
     /**
      * D-38（回炉）：窗口从后台回前台时尺寸可能与离开前相同，系统不会因此再回调 [onSizeChanged]
@@ -300,6 +307,14 @@ class TermSurfaceView @JvmOverloads constructor(
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
         val win = p.window
+        val contentLeft = contentLeftPx()
+        // 两个操作数都记：contentLeft vs 第 0 列格子原点。相等且 ≥0 ⇒ 不是布局推出；
+        // 字形起绘另由 drawCentered 钳到 ≥0，避免负 x 被 clip。
+        DiagLog.record(
+            "term-left-edge",
+            "source=onDraw contentLeft=$contentLeft col0Origin=${TermLeftEdge.cellOriginX(0, cellW, contentLeft)} " +
+                "cellW=$cellW viewW=$width verdict=${TermLeftEdge.classify(contentLeft.toFloat(), contentLeft, contentLeft)}",
+        )
         for (logical in win) {
             val rowY = (logical - win.first) * cellH
             drawLine(canvas, p.lineCells(logical), rowY)
@@ -332,7 +347,7 @@ class TermSurfaceView @JvmOverloads constructor(
         // 一列推进；主格矩形铺满 width 列（含续格列），续格只占位不重画。旧实现把主格
         // 当 2 列推进、续格又推 1 列且只铺 1 列宽矩形——背景色块内每个 CJK 留 2 列
         // 默认深底黑洞、后续格整体右漂（用户真机实拍黑块马赛克根因，fix-term-bg-cjk）。
-        var x = 0
+        var x = contentLeftPx()
         // 右缘护栏（X3）：网格超宽时背景矩形右缘会越过画布被 Canvas 裁。钳进画布宽 + 金丝雀计数。
         // width > 0 guard：TermBgCjkAlignTest 走 view.draw 无 layout（width=0）时护栏必须失效
         // （否则空画布下每个矩形都越界，计数误报、测试错乱）。只有真实视口（width>0）才兜底。
@@ -408,11 +423,12 @@ class TermSurfaceView @JvmOverloads constructor(
                     // 否则末列字形被 Canvas 裁半（用户「『它』的一半」正是字形被裁）。width>0 guard 同背景。
                     // 段占列宽按码点 CharWidth 累计（宽字符主格 2 列但 text 仅 1 字符，length 会低估）。
                     fgPaint.color = color
-                    if (width > 0 && seg.startCol * cellW >= width) {
+                    val originX = TermLeftEdge.cellOriginX(seg.startCol, cellW, contentLeftPx())
+                    if (width > 0 && originX >= width) {
                         clipGuardEngageCount++
                         canvas.drawText(seg.text, (width - cellW).coerceAtLeast(0).toFloat(), rowY + baselinePx, fgPaint)
                     } else {
-                        canvas.drawText(seg.text, seg.startCol * cellW.toFloat(), rowY + baselinePx, fgPaint)
+                        canvas.drawText(seg.text, originX.toFloat(), rowY + baselinePx, fgPaint)
                     }
                 }
                 GlyphSlot.SYSTEM_FALLBACK -> {
@@ -436,7 +452,7 @@ class TermSurfaceView @JvmOverloads constructor(
      * batch ASCII 同基线，纵向对齐）。
      */
     private fun drawCentered(canvas: Canvas, paint: Paint, text: String, startCol: Int, rowY: Int) {
-        var x = startCol * cellW
+        var x = TermLeftEdge.cellOriginX(startCol, cellW, contentLeftPx())
         var i = 0
         val n = text.length
         while (i < n) {
@@ -458,9 +474,16 @@ class TermSurfaceView @JvmOverloads constructor(
             }
             val cellPx = cellW * width
             val actual = paint.measureText(text, i, j)
-            // 格内水平居中：字形实际宽度小于格宽时居中，大于则轻微左出（不破栅格）。
-            // 纵向与 batch ASCII 同基线（行顶 + baselinePx）。
-            canvas.drawText(text, i, j, x + (cellPx - actual) / 2f, rowY + baselinePx, paint)
+            // 格内水平居中；advance > 格宽时旧公式左溢为负，col0 的 ● 被 clip。
+            // 钳到 0：完整字形可见，左溢改走左边距而不是裁半。
+            canvas.drawText(
+                text,
+                i,
+                j,
+                TermLeftEdge.centeredGlyphX(x, cellPx, actual),
+                rowY + baselinePx,
+                paint,
+            )
             x += cellPx
             i = j
         }
@@ -532,7 +555,7 @@ class TermSurfaceView @JvmOverloads constructor(
         /** 终端默认前景/背景色（主题定制任务替换处）。 */
         const val DEFAULT_FG = 0xFFE8E8E8.toInt()
         const val DEFAULT_BG = 0xFF0D1626.toInt()
-        /** 右侧留白（fix-terminal-right-margin），见 [usableWidthPx]。 */
+        /** 右侧留白（fix-terminal-right-margin），见 [usableWidthPx]。左侧见 [TermLeftEdge.LEFT_MARGIN_DP]。 */
         const val RIGHT_MARGIN_DP = 4f
         /** 终端基础 16 色调色板（XTerm 近似，主题定制任务可替换）。 */
         val ANSI_COLORS: Map<Int, Int> = mapOf(

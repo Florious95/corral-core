@@ -76,9 +76,10 @@ class TermRightMarginTest {
         assertEquals("[守恒] 首次视口建立只应上报一次 resize", 1, resizeCalls.size)
         val (_, cols) = resizeCalls.single()
         val leftover = viewportW - cols * realCellW
+        val leftPx = (TermLeftEdge.LEFT_MARGIN_DP * density).roundToInt()
 
         println(
-            "[右边距] viewportW=$viewportW realCellW=$realCellW marginPx=$marginPx " +
+            "[右边距] viewportW=$viewportW realCellW=$realCellW marginPx=$marginPx leftPx=$leftPx " +
                 "cols=$cols leftover=$leftover",
         )
 
@@ -95,7 +96,7 @@ class TermRightMarginTest {
         assertTrue(
             "[右边距][不倒退] 留白不得达到两倍字宽以上——不许为了留白反过来多抠一整列：" +
                 "leftover=$leftover cellW=$realCellW",
-            leftover <= realCellW,
+            leftover < leftPx + marginPx + realCellW,
         )
         assertTrue(
             "[缺陷②不倒退] cols×字宽=${cols * realCellW} 不得超出视口宽=$viewportW",
@@ -129,11 +130,14 @@ class TermRightMarginTest {
 
         val (_, cols) = resizeCalls.single()
         val leftover = viewportW - cols * realCellW
+        val density = view.resources.displayMetrics.density
+        val leftPx = (TermLeftEdge.LEFT_MARGIN_DP * density).roundToInt()
+        val rightPx = (4f * density).roundToInt()
 
         assertTrue("[右边距][典型场景] 留白必须 > 0：leftover=$leftover", leftover > 0)
         assertTrue(
-            "[右边距][典型场景] 留白必须严格小于一个字宽：leftover=$leftover cellW=$realCellW",
-            leftover < realCellW,
+            "[右边距][典型场景] 左右留白+余数不得再吞一整列：leftover=$leftover cellW=$realCellW left=$leftPx right=$rightPx",
+            leftover < leftPx + rightPx + realCellW,
         )
     }
 }

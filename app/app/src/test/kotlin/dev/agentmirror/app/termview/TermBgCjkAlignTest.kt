@@ -98,23 +98,24 @@ class TermBgCjkAlignTest {
         assertTrue("夹具失效：未画出任何白底格", white.isNotEmpty())
         val cellW = white.minOf { it.right - it.left }
         assertTrue("夹具失效：cellW=$cellW", cellW >= 1f)
+        val origin = view.contentLeftPx().toFloat()
 
-        // 不变量 1：白底区从第 0 列开始、连续无缝——任何缝隙都是实拍里的默认深底黑块。
-        assertEquals("白底区未从第 0 列开始", 0f, white.first().left, 0.01f)
-        var reach = 0f
+        // 不变量 1：白底区从第 0 列（contentLeft）开始、连续无缝——任何缝隙都是实拍里的默认深底黑块。
+        assertEquals("白底区未从 contentLeft 开始", origin, white.first().left, 0.01f)
+        var reach = origin
         for (r in white) {
             assertTrue("白底区在 x=${r.left} 前有黑洞（覆盖到 $reach）", r.left <= reach + 0.01f)
             if (r.right > reach) reach = r.right
         }
 
         // 不变量 2：白底区总宽恰为 10 列（4 CJK×2 + AB×2）——少铺即黑洞，多铺即右漂。
-        assertEquals("白底区总宽 ≠ 10 列", 10f * cellW, reach, 0.01f)
+        assertEquals("白底区总宽 ≠ 10 列", origin + 10f * cellW, reach, 0.01f)
 
         // 不变量 3：换色 run "AB" 的起始 x 恰在第 8 列（4 个 CJK 各占 2 列）。
         // 旧代码每 CJK 多推 1 列 ⇒ AB 落在第 12 列（文字与背景错位重叠的直接来源）。
         val ab = canvas.texts.filter { it.text.contains("AB") }
         assertTrue("夹具失效：未画出 AB 文本", ab.isNotEmpty())
-        assertEquals("AB run 起始列漂移", 8f * cellW, ab.first().x, 0.01f)
+        assertEquals("AB run 起始列漂移", origin + 8f * cellW, ab.first().x, 0.01f)
     }
 
     /** xterm 256 色扩展区期望值：254 = 灰阶梯 8+10×(254−232) = rgb(228,228,228)；
@@ -147,17 +148,18 @@ class TermBgCjkAlignTest {
         val cellW = light.minOf { it.right - it.left }
 
         // 浅底区连续无黑洞、总宽恰 22 列（9 个双宽 + 4 个单宽）。
-        var reach = 0f
+        val origin = view.contentLeftPx().toFloat()
+        var reach = origin
         for (r in light) {
             assertTrue("浅底区在 x=${r.left} 前有黑洞（覆盖到 $reach）", r.left <= reach + 0.01f)
             if (r.right > reach) reach = r.right
         }
-        assertEquals("浅底区总宽 ≠ 22 列", 22f * cellW, reach, 0.01f)
+        assertEquals("浅底区总宽 ≠ 22 列", origin + 22f * cellW, reach, 0.01f)
 
-        // 换色 run "OK"（MONO batch 路径，x = startCol*cellW 精确）恰在第 20 列。
+        // 换色 run "OK"（MONO batch 路径，x = contentLeft+startCol*cellW 精确）恰在第 20 列。
         val ok = canvas.texts.filter { it.text.contains("OK") }
         assertTrue("夹具失效：未画出 OK 文本", ok.isNotEmpty())
-        assertEquals("OK run 起始列漂移", 20f * cellW, ok.first().x, 0.01f)
+        assertEquals("OK run 起始列漂移", origin + 20f * cellW, ok.first().x, 0.01f)
 
         // 可读性：38;5;16 前景必须落黑（色立方原点），绝不与浅底同色（模拟器实拍
         // 第二缺陷：fg/bg 同塌缩到 15 号浅灰 → recap 块整块隐形）。
