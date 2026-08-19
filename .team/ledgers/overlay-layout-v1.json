@@ -1,209 +1,225 @@
 {
- "schema_version": "ledger.v2",
- "ledger_id": "ledger.overlay-layout.v1",
- "run": {
-  "desired_state": "running"
- },
- "roles": {
-  "r.app": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/ov4-layout/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "fav-dev-app",
-    "team": "grok-l2"
-   }
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.overlay-layout.v1",
+  "run": {
+    "desired_state": "running"
   },
-  "r.leader": {
-   "provider": "human",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/ov4-esc/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   }
-  }
- },
- "tasks": {
-  "t.layout": {
-   "title": "修悬浮窗**布局三缺陷**。契约 requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md **§6.2**（leader 2026-08-19 模拟器亲测坐实，证据截图 .team/nodes/ov3-probe/emulator-evidence/03、04 —— 回炉那轮修的是线上帧与错误码，**布局一条没动**）。\n三条，逐条修，逐条在模拟器上自证：\n①**横向截断**：每行右边被直接切掉（`保留V5代码保证审查…`、`Level2 回炉：归档回退与全…`）。面板必须按**自身宽度**决定抓屏的列数（由面板像素宽 ÷ 字宽算 cols，再让 tmux 客户端用这个尺寸），⛔ 不得沿用固定 80 列然后切掉超出部分。宽度实在不够时按可读方式处理（缩字号/换行/横向可滚），⛔ 不得静默截断。\n②**choose-tree 预览区糊进来**：面板中部出现框线碎片与 `Ctx: … | Opus 5 (` —— 那是 choose-tree 的**预览窗格**，不是会话树。只画树。（提示：tmux 的 choose-tree 有关闭预览的选项，**自己去 man 里确认再用**，⛔ 不要照抄我这句。）\n③**大片空白**：面板下半整块空白。抓屏的 rows 要与面板高度相称（同样由面板像素高 ÷ 行高算）。\n🔴 判据是**看起来对**，不是「没有裸控制序列」——上一轮就是因为只验了后者，这三条一条都没被看见。\n🔴 **必须在模拟器上自证**：装包 → 进会话 → 点右上角「查看」→ 截图，三条各自贴一张，存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov4-layout/。说明写同目录 说明.md，逐条对照修前修后。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n✅ **模拟器已解禁**（2026-08-19 用户令：「这次要模拟器调试通过」）。AVD `agentmirror_geo_1260x2800` 已在跑，adb 在 ~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。允许装包截图自验。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）做实验；要试 tmux 命令自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt10.layout",
-    "write_paths": [
-     "app/",
-     "server/",
-     ".team/nodes/ov4-layout/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md",
-     ".team/nodes/ov3-probe/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+  "roles": {
+    "r.app": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/ov4-layout/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "fav-dev-app",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "1e6417b8c"
+    "r.leader": {
+      "provider": "human",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/ov4-esc/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov4-layout/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-l-shots",
-      "argv": [
-       "python3",
-       "-c",
-       "import glob,sys;g=glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov4-layout/*.png');sys.exit(0 if len(g)>=3 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-l-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov4-layout/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-l-nofixed80",
-      "argv": [
-       "sh",
-       "-c",
-       "! grep -rn 'cols *= *80\\|COLS *= *80' /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/overlay/ /Volumes/nvme/Projects/远程Agent安卓/server/internal/api/overlay.go"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-l-app",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-l-go",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-l-apk",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q assembleDebug && test -s app/build/outputs/apk/debug/app-debug.apk"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     }
+  },
+  "tasks": {
+    "t.layout": {
+      "title": "修悬浮窗**布局三缺陷**。契约 requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md **§6.2**（leader 2026-08-19 模拟器亲测坐实，证据截图 .team/nodes/ov3-probe/emulator-evidence/03、04 —— 回炉那轮修的是线上帧与错误码，**布局一条没动**）。\n三条，逐条修，逐条在模拟器上自证：\n①**横向截断**：每行右边被直接切掉（`保留V5代码保证审查…`、`Level2 回炉：归档回退与全…`）。面板必须按**自身宽度**决定抓屏的列数（由面板像素宽 ÷ 字宽算 cols，再让 tmux 客户端用这个尺寸），⛔ 不得沿用固定 80 列然后切掉超出部分。宽度实在不够时按可读方式处理（缩字号/换行/横向可滚），⛔ 不得静默截断。\n②**choose-tree 预览区糊进来**：面板中部出现框线碎片与 `Ctx: … | Opus 5 (` —— 那是 choose-tree 的**预览窗格**，不是会话树。只画树。（提示：tmux 的 choose-tree 有关闭预览的选项，**自己去 man 里确认再用**，⛔ 不要照抄我这句。）\n③**大片空白**：面板下半整块空白。抓屏的 rows 要与面板高度相称（同样由面板像素高 ÷ 行高算）。\n🔴 判据是**看起来对**，不是「没有裸控制序列」——上一轮就是因为只验了后者，这三条一条都没被看见。\n🔴 **必须在模拟器上自证**：装包 → 进会话 → 点右上角「查看」→ 截图，三条各自贴一张，存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov4-layout/。说明写同目录 说明.md，逐条对照修前修后。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n✅ **模拟器已解禁**（2026-08-19 用户令：「这次要模拟器调试通过」）。AVD `agentmirror_geo_1260x2800` 已在跑，adb 在 ~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。允许装包截图自验。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）做实验；要试 tmux 命令自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt10.layout",
+        "write_paths": [
+          "app/",
+          "server/",
+          ".team/nodes/ov4-layout/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md",
+          ".team/nodes/ov3-probe/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "1e6417b8c"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov4-layout/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-l-shots",
+            "argv": [
+              "python3",
+              "-c",
+              "import glob,sys;g=glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov4-layout/*.png');sys.exit(0 if len(g)>=3 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-l-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov4-layout/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-l-nofixed80",
+            "argv": [
+              "sh",
+              "-c",
+              "! grep -rn 'cols *= *80\\|COLS *= *80' /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/overlay/ /Volumes/nvme/Projects/远程Agent安卓/server/internal/api/overlay.go"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-l-app",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-l-go",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-l-apk",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q assembleDebug && test -s app/build/outputs/apk/debug/app-debug.apk"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-l-shots",
+          "A-l-doc",
+          "A-l-nofixed80",
+          "A-l-app",
+          "A-l-go",
+          "A-l-apk"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.layout-seq1-t1787110654943",
+          "delivery_id": "del-t.layout-seq1-t1787110654943",
+          "state": "succeeded",
+          "writeback_revision": 2,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-l-shots",
+            "acceptance_success.acceptance_id=A-l-doc",
+            "acceptance_success.acceptance_id=A-l-nofixed80",
+            "acceptance_success.acceptance_id=A-l-app",
+            "acceptance_success.acceptance_id=A-l-go",
+            "acceptance_success.acceptance_id=A-l-apk",
+            "acceptance_success.writeback_revision=2"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": [],
+  "parallelism": [
+    {
+      "group": "g10",
+      "max_concurrency": 1
+    }
+  ],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
     ],
-    "judgment": [],
-    "required": [
-     "A-l-shots",
-     "A-l-doc",
-     "A-l-nofixed80",
-     "A-l-app",
-     "A-l-go",
-     "A-l-apk"
+    "missing_result": "完成以机械判据为准",
+    "delivery_uncertain": "重发并去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {
+    "F.esc": {
+      "agent": {
+        "role": "r.leader"
+      },
+      "triggers": [
+        "blocked_on_unknown",
+        "provider_unavailable",
+        "result_deadline_elapsed"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_leader",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md"
     ]
-   },
-   "state": "planned",
-   "attempts": []
-  }
- },
- "dependencies": [],
- "parallelism": [
-  {
-   "group": "g10",
-   "max_concurrency": 1
-  }
- ],
- "handoff": {
-  "send_command": "team-agent send",
-  "result_route": "leader",
-  "required_envelope_fields": [
-   "task_id",
-   "status"
-  ],
-  "missing_result": "完成以机械判据为准",
-  "delivery_uncertain": "重发并去重"
- },
- "acceptance": {
-  "mechanical_exit_code_is_authoritative": true,
-  "judgment_requires_distinct_provider": false
- },
- "fallback": {
-  "F.esc": {
-   "agent": {
-    "role": "r.leader"
-   },
-   "triggers": [
-    "blocked_on_unknown",
-    "provider_unavailable",
-    "result_deadline_elapsed"
-   ],
-   "max_attempts": 1,
-   "action": "escalate_to_leader",
-   "silent_substitution": false
-  }
- },
- "evidence_policy": {
-  "required_fields": [
-   "reported_by",
-   "revision",
-   "supports_or_refutes",
-   "observed_at",
-   "freshness"
-  ],
-  "missing_evidence": "判据必须是可重跑命令"
- },
- "resource_isolation": {
-  "default_write_scope": ".team/nodes",
-  "rules": [],
-  "read_only_shared": [
-   "requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md"
-  ]
- },
- "fanout_aggregation": {},
- "audit": {},
- "revision": 1
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 2
 }
