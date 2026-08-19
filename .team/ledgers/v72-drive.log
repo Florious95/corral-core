@@ -1,0 +1,6 @@
+[ledger-run 2026-08-19T04:34:19Z] 开工 start | ledger_id=ledger.v72.v1 revision=4 账本=.team/ledgers/v72-v1.json 墙钟上限=14400s 派单死线=90s
+[ledger-run 2026-08-19T04:34:27Z] 轮次 round | 第 1 轮开始：前沿 ["t.icons"]（墙钟已跑 7s / 上限 14400s）
+[ledger-run 2026-08-19T04:34:27Z] 派单 dispatch | task=t.icons 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/v72-v1-icons 席位=v72-v1-icons attempt=att-t.icons-seq1-t1787114067658 delivery=del-t.icons-seq1-t1787114067658
+[ledger-run 2026-08-19T04:34:27Z] 投递回执 send-ok | task=t.icons case_id=ledger_v72_v1__t.icons__r4 message_id=msg_da11b3b81760 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T04:34:27Z] 派单落地 dispatch-landed | task=t.icons 席位 v72-v1-icons 的收件箱已多出这条派单
+[ledger-run 2026-08-19T04:34:27Z] 等待 wait | task=t.icons 在等的 key（case_id）=ledger_v72_v1__t.icons__r4 team=grok-l2 预算=2400s
