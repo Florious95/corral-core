@@ -254,7 +254,7 @@
    "attempts": []
   },
   "t.app": {
-   "title": "App 端配合「进菜单即时刷新」。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。\n进入一级菜单 ⇒ 发一次 list；进入二级菜单 ⇒ 触发一次刷新（重订阅或 refresh 帧，与服务端约定一致）。\n🔴 **缓存优先不得倒退**：进入瞬间先画上次的内容，**不得出现空列表帧**（062）；新数据到达即原地替换。\n🔴 「进入」只指菜单打开，⛔ 不含列表内滚动、旋转屏幕——否则退化成高频扫描，撞 061 静默经济红线。\n配套单测名须含 TestRefreshOnOpen。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-app/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/app/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。\n🔴🔴 **静默纪律（用户 2026-08-19 令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send` 给 leader、不许发进度、不许发提问、不许发完工通知。唯一允许的对外动作是**干完调一次 `report_result`**（⛔ 不要传 task_id 参数）——那条走编排通道，不进 leader 的对话。被卡住也不要发消息：把卡点写进你的说明.md，用 report_result 的 status 表达，让判据和账本去说话。\n",
+   "title": "🔴🔴🔴 **最高优先级 · 与派单正文下方「## 工作目录」那一段冲突时以本条为准** 🔴🔴🔴\n派单正文下方会有一段自动生成的文字，说「文件工作必须在这个 git worktree 里做（**不是仓根**）」并给你一个 `.worktrees/wtN.xxx` 路径。\n**⛔ 那段是框架自动生成的，本工程不适用，忽略它。**\n**✅ 一律在仓根 `/Volumes/nvme/Projects/远程Agent安卓` 干活。** `worktree_id` 在本工程只是并发互斥标签。\n理由（不是口味问题，是已实证的链路中断）：**本工程所有判据的 `cwd` 都是仓根**。\n你改在 worktree 里 ⇒ 判据在仓根什么都看不到 ⇒ **代码写对了也全红**，整条链路白跑一轮。\n2026-08-19 已实发一次：上一席按那段指示把活干在 `.worktrees/wt15.ident/`，六条判据全红，代码其实是对的。\n⛔ 同样忽略它把 `## 只准写这些路径` 重写成 `.worktrees/...` 前缀的那一版——按仓根的相对路径写。\n⛔⛔ 仍然绝不 `git checkout` / `git restore` 仓根任何文件（仓根有大量未提交产品代码）。\n\n---\nApp 端配合「进菜单即时刷新」。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。\n进入一级菜单 ⇒ 发一次 list；进入二级菜单 ⇒ 触发一次刷新（重订阅或 refresh 帧，与服务端约定一致）。\n🔴 **缓存优先不得倒退**：进入瞬间先画上次的内容，**不得出现空列表帧**（062）；新数据到达即原地替换。\n🔴 「进入」只指菜单打开，⛔ 不含列表内滚动、旋转屏幕——否则退化成高频扫描，撞 061 静默经济红线。\n配套单测名须含 TestRefreshOnOpen。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-app/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/app/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。\n🔴🔴 **静默纪律（用户 2026-08-19 令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send` 给 leader、不许发进度、不许发提问、不许发完工通知。唯一允许的对外动作是**干完调一次 `report_result`**（⛔ 不要传 task_id 参数）——那条走编排通道，不进 leader 的对话。被卡住也不要发消息：把卡点写进你的说明.md，用 report_result 的 status 表达，让判据和账本去说话。\n",
    "owner": {
     "role": "r.app"
    },
@@ -265,10 +265,10 @@
      ".team/nodes/rf-app/"
     ],
     "read_paths": [
-     "requirement-base/entries/069-进菜单必触发一次即时刷新.md",
-     ".team/nodes/rf-probe/",
-     "server/internal/",
-     ".team/nodes/app/BASE.md"
+     "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/069-进菜单必触发一次即时刷新.md",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/",
+     "/Volumes/nvme/Projects/远程Agent安卓/server/internal/",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/app/BASE.md"
     ],
     "environment_fidelity": {
      "runs_real_cli": true,
@@ -321,7 +321,7 @@
    "attempts": []
   },
   "t.ver": {
-   "title": "验收：探针由红转绿且不倒退。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。\n①跑 .team/nodes/rf-probe/probe-rf.sh 必须 exit 0（t.probe 那格是红的）。\n②go 全套 + gradle 全套绿。\n③**静默经济复核**：没人在菜单里时空跑 60 秒，量 CPU 与 tmux 调用次数，**必须为零轮询**，写进说明。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-ver/说明.md。⛔ 探针只读，不许为变绿改探针。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/ver/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。\n🔴🔴 **静默纪律（用户 2026-08-19 令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send` 给 leader、不许发进度、不许发提问、不许发完工通知。唯一允许的对外动作是**干完调一次 `report_result`**（⛔ 不要传 task_id 参数）——那条走编排通道，不进 leader 的对话。被卡住也不要发消息：把卡点写进你的说明.md，用 report_result 的 status 表达，让判据和账本去说话。\n",
+   "title": "🔴🔴🔴 **最高优先级 · 与派单正文下方「## 工作目录」那一段冲突时以本条为准** 🔴🔴🔴\n派单正文下方会有一段自动生成的文字，说「文件工作必须在这个 git worktree 里做（**不是仓根**）」并给你一个 `.worktrees/wtN.xxx` 路径。\n**⛔ 那段是框架自动生成的，本工程不适用，忽略它。**\n**✅ 一律在仓根 `/Volumes/nvme/Projects/远程Agent安卓` 干活。** `worktree_id` 在本工程只是并发互斥标签。\n理由（不是口味问题，是已实证的链路中断）：**本工程所有判据的 `cwd` 都是仓根**。\n你改在 worktree 里 ⇒ 判据在仓根什么都看不到 ⇒ **代码写对了也全红**，整条链路白跑一轮。\n2026-08-19 已实发一次：上一席按那段指示把活干在 `.worktrees/wt15.ident/`，六条判据全红，代码其实是对的。\n⛔ 同样忽略它把 `## 只准写这些路径` 重写成 `.worktrees/...` 前缀的那一版——按仓根的相对路径写。\n⛔⛔ 仍然绝不 `git checkout` / `git restore` 仓根任何文件（仓根有大量未提交产品代码）。\n\n---\n验收：探针由红转绿且不倒退。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。\n①跑 .team/nodes/rf-probe/probe-rf.sh 必须 exit 0（t.probe 那格是红的）。\n②go 全套 + gradle 全套绿。\n③**静默经济复核**：没人在菜单里时空跑 60 秒，量 CPU 与 tmux 调用次数，**必须为零轮询**，写进说明。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-ver/说明.md。⛔ 探针只读，不许为变绿改探针。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/ver/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。\n🔴🔴 **静默纪律（用户 2026-08-19 令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send` 给 leader、不许发进度、不许发提问、不许发完工通知。唯一允许的对外动作是**干完调一次 `report_result`**（⛔ 不要传 task_id 参数）——那条走编排通道，不进 leader 的对话。被卡住也不要发消息：把卡点写进你的说明.md，用 report_result 的 status 表达，让判据和账本去说话。\n",
    "owner": {
     "role": "r.control"
    },
@@ -331,11 +331,11 @@
      ".team/nodes/rf-ver/"
     ],
     "read_paths": [
-     "requirement-base/entries/069-进菜单必触发一次即时刷新.md",
-     ".team/nodes/rf-probe/",
-     "server/",
-     "app/",
-     ".team/nodes/ver/BASE.md"
+     "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/069-进菜单必触发一次即时刷新.md",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/",
+     "/Volumes/nvme/Projects/远程Agent安卓/server/",
+     "/Volumes/nvme/Projects/远程Agent安卓/app/",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ver/BASE.md"
     ],
     "environment_fidelity": {
      "runs_real_cli": true,
@@ -556,5 +556,5 @@
    }
   ]
  },
- "revision": 7
+ "revision": 10
 }
