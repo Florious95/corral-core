@@ -27,12 +27,9 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ErrorFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
-import dev.agentmirror.app.conn.OverlayFrame
 import dev.agentmirror.app.conn.PaneModeChangedFrame
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.diag.DiagLog
-import dev.agentmirror.app.overlay.OverlayEmulator
-import dev.agentmirror.app.overlay.dropScratchLines
 import dev.agentmirror.app.termview.TermViewPresenter
 import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
@@ -93,9 +90,6 @@ class SessionViewModel(
     /** 终端内核：snapshot 重放 + delta 追加 + 本地 scrollback（006 本地化滚动）。 */
     val emulator = TerminalEmulator(initialCols, initialRows)
 
-    /** 悬浮窗屏幕缓冲（066 OverlayEmulator，与 web/js/overlay.js 同层）。 */
-    internal val overlayEmulator = OverlayEmulator(80, 24)
-
     /** 视口状态机：跟随/锁定、字号→行列数换算、脏区（渲染逻辑与 View 分离）。 */
     val presenter = TermViewPresenter(emulator) { rows, cols ->
         // feat-font-size-setting-drop-pinch：字号选定后实测算出的行列数先上报协议，
@@ -112,16 +106,10 @@ class SessionViewModel(
 
     /** 附件上传状态机（成功路径注入 / 失败明确报错）。 */
 
-    /** 会话内悬浮窗是否打开（064）。开才订 overlay 流。 */
+    /** 会话内悬浮窗是否打开（072：二级菜单列表，不再订 overlay 抓屏流）。 */
     var overlayOpen by mutableStateOf(false)
         private set
 
-    /** 服务端推来的抓屏原文，原样渲染；关闭即清空。 */
-    var overlayText by mutableStateOf("")
-        private set
-
-    private var overlayCols: Int = 0
-    private var overlayRows: Int = 0
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
 
     /**
@@ -232,97 +220,30 @@ class SessionViewModel(
             }
             // 缺陷④：远端 pane copy-mode 状态变更（进入/退出），驱动 UI 角标。
             is PaneModeChangedFrame -> if (frame.ref == ref) inCopyMode = frame.inCopyMode
-            is OverlayFrame -> if (overlayOpen) applyOverlayFrame(frame)
             else -> Unit
         }
     }
 
     /**
-     * 打开悬浮窗：订 overlay 流。只看不操作。
+     * 打开悬浮窗：展示二级会话列表（072）。不再订 overlay 抓屏流。
      *
-     * @post socket 非空时 [overlayOpen]=true 且已发 overlay_subscribe；
-     *       socket 空则不发帧、不打开，[transientError] 可读
+     * @post [overlayOpen]=true；不发 overlay_subscribe
      */
     fun openOverlay() {
         if (overlayOpen) return
-        val unitSep = ref.indexOf('\u001f')
-        val literalSep = ref.indexOf("\\u001f")
-        val socket = sessionSocketFromRef(ref)
-        DiagLog.record(
-            "overlay",
-            "open ref=$ref ref_len=${ref.length} unit_sep=$unitSep " +
-                "literal_u001f_sep=$literalSep socket=$socket",
-        )
-        if (socket.isEmpty()) {
-            DiagLog.record(
-                "overlay",
-                "refuse subscribe socket_empty ref=$ref extracted=$socket sent=false",
-            )
-            transientError = "无法打开悬浮窗：当前会话没有可用的 tmux socket（ref=$ref）"
-            return
-        }
         overlayOpen = true
-        val sent = manager.subscribeOverlay(socket, overlayCols, overlayRows)
-        DiagLog.record(
-            "overlay",
-            "subscribe sent=$sent socket=$socket ref=$ref cols=$overlayCols rows=$overlayRows",
-        )
+        DiagLog.record("overlay", "open menu ref=$ref subscribe=false")
     }
 
     /**
-     * 面板量到像素后换算行列，再订抓屏。同尺寸不重发。
-     */
-    fun reportOverlayViewport(cols: Int, rows: Int) {
-        if (!overlayOpen) return
-        if (cols < 1 || rows < 1) return
-        if (cols == overlayCols && rows == overlayRows) return
-        val socket = sessionSocketFromRef(ref)
-        if (socket.isEmpty()) {
-            DiagLog.record(
-                "overlay",
-                "viewport refuse socket_empty ref=$ref cols=$cols rows=$rows",
-            )
-            return
-        }
-        overlayCols = cols
-        overlayRows = rows
-        val sent = manager.subscribeOverlay(socket, cols, rows)
-        DiagLog.record(
-            "overlay",
-            "subscribe sent=$sent socket=$socket ref=$ref cols=$cols rows=$rows",
-        )
-    }
-
-    /**
-     * 关闭悬浮窗：退订 overlay 流，不得后台继续收。
+     * 关闭悬浮窗。不再退订抓屏流（主路径已不订阅）。
      *
-     * @post [overlayOpen]=false；[overlayText] 清空；已发 overlay_unsubscribe
+     * @post [overlayOpen]=false
      */
     fun closeOverlay() {
         if (!overlayOpen) return
         overlayOpen = false
-        overlayText = ""
-        overlayCols = 0
-        overlayRows = 0
-        overlayEmulator.resize(40, 16)
-        manager.unsubscribeOverlay()
-    }
-
-    /**
-     * overlay_frame 是整屏快照：先 [OverlayEmulator.resize] 清空，再 feed。
-     * 不得把 CSI 当文本，也不得在旧画面后追加。
-     */
-    private fun applyOverlayFrame(frame: OverlayFrame) {
-        val cols = if (frame.cols > 0) frame.cols else overlayEmulator.cols
-        val rows = if (frame.rows > 0) frame.rows else overlayEmulator.rows
-        overlayEmulator.resize(cols, rows)
-        overlayEmulator.feed(frame.text)
-        overlayText = dropScratchLines(overlayEmulator.plainText())
-        DiagLog.record(
-            "overlay",
-            "frame seq=${frame.seq} bytes=${frame.text.length} " +
-                "rows=${frame.rows} cols=${frame.cols} shown_lines=${overlayText.lines().size} ref=$ref",
-        )
+        DiagLog.record("overlay", "close menu ref=$ref")
     }
 
     override fun onBinary(frame: BinaryFrame) {

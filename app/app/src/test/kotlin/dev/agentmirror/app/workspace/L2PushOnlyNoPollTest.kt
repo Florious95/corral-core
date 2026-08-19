@@ -49,7 +49,7 @@ class L2PushOnlyNoPollTest {
         )
 
         vm.enterLevel2("/proj/a")
-        assertEquals("进入二级只订一次", 1, subs)
+        assertEquals("进入二级订一次", 1, subs)
         assertEquals("二级入口不得发 list（那是轮询）", 0, lists)
 
         vm.onFrame(
@@ -65,7 +65,8 @@ class L2PushOnlyNoPollTest {
         vm.onFrame(Level2HeartbeatFrame(workspace = "/proj/a", seq = 3))
         vm.enterLevel2("/proj/a")
 
-        assertEquals(1, subs)
+        // 069：同连接再进必须再发订阅（服务端 wake），不是周期轮询。
+        assertEquals("再进二级再订一次", 2, subs)
         assertEquals(0, lists)
         assertEquals(1, vm.level2.value.sessions.size)
         assertEquals(3L, vm.level2.value.seq)

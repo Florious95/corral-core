@@ -1,6 +1,30 @@
-[ledger-run 2026-08-19T04:34:19Z] 开工 start | ledger_id=ledger.v72.v1 revision=4 账本=.team/ledgers/v72-v1.json 墙钟上限=14400s 派单死线=90s
-[ledger-run 2026-08-19T04:34:27Z] 轮次 round | 第 1 轮开始：前沿 ["t.icons"]（墙钟已跑 7s / 上限 14400s）
-[ledger-run 2026-08-19T04:34:27Z] 派单 dispatch | task=t.icons 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/v72-v1-icons 席位=v72-v1-icons attempt=att-t.icons-seq1-t1787114067658 delivery=del-t.icons-seq1-t1787114067658
-[ledger-run 2026-08-19T04:34:27Z] 投递回执 send-ok | task=t.icons case_id=ledger_v72_v1__t.icons__r4 message_id=msg_da11b3b81760 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-19T04:34:27Z] 派单落地 dispatch-landed | task=t.icons 席位 v72-v1-icons 的收件箱已多出这条派单
-[ledger-run 2026-08-19T04:34:27Z] 等待 wait | task=t.icons 在等的 key（case_id）=ledger_v72_v1__t.icons__r4 team=grok-l2 预算=2400s
+租约抢占：pid=79278 stole from pid=26331 reason=holder pid 26331 不存在（判定已死） at=1787122406
+
+[ledger-run 2026-08-19T06:53:26Z] 常驻开工 resident-start | 账本=.team/ledgers/v72-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T06:53:26Z] 开工 start | ledger_id=ledger.v72.v1 revision=7 账本=.team/ledgers/v72-v1.json 墙钟上限=14400s 派单死线=90s
+[ledger-run 2026-08-19T06:53:26Z] 轮次 round | 第 1 轮开始：前沿 ["t.ident"]（墙钟已跑 0s / 上限 14400s）
+[ledger-run 2026-08-19T06:53:26Z] 派单 dispatch | task=t.ident 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/v72-v1-ident-r7 席位=v72-v1-ident-r7 attempt=att-t.ident-seq1-t1787122406784 delivery=del-t.ident-seq1-t1787122406784
+[ledger-run 2026-08-19T06:53:26Z] 投递回执 send-ok | task=t.ident case_id=ledger_v72_v1__t.ident__r7 message_id=msg_14ad4e114830 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T06:53:27Z] 派单落地 dispatch-landed | task=t.ident 席位 v72-v1-ident-r7 的收件箱已多出这条派单
+[ledger-run 2026-08-19T06:53:27Z] 等待 wait | task=t.ident 在等的 key（case_id）=ledger_v72_v1__t.ident__r7 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T07:18:31Z] 已唤醒 wait-signaled | task=t.ident 等到结果了
+[ledger-run 2026-08-19T07:18:31Z] 判据 acceptance | task=t.ident 在跑 required=["A-id-test", "A-id-shots", "A-id-doc", "A-id-suite", "A-id-go", "A-fav-path"]
+[ledger-run 2026-08-19T07:21:34Z] 判据通过留档 acceptance-success | task=t.ident 成功 attempt 落进 attempts[] writeback_revision=8 passed=["A-id-test", "A-id-shots", "A-id-doc", "A-id-suite", "A-id-go", "A-fav-path"]
+[ledger-run 2026-08-19T07:21:34Z] 原子写回 writeback-atomic | task=t.ident state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=8 hash=6129b79d47f4d6fc）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T07:21:34Z] 写回 writeback | task=t.ident state=succeeded revision=7 → 8
+[ledger-run 2026-08-19T07:21:34Z] 轮次 round | 第 2 轮开始：前沿 ["t.menu"]（墙钟已跑 1688s / 上限 14400s）
+[ledger-run 2026-08-19T07:21:34Z] 派单 dispatch | task=t.menu 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/v72-v1-menu-r7 席位=v72-v1-menu-r7 attempt=att-t.menu-seq2-t1787124094700 delivery=del-t.menu-seq2-t1787124094700
+[ledger-run 2026-08-19T07:21:34Z] 投递回执 send-ok | task=t.menu case_id=ledger_v72_v1__t.menu__r8 message_id=msg_d6a94fccba58 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T07:21:34Z] 派单落地 dispatch-landed | task=t.menu 席位 v72-v1-menu-r7 的收件箱已多出这条派单
+[ledger-run 2026-08-19T07:21:34Z] 等待 wait | task=t.menu 在等的 key（case_id）=ledger_v72_v1__t.menu__r8 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T07:51:23Z] 已唤醒 wait-signaled | task=t.menu 等到结果了
+[ledger-run 2026-08-19T07:51:23Z] 判据 acceptance | task=t.menu 在跑 required=["A-om-test", "A-om-shots", "A-om-doc", "A-om-suite", "A-om-go", "A-om-archived"]
+[ledger-run 2026-08-19T07:54:37Z] 判据通过留档 acceptance-success | task=t.menu 成功 attempt 落进 attempts[] writeback_revision=9 passed=["A-om-test", "A-om-shots", "A-om-doc", "A-om-suite", "A-om-go", "A-om-archived"]
+[ledger-run 2026-08-19T07:54:37Z] 延后落盘 writeback-deferred | task=t.menu 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-19T07:54:37Z] 写回 writeback | task=t.menu state=succeeded revision=8 → 9
+[ledger-run 2026-08-19T07:54:37Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.ident", "t.menu"] 冻结=[] 不可判=[] 墙钟已跑 3671s
+[ledger-run 2026-08-19T07:54:37Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T07:54:37Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-19T07:54:37Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=9 hash=d8da2e479349830f）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T07:54:37Z] 挂起 park | token=parked ledger_id=ledger.v72.v1 revision=9 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.v72.v1 | revision: 9 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.icons=Succeeded, t.ident=Succeeded, t.menu=Succeeded
+resident-exit signal=term reason=human_stop

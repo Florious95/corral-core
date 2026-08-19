@@ -2,7 +2,7 @@
  "schema_version": "ledger.v2",
  "ledger_id": "ledger.refresh.v1",
  "run": {
-  "desired_state": "running"
+  "desired_state": "stopped"
  },
  "roles": {
   "r.advisor": {
@@ -422,8 +422,23 @@
      "A-v-doc"
     ]
    },
-   "state": "planned",
-   "attempts": []
+   "state": "succeeded",
+   "attempts": [
+    {
+     "attempt_id": "att-t.ver-seq1-t1787128359949",
+     "delivery_id": "del-t.ver-seq1-t1787128359949",
+     "state": "failed_retryable",
+     "artifact_refs": [
+      "acceptance_failure.acceptance_id=A-v-probe",
+      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/probe-rf.sh'],timeout=900).returncode)\"]",
+      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+      "acceptance_failure.exit_code=247",
+      "acceptance_failure.expected_exit_code=0",
+      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 247（stdout/stderr 已截，见 stderr_tail）",
+      "acceptance_failure.stderr_tail(末20行)="
+     ]
+    }
+   ]
   }
  },
  "dependencies": [
@@ -593,8 +608,103 @@
       }
      }
     ]
+   },
+   {
+    "acceptance_id": "A-v-probe",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 13,
+      "supports_or_refutes": "A-v-probe",
+      "observed_at": "2026-08-19T09:17:58.860324Z",
+      "freshness": {
+       "as_of": "2026-08-19T09:17:58.860324Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
+   },
+   {
+    "acceptance_id": "A-v-go",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 13,
+      "supports_or_refutes": "A-v-go",
+      "observed_at": "2026-08-19T09:17:58.860324Z",
+      "freshness": {
+       "as_of": "2026-08-19T09:17:58.860324Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
+   },
+   {
+    "acceptance_id": "A-v-app",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 13,
+      "supports_or_refutes": "A-v-app",
+      "observed_at": "2026-08-19T09:17:58.860324Z",
+      "freshness": {
+       "as_of": "2026-08-19T09:17:58.860324Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
+   },
+   {
+    "acceptance_id": "A-v-zero",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 13,
+      "supports_or_refutes": "A-v-zero",
+      "observed_at": "2026-08-19T09:17:58.860324Z",
+      "freshness": {
+       "as_of": "2026-08-19T09:17:58.860324Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
+   },
+   {
+    "acceptance_id": "A-v-doc",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 13,
+      "supports_or_refutes": "A-v-doc",
+      "observed_at": "2026-08-19T09:17:58.860324Z",
+      "freshness": {
+       "as_of": "2026-08-19T09:17:58.860324Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
    }
   ]
  },
- "revision": 12
+ "revision": 13
 }

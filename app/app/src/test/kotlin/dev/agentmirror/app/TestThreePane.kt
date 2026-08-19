@@ -164,7 +164,7 @@ class TestThreePane {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithTag("fav-row-sess-gone-8-win-gone").performClick()
+        compose.onNodeWithTag("fav-row-ref-gone").performClick()
         compose.runOnIdle { assertNull(nav.activeSession) }
     }
 }

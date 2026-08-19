@@ -60,6 +60,7 @@ class SharedPreferencesFavoriteStore(context: Context) : FavoriteStore {
         val raw = prefs.getString(KEY_RECORDS, null) ?: return emptyList()
         return runCatching {
             json.decodeFromString(ListSerializer(FavoriteRecord.serializer()), raw)
+                .filter { it.ref.isNotEmpty() }
         }.getOrElse { emptyList() }
     }
 

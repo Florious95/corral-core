@@ -17,6 +17,8 @@
 package dev.agentmirror.app.overlay
 
 /**
+ * 已归档，2026-08-19 用户令暂不介入；展示不完全问题未修。
+ *
  * 由面板像素尺寸 ÷ 单元格算出抓屏行列。不得用固定 80 列去切内容。
  */
 object OverlayViewport {

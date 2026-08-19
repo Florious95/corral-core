@@ -20,43 +20,43 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * 收藏身份：只用 tmux 结构字段。
+ * 收藏身份：与服务端 session ref 同源（socket + U+001F + pane id）。
  *
  * @contract
- * @pre 三元组一起构成身份；任一字段单独不构成键
- * @post 相等仅比较三个结构字段
- * @inv 不含展示摘要
+ * @pre ref 即 listing/level2 下发的 Session.ref，客户端不得另拼
+ * @post 相等只比较 ref
+ * @inv 不含展示摘要 / 标题
  */
 data class FavoriteKey(
-    val sessionName: String,
-    val windowIndex: String,
-    val windowName: String,
+    val ref: String,
 )
 
 /**
- * 落盘记录。字段只有结构身份 + 加入时刻。
+ * 落盘记录。身份只有 ref；其余字段仅供失联时展示。
  *
  * @contract
- * @pre addedAt 为加入时的 epoch ms
- * @post 往返 JSON 只含 session_name / window_index / window_name / added_at
- * @inv 不含展示摘要
+ * @pre addedAt 为加入时的 epoch ms；ref 非空才是有效收藏
+ * @post 往返 JSON 含 ref；不含 title
+ * @inv 展示字段不参与相等
  */
 @Serializable
 data class FavoriteRecord(
-    @SerialName("session_name") val sessionName: String,
-    @SerialName("window_index") val windowIndex: String,
-    @SerialName("window_name") val windowName: String,
+    @SerialName("ref") val ref: String = "",
+    @SerialName("session_name") val sessionName: String = "",
+    @SerialName("window_index") val windowIndex: String = "",
+    @SerialName("window_name") val windowName: String = "",
+    @SerialName("cwd") val cwd: String = "",
     @SerialName("added_at") val addedAt: Long,
 ) {
     val key: FavoriteKey
-        get() = FavoriteKey(sessionName, windowIndex, windowName)
+        get() = FavoriteKey(ref)
 }
 
 /**
  * 收藏行（左栏 / 对账结果）。失联行 isOnline=false、gray=true，标「不在线」。
  *
  * @contract
- * @pre isOnline 由当前 live 结构键是否命中决定，不改落盘
+ * @pre isOnline 由当前 live 的 ref 是否命中决定，不改落盘
  * @post gray == !isOnline
  * @inv 落盘消失只能由用户取消收藏触发
  */
@@ -75,16 +75,7 @@ data class FavoriteRow(
         get() = windowName.ifEmpty { sessionName }
 
     val key: FavoriteKey
-        get() = FavoriteKey(sessionName, windowIndex, windowName)
+        get() = FavoriteKey(ref)
 }
 
-internal fun L2Entry.favoriteIdentity(): Triple<String, String, String> {
-    val sess = sessionName.ifEmpty { name }
-    val win = windowName.ifEmpty { name }
-    return Triple(sess, windowIndex, win)
-}
-
-internal fun L2Entry.favoriteKey(): FavoriteKey {
-    val (sess, idx, win) = favoriteIdentity()
-    return FavoriteKey(sessionName = sess, windowIndex = idx, windowName = win)
-}
+internal fun L2Entry.favoriteKey(): FavoriteKey = FavoriteKey(ref)

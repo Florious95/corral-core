@@ -105,6 +105,10 @@ class MainActivity : ComponentActivity() {
         workspaceViewModel = WorkspaceViewModel(
             favoriteStore = SharedPreferencesFavoriteStore(this),
         )
+        // 069：旋转重建不是「进入菜单」，不得再发 list / 重订二级。
+        if (savedInstanceState != null) {
+            workspaceViewModel.suppressNextEnterRefresh()
+        }
         setContent {
             AgentMirrorApp(navState = navState, workspaceViewModel = workspaceViewModel)
         }

@@ -1,0 +1,26 @@
+[ledger-run 2026-08-19T05:59:21Z] 开工 start | ledger_id=ledger.v74.v1 revision=3 账本=.team/ledgers/v74-v1.json 墙钟上限=9600s 派单死线=90s
+[ledger-run 2026-08-19T05:59:22Z] 轮次 round | 第 1 轮开始：前沿 ["t.unk"]（墙钟已跑 0s / 上限 9600s）
+[ledger-run 2026-08-19T05:59:22Z] 派单 dispatch | task=t.unk 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/v74-v1-unk 席位=v74-v1-unk attempt=att-t.unk-seq1-t1787119162311 delivery=del-t.unk-seq1-t1787119162311
+[ledger-run 2026-08-19T05:59:22Z] 投递回执 send-ok | task=t.unk case_id=ledger_v74_v1__t.unk__r3 message_id=msg_9b31e47a92c8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T05:59:22Z] 派单落地 dispatch-landed | task=t.unk 席位 v74-v1-unk 的收件箱已多出这条派单
+[ledger-run 2026-08-19T05:59:22Z] 等待 wait | task=t.unk 在等的 key（case_id）=ledger_v74_v1__t.unk__r3 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T06:07:26Z] 已唤醒 wait-signaled | task=t.unk 等到结果了
+[ledger-run 2026-08-19T06:07:26Z] 判据 acceptance | task=t.unk 在跑 required=["A-uk-rust", "A-uk-go", "A-uk-doc"]
+[ledger-run 2026-08-19T06:08:43Z] 判据通过留档 acceptance-success | task=t.unk 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-uk-rust", "A-uk-go", "A-uk-doc"]
+[ledger-run 2026-08-19T06:08:43Z] 原子写回 writeback-atomic | task=t.unk state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=4 hash=ccd6d56aea119d5e）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T06:08:43Z] 写回 writeback | task=t.unk state=succeeded revision=3 → 4
+[ledger-run 2026-08-19T06:08:43Z] 轮次 round | 第 2 轮开始：前沿 ["t.noloop"]（墙钟已跑 561s / 上限 9600s）
+[ledger-run 2026-08-19T06:08:43Z] 派单 dispatch | task=t.noloop 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/v74-v1-noloop 席位=v74-v1-noloop attempt=att-t.noloop-seq2-t1787119723647 delivery=del-t.noloop-seq2-t1787119723647
+[ledger-run 2026-08-19T06:08:43Z] 投递回执 send-ok | task=t.noloop case_id=ledger_v74_v1__t.noloop__r4 message_id=msg_7d399b48a968 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T06:08:43Z] 派单落地 dispatch-landed | task=t.noloop 席位 v74-v1-noloop 的收件箱已多出这条派单
+[ledger-run 2026-08-19T06:08:43Z] 等待 wait | task=t.noloop 在等的 key（case_id）=ledger_v74_v1__t.noloop__r4 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T06:22:47Z] 已唤醒 wait-signaled | task=t.noloop 等到结果了
+[ledger-run 2026-08-19T06:22:47Z] 判据 acceptance | task=t.noloop 在跑 required=["A-nl-test", "A-nl-counts", "A-nl-go", "A-nl-app"]
+[ledger-run 2026-08-19T06:24:46Z] 判据通过留档 acceptance-success | task=t.noloop 成功 attempt 落进 attempts[] writeback_revision=5 passed=["A-nl-test", "A-nl-counts", "A-nl-go", "A-nl-app"]
+[ledger-run 2026-08-19T06:24:46Z] 延后落盘 writeback-deferred | task=t.noloop 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-19T06:24:46Z] 写回 writeback | task=t.noloop state=succeeded revision=4 → 5
+[ledger-run 2026-08-19T06:24:46Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.unk", "t.noloop"] 冻结=[] 不可判=[] 墙钟已跑 1524s
+[ledger-run 2026-08-19T06:24:46Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T06:24:46Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-19T06:24:47Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=5 hash=b5f49c33ad14cb85）——中途死也不会留下半份账本，进度不会全废
+{"ok":true,"ledger_id":"ledger.v74.v1","revision_before":3,"revision_after":5,"wrote_back":["t.unk","t.noloop"],"unjudgeable":[],"frozen":[],"preflight_rejected":false,"awaiting_human":false,"idle_reason":null,"notices_sent":["ledger_id: ledger.v74.v1 | revision: 5 | 停机原因: AllSucceeded | 最后失败判据: 全部任务 succeeded：本轮没有失败判据、没有投递失败、没有超限 | 各任务终态: t.noloop=Succeeded, t.unk=Succeeded"],"notice_undelivered":null}

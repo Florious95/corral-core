@@ -33,24 +33,31 @@ class FavoriteBook(
 
     fun records(): List<FavoriteRecord> = store.load()
 
-    fun isFavorited(sessionName: String, windowIndex: String, windowName: String): Boolean {
-        val want = FavoriteKey(sessionName, windowIndex, windowName)
+    fun isFavorited(ref: String): Boolean {
+        if (ref.isEmpty()) return false
+        val want = FavoriteKey(ref)
         for (rec in store.load()) {
             if (rec.key == want) return true
         }
         return false
     }
 
-    fun toggle(sessionName: String, windowIndex: String, windowName: String) {
-        if (sessionName.isEmpty() && windowIndex.isEmpty() && windowName.isEmpty()) {
+    fun toggle(
+        ref: String,
+        sessionName: String = "",
+        windowIndex: String = "",
+        windowName: String = "",
+        cwd: String = "",
+    ) {
+        if (ref.isEmpty()) {
             DiagLog.record(
                 "favorite",
-                "toggle skipped empty identity session_name='$sessionName' " +
-                    "window_index='$windowIndex' window_name='$windowName'",
+                "toggle skipped empty ref session_name='$sessionName' " +
+                    "window_index='$windowIndex' window_name='$windowName' cwd='$cwd'",
             )
             return
         }
-        val want = FavoriteKey(sessionName, windowIndex, windowName)
+        val want = FavoriteKey(ref)
         val current = store.load()
         val next = ArrayList<FavoriteRecord>(current.size + 1)
         var removed = false
@@ -64,9 +71,11 @@ class FavoriteBook(
         if (!removed) {
             next.add(
                 FavoriteRecord(
+                    ref = ref,
                     sessionName = sessionName,
                     windowIndex = windowIndex,
                     windowName = windowName,
+                    cwd = cwd,
                     addedAt = nowMs(),
                 ),
             )
@@ -74,20 +83,20 @@ class FavoriteBook(
         store.save(next)
         DiagLog.record(
             "favorite",
-            "toggle session_name=$sessionName window_index=$windowIndex window_name=$windowName " +
-                "favorited=${!removed} stored_n=${next.size}",
+            "toggle ref=$ref session_name=$sessionName window_index=$windowIndex " +
+                "window_name=$windowName cwd=$cwd favorited=${!removed} stored_n=${next.size}",
         )
     }
 
     /**
-     * 用 live 结构键对账。未命中 → isOnline=false（不在线 / gray），仍输出该行。
+     * 用 live 的 ref 对账。未命中 → isOnline=false（不在线 / gray），仍输出该行。
      */
     fun rows(live: List<L2Entry>): List<FavoriteRow> {
         val byKey = HashMap<FavoriteKey, L2Entry>()
         for (entry in live) {
             byKey[entry.favoriteKey()] = entry
         }
-        val snapshot = store.load()
+        val snapshot = store.load().filter { it.ref.isNotEmpty() }
         val ordered = snapshot.sortedByDescending { it.addedAt }
         val out = ArrayList<FavoriteRow>(ordered.size)
         var onlineCount = 0
@@ -95,15 +104,22 @@ class FavoriteBook(
             val hit = byKey[rec.key]
             val isOnline = hit != null
             if (isOnline) onlineCount += 1
+            val cwd = hit?.cwd?.takeIf { it.isNotEmpty() } ?: rec.cwd
+            DiagLog.record(
+                "favorite",
+                "rows match stored_ref=${rec.ref} live_ref=${hit?.ref.orEmpty()} " +
+                    "equal=${hit != null} cwd_stored=${rec.cwd} cwd_live=${hit?.cwd.orEmpty()} " +
+                    "cwd_shown=$cwd",
+            )
             out.add(
                 FavoriteRow(
-                    sessionName = rec.sessionName,
-                    windowIndex = rec.windowIndex,
-                    windowName = rec.windowName,
+                    sessionName = hit?.sessionName?.takeIf { it.isNotEmpty() } ?: rec.sessionName,
+                    windowIndex = hit?.windowIndex?.takeIf { it.isNotEmpty() } ?: rec.windowIndex,
+                    windowName = hit?.windowName?.takeIf { it.isNotEmpty() } ?: rec.windowName,
                     addedAt = rec.addedAt,
                     isOnline = isOnline,
-                    ref = hit?.ref.orEmpty(),
-                    cwd = hit?.cwd.orEmpty(),
+                    ref = rec.ref,
+                    cwd = cwd,
                 ),
             )
         }

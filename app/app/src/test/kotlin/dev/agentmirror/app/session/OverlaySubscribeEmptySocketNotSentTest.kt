@@ -42,9 +42,8 @@ class OverlaySubscribeEmptySocketNotSentTest {
         val before = listing.transport.sentText.size
         vm.openOverlay()
         val after = listing.transport.sentText.drop(before)
-        assertFalse(vm.overlayOpen)
+        assertTrue(vm.overlayOpen)
         assertTrue(after.none { it.contains("overlay_subscribe") })
-        assertTrue(vm.transientError.orEmpty().contains("socket"))
         assertEquals("", sessionSocketFromRef("s1"))
     }
 
@@ -57,11 +56,10 @@ class OverlaySubscribeEmptySocketNotSentTest {
     }
 
     @Test
-    fun structuralRefStillSendsSubscribe() {
+    fun structuralRefDoesNotSendSubscribe() {
         val h = OverlayTestHarness()
         h.vm.openOverlay()
         assertTrue(h.vm.overlayOpen)
-        assertTrue(h.sent().any { it is OverlaySubscribeFrame })
-        assertEquals("/tmp/tmux-1000/default", h.sent().filterIsInstance<OverlaySubscribeFrame>().last().socket)
+        assertTrue(h.sent().none { it is OverlaySubscribeFrame })
     }
 }

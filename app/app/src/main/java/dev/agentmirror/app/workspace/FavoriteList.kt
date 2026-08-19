@@ -58,7 +58,11 @@ fun FavoriteList(
     ) {
         items(
             rows,
-            key = { "${it.sessionName}\u0000${it.windowIndex}\u0000${it.windowName}" },
+            key = { row ->
+                row.ref.ifEmpty {
+                    "legacy-${row.addedAt}-${row.sessionName}-${row.windowIndex}-${row.windowName}"
+                }
+            },
         ) { row ->
             val dim = if (row.isOnline) 1f else 0.45f
             Surface(
@@ -70,9 +74,7 @@ fun FavoriteList(
                 color = MaterialTheme.colorScheme.background,
                 modifier = Modifier
                     .alpha(dim)
-                    .testTag(
-                        "fav-row-${row.sessionName}-${row.windowIndex}-${row.windowName}",
-                    ),
+                    .testTag("fav-row-${row.ref}"),
             ) {
                 Row(
                     modifier = Modifier
@@ -93,13 +95,24 @@ fun FavoriteList(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (row.windowIndex.isNotEmpty()) {
+                        val secondary = buildString {
+                            if (row.windowIndex.isNotEmpty()) {
+                                append('#')
+                                append(row.windowIndex)
+                            }
+                            if (row.cwd.isNotEmpty()) {
+                                if (isNotEmpty()) append(" · ")
+                                append(row.cwd)
+                            }
+                        }
+                        if (secondary.isNotEmpty()) {
                             Text(
-                                text = "#${row.windowIndex}",
+                                text = secondary,
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = MonoFontFamily,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
+                                overflow = TextOverflow.MiddleEllipsis,
                             )
                         }
                     }
@@ -108,9 +121,7 @@ fun FavoriteList(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
-                            .testTag(
-                                "fav-star-${row.sessionName}-${row.windowIndex}-${row.windowName}",
-                            )
+                            .testTag("fav-star-${row.ref}")
                             .clickable { onUnfavorite(row) }
                             .padding(4.dp),
                     )
@@ -125,9 +136,7 @@ fun FavoriteList(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
                                     .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    .testTag(
-                                        "fav-offline-${row.sessionName}-${row.windowIndex}-${row.windowName}",
-                                    ),
+                                    .testTag("fav-offline-${row.ref}"),
                             )
                         }
                     }

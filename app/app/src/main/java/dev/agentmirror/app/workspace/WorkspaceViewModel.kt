@@ -89,10 +89,12 @@ data class WorkspaceUiState(
  * 等一致性恢复已由 conn 层 ConnectionManager 自动重新 list（conn 知识基底 §1），本层
  * 只按顺序渲染收到的 listing / list_delta，不自行推导聚合。
  *
- * 刷新模型（2026-08-15 用户裁定）：[refresh] 是进入一级与下拉共用的主动拉新入口，
- * 置刷新在途标记并发出一次全量列表请求；新 [ListingFrame] 到达后复位。**零周期性自动刷新**
- * （禁令）——本类无周期拉取结构（无无限循环/周期定时器/固定延迟协程）；主动刷新只在
- * 用户进入/下拉时发生。
+ * 刷新模型（2026-08-15 用户裁定 + 069 + 075）：[enterLevel1] / [refresh] 发一次 list；
+ * [enterLevel2] 画缓存后发一次 level2 订阅（含同连接再进）。新 [ListingFrame] /
+ * [Level2Frame] 到达后复位刷新标记。一级若首帧已在（补播/缓存），[enterLevel1]
+ * 仍发 list 但不把 [refreshing] 再挂 true——否则 PullToRefresh 指示器悬到下一次
+ * listing，而 handleList 重扫一卡住就永不回弹。**零周期性自动刷新**。
+ * [onConfigurationChange] 与 [onListScroll] 不是进入，不发帧。
  *
  * 061：二级状态挂在本 VM（已接 [ServiceWire.uiConnector]），禁止再 new 独立 Listener
  * 去 [ConnectionManager.setListener]。
@@ -153,23 +155,128 @@ class WorkspaceViewModel(
     private var lastLevel2AtMs: Long = 0L
 
     /**
-     * 进入二级：立刻画该 cwd 的缓存（没有才空），再订推送。同 cwd 再进幂等。
+     * 旋转/配置变更重建时置位：下一次 [enterLevel1] / [enterLevel2] 不得再发 list
+     * 或重订阅（069：进入不含旋转，否则退化成高频扫描）。
+     */
+    private var suppressEnterRefresh: Boolean = false
+
+    /**
+     * Activity 从 savedInstanceState 重建时调用。下一次进菜单入口只恢复画面，不发刷新。
+     */
+    fun suppressNextEnterRefresh() {
+        suppressEnterRefresh = true
+        DiagLog.record(
+            "refresh",
+            "suppressNextEnterRefresh set=true subscribed=${subscribedWorkspace ?: "<none>"} " +
+                "l1_cached=${workspaceCounts.size} l2_cached=${level2Cache.size}",
+        )
+    }
+
+    /** 本轮组合已消费抑制位（旋转首帧过后，用户再进菜单必须恢复刷新）。 */
+    fun clearEnterRefreshSuppress() {
+        if (suppressEnterRefresh) {
+            DiagLog.record("refresh", "clearEnterRefreshSuppress was=true")
+        }
+        suppressEnterRefresh = false
+    }
+
+    fun shouldSuppressEnterRefresh(): Boolean = suppressEnterRefresh
+
+    /**
+     * 进入一级：先保留已画列表（062），再发一次 [requestList]。
+     * 旋转抑制时只保留画面，不发 list。
+     * 首帧已在时只发 list、不置 [refreshing]（075：指示器跟的是「还在等首帧」，
+     * 不是「又发了一次 list」）。无首帧时走 [refresh] 置转圈，等 [applyListing]。
+     *
+     * @post 未抑制时发出一次 list；[uiState].workspaces 不被本方法清空
+     * @inv 本方法不写空列表
+     */
+    fun enterLevel1() {
+        val cached = _uiState.value.workspaces.size
+        val prevRefreshing = _refreshing.value
+        if (suppressEnterRefresh) {
+            DiagLog.record(
+                "refresh",
+                "enterLevel1 skipped suppress=true cached=$cached " +
+                    "refreshing_prev=$prevRefreshing refreshing_next=$prevRefreshing",
+            )
+            return
+        }
+        if (cached > 0) {
+            // 075：首帧已到（补播/上次 listing）。069 仍发 list；不得再把
+            // PullToRefresh 挂成 refreshing=true 干等到下一次 listing。
+            requestList()
+            DiagLog.record(
+                "refresh",
+                "enterLevel1 list cached=$cached first_frame=already " +
+                    "refreshing_prev=$prevRefreshing refreshing_next=${_refreshing.value}",
+            )
+            return
+        }
+        DiagLog.record(
+            "refresh",
+            "enterLevel1 list cached=$cached first_frame=missing " +
+                "refreshing_prev=$prevRefreshing → refresh()",
+        )
+        refresh()
+    }
+
+    /**
+     * 进入二级：立刻画该 cwd 的缓存（没有才空），再发一次 level2 订阅。
+     * 同 cwd 再进也重发订阅——服务端同一连接再订会 wakeLevel2（069），
+     * 不能只靠 0→1。旋转抑制时只画缓存，不重订。
      * 不调用 [requestList]。不先清空再画。
      *
-     * @post [level2] 为该 cwd 缓存，或首次进入时为空；已发订阅
+     * @post [level2] 为该 cwd 缓存，或首次进入时为空；未抑制时已发订阅
      * @inv 有缓存时本方法不会把 [level2].sessions 写成空表
      */
     fun enterLevel2(cwd: String) {
-        if (subscribedWorkspace == cwd) return
-        subscribedWorkspace?.let { prev ->
-            rememberLevel2(prev, _level2.value)
-            unsubscribeLevel2(prev)
+        if (subscribedWorkspace != cwd) {
+            subscribedWorkspace?.let { prev ->
+                rememberLevel2(prev, _level2.value)
+                if (!suppressEnterRefresh) {
+                    unsubscribeLevel2(prev)
+                }
+            }
+            subscribedWorkspace = cwd
+            lastLevel2AtMs = 0L
+            // 有缓存就立刻画旧列表；从未进过才允许空态。禁止先写空再写缓存。
+            publishLevel2(level2Cache[cwd] ?: L2UiState())
         }
-        subscribedWorkspace = cwd
-        lastLevel2AtMs = 0L
-        // 有缓存就立刻画旧列表；从未进过才允许空态。禁止先写空再写缓存。
-        publishLevel2(level2Cache[cwd] ?: L2UiState())
+        val painted = _level2.value.sessions.size
+        if (suppressEnterRefresh) {
+            DiagLog.record(
+                "refresh",
+                "enterLevel2 skipped subscribe suppress=true cwd=$cwd painted=$painted",
+            )
+            return
+        }
+        DiagLog.record(
+            "refresh",
+            "enterLevel2 subscribe cwd=$cwd painted=$painted cached=${level2Cache[cwd]?.sessions?.size ?: 0}",
+        )
         subscribeLevel2(cwd)
+    }
+
+    /**
+     * 旋转/配置变更：不是「进入」。不得发 list、不得重订二级。
+     */
+    fun onConfigurationChange() {
+        DiagLog.record(
+            "refresh",
+            "onConfigurationChange no-op subscribed=${subscribedWorkspace ?: "<none>"} " +
+                "l1=${_uiState.value.workspaces.size} l2=${_level2.value.sessions.size}",
+        )
+    }
+
+    /**
+     * 列表内滚动：不是「进入」。不得发 list、不得重订二级。
+     */
+    fun onListScroll() {
+        DiagLog.record(
+            "refresh",
+            "onListScroll no-op subscribed=${subscribedWorkspace ?: "<none>"}",
+        )
     }
 
     /**
@@ -217,24 +324,40 @@ class WorkspaceViewModel(
      * @inv 本方法只发请求，不改列表；列表只在 [applyListing] 时整体替换
      */
     fun refresh() {
+        val prev = _refreshing.value
         _refreshing.value = true
+        DiagLog.record(
+            "refresh",
+            "refresh() refreshing_prev=$prev refreshing_next=true cached=${_uiState.value.workspaces.size}",
+        )
         requestList()
     }
 
     fun toggleFavorite(entry: L2Entry) {
-        val (sess, idx, win) = entry.favoriteIdentity()
         DiagLog.record(
             "favorite",
-            "toggleFavorite src=star session_name=$sess window_index=$idx " +
-                "window_name=$win raw_triple=${entry.sessionName}/${entry.windowIndex}/${entry.windowName} " +
-                "name=${entry.name} title_len=${entry.title.length}",
+            "toggleFavorite src=star ref=${entry.ref} session_name=${entry.sessionName} " +
+                "window_index=${entry.windowIndex} window_name=${entry.windowName} " +
+                "cwd=${entry.cwd} name=${entry.name} title_len=${entry.title.length}",
         )
-        favoriteBook.toggle(sess, idx, win)
+        favoriteBook.toggle(
+            ref = entry.ref,
+            sessionName = entry.sessionName,
+            windowIndex = entry.windowIndex,
+            windowName = entry.windowName,
+            cwd = entry.cwd,
+        )
         _favorites.value = favoriteBook.records()
     }
 
     fun toggleFavorite(row: FavoriteRow) {
-        favoriteBook.toggle(row.sessionName, row.windowIndex, row.windowName)
+        favoriteBook.toggle(
+            ref = row.ref,
+            sessionName = row.sessionName,
+            windowIndex = row.windowIndex,
+            windowName = row.windowName,
+            cwd = row.cwd,
+        )
         _favorites.value = favoriteBook.records()
     }
 
@@ -310,7 +433,13 @@ class WorkspaceViewModel(
 
     private fun applyListing(frame: ListingFrame) {
         // 新 listing 到达 = 刷新完成：复位刷新在途标记（进入/下拉刷共用语义）。
+        val prev = _refreshing.value
         _refreshing.value = false
+        DiagLog.record(
+            "refresh",
+            "applyListing seq=${frame.seq} workspaces=${frame.workspaces.size} " +
+                "refreshing_prev=$prev refreshing_next=false",
+        )
         workspaceCounts.clear()
         for (w in frame.workspaces) {
             workspaceCounts[w.cwd] = w.sessionCount
@@ -347,6 +476,8 @@ class WorkspaceViewModel(
         }
         lastLevel2AtMs = nowMs()
         publishLevel2(next)
+        // 074：转圈跟的是 listing 往返；二级首帧是 level2_frame。首帧到了就必须停转。
+        _refreshing.value = false
     }
 
     /** 记下该 cwd 最近一次快照。空表不覆盖已有缓存（避免「先空白」写进记忆）。 */
