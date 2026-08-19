@@ -66,7 +66,8 @@ internal fun L2SessionList(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .testTag("l2-session-list-scroll"),
     ) {
         if (banner != null) {
             item(key = "l2-stale-banner") {

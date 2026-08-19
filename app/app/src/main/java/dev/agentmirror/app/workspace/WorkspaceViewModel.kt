@@ -361,6 +361,68 @@ class WorkspaceViewModel(
         _favorites.value = favoriteBook.records()
     }
 
+    /**
+     * 「查看」浮层的数据源：按**当前会话**解析工作区，再取该工作区缓存。
+     * 不读 [_level2] 单例——它会被最后一次 [enterLevel2] / 收藏写成别的工作区。
+     *
+     * @contract
+     * @pre [sessionRef] 为当前三级会话的结构 ref（可空串；空则空表）
+     * @post [ViewMenuSource.overlayWorkspace] == [ViewMenuSource.currentWorkspace]；
+     *       sessions 全属该工作区；[lastPublishedWorkspace] 是对照用的单例键
+     * @err 解析不到工作区时 sessions 为空，overlay 键为空，**不回落单例**
+     * @inv 不改身份键、不改 [_level2]、不改收藏簿
+     */
+    fun viewMenuSource(sessionRef: String): ViewMenuSource {
+        val currentWs = resolveWorkspaceForSession(sessionRef)
+        val currentSocket = socketPrefixFromRef(sessionRef)
+        val lastPublished = subscribedWorkspace.orEmpty().ifEmpty {
+            _level2.value.sessions.firstOrNull()?.cwd.orEmpty()
+        }
+        val sessions = if (currentWs.isEmpty()) {
+            emptyList()
+        } else {
+            level2Cache[currentWs]?.sessions
+                ?: if (subscribedWorkspace == currentWs) _level2.value.sessions else emptyList()
+        }
+        val overlayWs = currentWs
+        val overlaySocket = sessions.firstOrNull()?.let { socketPrefixFromRef(it.ref) }
+            .orEmpty()
+            .ifEmpty { currentSocket }
+        DiagLog.record(
+            "view-menu",
+            "viewMenuSource current_ref=$sessionRef current_ws=$currentWs " +
+                "current_socket=$currentSocket overlay_ws=$overlayWs " +
+                "overlay_socket=$overlaySocket last_published_ws=$lastPublished " +
+                "sessions=${sessions.size} source_match=${overlayWs == currentWs} " +
+                "singleton_mismatch=${overlayWs != lastPublished}",
+        )
+        return ViewMenuSource(
+            currentSessionRef = sessionRef,
+            currentWorkspace = currentWs,
+            currentSocket = currentSocket,
+            overlayWorkspace = overlayWs,
+            overlaySocket = overlaySocket,
+            lastPublishedWorkspace = lastPublished,
+            sessions = sessions,
+        )
+    }
+
+    /**
+     * 当前会话所属工作区：收藏簿 cwd → 各工作区二级缓存里的 ref → 当前单例里的 ref。
+     * 顺序故意把单例放最后，且命中单例时仍用该行自己的 cwd，不用 subscribedWorkspace 兜底成「最后收藏的」。
+     */
+    private fun resolveWorkspaceForSession(ref: String): String {
+        if (ref.isEmpty()) return ""
+        _favorites.value.firstOrNull { it.ref == ref }?.cwd?.takeIf { it.isNotEmpty() }?.let { return it }
+        for ((cwd, state) in level2Cache) {
+            if (state.sessions.any { it.ref == ref }) {
+                return cwd.ifEmpty { state.sessions.firstOrNull { it.ref == ref }?.cwd.orEmpty() }
+            }
+        }
+        _level2.value.sessions.firstOrNull { it.ref == ref }?.cwd?.takeIf { it.isNotEmpty() }?.let { return it }
+        return ""
+    }
+
     /** 收藏行：live 对账（全部已见工作区缓存 + 当前二级），失联保留置灰，按 addedAt 倒序。 */
     fun favoriteRows(live: List<L2Entry> = liveForFavorites()): List<FavoriteRow> =
         favoriteBook.rows(live)

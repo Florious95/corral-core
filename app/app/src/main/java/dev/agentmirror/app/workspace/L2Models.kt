@@ -64,6 +64,39 @@ data class L2UiState(
     val banner: String? = null,
 )
 
+/**
+ * 「查看」浮层读哪一份二级列表（076 §1）。
+ *
+ * 当前会话工作区键 [currentWorkspace] 与浮层实际采用的 [overlayWorkspace]
+ * 必须相同；[lastPublishedWorkspace] 是被最后一次 [WorkspaceViewModel.enterLevel2]
+ * / 收藏覆盖的单例，只作对照，不得当浮层输入。
+ *
+ * 先收藏 A 再收藏 B 之后：[lastPublishedWorkspace] 必是 B。
+ * overlay==B 且 current==A ⇒ 读错了源；overlay==A 且 lastPublished 仍是 A ⇒ 没刷新。
+ */
+data class ViewMenuSource(
+    val currentSessionRef: String,
+    val currentWorkspace: String,
+    val currentSocket: String,
+    val overlayWorkspace: String,
+    val overlaySocket: String,
+    val lastPublishedWorkspace: String,
+    val sessions: List<L2Entry>,
+)
+
+/** ref = socket + U+001F + pane_id；无结构分隔或非路径则空。 */
+internal fun socketPrefixFromRef(ref: String): String {
+    val unitSep = ref.indexOf('\u001f')
+    val literalSep = ref.indexOf("\\u001f")
+    val sep = when {
+        unitSep > 0 -> unitSep
+        literalSep > 0 -> literalSep
+        else -> -1
+    }
+    val socket = if (sep > 0) ref.substring(0, sep) else ref
+    return if (socket.contains('/')) socket else ""
+}
+
 internal fun Session.toL2Entry(): L2Entry {
     // 线上 Session 只有 name（window_name fallback session_name），三元组常缺省。
     // 收藏键必须落结构字段：空三元组回填 name，永不回填 title。
