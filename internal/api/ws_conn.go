@@ -9,6 +9,7 @@ package api
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -65,6 +66,8 @@ type wsConn struct {
 	overlayMu   sync.Mutex
 	overlayOn   bool
 	overlaySock string
+	overlayCols uint16
+	overlayRows uint16
 
 	// send is the writer queue. Control frames use a blocking send (a reply
 	// must never be dropped); mirror deltas use a non-blocking send that drops
@@ -261,7 +264,7 @@ func (c *wsConn) teardown() {
 		c.s.unmarkLevel2()
 	}
 	if c.overlayActive() {
-		c.setOverlay(false, "")
+		c.setOverlay(false, "", 0, 0)
 		c.s.unmarkOverlay()
 	}
 	c.subsMu.Lock()
@@ -403,8 +406,9 @@ func (c *wsConn) classifyCodecError(err error) {
 	case errors.Is(err, protocol.ErrUnsupportedVersion):
 		c.sendError(protocol.ErrCodeUnsupportedVersion, "unsupported protocol version")
 		c.sendClose(websocket.StatusProtocolError, "unsupported version")
+	case errors.Is(err, protocol.ErrInvalidField):
+		c.sendError(protocol.ErrCodeInvalidField, invalidFieldReason(err))
 	case errors.Is(err, protocol.ErrBadPayload),
-		errors.Is(err, protocol.ErrInvalidField),
 		errors.Is(err, protocol.ErrMissingVersion),
 		errors.Is(err, protocol.ErrInvalidRef),
 		errors.Is(err, protocol.ErrInvalidGeometry),
@@ -413,6 +417,16 @@ func (c *wsConn) classifyCodecError(err error) {
 	default:
 		c.sendError(protocol.ErrCodeBadFrame, "malformed frame")
 	}
+}
+
+// invalidFieldReason keeps the field name from Validate (070: 不能只说 malformed frame)。
+func invalidFieldReason(err error) string {
+	msg := err.Error()
+	const prefix = "protocol: invalid or missing required field: "
+	if strings.HasPrefix(msg, prefix) {
+		return strings.TrimPrefix(msg, prefix)
+	}
+	return msg
 }
 
 // --- subscription helpers ---------------------------------------------------

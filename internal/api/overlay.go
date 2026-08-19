@@ -103,6 +103,10 @@ func (s *Server) publishOverlaySocket(ctx context.Context, sock string, conns []
 		)
 		return
 	}
+	viewCols, viewRows := overlayViewFor(conns)
+	if sized, ok := s.overlay.(interface{ WantSize(cols, rows uint16) }); ok {
+		sized.WantSize(viewCols, viewRows)
+	}
 	if err := s.overlay.Start(ctx, sock); err != nil {
 		s.log.Warn("overlay: start failed", "err", err,
 			"requested", sock,
@@ -143,8 +147,8 @@ func (s *Server) publishOverlaySocket(ctx context.Context, sock string, conns []
 	frame := protocol.OverlayFrame{
 		Seq:  seq,
 		Text: string(raw),
-		Rows: overlay.ScratchRows,
-		Cols: overlay.ScratchCols,
+		Rows: viewRows,
+		Cols: viewCols,
 	}
 	if prev == "" {
 		s.log.Info("overlay: first frame",
@@ -192,12 +196,33 @@ func overlayClients(c overlay.Capturer) int64 {
 	return c.ClientCount()
 }
 
+func overlayViewFor(conns []*wsConn) (cols, rows uint16) {
+	for _, c := range conns {
+		cc, rr := c.overlayView()
+		if cc > cols {
+			cols = cc
+		}
+		if rr > rows {
+			rows = rr
+		}
+	}
+	if cols < 20 {
+		cols = overlay.ScratchCols
+	}
+	if rows < 8 {
+		rows = overlay.ScratchRows
+	}
+	return cols, rows
+}
+
 func (c *wsConn) handleOverlaySubscribe(req protocol.OverlaySubscribe) {
 	already := c.overlayActive()
 	prev := c.overlaySocket()
-	c.setOverlay(true, req.Socket)
+	c.setOverlay(true, req.Socket, req.Cols, req.Rows)
 	c.s.log.Info("overlay: subscribe",
 		"requested", req.Socket,
+		"cols", req.Cols,
+		"rows", req.Rows,
 		"prev", prev,
 		"already", already,
 		"switched", already && prev != req.Socket,
@@ -214,7 +239,7 @@ func (c *wsConn) handleOverlaySubscribe(req protocol.OverlaySubscribe) {
 
 func (c *wsConn) handleOverlayUnsubscribe(protocol.OverlayUnsubscribe) {
 	if c.overlayActive() {
-		c.setOverlay(false, "")
+		c.setOverlay(false, "", 0, 0)
 		c.s.unmarkOverlay()
 	}
 }
@@ -231,13 +256,23 @@ func (c *wsConn) overlaySocket() string {
 	return c.overlaySock
 }
 
-func (c *wsConn) setOverlay(on bool, sock string) {
+func (c *wsConn) overlayView() (cols, rows uint16) {
+	c.overlayMu.Lock()
+	defer c.overlayMu.Unlock()
+	return c.overlayCols, c.overlayRows
+}
+
+func (c *wsConn) setOverlay(on bool, sock string, cols, rows uint16) {
 	c.overlayMu.Lock()
 	defer c.overlayMu.Unlock()
 	c.overlayOn = on
 	if on {
 		c.overlaySock = sock
+		c.overlayCols = cols
+		c.overlayRows = rows
 	} else {
 		c.overlaySock = ""
+		c.overlayCols = 0
+		c.overlayRows = 0
 	}
 }

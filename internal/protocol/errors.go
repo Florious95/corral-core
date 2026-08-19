@@ -57,6 +57,9 @@ const (
 	ErrCodeUnauthorized ErrorCode = "unauthorized"
 	// ErrCodeBadFrame means the server could not parse a control frame.
 	ErrCodeBadFrame ErrorCode = "bad_frame"
+	// ErrCodeInvalidField means a required field is missing or out of range.
+	// Distinct from bad_frame (true decode failure). Reason must name the field.
+	ErrCodeInvalidField ErrorCode = "invalid_field"
 	// ErrCodeUnsupportedVersion means the client's protocol version is not
 	// supported; the server closes after sending this.
 	ErrCodeUnsupportedVersion ErrorCode = "unsupported_version"

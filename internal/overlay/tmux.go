@@ -47,8 +47,12 @@ type Tmux struct {
 	ptmx    *os.File
 	sock    string
 	client  string
-	started bool
-	spin    int
+	started  bool
+	spin     int
+	wantCols uint16
+	wantRows uint16
+	cols     uint16
+	rows     uint16
 
 	frameMu sync.Mutex
 	latest  []byte
@@ -67,11 +71,42 @@ func NewTmux(log *slog.Logger, socketDirs []string) *Tmux {
 func (t *Tmux) CaptureCount() int64 { return t.captures.Load() }
 func (t *Tmux) ClientCount() int64  { return t.clients.Load() }
 
+func (t *Tmux) viewSize() (uint16, uint16) {
+	cols, rows := t.wantCols, t.wantRows
+	if cols < 20 {
+		cols = ScratchCols
+	}
+	if rows < 8 {
+		rows = ScratchRows
+	}
+	return cols, rows
+}
+
+// WantSize sets the scratch client PTY size from the overlay panel
+// (pixel width/height ÷ cell). 0 leaves the last requested size.
+func (t *Tmux) WantSize(cols, rows uint16) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if cols >= 20 {
+		t.wantCols = cols
+	}
+	if rows >= 8 {
+		t.wantRows = rows
+	}
+}
+
 func (t *Tmux) Start(ctx context.Context, requested string) error {
 	t0 := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	cols, rows := t.viewSize()
 	if t.started && t.cmd != nil && t.cmd.Process != nil && t.cmd.ProcessState == nil && sameSocketPath(t.sock, requested) {
+		if t.cols == cols && t.rows == rows {
+			return nil
+		}
+		if err := t.resizeLocked(ctx, cols, rows); err != nil {
+			return err
+		}
 		return nil
 	}
 	if t.started && t.sock != requested {
@@ -103,8 +138,9 @@ func (t *Tmux) Start(ctx context.Context, requested string) error {
 		"match", requested == sock || sameSocketPath(requested, sock),
 	)
 	t.sock = sock
+	t.cols, t.rows = cols, rows
 	t1 := time.Now()
-	if err := t.ensureScratch(ctx, sock); err != nil {
+	if err := t.ensureScratch(ctx, sock, cols, rows); err != nil {
 		return err
 	}
 	scratchDur := time.Since(t1)
@@ -114,7 +150,7 @@ func (t *Tmux) Start(ctx context.Context, requested string) error {
 	cmd := exec.CommandContext(ctx, "tmux", "-S", sock, "attach-session", "-t", ScratchSession)
 	cmd.Env = overlayChildEnv()
 	t2 := time.Now()
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: ScratchRows, Cols: ScratchCols})
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: rows, Cols: cols})
 	if err != nil {
 		return fmt.Errorf("overlay attach scratch: %w", err)
 	}
@@ -144,7 +180,8 @@ func (t *Tmux) Start(ctx context.Context, requested string) error {
 		return fmt.Errorf("overlay: no scratch client after attach sock=%s client_wait=%s", sock, clientWait)
 	}
 	t4 := time.Now()
-	if err := runTmux(ctx, sock, "choose-tree", "-f", scratchFilter, "-t", ScratchSession+":0.0"); err != nil {
+	// -N: start without the preview pane (man tmux choose-tree).
+	if err := runTmux(ctx, sock, chooseTreeArgs()...); err != nil {
 		t.teardownLocked()
 		return fmt.Errorf("overlay choose-tree: %w", err)
 	}
@@ -152,7 +189,7 @@ func (t *Tmux) Start(ctx context.Context, requested string) error {
 		"socket", sock,
 		"session", ScratchSession,
 		"client", t.client,
-		"winsize", fmt.Sprintf("%dx%d", ScratchCols, ScratchRows),
+		"winsize", fmt.Sprintf("%dx%d", cols, rows),
 		"pick_ms", pickDur.Milliseconds(),
 		"scratch_ms", scratchDur.Milliseconds(),
 		"attach_ms", attachDur.Milliseconds(),
@@ -352,10 +389,30 @@ func sameSocketPath(a, b string) bool {
 	return ea == eb
 }
 
-func (t *Tmux) ensureScratch(ctx context.Context, sock string) error {
+func chooseTreeArgs() []string {
+	return []string{"choose-tree", "-N", "-f", scratchFilter, "-t", ScratchSession + ":0.0"}
+}
+
+func (t *Tmux) resizeLocked(ctx context.Context, cols, rows uint16) error {
+	if t.ptmx != nil {
+		if err := pty.Setsize(t.ptmx, &pty.Winsize{Rows: rows, Cols: cols}); err != nil {
+			return fmt.Errorf("overlay pty resize: %w", err)
+		}
+	}
+	if err := t.ensureScratch(ctx, t.sock, cols, rows); err != nil {
+		return err
+	}
+	t.cols, t.rows = cols, rows
+	if t.client != "" {
+		_ = runTmux(ctx, t.sock, "refresh-client", "-t", t.client)
+	}
+	return nil
+}
+
+func (t *Tmux) ensureScratch(ctx context.Context, sock string, cols, rows uint16) error {
 	if err := runTmux(ctx, sock, "has-session", "-t", ScratchSession); err != nil {
 		if err := runTmux(ctx, sock, "new-session", "-d", "-s", ScratchSession, "-n", "tree",
-			"-x", fmt.Sprintf("%d", ScratchCols), "-y", fmt.Sprintf("%d", ScratchRows),
+			"-x", fmt.Sprintf("%d", cols), "-y", fmt.Sprintf("%d", rows),
 			"sleep", "3600"); err != nil {
 			return fmt.Errorf("overlay new-session scratch: %w", err)
 		}
@@ -363,7 +420,7 @@ func (t *Tmux) ensureScratch(ctx context.Context, sock string) error {
 	_ = runTmux(ctx, sock, "set-option", "-t", ScratchSession, "-w", "window-size", "manual")
 	_ = runTmux(ctx, sock, "set-option", "-t", ScratchSession, "status", "off")
 	_ = runTmux(ctx, sock, "resize-window", "-t", ScratchSession+":0",
-		"-x", fmt.Sprintf("%d", ScratchCols), "-y", fmt.Sprintf("%d", ScratchRows))
+		"-x", fmt.Sprintf("%d", cols), "-y", fmt.Sprintf("%d", rows))
 	return nil
 }
 

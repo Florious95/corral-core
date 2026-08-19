@@ -404,6 +404,8 @@ type Level2Heartbeat struct {
 // @inv 与 level2_* 分订；零订阅者时零抓屏、零 tmux 客户端；不得回退到「第一个发现的」socket
 type OverlaySubscribe struct {
 	Socket string `json:"socket"`
+	Rows   uint16 `json:"rows,omitempty"`
+	Cols   uint16 `json:"cols,omitempty"`
 }
 
 // OverlayUnsubscribe stops the overlay capture stream (C→S; requirement 064).

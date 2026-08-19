@@ -252,7 +252,7 @@ func (r Resize) Validate() error {
 // Reason is optional.
 func (e ErrorFrame) Validate() error {
 	switch e.Code {
-	case ErrCodeUnauthorized, ErrCodeBadFrame, ErrCodeUnsupportedVersion,
+	case ErrCodeUnauthorized, ErrCodeBadFrame, ErrCodeInvalidField, ErrCodeUnsupportedVersion,
 		ErrCodeUnsupportedType, ErrCodeSessionNotFound, ErrCodeInternal:
 		return nil
 	default:

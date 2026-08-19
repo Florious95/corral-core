@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+func TestChooseTreeStartsWithoutPreview(t *testing.T) {
+	args := chooseTreeArgs()
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "-N") {
+		t.Fatalf("choose-tree must start without preview (-N per tmux man), got %q", joined)
+	}
+	if args[0] != "choose-tree" {
+		t.Fatalf("first arg %q", args[0])
+	}
+}
+
 func TestTmuxScratchIsolated(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not in PATH")
