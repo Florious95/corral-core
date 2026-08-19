@@ -361,38 +361,47 @@ func (s *Server) countAuthed() int64 {
 // model or sequence) just establishes the baseline at seq 1; each later scan
 // with changes bumps the seq and fans out one list_delta.
 func (s *Server) publishListing(ctx context.Context) {
+	_ = s.refreshListing(ctx)
+}
+
+// refreshListing runs one real discovery pass and updates the shared snapshot.
+// On failure the previous snapshot is left untouched (069: never wipe the
+// list because a refresh failed). Callers that must answer the client (list)
+// send that retained snapshot.
+func (s *Server) refreshListing(ctx context.Context) error {
 	prev, prevSeq := s.currentSnapshot()
 	if err := s.rebuildCatalog(ctx); err != nil {
-		s.log.Warn("listing: discovery failed", "err", err)
-		return
+		s.log.Warn("listing: discovery failed",
+			"err", err,
+			"had_cache", prev != nil,
+			"prev_seq", prevSeq,
+			"prev_sessions", snapshotSessionCount(prev),
+		)
+		return err
 	}
 	cur, _ := s.currentSnapshot()
 
 	if prev == nil && prevSeq == 0 {
-		// First snapshot establishes the baseline; guarantee it carries a
-		// sequence >= 1 (a client that lists before this tick reads seq 1).
 		s.snapMu.Lock()
 		if s.seq == 0 {
 			s.seq = 1
 		}
 		s.snapMu.Unlock()
 		s.log.Debug("listing: first snapshot", "seq", s.currentSeq())
-		return
+		return nil
 	}
 	if prev == nil {
-		// A failed initial scan still publishes an empty seq-1 listing. Treat
-		// that client-visible state as the baseline so recovery is announced
-		// instead of silently replacing it with the first successful snapshot.
 		prev = &modelSnapshot{}
 	}
 
 	d := cur.diff(prev)
 	if len(d.AddedSessions)+len(d.RemovedRefs)+len(d.ChangedSessions)+len(d.ChangedWorkspaces) == 0 {
 		s.log.Debug("listing: no changes")
-		return
+		return nil
 	}
 	d.Seq = s.nextSeq()
 	s.fanout(d)
+	return nil
 }
 
 // ensureInitialScan forces the first scan synchronously so a client that lists

@@ -82,10 +82,16 @@ func (s *Server) level2Loop(ctx context.Context) {
 // stream is fresh immediately.
 func (s *Server) markLevel2() {
 	if s.level2Subscribers.Add(1) == 1 {
-		select {
-		case s.level2WakeCh <- struct{}{}:
-		default:
-		}
+		s.wakeLevel2()
+	}
+}
+
+// wakeLevel2 is the 069 enter-menu signal. It must fire on every subscribe
+// (including re-subscribe on an already-active connection), not only 0→1.
+func (s *Server) wakeLevel2() {
+	select {
+	case s.level2WakeCh <- struct{}{}:
+	default:
 	}
 }
 
@@ -203,18 +209,17 @@ func (s *Server) publishLevel2(ctx context.Context) {
 // @post 连接计入 level2 订阅者并绑定 workspace；服务端开始按 cadence 推 Level2Frame
 // @err none
 func (c *wsConn) handleLevel2Subscribe(f protocol.Level2Subscribe) {
-	if c.level2Active() {
-		c.setLevel2(true, f.Workspace)
-		c.resetLevel2PushState()
-		select {
-		case c.s.level2WakeCh <- struct{}{}:
-		default:
-		}
-		return
-	}
+	already := c.level2Active()
 	c.setLevel2(true, f.Workspace)
 	c.resetLevel2PushState()
-	c.s.markLevel2()
+	if already {
+		c.s.wakeLevel2()
+	} else {
+		c.s.markLevel2()
+	}
+	// Event-driven one-shot (069): do not wait for the 2s cadence.
+	// publishLevel2 no-ops on discover failure and does not send an empty wipe.
+	c.s.publishLevel2(c.ctx)
 }
 
 // handleLevel2Unsubscribe stops this connection's second-level stream.

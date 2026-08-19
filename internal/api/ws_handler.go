@@ -69,17 +69,52 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 	return false
 }
 
-// handleList answers a full listing (docs/protocol.md §5.1). It performs the
-// first scan synchronously so the reply is real, not an empty shell, and
-// carries the current shared seq.
+// handleList answers a full listing (docs/protocol.md §5.1, requirement 069).
+// It always triggers one real rescan — not ensureInitialScan, which no-ops
+// once a snapshot exists. On scan failure the last snapshot is kept so the
+// reply is never an empty wipe of a known world.
 func (c *wsConn) handleList(l protocol.List) {
-	c.s.ensureInitialScan(c.ctx)
+	prev, prevSeq := c.s.currentSnapshot()
+	prevN := snapshotSessionCount(prev)
+	err := c.s.refreshListing(c.ctx)
 	snap, seq := c.s.currentSnapshot()
+	curN := snapshotSessionCount(snap)
+	c.s.log.Info("listing: refresh on open",
+		"req_id", l.ReqID,
+		"had_cache", prev != nil,
+		"prev_seq", prevSeq,
+		"prev_sessions", prevN,
+		"cur_sessions", curN,
+		"cur_seq", seq,
+		"refresh_err", errString(err),
+	)
+	if seq == 0 {
+		c.s.snapMu.Lock()
+		if c.s.seq == 0 {
+			c.s.seq = 1
+		}
+		seq = c.s.seq
+		c.s.snapMu.Unlock()
+	}
 	listing := &protocol.Listing{ReqID: l.ReqID, Seq: seq}
 	if snap != nil {
 		listing.Workspaces = snap.listing()
 	}
 	c.send(listing)
+}
+
+func snapshotSessionCount(snap *modelSnapshot) int {
+	if snap == nil {
+		return 0
+	}
+	return len(snap.byRef)
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 // handleSubscribe starts mirroring a session: resize the pane to the client's

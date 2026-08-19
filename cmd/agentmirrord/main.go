@@ -44,6 +44,7 @@ import (
 	"github.com/agentmirror/agentmirror/internal/api"
 	"github.com/agentmirror/agentmirror/internal/config"
 	"github.com/agentmirror/agentmirror/internal/pairing"
+	"github.com/agentmirror/agentmirror/internal/provider"
 	"github.com/agentmirror/agentmirror/internal/tsnetd"
 )
 
@@ -78,6 +79,19 @@ func run(args []string) int {
 	}
 
 	logger := newLogger(cfg.LogLevel)
+
+	// 白名单表（tools/nodeprobe/fixtures/providers.tsv，契约 068）必须在启动时就位。
+	// 加载失败时 provider.Lookup 会对每个 pane 返回 false ⇒ 所有节点被判成「不是节点」
+	// ⇒ 一级/二级菜单静默全空。2026-08-12 已经用这种死法给用户发过一次坏包，
+	// 所以这里必须**响亮失败**：宁可起不来，也不要起来之后交一个空列表。
+	if entries, err := provider.Load(); err != nil {
+		logger.Error("provider whitelist table unavailable; refusing startup",
+			"err", err,
+			"want", "tools/nodeprobe/fixtures/providers.tsv")
+		return 1
+	} else {
+		logger.Info("provider whitelist loaded", "entries", len(entries))
+	}
 	// Install signal cancellation before any control-plane handshake so SIGTERM
 	// can abort tsnet Up and reach deferred cleanup instead of waiting 60 seconds.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
