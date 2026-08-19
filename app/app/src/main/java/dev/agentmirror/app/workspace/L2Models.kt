@@ -64,15 +64,21 @@ data class L2UiState(
     val banner: String? = null,
 )
 
-internal fun Session.toL2Entry(): L2Entry = L2Entry(
-    ref = ref,
-    name = windowName.ifEmpty { sessionName }.ifEmpty { name },
-    title = title,
-    rows = rows,
-    cols = cols,
-    status = L2Status.fromWire(status),
-    cwd = cwd,
-    sessionName = sessionName,
-    windowIndex = windowIndex,
-    windowName = windowName,
-)
+internal fun Session.toL2Entry(): L2Entry {
+    // 线上 Session 只有 name（window_name fallback session_name），三元组常缺省。
+    // 收藏键必须落结构字段：空三元组回填 name，永不回填 title。
+    val resolvedWindow = windowName.ifEmpty { name }
+    val resolvedSession = sessionName.ifEmpty { name }
+    return L2Entry(
+        ref = ref,
+        name = resolvedWindow.ifEmpty { resolvedSession },
+        title = title,
+        rows = rows,
+        cols = cols,
+        status = L2Status.fromWire(status),
+        cwd = cwd,
+        sessionName = resolvedSession,
+        windowIndex = windowIndex,
+        windowName = resolvedWindow,
+    )
+}

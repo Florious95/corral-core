@@ -92,7 +92,7 @@ internal class OverlayTestHarness {
             manager = manager,
             uploader = AttachmentUploader { _, _ -> UploadOutcome.Failure("unused") },
             baseUrl = null,
-            ref = "s1",
+            ref = "/tmp/tmux-1000/default\u001f%3",
             initialRows = 24,
             initialCols = 80,
         )

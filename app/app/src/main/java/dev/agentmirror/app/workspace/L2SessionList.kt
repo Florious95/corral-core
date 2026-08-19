@@ -77,21 +77,22 @@ internal fun L2SessionList(
             }
         }
         items(sessions, key = { it.ref }) { entry ->
-            Surface(
-                onClick = { onOpenSession(entry.ref, entry.navigationName) },
-                color = MaterialTheme.colorScheme.background,
-                modifier = Modifier.testTag("l2-row-${entry.ref}"),
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 56.dp)
+                    .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
+                Surface(
+                    onClick = { onOpenSession(entry.ref, entry.navigationName) },
+                    color = MaterialTheme.colorScheme.background,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 56.dp)
-                        .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .weight(1f)
+                        .testTag("l2-row-${entry.ref}"),
                 ) {
                     Column(
-                        modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Text(
@@ -123,22 +124,23 @@ internal fun L2SessionList(
                             )
                         }
                     }
-                    val starred = favorited.contains(entry.favoriteKey())
-                    Text(
-                        text = if (starred) "★" else "☆",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (starred) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier
-                            .testTag("l2-star-${entry.ref}")
-                            .clickable { onToggleFavorite(entry) }
-                            .padding(4.dp),
-                    )
-                    L2StatusBadge(entry)
                 }
+                val starred = favorited.contains(entry.favoriteKey())
+                Text(
+                    text = if (starred) "★" else "☆",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (starred) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier
+                        .testTag("l2-star-${entry.ref}")
+                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                        .clickable { onToggleFavorite(entry) }
+                        .padding(4.dp),
+                )
+                L2StatusBadge(entry)
             }
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant,

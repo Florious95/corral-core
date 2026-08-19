@@ -1,0 +1,7 @@
+listing_ref="s1"
+listing_sep=-1
+listing_extracted=""
+structural_ref="/tmp/tmux-1000/default\\u001f%3"
+structural_sep=-1
+structural_extracted="/tmp/tmux-1000/default"
+structural_ref_codepoints=47,116,109,112,47,116,109,117,120,45,49,48,48,48,47,100,101,102,97,117,108,116,92,117,48,48,49,102,37,51

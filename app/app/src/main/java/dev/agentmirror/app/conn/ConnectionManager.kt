@@ -107,6 +107,8 @@ class ConnectionManager(
 
     /** 悬浮窗抓屏流应订的 socket；null = 未订。READY / 重连后重放。 */
     private var overlayWantedSocket: String? = null
+    private var overlayWantedCols: Int = 0
+    private var overlayWantedRows: Int = 0
 
     /** 上次见过的 listing seq；list_delta 连续性据此判定。 */
     private var lastSeenSeq: Long? = null
@@ -380,17 +382,28 @@ class ConnectionManager(
      * 会话内悬浮窗订阅（065）：打开时发带 [socket] 的 [OverlaySubscribeFrame]。
      * 关掉必须 [unsubscribeOverlay]。未就绪先簿记，READY 后重放。
      */
-    fun subscribeOverlay(socket: String): Boolean {
+    fun subscribeOverlay(socket: String, cols: Int = 0, rows: Int = 0): Boolean {
         if (state == ConnectionState.STOPPED) return false
+        if (socket.isEmpty()) return false
         overlayWantedSocket = socket
+        if (cols > 0) overlayWantedCols = cols
+        if (rows > 0) overlayWantedRows = rows
         val conn = connection ?: return true
         if (!conn.isReady) return true
-        return conn.send(OverlaySubscribeFrame(socket = socket))
+        return conn.send(
+            OverlaySubscribeFrame(
+                socket = socket,
+                cols = overlayWantedCols,
+                rows = overlayWantedRows,
+            ),
+        )
     }
 
     /** 悬浮窗退订：关闭时发 [OverlayUnsubscribeFrame]。幂等。关后不得继续收流。 */
     fun unsubscribeOverlay(): Boolean {
         overlayWantedSocket = null
+        overlayWantedCols = 0
+        overlayWantedRows = 0
         val conn = connection ?: return true
         if (!conn.isReady) return true
         return conn.send(OverlayUnsubscribeFrame())
@@ -556,7 +569,15 @@ class ConnectionManager(
         for (workspace in activeLevel2) {
             conn.send(Level2SubscribeFrame(workspace = workspace))
         }
-        overlayWantedSocket?.let { conn.send(OverlaySubscribeFrame(socket = it)) }
+        overlayWantedSocket?.let {
+            conn.send(
+                OverlaySubscribeFrame(
+                    socket = it,
+                    cols = overlayWantedCols,
+                    rows = overlayWantedRows,
+                ),
+            )
+        }
     }
 
     private fun scheduleReconnect() {
