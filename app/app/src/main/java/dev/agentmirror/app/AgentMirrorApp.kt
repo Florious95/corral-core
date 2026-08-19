@@ -131,7 +131,7 @@ fun AgentMirrorApp(
                         navState.showPairing = false
                     },
                 )
-                // 三栏主页：左收藏 / 中会话 / 右设置（067）。设置不再盖一层。
+                // 三栏主页：底部标签 收藏 / 会话 / 设置（067 §4.1）。设置不再盖一层。
                 AppRoute.Workspace -> {
                     // 接线（fix-workspace-wiring）：把 Activity 持有的工作区 VM 接入
                     // ServiceWire.uiConnector 扇出。配对成功切工作区后，conn 层 READY + listing /

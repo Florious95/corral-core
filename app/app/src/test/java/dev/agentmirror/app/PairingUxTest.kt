@@ -19,6 +19,8 @@ package dev.agentmirror.app
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -73,7 +75,7 @@ class PairingUxTest {
             AgentMirrorApp(navState = nav, workspaceViewModel = WorkspaceViewModel())
         }
 
-        compose.onNodeWithText("设置").performClick()
+        compose.onAllNodesWithText("设置").onFirst().performClick()
         compose.onNodeWithText("重新配对").assertExists().performClick()
         compose.waitForIdle()
 
