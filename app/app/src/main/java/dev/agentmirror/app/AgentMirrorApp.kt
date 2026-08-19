@@ -18,24 +18,26 @@ package dev.agentmirror.app
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import dev.agentmirror.app.pairing.PairingConfigStore
 import dev.agentmirror.app.pairing.PairingRoute
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.session.SessionRoute
+import dev.agentmirror.app.ui.components.NavDirection
+import dev.agentmirror.app.ui.components.navTransition
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
+import dev.agentmirror.app.ui.theme.AppTheme
+import dev.agentmirror.app.ui.theme.Appearance
+import dev.agentmirror.app.ui.theme.SharedPreferencesAppearanceStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
@@ -68,8 +70,16 @@ fun AgentMirrorApp(
     navState: MainNavState,
     workspaceViewModel: WorkspaceViewModel,
 ) {
-    AgentMirrorTheme {
-        val context = LocalContext.current
+    val context = LocalContext.current
+    val appearanceStore = remember { SharedPreferencesAppearanceStore(context) }
+    var appearance by remember { mutableStateOf(appearanceStore.load()) }
+    val darkTheme = when (appearance) {
+        Appearance.Light -> false
+        Appearance.Dark -> true
+        Appearance.System -> isSystemInDarkTheme()
+    }
+    AppTheme(appearance = appearance) {
+    AgentMirrorTheme(darkTheme = darkTheme) {
         // 在屏兜底时钟泵（fix-app-runtime-sa）：任一屏在屏且 App RESUMED 即挂一个兜底泵，
         // 前台服务泵不可用时接管共享连接的重连调度与输入超时裁决，服务恢复即让出（不双泵）。
         // 挂在根组合保证工作区/会话/设置/配对任一屏在屏都有兜底；服务常驻时兜底泵零工作。
@@ -109,8 +119,14 @@ fun AgentMirrorApp(
         AnimatedContent(
             targetState = route,
             transitionSpec = {
-                (fadeIn(tween(220)) + scaleIn(initialScale = 0.98f, animationSpec = tween(220)))
-                    .togetherWith(fadeOut(tween(90)))
+                val dir = when {
+                    initialState !is AppRoute.Session && targetState is AppRoute.Session ->
+                        NavDirection.Push
+                    initialState is AppRoute.Session && targetState !is AppRoute.Session ->
+                        NavDirection.Pop
+                    else -> NavDirection.FadeThrough
+                }
+                navTransition(dir)
             },
             label = "app-route",
         ) { r ->
@@ -159,10 +175,16 @@ fun AgentMirrorApp(
                     ThreePaneHome(
                         navState = navState,
                         workspaceViewModel = workspaceViewModel,
+                        appearance = appearance,
+                        onAppearanceChange = {
+                            appearance = it
+                            appearanceStore.save(it)
+                        },
                     )
                 }
             }
         }
+    }
     }
 }
 

@@ -31,15 +31,11 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -48,15 +44,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,7 +61,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
@@ -80,14 +72,24 @@ import androidx.core.content.ContextCompat
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
-import dev.agentmirror.app.workspace.FavoriteKey
-import dev.agentmirror.app.workspace.L2Entry
-import dev.agentmirror.app.workspace.L2SessionList
 import dev.agentmirror.app.termview.TermSurfaceView
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.ui.components.SessionSwitchSheet
+import dev.agentmirror.app.ui.model.SessionStatus
+import dev.agentmirror.app.ui.model.sessionStatusFromL2
+import dev.agentmirror.app.ui.screens.SessionShellScreen
+import dev.agentmirror.app.ui.screens.TerminalKey
+import dev.agentmirror.app.ui.theme.AppTheme
+import dev.agentmirror.app.ui.theme.DarkPalette
+import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.ui.theme.TermPalette
+import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.L2Entry
+import dev.agentmirror.app.workspace.cwdDisplayName
+import dev.agentmirror.app.workspace.favoriteKey
+import dev.agentmirror.app.workspace.toSessionItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -195,230 +197,118 @@ fun SessionScreen(
         viewModel.dismissTransient()
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        TopBar(
-            name = name,
-            // 拨号选择早于 socket 成功；只在 READY 时展示 LAN/tailnet，避免把尝试冒充连接。
-            connectionPath = connectionPath.takeIf { viewModel.connectionState == ConnectionState.READY },
-            onBack = onBack,
-            viewModel = viewModel,
+    var mirror by remember { mutableStateOf(TextFieldValue("")) }
+    var attachMenu by remember { mutableStateOf(false) }
+    val pickImage = {
+        pickMedia.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
         )
+    }
+    val requestTakePhoto = {
+        if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            launchCameraCapture()
+        } else {
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
 
-        // 终端画布：占满中间区域；IME 弹出时本区 weight 收缩（内容重排跟随，图31 修复）。
+    AppTheme {
+        val darkTheme = LocalAppPalette.current === DarkPalette
+        val themeToken = TermPalette.token(darkTheme)
+        val overlayItems = overlaySessions.map {
+            it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
+        }
+        val workspaceName = overlaySessions.firstOrNull()?.cwd?.let(::cwdDisplayName).orEmpty()
+        val status = overlaySessions.find { it.ref == viewModel.ref }
+            ?.let { sessionStatusFromL2(it.status) }
+            ?: SessionStatus.Unknown
+        val byRef = overlaySessions.associateBy { it.ref }
+
         Box(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding(),
         ) {
-            val darkTheme = isSystemInDarkTheme()
-            val themeToken = TermPalette.token(darkTheme)
-            AndroidView(
-                factory = { ctx ->
-                    TermSurfaceView(ctx).also {
-                        // 契约④（进入会话前尺寸即定）：先落定持久化字号，presenter 注入时
-                        // 才会用它实测出正确的 cellW/cellH（顺序颠倒则 seed 用默认字号）。
-                        val savedSp = SharedPreferencesFontSizeStore(ctx).load()
-                            ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
-                        it.fontSizeSp = savedSp.toFloat()
-                        it.presenter = viewModel.presenter
-                        it.onRemoteScrollBy = viewModel::onScrollWheel
-                        it.nightOverride = darkTheme
-                    }
+            SessionShellScreen(
+                sessionDisplayName = name,
+                status = status,
+                lanConnected = connectionPath != null &&
+                    viewModel.connectionState == ConnectionState.READY,
+                draft = mirror,
+                onDraftChange = {
+                    viewModel.onPassthroughInput(mirror, it)
+                    mirror = it
                 },
-                update = { view ->
-                    view.nightOverride = darkTheme
-                    view.presenter = viewModel.presenter
-                    view.onRemoteScrollBy = viewModel::onScrollWheel
+                onSend = {
+                    viewModel.sendDraft()
+                    mirror = TextFieldValue("")
                 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .semantics { contentDescription = themeToken },
-            )
-            // UI 树可断言的数据来源标签（透明 1dp，不参与视觉）。
-            Text(
-                text = themeToken,
-                color = Color.Transparent,
-                fontSize = 1.sp,
-                lineHeight = 1.sp,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .size(1.dp),
-                maxLines = 1,
-            )
-            // 「回到底部」悬浮钮（锁定历史时出现，006 交互）。
-            if (viewModel.showBackToBottom) {
-                BackToBottomButton(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(Spacing.lg),
-                    onClick = { viewModel.onScrollToBottom() },
-                )
-            }
-            // copy-mode 角标（缺陷④ 远端滚动投送：裸 shell 上滑进 copy-mode 后用户打字无响应）。
-            if (viewModel.inCopyMode) {
-                CopyModeIndicator(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(Spacing.sm),
-                )
-            }
-        }
-
-        // 底部集群：状态区 + 键条 + 输入条统一坐 surfaceContainer 面板；
-        // navigationBarsPadding().imePadding() 单点承担全部底部 insets（顺序敏感：
-        // 先消费导航栏再补 IME 差值，键盘收起时只让导航栏、弹出时整体贴键盘顶）。
-        Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .imePadding(),
+                onBack = onBack,
+                onOpenSwitcher = viewModel::openOverlay,
+                onKeyPress = { viewModel.sendKey(it.toInputKey()) },
+                onAttach = { attachMenu = true },
+                sendEnabled = viewModel.inputStatus !is InputStatus.Sending,
             ) {
-                StatusArea(viewModel)
-                KeyBar(
-                    enabled = viewModel.inputStatus !is InputStatus.Sending,
-                    onKey = viewModel::sendKey,
-                )
-                InputBar(
-                    viewModel = viewModel,
-                    onPickImage = {
-                        pickMedia.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
-                    },
-                    onTakePhoto = {
-                        if (
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                            PackageManager.PERMISSION_GRANTED
-                        ) {
-                            launchCameraCapture()
-                        } else {
-                            cameraPermission.launch(Manifest.permission.CAMERA)
-                        }
-                    },
-                )
-            }
-        }
-    }
-        if (viewModel.overlayOpen) {
-            SessionOverlay(
-                sessions = overlaySessions,
-                favorited = overlayFavorited,
-                onToggleFavorite = onToggleOverlayFavorite,
-                onOpenSession = { ref, sessionName ->
-                    viewModel.closeOverlay()
-                    onOpenOverlaySession(ref, sessionName)
-                },
-                onDismiss = viewModel::closeOverlay,
-            )
-        }
-    }
-}
-
-/**
- * 会话内悬浮窗（072）：二级菜单同一套会话列表；点一行跳转，点窗外即关。
- * 数据来自 [dev.agentmirror.app.workspace.WorkspaceViewModel.viewMenuSource]
- * （当前会话的工作区缓存），不得直接读被最后一次收藏覆盖的 [WorkspaceViewModel.level2] 单例。
- */
-@Composable
-internal fun SessionOverlay(
-    sessions: List<L2Entry>,
-    favorited: Set<FavoriteKey> = emptySet(),
-    onToggleFavorite: (L2Entry) -> Unit = {},
-    onOpenSession: (ref: String, name: String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.45f))
-            .testTag("session-overlay-scrim")
-            .clickable(onClick = onDismiss),
-    ) {
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 56.dp, end = Spacing.sm, start = Spacing.sm, bottom = Spacing.lg)
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.72f)
-                .testTag("session-overlay")
-                .clickable(enabled = false, onClick = {}),
-        ) {
-            L2SessionList(
-                sessions = sessions,
-                onOpenSession = onOpenSession,
-                favorited = favorited,
-                onToggleFavorite = onToggleFavorite,
-            )
-        }
-    }
-}
-
-/**
- * 紧凑顶栏（图29 修复 + 018 §一.7）：48dp 单行——返回钮 + 会话名（等宽、单行中段省略：
- * tmux 会话名首尾都是辨识位，中段省略两头都保）。「‹ 返回」文案沿用（e2e 语义树兼容）。
- * 连接横幅平滑展开收起，READY 无痕。
- */
-@Composable
-private fun TopBar(
-    name: String,
-    connectionPath: ConnectionPath?,
-    onBack: () -> Unit,
-    viewModel: SessionViewModel,
-) {
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 48.dp)
-                    .padding(horizontal = Spacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onBack) {
-                    Text("‹ 返回", style = MaterialTheme.typography.labelLarge)
-                }
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontFamily = MonoFontFamily,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.MiddleEllipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = Spacing.md),
-                )
-                connectionPath?.let { path ->
-                    Text(
-                        text = path.label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(end = Spacing.sm),
+                Box(Modifier.fillMaxSize()) {
+                    AndroidView(
+                        factory = { ctx ->
+                            TermSurfaceView(ctx).also {
+                                val savedSp = SharedPreferencesFontSizeStore(ctx).load()
+                                    ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
+                                it.fontSizeSp = savedSp.toFloat()
+                                it.presenter = viewModel.presenter
+                                it.onRemoteScrollBy = viewModel::onScrollWheel
+                                it.nightOverride = darkTheme
+                            }
+                        },
+                        update = { view ->
+                            view.nightOverride = darkTheme
+                            view.presenter = viewModel.presenter
+                            view.onRemoteScrollBy = viewModel::onScrollWheel
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .semantics { contentDescription = themeToken },
                     )
-                }
-                TextButton(
-                    onClick = viewModel::openOverlay,
-                    modifier = Modifier.testTag("session-overlay-open"),
-                ) {
-                    Text("查看", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        text = themeToken,
+                        color = Color.Transparent,
+                        fontSize = 1.sp,
+                        lineHeight = 1.sp,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .size(1.dp),
+                        maxLines = 1,
+                    )
+                    if (viewModel.showBackToBottom) {
+                        BackToBottomButton(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(Spacing.lg),
+                            onClick = { viewModel.onScrollToBottom() },
+                        )
+                    }
+                    if (viewModel.inCopyMode) {
+                        CopyModeIndicator(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(Spacing.sm),
+                        )
+                    }
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                        StatusArea(viewModel)
+                    }
                 }
             }
-            // 连接状态横幅：READY 时平滑收起；断连/重连中明确提示（conn 层自动重连，这里只反映）。
-            AnimatedVisibility(visible = viewModel.connectionBanner != null) {
+            AnimatedVisibility(
+                visible = viewModel.connectionBanner != null,
+                modifier = Modifier.align(Alignment.TopCenter),
+            ) {
                 Text(
                     text = viewModel.connectionBanner.orEmpty(),
                     style = MaterialTheme.typography.labelMedium,
@@ -429,91 +319,56 @@ private fun TopBar(
                         .padding(horizontal = Spacing.pageH, vertical = 6.dp),
                 )
             }
+            if (viewModel.overlayOpen) {
+                SessionSwitchSheet(
+                    visible = true,
+                    workspaceName = workspaceName,
+                    sessions = overlayItems,
+                    currentSessionId = viewModel.ref,
+                    onDismiss = viewModel::closeOverlay,
+                    onSelect = { item ->
+                        val entry = byRef[item.id] ?: return@SessionSwitchSheet
+                        viewModel.closeOverlay()
+                        onOpenOverlaySession(entry.ref, entry.identityLabel)
+                    },
+                    onToggleStar = { item ->
+                        byRef[item.id]?.let(onToggleOverlayFavorite)
+                    },
+                )
+            }
+            Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
+                DropdownMenu(
+                    expanded = attachMenu,
+                    onDismissRequest = { attachMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("拍照") },
+                        onClick = {
+                            attachMenu = false
+                            requestTakePhoto()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("从相册选择") },
+                        onClick = {
+                            attachMenu = false
+                            pickImage()
+                        },
+                    )
+                }
+            }
         }
     }
 }
 
-/** 底部输入条：附件轻量指示（若有）+ 加号（附件） + 草稿框（圆角胶囊） + 发送。 */
-@Composable
-private fun InputBar(
-    viewModel: SessionViewModel,
-    onPickImage: () -> Unit,
-    onTakePhoto: () -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // 需求 042：路径不进输入框文本，改用这条轻量指示——发送前用户能看到"带了图"，
-        // 但看不到、也不用手删主机绝对路径。需求 057 第 4 款：附件可累加，指示按张数走。
-        val attachedCount = viewModel.pendingAttachmentPaths.size
-        if (attachedCount > 0) {
-            Text(
-                text = "已附加 $attachedCount 张图",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Spacing.sm + 40.dp, vertical = 2.dp),
-            )
-        }
-        InputBarRow(viewModel, onPickImage, onTakePhoto)
-    }
-}
-
-@Composable
-private fun InputBarRow(
-    viewModel: SessionViewModel,
-    onPickImage: () -> Unit,
-    onTakePhoto: () -> Unit,
-) {
-    // 直通模型（059）：本地输入框只是键盘捕获载体 + IME 组合期显示，**不是草稿**。
-    // 每键经 onPassthroughInput 直通 CLI 输入框（CLI 才是草稿）；mirror 只保留 IME
-    // 组合期需要的当前值（CJK 组合期归输入法本地），组合结束上屏整串直通后镜像复位。
-    var mirror by remember { mutableStateOf(TextFieldValue("")) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.sm, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-    ) {
-        AttachmentButton(
-            enabled = viewModel.uploadStatus !is UploadStatus.Uploading,
-            onPickImage = onPickImage,
-            onTakePhoto = onTakePhoto,
-        )
-        OutlinedTextField(
-            value = mirror,
-            onValueChange = {
-                // 每键直通：把增量送到 CLI 输入框；mirror 保留 IME 组合期显示值。
-                viewModel.onPassthroughInput(mirror, it)
-                mirror = it
-            },
-            placeholder = {
-                Text("输入指令…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            },
-            modifier = Modifier.weight(1f),
-            enabled = viewModel.inputStatus !is InputStatus.Sending,
-            maxLines = 4,
-            shape = MaterialTheme.shapes.large,
-            colors = OutlinedTextFieldDefaults.colors(
-                // 输入条坐在 surfaceContainer 面板上，草稿框用更低一层的底色拉开层次。
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
-        )
-        // 发送只提交（059）：CLI 输入框即草稿，发送 = Enter。镜像同步清空（提交已把
-        // CLI 输入框清空，App 是 pane 的镜子，不保留本地残影）。
-        TextButton(
-            onClick = {
-                viewModel.sendDraft()
-                mirror = TextFieldValue("")
-            },
-            enabled = viewModel.inputStatus !is InputStatus.Sending,
-        ) {
-            Text(
-                text = if (viewModel.inputStatus is InputStatus.Sending) "…" else "发送",
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
-    }
+private fun TerminalKey.toInputKey(): InputKey = when (this) {
+    TerminalKey.Esc -> InputKey.ESC
+    TerminalKey.Tab -> InputKey.TAB
+    TerminalKey.Up -> InputKey.UP
+    TerminalKey.Down -> InputKey.DOWN
+    TerminalKey.Left -> InputKey.LEFT
+    TerminalKey.Right -> InputKey.RIGHT
+    TerminalKey.CtrlC -> InputKey.CTRL_C
 }
 
 /** 附件入口只做动作分流：拍照与系统 Photo Picker 最终复用同一上传链。 */

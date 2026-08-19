@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,6 +82,7 @@ fun SessionSwitchSheet(
                 Modifier
                     .fillMaxSize()
                     .background(p.scrim)
+                    .testTag("session-overlay-scrim")
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -106,6 +108,7 @@ fun SessionSwitchSheet(
                     .wrapContentHeight()
                     .clip(RoundedCornerShape(topStart = Radii.sheetTop, topEnd = Radii.sheetTop))
                     .background(p.sheetBackground)
+                    .testTag("session-overlay")
                     .padding(bottom = 12.dp)
             ) {
                 // 抓手条 —— 关闭的唯一视觉提示，⛔ 不要再加一行「点空白处关闭」的文案
@@ -142,6 +145,7 @@ fun SessionSwitchSheet(
                         Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(p.segmentedTrack)
+                            .testTag("session-switch-workspace")
                             .padding(horizontal = 8.dp, vertical = 5.dp)
                     ) {
                         AppText(
@@ -229,6 +233,7 @@ private fun SheetRow(
             .fillMaxWidth()
             .height(Dims.rowHeightSheet)
             .background(bg)
+            .testTag("l2-row-${item.id}")
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
     ) {
         if (isCurrent) {

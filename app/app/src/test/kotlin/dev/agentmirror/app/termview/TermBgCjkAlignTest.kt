@@ -20,6 +20,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -75,8 +76,8 @@ class TermBgCjkAlignTest {
         }
     }
 
-    /** SGR 47（Indexed 7）经 colorFor 的 ARGB 值（TermSurfaceView.ANSI_COLORS[7]）。 */
-    private val whiteBg = Color.rgb(229, 229, 229)
+    /** SGR 47（Indexed 7）经 colorFor 的 ARGB 值（TerminalSpec 浅色 ansi[7]）。 */
+    private val whiteBg = TermPalette.Light.ansi16[7]!!
 
     @Test
     fun bgRunWithCjkKeepsCellGridAligned() {
@@ -118,11 +119,8 @@ class TermBgCjkAlignTest {
         assertEquals("AB run 起始列漂移", origin + 8f * cellW, ab.first().x, 0.01f)
     }
 
-    /** xterm 256 色扩展区期望值：254 = 灰阶梯 8+10×(254−232) = rgb(228,228,228)；
-     *  16 = 色立方原点 rgb(0,0,0)。模拟器实拍第二缺陷：旧 colorFor 把 >15 的索引
-     *  coerceIn(0,15) 全塌缩到 15 号浅灰——fg 16（黑）与 bg 254（浅灰）同色，recap
-     *  块文字整块隐形（浅条无字）。 */
-    private val recapBg = Color.rgb(228, 228, 228)
+    /** 254 映射为 TerminalSpec.userBlockBackground（080：色值集中，不散落绘制层）。 */
+    private val recapBg = TermPalette.Light.userBlockBg
     private val recapFg = Color.rgb(0, 0, 0)
 
     @Test
@@ -142,7 +140,7 @@ class TermBgCjkAlignTest {
         view.draw(canvas)
         bitmap.recycle()
 
-        // 254 号必须映射为灰阶 228——旧实现塌缩到 15 号 rgb(229) 时此处即红。
+        // 254 号必须映射为 TerminalSpec 用户块底——旧实现塌缩到 15 号时此处即红。
         val light = canvas.rects.filter { it.color == recapBg }.sortedBy { it.left }
         assertTrue("夹具失效/256 色塌缩：未画出 48;5;254 浅底格", light.isNotEmpty())
         val cellW = light.minOf { it.right - it.left }

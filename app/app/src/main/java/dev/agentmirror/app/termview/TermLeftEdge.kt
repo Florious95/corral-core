@@ -15,6 +15,7 @@
 
 package dev.agentmirror.app.termview
 
+import dev.agentmirror.app.ui.theme.TerminalMetrics
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -28,8 +29,8 @@ import kotlin.math.roundToInt
  */
 internal object TermLeftEdge {
 
-    /** 左内边距。8dp：密度 3 下 24px，盖住实测 ● 左溢约 13px。 */
-    const val LEFT_MARGIN_DP = 8f
+    /** 左内边距。数值以设计 [TerminalMetrics.paddingLeft] 为准（14dp，左右对称）。 */
+    val LEFT_MARGIN_DP: Float = TerminalMetrics.paddingLeft.value
 
     fun contentLeftPx(density: Float): Int =
         (LEFT_MARGIN_DP * density).roundToInt()

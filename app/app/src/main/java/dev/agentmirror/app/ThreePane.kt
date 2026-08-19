@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +43,9 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.testTag
 import kotlin.math.abs
 import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.ui.components.AppBottomNav
+import dev.agentmirror.app.ui.model.NavTab
+import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.workspace.FavoriteList
 import dev.agentmirror.app.workspace.WorkspaceScreen
@@ -60,10 +61,24 @@ enum class ThreePane(val tabLabel: String, val tabIcon: String, val tabTag: Stri
     Settings("设置", "⚙", "bottom-tab-settings"),
 }
 
+private fun ThreePane.toNavTab(): NavTab = when (this) {
+    ThreePane.Favorites -> NavTab.Favorites
+    ThreePane.Sessions -> NavTab.Sessions
+    ThreePane.Settings -> NavTab.Settings
+}
+
+private fun NavTab.toPane(): ThreePane = when (this) {
+    NavTab.Favorites -> ThreePane.Favorites
+    NavTab.Sessions -> ThreePane.Sessions
+    NavTab.Settings -> ThreePane.Settings
+}
+
 @Composable
 internal fun ThreePaneHome(
     navState: MainNavState,
     workspaceViewModel: WorkspaceViewModel,
+    appearance: Appearance = Appearance.System,
+    onAppearanceChange: (Appearance) -> Unit = {},
 ) {
     val pagerState = rememberPagerState(
         initialPage = navState.homePane.ordinal,
@@ -105,20 +120,14 @@ internal fun ThreePaneHome(
             .testTag("three-pane"),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            NavigationBar(modifier = Modifier.testTag("bottom-tabs")) {
-                ThreePane.entries.forEach { pane ->
-                    NavigationBarItem(
-                        selected = navState.homePane == pane,
-                        onClick = {
-                            navState.homePane = pane
-                            navState.showSettings = pane == ThreePane.Settings
-                        },
-                        icon = { Text(pane.tabIcon) },
-                        label = { Text(pane.tabLabel) },
-                        modifier = Modifier.testTag(pane.tabTag),
-                    )
-                }
-            }
+            AppBottomNav(
+                selected = navState.homePane.toNavTab(),
+                onSelect = { tab ->
+                    val pane = tab.toPane()
+                    navState.homePane = pane
+                    navState.showSettings = pane == ThreePane.Settings
+                },
+            )
         },
     ) { innerPadding ->
         HorizontalPager(
@@ -157,6 +166,8 @@ internal fun ThreePaneHome(
                         navState.showPairing = true
                     },
                     enableBackHandler = pagerState.currentPage == ThreePane.Settings.ordinal,
+                    appearance = appearance,
+                    onAppearanceChange = onAppearanceChange,
                 )
             }
         }

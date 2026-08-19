@@ -74,11 +74,11 @@ class TermThemeTest {
         val canvasBg = canvas.rects.firstOrNull { it.color == pal.defaultBg }
         assertTrue("浅色模式清屏没用 TermPalette.Light.defaultBg", canvasBg != null)
 
-        val msg = canvas.rects.firstOrNull { it.color == TermPalette.userMessageBg }
+        val msg = canvas.rects.firstOrNull { it.color == pal.userBlockBg }
         assertTrue("夹具失效：没画出 48;5;254 用户消息块", msg != null)
         assertTrue(
-            "浅色：用户消息块必须比整体底更深（白底开灰块）。canvas=${TermPalette.luma(pal.defaultBg)} msg=${TermPalette.luma(TermPalette.userMessageBg)}",
-            TermPalette.luma(TermPalette.userMessageBg) < TermPalette.luma(pal.defaultBg),
+            "浅色：用户消息块必须比整体底更深（白底开更深块）。canvas=${TermPalette.luma(pal.defaultBg)} msg=${TermPalette.luma(pal.userBlockBg)}",
+            TermPalette.luma(pal.userBlockBg) < TermPalette.luma(pal.defaultBg),
         )
         assertEquals(TermPalette.token(false), view.contentDescription)
         assertTrue(view.contentDescription.contains("source=${TermPalette.SOURCE}"))
@@ -93,12 +93,12 @@ class TermThemeTest {
         val canvasBg = canvas.rects.firstOrNull { it.color == pal.defaultBg }
         assertTrue("深色模式清屏没用 TermPalette.Dark.defaultBg", canvasBg != null)
 
-        val msg = canvas.rects.firstOrNull { it.color == TermPalette.userMessageBg }
+        val msg = canvas.rects.firstOrNull { it.color == pal.userBlockBg }
         assertTrue("夹具失效：没画出 48;5;254 用户消息块", msg != null)
-        assertNotEquals("消息块底色必须可辨，不能与整体底同色", pal.defaultBg, TermPalette.userMessageBg)
+        assertNotEquals("消息块底色必须可辨，不能与整体底同色", pal.defaultBg, pal.userBlockBg)
         assertTrue(
-            "深色：用户消息块必须比整体底更浅。canvas=${TermPalette.luma(pal.defaultBg)} msg=${TermPalette.luma(TermPalette.userMessageBg)}",
-            TermPalette.luma(TermPalette.userMessageBg) > TermPalette.luma(pal.defaultBg),
+            "深色：用户消息块必须比整体底更浅。canvas=${TermPalette.luma(pal.defaultBg)} msg=${TermPalette.luma(pal.userBlockBg)}",
+            TermPalette.luma(pal.userBlockBg) > TermPalette.luma(pal.defaultBg),
         )
         assertEquals(TermPalette.token(true), view.contentDescription)
     }

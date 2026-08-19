@@ -7,6 +7,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -15,6 +16,9 @@ import androidx.compose.ui.unit.sp
 
 /** 设置页「外观」项的三个取值。System = 跟随系统。 */
 enum class Appearance { Light, Dark, System }
+
+/** 当前外观。嵌套 [AppTheme] 不传参时继承，避免把强制深/浅冲回「跟随系统」。 */
+val LocalAppearance = staticCompositionLocalOf { Appearance.System }
 
 private val LightScheme = lightColorScheme(
     primary = LightPalette.accent,
@@ -111,7 +115,7 @@ private val AppTypography = Typography(
  */
 @Composable
 fun AppTheme(
-    appearance: Appearance = Appearance.System,
+    appearance: Appearance = LocalAppearance.current,
     content: @Composable () -> Unit,
 ) {
     val dark = when (appearance) {
@@ -120,7 +124,10 @@ fun AppTheme(
         Appearance.System -> isSystemInDarkTheme()
     }
     val palette = if (dark) DarkPalette else LightPalette
-    CompositionLocalProvider(LocalAppPalette provides palette) {
+    CompositionLocalProvider(
+        LocalAppPalette provides palette,
+        LocalAppearance provides appearance,
+    ) {
         MaterialTheme(
             colorScheme = if (dark) DarkScheme else LightScheme,
             typography = AppTypography,

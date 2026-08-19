@@ -18,6 +18,8 @@ package dev.agentmirror.app.session
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -98,8 +100,9 @@ class ViewMenuSourceTest {
         compose.onNodeWithTag("l2-row-$REF_A").assertExists()
         compose.onNodeWithTag("l2-row-$REF_B").assertDoesNotExist()
         compose.onNodeWithText("sess-b").assertDoesNotExist()
-        compose.onNodeWithText(CWD_A, substring = true).assertIsDisplayed()
-        compose.onNodeWithText(CWD_B, substring = true).assertDoesNotExist()
+        compose.onAllNodesWithText("sess-a").assertCountEquals(2)
+        compose.onNodeWithText("多agent协作", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("远程Agent安卓").assertDoesNotExist()
     }
 
     private fun seededAbFavoritesLastB(): WorkspaceViewModel {
