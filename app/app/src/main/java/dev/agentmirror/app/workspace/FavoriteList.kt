@@ -83,7 +83,8 @@ fun FavoriteList(
                 Surface(
                     onClick = {
                         if (row.isOnline && row.ref.isNotEmpty()) {
-                            onOpenSession(row.ref, row.windowName.ifEmpty { row.sessionName })
+                            // 077：与二级列表同一条显示名（sessionDisplayName），勿改回 windowName。
+                            onOpenSession(row.ref, row.identityLabel)
                         }
                     },
                     color = MaterialTheme.colorScheme.background,
