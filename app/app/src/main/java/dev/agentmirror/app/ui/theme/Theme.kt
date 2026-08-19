@@ -53,8 +53,8 @@ val brandPrimary: Color = Color(0xFF1B2A4A)
  * 历史品牌背景深蓝（`0xFF0D1626`；colors.xml 的 `brand_background` 仍被自适应启动图标引用）。
  *
  * ui-redesign（018）后深色 scheme 的 `background` 已改用 `0xFF0B111D`（近黑深蓝，
- * 与纯黑终端画布分层次）；终端画布默认底色由 `TermSurfaceView.DEFAULT_BG` 以同一
- * 字面量承载，但不经本 token 引用。本 token 自彼时起无任何消费点，保留仅为存档。
+ * 与纯黑终端画布分层次）；终端画布默认底色现由 [TermPalette.Dark.defaultBg] 承载
+ * （078 §2 B：深浅两套集中在 TermPalette，不再散落 TermSurfaceView）。本 token 无消费点，保留仅为存档。
  */
 val brandBackground: Color = Color(0xFF0D1626)
 

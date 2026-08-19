@@ -69,6 +69,7 @@ class TermSgrReverseVideoTest {
         val emulator = TerminalEmulator(20, 5)
         emulator.feed(feed)
         val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+        view.nightOverride = true
         view.presenter = TermViewPresenter(emulator) { _, _ -> }
         val bitmap = Bitmap.createBitmap(400, 120, Bitmap.Config.ARGB_8888)
         val canvas = RecordingCanvas(bitmap)
@@ -80,8 +81,7 @@ class TermSgrReverseVideoTest {
     private val ansiRed = Color.rgb(205, 49, 49) // ANSI_COLORS[1]
     private val ansiGreen = Color.rgb(13, 188, 121) // ANSI_COLORS[2]
 
-    // TermSurfaceView.DEFAULT_FG / DEFAULT_BG 的字面值——本轮裁定不改这两个常量，
-    // 红测按当前值硬编码，常量若改动测试会如实转红提醒同步。
+    // 反显钉深色套（历史路径）；色值来自 TermPalette.Dark，不在本文件再写一份字面量。
     private val defaultFg = Color.rgb(0xE8, 0xE8, 0xE8)
     private val defaultBg = Color.rgb(0x0D, 0x16, 0x26)
 

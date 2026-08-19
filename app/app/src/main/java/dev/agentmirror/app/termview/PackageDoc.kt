@@ -24,5 +24,6 @@ package dev.agentmirror.app.termview
  * Choreographer 帧调度）。内核为 :terminal 模块；resize 协议帧由上层接线（conn/session）。
  *
  * @consumes dev.agentmirror.app.diag
+ * @consumes dev.agentmirror.app.ui.theme
  * @consumes dev.agentmirror.terminal
  */

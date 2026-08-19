@@ -1,0 +1,9 @@
+租约抢占：pid=19830 stole from pid=42441 reason=holder pid 42441 不存在（判定已死） at=1787146707
+
+[ledger-run 2026-08-19T13:38:27Z] 常驻开工 resident-start | 账本=.team/ledgers/land-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T13:38:27Z] 开工 start | ledger_id=ledger.land.v1 revision=7 账本=.team/ledgers/land-v1.json 墙钟上限=24000s 派单死线=90s
+[ledger-run 2026-08-19T13:38:28Z] 轮次 round | 第 1 轮开始：前沿 ["t.set"]（墙钟已跑 0s / 上限 24000s）
+[ledger-run 2026-08-19T13:38:28Z] 派单 dispatch | task=t.set 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/land-v1-set 席位=land-v1-set attempt=att-t.set-seq1-t1787146708034 delivery=del-t.set-seq1-t1787146708034
+[ledger-run 2026-08-19T13:38:28Z] 投递回执 send-ok | task=t.set case_id=ledger_land_v1__t.set__r7 message_id=msg_758b611484d0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T13:38:28Z] 派单落地 dispatch-landed | task=t.set 席位 land-v1-set 的收件箱已多出这条派单
+[ledger-run 2026-08-19T13:38:28Z] 等待 wait | task=t.set 在等的 key（case_id）=ledger_land_v1__t.set__r7 team=grok-l2 预算=2400s

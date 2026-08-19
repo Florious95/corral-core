@@ -348,6 +348,7 @@ class WorkspaceViewModel(
             cwd = entry.cwd,
         )
         _favorites.value = favoriteBook.records()
+        bumpFavoriteLive()
     }
 
     fun toggleFavorite(row: FavoriteRow) {
@@ -359,6 +360,7 @@ class WorkspaceViewModel(
             cwd = row.cwd,
         )
         _favorites.value = favoriteBook.records()
+        bumpFavoriteLive()
     }
 
     /**
@@ -421,6 +423,123 @@ class WorkspaceViewModel(
         }
         _level2.value.sessions.firstOrNull { it.ref == ref }?.cwd?.takeIf { it.isNotEmpty() }?.let { return it }
         return ""
+    }
+
+    /**
+     * 进入收藏页时的取数账本（082）。
+     * favoriteWorkspaceCount = 收藏项覆盖的工作区数；
+     * fetchedWorkspaceCount = 实际发出过 level2 订阅并收到帧（或超时跳过不算）的工作区数。
+     */
+    data class FavoriteFetchStats(
+        val favoriteWorkspaceCount: Int = 0,
+        val fetchedWorkspaceCount: Int = 0,
+    )
+
+    private var favoriteWorkspaceCount: Int = 0
+    private val favoriteFetched = LinkedHashSet<String>()
+    private val favoriteFetchQueue = ArrayDeque<String>()
+    private var favoriteFetchInFlight: String? = null
+    private var favoriteFetchStartedAtMs: Long = 0L
+
+    private val _favoriteLiveGen = MutableStateFlow(0)
+
+    /** 任一工作区缓存更新时递增，收藏页据此重算对账，不依赖二级单例。 */
+    val favoriteLiveGen: StateFlow<Int> = _favoriteLiveGen.asStateFlow()
+
+    fun favoriteFetchStats(): FavoriteFetchStats = FavoriteFetchStats(
+        favoriteWorkspaceCount = favoriteWorkspaceCount,
+        fetchedWorkspaceCount = favoriteFetched.size,
+    )
+
+    /**
+     * 进入收藏页：按**每个收藏项自己的工作区**各发一次 level2 订阅（串行，
+     * 服务端每连接只绑一个 workspace）。不是下拉刷新，也不是周期轮询（061）。
+     */
+    fun enterFavorites() {
+        val cwds = LinkedHashSet<String>()
+        for (rec in _favorites.value) {
+            if (rec.cwd.isNotEmpty()) cwds.add(rec.cwd)
+        }
+        favoriteWorkspaceCount = cwds.size
+        favoriteFetched.clear()
+        favoriteFetchQueue.clear()
+        favoriteFetchInFlight = null
+        favoriteFetchStartedAtMs = 0L
+        favoriteFetchQueue.addAll(cwds)
+        DiagLog.record(
+            "favorite",
+            "enterFavorites favorite_workspaces=$favoriteWorkspaceCount " +
+                "fetched_workspaces=${favoriteFetched.size} " +
+                "cwds=${cwds.joinToString()} queue=${favoriteFetchQueue.size}",
+        )
+        bumpFavoriteLive()
+        pumpFavoriteFetch()
+    }
+
+    /** 离开收藏页：停队列；退订正在飞的那一个（当前二级工作区除外）。 */
+    fun leaveFavorites() {
+        favoriteFetchQueue.clear()
+        val inflight = favoriteFetchInFlight
+        favoriteFetchInFlight = null
+        favoriteFetchStartedAtMs = 0L
+        if (inflight != null && inflight != subscribedWorkspace) {
+            unsubscribeLevel2(inflight)
+        }
+        DiagLog.record(
+            "favorite",
+            "leaveFavorites favorite_workspaces=$favoriteWorkspaceCount " +
+                "fetched_workspaces=${favoriteFetched.size} inflight=${inflight ?: "<none>"}",
+        )
+    }
+
+    /**
+     * 收藏取数超时（UI 带 now 调用，不自起定时器）。超时只跳到下一个工作区，不重发、不轮询。
+     */
+    fun checkFavoriteFetch(now: Long = nowMs(), timeoutMs: Long = 8_000L) {
+        val inflight = favoriteFetchInFlight ?: return
+        if (favoriteFetchStartedAtMs == 0L) return
+        val waited = now - favoriteFetchStartedAtMs
+        if (waited < timeoutMs) return
+        DiagLog.record(
+            "favorite",
+            "favoriteFetch timeout cwd=$inflight waited_ms=$waited timeout_ms=$timeoutMs " +
+                "favorite_workspaces=$favoriteWorkspaceCount fetched_workspaces=${favoriteFetched.size}",
+        )
+        if (inflight != subscribedWorkspace) unsubscribeLevel2(inflight)
+        favoriteFetchInFlight = null
+        favoriteFetchStartedAtMs = 0L
+        pumpFavoriteFetch()
+    }
+
+    private fun pumpFavoriteFetch() {
+        if (favoriteFetchInFlight != null) return
+        val next = favoriteFetchQueue.removeFirstOrNull() ?: return
+        favoriteFetchInFlight = next
+        favoriteFetchStartedAtMs = nowMs()
+        DiagLog.record(
+            "favorite",
+            "favoriteFetch start cwd=$next favorite_workspaces=$favoriteWorkspaceCount " +
+                "fetched_workspaces=${favoriteFetched.size} queue_left=${favoriteFetchQueue.size}",
+        )
+        subscribeLevel2(next)
+    }
+
+    private fun onFavoriteWorkspaceFetched(cwd: String) {
+        if (favoriteFetchInFlight != cwd) return
+        favoriteFetched.add(cwd)
+        DiagLog.record(
+            "favorite",
+            "favoriteFetch done cwd=$cwd favorite_workspaces=$favoriteWorkspaceCount " +
+                "fetched_workspaces=${favoriteFetched.size} queue_left=${favoriteFetchQueue.size}",
+        )
+        if (cwd != subscribedWorkspace) unsubscribeLevel2(cwd)
+        favoriteFetchInFlight = null
+        favoriteFetchStartedAtMs = 0L
+        pumpFavoriteFetch()
+    }
+
+    private fun bumpFavoriteLive() {
+        _favoriteLiveGen.update { it + 1 }
     }
 
     /** 收藏行：live 对账（全部已见工作区缓存 + 当前二级），失联保留置灰，按 addedAt 倒序。 */
@@ -528,6 +647,8 @@ class WorkspaceViewModel(
         val incoming = frame.sessions.map { it.toL2Entry() }
         val next = L2UiState(sessions = incoming, seq = frame.seq, banner = null)
         rememberLevel2(frame.workspace, next)
+        bumpFavoriteLive()
+        onFavoriteWorkspaceFetched(frame.workspace)
         val ws = subscribedWorkspace
         if (ws == null || frame.workspace != ws) {
             DiagLog.record(

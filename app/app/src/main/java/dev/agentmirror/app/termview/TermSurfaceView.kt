@@ -18,6 +18,7 @@ package dev.agentmirror.app.termview
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -28,6 +29,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
@@ -89,6 +91,19 @@ class TermSurfaceView @JvmOverloads constructor(
      * 内部负责，View 层不感知连接状态。null 分支保留是为了在测试/预览中允许不注入 VM。
      */
     var onRemoteScrollBy: ((deltaLines: Int) -> Unit)? = null
+
+    /**
+     * Compose 注入的深浅色（078 §2 B：跟系统主题，不跟主机）。
+     * null = 读 [Configuration.UI_MODE_NIGHT_MASK]。单测可钉死以免 Robolectric 默认浅色
+     * 把历史深色断言打红。
+     */
+    var nightOverride: Boolean? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            publishThemeChrome()
+            invalidate()
+        }
 
     /** 像素高度对应一逻辑行的行高（视口向下滚动超过一行时对齐整格）。 */
     private var lineHeightPx: Int = 0
@@ -301,6 +316,7 @@ class TermSurfaceView @JvmOverloads constructor(
     /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        publishThemeChrome()
         val p = presenter ?: return
         // 清屏为终端默认背景（BCE：空白格也带背景色，必须整帧铺底色）。
         bgPaint.color = themeBgArgb()
@@ -533,8 +549,8 @@ class TermSurfaceView @JvmOverloads constructor(
         TerminalColor.Default -> if (background) themeBgArgb() else themeFgArgb()
         is TerminalColor.Rgb -> Color.rgb(color.r, color.g, color.b)
         is TerminalColor.Indexed ->
-            if (color.index in 0..15) ANSI_COLORS[color.index] ?: Color.GRAY
-            else XTERM_256.getOrElse(color.index) { Color.GRAY }
+            if (color.index in 0..15) TermPalette.ansi16[color.index] ?: Color.GRAY
+            else TermPalette.xterm256.getOrElse(color.index) { Color.GRAY }
     }
 
     /** SGR 7 反显：背景画笔改取 fg 字段（作为"前景默认"语义解析，即 background=false），
@@ -546,53 +562,30 @@ class TermSurfaceView @JvmOverloads constructor(
     private fun resolvedFg(style: TextStyle): Int =
         if (style.inverse) colorFor(style.bg, background = true) else colorFor(style.fg, background = false)
 
-    private fun themeBgArgb(): Int = DEFAULT_BG
-    private fun themeFgArgb(): Int = DEFAULT_FG
+    private fun isNight(): Boolean {
+        val override = nightOverride
+        if (override != null) return override
+        val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return night == Configuration.UI_MODE_NIGHT_YES
+    }
+
+    private fun themeBgArgb(): Int = TermPalette.of(isNight()).defaultBg
+    private fun themeFgArgb(): Int = TermPalette.of(isNight()).defaultFg
+
+    private fun publishThemeChrome() {
+        val token = TermPalette.token(isNight())
+        if (contentDescription != token) contentDescription = token
+    }
 
     private fun dp(v: Float): Float = v * resources.displayMetrics.density
 
     private companion object {
-        /** 终端默认前景/背景色（主题定制任务替换处）。 */
+        /** 历史深色默认值别名；真实取色走 [TermPalette.of]。 */
         const val DEFAULT_FG = 0xFFE8E8E8.toInt()
         const val DEFAULT_BG = 0xFF0D1626.toInt()
         /** 右侧留白（fix-terminal-right-margin），见 [usableWidthPx]。左侧见 [TermLeftEdge.LEFT_MARGIN_DP]。 */
         const val RIGHT_MARGIN_DP = 4f
-        /** 终端基础 16 色调色板（XTerm 近似，主题定制任务可替换）。 */
-        val ANSI_COLORS: Map<Int, Int> = mapOf(
-            0 to Color.rgb(0, 0, 0),
-            1 to Color.rgb(205, 49, 49),
-            2 to Color.rgb(13, 188, 121),
-            3 to Color.rgb(229, 229, 16),
-            4 to Color.rgb(36, 114, 200),
-            5 to Color.rgb(188, 63, 188),
-            6 to Color.rgb(17, 168, 205),
-            7 to Color.rgb(229, 229, 229),
-            8 to Color.rgb(102, 102, 102),
-            9 to Color.rgb(241, 76, 76),
-            10 to Color.rgb(35, 209, 139),
-            11 to Color.rgb(245, 245, 67),
-            12 to Color.rgb(59, 142, 234),
-            13 to Color.rgb(214, 112, 214),
-            14 to Color.rgb(41, 184, 219),
-            15 to Color.rgb(229, 229, 229),
-        )
-
-        /** xterm 256 色扩展区一次性预计算查表（绘制热路径查表零分配）：
-         *  16-231 为 6×6×6 色立方（分量 0 或 55+40×v，xterm 标准），232-255 为
-         *  24 级灰阶梯 8+10×n。0-15 槽位仅占位（colorFor 先走 ANSI_COLORS）。 */
-        val XTERM_256: IntArray = IntArray(256) { i ->
-            fun cube(v: Int): Int = if (v == 0) 0 else 55 + 40 * v
-            when {
-                i < 16 -> ANSI_COLORS[i] ?: Color.GRAY
-                i < 232 -> {
-                    val c = i - 16
-                    Color.rgb(cube(c / 36), cube(c / 6 % 6), cube(c % 6))
-                }
-                else -> {
-                    val v = 8 + 10 * (i - 232)
-                    Color.rgb(v, v, v)
-                }
-            }
-        }
+        val ANSI_COLORS: Map<Int, Int> get() = TermPalette.ansi16
+        val XTERM_256: IntArray get() = TermPalette.xterm256
     }
 }
