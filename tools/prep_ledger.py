@@ -25,6 +25,20 @@ os.chdir(WS)
 def sh(*args):
     return subprocess.run(args, capture_output=True, text=True)
 
+MARK = "## 知识基底（已内联）"
+
+def _inline_base(task, base_path):
+    """基底前置内联（findings F-12：read_paths 被框架静默吞掉，只能靠正文）。"""
+    if MARK in task["title"]:
+        return
+    body = open(base_path, encoding="utf-8").read()
+    task["title"] = (
+        f"{MARK} —— tools/basegen_ledger.py 现算的模块影响闭包，"
+        f"**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。"
+        f"⛔ 不看它就动手 = 凭空猜架构。原件 {base_path}。\n\n"
+        f"{body}\n\n---\n以上是基底，以下是任务。\n\n" + task["title"])
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit("用法: prep_ledger.py <账本.json> [--team T] [--template 角色文件]")
@@ -38,6 +52,7 @@ def main():
     # dev-app.md 已纳入版本控制，清理退役席位时⛔不要删它。
     template = ".team/grok/agents/dev-app.md"
     suffix = ""
+    reuse = {}
     for i, a in enumerate(sys.argv):
         if a == "--team":     team = sys.argv[i + 1]
         if a == "--template": template = sys.argv[i + 1]
@@ -65,19 +80,26 @@ def main():
             sys.exit(f"基底编译失败 {tid}: {base.stderr[-400:]}")
 
         # ② 专属席位
-        seat = f"{short}-{tid.replace('t.', '')}{suffix}"[:48]
+        reused = tid in reuse
+        seat = reuse[tid] if reused else f"{short}-{tid.replace('t.', '')}{suffix}"[:48]
         role_file = f".team/grok/agents/{seat}.md"
-        if not os.path.exists(role_file):
+        if not reused and not os.path.exists(role_file):
             src = open(template, encoding="utf-8").read()
             name_line = [l for l in src.splitlines() if l.startswith("name:")][0]
             open(role_file, "w", encoding="utf-8").write(src.replace(name_line, f"name: {seat}", 1))
-        r = sh("team-agent", "add-agent", seat, "--role-file", role_file, "--workspace", ".")
+        r = sh("true") if reused else sh("team-agent", "add-agent", seat, "--role-file", role_file, "--workspace", ".")
         if "ok: True" not in r.stdout and "already" not in (r.stdout + r.stderr).lower():
             sys.exit(f"建席失败 {seat}: {(r.stdout + r.stderr)[-400:]}")
         sh("team-agent", "start-agent", seat, "--workspace", ".")
 
         # ③ 行为自证：能写盘才算有手
         probe = f".team/nodes/{tid.replace('t.', '')}/_hands.txt"
+        if reused:
+            led["roles"][role]["seat"] = {"agent": seat, "team": team}
+            rp = task.setdefault("resources", {}).setdefault("read_paths", [])
+            if base_path not in rp: rp.append(base_path)
+            _inline_base(task, base_path)
+            changed = True; print(f"{tid}: seat={seat}（复用） base={base_path}"); continue
         if os.path.exists(probe):
             os.remove(probe)
         sh("team-agent", "send", seat,
@@ -103,14 +125,7 @@ def main():
         # 而追加在任务书末尾的一句「去读 <path>」会被埋在纪律堆里，
         # 且只是**给路径**——席位读不读没有任何保证。
         # ⇒ 直接把闭包内容内联到任务书最前面：给内容，不给路径。
-        MARK = "## 知识基底（已内联）"
-        if MARK not in task["title"]:
-            body = open(base_path, encoding="utf-8").read()
-            task["title"] = (
-                f"{MARK} —— tools/basegen_ledger.py 现算的模块影响闭包，"
-                f"**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。"
-                f"⛔ 不看它就动手 = 凭空猜架构。原件 {base_path}。\n\n"
-                f"{body}\n\n---\n以上是基底，以下是任务。\n\n" + task["title"])
+        _inline_base(task, base_path)
         changed = True
         print(f"{tid}: seat={seat} base={base_path}")
 
