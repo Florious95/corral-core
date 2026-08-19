@@ -9,6 +9,7 @@ SOCK="${SOCK:-/tmp/tmux-501/ta-b7cc1c640ccf}"
 INTERVAL="${INTERVAL:-60}"
 NEED="${NEED:-3}"
 FRESH="${FRESH:-300}"
+PATIENCE="${PATIENCE:-16}"   # 等席位阶段的耐心：16×60s ≈ 驱动器 950s 预算
 cd "$WS" || exit 2
 # 判活只用这一把尺（skill: tmux-node-activity）。⛔ 不许手写 ps/pgrep/find 判活。
 NP=$(command -v nodeprobe || echo ~/.local/bin/nodeprobe)
@@ -46,6 +47,22 @@ print(sum(1 for n in ns if n['state']=='working'), sum(1 for n in ns if n['state
   last=$((last + $(find .team/acclogs -type f -newermt "@$((now-FRESH))" 2>/dev/null | wc -l)))
   if [ -n "$dead" ]; then
     echo "[$(date -u +%H:%M:%SZ)] 🔴 驱动器不见了:$dead —— 承诺常驻的进程自己消失过"; exit 1
+  fi
+  # 🔴 告警要盯「现在真正卡在谁身上」那一环（skill §4.2）。两个阶段的有意义信号不同：
+  #   等席位交货  → 有意义的是「席位在不在动」；驱动器无子进程是**预期的**，不算证据
+  #   驱动器跑判据 → 有意义的是「驱动器有没有子进程 / 判据输出在不在长」；席位 idle 是**预期的**
+  # 不分阶段就会在每次派单后立刻误响一次，而一个总在喊狼来了的告警等于没有告警。
+  phase=waiting
+  for lg in .team/ledgers/*-drive.log; do
+    [ -e "$lg" ] || continue
+    case "$(tail -1 "$lg")" in *"判据 acceptance"*) phase=acceptance ;; esac
+  done
+  if [ "$phase" = waiting ]; then
+    # 等席位：只有席位静默**超过驱动器自己的等待预算**才算停滞，那时驱动器会自己写下一行
+    if [ "$work" -gt 0 ] || [ "$last" -gt 0 ]; then strikes=0; else strikes=$((strikes+1)); fi
+    echo "[$(date -u +%H:%M:%SZ)] 等席位 席位working=$work 连续静默=$strikes/$PATIENCE"
+    [ "$strikes" -ge "$PATIENCE" ] && { echo "#ALERT 席位收了派单却一直不动（投递 delivered 但没被消费？）"; exit 1; }
+    sleep "$INTERVAL"; continue
   fi
   if [ "$work" -gt 0 ] || [ "$busy" -gt 0 ] || [ "$last" -gt 0 ]; then
     strikes=0
