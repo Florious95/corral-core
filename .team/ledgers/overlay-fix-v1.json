@@ -17,7 +17,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "advisor",
+    "agent": "fav-advisor",
     "team": "grok-l2"
    }
   },
@@ -33,7 +33,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "dev-server",
+    "agent": "fav-dev-app",
     "team": "grok-l2"
    }
   },
@@ -49,7 +49,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "dev-app",
+    "agent": "fav-dev-app",
     "team": "grok-l2"
    }
   },
@@ -65,7 +65,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "control",
+    "agent": "fav-control",
     "team": "grok-l2"
    }
   },
@@ -170,7 +170,22 @@
      "A-p-red"
     ]
    },
-   "state": "planned"
+   "state": "succeeded",
+   "attempts": [
+    {
+     "attempt_id": "att-t.probe-seq1-t1787072390234",
+     "delivery_id": "del-t.probe-seq1-t1787072390234",
+     "state": "succeeded",
+     "writeback_revision": 2,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-p-exec",
+      "acceptance_success.acceptance_id=A-p-doc",
+      "acceptance_success.acceptance_id=A-p-three",
+      "acceptance_success.acceptance_id=A-p-red",
+      "acceptance_success.writeback_revision=2"
+     ]
+    }
+   ]
   },
   "t.srv": {
    "title": "服务端修缺陷 1（socket 作用域 + 自我映照）。契约 065。\n🔴 悬浮窗流必须按**客户端指定的 socket** 取数：`overlay_subscribe` 要能带目标 socket，服务端按它建 scratch 客户端并抓屏，**不许用「第一个发现的」或写死的那个**。用户实测：在不同会话点开，看到的都是同一个 socket 的内容。\n🔴 **排除观测装置本身**：抓屏用的 scratch 会话（am-overlay）及其辅助 pane（tree / sleep / ov-spin）不得出现在输出里。它是观测装置，不是被观测对象。\n必须写出并 PASS：TestOverlayHonorsRequestedSocket / TestOverlayExcludesScratchSession。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
@@ -247,10 +262,24 @@
      "A-s-suite"
     ]
    },
-   "state": "planned",
+   "state": "succeeded",
    "parallel": {
     "group": "g5"
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.srv-seq3-t1787072794038",
+     "delivery_id": "del-t.srv-seq3-t1787072794038",
+     "state": "succeeded",
+     "writeback_revision": 4,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-s-sock",
+      "acceptance_success.acceptance_id=A-s-noself",
+      "acceptance_success.acceptance_id=A-s-suite",
+      "acceptance_success.writeback_revision=4"
+     ]
+    }
+   ]
   },
   "t.app": {
    "title": "App 修缺陷 2 与 3（ANSI 未渲染 / 画面追加不替换）。契约 065。\n🔴 现在 App 把 PTY 裸字节当**文本**画了出来，用户看到字面量 `[?1049h` `(B[m` `[K` `[30m[43m`；又因为 `[?1049h`（切备用屏）与 `[H[2J`（清屏归位）没被解释，每次刷新是**追加**不是**替换**，画面不断向下重复。\n🔴 **本项目已经有一条终端渲染路径（三级终端流），请复用它**，不要另写一份渲染——另写必然与三级行为漂移，而漂移是静默的。若你判断不能复用，**说明理由并发 class=\"blocking\"** 交 leader 裁定，不要默默另写一套。\n🔴 订阅时要把**当前会话所属的 socket** 带给服务端（配合 t.srv）。\n必须写出并 PASS：OverlayRendersThroughTerminalEmulatorTest（渲染结果不含裸控制序列）/ OverlayScreenReplacesNotAppendsTest（连续多帧后行数有界、不重复堆叠）/ OverlaySubscribeCarriesCurrentSocketTest。🔴 064 已通过的那两条不许弄坏：OverlayDismissOnOutsideTapTest / OverlayUnsubscribesOnCloseTest 必须仍 PASS。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
@@ -363,10 +392,27 @@
      "A-a-suite"
     ]
    },
-   "state": "planned",
+   "state": "succeeded",
    "parallel": {
     "group": "g5"
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.app-seq2-t1787072793393",
+     "delivery_id": "del-t.app-seq2-t1787072793393",
+     "state": "succeeded",
+     "writeback_revision": 3,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-a-ansi",
+      "acceptance_success.acceptance_id=A-a-replace",
+      "acceptance_success.acceptance_id=A-a-sock",
+      "acceptance_success.acceptance_id=A-a-keep1",
+      "acceptance_success.acceptance_id=A-a-keep2",
+      "acceptance_success.acceptance_id=A-a-suite",
+      "acceptance_success.writeback_revision=3"
+     ]
+    }
+   ]
   },
   "t.ver": {
    "title": "对照席：验加强版探针转绿、且尺寸不变没被破坏。🔴 不实现、不修任何东西。\n①跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh，必须**绿**（三条断言全过）；\n②跑 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-design/size-invariance.sh，必须**仍然绿**（064 的硬约束不许被这轮修改破坏）；\n③写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-ver/ov2-mutate.sh：定点破坏（例如把 scratch 排除去掉、或让渲染绕过终端模拟器），对应具名测试必须变红、恢复后变绿，两头成立才 exit 0，工作区跑完必须干净；并写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-ver/报告.md。\n🔴 自检：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
@@ -454,7 +500,23 @@
      "A-v-rep"
     ]
    },
-   "state": "planned"
+   "state": "planned",
+   "attempts": [
+    {
+     "attempt_id": "att-t.ver-seq4-t1787073663875",
+     "delivery_id": "del-t.ver-seq4-t1787073663875",
+     "state": "acceptance_pending",
+     "artifact_refs": [
+      "acceptance_failure.acceptance_id=A-v-probe",
+      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh'],timeout=900).returncode)\"]",
+      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+      "acceptance_failure.exit_code=1",
+      "acceptance_failure.expected_exit_code=0",
+      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+      "acceptance_failure.stderr_tail(末20行)="
+     ]
+    }
+   ]
   },
   "t.pkg": {
    "title": "打包给用户手动验收。assembleDebug 出 APK，证明不是旧产物。🔴 收口判据是加强版探针 + 尺寸不变，不是「dex 里有某个符号」。🔴 不要改任何实现代码。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**，判据也在仓根跑。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息（不发开工/进度/收到/完成）。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验就自己起隔离 server：`mkdir -p /tmp/ov2-<名>` → `unset TMUX` → `tmux -S <sock> new-session -d` → **`list-sessions` 自检在自己 socket 上**。\n⛔ 遍历进程只取 comm，禁止取 args（实发：pgrep -fl 把席位 API key 打上屏）。",
@@ -542,6 +604,97 @@
     ]
    },
    "state": "planned"
+  },
+  "t.web": {
+   "title": "先在 **web 外部端**把悬浮窗做成 MVP。契约 requirement-base/entries/066-悬浮窗先在外部端做MVP与展示要求.md（用户方法：先在外部端实现同一个模块、调好样式给人看过，再进安卓）。\n在 web/ 下做出会话内右上角「查看」的悬浮窗，**必须走真实的服务端流**（overlay_subscribe/overlay_frame），⛔ 不许用假数据糊一个界面——假数据能让样式看着对，却验不出取数、渲染、刷新这三件，而坏的正是这三件。\n四条展示要求全部要满足：①**简洁样式**，无裸控制序列（不得把 ESC[ / [?1049h / (B[m / [K 当文本画出来）；②中文/中英混排的目录树**不乱码不错位**；③树**全部展开**；④能**动态看到工作/停止**（转圈动效要活）。\n🔴 画面必须是**替换**不是追加：连续刷新后行数有界，不出现同一棵树重复多份。\n🔴 socket 必须正确：只显示目标 socket 下的真实会话，**不得混入我们自己的 scratch 会话**。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-web/说明.md，把四条各自的实测证据（截取的帧文本/行数统计）贴进去。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；要做 tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt5.web",
+    "write_paths": [
+     "web/",
+     ".team/nodes/ov2-web/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/066-悬浮窗先在外部端做MVP与展示要求.md",
+     "requirement-base/entries/065-悬浮窗三缺陷与判据加强.md",
+     "server/internal/",
+     ".team/nodes/ov2-probe/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "1c9070d98"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-web/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-w-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-web/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-w-noraw",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -aE '\\\\[\\\\?1049|\\\\(B\\\\[m|ESC\\\\[' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-web/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-w-four",
+      "argv": [
+       "sh",
+       "-c",
+       "grep -c -E '简洁|中文|展开|动态|工作|停止' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-web/说明.md | awk '$1>=4'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     },
+     {
+      "acceptance_id": "A-w-real",
+      "argv": [
+       "sh",
+       "-c",
+       "grep -qE 'overlay_subscribe|overlay_frame' /Volumes/nvme/Projects/远程Agent安卓/web/ -r"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 950
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-w-doc",
+     "A-w-noraw",
+     "A-w-four",
+     "A-w-real"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
   }
  },
  "dependencies": [
@@ -556,18 +709,18 @@
    "condition": "requires_success"
   },
   {
-   "from": "t.srv",
-   "to": "t.ver",
+   "from": "t.ver",
+   "to": "t.pkg",
    "condition": "requires_success"
   },
   {
    "from": "t.app",
-   "to": "t.ver",
+   "to": "t.web",
    "condition": "requires_success"
   },
   {
-   "from": "t.ver",
-   "to": "t.pkg",
+   "from": "t.web",
+   "to": "t.ver",
    "condition": "requires_success"
   }
  ],
@@ -627,5 +780,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 1
+ "revision": 5
 }
