@@ -250,7 +250,7 @@
      "A-s-doc"
     ]
    },
-   "state": "planned",
+   "state": "succeeded",
    "attempts": []
   },
   "t.app": {
@@ -495,6 +495,66 @@
   ]
  },
  "fanout_aggregation": {},
- "audit": {},
- "revision": 6
+ "audit": {
+  "acceptance_results": [
+   {
+    "acceptance_id": "A-s-test",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 7,
+      "supports_or_refutes": "A-s-test",
+      "observed_at": "2026-08-19T08:00:24.987205Z",
+      "freshness": {
+       "as_of": "2026-08-19T08:00:24.987205Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
+   },
+   {
+    "acceptance_id": "A-s-suite",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 7,
+      "supports_or_refutes": "A-s-suite",
+      "observed_at": "2026-08-19T08:00:24.987205Z",
+      "freshness": {
+       "as_of": "2026-08-19T08:00:24.987205Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
+   },
+   {
+    "acceptance_id": "A-s-doc",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 7,
+      "supports_or_refutes": "A-s-doc",
+      "observed_at": "2026-08-19T08:00:24.987205Z",
+      "freshness": {
+       "as_of": "2026-08-19T08:00:24.987205Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "revision": 7
 }
