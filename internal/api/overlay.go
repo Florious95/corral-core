@@ -216,25 +216,14 @@ func overlayViewFor(conns []*wsConn) (cols, rows uint16) {
 }
 
 func (c *wsConn) handleOverlaySubscribe(req protocol.OverlaySubscribe) {
-	already := c.overlayActive()
-	prev := c.overlaySocket()
-	c.setOverlay(true, req.Socket, req.Cols, req.Rows)
-	c.s.log.Info("overlay: subscribe",
+	// 已归档，2026-08-19 用户令暂不介入；展示不完全问题未修。
+	// 接受合法 overlay_subscribe 以免客户端收到 invalid_field，但不 mark、
+	// 不 attach、不起 scratch、不推 overlay_frame。
+	c.s.log.Info("overlay: subscribe archived no-op",
 		"requested", req.Socket,
 		"cols", req.Cols,
 		"rows", req.Rows,
-		"prev", prev,
-		"already", already,
-		"switched", already && prev != req.Socket,
 	)
-	if !already {
-		c.s.markOverlay()
-		return
-	}
-	select {
-	case c.s.overlayWakeCh <- struct{}{}:
-	default:
-	}
 }
 
 func (c *wsConn) handleOverlayUnsubscribe(protocol.OverlayUnsubscribe) {

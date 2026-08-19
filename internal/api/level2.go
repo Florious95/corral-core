@@ -189,7 +189,7 @@ func (s *Server) publishLevel2(ctx context.Context) {
 		if kind == "" {
 			continue
 		}
-		seq := s.nextSeq()
+		seq := s.nextLevel2Seq()
 		if kind == "heartbeat" {
 			c.send(protocol.Level2Heartbeat{Workspace: ws, Seq: seq})
 			continue

@@ -70,18 +70,25 @@ func (s *Server) logUnknownForProvider(providerID, title string, first rune) {
 	logUnknownForProvider(s.log, providerID, title, first)
 }
 
-// classifyForProvider runs only the detector registered for providerID.
-// Unclaimed titles are unknown (068: we know the family, not this title).
+// classifyForProvider runs only the detector registered for providerID, then
+// falls back to the shared three-state rule (062).
+//
+// 🔴 068 §4 原先写的是「已知是哪家但检测器认不出 ⇒ unknown」，那条**盖掉了 062**，
+// 是个回归：某些 CLI 刚起会话时标题就是一个光秃秃的产品名（不带该家的空闲后缀），
+// 于是本家检测器不认领 ⇒ 整窗判成「未知」。用户实测报「新对话被标记为未知」。
+// 正确语义：**无前导符号（字母/数字/空）一律空闲**；unknown 只留给
+// **认不出的前导符号**——那才是「某家的判据缺样本」这条真信号。
+// ⛔ 本文件是共享层，注释里也不得出现任何具体 CLI 名字（068 §3，判据 grep 反测）。
 func classifyForProvider(providerID, title string) (status string, first rune, known bool) {
 	r, _ := firstNonSpace(title)
 	d, ok := l2ByProvider[providerID]
 	if !ok {
-		return protocol.SessionStatusUnknown, r, false
+		return classifyFallback(title)
 	}
 	if st, claimed := d.Match(title); claimed {
 		return st, r, true
 	}
-	return protocol.SessionStatusUnknown, r, false
+	return classifyFallback(title)
 }
 
 func classifyFallback(title string) (status string, first rune, known bool) {

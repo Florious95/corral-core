@@ -22,16 +22,17 @@ type mapProvider map[int]string
 func (m mapProvider) Identify(pid int) string { return m[pid] }
 
 func TestProviderWhitelistIdentityBeforeStatus(t *testing.T) {
-	// A title the grok detector would claim must stay unknown when identity
-	// is the other family — detectors must not compete on one title.
+	// 身份优先：别家会认领的标题，落到本家时**不得被判成别家的状态**。
+	// 068 §8 修正后，本家不认领 ⇒ 落回 062 三态（此标题字母开头 ⇒ idle），
+	// ⛔ 关键是它**不能是 working**——那才叫「被别家偷走」。
 	title := "x - Thinking - stolen-by-wrong-family"
 	stGrok, claimed := grokDetector{}.Match(title)
 	if !claimed || stGrok != protocol.SessionStatusWorking {
 		t.Fatalf("precondition: grok detector should claim %q", title)
 	}
 	st, _, known := classifyForProvider("claude_code", title)
-	if known || st != protocol.SessionStatusUnknown {
-		t.Fatalf("identity-first: provider=claude_code title=%q → status=%q known=%v; want unknown (not grok working)",
+	if st == protocol.SessionStatusWorking || st != protocol.SessionStatusIdle || !known {
+		t.Fatalf("identity-first: provider=claude_code title=%q → status=%q known=%v; want idle (068 §8：不认领则落回 062 三态；未知只由认不出的前导符号产生)",
 			title, st, known)
 	}
 }

@@ -61,26 +61,9 @@ func TestOverlayNoResourceWithoutSubscriber(t *testing.T) {
 	}
 
 	e.sendFrame(protocol.OverlaySubscribe{Socket: "test-sock"})
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) && cap.ClientCount() == 0 {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if cap.ClientCount() == 0 {
-		t.Fatal("subscribe did not start a capture client")
-	}
-
-	e.sendFrame(protocol.OverlayUnsubscribe{})
-	deadline = time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) && cap.ClientCount() != 0 {
-		time.Sleep(10 * time.Millisecond)
-	}
-	after := cap.CaptureCount()
-	time.Sleep(80 * time.Millisecond)
-	if cap.ClientCount() != 0 {
-		t.Fatalf("after unsubscribe clients=%d, want 0", cap.ClientCount())
-	}
-	if got := cap.CaptureCount(); got != after {
-		t.Fatalf("captures grew after unsubscribe: %d -> %d", after, got)
+	time.Sleep(200 * time.Millisecond)
+	if cap.ClientCount() != 0 || cap.CaptureCount() != 0 {
+		t.Fatalf("archived overlay must not start capturer: captures=%d clients=%d", cap.CaptureCount(), cap.ClientCount())
 	}
 }
 
@@ -93,43 +76,31 @@ func waitOverlayFrame(t *testing.T, e *wsEnv, d time.Duration) protocol.OverlayF
 	return got.(protocol.OverlayFrame)
 }
 
-func TestOverlayFramesAreNonEmpty(t *testing.T) {
+func TestOverlaySubscribeDoesNotPublishFrames(t *testing.T) {
 	cap := &countingOverlay{}
 	e := startWS(t, overlayTestOpts(cap))
 	e.auth()
 	e.sendFrame(protocol.OverlaySubscribe{Socket: "test-sock"})
-	got := waitOverlayFrame(t, e, 3*time.Second)
-	if got.Text == "" || len([]rune(got.Text)) == 0 {
-		t.Fatalf("overlay_frame text empty: %+v", got)
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	for {
+		_, data, err := e.conn.Read(ctx)
+		if err != nil {
+			break
+		}
+		typed, err := protocol.UnmarshalFrame(data)
+		if err != nil {
+			continue
+		}
+		if _, ok := typed.(protocol.OverlayFrame); ok {
+			t.Fatalf("archived overlay must not publish overlay_frame: %+v", typed)
+		}
+		if ef, ok := typed.(protocol.ErrorFrame); ok {
+			t.Fatalf("valid overlay_subscribe must not error: %+v", ef)
+		}
 	}
-	if got.Seq < 1 {
-		t.Fatalf("overlay_frame seq=%d, want >= 1", got.Seq)
-	}
-}
-
-func TestOverlayFramesChangeOverTime(t *testing.T) {
-	cap := &countingOverlay{}
-	e := startWS(t, overlayTestOpts(cap))
-	e.auth()
-	e.sendFrame(protocol.OverlaySubscribe{Socket: "test-sock"})
-	first := waitOverlayFrame(t, e, 3*time.Second)
-	deadline := time.Now().Add(3 * time.Second)
-	var second protocol.OverlayFrame
-	found := false
-	for time.Now().Before(deadline) {
-		got := waitTyped(t, e, deadline, func(typed protocol.Typed) bool {
-			f, ok := typed.(protocol.OverlayFrame)
-			return ok && f.Text != first.Text
-		})
-		second = got.(protocol.OverlayFrame)
-		found = true
-		break
-	}
-	if !found {
-		t.Fatal("no second overlay_frame with different text (static screenshot?)")
-	}
-	if first.Text == second.Text {
-		t.Fatalf("two frames identical: %q", first.Text)
+	if cap.ClientCount() != 0 {
+		t.Fatalf("capturer clients=%d want 0", cap.ClientCount())
 	}
 }
 
@@ -177,23 +148,22 @@ func TestOverlayLiveFirstFrameWithinProbeWindow(t *testing.T) {
 		OverlayCapturer: cap,
 	})
 	e.auth()
-	t0 := time.Now()
 	e.sendFrame(protocol.OverlaySubscribe{Socket: sock})
-	first := waitOverlayFrame(t, e, 6*time.Second)
-	firstDur := time.Since(t0)
-	if strings.TrimSpace(first.Text) == "" {
-		t.Fatalf("first overlay_frame empty after %s: %+v", firstDur, first)
+	time.Sleep(400 * time.Millisecond)
+	after := exec.Command("tmux", "-S", sock, "list-sessions", "-F", "#{session_name}")
+	after.Env = isolatedTmuxEnv()
+	gotAfter, errAfter := after.CombinedOutput()
+	if errAfter != nil {
+		t.Fatalf("list-sessions after subscribe: %v %s", errAfter, gotAfter)
 	}
-	if firstDur > 6*time.Second {
-		t.Fatalf("first overlay_frame at %s, probe window is 6s", firstDur)
+	if strings.Contains(string(gotAfter), overlay.ScratchSession) {
+		t.Fatalf("archived overlay must not create scratch session, got=%q", gotAfter)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	second := waitTyped(t, e, deadline, func(typed protocol.Typed) bool {
-		f, ok := typed.(protocol.OverlayFrame)
-		return ok && f.Text != first.Text
-	}).(protocol.OverlayFrame)
-	if first.Text == second.Text {
-		t.Fatalf("two frames identical: %q", first.Text)
+	clients := exec.Command("tmux", "-S", sock, "list-clients", "-F", "#{client_name}")
+	clients.Env = isolatedTmuxEnv()
+	cout, _ := clients.CombinedOutput()
+	if strings.TrimSpace(string(cout)) != "" {
+		t.Fatalf("archived overlay must not attach any tmux client, clients=%q", cout)
 	}
 }
 
@@ -228,28 +198,15 @@ func TestOverlayHonorsRequestedSocket(t *testing.T) {
 		OverlayCapturer: cap,
 	})
 	e.auth()
-
 	e.sendFrame(protocol.OverlaySubscribe{Socket: sockA})
-	fa := waitOverlayFrame(t, e, 6*time.Second)
-	if !strings.Contains(fa.Text, "sess-aaa") {
-		t.Fatalf("socket A frame missing sess-aaa (requested=%s):\n%s", sockA, fa.Text)
-	}
-	if strings.Contains(fa.Text, "sess-bbb") {
-		t.Fatalf("socket A frame leaked sess-bbb (first-found bug? requested=%s):\n%s", sockA, fa.Text)
-	}
-
-	e.sendFrame(protocol.OverlayUnsubscribe{})
-	e.sendFrame(protocol.OverlaySubscribe{Socket: sockB})
-	deadline := time.Now().Add(6 * time.Second)
-	fb := waitTyped(t, e, deadline, func(typed protocol.Typed) bool {
-		f, ok := typed.(protocol.OverlayFrame)
-		return ok && strings.Contains(f.Text, "sess-bbb")
-	}).(protocol.OverlayFrame)
-	if !strings.Contains(fb.Text, "sess-bbb") {
-		t.Fatalf("socket B frame missing sess-bbb (requested=%s):\n%s", sockB, fb.Text)
-	}
-	if strings.Contains(fb.Text, "sess-aaa") {
-		t.Fatalf("socket B frame leaked sess-aaa (stuck on first socket? requested=%s):\n%s", sockB, fb.Text)
+	time.Sleep(300 * time.Millisecond)
+	for _, sock := range []string{sockA, sockB} {
+		clients := exec.Command("tmux", "-S", sock, "list-clients", "-F", "#{client_tty}")
+		clients.Env = isolatedTmuxEnv()
+		cout, _ := clients.CombinedOutput()
+		if strings.TrimSpace(string(cout)) != "" {
+			t.Fatalf("subscribe must not attach clients on %s, got=%q", sock, cout)
+		}
 	}
 }
 
@@ -279,14 +236,15 @@ func TestOverlayExcludesScratchSession(t *testing.T) {
 	})
 	e.auth()
 	e.sendFrame(protocol.OverlaySubscribe{Socket: sock})
-	got := waitOverlayFrame(t, e, 6*time.Second)
-	if !strings.Contains(got.Text, "sess-user") {
-		t.Fatalf("frame missing user session sess-user:\n%s", got.Text)
+	time.Sleep(300 * time.Millisecond)
+	list := exec.Command("tmux", "-S", sock, "list-sessions", "-F", "#{session_name}")
+	list.Env = isolatedTmuxEnv()
+	got, err := list.CombinedOutput()
+	if err != nil {
+		t.Fatalf("list-sessions: %v %s", err, got)
 	}
-	for _, tok := range []string{overlay.ScratchSession, "ov-spin", "tree*", "sleep*"} {
-		if strings.Contains(got.Text, tok) {
-			t.Fatalf("frame contains observer token %q (self-reflection):\n%s", tok, got.Text)
-		}
+	if strings.Contains(string(got), overlay.ScratchSession) {
+		t.Fatalf("must not start scratch session %s, got=%q", overlay.ScratchSession, got)
 	}
 }
 

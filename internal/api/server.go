@@ -103,6 +103,10 @@ type Server struct {
 	// heartbeat).
 	level2Interval  time.Duration
 	level2Heartbeat time.Duration
+	// level2Seq is the L2 stream's own monotonic counter. It must not share
+	// listing seq: publishLevel2 used to call nextSeq(), which punched holes
+	// in list_delta continuity and made the App re-list (074 / A-rf-noloop).
+	level2Seq atomic.Uint64
 
 	// overlaySubscribers / overlayWakeCh / overlayInterval gate the 064
 	// capture stream: only while ≥1 overlay subscriber exists may we start a
@@ -188,15 +192,12 @@ func NewServer(opts Options) *Server {
 	if s.providerFinder == nil {
 		s.providerFinder = newProcFinder()
 	}
+	// 072 / 2026-08-19：抓屏 overlay 已归档，主流程不再构造 scratch 客户端、
+	// 不再启动 overlayLoop。opts.OverlayCapturer 若注入也只保留字段，不被调用。
 	s.overlay = opts.OverlayCapturer
-	if s.overlay == nil {
-		dirs := resolvedDiscoverySocketDirs(opts.DiscoverySocketDirs)
-		s.overlay = overlay.NewTmux(log, dirs)
-	}
 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
 	go s.listingLoop(s.loopCtx)
 	go s.level2Loop(s.loopCtx)
-	go s.overlayLoop(s.loopCtx)
 	return s
 }
 
@@ -254,6 +255,12 @@ func (s *Server) nextSeq() uint64 {
 	defer s.snapMu.Unlock()
 	s.seq++
 	return s.seq
+}
+
+// nextLevel2Seq advances the level-2 stream sequence only. Listing / list_delta
+// continuity is unaffected.
+func (s *Server) nextLevel2Seq() uint64 {
+	return s.level2Seq.Add(1)
 }
 
 // currentSeq returns the last published sequence, 0 before any scan.

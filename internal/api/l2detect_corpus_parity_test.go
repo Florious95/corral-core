@@ -32,19 +32,29 @@ func TestL2FixtureCorpusParity(t *testing.T) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 3)
-		if len(parts) < 2 {
-			t.Fatalf("%s:%d: want title<TAB>state[<TAB>provider], got %q", path, lineNo, line)
+		parts := strings.Split(line, "\t")
+		if len(parts) != 4 {
+			t.Fatalf("%s:%d: need payload<TAB>want<TAB>provider<TAB>kind (4 fields), got %d in %q", path, lineNo, len(parts), line)
 		}
-		title, want := parts[0], parts[1]
-		var got string
-		if len(parts) >= 3 && parts[2] != "" && parts[2] != "unknown" {
-			got, _, _ = classifyForProvider(parts[2], title)
-		} else {
-			got, _, _ = classifyFallback(title)
-		}
-		if got != want {
-			t.Errorf("%s:%d title=%q: go=%q want=%q", path, lineNo, title, got, want)
+		payload, want, provider, kind := parts[0], parts[1], parts[2], parts[3]
+		switch kind {
+		case "title":
+			var got string
+			if provider != "" && provider != "unknown" {
+				got, _, _ = classifyForProvider(provider, payload)
+			} else {
+				got, _, _ = classifyFallback(payload)
+			}
+			if got != want {
+				t.Errorf("%s:%d title=%q: go=%q want=%q", path, lineNo, payload, got, want)
+			}
+		case "footer":
+			got := backgroundTasksFor(provider, payload)
+			if !got.equalWant(want) {
+				t.Errorf("%s:%d footer=%q provider=%s: go=%s want=%s", path, lineNo, payload, provider, got.String(), want)
+			}
+		default:
+			t.Fatalf("%s:%d: unknown kind %q (want title|footer); refusing to ignore a new column", path, lineNo, kind)
 		}
 		n++
 	}
