@@ -4,3 +4,13 @@
 [ledger-run 2026-08-19T03:37:35Z] 投递回执 send-ok | task=t.layout case_id=ledger_overlay-layout_v1__t.layout__r1 message_id=msg_7b6e1e3f9c70 —— 回执成功≠席位收到，下一步查收件箱确认落地
 [ledger-run 2026-08-19T03:37:35Z] 派单落地 dispatch-landed | task=t.layout 席位 fav-dev-app 的收件箱已多出这条派单
 [ledger-run 2026-08-19T03:37:35Z] 等待 wait | task=t.layout 在等的 key（case_id）=ledger_overlay-layout_v1__t.layout__r1 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T03:57:38Z] 已唤醒 wait-signaled | task=t.layout 等到结果了
+[ledger-run 2026-08-19T03:57:38Z] 判据 acceptance | task=t.layout 在跑 required=["A-l-shots", "A-l-doc", "A-l-nofixed80", "A-l-app", "A-l-go", "A-l-apk"]
+[ledger-run 2026-08-19T03:58:10Z] 判据通过留档 acceptance-success | task=t.layout 成功 attempt 落进 attempts[] writeback_revision=2 passed=["A-l-shots", "A-l-doc", "A-l-nofixed80", "A-l-app", "A-l-go", "A-l-apk"]
+[ledger-run 2026-08-19T03:58:10Z] 延后落盘 writeback-deferred | task=t.layout 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-19T03:58:10Z] 写回 writeback | task=t.layout state=succeeded revision=1 → 2
+[ledger-run 2026-08-19T03:58:10Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.layout"] 冻结=[] 不可判=[] 墙钟已跑 1238s
+[ledger-run 2026-08-19T03:58:10Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T03:58:10Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-19T03:58:10Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=2 hash=7d57ba729c50cffb）——中途死也不会留下半份账本，进度不会全废
+{"ok":true,"ledger_id":"ledger.overlay-layout.v1","revision_before":1,"revision_after":2,"wrote_back":["t.layout"],"unjudgeable":[],"frozen":[],"preflight_rejected":false,"awaiting_human":false,"idle_reason":null,"notices_sent":["ledger_id: ledger.overlay-layout.v1 | revision: 2 | 停机原因: AllSucceeded | 最后失败判据: 全部任务 succeeded：本轮没有失败判据、没有投递失败、没有超限 | 各任务终态: t.layout=Succeeded"],"notice_undelivered":null}

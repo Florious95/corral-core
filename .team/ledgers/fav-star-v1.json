@@ -1,198 +1,213 @@
 {
- "schema_version": "ledger.v2",
- "ledger_id": "ledger.fav-star.v1",
- "run": {
-  "desired_state": "running"
- },
- "roles": {
-  "r.app": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/fav-star/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "dev-app",
-    "team": "grok-l2"
-   }
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.fav-star.v1",
+  "run": {
+    "desired_state": "running"
   },
-  "r.leader": {
-   "provider": "human",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/fav-star-esc/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   }
-  }
- },
- "tasks": {
-  "t.star": {
-   "title": "修「点星星不收藏」。契约 requirement-base/entries/067-收藏与三栏布局.md。**手测流程照 .claude/skills/emulator-manual-test/SKILL.md 走，那份 skill 里有配对三坑与坐标换算。**\n现象（leader 2026-08-19 11:48 模拟器亲测，连点三次）：二级菜单里点会话行右侧的空心星星，**星星保持空心、左栏收藏始终「暂无收藏」**。三栏本身是好的（左收藏/中工作区/右设置，滑动切换正常）。\n⇒ **收藏只有 UI 没有行为。** 而 t.fav 那一格的单测是绿的 ⇒ 单测测的不是「点一下会发生什么」。\n要做三件：\n① 修到**点一下真的收藏**：星星变实心 → 左栏出现该会话 → 点它能直接进会话（契约 067 的完整闭环）。\n② 补一个**点击行为**的测试（名须含 `FavoriteToggleClick`）：断言点击回调真的写进了持久化，⛔ 不是断言「星星组件存在」——那正是这次漏掉它的原因。\n③ 顺带核对 067 的三条裁定没走样：按加入时间倒序、失联会话置灰不删、键只用结构字段不用标题。\n🔴 **必须在模拟器上截图自证**：点前/点后/左栏出现/点进会话，四张，存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-star/。\n✅ **模拟器已解禁**（2026-08-19 用户令）。AVD `agentmirror_geo_1260x2800` 在跑，adb=~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。角色文件里那句「禁止启动模拟器」已作废。\n🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。\n⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt11.star",
-    "write_paths": [
-     "app/",
-     ".team/nodes/fav-star/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/067-收藏与三栏布局.md",
-     ".claude/skills/emulator-manual-test/SKILL.md",
-     "app/app/src/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+  "roles": {
+    "r.app": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/fav-star/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "dev-app",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "a845924ab"
+    "r.leader": {
+      "provider": "human",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/fav-star-esc/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-star/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-st-click",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*FavoriteToggleClick*'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-st-shots",
-      "argv": [
-       "python3",
-       "-c",
-       "import glob,sys;sys.exit(0 if len(glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-star/*.png'))>=4 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-st-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-star/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-st-suite",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-st-apk",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q assembleDebug && test -s app/build/outputs/apk/debug/app-debug.apk"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     }
+  },
+  "tasks": {
+    "t.star": {
+      "title": "修「点星星不收藏」。契约 requirement-base/entries/067-收藏与三栏布局.md。**手测流程照 .claude/skills/emulator-manual-test/SKILL.md 走，那份 skill 里有配对三坑与坐标换算。**\n现象（leader 2026-08-19 11:48 模拟器亲测，连点三次）：二级菜单里点会话行右侧的空心星星，**星星保持空心、左栏收藏始终「暂无收藏」**。三栏本身是好的（左收藏/中工作区/右设置，滑动切换正常）。\n⇒ **收藏只有 UI 没有行为。** 而 t.fav 那一格的单测是绿的 ⇒ 单测测的不是「点一下会发生什么」。\n要做三件：\n① 修到**点一下真的收藏**：星星变实心 → 左栏出现该会话 → 点它能直接进会话（契约 067 的完整闭环）。\n② 补一个**点击行为**的测试（名须含 `FavoriteToggleClick`）：断言点击回调真的写进了持久化，⛔ 不是断言「星星组件存在」——那正是这次漏掉它的原因。\n③ 顺带核对 067 的三条裁定没走样：按加入时间倒序、失联会话置灰不删、键只用结构字段不用标题。\n🔴 **必须在模拟器上截图自证**：点前/点后/左栏出现/点进会话，四张，存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-star/。\n✅ **模拟器已解禁**（2026-08-19 用户令）。AVD `agentmirror_geo_1260x2800` 在跑，adb=~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。角色文件里那句「禁止启动模拟器」已作废。\n🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。\n⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt11.star",
+        "write_paths": [
+          "app/",
+          ".team/nodes/fav-star/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/067-收藏与三栏布局.md",
+          ".claude/skills/emulator-manual-test/SKILL.md",
+          "app/app/src/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "a845924ab"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-star/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-st-click",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*FavoriteToggleClick*'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-st-shots",
+            "argv": [
+              "python3",
+              "-c",
+              "import glob,sys;sys.exit(0 if len(glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-star/*.png'))>=4 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-st-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-star/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-st-suite",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-st-apk",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q assembleDebug && test -s app/build/outputs/apk/debug/app-debug.apk"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-st-click",
+          "A-st-shots",
+          "A-st-doc",
+          "A-st-suite",
+          "A-st-apk"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.star-seq1-t1787111496792",
+          "delivery_id": "del-t.star-seq1-t1787111496792",
+          "state": "succeeded",
+          "writeback_revision": 2,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-st-click",
+            "acceptance_success.acceptance_id=A-st-shots",
+            "acceptance_success.acceptance_id=A-st-doc",
+            "acceptance_success.acceptance_id=A-st-suite",
+            "acceptance_success.acceptance_id=A-st-apk",
+            "acceptance_success.writeback_revision=2"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": [],
+  "parallelism": [
+    {
+      "group": "g11",
+      "max_concurrency": 1
+    }
+  ],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
     ],
-    "judgment": [],
-    "required": [
-     "A-st-click",
-     "A-st-shots",
-     "A-st-doc",
-     "A-st-suite",
-     "A-st-apk"
+    "missing_result": "完成以机械判据为准",
+    "delivery_uncertain": "重发并去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {
+    "F.esc": {
+      "agent": {
+        "role": "r.leader"
+      },
+      "triggers": [
+        "blocked_on_unknown",
+        "provider_unavailable",
+        "result_deadline_elapsed"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_leader",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "requirement-base/entries/067-收藏与三栏布局.md",
+      ".claude/skills/emulator-manual-test/SKILL.md"
     ]
-   },
-   "state": "planned",
-   "attempts": []
-  }
- },
- "dependencies": [],
- "parallelism": [
-  {
-   "group": "g11",
-   "max_concurrency": 1
-  }
- ],
- "handoff": {
-  "send_command": "team-agent send",
-  "result_route": "leader",
-  "required_envelope_fields": [
-   "task_id",
-   "status"
-  ],
-  "missing_result": "完成以机械判据为准",
-  "delivery_uncertain": "重发并去重"
- },
- "acceptance": {
-  "mechanical_exit_code_is_authoritative": true,
-  "judgment_requires_distinct_provider": false
- },
- "fallback": {
-  "F.esc": {
-   "agent": {
-    "role": "r.leader"
-   },
-   "triggers": [
-    "blocked_on_unknown",
-    "provider_unavailable",
-    "result_deadline_elapsed"
-   ],
-   "max_attempts": 1,
-   "action": "escalate_to_leader",
-   "silent_substitution": false
-  }
- },
- "evidence_policy": {
-  "required_fields": [
-   "reported_by",
-   "revision",
-   "supports_or_refutes",
-   "observed_at",
-   "freshness"
-  ],
-  "missing_evidence": "判据必须是可重跑命令"
- },
- "resource_isolation": {
-  "default_write_scope": ".team/nodes",
-  "rules": [],
-  "read_only_shared": [
-   "requirement-base/entries/067-收藏与三栏布局.md",
-   ".claude/skills/emulator-manual-test/SKILL.md"
-  ]
- },
- "fanout_aggregation": {},
- "audit": {},
- "revision": 1
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 2
 }
