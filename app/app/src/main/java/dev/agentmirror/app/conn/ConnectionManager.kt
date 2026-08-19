@@ -119,6 +119,9 @@ class ConnectionManager(
     /** 退避尝试计数；成功连接后重置。 */
     private var attempt = 0
 
+    /** 下一次 onReady 是否来自掉线重连（相对首次 start）。仪表用，不驱动行为。 */
+    private var readyIsReconnect = false
+
     /** C→S 请求自增 req_id（list/input/scrollback 共用单调计数）。 */
     private var nextReqId = 1L
 
@@ -475,18 +478,45 @@ class ConnectionManager(
     }
 
     /**
+     * 当前订阅簿记的行列（重连重放用）。测试与会话页仪表读这个，不是猜。
+     */
+    fun subscriptionSize(ref: String): Pair<Int, Int>? = activeSubscriptions[ref]
+
+    /**
      * 上报手机行列数（只作用于已订阅会话）。
      *
      * @contract
      * @pre 当前处于 READY 且 connection 非空；rows/cols ≥ 1
-     * @post 返回 true 时 ResizeFrame 已发出
-     * @err 未就绪 ⇒ 返回 false；rows/cols 非法由帧校验兜底
-     * @inv 不改变订阅簿记
+     * @post 返回 true 时 ResizeFrame 已发出；成功发出后更新 [activeSubscriptions]
+     *       （081：重连必须重放**最新**行列，不能回落到首次 subscribe 的 40×120）
+     * @err 未就绪 / 非正行列 ⇒ 返回 false；两侧操作数都记进诊断日志
+     * @inv 非正行列不改簿记；未订阅的 ref 不偷偷记簿
      */
-    fun resize(ref: String, rows: Int, cols: Int): Boolean {
-        val conn = connection ?: return false
-        if (!conn.isReady) return false
-        return conn.send(ResizeFrame(ref = ref, rows = rows, cols = cols))
+    fun resize(ref: String, rows: Int, cols: Int, reason: String = "user"): Boolean {
+        val conn = connection
+        val ready = conn?.isReady == true
+        val bookkept = activeSubscriptions[ref]
+        // 守卫两侧都记：分得出「没调用 / 调用了被拦 / 发出去了」。
+        if (conn == null || !ready || rows < 1 || cols < 1) {
+            DiagLog.record(
+                "reflow",
+                "resize skipped rows=$rows cols=$cols reason=$reason " +
+                    "ready=$ready conn=${conn != null} " +
+                    "bookkept_rows=${bookkept?.first ?: -1} bookkept_cols=${bookkept?.second ?: -1}",
+            )
+            return false
+        }
+        val ok = conn.send(ResizeFrame(ref = ref, rows = rows, cols = cols))
+        if (ok && activeSubscriptions.containsKey(ref)) {
+            activeSubscriptions[ref] = rows to cols
+        }
+        val after = activeSubscriptions[ref]
+        DiagLog.record(
+            "reflow",
+            "resize sent rows=$rows cols=$cols reason=$reason ok=$ok " +
+                "bookkept_rows=${after?.first ?: -1} bookkept_cols=${after?.second ?: -1}",
+        )
+        return ok
     }
 
     // ---- 内部 ----
@@ -507,10 +537,12 @@ class ConnectionManager(
 
         override fun onReady() {
             attempt = 0 // 成功后退避重置
+            val reconnect = readyIsReconnect
+            readyIsReconnect = false
             setState(ConnectionState.READY)
             // 无状态恢复：重建全量列表 + 重放全部活跃订阅（当前屏快照重放）。
             sendList()
-            replaySubscriptions()
+            replaySubscriptions(reconnect = reconnect)
         }
 
         override fun onFrame(frame: FramePayload) {
@@ -572,8 +604,24 @@ class ConnectionManager(
         connection?.send(ListFrame(reqId = nextReqId++))
     }
 
-    private fun replaySubscriptions() {
+    private fun replaySubscriptions(reconnect: Boolean = false) {
         val conn = connection ?: return
+        if (reconnect) {
+            if (activeSubscriptions.isEmpty()) {
+                DiagLog.record(
+                    "reflow",
+                    "reconnect ok resend_resize=no cols=-1 rows=-1 subs=0",
+                )
+            } else {
+                for ((ref, dims) in activeSubscriptions) {
+                    // subscribe 携带最新簿记行列 = 把当前 cols 重新交给服务端（一次，非周期）。
+                    DiagLog.record(
+                        "reflow",
+                        "reconnect ok resend_resize=yes cols=${dims.second} rows=${dims.first} ref=$ref",
+                    )
+                }
+            }
+        }
         for ((ref, dims) in activeSubscriptions) {
             conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
         }
@@ -593,6 +641,7 @@ class ConnectionManager(
 
     private fun scheduleReconnect() {
         if (state == ConnectionState.STOPPED) return
+        readyIsReconnect = true
         setState(ConnectionState.RECONNECTING)
         // delay 对应"下一次尝试"的序号 attempt（0 起），报告后再递增。
         val delayMs = policy.nextDelayMs(attempt)

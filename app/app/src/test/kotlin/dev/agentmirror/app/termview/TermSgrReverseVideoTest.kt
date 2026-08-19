@@ -20,6 +20,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -78,12 +79,12 @@ class TermSgrReverseVideoTest {
         return canvas
     }
 
-    private val ansiRed = Color.rgb(205, 49, 49) // ANSI_COLORS[1]
-    private val ansiGreen = Color.rgb(13, 188, 121) // ANSI_COLORS[2]
+    private val ansiRed = TermPalette.Dark.ansi16[1]!!
+    private val ansiGreen = TermPalette.Dark.ansi16[2]!!
 
-    // 反显钉深色套（历史路径）；色值来自 TermPalette.Dark，不在本文件再写一份字面量。
-    private val defaultFg = Color.rgb(0xE8, 0xE8, 0xE8)
-    private val defaultBg = Color.rgb(0x0D, 0x16, 0x26)
+    // 反显钉深色套；色值来自 TerminalSpec → TermPalette.Dark，不在本文件再写一份字面量。
+    private val defaultFg = TermPalette.Dark.defaultFg
+    private val defaultBg = TermPalette.Dark.defaultBg
 
     /** 判据 1：显式双色 + 反显——背景矩形须取到 fg 色，文字须取到 bg 色。 */
     @Test

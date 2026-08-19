@@ -132,7 +132,8 @@ class OverlayMenuTest {
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-scrim").performTouchInput {
-            click(percentOffset(0.05f, 0.95f))
+            // 设计 sheet 贴底，点遮罩上方才是窗外。
+            click(percentOffset(0.5f, 0.08f))
         }
         compose.waitForIdle()
         assertFalse(h.vm.overlayOpen)

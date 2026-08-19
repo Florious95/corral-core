@@ -33,10 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -78,14 +80,15 @@ fun SessionShellScreen(
     sessionDisplayName: String,
     status: SessionStatus,
     lanConnected: Boolean,
-    draft: String,
-    onDraftChange: (String) -> Unit,
+    draft: TextFieldValue,
+    onDraftChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
     onBack: () -> Unit,
     onOpenSwitcher: () -> Unit,
     onKeyPress: (TerminalKey) -> Unit,
     onAttach: () -> Unit,
     modifier: Modifier = Modifier,
+    sendEnabled: Boolean = true,
     terminalContent: @Composable () -> Unit,
 ) {
     val p = LocalAppPalette.current
@@ -116,6 +119,7 @@ fun SessionShellScreen(
             draft = draft,
             onDraftChange = onDraftChange,
             onSend = onSend,
+            sendEnabled = sendEnabled,
             onKeyPress = onKeyPress,
             onAttach = onAttach,
         )
@@ -164,14 +168,16 @@ private fun SessionTopBar(
                     letterSpacing = (-0.2).sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .testTag("session-title"),
                     // 名字过长想跑马灯而不是省略号，加上这一句（ExperimentalFoundationApi，无新依赖）：
                     // modifier = Modifier.weight(1f).basicMarquee()
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (lanConnected) LanPill()
-                TonalTextButton("查看", onOpenSwitcher)
+                TonalTextButton("查看", onOpenSwitcher, modifier = Modifier.testTag("session-overlay-open"))
                 Box(Modifier.width(4.dp))
             }
         }
@@ -231,9 +237,10 @@ private fun IconGlyphButton(
 /** 功能键排 + 输入条，同一块表面、同一条顶部分割线 */
 @Composable
 private fun ConsoleBar(
-    draft: String,
-    onDraftChange: (String) -> Unit,
+    draft: TextFieldValue,
+    onDraftChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
+    sendEnabled: Boolean,
     onKeyPress: (TerminalKey) -> Unit,
     onAttach: () -> Unit,
 ) {
@@ -283,7 +290,7 @@ private fun ConsoleBar(
             ) {
                 PlusButton(onAttach)
                 DraftField(draft = draft, onDraftChange = onDraftChange, onSend = onSend, modifier = Modifier.weight(1f))
-                SendButton(enabled = draft.isNotBlank(), onSend = onSend)
+                SendButton(enabled = sendEnabled, onSend = onSend)
             }
         }
     }
@@ -378,8 +385,8 @@ private fun PlusButton(onAttach: () -> Unit) {
 
 @Composable
 private fun DraftField(
-    draft: String,
-    onDraftChange: (String) -> Unit,
+    draft: TextFieldValue,
+    onDraftChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -396,7 +403,7 @@ private fun DraftField(
     ) {
         AppText("❯", p.promptGlyph, 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (draft.isEmpty()) {
+            if (draft.text.isEmpty()) {
                 AppText("输入指令…", p.inputPlaceholder, TypeSizes.inputText, lineHeightMultiplier = 1f)
             }
             BasicTextField(

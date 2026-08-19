@@ -56,9 +56,9 @@ class OverlayDismissOnOutsideTapTest {
         assertTrue(h.vm.overlayOpen)
         compose.onNodeWithTag("session-overlay").assertExists()
 
-        // 窗贴在右上，点左下角才是窗外（中心会打在窗上）。
+        // 设计 sheet 贴底，点遮罩上方才是窗外。
         compose.onNodeWithTag("session-overlay-scrim").performTouchInput {
-            click(percentOffset(0.05f, 0.95f))
+            click(percentOffset(0.5f, 0.08f))
         }
         compose.waitForIdle()
 

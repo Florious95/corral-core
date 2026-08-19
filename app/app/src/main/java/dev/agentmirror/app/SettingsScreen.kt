@@ -17,47 +17,26 @@
 package dev.agentmirror.app
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import android.content.Intent
-import android.net.Uri
 import androidx.core.content.FileProvider
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.diag.DiagLogViewScreen
+import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
-import dev.agentmirror.app.ui.theme.Spacing
+import dev.agentmirror.app.ui.theme.Appearance
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import dev.agentmirror.app.ui.screens.SettingsScreen as DesignSettingsScreen
 
 /**
  * 单档设置页：重新配对成功时覆盖现有主机配置，不提前清除仍可用的档案。
@@ -71,6 +50,8 @@ internal fun SettingsScreen(
     onBack: () -> Unit,
     onRePair: () -> Unit,
     enableBackHandler: Boolean = true,
+    appearance: Appearance = Appearance.System,
+    onAppearanceChange: (Appearance) -> Unit = {},
 ) {
     var showDiagView by remember { mutableStateOf(false) }
     if (showDiagView) {
@@ -80,170 +61,37 @@ internal fun SettingsScreen(
     BackHandler(enabled = enableBackHandler, onBack = onBack)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var exportStatus by remember { mutableStateOf<String?>(null) }
-    var exportError by remember { mutableStateOf<String?>(null) }
     val fontSizeStore = remember { SharedPreferencesFontSizeStore(context) }
     var fontSizeSp by remember {
-        mutableStateOf(fontSizeStore.load() ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP)
+        mutableIntStateOf(fontSizeStore.load() ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP)
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .defaultMinSize(minHeight = 56.dp)
-                .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = onBack) { Text("‹ 工作区") }
-            Text(
-                text = "设置",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = Spacing.sm),
-            )
-        }
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.pageH)
-                .testTag("settings-scroll"),
-            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(Spacing.lg),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                ) {
-                    Text("主机配对", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "当前只保留一个主机档案。重新配对成功后会覆盖现有档案。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(onClick = onRePair, modifier = Modifier.fillMaxWidth()) {
-                        Text("重新配对")
-                    }
-                }
-            }
-
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(Spacing.lg),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                ) {
-                    Text("字体大小", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        SharedPreferencesFontSizeStore.PRESET_SIZES_SP.forEach { sp ->
-                            val selected = sp == fontSizeSp
-                            Button(
-                                onClick = {
-                                    fontSizeSp = sp
-                                    fontSizeStore.save(sp)
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant
-                                    },
-                                    contentColor = if (selected) {
-                                        MaterialTheme.colorScheme.onPrimary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                ),
-                                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
-                            ) {
-                                Text("$sp", maxLines = 1, softWrap = false)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(Spacing.lg),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                ) {
-                    Text("诊断日志", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "一键导出诊断日志，帮助我们定位问题。日志会自动脱敏（配对 token、密钥等不会包含）。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(
-                        onClick = {
-                            exportStatus = null
-                            exportError = null
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) { exportDiagLog(context) }
-                                when (result) {
-                                    is ExportOutcome.Success -> {
-                                        shareFile(context, result.file)
-                                        exportStatus = "已导出 ${result.bytes} 字节，正在分享…"
-                                    }
-                                    is ExportOutcome.Failed -> exportError = result.reason
-                                    is ExportOutcome.Empty -> exportStatus = "当前没有日志可导出（尚未产生任何事件）"
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("导出诊断日志")
-                    }
-                    Button(
-                        onClick = { showDiagView = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("查看诊断日志")
-                    }
-                    exportStatus?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    exportError?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-            }
-        }
+    val paired = remember { SharedPreferencesPairingConfigStore(context).load() != null }
+    val buildLabel = remember {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        info.versionName ?: context.packageName
     }
+    DesignSettingsScreen(
+        paired = paired,
+        terminalFontSize = fontSizeSp,
+        appearance = appearance,
+        buildLabel = buildLabel,
+        onRepair = onRePair,
+        onFontSizeChange = { sp ->
+            fontSizeSp = sp
+            fontSizeStore.save(sp)
+        },
+        onAppearanceChange = onAppearanceChange,
+        onExportLogs = {
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { exportDiagLog(context) }
+                when (result) {
+                    is ExportOutcome.Success -> shareFile(context, result.file)
+                    is ExportOutcome.Failed, is ExportOutcome.Empty -> Unit
+                }
+            }
+        },
+        onViewLogs = { showDiagView = true },
+    )
 }
 
 /** 导出结果（失败可见红线：导出必须可判定）。 */

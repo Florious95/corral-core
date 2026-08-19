@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +56,8 @@ fun AppBottomNav(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
+            .testTag("bottom-tabs")
+            .navigationBarsPadding()
             .height(Dims.navBarHeight)
             .background(p.navBackground)
     ) {
@@ -84,7 +90,10 @@ fun AppBottomNav(
                     label = tab.label(),
                     active = tab == selected,
                     onClick = { onSelect(tab) },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(tab.tabTag())
+                        .semantics { this.selected = tab == selected },
                 )
             }
         }
@@ -153,4 +162,10 @@ private fun NavTab.label(): String = when (this) {
     NavTab.Favorites -> "收藏"
     NavTab.Sessions -> "会话"
     NavTab.Settings -> "设置"
+}
+
+private fun NavTab.tabTag(): String = when (this) {
+    NavTab.Favorites -> "bottom-tab-favorites"
+    NavTab.Sessions -> "bottom-tab-sessions"
+    NavTab.Settings -> "bottom-tab-settings"
 }

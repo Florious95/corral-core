@@ -41,8 +41,12 @@ import dev.agentmirror.terminal.TerminalEmulator
  */
 class TermViewPresenter(
     private val emulator: TerminalEmulator,
-    private val onResizeRequest: (rows: Int, cols: Int) -> Unit,
+    private val onResizeRequest: (rows: Int, cols: Int, reason: String) -> Unit,
 ) {
+    constructor(
+        emulator: TerminalEmulator,
+        onResizeRequest: (rows: Int, cols: Int) -> Unit,
+    ) : this(emulator, { rows, cols, _ -> onResizeRequest(rows, cols) })
 
     /** 视口顶行（逻辑行，0=最老历史）：null=跟随底部；非 null=锁定历史，冻结不变。 */
     private var topLine: Int? = null
@@ -72,6 +76,13 @@ class TermViewPresenter(
     private var lastGridVw: Int = -1
     private var lastGridNominal: Int = -1
     private var lastGridMeasured: Int = -1
+
+    /**
+     * 下一次 [onResizeRequest] 的原因（081：resize 日志必须带 reason）。
+     * 调用方（SessionViewModel）在回调里读它，再传给 ConnectionManager.resize。
+     */
+    var lastResizeReason: String = "user"
+        private set
 
     /**
      * 首次真实视口是否已建立（raw/019：唯一合法的一次 resize 已上抛）。
@@ -220,6 +231,7 @@ class TermViewPresenter(
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
         var resized = false
+        lastResizeReason = if (!viewportSeeded) "user" else "rotate"
         // 0x0 预布局 / 非正尺寸不是真实视口：不落 seed（否则旋转重建后首帧被吞成非 resize）。
         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
             // 防静默失效（leader 2026-08-14 补充裁定）：未先 seedCellMetrics 就不许用
@@ -288,6 +300,8 @@ class TermViewPresenter(
         )
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
+        lastResizeReason = "resume"
+        recordResumeOperands()
         var resized = false
         var outgrew = false
         // 首帧尚未建立（onSizeChanged 未到，先来的是窗口可见事件）：按首次真实视口 seed，
@@ -316,6 +330,21 @@ class TermViewPresenter(
             onFrameRequested?.invoke()
         }
         recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = outgrew)
+    }
+
+    /**
+     * 081：回前台必须把推导列数与内核上次列数两边都记下。
+     * derived_cols = 可用视口宽 / 字格宽（[viewportWidthPx] 已扣左右内边距）。
+     * last_sent_cols 此处用内核 cols（与成功 resize 后的服务端协商值对齐）；
+     * 服务端认的列宽另在 SNAPSHOT 路径记 `frame cols`。
+     */
+    private fun recordResumeOperands() {
+        val derived = if (cellWidth > 0) viewportWidthPx / cellWidth else -1
+        DiagLog.record(
+            "reflow",
+            "source=resume view_width_px=$viewportWidthPx cell_width_px=$cellWidth " +
+                "derived_cols=$derived last_sent_cols=${emulator.cols}",
+        )
     }
 
     /** 仪表：视口事件处理结果的统一落记（[onViewportSizeChanged]/[onRealViewportChanged] 共用）。 */
@@ -378,7 +407,7 @@ class TermViewPresenter(
         val cols = viewportWidthPx / cellWidth
         val changed = rows != emulator.rows || cols != emulator.cols
         if (changed) {
-            onResizeRequest(rows, cols)
+            onResizeRequest(rows, cols, lastResizeReason)
         }
         recordGridSnapshot(cellWidth)
         return changed

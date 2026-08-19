@@ -20,6 +20,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -59,8 +60,8 @@ class TermColsGridConvergenceDiscriminationTest {
         }
     }
 
-    /** SGR 47（Indexed 7）白底 ARGB（TermSurfaceView.ANSI_COLORS[7]）。用白底过滤单元格矩形。 */
-    private val whiteBg = Color.rgb(229, 229, 229)
+    /** SGR 47（Indexed 7）ARGB（TerminalSpec 浅色 ansi[7]）。用它过滤单元格矩形。 */
+    private val whiteBg = TermPalette.Light.ansi16[7]!!
 
     private fun draw(view: TermSurfaceView, w: Int, h: Int): RecordingCanvas {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)

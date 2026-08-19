@@ -30,6 +30,7 @@ import android.view.MotionEvent
 import android.view.View
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.ui.theme.TermPalette
+import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
@@ -548,9 +549,11 @@ class TermSurfaceView @JvmOverloads constructor(
     private fun colorFor(color: TerminalColor, background: Boolean): Int = when (color) {
         TerminalColor.Default -> if (background) themeBgArgb() else themeFgArgb()
         is TerminalColor.Rgb -> Color.rgb(color.r, color.g, color.b)
-        is TerminalColor.Indexed ->
-            if (color.index in 0..15) TermPalette.ansi16[color.index] ?: Color.GRAY
-            else TermPalette.xterm256.getOrElse(color.index) { Color.GRAY }
+        is TerminalColor.Indexed -> {
+            val pal = TermPalette.of(isNight())
+            if (color.index in 0..15) pal.ansi16[color.index] ?: Color.GRAY
+            else pal.xterm256.getOrElse(color.index) { Color.GRAY }
+        }
     }
 
     /** SGR 7 反显：背景画笔改取 fg 字段（作为"前景默认"语义解析，即 background=false），
@@ -581,11 +584,11 @@ class TermSurfaceView @JvmOverloads constructor(
 
     private companion object {
         /** 历史深色默认值别名；真实取色走 [TermPalette.of]。 */
-        const val DEFAULT_FG = 0xFFE8E8E8.toInt()
-        const val DEFAULT_BG = 0xFF0D1626.toInt()
-        /** 右侧留白（fix-terminal-right-margin），见 [usableWidthPx]。左侧见 [TermLeftEdge.LEFT_MARGIN_DP]。 */
-        const val RIGHT_MARGIN_DP = 4f
-        val ANSI_COLORS: Map<Int, Int> get() = TermPalette.ansi16
-        val XTERM_256: IntArray get() = TermPalette.xterm256
+        val DEFAULT_FG: Int get() = TermPalette.Dark.defaultFg
+        val DEFAULT_BG: Int get() = TermPalette.Dark.defaultBg
+        /** 右侧留白，数值以设计 [TerminalMetrics.paddingRight] 为准。 */
+        val RIGHT_MARGIN_DP: Float = TerminalMetrics.paddingRight.value
+        val ANSI_COLORS: Map<Int, Int> get() = TermPalette.of(true).ansi16
+        val XTERM_256: IntArray get() = TermPalette.of(true).xterm256
     }
 }

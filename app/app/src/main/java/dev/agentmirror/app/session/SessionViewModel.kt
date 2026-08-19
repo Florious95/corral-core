@@ -91,10 +91,10 @@ class SessionViewModel(
     val emulator = TerminalEmulator(initialCols, initialRows)
 
     /** 视口状态机：跟随/锁定、字号→行列数换算、脏区（渲染逻辑与 View 分离）。 */
-    val presenter = TermViewPresenter(emulator) { rows, cols ->
+    val presenter = TermViewPresenter(emulator) { rows, cols, reason ->
         // feat-font-size-setting-drop-pinch：字号选定后实测算出的行列数先上报协议，
         // 再同步内核（让 CLI 自己重画）；几何只在进入会话时算一次（seedCellMetrics）。
-        if (manager.resize(ref, rows, cols)) {
+        if (manager.resize(ref, rows, cols, reason)) {
             emulator.resize(cols, rows)
         }
     }
@@ -251,6 +251,14 @@ class SessionViewModel(
         when (frame.kind) {
             // 首帧快照：清屏重建（replaySnapshot 而非 feed，经验基）。
             BinaryKind.SNAPSHOT -> {
+                val bookkept = manager.subscriptionSize(ref)
+                val frameCols = bookkept?.second ?: -1
+                val renderCols = emulator.cols
+                DiagLog.record(
+                    "reflow",
+                    "frame cols=$frameCols render cols=$renderCols " +
+                        "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
+                )
                 emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
                 // 006 秒开：打开即预取最近一页历史，滚动边界再按需补页。
                 if (!hasPrefetchedHistory) {

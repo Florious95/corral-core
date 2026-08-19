@@ -64,9 +64,7 @@ class TermRightMarginTest {
             this.presenter = presenter
         }
         val density = view.resources.displayMetrics.density
-        // 镜像 TermSurfaceView.RIGHT_MARGIN_DP（该常量在私有 companion object 里，测试不可见）——
-        // 仅用于日志打印，不参与断言（断言只依赖 leftover 的取值范围，不依赖具体留白像素值）。
-        val marginPx = (4f * density).roundToInt()
+        val marginPx = (TermLeftEdge.LEFT_MARGIN_DP * density).roundToInt()
 
         // 视口宽刻意取实测字宽的整数倍——不加留白时 leftover 恰好 = 0（复现"贴边"）。
         val viewportW = realCellW * 100
@@ -132,7 +130,7 @@ class TermRightMarginTest {
         val leftover = viewportW - cols * realCellW
         val density = view.resources.displayMetrics.density
         val leftPx = (TermLeftEdge.LEFT_MARGIN_DP * density).roundToInt()
-        val rightPx = (4f * density).roundToInt()
+        val rightPx = (TermLeftEdge.LEFT_MARGIN_DP * density).roundToInt()
 
         assertTrue("[右边距][典型场景] 留白必须 > 0：leftover=$leftover", leftover > 0)
         assertTrue(
