@@ -116,7 +116,7 @@ class TestThreePane {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithText("收藏").assertExists()
+        compose.onNodeWithTag("three-pane-favorites").assertExists()
         compose.onNodeWithText("win-fav").performClick()
         compose.runOnIdle {
             assertEquals("ref-fav" to "win-fav", nav.activeSession)

@@ -29,6 +29,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,12 +51,13 @@ import dev.agentmirror.app.workspace.WorkspaceScreen
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
- * 窄屏三栏（067）：左收藏 / 中会话 / 右设置。HorizontalPager，冷启动中间页。
+ * 窄屏三栏（067 §4.1）：底部标签栏 收藏 / 会话 / 设置。
+ * 滑动可保留为附加手势，不得作为唯一入口。冷启动默认「会话」。
  */
-enum class ThreePane {
-    Favorites,
-    Sessions,
-    Settings,
+enum class ThreePane(val tabLabel: String, val tabIcon: String, val tabTag: String) {
+    Favorites("收藏", "★", "bottom-tab-favorites"),
+    Sessions("会话", "☰", "bottom-tab-sessions"),
+    Settings("设置", "⚙", "bottom-tab-settings"),
 }
 
 @Composable
@@ -62,7 +66,7 @@ internal fun ThreePaneHome(
     workspaceViewModel: WorkspaceViewModel,
 ) {
     val pagerState = rememberPagerState(
-        initialPage = 1,
+        initialPage = navState.homePane.ordinal,
         pageCount = { ThreePane.entries.size },
     )
     LaunchedEffect(navState.homePane) {
@@ -71,7 +75,7 @@ internal fun ThreePaneHome(
             pagerState.scrollToPage(target)
         }
     }
-    // 首帧 settledPage 仍是 initialPage=1，不能回写，否则会把外部指定的 Favorites 冲掉。
+    // 首帧 settledPage 仍是 initialPage，不能回写，否则会把外部指定的 Favorites 冲掉。
     val pagerToNavArmed = remember { mutableStateOf(false) }
     LaunchedEffect(pagerState.settledPage) {
         if (!pagerToNavArmed.value) {
@@ -83,42 +87,64 @@ internal fun ThreePaneHome(
         navState.showSettings = pane == ThreePane.Settings
     }
 
-    HorizontalPager(
-        state = pagerState,
-        beyondViewportPageCount = 0,
+    Scaffold(
         modifier = Modifier
             .fillMaxSize()
             .testTag("three-pane"),
-    ) { page ->
-        when (ThreePane.entries[page]) {
-            ThreePane.Favorites -> FavoritesPane(
-                viewModel = workspaceViewModel,
-                onOpenSession = { ref, name -> navState.activeSession = ref to name },
-            )
-            ThreePane.Sessions -> WorkspaceScreen(
-                viewModel = workspaceViewModel,
-                selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
-                connectionPath = ServiceWire.connectionPath(),
-                onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
-                onBackToList = { navState.selectedWorkspaceCwd = null },
-                onOpenSettings = {
-                    navState.showSettings = true
-                    navState.homePane = ThreePane.Settings
-                },
-                onOpenSession = { ref, name -> navState.activeSession = ref to name },
-            )
-            ThreePane.Settings -> SettingsScreen(
-                onBack = {
-                    navState.showSettings = false
-                    navState.homePane = ThreePane.Sessions
-                },
-                onRePair = {
-                    navState.showSettings = false
-                    navState.homePane = ThreePane.Sessions
-                    navState.showPairing = true
-                },
-                enableBackHandler = pagerState.currentPage == ThreePane.Settings.ordinal,
-            )
+        bottomBar = {
+            NavigationBar(modifier = Modifier.testTag("bottom-tabs")) {
+                ThreePane.entries.forEach { pane ->
+                    NavigationBarItem(
+                        selected = navState.homePane == pane,
+                        onClick = {
+                            navState.homePane = pane
+                            navState.showSettings = pane == ThreePane.Settings
+                        },
+                        icon = { Text(pane.tabIcon) },
+                        label = { Text(pane.tabLabel) },
+                        modifier = Modifier.testTag(pane.tabTag),
+                    )
+                }
+            }
+        },
+    ) { innerPadding ->
+        HorizontalPager(
+            state = pagerState,
+            beyondViewportPageCount = 0,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) { page ->
+            when (ThreePane.entries[page]) {
+                ThreePane.Favorites -> FavoritesPane(
+                    viewModel = workspaceViewModel,
+                    onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                )
+                ThreePane.Sessions -> WorkspaceScreen(
+                    viewModel = workspaceViewModel,
+                    selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
+                    connectionPath = ServiceWire.connectionPath(),
+                    onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
+                    onBackToList = { navState.selectedWorkspaceCwd = null },
+                    onOpenSettings = {
+                        navState.showSettings = true
+                        navState.homePane = ThreePane.Settings
+                    },
+                    onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                )
+                ThreePane.Settings -> SettingsScreen(
+                    onBack = {
+                        navState.showSettings = false
+                        navState.homePane = ThreePane.Sessions
+                    },
+                    onRePair = {
+                        navState.showSettings = false
+                        navState.homePane = ThreePane.Sessions
+                        navState.showPairing = true
+                    },
+                    enableBackHandler = pagerState.currentPage == ThreePane.Settings.ordinal,
+                )
+            }
         }
     }
 }
