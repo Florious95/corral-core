@@ -1,0 +1,464 @@
+{
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.v72.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.menu": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov-menu/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "v72-v1-menu",
+    "team": "grok-l2"
+   }
+  },
+  "r.icons": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ui-fix/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "v72-v1-icons",
+    "team": "grok-l2"
+   }
+  },
+  "r.leader": {
+   "provider": "human",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/v72-esc/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  },
+  "r.ident": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ident/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "v72-v1-ident",
+    "team": "grok-l2"
+   }
+  }
+ },
+ "tasks": {
+  "t.menu": {
+   "title": "把右上角「查看」改成**可点的二级菜单列表**；**Ctrl-B W 那套抓屏实现模块化归档、不介入**。契约 requirement-base/entries/072-查看改二级菜单与图标修正.md §1。手测照 .claude/skills/emulator-manual-test/SKILL.md。\n用户 2026-08-19 追加裁定（**覆盖契约里「删干净」那句**）：「右上角查看 ctrl-b w 的实现模块化，归档不介入，**暂不修展示不完全的问题**」。\n⇒ 三条硬要求：\n① **新形态**：点「查看」⇒ 悬浮窗里是**和二级菜单一样的会话列表**（会话名/路径/状态徽章），**点一行直接跳到那个会话**；点列表以外区域关闭。\n② **抓屏那套（choose-tree / scratch 客户端 / OverlayEmulator）整体收拢成一个独立模块并归档**，⛔ **不要删**、⛔ **不要修它的展示不完全问题**（用户明令暂不修）。归档 = 移到一个边界清晰的包/目录，不再被主流程调用，并在包头注释写明「已归档，2026-08-19 用户令暂不介入；展示不完全问题未修」。\n③ 归档后**确认服务端不再 attach 任何 tmux 客户端**（061 零 attach 不变），且不再起 scratch 会话（070 §7 那条 scratch 跨重启复用的坑随之消失）。\n🔴 新列表**优先复用已有的 level2 数据通路**，⛔ 不要再造一份取数逻辑（一二级已统一走同一个 provider 识别函数，见 068 §7——两份取数会给出互相矛盾的世界）。\n配套测试名须含 `OverlayMenu`。模拟器截图 ≥3 张（打开/列表内容/点一行跳过去），存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-menu/。\n✅ 模拟器已解禁。AVD `agentmirror_geo_1260x2800` 在跑，adb=~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。\n🔴 截图必须是**不同现场**（判据会核 md5 互不相同）。\n🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。\n⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/menu/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。",
+   "owner": {
+    "role": "r.menu"
+   },
+   "resources": {
+    "worktree_id": "wt13.menu",
+    "write_paths": [
+     "app/",
+     "server/",
+     ".team/nodes/ov-menu/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/072-查看改二级菜单与图标修正.md",
+     ".claude/skills/emulator-manual-test/SKILL.md",
+     "app/app/src/",
+     "server/internal/",
+     ".team/nodes/menu/BASE.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "4f86d0e5f"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-menu/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-om-test",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*OverlayMenu*'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-om-shots",
+      "argv": [
+       "python3",
+       "-c",
+       "import glob,hashlib,sys;g=glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-menu/*.png');h={hashlib.md5(open(f,'rb').read()).hexdigest() for f in g};sys.exit(0 if len(g)>=3 and len(h)>=3 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-om-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov-menu/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-om-suite",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-om-go",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-om-archived",
+      "argv": [
+       "sh",
+       "-c",
+       "grep -rqi '已归档' /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/overlay/ || grep -rqi '已归档' /Volumes/nvme/Projects/远程Agent安卓/server/internal/overlay/"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-om-test",
+     "A-om-shots",
+     "A-om-doc",
+     "A-om-suite",
+     "A-om-go",
+     "A-om-archived"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
+  },
+  "t.icons": {
+   "title": "修列表行的三个 UI 缺陷。契约 requirement-base/entries/072-查看改二级菜单与图标修正.md **§2/§3/§4**。手测照 .claude/skills/emulator-manual-test/SKILL.md。\n① **「进行中」徽章错位**：`进行中` 与 `空闲` 高低不一（用户截图 developer-d72 vs d75）。要求同一列表内 `进行中`/`空闲`/星星**垂直中心线一致**、徽章右边缘对齐。\n② **点收藏出现灰色正方形框**：Material 默认 bounded ripple 落在方形边界上。点击反馈必须是**圆形或无界**，⛔ 不得出现方形色块。\n③ **星星移到每行最前面**（会话名之前）——**推翻 067 §2 的「状态标左边」**。用户理由：星星和状态挤在右侧时对齐问题互相放大、点击热区互相干扰。\n🔴 ⛔ **不得改坏收藏闭环**（点星→实心→收藏栏出现→点它直接进会话，已验通）。\n配套测试名须含 `RowLayout`。模拟器截图自证 ≥3 张（星星在行首/两种徽章对齐/点击无方框），存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ui-fix/。\n✅ 模拟器已解禁。AVD `agentmirror_geo_1260x2800` 在跑，adb=~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。角色文件里「禁止启动模拟器」那句已作废。\n🔴 截图必须是**不同现场**（判据会核 md5 互不相同；上一轮有人交三张相同的图充数）。\n🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。\n⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/icons/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。",
+   "owner": {
+    "role": "r.icons"
+   },
+   "resources": {
+    "worktree_id": "wt14.icons",
+    "write_paths": [
+     "app/",
+     ".team/nodes/ui-fix/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/072-查看改二级菜单与图标修正.md",
+     ".claude/skills/emulator-manual-test/SKILL.md",
+     "app/app/src/",
+     ".team/nodes/icons/BASE.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "4f86d0e5f"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ui-fix/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-ui-test",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*RowLayout*'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-ui-shots",
+      "argv": [
+       "python3",
+       "-c",
+       "import glob,hashlib,sys;g=glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ui-fix/*.png');h={hashlib.md5(open(f,'rb').read()).hexdigest() for f in g};sys.exit(0 if len(g)>=3 and len(h)>=3 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-ui-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ui-fix/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-ui-suite",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-ui-test",
+     "A-ui-shots",
+     "A-ui-doc",
+     "A-ui-suite"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
+  },
+  "t.ident": {
+   "title": "修**跨工作区会话身份冲突**：多个 leader 都叫 `claude_code`，收藏一个全中、列表只剩一条、点进去还跳错。契约 requirement-base/entries/073-会话身份跨socket冲突与leader同名.md（**先读，§2.1 说明这是我写 067 时漏了 socket 造成的**）。手测照 .claude/skills/emulator-manual-test/SKILL.md。\n用户原话：「一个 leader 点击收藏，全部 leader 都点击收藏，收藏列表只有一个，且点进去，是左上角工作空间的会话」。\n① **身份键必须含 socket**。服务端造 ref 用的就是 `Socket + \\x1f + PaneID`（`server/internal/api/session.go:23`）。🔴 **收藏键与 ref 必须同源** —— ⛔ 不许收藏自己拼一套键，那是两套身份漂移的起点。\n② **显示名要可区分**：同一列表内不得出现无法分辨的重名。名字**可能是中文**，⛔ 不得做 ASCII 假设、不得截断到不可辨认。「正确的名字该取哪个字段」**尚未确定**，候选 window_name / session_name / pane_title / 工作区名限定，**你去查清再改，不要猜**。⛔ 标题只能用于显示，**身份仍走结构字段 + socket**（062/067 铁律不变）。\n🔴 判据 `A-fav-uniq` 要断言世界：两个不同工作区各有一个 `claude_code`，收藏其一 ⇒ **另一个仍未收藏**；各收藏一次后列表**两条**；点每条**分别落到各自的会话**。**先在当前实现上验红**（现在必红），把红证据写进说明。\n配套测试名须含 `FavoriteIdentity`。模拟器截图 ≥3 张（两个同名会话/只收藏其一/两条各自跳对），存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ident/。\n✅ 模拟器已解禁。AVD `agentmirror_geo_1260x2800` 在跑，adb=~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。\n🔴 截图必须是**不同现场**（判据会核 md5 互不相同）。\n🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。\n⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/ident/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。\n\n③ **收藏页的会话条目要展示目录**（用户 2026-08-19 追加）：现在收藏栏每行只有会话名，没有路径。要和二级菜单一样带上工作目录副标题。🔴 这条和 ①（身份含 socket）是同一件事的两面：**同名会话靠目录才能被人分辨**，光修键不改显示，用户看到的仍是两条一模一样的「claude_code」。判据 `A-fav-path`：收藏页每行**都带非空目录副标题**，且两个同名会话的副标题**不同**。",
+   "owner": {
+    "role": "r.ident"
+   },
+   "resources": {
+    "worktree_id": "wt15.ident",
+    "write_paths": [
+     "app/",
+     "server/",
+     ".team/nodes/ident/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/073-会话身份跨socket冲突与leader同名.md",
+     ".claude/skills/emulator-manual-test/SKILL.md",
+     "app/app/src/",
+     "server/internal/",
+     ".team/nodes/ident/BASE.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "254ca9959"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ident/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-id-test",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*FavoriteIdentity*'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-id-shots",
+      "argv": [
+       "python3",
+       "-c",
+       "import glob,hashlib,sys;g=glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ident/*.png');h={hashlib.md5(open(f,'rb').read()).hexdigest() for f in g};sys.exit(0 if len(g)>=3 and len(h)>=3 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-id-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ident/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-id-suite",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-id-go",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-fav-path",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*FavoriteIdentity*'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-id-test",
+     "A-id-shots",
+     "A-id-doc",
+     "A-id-suite",
+     "A-id-go",
+     "A-fav-path"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
+  }
+ },
+ "dependencies": [
+  {
+   "from": "t.icons",
+   "to": "t.ident",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.ident",
+   "to": "t.menu",
+   "condition": "requires_success"
+  }
+ ],
+ "parallelism": [
+  {
+   "group": "g13",
+   "max_concurrency": 1
+  }
+ ],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "完成以机械判据为准",
+  "delivery_uncertain": "重发并去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {
+  "F.esc": {
+   "agent": {
+    "role": "r.leader"
+   },
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed"
+   ],
+   "max_attempts": 1,
+   "action": "escalate_to_leader",
+   "silent_substitution": false
+  }
+ },
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "requirement-base/entries/072-查看改二级菜单与图标修正.md",
+   ".claude/skills/emulator-manual-test/SKILL.md"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 4
+}
