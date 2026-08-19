@@ -1,36 +1,24 @@
-# 知识基底 · ledger.vz.v1 / t.ver（tools/basegen_ledger.py 编译产物，手工编辑无效）
+# 知识基底 · ledger.vz.v1 / t.diff（tools/basegen_ledger.py 编译产物，手工编辑无效）
 
 ## 1. 任务信封（账本原文，机械抽取）
 ```
-**独立验收席**：把本轮全部改动在模拟器上验一遍，产出给用户看的验收报告。
-⚠️ **你不是产出方**——前四格由别的席位实现。⛔ 你不许改产品码去让判据变绿；
-不通过就照实写进报告并报 fail，**让账本红着**。这正是本格存在的意义。
-用户 2026-08-19 令：「时间太久了，那还是**把测试加上**吧。我明天再来装 APP 手动验收。」
-⇒ 他还会手测，但**他拿到的应该是已经验过一轮的包**。
+实现 **输入框差分同步**。契约 requirement-base/entries/084-输入框差分同步.md（先读全文）。
+用户原话：「前面有个字要修改，很显然的，它是不支持的，因为它是**永远的增量模式**……有没有好的解决办法？」
+→ leader 给三方案 → **用户选 C（差分同步）并要求实时**：「我希望它是**比较实时的**，而不是我发送那一刻，它在同步。」
 
-## A. 本轮各条逐条复核（每条要证据，⛔ 不许写"看起来正常"）
-框线无断点 / logo 无黑缝 / 日志 10s ≤3 条且改 viewW 立刻出新记录 / grok 浅色下整屏近白（非灰非黑）/
-用户消息块比整体底色深 / 屏幕边到首字符 == 10dp / 发送成功后无「已发送」但失败仍有错误提示 /
-输入框光标移中间后外部更新不重置 / LanPill 走 tailnet 时不显示 LAN / 重连提示在标题下方且不顶动列表 /
-顶栏 `‹` 与标题墨迹中心差 ≤1dp / `+` 菜单跟随设计（非默认紫）/ **顶栏指示灯不切页也能实时变色** /
-差分同步纯追加零退格、改中间两边文本一致。
-
-## B. 🔴 多密度复核（本轮最重要，契约 083 §0）
-用户实测过「模拟器完全正常、手机完全不正常」⇒ **模拟器在渲染层没有分辨力**。
-⇒ 渲染类每一条**必须在整数密度与非整数密度各跑一遍**
-（`adb shell wm density 420` / `480`，⛔ 跑完必须 `wm density reset`），**两组读数都写进报告**。
-🔴 只有整数密度的绿**不算数**。
-
-## C. ⛔ 回归不得倒退（逐条断言，红一条就报 fail）
-073 身份键含 socket（三条 claude_code 互不串）/ 075 一级菜单转圈不回弹 /
-076 §1 查看菜单按当前会话 ref 取数、§2 横滑不抢竖滑+设置能滑到底+右上角无「设置」、§3 显示名与状态标 /
-077 §1 会话页标题是显示名 / 078 §1 终端首列不被裁 / 081 cols 仪表能读到两个数 / 082 收藏页按各工作区取数。
-
-## 产出
-`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-ver/验收报告.md`：逐条 **通过/不通过 + 证据**（UI 树断言输出、采样像素值、截图文件名）。
-🔴 不通过的要写清**现象 + 你量到的两个操作数**，让实现席不用重新复现就能定位。截图存同目录。
-**判据**：`A-vr-suite` gradle 全套绿；`A-vr-ui` 你的 ui-check.sh 全绿；
-`A-vr-density` 报告里**必须同时出现两个密度的读数**（缺一即不通过）；`A-vr-doc` 报告非空。
+**算法**：`prefix = 公共前缀长度(已同步, 当前)`；发 `BackSpace × (len(已同步)-prefix)` + `当前[prefix:]`；再 `已同步 = 当前`。
+- 🔴 **常见路径零代价**：纯追加时 prefix == len(已同步) ⇒ **退格数 0**，键序与今天逐键直通**完全一致**。
+- 🔴 **补全菜单必须保住**：CLI 仍收到逐键输入，`/` `@` `Tab` `↑↓` 照常。⛔ 不许改成"发送时整行提交"（用户已否掉该方案）。
+- 不需要知道 CLI 光标位置——**约定同步后光标永远在行尾**。
+🔴 **实时是硬要求**：每次文本变化立刻算差分立刻发。唯一允许延迟的是**中文输入法组合期**
+（`TextFieldValue.composition != null`，那段文本还不是用户要的）：**组合期攒着、上屏立即发**；英文/数字**一个字符都不许延迟**。
+⚠️ **前置**：t.chrome 已把 `BasicTextField` 改成 `TextFieldValue` 重载。
+⚠️ **先量再决定要不要合并，⛔ 不许拍脑袋加延迟**：改中间一字可能连发十几个键，CLI 对快速连发退格的吞吐未知。
+先量 **单次编辑发出的按键数** 与 **CLI 侧重绘耗时**，两个数写进说明；若要加合并，**延迟上限 50ms**并写明取舍。
+**判据**（先验红）：`A-df-append` 纯追加退格数==0 且键序与旧行为一致；
+`A-df-edit` 光标移中间删一字再插一字 ⇒ **两边最终文本相等**（⛔ 不许只断言"发了退格"）；
+`A-df-ime` 组合期零按键、上屏 ≤1 帧内发出；`A-df-latency` 英文逐字无额外延迟。
+配套单测名须含 `DiffSync`。说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-diff/说明.md。
 
 ---
 🔴🔴 **判据形态**：机械判据用 `python3 /Volumes/nvme/Projects/远程Agent安卓/tools/uiassert.py` 做内容断言，
@@ -226,9 +214,9 @@ fun LanPill(modifier: Modifier = Modifier) {
 🔴 **判据必须禁止"切出再切入"**——那正是现在能蒙混过关的路径。断言里不许有任何页面切换动作。
 ```
 
-- write_paths: app/, .team/nodes/vz-ver/
+- write_paths: app/, .team/nodes/vz-diff/
 - read_paths: /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md, /Volumes/nvme/Projects/远程Agent安卓/.team/issues/shots, /Volumes/nvme/Projects/远程Agent安卓/design/compose-handoff, /Volumes/nvme/Projects/远程Agent安卓/tools/uiassert.py, /Volumes/nvme/Projects/远程Agent安卓/app/app/src/, .team/nodes/chrome/BASE.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/084-输入框差分同步.md
-- 判据: A-vr-test, A-vr-suite, A-vr-ui, A-vr-shot, A-vr-doc
+- 判据: A-df-test, A-df-suite, A-df-ui, A-df-shot, A-df-doc
 
 ## 2. 架构基（wiki 现算影响闭包）
 - 写作用域包：dev.agentmirror.app
@@ -252,7 +240,7 @@ fun LanPill(modifier: Modifier = Modifier) {
 - **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet
 
 ## 3. 需求基
-- 标题引用条目：requirement-base/entries/083*
+- 标题引用条目：requirement-base/entries/083*, requirement-base/entries/084*
 - requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）
 
 ## 4. 纪律（本工程通用，违反即返工）
