@@ -1,5 +1,5 @@
 ---
-name: v72-v1-ident
+name: ux-v1-layout
 role: App 施工席（Kotlin / Compose）
 provider: grok
 model: grok-4.6
