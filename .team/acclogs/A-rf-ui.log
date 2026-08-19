@@ -1,0 +1,14 @@
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Warning: Activity not started, its current task has been brought to the front
+ON_SESSION ['‹', '远控 leader', 'LAN', '查看', 'term-theme-dark source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C']
+BACKGROUND_HOME
+WAIT_65s
+RESUME
+AFTER_RESUME ['‹', '远控 leader', 'LAN', '查看', 'term-theme-dark source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C']
+SETTINGS ['设置', '主机配对', 'PAIRED', '当前只保留一个主机档案。重新配对成功后会覆盖现有档案。', '重新配对', '字体大小', '12 pt', '取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。', '4', '6', '8', '10', '12', '14', '16', '18']
+DIAG_FILE diag-1787152208828.log
+DERIVED_HITS ['51']
+FRAME_HITS ['51']
+A-rf-cols derived_cols=51 frame_cols=51 elapsed=35.0
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/land-reflow/shot-after-resume.png
+PASS t.reflow A-rf-cols

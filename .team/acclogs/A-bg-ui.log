@@ -1,0 +1,28 @@
+Night mode: no
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 6927
+WaitTime: 6929
+Complete
+Night mode: yes
+Night mode: no
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 7313
+WaitTime: 7324
+Complete
+Night mode: yes
+DENSITY 480 TOKEN_LIGHT term-theme-light source=app-theme
+TERM_BG_LIGHT (247, 248, 251) luma 248 dist_paper 0 dist_ansi0 41 paperLuma 248 ansi0Luma 233 pad (36, 341) view (24, 317, 1236, 2392)
+DENSITY 480 TOKEN_DARK term-theme-dark source=app-theme TERM_BG_DARK (10, 17, 32) luma 16
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-bg/shot-d480-dark.png
+DENSITY 440 TOKEN_LIGHT term-theme-light source=app-theme
+TERM_BG_LIGHT (247, 248, 251) luma 248 dist_paper 0 dist_ansi0 41 paperLuma 248 ansi0Luma 233 pad (34, 326) view (22, 302, 1238, 2424)
+DENSITY 440 TOKEN_DARK term-theme-dark source=app-theme TERM_BG_DARK (10, 17, 32) luma 16
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-bg/shot-d440-dark.png
+PASS t.bg densities [(480, (247, 248, 251), (10, 17, 32), 'term-theme-light source=app-theme', 'term-theme-dark source=app-theme'), (440, (247, 248, 251), (10, 17, 32), 'term-theme-light source=app-theme', 'term-theme-dark source=app-theme')]
+PASS ui-check.sh

@@ -1,0 +1,13 @@
+SCREEN ‹ 返回 | 远控 leader | LAN | 查看 | Esc | Tab | ↑ | ↓ | ← | → | Ctrl-C | ＋ | 输入指令… | 发送
+tap '返回' at 102,144 prefer=top
+SCREEN ‹ 工作区 | 远程Agent安卓 | LAN | ★ | 远控 leader | /Volumes/nvme/Projects/远程Agent安卓 | 空闲 | ☆ | ux2-v1-title | /Volumes/nvme/Projects/远程Agent安卓 | 空闲 | ☆ | ux2-v1-clip | /Volumes/nvme/Projects/远程Agent安卓 | 空闲 | ☆ | ux2-v1-theme | /Volumes/nvme/Projects/远程Agent安卓 | 空闲 | ☆ | advisor | /Volumes/nvme/Projects/远程Agent安卓 | 空闲 | ☆ | ux-v1-layout | /Volumes/nvme/Projects/远程Agent安卓 | 空闲 | ☆ | ux-v1-view | /Volumes/nvme/Projects/远程Agent安卓 | 空闲 | ☆ | ux-v1-fav | /Volumes/nvme/Projects/远程Agent安卓 | 空闲 | 收藏 | 会话 | 设置
+LIST_DISPLAY_NAME 远控 leader
+operands before_open list_display='远控 leader' claude_code_in_list=False
+tap '远控 leader' at 352,343 prefer=top
+SCREEN ‹ 返回 | 远控 leader | LAN | 查看 | Esc | Tab | ↑ | ↓ | ← | → | Ctrl-C | ＋ | 输入指令… | 发送
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux-title/session-title.png
+UIXML /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux-title/session-title.ui.xml
+operands after_open has_return=True has_view=True has_list_name=True has_claude_code=False texts=['‹ 返回', '远控 leader', 'LAN', '查看', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '＋', '输入指令…', '发送']
+uiassert absent claude_code rc=0
+uiassert has '远控 leader' rc=0
+PASS session title matches list display name '远控 leader' and claude_code is absent
