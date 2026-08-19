@@ -1,10 +1,10 @@
-租约抢占：pid=4293 stole from pid=15314 reason=holder pid 15314 不存在（判定已死） at=1787109156
+租约抢占：pid=23626 stole from pid=4293 reason=holder pid 4293 不存在（判定已死） at=1787112611
 
-[ledger-run 2026-08-19T03:12:36Z] 开工 start | ledger_id=ledger.refresh.v1 revision=3 账本=.team/ledgers/refresh-v1.json 墙钟上限=9300s 派单死线=90s
-[ledger-run 2026-08-19T03:12:37Z] 轮次 round | 第 1 轮开始：前沿 ["t.srv"]（墙钟已跑 0s / 上限 9300s）
-[ledger-run 2026-08-19T03:12:37Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq1-t1787109157360 delivery=del-t.srv-seq1-t1787109157360
-[ledger-run 2026-08-19T03:12:37Z] 投递回执 send-ok | task=t.srv case_id=ledger_refresh_v1__t.srv__r3 message_id=msg_04756edd4000 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-19T03:12:37Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
-[ledger-run 2026-08-19T03:12:37Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_refresh_v1__t.srv__r3 team=grok-l2 预算=950s
-[ledger-run 2026-08-19T03:13:25Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
-[ledger-run 2026-08-19T03:13:25Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-test", "A-s-suite", "A-s-doc"]
+[ledger-run 2026-08-19T04:10:11Z] 开工 start | ledger_id=ledger.refresh.v1 revision=4 账本=.team/ledgers/refresh-v1.json 墙钟上限=9300s 派单死线=90s
+[ledger-run 2026-08-19T04:10:11Z] 轮次 round | 第 1 轮开始：前沿 ["t.srv"]（墙钟已跑 0s / 上限 9300s）
+[ledger-run 2026-08-19T04:10:11Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq1-t1787112611844 delivery=del-t.srv-seq1-t1787112611844
+[ledger-run 2026-08-19T04:10:12Z] 投递回执 send-ok | task=t.srv case_id=ledger_refresh_v1__t.srv__r4 message_id=msg_44f2be71b7a0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T04:10:12Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
+[ledger-run 2026-08-19T04:10:12Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_refresh_v1__t.srv__r4 team=grok-l2 预算=950s
+[ledger-run 2026-08-19T04:11:02Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
+[ledger-run 2026-08-19T04:11:02Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-test", "A-s-suite", "A-s-doc"]

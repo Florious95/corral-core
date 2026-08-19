@@ -1,0 +1,6 @@
+[ledger-run 2026-08-19T04:27:37Z] 开工 start | ledger_id=ledger.tabs.v1 revision=2 账本=.team/ledgers/tabs-v1.json 墙钟上限=4800s 派单死线=90s
+[ledger-run 2026-08-19T04:27:40Z] 轮次 round | 第 1 轮开始：前沿 ["t.tabs"]（墙钟已跑 3s / 上限 4800s）
+[ledger-run 2026-08-19T04:27:40Z] 派单 dispatch | task=t.tabs 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/tabs-v1-tabs 席位=tabs-v1-tabs attempt=att-t.tabs-seq1-t1787113660942 delivery=del-t.tabs-seq1-t1787113660942
+[ledger-run 2026-08-19T04:27:41Z] 投递回执 send-ok | task=t.tabs case_id=ledger_tabs_v1__t.tabs__r2 message_id=msg_d0e801904138 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T04:27:41Z] 派单落地 dispatch-landed | task=t.tabs 席位 tabs-v1-tabs 的收件箱已多出这条派单
+[ledger-run 2026-08-19T04:27:41Z] 等待 wait | task=t.tabs 在等的 key（case_id）=ledger_tabs_v1__t.tabs__r2 team=grok-l2 预算=2400s
