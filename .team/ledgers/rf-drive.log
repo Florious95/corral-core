@@ -1,10 +1,10 @@
-租约抢占：pid=48393 stole from pid=86766 reason=holder pid 86766 不存在（判定已死） at=1787104534
+租约抢占：pid=19348 stole from pid=48393 reason=holder pid 48393 不存在（判定已死） at=1787105771
 
-[ledger-run 2026-08-19T01:55:34Z] 开工 start | ledger_id=ledger.refresh.v1 revision=2 账本=.team/ledgers/refresh-v1.json 墙钟上限=9300s 派单死线=90s
-[ledger-run 2026-08-19T01:55:34Z] 轮次 round | 第 1 轮开始：前沿 ["t.srv"]（墙钟已跑 0s / 上限 9300s）
-[ledger-run 2026-08-19T01:55:34Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq1-t1787104534783 delivery=del-t.srv-seq1-t1787104534783
-[ledger-run 2026-08-19T01:55:34Z] 投递回执 send-ok | task=t.srv case_id=ledger_refresh_v1__t.srv__r2 message_id=msg_ada6277a2ff8 —— 回执成功≠席位收到，下一步查收件箱确认落地
-[ledger-run 2026-08-19T01:55:35Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
-[ledger-run 2026-08-19T01:55:35Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_refresh_v1__t.srv__r2 team=grok-l2 预算=950s
-[ledger-run 2026-08-19T01:55:35Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
-[ledger-run 2026-08-19T01:55:35Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-test", "A-s-suite", "A-s-doc"]
+[ledger-run 2026-08-19T02:16:11Z] 开工 start | ledger_id=ledger.refresh.v1 revision=2 账本=.team/ledgers/refresh-v1.json 墙钟上限=9300s 派单死线=90s
+[ledger-run 2026-08-19T02:16:11Z] 轮次 round | 第 1 轮开始：前沿 ["t.srv"]（墙钟已跑 0s / 上限 9300s）
+[ledger-run 2026-08-19T02:16:11Z] 派单 dispatch | task=t.srv 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/dev-server 席位=dev-server attempt=att-t.srv-seq1-t1787105771912 delivery=del-t.srv-seq1-t1787105771912
+[ledger-run 2026-08-19T02:16:12Z] 投递回执 send-ok | task=t.srv case_id=ledger_refresh_v1__t.srv__r2 message_id=msg_5f9f31badcf8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T02:16:12Z] 派单落地 dispatch-landed | task=t.srv 席位 dev-server 的收件箱已多出这条派单
+[ledger-run 2026-08-19T02:16:12Z] 等待 wait | task=t.srv 在等的 key（case_id）=ledger_refresh_v1__t.srv__r2 team=grok-l2 预算=950s
+[ledger-run 2026-08-19T02:16:12Z] 已唤醒 wait-signaled | task=t.srv 等到结果了
+[ledger-run 2026-08-19T02:16:12Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-test", "A-s-suite", "A-s-doc"]

@@ -28,6 +28,7 @@ import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.pairing.startPersistentConnection
 import dev.agentmirror.app.service.NetworkConnectivityWatcher
 import dev.agentmirror.app.service.NotificationHelper
+import dev.agentmirror.app.workspace.SharedPreferencesFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
@@ -101,7 +102,9 @@ class MainActivity : ComponentActivity() {
             startPersistentConnection(storedConfig, this)
         }
         // 工作区 VM 与 Activity 同生命周期；列表状态由 conn 层 READY+全量 listing 恢复（004 无状态）。
-        workspaceViewModel = WorkspaceViewModel()
+        workspaceViewModel = WorkspaceViewModel(
+            favoriteStore = SharedPreferencesFavoriteStore(this),
+        )
         setContent {
             AgentMirrorApp(navState = navState, workspaceViewModel = workspaceViewModel)
         }

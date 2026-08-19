@@ -600,17 +600,21 @@ data class Level2UnsubscribeFrame(
 data class OverlayFrame(
     @SerialName("text") val text: String = "",
     @SerialName("seq") val seq: Long = 1,
+    @SerialName("rows") val rows: Int = 0,
+    @SerialName("cols") val cols: Int = 0,
 ) : FramePayload {
     override val frameType: String get() = FrameType.OVERLAY_FRAME
     override fun validate(): String? = if (seq <= 0) "overlay_frame seq must be >= 1" else null
 }
 
-/** 打开悬浮窗时订抓屏流 C→S（064）。payload 可空。 */
+/** 打开悬浮窗时订抓屏流 C→S（065：必须带当前会话所属 socket）。 */
 @Serializable
-class OverlaySubscribeFrame : FramePayload {
+data class OverlaySubscribeFrame(
+    @SerialName("socket") val socket: String = "",
+) : FramePayload {
     override val frameType: String get() = FrameType.OVERLAY_SUBSCRIBE
-    override fun equals(other: Any?) = other is OverlaySubscribeFrame
-    override fun hashCode(): Int = frameType.hashCode()
+    override fun validate(): String? =
+        if (socket.isEmpty()) "overlay_subscribe socket must be non-empty" else null
 }
 
 /** 关闭悬浮窗时退订 C→S（064）。幂等。 */

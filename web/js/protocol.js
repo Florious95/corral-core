@@ -28,6 +28,7 @@ export const FRAME_TYPES = Object.freeze([
   'auth', 'auth_ack', 'list', 'listing', 'list_delta',
   'subscribe', 'unsubscribe', 'input', 'input_ack',
   'scrollback', 'resize', 'error',
+  'overlay_subscribe', 'overlay_unsubscribe', 'overlay_frame',
 ]);
 
 /** Closed set of AgentState values (§7.1) — server computes, client renders. */
@@ -151,6 +152,14 @@ export function validateFrame(type, p) {
     case 'error':
       if (typeof p.code !== 'string' || p.code.length === 0) return 'error code must be non-empty';
       return null;
+    case 'overlay_subscribe':
+      if (typeof p.socket !== 'string' || p.socket.length === 0) return 'overlay_subscribe socket must be non-empty';
+      return null;
+    case 'overlay_unsubscribe':
+      return null;
+    case 'overlay_frame':
+      if (!Number.isInteger(p.seq) || p.seq < 1) return 'overlay_frame seq must be >= 1';
+      return null;
     default:
       return `unknown frame type: ${type}`;
   }
@@ -176,6 +185,14 @@ function canonicalPayload(type, p) {
     }
     case 'scrollback': return { req_id: p.req_id, ref: p.ref, from_line: p.from_line, count: p.count };
     case 'resize': return { ref: p.ref, rows: p.rows, cols: p.cols };
+    case 'overlay_subscribe': return { socket: p.socket };
+    case 'overlay_unsubscribe': return {};
+    case 'overlay_frame': {
+      const o = { seq: p.seq, text: p.text || '' };
+      if (p.rows) o.rows = p.rows;
+      if (p.cols) o.cols = p.cols;
+      return o;
+    }
     default: return { ...p };
   }
 }
@@ -250,6 +267,9 @@ const KNOWN_FIELDS = Object.freeze({
   scrollback: ['req_id', 'ref', 'from_line', 'count'],
   resize: ['ref', 'rows', 'cols'],
   error: ['code', 'reason'],
+  overlay_subscribe: ['socket'],
+  overlay_unsubscribe: [],
+  overlay_frame: ['seq', 'text', 'rows', 'cols'],
 });
 
 function pickKnown(type, payload) {

@@ -117,7 +117,15 @@ class WorkspaceViewModel(
         Unit
     },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
+    favoriteStore: FavoriteStore = MemoryFavoriteStore(),
 ) : ConnectionManager.Listener {
+
+    private val favoriteBook = FavoriteBook(favoriteStore, nowMs)
+
+    private val _favorites = MutableStateFlow(favoriteBook.records())
+
+    /** 已收藏记录（加入时间序由 [FavoriteBook.rows] 再倒排）。 */
+    val favorites: StateFlow<List<FavoriteRecord>> = _favorites.asStateFlow()
 
     private val _uiState = MutableStateFlow(WorkspaceUiState(connection = initialConnection))
 
@@ -211,6 +219,43 @@ class WorkspaceViewModel(
     fun refresh() {
         _refreshing.value = true
         requestList()
+    }
+
+    fun toggleFavorite(entry: L2Entry) {
+        favoriteBook.toggle(entry.sessionName, entry.windowIndex, entry.windowName)
+        _favorites.value = favoriteBook.records()
+    }
+
+    fun toggleFavorite(row: FavoriteRow) {
+        favoriteBook.toggle(row.sessionName, row.windowIndex, row.windowName)
+        _favorites.value = favoriteBook.records()
+    }
+
+    /** 收藏行：live 对账（全部已见工作区缓存 + 当前二级），失联保留置灰，按 addedAt 倒序。 */
+    fun favoriteRows(live: List<L2Entry> = liveForFavorites()): List<FavoriteRow> =
+        favoriteBook.rows(live)
+
+    private fun liveForFavorites(): List<L2Entry> {
+        val byKey = LinkedHashMap<FavoriteKey, L2Entry>()
+        for (state in level2Cache.values) {
+            for (entry in state.sessions) {
+                byKey[entry.favoriteKey()] = entry
+            }
+        }
+        for (entry in _level2.value.sessions) {
+            byKey[entry.favoriteKey()] = entry
+        }
+        val subscribed = subscribedWorkspace
+        // 已订工作区若已收到快照，以当前表为准：缓存里多出来的键视为失联。
+        if (subscribed != null && lastLevel2AtMs != 0L) {
+            val liveNow = HashSet<FavoriteKey>()
+            for (entry in _level2.value.sessions) liveNow.add(entry.favoriteKey())
+            val cached = level2Cache[subscribed]?.sessions.orEmpty()
+            for (entry in cached) {
+                if (entry.favoriteKey() !in liveNow) byKey.remove(entry.favoriteKey())
+            }
+        }
+        return ArrayList(byKey.values)
     }
 
     /** 内部模型：cwd → session_count（保服务端下发顺序）。 */

@@ -30,8 +30,28 @@ import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.OverlayFrame
 import dev.agentmirror.app.conn.PaneModeChangedFrame
 import dev.agentmirror.app.conn.InputKey
+import dev.agentmirror.app.overlay.OverlayEmulator
+import dev.agentmirror.app.overlay.dropScratchLines
 import dev.agentmirror.app.termview.TermViewPresenter
+import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
+
+/** 会话 ref = socket + U+001F + pane_id；悬浮窗订阅只取 socket。 */
+internal fun sessionSocketFromRef(ref: String): String {
+    val sep = ref.indexOf('\u001f')
+    return if (sep > 0) ref.substring(0, sep) else ref
+}
+
+/** 从三级同一套网格快照抽出可见纯文本（宽字符占位格跳过）。 */
+internal fun ScreenSnapshot.plainText(): String =
+    lines.joinToString("\n") { row ->
+        buildString {
+            for (cell in row) {
+                if (cell.width == 0) continue
+                append(cell.text)
+            }
+        }.trimEnd()
+    }.trimEnd()
 
 /**
  * 会话页状态机（003 四标准的落地面）：终端镜像 + 本地输入条 + 发送回执 + 附件管线。
@@ -63,6 +83,9 @@ class SessionViewModel(
 
     /** 终端内核：snapshot 重放 + delta 追加 + 本地 scrollback（006 本地化滚动）。 */
     val emulator = TerminalEmulator(initialCols, initialRows)
+
+    /** 悬浮窗屏幕缓冲（066 OverlayEmulator，与 web/js/overlay.js 同层）。 */
+    internal val overlayEmulator = OverlayEmulator(80, 24)
 
     /** 视口状态机：跟随/锁定、字号→行列数换算、脏区（渲染逻辑与 View 分离）。 */
     val presenter = TermViewPresenter(emulator) { rows, cols ->
@@ -190,7 +213,7 @@ class SessionViewModel(
             is ErrorFrame -> transientError = "协议错误：${frame.code.wire}${frame.reason.takeIf { it.isNotEmpty() }?.let { "（$it）" } ?: ""}"
             // 缺陷④：远端 pane copy-mode 状态变更（进入/退出），驱动 UI 角标。
             is PaneModeChangedFrame -> if (frame.ref == ref) inCopyMode = frame.inCopyMode
-            is OverlayFrame -> if (overlayOpen) overlayText = frame.text
+            is OverlayFrame -> if (overlayOpen) applyOverlayFrame(frame)
             else -> Unit
         }
     }
@@ -203,7 +226,7 @@ class SessionViewModel(
     fun openOverlay() {
         if (overlayOpen) return
         overlayOpen = true
-        manager.subscribeOverlay()
+        manager.subscribeOverlay(sessionSocketFromRef(ref))
     }
 
     /**
@@ -215,7 +238,20 @@ class SessionViewModel(
         if (!overlayOpen) return
         overlayOpen = false
         overlayText = ""
+        overlayEmulator.resize(80, 24)
         manager.unsubscribeOverlay()
+    }
+
+    /**
+     * overlay_frame 是整屏快照：先 [OverlayEmulator.resize] 清空，再 feed。
+     * 不得把 CSI 当文本，也不得在旧画面后追加。
+     */
+    private fun applyOverlayFrame(frame: OverlayFrame) {
+        val cols = if (frame.cols > 0) frame.cols else 80
+        val rows = if (frame.rows > 0) frame.rows else 24
+        overlayEmulator.resize(cols, rows)
+        overlayEmulator.feed(frame.text)
+        overlayText = dropScratchLines(overlayEmulator.plainText())
     }
 
     override fun onBinary(frame: BinaryFrame) {
