@@ -10,16 +10,22 @@ INTERVAL="${INTERVAL:-60}"
 NEED="${NEED:-3}"
 FRESH="${FRESH:-300}"
 cd "$WS" || exit 2
-NP=/Volumes/nvme/cargo-target/release/nodeprobe
+# 判活只用这一把尺（skill: tmux-node-activity）。⛔ 不许手写 ps/pgrep/find 判活。
+NP=$(command -v nodeprobe || echo ~/.local/bin/nodeprobe)
 strikes=0
 while :; do
   now=$(date +%s)
   # ① 席位在工作数（排除 leader 自己）
-  work=$($NP -S "$SOCK" 2>/dev/null | python3 -c "
+  read -r work unk < <($NP -S "$SOCK" 2>/dev/null | python3 -c "
 import json,sys
 try: d=json.load(sys.stdin)
-except Exception: print('ERR'); sys.exit()
-print(sum(1 for n in d['nodes'] if n['state']=='working' and n['name']!='claude_code'))")
+except Exception: print('ERR ERR'); sys.exit()
+ns=[n for n in d['nodes'] if n['name']!='claude_code']
+print(sum(1 for n in ns if n['state']=='working'), sum(1 for n in ns if n['state']=='unknown'))")
+  # 🔴 unknown 绝不能当 idle：那是把「不知道」染成「确定空闲」，会让瞎掉的判据看着一切正常
+  if [ "${unk:-0}" != "0" ] && [ "${unk:-0}" != "ERR" ]; then
+    echo "[$(date -u +%H:%M:%SZ)] 🔴 有 $unk 个 unknown —— 符号表缺项或 nodeprobe 二进制旧了；⛔ 不许当 idle 用"; exit 1
+  fi
   if [ "$work" = "ERR" ] || [ -z "$work" ]; then
     echo "[$(date -u +%H:%M:%SZ)] 🔴 判活尺子坏了（nodeprobe 不可判）——尺子坏和被测空闲同形，必须响"; exit 1
   fi
