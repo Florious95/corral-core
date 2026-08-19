@@ -1,0 +1,422 @@
+{
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.overlay-reforge.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.advisor": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov3-probe/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "fav-advisor",
+    "team": "grok-l2"
+   }
+  },
+  "r.app": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov3-fix/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "fav-dev-app",
+    "team": "grok-l2"
+   }
+  },
+  "r.control": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov3-ver/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "fav-control",
+    "team": "grok-l2"
+   }
+  },
+  "r.leader": {
+   "provider": "human",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/ov3-esc/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.probe": {
+   "title": "回炉根因探针：坐实 bad_frame 空白窗。契约 requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md（**§2 已把定位做到「socket 为空 ⇒ ErrInvalidField ⇒ bad_frame」为止，「为什么是空」没坐实，这一格就是去坐实它**）。归档 tag：archive/overlay-badframe-20260819。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/probe-wire.sh，做**跨语言线上帧往返**：\n①用 **App 真正的序列化器**（Kotlin 单测，名须含 `WireFixtureExport`）把**每一个 C→S 帧**序列化成字节，落盘 /Volumes/nvme/Projects/远程Agent安卓/app/wire-fixtures/*.json；\n②**Go 侧读同一批文件**，用服务端真正的解码器 + Validate 逐个解，全部必须成功；\n③断言 `overlay_subscribe` 的 socket **非空**，并把实际取到的 socket 原值打出来。\n🔴 **现在跑必须红**，且红的那条要能指出是「socket 为空」还是别的。把红证据写进 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/说明.md。\n🔴 这条判据的价值在于**跨过语言接缝**：已有测试全是同语言闭环（App 对象→App 断言 / 服务端对象→服务端断言），所以线上帧不一致在两边单测里永远是绿的。⛔ 不要再写一个同语言闭环的测试来充数。\n⛔ 这一格只产探针，不改产品代码。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户令未解除）。⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "owner": {
+    "role": "r.advisor"
+   },
+   "resources": {
+    "worktree_id": "wt9.probe",
+    "write_paths": [
+     ".team/nodes/ov3-probe/",
+     "app/wire-fixtures/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md",
+     "app/app/src/",
+     "server/internal/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "1e97607f3"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/probe-wire.sh",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-p-exec",
+      "argv": [
+       "test",
+       "-x",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/probe-wire.sh"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-p-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-p-red",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;r=subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/probe-wire.sh'],timeout=1500).returncode;sys.exit(0 if r!=0 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-p-exec",
+     "A-p-doc",
+     "A-p-red"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
+  },
+  "t.fix": {
+   "title": "修 bad_frame 空白窗 + 补仪表。契约 requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md。探针 .team/nodes/ov3-probe/probe-wire.sh 只读，⛔ 不许改它让判据变绿。\n①**修根因**：让 overlay_subscribe 带上真实 socket。socket 为空时 App **不得发出该帧**，就地报可读错误。\n②**补仪表（诊断日志纪律）**：悬浮窗路径必须 DiagLog 记录，且记**参与判断的操作数**——订阅发出的 socket 原值、ref 原值、收到的帧序号与字节数、被拒时服务端给的原因。🔴 实发教训：这次用户导出日志里 `[viewport]`/`[grid]` 刷屏而 **overlay 零记录**，拿着一个为诊断而生的日志诊断不了这个。判据是那句：**光看日志就能分出「该做没做」还是「做了做错」**。\n③**服务端错误码分离**：`ErrInvalidField` 不得与真正的解码失败共用 `bad_frame`。字段非法要有自己的错误码并**带上字段名**，否则客户端拿到「malformed frame」无从下手。\n配套测试名须含 `WireRoundTrip`。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-fix/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户令未解除）。⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt9.fix",
+    "write_paths": [
+     "app/",
+     "server/",
+     ".team/nodes/ov3-fix/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md",
+     ".team/nodes/ov3-probe/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "1e97607f3"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-fix/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-f-probe",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/probe-wire.sh'],timeout=1500).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-f-round",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -run WireRoundTrip -count=1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-f-diag",
+      "argv": [
+       "sh",
+       "-c",
+       "grep -rq 'DiagLog' /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/overlay/ /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/session/"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-f-errcode",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -n 'ErrInvalidField' /Volumes/nvme/Projects/远程Agent安卓/server/internal/api/ws_conn.go | grep -q 'ErrCodeBadFrame'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-f-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-fix/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-f-probe",
+     "A-f-round",
+     "A-f-diag",
+     "A-f-errcode",
+     "A-f-doc"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
+  },
+  "t.ver": {
+   "title": "验收：探针由红转绿 + 全套不倒退 + 出包。契约 requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md。\n①探针 exit 0；②go 全套 + gradle 全套绿；③**打 debug APK 并核 dex**（OverlayEmulator/Favorite/ThreePane 符号都在）；\n④说明里贴出「修前红在哪一条、修后绿」的对照。产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-ver/说明.md。\n⛔ 探针只读。⛔ 不许用模拟器截图充验收证据。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户令未解除）。⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "owner": {
+    "role": "r.control"
+   },
+   "resources": {
+    "worktree_id": "wt9.ver",
+    "write_paths": [
+     ".team/nodes/ov3-ver/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md",
+     ".team/nodes/ov3-probe/",
+     "app/",
+     "server/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "1e97607f3"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-ver/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-v-probe",
+      "argv": [
+       "python3",
+       "-c",
+       "import subprocess,sys;sys.exit(subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-probe/probe-wire.sh'],timeout=1500).returncode)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-v-go",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-v-app",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-v-apk",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q assembleDebug && test -s app/build/outputs/apk/debug/app-debug.apk"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-v-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov3-ver/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-v-probe",
+     "A-v-go",
+     "A-v-app",
+     "A-v-apk",
+     "A-v-doc"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
+  }
+ },
+ "dependencies": [
+  {
+   "from": "t.probe",
+   "to": "t.fix",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.fix",
+   "to": "t.ver",
+   "condition": "requires_success"
+  }
+ ],
+ "parallelism": [
+  {
+   "group": "g9",
+   "max_concurrency": 1
+  }
+ ],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "leader",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "完成以机械判据为准",
+  "delivery_uncertain": "重发并去重"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": false
+ },
+ "fallback": {
+  "F.esc": {
+   "agent": {
+    "role": "r.leader"
+   },
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed"
+   ],
+   "max_attempts": 1,
+   "action": "escalate_to_leader",
+   "silent_substitution": false
+  }
+ },
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "判据必须是可重跑命令"
+ },
+ "resource_isolation": {
+  "default_write_scope": ".team/nodes",
+  "rules": [],
+  "read_only_shared": [
+   "requirement-base/entries/070-悬浮窗回炉与跨语言线上帧判据.md",
+   ".team/nodes/ov3-probe/probe-wire.sh"
+  ]
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 1
+}
