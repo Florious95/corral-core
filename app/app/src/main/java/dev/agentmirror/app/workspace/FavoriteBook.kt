@@ -120,6 +120,8 @@ class FavoriteBook(
                     isOnline = isOnline,
                     ref = rec.ref,
                     cwd = cwd,
+                    title = hit?.title.orEmpty(),
+                    status = hit?.status ?: L2Status.UNKNOWN,
                 ),
             )
         }

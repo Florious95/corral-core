@@ -143,7 +143,7 @@ internal fun L2SessionList(
                         }
                     }
                 }
-                L2StatusBadge(entry)
+                L2StatusBadge(status = entry.status, ref = entry.ref)
             }
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant,
@@ -155,13 +155,17 @@ internal fun L2SessionList(
 }
 
 @Composable
-private fun L2StatusBadge(entry: L2Entry) {
-    val container = when (entry.status) {
+internal fun L2StatusBadge(
+    status: L2Status,
+    ref: String,
+    tagPrefix: String = "l2-status",
+) {
+    val container = when (status) {
         L2Status.WORKING -> MaterialTheme.colorScheme.primaryContainer
         L2Status.IDLE -> MaterialTheme.colorScheme.surfaceContainerHigh
         L2Status.UNKNOWN -> MaterialTheme.colorScheme.errorContainer
     }
-    val content = when (entry.status) {
+    val content = when (status) {
         L2Status.WORKING -> MaterialTheme.colorScheme.onPrimaryContainer
         L2Status.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant
         L2Status.UNKNOWN -> MaterialTheme.colorScheme.onErrorContainer
@@ -170,7 +174,7 @@ private fun L2StatusBadge(entry: L2Entry) {
         color = container,
         shape = MaterialTheme.shapes.extraSmall,
         modifier = Modifier
-            .testTag("l2-status-${entry.ref}")
+            .testTag("$tagPrefix-$ref")
             .width(80.dp)
             .height(24.dp),
     ) {
@@ -179,7 +183,7 @@ private fun L2StatusBadge(entry: L2Entry) {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = entry.status.label,
+                text = status.label,
                 style = MaterialTheme.typography.labelMedium,
                 color = content,
                 maxLines = 1,
@@ -190,7 +194,7 @@ private fun L2StatusBadge(entry: L2Entry) {
 }
 
 @Composable
-private fun L2FavoriteStar(
+internal fun L2FavoriteStar(
     starred: Boolean,
     onClick: () -> Unit,
     tag: String,
