@@ -30,6 +30,12 @@ def main():
         sys.exit("用法: prep_ledger.py <账本.json> [--team T] [--template 角色文件]")
     path = sys.argv[1]
     team = "grok-l2"
+    # 模板会被席位清理顺手删掉（2026-08-19 实撞：清 20 个退役席位时把它一并删了，
+    # 下一张账本 prep 当场炸，而驱动器已经把单派给了那个已停用的占位席位）。
+    # ⇒ 用一份不随清理消失的常驻角色文件当模板。
+    # ⚠️ 模板必须是**工具齐全**的施工席角色文件：advisor.md 的 tools 只有 fs_* + execute_bash，
+    # 缺 mcp_team ⇒ 新席位连 report_result 都调不了，行为自证当场失败（2026-08-19 实撞两次）。
+    # dev-app.md 已纳入版本控制，清理退役席位时⛔不要删它。
     template = ".team/grok/agents/dev-app.md"
     suffix = ""
     for i, a in enumerate(sys.argv):
