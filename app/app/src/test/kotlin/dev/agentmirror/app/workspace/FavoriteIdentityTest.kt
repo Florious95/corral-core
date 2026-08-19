@@ -66,8 +66,10 @@ class FavoriteIdentityTest {
             ref = "/tmp/tmux-501/ident-b\u001f%1",
             cwd = "/tmp/e2e-ident/ws-乙",
         )
-        assertEquals("claude_code", a.identityLabel)
-        assertEquals("claude_code", b.identityLabel)
+        assertEquals("PROBE_TITLE_MUST_NOT_BE_KEY", a.identityLabel)
+        assertEquals("PROBE_TITLE_MUST_NOT_BE_KEY", b.identityLabel)
+        assertEquals("claude_code", a.navigationName)
+        assertEquals("claude_code", b.navigationName)
         assertNotEquals(a.ref, b.ref)
 
         vm.toggleFavorite(a)
@@ -120,7 +122,8 @@ class FavoriteIdentityTest {
             rows[1].cwd,
         )
         assertEquals(setOf(a.cwd, b.cwd), rows.map { it.cwd }.toSet())
-        assertTrue(rows.all { it.identityLabel == "claude_code" })
+        assertTrue(rows.all { it.identityLabel == "PROBE_TITLE_MUST_NOT_BE_KEY" })
+        assertTrue(rows.all { it.windowName == "claude_code" })
 
         val opened = ArrayList<String>()
         compose.setContent {

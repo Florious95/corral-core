@@ -68,11 +68,18 @@ data class FavoriteRow(
     val isOnline: Boolean,
     val ref: String = "",
     val cwd: String = "",
+    val title: String = "",
+    val status: L2Status = L2Status.UNKNOWN,
 ) {
     val gray: Boolean get() = !isOnline
 
     val identityLabel: String
-        get() = windowName.ifEmpty { sessionName }
+        get() = sessionDisplayName(
+            windowName = windowName,
+            sessionName = sessionName,
+            name = windowName,
+            title = title,
+        )
 
     val key: FavoriteKey
         get() = FavoriteKey(ref)

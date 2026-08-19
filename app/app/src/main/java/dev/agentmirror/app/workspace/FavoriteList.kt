@@ -16,7 +16,6 @@
 
 package dev.agentmirror.app.workspace
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,6 +42,7 @@ import dev.agentmirror.app.ui.theme.Spacing
 
 /**
  * 收藏列表：按加入时间倒序。失联行置灰标「不在线」，不可点进，可取消收藏。
+ * 076 §3：星在行首、标题、目录副标题、右侧状态标（与会话列表同构）。
  */
 @Composable
 fun FavoriteList(
@@ -65,27 +65,31 @@ fun FavoriteList(
             },
         ) { row ->
             val dim = if (row.isOnline) 1f else 0.45f
-            Surface(
-                onClick = {
-                    if (row.isOnline && row.ref.isNotEmpty()) {
-                        onOpenSession(row.ref, row.identityLabel)
-                    }
-                },
-                color = MaterialTheme.colorScheme.background,
+            Row(
                 modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 56.dp)
+                    .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV)
                     .alpha(dim)
                     .testTag("fav-row-${row.ref}"),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 56.dp)
-                        .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
+                L2FavoriteStar(
+                    starred = true,
+                    onClick = { onUnfavorite(row) },
+                    tag = "fav-star-${row.ref}",
+                )
+                Surface(
+                    onClick = {
+                        if (row.isOnline && row.ref.isNotEmpty()) {
+                            onOpenSession(row.ref, row.windowName.ifEmpty { row.sessionName })
+                        }
+                    },
+                    color = MaterialTheme.colorScheme.background,
+                    modifier = Modifier.weight(1f),
                 ) {
                     Column(
-                        modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Text(
@@ -94,6 +98,7 @@ fun FavoriteList(
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("fav-id-${row.ref}"),
                         )
                         val secondary = buildString {
                             if (row.windowIndex.isNotEmpty()) {
@@ -116,29 +121,26 @@ fun FavoriteList(
                             )
                         }
                     }
-                    Text(
-                        text = "★",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .testTag("fav-star-${row.ref}")
-                            .clickable { onUnfavorite(row) }
-                            .padding(4.dp),
+                }
+                if (row.isOnline) {
+                    L2StatusBadge(
+                        status = row.status,
+                        ref = row.ref,
+                        tagPrefix = "fav-status",
                     )
-                    if (!row.isOnline) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = MaterialTheme.shapes.extraSmall,
-                        ) {
-                            Text(
-                                text = "不在线",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    .testTag("fav-offline-${row.ref}"),
-                            )
-                        }
+                } else {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = MaterialTheme.shapes.extraSmall,
+                    ) {
+                        Text(
+                            text = "不在线",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                .testTag("fav-offline-${row.ref}"),
+                        )
                     }
                 }
             }
