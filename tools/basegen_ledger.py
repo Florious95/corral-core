@@ -41,6 +41,11 @@ def main():
     task = led['tasks'][tid]
     res = task.get('resources', {})
     pkgs = pkgs_from_paths(res.get('write_paths', []))
+    # 验收/探针格的 write_paths 只有产物目录（.team/nodes/xxx/），命不中任何代码包 ⇒
+    # 闭包算出来是空的，基底退化成一张只有纪律的白纸。这类格恰恰最需要知道波及面。
+    # ⇒ 写范围命不中就按**读范围**算闭包：它验的是那些代码。
+    if not pkgs:
+        pkgs = pkgs_from_paths(res.get('read_paths', []))
     cards, edges = basegen.wiki_cards()
     ids = {basegen.node_id(p) for p in pkgs}
     fwd = sorted({d for s, d in edges if s in ids and d not in ids})
