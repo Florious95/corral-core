@@ -46,6 +46,10 @@ def main():
         role = task["owner"]["role"]
         if led["roles"].get(role, {}).get("provider") == "human":
             continue
+        # 终态格不重 prep：它的活已经验过了，再去戳它的席位只会浪费一次行为自证，
+        # 席位没响应还会把整条准备流程卡死（实撞一次）。
+        if task.get("state") in ("succeeded", "failed_terminal", "not_applicable"):
+            continue
         # ① 基底
         base = subprocess.run(
             [sys.executable, "tools/basegen_ledger.py", path, tid],
@@ -87,10 +91,20 @@ def main():
         rp = task.setdefault("resources", {}).setdefault("read_paths", [])
         if base_path not in rp:
             rp.append(base_path)
-        if base_path not in task["title"]:
-            task["title"] += (f"\n🔴 **先完整读知识基底 {base_path}**"
-                              f"（模块影响闭包现算产物：正向依赖=你消费的契约，"
-                              f"反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。")
+        # 🔴 基底**前置且内联**，不是末尾丢一个路径。
+        # 实测（findings F-12）：账本的 resources.read_paths 被框架静默吞掉，
+        # 派单里那节 `## 你需要读的` 永远是空的 ⇒ 结构化那条路是断的。
+        # 而追加在任务书末尾的一句「去读 <path>」会被埋在纪律堆里，
+        # 且只是**给路径**——席位读不读没有任何保证。
+        # ⇒ 直接把闭包内容内联到任务书最前面：给内容，不给路径。
+        MARK = "## 知识基底（已内联）"
+        if MARK not in task["title"]:
+            body = open(base_path, encoding="utf-8").read()
+            task["title"] = (
+                f"{MARK} —— tools/basegen_ledger.py 现算的模块影响闭包，"
+                f"**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。"
+                f"⛔ 不看它就动手 = 凭空猜架构。原件 {base_path}。\n\n"
+                f"{body}\n\n---\n以上是基底，以下是任务。\n\n" + task["title"])
         changed = True
         print(f"{tid}: seat={seat} base={base_path}")
 
