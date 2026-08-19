@@ -531,3 +531,47 @@ vz-v1-bg       idle  title=Terminal explicit-bg remap for CC and gr…  ← 真�
 ⛔ 判据一个字不改。⛔ 不自动化这个绕法。
 
 ⛔ 按 2026-08-19 用户令：**只收集，不主动发。**
+
+### F-17 续：隔离实验做了，**归属要改**——主责在 B（我的产品 team-agent），不在 C
+
+上面写「C 为主 + 一条待查的 B」。**隔离实验做完了，这个归属是错的，此处更正。**
+
+**实验**：17:59Z 我用 `team-agent send` 手投了一条**最小消息**（一句话，不是派单）给两个卡住的席位。
+```
+ok: True status: queued message_id: msg_00d7f22f35d0 target: vz-v1-chrome
+ok: True status: queued message_id: msg_0081fa01a6d0 target: theme-v1-plan
+```
+**变量只有一个：绕开编排器，用最原始的 `team-agent send` 直投。**
+
+**结果**：到 18:01:45Z（约 3 分钟）两席仍 `idle`，pane 标题**一个字没变**，
+仍停在建席位时的行为自证。⇒ **不是编排器的派单丢了，是这两个席位对任何消息都不再消费。**
+
+⇒ **归属改判：主责 B（team-agent，我的产品）。** 按 §1，能用我自己的 CLI 复现的就是我的锅。
+C 那部分只剩「编排器在席位已经死掉之后，仍然把它表达成正常等待」——那条仍然成立（见上面的选项①②③），
+但它是**次生**问题，不是根因。
+
+⚠️ **我差点把自己的锅报成对方的。** 保住这条的唯一原因是**先做了隔离实验再下结论**。
+这正是 skill §1 那句「形状像 ≠ 同源」——`dispatch-landed 后无人消费` 这个形状，
+既能由投递层坏产生，也能由席位自己死掉产生，**两者在编排器的输出上完全同形**。
+
+### 修复（已生效，18:02:41–42Z）
+
+```
+team-agent reset-agent <席位> --team grok-l2 --discard-session --json
+```
+⚠️ 不带 `--discard-session` 会被拒：`{"ok":false,"reason":"discard_session_required","status":"refused"}`。
+返回里还带一句诚实的自陈，值得留意：
+`weak reset proof: capture_state=transcript_missing; lifecycle restarted but attribution did not prove a fresh transcript`
+—— **它自己说这次 reset 的证明是弱的。** 记下来，下次若复发要回来看这句。
+
+然后走恢复四步：kill 两个驱动器 → 删 pid 与 lease → 两格复位 `planned` 清 attempts →
+revision 前进（vz-v1 13→14，theme-v1 2→3）→ `--preflight` ok → 重起常驻。
+**18:02:4xZ 重新派单，两席在 5 分钟内双双进入 `working`。**⛔ 判据一个字没改。
+
+### 给我方产品（team-agent）的待办，⛔ 不投对方
+
+1. **席位消费循环会静默死掉**，且死后 `nodeprobe` 仍报 `idle`（形状与"确实没事干"同形）。
+   需要一个能区分「空闲」与「死了」的信号——例如席位定期刷新一个心跳时间戳。
+2. `team-agent results` 一次跑了 **>120s**、`diagnose` 更久。**这条还没定位**，明写未定位。
+   它和本条根因是不是同一个，**没有证据，⛔ 不许并条。**
+3. `reset-agent` 的 `weak reset proof` 自陈说明它无法证明真的换了会话。**这是个知道自己不可靠的修复动作。**

@@ -113,7 +113,8 @@
      "A-plan-sections",
      "A-plan-table"
     ]
-   }
+   },
+   "attempts": []
   }
  },
  "dependencies": [],
@@ -163,5 +164,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 2
+ "revision": 3
 }
