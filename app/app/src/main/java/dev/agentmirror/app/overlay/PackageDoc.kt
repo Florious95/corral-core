@@ -17,6 +17,12 @@
 package dev.agentmirror.app.overlay
 
 /**
+ * 已归档，2026-08-19 用户令暂不介入；展示不完全问题未修。
+ *
+ * 抓屏实现模块（choose-tree 画面缓冲 / OverlayEmulator / OverlayViewport）。
+ * 主流程「查看」已改为二级菜单列表（契约 072 §1），本包不再被 Session 主路径调用。
+ * 代码保留，不删除，也不修展示不完全。
+ *
  * 会话内悬浮窗渲染（066）：[OverlayEmulator] 把 overlay_frame.text 解成可见网格。
  *
  * @produces OverlayEmulator

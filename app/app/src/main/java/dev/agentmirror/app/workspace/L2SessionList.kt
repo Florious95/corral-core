@@ -17,31 +17,42 @@
 package dev.agentmirror.app.workspace
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 
+/** 072 §3：星星点击指示必须无界/圆形，禁止 Material 默认方形 bounded ripple。 */
+internal const val L2_STAR_RIPPLE_BOUNDED = false
+
 /**
- * 二级菜单列表（061/067）：每行会话标识 + 状态标左边的空心/实心星 + 右侧状态标。
+ * 二级菜单列表（061/067/072）：每行星标在会话名之前，右侧状态标。
  * 点行用结构 ref + 结构名，title 不参与。点星只切换收藏。
  */
 @Composable
@@ -85,6 +96,12 @@ internal fun L2SessionList(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val starred = favorited.contains(entry.favoriteKey())
+                L2FavoriteStar(
+                    starred = starred,
+                    onClick = { onToggleFavorite(entry) },
+                    tag = "l2-star-${entry.ref}",
+                )
                 Surface(
                     onClick = { onOpenSession(entry.ref, entry.navigationName) },
                     color = MaterialTheme.colorScheme.background,
@@ -125,21 +142,6 @@ internal fun L2SessionList(
                         }
                     }
                 }
-                val starred = favorited.contains(entry.favoriteKey())
-                Text(
-                    text = if (starred) "★" else "☆",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (starred) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier
-                        .testTag("l2-star-${entry.ref}")
-                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                        .clickable { onToggleFavorite(entry) }
-                        .padding(4.dp),
-                )
                 L2StatusBadge(entry)
             }
             HorizontalDivider(
@@ -166,13 +168,52 @@ private fun L2StatusBadge(entry: L2Entry) {
     Surface(
         color = container,
         shape = MaterialTheme.shapes.extraSmall,
-        modifier = Modifier.testTag("l2-status-${entry.ref}"),
+        modifier = Modifier
+            .testTag("l2-status-${entry.ref}")
+            .width(80.dp)
+            .height(24.dp),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = entry.status.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = content,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun L2FavoriteStar(
+    starred: Boolean,
+    onClick: () -> Unit,
+    tag: String,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .testTag(tag)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(bounded = L2_STAR_RIPPLE_BOUNDED, radius = 24.dp),
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = entry.status.label,
-            style = MaterialTheme.typography.labelMedium,
-            color = content,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            text = if (starred) "★" else "☆",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (starred) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
     }
 }

@@ -17,6 +17,8 @@
 package dev.agentmirror.app.overlay
 
 /**
+ * 已归档，2026-08-19 用户令暂不介入；展示不完全问题未修。
+ *
  * 悬浮窗屏幕缓冲（066：移植 web/js/overlay.js OverlayEmulator）。
  * 解释备用屏 / CUP / ED / EL / SGR，不把 CSI 当字形；每帧 [resize] 后 [feed] = 整屏替换。
  *

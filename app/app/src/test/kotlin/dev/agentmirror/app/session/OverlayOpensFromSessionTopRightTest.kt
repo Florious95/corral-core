@@ -19,14 +19,12 @@ package dev.agentmirror.app.session
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.FakeClock
 import dev.agentmirror.app.conn.FakeWebSocketTransport
 import dev.agentmirror.app.conn.FrameCodec
-import dev.agentmirror.app.conn.OverlayFrame
 import dev.agentmirror.app.conn.OverlaySubscribeFrame
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
@@ -39,7 +37,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 064：会话内右上角「查看」打开覆盖在终端之上的悬浮窗。
+ * 072：会话内右上角「查看」打开覆盖在终端之上的二级菜单悬浮窗，不再订抓屏。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -65,14 +63,9 @@ class OverlayOpensFromSessionTopRightTest {
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
         assertTrue(h.vm.overlayOpen)
         assertTrue(
-            "打开必须订 overlay_subscribe",
-            h.sent().any { it is OverlaySubscribeFrame },
+            "打开不得再订 overlay_subscribe",
+            h.sent().none { it is OverlaySubscribeFrame },
         )
-
-        val tree = "├─ 0:claude\n│  ◐ working"
-        h.vm.onFrame(OverlayFrame(text = tree, seq = 1))
-        compose.waitForIdle()
-        compose.onNodeWithText("claude", substring = true).assertIsDisplayed()
     }
 }
 

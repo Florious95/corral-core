@@ -41,6 +41,8 @@ import dev.agentmirror.app.service.MirrorForegroundService
 import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.L2Entry
 
 /**
  * 会话页路由挂载（[AgentMirrorApp] 的 Session 分支唯一入口；本组合同时承担接线层：
@@ -73,6 +75,10 @@ fun SessionRoute(
     name: String,
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
+    overlaySessions: List<L2Entry> = emptyList(),
+    overlayFavorited: Set<FavoriteKey> = emptySet(),
+    onToggleOverlayFavorite: (L2Entry) -> Unit = {},
+    onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val sessionContext = LocalContext.current
     var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
@@ -101,6 +107,10 @@ fun SessionRoute(
         name = name,
         connectionPath = connectionPath,
         onBack = onBack,
+        overlaySessions = overlaySessions,
+        overlayFavorited = overlayFavorited,
+        onToggleOverlayFavorite = onToggleOverlayFavorite,
+        onOpenOverlaySession = onOpenOverlaySession,
     )
 }
 

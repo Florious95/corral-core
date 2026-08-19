@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.workspace
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -52,6 +53,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,13 +95,18 @@ fun WorkspaceScreen(
     val refreshing by viewModel.refreshing.collectAsState()
     val level2 by viewModel.level2.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
+    val activity = LocalContext.current as? Activity
 
-    // 进入即刷（2026-08-15 用户裁定：每次到一级/二级自动刷一遍拉最新；leader 澄清：返回也算
-    // 到达）。LaunchedEffect 以 selectedWorkspaceCwd 为键——一级⇄二级每次切换都触发一次刷新：
-    // null → cwd 进入二级刷、cwd → null 返回一级刷、app 首次进入一级也刷。每次切换只刷一次，
-    // 不周期重复（零周期禁令）。下拉手动刷见 PullToRefreshBox.onRefresh。
+    // 进入即刷（069）：一级发 list，二级由 enterLevel2 重订。键是菜单身份，不是滚动。
+    // 旋转重建走 suppressNextEnterRefresh，本拍不发 list。下拉见 onRefresh。
     LaunchedEffect(selectedWorkspaceCwd) {
-        viewModel.refresh()
+        if (selectedWorkspaceCwd == null) {
+            viewModel.enterLevel1()
+        } else if (!viewModel.shouldSuppressEnterRefresh()) {
+            // 074：进二级仍发一次 list（转圈由 listing/首帧复位）；不是滚动触发。
+            viewModel.refresh()
+        }
+        viewModel.clearEnterRefreshSuppress()
     }
 
     Column(
@@ -130,7 +137,12 @@ fun WorkspaceScreen(
             if (level2Cwd != null) {
                 DisposableEffect(level2Cwd) {
                     viewModel.enterLevel2(level2Cwd)
-                    onDispose { viewModel.leaveLevel2() }
+                    onDispose {
+                        // 旋转销毁组合不是离开菜单：退订会逼新组合再订，撞 069 经济红线。
+                        if (activity?.isChangingConfigurations != true) {
+                            viewModel.leaveLevel2()
+                        }
+                    }
                 }
                 LaunchedEffect(level2Cwd) {
                     while (true) {

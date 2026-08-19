@@ -38,12 +38,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -68,20 +65,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.InputKey
-import dev.agentmirror.app.overlay.OverlayViewport
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
+import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.L2Entry
+import dev.agentmirror.app.workspace.L2SessionList
 import dev.agentmirror.app.termview.TermSurfaceView
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.theme.MonoFontFamily
@@ -112,6 +109,10 @@ fun SessionScreen(
     name: String,
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
+    overlaySessions: List<L2Entry> = emptyList(),
+    overlayFavorited: Set<FavoriteKey> = emptySet(),
+    onToggleOverlayFavorite: (L2Entry) -> Unit = {},
+    onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -282,41 +283,38 @@ fun SessionScreen(
     }
         if (viewModel.overlayOpen) {
             SessionOverlay(
-                text = viewModel.overlayText,
+                sessions = overlaySessions,
+                favorited = overlayFavorited,
+                onToggleFavorite = onToggleOverlayFavorite,
+                onOpenSession = { ref, sessionName ->
+                    viewModel.closeOverlay()
+                    onOpenOverlaySession(ref, sessionName)
+                },
                 onDismiss = viewModel::closeOverlay,
-                onViewport = viewModel::reportOverlayViewport,
             )
         }
     }
 }
 
 /**
- * 会话内悬浮窗（064）：盖在终端之上，等宽原样画抓屏；点窗外即关。只看，不发键。
+ * 会话内悬浮窗（072）：二级菜单同一套会话列表；点一行跳转，点窗外即关。
+ * 数据来自 [WorkspaceViewModel.level2]，不另造取数。
  */
 @Composable
 internal fun SessionOverlay(
-    text: String,
+    sessions: List<L2Entry>,
+    favorited: Set<FavoriteKey> = emptySet(),
+    onToggleFavorite: (L2Entry) -> Unit = {},
+    onOpenSession: (ref: String, name: String) -> Unit,
     onDismiss: () -> Unit,
-    onViewport: (cols: Int, rows: Int) -> Unit = { _, _ -> },
 ) {
-    val density = LocalDensity.current
-    val style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
-    BoxWithConstraints(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.45f))
             .testTag("session-overlay-scrim")
             .clickable(onClick = onDismiss),
     ) {
-        val padPx = with(density) { Spacing.sm.toPx() * 2 }
-        val fontPx = with(density) { style.fontSize.toPx() }
-        val panelW = constraints.maxWidth * 0.92f - padPx
-        val panelH = constraints.maxHeight * 0.72f - padPx
-        // 中文占两列：半角算出的列数再翻倍，让 tmux 有足够格子画全名。
-        val cols = (OverlayViewport.colsFor(panelW, fontPx * 0.45f) * 2).coerceIn(140, 240)
-        val rows = OverlayViewport.rowsFor(panelH, fontPx * 1.3f)
-        LaunchedEffect(cols, rows) { onViewport(cols, rows) }
-        val maxPanelH = with(density) { (constraints.maxHeight * 0.72f).toDp() }
         Surface(
             color = MaterialTheme.colorScheme.surface,
             shape = MaterialTheme.shapes.medium,
@@ -324,22 +322,15 @@ internal fun SessionOverlay(
                 .align(Alignment.TopEnd)
                 .padding(top = 56.dp, end = Spacing.sm, start = Spacing.sm, bottom = Spacing.lg)
                 .fillMaxWidth(0.92f)
-                .wrapContentHeight()
-                .heightIn(max = maxPanelH)
+                .fillMaxHeight(0.72f)
                 .testTag("session-overlay")
                 .clickable(enabled = false, onClick = {}),
         ) {
-            Text(
-                text = text,
-                style = style,
-                fontFamily = MonoFontFamily,
-                color = MaterialTheme.colorScheme.onSurface,
-                softWrap = false,
-                modifier = Modifier
-                    .padding(Spacing.sm)
-                    .horizontalScroll(rememberScrollState())
-                    .verticalScroll(rememberScrollState())
-                    .testTag("session-overlay-text"),
+            L2SessionList(
+                sessions = sessions,
+                onOpenSession = onOpenSession,
+                favorited = favorited,
+                onToggleFavorite = onToggleFavorite,
             )
         }
     }

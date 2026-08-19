@@ -68,7 +68,13 @@ export AGENTMIRROR_LISTEN="127.0.0.1:${PORT}"
 export AGENTMIRROR_LIST_INTERVAL="60s"
 unset TS_AUTHKEY
 : >"$DAEMON_LOG"
-"$BIN_DAEMON" >"$DAEMON_LOG" 2>&1 &
+# 🔴 收尾必须挂在 trap 上：脚本以前只在 fail 路径清理，成功路径 exit 0 时把 daemon 留成孤儿。
+# 后果不只是脏——孤儿继承着调用方的 stdout 管道，**调用方永远等不到 EOF**，
+# 于是「探针 ALL PASS 了但判据挂死到超时」。一天下来攒了 12 个孤儿，最老的跑了 6h10m。
+# `</dev/null` 一并断开 stdin，别让它攥着任何继承来的 fd。
+cleanup_daemon() { [ -n "${DAEMON_PID:-}" ] && kill "$DAEMON_PID" 2>/dev/null; }
+trap cleanup_daemon EXIT INT TERM
+"$BIN_DAEMON" >"$DAEMON_LOG" 2>&1 </dev/null &
 DAEMON_PID=$!
 sleep 0.2
 kill -0 "$DAEMON_PID" 2>/dev/null || fail "daemon 立刻退出"
@@ -236,6 +242,10 @@ if (fails.length) {
   process.exit(1);
 }
 console.log('probe-rf ALL PASS');
+// 🔴 成功路径必须显式退出：失败路径有 process.exit(1)，成功路径没有，
+// 而 WebSocket 还连着 ⇒ 事件循环不空 ⇒ node 不退 ⇒ 调用它的 bash 不退 ⇒
+// 判据的父进程永远等不到 EOF。表现是「探针 ALL PASS 了，判据却挂死到超时」。
+process.exit(0);
 NODE
 if [ $? -ne 0 ]; then
   fail "即时刷新探针未全绿（① 当前必红）"

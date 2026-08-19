@@ -4,3 +4,13 @@
 [ledger-run 2026-08-19T04:27:41Z] 投递回执 send-ok | task=t.tabs case_id=ledger_tabs_v1__t.tabs__r2 message_id=msg_d0e801904138 —— 回执成功≠席位收到，下一步查收件箱确认落地
 [ledger-run 2026-08-19T04:27:41Z] 派单落地 dispatch-landed | task=t.tabs 席位 tabs-v1-tabs 的收件箱已多出这条派单
 [ledger-run 2026-08-19T04:27:41Z] 等待 wait | task=t.tabs 在等的 key（case_id）=ledger_tabs_v1__t.tabs__r2 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T04:36:21Z] 已唤醒 wait-signaled | task=t.tabs 等到结果了
+[ledger-run 2026-08-19T04:36:21Z] 判据 acceptance | task=t.tabs 在跑 required=["A-tb-test", "A-tb-shots", "A-tb-doc", "A-tb-suite", "A-tb-apk"]
+[ledger-run 2026-08-19T04:36:55Z] 判据通过留档 acceptance-success | task=t.tabs 成功 attempt 落进 attempts[] writeback_revision=3 passed=["A-tb-test", "A-tb-shots", "A-tb-doc", "A-tb-suite", "A-tb-apk"]
+[ledger-run 2026-08-19T04:36:55Z] 延后落盘 writeback-deferred | task=t.tabs 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-19T04:36:55Z] 写回 writeback | task=t.tabs state=succeeded revision=2 → 3
+[ledger-run 2026-08-19T04:36:55Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.tabs"] 冻结=[] 不可判=[] 墙钟已跑 558s
+[ledger-run 2026-08-19T04:36:55Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T04:36:55Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-19T04:36:55Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=3 hash=4e9dbb2e96c0dc04）——中途死也不会留下半份账本，进度不会全废
+{"ok":true,"ledger_id":"ledger.tabs.v1","revision_before":2,"revision_after":3,"wrote_back":["t.tabs"],"unjudgeable":[],"frozen":[],"preflight_rejected":false,"awaiting_human":false,"idle_reason":null,"notices_sent":["ledger_id: ledger.tabs.v1 | revision: 3 | 停机原因: AllSucceeded | 最后失败判据: 全部任务 succeeded：本轮没有失败判据、没有投递失败、没有超限 | 各任务终态: t.tabs=Succeeded"],"notice_undelivered":null}

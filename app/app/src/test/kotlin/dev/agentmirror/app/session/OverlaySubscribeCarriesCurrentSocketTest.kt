@@ -57,8 +57,8 @@ class OverlaySubscribeCarriesCurrentSocketTest {
 
         val sent = transport.sentText.mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() }
         val sub = sent.filterIsInstance<OverlaySubscribeFrame>()
-        assertTrue("必须发出 overlay_subscribe", sub.isNotEmpty())
-        assertEquals(socket, sub.last().socket)
+        assertTrue("查看改为二级列表后不得发出 overlay_subscribe", sub.isEmpty())
+        assertTrue(vm.overlayOpen)
         assertEquals(socket, sessionSocketFromRef(ref))
     }
 }

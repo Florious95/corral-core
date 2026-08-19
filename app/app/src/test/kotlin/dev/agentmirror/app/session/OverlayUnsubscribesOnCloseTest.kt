@@ -16,46 +16,34 @@
 
 package dev.agentmirror.app.session
 
-import dev.agentmirror.app.conn.OverlayFrame
 import dev.agentmirror.app.conn.OverlaySubscribeFrame
 import dev.agentmirror.app.conn.OverlayUnsubscribeFrame
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 064：关闭悬浮窗必须退订，不得后台继续收流。
+ * 072：主路径不再订/退订 overlay 抓屏流。
  */
 class OverlayUnsubscribesOnCloseTest {
 
     @Test
-    fun closeSendsUnsubscribeAndStopsApplyingFrames() {
+    fun closeDoesNotSendOverlayFrames() {
         val h = OverlayTestHarness()
         h.vm.openOverlay()
-        assertTrue(h.sent().any { it is OverlaySubscribeFrame })
-
-        h.vm.onFrame(OverlayFrame(text = "tree-a", seq = 1))
-        assertEquals("tree-a", h.vm.overlayText)
+        assertTrue(h.sent().none { it is OverlaySubscribeFrame })
 
         h.vm.closeOverlay()
-        assertTrue(
-            "关闭必须发 overlay_unsubscribe",
-            h.sent().any { it is OverlayUnsubscribeFrame },
-        )
+        assertTrue(h.sent().none { it is OverlayUnsubscribeFrame })
         assertFalse(h.vm.overlayOpen)
-        assertEquals("", h.vm.overlayText)
-
-        h.vm.onFrame(OverlayFrame(text = "tree-after-close", seq = 2))
-        assertEquals("关后不得再收流进画面", "", h.vm.overlayText)
     }
 
     @Test
-    fun disposeAlsoUnsubscribes() {
+    fun disposeDoesNotSendUnsubscribe() {
         val h = OverlayTestHarness()
         h.vm.openOverlay()
         h.vm.dispose()
-        assertTrue(h.sent().any { it is OverlayUnsubscribeFrame })
+        assertTrue(h.sent().none { it is OverlayUnsubscribeFrame })
         assertFalse(h.vm.overlayOpen)
     }
 }

@@ -16,33 +16,33 @@
 
 package dev.agentmirror.app.session
 
-import dev.agentmirror.app.conn.OverlayFrame
+import dev.agentmirror.app.overlay.OverlayEmulator
+import dev.agentmirror.app.overlay.dropScratchLines
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 065 缺陷 3：连续整帧刷新必须替换，行数有界，不得把同一棵树堆很多份。
+ * 归档模块自测：连续整帧刷新必须替换。主路径已不调用。
  */
 class OverlayScreenReplacesNotAppendsTest {
 
     @Test
-    fun repeatedFullRedrawsStayBoundedAndDoNotStackTrees() {
-        val h = OverlayTestHarness()
-        h.vm.openOverlay()
+    fun archivedEmulatorRepeatedFullRedrawsStayBounded() {
+        val emu = OverlayEmulator(80, 24)
         val frame = "\u001b[?1049h\u001b[H\u001b[2J" +
             "(0) - 1 windows\n" +
             "├─ 0:claude\n" +
             "│  ✳ idle\n"
-        repeat(12) { i ->
-            h.vm.onFrame(OverlayFrame(text = frame, seq = (i + 1).toLong(), rows = 24, cols = 80))
+        repeat(12) {
+            emu.resize(80, 24)
+            emu.feed(frame)
         }
-
-        val shown = h.vm.overlayText
+        val shown = dropScratchLines(emu.plainText())
         val lines = shown.lines()
         assertTrue("行数必须有界 ≤ 终端行数，got=${lines.size} text=$shown", lines.size <= 24)
         val treeMarks = Regex("├─ 0:claude").findAll(shown).count()
         assertEquals("同一棵树不得重复堆叠，got=$shown", 1, treeMarks)
-        assertEquals(24, h.vm.overlayEmulator.rows)
+        assertEquals(24, emu.rows)
     }
 }

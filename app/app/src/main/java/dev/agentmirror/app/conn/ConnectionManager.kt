@@ -522,13 +522,24 @@ class ConnectionManager(
                 is ListDeltaFrame -> {
                     // lastSeenSeq 是可变属性，先捕获局部值再判连续（智能转换不可用）。
                     val seen = lastSeenSeq
-                    val continuous = seen != null && frame.seq == seen + 1
-                    if (!continuous) {
-                        // seq 不连续 / delta 先于 listing ⇒ 必须重新 list 拉全量（§4.2）。
-                        sendList()
-                    } else {
-                        lastSeenSeq = frame.seq
-                        listener?.onFrame(frame)
+                    when {
+                        seen == null -> {
+                            // delta 先于 listing ⇒ 必须重新 list 拉全量（§4.2）。
+                            sendList()
+                        }
+                        frame.seq == seen + 1 -> {
+                            lastSeenSeq = frame.seq
+                            listener?.onFrame(frame)
+                        }
+                        frame.seq <= seen -> {
+                            // 已由 listing / 更早 delta 覆盖（handleList 重扫会 fanout
+                            // 与 listing 同 seq 的 delta）。再 list 会自激。
+                            listener?.onFrame(frame)
+                        }
+                        else -> {
+                            // 真正的空洞 ⇒ 重新 list。
+                            sendList()
+                        }
                     }
                 }
                 is InputAckFrame -> resolveInput(frame)

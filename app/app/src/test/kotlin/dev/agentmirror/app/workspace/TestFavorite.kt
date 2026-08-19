@@ -56,22 +56,28 @@ class TestFavorite {
         val clock = longArrayOf(1_700_000_000_123L)
         val book = FavoriteBook(SharedPreferencesFavoriteStore(ctx)) { clock[0] }
         book.toggle(
+            ref = "/tmp/sock-probe\u001f%13",
             sessionName = "favprobe_sess",
             windowIndex = "13",
             windowName = "favprobe_win",
+            cwd = "/proj/favprobe",
         )
 
         val rebuilt = SharedPreferencesFavoriteStore(ctx).load()
         assertEquals(1, rebuilt.size)
         val rec = rebuilt.single()
+        assertEquals("/tmp/sock-probe\u001f%13", rec.ref)
         assertEquals("favprobe_sess", rec.sessionName)
         assertEquals("13", rec.windowIndex)
         assertEquals("favprobe_win", rec.windowName)
+        assertEquals("/proj/favprobe", rec.cwd)
         assertEquals(1_700_000_000_123L, rec.addedAt)
 
         val blob = ctx.getSharedPreferences("favorites", Context.MODE_PRIVATE)
             .getString("records", "")
             .orEmpty()
+        assertTrue("blob must carry ref: $blob", blob.contains("/tmp/sock-probe"))
+        assertTrue(blob.contains("%13"))
         assertTrue("blob must carry session_name value: $blob", blob.contains("favprobe_sess"))
         assertTrue(blob.contains("13"))
         assertTrue(blob.contains("favprobe_win"))
@@ -87,7 +93,7 @@ class TestFavorite {
         val store = MemoryFavoriteStore()
         val clock = longArrayOf(10L)
         val book = FavoriteBook(store) { clock[0] }
-        book.toggle("sess-a", "2", "win-a")
+        book.toggle("ref-a", "sess-a", "2", "win-a", "/proj/a")
         val live = listOf(entry("ref-a", "sess-a", "2", "win-a"))
 
         val online = book.rows(live).single()
@@ -99,13 +105,13 @@ class TestFavorite {
         assertTrue("ghost row must remain", ghost.sessionName == "sess-a")
         assertTrue(ghost.gray)
         assertFalse(ghost.isOnline)
-        assertEquals("", ghost.ref)
+        assertEquals("ref-a", ghost.ref)
         assertEquals(1, store.load().size)
 
-        val revived = book.rows(listOf(entry("ref-a2", "sess-a", "2", "win-a"))).single()
+        val revived = book.rows(listOf(entry("ref-a", "sess-a", "2", "win-a"))).single()
         assertTrue(revived.isOnline)
         assertFalse(revived.gray)
-        assertEquals("ref-a2", revived.ref)
+        assertEquals("ref-a", revived.ref)
         assertEquals(1, store.load().size)
     }
 
@@ -114,9 +120,9 @@ class TestFavorite {
         val store = MemoryFavoriteStore()
         val clock = longArrayOf(1L)
         val book = FavoriteBook(store) { clock[0] }
-        book.toggle("old", "1", "old-win")
+        book.toggle("ref-old", "old", "1", "old-win")
         clock[0] = 9L
-        book.toggle("new", "2", "new-win")
+        book.toggle("ref-new", "new", "2", "new-win")
         val rows = book.rows(emptyList())
         assertEquals(listOf("new", "old"), rows.map { it.sessionName })
         assertTrue(rows.all { it.gray })
@@ -151,6 +157,7 @@ class TestFavorite {
         compose.runOnIdle {
             assertEquals(0, opened)
             assertEquals(1, vm.favorites.value.size)
+            assertEquals("ref-x", vm.favorites.value.single().ref)
             assertEquals("sess-x", vm.favorites.value.single().sessionName)
             assertEquals("4", vm.favorites.value.single().windowIndex)
             assertEquals("win-x", vm.favorites.value.single().windowName)
@@ -166,7 +173,7 @@ class TestFavorite {
     fun offlineRowNotOpenableButStarRemoves() {
         val store = MemoryFavoriteStore()
         val book = FavoriteBook(store) { 7L }
-        book.toggle("gone", "9", "gone-win")
+        book.toggle("gone-ref", "gone", "9", "gone-win")
         val rows = book.rows(emptyList())
         var opened = 0
         compose.setContent {
@@ -174,14 +181,14 @@ class TestFavorite {
                 FavoriteList(
                     rows = rows,
                     onOpenSession = { _, _ -> opened += 1 },
-                    onUnfavorite = { row -> book.toggle(row.sessionName, row.windowIndex, row.windowName) },
+                    onUnfavorite = { row -> book.toggle(row.ref) },
                 )
             }
         }
-        compose.onNodeWithTag("fav-row-gone-9-gone-win").performClick()
+        compose.onNodeWithTag("fav-row-gone-ref").performClick()
         compose.runOnIdle { assertEquals(0, opened) }
         compose.onNodeWithText("不在线").assertExists()
-        compose.onNodeWithTag("fav-star-gone-9-gone-win").performClick()
+        compose.onNodeWithTag("fav-star-gone-ref").performClick()
         compose.runOnIdle {
             assertEquals(0, opened)
             assertTrue(store.load().isEmpty())

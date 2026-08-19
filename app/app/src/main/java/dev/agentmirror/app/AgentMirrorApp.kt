@@ -25,6 +25,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -76,6 +77,8 @@ fun AgentMirrorApp(
         // 配对配置存储（SharedPreferences）：首启判定 + 重配入口共用。
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
         val session = navState.activeSession
+        val overlayLevel2 by workspaceViewModel.level2.collectAsState()
+        val overlayFavorites by workspaceViewModel.favorites.collectAsState()
 
         /**
          * 根返回手势接线（D-23/D-32）。
@@ -118,6 +121,10 @@ fun AgentMirrorApp(
                     name = r.name,
                     connectionPath = ServiceWire.connectionPath(),
                     onBack = { navState.activeSession = null },
+                    overlaySessions = overlayLevel2.sessions,
+                    overlayFavorited = overlayFavorites.map { it.key }.toSet(),
+                    onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
+                    onOpenOverlaySession = { ref, name -> navState.activeSession = ref to name },
                 )
                 // 配对页：首启无配置，或用户从设置/重配入口进入。
                 AppRoute.Pairing -> PairingRoute(
