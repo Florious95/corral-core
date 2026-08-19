@@ -31,9 +31,12 @@ def main():
     path = sys.argv[1]
     team = "grok-l2"
     template = ".team/grok/agents/dev-app.md"
+    suffix = ""
     for i, a in enumerate(sys.argv):
         if a == "--team":     team = sys.argv[i + 1]
         if a == "--template": template = sys.argv[i + 1]
+        # 返工轮要真换一张新脸：同名 = 同一席位 = 上一轮的上下文还在
+        if a == "--suffix":   suffix = sys.argv[i + 1]
 
     led = json.load(open(path, encoding="utf-8"))
     short = led["ledger_id"].replace("ledger.", "").replace(".", "-")
@@ -52,7 +55,7 @@ def main():
             sys.exit(f"基底编译失败 {tid}: {base.stderr[-400:]}")
 
         # ② 专属席位
-        seat = f"{short}-{tid.replace('t.', '')}"[:48]
+        seat = f"{short}-{tid.replace('t.', '')}{suffix}"[:48]
         role_file = f".team/grok/agents/{seat}.md"
         if not os.path.exists(role_file):
             src = open(template, encoding="utf-8").read()
@@ -68,8 +71,9 @@ def main():
         if os.path.exists(probe):
             os.remove(probe)
         sh("team-agent", "send", seat,
-           f"行为自证：执行 `echo ok > {os.path.join(WS, probe)}`，然后调一次 report_result"
-           f"（不要传 task_id 参数）。不要回复任何消息。")
+           f"行为自证：只执行 `echo ok > {os.path.join(WS, probe)}`，然后停手。"
+           f"⛔ 不要调 report_result、不要回复、不要给任何人发消息 —— "
+           f"文件写出来本身就是回执（用户令：节点禁止给 leader 发消息）。")
         for _ in range(20):
             if os.path.exists(probe):
                 break
