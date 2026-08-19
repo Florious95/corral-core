@@ -1,0 +1,9 @@
+texts: ['‹ 返回', '远控 leader', 'LAN', '查看', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '＋', '输入指令…', '发送']
+already on session
+term bounds 0 216 1260 2356
+contentLeft 0 image 1260 2800
+term bg (13, 22, 38)
+glyphX 21 contentLeft 0 gutter 21 ink_n 71915
+OK 左缘有内边距：glyphX=21 contentLeft=0 gutter=21
+PASS 会话页左缘 ● 完整可见
+probe: ALL PASS (exit 0)

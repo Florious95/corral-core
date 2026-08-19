@@ -1,0 +1,6 @@
+Night mode: no
+SESSION_SCREEN: ['‹', '远控 leader', 'LAN', '查看', 'term-theme-light source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
+TITLE: 远控 leader
+SHEET: ['切换会话', '远程Agent安卓 · 5', '★', '远控 leader', '当前', '进行中', '☆', 'advisor', '空闲', '☆', 'land-v1-set', '空闲', '☆', 'land-v1-term', '空闲', '☆', 'land-v1-reflow', '空闲']
+WORKSPACE_BADGE: ['远程Agent安卓 · 5']
+FAIL 找不到终端 SurfaceView bounds。token 缺失？
