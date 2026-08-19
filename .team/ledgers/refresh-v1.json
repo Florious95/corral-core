@@ -318,7 +318,7 @@
      "A-a-doc"
     ]
    },
-   "state": "planned",
+   "state": "succeeded",
    "attempts": []
   },
   "t.ver": {
@@ -555,8 +555,46 @@
       }
      }
     ]
+   },
+   {
+    "acceptance_id": "A-a-test",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 12,
+      "supports_or_refutes": "A-a-test",
+      "observed_at": "2026-08-19T08:32:38.820651Z",
+      "freshness": {
+       "as_of": "2026-08-19T08:32:38.820651Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
+   },
+   {
+    "acceptance_id": "A-a-doc",
+    "verdict": "supports",
+    "evidence": [
+     {
+      "reported_by": {
+       "kind": "human",
+       "id": "leader"
+      },
+      "revision": 12,
+      "supports_or_refutes": "A-a-doc",
+      "observed_at": "2026-08-19T08:32:38.820651Z",
+      "freshness": {
+       "as_of": "2026-08-19T08:32:38.820651Z",
+       "max_age_seconds": 3600
+      }
+     }
+    ]
    }
   ]
  },
- "revision": 11
+ "revision": 12
 }
