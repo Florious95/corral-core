@@ -1,439 +1,490 @@
 {
- "schema_version": "ledger.v2",
- "ledger_id": "ledger.favorites.v1",
- "run": {
-  "desired_state": "running"
- },
- "roles": {
-  "r.advisor": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/fav-probe/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "fav-advisor",
-    "team": "grok-l2"
-   }
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.favorites.v1",
+  "run": {
+    "desired_state": "running"
   },
-  "r.app": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/fav-impl/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "fav-dev-app",
-    "team": "grok-l2"
-   }
-  },
-  "r.control": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/fav-ver/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "fav-control",
-    "team": "grok-l2"
-   }
-  },
-  "r.leader": {
-   "provider": "human",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/fav-esc/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   }
-  }
- },
- "tasks": {
-  "t.probe": {
-   "title": "写收藏功能的根因探针。契约 requirement-base/entries/067-收藏与三栏布局.md（**四处裁定都要读**：窄屏三页滑动、按加入时间倒序、失联收藏置灰不删、身份只用结构字段）。产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh。\n四条断言：①收藏记录里**不含标题字符串**（标题会随任务摘要变，拿它当键收藏会错位/丢失）；②写入收藏→重建 App 状态→仍在（持久化）；③**收藏的会话消失后该行仍在且置灰**——🔴 此条须先在「自动移除」的写法上验红，把红证据写进说明；④冷启动落在中间页（会话），不是收藏页。\n🔴 现在跑必须红（功能未实现）。说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/说明.md。⛔ 这一格只产探针，不改产品代码。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户 2026-08-14 令未解除）——验收走单元测试 + web 端，不许拿模拟器截图充证据。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
-   "owner": {
-    "role": "r.advisor"
-   },
-   "resources": {
-    "worktree_id": "wt7.probe",
-    "write_paths": [
-     ".team/nodes/fav-probe/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/067-收藏与三栏布局.md",
-     "app/app/src/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+  "roles": {
+    "r.advisor": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/fav-probe/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "fav-advisor",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "74e9b0750"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh",
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-p-exec",
-      "argv": [
-       "test",
-       "-x",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-p-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-p-red",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;r=subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh'],timeout=600).returncode;sys.exit(0 if r!=0 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-p-exec",
-     "A-p-doc",
-     "A-p-red"
-    ]
-   },
-   "state": "planned",
-   "attempts": []
-  },
-  "t.fav": {
-   "title": "实现收藏。契约 requirement-base/entries/067-收藏与三栏布局.md。二级菜单每行**在状态标左边**加空心星星，点击收藏/再点取消（实心=已收藏）。\n🔴 **收藏的键只能是 tmux 结构字段**（session_name/window_index/window_name 组合），⛔ 绝不用标题字符串。\n持久化落盘，重启仍在。排序**按加入时间倒序**（最近收藏在最上）。\n失联会话（收藏了但 tmux 里已不存在）：**保留并置灰标「不在线」，绝不自动移除**——自动移除是不可逆的数据丢失，而会话消失多半是主机重启而非用户不要了。灰行不可点进但**可取消收藏**；按同样结构字段重新出现时**自动恢复在线**，不需重新收藏。\n配套单元测试名须含 TestFavorite。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-impl/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户 2026-08-14 令未解除）——验收走单元测试 + web 端，不许拿模拟器截图充证据。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt7.fav",
-    "write_paths": [
-     "app/",
-     ".team/nodes/fav-impl/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/067-收藏与三栏布局.md",
-     ".team/nodes/fav-probe/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+    "r.app": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/fav-impl/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "fav-dev-app",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "74e9b0750"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-impl/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-f-test",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*Favorite*'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1800
-     },
-     {
-      "acceptance_id": "A-f-nokey",
-      "argv": [
-       "sh",
-       "-c",
-       "! grep -rniE 'favorit' /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main --include=*.kt -l | xargs -r grep -lniE 'title.*key|key.*title'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-f-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-impl/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-f-test",
-     "A-f-nokey",
-     "A-f-doc"
-    ]
-   },
-   "state": "planned",
-   "attempts": []
-  },
-  "t.cols": {
-   "title": "实现三栏布局。契约 requirement-base/entries/067-收藏与三栏布局.md。左=收藏 / 中=会话 / 右=设置。\n🔴 窄屏（手机）呈现方式已裁定：**左右滑动切换的三页（ViewPager 语义），冷启动落在中间页（会话）**。⛔ 不做抽屉——抽屉是「临时打开看完就关」的语义，而收藏是常用入口。⛔ 不得把收藏做起始页（收藏可能为空，空页当门面是坏体验）。\n左栏收藏点一行 = **直接进入该会话**（三级终端），不必先回中间栏。\n配套测试名须含 TestThreePane。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-cols/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户 2026-08-14 令未解除）——验收走单元测试 + web 端，不许拿模拟器截图充证据。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
-   "owner": {
-    "role": "r.app"
-   },
-   "resources": {
-    "worktree_id": "wt7.cols",
-    "write_paths": [
-     "app/",
-     ".team/nodes/fav-cols/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/067-收藏与三栏布局.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+    "r.control": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/fav-ver/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "fav-control",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "74e9b0750"
+    "r.leader": {
+      "provider": "human",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/fav-esc/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-cols/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-c-test",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*ThreePane*'"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1800
-     },
-     {
-      "acceptance_id": "A-c-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-cols/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-c-test",
-     "A-c-doc"
-    ]
-   },
-   "state": "planned",
-   "attempts": []
   },
-  "t.ver": {
-   "title": "验收：探针必须由红转绿，且不倒退。契约 requirement-base/entries/067-收藏与三栏布局.md。\n①跑 .team/nodes/fav-probe/probe-fav.sh 必须 exit 0（它在 t.probe 那格是红的）。\n②gradle 全套绿。③把四条裁定各自的实测输出贴进 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-ver/说明.md。\n⛔ 探针只读，不许为了变绿改探针。⛔ 不许用模拟器截图充验收证据。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户 2026-08-14 令未解除）——验收走单元测试 + web 端，不许拿模拟器截图充证据。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
-   "owner": {
-    "role": "r.control"
-   },
-   "resources": {
-    "worktree_id": "wt7.ver",
-    "write_paths": [
-     ".team/nodes/fav-ver/"
-    ],
-    "read_paths": [
-     "requirement-base/entries/067-收藏与三栏布局.md",
-     ".team/nodes/fav-probe/",
-     "app/"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+  "tasks": {
+    "t.probe": {
+      "title": "写收藏功能的根因探针。契约 requirement-base/entries/067-收藏与三栏布局.md（**四处裁定都要读**：窄屏三页滑动、按加入时间倒序、失联收藏置灰不删、身份只用结构字段）。产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh。\n四条断言：①收藏记录里**不含标题字符串**（标题会随任务摘要变，拿它当键收藏会错位/丢失）；②写入收藏→重建 App 状态→仍在（持久化）；③**收藏的会话消失后该行仍在且置灰**——🔴 此条须先在「自动移除」的写法上验红，把红证据写进说明；④冷启动落在中间页（会话），不是收藏页。\n🔴 现在跑必须红（功能未实现）。说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/说明.md。⛔ 这一格只产探针，不改产品代码。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户 2026-08-14 令未解除）——验收走单元测试 + web 端，不许拿模拟器截图充证据。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+      "owner": {
+        "role": "r.advisor"
+      },
+      "resources": {
+        "worktree_id": "wt7.probe",
+        "write_paths": [
+          ".team/nodes/fav-probe/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/067-收藏与三栏布局.md",
+          "app/app/src/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "74e9b0750"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh",
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-p-exec",
+            "argv": [
+              "test",
+              "-x",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-p-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-p-red",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;r=subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh'],timeout=600).returncode;sys.exit(0 if r!=0 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-p-exec",
+          "A-p-doc",
+          "A-p-red"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.probe-seq1-t1787094369742",
+          "delivery_id": "del-t.probe-seq1-t1787094369742",
+          "state": "succeeded",
+          "writeback_revision": 2,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-p-exec",
+            "acceptance_success.acceptance_id=A-p-doc",
+            "acceptance_success.acceptance_id=A-p-red",
+            "acceptance_success.writeback_revision=2"
+          ]
+        }
+      ]
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "74e9b0750"
+    "t.fav": {
+      "title": "实现收藏。契约 requirement-base/entries/067-收藏与三栏布局.md。二级菜单每行**在状态标左边**加空心星星，点击收藏/再点取消（实心=已收藏）。\n🔴 **收藏的键只能是 tmux 结构字段**（session_name/window_index/window_name 组合），⛔ 绝不用标题字符串。\n持久化落盘，重启仍在。排序**按加入时间倒序**（最近收藏在最上）。\n失联会话（收藏了但 tmux 里已不存在）：**保留并置灰标「不在线」，绝不自动移除**——自动移除是不可逆的数据丢失，而会话消失多半是主机重启而非用户不要了。灰行不可点进但**可取消收藏**；按同样结构字段重新出现时**自动恢复在线**，不需重新收藏。\n配套单元测试名须含 TestFavorite。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-impl/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户 2026-08-14 令未解除）——验收走单元测试 + web 端，不许拿模拟器截图充证据。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt7.fav",
+        "write_paths": [
+          "app/",
+          ".team/nodes/fav-impl/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/067-收藏与三栏布局.md",
+          ".team/nodes/fav-probe/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "74e9b0750"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-impl/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-f-test",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*Favorite*'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1800
+          },
+          {
+            "acceptance_id": "A-f-nokey",
+            "argv": [
+              "sh",
+              "-c",
+              "! grep -rniE 'favorit' /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main --include=*.kt -l | xargs -r grep -lniE 'title.*key|key.*title'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-f-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-impl/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-f-test",
+          "A-f-nokey",
+          "A-f-doc"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.fav-seq2-t1787095038228",
+          "delivery_id": "del-t.fav-seq2-t1787095038228",
+          "state": "succeeded",
+          "writeback_revision": 3,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-f-test",
+            "acceptance_success.acceptance_id=A-f-nokey",
+            "acceptance_success.acceptance_id=A-f-doc",
+            "acceptance_success.writeback_revision=3"
+          ]
+        }
+      ]
+    },
+    "t.cols": {
+      "title": "实现三栏布局。契约 requirement-base/entries/067-收藏与三栏布局.md。左=收藏 / 中=会话 / 右=设置。\n🔴 窄屏（手机）呈现方式已裁定：**左右滑动切换的三页（ViewPager 语义），冷启动落在中间页（会话）**。⛔ 不做抽屉——抽屉是「临时打开看完就关」的语义，而收藏是常用入口。⛔ 不得把收藏做起始页（收藏可能为空，空页当门面是坏体验）。\n左栏收藏点一行 = **直接进入该会话**（三级终端），不必先回中间栏。\n配套测试名须含 TestThreePane。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-cols/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户 2026-08-14 令未解除）——验收走单元测试 + web 端，不许拿模拟器截图充证据。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+      "owner": {
+        "role": "r.app"
+      },
+      "resources": {
+        "worktree_id": "wt7.cols",
+        "write_paths": [
+          "app/",
+          ".team/nodes/fav-cols/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/067-收藏与三栏布局.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "74e9b0750"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-cols/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-c-test",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*ThreePane*'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1800
+          },
+          {
+            "acceptance_id": "A-c-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-cols/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-c-test",
+          "A-c-doc"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.cols-seq3-t1787095539686",
+          "delivery_id": "del-t.cols-seq3-t1787095539686",
+          "state": "succeeded",
+          "writeback_revision": 4,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-c-test",
+            "acceptance_success.acceptance_id=A-c-doc",
+            "acceptance_success.writeback_revision=4"
+          ]
+        }
+      ]
+    },
+    "t.ver": {
+      "title": "验收：探针必须由红转绿，且不倒退。契约 requirement-base/entries/067-收藏与三栏布局.md。\n①跑 .team/nodes/fav-probe/probe-fav.sh 必须 exit 0（它在 t.probe 那格是红的）。\n②gradle 全套绿。③把四条裁定各自的实测输出贴进 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-ver/说明.md。\n⛔ 探针只读，不许为了变绿改探针。⛔ 不许用模拟器截图充验收证据。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外是被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器（用户 2026-08-14 令未解除）——验收走单元测试 + web 端，不许拿模拟器截图充证据。\n⛔⛔ 绝不碰用户真实 tmux（默认 socket）。⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+      "owner": {
+        "role": "r.control"
+      },
+      "resources": {
+        "worktree_id": "wt7.ver",
+        "write_paths": [
+          ".team/nodes/fav-ver/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/067-收藏与三栏布局.md",
+          ".team/nodes/fav-probe/",
+          "app/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "74e9b0750"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-ver/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-v-probe",
+            "argv": [
+              "python3",
+              "-c",
+              "import subprocess,sys;sys.exit(subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh'],timeout=900).returncode)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          },
+          {
+            "acceptance_id": "A-v-suite",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-v-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-ver/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 950
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-v-probe",
+          "A-v-suite",
+          "A-v-doc"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.ver-seq4-t1787096190697",
+          "delivery_id": "del-t.ver-seq4-t1787096190697",
+          "state": "succeeded",
+          "writeback_revision": 5,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-v-probe",
+            "acceptance_success.acceptance_id=A-v-suite",
+            "acceptance_success.acceptance_id=A-v-doc",
+            "acceptance_success.writeback_revision=5"
+          ]
+        }
+      ]
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-ver/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-v-probe",
-      "argv": [
-       "python3",
-       "-c",
-       "import subprocess,sys;sys.exit(subprocess.run(['bash',r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-probe/probe-fav.sh'],timeout=900).returncode)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     },
-     {
-      "acceptance_id": "A-v-suite",
-      "argv": [
-       "sh",
-       "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-v-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/fav-ver/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 950
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-v-probe",
-     "A-v-suite",
-     "A-v-doc"
-    ]
-   },
-   "state": "planned",
-   "attempts": []
-  }
- },
- "dependencies": [
-  {
-   "from": "t.probe",
-   "to": "t.fav",
-   "condition": "requires_success"
   },
-  {
-   "from": "t.fav",
-   "to": "t.cols",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.cols",
-   "to": "t.ver",
-   "condition": "requires_success"
-  }
- ],
- "parallelism": [
-  {
-   "group": "g7",
-   "max_concurrency": 1
-  }
- ],
- "handoff": {
-  "send_command": "team-agent send",
-  "result_route": "leader",
-  "required_envelope_fields": [
-   "task_id",
-   "status"
+  "dependencies": [
+    {
+      "from": "t.probe",
+      "to": "t.fav",
+      "condition": "requires_success"
+    },
+    {
+      "from": "t.fav",
+      "to": "t.cols",
+      "condition": "requires_success"
+    },
+    {
+      "from": "t.cols",
+      "to": "t.ver",
+      "condition": "requires_success"
+    }
   ],
-  "missing_result": "完成以机械判据为准",
-  "delivery_uncertain": "重发并去重"
- },
- "acceptance": {
-  "mechanical_exit_code_is_authoritative": true,
-  "judgment_requires_distinct_provider": false
- },
- "fallback": {
-  "F.esc": {
-   "agent": {
-    "role": "r.leader"
-   },
-   "triggers": [
-    "blocked_on_unknown",
-    "provider_unavailable",
-    "result_deadline_elapsed"
-   ],
-   "max_attempts": 1,
-   "action": "escalate_to_leader",
-   "silent_substitution": false
-  }
- },
- "evidence_policy": {
-  "required_fields": [
-   "reported_by",
-   "revision",
-   "supports_or_refutes",
-   "observed_at",
-   "freshness"
+  "parallelism": [
+    {
+      "group": "g7",
+      "max_concurrency": 1
+    }
   ],
-  "missing_evidence": "判据必须是可重跑命令"
- },
- "resource_isolation": {
-  "default_write_scope": ".team/nodes",
-  "rules": [],
-  "read_only_shared": [
-   "requirement-base/entries/067-收藏与三栏布局.md",
-   ".team/nodes/fav-probe/probe-fav.sh"
-  ]
- },
- "fanout_aggregation": {},
- "audit": {},
- "revision": 1
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "完成以机械判据为准",
+    "delivery_uncertain": "重发并去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {
+    "F.esc": {
+      "agent": {
+        "role": "r.leader"
+      },
+      "triggers": [
+        "blocked_on_unknown",
+        "provider_unavailable",
+        "result_deadline_elapsed"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_leader",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "requirement-base/entries/067-收藏与三栏布局.md",
+      ".team/nodes/fav-probe/probe-fav.sh"
+    ]
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 5
 }

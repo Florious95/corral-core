@@ -1,0 +1,16 @@
+[ledger-run 2026-08-18T23:18:25Z] 开工 start | ledger_id=ledger.whitelist.v1 revision=5 账本=.team/ledgers/whitelist-v1.json 墙钟上限=7600s 派单死线=90s
+[ledger-run 2026-08-18T23:18:27Z] 轮次 round | 第 1 轮开始：前沿 ["t.ver"]（墙钟已跑 1s / 上限 7600s）
+[ledger-run 2026-08-18T23:18:27Z] 派单 dispatch | task=t.ver 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/control 席位=control attempt=att-t.ver-seq1-t1787095107054 delivery=del-t.ver-seq1-t1787095107054
+[ledger-run 2026-08-18T23:18:27Z] 投递回执 send-ok | task=t.ver case_id=ledger_whitelist_v1__t.ver__r5 message_id=msg_38862060d0c8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T23:18:27Z] 派单落地 dispatch-landed | task=t.ver 席位 control 的收件箱已多出这条派单
+[ledger-run 2026-08-18T23:18:27Z] 等待 wait | task=t.ver 在等的 key（case_id）=ledger_whitelist_v1__t.ver__r5 team=grok-l2 预算=950s
+[ledger-run 2026-08-18T23:18:27Z] 已唤醒 wait-signaled | task=t.ver 等到结果了
+[ledger-run 2026-08-18T23:18:27Z] 判据 acceptance | task=t.ver 在跑 required=["A-v-probe", "A-v-go", "A-v-rust", "A-v-doc", "A-v-cost", "A-v-l1doc"]
+[ledger-run 2026-08-18T23:19:54Z] 判据通过留档 acceptance-success | task=t.ver 成功 attempt 落进 attempts[] writeback_revision=6 passed=["A-v-probe", "A-v-go", "A-v-rust", "A-v-doc", "A-v-cost", "A-v-l1doc"]
+[ledger-run 2026-08-18T23:19:54Z] 延后落盘 writeback-deferred | task=t.ver 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-18T23:19:54Z] 写回 writeback | task=t.ver state=succeeded revision=5 → 6
+[ledger-run 2026-08-18T23:19:54Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.ver"] 冻结=[] 不可判=[] 墙钟已跑 88s
+[ledger-run 2026-08-18T23:19:54Z] 通知 notify-begin | 正在把停机原因发给 leader
+[ledger-run 2026-08-18T23:19:54Z] 通知 notify-fail | 通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)
+[ledger-run 2026-08-18T23:19:54Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=6 hash=e63ee25b14c01c14）——中途死也不会留下半份账本，进度不会全废
+{"ok":true,"ledger_id":"ledger.whitelist.v1","revision_before":5,"revision_after":6,"wrote_back":["t.ver"],"unjudgeable":[],"frozen":[],"preflight_rejected":false,"notices_sent":["ledger_id: ledger.whitelist.v1 | revision: 6 | 停机原因: AllSucceeded | 最后失败判据: 全部任务 succeeded：本轮没有失败判据、没有投递失败、没有超限 | 各任务终态: t.np=Succeeded, t.probe=Succeeded, t.srv=Succeeded, t.ver=Succeeded","通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)"]}

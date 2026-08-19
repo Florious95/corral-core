@@ -515,6 +515,20 @@
       "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
       "acceptance_failure.stderr_tail(末20行)="
      ]
+    },
+    {
+     "attempt_id": "att-t.ver-seq2-t1787101377750",
+     "delivery_id": "del-t.ver-seq2-t1787101377750",
+     "state": "acceptance_pending",
+     "artifact_refs": [
+      "acceptance_failure.acceptance_id=A-v-probe",
+      "acceptance_failure.argv=[\"python3\", \"-c\", \"import subprocess,sys;sys.exit(subprocess.run(['bash', '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh'],timeout=900).returncode)\"]",
+      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+      "acceptance_failure.exit_code=1",
+      "acceptance_failure.expected_exit_code=0",
+      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+      "acceptance_failure.stderr_tail(末20行)="
+     ]
     }
    ]
   },
@@ -693,6 +707,179 @@
      "A-w-real"
     ]
    },
+   "state": "succeeded",
+   "attempts": [
+    {
+     "attempt_id": "att-t.web-seq1-t1787100846308",
+     "delivery_id": "del-t.web-seq1-t1787100846308",
+     "state": "succeeded",
+     "writeback_revision": 6,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-w-doc",
+      "acceptance_success.acceptance_id=A-w-noraw",
+      "acceptance_success.acceptance_id=A-w-four",
+      "acceptance_success.acceptance_id=A-w-real",
+      "acceptance_success.writeback_revision=6"
+     ]
+    }
+   ]
+  },
+  "t.port": {
+   "title": "把 web MVP 的悬浮窗渲染能力**移植到安卓**。契约 requirement-base/entries/066-悬浮窗先在外部端做MVP与展示要求.md（**先读附则**）。\n参照物已经做出来了：`web/js/overlay.js` 的 `OverlayEmulator` —— 解释备用屏/清屏/SGR，**整屏替换**。实测结果：中文树、全展开、8 帧转圈 ✳◐◑◒✳◐◑◒、行数恒为 7 有界。**安卓要的是同一层能力。**\n现在安卓坏在两条（加强探针实测）：①把 `ESC[` `[?1049h` `[K` `(B[m` `[30m/[43m` **当文本画出来**；②画面**无限向下追加**（实测 251 行 vs 终端 24 行）。\n🔴 在 App 里实现 **OverlayEmulator（Kotlin）**：把 `overlay_frame.text` 喂进一个屏幕缓冲，解释控制序列，**每帧整屏替换**，⛔ 绝不追加。\n🔴 配套写单测，**名须含 `OverlayEmulatorFixture`**：读 `.team/nodes/ov2-probe/frames.jsonl` 夹具，逐帧喂进真实 OverlayEmulator，在**最终屏幕文本**上断言三条：①无裸控制序列；②目标会话在、scratch（am-overlay/ov-spin/tree/sleep）不在；③行数 ≤ rows 且同一棵树不重复。\n夹具由 t.probe2 产出；若还没有，先按 065 的样例自造一份最小夹具跑通，t.probe2 的真夹具到位后必须仍绿。\n产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-port/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "owner": {
+    "role": "r.app"
+   },
+   "resources": {
+    "worktree_id": "wt5.port",
+    "write_paths": [
+     "app/",
+     ".team/nodes/ov2-port/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/066-悬浮窗先在外部端做MVP与展示要求.md",
+     "requirement-base/entries/065-悬浮窗三缺陷与判据加强.md",
+     "web/js/",
+     "server/internal/",
+     ".team/nodes/ov2-probe/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "9555dd80c"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-port/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-po-test",
+      "argv": [
+       "sh",
+       "-c",
+       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*OverlayEmulatorFixture*'"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-po-noappend",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -rnE '\\\\+= *frame|append\\\\(.*text' /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/overlay/ 2>/dev/null"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-po-doc",
+      "argv": [
+       "test",
+       "-s",
+       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-port/说明.md"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-po-test",
+     "A-po-noappend",
+     "A-po-doc"
+    ]
+   },
+   "state": "planned",
+   "attempts": []
+  },
+  "t.probe2": {
+   "title": "把加强探针改成**三段式**（契约 requirement-base/entries/066-悬浮窗先在外部端做MVP与展示要求.md 附则）。⚠️ 这不是「为了变绿改探针」，是原探针的渲染口径写死成「与当前 App 一致：把 text 当普通字符串画」，App 改用模拟器后这个口径就过期了。\n🔴 **⛔ 绝不能改用 web 那份 JS 模拟器去渲染** —— 那会立刻变绿而安卓仍然是坏的（假绿）。被测对象是**安卓的渲染器**。\n三段：\n①**抓夹具**：连真实服务端流，把连续 ≥8 帧 overlay_frame（含 text/rows/cols）原样落盘成 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/frames.jsonl；\n②**喂安卓渲染器**：跑 gradle 单测 `*OverlayEmulatorFixture*`（由 t.port 产出）；\n③探针退出码 = 该单测退出码。\n改完把新版写回 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh，说明追加到同目录 说明.md，**写清为什么换口径、以及为什么不用 JS 模拟器代跑**。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "owner": {
+    "role": "r.advisor"
+   },
+   "resources": {
+    "worktree_id": "wt5.probe2",
+    "write_paths": [
+     ".team/nodes/ov2-probe/"
+    ],
+    "read_paths": [
+     "requirement-base/entries/066-悬浮窗先在外部端做MVP与展示要求.md",
+     "requirement-base/entries/065-悬浮窗三缺陷与判据加强.md",
+     "server/internal/",
+     "app/app/src/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": true,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "9555dd80c"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/frames.jsonl",
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-p2-fix",
+      "argv": [
+       "python3",
+       "-c",
+       "import sys;ls=[l for l in open(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/frames.jsonl',encoding='utf-8') if l.strip()];sys.exit(0 if len(ls)>=8 else 1)"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-p2-nojs",
+      "argv": [
+       "sh",
+       "-c",
+       "! grep -nE 'web/js/overlay|require.*overlay\\\\.js|import.*overlay\\\\.js' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-p2-gradle",
+      "argv": [
+       "sh",
+       "-c",
+       "grep -qE 'gradlew|OverlayEmulatorFixture' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ov2-probe/probe-ov2.sh"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-p2-fix",
+     "A-p2-nojs",
+     "A-p2-gradle"
+    ]
+   },
    "state": "planned",
    "attempts": []
   }
@@ -720,6 +907,21 @@
   },
   {
    "from": "t.web",
+   "to": "t.probe2",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.web",
+   "to": "t.port",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.probe2",
+   "to": "t.ver",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.port",
    "to": "t.ver",
    "condition": "requires_success"
   }
@@ -780,5 +982,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 5
+ "revision": 7
 }
