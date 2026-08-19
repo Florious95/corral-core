@@ -121,7 +121,9 @@ fun AgentMirrorApp(
                     name = r.name,
                     connectionPath = ServiceWire.connectionPath(),
                     onBack = { navState.activeSession = null },
-                    overlaySessions = overlayLevel2.sessions,
+                    overlaySessions = remember(r.ref, overlayLevel2, overlayFavorites) {
+                        workspaceViewModel.viewMenuSource(r.ref).sessions
+                    },
                     overlayFavorited = overlayFavorites.map { it.key }.toSet(),
                     onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
                     onOpenOverlaySession = { ref, name -> navState.activeSession = ref to name },

@@ -88,7 +88,7 @@ fun WorkspaceScreen(
     connectionPath: ConnectionPath? = null,
     onSelectWorkspace: (cwd: String) -> Unit,
     onBackToList: () -> Unit,
-    onOpenSettings: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onOpenSettings: () -> Unit,
     onOpenSession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -119,7 +119,6 @@ fun WorkspaceScreen(
             // 拨号工厂记录的是本次尝试路径；只有 READY 后才可称为当前已连接路径。
             connectionPath = connectionPath.takeIf { state.connection == ConnectionUi.READY },
             onBack = onBackToList,
-            onOpenSettings = onOpenSettings,
         )
         ConnectionBanner(connection = state.connection)
 
@@ -190,7 +189,6 @@ private fun TopBar(
     selectedCwd: String?,
     connectionPath: ConnectionPath?,
     onBack: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Row(
@@ -235,7 +233,6 @@ private fun TopBar(
                     modifier = Modifier.padding(horizontal = Spacing.sm),
                 )
             }
-            TextButton(onClick = onOpenSettings) { Text("设置") }
         }
     }
 }
@@ -401,7 +398,8 @@ private fun WorkspaceList(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .testTag("workspace-list-scroll"),
     ) {
         items(workspaces, key = { it.cwd }) { ws ->
             // Surface onClick：ripple 点击态 + 48dp 最小触控目标（018 §一.4/一.6）。

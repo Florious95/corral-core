@@ -67,7 +67,7 @@ class BottomTabsTest {
         compose.onNodeWithTag("bottom-tab-settings").assertExists()
         compose.onNodeWithText("收藏").assertExists()
         compose.onNodeWithText("会话").assertExists()
-        compose.onAllNodesWithText("设置").assertCountEquals(2)
+        compose.onAllNodesWithText("设置").assertCountEquals(1)
         compose.onNodeWithText("工作区").assertExists()
         compose.onNodeWithTag("bottom-tab-sessions").assertIsSelected()
         assertEquals(ThreePane.Sessions, nav.homePane)

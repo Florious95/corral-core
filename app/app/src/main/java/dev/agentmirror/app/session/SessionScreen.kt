@@ -298,7 +298,8 @@ fun SessionScreen(
 
 /**
  * 会话内悬浮窗（072）：二级菜单同一套会话列表；点一行跳转，点窗外即关。
- * 数据来自 [WorkspaceViewModel.level2]，不另造取数。
+ * 数据来自 [dev.agentmirror.app.workspace.WorkspaceViewModel.viewMenuSource]
+ * （当前会话的工作区缓存），不得直接读被最后一次收藏覆盖的 [WorkspaceViewModel.level2] 单例。
  */
 @Composable
 internal fun SessionOverlay(

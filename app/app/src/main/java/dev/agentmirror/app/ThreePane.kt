@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,8 +43,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.workspace.FavoriteList
@@ -87,10 +92,23 @@ internal fun ThreePaneHome(
         navState.showSettings = pane == ThreePane.Settings
     }
 
+    // 子页顶栏自己吃 statusBarsPadding（edge-to-edge）。Scaffold 默认 contentWindowInsets
+    // 再垫一层 statusBars，叠出设置页「状态栏到标题约屏高 1/8」的空洞（076 §2a）。
+    // bottomBar 仍通过 innerPadding 占位，不在这里清零。
+    val tabPagerNestedScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // 主导竖直时吞掉横向分量，避免斜滑被 HorizontalPager 锁成切页。
+                // 主导横向时放行，067 §4.1 横滑切页仍在。
+                return if (abs(available.y) > abs(available.x)) Offset(available.x, 0f) else Offset.Zero
+            }
+        }
+    }
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
             .testTag("three-pane"),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar(modifier = Modifier.testTag("bottom-tabs")) {
                 ThreePane.entries.forEach { pane ->
@@ -111,6 +129,7 @@ internal fun ThreePaneHome(
         HorizontalPager(
             state = pagerState,
             beyondViewportPageCount = 0,
+            pageNestedScrollConnection = tabPagerNestedScroll,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
