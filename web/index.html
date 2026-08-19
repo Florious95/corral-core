@@ -63,6 +63,19 @@
       <button id="btn-back" class="btn" title="返回工作区列表">‹ 返回</button>
       <span class="session-title-name">会话</span>
       <span class="conn-spacer"></span>
+      <button id="btn-overlay" class="btn" title="查看会话树">查看</button>
+    </div>
+    <div id="overlay-root" class="overlay-root" hidden>
+      <div id="overlay-scrim" class="overlay-scrim" data-role="overlay-scrim"></div>
+      <aside id="overlay-panel" class="overlay-panel" data-role="overlay">
+        <header class="overlay-head">
+          <span class="overlay-live" data-role="overlay-live" aria-hidden="true"></span>
+          <span class="overlay-title">会话树</span>
+          <span class="overlay-state" data-role="overlay-state">—</span>
+          <button id="btn-overlay-close" class="btn" type="button">关闭</button>
+        </header>
+        <pre id="overlay-text" class="overlay-text" data-role="overlay-text"></pre>
+      </aside>
     </div>
     <div id="session-tabs" class="session-tabs" role="tablist"></div>
     <div id="session-panels" class="session-panels"></div>

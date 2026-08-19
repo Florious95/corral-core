@@ -68,13 +68,14 @@ import java.io.File
 internal fun SettingsScreen(
     onBack: () -> Unit,
     onRePair: () -> Unit,
+    enableBackHandler: Boolean = true,
 ) {
     var showDiagView by remember { mutableStateOf(false) }
     if (showDiagView) {
         DiagLogViewScreen(onBack = { showDiagView = false })
         return
     }
-    BackHandler(onBack = onBack)
+    BackHandler(enabled = enableBackHandler, onBack = onBack)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var exportStatus by remember { mutableStateOf<String?>(null) }

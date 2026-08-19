@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
-# probe-ov2.sh — 065 加强探针：验渲染结果，不验「有东西在动」
+# probe-ov2.sh — 066 附则三段式：抓真实流夹具 → 喂安卓 OverlayEmulator → 退出码=单测
 #
-# ① 无裸控制序列：渲染后不得出现 ESC[ / [?1049 / [K / (B[m
-# ② socket 正确且无自我映照：必须有目标会话名，不得有 am-overlay / tree / sleep / ov-spin
-# ③ 替换而非追加：行数 bounded（≤ 终端行数），同一棵树不得重复多份
+# ① 抓夹具：隔离 socket + 真实 agentmirrord，连续 ≥8 帧 overlay_frame 原样落盘
+#    （text/rows/cols 不剥 ESC、不本地渲染）
+# ② 喂安卓渲染器：gradle *OverlayEmulatorFixture*（t.port 产出）读夹具，
+#    逐帧喂 App 真实 OverlayEmulator，在最终屏幕文本上断言 065 三条
+# ③ 本脚本退出码 = 该单测退出码
 #
-# 渲染口径：与当前 App 一致——把 overlay_frame.text 当普通字符串画
-# （ESC 不可见，留下 [?1049h 这类字面量）。这正是真机坏样本。
+# ⛔ 不用 JS 模拟器代跑：被测对象是安卓渲染器。旧口径「text 当普通字符串画」
+# 在 App 改用模拟器后过期——那会把已修的安卓判成仍红，或让错误渲染器蒙混。
 set -u
 fail() { echo "FAIL $1"; exit 1; }
-pass() { echo "PASS $1"; }
 
 ORACLE_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$ORACLE_DIR/../../.." && pwd)"
 SERVER="$ROOT/server"
+APP="$ROOT/app"
+FRAMES="$ORACLE_DIR/frames.jsonl"
 
 command -v tmux >/dev/null || fail "tmux 不在 PATH"
 command -v go >/dev/null || fail "go 不在 PATH"
 command -v node >/dev/null || fail "node 不在 PATH"
 command -v python3 >/dev/null || fail "python3 不在 PATH"
 [ -d "$SERVER/cmd/agentmirrord" ] || fail "找不到 server/cmd/agentmirrord"
+[ -x "$APP/gradlew" ] || fail "找不到 app/gradlew"
 
 BASE=/tmp/ov2-advisor
 SOCK_DIR="$BASE/tmux"
@@ -48,9 +52,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# --- ① 抓夹具：真实服务端流 ---
 tmux -S "$SOCK_A" kill-server 2>/dev/null || true
 tmux -S "$SOCK_B" kill-server 2>/dev/null || true
-# 目标 socket：会话名独特，pane 命令用 cat，避免和 scratch 的 sleep* 撞名
+# 目标 socket：会话名独特，pane 用 cat，避免和 scratch 的 sleep* 撞名
 tmux -S "$SOCK_A" new-session -d -s alpha-ov2 -n main 'cat' || fail "sock-a new-session"
 SESS_A="$(tmux -S "$SOCK_A" list-sessions -F '#{session_name}' 2>/dev/null || true)"
 echo "$SESS_A" | grep -qx alpha-ov2 || fail "自检失败 sock-a（got='$SESS_A'）"
@@ -87,10 +92,14 @@ done
 export PROBE_URL="ws://127.0.0.1:${PORT}/ws"
 export PROBE_TOKEN="ov2-probe-token"
 export PROBE_SOCK_A="$SOCK_A"
+export OV2_FRAMES_JSONL="$FRAMES"
 node --input-type=module - <<'NODE'
+import fs from 'node:fs';
+
 const url = process.env.PROBE_URL;
 const token = process.env.PROBE_TOKEN;
 const sockA = process.env.PROBE_SOCK_A;
+const outPath = process.env.OV2_FRAMES_JSONL;
 
 function send(ws, type, payload) {
   ws.send(JSON.stringify({ v: 1, type, payload: payload || {} }));
@@ -122,83 +131,61 @@ send(ws, 'auth', { token });
 const ack = await waitFrame(ws, (f) => f.type === 'auth_ack', 5000, 'auth_ack');
 if (!ack.payload || ack.payload.ok !== true) throw new Error('auth rejected');
 
-// 修完后服务端必须认这个 socket；当前实现忽略，正好打 ②
 send(ws, 'overlay_subscribe', { socket: sockA });
 
 const frames = [];
-const deadline = Date.now() + 8000;
+const deadline = Date.now() + 20000;
 while (Date.now() < deadline && frames.length < 8) {
   try {
     const f = await waitFrame(ws, (x) => x.type === 'overlay_frame', Math.max(200, deadline - Date.now()), 'overlay_frame');
-    if (typeof f.payload?.text === 'string' && f.payload.text.length) frames.push(f);
+    const p = f.payload || {};
+    if (typeof p.text === 'string' && p.text.length) frames.push(f);
   } catch {
     break;
   }
 }
 ws.close();
-if (frames.length < 1) throw new Error('没有 overlay_frame，无法验三条渲染断言');
-
-const rows = Number(frames[0].payload.rows) || 24;
-const last = frames[frames.length - 1];
-const raw = String(last.payload.text);
-// 当前 App：text 当普通字符串。ESC 不可见，留下 [?1049h
-const rendered = raw.replace(/\x1b/g, '');
-
-const fails = [];
-
-// ① 无裸控制序列
-const csiHits = [];
-if (raw.includes('\x1b[' ) || rendered.includes('ESC[')) csiHits.push('ESC[');
-if (rendered.includes('[?1049')) csiHits.push('[?1049');
-if (/(^|[^0-9])\[K(?![A-Za-z0-9])/.test(rendered) || rendered.includes('[K')) csiHits.push('[K');
-if (rendered.includes('(B[m')) csiHits.push('(B[m');
-if (rendered.includes('[30m') || rendered.includes('[43m')) csiHits.push('[30m/[43m');
-if (csiHits.length) {
-  fails.push('① 裸控制序列: ' + csiHits.join(','));
-  console.log('FAIL ① 渲染后仍有 ' + csiHits.join(' '));
-} else {
-  console.log('PASS ① 无裸控制序列');
+if (frames.length < 8) {
+  throw new Error('overlay_frame 不足 8 帧（got=' + frames.length + '），夹具不立');
 }
 
-// ② socket 正确且无自我映照
-const need = 'alpha-ov2';
-const forbidden = [];
-if (!rendered.includes(need)) forbidden.push('missing-target-session:' + need);
-if (rendered.includes('am-overlay')) forbidden.push('am-overlay');
-if (rendered.includes('ov-spin')) forbidden.push('ov-spin');
-if (/\btree\b/.test(rendered) || rendered.includes('tree*')) forbidden.push('tree');
-if (rendered.includes('sleep*') || /\bsleep\b/.test(rendered)) forbidden.push('sleep');
-if (rendered.includes('beta-ov2')) forbidden.push('wrong-socket:beta-ov2');
-if (forbidden.length) {
-  fails.push('② socket/自我映照: ' + forbidden.join(','));
-  console.log('FAIL ② ' + forbidden.join(' '));
-} else {
-  console.log('PASS ② 目标会话在、scratch 不在');
-}
-
-// ③ 替换而非追加：行数 bounded，同一棵树不得重复多份
-const lineCount = rendered.split(/\r\n|\n|\r/).length;
-const bounded = lineCount <= rows;
-const treeMarks = (rendered.match(/am-overlay/g) || []).length
-  + (rendered.match(/alpha-ov2/g) || []).length;
-const dup = treeMarks > 4;
-if (!bounded || dup) {
-  fails.push(`③ 行数=${lineCount} rows=${rows} bounded=${bounded} treeMarks=${treeMarks}`);
-  console.log(`FAIL ③ 行数=${lineCount} (≤${rows}? ${bounded}) treeMarks=${treeMarks} frames=${frames.length}`);
-} else {
-  console.log(`PASS ③ 行数有界 ${lineCount}≤${rows} 且无重复树`);
-}
-
-console.log('--- last frame meta ---');
-console.log('frames=' + frames.length + ' last_bytes=' + raw.length + ' last_lines=' + lineCount);
-if (fails.length) {
-  console.log('RED ' + fails.join(' | '));
-  process.exit(1);
-}
-console.log('probe-ov2 ALL PASS');
+// 原样：payload 的 text/rows/cols/seq 不剥 ESC、不本地渲染
+const lines = frames.map((f) => {
+  const p = f.payload || {};
+  return JSON.stringify({
+    seq: p.seq,
+    text: p.text,
+    rows: p.rows,
+    cols: p.cols,
+  });
+});
+fs.writeFileSync(outPath, lines.join('\n') + '\n');
+const last = frames[frames.length - 1].payload || {};
+console.log(
+  'capture frames=' + frames.length +
+  ' last_seq=' + last.seq +
+  ' last_bytes=' + String(last.text || '').length +
+  ' rows=' + last.rows +
+  ' cols=' + last.cols +
+  ' -> ' + outPath
+);
 NODE
 if [ $? -ne 0 ]; then
-  fail "加强探针未全绿（当前坏实现预期红）"
+  fail "① 抓夹具失败"
 fi
-pass "三条渲染断言全过"
-exit 0
+N="$(python3 -c "import pathlib; p=pathlib.Path(r'$FRAMES'); print(sum(1 for l in p.read_text(encoding='utf-8').splitlines() if l.strip()) if p.is_file() else 0)")"
+[ "$N" -ge 8 ] || fail "① frames.jsonl 行数=$N 不足 8"
+
+echo "PASS ① 夹具 $N 帧 -> $FRAMES"
+
+# --- ② 喂安卓渲染器（不是 JS）---
+export OV2_FRAMES_JSONL="$FRAMES"
+echo "running OverlayEmulatorFixture via gradlew..."
+set +e
+( cd "$APP" && ./gradlew testDebugUnitTest --tests '*OverlayEmulatorFixture*' )
+GRADLE_RC=$?
+set -e
+
+echo "gradle OverlayEmulatorFixture exit=$GRADLE_RC"
+# --- ③ 退出码 = 单测退出码 ---
+exit "$GRADLE_RC"

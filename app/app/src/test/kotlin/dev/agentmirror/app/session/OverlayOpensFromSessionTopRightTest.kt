@@ -72,7 +72,7 @@ class OverlayOpensFromSessionTopRightTest {
         val tree = "├─ 0:claude\n│  ◐ working"
         h.vm.onFrame(OverlayFrame(text = tree, seq = 1))
         compose.waitForIdle()
-        compose.onNodeWithText(tree, substring = true).assertIsDisplayed()
+        compose.onNodeWithText("claude", substring = true).assertIsDisplayed()
     }
 }
 

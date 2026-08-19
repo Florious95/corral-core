@@ -35,7 +35,6 @@ import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.session.SessionRoute
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
-import dev.agentmirror.app.workspace.WorkspaceScreen
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
@@ -97,7 +96,6 @@ fun AgentMirrorApp(
         val route: AppRoute = when {
             session != null -> AppRoute.Session(ref = session.first, name = session.second)
             navState.showPairing -> AppRoute.Pairing
-            navState.showSettings -> AppRoute.Settings
             else -> AppRoute.Workspace
         }
 
@@ -133,15 +131,7 @@ fun AgentMirrorApp(
                         navState.showPairing = false
                     },
                 )
-                // 设置页：单档模型只提供重配；成功后 PairingConfigStore.save 覆盖现有档案。
-                AppRoute.Settings -> SettingsScreen(
-                    onBack = { navState.showSettings = false },
-                    onRePair = {
-                        navState.showSettings = false
-                        navState.showPairing = true
-                    },
-                )
-                // 工作区：有配置直进；顶栏设置钮进入真实设置页，再选择重新配对。
+                // 三栏主页：左收藏 / 中会话 / 右设置（067）。设置不再盖一层。
                 AppRoute.Workspace -> {
                     // 接线（fix-workspace-wiring）：把 Activity 持有的工作区 VM 接入
                     // ServiceWire.uiConnector 扇出。配对成功切工作区后，conn 层 READY + listing /
@@ -157,14 +147,9 @@ fun AgentMirrorApp(
                             }
                         }
                     }
-                    WorkspaceScreen(
-                        viewModel = workspaceViewModel,
-                        selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
-                        connectionPath = ServiceWire.connectionPath(),
-                        onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
-                        onBackToList = { navState.selectedWorkspaceCwd = null },
-                        onOpenSettings = { navState.showSettings = true },
-                        onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                    ThreePaneHome(
+                        navState = navState,
+                        workspaceViewModel = workspaceViewModel,
                     )
                 }
             }
@@ -176,6 +161,5 @@ fun AgentMirrorApp(
 private sealed interface AppRoute {
     data class Session(val ref: String, val name: String) : AppRoute
     data object Pairing : AppRoute
-    data object Settings : AppRoute
     data object Workspace : AppRoute
 }

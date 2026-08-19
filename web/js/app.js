@@ -19,6 +19,7 @@ import { BINARY_KIND } from './binary.js';
 import { TerminalView } from './terminal.js';
 import { fetchOlder, acceptScrollback } from './scrollback.js';
 import { loadConfig, saveConfig, clearConfig, loadTheme, saveTheme, resolvedTheme } from './preferences.js';
+import { OverlayEmulator, renderOverlayFrame, sessionSocketFromRef } from './overlay.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -298,6 +299,9 @@ class App {
     this.sessionPage = null;
     this.currentPage = null;
     this.theme = 'system';
+    this.overlayOpen = false;
+    this.overlayEmu = new OverlayEmulator(80, 24);
+    this.overlayLastAt = 0;
   }
 
   init() {
@@ -315,6 +319,9 @@ class App {
     $('#btn-refresh-list').addEventListener('click', () => {
       if (this.client) this.client.list();
     });
+    $('#btn-overlay').addEventListener('click', () => this.openOverlay());
+    $('#btn-overlay-close').addEventListener('click', () => this.closeOverlay());
+    $('#overlay-scrim').addEventListener('click', () => this.closeOverlay());
     this.show('pair');
     if (saved) this.connect(saved.url, saved.token, { automatic: true });
   }
@@ -354,6 +361,7 @@ class App {
       onFrame: (type, payload) => {
         if (type === 'listing' || type === 'list_delta') { app.renderWorkspaces(); app.syncOpenSessions(); }
         if (type === 'auth_ack' && payload.ok === false) app.setPairStatus(`认证失败：${payload.reason || '服务器拒绝连接'}`, 'error');
+        if (type === 'overlay_frame') app.applyOverlayFrame(payload);
       },
       onBinary,
       onInputResult: (reqId, ok, reason) => {
@@ -386,6 +394,7 @@ class App {
   }
 
   show(page) {
+    if (page !== 'session') this.closeOverlay();
     this.currentPage = page;
     for (const p of ['pair-page', 'workspaces-page', 'session-page']) {
       $(`#${p}`).style.display = p === `${page}-page` ? 'flex' : 'none';
@@ -453,9 +462,53 @@ class App {
     this.renderTabs();
   }
 
+  openOverlay() {
+    const page = this.sessionPage;
+    if (!page || !this.client) return;
+    const socket = sessionSocketFromRef(page.ref);
+    if (!socket) {
+      this.toast('当前会话没有可订阅的 socket', 'error');
+      return;
+    }
+    this.overlayOpen = true;
+    this.overlayEmu.resize(80, 24);
+    const root = $('#overlay-root');
+    root.hidden = false;
+    root.dataset.idle = '0';
+    $('#overlay-text').textContent = '';
+    $('#overlay-state').textContent = '订阅中…';
+    this.client.subscribeOverlay(socket);
+  }
+
+  closeOverlay() {
+    if (!this.overlayOpen) return;
+    this.overlayOpen = false;
+    $('#overlay-root').hidden = true;
+    $('#overlay-text').textContent = '';
+    if (this.client) this.client.unsubscribeOverlay();
+  }
+
+  applyOverlayFrame(payload) {
+    if (!this.overlayOpen) return;
+    const cols = payload.cols > 0 ? payload.cols : 80;
+    const rows = payload.rows > 0 ? payload.rows : 24;
+    // overlay_frame 是整屏快照：每帧先清空再喂，替换不是追加。
+    this.overlayEmu.resize(cols, rows);
+    const shown = renderOverlayFrame(payload.text || '', cols, rows, this.overlayEmu);
+    const el = $('#overlay-text');
+    el.textContent = shown;
+    const lines = shown === '' ? 0 : shown.split('\n').length;
+    const idle = /idle|停止|空闲/i.test(shown);
+    const working = /working|进行中|✳|◐|◑|◒|◓/i.test(shown);
+    $('#overlay-root').dataset.idle = (!working && idle) ? '1' : '0';
+    $('#overlay-state').textContent = working ? '工作' : (idle ? '停止' : `seq ${payload.seq || '—'} · ${lines} 行`);
+    this.overlayLastAt = Date.now();
+  }
+
   closeSession(ref) {
     const page = this.sessions.get(ref);
     if (!page) return;
+    if (this.sessionPage === page) this.closeOverlay();
     page.unmount();
     this.sessions.delete(ref);
     if (this.sessionPage === page) {
@@ -490,6 +543,7 @@ class App {
   }
 
   resetConnection() {
+    this.closeOverlay();
     for (const page of [...this.sessions.values()]) page.unmount();
     this.sessions.clear(); this.sessionPage = null; this.renderTabs();
     if (this.client) { this.client.disconnect(); this.client = null; }

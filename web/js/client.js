@@ -76,6 +76,7 @@ export class Client {
     this.nextReqId = 1;
     this.lastSeq = null;
     this.activeSubscriptions = new Map(); // ref -> { rows, cols }
+    this.overlaySocket = null;
     this.pendingInputs = new Map();        // reqId -> { timer }
     this.attempt = 0;
     this._reconnectTimer = null;
@@ -177,6 +178,24 @@ export class Client {
   resize(ref, rows, cols) {
     if (!this.isReady) return false;
     return this.sendControl('resize', { ref, rows, cols });
+  }
+
+  /**
+   * Open overlay capture for the tmux socket of the session being viewed.
+   * Replayed after READY. Empty socket is refused (065: no first-found fallback).
+   */
+  subscribeOverlay(socket) {
+    if (typeof socket !== 'string' || socket.length === 0) return false;
+    this.overlaySocket = socket;
+    if (!this.isReady) return true;
+    return this.sendControl('overlay_subscribe', { socket });
+  }
+
+  /** Close overlay capture. Idempotent. */
+  unsubscribeOverlay() {
+    this.overlaySocket = null;
+    if (!this.isReady) return true;
+    return this.sendControl('overlay_unsubscribe', {});
   }
 
   // ---- internals ----
@@ -307,6 +326,9 @@ export class Client {
   replaySubscriptions() {
     for (const [ref, dims] of this.activeSubscriptions) {
       this.sendControl('subscribe', { ref, rows: dims.rows, cols: dims.cols });
+    }
+    if (this.overlaySocket) {
+      this.sendControl('overlay_subscribe', { socket: this.overlaySocket });
     }
   }
 

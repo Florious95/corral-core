@@ -105,8 +105,8 @@ class ConnectionManager(
     /** 二级订阅簿记：workspace cwd；READY / 重连后重发 level2_subscribe。 */
     private val activeLevel2 = LinkedHashSet<String>()
 
-    /** 悬浮窗抓屏流是否应订着；READY / 重连后重放。 */
-    private var overlayWanted = false
+    /** 悬浮窗抓屏流应订的 socket；null = 未订。READY / 重连后重放。 */
+    private var overlayWantedSocket: String? = null
 
     /** 上次见过的 listing seq；list_delta 连续性据此判定。 */
     private var lastSeenSeq: Long? = null
@@ -377,20 +377,20 @@ class ConnectionManager(
     }
 
     /**
-     * 会话内悬浮窗订阅（064）：打开时发 [OverlaySubscribeFrame]。关掉必须 [unsubscribeOverlay]。
-     * 未就绪先簿记，READY 后重放。
+     * 会话内悬浮窗订阅（065）：打开时发带 [socket] 的 [OverlaySubscribeFrame]。
+     * 关掉必须 [unsubscribeOverlay]。未就绪先簿记，READY 后重放。
      */
-    fun subscribeOverlay(): Boolean {
+    fun subscribeOverlay(socket: String): Boolean {
         if (state == ConnectionState.STOPPED) return false
-        overlayWanted = true
+        overlayWantedSocket = socket
         val conn = connection ?: return true
         if (!conn.isReady) return true
-        return conn.send(OverlaySubscribeFrame())
+        return conn.send(OverlaySubscribeFrame(socket = socket))
     }
 
     /** 悬浮窗退订：关闭时发 [OverlayUnsubscribeFrame]。幂等。关后不得继续收流。 */
     fun unsubscribeOverlay(): Boolean {
-        overlayWanted = false
+        overlayWantedSocket = null
         val conn = connection ?: return true
         if (!conn.isReady) return true
         return conn.send(OverlayUnsubscribeFrame())
@@ -556,9 +556,7 @@ class ConnectionManager(
         for (workspace in activeLevel2) {
             conn.send(Level2SubscribeFrame(workspace = workspace))
         }
-        if (overlayWanted) {
-            conn.send(OverlaySubscribeFrame())
-        }
+        overlayWantedSocket?.let { conn.send(OverlaySubscribeFrame(socket = it)) }
     }
 
     private fun scheduleReconnect() {

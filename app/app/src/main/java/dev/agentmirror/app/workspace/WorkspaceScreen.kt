@@ -92,6 +92,7 @@ fun WorkspaceScreen(
     val state by viewModel.uiState.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
     val level2 by viewModel.level2.collectAsState()
+    val favorites by viewModel.favorites.collectAsState()
 
     // 进入即刷（2026-08-15 用户裁定：每次到一级/二级自动刷一遍拉最新；leader 澄清：返回也算
     // 到达）。LaunchedEffect 以 selectedWorkspaceCwd 为键——一级⇄二级每次切换都触发一次刷新：
@@ -141,6 +142,8 @@ fun WorkspaceScreen(
                     sessions = level2.sessions,
                     banner = level2.banner,
                     onOpenSession = onOpenSession,
+                    favorited = favorites.map { it.key }.toSet(),
+                    onToggleFavorite = viewModel::toggleFavorite,
                 )
                 return@PullToRefreshBox
             }

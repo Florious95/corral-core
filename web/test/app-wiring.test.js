@@ -6,3 +6,10 @@ test('app frame callback receives payload used by auth rejection feedback', () =
   const source = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
   assert.match(source, /onFrame:\s*\(type, payload\)\s*=>/);
 });
+
+test('app routes overlay_frame into the overlay panel', () => {
+  const source = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  assert.match(source, /type === 'overlay_frame'/);
+  assert.match(source, /subscribeOverlay/);
+  assert.match(source, /sessionSocketFromRef/);
+});

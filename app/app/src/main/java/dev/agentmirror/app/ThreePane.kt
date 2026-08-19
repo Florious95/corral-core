@@ -1,0 +1,184 @@
+/*
+ * Copyright 2026 AgentMirror Project Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.agentmirror.app
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.ui.theme.Spacing
+import dev.agentmirror.app.workspace.FavoriteList
+import dev.agentmirror.app.workspace.WorkspaceScreen
+import dev.agentmirror.app.workspace.WorkspaceViewModel
+
+/**
+ * 窄屏三栏（067）：左收藏 / 中会话 / 右设置。HorizontalPager，冷启动中间页。
+ */
+enum class ThreePane {
+    Favorites,
+    Sessions,
+    Settings,
+}
+
+@Composable
+internal fun ThreePaneHome(
+    navState: MainNavState,
+    workspaceViewModel: WorkspaceViewModel,
+) {
+    val pagerState = rememberPagerState(
+        initialPage = 1,
+        pageCount = { ThreePane.entries.size },
+    )
+    LaunchedEffect(navState.homePane) {
+        val target = navState.homePane.ordinal
+        if (pagerState.currentPage != target) {
+            pagerState.scrollToPage(target)
+        }
+    }
+    // 首帧 settledPage 仍是 initialPage=1，不能回写，否则会把外部指定的 Favorites 冲掉。
+    val pagerToNavArmed = remember { mutableStateOf(false) }
+    LaunchedEffect(pagerState.settledPage) {
+        if (!pagerToNavArmed.value) {
+            pagerToNavArmed.value = true
+            return@LaunchedEffect
+        }
+        val pane = ThreePane.entries[pagerState.settledPage]
+        if (navState.homePane != pane) navState.homePane = pane
+        navState.showSettings = pane == ThreePane.Settings
+    }
+
+    HorizontalPager(
+        state = pagerState,
+        beyondViewportPageCount = 0,
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("three-pane"),
+    ) { page ->
+        when (ThreePane.entries[page]) {
+            ThreePane.Favorites -> FavoritesPane(
+                viewModel = workspaceViewModel,
+                onOpenSession = { ref, name -> navState.activeSession = ref to name },
+            )
+            ThreePane.Sessions -> WorkspaceScreen(
+                viewModel = workspaceViewModel,
+                selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
+                connectionPath = ServiceWire.connectionPath(),
+                onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
+                onBackToList = { navState.selectedWorkspaceCwd = null },
+                onOpenSettings = {
+                    navState.showSettings = true
+                    navState.homePane = ThreePane.Settings
+                },
+                onOpenSession = { ref, name -> navState.activeSession = ref to name },
+            )
+            ThreePane.Settings -> SettingsScreen(
+                onBack = {
+                    navState.showSettings = false
+                    navState.homePane = ThreePane.Sessions
+                },
+                onRePair = {
+                    navState.showSettings = false
+                    navState.homePane = ThreePane.Sessions
+                    navState.showPairing = true
+                },
+                enableBackHandler = pagerState.currentPage == ThreePane.Settings.ordinal,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FavoritesPane(
+    viewModel: WorkspaceViewModel,
+    onOpenSession: (ref: String, name: String) -> Unit,
+) {
+    val favorites by viewModel.favorites.collectAsState()
+    val level2 by viewModel.level2.collectAsState()
+    val rows = remember(favorites, level2) { viewModel.favoriteRows() }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .testTag("three-pane-favorites"),
+    ) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .defaultMinSize(minHeight = 56.dp)
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "收藏",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(horizontal = Spacing.sm),
+                )
+            }
+        }
+        if (rows.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    modifier = Modifier.padding(horizontal = Spacing.xl),
+                ) {
+                    Text(
+                        text = "暂无收藏",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "在会话列表里点星星即可收藏。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            FavoriteList(
+                rows = rows,
+                onOpenSession = onOpenSession,
+                onUnfavorite = viewModel::toggleFavorite,
+            )
+        }
+    }
+}

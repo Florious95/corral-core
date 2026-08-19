@@ -47,8 +47,11 @@ class MainNavState(initialShowPairing: Boolean) {
     /** 配对页开关：首启无配置 / 重配入口。重建后恢复（D-3）。 */
     var showPairing by mutableStateOf(initialShowPairing)
 
-    /** 设置页开关：工作区顶栏进入；重建后仍停在设置页。 */
+    /** 设置页开关：工作区顶栏进入；重建后仍停在设置页。三栏里与 [homePane]==Settings 同步。 */
     var showSettings by mutableStateOf(false)
+
+    /** 三栏当前页；冷启动默认中间会话页。 */
+    var homePane by mutableStateOf(ThreePane.Sessions)
 
     /** 当前会话（ref, name）；null = 不在会话页（工作区/配对页）。重建后恢复（D-3）。 */
     var activeSession by mutableStateOf<Pair<String, String>?>(null)
@@ -75,8 +78,9 @@ class MainNavState(initialShowPairing: Boolean) {
             selectedWorkspaceCwd = null
             return true
         }
-        if (showSettings) {
+        if (showSettings || homePane != ThreePane.Sessions) {
             showSettings = false
+            homePane = ThreePane.Sessions
             return true
         }
         if (!showPairing) {
@@ -90,6 +94,7 @@ class MainNavState(initialShowPairing: Boolean) {
     fun writeTo(outState: Bundle) {
         outState.putBoolean(KEY_SHOW_PAIRING, showPairing)
         outState.putBoolean(KEY_SHOW_SETTINGS, showSettings)
+        outState.putInt(KEY_HOME_PANE, homePane.ordinal)
         selectedWorkspaceCwd?.let { outState.putString(KEY_WORKSPACE_CWD, it) }
         activeSession?.let { (ref, name) ->
             outState.putString(KEY_SESSION_REF, ref)
@@ -102,6 +107,8 @@ class MainNavState(initialShowPairing: Boolean) {
         if (savedInstanceState == null || !savedInstanceState.containsKey(KEY_SHOW_PAIRING)) return
         showPairing = savedInstanceState.getBoolean(KEY_SHOW_PAIRING)
         showSettings = savedInstanceState.getBoolean(KEY_SHOW_SETTINGS)
+        val paneOrd = savedInstanceState.getInt(KEY_HOME_PANE, ThreePane.Sessions.ordinal)
+        homePane = ThreePane.entries.getOrElse(paneOrd) { ThreePane.Sessions }
         selectedWorkspaceCwd = savedInstanceState.getString(KEY_WORKSPACE_CWD)
         val ref = savedInstanceState.getString(KEY_SESSION_REF)
         val name = savedInstanceState.getString(KEY_SESSION_NAME)
@@ -111,6 +118,7 @@ class MainNavState(initialShowPairing: Boolean) {
     private companion object {
         const val KEY_SHOW_PAIRING = "nav_show_pairing"
         const val KEY_SHOW_SETTINGS = "nav_show_settings"
+        const val KEY_HOME_PANE = "nav_home_pane"
         const val KEY_WORKSPACE_CWD = "nav_workspace_cwd"
         const val KEY_SESSION_REF = "nav_session_ref"
         const val KEY_SESSION_NAME = "nav_session_name"
