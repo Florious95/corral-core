@@ -59,6 +59,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.ui.screens.SessionListScreen
+import dev.agentmirror.app.ui.screens.WorkspaceListScreen
+import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 
@@ -109,17 +112,23 @@ fun WorkspaceScreen(
         viewModel.clearEnterRefreshSuppress()
     }
 
+    val lanConnected = state.connection == ConnectionUi.READY && connectionPath != null
+    val showingDesignList = selectedWorkspaceCwd != null ||
+        (!state.isLoading && !state.isEmpty && !(state.isDisconnected && state.workspaces.isEmpty()))
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        TopBar(
-            selectedCwd = selectedWorkspaceCwd,
-            // 拨号工厂记录的是本次尝试路径；只有 READY 后才可称为当前已连接路径。
-            connectionPath = connectionPath.takeIf { state.connection == ConnectionUi.READY },
-            onBack = onBackToList,
-        )
+        if (!showingDesignList) {
+            TopBar(
+                selectedCwd = selectedWorkspaceCwd,
+                // 拨号工厂记录的是本次尝试路径；只有 READY 后才可称为当前已连接路径。
+                connectionPath = connectionPath.takeIf { state.connection == ConnectionUi.READY },
+                onBack = onBackToList,
+            )
+        }
         ConnectionBanner(connection = state.connection)
 
         // 下拉手动刷（2026-08-15 用户裁定）：手指下滑触发一次全量刷新（PullToRefreshBox
@@ -149,13 +158,44 @@ fun WorkspaceScreen(
                         viewModel.checkLevel2Quiet()
                     }
                 }
-                L2SessionList(
-                    sessions = level2.sessions,
-                    banner = level2.banner,
-                    onOpenSession = onOpenSession,
-                    favorited = favorites.map { it.key }.toSet(),
-                    onToggleFavorite = viewModel::toggleFavorite,
-                )
+                val starred = favorites.map { it.key }.toSet()
+                Column(Modifier.fillMaxSize()) {
+                    val banner = level2.banner
+                    if (banner != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = Spacing.pageH, vertical = Spacing.xs)
+                                .testTag("l2-stale-banner"),
+                        ) {
+                            Text(
+                                text = banner,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                            )
+                        }
+                    }
+                    AppTheme {
+                        SessionListScreen(
+                            workspaceName = cwdDisplayName(level2Cwd),
+                            workspacePath = level2Cwd,
+                            sessions = level2.sessions.map { it.toSessionItem(starred.contains(it.favoriteKey())) },
+                            onBack = onBackToList,
+                            onSessionClick = { item -> onOpenSession(item.id, item.displayName) },
+                            onToggleStar = { item ->
+                                level2.sessions.firstOrNull { it.ref == item.id }?.let(viewModel::toggleFavorite)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .statusBarsPadding(),
+                            lanConnected = lanConnected,
+                        )
+                    }
+                }
                 return@PullToRefreshBox
             }
             // 一级列表 + 加载/空/错态。
@@ -170,10 +210,16 @@ fun WorkspaceScreen(
                     state.isLoading -> LoadingContent()
                     state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
                     state.isEmpty -> EmptyGuideContent()
-                    else -> WorkspaceList(
-                        workspaces = workspaces,
-                        onOpenWorkspace = { onSelectWorkspace(it.cwd) },
-                    )
+                    else -> AppTheme {
+                        WorkspaceListScreen(
+                            workspaces = workspaces.map { it.toWorkspaceItem() },
+                            onWorkspaceClick = { onSelectWorkspace(it.path) },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .statusBarsPadding(),
+                            lanConnected = lanConnected,
+                        )
+                    }
                 }
             }
         }

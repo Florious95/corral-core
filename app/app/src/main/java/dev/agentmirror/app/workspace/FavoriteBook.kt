@@ -90,6 +90,8 @@ class FavoriteBook(
 
     /**
      * 用 live 的 ref 对账。未命中 → isOnline=false（不在线 / gray），仍输出该行。
+     * 082：live 必须覆盖**每个收藏项自己的工作区**，不能只拿最近进过的那一个。
+     * 本函数不负责去取数；取数由 [WorkspaceViewModel.enterFavorites] 按工作区串行订阅。
      */
     fun rows(live: List<L2Entry>): List<FavoriteRow> {
         val byKey = HashMap<FavoriteKey, L2Entry>()

@@ -20,22 +20,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,7 +43,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.ui.theme.Spacing
@@ -174,31 +169,24 @@ private fun FavoritesPane(
     onOpenSession: (ref: String, name: String) -> Unit,
 ) {
     val favorites by viewModel.favorites.collectAsState()
-    val level2 by viewModel.level2.collectAsState()
-    val rows = remember(favorites, level2) { viewModel.favoriteRows() }
+    val liveGen by viewModel.favoriteLiveGen.collectAsState()
+    val rows = remember(favorites, liveGen) { viewModel.favoriteRows() }
+    DisposableEffect(Unit) {
+        viewModel.enterFavorites()
+        onDispose { viewModel.leaveFavorites() }
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1_000)
+            viewModel.checkFavoriteFetch()
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .testTag("three-pane-favorites"),
     ) {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .defaultMinSize(minHeight = 56.dp)
-                    .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "收藏",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = Spacing.sm),
-                )
-            }
-        }
         if (rows.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(

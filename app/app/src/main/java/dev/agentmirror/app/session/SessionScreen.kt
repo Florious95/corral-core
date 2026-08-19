@@ -32,6 +32,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.IconButton
@@ -64,6 +66,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -71,6 +74,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import dev.agentmirror.app.conn.ConnectionState
@@ -83,6 +87,7 @@ import dev.agentmirror.app.termview.TermSurfaceView
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
+import dev.agentmirror.app.ui.theme.TermPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -212,6 +217,8 @@ fun SessionScreen(
                 .weight(1f)
                 .fillMaxWidth(),
         ) {
+            val darkTheme = isSystemInDarkTheme()
+            val themeToken = TermPalette.token(darkTheme)
             AndroidView(
                 factory = { ctx ->
                     TermSurfaceView(ctx).also {
@@ -222,9 +229,28 @@ fun SessionScreen(
                         it.fontSizeSp = savedSp.toFloat()
                         it.presenter = viewModel.presenter
                         it.onRemoteScrollBy = viewModel::onScrollWheel
+                        it.nightOverride = darkTheme
                     }
                 },
-                modifier = Modifier.fillMaxSize(),
+                update = { view ->
+                    view.nightOverride = darkTheme
+                    view.presenter = viewModel.presenter
+                    view.onRemoteScrollBy = viewModel::onScrollWheel
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .semantics { contentDescription = themeToken },
+            )
+            // UI 树可断言的数据来源标签（透明 1dp，不参与视觉）。
+            Text(
+                text = themeToken,
+                color = Color.Transparent,
+                fontSize = 1.sp,
+                lineHeight = 1.sp,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(1.dp),
+                maxLines = 1,
             )
             // 「回到底部」悬浮钮（锁定历史时出现，006 交互）。
             if (viewModel.showBackToBottom) {
