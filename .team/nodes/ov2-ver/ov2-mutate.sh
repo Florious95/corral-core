@@ -2,17 +2,20 @@
 # ov2-mutate.sh — 对照席定点变异（ledger.overlay-fix.v1 / t.ver）
 #
 # 自检：如果被测对象是坏的，这条命令会不会仍然返回 0？会，就还不是判据。
-# 破坏：去掉 scratch 排除（choose-tree 不再 -f 过滤，stripObserver 变空操作）。
-# 具名测试 TestOverlayExcludesScratchSession 必须变红；恢复后必须绿。
+# 两处破坏，各自恢复：
+#   A) 去掉 scratch 排除 → TestOverlayExcludesScratchSession 必须红
+#   B) 渲染绕过 TerminalEmulator → OverlayRendersThroughTerminalEmulatorTest 必须红
+# 两头都成立才 exit 0；trap 保证工作区干净。
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 SERVER_DIR="$ROOT/server"
-TARGET="$SERVER_DIR/internal/overlay/tmux.go"
-TEST_PKG="./internal/overlay/"
-# The named test lives in api/ and drives the live capturer.
-TEST_MATCH="TestOverlayExcludesScratchSession"
+APP_DIR="$ROOT/app"
+TMUX_GO="$SERVER_DIR/internal/overlay/tmux.go"
+VM_KT="$APP_DIR/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt"
+TEST_SCRATCH="TestOverlayExcludesScratchSession"
+TEST_RENDER="OverlayRendersThroughTerminalEmulatorTest"
 
 ANCHOR1_SRC=$'	if err := runTmux(ctx, sock, "choose-tree", "-f", scratchFilter, "-t", ScratchSession+":0.0"); err != nil {'
 ANCHOR1_DST=$'	if err := runTmux(ctx, sock, "choose-tree", "-t", ScratchSession+":0.0"); err != nil { // MUTATION[verify]: no scratch filter'
@@ -20,19 +23,31 @@ ANCHOR1_DST=$'	if err := runTmux(ctx, sock, "choose-tree", "-t", ScratchSession+
 ANCHOR2_SRC=$'func stripObserver(raw []byte) []byte {\n	if len(raw) == 0 {\n		return raw\n	}'
 ANCHOR2_DST=$'func stripObserver(raw []byte) []byte {\n	return raw // MUTATION[verify]: keep observer tokens\n	if len(raw) == 0 {\n		return raw\n	}'
 
-SNAP="$(mktemp -d)/tmux.go.bak"
+ANCHOR3_SRC=$'        overlayEmulator.feed(frame.text)\n        overlayText = overlayEmulator.snapshot().plainText()'
+ANCHOR3_DST=$'        overlayText = frame.text.replace("\\u001b", "") // MUTATION[verify]: skip emulator'
+
+SNAP_DIR="$(mktemp -d)"
+SNAP_GO="$SNAP_DIR/tmux.go.bak"
+SNAP_KT="$SNAP_DIR/SessionViewModel.kt.bak"
 fail() { echo "OV2-MUTATE FAIL: $1" >&2; exit 1; }
 
-[ -f "$TARGET" ] || fail "被测文件不存在: $TARGET"
-cp -f "$TARGET" "$SNAP"
-BASE_HASH="$(shasum -a 256 "$TARGET" | awk '{print $1}')"
-echo "baseline hash: $BASE_HASH"
+[ -f "$TMUX_GO" ] || fail "被测文件不存在: $TMUX_GO"
+[ -f "$VM_KT" ] || fail "被测文件不存在: $VM_KT"
+cp -f "$TMUX_GO" "$SNAP_GO"
+cp -f "$VM_KT" "$SNAP_KT"
+BASE_GO="$(shasum -a 256 "$TMUX_GO" | awk '{print $1}')"
+BASE_KT="$(shasum -a 256 "$VM_KT" | awk '{print $1}')"
+echo "baseline tmux.go=$BASE_GO"
+echo "baseline SessionViewModel.kt=$BASE_KT"
 
-restore() { cp -f "$SNAP" "$TARGET" 2>/dev/null || true; }
+restore() {
+  cp -f "$SNAP_GO" "$TMUX_GO" 2>/dev/null || true
+  cp -f "$SNAP_KT" "$VM_KT" 2>/dev/null || true
+}
 trap restore EXIT
 
 apply() {
-  python3 - "$TARGET" "$1" "$2" <<'PYEOF'
+  python3 - "$1" "$2" "$3" <<'PYEOF'
 import sys
 p, src, dst = sys.argv[1], sys.argv[2], sys.argv[3]
 s = open(p, encoding="utf-8").read()
@@ -44,33 +59,57 @@ open(p, "w", encoding="utf-8").write(s.replace(src, dst, 1))
 PYEOF
 }
 
-if ! ( cd "$SERVER_DIR" && go test ./internal/api/ -run "^${TEST_MATCH}$" -count=1 -timeout 90s ); then
-  fail "变异前 $TEST_MATCH 已红——基线不是绿"
+# --- A: scratch 排除 ---
+if ! ( cd "$SERVER_DIR" && go test ./internal/api/ -run "^${TEST_SCRATCH}$" -count=1 -timeout 90s ); then
+  fail "变异前 $TEST_SCRATCH 已红——基线不是绿"
 fi
-echo "GREEN baseline: $TEST_MATCH"
+echo "GREEN baseline: $TEST_SCRATCH"
 
-apply "$ANCHOR1_SRC" "$ANCHOR1_DST" || fail "锚点1（choose-tree -f）未找到或非唯一"
-apply "$ANCHOR2_SRC" "$ANCHOR2_DST" || fail "锚点2（stripObserver）未找到或非唯一"
+apply "$TMUX_GO" "$ANCHOR1_SRC" "$ANCHOR1_DST" || fail "锚点1（choose-tree -f）未找到或非唯一"
+apply "$TMUX_GO" "$ANCHOR2_SRC" "$ANCHOR2_DST" || fail "锚点2（stripObserver）未找到或非唯一"
 echo "mutated: scratch filter + stripObserver removed"
 
-if ( cd "$SERVER_DIR" && go test ./internal/api/ -run "^${TEST_MATCH}$" -count=1 -timeout 90s ); then
-  fail "变异后 $TEST_MATCH 仍绿——判据对坏实现不响"
+if ( cd "$SERVER_DIR" && go test ./internal/api/ -run "^${TEST_SCRATCH}$" -count=1 -timeout 90s ); then
+  fail "变异后 $TEST_SCRATCH 仍绿——判据对坏实现不响"
 fi
-echo "RED confirmed: $TEST_MATCH 变红"
+echo "RED confirmed: $TEST_SCRATCH 变红"
 
-restore
-RESTORED="$(shasum -a 256 "$TARGET" | awk '{print $1}')"
-[ "$RESTORED" = "$BASE_HASH" ] || fail "恢复后哈希不匹配"
+cp -f "$SNAP_GO" "$TMUX_GO"
+[ "$(shasum -a 256 "$TMUX_GO" | awk '{print $1}')" = "$BASE_GO" ] || fail "A 恢复后 tmux.go 哈希不匹配"
 
-if ! ( cd "$SERVER_DIR" && go test ./internal/api/ -run "^${TEST_MATCH}$" -count=1 -timeout 90s ); then
-  fail "恢复后 $TEST_MATCH 仍红"
+if ! ( cd "$SERVER_DIR" && go test ./internal/api/ -run "^${TEST_SCRATCH}$" -count=1 -timeout 90s ); then
+  fail "恢复后 $TEST_SCRATCH 仍红"
 fi
-echo "GREEN confirmed: $TEST_MATCH 回绿"
+echo "GREEN confirmed: $TEST_SCRATCH 回绿"
 
-FINAL="$(shasum -a 256 "$TARGET" | awk '{print $1}')"
-[ "$FINAL" = "$BASE_HASH" ] || fail "终态哈希不匹配"
-rm -f "$SNAP"
+# --- B: 绕过终端模拟器 ---
+if ! ( cd "$APP_DIR" && ./gradlew -q :app:testDebugUnitTest --tests "*${TEST_RENDER}" ); then
+  fail "变异前 $TEST_RENDER 已红——基线不是绿"
+fi
+echo "GREEN baseline: $TEST_RENDER"
+
+apply "$VM_KT" "$ANCHOR3_SRC" "$ANCHOR3_DST" || fail "锚点3（emulator.feed）未找到或非唯一"
+echo "mutated: applyOverlayFrame skips TerminalEmulator"
+
+if ( cd "$APP_DIR" && ./gradlew -q :app:testDebugUnitTest --tests "*${TEST_RENDER}" ); then
+  fail "变异后 $TEST_RENDER 仍绿——判据对坏实现不响"
+fi
+echo "RED confirmed: $TEST_RENDER 变红"
+
+cp -f "$SNAP_KT" "$VM_KT"
+[ "$(shasum -a 256 "$VM_KT" | awk '{print $1}')" = "$BASE_KT" ] || fail "B 恢复后 SessionViewModel.kt 哈希不匹配"
+
+if ! ( cd "$APP_DIR" && ./gradlew -q :app:testDebugUnitTest --tests "*${TEST_RENDER}" ); then
+  fail "恢复后 $TEST_RENDER 仍红"
+fi
+echo "GREEN confirmed: $TEST_RENDER 回绿"
+
+FINAL_GO="$(shasum -a 256 "$TMUX_GO" | awk '{print $1}')"
+FINAL_KT="$(shasum -a 256 "$VM_KT" | awk '{print $1}')"
+[ "$FINAL_GO" = "$BASE_GO" ] || fail "终态 tmux.go 哈希不匹配"
+[ "$FINAL_KT" = "$BASE_KT" ] || fail "终态 SessionViewModel.kt 哈希不匹配"
+rm -rf "$SNAP_DIR"
 trap - EXIT
 echo "----"
-echo "ov2-mutate: ALL PASS (变异红 + 恢复绿 + 文件还原)"
+echo "ov2-mutate: ALL PASS (scratch 红/绿 + emulator 红/绿 + 文件还原)"
 exit 0

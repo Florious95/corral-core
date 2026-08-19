@@ -1,0 +1,9 @@
+[ledger-run 2026-08-19T01:57:35Z] 开工 start | ledger_id=ledger.overlay-fix.v1 revision=7 账本=.team/ledgers/overlay-fix-v1.json 墙钟上限=24900s 派单死线=90s
+[ledger-run 2026-08-19T01:57:40Z] 轮次 round | 第 1 轮开始：前沿 ["t.port", "t.probe2"]（墙钟已跑 5s / 上限 24900s）
+[ledger-run 2026-08-19T01:57:40Z] 派单 dispatch | task=t.port 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/fav-dev-app 席位=fav-dev-app attempt=att-t.port-seq1-t1787104660474 delivery=del-t.port-seq1-t1787104660474
+[ledger-run 2026-08-19T01:57:40Z] 投递回执 send-ok | task=t.port case_id=ledger_overlay-fix_v1__t.port__r7 message_id=msg_ee766be95020 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T01:57:40Z] 派单落地 dispatch-landed | task=t.port 席位 fav-dev-app 的收件箱已多出这条派单
+[ledger-run 2026-08-19T01:57:40Z] 派单 dispatch | task=t.probe2 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/fav-advisor 席位=fav-advisor attempt=att-t.probe2-seq2-t1787104660706 delivery=del-t.probe2-seq2-t1787104660706
+[ledger-run 2026-08-19T01:57:40Z] 投递回执 send-ok | task=t.probe2 case_id=ledger_overlay-fix_v1__t.probe2__r7 message_id=msg_ef4c79add190 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T01:57:40Z] 派单落地 dispatch-landed | task=t.probe2 席位 fav-advisor 的收件箱已多出这条派单
+[ledger-run 2026-08-19T01:57:40Z] 等待 wait | task=t.port 在等的 key（case_id）=ledger_overlay-fix_v1__t.port__r7 team=grok-l2 预算=2400s

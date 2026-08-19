@@ -592,7 +592,7 @@
           "A-v-l1doc"
         ]
       },
-      "state": "planned",
+      "state": "succeeded",
       "attempts": [
         {
           "attempt_id": "att-t.ver-seq3-t1787094519289",
@@ -606,6 +606,21 @@
             "acceptance_failure.expected_exit_code=0",
             "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
             "acceptance_failure.stderr_tail(末20行)="
+          ]
+        },
+        {
+          "attempt_id": "att-t.ver-seq1-t1787095107054",
+          "delivery_id": "del-t.ver-seq1-t1787095107054",
+          "state": "succeeded",
+          "writeback_revision": 6,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-v-probe",
+            "acceptance_success.acceptance_id=A-v-go",
+            "acceptance_success.acceptance_id=A-v-rust",
+            "acceptance_success.acceptance_id=A-v-doc",
+            "acceptance_success.acceptance_id=A-v-cost",
+            "acceptance_success.acceptance_id=A-v-l1doc",
+            "acceptance_success.writeback_revision=6"
           ]
         }
       ]
@@ -685,5 +700,5 @@
   },
   "fanout_aggregation": {},
   "audit": {},
-  "revision": 5
+  "revision": 6
 }
