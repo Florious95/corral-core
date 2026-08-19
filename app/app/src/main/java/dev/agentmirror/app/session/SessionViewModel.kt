@@ -30,6 +30,7 @@ import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.OverlayFrame
 import dev.agentmirror.app.conn.PaneModeChangedFrame
 import dev.agentmirror.app.conn.InputKey
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.overlay.OverlayEmulator
 import dev.agentmirror.app.overlay.dropScratchLines
 import dev.agentmirror.app.termview.TermViewPresenter
@@ -38,8 +39,16 @@ import dev.agentmirror.terminal.TerminalEmulator
 
 /** 会话 ref = socket + U+001F + pane_id；悬浮窗订阅只取 socket。 */
 internal fun sessionSocketFromRef(ref: String): String {
-    val sep = ref.indexOf('\u001f')
-    return if (sep > 0) ref.substring(0, sep) else ref
+    val unitSep = ref.indexOf('\u001f')
+    val literalSep = ref.indexOf("\\u001f")
+    val sep = when {
+        unitSep > 0 -> unitSep
+        literalSep > 0 -> literalSep
+        else -> -1
+    }
+    val socket = if (sep > 0) ref.substring(0, sep) else ref
+    // listing 金样 / 无结构分隔的 ref（如 "s1"）不是 tmux socket，不得当路径发出。
+    return if (socket.contains('/')) socket else ""
 }
 
 /** 从三级同一套网格快照抽出可见纯文本（宽字符占位格跳过）。 */
@@ -110,6 +119,9 @@ class SessionViewModel(
     /** 服务端推来的抓屏原文，原样渲染；关闭即清空。 */
     var overlayText by mutableStateOf("")
         private set
+
+    private var overlayCols: Int = 0
+    private var overlayRows: Int = 0
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
 
     /**
@@ -210,7 +222,14 @@ class SessionViewModel(
     override fun onFrame(frame: FramePayload) {
         when (frame) {
             // 列表帧归 workspace 渲染；本页只关心协议级错误（被动异常必须可见）。
-            is ErrorFrame -> transientError = "协议错误：${frame.code.wire}${frame.reason.takeIf { it.isNotEmpty() }?.let { "（$it）" } ?: ""}"
+            is ErrorFrame -> {
+                DiagLog.record(
+                    "overlay",
+                    "error_frame code=${frame.code.wire} reason=${frame.reason} " +
+                        "overlay_open=$overlayOpen ref=$ref",
+                )
+                transientError = "协议错误：${frame.code.wire}${frame.reason.takeIf { it.isNotEmpty() }?.let { "（$it）" } ?: ""}"
+            }
             // 缺陷④：远端 pane copy-mode 状态变更（进入/退出），驱动 UI 角标。
             is PaneModeChangedFrame -> if (frame.ref == ref) inCopyMode = frame.inCopyMode
             is OverlayFrame -> if (overlayOpen) applyOverlayFrame(frame)
@@ -221,12 +240,57 @@ class SessionViewModel(
     /**
      * 打开悬浮窗：订 overlay 流。只看不操作。
      *
-     * @post [overlayOpen]=true；已发 overlay_subscribe
+     * @post socket 非空时 [overlayOpen]=true 且已发 overlay_subscribe；
+     *       socket 空则不发帧、不打开，[transientError] 可读
      */
     fun openOverlay() {
         if (overlayOpen) return
+        val unitSep = ref.indexOf('\u001f')
+        val literalSep = ref.indexOf("\\u001f")
+        val socket = sessionSocketFromRef(ref)
+        DiagLog.record(
+            "overlay",
+            "open ref=$ref ref_len=${ref.length} unit_sep=$unitSep " +
+                "literal_u001f_sep=$literalSep socket=$socket",
+        )
+        if (socket.isEmpty()) {
+            DiagLog.record(
+                "overlay",
+                "refuse subscribe socket_empty ref=$ref extracted=$socket sent=false",
+            )
+            transientError = "无法打开悬浮窗：当前会话没有可用的 tmux socket（ref=$ref）"
+            return
+        }
         overlayOpen = true
-        manager.subscribeOverlay(sessionSocketFromRef(ref))
+        val sent = manager.subscribeOverlay(socket, overlayCols, overlayRows)
+        DiagLog.record(
+            "overlay",
+            "subscribe sent=$sent socket=$socket ref=$ref cols=$overlayCols rows=$overlayRows",
+        )
+    }
+
+    /**
+     * 面板量到像素后换算行列，再订抓屏。同尺寸不重发。
+     */
+    fun reportOverlayViewport(cols: Int, rows: Int) {
+        if (!overlayOpen) return
+        if (cols < 1 || rows < 1) return
+        if (cols == overlayCols && rows == overlayRows) return
+        val socket = sessionSocketFromRef(ref)
+        if (socket.isEmpty()) {
+            DiagLog.record(
+                "overlay",
+                "viewport refuse socket_empty ref=$ref cols=$cols rows=$rows",
+            )
+            return
+        }
+        overlayCols = cols
+        overlayRows = rows
+        val sent = manager.subscribeOverlay(socket, cols, rows)
+        DiagLog.record(
+            "overlay",
+            "subscribe sent=$sent socket=$socket ref=$ref cols=$cols rows=$rows",
+        )
     }
 
     /**
@@ -238,7 +302,9 @@ class SessionViewModel(
         if (!overlayOpen) return
         overlayOpen = false
         overlayText = ""
-        overlayEmulator.resize(80, 24)
+        overlayCols = 0
+        overlayRows = 0
+        overlayEmulator.resize(40, 16)
         manager.unsubscribeOverlay()
     }
 
@@ -247,11 +313,16 @@ class SessionViewModel(
      * 不得把 CSI 当文本，也不得在旧画面后追加。
      */
     private fun applyOverlayFrame(frame: OverlayFrame) {
-        val cols = if (frame.cols > 0) frame.cols else 80
-        val rows = if (frame.rows > 0) frame.rows else 24
+        val cols = if (frame.cols > 0) frame.cols else overlayEmulator.cols
+        val rows = if (frame.rows > 0) frame.rows else overlayEmulator.rows
         overlayEmulator.resize(cols, rows)
         overlayEmulator.feed(frame.text)
         overlayText = dropScratchLines(overlayEmulator.plainText())
+        DiagLog.record(
+            "overlay",
+            "frame seq=${frame.seq} bytes=${frame.text.length} " +
+                "rows=${frame.rows} cols=${frame.cols} shown_lines=${overlayText.lines().size} ref=$ref",
+        )
     }
 
     override fun onBinary(frame: BinaryFrame) {

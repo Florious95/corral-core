@@ -39,6 +39,9 @@ enum class ErrorCode(val wire: String) {
     /** 控制帧无法解析。 */
     BAD_FRAME("bad_frame"),
 
+    /** 必填字段缺失或越界（与 bad_frame 解码失败分离，reason 带字段名）。 */
+    INVALID_FIELD("invalid_field"),
+
     /** 版本不匹配（随后关闭）。 */
     UNSUPPORTED_VERSION("unsupported_version"),
 

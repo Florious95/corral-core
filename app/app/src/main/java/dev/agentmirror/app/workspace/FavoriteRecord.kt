@@ -78,8 +78,13 @@ data class FavoriteRow(
         get() = FavoriteKey(sessionName, windowIndex, windowName)
 }
 
-internal fun L2Entry.favoriteKey(): FavoriteKey = FavoriteKey(
-    sessionName = sessionName,
-    windowIndex = windowIndex,
-    windowName = windowName,
-)
+internal fun L2Entry.favoriteIdentity(): Triple<String, String, String> {
+    val sess = sessionName.ifEmpty { name }
+    val win = windowName.ifEmpty { name }
+    return Triple(sess, windowIndex, win)
+}
+
+internal fun L2Entry.favoriteKey(): FavoriteKey {
+    val (sess, idx, win) = favoriteIdentity()
+    return FavoriteKey(sessionName = sess, windowIndex = idx, windowName = win)
+}

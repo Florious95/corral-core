@@ -25,7 +25,7 @@ package dev.agentmirror.app.overlay
  * @post [plainText] 不含控制序列字面量
  * @inv 网格尺寸恒为 cols×rows，不因 feed 增长
  */
-class OverlayEmulator(cols: Int = 80, rows: Int = 24) {
+class OverlayEmulator(cols: Int = 40, rows: Int = 16) {
 
     var cols: Int = cols
         private set

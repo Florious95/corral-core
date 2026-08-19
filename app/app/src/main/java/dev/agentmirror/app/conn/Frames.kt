@@ -611,10 +611,16 @@ data class OverlayFrame(
 @Serializable
 data class OverlaySubscribeFrame(
     @SerialName("socket") val socket: String = "",
+    @SerialName("rows") val rows: Int = 0,
+    @SerialName("cols") val cols: Int = 0,
 ) : FramePayload {
     override val frameType: String get() = FrameType.OVERLAY_SUBSCRIBE
-    override fun validate(): String? =
-        if (socket.isEmpty()) "overlay_subscribe socket must be non-empty" else null
+    override fun validate(): String? = when {
+        socket.isEmpty() -> "overlay_subscribe socket must be non-empty"
+        rows < 0 -> "overlay_subscribe rows must be >= 0"
+        cols < 0 -> "overlay_subscribe cols must be >= 0"
+        else -> null
+    }
 }
 
 /** 关闭悬浮窗时退订 C→S（064）。幂等。 */

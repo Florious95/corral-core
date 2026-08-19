@@ -42,7 +42,14 @@ class FavoriteBook(
     }
 
     fun toggle(sessionName: String, windowIndex: String, windowName: String) {
-        if (sessionName.isEmpty() && windowIndex.isEmpty() && windowName.isEmpty()) return
+        if (sessionName.isEmpty() && windowIndex.isEmpty() && windowName.isEmpty()) {
+            DiagLog.record(
+                "favorite",
+                "toggle skipped empty identity session_name='$sessionName' " +
+                    "window_index='$windowIndex' window_name='$windowName'",
+            )
+            return
+        }
         val want = FavoriteKey(sessionName, windowIndex, windowName)
         val current = store.load()
         val next = ArrayList<FavoriteRecord>(current.size + 1)

@@ -222,7 +222,14 @@ class WorkspaceViewModel(
     }
 
     fun toggleFavorite(entry: L2Entry) {
-        favoriteBook.toggle(entry.sessionName, entry.windowIndex, entry.windowName)
+        val (sess, idx, win) = entry.favoriteIdentity()
+        DiagLog.record(
+            "favorite",
+            "toggleFavorite src=star session_name=$sess window_index=$idx " +
+                "window_name=$win raw_triple=${entry.sessionName}/${entry.windowIndex}/${entry.windowName} " +
+                "name=${entry.name} title_len=${entry.title.length}",
+        )
+        favoriteBook.toggle(sess, idx, win)
         _favorites.value = favoriteBook.records()
     }
 
