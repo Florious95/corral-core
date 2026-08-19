@@ -17,7 +17,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "advisor",
+    "agent": "refresh-v1-probe",
     "team": "grok-l2"
    }
   },
@@ -33,7 +33,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "dev-server",
+    "agent": "refresh-v1-srv",
     "team": "grok-l2"
    }
   },
@@ -49,7 +49,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "dev-app",
+    "agent": "refresh-v1-app",
     "team": "grok-l2"
    }
   },
@@ -65,7 +65,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "control",
+    "agent": "refresh-v1-ver",
     "team": "grok-l2"
    }
   },
@@ -84,7 +84,7 @@
  },
  "tasks": {
   "t.probe": {
-   "title": "写「进菜单即时刷新」的根因探针。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md（**§2 已经把两级各自的根因定位好了，先读**）。\n一级：handleList 调 ensureInitialScan——只在第一次扫，之后每次进来都返回缓存，**永远不重扫**。\n二级：markLevel2 只在订阅数 0→1 时唤醒轮询；App 离开不退订、回来不重订阅 ⇒ 服务端收不到「用户又进来了」。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/probe-rf.sh，四条断言：\n①**A-rf-l1**：无人订阅时改变 tmux 世界（增/删一个含白名单 CLI 的会话）⇒ 客户端发一次 list ⇒ **返回列表必须是新世界**；\n②**A-rf-l2**：无人订阅时把某节点由空闲切到工作 ⇒ 进入二级菜单 ⇒ **首个非缓存帧就是新状态**，且不得等满一个 2s cadence；\n③**不倒退**：进入瞬间仍不得出现空列表帧（062 缓存优先）；\n④**不倒退**：没人在菜单里时仍然零轮询（061 零订阅零轮询）。\n⛔ 判据不许写成「代码里有一次 scan 调用」——那是验东西在那儿，不是验世界变了。\n🔴 现在跑必须红（①一定红）。说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/说明.md，记清每条红在哪。\n⛔ 这一格只产探针，不改产品代码。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "title": "写「进菜单即时刷新」的根因探针。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md（**§2 已经把两级各自的根因定位好了，先读**）。\n一级：handleList 调 ensureInitialScan——只在第一次扫，之后每次进来都返回缓存，**永远不重扫**。\n二级：markLevel2 只在订阅数 0→1 时唤醒轮询；App 离开不退订、回来不重订阅 ⇒ 服务端收不到「用户又进来了」。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/probe-rf.sh，四条断言：\n①**A-rf-l1**：无人订阅时改变 tmux 世界（增/删一个含白名单 CLI 的会话）⇒ 客户端发一次 list ⇒ **返回列表必须是新世界**；\n②**A-rf-l2**：无人订阅时把某节点由空闲切到工作 ⇒ 进入二级菜单 ⇒ **首个非缓存帧就是新状态**，且不得等满一个 2s cadence；\n③**不倒退**：进入瞬间仍不得出现空列表帧（062 缓存优先）；\n④**不倒退**：没人在菜单里时仍然零轮询（061 零订阅零轮询）。\n⛔ 判据不许写成「代码里有一次 scan 调用」——那是验东西在那儿，不是验世界变了。\n🔴 现在跑必须红（①一定红）。说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/说明.md，记清每条红在哪。\n⛔ 这一格只产探针，不改产品代码。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/probe/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。",
    "owner": {
     "role": "r.advisor"
    },
@@ -96,7 +96,8 @@
     "read_paths": [
      "requirement-base/entries/069-进菜单必触发一次即时刷新.md",
      "server/internal/",
-     "app/app/src/"
+     "app/app/src/",
+     ".team/nodes/probe/BASE.md"
     ],
     "environment_fidelity": {
      "runs_real_cli": true,
@@ -175,7 +176,7 @@
    ]
   },
   "t.srv": {
-   "title": "服务端实现「进菜单即时刷新」。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。探针 .team/nodes/rf-probe/probe-rf.sh 只读，⛔ 不许改它让判据变绿。\n①**一级**：handleList 必须触发一次**真实重扫**，不能只吃 ensureInitialScan 的缓存。先回缓存保证「立刻有内容」，重扫结果到达即推新列表——两者都要，不是二选一。\n②**二级**：进入二级菜单必须触发一次即时刷新。⛔ 不能只靠 0→1 的唤醒——同一连接重新进入菜单（重订阅或显式 refresh 帧）也必须唤醒一次。\n🔴 **不许把轮询打开**：「进入时刷新」是事件驱动的一次，061 的零订阅零轮询不得倒退。\n🔴 **不许因刷新失败而清空列表**：tmux 不可达时保留缓存内容并按 061 失败可见规则提示。\n配套 Go 测试名须含 TestRefreshOnOpen。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-srv/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "title": "服务端实现「进菜单即时刷新」。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。探针 .team/nodes/rf-probe/probe-rf.sh 只读，⛔ 不许改它让判据变绿。\n①**一级**：handleList 必须触发一次**真实重扫**，不能只吃 ensureInitialScan 的缓存。先回缓存保证「立刻有内容」，重扫结果到达即推新列表——两者都要，不是二选一。\n②**二级**：进入二级菜单必须触发一次即时刷新。⛔ 不能只靠 0→1 的唤醒——同一连接重新进入菜单（重订阅或显式 refresh 帧）也必须唤醒一次。\n🔴 **不许把轮询打开**：「进入时刷新」是事件驱动的一次，061 的零订阅零轮询不得倒退。\n🔴 **不许因刷新失败而清空列表**：tmux 不可达时保留缓存内容并按 061 失败可见规则提示。\n配套 Go 测试名须含 TestRefreshOnOpen。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-srv/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/srv/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。\n🔴🔴 **静默纪律（用户 2026-08-19 令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send` 给 leader、不许发进度、不许发提问、不许发完工通知。唯一允许的对外动作是**干完调一次 `report_result`**（⛔ 不要传 task_id 参数）——那条走编排通道，不进 leader 的对话。被卡住也不要发消息：把卡点写进你的说明.md，用 report_result 的 status 表达，让判据和账本去说话。\n",
    "owner": {
     "role": "r.server"
    },
@@ -187,7 +188,8 @@
     ],
     "read_paths": [
      "requirement-base/entries/069-进菜单必触发一次即时刷新.md",
-     ".team/nodes/rf-probe/"
+     ".team/nodes/rf-probe/",
+     ".team/nodes/srv/BASE.md"
     ],
     "environment_fidelity": {
      "runs_real_cli": true,
@@ -212,7 +214,7 @@
       "argv": [
        "sh",
        "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -run TestRefreshOnOpen -count=1"
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -run TestRefreshOnOpen -count=1 ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-s-test.log 2>&1"
       ],
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
@@ -223,7 +225,7 @@
       "argv": [
        "sh",
        "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1 ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-s-suite.log 2>&1"
       ],
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
@@ -252,7 +254,7 @@
    "attempts": []
   },
   "t.app": {
-   "title": "App 端配合「进菜单即时刷新」。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。\n进入一级菜单 ⇒ 发一次 list；进入二级菜单 ⇒ 触发一次刷新（重订阅或 refresh 帧，与服务端约定一致）。\n🔴 **缓存优先不得倒退**：进入瞬间先画上次的内容，**不得出现空列表帧**（062）；新数据到达即原地替换。\n🔴 「进入」只指菜单打开，⛔ 不含列表内滚动、旋转屏幕——否则退化成高频扫描，撞 061 静默经济红线。\n配套单测名须含 TestRefreshOnOpen。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-app/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "title": "App 端配合「进菜单即时刷新」。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。\n进入一级菜单 ⇒ 发一次 list；进入二级菜单 ⇒ 触发一次刷新（重订阅或 refresh 帧，与服务端约定一致）。\n🔴 **缓存优先不得倒退**：进入瞬间先画上次的内容，**不得出现空列表帧**（062）；新数据到达即原地替换。\n🔴 「进入」只指菜单打开，⛔ 不含列表内滚动、旋转屏幕——否则退化成高频扫描，撞 061 静默经济红线。\n配套单测名须含 TestRefreshOnOpen。产出说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-app/说明.md。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/app/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。\n🔴🔴 **静默纪律（用户 2026-08-19 令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send` 给 leader、不许发进度、不许发提问、不许发完工通知。唯一允许的对外动作是**干完调一次 `report_result`**（⛔ 不要传 task_id 参数）——那条走编排通道，不进 leader 的对话。被卡住也不要发消息：把卡点写进你的说明.md，用 report_result 的 status 表达，让判据和账本去说话。\n",
    "owner": {
     "role": "r.app"
    },
@@ -265,7 +267,8 @@
     "read_paths": [
      "requirement-base/entries/069-进菜单必触发一次即时刷新.md",
      ".team/nodes/rf-probe/",
-     "server/internal/"
+     "server/internal/",
+     ".team/nodes/app/BASE.md"
     ],
     "environment_fidelity": {
      "runs_real_cli": true,
@@ -290,7 +293,7 @@
       "argv": [
        "sh",
        "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*RefreshOnOpen*'"
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*RefreshOnOpen*' ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-a-test.log 2>&1"
       ],
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
@@ -318,7 +321,7 @@
    "attempts": []
   },
   "t.ver": {
-   "title": "验收：探针由红转绿且不倒退。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。\n①跑 .team/nodes/rf-probe/probe-rf.sh 必须 exit 0（t.probe 那格是红的）。\n②go 全套 + gradle 全套绿。\n③**静默经济复核**：没人在菜单里时空跑 60 秒，量 CPU 与 tmux 调用次数，**必须为零轮询**，写进说明。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-ver/说明.md。⛔ 探针只读，不许为变绿改探针。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。",
+   "title": "验收：探针由红转绿且不倒退。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md。\n①跑 .team/nodes/rf-probe/probe-rf.sh 必须 exit 0（t.probe 那格是红的）。\n②go 全套 + gradle 全套绿。\n③**静默经济复核**：没人在菜单里时空跑 60 秒，量 CPU 与 tmux 调用次数，**必须为零轮询**，写进说明。\n产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-ver/说明.md。⛔ 探针只读，不许为变绿改探针。\n🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。\n🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class=\"blocking\"）。\n🔴 干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/ver/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。\n🔴🔴 **静默纪律（用户 2026-08-19 令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send` 给 leader、不许发进度、不许发提问、不许发完工通知。唯一允许的对外动作是**干完调一次 `report_result`**（⛔ 不要传 task_id 参数）——那条走编排通道，不进 leader 的对话。被卡住也不要发消息：把卡点写进你的说明.md，用 report_result 的 status 表达，让判据和账本去说话。\n",
    "owner": {
     "role": "r.control"
    },
@@ -331,7 +334,8 @@
      "requirement-base/entries/069-进菜单必触发一次即时刷新.md",
      ".team/nodes/rf-probe/",
      "server/",
-     "app/"
+     "app/",
+     ".team/nodes/ver/BASE.md"
     ],
     "environment_fidelity": {
      "runs_real_cli": true,
@@ -367,7 +371,7 @@
       "argv": [
        "sh",
        "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1 ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-v-go.log 2>&1"
       ],
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
@@ -378,7 +382,7 @@
       "argv": [
        "sh",
        "-c",
-       "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-v-app.log 2>&1"
       ],
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
@@ -389,7 +393,7 @@
       "argv": [
        "sh",
        "-c",
-       "grep -qE '零轮询|zero|CPU' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-ver/说明.md"
+       "{ grep -qE '零轮询|zero|CPU' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-ver/说明.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-v-zero.log 2>&1"
       ],
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
@@ -492,5 +496,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 4
+ "revision": 6
 }

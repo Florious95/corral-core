@@ -80,3 +80,19 @@ go test ./... -count=1 -timeout 240s     # 无任何 FAIL，约 20 秒
 ## 五、我方处置
 
 按 2026-08-18 用户裁定「投完报告就继续，不停工」：kill 该驱动器并重启同一账本，任务继续。
+
+---
+
+## 复发记录 #2（2026-08-19 14:45 CST / 06:45Z）
+
+同一形状再次命中，**不另发信**（同一缺陷，避免占用跨 agent 往返配额）。
+
+- 量具身份：`/Users/alauda/.cargo/bin/ledger-run` mtime `8月 19 10:35` md5 `e3b6683af465b13f4fbade6927decbb0`
+- 账本：`.team/ledgers/refresh-v1.json` revision=5，task=`t.srv`
+- 日志冻结点：`[2026-08-19T05:46:35Z] 判据 acceptance | task=t.srv 在跑 required=["A-s-test","A-s-suite","A-s-doc"]` —— 此后 **59 分钟零新行**
+- 进程：`ps -o pid,ppid,etime,stat,comm` → 存活，`STAT=SN`，`%CPU=0.0`，累计 `TIME=0:01.92`
+- **子进程数 = 0**（`pgrep -P <pid>` 返回空）——判据本该在跑 `go test`，却没有任何子进程
+- 对照组：同一时刻另一驱动器（v72-v1）处于 `等待 wait` 阶段，同样零子进程但日志仍按预算推进 ⇒ **挂死只发生在 acceptance 阶段**
+
+与首报的差异：本次 `A-s-suite` 是 `go test ./... -count=1`（分钟级），首报是同类长命令。
+⇒ 复现条件收窄为：**acceptance 里存在分钟级机械命令时，驱动器在收集其输出处挂死**。
