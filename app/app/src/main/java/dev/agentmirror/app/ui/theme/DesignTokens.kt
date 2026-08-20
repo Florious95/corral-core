@@ -41,6 +41,8 @@ object Dims {
     val rowGap: Dp = 11.dp
     val subtitleGap: Dp = 3.dp
     val tapTargetMin: Dp = 40.dp          // 星标 / 图标按钮最小触控区
+    val providerIconBox: Dp = 32.dp
+    val providerIconPad: Dp = 6.dp
 
     // 状态标
     val statusChipHeight: Dp = 24.dp
@@ -119,6 +121,7 @@ object Radii {
     val segmentedTrack: Dp = 12.dp
     val segmentedItem: Dp = 9.dp
     val workspaceGlyphBox: Dp = 10.dp
+    val providerIconBox: Dp = 8.dp
     val sheetTop: Dp = 22.dp
     val previewBox: Dp = 10.dp
 }
@@ -296,6 +299,7 @@ data class AppPalette(
     val sheetCurrentRail: Color,
     val currentBadgeText: Color,
     val currentBadgeBorder: Color,
+    val providerIconWell: Color,
 
     // 设置页
     val segmentedTrack: Color,
@@ -383,6 +387,7 @@ val LightPalette = AppPalette(
     sheetCurrentRail = Color(0xFF0B57D0),
     currentBadgeText = Color(0xFF0B57D0),
     currentBadgeBorder = Color(0x470B57D0),
+    providerIconWell = Color(0x14101828),
 
     segmentedTrack = Color(0x0D101828),
     segmentedSelectedBg = Color(0xFFFFFFFF),
@@ -469,6 +474,7 @@ val DarkPalette = AppPalette(
     sheetCurrentRail = Color(0xFF77A6FF),
     currentBadgeText = Color(0xFF9CC0FF),
     currentBadgeBorder = Color(0x4D77A6FF),
+    providerIconWell = Color(0x2478A0FF),
 
     segmentedTrack = Color(0x1478A0FF),
     segmentedSelectedBg = Color(0xFF1D2740),

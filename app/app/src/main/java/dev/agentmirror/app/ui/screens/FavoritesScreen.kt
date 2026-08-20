@@ -1,7 +1,7 @@
 package dev.agentmirror.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -32,8 +34,9 @@ import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.PathText
 import dev.agentmirror.app.ui.components.RowDivider
 import dev.agentmirror.app.ui.components.ScreenHeader
+import dev.agentmirror.app.ui.components.ProviderIcon
 import dev.agentmirror.app.ui.components.SessionNameText
-import dev.agentmirror.app.ui.components.StarButton
+import dev.agentmirror.app.ui.components.SessionOverflowMenu
 import dev.agentmirror.app.ui.components.StatusChip
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.SessionStatus
@@ -44,8 +47,8 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
  * 收藏页。
- * 🔴 行结构按当前版本：星（行首）→ 标题 → 目录副标题 → 右侧状态标。
- * 星在行首，40dp 圆形触控区，与二级会话列表完全一致。
+ * 🔴 行结构：Provider 图标（行首）→ 标题 → 目录副标题 → 右侧状态标。
+ * 长按只有「取消收藏」，不含「关闭」。
  */
 @Composable
 fun FavoritesScreen(
@@ -114,6 +117,7 @@ private fun FavoriteRow(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    var menu by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -123,26 +127,42 @@ private fun FavoriteRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dims.rowGap),
     ) {
-        StarButton(
-            starred = item.starred,
-            onToggle = onToggleStar,
-            modifier = Modifier.testTag("fav-star-${item.id}"),
+        ProviderIcon(
+            provider = item.provider,
+            modifier = Modifier.testTag("fav-provider-${item.id}"),
         )
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .height(Dims.rowHeightWithSubtitle)
-                .background(if (pressed) p.rowPressed else Color.Transparent)
-                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-                .testTag("fav-row-${item.id}"),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            SessionNameText(
-                item.displayName,
-                Modifier.testTag("fav-id-${item.id}"),
+        Box(Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(Dims.rowHeightWithSubtitle)
+                    .background(if (pressed) p.rowPressed else Color.Transparent)
+                    .combinedClickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClick = onClick,
+                        onLongClick = { menu = true },
+                    )
+                    .testTag("fav-row-${item.id}"),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                SessionNameText(
+                    item.displayName,
+                    Modifier.testTag("fav-id-${item.id}"),
+                )
+                Box(Modifier.height(Dims.subtitleGap))
+                PathText(item.path)
+            }
+            SessionOverflowMenu(
+                expanded = menu,
+                onDismiss = { menu = false },
+                menuTag = "fav-row-menu-${item.id}",
+                starred = true,
+                showClose = false,
+                onFavorite = onToggleStar,
+                onUnfavorite = onToggleStar,
+                onClose = {},
             )
-            Box(Modifier.height(Dims.subtitleGap))
-            PathText(item.path)
         }
         if (item.isOnline) {
             StatusChip(item.status, Modifier.testTag("fav-status-${item.id}"))

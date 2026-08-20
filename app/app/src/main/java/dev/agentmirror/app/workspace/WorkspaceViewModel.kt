@@ -346,6 +346,7 @@ class WorkspaceViewModel(
             windowIndex = entry.windowIndex,
             windowName = entry.windowName,
             cwd = entry.cwd,
+            provider = entry.provider,
         )
         _favorites.value = favoriteBook.records()
         bumpFavoriteLive()
@@ -358,6 +359,7 @@ class WorkspaceViewModel(
             windowIndex = row.windowIndex,
             windowName = row.windowName,
             cwd = row.cwd,
+            provider = row.provider,
         )
         _favorites.value = favoriteBook.records()
         bumpFavoriteLive()

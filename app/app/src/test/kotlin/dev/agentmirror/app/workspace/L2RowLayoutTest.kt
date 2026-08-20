@@ -23,7 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.DpRect
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
@@ -67,19 +69,19 @@ class L2RowLayoutTest {
         }
         compose.waitForIdle()
 
-        val starW = compose.onNodeWithTag("l2-star-ref-w").getUnclippedBoundsInRoot()
+        val starW = compose.onNodeWithTag("l2-provider-ref-w").getUnclippedBoundsInRoot()
         val idW = compose.onNodeWithTag("l2-id-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badgeW = compose.onNodeWithTag("l2-status-ref-w").getUnclippedBoundsInRoot()
-        val starI = compose.onNodeWithTag("l2-star-ref-i").getUnclippedBoundsInRoot()
+        val starI = compose.onNodeWithTag("l2-provider-ref-i").getUnclippedBoundsInRoot()
         val idI = compose.onNodeWithTag("l2-id-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badgeI = compose.onNodeWithTag("l2-status-ref-i").getUnclippedBoundsInRoot()
 
         assertTrue(
-            "072 §4：星星必须在会话名之前（working）star.left=${starW.left} id.left=${idW.left}",
+            "Provider 图标必须在会话名之前（working）icon.left=${starW.left} id.left=${idW.left}",
             starW.left < idW.left,
         )
         assertTrue(
-            "072 §4：星星必须在会话名之前（idle）star.left=${starI.left} id.left=${idI.left}",
+            "Provider 图标必须在会话名之前（idle）icon.left=${starI.left} id.left=${idI.left}",
             starI.left < idI.left,
         )
         assertTrue(
@@ -96,11 +98,11 @@ class L2RowLayoutTest {
         val workDelta = kotlin.math.abs(centerY(starW).value - centerY(badgeW).value)
         val idleDelta = kotlin.math.abs(centerY(starI).value - centerY(badgeI).value)
         assertTrue(
-            "072 §2：同行星星与进行中徽章垂直中心应对齐 delta=$workDelta star=${centerY(starW)} badge=${centerY(badgeW)}",
+            "072 §2：同行图标与进行中徽章垂直中心应对齐 delta=$workDelta icon=${centerY(starW)} badge=${centerY(badgeW)}",
             workDelta < 1f,
         )
         assertTrue(
-            "072 §2：同行星星与空闲徽章垂直中心应对齐 delta=$idleDelta star=${centerY(starI)} badge=${centerY(badgeI)}",
+            "072 §2：同行图标与空闲徽章垂直中心应对齐 delta=$idleDelta icon=${centerY(starI)} badge=${centerY(badgeI)}",
             idleDelta < 1f,
         )
     }
@@ -130,14 +132,18 @@ class L2RowLayoutTest {
                 )
             }
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.onNodeWithTag("l2-row-ref-x").performTouchInput { longClick() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("menu-favorite").performClick()
         compose.runOnIdle {
             assertEquals("点星不得进会话", 0, opened)
             assertEquals(1, vm.favorites.value.size)
             assertEquals("sess-x", vm.favorites.value.single().sessionName)
             assertEquals("4", vm.favorites.value.single().windowIndex)
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.onNodeWithTag("l2-row-ref-x").performTouchInput { longClick() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("menu-unfavorite").performClick()
         compose.runOnIdle {
             assertEquals(0, opened)
             assertTrue(vm.favorites.value.isEmpty())
