@@ -117,3 +117,30 @@ PermissionError: [Errno 1] Operation not permitted
 [ledger-run 2026-08-19T18:42:23Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
 [ledger-run 2026-08-19T18:42:23Z] 通知 notify-fail | 通知未送达：team=grok-l2 workspace=/Volumes/nvme/Projects/远程Agent安卓: Error: Operation not permitted (os error 1)
 [ledger-run 2026-08-19T18:42:23Z] 挂起 park | token=parked ledger_id=ledger.vz.v1 revision=15 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: 通知未送达：team=grok-l2 workspace=/Volumes/nvme/Projects/远程Agent安卓: Error: Operation not permitted (os error 1)
+[ledger-run 2026-08-20T01:25:51Z] 解挂 unpark | token=unparked_revision_advanced ledger_id=ledger.vz.v1 revision 15 → 16 —— revision 前进 = 人下了新指令，解挂；下一轮边界采纳这份账本
+[ledger-run 2026-08-20T01:25:51Z] 开工 start | ledger_id=ledger.vz.v1 revision=16 账本=.team/ledgers/vz-v1.json 墙钟上限=24000s 派单死线=90s
+[ledger-run 2026-08-20T01:25:52Z] 轮次 round | 第 1 轮开始：前沿 ["t.chrome"]（墙钟已跑 0s / 上限 24000s）
+[ledger-run 2026-08-20T01:25:52Z] 派单 dispatch | task=t.chrome 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-chrome 席位=vz-v1-chrome attempt=att-t.chrome-seq1-t1787189152383 delivery=del-t.chrome-seq1-t1787189152383
+[ledger-run 2026-08-20T01:25:52Z] 投递回执 send-ok | task=t.chrome case_id=ledger_vz_v1__t.chrome__r16 message_id=msg_7dc0b9d94798 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T01:25:52Z] 派单落地 dispatch-landed | task=t.chrome 席位 vz-v1-chrome 的收件箱已多出这条派单
+[ledger-run 2026-08-20T01:25:52Z] 等待 wait | task=t.chrome 在等的 key（case_id）=ledger_vz_v1__t.chrome__r16 team=grok-l2 预算=2400s
+[ledger-run 2026-08-20T01:28:08Z] 已唤醒 wait-signaled | task=t.chrome 等到结果了
+[ledger-run 2026-08-20T01:28:08Z] 判据 acceptance | task=t.chrome 在跑 required=["A-ch-test", "A-ch-suite", "A-ch-ui", "A-ch-shot", "A-ch-doc"]
+[ledger-run 2026-08-20T01:32:06Z] 判据通过留档 acceptance-success | task=t.chrome 成功 attempt 落进 attempts[] writeback_revision=17 passed=["A-ch-test", "A-ch-suite", "A-ch-ui", "A-ch-shot", "A-ch-doc"]
+[ledger-run 2026-08-20T01:32:06Z] 原子写回 writeback-atomic | task=t.chrome state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=17 hash=8dd0543023180f27）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T01:32:06Z] 写回 writeback | task=t.chrome state=succeeded revision=16 → 17
+[ledger-run 2026-08-20T01:32:06Z] 轮次 round | 第 2 轮开始：前沿 ["t.diff"]（墙钟已跑 374s / 上限 24000s）
+[ledger-run 2026-08-20T01:32:06Z] 派单 dispatch | task=t.diff 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-diff 席位=vz-v1-diff attempt=att-t.diff-seq2-t1787189526215 delivery=del-t.diff-seq2-t1787189526215
+[ledger-run 2026-08-20T01:32:06Z] 投递回执 send-ok | task=t.diff case_id=ledger_vz_v1__t.diff__r17 message_id=msg_d667c8d60798 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T01:32:06Z] 派单落地 dispatch-landed | task=t.diff 席位 vz-v1-diff 的收件箱已多出这条派单
+[ledger-run 2026-08-20T01:32:06Z] 等待 wait | task=t.diff 在等的 key（case_id）=ledger_vz_v1__t.diff__r17 team=grok-l2 预算=2400s
+[ledger-run 2026-08-20T01:44:20Z] 已唤醒 wait-signaled | task=t.diff 等到结果了
+[ledger-run 2026-08-20T01:44:20Z] 判据 acceptance | task=t.diff 在跑 required=["A-df-test", "A-df-suite", "A-df-ui", "A-df-shot", "A-df-doc"]
+[ledger-run 2026-08-20T01:48:35Z] 判据通过留档 acceptance-success | task=t.diff 成功 attempt 落进 attempts[] writeback_revision=18 passed=["A-df-test", "A-df-suite", "A-df-ui", "A-df-shot", "A-df-doc"]
+[ledger-run 2026-08-20T01:48:35Z] 原子写回 writeback-atomic | task=t.diff state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=18 hash=3b6a8f5c0d2bad61）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T01:48:35Z] 写回 writeback | task=t.diff state=succeeded revision=17 → 18
+[ledger-run 2026-08-20T01:48:35Z] 轮次 round | 第 3 轮开始：前沿 ["t.ver"]（墙钟已跑 1363s / 上限 24000s）
+[ledger-run 2026-08-20T01:48:35Z] 派单 dispatch | task=t.ver 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-ver 席位=vz-v1-ver attempt=att-t.ver-seq3-t1787190515195 delivery=del-t.ver-seq3-t1787190515195
+[ledger-run 2026-08-20T01:48:35Z] 投递回执 send-ok | task=t.ver case_id=ledger_vz_v1__t.ver__r18 message_id=msg_d42c0e986d48 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T01:48:35Z] 派单落地 dispatch-landed | task=t.ver 席位 vz-v1-ver 的收件箱已多出这条派单
+[ledger-run 2026-08-20T01:48:35Z] 等待 wait | task=t.ver 在等的 key（case_id）=ledger_vz_v1__t.ver__r18 team=grok-l2 预算=2400s

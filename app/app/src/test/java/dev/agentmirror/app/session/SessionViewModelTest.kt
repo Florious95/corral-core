@@ -267,10 +267,12 @@ class SessionViewModelTest {
 
     @Test
     fun passthroughDelete_sendsBackspaceKey() {
-        // 直通（059）：虚拟键盘删除键直通 CLI（经 keys 通道 backspace 命名键，不本地消费）。
+        // 直通（059）+ 084：先同步到 "ls"，再删末字 → 1 次 backspace（行尾退格）。
         val h = Harness()
+        h.vm.onPassthroughInput(tv(""), tv("ls"))
+        val before = h.inputFrames().size
         h.vm.onPassthroughInput(tv("ls"), tv("l"))
-        val sent = h.inputFrames()
+        val sent = h.inputFrames().drop(before)
         assertEquals(1, sent.size)
         // 删除 = keys=[backspace]（服务端 SendKeys 映射 tmux BSpace，不回车）。
         assertTrue(sent[0].text.isEmpty())
