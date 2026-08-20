@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -84,6 +85,7 @@ fun SessionSwitchSheet(
     onDismiss: () -> Unit,
     onSelect: (SessionItem) -> Unit,
     onToggleStar: (SessionItem) -> Unit,
+    onClose: (SessionItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
@@ -209,6 +211,7 @@ fun SessionSwitchSheet(
                                         isCurrent = item.id == currentSessionId,
                                         onClick = { onSelect(item) },
                                         onToggleStar = { onToggleStar(item) },
+                                        onClose = { onClose(item) },
                                     )
                                 }
                             } else {
@@ -217,6 +220,7 @@ fun SessionSwitchSheet(
                                     isCurrent = item.id == currentSessionId,
                                     onClick = { onSelect(item) },
                                     onToggleStar = { onToggleStar(item) },
+                                    onClose = { onClose(item) },
                                 )
                             }
                             Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
@@ -278,10 +282,12 @@ private fun SheetRow(
     isCurrent: Boolean,
     onClick: () -> Unit,
     onToggleStar: () -> Unit,
+    onClose: () -> Unit,
 ) {
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    var menu by remember { mutableStateOf(false) }
     val bg = when {
         pressed -> p.sheetRowPressed
         isCurrent -> p.sheetCurrentRowBg
@@ -293,7 +299,6 @@ private fun SheetRow(
             .height(Dims.rowHeightSheet)
             .background(bg)
             .testTag("l2-row-${item.id}")
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
     ) {
         if (isCurrent) {
             Box(
@@ -312,8 +317,33 @@ private fun SheetRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Dims.rowGap),
         ) {
-            StarButton(starred = item.starred, onToggle = onToggleStar)
-            SessionNameText(item.displayName, Modifier.weight(1f))
+            ProviderIcon(
+                provider = item.provider,
+                modifier = Modifier.testTag("l2-provider-${item.id}"),
+            )
+            Box(Modifier.weight(1f)) {
+                SessionNameText(
+                    item.displayName,
+                    Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            interactionSource = interaction,
+                            indication = null,
+                            onClick = onClick,
+                            onLongClick = { menu = true },
+                        ),
+                )
+                SessionOverflowMenu(
+                    expanded = menu,
+                    onDismiss = { menu = false },
+                    menuTag = "l2-row-menu-${item.id}",
+                    starred = item.starred,
+                    showClose = true,
+                    onFavorite = onToggleStar,
+                    onUnfavorite = onToggleStar,
+                    onClose = onClose,
+                )
+            }
             if (isCurrent) {
                 Box(
                     Modifier
