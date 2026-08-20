@@ -1,2 +1,2 @@
-d480 before_avg=4949 before_p95=7006 after_avg=4018 after_p95=5434 gfx_before=(128, 1.56, 42.0) gfx_after=(128, 0.78, 29.0)
-d440 before_avg=5481 before_p95=7349 after_avg=4611 after_p95=6162 gfx_before=(129, 1.55, 32.0) gfx_after=(130, 0.0, 17.0)
+d480 before_avg=4601 before_p95=6825 after_avg=3696 after_p95=5282 gfx_before=(818, 9.9, 34.0) gfx_after=(810, 10.99, 28.0)
+d440 before_avg=5317 before_p95=7205 after_avg=5131 after_p95=7103 gfx_before=(794, 10.45, 34.0) gfx_after=(785, 11.21, 28.0)
