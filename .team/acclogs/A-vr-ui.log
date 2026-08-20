@@ -1,1 +1,16 @@
-bash: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-ver/ui-check.sh: No such file or directory
+SESSION_d480: ['远程控制 app 开发', 'LAN', '查看', 'term-theme-light source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
+GAP_d480 dpi=480 scale=3.000 surface.left_px=12 outer_dp=4.00 inner_dp=6.0 total_dp=10.00 view=(12, 305, 1248, 2404)
+PAPER_d480 token=term-theme-light source=app-theme sample=(247, 248, 251) luma=248 dist_paper=0.0 dist_ansi0=23.9 pad=(21,329)
+ALIGN_d480 back_ink_cy=208.5 title_ink_cy=214.0 delta_dp=1.83 lamp=Idle
+FAIL 光学对齐 density=d480 墨迹中心差 1.83dp > 1dp back=208.5 title=214.0
+MENU_d480: ['拍照', '从相册选择']
+MENU_BG_d480 sample=(17, 24, 39) dist_m3_purple=161.7
+SESSION_d420: ['远程控制 app 开发', 'LAN', '查看', 'term-theme-light source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
+GAP_d420 dpi=420 scale=2.625 surface.left_px=11 outer_dp=4.19 inner_dp=6.0 total_dp=10.19 view=(11, 284, 1249, 2452)
+PAPER_d420 token=term-theme-light source=app-theme sample=(247, 248, 251) luma=248 dist_paper=0.0 dist_ansi0=23.9 pad=(19,305)
+ALIGN_d420 back_ink_cy=198.5 title_ink_cy=203.5 delta_dp=1.90 lamp=Unknown
+FAIL 光学对齐 density=d420 墨迹中心差 1.90dp > 1dp back=198.5 title=203.5
+MENU_d420: ['拍照', '从相册选择']
+MENU_BG_d420 sample=(17, 24, 39) dist_m3_purple=161.7
+SHEET: ['切换会话', ' · 0']
+FAIL 查看菜单没有当前显示名 '远程控制 app 开发'。屏上有: ['切换会话', ' · 0']
