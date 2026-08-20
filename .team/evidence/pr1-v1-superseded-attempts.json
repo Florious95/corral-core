@@ -178,6 +178,25 @@
      "acceptance_failure.stderr_tail(末20行)="
     ]
    }
+  },
+  {
+   "task_id": "t.e7.rv",
+   "superseded_at_revision": 13,
+   "reason": "land-pr.sh 幂等检查顺序写反：先查待并数再查 is-ancestor，已并过的分支反而判红。已修",
+   "attempt": {
+    "attempt_id": "att-t.e7.rv-seq1-t1787253752583",
+    "delivery_id": "del-t.e7.rv-seq1-t1787253752583",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-e7-land",
+     "acceptance_failure.argv=[\"sh\", \"-c\", \"{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e7-scroll-hint /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.listui/.team/nodes/pr2-e7-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-e7-land.log 2>&1\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)="
+    ]
+   }
   }
  ]
 }
