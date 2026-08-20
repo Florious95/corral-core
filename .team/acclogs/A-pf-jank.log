@@ -1,0 +1,12 @@
+DENSITY_SET 480
+GFX d480 try=1 total=110 janky=106 pct=96.36 p95=36.0
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/shot-d480-after.png
+GFX d480 picked total=110 pct=96.36 p95=36.0
+DENSITY_SET 440
+GFX d440 try=1 total=102 janky=91 pct=89.22 p95=36.0
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/shot-d440-after.png
+GFX d440 picked total=102 pct=89.22 p95=36.0
+WROTE /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/jank-after.txt
+COMPARE d480 before_pct=8.24 after_pct=96.36 before_p95=38.00 after_p95=36.00
+VERDICT d480 jank_down=False frames_up=False (before_n=85 after_n=110 ×1.29)
+FAIL A-pf-jank d480 世界没变：janky% before=8.24 after=96.36；frames before=85 after=110 need_drop=20% or frames×2.0

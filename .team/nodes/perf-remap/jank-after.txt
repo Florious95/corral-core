@@ -1,0 +1,2 @@
+d480 total=110 janky=106 janky_pct=96.36 p95=36.00
+d440 total=102 janky=91 janky_pct=89.22 p95=36.00
