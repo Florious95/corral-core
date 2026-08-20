@@ -1,0 +1,19 @@
+[ledger-run 2026-08-20T02:16:38Z] 常驻开工 resident-start | 账本=.team/ledgers/vzfix-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-20T02:16:38Z] 开工 start | ledger_id=ledger.vzfix.v1 revision=2 账本=.team/ledgers/vzfix-v1.json 墙钟上限=18000s 派单死线=90s
+[ledger-run 2026-08-20T02:16:46Z] 轮次 round | 第 1 轮开始：前沿 ["t.live"]（墙钟已跑 7s / 上限 18000s）
+[ledger-run 2026-08-20T02:16:46Z] 派单 dispatch | task=t.live 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vzfix-v1-live 席位=vzfix-v1-live attempt=att-t.live-seq1-t1787192206629 delivery=del-t.live-seq1-t1787192206629
+[ledger-run 2026-08-20T02:16:46Z] 投递回执 send-ok | task=t.live case_id=ledger_vzfix_v1__t.live__r2 message_id=msg_93d2da0b8d40 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T02:16:46Z] 派单落地 dispatch-landed | task=t.live 席位 vzfix-v1-live 的收件箱已多出这条派单
+[ledger-run 2026-08-20T02:16:46Z] 等待 wait | task=t.live 在等的 key（case_id）=ledger_vzfix_v1__t.live__r2 team=grok-l2 预算=3000s
+[ledger-run 2026-08-20T02:28:30Z] 已唤醒 wait-signaled | task=t.live 等到结果了
+[ledger-run 2026-08-20T02:28:30Z] 判据 acceptance | task=t.live 在跑 required=["A-lv-ui", "A-lv-suite", "A-lv-doc"]
+[ledger-run 2026-08-20T02:29:10Z] 判据通过留档 acceptance-success | task=t.live 成功 attempt 落进 attempts[] writeback_revision=3 passed=["A-lv-ui", "A-lv-suite", "A-lv-doc"]
+[ledger-run 2026-08-20T02:29:10Z] 原子写回 writeback-atomic | task=t.live state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=3 hash=e184414333a04cf8）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T02:29:10Z] 写回 writeback | task=t.live state=succeeded revision=2 → 3
+[ledger-run 2026-08-20T02:29:10Z] 轮次 round | 第 2 轮开始：前沿 ["t.align"]（墙钟已跑 751s / 上限 18000s）
+[ledger-run 2026-08-20T02:29:10Z] 派单 dispatch | task=t.align 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vzfix-v1-align 席位=vzfix-v1-align attempt=att-t.align-seq2-t1787192950261 delivery=del-t.align-seq2-t1787192950261
+[ledger-run 2026-08-20T02:29:10Z] 投递回执 send-ok | task=t.align case_id=ledger_vzfix_v1__t.align__r3 message_id=msg_e3060004b988 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T02:29:10Z] 派单落地 dispatch-landed | task=t.align 席位 vzfix-v1-align 的收件箱已多出这条派单
+[ledger-run 2026-08-20T02:29:10Z] 等待 wait | task=t.align 在等的 key（case_id）=ledger_vzfix_v1__t.align__r3 team=grok-l2 预算=3000s
+[ledger-run 2026-08-20T02:39:42Z] 已唤醒 wait-signaled | task=t.align 等到结果了
+[ledger-run 2026-08-20T02:39:42Z] 判据 acceptance | task=t.align 在跑 required=["A-al-ui", "A-al-suite", "A-al-doc"]

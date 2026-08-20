@@ -1,0 +1,13 @@
+SESSION_d480: ['远程控制 app 开发', 'LAN', '查看', 'term-theme-light source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
+ALIGN_BOX_d480 back_bounds=[45,182][111,248] title_bounds=[189,174][576,244] bar_bg=(244, 245, 248)
+ALIGN_d480 back_ink_cy=214.5 title_ink_cy=214.0 delta_dp=0.17 scale=3.000 dpi=480
+MENU_d480: ['拍照', '从相册选择']
+MENU_BOUNDS_d480 container=[48,2120][384,2456] photo=[84,2186][170,2247]
+MENU_SAMPLE_d480 pad_xy=(60,2132) pad_rgb=(236, 238, 242) oldprobe_xy=(92,2216) oldprobe_rgb=(17, 24, 39)
+SESSION_d420: ['远程控制 app 开发', 'LAN', '查看', 'term-theme-light source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
+ALIGN_BOX_d420 back_bounds=[40,175][98,233] title_bounds=[166,169][505,230] bar_bg=(244, 245, 248)
+ALIGN_d420 back_ink_cy=203.5 title_ink_cy=203.5 delta_dp=0.00 scale=2.625 dpi=420
+MENU_d420: ['拍照', '从相册选择']
+MENU_BOUNDS_d420 container=[42,2189][336,2483] photo=[74,2247][148,2300]
+MENU_SAMPLE_d420 pad_xy=(54,2201) pad_rgb=(236, 238, 242) oldprobe_xy=(82,2273) oldprobe_rgb=(17, 24, 39)
+PASS t.align vzfix-align

@@ -1,0 +1,12 @@
+LAMP_BEFORE_d480 title='远程控制 app 开发' lamp=Idle
+POKE_SEND at y=2601
+LAMP_POLL_d480 t=5.3s lamp=Busy poked=True
+LAMP_AFTER_d480 title='远程控制 app 开发' before=Idle after=Busy waited_s=5.3 poked=True
+SHEET_d480: ['切换会话', '远程Agent安卓 · 19', '★', '远程控制 app 开发', '当前', '进行中', '☆', 'advisor', '空闲', '☆', 'land-v1-set', '空闲', '☆', 'land-v1-term', '空闲', '☆', 'land-v1-reflow', '空闲', '☆', 'vz-v1-glyph', '空闲', '☆', 'vz-v1-bg', '空闲', '☆', 'vz-v1-chrome', '空闲', '☆', 'vz-v1-diff', '空闲', '☆', 'vz-v1-ver', '空闲', '☆', 'theme-v1-plan', '空闲', '☆', 'theme-v1-catalog', '空闲', '☆', 'theme-v1-wire', '空闲', '☆']
+SHEET_OK_d480 title='远程控制 app 开发' rows=19
+LAMP_BEFORE_d420 title='远程控制 app 开发' lamp=Busy
+LAMP_POLL_d420 t=3.3s lamp=Busy poked=False
+LAMP_AFTER_d420 title='远程控制 app 开发' before=Busy after=Busy waited_s=3.3 poked=False
+SHEET_d420: ['切换会话', '远程Agent安卓 · 19', '★', '远程控制 app 开发', '当前', '进行中', '☆', 'advisor', '空闲', '☆', 'land-v1-set', '空闲', '☆', 'land-v1-term', '空闲', '☆', 'land-v1-reflow', '空闲', '☆', 'vz-v1-glyph', '空闲', '☆', 'vz-v1-bg', '空闲', '☆', 'vz-v1-chrome', '空闲', '☆', 'vz-v1-diff', '空闲', '☆', 'vz-v1-ver', '空闲', '☆', 'theme-v1-plan', '空闲', '☆', 'theme-v1-catalog', '空闲', '☆', 'theme-v1-wire', '空闲', '☆', 'theme-v1-settings', '空闲', '☆', 'theme-v1-remap', '空闲', '☆', 'market-v1-scan', '空闲']
+SHEET_OK_d420 title='远程控制 app 开发' rows=19
+PASS t.live vzfix-live

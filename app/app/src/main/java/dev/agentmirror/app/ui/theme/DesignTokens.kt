@@ -28,6 +28,8 @@ object Dims {
     // 顶栏
     val topBarHeight: Dp = 54.dp
     val backButtonSize: Dp = 44.dp        // 触控区，图标视觉尺寸另计
+    // 几何折线中心高于标题墨迹（d480 1.83dp / d420 1.90dp）。正值 = 折线下移。
+    val topBarBackInkNudge: Dp = 2.dp
     val actionButtonHeight: Dp = 32.dp
     val actionButtonHPadding: Dp = 11.dp
 

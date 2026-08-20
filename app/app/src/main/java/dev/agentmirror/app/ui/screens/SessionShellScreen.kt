@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -260,7 +261,8 @@ private fun IconGlyphButton(
             .testTag("session-back"),
         contentAlignment = Alignment.Center,
     ) {
-        BackChevron(tint = tint)
+        // 墨迹盒：折线几何中心高于标题/「查看」字墨约 1.9dp（083 光学对齐）
+        BackChevron(tint = tint, modifier = Modifier.offset(y = Dims.topBarBackInkNudge))
     }
 }
 
