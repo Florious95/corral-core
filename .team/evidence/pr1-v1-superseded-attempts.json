@@ -197,6 +197,44 @@
      "acceptance_failure.stderr_tail(末20行)="
     ]
    }
+  },
+  {
+   "task_id": "t.compose",
+   "superseded_at_revision": 17,
+   "reason": "评审 supports，但分支背着 E1 旧提交与 main 上 E1 返工版冲突（leader 封版污染）；派回 rebase",
+   "attempt": {
+    "attempt_id": "att-t.compose-seq1-t1787252719075",
+    "delivery_id": "del-t.compose-seq1-t1787252719075",
+    "state": "succeeded",
+    "writeback_revision": 11,
+    "artifact_refs": [
+     "acceptance_success.acceptance_id=A-compose-suite",
+     "acceptance_success.acceptance_id=A-compose-wiki",
+     "acceptance_success.acceptance_id=A-compose-smell",
+     "acceptance_success.acceptance_id=A-compose-doc",
+     "acceptance_success.acceptance_id=A-compose-seal",
+     "acceptance_success.writeback_revision=11"
+    ]
+   }
+  },
+  {
+   "task_id": "t.compose.rv",
+   "superseded_at_revision": 17,
+   "reason": "评审 supports，但分支背着 E1 旧提交与 main 上 E1 返工版冲突（leader 封版污染）；派回 rebase",
+   "attempt": {
+    "attempt_id": "att-t.compose.rv-seq4-t1787255349380",
+    "delivery_id": "del-t.compose.rv-seq4-t1787255349380",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-compose-land",
+     "acceptance_failure.argv=[\"sh\", \"-c\", \"{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e2-composer /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.input/.team/nodes/pr2-compose-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-compose-land.log 2>&1\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)="
+    ]
+   }
   }
  ]
 }
