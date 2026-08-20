@@ -220,7 +220,14 @@ class TermSurfaceView @JvmOverloads constructor(
             }
             lastDirtyRowsIn = dirtyRows
             p.beginFrame()
+            refreshBurst()
             invalidate()
+            // 只经 Choreographer 请下一帧（跟 vsync），禁止在 onDraw 里 postFrame
+            // 同步打满主线程——否则 WS 快照到不了，采集全是空屏。
+            if (TermDrawMeter.consumeBurstFrame()) {
+                framePending = false
+                postFrame()
+            }
         }
     }
 
@@ -342,6 +349,7 @@ class TermSurfaceView @JvmOverloads constructor(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         presenter ?: return super.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) refreshBurst()
         val handled = gestureDetector.onTouchEvent(event)
         if (!handled) super.onTouchEvent(event)
         return true
@@ -349,9 +357,13 @@ class TermSurfaceView @JvmOverloads constructor(
 
     /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
     override fun onDraw(canvas: Canvas) {
+        // 计时边界：本方法入口→出口。View 不是 SurfaceView，没有 lockCanvas/post。
+        refreshBurst()
         val t0 = System.nanoTime()
         super.onDraw(canvas)
+        val tSuper = System.nanoTime()
         publishThemeChrome()
+        val tChrome = System.nanoTime()
         bgRectCount = 0
         textDrawCount = 0
         measureTextCount = 0
@@ -359,13 +371,24 @@ class TermSurfaceView @JvmOverloads constructor(
         cellsNonBlank = 0
         val p = presenter
         if (p == null) {
-            emitDrawMeter(t0, rows = 0, cols = 0, drawnRows = 0, presenterNull = 1)
+            emitDrawMeter(
+                t0 = t0,
+                tSuper = tSuper,
+                tChrome = tChrome,
+                tClear = tChrome,
+                tLines = tChrome,
+                rows = 0,
+                cols = 0,
+                drawnRows = 0,
+                presenterNull = 1,
+            )
             return
         }
         // 清屏为终端默认背景（BCE：空白格也带背景色，必须整帧铺底色）。
         bgPaint.color = themeBgArgb()
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         bgRectCount++
+        val tClear = System.nanoTime()
 
         val win = p.window
         val contentLeft = contentLeftPx()
@@ -376,6 +399,7 @@ class TermSurfaceView @JvmOverloads constructor(
             drawLine(canvas, p.lineCells(logical), rowY)
             drawnRows++
         }
+        val tLines = System.nanoTime()
 
         // 视图内"回到底部"悬浮钮为历史遗留死代码：backToBottomLabel 全仓库无赋值点，本块永不走；
         // 实际回到底部入口是 session 层 Compose 悬浮钮（读 `SessionViewModel.showBackToBottom`）。
@@ -392,7 +416,11 @@ class TermSurfaceView @JvmOverloads constructor(
             }
         }
         emitDrawMeter(
-            t0,
+            t0 = t0,
+            tSuper = tSuper,
+            tChrome = tChrome,
+            tClear = tClear,
+            tLines = tLines,
             rows = drawnRows,
             cols = if (cellW > 0) usableWidthPx(width) / cellW else 0,
             drawnRows = drawnRows,
@@ -499,7 +527,7 @@ class TermSurfaceView @JvmOverloads constructor(
             }
             runColor = color
             sb.append(cell.text)
-            if (cell.text.isNotEmpty() && cell.text != " ") cellsNonBlank++
+            if (cell.text.isNotEmpty()) cellsNonBlank++
             col += cell.width
         }
         if (sb.isNotEmpty()) {
@@ -517,9 +545,6 @@ class TermSurfaceView @JvmOverloads constructor(
                     // 字形右缘护栏（X3）：段首列越界（X2 失效/异常回归，正常路径恒 0）时钳进画布，
                     // 否则末列字形被 Canvas 裁半（用户「『它』的一半」正是字形被裁）。width>0 guard 同背景。
                     // 段占列宽按码点 CharWidth 累计（宽字符主格 2 列但 text 仅 1 字符，length 会低估）。
-                    if (TermDrawMeter.optEnabled && seg.text.isNotEmpty() && seg.text.all { it == ' ' }) {
-                        continue
-                    }
                     fgPaint.color = color
                     val originX = TermLeftEdge.cellOriginX(seg.startCol, cellW, contentLeftPx())
                     if (width > 0 && originX >= width) {
@@ -633,14 +658,32 @@ class TermSurfaceView @JvmOverloads constructor(
 
     private fun emitDrawMeter(
         t0: Long,
+        tSuper: Long,
+        tChrome: Long,
+        tClear: Long,
+        tLines: Long,
         rows: Int,
         cols: Int,
         drawnRows: Int,
         presenterNull: Int,
     ) {
-        val dtUs = ((System.nanoTime() - t0) / 1000L).toInt().coerceAtLeast(0)
+        val now = System.nanoTime()
+        fun us(a: Long, b: Long) = ((b - a) / 1000L).toInt().coerceAtLeast(0)
+        val dtSuper = us(t0, tSuper)
+        val dtChrome = us(tSuper, tChrome)
+        val dtClear = us(tChrome, tClear)
+        val dtLines = us(tClear, tLines)
+        val dtBody = dtChrome + dtClear + dtLines
+        val dtUs = us(t0, now)
         TermDrawMeter.onDrawEnd(
             dtUs = dtUs,
+            dtSuperUs = dtSuper,
+            dtChromeUs = dtChrome,
+            dtClearUs = dtClear,
+            dtLinesUs = dtLines,
+            dtBodyUs = dtBody,
+            dtLockUs = -1,
+            dtPostUs = -1,
             rows = rows,
             cols = cols,
             cellW = cellW,
@@ -665,6 +708,21 @@ class TermSurfaceView @JvmOverloads constructor(
             if (!f.exists()) true else f.readText().trim() != "0"
         } catch (_: Exception) {
             true
+        }
+    }
+
+    private fun refreshBurst() {
+        val f = File(context.filesDir, TermDrawMeter.BURST_FILE)
+        if (!f.exists()) return
+        val n = try {
+            f.readText().trim().toIntOrNull() ?: 0
+        } catch (_: Exception) {
+            0
+        }
+        f.delete()
+        if (n > 0) {
+            TermDrawMeter.armBurst(n)
+            postFrame()
         }
     }
 

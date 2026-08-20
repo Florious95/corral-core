@@ -2,66 +2,65 @@ Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1531
-WaitTime: 1532
+TotalTime: 1437
+WaitTime: 1439
 Complete
 Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1510
-WaitTime: 1517
+TotalTime: 1371
+WaitTime: 1373
 Complete
 Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1524
-WaitTime: 1529
+TotalTime: 1435
+WaitTime: 1437
 Complete
 Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1526
-WaitTime: 1528
+TotalTime: 1245
+WaitTime: 1247
 Complete
 Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1528
-WaitTime: 1528
+TotalTime: 1420
+WaitTime: 1424
 Complete
 Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1466
-WaitTime: 1468
+TotalTime: 1441
+WaitTime: 1443
 Complete
 Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1396
-WaitTime: 1397
+TotalTime: 1556
+WaitTime: 1559
 Complete
 Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 2416
-WaitTime: 2421
+TotalTime: 1533
+WaitTime: 1534
 Complete
-GFX density=480 opt=0 total=1 janky%=100.0 p95_ms=34.0
-DRAW density=480 opt=0 avg_us=68894 p95_us=68894 bgRect=2017 n=1 count=1
-GFX density=480 opt=1 total=1 janky%=100.0 p95_ms=17.0
-DRAW density=480 opt=1 avg_us=61858 p95_us=61858 bgRect=1 n=1 count=1
-DROP d480 p95 0.102  before=68894 after=61858
-GFX density=440 opt=0 total=1 janky%=100.0 p95_ms=34.0
-DRAW density=440 opt=0 avg_us=97517 p95_us=97517 bgRect=2445 n=1 count=1
-GFX density=440 opt=1 total=261 janky%=3.45 p95_ms=30.0
-DRAW density=440 opt=1 avg_us=24273 p95_us=24273 bgRect=1 n=1 count=1
-DROP d440 p95 0.751  before=97517 after=24273
-PASS A-dw-ui
+GFX density=480 opt=0 total=111 janky%=3.6 p95_ms=48.0
+DRAW density=480 opt=0 n=120 avg_us=4625 p95_us=7948 body_p95=7940 lines_p95=7825 super_p95=0 clear_p95=12 bgRect=2017 textDraw=42 cellsNonBlank=2016 lock=-1 post=-1
+GFX density=480 opt=1 total=116 janky%=0.0 p95_ms=24.0
+DRAW density=480 opt=1 n=120 avg_us=2753 p95_us=3495 body_p95=3485 lines_p95=3464 super_p95=0 clear_p95=16 bgRect=1 textDraw=42 cellsNonBlank=2016 lock=-1 post=-1
+DROP d480 p95 0.560  before=7948 after=3495 body 7940→3485 lines 7825→3464
+GFX density=440 opt=0 total=112 janky%=0.0 p95_ms=26.0
+DRAW density=440 opt=0 n=120 avg_us=3547 p95_us=3916 body_p95=3911 lines_p95=3896 super_p95=0 clear_p95=14 bgRect=2445 textDraw=47 cellsNonBlank=2444 lock=-1 post=-1
+GFX density=440 opt=1 total=111 janky%=0.0 p95_ms=24.0
+DRAW density=440 opt=1 n=120 avg_us=3101 p95_us=4005 body_p95=4000 lines_p95=3972 super_p95=0 clear_p95=13 bgRect=1 textDraw=47 cellsNonBlank=2444 lock=-1 post=-1
+FAIL d440 p95 未下降 before=3916 after=4005 body 3911→4000 lines 3896→3972 super 0→0

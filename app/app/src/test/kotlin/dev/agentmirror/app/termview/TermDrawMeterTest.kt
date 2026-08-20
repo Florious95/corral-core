@@ -56,16 +56,41 @@ class TermDrawMeterTest {
 
     @Test
     fun onDrawEmitsTermDrawTagWithOperands() {
-        val view = drawOnce("hello world")
+        drawOnce("hello world")
         val f = java.io.File.createTempFile("diag-draw-", ".log")
         f.deleteOnExit()
         DiagLog.exportTo(f)
         val text = f.readText()
         assertTrue("onDraw 必须落 [term-draw]：$text", text.contains("[term-draw]"))
         assertTrue("必须带 dt_us_p95：$text", text.contains("dt_us_p95="))
+        assertTrue("必须带 dt_body_us_last：$text", text.contains("dt_body_us_last="))
+        assertTrue("必须带 dt_super_us_last：$text", text.contains("dt_super_us_last="))
+        assertTrue("必须带 dt_lines_us_last：$text", text.contains("dt_lines_us_last="))
+        assertTrue("必须带 dt_lock_us=-1：$text", text.contains("dt_lock_us=-1"))
+        assertTrue("必须带 dt_post_us=-1：$text", text.contains("dt_post_us=-1"))
+        assertTrue("必须带 surface=view：$text", text.contains("surface=view"))
         assertTrue("必须带 source=onDraw：$text", text.contains("source=onDraw"))
         assertTrue("必须带 bgRect：$text", text.contains("bgRect="))
-        view
+    }
+
+    @Test
+    fun hundredThirtyComparableFramesFillP95Ring() {
+        val emulator = TerminalEmulator(20, 5)
+        emulator.feed("hello world")
+        val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+        view.presenter = TermViewPresenter(emulator) { _, _ -> }
+        val bitmap = Bitmap.createBitmap(400, 120, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        repeat(TermDrawMeter.WARMUP + TermDrawMeter.MIN_FRAMES) {
+            view.draw(canvas)
+        }
+        bitmap.recycle()
+        val f = java.io.File.createTempFile("diag-draw-n-", ".log")
+        f.deleteOnExit()
+        DiagLog.exportTo(f)
+        val text = f.readText()
+        val n = Regex("""source=onDraw n=(\d+)""").findAll(text).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0
+        assertTrue("稳态帧 n 应 ≥ 120，实际 n=$n text=$text", n >= 120)
     }
 
     @Test
