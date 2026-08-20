@@ -57,6 +57,32 @@
      "acceptance_failure.stderr_tail(末20行)=Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md'"
     ]
    }
+  },
+  {
+   "task_id": "t.d1.rv",
+   "superseded_at_revision": 18,
+   "reason": "leader 改了 rv 格 worktree_id 却没同步判据里烤死的路径，判据找不到 verdict 而判红；已修",
+   "attempt": {
+    "attempt_id": "att-t.d1.rv-seq4-t1787245949917",
+    "delivery_id": "del-t.d1.rv-seq4-t1787245949917",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-d1-rv-form",
+     "acceptance_failure.argv=[\"python3\", \"-c\", \"import io,os,sys\\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-d1-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.d1.rv/.team/nodes/pr1-d1-rv/verdict.md']\\nhit=[c for c in cands if os.path.exists(c)]\\nsys.stderr.write('candidates=%r hit=%r\\\\n'%(cands,hit))\\nif not hit: sys.stderr.write('产物两处都不存在\\\\n'); sys.exit(1)\\ns=io.open(hit[0],encoding='utf-8').read()\\nneed=[]\\nmiss=[x for x in need if x not in s]\\nsys.stderr.write('path=%s len=%d missing=%r\\\\n'%(hit[0],len(s),miss))\\nsys.exit(1 if miss or len(s)<800 else 0)\\n\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)=candidates=['/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-d1-rv/verdict.md', '/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.d1.rv/.team/nodes/pr1-d1-rv/verdict.md'] hit=[]\n产物两处都不存在",
+     "acceptance_failure.acceptance_id=A-d1-rv-pass",
+     "acceptance_failure.argv=[\"python3\", \"-c\", \"import io,os,sys\\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-d1-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.d1.rv/.team/nodes/pr1-d1-rv/verdict.md']\\nhit=[c for c in cands if os.path.exists(c)]\\nsys.stderr.write('candidates=%r hit=%r\\\\n'%(cands,hit))\\nif not hit: sys.stderr.write('产物两处都不存在\\\\n'); sys.exit(1)\\ns=io.open(hit[0],encoding='utf-8').read()\\nneed=[]\\nmiss=[x for x in need if x not in s]\\nsys.stderr.write('path=%s len=%d missing=%r\\\\n'%(hit[0],len(s),miss))\\nsys.exit(1 if miss or len(s)<800 else 0)\\n\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)=candidates=['/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-d1-rv/verdict.md', '/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.d1.rv/.team/nodes/pr1-d1-rv/verdict.md'] hit=[]\n产物两处都不存在"
+    ]
+   }
   }
  ]
 }
