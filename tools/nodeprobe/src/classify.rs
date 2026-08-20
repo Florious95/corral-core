@@ -1,5 +1,24 @@
-//! pane_title classifiers aligned with contract 062 / Go detect.go.
+//! ---
+//! purpose: provider 匹配器——标题三态 + 页脚后台任务维；core 不认具体 UI 文案
+//! contract:
+//!   provides:
+//!     - name: classify_for
+//!       what: 按已识别 provider 把标题判成 working/idle/unknown，unknown 不折 idle
+//!     - name: background_tasks_for
+//!       what: 按语料里该 provider 的 footer 规则返回 Count(N) 或 Unknown；无规则绝不报 0
+//!   depends:
+//!     - fixtures/titles.tsv（kind=title|footer，与 Go l2detect 共读）
+//! boundary:
+//!   - 不把 background_tasks 折进 state
+//!   - 具体页脚短语只存在语料，不写进本文件字符串
+//!   - 加新 provider 只加语料行（同一种匹配）或本文件一家一个 matcher，不改 lib.rs 聚合
+//! maturity: wired
+//! ---
 //! State never falls back from unknown to idle.
+
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Class {
@@ -7,6 +26,22 @@ pub struct Class {
     pub provider: &'static str,
     pub first: Option<char>,
     pub known: bool,
+}
+
+/// 观测维：有规则且未命中=0；有规则且命中=N；语料无该 provider 的 footer 行=Unknown。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackgroundTasks {
+    Count(u32),
+    Unknown,
+}
+
+impl serde::Serialize for BackgroundTasks {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Count(n) => serializer.serialize_u32(*n),
+            Self::Unknown => serializer.serialize_str("unknown"),
+        }
+    }
 }
 
 pub const STATE_WORKING: &str = "working";
@@ -94,7 +129,12 @@ pub fn classify(title: &str) -> Class {
     fallback(title)
 }
 
-/// Dispatch the detector for a known provider. Unclaimed → unknown.
+/// Dispatch the detector for a known provider, then fall back to the shared
+/// three-state rule (062).
+///
+/// 🔴 068 §8 修正：原先「本家不认领 ⇒ unknown」盖掉了 062，是回归——
+/// 刚起的会话标题是光秃秃的产品名，本家检测器不认领，于是每个新会话都先判「未知」。
+/// 正确语义：无前导符号（字母/数字/空）⇒ 空闲；unknown 只由**认不出的前导符号**产生。
 pub fn classify_for(provider: &str, title: &str) -> Class {
     let hit = match provider {
         PROVIDER_CLAUDE => claude_match(title),
@@ -109,34 +149,178 @@ pub fn classify_for(provider: &str, title: &str) -> Class {
             known: true,
         };
     }
+    // 不认领 ⇒ 落回三态；provider 仍记本家（身份优先不变）
+    let fb = fallback(title);
     Class {
-        state: STATE_UNKNOWN,
+        state: fb.state,
         provider: intern_expect(provider),
-        first: first_non_space(title),
-        known: false,
+        first: fb.first,
+        known: fb.known,
     }
 }
 
-pub fn classify_tsv_line(line: &str) -> Option<(String, Class, &'static str, &'static str)> {
+pub const KIND_TITLE: &str = "title";
+pub const KIND_FOOTER: &str = "footer";
+
+#[derive(Debug)]
+pub enum CorpusRow {
+    Title {
+        payload: String,
+        got: Class,
+        want_state: &'static str,
+        want_provider: &'static str,
+    },
+    Footer {
+        payload: String,
+        got: BackgroundTasks,
+        want: BackgroundTasks,
+        provider: String,
+    },
+}
+
+/// Four-column corpus: payload, want, provider, kind. Missing kind is an error.
+pub fn parse_corpus_line(line: &str) -> Result<Option<CorpusRow>, String> {
     let line = line.trim_end_matches(['\n', '\r']);
     if line.is_empty() || line.starts_with('#') {
-        return None;
+        return Ok(None);
     }
-    let mut parts = line.splitn(3, '\t');
-    let title = parts.next()?.to_string();
-    let want_state = parts.next()?;
-    let want_provider = parts.next()?;
-    let got = if want_provider == PROVIDER_UNKNOWN {
-        fallback(&title)
-    } else {
-        classify_for(want_provider, &title)
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() != 4 {
+        return Err(format!(
+            "need payload<TAB>want<TAB>provider<TAB>kind (4 fields), got {}",
+            parts.len()
+        ));
+    }
+    let (payload, want, provider, kind) = (parts[0], parts[1], parts[2], parts[3]);
+    match kind {
+        KIND_TITLE => {
+            let got = if provider == PROVIDER_UNKNOWN {
+                fallback(payload)
+            } else {
+                classify_for(provider, payload)
+            };
+            Ok(Some(CorpusRow::Title {
+                payload: payload.to_string(),
+                got,
+                want_state: intern_expect(want),
+                want_provider: intern_expect(provider),
+            }))
+        }
+        KIND_FOOTER => {
+            let got = background_tasks_for(provider, payload);
+            let want_bg = parse_bg_want(want)?;
+            Ok(Some(CorpusRow::Footer {
+                payload: payload.to_string(),
+                got,
+                want: want_bg,
+                provider: provider.to_string(),
+            }))
+        }
+        other => Err(format!("unknown kind {other:?} (want title|footer)")),
+    }
+}
+
+/// Back-compat for title-only callers. Footer rows and malformed lines are skipped.
+pub fn classify_tsv_line(line: &str) -> Option<(String, Class, &'static str, &'static str)> {
+    match parse_corpus_line(line) {
+        Ok(Some(CorpusRow::Title {
+            payload,
+            got,
+            want_state,
+            want_provider,
+        })) => Some((payload, got, want_state, want_provider)),
+        _ => None,
+    }
+}
+
+fn parse_bg_want(want: &str) -> Result<BackgroundTasks, String> {
+    if want == "unknown" {
+        return Ok(BackgroundTasks::Unknown);
+    }
+    want.parse::<u32>()
+        .map(BackgroundTasks::Count)
+        .map_err(|_| format!("footer want must be 0|N|unknown, got {want:?}"))
+}
+
+struct FooterRules {
+    needles: Vec<String>,
+}
+
+static FOOTER_RULES: OnceLock<HashMap<String, FooterRules>> = OnceLock::new();
+
+fn footer_rules() -> &'static HashMap<String, FooterRules> {
+    FOOTER_RULES.get_or_init(|| load_footer_rules(&default_titles_tsv()))
+}
+
+pub fn default_titles_tsv() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/titles.tsv")
+}
+
+fn load_footer_rules(path: &Path) -> HashMap<String, FooterRules> {
+    let mut map: HashMap<String, FooterRules> = HashMap::new();
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return map;
     };
-    Some((
-        title,
-        got,
-        intern_expect(want_state),
-        intern_expect(want_provider),
-    ))
+    for line in text.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() != 4 || parts[3] != KIND_FOOTER {
+            continue;
+        }
+        let (payload, want, provider) = (parts[0], parts[1], parts[2]);
+        // want=unknown is a corpus assertion (no rule), not a rule row.
+        // Registering it would make missing-rule look like Count(0).
+        if want == "unknown" {
+            continue;
+        }
+        let entry = map.entry(provider.to_string()).or_insert(FooterRules {
+            needles: Vec::new(),
+        });
+        if let Ok(n) = want.parse::<u32>() {
+            if n >= 1 {
+                entry.needles.push(payload.to_string());
+            }
+        }
+    }
+    map
+}
+
+/// Provider matcher. Core must call this and not name any UI phrase.
+pub fn background_tasks_for(provider: &str, footer: &str) -> BackgroundTasks {
+    let rules = footer_rules();
+    let Some(r) = rules.get(provider) else {
+        return BackgroundTasks::Unknown;
+    };
+    for needle in &r.needles {
+        if footer.contains(needle.as_str()) {
+            return BackgroundTasks::Count(count_before_needle(footer, needle));
+        }
+    }
+    BackgroundTasks::Count(0)
+}
+
+fn count_before_needle(footer: &str, needle: &str) -> u32 {
+    let Some(idx) = footer.find(needle) else {
+        return 1;
+    };
+    let before = &footer[..idx];
+    let digits: String = before
+        .chars()
+        .rev()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    if digits.is_empty() {
+        return 1;
+    }
+    digits
+        .chars()
+        .rev()
+        .collect::<String>()
+        .parse()
+        .unwrap_or(1)
 }
 
 fn intern_expect(s: &str) -> &'static str {
@@ -150,5 +334,56 @@ fn intern_expect(s: &str) -> &'static str {
         "copilot" => PROVIDER_COPILOT,
         "cursor" => PROVIDER_CURSOR,
         _ => STATE_UNKNOWN,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn footer_grok_running_is_count_state_stays_idle() {
+        let title = "修滚动摘要 - grok";
+        let class = classify_for(PROVIDER_GROK, title);
+        assert_eq!(class.state, STATE_IDLE);
+        let footer = "◉ 1 command still running · 1 queued — Enter to send now";
+        let bg = background_tasks_for(PROVIDER_GROK, footer);
+        assert_eq!(bg, BackgroundTasks::Count(1));
+        assert_ne!(class.state, STATE_WORKING, "must not fold bg into state");
+    }
+
+    #[test]
+    fn footer_grok_vacuum_is_zero_not_constant_one() {
+        let bg = background_tasks_for(PROVIDER_GROK, "just a prompt · nothing in flight");
+        assert_eq!(bg, BackgroundTasks::Count(0));
+    }
+
+    #[test]
+    fn footer_provider_without_rule_is_unknown_not_zero() {
+        let grok_footer = "◉ 1 command still running · send a message to interrupt";
+        assert_eq!(
+            background_tasks_for(PROVIDER_CLAUDE, grok_footer),
+            BackgroundTasks::Unknown
+        );
+        assert_eq!(
+            background_tasks_for(PROVIDER_CODEX, grok_footer),
+            BackgroundTasks::Unknown
+        );
+        assert_eq!(
+            background_tasks_for(PROVIDER_CURSOR, grok_footer),
+            BackgroundTasks::Unknown
+        );
+        assert_ne!(
+            background_tasks_for(PROVIDER_CLAUDE, grok_footer),
+            BackgroundTasks::Count(0)
+        );
+    }
+
+    #[test]
+    fn unknown_title_state_is_not_idle() {
+        let got = fallback("※probe-unknown-full-title");
+        assert_eq!(got.state, STATE_UNKNOWN);
+        assert_ne!(got.state, STATE_IDLE);
+        assert!(got.first.is_some());
     }
 }

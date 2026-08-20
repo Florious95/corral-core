@@ -237,8 +237,9 @@ fun SessionScreen(
             SessionShellScreen(
                 sessionDisplayName = name,
                 status = status,
-                lanConnected = connectionPath != null &&
-                    viewModel.connectionState == ConnectionState.READY,
+                connectionPath = connectionPath.takeIf {
+                    viewModel.connectionState == ConnectionState.READY
+                },
                 draft = mirror,
                 onDraftChange = {
                     viewModel.onPassthroughInput(mirror, it)
@@ -253,6 +254,7 @@ fun SessionScreen(
                 onKeyPress = { viewModel.sendKey(it.toInputKey()) },
                 onAttach = { attachMenu = true },
                 sendEnabled = viewModel.inputStatus !is InputStatus.Sending,
+                connectionBanner = viewModel.connectionBanner,
             ) {
                 Box(Modifier.fillMaxSize()) {
                     AndroidView(
@@ -304,20 +306,6 @@ fun SessionScreen(
                         StatusArea(viewModel)
                     }
                 }
-            }
-            AnimatedVisibility(
-                visible = viewModel.connectionBanner != null,
-                modifier = Modifier.align(Alignment.TopCenter),
-            ) {
-                Text(
-                    text = viewModel.connectionBanner.orEmpty(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(horizontal = Spacing.pageH, vertical = 6.dp),
-                )
             }
             if (viewModel.overlayOpen) {
                 SessionSwitchSheet(
@@ -483,7 +471,7 @@ private val KEY_BAR_ENTRIES = listOf(
 @Composable
 private fun StatusArea(viewModel: SessionViewModel) {
     val message = when (val s = viewModel.inputStatus) {
-        is InputStatus.Sent -> "已发送"
+        is InputStatus.Sent -> null
         is InputStatus.Failed -> s.message
         is InputStatus.Sending -> "发送中…"
         InputStatus.Idle -> null

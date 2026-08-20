@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.screens.FavoritesScreen
 import dev.agentmirror.app.ui.theme.AppTheme
 
@@ -32,6 +33,8 @@ fun FavoriteList(
     rows: List<FavoriteRow>,
     onOpenSession: (ref: String, name: String) -> Unit,
     onUnfavorite: (FavoriteRow) -> Unit,
+    connectionPath: ConnectionPath? = null,
+    connectionBanner: String? = null,
 ) {
     val items = rows.map { it.toSessionItem() }
     val byId = items.zip(rows).associate { it.first.id to it.second }
@@ -47,6 +50,8 @@ fun FavoriteList(
             onToggleStar = { item ->
                 byId[item.id]?.let(onUnfavorite)
             },
+            connectionPath = connectionPath,
+            connectionBanner = connectionBanner,
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.PathText
@@ -52,7 +53,8 @@ fun FavoritesScreen(
     onSessionClick: (SessionItem) -> Unit,
     onToggleStar: (SessionItem) -> Unit,
     modifier: Modifier = Modifier,
-    lanConnected: Boolean = true,
+    connectionPath: ConnectionPath? = null,
+    connectionBanner: String? = null,
     bottomBar: @Composable () -> Unit = {},
 ) {
     val p = LocalAppPalette.current
@@ -62,23 +64,41 @@ fun FavoritesScreen(
         ScreenHeader(
             title = "收藏",
             meta = "${favorites.size} SESSIONS · $activeCount ACTIVE",
-            trailing = if (lanConnected) ({ LanPill() }) else null,
+            trailing = if (connectionPath != null) ({ LanPill(connectionPath) }) else null,
         )
         Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
-        LazyColumn(
+        Box(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(p.listBackground)
-                .testTag("favorite-list")
+                .background(p.listBackground),
         ) {
-            items(favorites, key = { it.id }) { item ->
-                FavoriteRow(
-                    item = item,
-                    onClick = { if (item.isOnline) onSessionClick(item) },
-                    onToggleStar = { onToggleStar(item) },
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .testTag("favorite-list")
+            ) {
+                items(favorites, key = { it.id }) { item ->
+                    FavoriteRow(
+                        item = item,
+                        onClick = { if (item.isOnline) onSessionClick(item) },
+                        onToggleStar = { onToggleStar(item) },
+                    )
+                    RowDivider()
+                }
+            }
+            if (connectionBanner != null) {
+                AppText(
+                    text = connectionBanner,
+                    color = p.metaText,
+                    fontSize = TypeSizes.statusChip,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .background(p.consoleBackground)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .testTag("connection-banner"),
                 )
-                RowDivider()
             }
         }
         bottomBar()

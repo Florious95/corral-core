@@ -129,6 +129,13 @@ class TermSurfaceView @JvmOverloads constructor(
     private val fgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.MONOSPACE
     }
+    /** 框线/块元素几何：关抗锯齿，避免半透明边在非整数密度上露缝。 */
+    private val geomPaint = Paint().apply {
+        isAntiAlias = false
+        style = Paint.Style.FILL
+    }
+    private var lastLeftEdgeKey: String? = null
+    private var lastLeftEdgeOk: Boolean = true
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.DEFAULT_BOLD
         textSize = 44f
@@ -325,13 +332,7 @@ class TermSurfaceView @JvmOverloads constructor(
 
         val win = p.window
         val contentLeft = contentLeftPx()
-        // 两个操作数都记：contentLeft vs 第 0 列格子原点。相等且 ≥0 ⇒ 不是布局推出；
-        // 字形起绘另由 drawCentered 钳到 ≥0，避免负 x 被 clip。
-        DiagLog.record(
-            "term-left-edge",
-            "source=onDraw contentLeft=$contentLeft col0Origin=${TermLeftEdge.cellOriginX(0, cellW, contentLeft)} " +
-                "cellW=$cellW viewW=$width verdict=${TermLeftEdge.classify(contentLeft.toFloat(), contentLeft, contentLeft)}",
-        )
+        recordLeftEdgeOnce(contentLeft)
         for (logical in win) {
             val rowY = (logical - win.first) * cellH
             drawLine(canvas, p.lineCells(logical), rowY)
@@ -490,20 +491,66 @@ class TermSurfaceView @JvmOverloads constructor(
                 j += Character.charCount(nc)
             }
             val cellPx = cellW * width
-            val actual = paint.measureText(text, i, j)
-            // 格内水平居中；advance > 格宽时旧公式左溢为负，col0 的 ● 被 clip。
-            // 钳到 0：完整字形可见，左溢改走左边距而不是裁半。
-            canvas.drawText(
-                text,
-                i,
-                j,
-                TermLeftEdge.centeredGlyphX(x, cellPx, actual),
-                rowY + baselinePx,
-                paint,
-            )
+            if (BoxBlockGeometry.handles(cp)) {
+                drawBoxBlock(canvas, cp, x, rowY, cellPx, cellH, paint.color)
+            } else {
+                val actual = paint.measureText(text, i, j)
+                // 格内水平居中；advance > 格宽时旧公式左溢为负，col0 的 ● 被 clip。
+                // 钳到 0：完整字形可见，左溢改走左边距而不是裁半。
+                canvas.drawText(
+                    text,
+                    i,
+                    j,
+                    TermLeftEdge.centeredGlyphX(x, cellPx, actual),
+                    rowY + baselinePx,
+                    paint,
+                )
+            }
             x += cellPx
             i = j
         }
+    }
+
+    private fun drawBoxBlock(
+        canvas: Canvas,
+        cp: Int,
+        originX: Int,
+        originY: Int,
+        cellPx: Int,
+        cellH: Int,
+        color: Int,
+    ) {
+        for (fill in BoxBlockGeometry.fills(cp, originX, originY, cellPx, cellH)) {
+            val a = fill.alpha
+            geomPaint.color = if (a >= 255) color else (color and 0x00FFFFFF) or (a shl 24)
+            val r = fill.rect
+            canvas.drawRect(
+                r.left.toFloat(),
+                r.top.toFloat(),
+                r.right.toFloat(),
+                r.bottom.toFloat(),
+                geomPaint,
+            )
+        }
+    }
+
+    /**
+     * 只在操作数变化或 verdict 从 OK 变坏时记。值不变不打——onDraw 每帧刷屏会淹日志。
+     */
+    private fun recordLeftEdgeOnce(contentLeft: Int) {
+        val col0 = TermLeftEdge.cellOriginX(0, cellW, contentLeft)
+        val verdict = TermLeftEdge.classify(contentLeft.toFloat(), contentLeft, contentLeft)
+        val ok = verdict == TermLeftEdge.Verdict.OK
+        val key = "$contentLeft|$col0|$cellW|$width"
+        val becameBad = lastLeftEdgeOk && !ok
+        if (!becameBad && key == lastLeftEdgeKey) return
+        lastLeftEdgeKey = key
+        lastLeftEdgeOk = ok
+        DiagLog.record(
+            "term-left-edge",
+            "source=onDraw contentLeft=$contentLeft col0Origin=$col0 " +
+                "cellW=$cellW viewW=$width verdict=$verdict",
+        )
     }
 
     // ---- 测量与配色 ----
@@ -542,19 +589,9 @@ class TermSurfaceView @JvmOverloads constructor(
         }
     }
 
-    /** 终端色（Indexed/真彩/默认）→ Android ARGB 色值。
-     *  索引 >15 走 xterm 256 扩展查表：旧实现 coerceIn(0,15) 把 256 色区整体塌缩到
-     *  基础 16 色——fg 16（黑）与 bg 254（浅灰）同折到 15 号浅灰，Claude Code recap
-     *  背景块内文字与底色同色整块隐形（fix-term-bg-cjk 模拟器实拍第二缺陷）。 */
-    private fun colorFor(color: TerminalColor, background: Boolean): Int = when (color) {
-        TerminalColor.Default -> if (background) themeBgArgb() else themeFgArgb()
-        is TerminalColor.Rgb -> Color.rgb(color.r, color.g, color.b)
-        is TerminalColor.Indexed -> {
-            val pal = TermPalette.of(isNight())
-            if (color.index in 0..15) pal.ansi16[color.index] ?: Color.GRAY
-            else pal.xterm256.getOrElse(color.index) { Color.GRAY }
-        }
-    }
+    /** 终端色 → ARGB。色值与 083 §2 重映射都在 [TermPalette.colorFor]，这里不写字面量。 */
+    private fun colorFor(color: TerminalColor, background: Boolean): Int =
+        TermPalette.colorFor(color, background, isNight())
 
     /** SGR 7 反显：背景画笔改取 fg 字段（作为"前景默认"语义解析，即 background=false），
      *  前景画笔改取 bg 字段（作为"背景默认"语义解析）——两个字段与 background 旗标一起互换，
@@ -576,9 +613,26 @@ class TermSurfaceView @JvmOverloads constructor(
     private fun themeFgArgb(): Int = TermPalette.of(isNight()).defaultFg
 
     private fun publishThemeChrome() {
-        val token = TermPalette.token(isNight())
-        if (contentDescription != token) contentDescription = token
+        val night = isNight()
+        val pal = TermPalette.of(night)
+        val token = TermPalette.token(night)
+        if (contentDescription != token) {
+            contentDescription = token
+            val ansi0 = pal.ansi16[0] ?: 0
+            DiagLog.record(
+                "term-bg-remap",
+                "source=theme-chrome night=$night " +
+                    "defaultBg=0x${hex(pal.defaultBg)} ansi0=0x${hex(ansi0)} " +
+                    "userBlock=0x${hex(pal.userBlockBg)} " +
+                    "paperLuma=${TermPalette.luma(pal.defaultBg)} " +
+                    "ansi0Luma=${TermPalette.luma(ansi0)} " +
+                    "blockLuma=${TermPalette.luma(pal.userBlockBg)} " +
+                    "verdict=${if (pal.defaultBg != ansi0) "paper_ne_ansi0" else "PAPER_EQ_ANSI0"}",
+            )
+        }
     }
+
+    private fun hex(argb: Int): String = (argb.toLong() and 0xffffffffL).toString(16)
 
     private fun dp(v: Float): Float = v * resources.displayMetrics.density
 

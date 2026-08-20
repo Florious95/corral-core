@@ -1,0 +1,119 @@
+[ledger-run 2026-08-19T15:33:24Z] 常驻开工 resident-start | 账本=.team/ledgers/vz-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T15:33:24Z] 开工 start | ledger_id=ledger.vz.v1 revision=4 账本=.team/ledgers/vz-v1.json 墙钟上限=14400s 派单死线=90s
+[ledger-run 2026-08-19T15:33:31Z] 轮次 round | 第 1 轮开始：前沿 ["t.glyph"]（墙钟已跑 6s / 上限 14400s）
+[ledger-run 2026-08-19T15:33:31Z] 派单 dispatch | task=t.glyph 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/land-v1-term 席位=land-v1-term attempt=att-t.glyph-seq1-t1787153611030 delivery=del-t.glyph-seq1-t1787153611030
+[ledger-run 2026-08-19T15:33:31Z] 投递回执 send-ok | task=t.glyph case_id=ledger_vz_v1__t.glyph__r4 message_id=msg_557b9bf431c0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T15:33:31Z] 派单落地 dispatch-landed | task=t.glyph 席位 land-v1-term 的收件箱已多出这条派单
+[ledger-run 2026-08-19T15:33:31Z] 等待 wait | task=t.glyph 在等的 key（case_id）=ledger_vz_v1__t.glyph__r4 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T16:05:41Z] 已唤醒 wait-signaled | task=t.glyph 等到结果了
+[ledger-run 2026-08-19T16:05:41Z] 判据 acceptance | task=t.glyph 在跑 required=["A-gl-test", "A-gl-suite", "A-gl-ui", "A-gl-shot", "A-gl-doc"]
+[ledger-run 2026-08-19T16:08:47Z] 判据通过留档 acceptance-success | task=t.glyph 成功 attempt 落进 attempts[] writeback_revision=5 passed=["A-gl-test", "A-gl-suite", "A-gl-ui", "A-gl-shot", "A-gl-doc"]
+[ledger-run 2026-08-19T16:08:47Z] 解挂重载 writeback-reload | task=t.glyph state=succeeded + revision+1：盘上 revision 6 > 我读的 4（hash f88643822f4e9a0e → 8ea8fdacbf0b105e）——人的解挂，重载账本重跑本轮，⛔ 不 park、不盖人的账本
+[ledger-run 2026-08-19T16:08:47Z] 轮次 round | 第 2 轮开始：前沿 ["t.glyph"]（墙钟已跑 2123s / 上限 14400s）
+[ledger-run 2026-08-19T16:08:47Z] 派单 dispatch | task=t.glyph 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/land-v1-term 席位=land-v1-term attempt=att-t.glyph-seq2-t1787155727440 delivery=del-t.glyph-seq2-t1787155727440
+[ledger-run 2026-08-19T16:08:47Z] 投递回执 send-ok | task=t.glyph case_id=ledger_vz_v1__t.glyph__r6 message_id=msg_d73765292058 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T16:08:47Z] 派单落地 dispatch-landed | task=t.glyph 席位 land-v1-term 的收件箱已多出这条派单
+[ledger-run 2026-08-19T16:08:47Z] 等待 wait | task=t.glyph 在等的 key（case_id）=ledger_vz_v1__t.glyph__r6 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T16:21:24Z] 已唤醒 wait-signaled | task=t.glyph 等到结果了
+[ledger-run 2026-08-19T16:21:24Z] 判据 acceptance | task=t.glyph 在跑 required=["A-gl-test", "A-gl-suite", "A-gl-ui", "A-gl-shot", "A-gl-doc"]
+[ledger-run 2026-08-19T16:24:58Z] 判据通过留档 acceptance-success | task=t.glyph 成功 attempt 落进 attempts[] writeback_revision=7 passed=["A-gl-test", "A-gl-suite", "A-gl-ui", "A-gl-shot", "A-gl-doc"]
+[ledger-run 2026-08-19T16:24:58Z] 解挂重载 writeback-reload | task=t.glyph state=succeeded + revision+1：盘上 revision 10 > 我读的 6（hash 8ea8fdacbf0b105e → 8719304fb72ce757）——人的解挂，重载账本重跑本轮，⛔ 不 park、不盖人的账本
+[ledger-run 2026-08-19T16:24:58Z] 轮次 round | 第 3 轮开始：前沿 ["t.glyph"]（墙钟已跑 3094s / 上限 14400s）
+[ledger-run 2026-08-19T16:24:58Z] 派单 dispatch | task=t.glyph 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-glyph 席位=vz-v1-glyph attempt=att-t.glyph-seq3-t1787156698462 delivery=del-t.glyph-seq3-t1787156698462
+[ledger-run 2026-08-19T16:24:58Z] 投递回执 send-ok | task=t.glyph case_id=ledger_vz_v1__t.glyph__r10 message_id=msg_00ba75ee43b8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T16:24:58Z] 派单落地 dispatch-landed | task=t.glyph 席位 vz-v1-glyph 的收件箱已多出这条派单
+[ledger-run 2026-08-19T16:24:58Z] 等待 wait | task=t.glyph 在等的 key（case_id）=ledger_vz_v1__t.glyph__r10 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T16:40:44Z] 已唤醒 wait-signaled | task=t.glyph 等到结果了
+[ledger-run 2026-08-19T16:40:44Z] 判据 acceptance | task=t.glyph 在跑 required=["A-gl-test", "A-gl-suite", "A-gl-ui", "A-gl-shot", "A-gl-doc"]
+[ledger-run 2026-08-19T16:44:38Z] 判据通过留档 acceptance-success | task=t.glyph 成功 attempt 落进 attempts[] writeback_revision=11 passed=["A-gl-test", "A-gl-suite", "A-gl-ui", "A-gl-shot", "A-gl-doc"]
+[ledger-run 2026-08-19T16:44:38Z] 原子写回 writeback-atomic | task=t.glyph state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=11 hash=17aa82c6b5b7ce22）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T16:44:38Z] 写回 writeback | task=t.glyph state=succeeded revision=10 → 11
+[ledger-run 2026-08-19T16:44:38Z] 轮次 round | 第 4 轮开始：前沿 ["t.bg"]（墙钟已跑 4274s / 上限 14400s）
+[ledger-run 2026-08-19T16:44:38Z] 派单 dispatch | task=t.bg 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-bg 席位=vz-v1-bg attempt=att-t.bg-seq4-t1787157878424 delivery=del-t.bg-seq4-t1787157878424
+[ledger-run 2026-08-19T16:44:38Z] 投递回执 send-ok | task=t.bg case_id=ledger_vz_v1__t.bg__r11 message_id=msg_deb43ead8378 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T16:44:38Z] 派单落地 dispatch-landed | task=t.bg 席位 vz-v1-bg 的收件箱已多出这条派单
+[ledger-run 2026-08-19T16:44:38Z] 等待 wait | task=t.bg 在等的 key（case_id）=ledger_vz_v1__t.bg__r11 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T17:20:13Z] 已唤醒 wait-signaled | task=t.bg 等到结果了
+[ledger-run 2026-08-19T17:20:13Z] 判据 acceptance | task=t.bg 在跑 required=["A-bg-test", "A-bg-suite", "A-bg-ui", "A-bg-shot", "A-bg-doc"]
+[ledger-run 2026-08-19T17:25:39Z] 判据失败诊断 acceptance-diagnostic | task=t.bg 判据 A-bg-test 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*TermBgRemap*' ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-bg-test.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-19T17:25:39Z] 原子写回 writeback-atomic | task=t.bg 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=11 hash=1f9ad51b9a9bcf0f）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T17:25:39Z] 原子写回 writeback-atomic | task=t.bg 判据红下一步落盘 → 临时文件+rename 已落盘（revision=11 hash=5a86f36ce185ec15）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T17:25:39Z] 状态变坏 notify-bad-state | task=t.bg 判据红 停机通知：已投递
+[ledger-run 2026-08-19T17:25:39Z] 判据红 acceptance-red | task=t.bg required 未全过——关 attempt，默认 halt（该格已移出前沿；停机通知：已投递）
+[ledger-run 2026-08-19T17:25:39Z] 收工 finish | 停机原因=Failed 写回=["t.glyph"] 冻结=["t.bg"] 不可判=[] 墙钟已跑 6735s
+[ledger-run 2026-08-19T17:25:39Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T17:25:39Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-19T17:25:39Z] 挂起 park | token=parked ledger_id=ledger.vz.v1 revision=11 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.vz.v1 | revision: 11 | 停机原因: Failed | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 ｜ t.bg 判据未过 ｜ t.bg：判据 A-bg-test 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*TermBgRemap*' ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-bg-test.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1（stderr 末20行见账本 tasks.t.bg.attempts[].artifact_refs） ｜ 未干完的任务（非 Succeeded）: t.bg=FailedRetryable, t.chrome=Planned, t.diff=Planned, t.ver=Planned | 各任务终态: t.bg=FailedRetryable, t.chrome=Planned, t.diff=Planned, t.glyph=Succeeded, t.ver=Planned
+resident-exit signal=term reason=human_stop
+租约抢占：pid=66033 stole from pid=91985 reason=holder pid 91985 不存在（判定已死） at=1787160502
+
+[ledger-run 2026-08-19T17:28:22Z] 常驻开工 resident-start | 账本=.team/ledgers/vz-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T17:28:22Z] 开工 start | ledger_id=ledger.vz.v1 revision=12 账本=.team/ledgers/vz-v1.json 墙钟上限=24000s 派单死线=90s
+[ledger-run 2026-08-19T17:28:27Z] 轮次 round | 第 1 轮开始：前沿 ["t.bg"]（墙钟已跑 5s / 上限 24000s）
+[ledger-run 2026-08-19T17:28:27Z] 派单 dispatch | task=t.bg 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-bg 席位=vz-v1-bg attempt=att-t.bg-seq1-t1787160507451 delivery=del-t.bg-seq1-t1787160507451
+[ledger-run 2026-08-19T17:28:27Z] 投递回执 send-ok | task=t.bg case_id=ledger_vz_v1__t.bg__r12 message_id=msg_40004ed690d0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T17:28:27Z] 派单落地 dispatch-landed | task=t.bg 席位 vz-v1-bg 的收件箱已多出这条派单
+[ledger-run 2026-08-19T17:28:27Z] 等待 wait | task=t.bg 在等的 key（case_id）=ledger_vz_v1__t.bg__r12 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T17:32:05Z] 已唤醒 wait-signaled | task=t.bg 等到结果了
+[ledger-run 2026-08-19T17:32:05Z] 判据 acceptance | task=t.bg 在跑 required=["A-bg-test", "A-bg-suite", "A-bg-ui", "A-bg-shot", "A-bg-doc"]
+[ledger-run 2026-08-19T17:36:15Z] 判据通过留档 acceptance-success | task=t.bg 成功 attempt 落进 attempts[] writeback_revision=13 passed=["A-bg-test", "A-bg-suite", "A-bg-ui", "A-bg-shot", "A-bg-doc"]
+[ledger-run 2026-08-19T17:36:15Z] 原子写回 writeback-atomic | task=t.bg state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=13 hash=385b90756f12f8c1）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T17:36:15Z] 写回 writeback | task=t.bg state=succeeded revision=12 → 13
+[ledger-run 2026-08-19T17:36:15Z] 轮次 round | 第 2 轮开始：前沿 ["t.chrome"]（墙钟已跑 472s / 上限 24000s）
+[ledger-run 2026-08-19T17:36:15Z] 派单 dispatch | task=t.chrome 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-chrome 席位=vz-v1-chrome attempt=att-t.chrome-seq2-t1787160975063 delivery=del-t.chrome-seq2-t1787160975063
+[ledger-run 2026-08-19T17:36:15Z] 投递回执 send-ok | task=t.chrome case_id=ledger_vz_v1__t.chrome__r13 message_id=msg_29d030708c78 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T17:36:15Z] 派单落地 dispatch-landed | task=t.chrome 席位 vz-v1-chrome 的收件箱已多出这条派单
+[ledger-run 2026-08-19T17:36:15Z] 等待 wait | task=t.chrome 在等的 key（case_id）=ledger_vz_v1__t.chrome__r13 team=grok-l2 预算=2400s
+resident-exit signal=term reason=human_stop
+[ledger-run 2026-08-19T18:02:40Z] 常驻开工 resident-start | 账本=.team/ledgers/vz-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T18:02:40Z] 开工 start | ledger_id=ledger.vz.v1 revision=14 账本=.team/ledgers/vz-v1.json 墙钟上限=24000s 派单死线=90s
+[ledger-run 2026-08-19T18:02:41Z] 轮次 round | 第 1 轮开始：前沿 ["t.chrome"]（墙钟已跑 0s / 上限 24000s）
+[ledger-run 2026-08-19T18:02:41Z] 派单 dispatch | task=t.chrome 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-chrome 席位=vz-v1-chrome attempt=att-t.chrome-seq1-t1787162561736 delivery=del-t.chrome-seq1-t1787162561736
+[ledger-run 2026-08-19T18:02:42Z] 投递回执 send-ok | task=t.chrome case_id=ledger_vz_v1__t.chrome__r14 message_id=msg_d81fa53c5740 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T18:02:42Z] 派单落地 dispatch-landed | task=t.chrome 席位 vz-v1-chrome 的收件箱已多出这条派单
+[ledger-run 2026-08-19T18:02:42Z] 等待 wait | task=t.chrome 在等的 key（case_id）=ledger_vz_v1__t.chrome__r14 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T18:28:46Z] 已唤醒 wait-signaled | task=t.chrome 等到结果了
+[ledger-run 2026-08-19T18:28:46Z] 判据 acceptance | task=t.chrome 在跑 required=["A-ch-test", "A-ch-suite", "A-ch-ui", "A-ch-shot", "A-ch-doc"]
+[ledger-run 2026-08-19T18:34:13Z] 判据失败诊断 acceptance-diagnostic | task=t.chrome 判据 A-ch-test 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*ConsoleChrome*' ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-ch-test.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-19T18:34:13Z] 原子写回 writeback-atomic | task=t.chrome 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=14 hash=7a26ed5450f1da8c）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T18:34:13Z] 原子写回 writeback-atomic | task=t.chrome 判据红下一步落盘 → 临时文件+rename 已落盘（revision=14 hash=ce9ae81c9885d6ae）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T18:34:13Z] 状态变坏 notify-bad-state | task=t.chrome 判据红 停机通知：已投递
+[ledger-run 2026-08-19T18:34:13Z] 判据红 acceptance-red | task=t.chrome required 未全过——关 attempt，默认 halt（该格已移出前沿；停机通知：已投递）
+[ledger-run 2026-08-19T18:34:13Z] 收工 finish | 停机原因=Failed 写回=[] 冻结=["t.chrome"] 不可判=[] 墙钟已跑 1892s
+[ledger-run 2026-08-19T18:34:13Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T18:34:13Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-19T18:34:13Z] 挂起 park | token=parked ledger_id=ledger.vz.v1 revision=14 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.vz.v1 | revision: 14 | 停机原因: Failed | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 ｜ t.chrome 判据未过 ｜ t.chrome：判据 A-ch-test 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*ConsoleChrome*' ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-ch-test.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1（stderr 末20行见账本 tasks.t.chrome.attempts[].artifact_refs） ｜ 未干完的任务（非 Succeeded）: t.chrome=FailedRetryable, t.diff=Planned, t.ver=Planned | 各任务终态: t.bg=Succeeded, t.chrome=FailedRetryable, t.diff=Planned, t.glyph=Succeeded, t.ver=Planned
+resident-exit signal=term reason=human_stop
+[ledger-run 2026-08-19T18:35:24Z] 常驻开工 resident-start | 账本=.team/ledgers/vz-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T18:35:24Z] 开工 start | ledger_id=ledger.vz.v1 revision=15 账本=.team/ledgers/vz-v1.json 墙钟上限=24000s 派单死线=90s
+[ledger-run 2026-08-19T18:35:25Z] 轮次 round | 第 1 轮开始：前沿 ["t.chrome"]（墙钟已跑 0s / 上限 24000s）
+[ledger-run 2026-08-19T18:35:25Z] 派单 dispatch | task=t.chrome 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-chrome 席位=vz-v1-chrome attempt=att-t.chrome-seq1-t1787164525305 delivery=del-t.chrome-seq1-t1787164525305
+[ledger-run 2026-08-19T18:35:25Z] 投递回执 send-ok | task=t.chrome case_id=ledger_vz_v1__t.chrome__r15 message_id=msg_5454ca41ff70 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T18:35:25Z] 派单落地 dispatch-landed | task=t.chrome 席位 vz-v1-chrome 的收件箱已多出这条派单
+[ledger-run 2026-08-19T18:35:25Z] 等待 wait | task=t.chrome 在等的 key（case_id）=ledger_vz_v1__t.chrome__r15 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T18:42:22Z] 无信号 wait-no-signal | task=t.chrome 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-19T18:42:22Z] 判据 acceptance | task=t.chrome 在跑 required=["A-ch-test", "A-ch-suite", "A-ch-ui", "A-ch-shot", "A-ch-doc"]
+[ledger-run 2026-08-19T18:42:23Z] 判据失败诊断 acceptance-diagnostic | task=t.chrome 判据 A-ch-test 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*ConsoleChrome*' ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-ch-test.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+sh: /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-ch-test.log: Operation not permitted
+[ledger-run 2026-08-19T18:42:23Z] 判据失败诊断 acceptance-diagnostic | task=t.chrome 判据 A-ch-suite 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-ch-suite.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+sh: /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-ch-suite.log: Operation not permitted
+[ledger-run 2026-08-19T18:42:23Z] 判据失败诊断 acceptance-diagnostic | task=t.chrome 判据 A-ch-ui 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ bash /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-chrome/ui-check.sh ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-ch-ui.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+sh: /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-ch-ui.log: Operation not permitted
+[ledger-run 2026-08-19T18:42:23Z] 判据失败诊断 acceptance-diagnostic | task=t.chrome 判据 A-ch-shot 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import glob,sys;sys.exit(0 if glob.glob(r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-chrome/*.png') else 1)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "<frozen importlib._bootstrap>", line 1007, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 982, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 925, in _find_spec
+  File "<frozen importlib._bootstrap_external>", line 1414, in find_spec
+  File "<frozen importlib._bootstrap_external>", line 1383, in _get_spec
+  File "<frozen importlib._bootstrap_external>", line 1347, in _path_importer_cache
+PermissionError: [Errno 1] Operation not permitted
+[ledger-run 2026-08-19T18:42:23Z] 放弃写回 writeback-skipped | token=writeback_skipped_stale_snapshot task=t.chrome 判据失败诊断落进 attempts[]：写回前比对发现盘上那份已不是我读的那份（我读的 revision=15 hash=cd6fd7b149e27c4b；盘上 revision=0 hash=<读不到账本文件>）——⛔ 放弃写回，不合并、不覆盖、不猜。有人在我手上改了账本，这件事只能由人处理
+[ledger-run 2026-08-19T18:42:23Z] 放弃写回 writeback-skipped | token=writeback_skipped_stale_snapshot task=- 收工对齐：写回前比对发现盘上那份已不是我读的那份（我读的 revision=15 hash=cd6fd7b149e27c4b；盘上 revision=0 hash=<读不到账本文件>）——⛔ 放弃写回，不合并、不覆盖、不猜。有人在我手上改了账本，这件事只能由人处理
+[ledger-run 2026-08-19T18:42:23Z] 收工 finish | 停机原因=AwaitingHuman 写回=[] 冻结=[] 不可判=[] 墙钟已跑 418s
+[ledger-run 2026-08-19T18:42:23Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T18:42:23Z] 通知 notify-fail | 通知未送达：team=grok-l2 workspace=/Volumes/nvme/Projects/远程Agent安卓: Error: Operation not permitted (os error 1)
+[ledger-run 2026-08-19T18:42:23Z] 挂起 park | token=parked ledger_id=ledger.vz.v1 revision=15 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: 通知未送达：team=grok-l2 workspace=/Volumes/nvme/Projects/远程Agent安卓: Error: Operation not permitted (os error 1)

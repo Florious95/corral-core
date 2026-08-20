@@ -17,6 +17,7 @@
 package dev.agentmirror.app.termview
 
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.DamageListener
 import dev.agentmirror.terminal.ScreenSnapshot
@@ -338,8 +339,13 @@ class TermViewPresenter(
      * last_sent_cols 此处用内核 cols（与成功 resize 后的服务端协商值对齐）；
      * 服务端认的列宽另在 SNAPSHOT 路径记 `frame cols`。
      */
+    private var lastReflowKey: String? = null
+
     private fun recordResumeOperands() {
         val derived = if (cellWidth > 0) viewportWidthPx / cellWidth else -1
+        val key = "$viewportWidthPx|$cellWidth|$derived|${emulator.cols}"
+        if (key == lastReflowKey) return
+        lastReflowKey = key
         DiagLog.record(
             "reflow",
             "source=resume view_width_px=$viewportWidthPx cell_width_px=$cellWidth " +
@@ -394,8 +400,9 @@ class TermViewPresenter(
      */
     private fun viewportOutgrewEmulator(): Boolean {
         if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return false
-        return (viewportHeightPx / cellHeight) > emulator.rows ||
-            (viewportWidthPx / cellWidth) > emulator.cols
+        val candidateRows = viewportHeightPx / cellHeight
+        val candidateCols = minOf(viewportWidthPx / cellWidth, TerminalMetrics.maxCols)
+        return candidateRows > emulator.rows || candidateCols > emulator.cols
     }
 
     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。
@@ -404,7 +411,7 @@ class TermViewPresenter(
     private fun recomputeGeometry(): Boolean {
         if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return false
         val rows = viewportHeightPx / cellHeight
-        val cols = viewportWidthPx / cellWidth
+        val cols = minOf(viewportWidthPx / cellWidth, TerminalMetrics.maxCols).coerceAtLeast(1)
         val changed = rows != emulator.rows || cols != emulator.cols
         if (changed) {
             onResizeRequest(rows, cols, lastResizeReason)
@@ -431,8 +438,8 @@ class TermViewPresenter(
     fun recordGridSnapshot(measuredCellW: Int) {
         val vw = viewportWidthPx
         val nominal = cellWidth
-        val reported = if (nominal > 0) vw / nominal else 0
-        val capacity = if (measuredCellW > 0) vw / measuredCellW else 0
+        val reported = if (nominal > 0) minOf(vw / nominal, TerminalMetrics.maxCols) else 0
+        val capacity = if (measuredCellW > 0) minOf(vw / measuredCellW, TerminalMetrics.maxCols) else 0
         val overflow = if (reported > capacity && measuredCellW > 0) {
             (capacity + 1) * measuredCellW - vw
         } else {

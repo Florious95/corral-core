@@ -84,6 +84,16 @@ fun AgentMirrorApp(
         // 前台服务泵不可用时接管共享连接的重连调度与输入超时裁决，服务恢复即让出（不双泵）。
         // 挂在根组合保证工作区/会话/设置/配对任一屏在屏都有兜底；服务常驻时兜底泵零工作。
         OnScreenFallbackPump()
+        // 工作区 VM 常挂 listConnector：进会话后 uiConnector 被会话 VM 占用，
+        // 二级推送仍要进列表数据源（083 §10 顶栏灯与列表同一套）。
+        DisposableEffect(workspaceViewModel) {
+            ServiceWire.listConnector = workspaceViewModel
+            onDispose {
+                if (ServiceWire.listConnector === workspaceViewModel) {
+                    ServiceWire.listConnector = null
+                }
+            }
+        }
         // 配对配置存储（SharedPreferences）：首启判定 + 重配入口共用。
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
         val session = navState.activeSession

@@ -60,3 +60,75 @@ FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/
 [ledger-run 2026-08-19T18:13:22Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=4 hash=a6b541c1f42c980d）——中途死也不会留下半份账本，进度不会全废
 [ledger-run 2026-08-19T18:13:22Z] 挂起 park | token=parked ledger_id=ledger.theme.v1 revision=4 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.theme.v1 | revision: 4 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 ｜ t.plan：曾失败 3 次，最后一次通过（历史失败已被后续尝试推翻） | 各任务终态: t.plan=Succeeded
 resident-exit signal=term reason=human_stop
+租约抢占：pid=58347 stole from pid=40419 reason=holder pid 40419 不存在（判定已死） at=1787164215
+
+[ledger-run 2026-08-19T18:30:15Z] 常驻开工 resident-start | 账本=.team/ledgers/theme-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T18:30:15Z] 开工 start | ledger_id=ledger.theme.v1 revision=10 账本=.team/ledgers/theme-v1.json 墙钟上限=15240s 派单死线=90s
+[ledger-run 2026-08-19T18:30:24Z] 轮次 round | 第 1 轮开始：前沿 ["t.remap"]（墙钟已跑 9s / 上限 15240s）
+[ledger-run 2026-08-19T18:30:24Z] 派单 dispatch | task=t.remap 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/theme-v1-remap 席位=theme-v1-remap attempt=att-t.remap-seq1-t1787164224476 delivery=del-t.remap-seq1-t1787164224476
+[ledger-run 2026-08-19T18:30:24Z] 投递回执 send-ok | task=t.remap case_id=ledger_theme_v1__t.remap__r10 message_id=msg_a1aebe706b78 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T18:30:24Z] 派单落地 dispatch-landed | task=t.remap 席位 theme-v1-remap 的收件箱已多出这条派单
+[ledger-run 2026-08-19T18:30:24Z] 等待 wait | task=t.remap 在等的 key（case_id）=ledger_theme_v1__t.remap__r10 team=grok-l2 预算=120s
+[ledger-run 2026-08-19T18:32:24Z] 无信号 wait-no-signal | task=t.remap 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-19T18:32:24Z] 判据 acceptance | task=t.remap 在跑 required=["A-rm-doc", "A-rm-sections", "A-rm-fixture"]
+[ledger-run 2026-08-19T18:33:06Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-doc 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["test", "-s", "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-19T18:33:06Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-sections 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md';s=io.open(p,encoding='utf-8').read();need=['真彩','256','对比度','例外','先验红','容差','083'];miss=[n for n in need if n not in s];print('MISSING',miss) or sys.exit(1 if miss else 0)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md'
+[ledger-run 2026-08-19T18:33:06Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-fixture 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md';s=io.open(p,encoding='utf-8').read();ok=('48;2' in s or '38;2' in s) and '48;5' in s or '38;5' in s;print('fixture escapes present', ok) or sys.exit(0 if ok else 1)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md'
+[ledger-run 2026-08-19T18:33:06Z] 原子写回 writeback-atomic | task=t.remap 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=10 hash=b83895294b73ebae）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T18:33:06Z] 判据红 acceptance-red | task=t.remap required 未全过——还没等到结果，只冻内存，接着等席位（健康长线）
+[ledger-run 2026-08-19T18:33:06Z] 在飞 in-flight | 第 1 轮没有写回，但有 1 条派单还在飞（ledger_theme_v1__t.remap__r10）——那是【还没干完】，不是【没人在干】，继续等（墙钟已跑 171s / 上限 15240s）
+[ledger-run 2026-08-19T18:33:06Z] 轮次 round | 第 2 轮开始：前沿 ["t.remap"]（墙钟已跑 171s / 上限 15240s）
+[ledger-run 2026-08-19T18:33:06Z] 在飞 in-flight | task=t.remap case_id=ledger_theme_v1__t.remap__r10 本次驱动循环已派过：接着等它的结果，⛔ 不重派
+[ledger-run 2026-08-19T18:33:06Z] 等待 wait | task=t.remap 在等的 key（case_id）=ledger_theme_v1__t.remap__r10 team=grok-l2 预算=120s
+[ledger-run 2026-08-19T18:35:06Z] 无信号 wait-no-signal | task=t.remap 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-19T18:35:06Z] 判据 acceptance | task=t.remap 在跑 required=["A-rm-doc", "A-rm-sections", "A-rm-fixture"]
+[ledger-run 2026-08-19T18:35:37Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-doc 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["test", "-s", "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-19T18:35:37Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-sections 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md';s=io.open(p,encoding='utf-8').read();need=['真彩','256','对比度','例外','先验红','容差','083'];miss=[n for n in need if n not in s];print('MISSING',miss) or sys.exit(1 if miss else 0)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md'
+[ledger-run 2026-08-19T18:35:37Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-fixture 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md';s=io.open(p,encoding='utf-8').read();ok=('48;2' in s or '38;2' in s) and '48;5' in s or '38;5' in s;print('fixture escapes present', ok) or sys.exit(0 if ok else 1)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md'
+[ledger-run 2026-08-19T18:35:37Z] 原子写回 writeback-atomic | task=t.remap 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=10 hash=daf9caf4fc8a3c25）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T18:35:37Z] 判据红 acceptance-red | task=t.remap required 未全过——还没等到结果，只冻内存，接着等席位（健康长线）
+[ledger-run 2026-08-19T18:35:37Z] 在飞 in-flight | 第 2 轮没有写回，但有 1 条派单还在飞（ledger_theme_v1__t.remap__r10）——那是【还没干完】，不是【没人在干】，继续等（墙钟已跑 322s / 上限 15240s）
+[ledger-run 2026-08-19T18:35:37Z] 轮次 round | 第 3 轮开始：前沿 ["t.remap"]（墙钟已跑 322s / 上限 15240s）
+[ledger-run 2026-08-19T18:35:37Z] 在飞 in-flight | task=t.remap case_id=ledger_theme_v1__t.remap__r10 本次驱动循环已派过：接着等它的结果，⛔ 不重派
+[ledger-run 2026-08-19T18:35:37Z] 等待 wait | task=t.remap 在等的 key（case_id）=ledger_theme_v1__t.remap__r10 team=grok-l2 预算=120s
+[ledger-run 2026-08-19T18:37:37Z] 无信号 wait-no-signal | task=t.remap 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-19T18:37:37Z] 判据 acceptance | task=t.remap 在跑 required=["A-rm-doc", "A-rm-sections", "A-rm-fixture"]
+[ledger-run 2026-08-19T18:38:57Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-doc 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["test", "-s", "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-19T18:38:57Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-sections 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md';s=io.open(p,encoding='utf-8').read();need=['真彩','256','对比度','例外','先验红','容差','083'];miss=[n for n in need if n not in s];print('MISSING',miss) or sys.exit(1 if miss else 0)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md'
+[ledger-run 2026-08-19T18:38:57Z] 判据失败诊断 acceptance-diagnostic | task=t.remap 判据 A-rm-fixture 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md';s=io.open(p,encoding='utf-8').read();ok=('48;2' in s or '38;2' in s) and '48;5' in s or '38;5' in s;print('fixture escapes present', ok) or sys.exit(0 if ok else 1)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-remap/投影规则.md'
+[ledger-run 2026-08-19T18:38:57Z] 原子写回 writeback-atomic | task=t.remap 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=10 hash=f22a2c48be02b90a）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T18:38:57Z] 判据红 acceptance-red | task=t.remap required 未全过——还没等到结果，只冻内存，接着等席位（健康长线）
+[ledger-run 2026-08-19T18:38:57Z] 在飞 in-flight | 第 3 轮没有写回，但有 1 条派单还在飞（ledger_theme_v1__t.remap__r10）——那是【还没干完】，不是【没人在干】，继续等（墙钟已跑 522s / 上限 15240s）
+[ledger-run 2026-08-19T18:38:57Z] 轮次 round | 第 4 轮开始：前沿 ["t.remap"]（墙钟已跑 522s / 上限 15240s）
+[ledger-run 2026-08-19T18:38:57Z] 在飞 in-flight | task=t.remap case_id=ledger_theme_v1__t.remap__r10 本次驱动循环已派过：接着等它的结果，⛔ 不重派
+[ledger-run 2026-08-19T18:38:57Z] 等待 wait | task=t.remap 在等的 key（case_id）=ledger_theme_v1__t.remap__r10 team=grok-l2 预算=120s
+[ledger-run 2026-08-19T18:40:44Z] 已唤醒 wait-signaled | task=t.remap 等到结果了
+[ledger-run 2026-08-19T18:40:44Z] 判据 acceptance | task=t.remap 在跑 required=["A-rm-doc", "A-rm-sections", "A-rm-fixture"]
+[ledger-run 2026-08-19T18:42:02Z] 判据通过留档 acceptance-success | task=t.remap 成功 attempt 落进 attempts[] writeback_revision=11 passed=["A-rm-doc", "A-rm-sections", "A-rm-fixture"]
+[ledger-run 2026-08-19T18:42:02Z] 原子写回 writeback-atomic | task=t.remap state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=11 hash=3b54d18c6ebdcd58）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-19T18:42:02Z] 写回 writeback | task=t.remap state=succeeded revision=10 → 11
+[ledger-run 2026-08-19T18:42:02Z] 收工 finish | 停机原因=AwaitingHuman 写回=["t.remap"] 冻结=[] 不可判=[] 墙钟已跑 707s
+[ledger-run 2026-08-19T18:42:02Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T18:42:03Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-19T18:42:03Z] 挂起 park | token=parked ledger_id=ledger.theme.v1 revision=11 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.theme.v1 | revision: 11 | 停机原因: AwaitingHuman | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 ｜ t.remap：曾失败 9 次，最后一次通过（历史失败已被后续尝试推翻） ｜ 未干完的任务（非 Succeeded）: t.catalog=Blocked, t.settings=Blocked, t.wire=Blocked | 各任务终态: t.catalog=Blocked, t.plan=Succeeded, t.remap=Succeeded, t.settings=Blocked, t.wire=Blocked

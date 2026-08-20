@@ -15,6 +15,7 @@
 🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。
 🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。
 ⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。
+🔴 **先完整读知识基底 .team/nodes/menu/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。
 ```
 
 - write_paths: app/, server/, .team/nodes/ov-menu/

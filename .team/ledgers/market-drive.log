@@ -1,0 +1,35 @@
+[ledger-run 2026-08-19T18:34:02Z] 常驻开工 resident-start | 账本=.team/ledgers/market-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-19T18:34:02Z] 开工 start | ledger_id=ledger.market.v1 revision=1 账本=.team/ledgers/market-v1.json 墙钟上限=4800s 派单死线=90s
+[ledger-run 2026-08-19T18:34:06Z] 轮次 round | 第 1 轮开始：前沿 ["t.scan"]（墙钟已跑 3s / 上限 4800s）
+[ledger-run 2026-08-19T18:34:06Z] 派单 dispatch | task=t.scan 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/market-v1-scan 席位=market-v1-scan attempt=att-t.scan-seq1-t1787164446548 delivery=del-t.scan-seq1-t1787164446548
+[ledger-run 2026-08-19T18:34:06Z] 投递回执 send-ok | task=t.scan case_id=ledger_market_v1__t.scan__r1 message_id=msg_25917430d488 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-19T18:34:06Z] 派单落地 dispatch-landed | task=t.scan 席位 market-v1-scan 的收件箱已多出这条派单
+[ledger-run 2026-08-19T18:34:06Z] 等待 wait | task=t.scan 在等的 key（case_id）=ledger_market_v1__t.scan__r1 team=grok-l2 预算=2400s
+[ledger-run 2026-08-19T18:42:22Z] 无信号 wait-no-signal | task=t.scan 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-19T18:42:22Z] 判据 acceptance | task=t.scan 在跑 required=["A-mk-doc", "A-mk-sections", "A-mk-links", "A-mk-table"]
+[ledger-run 2026-08-19T18:42:22Z] 判据失败诊断 acceptance-diagnostic | task=t.scan 判据 A-mk-doc 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["test", "-s", "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/market-scan/调研.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-19T18:42:22Z] 判据失败诊断 acceptance-diagnostic | task=t.scan 判据 A-mk-sections 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/market-scan/调研.md';s=io.open(p,encoding='utf-8').read();need=['定位','优势','劣势','查不清','Heeler','tmux','SSH'];miss=[n for n in need if n not in s];print('MISSING',miss) or sys.exit(1 if miss else 0)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/market-scan/调研.md'
+[ledger-run 2026-08-19T18:42:22Z] 判据失败诊断 acceptance-diagnostic | task=t.scan 判据 A-mk-links 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io,re;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/market-scan/调研.md';s=io.open(p,encoding='utf-8').read();n=len(re.findall(r'https?://',s));print('links',n) or sys.exit(0 if n>=10 else 1)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "<frozen importlib._bootstrap>", line 1007, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 982, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 925, in _find_spec
+  File "<frozen importlib._bootstrap_external>", line 1414, in find_spec
+  File "<frozen importlib._bootstrap_external>", line 1383, in _get_spec
+  File "<frozen importlib._bootstrap_external>", line 1347, in _path_importer_cache
+PermissionError: [Errno 1] Operation not permitted
+[ledger-run 2026-08-19T18:42:22Z] 判据失败诊断 acceptance-diagnostic | task=t.scan 判据 A-mk-table 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/market-scan/调研.md';s=io.open(p,encoding='utf-8').read();rows=[l for l in s.splitlines() if l.count('|')>=5];print('rows',len(rows)) or sys.exit(0 if len(rows)>=8 else 1)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/market-scan/调研.md'
+[ledger-run 2026-08-19T18:42:22Z] 放弃写回 writeback-skipped | token=writeback_skipped_stale_snapshot task=t.scan 判据失败诊断落进 attempts[]：写回前比对发现盘上那份已不是我读的那份（我读的 revision=1 hash=ae1cf8e407206ca0；盘上 revision=0 hash=<读不到账本文件>）——⛔ 放弃写回，不合并、不覆盖、不猜。有人在我手上改了账本，这件事只能由人处理
+[ledger-run 2026-08-19T18:42:22Z] 放弃写回 writeback-skipped | token=writeback_skipped_stale_snapshot task=- 收工对齐：写回前比对发现盘上那份已不是我读的那份（我读的 revision=1 hash=ae1cf8e407206ca0；盘上 revision=0 hash=<读不到账本文件>）——⛔ 放弃写回，不合并、不覆盖、不猜。有人在我手上改了账本，这件事只能由人处理
+[ledger-run 2026-08-19T18:42:22Z] 收工 finish | 停机原因=AwaitingHuman 写回=[] 冻结=[] 不可判=[] 墙钟已跑 499s
+[ledger-run 2026-08-19T18:42:22Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-19T18:42:22Z] 通知 notify-fail | 通知未送达：team=grok-l2 workspace=/Volumes/nvme/Projects/远程Agent安卓: Error: Operation not permitted (os error 1)
+[ledger-run 2026-08-19T18:42:22Z] 挂起 park | token=parked ledger_id=ledger.market.v1 revision=1 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: 通知未送达：team=grok-l2 workspace=/Volumes/nvme/Projects/远程Agent安卓: Error: Operation not permitted (os error 1)

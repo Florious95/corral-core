@@ -29,7 +29,7 @@ import kotlin.math.roundToInt
  */
 internal object TermLeftEdge {
 
-    /** 左内边距。数值以设计 [TerminalMetrics.paddingLeft] 为准（14dp，左右对称）。 */
+    /** 左内边距。数值以设计 [TerminalMetrics.paddingLeft] 为准（083 §3：6dp，左右对称）。 */
     val LEFT_MARGIN_DP: Float = TerminalMetrics.paddingLeft.value
 
     fun contentLeftPx(density: Float): Int =

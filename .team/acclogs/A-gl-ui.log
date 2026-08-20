@@ -1,7 +1,3 @@
 SESSION: ['远程控制 app 开发', '查看', 'Esc']
 REDRAW swipes
-EXPORT files/diag/diag-1787160263608.log term-left-edge=3 lines=68
-EXPORT files/diag/diag-1787160307098.log term-left-edge=6 lines=141
-A-gl-quiet after density term-left-edge=6 (was 3)
-SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-glyph/shot-session.png density=440
-PASS t.glyph vz-glyph
+FAIL 到不了设置/诊断日志。屏上有: ['远程控制 app 开发', 'LAN', '查看', 'term-theme-dark source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']

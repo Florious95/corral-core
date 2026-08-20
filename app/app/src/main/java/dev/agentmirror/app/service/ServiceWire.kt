@@ -79,18 +79,40 @@ object ServiceWire {
      * @pre 无（任意时刻可挂/摘）
      * @post 挂载时补播当前连接态与最近一次全量 listing（若已有）；摘除（置 null）不补播
      * @err none
-     * @inv 任意时刻至多一个 UI 监听挂在桥（后挂覆盖前挂）
+     * @inv 前台槽任意时刻至多一个（后挂覆盖前挂）。列表槽 [listConnector] 可同时挂，
+     *      身份相同则扇出去重，避免同一 VM 收两遍帧。
      */
     @Volatile
     var uiConnector: ConnectionManager.Listener? = null
         set(value) {
             field = value
             if (value == null) return
-            // 补播当前连接态（manager 可能未创建：无态可补，跳过）。
-            manager?.state()?.let(value::onStateChanged)
-            // 补播最近一次全量 listing：晚挂载 VM 的列表基线（可能已错过 READY 后的 listing）。
-            lastListing?.let(value::onFrame)
+            replayTo(value)
         }
+
+    /**
+     * 工作区列表监听槽（083 §10）：会话页占用 [uiConnector] 时，二级状态仍要进
+     * [WorkspaceViewModel]。值必须来自连接层推送，不得轮询。
+     */
+    @Volatile
+    var listConnector: ConnectionManager.Listener? = null
+        set(value) {
+            field = value
+            if (value == null) return
+            replayTo(value)
+        }
+
+    private fun replayTo(listener: ConnectionManager.Listener) {
+        manager?.state()?.let(listener::onStateChanged)
+        lastListing?.let(listener::onFrame)
+    }
+
+    private fun fanOut(block: (ConnectionManager.Listener) -> Unit) {
+        val ui = uiConnector
+        val list = listConnector
+        ui?.let(block)
+        if (list != null && list !== ui) block(list)
+    }
 
     /**
      * 前台服务监听槽（feat-fg-service-wiring）：连接事件 → 常驻通知 + 状态守望。
@@ -252,7 +274,7 @@ object ServiceWire {
                     override fun onStateChanged(state: ConnectionState) {
                         connListener.onStateChanged(state)
                         serviceListener?.onStateChanged(state)
-                        uiConnector?.onStateChanged(state)
+                        fanOut { it.onStateChanged(state) }
                     }
 
                     override fun onFrame(frame: FramePayload) {
@@ -260,31 +282,31 @@ object ServiceWire {
                         if (frame is ListingFrame) lastListing = frame
                         connListener.onFrame(frame)
                         serviceListener?.onFrame(frame)
-                        uiConnector?.onFrame(frame)
+                        fanOut { it.onFrame(frame) }
                     }
 
                     override fun onBinary(frame: BinaryFrame) {
                         connListener.onBinary(frame)
                         serviceListener?.onBinary(frame)
-                        uiConnector?.onBinary(frame)
+                        fanOut { it.onBinary(frame) }
                     }
 
                     override fun onLocalDecodeError(code: FrameError, message: String) {
                         connListener.onLocalDecodeError(code, message)
                         serviceListener?.onLocalDecodeError(code, message)
-                        uiConnector?.onLocalDecodeError(code, message)
+                        fanOut { it.onLocalDecodeError(code, message) }
                     }
 
                     override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) {
                         connListener.onInputResult(reqId, ok, reason)
                         serviceListener?.onInputResult(reqId, ok, reason)
-                        uiConnector?.onInputResult(reqId, ok, reason)
+                        fanOut { it.onInputResult(reqId, ok, reason) }
                     }
 
                     override fun onReconnect(attempt: Int, delayMs: Long) {
                         connListener.onReconnect(attempt, delayMs)
                         serviceListener?.onReconnect(attempt, delayMs)
-                        uiConnector?.onReconnect(attempt, delayMs)
+                        fanOut { it.onReconnect(attempt, delayMs) }
                     }
                 },
             )

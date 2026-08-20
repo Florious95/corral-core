@@ -1,8 +1,29 @@
+//! ---
+//! purpose: nodeprobe core——聚合 list-panes + 页脚观测，对具体 CLI 文案一无所知
+//! contract:
+//!   provides:
+//!     - name: probe
+//!       what: 输出每个席位的 state 与 background_tasks 两维；加新 provider 不必改本文件
+//!   depends:
+//!     - classify（provider 匹配器）
+//!     - tmux list-panes
+//!     - tmux capture-pane（只读，每 pane 一次）
+//! boundary:
+//!   - 旧契约是「只做 list-panes，零副作用」。现改为 list-panes + N 次 capture-pane。
+//!     仍不 attach、不 send-keys、不改 pane 状态；成本从 1 次 list 变成 1+N。
+//!   - 不把 background_tasks 折进 state；不把无规则写成 0
+//!   - 不写任何家的页脚短语
+//! maturity: wired
+//! ---
+
 pub mod classify;
 pub mod proctree;
 pub mod providers;
 
-use classify::{classify, format_codepoint, Class, STATE_UNKNOWN};
+use classify::{
+    background_tasks_for, classify, format_codepoint, parse_corpus_line, BackgroundTasks, Class,
+    CorpusRow, STATE_UNKNOWN,
+};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -24,6 +45,7 @@ pub struct Node {
     pub name: String,
     pub provider: String,
     pub state: String,
+    pub background_tasks: BackgroundTasks,
     pub evidence: Evidence,
 }
 
@@ -189,6 +211,22 @@ pub struct RawPane {
     pub title: String,
 }
 
+/// Read-only pane body (footer lives here). One capture per pane.
+pub fn capture_pane(spec: &SocketSpec, pane_id: &str) -> Result<String, String> {
+    let mut cmd = tmux_base(spec);
+    cmd.args(["capture-pane", "-p", "-t", pane_id, "-S", "-30"]);
+    let out = cmd
+        .output()
+        .map_err(|e| format!("tmux capture-pane spawn: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "tmux capture-pane failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 pub fn probe(spec: SocketSpec) -> Result<Report, String> {
     let panes = list_panes(&spec)?;
     let snap = proctree::read_table();
@@ -204,6 +242,8 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
         } else {
             continue;
         };
+        let footer = capture_pane(&spec, &p.pane_id).unwrap_or_default();
+        let background_tasks = background_tasks_for(class.provider, &footer);
         let evidence = evidence_for(&p.title, &class, comms);
         let name = if p.window_name.is_empty() {
             p.session.clone()
@@ -218,6 +258,7 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
             name,
             provider: class.provider.to_string(),
             state: class.state.to_string(),
+            background_tasks,
             evidence,
         });
     }
@@ -233,22 +274,52 @@ pub fn run_fixtures(path: &Path) -> Result<String, String> {
         std::fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let mut out = String::new();
     for (i, line) in text.lines().enumerate() {
-        let Some((title, got, want_state, want_provider)) = classify::classify_tsv_line(line)
-        else {
-            continue;
+        let row = match parse_corpus_line(line) {
+            Ok(None) => continue,
+            Ok(Some(r)) => r,
+            Err(e) => return Err(format!("line {}: {e}", i + 1)),
         };
-        if got.state != want_state || got.provider != want_provider {
-            return Err(format!(
-                "line {} title={title:?} want {want_state}/{want_provider} got {}/{}",
-                i + 1,
-                got.state,
-                got.provider
-            ));
+        match row {
+            CorpusRow::Title {
+                payload,
+                got,
+                want_state,
+                want_provider,
+            } => {
+                if got.state != want_state || got.provider != want_provider {
+                    return Err(format!(
+                        "line {} title={payload:?} want {want_state}/{want_provider} got {}/{}",
+                        i + 1,
+                        got.state,
+                        got.provider
+                    ));
+                }
+                out.push_str(got.state);
+                out.push('\t');
+                out.push_str(got.provider);
+                out.push('\n');
+            }
+            CorpusRow::Footer {
+                payload,
+                got,
+                want,
+                provider,
+            } => {
+                if got != want {
+                    return Err(format!(
+                        "line {} footer={payload:?} provider={provider} want {want:?} got {got:?}",
+                        i + 1
+                    ));
+                }
+                match got {
+                    BackgroundTasks::Count(n) => out.push_str(&n.to_string()),
+                    BackgroundTasks::Unknown => out.push_str("unknown"),
+                }
+                out.push('\t');
+                out.push_str(&provider);
+                out.push('\n');
+            }
         }
-        out.push_str(got.state);
-        out.push('\t');
-        out.push_str(got.provider);
-        out.push('\n');
     }
     Ok(out)
 }
@@ -266,36 +337,67 @@ mod tests {
         let path = default_fixtures();
         let text = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-        let mut n = 0usize;
+        let mut n_title = 0usize;
+        let mut n_footer = 0usize;
         for (i, line) in text.lines().enumerate() {
-            let Some((title, got, want_state, want_provider)) = classify::classify_tsv_line(line)
-            else {
+            let row = parse_corpus_line(line).unwrap_or_else(|e| panic!("line {}: {e}", i + 1));
+            let Some(row) = row else {
                 continue;
             };
-            n += 1;
-            assert_eq!(
-                got.state,
-                want_state,
-                "line {} title={title:?} state {} != {want_state} first={:?}",
-                i + 1,
-                got.state,
-                got.first
-            );
-            assert_eq!(
-                got.provider,
-                want_provider,
-                "line {} title={title:?} provider {} != {want_provider}",
-                i + 1,
-                got.provider
-            );
-            if got.state == STATE_UNKNOWN {
-                assert!(got.first.is_some(), "unknown must carry a leading glyph");
-                let ev = evidence_for(&title, &got, Vec::new());
-                assert!(ev.codepoint.is_some(), "unknown evidence missing codepoint");
-                assert_eq!(ev.title.as_deref(), Some(title.as_str()));
+            match row {
+                CorpusRow::Title {
+                    payload,
+                    got,
+                    want_state,
+                    want_provider,
+                } => {
+                    n_title += 1;
+                    assert_eq!(
+                        got.state,
+                        want_state,
+                        "line {} title={payload:?} state {} != {want_state} first={:?}",
+                        i + 1,
+                        got.state,
+                        got.first
+                    );
+                    assert_eq!(
+                        got.provider,
+                        want_provider,
+                        "line {} title={payload:?} provider {} != {want_provider}",
+                        i + 1,
+                        got.provider
+                    );
+                    if got.state == STATE_UNKNOWN {
+                        assert!(got.first.is_some(), "unknown must carry a leading glyph");
+                        let ev = evidence_for(&payload, &got, Vec::new());
+                        assert!(ev.codepoint.is_some(), "unknown evidence missing codepoint");
+                        assert_eq!(ev.title.as_deref(), Some(payload.as_str()));
+                    }
+                }
+                CorpusRow::Footer {
+                    payload,
+                    got,
+                    want,
+                    provider,
+                } => {
+                    n_footer += 1;
+                    assert_eq!(
+                        got,
+                        want,
+                        "line {} footer={payload:?} provider={provider} {got:?} != {want:?}",
+                        i + 1
+                    );
+                }
             }
         }
-        assert!(n >= 6, "corpus rows {n} < 6");
-        eprintln!("fixtures_corpus {n} ok");
+        assert!(n_title >= 6, "title rows {n_title} < 6");
+        assert!(n_footer >= 3, "footer rows {n_footer} < 3");
+        eprintln!("fixtures_corpus title={n_title} footer={n_footer} ok");
+    }
+
+    #[test]
+    fn corpus_rejects_missing_kind() {
+        let err = parse_corpus_line("hello\tidle\tgrok").unwrap_err();
+        assert!(err.contains("4 fields"), "{err}");
     }
 }

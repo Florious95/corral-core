@@ -34,6 +34,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +45,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
+import dev.agentmirror.app.ui.components.BackChevron
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.TonalTextButton
 import dev.agentmirror.app.ui.components.runningDotColor
@@ -79,7 +83,7 @@ enum class TerminalKey(val label: String, val danger: Boolean = false) {
 fun SessionShellScreen(
     sessionDisplayName: String,
     status: SessionStatus,
-    lanConnected: Boolean,
+    connectionPath: ConnectionPath? = null,
     draft: TextFieldValue,
     onDraftChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
@@ -89,6 +93,7 @@ fun SessionShellScreen(
     onAttach: () -> Unit,
     modifier: Modifier = Modifier,
     sendEnabled: Boolean = true,
+    connectionBanner: String? = null,
     terminalContent: @Composable () -> Unit,
 ) {
     val p = LocalAppPalette.current
@@ -96,24 +101,48 @@ fun SessionShellScreen(
         SessionTopBar(
             sessionDisplayName = sessionDisplayName,
             status = status,
-            lanConnected = lanConnected,
+            connectionPath = connectionPath,
             onBack = onBack,
             onOpenSwitcher = onOpenSwitcher,
         )
-        // 终端屏：四周 8dp 呼吸 + 14dp 圆角，做成「内嵌屏幕」
-        Surface(
-            modifier = Modifier
+        // 终端屏：外 4dp 呼吸 + 14dp 圆角。重连条 overlay 在卡片顶、不推内容。
+        Box(
+            Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .padding(Dims.terminalCardMargin),
-            shape = RoundedCornerShape(Radii.terminalCard),
-            color = dev.agentmirror.app.ui.theme.currentTerminalPalette().background,
-            tonalElevation = Elevations.none,
-            shadowElevation = if (p === dev.agentmirror.app.ui.theme.DarkPalette) Elevations.terminalCardDark else Elevations.terminalCardLight,
-            border = if (p === dev.agentmirror.app.ui.theme.DarkPalette)
-                BorderStroke(Dims.hairline, p.divider) else null,
+                .fillMaxWidth(),
         ) {
-            terminalContent()
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(Dims.terminalCardMargin),
+                shape = RoundedCornerShape(Radii.terminalCard),
+                color = dev.agentmirror.app.ui.theme.currentTerminalPalette().background,
+                tonalElevation = Elevations.none,
+                shadowElevation = if (p === dev.agentmirror.app.ui.theme.DarkPalette) Elevations.terminalCardDark else Elevations.terminalCardLight,
+                border = if (p === dev.agentmirror.app.ui.theme.DarkPalette)
+                    BorderStroke(Dims.hairline, p.divider) else null,
+            ) {
+                terminalContent()
+            }
+            if (connectionBanner != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = Dims.terminalCardMargin)
+                        .testTag("connection-banner"),
+                ) {
+                    AppText(
+                        text = connectionBanner,
+                        color = p.metaText,
+                        fontSize = TypeSizes.statusChip,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(p.consoleBackground)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
         }
         ConsoleBar(
             draft = draft,
@@ -137,12 +166,12 @@ fun SessionShellScreen(
 private fun SessionTopBar(
     sessionDisplayName: String,
     status: SessionStatus,
-    lanConnected: Boolean,
+    connectionPath: ConnectionPath?,
     onBack: () -> Unit,
     onOpenSwitcher: () -> Unit,
 ) {
     val p = LocalAppPalette.current
-    Column {
+    Column(Modifier.testTag("session-topbar")) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -150,7 +179,7 @@ private fun SessionTopBar(
                 .padding(start = 4.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconGlyphButton(glyph = "‹", size = Dims.backButtonSize, fontSize = 26.sp, tint = p.accent, onClick = onBack)
+            IconGlyphButton(size = Dims.backButtonSize, tint = p.accent, onClick = onBack)
             Row(
                 Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
@@ -176,7 +205,7 @@ private fun SessionTopBar(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (lanConnected) LanPill()
+                if (connectionPath != null) LanPill(connectionPath)
                 TonalTextButton("查看", onOpenSwitcher, modifier = Modifier.testTag("session-overlay-open"))
                 Box(Modifier.width(4.dp))
             }
@@ -208,14 +237,14 @@ private fun RunningDot(status: SessionStatus) {
             .size(7.dp)
             .clip(CircleShape)
             .background(if (pulse) lamp.copy(alpha = alpha) else lamp)
+            .testTag("session-lamp")
+            .semantics { contentDescription = status.name },
     )
 }
 
 @Composable
 private fun IconGlyphButton(
-    glyph: String,
     size: Dp,
-    fontSize: androidx.compose.ui.unit.TextUnit,
     tint: Color,
     onClick: () -> Unit,
 ) {
@@ -227,10 +256,11 @@ private fun IconGlyphButton(
             .size(size)
             .clip(CircleShape)
             .background(if (pressed) p.accentContainer else Color.Transparent)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .testTag("session-back"),
         contentAlignment = Alignment.Center,
     ) {
-        AppText(glyph, tint, fontSize, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
+        BackChevron(tint = tint)
     }
 }
 
@@ -421,7 +451,9 @@ private fun DraftField(
                 cursorBrush = SolidColor(p.accent),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { onSend() }),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("session-draft"),
             )
         }
     }

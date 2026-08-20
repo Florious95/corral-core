@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -20,40 +21,86 @@ enum class Appearance { Light, Dark, System }
 /** 当前外观。嵌套 [AppTheme] 不传参时继承，避免把强制深/浅冲回「跟随系统」。 */
 val LocalAppearance = staticCompositionLocalOf { Appearance.System }
 
-private val LightScheme = lightColorScheme(
+/**
+ * 设计落位的 M3 浅色槽。缺 surfaceContainer* 时 DropdownMenu/Dialog 会掉进框架默认紫。
+ * 测试经 [appLightScheme] 断言每一个槽位都不等于 [lightColorScheme] 默认。
+ */
+internal val appLightScheme = lightColorScheme(
     primary = LightPalette.accent,
     onPrimary = LightPalette.onAccent,
     primaryContainer = LightPalette.accentContainer,
     onPrimaryContainer = LightPalette.accent,
+    inversePrimary = DarkPalette.accent,
     secondary = LightPalette.busyDot,
-    onSecondary = androidx.compose.ui.graphics.Color.White,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFD7E8E5),
+    onSecondaryContainer = LightPalette.busyChipText,
+    tertiary = LightPalette.busyDot,
+    onTertiary = Color.White,
+    tertiaryContainer = LightPalette.busyChipBg,
+    onTertiaryContainer = LightPalette.busyChipText,
     background = LightPalette.screenBackground,
     onBackground = LightPalette.titleText,
     surface = LightPalette.listBackground,
     onSurface = LightPalette.rowTitleText,
     surfaceVariant = LightPalette.consoleBackground,
     onSurfaceVariant = LightPalette.metaText,
+    surfaceTint = LightPalette.accent,
+    inverseSurface = LightPalette.titleText,
+    inverseOnSurface = LightPalette.listBackground,
+    error = LightPalette.unknownDot,
+    onError = Color.White,
+    errorContainer = LightPalette.unknownChipBg,
+    onErrorContainer = LightPalette.unknownChipText,
     outline = LightPalette.cardBorder,
     outlineVariant = LightPalette.divider,
     scrim = LightPalette.scrim,
+    surfaceBright = Color.White,
+    surfaceDim = Color(0xFFDDDFE5),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = LightPalette.listBackground,
+    surfaceContainer = Color(0xFFECEEF2),
+    surfaceContainerHigh = LightPalette.consoleBackground,
+    surfaceContainerHighest = Color(0xFFE0E3EA),
 )
 
-private val DarkScheme = darkColorScheme(
+internal val appDarkScheme = darkColorScheme(
     primary = DarkPalette.accent,
     onPrimary = DarkPalette.onAccent,
     primaryContainer = DarkPalette.accentContainer,
     onPrimaryContainer = DarkPalette.navActive,
+    inversePrimary = LightPalette.accent,
     secondary = DarkPalette.busyDot,
-    onSecondary = androidx.compose.ui.graphics.Color(0xFF04201D),
+    onSecondary = Color(0xFF04201D),
+    secondaryContainer = Color(0xFF14332F),
+    onSecondaryContainer = DarkPalette.busyChipText,
+    tertiary = DarkPalette.busyDot,
+    onTertiary = Color(0xFF04201D),
+    tertiaryContainer = DarkPalette.busyChipBg,
+    onTertiaryContainer = DarkPalette.busyChipText,
     background = DarkPalette.screenBackground,
     onBackground = DarkPalette.titleText,
     surface = DarkPalette.listBackground,
     onSurface = DarkPalette.rowTitleText,
     surfaceVariant = DarkPalette.consoleBackground,
     onSurfaceVariant = DarkPalette.metaText,
+    surfaceTint = DarkPalette.accent,
+    inverseSurface = DarkPalette.titleText,
+    inverseOnSurface = DarkPalette.listBackground,
+    error = DarkPalette.unknownDot,
+    onError = Color(0xFF3B1018),
+    errorContainer = DarkPalette.unknownChipBg,
+    onErrorContainer = DarkPalette.unknownChipText,
     outline = DarkPalette.cardBorder,
     outlineVariant = DarkPalette.divider,
     scrim = DarkPalette.scrim,
+    surfaceBright = Color(0xFF1A2233),
+    surfaceDim = Color(0xFF070B14),
+    surfaceContainerLowest = Color(0xFF05080F),
+    surfaceContainerLow = DarkPalette.listBackground,
+    surfaceContainer = DarkPalette.cardBackground,
+    surfaceContainerHigh = DarkPalette.consoleBackground,
+    surfaceContainerHighest = Color(0xFF1A2233),
 )
 
 /**
@@ -129,7 +176,7 @@ fun AppTheme(
         LocalAppearance provides appearance,
     ) {
         MaterialTheme(
-            colorScheme = if (dark) DarkScheme else LightScheme,
+            colorScheme = if (dark) appDarkScheme else appLightScheme,
             typography = AppTypography,
             content = content,
         )

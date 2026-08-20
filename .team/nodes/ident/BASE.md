@@ -13,11 +13,28 @@
 🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。
 🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。
 ⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。
+🔴 **先完整读知识基底 .team/nodes/ident/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。
+
+③ **收藏页的会话条目要展示目录**（用户 2026-08-19 追加）：现在收藏栏每行只有会话名，没有路径。要和二级菜单一样带上工作目录副标题。🔴 这条和 ①（身份含 socket）是同一件事的两面：**同名会话靠目录才能被人分辨**，光修键不改显示，用户看到的仍是两条一模一样的「claude_code」。判据 `A-fav-path`：收藏页每行**都带非空目录副标题**，且两个同名会话的副标题**不同**。
+
+---
+🔴🔴 **上一轮（revision 6）的失败诊断 —— 引擎不会告诉你，由 leader 手工回注：**
+上一席**把活干在了 `.worktrees/wt15.ident/` 里**，而判据全部在**仓根**执行 ⇒ `A-id-test` / `A-id-doc` / `A-id-shots` / `A-fav-path` 一律红，不是代码不对，是**改在了没人验的那棵树上**。
+- 那棵树里已有可用产出（未提交）：`FavoriteIdentityTest.kt`（新增）+ `FavoriteBook.kt` / `FavoriteList.kt` / `FavoriteRecord.kt` / `WorkspaceViewModel.kt` / `TestFavorite.kt` / `TestThreePane.kt` / `FavoriteToggleClickTest.kt`（修改）。
+- **先只读地看它**：`git -C /Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt15.ident diff` 和 `git -C ... status --porcelain`。
+- 🔴 **判断它对不对是你的事**，⛔ 不许无脑照搬——它从没被任何判据验过。可用就在**仓根**重做一遍，不可用就自己写。
+- ⛔⛔ 绝不 `git checkout` / `git restore` 仓根任何文件（仓根有大量未提交产品代码，覆盖即丢失）。
+- ⛔ 不要动 `.worktrees/` 下任何东西，也不要再建 worktree。
+
+✅ **模拟器已重新起好**：`emulator-5554`（AVD `agentmirror_geo_1260x2800`）。
+adb=`~/Library/Android/sdk/platform-tools/adb`；连之前先 `adb reverse tcp:9900 tcp:9900`。
+⛔ 截图前先关输入法——2026-08-19 实发：候选栏把配对 token 明文显示进了截图。
+
 ```
 
 - write_paths: app/, server/, .team/nodes/ident/
-- read_paths: requirement-base/entries/073-会话身份跨socket冲突与leader同名.md, .claude/skills/emulator-manual-test/SKILL.md, app/app/src/, server/internal/
-- 判据: A-id-test, A-id-shots, A-id-doc, A-id-suite, A-id-go
+- read_paths: requirement-base/entries/073-会话身份跨socket冲突与leader同名.md, .claude/skills/emulator-manual-test/SKILL.md, app/app/src/, server/internal/, .team/nodes/ident/BASE.md
+- 判据: A-id-test, A-id-shots, A-id-doc, A-id-suite, A-id-go, A-fav-path
 
 ## 2. 架构基（wiki 现算影响闭包）
 - 写作用域包：dev.agentmirror.app, internal/api
