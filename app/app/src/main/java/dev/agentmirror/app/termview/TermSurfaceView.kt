@@ -36,6 +36,7 @@ import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
 import dev.agentmirror.terminal.TextStyle
+import java.io.File
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -43,8 +44,9 @@ import kotlin.math.roundToInt
 /**
  * 终端画布视图：Canvas 逐格绘制 + 拖动手势 + Choreographer 帧调度（薄层，业务状态全在 [TermViewPresenter]）。
  *
- * 帧循环纯数据驱动：presenter 的脏区只作"画面已变化"的触发信号（[TermViewPresenter.takeDamage]
- * 排空即弃，防缓冲无界增长），之后整帧重绘可见窗口全部行（每帧工作量 = 窗口行数，非脏行数，006）；
+ * 帧循环纯数据驱动：presenter 的脏区取走后整帧重绘可见窗口（滚动/快照仍全窗；
+ * [TermDrawMeter.optEnabled] 时跳过已由清屏铺过的默认底并合并同色底，像素等价）。
+ * 脏区行数记入仪表，不按脏行裁剪滚动帧（思路 S2-a 滚动暂全绘）。
  * 拖动滚动只改本地视口零网络。字号（[fontSizeSp]，Settings 持久化，取代原 005 捏合）经
  * [applyFontMetrics] 实测换算 cellWidth/cellHeight 后写回 presenter，视口建立时presenter
  * 据此算 rows/cols 并由上层发协议 resize 帧。绘制全部逻辑收敛在本类（等宽字体测量/同色 run
@@ -191,6 +193,7 @@ class TermSurfaceView @JvmOverloads constructor(
             val deltaLines = (pendingScrollPx / lineHeightPx.toFloat()).toInt() // 向零截断，符号随累加器
             if (deltaLines == 0) return true
             pendingScrollPx -= deltaLines * lineHeightPx.toFloat()
+            lastScrollDelta = deltaLines
             val remoteScroll = onRemoteScrollBy
             if (remoteScroll != null) {
                 remoteScroll(deltaLines) // 远端路径；降级判断由 SessionViewModel 负责
@@ -204,15 +207,32 @@ class TermSurfaceView @JvmOverloads constructor(
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             framePending = false
+            lastFrameTimeNanos = frameTimeNanos
             val p = presenter ?: return
             // 排空脏区缓冲（防无界增长）后整帧重绘。不再自续下一帧：帧循环是纯数据
             // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线；
             // 旧版 showBackToBottom 自续 = 锁定历史时 60fps 空转，本案顺带拆除）。
-            while (p.takeDamage().isNotEmpty()) Unit
+            var dirtyRows = 0
+            while (true) {
+                val taken = p.takeDamage()
+                if (taken.isEmpty()) break
+                for (r in taken) dirtyRows += r.last - r.first + 1
+            }
+            lastDirtyRowsIn = dirtyRows
             p.beginFrame()
             invalidate()
         }
     }
+
+    private var lastDirtyRowsIn: Int = 0
+    private var lastScrollDelta: Int = 0
+    private var lastFrameTimeNanos: Long = 0L
+    private var bgRectCount: Int = 0
+    private var textDrawCount: Int = 0
+    private var measureTextCount: Int = 0
+    private var geomRectCount: Int = 0
+    private var cellsNonBlank: Int = 0
+    private val glyphAdvanceCache = HashMap<Int, Float>(256)
 
     /** 帧是否已排入 Choreographer（防重复排队；doFrame 时复位；仅主线程触碰）。 */
     private var framePending = false
@@ -252,9 +272,15 @@ class TermSurfaceView @JvmOverloads constructor(
         }
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        refreshDrawOpt()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         presenter?.onViewportSizeChanged(usableWidthPx(w), h)
+        persistViewportGeom()
     }
 
     /**
@@ -307,7 +333,9 @@ class TermSurfaceView @JvmOverloads constructor(
             return
         }
         if (width <= 0 || height <= 0) return
+        refreshDrawOpt()
         presenter?.onRealViewportChanged(usableWidthPx(width), height)
+        persistViewportGeom()
         postFrame()
     }
 
@@ -321,19 +349,32 @@ class TermSurfaceView @JvmOverloads constructor(
 
     /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
     override fun onDraw(canvas: Canvas) {
+        val t0 = System.nanoTime()
         super.onDraw(canvas)
         publishThemeChrome()
-        val p = presenter ?: return
+        bgRectCount = 0
+        textDrawCount = 0
+        measureTextCount = 0
+        geomRectCount = 0
+        cellsNonBlank = 0
+        val p = presenter
+        if (p == null) {
+            emitDrawMeter(t0, rows = 0, cols = 0, drawnRows = 0, presenterNull = 1)
+            return
+        }
         // 清屏为终端默认背景（BCE：空白格也带背景色，必须整帧铺底色）。
         bgPaint.color = themeBgArgb()
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+        bgRectCount++
 
         val win = p.window
         val contentLeft = contentLeftPx()
         recordLeftEdgeOnce(contentLeft)
+        var drawnRows = 0
         for (logical in win) {
             val rowY = (logical - win.first) * cellH
             drawLine(canvas, p.lineCells(logical), rowY)
+            drawnRows++
         }
 
         // 视图内"回到底部"悬浮钮为历史遗留死代码：backToBottomLabel 全仓库无赋值点，本块永不走；
@@ -350,6 +391,14 @@ class TermSurfaceView @JvmOverloads constructor(
                 canvas.drawText(label, x + pad, y + dp(28f), labelPaint)
             }
         }
+        emitDrawMeter(
+            t0,
+            rows = drawnRows,
+            cols = if (cellW > 0) usableWidthPx(width) / cellW else 0,
+            drawnRows = drawnRows,
+            presenterNull = 0,
+        )
+        lastScrollDelta = 0
     }
 
     // ---- 逐行绘制 ----
@@ -368,12 +417,24 @@ class TermSurfaceView @JvmOverloads constructor(
         // width > 0 guard：TermBgCjkAlignTest 走 view.draw 无 layout（width=0）时护栏必须失效
         // （否则空画布下每个矩形都越界，计数误报、测试错乱）。只有真实视口（width>0）才兜底。
         val guardActive = width > 0
+        val defaultBg = themeBgArgb()
+        val fast = TermDrawMeter.optEnabled
+        var runColor: Int? = null
+        var runLeft = 0f
+        var runRight = 0f
+        fun flushBg() {
+            val c = runColor ?: return
+            bgPaint.color = c
+            canvas.drawRect(runLeft, rowY.toFloat(), runRight, (rowY + cellH).toFloat(), bgPaint)
+            bgRectCount++
+            runColor = null
+        }
         for (cell in cells) {
             if (cell.width == 0) {
                 x += cellW
                 continue
             }
-            bgPaint.color = resolvedBg(cell.style)
+            val color = resolvedBg(cell.style)
             val right = x + cellW * cell.width
             val clipped = if (guardActive && right > width) {
                 clipGuardEngageCount++
@@ -381,9 +442,26 @@ class TermSurfaceView @JvmOverloads constructor(
             } else {
                 right.toFloat()
             }
-            canvas.drawRect(x.toFloat(), rowY.toFloat(), clipped, (rowY + cellH).toFloat(), bgPaint)
+            if (fast && color == defaultBg) {
+                flushBg()
+                x += cellW
+                continue
+            }
+            if (fast && runColor == color) {
+                runRight = clipped
+            } else if (fast) {
+                flushBg()
+                runColor = color
+                runLeft = x.toFloat()
+                runRight = clipped
+            } else {
+                bgPaint.color = color
+                canvas.drawRect(x.toFloat(), rowY.toFloat(), clipped, (rowY + cellH).toFloat(), bgPaint)
+                bgRectCount++
+            }
             x += cellW
         }
+        flushBg()
         drawTextRuns(canvas, cells, rowY)
     }
 
@@ -421,6 +499,7 @@ class TermSurfaceView @JvmOverloads constructor(
             }
             runColor = color
             sb.append(cell.text)
+            if (cell.text.isNotEmpty() && cell.text != " ") cellsNonBlank++
             col += cell.width
         }
         if (sb.isNotEmpty()) {
@@ -438,6 +517,9 @@ class TermSurfaceView @JvmOverloads constructor(
                     // 字形右缘护栏（X3）：段首列越界（X2 失效/异常回归，正常路径恒 0）时钳进画布，
                     // 否则末列字形被 Canvas 裁半（用户「『它』的一半」正是字形被裁）。width>0 guard 同背景。
                     // 段占列宽按码点 CharWidth 累计（宽字符主格 2 列但 text 仅 1 字符，length 会低估）。
+                    if (TermDrawMeter.optEnabled && seg.text.isNotEmpty() && seg.text.all { it == ' ' }) {
+                        continue
+                    }
                     fgPaint.color = color
                     val originX = TermLeftEdge.cellOriginX(seg.startCol, cellW, contentLeftPx())
                     if (width > 0 && originX >= width) {
@@ -446,6 +528,7 @@ class TermSurfaceView @JvmOverloads constructor(
                     } else {
                         canvas.drawText(seg.text, originX.toFloat(), rowY + baselinePx, fgPaint)
                     }
+                    textDrawCount++
                 }
                 GlyphSlot.SYSTEM_FALLBACK -> {
                     g.systemPaint.color = color
@@ -492,7 +575,7 @@ class TermSurfaceView @JvmOverloads constructor(
             if (BoxBlockGeometry.handles(cp)) {
                 drawBoxBlock(canvas, cp, x, rowY, cellPx, cellH, paint.color)
             } else {
-                val actual = paint.measureText(text, i, j)
+                val actual = cachedAdvance(paint, text, i, j, cp)
                 // 格内水平居中；advance > 格宽时旧公式左溢为负，col0 的 ● 被 clip。
                 // 钳到 0：完整字形可见，左溢改走左边距而不是裁半。
                 canvas.drawText(
@@ -503,6 +586,7 @@ class TermSurfaceView @JvmOverloads constructor(
                     rowY + baselinePx,
                     paint,
                 )
+                textDrawCount++
             }
             x += cellPx
             i = j
@@ -529,7 +613,84 @@ class TermSurfaceView @JvmOverloads constructor(
                 r.bottom.toFloat(),
                 geomPaint,
             )
+            geomRectCount++
         }
+    }
+
+    private fun cachedAdvance(paint: Paint, text: String, start: Int, end: Int, cp: Int): Float {
+        if (!TermDrawMeter.optEnabled) {
+            measureTextCount++
+            return paint.measureText(text, start, end)
+        }
+        val key = (paint.textSize.toRawBits() xor cp)
+        val hit = glyphAdvanceCache[key]
+        if (hit != null) return hit
+        measureTextCount++
+        val v = paint.measureText(text, start, end)
+        if (glyphAdvanceCache.size < 2048) glyphAdvanceCache[key] = v
+        return v
+    }
+
+    private fun emitDrawMeter(
+        t0: Long,
+        rows: Int,
+        cols: Int,
+        drawnRows: Int,
+        presenterNull: Int,
+    ) {
+        val dtUs = ((System.nanoTime() - t0) / 1000L).toInt().coerceAtLeast(0)
+        TermDrawMeter.onDrawEnd(
+            dtUs = dtUs,
+            rows = rows,
+            cols = cols,
+            cellW = cellW,
+            cellH = cellH,
+            bgRect = bgRectCount,
+            textDraw = textDrawCount,
+            measureText = measureTextCount,
+            geomRect = geomRectCount,
+            dirtyRowsIn = lastDirtyRowsIn,
+            drawnRows = drawnRows,
+            presenterNull = presenterNull,
+            cellsNonBlank = cellsNonBlank,
+            scrollDelta = lastScrollDelta,
+            frameTimeNanos = lastFrameTimeNanos,
+            source = "onDraw",
+        )
+    }
+
+    private fun refreshDrawOpt() {
+        val f = File(context.filesDir, TermDrawMeter.OPT_FILE)
+        TermDrawMeter.optEnabled = try {
+            if (!f.exists()) true else f.readText().trim() != "0"
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    private fun persistViewportGeom() {
+        if (cellW <= 0 || cellH <= 0 || width <= 0 || height <= 0) return
+        val rows = (height / cellH).coerceAtLeast(1)
+        val cols = minOf(usableWidthPx(width) / cellW, TerminalMetrics.maxCols).coerceAtLeast(1)
+        val geom = ViewportGeom(
+            rows = rows,
+            cols = cols,
+            cellW = cellW,
+            cellH = cellH,
+            fontSizeSp = fontSizeSp.roundToInt(),
+            viewW = width,
+            viewH = height,
+            densityDpi = resources.displayMetrics.densityDpi,
+        )
+        SharedPreferencesViewportGeomStore(context).save(geom)
+        DiagLog.record(
+            "term-geom",
+            "source=persist rows=${geom.rows} cols=${geom.cols} cellW=${geom.cellW} " +
+                "cellH=${geom.cellH} fontSp=${geom.fontSizeSp} viewW=${geom.viewW} " +
+                "viewH=${geom.viewH} densityDpi=${geom.densityDpi}",
+            coalesceKey = "${geom.rows}|${geom.cols}|${geom.cellW}|${geom.cellH}|" +
+                "${geom.fontSizeSp}|${geom.viewW}|${geom.viewH}|${geom.densityDpi}",
+        )
     }
 
     /**
@@ -580,9 +741,11 @@ class TermSurfaceView @JvmOverloads constructor(
         val textW = fgPaint.measureText("W")
         cellW = max(1, floor(textW).toInt())
         lineHeightPx = cellH
+        glyphAdvanceCache.clear()
         if (!p.cellMetricsSeeded) {
             p.seedCellMetrics(cellW, cellH)
         }
+        persistViewportGeom()
     }
 
     /** 终端色 → ARGB。色值与 083 §2 重映射都在 [TermPalette.colorFor]，这里不写字面量。 */

@@ -1,1 +1,67 @@
-bash: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/perf-check.sh: No such file or directory
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1531
+WaitTime: 1532
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1510
+WaitTime: 1517
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1524
+WaitTime: 1529
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1526
+WaitTime: 1528
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1528
+WaitTime: 1528
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1466
+WaitTime: 1468
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1396
+WaitTime: 1397
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 2416
+WaitTime: 2421
+Complete
+GFX density=480 opt=0 total=1 janky%=100.0 p95_ms=34.0
+DRAW density=480 opt=0 avg_us=68894 p95_us=68894 bgRect=2017 n=1 count=1
+GFX density=480 opt=1 total=1 janky%=100.0 p95_ms=17.0
+DRAW density=480 opt=1 avg_us=61858 p95_us=61858 bgRect=1 n=1 count=1
+DROP d480 p95 0.102  before=68894 after=61858
+GFX density=440 opt=0 total=1 janky%=100.0 p95_ms=34.0
+DRAW density=440 opt=0 avg_us=97517 p95_us=97517 bgRect=2445 n=1 count=1
+GFX density=440 opt=1 total=261 janky%=3.45 p95_ms=30.0
+DRAW density=440 opt=1 avg_us=24273 p95_us=24273 bgRect=1 n=1 count=1
+DROP d440 p95 0.751  before=97517 after=24273
+PASS A-dw-ui
