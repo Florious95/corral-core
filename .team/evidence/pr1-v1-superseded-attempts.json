@@ -1,0 +1,62 @@
+{
+ "note": "账本 audit 不接受自定义键，失败 attempt 归档到本文件，⛔ 不删证据。这些红全部源于 leader 的判据写错（A-recon-wiki 存量红 / 文档判据写死仓根），已在 rev6-11 更正，不代表席位的错。",
+ "superseded_attempts": [
+  {
+   "task_id": "t.recon",
+   "superseded_at_revision": 10,
+   "reason": "leader 判据写错（A-recon-wiki 存量红 / 文档判据写死仓根），已在 rev6-10 更正，本 attempt 的红不代表席位的错",
+   "attempt": {
+    "attempt_id": "att-t.recon-seq15-t1787244694078",
+    "delivery_id": "del-t.recon-seq15-t1787244694078",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-recon-wiki",
+     "acceptance_failure.argv=[\"sh\", \"-c\", \"{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.conn && cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.service && cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.workspace ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-recon-wiki.log 2>&1\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)="
+    ]
+   }
+  },
+  {
+   "task_id": "t.idea-input",
+   "superseded_at_revision": 10,
+   "reason": "leader 判据写错（A-recon-wiki 存量红 / 文档判据写死仓根），已在 rev6-10 更正，本 attempt 的红不代表席位的错",
+   "attempt": {
+    "attempt_id": "att-t.idea-input-seq13-t1787244693396",
+    "delivery_id": "del-t.idea-input-seq13-t1787244693396",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-ii-doc",
+     "acceptance_failure.argv=[\"python3\", \"-c\", \"import io,sys;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md';s=io.open(p,encoding='utf-8').read();need=['本格未读取 Heeler 任何源码文件', 'F-087-1', 'F-087-2', 'F-087-3', '代价', '查不清'];miss=[x for x in need if x not in s];sys.stderr.write('missing=%r len=%d'%(miss,len(s)));sys.exit(1 if miss or len(s)<800 else 0)\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)=Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md'"
+    ]
+   }
+  },
+  {
+   "task_id": "t.idea-list",
+   "superseded_at_revision": 10,
+   "reason": "leader 判据写错（A-recon-wiki 存量红 / 文档判据写死仓根），已在 rev6-10 更正，本 attempt 的红不代表席位的错",
+   "attempt": {
+    "attempt_id": "att-t.idea-list-seq14-t1787244693769",
+    "delivery_id": "del-t.idea-list-seq14-t1787244693769",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-il-doc",
+     "acceptance_failure.argv=[\"python3\", \"-c\", \"import io,sys;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md';s=io.open(p,encoding='utf-8').read();need=['--always-approve', '许可', '自绘', '二次确认', '查不清'];miss=[x for x in need if x not in s];sys.stderr.write('missing=%r len=%d'%(miss,len(s)));sys.exit(1 if miss or len(s)<800 else 0)\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)=Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md'"
+    ]
+   }
+  }
+ ]
+}

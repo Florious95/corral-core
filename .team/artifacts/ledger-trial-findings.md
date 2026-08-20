@@ -1149,3 +1149,41 @@ ls .worktrees/prov.whitelist/.team/nodes/prov-whitelist/  →  No such file or d
 这条绕法会让那个要求失效。
 
 ⛔ 只收集，未投递（本条属易用性/优化点）。
+
+---
+
+## 【新】失败 attempt 会把格挡在前沿外，而恢复四步没写要清它（2026-08-21）
+
+**现象**：判据红 → 格进 `failed_retryable`。按 `ledger-orchestration-trial` §4「恢复的四步」
+第 2 步「复位被冻住的格（`state` 回 `planned`，清 `status_record`）」照做后，
+**该格仍然不进前沿**，`--dry-run` 的 `frontier` 里没有它，且**没有任何提示说明为什么**。
+
+**隔离（单变量）**：同一张账本，只把 `tasks[].attempts` 清空（其余一字不动）：
+
+```
+清空前 frontier= ['t.d1.rv', 't.geom', 't.meter']
+清空后 frontier= ['t.idea-input', 't.idea-list', 't.recon', 't.d1.rv', 't.geom', 't.meter']
+```
+
+⇒ **卡住的是那条 `state=failed_retryable` 的 attempt 记录，不是任务 `state`。**
+
+**归属**：C（对方）。两条：
+① 恢复配方不完整 —— 照它做完，格还是不动，而**「不动」和「还没轮到」在输出里同形**；
+② `--dry-run` 只给 frontier，不给**「这个格为什么不在 frontier 里」**。
+使用者只能靠单变量试出来。
+
+**建议（给成选项，不替对方定方案）**：
+① `--dry-run` 增加「被排除的格 + 排除原因」一节；
+② 提供一个显式的 `--reset-task <id>` 做完整复位（含 attempts 归档）；
+③ 或在文档里把「清 attempts」补进恢复四步。
+
+**我方绕法（已用，代价）**：把失败 attempt 移到
+`.team/evidence/pr1-v1-superseded-attempts.json` 再从账本清空。
+⛔ 不删证据。代价是**证据链断在账本之外**——重放账本时看不到这些红曾经发生过，
+要靠人记得去读那个文件。
+
+### 顺带一条
+`audit` 顶层**不接受自定义键**（`Additional properties are not allowed`），
+所以归档不能就地放在账本里。规范说 `audit` 可以是 `{}`，但没说它是封闭对象。
+
+⛔ 只收集，未投递。
