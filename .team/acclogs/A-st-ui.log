@@ -2,23 +2,7 @@ Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1508
-WaitTime: 1509
+TotalTime: 1543
+WaitTime: 1545
 Complete
-Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
-Status: ok
-LaunchState: COLD
-Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1681
-WaitTime: 1684
-Complete
-SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/shot-after-d480.png 102531
-DENSITY d480 before_sent_nodes=0 after_sent_nodes=0 marker_in_pane=True
-DENSITY d480 fail_texts_has_error=True sample=['claude', '查看', 'term-theme-light source=Vesper.itermcolors', '连接未就绪，无法发送', '连接断开，正在重连…', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
-DAEMON_UP pid=23232
-SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/shot-after-d440.png 97662
-DENSITY d440 before_sent_nodes=0 after_sent_nodes=0 marker_in_pane=True
-DENSITY d440 fail_texts_has_error=True sample=['claude', '查看', 'term-theme-light source=Vesper.itermcolors', '连接未就绪，无法发送', '连接断开，正在重连…', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
-DAEMON_UP pid=26114
-PASS sent-nodes==0 both densities; fail banner kept
-PASS ui-check
+FAIL 二级没有 claude ts=['工作区', '连接已关闭', '❯_', '连接已关闭', '与主机的连接已终止。&#10;请检查主机守护进程，或重新配对。', '★', '收藏', '☰', '会话', '⚙', '设置']

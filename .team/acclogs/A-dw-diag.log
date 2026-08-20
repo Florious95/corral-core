@@ -2,8 +2,7 @@ Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1423
-WaitTime: 1426
+TotalTime: 1580
+WaitTime: 1591
 Complete
-WINDOW10 count=1 total=1 last=2026-08-20T21:30:37.646000
-PASS A-dw-diag
+FAIL 进不了会话页。屏上有: ['工作区', '连接已关闭', '❯_', '连接已关闭', '与主机的连接已终止。&#10;请检查主机守护进程，或重新配对。', '★', '收藏', '☰', '会话', '⚙', '设置']
