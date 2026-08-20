@@ -158,7 +158,7 @@ class TabScrollTest {
         }
         val after = snapshot("l2-session-list-scroll", nav.homePane.ordinal)
 
-        compose.onNodeWithText("sess-15").assertIsDisplayed()
+        compose.onNodeWithText("sess-9").assertIsDisplayed()
         assertTrue(
             "会话列表必须溢出视口 contentPx=${before.contentPx} viewportPx=${before.viewportPx} scrollMax=${before.scrollMax}",
             before.contentPx > before.viewportPx && before.scrollMax > 0f,

@@ -35,10 +35,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,7 +71,7 @@ fun statusVisuals(p: AppPalette, status: SessionStatus): StatusVisuals = when (s
         chipBg = p.busyChipBg,
         chipText = p.busyChipText,
         lamp = p.busyDot,
-        label = "进行中",
+        label = "运行",
         pulse = true,
     )
     SessionStatus.Idle -> StatusVisuals(
@@ -160,11 +162,23 @@ fun SessionNameText(name: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** 「进行中 / 空闲 / 未知」状态标。Busy 保留脉冲绿灯；Idle 灰灯；Unknown 红灯。 */
+/** 「运行 / 空闲 / 未知」状态标。Busy 保留脉冲绿灯；Idle 灰灯；Unknown 红灯。两态文字槽等宽。 */
 @Composable
 fun StatusChip(status: SessionStatus, modifier: Modifier = Modifier) {
     val p = LocalAppPalette.current
     val v = statusVisuals(p, status)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val labelMin = remember(measurer, density) {
+        val style = TextStyle(
+            fontSize = TypeSizes.statusChip,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Default,
+        )
+        val runPx = measurer.measure("运行", style).size.width
+        val idlePx = measurer.measure("空闲", style).size.width
+        with(density) { maxOf(runPx, idlePx).toDp() }.also { Dims.statusChipLabelMinWidth = it }
+    }
     Row(
         modifier = modifier
             .height(Dims.statusChipHeight)
@@ -206,6 +220,9 @@ fun StatusChip(status: SessionStatus, modifier: Modifier = Modifier) {
             fontSize = TypeSizes.statusChip,
             fontWeight = if (v.pulse) FontWeight.SemiBold else FontWeight.Medium,
             lineHeightMultiplier = 1f,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(labelMin),
+            maxLines = 1,
         )
     }
 }
