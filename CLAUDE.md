@@ -17,8 +17,20 @@
 
 ## 席位与模型
 
-- 默认通道 `provider: claude_code` + `auth_mode: compatible_api` + `profile: worker-api`（deepseek-v4-flash，角色文件不写 model）。
-  升级仅两种：① `contention: contract`；② 返工达上限。
+- ⛔⛔ **禁止使用 Deepseek 模型**（2026-08-21 用户令）。这条**取代**了下面那条旧的默认通道。
+  ⇒ 新建席位用 `provider: grok`（`grok-4.6`）或 Claude 订阅
+  （`provider: claude_code` + `auth_mode: subscription` + `profile: claude-default`）。
+  异源评审席必须与实现席不同源：实现走 grok ⇒ 评审走 Claude 订阅。
+- **旧条（已作废，留档）**：默认通道 `provider: claude_code` + `auth_mode: compatible_api`
+  + `profile: worker-api`（deepseek-v4-flash）。升级仅两种：① `contention: contract`；② 返工达上限。
+- 🔴 **新建席位必须在角色文件里写 `dangerously_skip_permissions: true`**（2026-08-21 实撞）。
+  写 `false` 的席位会**停在 provider 的第一个确认提示上等人按键**，而编排层给出的唯一症状是
+  `send_unverified_exhausted`（读起来像投递问题）。**该字段只在启动时生效**——
+  改了文件再 `reset-agent` **不够**，必须 `remove-agent --force` + `add-agent` 重建。
+- 🔴 **席位卡住时读它的屏**：`tmux -S /private/tmp/tmux-501/ta-<team> capture-pane -p -t <pane>`
+  （team 私有 socket，不是用户真实 tmux）。用户不在屏幕前时，这是唯一能认出「卡在提示上」的手段。
+- ⛔ **席位不许写 `/tmp` 或任何项目外路径**，临时文件写 `.team/nodes/<格>/tmp/`。
+  各家 provider 对项目外路径的默认策略不同，靠加权限治不了根。
 - 多模态缺陷（需看截图判断渲染效果）用 Claude 订阅席位，不用 deepseek。
 - 密钥只存在于 `.team/current/profiles/*.env`，任何席位禁止读其原文。
 - **`.team/current/profiles/tailnet-test.env` 全员禁读**（含 leader）。里面是用户 tailnet 的
