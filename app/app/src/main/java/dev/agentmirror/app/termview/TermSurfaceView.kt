@@ -712,6 +712,7 @@ class TermSurfaceView @JvmOverloads constructor(
     }
 
     private fun refreshBurst() {
+        refreshDrawOpt()
         val f = File(context.filesDir, TermDrawMeter.BURST_FILE)
         if (!f.exists()) return
         val n = try {

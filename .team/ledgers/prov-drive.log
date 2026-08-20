@@ -1,0 +1,7 @@
+[ledger-run 2026-08-20T14:05:20Z] 常驻开工 resident-start | 账本=/Volumes/nvme/Projects/远程Agent安卓/.team/ledgers/prov-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-20T14:05:20Z] 开工 start | ledger_id=ledger.prov.v1 revision=2 账本=/Volumes/nvme/Projects/远程Agent安卓/.team/ledgers/prov-v1.json 墙钟上限=10800s 派单死线=90s
+[ledger-run 2026-08-20T14:05:22Z] 轮次 round | 第 1 轮开始：前沿 ["t.prov"]（墙钟已跑 2s / 上限 10800s）
+[ledger-run 2026-08-20T14:05:22Z] 派单 dispatch | task=t.prov 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/prov-v1-prov 席位=prov-v1-prov attempt=att-t.prov-seq1-t1787234722861 delivery=del-t.prov-seq1-t1787234722861 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T14:05:23Z] 投递回执 send-ok | task=t.prov case_id=ledger_prov_v1__t.prov__r2 message_id=msg_f9e7edf40810 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T14:05:23Z] 派单落地 dispatch-landed | task=t.prov 席位 prov-v1-prov 的收件箱已多出这条派单
+[ledger-run 2026-08-20T14:05:23Z] 等待 wait | task=t.prov 在等的 key（case_id）=ledger_prov_v1__t.prov__r2 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds

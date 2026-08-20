@@ -81,9 +81,14 @@ internal object TermDrawMeter {
         }
     }
 
-    /** 开始采集：一直请帧直到稳态环 ≥ [MIN_FRAMES] 或 15s 到点。空屏不计入 n。 */
+    /** 开始采集：清环后一直请帧直到稳态环 ≥ [MIN_FRAMES] 或 15s 到点。空屏不计入 n。 */
     fun armBurst(frames: Int) {
         synchronized(lock) {
+            n = 0
+            write = 0
+            warmupLeft = WARMUP
+            emittedMinFrames = false
+            lastEmitMs = 0L
             collectUntilMin = frames > 0
             collectDeadlineMs = System.currentTimeMillis() + 15_000L
         }
