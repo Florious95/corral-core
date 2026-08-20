@@ -10,8 +10,8 @@ func TestProviderWhitelistFiveComms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 5 {
-		t.Fatalf("whitelist rows=%d, want 5", len(rows))
+	if len(rows) != 6 {
+		t.Fatalf("whitelist rows=%d, want 6", len(rows))
 	}
 	want := map[string]string{
 		"claude":       "claude_code",
@@ -19,6 +19,7 @@ func TestProviderWhitelistFiveComms(t *testing.T) {
 		"copilot":      "copilot",
 		"grok":         "grok",
 		"cursor-agent": "cursor",
+		"pi":           "pi",
 	}
 	for comm, id := range want {
 		e, ok := Lookup(comm)
@@ -49,10 +50,36 @@ func TestProviderWhitelistBasenameFullPath(t *testing.T) {
 }
 
 func TestProviderWhitelistNoiseComms(t *testing.T) {
-	for _, comm := range []string{"bash", "sleep", "vim", "make", "sshd", ""} {
+	for _, comm := range []string{"bash", "sleep", "vim", "make", "sshd", "node", ""} {
 		if e, ok := Lookup(comm); ok {
 			t.Fatalf("noise comm %q matched provider %q (must not be a node)", comm, e.ID)
 		}
+	}
+}
+
+func TestProviderWhitelistNoBareNodeRow(t *testing.T) {
+	rows, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range rows {
+		if e.Comm == "node" {
+			t.Fatal("TSV must not whitelist basename node")
+		}
+	}
+}
+
+func TestProviderWhitelistCursorPathSegment(t *testing.T) {
+	full := "/Users/alauda/.local/share/cursor-agent/versions/2026.08.11-e8db854/node"
+	if filepath.Base(full) != "node" {
+		t.Fatalf("fixture broken: basename(%q)=%q, want node", full, filepath.Base(full))
+	}
+	e, ok := Lookup(full)
+	if !ok || e.ID != "cursor" {
+		t.Fatalf("path-segment lookup of %q: ok=%v id=%q, want cursor", full, ok, e.ID)
+	}
+	if _, ok := Lookup("/Users/alauda/.nvm/versions/node/v20.0.0/bin/node"); ok {
+		t.Fatal("generic node path must not match cursor")
 	}
 }
 
