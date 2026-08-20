@@ -29,7 +29,6 @@ import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -476,8 +475,9 @@ private val KEY_BAR_ENTRIES = listOf(
 )
 
 /**
- * 回执/错误状态区：发送回执、上传回执、协议/解码错误全部明确可见（003 静默失效猎杀）。
- * 平滑展开收起（AnimatedVisibility 替代旧版 2dp Spacer 占位闪跳，018 §一.6）。
+ * 回执/错误状态区：失败/在途/上传/解码错误明确可见（003）。
+ * 083 §4/§12：成功态不组「已发送」节点。不用 AnimatedVisibility——
+ * 退出动画会把旧节点留在树上叠成蓝色悬浮堆。
  */
 @Composable
 private fun StatusArea(viewModel: SessionViewModel) {
@@ -493,21 +493,20 @@ private fun StatusArea(viewModel: SessionViewModel) {
         UploadStatus.Idle -> null
     } ?: viewModel.transientError
 
-    AnimatedVisibility(visible = message != null) {
-        val isError = viewModel.inputStatus is InputStatus.Failed ||
-            viewModel.uploadStatus is UploadStatus.Failed ||
-            viewModel.transientError != null
-        Text(
-            text = message.orEmpty(),
-            style = MaterialTheme.typography.labelMedium,
-            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.pageH, vertical = Spacing.xs),
-        )
-    }
+    if (message == null) return
+    val isError = viewModel.inputStatus is InputStatus.Failed ||
+        viewModel.uploadStatus is UploadStatus.Failed ||
+        viewModel.transientError != null
+    Text(
+        text = message,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.pageH, vertical = Spacing.xs),
+    )
 }
 
 /** 「回到底部」悬浮钮（锁定历史时点击恢复跟随，006）：tonal 胶囊 + ripple。 */

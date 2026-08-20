@@ -8,3 +8,19 @@
 [ledger-run 2026-08-20T11:53:51Z] 投递回执 send-ok | task=t.sent case_id=ledger_ux4_v1__t.sent__r2 message_id=msg_d1e373d7b290 —— 回执成功≠席位收到，下一步查收件箱确认落地
 [ledger-run 2026-08-20T11:53:51Z] 派单落地 dispatch-landed | task=t.sent 席位 ux4-v1-sent 的收件箱已多出这条派单
 [ledger-run 2026-08-20T11:53:51Z] 等待 wait | task=t.idea 在等的 key（case_id）=ledger_ux4_v1__t.idea__r2 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T12:00:54Z] 已唤醒 wait-signaled | task=t.idea 等到结果了
+[ledger-run 2026-08-20T12:00:54Z] 判据 acceptance | task=t.idea 在跑 required=["A-id-doc", "A-id-src", "A-id-links", "A-id-noswift"]
+[ledger-run 2026-08-20T12:01:08Z] 判据通过留档 acceptance-success | task=t.idea 成功 attempt 落进 attempts[] writeback_revision=3 passed=["A-id-doc", "A-id-src", "A-id-links", "A-id-noswift"]
+[ledger-run 2026-08-20T12:01:08Z] 原子写回 writeback-atomic | task=t.idea state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=3 hash=2c4bdf484ce11012）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T12:01:08Z] 写回 writeback | task=t.idea state=succeeded revision=2 → 3
+[ledger-run 2026-08-20T12:01:08Z] 等待 wait | task=t.sent 在等的 key（case_id）=ledger_ux4_v1__t.sent__r2 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T12:20:37Z] 已唤醒 wait-signaled | task=t.sent 等到结果了
+[ledger-run 2026-08-20T12:20:37Z] 判据 acceptance | task=t.sent 在跑 required=["A-st-ui", "A-st-suite", "A-st-doc"]
+[ledger-run 2026-08-20T12:21:39Z] 判据通过留档 acceptance-success | task=t.sent 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-st-ui", "A-st-suite", "A-st-doc"]
+[ledger-run 2026-08-20T12:21:39Z] 原子写回 writeback-atomic | task=t.sent state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=4 hash=9d4cda25ef71c179）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T12:21:39Z] 写回 writeback | task=t.sent state=succeeded revision=3 → 4
+[ledger-run 2026-08-20T12:21:39Z] 轮次 round | 第 2 轮开始：前沿 ["t.draw"]（墙钟已跑 1677s / 上限 32400s）
+[ledger-run 2026-08-20T12:21:39Z] 派单 dispatch | task=t.draw 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/ux4-v1-draw 席位=ux4-v1-draw attempt=att-t.draw-seq3-t1787228499701 delivery=del-t.draw-seq3-t1787228499701 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T12:21:39Z] 投递回执 send-ok | task=t.draw case_id=ledger_ux4_v1__t.draw__r4 message_id=msg_b0b2ff05fea0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T12:21:39Z] 派单落地 dispatch-landed | task=t.draw 席位 ux4-v1-draw 的收件箱已多出这条派单
+[ledger-run 2026-08-20T12:21:39Z] 等待 wait | task=t.draw 在等的 key（case_id）=ledger_ux4_v1__t.draw__r4 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
