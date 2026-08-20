@@ -198,6 +198,12 @@ fun SessionScreen(
     }
 
     var mirror by remember { mutableStateOf(TextFieldValue("")) }
+    LaunchedEffect(viewModel.resyncDraftGen) {
+        val overlay = viewModel.resyncDraft
+        if (viewModel.resyncDraftGen != 0 && overlay != null) {
+            mirror = overlay
+        }
+    }
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
