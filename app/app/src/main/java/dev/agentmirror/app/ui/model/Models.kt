@@ -54,6 +54,8 @@ data class SessionItem(
     val starred: Boolean,
     /** 收藏页失联行：false 时标「不在线」，不得当成 Idle。默认在线（二级列表）。 */
     val isOnline: Boolean = true,
+    /** 白名单 Provider id；空则通用 glyph。 */
+    val provider: String = "",
 )
 
 /** 底部导航的三个位置 */
