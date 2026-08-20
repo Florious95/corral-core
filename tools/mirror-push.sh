@@ -66,6 +66,12 @@ guard() {
 # 不是 ⇒ 过滤规则变过（或远端被别处改过），这一推会静默重写远端历史 —— 中止。
 ancestor_gate() {
   local remote_head
+  # 重基线：排除规则变更等导致历史必须整体重写时，显式 MIRROR_REBASELINE=1 才放行。
+  # 缺省不放行 —— 否则这道闸等于没立。
+  if [ "${MIRROR_REBASELINE:-0}" = "1" ]; then
+    echo "   ⚠️ MIRROR_REBASELINE=1：跳过祖先闸，本次将整体重写远端 $MIRROR_BRANCH"
+    return 0
+  fi
   remote_head=$(git ls-remote origin "refs/heads/$MIRROR_BRANCH" 2>/dev/null | cut -f1)
   [ -z "$remote_head" ] && { echo "   远端 $MIRROR_BRANCH 不存在，按新建分支推送"; return 0; }
   if git cat-file -e "$remote_head^{commit}" 2>/dev/null && \
@@ -80,27 +86,23 @@ ancestor_gate() {
 echo "==> corral-core（当前 App + 需求维基 + 任务书 + 文档）"
 git clone --no-hardlinks --quiet "$SRC" "$WORK/core"
 cd "$WORK/core"
-# .team/ 下逐项点名排除，而不是整目录排除 —— 目的是把 .team/evidence/ 留下来。
-# 用点名而不是 glob：glob 会在新增子目录时静默把它一起带上去，而那里面可能有凭据。
-# 新增 .team 子目录时必须显式决定它的去留，这个"必须显式"就是这里的设计意图。
+# 排除策略（用户 2026-08-20 裁定「远端就是云备份 + 规范，不用特别注重细节，
+# 文档也没必要忽略」）：默认全收，只挡三类 —— 凭据 / 巨物 / 构建产物。
+#   凭据：*.env（席位 API key，从基线 commit 就在历史里）、.team/logs/（daemon 明文打配对 token）
+#   巨物：.team/runtime/ 1.6GB·69189 文件、e2e/artifacts/ 126MB 截图录屏、e2e/bin/
+#   构建产物：*/build/ */.gradle/ *.apk agentmirrord*（历史里有 178MB 的 gradle jar，超 GitHub 单文件 100MB 硬限）
+# 席位角色文件（agents/、.team/grok/）与席位产物（.team/nodes/ 35MB）现在【上传】——
+# 它们是"凭什么这么干"的记录，和 .team/evidence/ 同一性质。
 TEAM_EXCLUDE=(
-  --path .team/current/ --path .team/runtime/ --path .team/logs/ --path .team/nodes/
-  --path .team/recheck-20260811/ --path .team/__pycache__/ --path .team/adjudicator/
-  --path .team/verify-t3/ --path .team/ta --path .team/orch.wake
-  --path .team/orchestrator.py --path .team/orchestrator-state.json
-  --path .team/leader-sink.py --path .team/leader-inbox.log
-  --path .team/llm-leader-boot.md --path .team/escalations-for-human.md
-  --path .team/outbox-relay.sh --path .team/prod-daemon-launch.sh
-  --path .team/watchdog.py --path .team/watchdog.sh --path .team/watchdog.log
-  --path .team/watchdog-supervisor.sh
-  --path .team/grok/ --path .team/dynamic-role-files/
+  --path .team/runtime/ --path .team/logs/ --path .team/__pycache__/
+  --path .team/leader-inbox.log --path .team/watchdog.log
 )
 
 python3 "$FR" --force --invert-paths \
   "${TEAM_EXCLUDE[@]}" \
-  --path agents/ --path e2e/artifacts/ --path e2e/bin/ --path server/ \
+  --path e2e/artifacts/ --path e2e/bin/ --path server/ \
   --path-glob '*/build/*' --path-glob '*/.gradle/*' \
-  --path-glob '*.env' --path-glob '*.apk' \
+  --path-glob '*.env' --path-glob '*.apk' --path-glob 'agentmirrord*' \
   --mailmap "$WORK/mailmap" --commit-callback "$STRIP_COAUTHOR" >/dev/null
 guard
 git remote add origin "$GH/corral-core.git"
@@ -117,6 +119,10 @@ python3 "$FR" --force --invert-paths --path-glob 'agentmirrord*' --path-glob '*.
 guard
 cp "$SRC/LICENSE" ./LICENSE
 git add LICENSE
+# 时间钉死：用当前时间会让这个 commit 的 sha 每跑一次就变，
+# 于是远端 main 永远不是过滤结果的祖先 —— 这条镜像线会【每次都重写远端历史】。
+# 2026-08-20 祖先闸上线第一次就抓到了它。
+GIT_AUTHOR_DATE='2026-08-14T16:35:00+00:00' GIT_COMMITTER_DATE='2026-08-14T16:35:00+00:00' \
 git -c user.name=Florious95 -c user.email=281215401+Florious95@users.noreply.github.com \
     commit -q -m "补入 Apache-2.0 LICENSE（拆仓时随服务端一起带上）" || true
 git remote add origin "$GH/corral-serve.git"
