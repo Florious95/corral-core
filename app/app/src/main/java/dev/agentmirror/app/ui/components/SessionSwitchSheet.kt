@@ -1,5 +1,6 @@
 package dev.agentmirror.app.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -59,6 +60,12 @@ import dev.agentmirror.app.ui.theme.TypeSizes
  *
  * 用法：套在会话页最外层的 Box 里，与 SessionShellScreen 同级。
  * ⛔ 没有内部业务状态：visible 由你控制，onDismiss 只是回调。
+ *
+ * @contract
+ * @pre visible=true 时本组件已组合
+ * @post 一次系统返回只调用 onDismiss，不修改导航栈
+ * @err none
+ * @inv visible=false 时 BackHandler.enabled=false，返回事件落到根处理器
  */
 @Composable
 fun SessionSwitchSheet(
@@ -72,6 +79,7 @@ fun SessionSwitchSheet(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
+    BackHandler(enabled = visible) { onDismiss() }
     Box(modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
