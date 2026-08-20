@@ -28,12 +28,16 @@ trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 [ -d "$LOCK" ] || { echo "红：拿不到并线锁" >&2; exit 1; }
 
 git rev-parse --verify --quiet "refs/heads/$BR" >/dev/null || { echo "红：分支不存在 $BR" >&2; exit 1; }
-N=$(git rev-list --count main.."$BR"); echo "land-pr: 待并提交数=$N"
-[ "$N" -ge 1 ] || { echo "红：分支上没有超出 main 的提交" >&2; exit 1; }
-
+# 🔴 顺序要紧：幂等检查必须【先】做。
+# 2026-08-21 实撞：原来先查「待并提交数 >= 1」再查 is-ancestor，
+# 于是一个【已经并过】的分支 N=0，走进「没有超出 main 的提交」判红 ——
+# 重跑一条已成功的判据反而失败，幂等性被顺序毁掉。
 if git merge-base --is-ancestor "$BR" main; then
-  echo "land-pr: ${BR} 已在 main 里，无需重复并线"; exit 0
+  echo "land-pr: ${BR} 已在 main 里（is-ancestor），无需重复并线"; exit 0
 fi
+
+N=$(git rev-list --count main.."$BR"); echo "land-pr: 待并提交数=$N"
+[ "$N" -ge 1 ] || { echo "红：分支存在但没有超出 main 的提交，且不是 main 的祖先 —— 需人工查" >&2; exit 1; }
 # 仓根常有未跟踪的同名产物（席位往 worktree 和仓根各写了一份说明.md），
 # 会让 merge 以「untracked working tree files would be overwritten」中止。
 # ⛔ 不盲删：逐个与分支上的版本比对，【逐字节相同】才移走，不同就响亮失败交人判断。
