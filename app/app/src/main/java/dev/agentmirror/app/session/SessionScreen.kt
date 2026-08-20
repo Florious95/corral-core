@@ -185,12 +185,15 @@ fun SessionScreen(
     }
 
     // 回执/错误瞬时态自动收起（「已发送」/「已注入」短暂可见；错误多停留一会儿）。
-    LaunchedEffect(viewModel.inputStatus, viewModel.uploadStatus, viewModel.transientError) {
+    LaunchedEffect(viewModel.inputStatus, viewModel.controlKeyStatus, viewModel.uploadStatus, viewModel.transientError) {
         val holdMs = when {
             viewModel.inputStatus is InputStatus.Failed -> TRANSIENT_MS * 3
+            viewModel.controlKeyStatus is InputStatus.Failed -> TRANSIENT_MS * 3
             viewModel.uploadStatus is UploadStatus.Failed -> TRANSIENT_MS * 3
             viewModel.transientError != null -> TRANSIENT_MS * 3
-            viewModel.inputStatus is InputStatus.Sent || viewModel.uploadStatus is UploadStatus.Success -> TRANSIENT_MS
+            viewModel.inputStatus is InputStatus.Sent ||
+                viewModel.controlKeyStatus is InputStatus.Sent ||
+                viewModel.uploadStatus is UploadStatus.Success -> TRANSIENT_MS
             else -> return@LaunchedEffect
         }
         delay(holdMs)
@@ -205,6 +208,7 @@ fun SessionScreen(
         }
     }
     var attachMenu by remember { mutableStateOf(false) }
+    var composerExpanded by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
@@ -264,6 +268,7 @@ fun SessionScreen(
                 onSend = {
                     viewModel.sendDraft()
                     mirror = TextFieldValue("")
+                    composerExpanded = false
                 },
                 onBack = onBack,
                 onOpenSwitcher = viewModel::openOverlay,
@@ -271,6 +276,20 @@ fun SessionScreen(
                 onAttach = { attachMenu = true },
                 sendEnabled = viewModel.inputStatus !is InputStatus.Sending,
                 connectionBanner = viewModel.connectionBanner,
+                composerExpanded = composerExpanded,
+                onToggleExpand = { composerExpanded = !composerExpanded },
+                pendingAttachmentCount = viewModel.pendingAttachmentPaths.size,
+                pendingAttachmentLabel = viewModel.pendingAttachmentPaths.lastOrNull(),
+                attachMenuExpanded = attachMenu,
+                onAttachMenuChange = { attachMenu = it },
+                onPickCamera = {
+                    attachMenu = false
+                    requestTakePhoto()
+                },
+                onPickGallery = {
+                    attachMenu = false
+                    pickImage()
+                },
             ) {
                 Box(Modifier.fillMaxSize()) {
                     AndroidView(
@@ -282,6 +301,8 @@ fun SessionScreen(
                                 it.presenter = viewModel.presenter
                                 it.onRemoteScrollBy = viewModel::onScrollWheel
                                 it.nightOverride = darkTheme
+                                it.isFocusable = false
+                                it.isFocusableInTouchMode = false
                             }
                         },
                         update = { view ->
@@ -339,27 +360,6 @@ fun SessionScreen(
                         byRef[item.id]?.let(onToggleOverlayFavorite)
                     },
                 )
-            }
-            Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
-                DropdownMenu(
-                    expanded = attachMenu,
-                    onDismissRequest = { attachMenu = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("拍照") },
-                        onClick = {
-                            attachMenu = false
-                            requestTakePhoto()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("从相册选择") },
-                        onClick = {
-                            attachMenu = false
-                            pickImage()
-                        },
-                    )
-                }
             }
         }
     }
@@ -488,11 +488,13 @@ private val KEY_BAR_ENTRIES = listOf(
 @Composable
 private fun StatusArea(viewModel: SessionViewModel) {
     val message = bannerFrom(viewModel.inputStatus)
+        ?: bannerFrom(viewModel.controlKeyStatus)
         ?: bannerFrom(viewModel.uploadStatus)
         ?: viewModel.transientError
 
     if (message == null) return
     val isError = viewModel.inputStatus is InputStatus.Failed ||
+        viewModel.controlKeyStatus is InputStatus.Failed ||
         viewModel.uploadStatus is UploadStatus.Failed ||
         viewModel.transientError != null
     Text(

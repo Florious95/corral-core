@@ -110,6 +110,12 @@ class SessionViewModel(
     /** 发送回执状态机（必达：ok 静默收起 / fail+超时明确报错）。 */
     var inputStatus by mutableStateOf<InputStatus>(InputStatus.Idle)
 
+    /**
+     * 控制键（Esc/Tab/方向/Ctrl-C）独立回执。不得写入 [inputStatus]，
+     * 不得让发送键因点 Tab 变灰（087 E3）。
+     */
+    var controlKeyStatus by mutableStateOf<InputStatus>(InputStatus.Idle)
+
     /** 附件上传状态机（成功路径注入 / 失败明确报错）。 */
 
     /** 会话内悬浮窗是否打开（072：二级菜单列表，不再订 overlay 抓屏流）。 */
@@ -314,20 +320,27 @@ class SessionViewModel(
     }
 
     override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) {
-        // 发送态阻塞并发发送（UI 置灰），且 conn 层对每次投递只回执一次 ⇒ 在途回执即本页的。
-        if (inputStatus !is InputStatus.Sending) return
-        val key = inFlightKey
-        inFlightKey = null
-        if (ok) {
-            // 003 发送必达：回执可见。直通模型下草稿在 CLI，本地无草稿可清；
-            // 提交已发出，附件清单清空（避免跟着下一条重复发送）。
-            inputStatus = InputStatus.Sent
-            pendingAttachmentPaths = emptyList()
-            val trigger = resyncTriggerName(key)
-            if (trigger != null) beginResync(trigger)
-        } else {
-            // 失败明确报错（CLI 草稿仍在，可直接重发）。
-            inputStatus = InputStatus.Failed(mapInputReason(reason))
+        val item = inFlight.removeFirstOrNull()
+        when (item) {
+            is InFlight.Key -> {
+                inFlightKey = null
+                if (ok) {
+                    controlKeyStatus = InputStatus.Sent
+                    resyncTriggerName(item.key)?.let { beginResync(it) }
+                } else {
+                    controlKeyStatus = InputStatus.Failed(mapInputReason(reason))
+                }
+            }
+            InFlight.Draft, null -> {
+                if (inputStatus !is InputStatus.Sending) return
+                inFlightKey = null
+                if (ok) {
+                    inputStatus = InputStatus.Sent
+                    pendingAttachmentPaths = emptyList()
+                } else {
+                    inputStatus = InputStatus.Failed(mapInputReason(reason))
+                }
+            }
         }
     }
 
@@ -374,6 +387,7 @@ class SessionViewModel(
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
         if (manager.sendInput(ref, "", attachmentPath)) {
             inputStatus = InputStatus.Sending
+            inFlight.addLast(InFlight.Draft)
             inFlightKey = null
             cancelResync()
             // Enter 提交后 CLI 行空；本地框跟着清。不同步会把下一轮当成「删掉上一条」。
@@ -387,26 +401,26 @@ class SessionViewModel(
     /**
      * 点按快捷键条（R-1，017）：注入 keys 帧，**不附加回车**。
      *
-     * 走既有 input→input_ack 决定性链路（003 发送必达：ack 失败/超时可见），与提交共用
-     * 发送闸（在途不回发）；回执 ok 显示已发送。
+     * 走既有 input→input_ack 决定性链路（003 发送必达：ack 失败/超时可见）。
+     * **不占** [inputStatus] 发送闸：发送在途时仍能按 Ctrl-C / Esc / Tab（087 E3）。
      *
      * @contract
-     * @pre connectionState 为 READY，且 inputStatus 非 Sending
-     * @post 注入成功置 [InputStatus.Sending]
-     * @err 未就绪 / 注入失败置 [InputStatus.Failed]
-     * @inv 在途不回发（发送闸）
+     * @pre connectionState 为 READY
+     * @post 注入成功置 [controlKeyStatus]=Sending；不改 [inputStatus]
+     * @err 未就绪 / 注入失败置 [controlKeyStatus]=Failed
+     * @inv 不因 inputStatus==Sending 吞键；失败可见
      */
     fun sendKey(key: InputKey) {
-        if (inputStatus is InputStatus.Sending) return // 在途不回发
         if (connectionState != ConnectionState.READY) {
-            inputStatus = InputStatus.Failed("连接未就绪，无法发送")
+            controlKeyStatus = InputStatus.Failed("连接未就绪，无法发送")
             return
         }
         if (manager.sendInputKeys(ref, key)) {
-            inputStatus = InputStatus.Sending
+            controlKeyStatus = InputStatus.Sending
             inFlightKey = key
+            inFlight.addLast(InFlight.Key(key))
         } else {
-            inputStatus = InputStatus.Failed("发送失败：连接不可用")
+            controlKeyStatus = InputStatus.Failed("发送失败：连接不可用")
         }
     }
 
@@ -507,6 +521,14 @@ class SessionViewModel(
 
     /** 在途 keys 帧对应的键；sendDraft 为 null。 */
     private var inFlightKey: InputKey? = null
+
+    /** 发送闸与控制键可并发；ack 按发出顺序配对（WS 回执与 req_id 同序）。 */
+    private val inFlight = ArrayDeque<InFlight>()
+
+    private sealed interface InFlight {
+        data object Draft : InFlight
+        data class Key(val key: InputKey) : InFlight
+    }
 
     private var snapshotGen: Long = 0
     private var lastTickMs: Long = 0
@@ -614,6 +636,7 @@ class SessionViewModel(
     /** 收起瞬时状态（Sent / 上传 Success / 错误提示，会话屏 LaunchedEffect 延迟后自动触发）。 */
     fun dismissTransient() {
         if (inputStatus is InputStatus.Sent) inputStatus = InputStatus.Idle
+        if (controlKeyStatus is InputStatus.Sent) controlKeyStatus = InputStatus.Idle
         if (uploadStatus is UploadStatus.Success) uploadStatus = UploadStatus.Idle
         transientError = null
     }
