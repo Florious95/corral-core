@@ -1,21 +1,27 @@
-# 知识基底 · ledger.pr2.v1 / t.icons（tools/basegen_ledger.py 编译产物，手工编辑无效）
+# 知识基底 · ledger.pr2.v1 / t.compose（tools/basegen_ledger.py 编译产物，手工编辑无效）
 
 ## 1. 任务信封（账本原文，机械抽取）
 ```
-# t.icons · E10/E11/E15 · 首列 Provider 图标 + 长按菜单（收藏页无「关闭」）（契约 088）
+# t.compose · E2/E3/E4/E5 · 点击膨胀多行 + 按键条与打字并存 + 附件与发送收进框内 + 观感（契约 087）
 
-方案 §4
+🔴 **方案已由思路席位裁定，⛔ 你不要自己再选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md` §0 明写
+**选定方案 1「本地缓冲 + 光标锚定回读」，否决方案 2「镜像 + 按键捕获」，也否决「发送才同步」**。
+改成别的 ⇒ E2–E5 与 087 验收全部作废。
 
-🔴 **施工方案已定，⛔ 你不要自己另选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md` 里对应小节写清了「改什么/外骨骼/判据」，**照它做**。
-有异议报 `blocked` 说明，不要静默改方案。
+**必须照它的 §2 落实的细节**：`resyncPending` 期间 `onPassthroughInput` 只更新本地框不发键；
+回读完成后用 `DiffSync.plan(新synced, 本地当前)` 一次补齐；⛔ 回读不得在 `composition != null` 时覆盖；
+用**仿真器光标**定位输入行，⛔ 不许写死行号；超时 400ms 且**失败必须可见，不静默**。
+日志三个字段一个不能少：`resync_wait_ms`、`snapshot_gen`、`trigger=Tab|Esc|Up|Down|Ctrl-C`。
 
+⛔ **084 §5 的四条判据（A-df-append / A-df-edit / A-df-ime / A-df-latency）必须仍然全绿**——
+那是 F-087-3，破坏任一条即为失败。
 ---
 ## 🔴 流程（PR 链）
 开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。
-1. 建分支 `git checkout -b pr/icons-longpress`，只改自己 worktree 里的文件。
-2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-icons-seal`
-   在你报完后把改动提交到 `pr/icons-longpress` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。
-3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-icons/tmp/`（自己 mkdir -p）。
+1. 建分支 `git checkout -b pr/e2-composer`，只改自己 worktree 里的文件。
+2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-compose-seal`
+   在你报完后把改动提交到 `pr/e2-composer` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。
+3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-compose/tmp/`（自己 mkdir -p）。
 4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked` 并指出错在哪。
 5. **一次只改一个缺陷**，⛔ 顺手改相邻代码/重构/改格式一律禁止。
 
@@ -35,23 +41,23 @@ main 上已有存量（app lint 16 条、archwiki T3 若干）。**不是你造�
 
 ```
 
-- write_paths: app/app/src/main/java/dev/agentmirror/app/workspace/, .team/nodes/pr2-icons/
-- read_paths: requirement-base/entries/088-会话列表与Agent生命周期.md, .team/nodes/pr1-idea-list/方案.md, .team/nodes/pr2-icons/说明.md
-- 判据: A-icons-suite, A-icons-wiki, A-icons-smell, A-icons-doc, A-icons-seal
+- write_paths: app/app/src/main/java/dev/agentmirror/app/session/, .team/nodes/pr2-compose/
+- read_paths: requirement-base/entries/087-输入行发散与输入区重做.md, requirement-base/entries/084-输入框差分同步.md, .team/nodes/pr1-idea-input/思路.md, .team/nodes/pr2-compose/说明.md
+- 判据: A-compose-suite, A-compose-wiki, A-compose-smell, A-compose-doc, A-compose-seal
 
 ## 2. 架构基（wiki 现算影响闭包）
-- 写作用域包：dev.agentmirror.app.workspace
-- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_conn, kt_dev_agentmirror_app_tsnet, kt_dev_agentmirror_app_ui_theme
+- 写作用域包：dev.agentmirror.app.session
+- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_conn, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_termview, kt_dev_agentmirror_app_tsnet, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_terminal
 - **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app
 
 ### 闭包架构卡内联
 
-### Kotlin · dev.agentmirror.app.workspace
+### Kotlin · dev.agentmirror.app.session
 
-- **职责**：工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」、002「两级分组」。
-- **导出面**：ConnectionUi, SessionUi, StateBadge, StateBadgeStyle, WorkspaceScreen, WorkspaceUi, WorkspaceUiState, WorkspaceViewModel
-- **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.tsnet, dev.agentmirror.app.ui.theme
-- **doc 全文**：工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」、002「两级分组」。 - [WorkspaceViewModel]：纯 JVM 视图模型，消费 conn 层 listing/list_delta 帧流 → UI 状态；聚合字段（session_count / aggregate_state）为服务端权威值，只渲染不重算（012）。 - [WorkspaceScreen] / [StateBadge]：薄 Compose 渲染层；状态徽章五值（008）。 二级导航经 [WorkspaceScreen] 的 onOpenSession 回调把 (ref, name) 交给根路由 [AgentMirrorApp]，由其挂载 [SessionRoute] 进入会话页。 @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet @consumes dev.agentmirror.app.ui.theme
+- **职责**：会话页：单个 tmux 会话的交互界面。
+- **导出面**：Attachment, Failed, Failure, HttpUrlConnectionUploader, SessionRoute, SessionScreen, SessionViewModel, Success
+- **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.service, dev.agentmirror.app.termview, dev.agentmirror.app.tsnet, dev.agentmirror.app.ui.theme, dev.agentmirror.terminal
+- **doc 全文**：会话页：单个 tmux 会话的交互界面。 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条； 图片附件走 multipart HTTP 上传（上传基地址由 service 装配的 ServiceWire 统一注入）， 跨层共享连接经 service 的 ServiceWire.uiConnector 扇出订阅。会话页已完整落位： 镜像流（snapshot/delta/scrollback 本地滚动补页）、发送必达回执、附件路径注入光标处。 @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.termview @consumes dev.agentmirror.app.tsnet @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.terminal
 
 ### Kotlin · dev.agentmirror.app
 
