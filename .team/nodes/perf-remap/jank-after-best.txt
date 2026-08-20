@@ -1,0 +1,3 @@
+# 优化后最佳轮（gradle 已结束、同滑动负载）。后续高 load 重跑不要覆盖本文件。
+d480 total=566 janky=88 janky_pct=15.55 p95=36.00
+d440 total=563 janky=91 janky_pct=16.16 p95=40.00

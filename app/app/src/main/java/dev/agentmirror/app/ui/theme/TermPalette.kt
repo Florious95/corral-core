@@ -89,6 +89,10 @@ object TermPalette {
 
         internal val fgSlots: List<Slot> = roleSlots(background = false)
         internal val bgSlots: List<Slot> = roleSlots(background = true)
+        internal val fgChroma: List<Slot> = fgSlots.filter { it.chroma >= CHROMA_SLOT }
+        internal val fgAchroma: List<Slot> = fgSlots.filter { it.chroma < CHROMA_SLOT }
+        internal val bgChroma: List<Slot> = bgSlots.filter { it.chroma >= CHROMA_SLOT }
+        internal val bgAchroma: List<Slot> = bgSlots.filter { it.chroma < CHROMA_SLOT }
 
         fun slotArgbSet(): Set<Int> = buildSet {
             add(defaultBg)
@@ -139,11 +143,23 @@ object TermPalette {
     private var cachedKey: TermThemeSelection? = null
     private var cachedLight: Scheme? = null
     private var cachedDark: Scheme? = null
+    @Volatile private var tablesLight: RemapTables? = null
+    @Volatile private var tablesDark: RemapTables? = null
+
+    /** 256 索引预计算 + 真彩 memo。主题键变了整体换表，不改投影结果。 */
+    private class RemapTables(
+        val indexedFg: IntArray,
+        val indexedBg: IntArray,
+        val rgbFg: HashMap<Int, Int>,
+        val rgbBg: HashMap<Int, Int>,
+    )
 
     fun bind(store: TermThemeStore) {
         synchronized(lock) {
             this.store = store
             cachedKey = null
+            tablesLight = null
+            tablesDark = null
         }
     }
 
@@ -151,6 +167,8 @@ object TermPalette {
         synchronized(lock) {
             overrideSelection = TermThemeSelection(lightFamilyId, darkFamilyId)
             cachedKey = null
+            tablesLight = null
+            tablesDark = null
         }
     }
 
@@ -161,11 +179,17 @@ object TermPalette {
             cachedKey = null
             cachedLight = null
             cachedDark = null
+            tablesLight = null
+            tablesDark = null
         }
     }
 
     fun invalidate() {
-        synchronized(lock) { cachedKey = null }
+        synchronized(lock) {
+            cachedKey = null
+            tablesLight = null
+            tablesDark = null
+        }
     }
 
     fun of(dark: Boolean): Scheme = synchronized(lock) {
@@ -174,6 +198,8 @@ object TermPalette {
             cachedKey = sel
             cachedLight = assembleSlot(dark = false, familyId = sel.lightFamilyId, slot = "light")
             cachedDark = assembleSlot(dark = true, familyId = sel.darkFamilyId, slot = "dark")
+            tablesLight = buildTables(cachedLight!!)
+            tablesDark = buildTables(cachedDark!!)
         }
         if (dark) cachedDark!! else cachedLight!!
     }
@@ -218,14 +244,51 @@ object TermPalette {
         againstBg: Int? = null,
     ): Int {
         val pal = of(dark)
+        val tables = if (dark) tablesDark else tablesLight
+        val against = againstBg ?: pal.defaultBg
+        val defaultAgainst = against == pal.defaultBg
         return when (color) {
             TerminalColor.Default -> if (background) pal.defaultBg else pal.defaultFg
-            is TerminalColor.Indexed -> indexed(color.index, background, pal, againstBg)
+            is TerminalColor.Indexed -> {
+                val i = color.index
+                if (tables != null && defaultAgainst && i in 0..255) {
+                    if (background) tables.indexedBg[i] else tables.indexedFg[i]
+                } else {
+                    indexed(i, background, pal, againstBg)
+                }
+            }
             is TerminalColor.Rgb -> {
                 val raw = pack(color.r, color.g, color.b)
-                if (background) guardRgbBg(raw, pal, againstBg) else project(raw, background = false, pal, againstBg)
+                if (tables != null && defaultAgainst) {
+                    val map = if (background) tables.rgbBg else tables.rgbFg
+                    val hit = map[raw]
+                    if (hit != null) hit
+                    else {
+                        val v = if (background) {
+                            guardRgbBg(raw, pal, againstBg)
+                        } else {
+                            project(raw, background = false, pal, againstBg)
+                        }
+                        map[raw] = v
+                        v
+                    }
+                } else if (background) {
+                    guardRgbBg(raw, pal, againstBg)
+                } else {
+                    project(raw, background = false, pal, againstBg)
+                }
             }
         }
+    }
+
+    private fun buildTables(pal: Scheme): RemapTables {
+        val fg = IntArray(256)
+        val bg = IntArray(256)
+        for (i in 0..255) {
+            fg[i] = indexed(i, background = false, pal, againstBg = null)
+            bg[i] = indexed(i, background = true, pal, againstBg = null)
+        }
+        return RemapTables(fg, bg, HashMap(64), HashMap(64))
     }
 
     private fun indexed(index: Int, background: Boolean, pal: Scheme, againstBg: Int?): Int {
@@ -257,12 +320,13 @@ object TermPalette {
     private fun project(argb: Int, background: Boolean, pal: Scheme, againstBg: Int?): Int {
         val lab = toOkLab(argb)
         val role = if (background) pal.bgSlots else pal.fgSlots
-        val gated = chromaGate(lab, role)
+        val gated = chromaGate(lab, pal, background)
         val slots = if (gated.isEmpty()) {
             DiagLog.record(
                 "term-remap-chroma",
                 "source=${pal.source} rgb=${rgbTriple(argb)} inputC=${hypot(lab.a, lab.b)} " +
                     "empty=chroma_gate role=${if (background) "bg" else "fg"}",
+                coalesceKey = "chroma|${pal.source}|$argb|${if (background) "bg" else "fg"}",
             )
             role
         } else {
@@ -276,12 +340,12 @@ object TermPalette {
         return picked.argb
     }
 
-    private fun chromaGate(lab: OkLab, slots: List<Slot>): List<Slot> {
+    private fun chromaGate(lab: OkLab, pal: Scheme, background: Boolean): List<Slot> {
         val c = hypot(lab.a, lab.b)
         return if (c >= CHROMA_INPUT) {
-            slots.filter { it.chroma >= CHROMA_SLOT }
+            if (background) pal.bgChroma else pal.fgChroma
         } else {
-            slots.filter { it.chroma < CHROMA_SLOT }
+            if (background) pal.bgAchroma else pal.fgAchroma
         }
     }
 
@@ -327,6 +391,7 @@ object TermPalette {
             "term-remap-contrast",
             "source=${pal.source} fg_rgb=${rgbTriple(fg0.argb)} bg=0x${hex(bg)} " +
                 "contrast_before=$before contrast_after=${contrast(after.argb, bg)}",
+            coalesceKey = "contrast|${pal.source}|${fg0.argb}|$bg|${after.argb}",
         )
         return after
     }
