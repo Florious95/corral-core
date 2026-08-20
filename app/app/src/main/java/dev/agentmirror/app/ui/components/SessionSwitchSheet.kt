@@ -85,8 +85,8 @@ fun SessionSwitchSheet(
     onDismiss: () -> Unit,
     onSelect: (SessionItem) -> Unit,
     onToggleStar: (SessionItem) -> Unit,
-    onClose: (SessionItem) -> Unit = {},
     modifier: Modifier = Modifier,
+    onClose: (SessionItem) -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     val screenH = LocalConfiguration.current.screenHeightDp

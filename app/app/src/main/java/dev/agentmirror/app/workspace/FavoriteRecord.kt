@@ -46,8 +46,7 @@ data class FavoriteRecord(
     @SerialName("window_index") val windowIndex: String = "",
     @SerialName("window_name") val windowName: String = "",
     @SerialName("cwd") val cwd: String = "",
-    @SerialName("added_at") val addedAt: Long,
-    @SerialName("provider") val provider: String = "",
+    @SerialName("added_at") val addedAt: Long, @SerialName("provider") val provider: String = "",
 ) {
     val key: FavoriteKey
         get() = FavoriteKey(ref)
@@ -70,8 +69,7 @@ data class FavoriteRow(
     val ref: String = "",
     val cwd: String = "",
     val title: String = "",
-    val status: L2Status = L2Status.UNKNOWN,
-    val provider: String = "",
+    val status: L2Status = L2Status.UNKNOWN, val provider: String = "",
 ) {
     val gray: Boolean get() = !isOnline
 
