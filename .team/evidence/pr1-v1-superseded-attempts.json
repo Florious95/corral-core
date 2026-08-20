@@ -159,6 +159,25 @@
      "acceptance_failure.stderr_tail(末20行)=hit=['/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.input/.team/nodes/pr2-compose-rv/verdict.md']\nverdict='VERDICT: refutes' len=2254"
     ]
    }
+  },
+  {
+   "task_id": "t.e7.rv",
+   "superseded_at_revision": 12,
+   "reason": "land-pr.sh 两个自身缺陷：$BR 紧跟全角括号被 bash 吞进变量名；未处理仓根未跟踪同名副本。均已修，e7 已实际并线 84b2d73e6",
+   "attempt": {
+    "attempt_id": "att-t.e7.rv-seq2-t1787252719332",
+    "delivery_id": "del-t.e7.rv-seq2-t1787252719332",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-e7-land",
+     "acceptance_failure.argv=[\"sh\", \"-c\", \"{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e7-scroll-hint /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.listui/.team/nodes/pr2-e7-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-e7-land.log 2>&1\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)="
+    ]
+   }
   }
  ]
 }
