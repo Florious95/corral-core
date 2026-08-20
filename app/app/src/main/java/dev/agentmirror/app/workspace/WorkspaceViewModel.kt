@@ -488,6 +488,8 @@ class WorkspaceViewModel(
      * 服务端每连接只绑一个 workspace）。不是下拉刷新，也不是周期轮询（061）。
      */
     fun enterFavorites() {
+        // 契约 090：收藏页可见走与回前台同一个入口，不在这里单独 start / 另订一份。
+        ServiceWire.onUiVisible("visibility:favorites")
         val cwds = LinkedHashSet<String>()
         for (rec in _favorites.value) {
             if (rec.cwd.isNotEmpty()) cwds.add(rec.cwd)
