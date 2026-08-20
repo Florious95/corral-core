@@ -476,22 +476,14 @@ private val KEY_BAR_ENTRIES = listOf(
 
 /**
  * 回执/错误状态区：失败/在途/上传/解码错误明确可见（003）。
- * 083 §4/§12：成功态不组「已发送」节点。不用 AnimatedVisibility——
- * 退出动画会把旧节点留在树上叠成蓝色悬浮堆。
+ * 083 §4/§12 + 089 §3：成功态经 [bannerFrom] 共同出口不组节点。
+ * 不用 AnimatedVisibility——退出动画会把旧节点留在树上叠成蓝色悬浮堆。
  */
 @Composable
 private fun StatusArea(viewModel: SessionViewModel) {
-    val message = when (val s = viewModel.inputStatus) {
-        is InputStatus.Sent -> null
-        is InputStatus.Failed -> s.message
-        is InputStatus.Sending -> "发送中…"
-        InputStatus.Idle -> null
-    } ?: when (val u = viewModel.uploadStatus) {
-        is UploadStatus.Uploading -> "上传中…"
-        is UploadStatus.Success -> "已附加图片"
-        is UploadStatus.Failed -> u.message
-        UploadStatus.Idle -> null
-    } ?: viewModel.transientError
+    val message = bannerFrom(viewModel.inputStatus)
+        ?: bannerFrom(viewModel.uploadStatus)
+        ?: viewModel.transientError
 
     if (message == null) return
     val isError = viewModel.inputStatus is InputStatus.Failed ||
