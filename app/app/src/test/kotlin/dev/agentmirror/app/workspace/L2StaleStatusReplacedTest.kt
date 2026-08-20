@@ -80,20 +80,20 @@ class L2StaleStatusReplacedTest {
         }
         compose.waitForIdle()
         compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("进行中").assertDoesNotExist()
+        compose.onNodeWithText("运行").assertDoesNotExist()
 
         // 订着时同一身份再从 idle 推 working 又推 idle，徽章必须跟着换。
         vm.onFrame(snap("/proj", 3, ref, identity, "working"))
         compose.waitForIdle()
         assertEquals(L2Status.WORKING, statusOf(vm, ref))
-        compose.onNodeWithText("进行中").assertExists()
+        compose.onNodeWithText("运行").assertExists()
         vm.onFrame(
             snap("/proj", 4, ref, identity, "idle", title = "对照席定点变异验红绿判据 - grok"),
         )
         compose.waitForIdle()
         assertEquals(L2Status.IDLE, statusOf(vm, ref))
         compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("进行中").assertDoesNotExist()
+        compose.onNodeWithText("运行").assertDoesNotExist()
     }
 
     private fun statusOf(vm: WorkspaceViewModel, ref: String): L2Status =
