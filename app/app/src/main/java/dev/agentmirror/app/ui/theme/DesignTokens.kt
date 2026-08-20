@@ -48,6 +48,8 @@ object Dims {
     val statusChipHeight: Dp = 24.dp
     val statusChipHPadding: Dp = 9.dp
     val statusDotSize: Dp = 5.dp
+    /** StatusChip 「运行」「空闲」文字槽；由 [dev.agentmirror.app.ui.components.StatusChip] 实测写入。 */
+    var statusChipLabelMinWidth: Dp = 0.dp
 
     // 工作区行首的 ❯ 方块
     val workspaceGlyphBox: Dp = 34.dp

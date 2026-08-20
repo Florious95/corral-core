@@ -36,7 +36,7 @@ fun FavoriteList(
     connectionPath: ConnectionPath? = null,
     connectionBanner: String? = null,
 ) {
-    val items = rows.map { it.toSessionItem() }
+    val items = sortSessions(rows.map { it.toSessionItem() })
     val byId = items.zip(rows).associate { it.first.id to it.second }
     AppTheme {
         FavoritesScreen(
