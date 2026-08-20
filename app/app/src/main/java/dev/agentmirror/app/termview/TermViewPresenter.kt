@@ -106,6 +106,14 @@ class TermViewPresenter(
         private set
 
     /**
+     * 字格相对上次写入是否变了（090 §2.5）。[seedCellMetrics] 置位，
+     * [onRealViewportChanged] 消费后清掉。回前台时 View 可能重新实测出更大的字格，
+     * 像素视口却没变——[viewportOutgrewEmulator] 为 false，若不据此重算就会
+     * 按旧的多列画新的大字格，右侧被切（用户截图）。
+     */
+    private var cellMetricsDirty: Boolean = false
+
+    /**
      * 当前可见行数（≤ 内核行数）；null = 未挤压，取 [TerminalEmulator.rows]。
      *
      * 视口上推的载体（raw/019）：IME/输入框把 View 高度挤小时，本值收缩为
@@ -254,7 +262,7 @@ class TermViewPresenter(
         // coerceIn(1, rows) 上限夹住，窗口画不满 View（用户截图：56 行空黑）。
         // 判据见 [viewportOutgrewEmulator]：挤压恒 <= 内核，等于/小于都不触发；只有
         // 「内核行数过时偏低」才重算并 emit——这就是 v1/v2/v3 找不到的区分判据。
-        val outgrew = viewportOutgrewEmulator()
+        val outgrew = viewportOutgrewEmulator(source = "onViewportSizeChanged")
         if (outgrew) {
             resized = recomputeGeometry() || resized
         }
@@ -282,12 +290,16 @@ class TermViewPresenter(
      * 行/列数**超出**内核时重算并 emit。挤压（<）与相等一律不动——绝不把 IME 在屏的挤压
      * 值当真实视口 shrink 终端（v1/v2/v3 死因；回前台 IME 仍在屏时应保持挤压显示，不发 resize）。
      *
+     * 090 §2.5：字格在回前台被重新实测且与内核行列不一致时也必须重算。这不是挤压——
+     * 像素没变、格子变大，candidate 更小，outgrew 为 false，旧实现会留下「大字号 + 右侧被切」。
+     *
      * @contract
      * @pre none
      * @post viewportWidthPx/HeightPx 更新为入参；首帧未 seed 且尺寸为正则按首次视口 seed；
-     *       视口超出内核行列数则重算并 emit；可见行数变化即请求帧
+     *       视口超出内核行列数则重算并 emit；[cellMetricsDirty] 且推导行列与内核不一致则重算；
+     *       可见行数变化即请求帧
      * @err none
-     * @inv 挤压（视口 < 内核）不产生任何重算/emit
+     * @inv 挤压（视口 < 内核）且字格未变不产生重算/emit；字格已变则按真实视口重算
      */
     fun onRealViewportChanged(widthPx: Int, heightPx: Int) {
         // 仪表（leader 2026-08-14 补充裁定）：一进来就记——用户报「回前台后只画上面三分之一」，
@@ -305,6 +317,8 @@ class TermViewPresenter(
         recordResumeOperands()
         var resized = false
         var outgrew = false
+        val cellsDirty = cellMetricsDirty
+        cellMetricsDirty = false
         // 首帧尚未建立（onSizeChanged 未到，先来的是窗口可见事件）：按首次真实视口 seed，
         // 之后 onViewportSizeChanged 因 viewportSeeded 已置位不再 emit——两种事件顺序只 seed 一次。
         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
@@ -315,15 +329,26 @@ class TermViewPresenter(
                     "字号选定后必须先调用 seedCellMetrics 喂入实测字形度量，不许静默用占位值继续算 rows/cols"
             }
             viewportSeeded = true
+            // 仪表必须先走守卫：首帧路径以前硬编码 outgrewGuard=true 且不调用本函数，
+            // 日志里「没被调用」和「算过 true」同形。
+            outgrew = viewportOutgrewEmulator(source = "onRealViewportChanged")
             resized = recomputeGeometry()
             updateVisibleRows()
             onFrameRequested?.invoke()
-            recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = true)
+            recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = outgrew)
             return
         }
         val rowsBefore = visibleRows
-        outgrew = viewportOutgrewEmulator()
-        if (outgrew) {
+        outgrew = viewportOutgrewEmulator(source = "onRealViewportChanged")
+        val mismatch = derivedGeometryDiffersFromEmulator()
+        DiagLog.record(
+            "viewport",
+            "source=onRealViewportChanged cellsDirty=$cellsDirty " +
+                "resume_rows=${derivedRows()} emulator_rows=${emulator.rows} " +
+                "resume_cols=${derivedCols()} emulator_cols=${emulator.cols} " +
+                "outgrew=$outgrew mismatch=$mismatch → ${outgrew || (cellsDirty && mismatch)}",
+        )
+        if (outgrew || (cellsDirty && mismatch)) {
             resized = recomputeGeometry()
         }
         updateVisibleRows()
@@ -378,7 +403,8 @@ class TermViewPresenter(
      *      legacy graphics）的字形度量在部分路径下是 stub，可能诚实地测出 0（见下）
      * @post cellWidth/cellHeight 更新为入参；[cellMetricsSeeded] 置位（解除
      *       [onViewportSizeChanged]/[onRealViewportChanged] 的防静默失效守卫）；
-     *       不触发重算/上抛/请求帧
+     *       宽高与上次不同则置 [cellMetricsDirty]（供回前台入口消费）；
+     *       本方法自身不触发重算/上抛/请求帧
      * @err none（不校验正负——本方法只负责「记下调用方测出的值」，不负责评判测量质量；
      *      非正值会让 [recomputeGeometry] 的既有 guard 继续跳过几何计算，行为等同「尚未
      *      有可用几何」，但不影响 [cellMetricsSeeded]：防静默失效守卫防的是「没测就用
@@ -386,6 +412,9 @@ class TermViewPresenter(
      * @inv 正常生命周期内应在首次 [onViewportSizeChanged] 之前调用（进入会话前尺寸即定，契约④）
      */
     fun seedCellMetrics(cellW: Int, cellH: Int) {
+        if (cellWidth != cellW || cellHeight != cellH) {
+            cellMetricsDirty = true
+        }
         cellWidth = cellW
         cellHeight = cellH
         cellMetricsSeeded = true
@@ -397,12 +426,44 @@ class TermViewPresenter(
      * 挤压只会让视口 <= 内核（首帧被挤压 seed 时 ==，之后收缩 <）；只有真实增长（IME 收起、
      * 分屏/窗口变大、回前台）才会让视口 > 内核，这正是「内核 rows/cols 过时偏低」的信号。
      * 用它做重算触发条件，天然不会把挤压值当真实视口（v1/v2/v3 死因：在 View 层推断 IME）。
+     *
+     * 仪表：无论结果真假、操作数是否就绪，都把两边原始数值和结论写下来。
+     * 早期 return false 若不记，日志里「没被调用 / 守卫拦下 / 算错了」三种同形。
      */
-    private fun viewportOutgrewEmulator(): Boolean {
-        if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return false
-        val candidateRows = viewportHeightPx / cellHeight
-        val candidateCols = minOf(viewportWidthPx / cellWidth, TerminalMetrics.maxCols)
-        return candidateRows > emulator.rows || candidateCols > emulator.cols
+    private fun viewportOutgrewEmulator(source: String): Boolean {
+        val ready = viewportWidthPx > 0 && viewportHeightPx > 0 && cellWidth > 0 && cellHeight > 0
+        val candidateRows = derivedRows()
+        val candidateCols = if (cellWidth > 0 && viewportWidthPx > 0) {
+            minOf(viewportWidthPx / cellWidth, TerminalMetrics.maxCols)
+        } else {
+            -1
+        }
+        val out = ready && (candidateRows > emulator.rows || candidateCols > emulator.cols)
+        DiagLog.record(
+            "viewport",
+            "viewportOutgrewEmulator: source=$source " +
+                "viewport_rows=$candidateRows emulator_rows=${emulator.rows} " +
+                "viewport_cols=$candidateCols emulator_cols=${emulator.cols} " +
+                "viewport_w=$viewportWidthPx viewport_h=$viewportHeightPx " +
+                "cell_w=$cellWidth cell_h=$cellHeight operandsReady=$ready → $out",
+        )
+        return out
+    }
+
+    private fun derivedRows(): Int =
+        if (cellHeight > 0 && viewportHeightPx > 0) viewportHeightPx / cellHeight else -1
+
+    private fun derivedCols(): Int =
+        if (cellWidth > 0 && viewportWidthPx > 0) {
+            minOf(viewportWidthPx / cellWidth, TerminalMetrics.maxCols).coerceAtLeast(1)
+        } else {
+            -1
+        }
+
+    private fun derivedGeometryDiffersFromEmulator(): Boolean {
+        val rows = derivedRows()
+        val cols = derivedCols()
+        return rows > 0 && cols > 0 && (rows != emulator.rows || cols != emulator.cols)
     }
 
     /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。
