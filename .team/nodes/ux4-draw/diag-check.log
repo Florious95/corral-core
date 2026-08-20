@@ -1,55 +1,58 @@
-2026-08-20T20:59:39.520 [lifecycle] ON_CREATE
-2026-08-20T20:59:39.615 [ws] conn state STOPPED → CONNECTING
-2026-08-20T20:59:39.647 [ws] conn state CONNECTING → AUTHENTICATING
-2026-08-20T20:59:39.652 [lifecycle] ON_START
-2026-08-20T20:59:39.666 [ws] conn state AUTHENTICATING → READY
-2026-08-20T20:59:40.102 [refresh] applyListing seq=23 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T20:59:40.103 [refresh] applyListing seq=23 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T20:59:40.483 [refresh] enterLevel1 list cached=1 first_frame=already refreshing_prev=false refreshing_next=false
-2026-08-20T20:59:40.495 [refresh] applyListing seq=23 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T20:59:43.855 [refresh] enterLevel2 subscribe cwd=/private/tmp/e2e-sent/cwd painted=0 cached=0
-2026-08-20T20:59:43.867 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=1
-2026-08-20T20:59:43.867 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=155 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:<none>->idle
-2026-08-20T20:59:43.883 [refresh] applyListing seq=23 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T20:59:47.463 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T20:59:47.467 [term-geom] source=subscribe cache=miss reason=dpi rows=40 cols=120 fontSp=14 densityDpi=480 cachedRows=47 cachedCols=52 cachedFontSp=14 cachedDpi=440 fallbackRows=40 fallbackCols=120
-2026-08-20T20:59:47.491 [term-theme] raw=vesper catalogHit=true slot=light
-2026-08-20T20:59:47.492 [term-theme] raw=vesper catalogHit=true slot=dark
-2026-08-20T20:59:47.511 [term-theme] raw=vesper catalogHit=true slot=light
-2026-08-20T20:59:47.511 [term-theme] raw=vesper catalogHit=true slot=dark
-2026-08-20T20:59:47.566 [term-bg-remap] source=theme-chrome night=false defaultBg=0xff101010 ansi0=0xff101010 userBlock=0xffe6f5f2 paperLuma=16 ansi0Luma=16 blockLuma=240 verdict=PAPER_EQ_ANSI0
-2026-08-20T20:59:47.575 [viewport] source=windowVisibility visibility=0 width=0 height=0
-2026-08-20T20:59:47.603 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T20:59:47.604 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
-2026-08-20T20:59:47.650 [viewport] source=onViewportSizeChanged oldW=0 oldH=0 newW=1200 newH=2099 viewportSeeded=false emulatorRows=40 emulatorCols=120
-2026-08-20T20:59:47.651 [reflow] resize sent rows=42 cols=48 reason=user ok=true bookkept_rows=42 bookkept_cols=48
-2026-08-20T20:59:47.653 [grid] viewport_width_px=1200 cell_width_nominal=25 cell_width_measured=25 reported_cols=48 canvas_capacity_cols=48 overflow_px=0 half_cell_px=12.5
-2026-08-20T20:59:47.653 [viewport] source=onViewportSizeChanged result resized=true outgrewGuard=false candidateRows=42 candidateCols=48 emulatorRows=42 emulatorCols=48
-2026-08-20T20:59:47.656 [term-geom] source=persist rows=42 cols=48 cellW=25 cellH=49 fontSp=14 viewW=1236 viewH=2099 densityDpi=480
-2026-08-20T20:59:47.676 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=25 viewW=1236 verdict=OK ×3
-2026-08-20T20:59:47.704 [reflow] frame cols=48 render cols=48 bookkept_rows=42 emulator_rows=42
-2026-08-20T20:59:47.747 [term-draw] source=onDraw n=1 dt_us_avg=70562 dt_us_p50=70562 dt_us_p95=70562 dt_us_last=70562 rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=9 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=113 scrollDelta=0 opt=1 frameTimeNanos=0 t_firstOnDraw=1787230787747 t_firstOnDrawWithCells=1787230787747
-2026-08-20T20:59:47.766 [session-lamp] src=level2-push ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 overlay_n=1 hit=true hit_status=idle hit_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 lamp=Idle eq_ref=true
-2026-08-20T20:59:47.884 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=156 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
-2026-08-20T20:59:47.920 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T20:59:47.929 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T20:59:47.930 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
-2026-08-20T20:59:47.935 [session-lamp] src=level2-push ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 overlay_n=1 hit=true hit_status=idle hit_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 lamp=Idle eq_ref=true
-2026-08-20T20:59:55.924 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:00:03.421 [refresh] applyListing seq=23 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T21:00:03.431 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=158 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
-2026-08-20T21:00:03.446 [refresh] enterLevel2 subscribe cwd=/private/tmp/e2e-sent/cwd painted=1 cached=1
-2026-08-20T21:00:03.457 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=159 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
-2026-08-20T21:00:03.466 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=1
-2026-08-20T21:00:03.468 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:00:03.469 [term-theme] raw=vesper catalogHit=true slot=light
-2026-08-20T21:00:03.469 [term-theme] raw=vesper catalogHit=true slot=dark
-2026-08-20T21:00:03.477 [refresh] applyListing seq=24 workspaces=1 refreshing_prev=true refreshing_next=false
-2026-08-20T21:00:03.487 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:00:03.487 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
-2026-08-20T21:00:03.729 [viewport] source=windowVisibility visibility=8 width=1236 height=2099
-2026-08-20T21:00:05.464 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=160 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
-2026-08-20T21:00:06.287 [refresh] enterLevel1 list cached=1 first_frame=already refreshing_prev=false refreshing_next=false
-2026-08-20T21:00:06.297 [refresh] applyListing seq=25 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T21:00:09.111 [term-theme] raw=vesper catalogHit=true slot=light
-2026-08-20T21:00:09.111 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:30:29.561 [lifecycle] ON_CREATE
+2026-08-20T21:30:29.625 [ws] conn state STOPPED → CONNECTING
+2026-08-20T21:30:29.648 [lifecycle] ON_START
+2026-08-20T21:30:29.652 [ws] conn state CONNECTING → AUTHENTICATING
+2026-08-20T21:30:29.728 [ws] conn state AUTHENTICATING → READY
+2026-08-20T21:30:29.964 [refresh] applyListing seq=38 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:30:29.966 [refresh] applyListing seq=38 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:30:30.271 [refresh] enterLevel1 list cached=1 first_frame=already refreshing_prev=false refreshing_next=false
+2026-08-20T21:30:30.283 [refresh] applyListing seq=38 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:30:33.759 [refresh] enterLevel2 subscribe cwd=/private/tmp/e2e-sent/cwd painted=0 cached=0
+2026-08-20T21:30:33.770 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=185 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:<none>->idle
+2026-08-20T21:30:33.783 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=1
+2026-08-20T21:30:33.794 [refresh] applyListing seq=38 workspaces=1 refreshing_prev=true refreshing_next=false
+2026-08-20T21:30:37.351 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:37.355 [term-geom] source=subscribe cache=miss reason=dpi rows=40 cols=120 fontSp=14 densityDpi=480 cachedRows=47 cachedCols=52 cachedFontSp=14 cachedDpi=440 fallbackRows=40 fallbackCols=120
+2026-08-20T21:30:37.375 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:30:37.376 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:30:37.405 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:30:37.407 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:30:37.495 [term-bg-remap] source=theme-chrome night=false defaultBg=0xff101010 ansi0=0xff101010 userBlock=0xffe6f5f2 paperLuma=16 ansi0Luma=16 blockLuma=240 verdict=PAPER_EQ_ANSI0
+2026-08-20T21:30:37.504 [viewport] source=windowVisibility visibility=0 width=0 height=0
+2026-08-20T21:30:37.527 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:37.528 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
+2026-08-20T21:30:37.570 [viewport] source=onViewportSizeChanged oldW=0 oldH=0 newW=1200 newH=2099 viewportSeeded=false emulatorRows=40 emulatorCols=120
+2026-08-20T21:30:37.570 [reflow] resize sent rows=42 cols=48 reason=user ok=true bookkept_rows=42 bookkept_cols=48
+2026-08-20T21:30:37.571 [grid] viewport_width_px=1200 cell_width_nominal=25 cell_width_measured=25 reported_cols=48 canvas_capacity_cols=48 overflow_px=0 half_cell_px=12.5
+2026-08-20T21:30:37.571 [viewport] source=onViewportSizeChanged result resized=true outgrewGuard=false candidateRows=42 candidateCols=48 emulatorRows=42 emulatorCols=48
+2026-08-20T21:30:37.572 [term-geom] source=persist rows=42 cols=48 cellW=25 cellH=49 fontSp=14 viewW=1236 viewH=2099 densityDpi=480
+2026-08-20T21:30:37.580 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=25 viewW=1236 verdict=OK ×3
+2026-08-20T21:30:37.633 [reflow] frame cols=48 render cols=48 bookkept_rows=42 emulator_rows=42
+2026-08-20T21:30:37.646 [term-draw] source=onDraw n=0 dt_us_avg=0 dt_us_p50=0 dt_us_p95=0 dt_us_last=65521 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=5 dt_body_us_avg=0 dt_body_us_p95=0 dt_body_us_last=65513 dt_clear_us_avg=0 dt_clear_us_p95=0 dt_clear_us_last=7 dt_lines_us_avg=0 dt_lines_us_p95=0 dt_lines_us_last=65482 dt_chrome_us_last=24 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=9 frameTimeNanos=0 t_firstOnDraw=1787232637645 t_firstOnDrawWithCells=1787232637645 t_emit=1787232637645
+2026-08-20T21:30:37.687 [session-lamp] src=level2-push ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 overlay_n=1 hit=true hit_status=idle hit_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 lamp=Idle eq_ref=true
+2026-08-20T21:30:37.787 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=186 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
+2026-08-20T21:30:37.808 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:37.820 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:37.822 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
+2026-08-20T21:30:37.878 [session-lamp] src=level2-push ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 overlay_n=1 hit=true hit_status=idle hit_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 lamp=Idle eq_ref=true
+2026-08-20T21:30:45.874 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:53.327 [refresh] applyListing seq=38 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:30:53.338 [refresh] enterLevel2 subscribe cwd=/private/tmp/e2e-sent/cwd painted=1 cached=1
+2026-08-20T21:30:53.345 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=188 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
+2026-08-20T21:30:53.352 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=1
+2026-08-20T21:30:53.353 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=189 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
+2026-08-20T21:30:53.353 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:53.354 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:30:53.354 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:30:53.364 [refresh] applyListing seq=39 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:30:53.375 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:53.375 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
+2026-08-20T21:30:53.386 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:53.387 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:30:53.387 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
+2026-08-20T21:30:53.612 [viewport] source=windowVisibility visibility=8 width=1236 height=2099
+2026-08-20T21:30:55.360 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=190 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
+2026-08-20T21:30:56.182 [refresh] enterLevel1 list cached=1 first_frame=already refreshing_prev=false refreshing_next=false
+2026-08-20T21:30:56.197 [refresh] applyListing seq=40 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:30:58.976 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:30:58.977 [term-theme] raw=vesper catalogHit=true slot=dark
