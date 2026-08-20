@@ -1,0 +1,12 @@
+DENSITY_SET 480
+RAPID_REENTER name=远程控制 app 开发 session=(354,643) back=(78,215)
+RAPID_REENTER done
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/shot-d480-session.png
+EXPORT d480 files/diag/diag-1787194454108.log bytes=87464 lines=346 dest=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/diag-d480.log
+WINDOW10 count=5 events=6
+  WIN 2026-08-20T10:53:56.620 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=22 viewW=1236 verdict=OK
+  WIN 2026-08-20T10:53:57.694 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=22 viewW=1236 verdict=OK
+  WIN 2026-08-20T10:53:58.737 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=22 viewW=1236 verdict=OK
+  WIN 2026-08-20T10:53:59.783 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=22 viewW=1236 verdict=OK
+  WIN 2026-08-20T10:54:00.854 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=22 viewW=1236 verdict=OK
+FAIL A-dd-ui 10s 窗口 [term-left-edge]=5 > 3（同操作数连打）

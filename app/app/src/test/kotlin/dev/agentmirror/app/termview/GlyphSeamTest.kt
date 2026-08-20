@@ -179,6 +179,36 @@ class GlyphSeamTest {
         bmp.recycle()
     }
 
+    @Test
+    fun glyphSeamQuietSurvivesViewRecreationSameOperands() {
+        val emulator = TerminalEmulator(20, 4)
+        emulator.feed("x")
+        val bmp = Bitmap.createBitmap(400, 160, Bitmap.Config.ARGB_8888)
+        val canvas = RecordingCanvas(bmp)
+        repeat(4) {
+            val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+            view.nightOverride = false
+            view.presenter = TermViewPresenter(emulator) { _, _ -> }
+            view.layout(0, 0, 400, 160)
+            view.draw(canvas)
+        }
+        val lines = DiagLog.snapshotForTest().filter { it.contains("[term-left-edge]") }
+        println("[A-dd-quiet] 4 views same operands lines=${lines.size} $lines")
+        assertTrue("4 个 View 同操作数必须合并成 ≤3 条，实际 ${lines.size}", lines.size <= 3)
+        assertTrue("至少应有首条仪表，不能整段关掉", lines.size >= 1)
+        assertTrue("合并计数应写在首条上 ×N", lines.any { it.contains(" ×") })
+
+        val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+        view.nightOverride = false
+        view.presenter = TermViewPresenter(emulator) { _, _ -> }
+        view.layout(0, 0, 520, 160)
+        view.draw(canvas)
+        val after = DiagLog.snapshotForTest().count { it.contains("[term-left-edge]") }
+        println("[A-dd-quiet] after viewW change term-left-edge=$after")
+        assertTrue("改 viewW 后必须立刻多一条，before=${lines.size} after=$after", after >= lines.size + 1)
+        bmp.recycle()
+    }
+
     private fun assertSeam(label: String, densityHint: Float) {
         val (view, canvas) = render("█████")
         val fg = TermPalette.of(false).defaultFg

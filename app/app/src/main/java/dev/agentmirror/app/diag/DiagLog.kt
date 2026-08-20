@@ -118,6 +118,14 @@ object DiagLog {
     /** 环形缓冲：容量固定，写满覆盖最旧（下标取模）。 */
     private val buffer = ArrayDeque<Entry>()
 
+    /**
+     * 同 tag 最近一次 coalesce 键。Compose 会在 180ms 内重建多个 View，
+     * 实例字段拦不住；进程级按操作数合并（值不变不新开行，变了立刻新行）。
+     */
+    private val lastCoalesce = mutableMapOf<String, Coalesce>()
+
+    private data class Coalesce(val key: String, var count: Int)
+
     /** 只写一次的系统启动时间锚点（format 共享；[formatter] 非线程安全，锁内用）。 */
     private val formatter: ThreadLocal<SimpleDateFormat> =
         ThreadLocal.withInitial { formatEpoch() }
@@ -179,15 +187,31 @@ object DiagLog {
      * @contract
      * @pre none（tag 非空；message 任意，含可能携带凭据的异常文案）
      * @post 一条 `[tag] message` 追加到环形缓冲（写满覆盖最旧）；message 中已注册 secret
-     *       与结构敏感串（tskey 前缀 / Bearer 头 / URI userinfo）已被替换为 [REDACTED]
+     *       与结构敏感串（tskey 前缀 / Bearer 头 / URI userinfo）已被替换为 [REDACTED]。
+     *       [coalesceKey] 非空且与该 tag 上次相同：不新开行，把最近一条同 tag 行改成 `×N`
+     *       （操作数没变）；键一变立刻新开行（操作数变了不许吞）。
      * @err none（不抛异常）
      * @inv 缓冲条数恒 ≤ maxEntries；任何 registerSecret 过的值在缓冲输出中零命中
      */
-    fun record(tag: String, message: String) {
+    fun record(tag: String, message: String, coalesceKey: String? = null) {
         val safe = redact(message)
         val ts = clock.nowMs()
         val line = formatLine(ts, tag, safe)
         lock.withLock {
+            if (coalesceKey != null) {
+                val prev = lastCoalesce[tag]
+                if (prev != null && prev.key == coalesceKey) {
+                    prev.count += 1
+                    val needle = "[$tag]"
+                    val idx = buffer.indexOfLast { it.line.contains(needle) }
+                    if (idx >= 0) {
+                        val stripped = COALESCE_REPEAT.replace(buffer[idx].line, "")
+                        buffer[idx] = Entry("$stripped ×${prev.count}")
+                    }
+                    return
+                }
+                lastCoalesce[tag] = Coalesce(coalesceKey, 1)
+            }
             if (buffer.size >= config.maxEntries) buffer.removeFirst()
             buffer.addLast(Entry(line))
         }
@@ -293,6 +317,7 @@ object DiagLog {
         lock.withLock {
             buffer.clear()
             secrets.clear()
+            lastCoalesce.clear()
             storageDir = null
             config = Config()
             clock = Clock { System.currentTimeMillis() }
@@ -347,6 +372,9 @@ object DiagLog {
     }
 
     // ---- 结构兜底正则（写入点脱敏用；standalone object 不允许 companion object，直接作顶层属性）----
+
+    // 合并计数后缀：同一 coalesce 键反复命中时改写最近一条，不新开行。
+    private val COALESCE_REPEAT = Regex(" ×\\d+$")
 
     // tskey-auth- 后跟 base62 长串；保守取 8..64 个非空白字符段。
     private val TSKEY_PATTERN = Regex("tskey-[A-Za-z0-9_-]{8,64}")
