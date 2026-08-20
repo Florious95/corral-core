@@ -296,12 +296,76 @@ object TermPalette {
     }
 
     private fun indexed(index: Int, background: Boolean, pal: Scheme, againstBg: Int?): Int {
-        if (background && (index == 0 || index == CUBE_BLACK_INDEX)) return pal.defaultBg
-        if (index == USER_MESSAGE_INDEX) return pal.userBlockBg
-        if (background && index in NEAR_WHITE_INDEXES) return pal.userBlockBg
-        if (index in 0..15) return pal.ansi16[index] ?: pack(128, 128, 128)
-        val raw = xtermCubeOrGray(index)
-        return if (background) guardRgbBg(raw, pal, againstBg) else project(raw, background = false, pal, againstBg)
+        val raw = indexedInputRgb(index, pal)
+        val y = luma(raw)
+        val chroma = chromaOf(raw)
+        if (background && (index == 0 || index == CUBE_BLACK_INDEX)) {
+            val out = pal.defaultBg
+            logIndexed(
+                branch = "screen-black",
+                index = index,
+                raw = raw,
+                y = y,
+                chroma = chroma,
+                thresh = "index in {0,$CUBE_BLACK_INDEX} lumaMax=$SCREEN_BLACK_LUMA_MAX",
+                out = out,
+            )
+            return out
+        }
+        if (index == USER_MESSAGE_INDEX) {
+            val out = pal.userBlockBg
+            logIndexed(
+                branch = "index-254",
+                index = index,
+                raw = raw,
+                y = y,
+                chroma = chroma,
+                thresh = "index==$USER_MESSAGE_INDEX",
+                out = out,
+            )
+            return out
+        }
+        if (background && index in NEAR_WHITE_INDEXES) {
+            val out = pal.userBlockBg
+            logIndexed(
+                branch = "near-white",
+                index = index,
+                raw = raw,
+                y = y,
+                chroma = chroma,
+                thresh = "index in {231,253,255} lumaMin=$HIGHLIGHT_WHITE_LUMA_MIN",
+                out = out,
+            )
+            return out
+        }
+        if (index in 0..15) {
+            val out = pal.ansi16[index] ?: pack(128, 128, 128)
+            logIndexed(
+                branch = "ansi16",
+                index = index,
+                raw = raw,
+                y = y,
+                chroma = chroma,
+                thresh = "index in 0..15",
+                out = out,
+            )
+            return out
+        }
+        val out = if (background) {
+            guardRgbBg(raw, pal, againstBg)
+        } else {
+            project(raw, background = false, pal, againstBg)
+        }
+        logIndexed(
+            branch = if (background) "fallthrough-guardRgbBg" else "fallthrough-project",
+            index = index,
+            raw = raw,
+            y = y,
+            chroma = chroma,
+            thresh = "index not in {0,16,254,231,253,255} and not (bg && 0..15)",
+            out = out,
+        )
+        return out
     }
 
     /**
@@ -309,16 +373,61 @@ object TermPalette {
      */
     private fun guardRgbBg(raw: Int, pal: Scheme, againstBg: Int?): Int {
         val y = luma(raw)
-        val r = (raw shr 16) and 0xFF
-        val g = (raw shr 8) and 0xFF
-        val b = raw and 0xFF
-        val chroma = maxOf(r, g, b) - minOf(r, g, b)
-        return when {
-            y <= SCREEN_BLACK_LUMA_MAX -> pal.defaultBg
-            y >= HIGHLIGHT_WHITE_LUMA_MIN && chroma <= ACHROMA_MAX -> pal.userBlockBg
-            y >= HIGHLIGHT_WHITE_LUMA_MIN -> pal.userBlockBg
-            else -> project(raw, background = true, pal, againstBg)
+        val chroma = chromaOf(raw)
+        val (branch, thresh, out) = when {
+            y <= SCREEN_BLACK_LUMA_MAX -> Triple(
+                "luma-screen-black",
+                "luma=$y<=$SCREEN_BLACK_LUMA_MAX chroma=$chroma vs achromaMax=$ACHROMA_MAX lumaMin=$HIGHLIGHT_WHITE_LUMA_MIN",
+                pal.defaultBg,
+            )
+            y >= HIGHLIGHT_WHITE_LUMA_MIN && chroma <= ACHROMA_MAX -> Triple(
+                "luma-achroma-white",
+                "luma=$y>=$HIGHLIGHT_WHITE_LUMA_MIN chroma=$chroma<=$ACHROMA_MAX lumaMax=$SCREEN_BLACK_LUMA_MAX",
+                pal.userBlockBg,
+            )
+            y >= HIGHLIGHT_WHITE_LUMA_MIN -> Triple(
+                "luma-chroma-white",
+                "luma=$y>=$HIGHLIGHT_WHITE_LUMA_MIN chroma=$chroma>$ACHROMA_MAX lumaMax=$SCREEN_BLACK_LUMA_MAX",
+                pal.userBlockBg,
+            )
+            else -> Triple(
+                "project",
+                "luma=$y in ($SCREEN_BLACK_LUMA_MAX,$HIGHLIGHT_WHITE_LUMA_MIN) chroma=$chroma vs achromaMax=$ACHROMA_MAX",
+                project(raw, background = true, pal, againstBg),
+            )
         }
+        DiagLog.record(
+            "term-guard-bg",
+            "branch=$branch rgb=${rgbTriple(raw)} luma=$y chroma=$chroma thresh=$thresh out=0x${hex(out)}",
+            coalesceKey = "term-guard-bg|$branch|$raw|$out",
+        )
+        return out
+    }
+
+    private fun indexedInputRgb(index: Int, pal: Scheme): Int =
+        if (index in 0..15) pal.ansi16[index] ?: pack(128, 128, 128) else xtermCubeOrGray(index)
+
+    private fun chromaOf(argb: Int): Int {
+        val r = (argb shr 16) and 0xFF
+        val g = (argb shr 8) and 0xFF
+        val b = argb and 0xFF
+        return maxOf(r, g, b) - minOf(r, g, b)
+    }
+
+    private fun logIndexed(
+        branch: String,
+        index: Int,
+        raw: Int,
+        y: Int,
+        chroma: Int,
+        thresh: String,
+        out: Int,
+    ) {
+        DiagLog.record(
+            "term-indexed",
+            "branch=$branch index=$index rgb=${rgbTriple(raw)} luma=$y chroma=$chroma thresh=$thresh out=0x${hex(out)}",
+            coalesceKey = "term-indexed|$branch|$index|$raw|$out",
+        )
     }
 
     private fun project(argb: Int, background: Boolean, pal: Scheme, againstBg: Int?): Int {
