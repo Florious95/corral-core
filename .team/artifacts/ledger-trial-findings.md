@@ -837,3 +837,60 @@ F-16 是两个受害者：
 ⇒ **拖慢交付的是账本层，不是席位能力。** 这句对我方同样成立。
 
 ⛔ 按 2026-08-19 用户令：**只收集，不主动发。**（本条也未回信。）
+
+## F-21 `send_inject_exhausted` —— F-17 那个静默缺陷**现在会自己报出来了**（正面案例 + 一条仍未闭合的边）
+
+**类别**：正面案例（清单第二条）+ 一条待补
+**实撞**：2026-08-20T11:53Z，`ledger.ux4.v1` `t.sent` 派单。
+
+### 发生了什么
+
+驱动器日志两行都是成功的：
+```
+[11:53:51Z] 投递回执 send-ok | task=t.sent case_id=ledger_ux4_v1__t.sent__r2 message_id=msg_d1e373d7b290
+[11:53:51Z] 派单落地 dispatch-landed | task=t.sent 席位 ux4-v1-sent 的收件箱已多出这条派单
+```
+
+**但 coordinator 主动投来一封**：
+```
+send.failed
+error: send to ux4-v1-sent failed with send_inject_exhausted after 3/3 attempts
+action: inspect the target pane and retry the send
+log: .team/logs/events.jsonl
+```
+
+`nodeprobe` 佐证：`ux4-v1-sent` 是 `idle`，pane 标题停在 `Write team handshake to _hands.txt`
+（= 建席位时的行为自证），**从没碰过那条派单**。
+
+### 🔴 这正是 F-17 的形状，但**这次它说话了**
+
+F-17 记的是：「派单 landed 但席位从不消费」，而当时**编排层提供的全部信息是「我投出去了，我在等」**，
+三种世界（在想 / 从不消费 / 消费后死掉）在输出上一个字都不差，只能靠框架之外的 `nodeprobe` 分辨。
+
+**现在不一样了**：`send_inject_exhausted after 3/3 attempts` 直接指认了失败的那一跳
+（消息已持久化进收件箱，但**注入目标 pane 失败**），并给了 `action` 和 `log` 路径。
+⇒ **「投递成功」与「送达席位」被拆成了两个可分辨的事实**，这是 F-17 要的核心。
+
+⚠️ 归属提醒：F-17 后来经隔离实验改判为 **B（team-agent 我方产品）**。
+所以这条改进也主要是**我方产品的改进**，不是编排框架的功劳。记清楚，别贴错功劳簿。
+
+### ❌ 仍未闭合的一条边
+
+`dispatch-landed` 与 `send.failed` **是两条独立的消息，且前者说成功、后者说失败**。
+驱动器**没有**因为注入失败而改变行为——它照常进入 `等待 wait`，会一直等到 5400s 预算耗尽。
+⇒ **一个已知失败的投递，仍然被当成正常等待处理。**
+
+正确行为的选项（给选项，不替对方定方案）：
+① `dispatch-landed` 应当等注入确认之后再打，或降级成 `dispatch-persisted`（如实：只是进了库）；
+② 或驱动器订阅 `send.failed`，命中即把该格转 `alarm`，⛔ 不要静默等满预算；
+③ 或 `wait` 那行带上「本次投递的注入结果」。
+
+**代价**：这次是我人工看到 coordinator 那封信才处置的。若我没在场，
+这一格会白等 90 分钟（5400s）才暴露，而失败在第 1 秒就已知。
+
+### 本轮处置
+`team-agent reset-agent ux4-v1-sent --team grok-l2 --discard-session` →
+`start_mode: fresh` / `status: reset` → 再用 `team-agent send` 手推它去消费收件箱里**已有**的那条派单
+（⛔ 不新派 case_id，驱动器等的 key 不变）。⛔ 判据一个字没改。
+
+⛔ 按 2026-08-19 用户令：**只收集，不主动发。**

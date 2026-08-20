@@ -1,0 +1,10 @@
+[ledger-run 2026-08-20T11:53:42Z] 常驻开工 resident-start | 账本=.team/ledgers/ux4-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-20T11:53:42Z] 开工 start | ledger_id=ledger.ux4.v1 revision=2 账本=.team/ledgers/ux4-v1.json 墙钟上限=32400s 派单死线=90s
+[ledger-run 2026-08-20T11:53:50Z] 轮次 round | 第 1 轮开始：前沿 ["t.idea", "t.sent"]（墙钟已跑 8s / 上限 32400s）
+[ledger-run 2026-08-20T11:53:50Z] 派单 dispatch | task=t.idea 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/ux4-v1-idea 席位=ux4-v1-idea attempt=att-t.idea-seq1-t1787226830729 delivery=del-t.idea-seq1-t1787226830729 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T11:53:50Z] 投递回执 send-ok | task=t.idea case_id=ledger_ux4_v1__t.idea__r2 message_id=msg_d1d465fee1e8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T11:53:50Z] 派单落地 dispatch-landed | task=t.idea 席位 ux4-v1-idea 的收件箱已多出这条派单
+[ledger-run 2026-08-20T11:53:50Z] 派单 dispatch | task=t.sent 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/ux4-v1-sent 席位=ux4-v1-sent attempt=att-t.sent-seq2-t1787226830957 delivery=del-t.sent-seq2-t1787226830957 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T11:53:51Z] 投递回执 send-ok | task=t.sent case_id=ledger_ux4_v1__t.sent__r2 message_id=msg_d1e373d7b290 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T11:53:51Z] 派单落地 dispatch-landed | task=t.sent 席位 ux4-v1-sent 的收件箱已多出这条派单
+[ledger-run 2026-08-20T11:53:51Z] 等待 wait | task=t.idea 在等的 key（case_id）=ledger_ux4_v1__t.idea__r2 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
