@@ -246,7 +246,7 @@
    ]
   },
   "t.e8.rv": {
-   "title": "# t.e8.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e8-back-gesture`**，需求＝E8 · 侧滑关列表而不是退出会话。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e8-back-gesture --stat` 与 `git diff main...pr/e8-back-gesture` 逐处看。\n2. 读 `.team/nodes/pr2-e8/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-e8-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.e8.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e8-back-gesture`**，需求＝E8 · 侧滑关列表而不是退出会话。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e8-back-gesture --stat` 与 `git diff main...pr/e8-back-gesture` 逐处看。\n2. 读 `.team/nodes/pr2-e8/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-e8-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-e8-land` 会在你判 `supports` 之后把 `pr/e8-back-gesture` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "succeeded",
    "owner": {
     "role": "r.rv.listui"
@@ -305,12 +305,24 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-e8-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e8-back-gesture /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.listui/.team/nodes/pr2-e8-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-e8-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-e8-rv-form",
-     "A-e8-rv-pass"
+     "A-e8-rv-pass",
+     "A-e8-land"
     ]
    },
    "attempts": [
@@ -452,7 +464,7 @@
    ]
   },
   "t.e7.rv": {
-   "title": "# t.e7.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e7-scroll-hint`**，需求＝E7 · 列表超一屏可滚 + 「下面还有」提示。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e7-scroll-hint --stat` 与 `git diff main...pr/e7-scroll-hint` 逐处看。\n2. 读 `.team/nodes/pr2-e7/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-e7-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.e7.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e7-scroll-hint`**，需求＝E7 · 列表超一屏可滚 + 「下面还有」提示。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e7-scroll-hint --stat` 与 `git diff main...pr/e7-scroll-hint` 逐处看。\n2. 读 `.team/nodes/pr2-e7/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-e7-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-e7-land` 会在你判 `supports` 之后把 `pr/e7-scroll-hint` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "planned",
    "owner": {
     "role": "r.rv.listui"
@@ -511,12 +523,24 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-e7-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e7-scroll-hint /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.listui/.team/nodes/pr2-e7-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-e7-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-e7-rv-form",
-     "A-e7-rv-pass"
+     "A-e7-rv-pass",
+     "A-e7-land"
     ]
    }
   },
@@ -628,7 +652,7 @@
    }
   },
   "t.icons.rv": {
-   "title": "# t.icons.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/icons-longpress`**，需求＝E10/E11/E15 · 首列 Provider 图标 + 长按菜单（收藏页无「关闭」）。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/icons-longpress --stat` 与 `git diff main...pr/icons-longpress` 逐处看。\n2. 读 `.team/nodes/pr2-icons/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-icons-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.icons.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/icons-longpress`**，需求＝E10/E11/E15 · 首列 Provider 图标 + 长按菜单（收藏页无「关闭」）。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/icons-longpress --stat` 与 `git diff main...pr/icons-longpress` 逐处看。\n2. 读 `.team/nodes/pr2-icons/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-icons-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-icons-land` 会在你判 `supports` 之后把 `pr/icons-longpress` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "planned",
    "owner": {
     "role": "r.rv.listui"
@@ -687,12 +711,24 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-icons-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/icons-longpress /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.listui/.team/nodes/pr2-icons-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-icons-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-icons-rv-form",
-     "A-icons-rv-pass"
+     "A-icons-rv-pass",
+     "A-icons-land"
     ]
    }
   },
@@ -804,7 +840,7 @@
    }
   },
   "t.sortlabel.rv": {
-   "title": "# t.sortlabel.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/sort-label`**，需求＝E9/E16 · 排序(收藏↓,运行↓,名称↑) + 「运行」等宽。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/sort-label --stat` 与 `git diff main...pr/sort-label` 逐处看。\n2. 读 `.team/nodes/pr2-sortlabel/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-sortlabel-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.sortlabel.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/sort-label`**，需求＝E9/E16 · 排序(收藏↓,运行↓,名称↑) + 「运行」等宽。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/sort-label --stat` 与 `git diff main...pr/sort-label` 逐处看。\n2. 读 `.team/nodes/pr2-sortlabel/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-sortlabel-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-sortlabel-land` 会在你判 `supports` 之后把 `pr/sort-label` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "planned",
    "owner": {
     "role": "r.rv.listui"
@@ -863,12 +899,24 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-sortlabel-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/sort-label /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.listui/.team/nodes/pr2-sortlabel-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-sortlabel-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-sortlabel-rv-form",
-     "A-sortlabel-rv-pass"
+     "A-sortlabel-rv-pass",
+     "A-sortlabel-land"
     ]
    }
   },
@@ -983,7 +1031,7 @@
    }
   },
   "t.close.rv": {
-   "title": "# t.close.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e12-close`**，需求＝E12 · close_session 原子关闭（关 CLI + 关 tmux 条目 + 若收藏则取消收藏）+ 二次确认。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e12-close --stat` 与 `git diff main...pr/e12-close` 逐处看。\n2. 读 `.team/nodes/pr2-close/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-close-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.close.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e12-close`**，需求＝E12 · close_session 原子关闭（关 CLI + 关 tmux 条目 + 若收藏则取消收藏）+ 二次确认。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e12-close --stat` 与 `git diff main...pr/e12-close` 逐处看。\n2. 读 `.team/nodes/pr2-close/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-close-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-close-land` 会在你判 `supports` 之后把 `pr/e12-close` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "planned",
    "owner": {
     "role": "r.rv.proto"
@@ -1042,12 +1090,24 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-close-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e12-close /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.proto/.team/nodes/pr2-close-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-close-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-close-rv-form",
-     "A-close-rv-pass"
+     "A-close-rv-pass",
+     "A-close-land"
     ]
    }
   },
@@ -1161,7 +1221,7 @@
    }
   },
   "t.provcmd.rv": {
-   "title": "# t.provcmd.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e14-provider-cmd`**，需求＝E14 · 设置里每个 Provider 的完整启动命令（E13 的 argv 来源）。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e14-provider-cmd --stat` 与 `git diff main...pr/e14-provider-cmd` 逐处看。\n2. 读 `.team/nodes/pr2-provcmd/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-provcmd-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.provcmd.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e14-provider-cmd`**，需求＝E14 · 设置里每个 Provider 的完整启动命令（E13 的 argv 来源）。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e14-provider-cmd --stat` 与 `git diff main...pr/e14-provider-cmd` 逐处看。\n2. 读 `.team/nodes/pr2-provcmd/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-provcmd-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-provcmd-land` 会在你判 `supports` 之后把 `pr/e14-provider-cmd` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "planned",
    "owner": {
     "role": "r.rv.proto"
@@ -1220,12 +1280,24 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-provcmd-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e14-provider-cmd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.proto/.team/nodes/pr2-provcmd-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-provcmd-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-provcmd-rv-form",
-     "A-provcmd-rv-pass"
+     "A-provcmd-rv-pass",
+     "A-provcmd-land"
     ]
    }
   },
@@ -1338,7 +1410,7 @@
    }
   },
   "t.newpane.rv": {
-   "title": "# t.newpane.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e13-new-pane`**，需求＝E13 · 工作区页「+」新建 pane（选 Provider + 勾 Bypass）。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e13-new-pane --stat` 与 `git diff main...pr/e13-new-pane` 逐处看。\n2. 读 `.team/nodes/pr2-newpane/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-newpane-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.newpane.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e13-new-pane`**，需求＝E13 · 工作区页「+」新建 pane（选 Provider + 勾 Bypass）。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e13-new-pane --stat` 与 `git diff main...pr/e13-new-pane` 逐处看。\n2. 读 `.team/nodes/pr2-newpane/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-newpane-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-newpane-land` 会在你判 `supports` 之后把 `pr/e13-new-pane` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "planned",
    "owner": {
     "role": "r.rv.proto"
@@ -1397,18 +1469,30 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-newpane-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e13-new-pane /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.proto/.team/nodes/pr2-newpane-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-newpane-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-newpane-rv-form",
-     "A-newpane-rv-pass"
+     "A-newpane-rv-pass",
+     "A-newpane-land"
     ]
    }
   },
   "t.resync": {
    "title": "## 知识基底（已内联）—— tools/basegen_ledger.py 从本格 write_paths 现算的模块影响闭包。\n**正向依赖 = 你消费的契约；反向依赖 = 你的回归自查范围。**⛔ 不看它就动手 = 凭空猜架构。\n\n# 知识基底 · ledger.pr2.v1 / t.resync（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.resync · E1 · 控制键改写远端输入行后，用仿真器光标锚定回读校正 syncedText（契约 087）\n\n🔴 **方案已由思路席位裁定，⛔ 你不要自己再选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md` §0 明写\n**选定方案 1「本地缓冲 + 光标锚定回读」，否决方案 2「镜像 + 按键捕获」，也否决「发送才同步」**。\n改成别的 ⇒ E2–E5 与 087 验收全部作废。\n\n**必须照它的 §2 落实的细节**：`resyncPending` 期间 `onPassthroughInput` 只更新本地框不发键；\n回读完成后用 `DiffSync.plan(新synced, 本地当前)` 一次补齐；⛔ 回读不得在 `composition != null` 时覆盖；\n用**仿真器光标**定位输入行，⛔ 不许写死行号；超时 400ms 且**失败必须可见，不静默**。\n日志三个字段一个不能少：`resync_wait_ms`、`snapshot_gen`、`trigger=Tab|Esc|Up|Down|Ctrl-C`。\n\n⛔ **084 §5 的四条判据（A-df-append / A-df-edit / A-df-ime / A-df-latency）必须仍然全绿**——\n那是 F-087-3，破坏任一条即为失败。\n---\n## 🔴 流程（PR 链）\n开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。\n1. 建分支 `git checkout -b pr/e1-resync`，只改自己 worktree 里的文件。\n2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-resync-seal`\n   在你报完后把改动提交到 `pr/e1-resync` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。\n3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-resync/tmp/`（自己 mkdir -p）。\n4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked` 并指出错在哪。\n5. **一次只改一个缺陷**，⛔ 顺手改相邻代码/重构/改格式一律禁止。\n\n## 🔴 判据纪律\n- 判据要断言「世界变了」；**先验红**（改之前跑，必须红）→ 改 → 验绿。\n  **先验红的原始输出必须贴进说明.md**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」必须先造出让它出现的条件，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**。\n\n## 🔴 两条常态判据：不许新增（⛔ 不是必须为 0）\nmain 上已有存量（app lint 16 条、archwiki T3 若干）。**不是你造成的，⛔ 不要去修** —— 修了 diff 就超范围。\n两条判据都会**逐条点名新增了哪几条**（含文件行号）。⛔ 不许 `--freeze` 洗基线。T1 判据仍必须全绿。\n\n## 说明.md 必须含\n分支名 / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 验绿原始输出 / 查不清的明写「查不清」。\n\n```\n\n- write_paths: app/app/src/main/java/dev/agentmirror/app/session/, app/app/src/main/java/dev/agentmirror/app/termview/, .team/nodes/pr2-resync/\n- read_paths: requirement-base/entries/087-输入行发散与输入区重做.md, requirement-base/entries/084-输入框差分同步.md, .team/nodes/pr1-idea-input/思路.md, .team/nodes/pr2-resync/说明.md\n- 判据: A-resync-suite, A-resync-wiki, A-resync-smell, A-resync-doc, A-resync-seal\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app.session, dev.agentmirror.app.termview\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_conn, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_tsnet, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_terminal\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app.session\n\n- **职责**：会话页：单个 tmux 会话的交互界面。\n- **导出面**：Attachment, Failed, Failure, HttpUrlConnectionUploader, SessionRoute, SessionScreen, SessionViewModel, Success\n- **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.service, dev.agentmirror.app.termview, dev.agentmirror.app.tsnet, dev.agentmirror.app.ui.theme, dev.agentmirror.terminal\n- **doc 全文**：会话页：单个 tmux 会话的交互界面。 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条； 图片附件走 multipart HTTP 上传（上传基地址由 service 装配的 ServiceWire 统一注入）， 跨层共享连接经 service 的 ServiceWire.uiConnector 扇出订阅。会话页已完整落位： 镜像流（snapshot/delta/scrollback 本地滚动补页）、发送必达回执、附件路径注入光标处。 @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.termview @consumes dev.agentmirror.app.tsnet @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.terminal\n\n### Kotlin · dev.agentmirror.app.termview\n\n- **职责**：终端渲染：快照/增量渲染 + 本地滚动视口（60fps，需求 006）。\n- **导出面**：ANSI_COLORS, DRAWABLE_EQUIVALENTS, GlyphFallbackPolicy, GlyphFontProvider, GlyphRunBuilder, GlyphSegment, GlyphSlot, TermSurfaceView, TermViewPresenter, XTERM_256\n- **依赖边**：dev.agentmirror.terminal\n- **doc 全文**：终端渲染：快照/增量渲染 + 本地滚动视口（60fps，需求 006）。 [TermViewPresenter] 纯 JVM 视口状态机（跟随/锁定历史、可见行窗口、捏合行列数换算、 脏区合并），单测全部打在它上；[TermSurfaceView] 薄 Android 层（Canvas 画格、拖动/捏合 手势、Choreographer 帧调度）。内核为 :terminal 模块；resize 协议帧由上层接线（conn/session）。 @consumes dev.agentmirror.terminal\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n\n# t.resync · E1 · 控制键改写远端输入行后，用仿真器光标锚定回读校正 syncedText（契约 087）\n\n🔴 **方案已由思路席位裁定，⛔ 你不要自己再选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md` §0 明写\n**选定方案 1「本地缓冲 + 光标锚定回读」，否决方案 2「镜像 + 按键捕获」，也否决「发送才同步」**。\n改成别的 ⇒ E2–E5 与 087 验收全部作废。\n\n**必须照它的 §2 落实的细节**：`resyncPending` 期间 `onPassthroughInput` 只更新本地框不发键；\n回读完成后用 `DiffSync.plan(新synced, 本地当前)` 一次补齐；⛔ 回读不得在 `composition != null` 时覆盖；\n用**仿真器光标**定位输入行，⛔ 不许写死行号；超时 400ms 且**失败必须可见，不静默**。\n日志三个字段一个不能少：`resync_wait_ms`、`snapshot_gen`、`trigger=Tab|Esc|Up|Down|Ctrl-C`。\n\n⛔ **084 §5 的四条判据（A-df-append / A-df-edit / A-df-ime / A-df-latency）必须仍然全绿**——\n那是 F-087-3，破坏任一条即为失败。\n---\n## 🔴 流程（PR 链）\n开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。\n1. 建分支 `git checkout -b pr/e1-resync`，只改自己 worktree 里的文件。\n2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-resync-seal`\n   在你报完后把改动提交到 `pr/e1-resync` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。\n3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-resync/tmp/`（自己 mkdir -p）。\n4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked` 并指出错在哪。\n5. **一次只改一个缺陷**，⛔ 顺手改相邻代码/重构/改格式一律禁止。\n\n## 🔴 判据纪律\n- 判据要断言「世界变了」；**先验红**（改之前跑，必须红）→ 改 → 验绿。\n  **先验红的原始输出必须贴进说明.md**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」必须先造出让它出现的条件，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**。\n\n## 🔴 两条常态判据：不许新增（⛔ 不是必须为 0）\nmain 上已有存量（app lint 16 条、archwiki T3 若干）。**不是你造成的，⛔ 不要去修** —— 修了 diff 就超范围。\n两条判据都会**逐条点名新增了哪几条**（含文件行号）。⛔ 不许 `--freeze` 洗基线。T1 判据仍必须全绿。\n\n## 说明.md 必须含\n分支名 / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 验绿原始输出 / 查不清的明写「查不清」。\n\n\n---\n## ⛔⛔ 本格只做这一条（rev2，2026-08-21 实撞）\n\n`方案.md` §1 列出了**全部 7 个 PR 的施工顺序**。⛔ **那不是你的任务清单，只有本格这一条是。**\n\n实撞：`t.e8` 的席位照着 §1 一路往下做，在同一个 worktree 里**连续建了 4 条分支并切来切去**，\n结果 E8 的交付被提交到了 `pr/e7-scroll-hint` 上，而 `pr/e8-back-gesture` 是空的，封版判据判红。\n\n⇒ 本格的规矩：\n- **只做本格标题点名的那一条**，⛔ 不许提前做后面的 PR。\n- **只在本格自己的分支上工作**，⛔ 不许建别的分支、⛔ 不许切到别的分支。\n- 后面那些 PR 会作为**独立的格**派给你，到时候再做。\n\n\n---\n## 🔴 返工（rev8）：评审席 refutes —— 缺功能判据的先验红\n\n`pr2-judge-input` 的裁定（`.worktrees/pr2.rv.input/.team/nodes/pr2-resync-rv/verdict.md`）：\n\n> **F-087-2 功能判据没有「改之前跑判据的原始输出且是红的」。**\n> 说明里那两份先验红（`A-resync-doc` 的 `hit=[]`、`A-resync-seal` 的 `seal_exit=1`）\n> **是机械判据，红是必然的**，与「控制键后删除发 0 键」这个缺陷本身无关，\n> **区分不了功能判据是否恒真**。\n\n🔴 **它逐条核过其余各项，全部无问题，并明确结论：产品码本身没有需要改的点，只缺那一份红证。**\n⛔ 所以**不要改产品代码**，⛔ 不要重做设计，⛔ 不要改判据。**只补先验红。**\n\n### 怎么补（评审席已给出可行路径，照做）\n写一条**只用既有 API** 的最小红测（这样它在改前的代码上也能编译）：\n\n```\nsendKey(ESC) → ackOk → 用 delta 画出远端输入行（含 \"prev-command\"）\n→ onPassthroughInput(tv(\"prev-command\"), tv(\"\"))\n断言：发出的 BackSpace 个数 == 12\n```\n\n**改前必发 0 个（`DiffSync.plan(\"\",\"\")` 零键），改后发 12 个。**这条能区分两个世界。\n\n拿改前红输出的做法（在你自己的 worktree 里做，⛔ 不要碰仓根）：\n1. 把新测试文件写好（只用既有 API，能在 main 的代码上编译）。\n2. `git checkout main -- app/app/src/main/java/dev/agentmirror/app/session/`\n   —— 把产品码退回改前状态。\n3. 跑那条测试，**它必须红**。⛔ **把原始输出（含断言失败的期望值与实际值）原样贴进说明.md 的「先验红」节。**\n4. `git checkout HEAD -- app/app/src/main/java/dev/agentmirror/app/session/` 恢复你的实现。\n5. 再跑一遍，**它必须绿**，原始输出也贴进去。\n\n### 说明.md 里要写清\n- 这条红测**为什么能区分两个世界**（改前 0 键 / 改后 12 键），\n- 以及**为什么原先那两份先验红不算数**（机械判据必然红，与缺陷无关）——\n  把教训写下来，别让下一格再犯。\n",
-   "state": "planned",
+   "state": "succeeded",
    "owner": {
     "role": "r.input"
    },
@@ -1513,10 +1597,26 @@
      "A-resync-doc",
      "A-resync-seal"
     ]
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.resync-seq1-t1787251563383",
+     "delivery_id": "del-t.resync-seq1-t1787251563383",
+     "state": "succeeded",
+     "writeback_revision": 9,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-resync-suite",
+      "acceptance_success.acceptance_id=A-resync-wiki",
+      "acceptance_success.acceptance_id=A-resync-smell",
+      "acceptance_success.acceptance_id=A-resync-doc",
+      "acceptance_success.acceptance_id=A-resync-seal",
+      "acceptance_success.writeback_revision=9"
+     ]
+    }
+   ]
   },
   "t.resync.rv": {
-   "title": "# t.resync.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e1-resync`**，需求＝E1 · 控制键改写远端输入行后，用仿真器光标锚定回读校正 syncedText。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e1-resync --stat` 与 `git diff main...pr/e1-resync` 逐处看。\n2. 读 `.team/nodes/pr2-resync/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-resync-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.resync.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e1-resync`**，需求＝E1 · 控制键改写远端输入行后，用仿真器光标锚定回读校正 syncedText。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e1-resync --stat` 与 `git diff main...pr/e1-resync` 逐处看。\n2. 读 `.team/nodes/pr2-resync/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-resync-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-resync-land` 会在你判 `supports` 之后把 `pr/e1-resync` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "planned",
    "owner": {
     "role": "r.rv.input"
@@ -1575,18 +1675,30 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-resync-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e1-resync /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.input/.team/nodes/pr2-resync-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-resync-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-resync-rv-form",
-     "A-resync-rv-pass"
+     "A-resync-rv-pass",
+     "A-resync-land"
     ]
    }
   },
   "t.compose": {
-   "title": "## 知识基底（已内联）—— tools/basegen_ledger.py 从本格 write_paths 现算的模块影响闭包。\n**正向依赖 = 你消费的契约；反向依赖 = 你的回归自查范围。**⛔ 不看它就动手 = 凭空猜架构。\n\n# 知识基底 · ledger.pr2.v1 / t.compose（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.compose · E2/E3/E4/E5 · 点击膨胀多行 + 按键条与打字并存 + 附件与发送收进框内 + 观感（契约 087）\n\n🔴 **方案已由思路席位裁定，⛔ 你不要自己再选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md` §0 明写\n**选定方案 1「本地缓冲 + 光标锚定回读」，否决方案 2「镜像 + 按键捕获」，也否决「发送才同步」**。\n改成别的 ⇒ E2–E5 与 087 验收全部作废。\n\n**必须照它的 §2 落实的细节**：`resyncPending` 期间 `onPassthroughInput` 只更新本地框不发键；\n回读完成后用 `DiffSync.plan(新synced, 本地当前)` 一次补齐；⛔ 回读不得在 `composition != null` 时覆盖；\n用**仿真器光标**定位输入行，⛔ 不许写死行号；超时 400ms 且**失败必须可见，不静默**。\n日志三个字段一个不能少：`resync_wait_ms`、`snapshot_gen`、`trigger=Tab|Esc|Up|Down|Ctrl-C`。\n\n⛔ **084 §5 的四条判据（A-df-append / A-df-edit / A-df-ime / A-df-latency）必须仍然全绿**——\n那是 F-087-3，破坏任一条即为失败。\n---\n## 🔴 流程（PR 链）\n开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。\n1. 建分支 `git checkout -b pr/e2-composer`，只改自己 worktree 里的文件。\n2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-compose-seal`\n   在你报完后把改动提交到 `pr/e2-composer` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。\n3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-compose/tmp/`（自己 mkdir -p）。\n4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked` 并指出错在哪。\n5. **一次只改一个缺陷**，⛔ 顺手改相邻代码/重构/改格式一律禁止。\n\n## 🔴 判据纪律\n- 判据要断言「世界变了」；**先验红**（改之前跑，必须红）→ 改 → 验绿。\n  **先验红的原始输出必须贴进说明.md**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」必须先造出让它出现的条件，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**。\n\n## 🔴 两条常态判据：不许新增（⛔ 不是必须为 0）\nmain 上已有存量（app lint 16 条、archwiki T3 若干）。**不是你造成的，⛔ 不要去修** —— 修了 diff 就超范围。\n两条判据都会**逐条点名新增了哪几条**（含文件行号）。⛔ 不许 `--freeze` 洗基线。T1 判据仍必须全绿。\n\n## 说明.md 必须含\n分支名 / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 验绿原始输出 / 查不清的明写「查不清」。\n\n```\n\n- write_paths: app/app/src/main/java/dev/agentmirror/app/session/, .team/nodes/pr2-compose/\n- read_paths: requirement-base/entries/087-输入行发散与输入区重做.md, requirement-base/entries/084-输入框差分同步.md, .team/nodes/pr1-idea-input/思路.md, .team/nodes/pr2-compose/说明.md\n- 判据: A-compose-suite, A-compose-wiki, A-compose-smell, A-compose-doc, A-compose-seal\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app.session\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_conn, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_termview, kt_dev_agentmirror_app_tsnet, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_terminal\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app.session\n\n- **职责**：会话页：单个 tmux 会话的交互界面。\n- **导出面**：Attachment, Failed, Failure, HttpUrlConnectionUploader, SessionRoute, SessionScreen, SessionViewModel, Success\n- **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.service, dev.agentmirror.app.termview, dev.agentmirror.app.tsnet, dev.agentmirror.app.ui.theme, dev.agentmirror.terminal\n- **doc 全文**：会话页：单个 tmux 会话的交互界面。 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条； 图片附件走 multipart HTTP 上传（上传基地址由 service 装配的 ServiceWire 统一注入）， 跨层共享连接经 service 的 ServiceWire.uiConnector 扇出订阅。会话页已完整落位： 镜像流（snapshot/delta/scrollback 本地滚动补页）、发送必达回执、附件路径注入光标处。 @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.termview @consumes dev.agentmirror.app.tsnet @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.terminal\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n\n# t.compose · E2/E3/E4/E5 · 点击膨胀多行 + 按键条与打字并存 + 附件与发送收进框内 + 观感（契约 087）\n\n🔴 **方案已由思路席位裁定，⛔ 你不要自己再选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md` §0 明写\n**选定方案 1「本地缓冲 + 光标锚定回读」，否决方案 2「镜像 + 按键捕获」，也否决「发送才同步」**。\n改成别的 ⇒ E2–E5 与 087 验收全部作废。\n\n**必须照它的 §2 落实的细节**：`resyncPending` 期间 `onPassthroughInput` 只更新本地框不发键；\n回读完成后用 `DiffSync.plan(新synced, 本地当前)` 一次补齐；⛔ 回读不得在 `composition != null` 时覆盖；\n用**仿真器光标**定位输入行，⛔ 不许写死行号；超时 400ms 且**失败必须可见，不静默**。\n日志三个字段一个不能少：`resync_wait_ms`、`snapshot_gen`、`trigger=Tab|Esc|Up|Down|Ctrl-C`。\n\n⛔ **084 §5 的四条判据（A-df-append / A-df-edit / A-df-ime / A-df-latency）必须仍然全绿**——\n那是 F-087-3，破坏任一条即为失败。\n---\n## 🔴 流程（PR 链）\n开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。\n1. 建分支 `git checkout -b pr/e2-composer`，只改自己 worktree 里的文件。\n2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-compose-seal`\n   在你报完后把改动提交到 `pr/e2-composer` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。\n3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-compose/tmp/`（自己 mkdir -p）。\n4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked` 并指出错在哪。\n5. **一次只改一个缺陷**，⛔ 顺手改相邻代码/重构/改格式一律禁止。\n\n## 🔴 判据纪律\n- 判据要断言「世界变了」；**先验红**（改之前跑，必须红）→ 改 → 验绿。\n  **先验红的原始输出必须贴进说明.md**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」必须先造出让它出现的条件，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**。\n\n## 🔴 两条常态判据：不许新增（⛔ 不是必须为 0）\nmain 上已有存量（app lint 16 条、archwiki T3 若干）。**不是你造成的，⛔ 不要去修** —— 修了 diff 就超范围。\n两条判据都会**逐条点名新增了哪几条**（含文件行号）。⛔ 不许 `--freeze` 洗基线。T1 判据仍必须全绿。\n\n## 说明.md 必须含\n分支名 / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 验绿原始输出 / 查不清的明写「查不清」。\n\n\n---\n## ⛔⛔ 本格只做这一条（rev2，2026-08-21 实撞）\n\n`方案.md` §1 列出了**全部 7 个 PR 的施工顺序**。⛔ **那不是你的任务清单，只有本格这一条是。**\n\n实撞：`t.e8` 的席位照着 §1 一路往下做，在同一个 worktree 里**连续建了 4 条分支并切来切去**，\n结果 E8 的交付被提交到了 `pr/e7-scroll-hint` 上，而 `pr/e8-back-gesture` 是空的，封版判据判红。\n\n⇒ 本格的规矩：\n- **只做本格标题点名的那一条**，⛔ 不许提前做后面的 PR。\n- **只在本格自己的分支上工作**，⛔ 不许建别的分支、⛔ 不许切到别的分支。\n- 后面那些 PR 会作为**独立的格**派给你，到时候再做。\n",
-   "state": "succeeded",
+   "title": "## 知识基底（已内联）—— tools/basegen_ledger.py 从本格 write_paths 现算的模块影响闭包。\n**正向依赖 = 你消费的契约；反向依赖 = 你的回归自查范围。**⛔ 不看它就动手 = 凭空猜架构。\n\n# 知识基底 · ledger.pr2.v1 / t.compose（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.compose · E2/E3/E4/E5 · 点击膨胀多行 + 按键条与打字并存 + 附件与发送收进框内 + 观感（契约 087）\n\n🔴 **方案已由思路席位裁定，⛔ 你不要自己再选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md` §0 明写\n**选定方案 1「本地缓冲 + 光标锚定回读」，否决方案 2「镜像 + 按键捕获」，也否决「发送才同步」**。\n改成别的 ⇒ E2–E5 与 087 验收全部作废。\n\n**必须照它的 §2 落实的细节**：`resyncPending` 期间 `onPassthroughInput` 只更新本地框不发键；\n回读完成后用 `DiffSync.plan(新synced, 本地当前)` 一次补齐；⛔ 回读不得在 `composition != null` 时覆盖；\n用**仿真器光标**定位输入行，⛔ 不许写死行号；超时 400ms 且**失败必须可见，不静默**。\n日志三个字段一个不能少：`resync_wait_ms`、`snapshot_gen`、`trigger=Tab|Esc|Up|Down|Ctrl-C`。\n\n⛔ **084 §5 的四条判据（A-df-append / A-df-edit / A-df-ime / A-df-latency）必须仍然全绿**——\n那是 F-087-3，破坏任一条即为失败。\n---\n## 🔴 流程（PR 链）\n开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。\n1. 建分支 `git checkout -b pr/e2-composer`，只改自己 worktree 里的文件。\n2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-compose-seal`\n   在你报完后把改动提交到 `pr/e2-composer` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。\n3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-compose/tmp/`（自己 mkdir -p）。\n4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked` 并指出错在哪。\n5. **一次只改一个缺陷**，⛔ 顺手改相邻代码/重构/改格式一律禁止。\n\n## 🔴 判据纪律\n- 判据要断言「世界变了」；**先验红**（改之前跑，必须红）→ 改 → 验绿。\n  **先验红的原始输出必须贴进说明.md**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」必须先造出让它出现的条件，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**。\n\n## 🔴 两条常态判据：不许新增（⛔ 不是必须为 0）\nmain 上已有存量（app lint 16 条、archwiki T3 若干）。**不是你造成的，⛔ 不要去修** —— 修了 diff 就超范围。\n两条判据都会**逐条点名新增了哪几条**（含文件行号）。⛔ 不许 `--freeze` 洗基线。T1 判据仍必须全绿。\n\n## 说明.md 必须含\n分支名 / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 验绿原始输出 / 查不清的明写「查不清」。\n\n```\n\n- write_paths: app/app/src/main/java/dev/agentmirror/app/session/, .team/nodes/pr2-compose/\n- read_paths: requirement-base/entries/087-输入行发散与输入区重做.md, requirement-base/entries/084-输入框差分同步.md, .team/nodes/pr1-idea-input/思路.md, .team/nodes/pr2-compose/说明.md\n- 判据: A-compose-suite, A-compose-wiki, A-compose-smell, A-compose-doc, A-compose-seal\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app.session\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_conn, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_termview, kt_dev_agentmirror_app_tsnet, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_terminal\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app.session\n\n- **职责**：会话页：单个 tmux 会话的交互界面。\n- **导出面**：Attachment, Failed, Failure, HttpUrlConnectionUploader, SessionRoute, SessionScreen, SessionViewModel, Success\n- **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.service, dev.agentmirror.app.termview, dev.agentmirror.app.tsnet, dev.agentmirror.app.ui.theme, dev.agentmirror.terminal\n- **doc 全文**：会话页：单个 tmux 会话的交互界面。 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条； 图片附件走 multipart HTTP 上传（上传基地址由 service 装配的 ServiceWire 统一注入）， 跨层共享连接经 service 的 ServiceWire.uiConnector 扇出订阅。会话页已完整落位： 镜像流（snapshot/delta/scrollback 本地滚动补页）、发送必达回执、附件路径注入光标处。 @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.termview @consumes dev.agentmirror.app.tsnet @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.terminal\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n\n# t.compose · E2/E3/E4/E5 · 点击膨胀多行 + 按键条与打字并存 + 附件与发送收进框内 + 观感（契约 087）\n\n🔴 **方案已由思路席位裁定，⛔ 你不要自己再选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md` §0 明写\n**选定方案 1「本地缓冲 + 光标锚定回读」，否决方案 2「镜像 + 按键捕获」，也否决「发送才同步」**。\n改成别的 ⇒ E2–E5 与 087 验收全部作废。\n\n**必须照它的 §2 落实的细节**：`resyncPending` 期间 `onPassthroughInput` 只更新本地框不发键；\n回读完成后用 `DiffSync.plan(新synced, 本地当前)` 一次补齐；⛔ 回读不得在 `composition != null` 时覆盖；\n用**仿真器光标**定位输入行，⛔ 不许写死行号；超时 400ms 且**失败必须可见，不静默**。\n日志三个字段一个不能少：`resync_wait_ms`、`snapshot_gen`、`trigger=Tab|Esc|Up|Down|Ctrl-C`。\n\n⛔ **084 §5 的四条判据（A-df-append / A-df-edit / A-df-ime / A-df-latency）必须仍然全绿**——\n那是 F-087-3，破坏任一条即为失败。\n---\n## 🔴 流程（PR 链）\n开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。\n1. 建分支 `git checkout -b pr/e2-composer`，只改自己 worktree 里的文件。\n2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-compose-seal`\n   在你报完后把改动提交到 `pr/e2-composer` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。\n3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-compose/tmp/`（自己 mkdir -p）。\n4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked` 并指出错在哪。\n5. **一次只改一个缺陷**，⛔ 顺手改相邻代码/重构/改格式一律禁止。\n\n## 🔴 判据纪律\n- 判据要断言「世界变了」；**先验红**（改之前跑，必须红）→ 改 → 验绿。\n  **先验红的原始输出必须贴进说明.md**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」必须先造出让它出现的条件，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**。\n\n## 🔴 两条常态判据：不许新增（⛔ 不是必须为 0）\nmain 上已有存量（app lint 16 条、archwiki T3 若干）。**不是你造成的，⛔ 不要去修** —— 修了 diff 就超范围。\n两条判据都会**逐条点名新增了哪几条**（含文件行号）。⛔ 不许 `--freeze` 洗基线。T1 判据仍必须全绿。\n\n## 说明.md 必须含\n分支名 / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 验绿原始输出 / 查不清的明写「查不清」。\n\n\n---\n## ⛔⛔ 本格只做这一条（rev2，2026-08-21 实撞）\n\n`方案.md` §1 列出了**全部 7 个 PR 的施工顺序**。⛔ **那不是你的任务清单，只有本格这一条是。**\n\n实撞：`t.e8` 的席位照着 §1 一路往下做，在同一个 worktree 里**连续建了 4 条分支并切来切去**，\n结果 E8 的交付被提交到了 `pr/e7-scroll-hint` 上，而 `pr/e8-back-gesture` 是空的，封版判据判红。\n\n⇒ 本格的规矩：\n- **只做本格标题点名的那一条**，⛔ 不许提前做后面的 PR。\n- **只在本格自己的分支上工作**，⛔ 不许建别的分支、⛔ 不许切到别的分支。\n- 后面那些 PR 会作为**独立的格**派给你，到时候再做。\n\n\n---\n## 🔴 返工（rev10）：评审席 refutes —— 两条\n\n`pr2-judge-input` 的裁定（`.worktrees/pr2.rv.input/.team/nodes/pr2-compose-rv/verdict.md`）：\n\n**① 功能判据无先验红原始输出。**说明里唯一的原始红是 `A-compose-doc` 的 `hit=[]`\n——机械判据，红是必然，与 E2–E5 缺陷无关；「功能先验红」四条全是**代码状态叙述**，\n没有任何一次改前红跑的输出。\n\n**红跑做得到，评审席已指路**：新测 `sendKeyWhileDraftSendingStillEmits`\n（`SessionViewModelTest.kt:325-336`）**只用既有 API**（`sendDraft`/`sendKey`/keyFrames 计数），\n改前可编译且**必红**——改前 `sendKey` 第一行 `if (inputStatus is Sending) return` 直接吞键，\nkeyFrames 数不增。跑一次贴原始输出即可。\nE2/E4 的 `ComposerChromeTest` 引用新参数改前编译不过 ⇒ **另写只用旧签名的红测**\n（断言高度 == 40.dp 会绿、断言 send 在 composer 内会红）。\n\n**② 分支污染 —— 这条是 leader 的错，已由 leader 处理，⛔ 你不用管。**\n`pr/e2-composer` 背着两个 E1 提交（封版无差别提交 + 链内共享 worktree 的事故）。\n处置：账本已加依赖 `t.resync.rv → t.compose.rv`，E1 过审后先落 main，\n届时 `git diff main...pr/e2-composer` 里就不再有 E1 的东西。\n\n## 🔴 顺带：把那个 `@Suppress(\"ModifierParameter\")` 去掉\n你加它是因为**我的坏味道棘轮按 `文件:行号` 做键**，import 挪了行号就把存量误判成新增。\n**那是我的判据有伪阳性，不是你的代码有问题**——一个逼人去压制真实告警的判据比没有判据更糟。\n棘轮已修（键不含行号）。⇒ **把 `@Suppress` 删掉**，重跑棘轮应当 `新增=0`。\n\n⛔ 产品码本身评审席未发现需改的点：不要改设计、不要改判据，只补红证 + 删那个 Suppress。\n",
+   "state": "planned",
    "owner": {
     "role": "r.input"
    },
@@ -1690,26 +1802,10 @@
      "A-compose-doc",
      "A-compose-seal"
     ]
-   },
-   "attempts": [
-    {
-     "attempt_id": "att-t.compose-seq3-t1787249550362",
-     "delivery_id": "del-t.compose-seq3-t1787249550362",
-     "state": "succeeded",
-     "writeback_revision": 5,
-     "artifact_refs": [
-      "acceptance_success.acceptance_id=A-compose-suite",
-      "acceptance_success.acceptance_id=A-compose-wiki",
-      "acceptance_success.acceptance_id=A-compose-smell",
-      "acceptance_success.acceptance_id=A-compose-doc",
-      "acceptance_success.acceptance_id=A-compose-seal",
-      "acceptance_success.writeback_revision=5"
-     ]
-    }
-   ]
+   }
   },
   "t.compose.rv": {
-   "title": "# t.compose.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e2-composer`**，需求＝E2/E3/E4/E5 · 点击膨胀多行 + 按键条与打字并存 + 附件与发送收进框内 + 观感。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e2-composer --stat` 与 `git diff main...pr/e2-composer` 逐处看。\n2. 读 `.team/nodes/pr2-compose/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-compose-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n",
+   "title": "# t.compose.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/e2-composer`**，需求＝E2/E3/E4/E5 · 点击膨胀多行 + 按键条与打字并存 + 附件与发送收进框内 + 观感。⛔ **在这条分支上审，不要在 main 上审**。\n\n## 四件事\n1. `git log main..pr/e2-composer --stat` 与 `git diff main...pr/e2-composer` 逐处看。\n2. 读 `.team/nodes/pr2-compose/说明.md`，核对写的和 diff 里真做的是不是一回事。\n3. 🔴 **查先验红**：说明里必须有改之前跑判据的原始输出且是红的。\n   **没有先验红的原始输出 ⇒ 直接 refutes** —— 没有它就无法区分「判据真抓住了问题」和「判据恒真」。\n4. 🔴 **查判据是否恒真**：断言「某物不应出现」的判据必须先造出让它出现的条件。做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n改动超出本格范围；判据被改动过以让它变绿；说明漂亮但 diff 里没有对应实现。\n\n## 产物（格式是判据）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-compose-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `VERDICT: refutes` / `VERDICT: inconclusive` 之一，\n其后理由**逐条指到文件与行号**，少于 300 字视为没审。\n⛔ 不许改产品代码、⛔ 不许并线、⛔ 不许写 /tmp。\n\n\n---\n## 🔴 本格判据里含并线（rev10）\n`A-compose-land` 会在你判 `supports` 之后把 `pr/e2-composer` 并进 main。\n脚本**自己再验一次 verdict 必须是 supports** 才动手（判据执行顺序不保证）。\n⇒ **你判 refutes 就不会并线**，你的裁定是真的门，不是走过场。\n",
    "state": "planned",
    "owner": {
     "role": "r.rv.input"
@@ -1768,12 +1864,24 @@
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
       "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-compose-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e2-composer /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.input/.team/nodes/pr2-compose-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-compose-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
      }
     ],
     "judgment": [],
     "required": [
      "A-compose-rv-form",
-     "A-compose-rv-pass"
+     "A-compose-rv-pass",
+     "A-compose-land"
     ]
    }
   }
@@ -1858,6 +1966,11 @@
    "from": "t.resync",
    "to": "t.compose",
    "condition": "requires_success"
+  },
+  {
+   "from": "t.resync.rv",
+   "to": "t.compose.rv",
+   "condition": "requires_success"
   }
  ],
  "parallelism": [],
@@ -1906,5 +2019,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 8
+ "revision": 10
 }
