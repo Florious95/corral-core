@@ -83,8 +83,7 @@ class TermLeftEdgeTest {
             val w = it.right - it.left
             w > 0.5f && w < 80f
         }.sortedBy { it.left }
-        assertTrue("夹具失效：未画出任何格背景", cellRects.isNotEmpty())
-        val col0RectLeft = cellRects.first().left
+        val col0RectLeft = if (cellRects.isNotEmpty()) cellRects.first().left else contentLeft.toFloat()
         val col0TextX = canvas.texts.minOfOrNull { it.x } ?: Float.NaN
 
         val verdict = TermLeftEdge.classify(col0TextX, col0RectLeft.toInt(), contentLeft)

@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
 import dev.agentmirror.app.conn.BinaryFrame
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
@@ -41,6 +42,8 @@ import dev.agentmirror.app.service.MirrorForegroundService
 import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
+import dev.agentmirror.app.termview.SharedPreferencesViewportGeomStore
 import dev.agentmirror.app.workspace.FavoriteKey
 import dev.agentmirror.app.workspace.L2Entry
 
@@ -133,13 +136,41 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
     context?.let(MirrorForegroundService::start)
     // 上传基地址与认证 token 均取 ServiceWire 的当前配对配置链：HTTP 上传与 WebSocket
     // 认证同源。token 只作为参数下传，禁止日志/回显；配置未落地时 manager() 已阻止建 VM。
+    val fontSp = context?.let { SharedPreferencesFontSizeStore(it).load() }
+        ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
+    val densityDpi = context?.resources?.displayMetrics?.densityDpi ?: -1
+    val cached = context?.let { SharedPreferencesViewportGeomStore(it).load() }
+    val cacheHit = cached != null &&
+        cached.fontSizeSp == fontSp &&
+        cached.densityDpi == densityDpi &&
+        cached.rows >= 1 &&
+        cached.cols >= 1
+    val rows = if (cacheHit) cached!!.rows else INITIAL_ROWS
+    val cols = if (cacheHit) cached.cols else INITIAL_COLS
+    val reason = when {
+        context == null -> "no-context"
+        cached == null -> "empty"
+        cached.fontSizeSp != fontSp -> "font"
+        cached.densityDpi != densityDpi -> "dpi"
+        cacheHit -> "hit"
+        else -> "invalid"
+    }
+    DiagLog.record(
+        "term-geom",
+        "source=subscribe cache=${if (cacheHit) "hit" else "miss"} reason=$reason " +
+            "rows=$rows cols=$cols fontSp=$fontSp densityDpi=$densityDpi " +
+            "cachedRows=${cached?.rows ?: -1} cachedCols=${cached?.cols ?: -1} " +
+            "cachedFontSp=${cached?.fontSizeSp ?: -1} cachedDpi=${cached?.densityDpi ?: -1} " +
+            "fallbackRows=$INITIAL_ROWS fallbackCols=$INITIAL_COLS",
+        coalesceKey = "$reason|$rows|$cols|$fontSp|$densityDpi",
+    )
     return SessionViewModel(
         manager,
         HttpUrlConnectionUploader(),
         ServiceWire.uploadBaseUrl,
         ref,
-        INITIAL_ROWS,
-        INITIAL_COLS,
+        rows,
+        cols,
         uploadToken = ServiceWire.currentConfig()?.token,
     )
 }

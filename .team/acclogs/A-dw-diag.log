@@ -1,1 +1,9 @@
-bash: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/diag-check.sh: No such file or directory
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1491
+WaitTime: 1495
+Complete
+WINDOW10 count=1 total=1 last=2026-08-20T20:59:47.747000
+PASS A-dw-diag

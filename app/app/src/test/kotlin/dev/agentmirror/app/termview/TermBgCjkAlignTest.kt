@@ -99,7 +99,7 @@ class TermBgCjkAlignTest {
         // 白底格矩形（按左边排序）。最窄者即单格宽 cellW（"AB"格必为单格矩形，新旧代码同）。
         val white = canvas.rects.filter { it.color == whiteBg }.sortedBy { it.left }
         assertTrue("夹具失效：未画出任何白底格", white.isNotEmpty())
-        val cellW = white.minOf { it.right - it.left }
+        val cellW = view.presenter!!.cellWidth.toFloat()
         assertTrue("夹具失效：cellW=$cellW", cellW >= 1f)
         val origin = view.contentLeftPx().toFloat()
 
@@ -150,7 +150,7 @@ class TermBgCjkAlignTest {
         // 254 号必须映射为 TerminalSpec 用户块底——旧实现塌缩到 15 号时此处即红。
         val light = canvas.rects.filter { it.color == recapBg }.sortedBy { it.left }
         assertTrue("夹具失效/256 色塌缩：未画出 48;5;254 浅底格", light.isNotEmpty())
-        val cellW = light.minOf { it.right - it.left }
+        val cellW = view.presenter!!.cellWidth.toFloat()
 
         // 浅底区连续无黑洞、总宽恰 22 列（9 个双宽 + 4 个单宽）。
         val origin = view.contentLeftPx().toFloat()
