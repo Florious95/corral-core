@@ -27,6 +27,7 @@ import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.tsnet.ConnectionPath
 
 /**
@@ -222,6 +223,43 @@ object ServiceWire {
     }
 
     /**
+     * UI 可见性变化的共同入口（契约 090 E17/E18）。
+     *
+     * 会话页回前台与收藏页在屏都必须走这里，再下发 [ConnectionManager.onUiVisible]。
+     * manager 已被服务 onDestroy 释放时，有配置则重建并 [ConnectionManager.start]
+     * （真拨号，不是只改 UI 状态）。
+     *
+     * @contract
+     * @pre 无
+     * @post manager 空且已注入 config → 重建并 start；否则转交 [ConnectionManager.onUiVisible]
+     * @err 无配置且无 manager ⇒ 返回 false（不猜地址）
+     * @inv 收藏页 / 会话页不得另写一套 start/subscribe 来「发现断线」
+     */
+    fun onUiVisible(source: String): Boolean {
+        val existing = manager
+        val cfg = config
+        DiagLog.record(
+            "reconnect",
+            "onUiVisible wire source=$source manager=${existing != null} " +
+                "config=${cfg != null} state=${existing?.state() ?: "<none>"} " +
+                "servicePumpActive=$servicePumpActive",
+        )
+        if (existing == null) {
+            if (cfg == null) {
+                DiagLog.record(
+                    "reconnect",
+                    "onUiVisible skip source=$source reason=no-config " +
+                        "manager=false config=false",
+                )
+                return false
+            }
+            manager(NoopUiVisibleListener).start()
+            return true
+        }
+        return existing.onUiVisible(source)
+    }
+
+    /**
      * 获取当前持久 [ConnectionManager] 单例；不存在（未创建）返回 null。
      *
      * 调用方是 [MirrorForegroundService]（时钟泵 [MirrorForegroundService.pumpOnce]、通知文案、
@@ -340,6 +378,15 @@ object ServiceWire {
     internal fun resetConfigForTest() {
         config = null
         connectionPathState.value = null
+    }
+
+    private object NoopUiVisibleListener : ConnectionManager.Listener {
+        override fun onStateChanged(state: ConnectionState) = Unit
+        override fun onFrame(frame: FramePayload) = Unit
+        override fun onBinary(frame: BinaryFrame) = Unit
+        override fun onLocalDecodeError(code: FrameError, message: String) = Unit
+        override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) = Unit
+        override fun onReconnect(attempt: Int, delayMs: Long) = Unit
     }
 }
 
