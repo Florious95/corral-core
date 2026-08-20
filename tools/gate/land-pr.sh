@@ -32,9 +32,36 @@ N=$(git rev-list --count main.."$BR"); echo "land-pr: 待并提交数=$N"
 [ "$N" -ge 1 ] || { echo "红：分支上没有超出 main 的提交" >&2; exit 1; }
 
 if git merge-base --is-ancestor "$BR" main; then
-  echo "land-pr: $BR 已在 main 里，无需重复并线"; exit 0
+  echo "land-pr: ${BR} 已在 main 里，无需重复并线"; exit 0
 fi
-git merge --no-ff -m "land $BR（判据全绿 + 异源评审 VERDICT: supports）" "$BR" || {
-  echo "红：合并冲突，⛔ 已中止，需人工处理" >&2; git merge --abort 2>/dev/null; exit 1; }
+# 仓根常有未跟踪的同名产物（席位往 worktree 和仓根各写了一份说明.md），
+# 会让 merge 以「untracked working tree files would be overwritten」中止。
+# ⛔ 不盲删：逐个与分支上的版本比对，【逐字节相同】才移走，不同就响亮失败交人判断。
+clear_untracked() {
+  local out paths f tmp
+  out=$(git merge --no-ff -m "land ${BR}（判据全绿 + 异源评审 VERDICT: supports）" "$BR" 2>&1) && { echo "$out"; return 0; }
+  echo "$out"
+  case "$out" in
+    *"untracked working tree files would be overwritten"*) ;;
+    *) return 1 ;;
+  esac
+  paths=$(printf '%s\n' "$out" | sed -n 's/^\t\(.*\)$/\1/p')
+  [ -n "$paths" ] || return 1
+  tmp=$(mktemp -d)
+  printf '%s\n' "$paths" | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if git show "$BR:$f" > "$tmp/x" 2>/dev/null && cmp -s "$tmp/x" "$f"; then
+      echo "land-pr: 仓根未跟踪副本与分支版本逐字节相同，移走：$f"
+      mkdir -p "$tmp/bak/$(dirname "$f")" && mv "$f" "$tmp/bak/$f"
+    else
+      echo "红：仓根未跟踪文件 $f 与分支版本【不同】，⛔ 不删，需人工判断" >&2
+      exit 1
+    fi
+  done || return 1
+  echo "land-pr: 被移走的副本备份在 $tmp/bak（⛔ 未删除）"
+  git merge --no-ff -m "land ${BR}（判据全绿 + 异源评审 VERDICT: supports）" "$BR"
+}
+clear_untracked || {
+  echo "红：合并失败，⛔ 已中止，需人工处理" >&2; git merge --abort 2>/dev/null; exit 1; }
 echo "land-pr: 已并线 $(git rev-parse --short HEAD)"
 git --no-pager log --oneline -1
