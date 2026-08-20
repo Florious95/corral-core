@@ -50,7 +50,7 @@ data class L2Entry(
     val cwd: String = "",
     val sessionName: String = "",
     val windowIndex: String = "",
-    val windowName: String = "",
+    val windowName: String = "", val provider: String = "",
 ) {
     val identityLabel: String
         get() = sessionDisplayName(
@@ -163,5 +163,6 @@ internal fun Session.toL2Entry(): L2Entry {
         sessionName = resolvedSession,
         windowIndex = windowIndex,
         windowName = resolvedWindow,
+        provider = provider,
     )
 }
