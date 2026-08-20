@@ -87,7 +87,6 @@ enum class TerminalKey(val label: String, val danger: Boolean = false) {
  * 底部两条浅色栏合并成一整块 consoleBackground，共用一条顶部分割线：
  * 视觉重量减半，正文区占比从约 62% 提到 74%。
  */
-@Suppress("ModifierParameter")
 @Composable
 fun SessionShellScreen(
     sessionDisplayName: String,
