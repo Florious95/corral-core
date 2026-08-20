@@ -33,3 +33,21 @@ FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/
 [ledger-run 2026-08-19T18:42:22Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
 [ledger-run 2026-08-19T18:42:22Z] 通知 notify-fail | 通知未送达：team=grok-l2 workspace=/Volumes/nvme/Projects/远程Agent安卓: Error: Operation not permitted (os error 1)
 [ledger-run 2026-08-19T18:42:22Z] 挂起 park | token=parked ledger_id=ledger.market.v1 revision=1 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: 通知未送达：team=grok-l2 workspace=/Volumes/nvme/Projects/远程Agent安卓: Error: Operation not permitted (os error 1)
+[ledger-run 2026-08-20T01:25:52Z] 解挂 unpark | token=unparked_revision_advanced ledger_id=ledger.market.v1 revision 1 → 3 —— revision 前进 = 人下了新指令，解挂；下一轮边界采纳这份账本
+[ledger-run 2026-08-20T01:25:52Z] 开工 start | ledger_id=ledger.market.v1 revision=3 账本=.team/ledgers/market-v1.json 墙钟上限=4800s 派单死线=90s
+[ledger-run 2026-08-20T01:25:52Z] 轮次 round | 第 1 轮开始：前沿 ["t.scan"]（墙钟已跑 0s / 上限 4800s）
+[ledger-run 2026-08-20T01:25:52Z] 派单 dispatch | task=t.scan 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/market-v1-scan 席位=market-v1-scan attempt=att-t.scan-seq1-t1787189152716 delivery=del-t.scan-seq1-t1787189152716
+[ledger-run 2026-08-20T01:25:52Z] 投递回执 send-ok | task=t.scan case_id=ledger_market_v1__t.scan__r3 message_id=msg_7cd5ce550608 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T01:25:52Z] 派单落地 dispatch-landed | task=t.scan 席位 market-v1-scan 的收件箱已多出这条派单
+[ledger-run 2026-08-20T01:25:52Z] 等待 wait | task=t.scan 在等的 key（case_id）=ledger_market_v1__t.scan__r3 team=grok-l2 预算=2400s
+[ledger-run 2026-08-20T01:27:47Z] 已唤醒 wait-signaled | task=t.scan 等到结果了
+[ledger-run 2026-08-20T01:27:47Z] 判据 acceptance | task=t.scan 在跑 required=["A-mk-doc", "A-mk-sections", "A-mk-links", "A-mk-table"]
+[ledger-run 2026-08-20T01:27:48Z] 判据通过留档 acceptance-success | task=t.scan 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-mk-doc", "A-mk-sections", "A-mk-links", "A-mk-table"]
+[ledger-run 2026-08-20T01:27:48Z] 延后落盘 writeback-deferred | task=t.scan 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-20T01:27:48Z] 写回 writeback | task=t.scan state=succeeded revision=3 → 4
+[ledger-run 2026-08-20T01:27:48Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.scan"] 冻结=[] 不可判=[] 墙钟已跑 115s
+[ledger-run 2026-08-20T01:27:48Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-20T01:27:48Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-20T01:27:48Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=4 hash=279ec9eb3f9e7f12）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T01:27:48Z] 挂起 park | token=parked ledger_id=ledger.market.v1 revision=4 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.market.v1 | revision: 4 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.scan=Succeeded
+resident-exit signal=term reason=human_stop
