@@ -28,6 +28,7 @@ import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.pairing.startPersistentConnection
 import dev.agentmirror.app.service.NetworkConnectivityWatcher
 import dev.agentmirror.app.service.NotificationHelper
+import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.workspace.SharedPreferencesFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
@@ -127,10 +128,12 @@ class MainActivity : ComponentActivity() {
     }
 
     /** 缺陷⑤观测点：回前台（后台冻结窗口结束，连接自愈触发点——若此处 ensureStarted
-     *  被幂等守卫拦下、且 SOCKS 持续失败，日志里两个信号对撞即定位根因）。 */
+     *  被幂等守卫拦下、且 SOCKS 持续失败，日志里两个信号对撞即定位根因）。
+     *  契约 090：回前台必须走可见性共同入口 [ServiceWire.onUiVisible]，真的发起重连尝试。 */
     override fun onStart() {
         super.onStart()
         DiagLog.record("lifecycle", "ON_START")
+        ServiceWire.onUiVisible("lifecycle:ON_START")
     }
 
     /** 缺陷⑤观测点：切后台（系统可能冻结进程/挂起连接，回前台时状态错位的起点）。 */

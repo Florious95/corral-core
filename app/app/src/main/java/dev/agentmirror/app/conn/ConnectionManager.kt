@@ -238,6 +238,60 @@ class ConnectionManager(
     }
 
     /**
+     * 可见性变化共同入口（契约 090）：UI 从不可见变为可见，或某一屏刚进入前台。
+     * 会话页回前台与收藏页在屏走同一函数，禁止各页再各补一份重连。
+     *
+     * 真的发起重连 = 走 [attemptConnect] / [start]（新传输被 create），不是只改状态变量。
+     *
+     * @contract
+     * @pre 无
+     * @post STOPPED → [start]；RECONNECTING → 立即 [attemptConnect]（打断退避）；
+     *       READY 且传输已关 → 立即重拨；READY 且传输仍开 / 正在拨号 → 不拨
+     * @err none
+     * @inv 不引入周期探活；只在可见性事件上判定一次
+     */
+    fun onUiVisible(source: String): Boolean {
+        val open = connection?.isTransportOpen == true
+        val pending = pendingReconnectAt
+        DiagLog.record(
+            "reconnect",
+            "onUiVisible source=$source state=$state " +
+                "pendingReconnectAt=${pending ?: -1} transportOpen=$open " +
+                "conn=${connection != null}",
+        )
+        val kicked = when (state) {
+            ConnectionState.STOPPED -> {
+                start()
+                true
+            }
+            ConnectionState.RECONNECTING -> {
+                pendingReconnectAt = null
+                attemptConnect()
+                true
+            }
+            ConnectionState.READY -> {
+                if (open) {
+                    false
+                } else {
+                    failAllPending("connection lost: ui visible transport closed")
+                    connection = null
+                    readyIsReconnect = true
+                    attemptConnect()
+                    true
+                }
+            }
+            ConnectionState.CONNECTING, ConnectionState.AUTHENTICATING -> false
+        }
+        DiagLog.record(
+            "reconnect",
+            "onUiVisible result source=$source kicked=$kicked state=$state " +
+                "transportOpen=${connection?.isTransportOpen == true} " +
+                "pendingReconnectAt=${pendingReconnectAt ?: -1}",
+        )
+        return kicked
+    }
+
+    /**
      * 注入整条文本，可选带一个图片附件路径（input 以 input_ack 完结：必达回执）。
      * text 为空且 attachmentPath 为空 = 仅回车。attachmentPath 非空时服务端按三步序列
      * 注入（先单独粘贴路径内联成 `[Image #N]`，再发 text，最后一次 Enter；feat-image
