@@ -18,12 +18,19 @@ WT="${1:?worktree}"; BR="${2:?branch}"
 cd "$WT" || { echo "worktree 不存在：$WT" >&2; exit 1; }
 
 CUR=$(git branch --show-current 2>/dev/null)
-echo "seal-pr: worktree=$WT 当前分支=${CUR:-<detached>} 目标分支=$BR"
+DIRTY0=$(git status --porcelain | wc -l | tr -d ' ')
+echo "seal-pr: worktree=$WT 当前分支=${CUR:-<detached>} 目标分支=$BR 待提交=$DIRTY0"
 if [ "$CUR" != "$BR" ]; then
-  git show-ref --verify --quiet "refs/heads/$BR" \
-    && git checkout "$BR" \
-    || git checkout -b "$BR"
-  echo "seal-pr: 已切到 $(git branch --show-current)"
+  # 🔴 2026-08-21 实撞：本脚本原来无条件 checkout，会把工作树从【正在干活的席位】手里夺走。
+  # 分支不符 + 工作区有未提交改动 ⇒ 说明席位还在动它（或做在了别的分支上）⇒ 响亮失败，⛔ 不夺树。
+  if [ "$DIRTY0" != "0" ]; then
+    echo "红：worktree 在 $CUR 且有 $DIRTY0 项未提交改动，与目标分支 $BR 不符。" >&2
+    echo "    ⛔ 拒绝 checkout —— 那会把树从正在干活的席位手里夺走。" >&2
+    echo "    人工判断：改动属于哪一格？属于本格就把分支指过去，不属于就查席位为什么跑到别的分支。" >&2
+    exit 1
+  fi
+  git show-ref --verify --quiet "refs/heads/$BR" && git checkout "$BR" || git checkout -b "$BR"
+  echo "seal-pr: 工作区干净，已切到 $(git branch --show-current)"
 fi
 
 DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
