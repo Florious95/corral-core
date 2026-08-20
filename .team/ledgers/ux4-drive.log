@@ -86,3 +86,5 @@ resident-exit signal=term reason=human_stop
 [ledger-run 2026-08-20T13:56:46Z] 投递回执 send-ok | task=t.draw case_id=ledger_ux4_v1__t.draw__r8 message_id=msg_8666b19720c8 —— 回执成功≠席位收到，下一步查收件箱确认落地
 [ledger-run 2026-08-20T13:56:46Z] 派单落地 dispatch-landed | task=t.draw 席位 ux4-v1-draw 的收件箱已多出这条派单
 [ledger-run 2026-08-20T13:56:46Z] 等待 wait | task=t.draw 在等的 key（case_id）=ledger_ux4_v1__t.draw__r8 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T14:11:24Z] 已唤醒 wait-signaled | task=t.draw 等到结果了
+[ledger-run 2026-08-20T14:11:24Z] 判据 acceptance | task=t.draw 在跑 required=["A-dw-ui", "A-dw-diag", "A-dw-suite", "A-dw-doc", "A-dw-split"]

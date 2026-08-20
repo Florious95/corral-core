@@ -704,10 +704,11 @@ class TermSurfaceView @JvmOverloads constructor(
 
     private fun refreshDrawOpt() {
         val f = File(context.filesDir, TermDrawMeter.OPT_FILE)
+        if (!f.exists()) return
         TermDrawMeter.optEnabled = try {
-            if (!f.exists()) true else f.readText().trim() != "0"
+            f.readText().trim() != "0"
         } catch (_: Exception) {
-            true
+            TermDrawMeter.optEnabled
         }
     }
 

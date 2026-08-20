@@ -8,6 +8,7 @@ pub struct Entry {
     pub comm: String,
     pub id: String,
     pub display: String,
+    pub path_segment: bool,
 }
 
 static TABLE: OnceLock<Vec<Entry>> = OnceLock::new();
@@ -34,10 +35,16 @@ fn load_path(path: &Path) -> Vec<Entry> {
         let comm = parts.next().unwrap_or("").to_string();
         let id = parts.next().unwrap_or("").to_string();
         let display = parts.next().unwrap_or("").to_string();
+        let path_segment = parts.next().unwrap_or("") == "path-segment";
         if comm.is_empty() || id.is_empty() {
             continue;
         }
-        out.push(Entry { comm, id, display });
+        out.push(Entry {
+            comm,
+            id,
+            display,
+            path_segment,
+        });
     }
     out
 }
@@ -51,7 +58,13 @@ pub fn basename(comm: &str) -> &str {
 
 pub fn lookup(comm: &str) -> Option<&'static Entry> {
     let base = basename(comm);
-    load().iter().find(|e| e.comm == base)
+    if let Some(e) = load().iter().find(|e| e.comm == base) {
+        return Some(e);
+    }
+    let slash = comm.replace('\\', "/");
+    load().iter().find(|e| {
+        e.path_segment && !e.comm.is_empty() && slash.contains(&format!("/{}/", e.comm))
+    })
 }
 
 pub fn match_comms(comms: &[String]) -> Option<&'static Entry> {
@@ -63,9 +76,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn five_rows_and_basename() {
+    fn six_rows_and_basename() {
         let t = load();
-        assert_eq!(t.len(), 5);
+        assert_eq!(t.len(), 6);
         assert_eq!(lookup("codex").map(|e| e.id.as_str()), Some("codex"));
         let full = "/opt/homebrew/bin/codex";
         assert_ne!(full, "codex");
@@ -82,6 +95,7 @@ mod tests {
             ("copilot", "copilot"),
             ("grok", "grok"),
             ("cursor-agent", "cursor"),
+            ("pi", "pi"),
         ];
         for (comm, id) in want {
             let e = lookup(comm).unwrap_or_else(|| panic!("comm {comm} missing"));
@@ -94,8 +108,19 @@ mod tests {
             "tsv must store basename, not full path"
         );
         assert_eq!(lookup(full).map(|e| e.id.as_str()), Some("codex"));
-        for noise in ["bash", "sleep", "vim", "make", "sshd", ""] {
+        for noise in ["bash", "sleep", "vim", "make", "sshd", "node", ""] {
             assert!(lookup(noise).is_none(), "noise {noise} must not be a node");
         }
+        assert!(
+            load().iter().all(|e| e.comm != "node"),
+            "TSV must not whitelist basename node"
+        );
+        let cursor_node = "/Users/alauda/.local/share/cursor-agent/versions/2026.08.11-e8db854/node";
+        assert_eq!(basename(cursor_node), "node");
+        assert_eq!(
+            lookup(cursor_node).map(|e| e.id.as_str()),
+            Some("cursor")
+        );
+        assert!(lookup("/Users/alauda/.nvm/versions/node/v20.0.0/bin/node").is_none());
     }
 }
