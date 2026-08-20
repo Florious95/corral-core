@@ -9,6 +9,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -110,13 +111,21 @@ class ConsoleChromeTest {
                 SessionScreen(viewModel = h.vm, name = "远控 leader", onBack = {})
             }
         }
-        compose.runOnIdle { h.vm.inputStatus = InputStatus.Sent }
-        compose.waitForIdle()
-        compose.onNodeWithText("已发送").assertDoesNotExist()
+        repeat(3) {
+            compose.runOnIdle { h.vm.inputStatus = InputStatus.Sent }
+            compose.waitForIdle()
+        }
+        assertEquals(
+            0,
+            compose.onAllNodesWithText("已发送", substring = true).fetchSemanticsNodes().size,
+        )
         compose.runOnIdle { h.vm.inputStatus = InputStatus.Failed("发送失败：超时") }
         compose.waitForIdle()
         compose.onNodeWithText("发送失败：超时").assertIsDisplayed()
-        compose.onNodeWithText("已发送").assertDoesNotExist()
+        assertEquals(
+            0,
+            compose.onAllNodesWithText("已发送", substring = true).fetchSemanticsNodes().size,
+        )
     }
 
     @Test

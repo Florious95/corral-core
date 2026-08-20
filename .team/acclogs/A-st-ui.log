@@ -1,5 +1,24 @@
-SCREEN: ['设置', '主机配对', 'PAIRED', '当前只保留一个主机档案。重新配对成功后会覆盖现有档案。', '重新配对', '字体大小', '12 pt', '取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。', '4', '6', '8', '10', '12', '14', '16', '18', '20', '❯', 'claim-leader --team wiki-team', '诊断日志', '一键导出诊断日志，帮助我们定位问题。日志会自动脱敏（配对 token、密钥等不会包含）。', '导出', '查看', '外观', '跟随系统', '终端正文始终保持深色，这里只切换列表、设置和外壳。', '浅色', '深色', '跟随系统', '0.1.0', '★', '收藏', '☰', '会话', '⚙', '设置']
-BG_BEFORE (16, 23, 38) wh 1260 2800
-BG_AFTER (234, 240, 250) wh 1260 2800
-SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/land-set/shot-settings.png
-PASS t.set land-set
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1406
+WaitTime: 1407
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1407
+WaitTime: 1409
+Complete
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/shot-after-d480.png 165361
+DENSITY d480 before_sent_nodes=0 after_sent_nodes=0 marker_in_pane=True
+DENSITY d480 fail_texts_has_error=True sample=['claude', '查看', 'term-theme-light source=Vesper.itermcolors', '连接未就绪，无法发送', '连接断开，正在重连…', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
+DAEMON_UP pid=77398
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/shot-after-d440.png 165134
+DENSITY d440 before_sent_nodes=0 after_sent_nodes=0 marker_in_pane=True
+DENSITY d440 fail_texts_has_error=True sample=['claude', '查看', 'term-theme-light source=Vesper.itermcolors', '连接未就绪，无法发送', '连接断开，正在重连…', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
+DAEMON_UP pid=78347
+PASS sent-nodes==0 both densities; fail banner kept
+PASS ui-check

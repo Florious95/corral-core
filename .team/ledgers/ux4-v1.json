@@ -1,405 +1,434 @@
 {
- "schema_version": "ledger.v2",
- "ledger_id": "ledger.ux4.v1",
- "run": {
-  "desired_state": "running"
- },
- "roles": {
-  "r.advisor": {
-   "provider": "grok",
-   "seat_policy": "resident_reuse",
-   "artifact_landing": {
-    "path": ".team/nodes/advisor/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   }
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.ux4.v1",
+  "run": {
+    "desired_state": "running"
   },
-  "r.idea": {
-   "provider": "grok",
-   "seat_policy": "fresh",
-   "artifact_landing": {
-    "path": ".team/nodes/ux4-idea/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "ux4-v1-idea",
-    "team": "grok-l2"
-   }
-  },
-  "r.sent": {
-   "provider": "grok",
-   "seat_policy": "fresh",
-   "artifact_landing": {
-    "path": ".team/nodes/ux4-sent/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "ux4-v1-sent",
-    "team": "grok-l2"
-   }
-  },
-  "r.draw": {
-   "provider": "grok",
-   "seat_policy": "fresh",
-   "artifact_landing": {
-    "path": ".team/nodes/ux4-draw/",
-    "form": "committed"
-   },
-   "retirement_condition": {
-    "artifacts_persisted": true,
-    "ledger_updated": true
-   },
-   "seat": {
-    "agent": "ux4-v1-draw",
-    "team": "grok-l2"
-   }
-  }
- },
- "tasks": {
-  "t.idea": {
-   "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/idea/BASE.md。\n\n# 知识基底 · ledger.ux4.v1 / t.idea（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.idea · 借鉴 Heeler 的**做法**给出我们的性能思路（🔴 禁止参考代码）\n\n🔴 **用户原话（2026-08-20）**：\n> 「那就**借鉴 heeler 这个 app**，还是要**独立席位给出思路**，**禁止参考代码**」\n\n🔴🔴🔴 **本格只出思路文档，⛔ 一行产品代码都不许改。** 写范围只有 `.team/nodes/ux4-idea/`。\n\n---\n## ⛔⛔ 第一硬约束：禁止参考代码（两个理由，任一独立成立）\n\n1. **用户明令**：「禁止参考代码」。\n2. **许可**：`github.com/ZingerLittleBee/Heeler` 是 **AGPL-3.0**，我们是 Apache-2.0。\n   契约 085 §0 已裁定：⛔ 一行都不许抄。**看了再\"凭印象写\"同样不行**——那是把表达洗一遍。\n\n### 允许的信息来源（**每条结论都必须标出来源，⛔ 无来源不许进文档**）\n- ✅ 仓库 **README / 文档站 / 官网**（`heeler.bybee.dev`）里的**行为与架构描述**\n- ✅ **公开的 notices 文件名与依赖清单**（例如它用 libghostty —— 这是事实不是表达）\n- ✅ App Store / TestFlight 的**功能描述与更新说明**\n- ✅ issues / discussions / release notes 里**开发者自己写的行为说明**\n- ✅ 它依赖的**上游项目的公开文档**（Ghostty / libghostty 自己的文档，MIT，随便读）\n\n### ⛔ 禁止的\n- ⛔ `Sources/**` 下任何 `.swift`\n- ⛔ `gh api .../contents/...` 去取任何源码文件内容\n- ⛔ clone 该仓库\n- ⛔ 反编译 / 解包 IPA\n- ⛔ 「我看了它怎么写的，所以我们这样写」——**一句都不许出现**\n\n🔴 **在文档开头写一行自证**：「本格未读取 Heeler 任何源码文件；信息来源见每条结论的链接。」\n\n---\n## 要解决的问题（用户实测的三症状，perf-v1 已量过基线）\n\n| # | 症状 | perf-v1 的读数（**基线包与当前包一样**） |\n|---|---|---|\n| S1 | 进入会话有明显重排 | 两包完全相同：`viewport=4 resized_true=1 reflow=2 grid=1` |\n| S2 | 滑动掉帧 | janky% 基线 92.69 / 当前 92.89（d480）；p95 34→32ms |\n| S3 | 进入会话短暂白屏 | 现有采样粒度测不到（`screencap` 单次约 1.2s，亚秒白闪抓不住） |\n\n🔴 **已排除**：不是 085 主题投影引入的。`colorFor` 已优化 10×（857.6ns→87.4ns）而屏幕表现没变。\n⇒ 大头在 `TermSurfaceView.onDraw` 的铺格/`drawText`/GPU，以及首帧 snapshot 到达。\n读数原件：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md`\n\n---\n## 你要产出什么\n\n**唯一产物**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md`\n\n### 1. Heeler 在这件事上**据公开资料**是怎么做的\n它是 iOS 上同形态的产品（SSH + 真终端 + 手机端）。从**公开描述**能确定的是它用 **libghostty** 做终端。\n⇒ 去读 **Ghostty / libghostty 自己的公开文档**（MIT，可放心读），回答：\n- 它的渲染管线是什么形态（GPU 着色器？纹理图集 glyph atlas？脏矩形？）\n- 它怎么处理**滚动**（整屏重绘 vs 位移已有纹理）\n- 它怎么处理**首帧 / resize**（是否有 reflow 分期、是否复用旧帧）\n🔴 **这一节写的是\"上游终端引擎的公开设计\"，不是\"Heeler 的代码\"。** 分清楚。\n\n### 2. 我们现在是怎么做的（读我们自己的代码，这是我们的仓库，随便读）\n`/Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt`\n- `onDraw` 每帧做了什么？逐格 `drawText`？有没有 glyph 缓存/图集？\n- 滚动时是整屏重画还是有增量？\n- 首帧/尺寸协商走哪条路（081 已补 cols 仪表）？\n**给出量化描述**（一屏多少格、每格几次 draw 调用），⛔ 不要只写\"可能比较慢\"。\n\n### 3. 差在哪 —— **逐条对照**，并给可验证的判断\n每条写成：**「上游引擎用 X（来源链接）／我们现在是 Y（代码位置）／差距导致 Z（可量的指标）」**。\n⛔ 不许写\"他们更专业所以更快\"这种无法证伪的话。\n\n### 4. 我们该怎么做（**自己的设计**，不是照搬）\n针对 S1/S2/S3 各给方案，每条含：\n- 改哪里（文件 + 函数）\n- **预期收益的量级**，以及**用什么指标验证**\n- **风险与代价**（会不会伤到 085 重着色语义 / 083 已判绿的几何 / CJK 对齐）\n- **拆格建议**（写范围两两不相交，串行顺序）\n\n🔴🔴 **⛔ 不许提出遮掩手段**（用户明令）：延迟展示、等排好再画、占位、动画遮挡、\n把白屏换成主题底色、节流输入压 janky%——**一个都不许出现在方案里**。\n若某条只能靠遮掩，**照实写\"这条我给不出真解\"**。\n\n### 5. 🔴 模拟器可信度\nperf-v1 量到 janky% ~93%，这个绝对值很可能是**模拟器伪影**（083 §0）。\n⇒ 方案里必须包含**能在用户真机上复现的量法**（例如把 `onDraw` 耗时打进诊断日志，\n用户导出日志即可定罪），⛔ 不要设计一个只能在模拟器上跑的验证。\n\n### 6. 风险与查不清\n⛔ 不许为了让方案完整而补一个说得通的因果。查不清就写查不清。\n\n---\n## 判据（⛔ 一个字不许改）\n- `A-id-doc`：`思路.md` 非空\n- `A-id-src`：文档必须含 `未读取 Heeler 任何源码`、`libghostty`、`TermSurfaceView`、`onDraw`、`查不清` 这几个串\n- `A-id-links`：文档内 `http` 链接数 ≥ 6（每条结论要有来源）\n- `A-id-noswift`：🔴 **文档内⛔不得出现 `.swift`、`Sources/Heeler`、`import SwiftUI` 等源码痕迹串**（判据会 grep，命中即红）\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n\n```\n\n- write_paths: .team/nodes/ux4-idea/\n- read_paths: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md\n- 判据: A-id-doc, A-id-src, A-id-links, A-id-noswift\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.idea · 借鉴 Heeler 的**做法**给出我们的性能思路（🔴 禁止参考代码）\n\n🔴 **用户原话（2026-08-20）**：\n> 「那就**借鉴 heeler 这个 app**，还是要**独立席位给出思路**，**禁止参考代码**」\n\n🔴🔴🔴 **本格只出思路文档，⛔ 一行产品代码都不许改。** 写范围只有 `.team/nodes/ux4-idea/`。\n\n---\n## ⛔⛔ 第一硬约束：禁止参考代码（两个理由，任一独立成立）\n\n1. **用户明令**：「禁止参考代码」。\n2. **许可**：`github.com/ZingerLittleBee/Heeler` 是 **AGPL-3.0**，我们是 Apache-2.0。\n   契约 085 §0 已裁定：⛔ 一行都不许抄。**看了再\"凭印象写\"同样不行**——那是把表达洗一遍。\n\n### 允许的信息来源（**每条结论都必须标出来源，⛔ 无来源不许进文档**）\n- ✅ 仓库 **README / 文档站 / 官网**（`heeler.bybee.dev`）里的**行为与架构描述**\n- ✅ **公开的 notices 文件名与依赖清单**（例如它用 libghostty —— 这是事实不是表达）\n- ✅ App Store / TestFlight 的**功能描述与更新说明**\n- ✅ issues / discussions / release notes 里**开发者自己写的行为说明**\n- ✅ 它依赖的**上游项目的公开文档**（Ghostty / libghostty 自己的文档，MIT，随便读）\n\n### ⛔ 禁止的\n- ⛔ `Sources/**` 下任何 `.swift`\n- ⛔ `gh api .../contents/...` 去取任何源码文件内容\n- ⛔ clone 该仓库\n- ⛔ 反编译 / 解包 IPA\n- ⛔ 「我看了它怎么写的，所以我们这样写」——**一句都不许出现**\n\n🔴 **在文档开头写一行自证**：「本格未读取 Heeler 任何源码文件；信息来源见每条结论的链接。」\n\n---\n## 要解决的问题（用户实测的三症状，perf-v1 已量过基线）\n\n| # | 症状 | perf-v1 的读数（**基线包与当前包一样**） |\n|---|---|---|\n| S1 | 进入会话有明显重排 | 两包完全相同：`viewport=4 resized_true=1 reflow=2 grid=1` |\n| S2 | 滑动掉帧 | janky% 基线 92.69 / 当前 92.89（d480）；p95 34→32ms |\n| S3 | 进入会话短暂白屏 | 现有采样粒度测不到（`screencap` 单次约 1.2s，亚秒白闪抓不住） |\n\n🔴 **已排除**：不是 085 主题投影引入的。`colorFor` 已优化 10×（857.6ns→87.4ns）而屏幕表现没变。\n⇒ 大头在 `TermSurfaceView.onDraw` 的铺格/`drawText`/GPU，以及首帧 snapshot 到达。\n读数原件：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md`\n\n---\n## 你要产出什么\n\n**唯一产物**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md`\n\n### 1. Heeler 在这件事上**据公开资料**是怎么做的\n它是 iOS 上同形态的产品（SSH + 真终端 + 手机端）。从**公开描述**能确定的是它用 **libghostty** 做终端。\n⇒ 去读 **Ghostty / libghostty 自己的公开文档**（MIT，可放心读），回答：\n- 它的渲染管线是什么形态（GPU 着色器？纹理图集 glyph atlas？脏矩形？）\n- 它怎么处理**滚动**（整屏重绘 vs 位移已有纹理）\n- 它怎么处理**首帧 / resize**（是否有 reflow 分期、是否复用旧帧）\n🔴 **这一节写的是\"上游终端引擎的公开设计\"，不是\"Heeler 的代码\"。** 分清楚。\n\n### 2. 我们现在是怎么做的（读我们自己的代码，这是我们的仓库，随便读）\n`/Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt`\n- `onDraw` 每帧做了什么？逐格 `drawText`？有没有 glyph 缓存/图集？\n- 滚动时是整屏重画还是有增量？\n- 首帧/尺寸协商走哪条路（081 已补 cols 仪表）？\n**给出量化描述**（一屏多少格、每格几次 draw 调用），⛔ 不要只写\"可能比较慢\"。\n\n### 3. 差在哪 —— **逐条对照**，并给可验证的判断\n每条写成：**「上游引擎用 X（来源链接）／我们现在是 Y（代码位置）／差距导致 Z（可量的指标）」**。\n⛔ 不许写\"他们更专业所以更快\"这种无法证伪的话。\n\n### 4. 我们该怎么做（**自己的设计**，不是照搬）\n针对 S1/S2/S3 各给方案，每条含：\n- 改哪里（文件 + 函数）\n- **预期收益的量级**，以及**用什么指标验证**\n- **风险与代价**（会不会伤到 085 重着色语义 / 083 已判绿的几何 / CJK 对齐）\n- **拆格建议**（写范围两两不相交，串行顺序）\n\n🔴🔴 **⛔ 不许提出遮掩手段**（用户明令）：延迟展示、等排好再画、占位、动画遮挡、\n把白屏换成主题底色、节流输入压 janky%——**一个都不许出现在方案里**。\n若某条只能靠遮掩，**照实写\"这条我给不出真解\"**。\n\n### 5. 🔴 模拟器可信度\nperf-v1 量到 janky% ~93%，这个绝对值很可能是**模拟器伪影**（083 §0）。\n⇒ 方案里必须包含**能在用户真机上复现的量法**（例如把 `onDraw` 耗时打进诊断日志，\n用户导出日志即可定罪），⛔ 不要设计一个只能在模拟器上跑的验证。\n\n### 6. 风险与查不清\n⛔ 不许为了让方案完整而补一个说得通的因果。查不清就写查不清。\n\n---\n## 判据（⛔ 一个字不许改）\n- `A-id-doc`：`思路.md` 非空\n- `A-id-src`：文档必须含 `未读取 Heeler 任何源码`、`libghostty`、`TermSurfaceView`、`onDraw`、`查不清` 这几个串\n- `A-id-links`：文档内 `http` 链接数 ≥ 6（每条结论要有来源）\n- `A-id-noswift`：🔴 **文档内⛔不得出现 `.swift`、`Sources/Heeler`、`import SwiftUI` 等源码痕迹串**（判据会 grep，命中即红）\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n",
-   "state": "planned",
-   "owner": {
-    "role": "r.idea"
-   },
-   "seat_wait_seconds": 5400,
-   "unit": {
-    "module": "app",
-    "symbol": "idea",
-    "source": ".team/nodes/ux4-idea/"
-   },
-   "resources": {
-    "worktree_id": "ux4.idea",
-    "write_paths": [
-     ".team/nodes/ux4-idea/"
-    ],
-    "read_paths": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md",
-     "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md",
-     "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md",
-     ".team/nodes/idea/BASE.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": false,
-     "injects_latency": false,
-     "carries_long_history": false
+  "roles": {
+    "r.advisor": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/advisor/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "HEAD"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-id-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 300
-     },
-     {
-      "acceptance_id": "A-id-src",
-      "argv": [
-       "python3",
-       "-c",
-       "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md';s=io.open(p,encoding='utf-8').read();need=['未读取 Heeler 任何源码','libghostty','TermSurfaceView','onDraw','查不清'];miss=[n for n in need if n not in s];print('MISSING',miss) or sys.exit(1 if miss else 0)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 300
-     },
-     {
-      "acceptance_id": "A-id-links",
-      "argv": [
-       "python3",
-       "-c",
-       "import sys,io,re;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md';s=io.open(p,encoding='utf-8').read();n=len(re.findall(r'https?://',s));print('links',n) or sys.exit(0 if n>=6 else 1)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 300
-     },
-     {
-      "acceptance_id": "A-id-noswift",
-      "argv": [
-       "python3",
-       "-c",
-       "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md';s=io.open(p,encoding='utf-8').read();bad=[b for b in ['.swift','Sources/Heeler','import SwiftUI','@State var'] if b in s];print('SRC_TRACE',bad) or sys.exit(1 if bad else 0)"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 300
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-id-doc",
-     "A-id-src",
-     "A-id-links",
-     "A-id-noswift"
-    ]
-   }
-  },
-  "t.sent": {
-   "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/sent/BASE.md。\n\n# 知识基底 · ledger.ux4.v1 / t.sent（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.sent · 「已发送」蓝色悬浮堆叠回归（契约 083 §12）\n\n🔴 **用户原话（2026-08-20）**：\n> 「有回归，那就是我发送消息，**键盘上面有已发送几个蓝色悬浮堆叠字**」\n\n**这是回归，不是新缺陷**：083 原本就有「发送成功后无『已发送』」这一条，\n`vz-v1` `t.ver` r19 独立验收判过**绿**（`两密度 uiassert absent 已发送` + 单测\n`VzVerifySentHidesSuccessKeepsFailure`）。**判过绿，真机又出现了，而且变成\"几个堆叠\"。**\n\n---\n## 🔴 上一轮那个绿是怎么漏的（本格必须避免重蹈）\n\n验收报告自己写着「**本场未在模拟器上注入一次真实发送失败**」，成功态也是看的**静态屏**。\n⇒ **`absent 已发送` 在「根本没发生过发送」的屏上恒真。**\n「发过了但没显示」和「压根没发过」，在那个断言下**完全同形**。\n\n⇒ **本格铁律：断言「某物不应出现」之前，必须先制造出让它有机会出现的条件，\n并在同一脚本里证明那个条件真的发生了。**\n\n---\n## 你要做什么\n\n### ① 先复现（⛔ 复现不出来不许开工）\n在模拟器上**真发一条消息**，然后：\n- `uiassert has 已发送` 必须**先红**（= 屏上确实看得见），截图 + UI 树留证\n- 🔴 同时证明**消息真的发出去了**（断言终端正文里出现了你发的那串内容），\n  否则你复现的可能是另一个世界\n\n### ② 定位\nr19 判绿之后动过会话页/输入区的有：`vzfix-v1` 的 `t.live`/`t.align`、\n`theme-v1` 的 `t.wire`/`t.settings`、`perf-v1` 的 `t.perf`。\n⛔ **不许凭「最可能是谁」直接改**，先复现再定位，把定位证据写进说明.md。\n\n### ③ 修\n🔴 **「堆叠」是关键线索**：多个同时存在，说明很可能是**每次发送新建一个节点且从不移除**。\n⇒ 修法要保证**节点被移除**，不是把它藏起来。\n\n---\n## 判据（⛔ 一个字不许改）\n- `A-st-ui`：你写 `.team/nodes/ux4-sent/ui-check.sh`（⛔ trap 收尾不留后台进程），双 density：\n  1. 先断言**消息真的发出去了**（终端正文里能找到你发的内容）\n  2. 再断言同一时刻屏上「已发送」节点数 **== 0**（🔴 **要数个数，不只是 absent**——\n     「堆叠」说明只测有无会漏掉有几个）\n  3. **失败态仍在**：构造一次发送失败，断言「发送失败」提示**仍然显示**\n     （⛔ 不许为了让成功态消失把失败提示一起删）\n  4. 每步把**改前/改后两个读数**都打进日志\n- `A-st-suite`：`./gradlew :app:testDebugUnitTest` 全量绿\n- `A-st-doc`：`说明.md` 非空\n\n⚠️ 本条被测对象**就在键盘上方**，关输入法可能让它不可见 ⇒ **允许在开着输入法的状态下取 UI 树**，\n但⛔ 截图注意不要把输入法候选栏里的敏感内容拍进去（凭据红线）。\n\n✅ ADB 一律 `$HOME/Library/Android/sdk/platform-tools/adb`；模拟器 `emulator-5554`；\n先 `adb reverse tcp:9900 tcp:9900`；跑完 `adb shell wm density reset`。\n🔴 渲染类必须 **d480（整数 3.0）与 d440（非整数 2.75）各跑一遍**（083 §0：模拟器在渲染层没有分辨力）。\n🟢 **⛔ 不得倒退**：073 / 075 / 076 / 077 / 078 §1 / 081 / 082 / land-v1 五格 / vz-v1 五格 /\nvzfix-v1 三格 / theme-v1 五格 / perf-v1（`colorFor` 的等价投影与 10× 优化）。\n**085 §1.5 的重着色语义一个字都不许弱化。**\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n\n```\n\n- write_paths: app/, .team/nodes/ux4-sent/\n- read_paths: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md\n- 判据: A-st-ui, A-st-suite, A-st-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n### Kotlin · dev.agentmirror.app.service\n\n- **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。\n- **导出面**：AppClockPump, MirrorForegroundService, NetworkConnectivityWatcher, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, OnScreenFallbackPump, ServiceWire, StateWatcher, TsnetBootstrap\n- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn, dev.agentmirror.app.tsnet\n- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.sent · 「已发送」蓝色悬浮堆叠回归（契约 083 §12）\n\n🔴 **用户原话（2026-08-20）**：\n> 「有回归，那就是我发送消息，**键盘上面有已发送几个蓝色悬浮堆叠字**」\n\n**这是回归，不是新缺陷**：083 原本就有「发送成功后无『已发送』」这一条，\n`vz-v1` `t.ver` r19 独立验收判过**绿**（`两密度 uiassert absent 已发送` + 单测\n`VzVerifySentHidesSuccessKeepsFailure`）。**判过绿，真机又出现了，而且变成\"几个堆叠\"。**\n\n---\n## 🔴 上一轮那个绿是怎么漏的（本格必须避免重蹈）\n\n验收报告自己写着「**本场未在模拟器上注入一次真实发送失败**」，成功态也是看的**静态屏**。\n⇒ **`absent 已发送` 在「根本没发生过发送」的屏上恒真。**\n「发过了但没显示」和「压根没发过」，在那个断言下**完全同形**。\n\n⇒ **本格铁律：断言「某物不应出现」之前，必须先制造出让它有机会出现的条件，\n并在同一脚本里证明那个条件真的发生了。**\n\n---\n## 你要做什么\n\n### ① 先复现（⛔ 复现不出来不许开工）\n在模拟器上**真发一条消息**，然后：\n- `uiassert has 已发送` 必须**先红**（= 屏上确实看得见），截图 + UI 树留证\n- 🔴 同时证明**消息真的发出去了**（断言终端正文里出现了你发的那串内容），\n  否则你复现的可能是另一个世界\n\n### ② 定位\nr19 判绿之后动过会话页/输入区的有：`vzfix-v1` 的 `t.live`/`t.align`、\n`theme-v1` 的 `t.wire`/`t.settings`、`perf-v1` 的 `t.perf`。\n⛔ **不许凭「最可能是谁」直接改**，先复现再定位，把定位证据写进说明.md。\n\n### ③ 修\n🔴 **「堆叠」是关键线索**：多个同时存在，说明很可能是**每次发送新建一个节点且从不移除**。\n⇒ 修法要保证**节点被移除**，不是把它藏起来。\n\n---\n## 判据（⛔ 一个字不许改）\n- `A-st-ui`：你写 `.team/nodes/ux4-sent/ui-check.sh`（⛔ trap 收尾不留后台进程），双 density：\n  1. 先断言**消息真的发出去了**（终端正文里能找到你发的内容）\n  2. 再断言同一时刻屏上「已发送」节点数 **== 0**（🔴 **要数个数，不只是 absent**——\n     「堆叠」说明只测有无会漏掉有几个）\n  3. **失败态仍在**：构造一次发送失败，断言「发送失败」提示**仍然显示**\n     （⛔ 不许为了让成功态消失把失败提示一起删）\n  4. 每步把**改前/改后两个读数**都打进日志\n- `A-st-suite`：`./gradlew :app:testDebugUnitTest` 全量绿\n- `A-st-doc`：`说明.md` 非空\n\n⚠️ 本条被测对象**就在键盘上方**，关输入法可能让它不可见 ⇒ **允许在开着输入法的状态下取 UI 树**，\n但⛔ 截图注意不要把输入法候选栏里的敏感内容拍进去（凭据红线）。\n\n✅ ADB 一律 `$HOME/Library/Android/sdk/platform-tools/adb`；模拟器 `emulator-5554`；\n先 `adb reverse tcp:9900 tcp:9900`；跑完 `adb shell wm density reset`。\n🔴 渲染类必须 **d480（整数 3.0）与 d440（非整数 2.75）各跑一遍**（083 §0：模拟器在渲染层没有分辨力）。\n🟢 **⛔ 不得倒退**：073 / 075 / 076 / 077 / 078 §1 / 081 / 082 / land-v1 五格 / vz-v1 五格 /\nvzfix-v1 三格 / theme-v1 五格 / perf-v1（`colorFor` 的等价投影与 10× 优化）。\n**085 §1.5 的重着色语义一个字都不许弱化。**\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n",
-   "state": "planned",
-   "owner": {
-    "role": "r.sent"
-   },
-   "seat_wait_seconds": 5400,
-   "unit": {
-    "module": "app",
-    "symbol": "sent",
-    "source": ".team/nodes/ux4-sent/"
-   },
-   "resources": {
-    "worktree_id": "ux4.sent",
-    "write_paths": [
-     "app/",
-     ".team/nodes/ux4-sent/"
-    ],
-    "read_paths": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md",
-     "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md",
-     "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md",
-     ".team/nodes/sent/BASE.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+    "r.idea": {
+      "provider": "grok",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/ux4-idea/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "ux4-v1-idea",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "HEAD"
-    }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-st-ui",
-      "argv": [
-       "sh",
-       "-c",
-       "{ bash /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/ui-check.sh ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-st-ui.log 2>&1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 3000
-     },
-     {
-      "acceptance_id": "A-st-suite",
-      "argv": [
-       "sh",
-       "-c",
-       "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && env -u TEAM_AGENT_API_KEY ./gradlew -q :app:testDebugUnitTest ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-st-suite.log 2>&1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-st-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 300
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-st-ui",
-     "A-st-suite",
-     "A-st-doc"
-    ]
-   }
-  },
-  "t.draw": {
-   "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/draw/BASE.md。\n\n# 知识基底 · ledger.ux4.v1 / t.draw（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.draw · 按 `t.idea` 的思路做真机可定罪的绘制性能改进\n\n🔴 **本格照 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md` 做，⛔ 不要自己重新设计。**\n它写「查不清」的地方才轮到你判断。\n\n## 背景（perf-v1 已经排除的东西，⛔ 不要重复走）\n- **不是 085 主题投影**：`colorFor` 已优化 10×（857.6ns→87.4ns，等价变换），屏幕表现没变\n- 基线包（085 之前）与当前包**一样卡**：janky% ~93、p95 32–34ms\n- 大头在 `TermSurfaceView.onDraw` 铺格/`drawText`/GPU + 首帧 snapshot 到达\n- 读数原件：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md`\n\n## 🔴 硬约束\n1. ⛔⛔ **不许用遮掩手段**（用户明令原话「不考虑特殊手段，比如重排好了才展示」）：\n   延迟展示 / 等排好再画 / 占位 / 动画遮挡 / 把白屏换成主题底色 / 节流输入压 janky% ——**一个都不许**。\n2. ⛔ **不许弱化 085 §1.5 重着色语义**，⛔ 不许倒退 083 已判绿的几何与 CJK 对齐。\n3. 🔴 **必须留下真机可用的量具**：把 `onDraw` 耗时（以及你优化的那一段的耗时）\n   打进诊断日志，**用户在自己手机上导出日志就能定罪**。\n   ⛔ 不许只做一个模拟器上才能跑的验证——模拟器在渲染层没有分辨力（083 §0）。\n4. 🔴 **诊断日志纪律**：有守卫/阈值/比较的地方，**参与比较的两边原始数值都要记**，再记结论；\n   并记触发来源。⛔ 去重不是删仪表（参考 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/说明.md` 的做法）。\n\n## 判据（⛔ 一个字不许改）\n- `A-dw-ui`：你写 `.team/nodes/ux4-draw/perf-check.sh`（⛔ trap 收尾），双 density，\n  **改前/改后两组读数**：`onDraw` 平均与 p95 耗时（来自你新加的仪表，不是 gfxinfo），\n  断言 **p95 明显下降**；同时报 `gfxinfo` 的 janky%/p95 作参考（⛔ 不作为唯一判据，它含模拟器伪影）\n- `A-dw-diag`：诊断日志里能读到 `onDraw` 耗时记录（判据 grep 你声明的 tag），\n  且**同操作数不重复刷屏**（10s 窗口该 tag ≤ 你在说明里声明的上限）\n- `A-dw-suite`：`./gradlew :app:testDebugUnitTest` 全量绿\n- `A-dw-doc`：`说明.md` 非空，含改前/改后两组数与**风险**\n\n✅ ADB 一律 `$HOME/Library/Android/sdk/platform-tools/adb`；模拟器 `emulator-5554`；\n先 `adb reverse tcp:9900 tcp:9900`；跑完 `adb shell wm density reset`。\n🔴 渲染类必须 **d480（整数 3.0）与 d440（非整数 2.75）各跑一遍**（083 §0：模拟器在渲染层没有分辨力）。\n🟢 **⛔ 不得倒退**：073 / 075 / 076 / 077 / 078 §1 / 081 / 082 / land-v1 五格 / vz-v1 五格 /\nvzfix-v1 三格 / theme-v1 五格 / perf-v1（`colorFor` 的等价投影与 10× 优化）。\n**085 §1.5 的重着色语义一个字都不许弱化。**\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n\n```\n\n- write_paths: app/, .team/nodes/ux4-draw/\n- read_paths: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md\n- 判据: A-dw-ui, A-dw-diag, A-dw-suite, A-dw-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n### Kotlin · dev.agentmirror.app.service\n\n- **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。\n- **导出面**：AppClockPump, MirrorForegroundService, NetworkConnectivityWatcher, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, OnScreenFallbackPump, ServiceWire, StateWatcher, TsnetBootstrap\n- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn, dev.agentmirror.app.tsnet\n- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.draw · 按 `t.idea` 的思路做真机可定罪的绘制性能改进\n\n🔴 **本格照 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md` 做，⛔ 不要自己重新设计。**\n它写「查不清」的地方才轮到你判断。\n\n## 背景（perf-v1 已经排除的东西，⛔ 不要重复走）\n- **不是 085 主题投影**：`colorFor` 已优化 10×（857.6ns→87.4ns，等价变换），屏幕表现没变\n- 基线包（085 之前）与当前包**一样卡**：janky% ~93、p95 32–34ms\n- 大头在 `TermSurfaceView.onDraw` 铺格/`drawText`/GPU + 首帧 snapshot 到达\n- 读数原件：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md`\n\n## 🔴 硬约束\n1. ⛔⛔ **不许用遮掩手段**（用户明令原话「不考虑特殊手段，比如重排好了才展示」）：\n   延迟展示 / 等排好再画 / 占位 / 动画遮挡 / 把白屏换成主题底色 / 节流输入压 janky% ——**一个都不许**。\n2. ⛔ **不许弱化 085 §1.5 重着色语义**，⛔ 不许倒退 083 已判绿的几何与 CJK 对齐。\n3. 🔴 **必须留下真机可用的量具**：把 `onDraw` 耗时（以及你优化的那一段的耗时）\n   打进诊断日志，**用户在自己手机上导出日志就能定罪**。\n   ⛔ 不许只做一个模拟器上才能跑的验证——模拟器在渲染层没有分辨力（083 §0）。\n4. 🔴 **诊断日志纪律**：有守卫/阈值/比较的地方，**参与比较的两边原始数值都要记**，再记结论；\n   并记触发来源。⛔ 去重不是删仪表（参考 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/说明.md` 的做法）。\n\n## 判据（⛔ 一个字不许改）\n- `A-dw-ui`：你写 `.team/nodes/ux4-draw/perf-check.sh`（⛔ trap 收尾），双 density，\n  **改前/改后两组读数**：`onDraw` 平均与 p95 耗时（来自你新加的仪表，不是 gfxinfo），\n  断言 **p95 明显下降**；同时报 `gfxinfo` 的 janky%/p95 作参考（⛔ 不作为唯一判据，它含模拟器伪影）\n- `A-dw-diag`：诊断日志里能读到 `onDraw` 耗时记录（判据 grep 你声明的 tag），\n  且**同操作数不重复刷屏**（10s 窗口该 tag ≤ 你在说明里声明的上限）\n- `A-dw-suite`：`./gradlew :app:testDebugUnitTest` 全量绿\n- `A-dw-doc`：`说明.md` 非空，含改前/改后两组数与**风险**\n\n✅ ADB 一律 `$HOME/Library/Android/sdk/platform-tools/adb`；模拟器 `emulator-5554`；\n先 `adb reverse tcp:9900 tcp:9900`；跑完 `adb shell wm density reset`。\n🔴 渲染类必须 **d480（整数 3.0）与 d440（非整数 2.75）各跑一遍**（083 §0：模拟器在渲染层没有分辨力）。\n🟢 **⛔ 不得倒退**：073 / 075 / 076 / 077 / 078 §1 / 081 / 082 / land-v1 五格 / vz-v1 五格 /\nvzfix-v1 三格 / theme-v1 五格 / perf-v1（`colorFor` 的等价投影与 10× 优化）。\n**085 §1.5 的重着色语义一个字都不许弱化。**\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n",
-   "state": "planned",
-   "owner": {
-    "role": "r.draw"
-   },
-   "seat_wait_seconds": 5400,
-   "unit": {
-    "module": "app",
-    "symbol": "draw",
-    "source": ".team/nodes/ux4-draw/"
-   },
-   "resources": {
-    "worktree_id": "ux4.draw",
-    "write_paths": [
-     "app/",
-     ".team/nodes/ux4-draw/"
-    ],
-    "read_paths": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md",
-     "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md",
-     "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md",
-     ".team/nodes/draw/BASE.md"
-    ],
-    "environment_fidelity": {
-     "runs_real_cli": true,
-     "injects_latency": false,
-     "carries_long_history": false
+    "r.sent": {
+      "provider": "grok",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/ux4-sent/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "ux4-v1-sent",
+        "team": "grok-l2"
+      }
     },
-    "provenance": {
-     "identity": "repo:remote-agent-android",
-     "revision": "HEAD"
+    "r.draw": {
+      "provider": "grok",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/ux4-draw/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "ux4-v1-draw",
+        "team": "grok-l2"
+      }
     }
-   },
-   "handoff": {
-    "route": "report_result",
-    "required_artifacts": [
-     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/说明.md"
-    ]
-   },
-   "acceptance": {
-    "mechanical": [
-     {
-      "acceptance_id": "A-dw-ui",
-      "argv": [
-       "sh",
-       "-c",
-       "{ bash /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/perf-check.sh ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-dw-ui.log 2>&1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 3600
-     },
-     {
-      "acceptance_id": "A-dw-diag",
-      "argv": [
-       "sh",
-       "-c",
-       "{ bash /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/diag-check.sh ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-dw-diag.log 2>&1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 1800
-     },
-     {
-      "acceptance_id": "A-dw-suite",
-      "argv": [
-       "sh",
-       "-c",
-       "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && env -u TEAM_AGENT_API_KEY ./gradlew -q :app:testDebugUnitTest ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-dw-suite.log 2>&1"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 2400
-     },
-     {
-      "acceptance_id": "A-dw-doc",
-      "argv": [
-       "test",
-       "-s",
-       "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/说明.md"
-      ],
-      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
-      "expected_exit_code": 0,
-      "time_budget_seconds": 300
-     }
-    ],
-    "judgment": [],
-    "required": [
-     "A-dw-ui",
-     "A-dw-diag",
-     "A-dw-suite",
-     "A-dw-doc"
-    ]
-   }
-  }
- },
- "dependencies": [
-  {
-   "from": "t.idea",
-   "to": "t.draw",
-   "condition": "requires_success"
   },
-  {
-   "from": "t.sent",
-   "to": "t.draw",
-   "condition": "requires_success"
-  }
- ],
- "parallelism": [],
- "transitions": [],
- "handoff": {
-  "send_command": "team-agent send",
-  "result_route": "report_result",
-  "required_envelope_fields": [
-   "task_id",
-   "status"
+  "tasks": {
+    "t.idea": {
+      "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/idea/BASE.md。\n\n# 知识基底 · ledger.ux4.v1 / t.idea（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.idea · 借鉴 Heeler 的**做法**给出我们的性能思路（🔴 禁止参考代码）\n\n🔴 **用户原话（2026-08-20）**：\n> 「那就**借鉴 heeler 这个 app**，还是要**独立席位给出思路**，**禁止参考代码**」\n\n🔴🔴🔴 **本格只出思路文档，⛔ 一行产品代码都不许改。** 写范围只有 `.team/nodes/ux4-idea/`。\n\n---\n## ⛔⛔ 第一硬约束：禁止参考代码（两个理由，任一独立成立）\n\n1. **用户明令**：「禁止参考代码」。\n2. **许可**：`github.com/ZingerLittleBee/Heeler` 是 **AGPL-3.0**，我们是 Apache-2.0。\n   契约 085 §0 已裁定：⛔ 一行都不许抄。**看了再\"凭印象写\"同样不行**——那是把表达洗一遍。\n\n### 允许的信息来源（**每条结论都必须标出来源，⛔ 无来源不许进文档**）\n- ✅ 仓库 **README / 文档站 / 官网**（`heeler.bybee.dev`）里的**行为与架构描述**\n- ✅ **公开的 notices 文件名与依赖清单**（例如它用 libghostty —— 这是事实不是表达）\n- ✅ App Store / TestFlight 的**功能描述与更新说明**\n- ✅ issues / discussions / release notes 里**开发者自己写的行为说明**\n- ✅ 它依赖的**上游项目的公开文档**（Ghostty / libghostty 自己的文档，MIT，随便读）\n\n### ⛔ 禁止的\n- ⛔ `Sources/**` 下任何 `.swift`\n- ⛔ `gh api .../contents/...` 去取任何源码文件内容\n- ⛔ clone 该仓库\n- ⛔ 反编译 / 解包 IPA\n- ⛔ 「我看了它怎么写的，所以我们这样写」——**一句都不许出现**\n\n🔴 **在文档开头写一行自证**：「本格未读取 Heeler 任何源码文件；信息来源见每条结论的链接。」\n\n---\n## 要解决的问题（用户实测的三症状，perf-v1 已量过基线）\n\n| # | 症状 | perf-v1 的读数（**基线包与当前包一样**） |\n|---|---|---|\n| S1 | 进入会话有明显重排 | 两包完全相同：`viewport=4 resized_true=1 reflow=2 grid=1` |\n| S2 | 滑动掉帧 | janky% 基线 92.69 / 当前 92.89（d480）；p95 34→32ms |\n| S3 | 进入会话短暂白屏 | 现有采样粒度测不到（`screencap` 单次约 1.2s，亚秒白闪抓不住） |\n\n🔴 **已排除**：不是 085 主题投影引入的。`colorFor` 已优化 10×（857.6ns→87.4ns）而屏幕表现没变。\n⇒ 大头在 `TermSurfaceView.onDraw` 的铺格/`drawText`/GPU，以及首帧 snapshot 到达。\n读数原件：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md`\n\n---\n## 你要产出什么\n\n**唯一产物**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md`\n\n### 1. Heeler 在这件事上**据公开资料**是怎么做的\n它是 iOS 上同形态的产品（SSH + 真终端 + 手机端）。从**公开描述**能确定的是它用 **libghostty** 做终端。\n⇒ 去读 **Ghostty / libghostty 自己的公开文档**（MIT，可放心读），回答：\n- 它的渲染管线是什么形态（GPU 着色器？纹理图集 glyph atlas？脏矩形？）\n- 它怎么处理**滚动**（整屏重绘 vs 位移已有纹理）\n- 它怎么处理**首帧 / resize**（是否有 reflow 分期、是否复用旧帧）\n🔴 **这一节写的是\"上游终端引擎的公开设计\"，不是\"Heeler 的代码\"。** 分清楚。\n\n### 2. 我们现在是怎么做的（读我们自己的代码，这是我们的仓库，随便读）\n`/Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt`\n- `onDraw` 每帧做了什么？逐格 `drawText`？有没有 glyph 缓存/图集？\n- 滚动时是整屏重画还是有增量？\n- 首帧/尺寸协商走哪条路（081 已补 cols 仪表）？\n**给出量化描述**（一屏多少格、每格几次 draw 调用），⛔ 不要只写\"可能比较慢\"。\n\n### 3. 差在哪 —— **逐条对照**，并给可验证的判断\n每条写成：**「上游引擎用 X（来源链接）／我们现在是 Y（代码位置）／差距导致 Z（可量的指标）」**。\n⛔ 不许写\"他们更专业所以更快\"这种无法证伪的话。\n\n### 4. 我们该怎么做（**自己的设计**，不是照搬）\n针对 S1/S2/S3 各给方案，每条含：\n- 改哪里（文件 + 函数）\n- **预期收益的量级**，以及**用什么指标验证**\n- **风险与代价**（会不会伤到 085 重着色语义 / 083 已判绿的几何 / CJK 对齐）\n- **拆格建议**（写范围两两不相交，串行顺序）\n\n🔴🔴 **⛔ 不许提出遮掩手段**（用户明令）：延迟展示、等排好再画、占位、动画遮挡、\n把白屏换成主题底色、节流输入压 janky%——**一个都不许出现在方案里**。\n若某条只能靠遮掩，**照实写\"这条我给不出真解\"**。\n\n### 5. 🔴 模拟器可信度\nperf-v1 量到 janky% ~93%，这个绝对值很可能是**模拟器伪影**（083 §0）。\n⇒ 方案里必须包含**能在用户真机上复现的量法**（例如把 `onDraw` 耗时打进诊断日志，\n用户导出日志即可定罪），⛔ 不要设计一个只能在模拟器上跑的验证。\n\n### 6. 风险与查不清\n⛔ 不许为了让方案完整而补一个说得通的因果。查不清就写查不清。\n\n---\n## 判据（⛔ 一个字不许改）\n- `A-id-doc`：`思路.md` 非空\n- `A-id-src`：文档必须含 `未读取 Heeler 任何源码`、`libghostty`、`TermSurfaceView`、`onDraw`、`查不清` 这几个串\n- `A-id-links`：文档内 `http` 链接数 ≥ 6（每条结论要有来源）\n- `A-id-noswift`：🔴 **文档内⛔不得出现 `.swift`、`Sources/Heeler`、`import SwiftUI` 等源码痕迹串**（判据会 grep，命中即红）\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n\n```\n\n- write_paths: .team/nodes/ux4-idea/\n- read_paths: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md\n- 判据: A-id-doc, A-id-src, A-id-links, A-id-noswift\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.idea · 借鉴 Heeler 的**做法**给出我们的性能思路（🔴 禁止参考代码）\n\n🔴 **用户原话（2026-08-20）**：\n> 「那就**借鉴 heeler 这个 app**，还是要**独立席位给出思路**，**禁止参考代码**」\n\n🔴🔴🔴 **本格只出思路文档，⛔ 一行产品代码都不许改。** 写范围只有 `.team/nodes/ux4-idea/`。\n\n---\n## ⛔⛔ 第一硬约束：禁止参考代码（两个理由，任一独立成立）\n\n1. **用户明令**：「禁止参考代码」。\n2. **许可**：`github.com/ZingerLittleBee/Heeler` 是 **AGPL-3.0**，我们是 Apache-2.0。\n   契约 085 §0 已裁定：⛔ 一行都不许抄。**看了再\"凭印象写\"同样不行**——那是把表达洗一遍。\n\n### 允许的信息来源（**每条结论都必须标出来源，⛔ 无来源不许进文档**）\n- ✅ 仓库 **README / 文档站 / 官网**（`heeler.bybee.dev`）里的**行为与架构描述**\n- ✅ **公开的 notices 文件名与依赖清单**（例如它用 libghostty —— 这是事实不是表达）\n- ✅ App Store / TestFlight 的**功能描述与更新说明**\n- ✅ issues / discussions / release notes 里**开发者自己写的行为说明**\n- ✅ 它依赖的**上游项目的公开文档**（Ghostty / libghostty 自己的文档，MIT，随便读）\n\n### ⛔ 禁止的\n- ⛔ `Sources/**` 下任何 `.swift`\n- ⛔ `gh api .../contents/...` 去取任何源码文件内容\n- ⛔ clone 该仓库\n- ⛔ 反编译 / 解包 IPA\n- ⛔ 「我看了它怎么写的，所以我们这样写」——**一句都不许出现**\n\n🔴 **在文档开头写一行自证**：「本格未读取 Heeler 任何源码文件；信息来源见每条结论的链接。」\n\n---\n## 要解决的问题（用户实测的三症状，perf-v1 已量过基线）\n\n| # | 症状 | perf-v1 的读数（**基线包与当前包一样**） |\n|---|---|---|\n| S1 | 进入会话有明显重排 | 两包完全相同：`viewport=4 resized_true=1 reflow=2 grid=1` |\n| S2 | 滑动掉帧 | janky% 基线 92.69 / 当前 92.89（d480）；p95 34→32ms |\n| S3 | 进入会话短暂白屏 | 现有采样粒度测不到（`screencap` 单次约 1.2s，亚秒白闪抓不住） |\n\n🔴 **已排除**：不是 085 主题投影引入的。`colorFor` 已优化 10×（857.6ns→87.4ns）而屏幕表现没变。\n⇒ 大头在 `TermSurfaceView.onDraw` 的铺格/`drawText`/GPU，以及首帧 snapshot 到达。\n读数原件：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md`\n\n---\n## 你要产出什么\n\n**唯一产物**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md`\n\n### 1. Heeler 在这件事上**据公开资料**是怎么做的\n它是 iOS 上同形态的产品（SSH + 真终端 + 手机端）。从**公开描述**能确定的是它用 **libghostty** 做终端。\n⇒ 去读 **Ghostty / libghostty 自己的公开文档**（MIT，可放心读），回答：\n- 它的渲染管线是什么形态（GPU 着色器？纹理图集 glyph atlas？脏矩形？）\n- 它怎么处理**滚动**（整屏重绘 vs 位移已有纹理）\n- 它怎么处理**首帧 / resize**（是否有 reflow 分期、是否复用旧帧）\n🔴 **这一节写的是\"上游终端引擎的公开设计\"，不是\"Heeler 的代码\"。** 分清楚。\n\n### 2. 我们现在是怎么做的（读我们自己的代码，这是我们的仓库，随便读）\n`/Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt`\n- `onDraw` 每帧做了什么？逐格 `drawText`？有没有 glyph 缓存/图集？\n- 滚动时是整屏重画还是有增量？\n- 首帧/尺寸协商走哪条路（081 已补 cols 仪表）？\n**给出量化描述**（一屏多少格、每格几次 draw 调用），⛔ 不要只写\"可能比较慢\"。\n\n### 3. 差在哪 —— **逐条对照**，并给可验证的判断\n每条写成：**「上游引擎用 X（来源链接）／我们现在是 Y（代码位置）／差距导致 Z（可量的指标）」**。\n⛔ 不许写\"他们更专业所以更快\"这种无法证伪的话。\n\n### 4. 我们该怎么做（**自己的设计**，不是照搬）\n针对 S1/S2/S3 各给方案，每条含：\n- 改哪里（文件 + 函数）\n- **预期收益的量级**，以及**用什么指标验证**\n- **风险与代价**（会不会伤到 085 重着色语义 / 083 已判绿的几何 / CJK 对齐）\n- **拆格建议**（写范围两两不相交，串行顺序）\n\n🔴🔴 **⛔ 不许提出遮掩手段**（用户明令）：延迟展示、等排好再画、占位、动画遮挡、\n把白屏换成主题底色、节流输入压 janky%——**一个都不许出现在方案里**。\n若某条只能靠遮掩，**照实写\"这条我给不出真解\"**。\n\n### 5. 🔴 模拟器可信度\nperf-v1 量到 janky% ~93%，这个绝对值很可能是**模拟器伪影**（083 §0）。\n⇒ 方案里必须包含**能在用户真机上复现的量法**（例如把 `onDraw` 耗时打进诊断日志，\n用户导出日志即可定罪），⛔ 不要设计一个只能在模拟器上跑的验证。\n\n### 6. 风险与查不清\n⛔ 不许为了让方案完整而补一个说得通的因果。查不清就写查不清。\n\n---\n## 判据（⛔ 一个字不许改）\n- `A-id-doc`：`思路.md` 非空\n- `A-id-src`：文档必须含 `未读取 Heeler 任何源码`、`libghostty`、`TermSurfaceView`、`onDraw`、`查不清` 这几个串\n- `A-id-links`：文档内 `http` 链接数 ≥ 6（每条结论要有来源）\n- `A-id-noswift`：🔴 **文档内⛔不得出现 `.swift`、`Sources/Heeler`、`import SwiftUI` 等源码痕迹串**（判据会 grep，命中即红）\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n",
+      "state": "succeeded",
+      "owner": {
+        "role": "r.idea"
+      },
+      "seat_wait_seconds": 5400,
+      "unit": {
+        "module": "app",
+        "symbol": "idea",
+        "source": ".team/nodes/ux4-idea/"
+      },
+      "resources": {
+        "worktree_id": "ux4.idea",
+        "write_paths": [
+          ".team/nodes/ux4-idea/"
+        ],
+        "read_paths": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md",
+          "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md",
+          "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md",
+          ".team/nodes/idea/BASE.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": false,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "HEAD"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-id-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300
+          },
+          {
+            "acceptance_id": "A-id-src",
+            "argv": [
+              "python3",
+              "-c",
+              "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md';s=io.open(p,encoding='utf-8').read();need=['未读取 Heeler 任何源码','libghostty','TermSurfaceView','onDraw','查不清'];miss=[n for n in need if n not in s];print('MISSING',miss) or sys.exit(1 if miss else 0)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300
+          },
+          {
+            "acceptance_id": "A-id-links",
+            "argv": [
+              "python3",
+              "-c",
+              "import sys,io,re;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md';s=io.open(p,encoding='utf-8').read();n=len(re.findall(r'https?://',s));print('links',n) or sys.exit(0 if n>=6 else 1)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300
+          },
+          {
+            "acceptance_id": "A-id-noswift",
+            "argv": [
+              "python3",
+              "-c",
+              "import sys,io;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md';s=io.open(p,encoding='utf-8').read();bad=[b for b in ['.swift','Sources/Heeler','import SwiftUI','@State var'] if b in s];print('SRC_TRACE',bad) or sys.exit(1 if bad else 0)"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-id-doc",
+          "A-id-src",
+          "A-id-links",
+          "A-id-noswift"
+        ]
+      },
+      "attempts": [
+        {
+          "attempt_id": "att-t.idea-seq1-t1787226830729",
+          "delivery_id": "del-t.idea-seq1-t1787226830729",
+          "state": "succeeded",
+          "writeback_revision": 3,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-id-doc",
+            "acceptance_success.acceptance_id=A-id-src",
+            "acceptance_success.acceptance_id=A-id-links",
+            "acceptance_success.acceptance_id=A-id-noswift",
+            "acceptance_success.writeback_revision=3"
+          ]
+        }
+      ]
+    },
+    "t.sent": {
+      "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/sent/BASE.md。\n\n# 知识基底 · ledger.ux4.v1 / t.sent（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.sent · 「已发送」蓝色悬浮堆叠回归（契约 083 §12）\n\n🔴 **用户原话（2026-08-20）**：\n> 「有回归，那就是我发送消息，**键盘上面有已发送几个蓝色悬浮堆叠字**」\n\n**这是回归，不是新缺陷**：083 原本就有「发送成功后无『已发送』」这一条，\n`vz-v1` `t.ver` r19 独立验收判过**绿**（`两密度 uiassert absent 已发送` + 单测\n`VzVerifySentHidesSuccessKeepsFailure`）。**判过绿，真机又出现了，而且变成\"几个堆叠\"。**\n\n---\n## 🔴 上一轮那个绿是怎么漏的（本格必须避免重蹈）\n\n验收报告自己写着「**本场未在模拟器上注入一次真实发送失败**」，成功态也是看的**静态屏**。\n⇒ **`absent 已发送` 在「根本没发生过发送」的屏上恒真。**\n「发过了但没显示」和「压根没发过」，在那个断言下**完全同形**。\n\n⇒ **本格铁律：断言「某物不应出现」之前，必须先制造出让它有机会出现的条件，\n并在同一脚本里证明那个条件真的发生了。**\n\n---\n## 你要做什么\n\n### ① 先复现（⛔ 复现不出来不许开工）\n在模拟器上**真发一条消息**，然后：\n- `uiassert has 已发送` 必须**先红**（= 屏上确实看得见），截图 + UI 树留证\n- 🔴 同时证明**消息真的发出去了**（断言终端正文里出现了你发的那串内容），\n  否则你复现的可能是另一个世界\n\n### ② 定位\nr19 判绿之后动过会话页/输入区的有：`vzfix-v1` 的 `t.live`/`t.align`、\n`theme-v1` 的 `t.wire`/`t.settings`、`perf-v1` 的 `t.perf`。\n⛔ **不许凭「最可能是谁」直接改**，先复现再定位，把定位证据写进说明.md。\n\n### ③ 修\n🔴 **「堆叠」是关键线索**：多个同时存在，说明很可能是**每次发送新建一个节点且从不移除**。\n⇒ 修法要保证**节点被移除**，不是把它藏起来。\n\n---\n## 判据（⛔ 一个字不许改）\n- `A-st-ui`：你写 `.team/nodes/ux4-sent/ui-check.sh`（⛔ trap 收尾不留后台进程），双 density：\n  1. 先断言**消息真的发出去了**（终端正文里能找到你发的内容）\n  2. 再断言同一时刻屏上「已发送」节点数 **== 0**（🔴 **要数个数，不只是 absent**——\n     「堆叠」说明只测有无会漏掉有几个）\n  3. **失败态仍在**：构造一次发送失败，断言「发送失败」提示**仍然显示**\n     （⛔ 不许为了让成功态消失把失败提示一起删）\n  4. 每步把**改前/改后两个读数**都打进日志\n- `A-st-suite`：`./gradlew :app:testDebugUnitTest` 全量绿\n- `A-st-doc`：`说明.md` 非空\n\n⚠️ 本条被测对象**就在键盘上方**，关输入法可能让它不可见 ⇒ **允许在开着输入法的状态下取 UI 树**，\n但⛔ 截图注意不要把输入法候选栏里的敏感内容拍进去（凭据红线）。\n\n✅ ADB 一律 `$HOME/Library/Android/sdk/platform-tools/adb`；模拟器 `emulator-5554`；\n先 `adb reverse tcp:9900 tcp:9900`；跑完 `adb shell wm density reset`。\n🔴 渲染类必须 **d480（整数 3.0）与 d440（非整数 2.75）各跑一遍**（083 §0：模拟器在渲染层没有分辨力）。\n🟢 **⛔ 不得倒退**：073 / 075 / 076 / 077 / 078 §1 / 081 / 082 / land-v1 五格 / vz-v1 五格 /\nvzfix-v1 三格 / theme-v1 五格 / perf-v1（`colorFor` 的等价投影与 10× 优化）。\n**085 §1.5 的重着色语义一个字都不许弱化。**\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n\n```\n\n- write_paths: app/, .team/nodes/ux4-sent/\n- read_paths: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md\n- 判据: A-st-ui, A-st-suite, A-st-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n### Kotlin · dev.agentmirror.app.service\n\n- **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。\n- **导出面**：AppClockPump, MirrorForegroundService, NetworkConnectivityWatcher, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, OnScreenFallbackPump, ServiceWire, StateWatcher, TsnetBootstrap\n- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn, dev.agentmirror.app.tsnet\n- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.sent · 「已发送」蓝色悬浮堆叠回归（契约 083 §12）\n\n🔴 **用户原话（2026-08-20）**：\n> 「有回归，那就是我发送消息，**键盘上面有已发送几个蓝色悬浮堆叠字**」\n\n**这是回归，不是新缺陷**：083 原本就有「发送成功后无『已发送』」这一条，\n`vz-v1` `t.ver` r19 独立验收判过**绿**（`两密度 uiassert absent 已发送` + 单测\n`VzVerifySentHidesSuccessKeepsFailure`）。**判过绿，真机又出现了，而且变成\"几个堆叠\"。**\n\n---\n## 🔴 上一轮那个绿是怎么漏的（本格必须避免重蹈）\n\n验收报告自己写着「**本场未在模拟器上注入一次真实发送失败**」，成功态也是看的**静态屏**。\n⇒ **`absent 已发送` 在「根本没发生过发送」的屏上恒真。**\n「发过了但没显示」和「压根没发过」，在那个断言下**完全同形**。\n\n⇒ **本格铁律：断言「某物不应出现」之前，必须先制造出让它有机会出现的条件，\n并在同一脚本里证明那个条件真的发生了。**\n\n---\n## 你要做什么\n\n### ① 先复现（⛔ 复现不出来不许开工）\n在模拟器上**真发一条消息**，然后：\n- `uiassert has 已发送` 必须**先红**（= 屏上确实看得见），截图 + UI 树留证\n- 🔴 同时证明**消息真的发出去了**（断言终端正文里出现了你发的那串内容），\n  否则你复现的可能是另一个世界\n\n### ② 定位\nr19 判绿之后动过会话页/输入区的有：`vzfix-v1` 的 `t.live`/`t.align`、\n`theme-v1` 的 `t.wire`/`t.settings`、`perf-v1` 的 `t.perf`。\n⛔ **不许凭「最可能是谁」直接改**，先复现再定位，把定位证据写进说明.md。\n\n### ③ 修\n🔴 **「堆叠」是关键线索**：多个同时存在，说明很可能是**每次发送新建一个节点且从不移除**。\n⇒ 修法要保证**节点被移除**，不是把它藏起来。\n\n---\n## 判据（⛔ 一个字不许改）\n- `A-st-ui`：你写 `.team/nodes/ux4-sent/ui-check.sh`（⛔ trap 收尾不留后台进程），双 density：\n  1. 先断言**消息真的发出去了**（终端正文里能找到你发的内容）\n  2. 再断言同一时刻屏上「已发送」节点数 **== 0**（🔴 **要数个数，不只是 absent**——\n     「堆叠」说明只测有无会漏掉有几个）\n  3. **失败态仍在**：构造一次发送失败，断言「发送失败」提示**仍然显示**\n     （⛔ 不许为了让成功态消失把失败提示一起删）\n  4. 每步把**改前/改后两个读数**都打进日志\n- `A-st-suite`：`./gradlew :app:testDebugUnitTest` 全量绿\n- `A-st-doc`：`说明.md` 非空\n\n⚠️ 本条被测对象**就在键盘上方**，关输入法可能让它不可见 ⇒ **允许在开着输入法的状态下取 UI 树**，\n但⛔ 截图注意不要把输入法候选栏里的敏感内容拍进去（凭据红线）。\n\n✅ ADB 一律 `$HOME/Library/Android/sdk/platform-tools/adb`；模拟器 `emulator-5554`；\n先 `adb reverse tcp:9900 tcp:9900`；跑完 `adb shell wm density reset`。\n🔴 渲染类必须 **d480（整数 3.0）与 d440（非整数 2.75）各跑一遍**（083 §0：模拟器在渲染层没有分辨力）。\n🟢 **⛔ 不得倒退**：073 / 075 / 076 / 077 / 078 §1 / 081 / 082 / land-v1 五格 / vz-v1 五格 /\nvzfix-v1 三格 / theme-v1 五格 / perf-v1（`colorFor` 的等价投影与 10× 优化）。\n**085 §1.5 的重着色语义一个字都不许弱化。**\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n",
+      "state": "succeeded",
+      "owner": {
+        "role": "r.sent"
+      },
+      "seat_wait_seconds": 5400,
+      "unit": {
+        "module": "app",
+        "symbol": "sent",
+        "source": ".team/nodes/ux4-sent/"
+      },
+      "resources": {
+        "worktree_id": "ux4.sent",
+        "write_paths": [
+          "app/",
+          ".team/nodes/ux4-sent/"
+        ],
+        "read_paths": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md",
+          "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md",
+          "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md",
+          ".team/nodes/sent/BASE.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "HEAD"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-st-ui",
+            "argv": [
+              "sh",
+              "-c",
+              "{ bash /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/ui-check.sh ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-st-ui.log 2>&1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 3000
+          },
+          {
+            "acceptance_id": "A-st-suite",
+            "argv": [
+              "sh",
+              "-c",
+              "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && env -u TEAM_AGENT_API_KEY ./gradlew -q :app:testDebugUnitTest ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-st-suite.log 2>&1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-st-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-sent/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-st-ui",
+          "A-st-suite",
+          "A-st-doc"
+        ]
+      },
+      "attempts": [
+        {
+          "attempt_id": "att-t.sent-seq2-t1787226830957",
+          "delivery_id": "del-t.sent-seq2-t1787226830957",
+          "state": "succeeded",
+          "writeback_revision": 4,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-st-ui",
+            "acceptance_success.acceptance_id=A-st-suite",
+            "acceptance_success.acceptance_id=A-st-doc",
+            "acceptance_success.writeback_revision=4"
+          ]
+        }
+      ]
+    },
+    "t.draw": {
+      "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/draw/BASE.md。\n\n# 知识基底 · ledger.ux4.v1 / t.draw（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.draw · 按 `t.idea` 的思路做真机可定罪的绘制性能改进\n\n🔴 **本格照 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md` 做，⛔ 不要自己重新设计。**\n它写「查不清」的地方才轮到你判断。\n\n## 背景（perf-v1 已经排除的东西，⛔ 不要重复走）\n- **不是 085 主题投影**：`colorFor` 已优化 10×（857.6ns→87.4ns，等价变换），屏幕表现没变\n- 基线包（085 之前）与当前包**一样卡**：janky% ~93、p95 32–34ms\n- 大头在 `TermSurfaceView.onDraw` 铺格/`drawText`/GPU + 首帧 snapshot 到达\n- 读数原件：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md`\n\n## 🔴 硬约束\n1. ⛔⛔ **不许用遮掩手段**（用户明令原话「不考虑特殊手段，比如重排好了才展示」）：\n   延迟展示 / 等排好再画 / 占位 / 动画遮挡 / 把白屏换成主题底色 / 节流输入压 janky% ——**一个都不许**。\n2. ⛔ **不许弱化 085 §1.5 重着色语义**，⛔ 不许倒退 083 已判绿的几何与 CJK 对齐。\n3. 🔴 **必须留下真机可用的量具**：把 `onDraw` 耗时（以及你优化的那一段的耗时）\n   打进诊断日志，**用户在自己手机上导出日志就能定罪**。\n   ⛔ 不许只做一个模拟器上才能跑的验证——模拟器在渲染层没有分辨力（083 §0）。\n4. 🔴 **诊断日志纪律**：有守卫/阈值/比较的地方，**参与比较的两边原始数值都要记**，再记结论；\n   并记触发来源。⛔ 去重不是删仪表（参考 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/说明.md` 的做法）。\n\n## 判据（⛔ 一个字不许改）\n- `A-dw-ui`：你写 `.team/nodes/ux4-draw/perf-check.sh`（⛔ trap 收尾），双 density，\n  **改前/改后两组读数**：`onDraw` 平均与 p95 耗时（来自你新加的仪表，不是 gfxinfo），\n  断言 **p95 明显下降**；同时报 `gfxinfo` 的 janky%/p95 作参考（⛔ 不作为唯一判据，它含模拟器伪影）\n- `A-dw-diag`：诊断日志里能读到 `onDraw` 耗时记录（判据 grep 你声明的 tag），\n  且**同操作数不重复刷屏**（10s 窗口该 tag ≤ 你在说明里声明的上限）\n- `A-dw-suite`：`./gradlew :app:testDebugUnitTest` 全量绿\n- `A-dw-doc`：`说明.md` 非空，含改前/改后两组数与**风险**\n\n✅ ADB 一律 `$HOME/Library/Android/sdk/platform-tools/adb`；模拟器 `emulator-5554`；\n先 `adb reverse tcp:9900 tcp:9900`；跑完 `adb shell wm density reset`。\n🔴 渲染类必须 **d480（整数 3.0）与 d440（非整数 2.75）各跑一遍**（083 §0：模拟器在渲染层没有分辨力）。\n🟢 **⛔ 不得倒退**：073 / 075 / 076 / 077 / 078 §1 / 081 / 082 / land-v1 五格 / vz-v1 五格 /\nvzfix-v1 三格 / theme-v1 五格 / perf-v1（`colorFor` 的等价投影与 10× 优化）。\n**085 §1.5 的重着色语义一个字都不许弱化。**\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n\n```\n\n- write_paths: app/, .team/nodes/ux4-draw/\n- read_paths: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md\n- 判据: A-dw-ui, A-dw-diag, A-dw-suite, A-dw-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n### Kotlin · dev.agentmirror.app.service\n\n- **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。\n- **导出面**：AppClockPump, MirrorForegroundService, NetworkConnectivityWatcher, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, OnScreenFallbackPump, ServiceWire, StateWatcher, TsnetBootstrap\n- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn, dev.agentmirror.app.tsnet\n- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.draw · 按 `t.idea` 的思路做真机可定罪的绘制性能改进\n\n🔴 **本格照 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-idea/思路.md` 做，⛔ 不要自己重新设计。**\n它写「查不清」的地方才轮到你判断。\n\n## 背景（perf-v1 已经排除的东西，⛔ 不要重复走）\n- **不是 085 主题投影**：`colorFor` 已优化 10×（857.6ns→87.4ns，等价变换），屏幕表现没变\n- 基线包（085 之前）与当前包**一样卡**：janky% ~93、p95 32–34ms\n- 大头在 `TermSurfaceView.onDraw` 铺格/`drawText`/GPU + 首帧 snapshot 到达\n- 读数原件：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md`\n\n## 🔴 硬约束\n1. ⛔⛔ **不许用遮掩手段**（用户明令原话「不考虑特殊手段，比如重排好了才展示」）：\n   延迟展示 / 等排好再画 / 占位 / 动画遮挡 / 把白屏换成主题底色 / 节流输入压 janky% ——**一个都不许**。\n2. ⛔ **不许弱化 085 §1.5 重着色语义**，⛔ 不许倒退 083 已判绿的几何与 CJK 对齐。\n3. 🔴 **必须留下真机可用的量具**：把 `onDraw` 耗时（以及你优化的那一段的耗时）\n   打进诊断日志，**用户在自己手机上导出日志就能定罪**。\n   ⛔ 不许只做一个模拟器上才能跑的验证——模拟器在渲染层没有分辨力（083 §0）。\n4. 🔴 **诊断日志纪律**：有守卫/阈值/比较的地方，**参与比较的两边原始数值都要记**，再记结论；\n   并记触发来源。⛔ 去重不是删仪表（参考 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/说明.md` 的做法）。\n\n## 判据（⛔ 一个字不许改）\n- `A-dw-ui`：你写 `.team/nodes/ux4-draw/perf-check.sh`（⛔ trap 收尾），双 density，\n  **改前/改后两组读数**：`onDraw` 平均与 p95 耗时（来自你新加的仪表，不是 gfxinfo），\n  断言 **p95 明显下降**；同时报 `gfxinfo` 的 janky%/p95 作参考（⛔ 不作为唯一判据，它含模拟器伪影）\n- `A-dw-diag`：诊断日志里能读到 `onDraw` 耗时记录（判据 grep 你声明的 tag），\n  且**同操作数不重复刷屏**（10s 窗口该 tag ≤ 你在说明里声明的上限）\n- `A-dw-suite`：`./gradlew :app:testDebugUnitTest` 全量绿\n- `A-dw-doc`：`说明.md` 非空，含改前/改后两组数与**风险**\n\n✅ ADB 一律 `$HOME/Library/Android/sdk/platform-tools/adb`；模拟器 `emulator-5554`；\n先 `adb reverse tcp:9900 tcp:9900`；跑完 `adb shell wm density reset`。\n🔴 渲染类必须 **d480（整数 3.0）与 d440（非整数 2.75）各跑一遍**（083 §0：模拟器在渲染层没有分辨力）。\n🟢 **⛔ 不得倒退**：073 / 075 / 076 / 077 / 078 §1 / 081 / 082 / land-v1 五格 / vz-v1 五格 /\nvzfix-v1 三格 / theme-v1 五格 / perf-v1（`colorFor` 的等价投影与 10× 优化）。\n**085 §1.5 的重着色语义一个字都不许弱化。**\n\n---\n## 全格通用（违反任一条 = 本格红）\n\n🔴🔴🔴 **开工第一件事**\n```\ncd /Volumes/nvme/Projects/远程Agent安卓 && pwd\n```\n`pwd` 必须输出仓根。**若输出里出现 `.worktrees/`，立刻 cd 回仓根**——\n派单正文下方那段「## 工作目录」是框架自动附加的，**它是错的，以本条为准**。\n⛔ 不要 `git worktree add`，⛔ 不要进 `.worktrees/`。\n⛔⛔ 绝不 `git checkout` / `git restore` 任何文件（仓根有大量未提交产品代码）。\n🔴 **一次修复一个提交**。⛔ 不要顺手改相邻代码。\n🔴🔴 **静默纪律（用户令：节点禁止给 leader 发消息）**：⛔ 不许 `team-agent send`、不发进度/提问/完工通知。\n唯一对外动作是干完调一次 `report_result`。卡住写进说明.md。\n⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux。⛔ 禁读 `.team/current/profiles/*.env`。\n",
+      "state": "planned",
+      "owner": {
+        "role": "r.draw"
+      },
+      "seat_wait_seconds": 5400,
+      "unit": {
+        "module": "app",
+        "symbol": "draw",
+        "source": ".team/nodes/ux4-draw/"
+      },
+      "resources": {
+        "worktree_id": "ux4.draw",
+        "write_paths": [
+          "app/",
+          ".team/nodes/ux4-draw/"
+        ],
+        "read_paths": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/说明.md",
+          "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/083-真机视觉收口六条.md",
+          "/Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/085-终端主题库落位.md",
+          ".team/nodes/draw/BASE.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "HEAD"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-dw-ui",
+            "argv": [
+              "sh",
+              "-c",
+              "{ bash /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/perf-check.sh ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-dw-ui.log 2>&1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 3600
+          },
+          {
+            "acceptance_id": "A-dw-diag",
+            "argv": [
+              "sh",
+              "-c",
+              "{ bash /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/diag-check.sh ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-dw-diag.log 2>&1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1800
+          },
+          {
+            "acceptance_id": "A-dw-suite",
+            "argv": [
+              "sh",
+              "-c",
+              "{ cd /Volumes/nvme/Projects/远程Agent安卓/app && env -u TEAM_AGENT_API_KEY ./gradlew -q :app:testDebugUnitTest ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-dw-suite.log 2>&1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-dw-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ux4-draw/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-dw-ui",
+          "A-dw-diag",
+          "A-dw-suite",
+          "A-dw-doc"
+        ]
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "from": "t.idea",
+      "to": "t.draw",
+      "condition": "requires_success"
+    },
+    {
+      "from": "t.sent",
+      "to": "t.draw",
+      "condition": "requires_success"
+    }
   ],
-  "missing_result": "alarm",
-  "delivery_uncertain": "needs_reconcile"
- },
- "acceptance": {
-  "mechanical_exit_code_is_authoritative": true,
-  "judgment_requires_distinct_provider": true
- },
- "fallback": {
-  "F.ask-advisor": {
-   "agent": {
-    "role": "r.advisor"
-   },
-   "triggers": [
-    "blocked_on_unknown"
-   ],
-   "max_attempts": 1,
-   "action": "escalate_to_advisor",
-   "silent_substitution": false
-  }
- },
- "evidence_policy": {
-  "required_fields": [
-   "reported_by",
-   "revision",
-   "supports_or_refutes",
-   "observed_at",
-   "freshness"
-  ],
-  "missing_evidence": "cannot_close_success"
- },
- "resource_isolation": {
-  "rules": [],
-  "read_only_shared": [],
-  "closed_read": false
- },
- "fanout_aggregation": {},
- "audit": {},
- "revision": 2
+  "parallelism": [],
+  "transitions": [],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "report_result",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "alarm",
+    "delivery_uncertain": "needs_reconcile"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": true
+  },
+  "fallback": {
+    "F.ask-advisor": {
+      "agent": {
+        "role": "r.advisor"
+      },
+      "triggers": [
+        "blocked_on_unknown"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_advisor",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "cannot_close_success"
+  },
+  "resource_isolation": {
+    "rules": [],
+    "read_only_shared": [],
+    "closed_read": false
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 4
 }
