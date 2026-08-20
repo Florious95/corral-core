@@ -134,8 +134,6 @@ class TermSurfaceView @JvmOverloads constructor(
         isAntiAlias = false
         style = Paint.Style.FILL
     }
-    private var lastLeftEdgeKey: String? = null
-    private var lastLeftEdgeOk: Boolean = true
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.DEFAULT_BOLD
         textSize = 44f
@@ -535,21 +533,19 @@ class TermSurfaceView @JvmOverloads constructor(
     }
 
     /**
-     * 只在操作数变化或 verdict 从 OK 变坏时记。值不变不打——onDraw 每帧刷屏会淹日志。
+     * 操作数（contentLeft/col0/cellW/viewW/verdict）没变不新开行——Compose 会在
+     * 180ms 内重建多个 View，实例字段拦不住，合并放在 [DiagLog] 进程级。
+     * 键一变立刻新开行（密度/viewW 变化不许吞）。
      */
     private fun recordLeftEdgeOnce(contentLeft: Int) {
         val col0 = TermLeftEdge.cellOriginX(0, cellW, contentLeft)
         val verdict = TermLeftEdge.classify(contentLeft.toFloat(), contentLeft, contentLeft)
-        val ok = verdict == TermLeftEdge.Verdict.OK
-        val key = "$contentLeft|$col0|$cellW|$width"
-        val becameBad = lastLeftEdgeOk && !ok
-        if (!becameBad && key == lastLeftEdgeKey) return
-        lastLeftEdgeKey = key
-        lastLeftEdgeOk = ok
+        val key = "$contentLeft|$col0|$cellW|$width|$verdict"
         DiagLog.record(
             "term-left-edge",
             "source=onDraw contentLeft=$contentLeft col0Origin=$col0 " +
                 "cellW=$cellW viewW=$width verdict=$verdict",
+            coalesceKey = key,
         )
     }
 

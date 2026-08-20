@@ -17,3 +17,22 @@
 [ledger-run 2026-08-20T02:29:10Z] 等待 wait | task=t.align 在等的 key（case_id）=ledger_vzfix_v1__t.align__r3 team=grok-l2 预算=3000s
 [ledger-run 2026-08-20T02:39:42Z] 已唤醒 wait-signaled | task=t.align 等到结果了
 [ledger-run 2026-08-20T02:39:42Z] 判据 acceptance | task=t.align 在跑 required=["A-al-ui", "A-al-suite", "A-al-doc"]
+[ledger-run 2026-08-20T02:40:55Z] 判据通过留档 acceptance-success | task=t.align 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-al-ui", "A-al-suite", "A-al-doc"]
+[ledger-run 2026-08-20T02:40:55Z] 原子写回 writeback-atomic | task=t.align state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=4 hash=beff28e2c114f1cf）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T02:40:55Z] 写回 writeback | task=t.align state=succeeded revision=3 → 4
+[ledger-run 2026-08-20T02:40:55Z] 轮次 round | 第 3 轮开始：前沿 ["t.dedup"]（墙钟已跑 1456s / 上限 18000s）
+[ledger-run 2026-08-20T02:40:55Z] 派单 dispatch | task=t.dedup 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vzfix-v1-dedup 席位=vzfix-v1-dedup attempt=att-t.dedup-seq3-t1787193655139 delivery=del-t.dedup-seq3-t1787193655139
+[ledger-run 2026-08-20T02:40:55Z] 投递回执 send-ok | task=t.dedup case_id=ledger_vzfix_v1__t.dedup__r4 message_id=msg_0d311d6c26d8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T02:40:55Z] 派单落地 dispatch-landed | task=t.dedup 席位 vzfix-v1-dedup 的收件箱已多出这条派单
+[ledger-run 2026-08-20T02:40:55Z] 等待 wait | task=t.dedup 在等的 key（case_id）=ledger_vzfix_v1__t.dedup__r4 team=grok-l2 预算=3000s
+[ledger-run 2026-08-20T02:57:37Z] 已唤醒 wait-signaled | task=t.dedup 等到结果了
+[ledger-run 2026-08-20T02:57:37Z] 判据 acceptance | task=t.dedup 在跑 required=["A-dd-ui", "A-dd-suite", "A-dd-doc"]
+[ledger-run 2026-08-20T03:00:03Z] 判据通过留档 acceptance-success | task=t.dedup 成功 attempt 落进 attempts[] writeback_revision=5 passed=["A-dd-ui", "A-dd-suite", "A-dd-doc"]
+[ledger-run 2026-08-20T03:00:03Z] 延后落盘 writeback-deferred | task=t.dedup 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-20T03:00:03Z] 写回 writeback | task=t.dedup state=succeeded revision=4 → 5
+[ledger-run 2026-08-20T03:00:03Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.live", "t.align", "t.dedup"] 冻结=[] 不可判=[] 墙钟已跑 2604s
+[ledger-run 2026-08-20T03:00:03Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-20T03:00:03Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-20T03:00:03Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=5 hash=610407c5006bdbb5）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T03:00:03Z] 挂起 park | token=parked ledger_id=ledger.vzfix.v1 revision=5 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.vzfix.v1 | revision: 5 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.align=Succeeded, t.dedup=Succeeded, t.live=Succeeded
+resident-exit signal=term reason=human_stop

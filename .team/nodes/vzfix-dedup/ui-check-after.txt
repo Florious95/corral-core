@@ -1,0 +1,15 @@
+Performing Streamed Install
+Success
+DENSITY_SET 480
+RAPID_REENTER name=远程控制 app 开发 session=(354,643) back=(78,215)
+RAPID_REENTER done
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/shot-d480-session.png
+EXPORT d480 files/diag/diag-1787194595129.log bytes=92424 lines=355 dest=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/diag-d480.log
+WINDOW10 count=1 events=1
+  WIN 2026-08-20T10:56:11.047 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=22 viewW=1236 verdict=OK ×26
+DENSITY_SET 420
+SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/shot-d420-session.png
+EXPORT d420 files/diag/diag-1787194621226.log bytes=113238 lines=447 dest=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vzfix-dedup/diag-d420.log
+AFTER_DENSITY total=2 old_ops=[('18', '18', '22', '1236')] new_diff=1
+  NEW 2026-08-20T10:56:44.802 [term-left-edge] source=onDraw contentLeft=16 col0Origin=16 cellW=19 viewW=1238 verdict=OK ×5
+PASS t.dedup A-dd-ui window10=1 new_diff=1
