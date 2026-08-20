@@ -1,0 +1,39 @@
+{
+ "server": [
+  "gofmt:internal/api/api_tmux_test.go",
+  "gofmt:internal/api/delta_merge_scenario_test.go",
+  "gofmt:internal/bridge/bridge.go",
+  "gofmt:internal/overlay/tmux.go",
+  "staticcheck:internal/api/l2detect_footer.go:57",
+  "staticcheck:internal/api/overlay.go:15",
+  "staticcheck:internal/api/overlay.go:178",
+  "staticcheck:internal/api/overlay.go:185",
+  "staticcheck:internal/api/overlay.go:192",
+  "staticcheck:internal/api/overlay.go:199",
+  "staticcheck:internal/api/overlay.go:242",
+  "staticcheck:internal/api/overlay.go:248",
+  "staticcheck:internal/api/overlay.go:54",
+  "staticcheck:internal/api/overlay.go:72",
+  "staticcheck:internal/api/overlay.go:76",
+  "staticcheck:internal/api/overlay.go:98",
+  "staticcheck:internal/api/overlay_test.go:70"
+ ],
+ "app": [
+  "lint:ContextCastToActivity:app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt:102",
+  "lint:GradleDependency:app/app/build.gradle.kts:132",
+  "lint:GradleDependency:app/app/build.gradle.kts:95",
+  "lint:GradleDependency:app/app/build.gradle.kts:96",
+  "lint:ModifierParameter:app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:95",
+  "lint:NewerVersionAvailable:app/app/build.gradle.kts:108",
+  "lint:NewerVersionAvailable:app/app/build.gradle.kts:122",
+  "lint:NewerVersionAvailable:app/app/build.gradle.kts:34",
+  "lint:OldTargetApi:app/app/build.gradle.kts:50",
+  "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:101",
+  "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:127",
+  "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:65",
+  "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2ListRendersStatusTest.kt:71",
+  "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2NavigationIdentityTest.kt:105",
+  "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2UnknownStatusTest.kt:81",
+  "lint:UseOfNonLambdaOffsetOverload:app/app/src/main/java/dev/agentmirror/app/ui/components/AppBottomNav.kt:105"
+ ]
+}
