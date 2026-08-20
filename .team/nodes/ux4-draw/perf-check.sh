@@ -111,7 +111,7 @@ def parse_gfx(text):
         p95 = float(m.group(1))
     return total, janky_pct, p95
 
-def parse_draw(log):
+def parse_draw(log, want_opt=None):
     best = None
     count = 0
     for last in log.splitlines():
@@ -146,6 +146,8 @@ def parse_draw(log):
             "raw": last,
         }
         if rec["n"] is None:
+            continue
+        if want_opt is not None and rec.get("opt") != want_opt:
             continue
         if best is None or rec["n"] > best["n"]:
             best = rec
@@ -301,14 +303,7 @@ def within_10(a, b):
         return False
     return abs(a - b) <= 0.10 * max(a, b, 1)
 
-def measure(density, opt, label):
-    sh(adb, "shell", "wm", "density", str(density))
-    time.sleep(0.8)
-    restart()
-    set_opt(opt)
-    restart()
-    go_session()
-    time.sleep(5.0)
+def run_burst():
     set_burst(1)
     sh(adb, "shell", "input", "tap", "630", "1400")
     sh(adb, "shell", "input", "swipe", "630", "1200", "630", "900", "140")
@@ -318,30 +313,41 @@ def measure(density, opt, label):
         [adb, "shell", "dumpsys", "gfxinfo", pkg],
         capture_output=True, text=True, timeout=30,
     ).stdout or ""
-    total, janky, p95ms = parse_gfx(gfx)
-    log = export_log("%s-d%s-opt%s" % (label, density, opt))
-    draw = parse_draw(log)
+    return parse_gfx(gfx)
+
+def check_draw(draw, density, label):
     if not draw or draw["p95"] is None or draw["avg"] is None:
-        empty = [ln for ln in log.splitlines() if "onDrawEmpty" in ln or "[term-draw]" in ln]
-        fail("读不到稳态 [term-draw] source=onDraw p95/avg label=%s density=%s opt=%s empty_or_draw=%s" % (
-            label, density, opt, empty[-2:] if empty else log[-400:]))
+        fail("读不到稳态 [term-draw] source=onDraw p95/avg density=%s %s raw=%s" % (
+            density, label, (draw or {}).get("raw")))
     if draw["n"] is None or draw["n"] < 120:
-        fail("量具无效 n=%s < 120 label=%s density=%s opt=%s raw=%s" % (
-            draw.get("n"), label, density, opt, draw.get("raw")))
+        fail("量具无效 n=%s < 120 density=%s %s raw=%s" % (
+            draw.get("n"), density, label, draw.get("raw")))
     if not draw.get("cellsNonBlank") or not draw.get("textDraw"):
-        fail("空屏不可比 cellsNonBlank=%s textDraw=%s label=%s density=%s opt=%s raw=%s" % (
-            draw.get("cellsNonBlank"), draw.get("textDraw"), label, density, opt, draw.get("raw")))
-    print("GFX density=%s opt=%s total=%s janky%%=%s p95_ms=%s" % (density, opt, total, janky, p95ms))
-    print("DRAW density=%s opt=%s n=%s avg_us=%s p95_us=%s body_p95=%s lines_p95=%s super_p95=%s clear_p95=%s bgRect=%s textDraw=%s cellsNonBlank=%s lock=%s post=%s" % (
-        density, opt, draw["n"], draw["avg"], draw["p95"], draw["dt_body_p95"], draw["dt_lines_p95"],
-        draw["dt_super_p95"], draw["dt_clear_p95"], draw["bgRect"], draw["textDraw"],
-        draw["cellsNonBlank"], draw["dt_lock"], draw["dt_post"]))
-    return draw, (total, janky, p95ms)
+        fail("空屏不可比 cellsNonBlank=%s textDraw=%s density=%s %s raw=%s" % (
+            draw.get("cellsNonBlank"), draw.get("textDraw"), density, label, draw.get("raw")))
 
 results = {}
 for density in (480, 440):
-    before, gfx_b = measure(density, "0", "before")
-    after, gfx_a = measure(density, "1", "after")
+    sh(adb, "shell", "wm", "density", str(density))
+    time.sleep(0.8)
+    restart()
+    go_session()
+    time.sleep(5.0)
+    set_opt("0")
+    gfx_b = run_burst()
+    set_opt("1")
+    gfx_a = run_burst()
+    log = export_log("d%s" % density)
+    before = parse_draw(log, want_opt=0)
+    after = parse_draw(log, want_opt=1)
+    check_draw(before, density, "before")
+    check_draw(after, density, "after")
+    print("GFX density=%s opt=0 total=%s janky%%=%s p95_ms=%s" % (density, gfx_b[0], gfx_b[1], gfx_b[2]))
+    print("DRAW density=%s opt=0 n=%s avg_us=%s p95_us=%s bgRect=%s textDraw=%s cellsNonBlank=%s" % (
+        density, before["n"], before["avg"], before["p95"], before["bgRect"], before["textDraw"], before["cellsNonBlank"]))
+    print("GFX density=%s opt=1 total=%s janky%%=%s p95_ms=%s" % (density, gfx_a[0], gfx_a[1], gfx_a[2]))
+    print("DRAW density=%s opt=1 n=%s avg_us=%s p95_us=%s bgRect=%s textDraw=%s cellsNonBlank=%s" % (
+        density, after["n"], after["avg"], after["p95"], after["bgRect"], after["textDraw"], after["cellsNonBlank"]))
     results[density] = (before, after, gfx_b, gfx_a)
     if not within_10(before["cellsNonBlank"], after["cellsNonBlank"]):
         fail("d%s 同负载失败 cellsNonBlank before=%s after=%s" % (
