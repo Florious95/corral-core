@@ -238,6 +238,8 @@ data class Session(
     @SerialName("window_index") val windowIndex: String = "",
     /** tmux window_name 结构字段；缺省空。展示名优先于 [name]。 */
     @SerialName("window_name") val windowName: String = "",
+    /** 白名单 Provider id；缺省空，UI 走通用 glyph，不得猜成 claude。 */
+    @SerialName("provider") val provider: String = "",
 )
 
 /**
