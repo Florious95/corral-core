@@ -294,7 +294,7 @@ func (s *Server) rebuildCatalog(ctx context.Context) error {
 		return fmt.Errorf("api: discover: %w", err)
 	}
 	s.catalog.rebuild(filterModel(s, model))
-	snap := buildSnapshot(s.catalog)
+	snap := buildSnapshot(s.catalog, s.identifyProvider)
 	s.setSnapshot(snap)
 	return nil
 }

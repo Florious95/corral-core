@@ -20,17 +20,18 @@ import (
 // fix-session-alias: window names carry the meaningful per-window labels the
 // fleet is organized by), falling back to the session name when the scan
 // produced none. Dims come from the pane as discovered.
-func toSession(e *sessionEntry) protocol.Session {
+func toSession(e *sessionEntry, provider string) protocol.Session {
 	name := e.pane.WindowName
 	if name == "" {
 		name = e.pane.Session
 	}
 	return protocol.Session{
-		Ref:  e.ref,
-		Name: name,
-		Cwd:  e.pane.CWD,
-		Rows: uint16(e.pane.Height),
-		Cols: uint16(e.pane.Width),
+		Ref:      e.ref,
+		Name:     name,
+		Cwd:      e.pane.CWD,
+		Rows:     uint16(e.pane.Height),
+		Cols:     uint16(e.pane.Width),
+		Provider: provider,
 	}
 }
 
@@ -48,14 +49,18 @@ type modelSnapshot struct {
 
 // buildSnapshot converts the catalog's current entries into a modelSnapshot,
 // computing workspace session counts and ordering deterministically.
-func buildSnapshot(c *sessionCatalog) *modelSnapshot {
+func buildSnapshot(c *sessionCatalog, identify func(int) string) *modelSnapshot {
 	entries := c.list()
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ref < entries[j].ref })
 
 	byRef := make(map[string]protocol.Session, len(entries))
 	byCWD := make(map[string]protocol.Workspace)
 	for _, e := range entries {
-		s := toSession(e)
+		prov := ""
+		if identify != nil {
+			prov = identify(e.pane.PanePID)
+		}
+		s := toSession(e, prov)
 		byRef[s.Ref] = s
 		ws, ok := byCWD[s.Cwd]
 		if !ok {
