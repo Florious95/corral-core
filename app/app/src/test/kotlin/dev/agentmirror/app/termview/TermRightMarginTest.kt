@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.termview
 
+import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.TerminalEmulator
 import kotlin.math.roundToInt
 import org.junit.Assert.assertEquals
@@ -133,9 +134,13 @@ class TermRightMarginTest {
         val rightPx = (TermLeftEdge.LEFT_MARGIN_DP * density).roundToInt()
 
         assertTrue("[右边距][典型场景] 留白必须 > 0：leftover=$leftover", leftover > 0)
-        assertTrue(
-            "[右边距][典型场景] 左右留白+余数不得再吞一整列：leftover=$leftover cellW=$realCellW left=$leftPx right=$rightPx",
-            leftover < leftPx + rightPx + realCellW,
-        )
+        if (cols < TerminalMetrics.maxCols) {
+            assertTrue(
+                "[右边距][典型场景] 未封顶时左右留白+余数不得再吞一整列：leftover=$leftover cellW=$realCellW left=$leftPx right=$rightPx",
+                leftover < leftPx + rightPx + realCellW,
+            )
+        } else {
+            assertEquals(TerminalMetrics.maxCols, cols)
+        }
     }
 }

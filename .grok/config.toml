@@ -1,5 +1,5 @@
 [mcp_servers.team_orchestrator]
-command = "/Users/alauda/.team-agent/runtime/0.5.66+integrate.10137cda/bin/team-agent"
+command = "/Users/alauda/.team-agent/runtime/0.5.66/bin/team-agent"
 args = [
     "mcp-server",
     "--workspace",

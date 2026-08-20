@@ -17,15 +17,19 @@
 package dev.agentmirror.app.ui.theme
 
 import androidx.compose.ui.graphics.toArgb
+import dev.agentmirror.terminal.TerminalColor
 
 /**
- * 终端自绘色板的取色入口（078 §2 / 080）。
+ * 终端自绘色板的取色入口（078 §2 / 080 / 083 §2）。
  *
  * 色值只来自 [TerminalPaletteLight] / [TerminalPaletteDark]，绘制层不许再写一份字面量。
  * [source] 恒为 `app-theme`：contentDescription 与单测钉这个串。
  *
- * Claude Code 用户消息块走 SGR `48;5;254`。这里把 254 映射成
- * [TerminalPalette.userBlockBackground]，浅底上更深、深底上更浅。
+ * 显式背景重映射（083 §2）：CLI 按深色终端发的底色，按当前主题落到设计色。
+ * - Claude Code 用户消息：SGR `48;5;254`（256 色，非真彩）→ [TerminalPalette.userBlockBackground]
+ * - grok 整屏黑：SGR `40` / `48;5;0` / `48;5;16` 或近黑真彩 → [TerminalPalette.background]
+ *   （⛔ 不走 ansi[0]「浅底暗格」`E7EAF0`，那个值给局部色块）
+ * - `TerminalColor.Rgb` 翻不了索引表，走亮度守卫（浅底过亮压暗保色相、过暗抬到纸色）
  */
 object TermPalette {
 
@@ -33,6 +37,21 @@ object TermPalette {
 
     /** Claude Code 用户消息/recap 块用的 256 色索引（SGR 48;5;254）。 */
     const val USER_MESSAGE_INDEX = 254
+
+    /** xterm 色立方原点，常被当成「整屏黑」（SGR 48;5;16）。 */
+    const val CUBE_BLACK_INDEX = 16
+
+    /** 近白 256 色：立方白 / 灰阶顶端。浅底上当作用户块，不留纯白。 */
+    private val NEAR_WHITE_INDEXES = setOf(231, 253, 255)
+
+    /** 原色亮度 ≤ 此值视为「终端黑」（整屏底），映射到 [Scheme.defaultBg]。 */
+    const val SCREEN_BLACK_LUMA_MAX = 32
+
+    /** 原色亮度 ≥ 此值视为「高亮白块」，浅底上压到用户块。 */
+    const val HIGHLIGHT_WHITE_LUMA_MIN = 220
+
+    /** 无色相：max-min ≤ 此值的近白走 userBlock，不按色相缩放。 */
+    const val ACHROMA_MAX = 8
 
     data class Scheme(
         val defaultBg: Int,
@@ -71,6 +90,60 @@ object TermPalette {
         val g = (argb shr 8) and 0xFF
         val b = argb and 0xFF
         return (r * 299 + g * 587 + b * 114) / 1000
+    }
+
+    /**
+     * 终端色 → ARGB。背景路径做 083 §2 重映射；前景不把「黑」抬成纸色（否则字消失）。
+     */
+    fun colorFor(color: TerminalColor, background: Boolean, dark: Boolean): Int {
+        val pal = of(dark)
+        return when (color) {
+            TerminalColor.Default -> if (background) pal.defaultBg else pal.defaultFg
+            is TerminalColor.Indexed -> indexed(color.index, background, pal, dark)
+            is TerminalColor.Rgb -> {
+                val raw = pack(color.r, color.g, color.b)
+                if (background) guardRgbBg(raw, pal, dark) else raw
+            }
+        }
+    }
+
+    private fun indexed(index: Int, background: Boolean, pal: Scheme, dark: Boolean): Int {
+        if (background && (index == 0 || index == CUBE_BLACK_INDEX)) return pal.defaultBg
+        if (index == USER_MESSAGE_INDEX) return pal.userBlockBg
+        if (background && index in NEAR_WHITE_INDEXES) return pal.userBlockBg
+        if (index in 0..15) return pal.ansi16[index] ?: pack(128, 128, 128)
+        val raw = pal.xterm256.getOrElse(index) { pack(128, 128, 128) }
+        return if (background) guardRgbBg(raw, pal, dark) else raw
+    }
+
+    /**
+     * 真彩 / 256 扩展底：记录比较操作数后判决。
+     * 浅底过亮 → 压到用户块亮度（有色相则缩放通道）；过暗 → 纸色。
+     */
+    private fun guardRgbBg(raw: Int, pal: Scheme, dark: Boolean): Int {
+        val y = luma(raw)
+        val r = (raw shr 16) and 0xFF
+        val g = (raw shr 8) and 0xFF
+        val b = raw and 0xFF
+        val chroma = maxOf(r, g, b) - minOf(r, g, b)
+        val blockY = luma(pal.userBlockBg)
+        return when {
+            y <= SCREEN_BLACK_LUMA_MAX -> pal.defaultBg
+            y >= HIGHLIGHT_WHITE_LUMA_MIN && chroma <= ACHROMA_MAX -> pal.userBlockBg
+            !dark && y >= HIGHLIGHT_WHITE_LUMA_MIN -> scaleLuma(raw, blockY)
+            dark && y >= HIGHLIGHT_WHITE_LUMA_MIN -> pal.userBlockBg
+            else -> raw
+        }
+    }
+
+    private fun scaleLuma(argb: Int, targetY: Int): Int {
+        val y = luma(argb)
+        if (y <= 0) return pack(targetY, targetY, targetY)
+        val r = (argb shr 16) and 0xFF
+        val g = (argb shr 8) and 0xFF
+        val b = argb and 0xFF
+        fun ch(v: Int) = (v * targetY / y).coerceIn(0, 255)
+        return pack(ch(r), ch(g), ch(b))
     }
 
     private fun schemeFrom(p: TerminalPalette): Scheme = Scheme(

@@ -1,0 +1,7 @@
+uimode night no
+SCREEN ‹ 返回 | 远控 leader | LAN | 查看 | ...
+operands light canvas=(8, 16, 32) luma=15 frac=0.874 bounds=(0, 216, 1260, 2356) others=[((232, 232, 232), 232, 126194)] token_text=[] descs=[]
+uiassert has 返回 查看 rc=0
+uiassert has term-theme-light source=app-theme rc=1
+FAIL 浅色 UI 树未带会话壳或数据来源标签 has_chrome=0 has_source=1
+# 同期像素：整体底 luma=15（深蓝黑 0x0D1626 量化），消息块 (232,232,232) luma=232 比底更浅——主次关系反了。

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +31,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.AppPalette
 import dev.agentmirror.app.ui.theme.Dims
@@ -227,10 +236,60 @@ fun MicroPill(
     }
 }
 
+/**
+ * 连接通道胶囊。文案必须是 [ConnectionPath.label]（transport 真实选路），
+ * ⛔ 不许写死 LAN、不许按「能不能连通」猜。
+ *
+ * @contract
+ * @pre path 为本次拨号记录的通道
+ * @post 显示 path.label
+ * @err none
+ */
 @Composable
-fun LanPill(modifier: Modifier = Modifier) {
+fun LanPill(path: ConnectionPath, modifier: Modifier = Modifier) {
     val p = LocalAppPalette.current
-    MicroPill("LAN", p.statusPillText, p.statusPillBg, modifier)
+    MicroPill(
+        path.label,
+        p.statusPillText,
+        p.statusPillBg,
+        modifier.testTag("lan-pill").semantics { contentDescription = path.label },
+    )
+}
+
+/**
+ * 顶栏返回chevron。用几何路径而不是 `‹` 字符：字符墨迹偏上，排版盒对齐看起来没对齐（083 §8）。
+ * 路径关于垂直中心对称，视觉重心 = 几何中心。
+ */
+internal object BackChevronGeometry {
+    /** 对称折线，垂直中心即视觉中心。坐标相对 [w]×[h] 盒子。 */
+    fun addTo(path: androidx.compose.ui.graphics.Path, w: Float, h: Float) {
+        path.moveTo(w * 0.64f, h * 0.22f)
+        path.lineTo(w * 0.34f, h * 0.50f)
+        path.lineTo(w * 0.64f, h * 0.78f)
+    }
+
+    fun inkCenterY(h: Float): Float = h * 0.50f
+}
+
+@Composable
+fun BackChevron(
+    tint: Color,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "返回",
+) {
+    Canvas(
+        modifier
+            .size(22.dp)
+            .semantics { this.contentDescription = contentDescription },
+    ) {
+        val stroke = Stroke(
+            width = 2.2.dp.toPx(),
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+        )
+        val path = Path().apply { BackChevronGeometry.addTo(this, size.width, size.height) }
+        drawPath(path, tint, style = stroke)
+    }
 }
 
 /** 星标 —— 40dp 圆形触控区，行首位置。★ = 已收藏，☆ = 未收藏。 */
@@ -288,7 +347,8 @@ fun ScreenHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = Dims.screenHPadding, end = Dims.screenHPadding, top = 14.dp, bottom = 12.dp),
+            .padding(start = Dims.screenHPadding, end = Dims.screenHPadding, top = 14.dp, bottom = 12.dp)
+            .testTag("screen-header"),
         verticalAlignment = Alignment.Bottom,
     ) {
         Column(Modifier.weight(1f)) {
@@ -344,7 +404,7 @@ fun BackAffordance(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        AppText("‹", p.accent, 22.sp, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
+        BackChevron(tint = p.accent)
         AppText(label, p.accent, TypeSizes.actionButton, fontWeight = FontWeight.Medium, lineHeightMultiplier = 1f)
     }
 }

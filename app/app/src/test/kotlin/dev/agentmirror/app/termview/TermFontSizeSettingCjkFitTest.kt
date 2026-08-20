@@ -19,6 +19,7 @@ package dev.agentmirror.app.termview
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.TerminalEmulator
 import java.lang.reflect.Method
 import org.junit.Assert.assertEquals
@@ -88,7 +89,7 @@ class TermFontSizeSettingCjkFitTest {
         }
         view.layout(0, 0, viewportW, viewportH)
 
-        val capacity = viewportW / realCellW // 114：实测栅格能放的整列数
+        val capacity = minOf(viewportW / realCellW, TerminalMetrics.maxCols)
         // 纯 CJK（双宽）内容，逐格填满到刚好覆盖画布容量列数（capacity/2 个双宽字符，
         // 余 1 列时也无所谓——只看末列字形是否越界，不追求精确占满）。
         val cjkCount = capacity / 2

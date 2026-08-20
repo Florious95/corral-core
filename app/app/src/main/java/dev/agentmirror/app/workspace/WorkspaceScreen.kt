@@ -89,6 +89,7 @@ fun WorkspaceScreen(
     viewModel: WorkspaceViewModel,
     selectedWorkspaceCwd: String?,
     connectionPath: ConnectionPath? = null,
+    retainLevel2OnDispose: () -> Boolean = { false },
     onSelectWorkspace: (cwd: String) -> Unit,
     onBackToList: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onOpenSettings: () -> Unit,
@@ -112,7 +113,8 @@ fun WorkspaceScreen(
         viewModel.clearEnterRefreshSuppress()
     }
 
-    val lanConnected = state.connection == ConnectionUi.READY && connectionPath != null
+    val readyPath = connectionPath.takeIf { state.connection == ConnectionUi.READY }
+    val reconnectBanner = connectionBannerText(state.connection)
     val showingDesignList = selectedWorkspaceCwd != null ||
         (!state.isLoading && !state.isEmpty && !(state.isDisconnected && state.workspaces.isEmpty()))
 
@@ -129,9 +131,11 @@ fun WorkspaceScreen(
                 onBack = onBackToList,
             )
         }
-        ConnectionBanner(connection = state.connection)
+        if (!showingDesignList) {
+            ConnectionBanner(connection = state.connection)
+        }
 
-        // 下拉手动刷（2026-08-15 用户裁定）：手指下滑触发一次全量刷新（PullToRefreshBox
+        // 下拉手动刷（2026-08-15 用户裁定）：手指下滑触发一次全量刷新（PullToRefreshBox）
         // 的 onRefresh → viewModel.refresh）。isRefreshing 驱动指示器，新 listing 到达后由
         // ViewModel 复位。两级的公共容器（一级/二级都允许下拉刷）。
         PullToRefreshBox(
@@ -147,7 +151,8 @@ fun WorkspaceScreen(
                     viewModel.enterLevel2(level2Cwd)
                     onDispose {
                         // 旋转销毁组合不是离开菜单：退订会逼新组合再订，撞 069 经济红线。
-                        if (activity?.isChangingConfigurations != true) {
+                        // 进会话页时 ThreePane 离屏，但二级订阅必须留下给顶栏灯（083 §10）。
+                        if (activity?.isChangingConfigurations != true && !retainLevel2OnDispose()) {
                             viewModel.leaveLevel2()
                         }
                     }
@@ -192,7 +197,8 @@ fun WorkspaceScreen(
                                 .weight(1f)
                                 .fillMaxWidth()
                                 .statusBarsPadding(),
-                            lanConnected = lanConnected,
+                            connectionPath = readyPath,
+                            connectionBanner = reconnectBanner,
                         )
                     }
                 }
@@ -217,7 +223,8 @@ fun WorkspaceScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .statusBarsPadding(),
-                            lanConnected = lanConnected,
+                            connectionPath = readyPath,
+                            connectionBanner = reconnectBanner,
                         )
                     }
                 }
@@ -288,6 +295,13 @@ private fun TopBar(
  * 018 §一.6 连接状态变化平滑呈现，替代旧版 2dp Spacer 闪跳）。
  * conn 层自动重连，UI 只反映状态（004）。
  */
+internal fun connectionBannerText(connection: ConnectionUi): String? = when (connection) {
+    ConnectionUi.CONNECTING -> "连接中…"
+    ConnectionUi.RECONNECTING -> "重连中…"
+    ConnectionUi.STOPPED -> "连接已关闭"
+    ConnectionUi.READY -> null
+}
+
 @Composable
 private fun ConnectionBanner(connection: ConnectionUi) {
     AnimatedVisibility(visible = connection != ConnectionUi.READY) {

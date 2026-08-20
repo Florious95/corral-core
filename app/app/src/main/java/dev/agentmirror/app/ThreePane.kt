@@ -43,13 +43,16 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.testTag
 import kotlin.math.abs
 import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppBottomNav
 import dev.agentmirror.app.ui.model.NavTab
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.Spacing
+import dev.agentmirror.app.workspace.ConnectionUi
 import dev.agentmirror.app.workspace.FavoriteList
 import dev.agentmirror.app.workspace.WorkspaceScreen
 import dev.agentmirror.app.workspace.WorkspaceViewModel
+import dev.agentmirror.app.workspace.connectionBannerText
 
 /**
  * 窄屏三栏（067 §4.1）：底部标签栏 收藏 / 会话 / 设置。
@@ -141,12 +144,14 @@ internal fun ThreePaneHome(
             when (ThreePane.entries[page]) {
                 ThreePane.Favorites -> FavoritesPane(
                     viewModel = workspaceViewModel,
+                    connectionPath = ServiceWire.connectionPath(),
                     onOpenSession = { ref, name -> navState.activeSession = ref to name },
                 )
                 ThreePane.Sessions -> WorkspaceScreen(
                     viewModel = workspaceViewModel,
                     selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
                     connectionPath = ServiceWire.connectionPath(),
+                    retainLevel2OnDispose = { navState.activeSession != null },
                     onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
                     onBackToList = { navState.selectedWorkspaceCwd = null },
                     onOpenSettings = {
@@ -177,10 +182,12 @@ internal fun ThreePaneHome(
 @Composable
 private fun FavoritesPane(
     viewModel: WorkspaceViewModel,
+    connectionPath: ConnectionPath?,
     onOpenSession: (ref: String, name: String) -> Unit,
 ) {
     val favorites by viewModel.favorites.collectAsState()
     val liveGen by viewModel.favoriteLiveGen.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val rows = remember(favorites, liveGen) { viewModel.favoriteRows() }
     DisposableEffect(Unit) {
         viewModel.enterFavorites()
@@ -222,6 +229,8 @@ private fun FavoritesPane(
                 rows = rows,
                 onOpenSession = onOpenSession,
                 onUnfavorite = viewModel::toggleFavorite,
+                connectionPath = connectionPath.takeIf { uiState.connection == ConnectionUi.READY },
+                connectionBanner = connectionBannerText(uiState.connection),
             )
         }
     }

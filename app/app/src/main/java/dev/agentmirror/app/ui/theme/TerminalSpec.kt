@@ -73,7 +73,7 @@ val TerminalPaletteLight = TerminalPalette(
     cursor = Color(0xFF0E7F72),
     selection = Color(0x3312A594),
     ansi = listOf(
-        Color(0xFFE7EAF0), // 0 black（浅底上作为“暗格”用）
+        Color(0xFFE7EAF0), // 0 black（浅底局部暗格；整屏 40m/index0 由 TermPalette 改走 background）
         Color(0xFFC03A62), // 1 red
         Color(0xFF1F7A4D), // 2 green
         Color(0xFF8A6212), // 3 yellow
@@ -106,12 +106,23 @@ object TerminalMetrics {
     /**
      * 🔴 首列被裁掉半个字符的修复值。
      * 字形绘制原点必须是 x = paddingLeft（不是 0，也不是 -0.5f）。
-     * 14dp 同时是列表行、状态行、卡片的统一左内边距，终端跟它对齐才不会看起来「脱框」。
+     * 083 §3：内 14→6dp。6dp×density3=18px，仍盖得住 t.clip 实测 11–13px 左溢。
+     * 屏幕边到首字符 = [Dims.terminalCardMargin] + paddingLeft = 4+6 = 10dp。
      */
-    val paddingLeft: Dp = 14.dp
-    val paddingRight: Dp = 14.dp
-    val paddingTop: Dp = 14.dp
-    val paddingBottom: Dp = 12.dp
+    val paddingLeft: Dp = 6.dp
+    val paddingRight: Dp = 6.dp
+    val paddingTop: Dp = 6.dp
+    val paddingBottom: Dp = 6.dp
+
+    /**
+     * 列数上限（083 §3 与 padding 减量联动）。
+     *
+     * 依据：参考真机宽 1260px、density 3 上旧几何（外 8+内 14）约 112 列；
+     * padding 减量后若不封顶会涨到 ~120 列，CLI（Claude Code Tips）会切双栏。
+     * 112 钉在改前的列数。CJK 占 2 格：4.5 寸（~360dp，内容宽 340dp）上
+     * 格宽 ≈ 3.0dp、CJK ≈ 6.1dp（density 3 时 18px），不低于 t.clip 仍需覆盖的溢出。
+     */
+    const val maxCols: Int = 112
 
     /**
      * 字符网格步进。
@@ -132,9 +143,12 @@ object TerminalMetrics {
     fun rowsFor(heightPx: Float, cellHeightPx: Float, paddingTopPx: Float, paddingBottomPx: Float): Int =
         maxOf(1, ((heightPx - paddingTopPx - paddingBottomPx) / cellHeightPx).toInt())
 
-    /** 可视列数同理，⚠️ 用 floor，宁可右边空半格也不要裁字 */
-    fun colsFor(widthPx: Float, cellWidthPx: Float, paddingLeftPx: Float, paddingRightPx: Float): Int =
-        maxOf(1, ((widthPx - paddingLeftPx - paddingRightPx) / cellWidthPx).toInt())
+    /** 可视列数同理，⚠️ 用 floor，宁可右边空半格也不要裁字；再夹 [maxCols] */
+    fun colsFor(widthPx: Float, cellWidthPx: Float, paddingLeftPx: Float, paddingRightPx: Float): Int {
+        if (cellWidthPx <= 0f) return 1
+        val raw = maxOf(1, ((widthPx - paddingLeftPx - paddingRightPx) / cellWidthPx).toInt())
+        return minOf(raw, maxCols)
+    }
 
     /** 光标 */
     val cursorWidthFraction = 1f      // 块状光标占满一格；改 0.12f 变成竖线光标

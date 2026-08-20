@@ -101,7 +101,7 @@ class SessionViewModel(
 
     // ---- 可观察 UI 状态（Compose 直接读）----
 
-    /** 发送回执状态机（必达：ok 显示已发送 / fail+超时明确报错）。 */
+    /** 发送回执状态机（必达：ok 静默收起 / fail+超时明确报错）。 */
     var inputStatus by mutableStateOf<InputStatus>(InputStatus.Idle)
 
     /** 附件上传状态机（成功路径注入 / 失败明确报错）。 */
@@ -178,6 +178,7 @@ class SessionViewModel(
 
     /** 首帧 snapshot 是否已预取过历史（重连重放不重复预取）。 */
     private var hasPrefetchedHistory = false
+    private var lastFrameColsKey: String? = null
 
     init {
         // 注意：本 VM 不调用 manager.setListener(self)——共享连接（ServiceWire 单例）由
@@ -254,11 +255,15 @@ class SessionViewModel(
                 val bookkept = manager.subscriptionSize(ref)
                 val frameCols = bookkept?.second ?: -1
                 val renderCols = emulator.cols
-                DiagLog.record(
-                    "reflow",
-                    "frame cols=$frameCols render cols=$renderCols " +
-                        "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
-                )
+                val frameKey = "$frameCols|$renderCols|${bookkept?.first ?: -1}|${emulator.rows}"
+                if (frameKey != lastFrameColsKey) {
+                    lastFrameColsKey = frameKey
+                    DiagLog.record(
+                        "reflow",
+                        "frame cols=$frameCols render cols=$renderCols " +
+                            "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
+                    )
+                }
                 emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
                 // 006 秒开：打开即预取最近一页历史，滚动边界再按需补页。
                 if (!hasPrefetchedHistory) {

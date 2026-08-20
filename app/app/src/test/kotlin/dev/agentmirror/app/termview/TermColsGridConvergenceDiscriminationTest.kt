@@ -21,6 +21,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import dev.agentmirror.app.ui.theme.TermPalette
+import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -177,7 +178,7 @@ class TermColsGridConvergenceDiscriminationTest {
 
         assertEquals("[守恒] seed 后首次视口建立必须恰好一次 resize", 1, reportedCols.size)
         val cols = reportedCols.single()
-        val capacity = viewportW / realCellW // 114
+        val capacity = minOf(viewportW / realCellW, TerminalMetrics.maxCols)
 
         println("[结果不变量③] viewportW=$viewportW realCellW=$realCellW reportedCols=$cols canvasCapacity=$capacity")
 

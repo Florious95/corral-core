@@ -53,8 +53,8 @@ object Dims {
     val navRailThickness: Dp = 2.dp
     val navIconLabelGap: Dp = 5.dp
 
-    // 会话页 · 终端卡片
-    val terminalCardMargin: Dp = 8.dp
+    // 会话页 · 终端卡片（083 §3：外 8→4，与内 padding 合计 10dp）
+    val terminalCardMargin: Dp = 4.dp
 
     // 会话页 · 功能键排
     val consoleVPadding: Dp = 8.dp

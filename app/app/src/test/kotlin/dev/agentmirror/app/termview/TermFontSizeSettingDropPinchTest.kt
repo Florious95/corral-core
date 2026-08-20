@@ -18,6 +18,7 @@ package dev.agentmirror.app.termview
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.TerminalEmulator
 import java.lang.reflect.Method
 import org.junit.Assert.assertEquals
@@ -181,7 +182,7 @@ class TermFontSizeSettingDropPinchTest {
                 1, resizeCalls.size,
             )
             val (_, cols) = resizeCalls.single()
-            val capacity = viewportW / tier.cellW
+            val capacity = minOf(viewportW / tier.cellW, TerminalMetrics.maxCols)
             assertEquals(
                 "[①][${tier.fontSizeSp}sp] 上报 cols($cols) 必须与画布实测容量($capacity) 一致——" +
                     "同源校验（本档列数=$capacity，是覆盖列表里累积误差最容易暴露的一档吗：" +

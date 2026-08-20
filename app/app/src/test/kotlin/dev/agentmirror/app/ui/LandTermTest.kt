@@ -62,8 +62,8 @@ class LandTermTest {
 
     @Test
     fun landTermTokensMatchDesignHandoff() {
-        assertEquals(14, TerminalMetrics.paddingLeft.value.toInt())
-        assertEquals(14, TerminalMetrics.paddingRight.value.toInt())
+        assertEquals(6, TerminalMetrics.paddingLeft.value.toInt())
+        assertEquals(6, TerminalMetrics.paddingRight.value.toInt())
         assertEquals(TerminalMetrics.paddingLeft.value, TermLeftEdge.LEFT_MARGIN_DP)
         assertEquals(Color(0xFFF7F8FB), TerminalPaletteLight.background)
         assertEquals(Color(0xFFE6F5F2), TerminalPaletteLight.userBlockBackground)

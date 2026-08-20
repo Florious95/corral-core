@@ -64,6 +64,8 @@ class GlyphFallbackPolicy(private val probe: GlyphProbe) {
         }
         // ASCII 可打印快速路径：主等宽字体必有字形，连缓存与探针都不碰。
         if (codepoint in 0x20..0x7E) return GlyphSlot.MONO
+        // 框线/块元素改走几何，⛔ 不让 MONO hasGlyph 把它们拐进 batch drawText。
+        if (BoxBlockGeometry.handles(codepoint)) return GlyphSlot.SYSTEM_FALLBACK
 
         return if (codepoint < 0x10000) {
             cachedResolve(codepoint)

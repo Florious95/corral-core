@@ -1,0 +1,32 @@
+
+581 tests completed, 2 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> Multiple build operations failed.
+      Could not write XML test results for dev.agentmirror.app.termview.GlyphSeamTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.termview.GlyphSeamTest.xml.
+      Could not write XML test results for dev.agentmirror.app.termview.TermLeftEdgeTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.termview.TermLeftEdgeTest.xml.
+      Could not write XML test results for dev.agentmirror.app.service.ForegroundServiceEconomyTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.service.ForegroundServiceEconomyTest.xml.
+      Could not write XML test results for dev.agentmirror.app.termview.TermRightMarginTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.termview.TermRightMarginTest.xml.
+      Could not write XML test results for dev.agentmirror.app.diag.DiagLogHotPathBenchmarkTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.diag.DiagLogHotPathBenchmarkTest.xml.
+      Could not write XML test results for dev.agentmirror.app.BackGestureNavTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.BackGestureNavTest.xml.
+      Could not write XML test results for dev.agentmirror.app.diag.DiagLogViewScreenTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.diag.DiagLogViewScreenTest.xml.
+      Could not write XML test results for dev.agentmirror.app.termview.TermColsGridConvergenceDiscriminationTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.termview.TermColsGridConvergenceDiscriminationTest.xml.
+   > Could not write XML test results for dev.agentmirror.app.termview.GlyphSeamTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.termview.GlyphSeamTest.xml.
+   > Could not write XML test results for dev.agentmirror.app.termview.TermLeftEdgeTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.termview.TermLeftEdgeTest.xml.
+   > Could not write XML test results for dev.agentmirror.app.service.ForegroundServiceEconomyTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.service.ForegroundServiceEconomyTest.xml.
+   > Could not write XML test results for dev.agentmirror.app.termview.TermRightMarginTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.termview.TermRightMarginTest.xml.
+   > Could not write XML test results for dev.agentmirror.app.diag.DiagLogHotPathBenchmarkTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.diag.DiagLogHotPathBenchmarkTest.xml.
+   > Could not write XML test results for dev.agentmirror.app.BackGestureNavTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.BackGestureNavTest.xml.
+   > Could not write XML test results for dev.agentmirror.app.diag.DiagLogViewScreenTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.diag.DiagLogViewScreenTest.xml.
+   > Could not write XML test results for dev.agentmirror.app.termview.TermColsGridConvergenceDiscriminationTest to file /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.termview.TermColsGridConvergenceDiscriminationTest.xml.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 24s

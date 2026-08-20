@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.BackAffordance
 import dev.agentmirror.app.ui.components.LanPill
@@ -53,7 +54,8 @@ fun SessionListScreen(
     onSessionClick: (SessionItem) -> Unit,
     onToggleStar: (SessionItem) -> Unit,
     modifier: Modifier = Modifier,
-    lanConnected: Boolean = true,
+    connectionPath: ConnectionPath? = null,
+    connectionBanner: String? = null,
     bottomBar: @Composable () -> Unit = {},
 ) {
     val p = LocalAppPalette.current
@@ -62,12 +64,13 @@ fun SessionListScreen(
             Modifier
                 .fillMaxWidth()
                 .height(Dims.topBarHeight)
-                .padding(start = 2.dp, end = Dims.screenHPadding),
+                .padding(start = 2.dp, end = Dims.screenHPadding)
+                .testTag("session-list-topbar"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BackAffordance(label = "工作区", onBack = onBack)
             Box(Modifier.weight(1f))
-            if (lanConnected) LanPill()
+            if (connectionPath != null) LanPill(connectionPath)
         }
         Column(Modifier.padding(start = Dims.screenHPadding, end = Dims.screenHPadding, top = 2.dp, bottom = 13.dp)) {
             AppText(
@@ -84,15 +87,32 @@ fun SessionListScreen(
             PathText(workspacePath)
         }
         Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
-        SessionListRows(
-            sessions = sessions,
-            onSessionClick = onSessionClick,
-            onToggleStar = onToggleStar,
-            modifier = Modifier
+        Box(
+            Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .background(p.listBackground),
-        )
+        ) {
+            SessionListRows(
+                sessions = sessions,
+                onSessionClick = onSessionClick,
+                onToggleStar = onToggleStar,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (connectionBanner != null) {
+                AppText(
+                    text = connectionBanner,
+                    color = p.metaText,
+                    fontSize = TypeSizes.statusChip,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .background(p.consoleBackground)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .testTag("connection-banner"),
+                )
+            }
+        }
         bottomBar()
     }
 }
