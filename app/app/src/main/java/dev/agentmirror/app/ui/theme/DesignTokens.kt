@@ -78,6 +78,8 @@ object Dims {
     val composerTopGap: Dp = 9.dp
     val plusButtonSize: Dp = 38.dp
     val inputHeight: Dp = 40.dp
+    /** 点击膨胀后的起草区高度（约 5 行，有界）。 */
+    val inputHeightExpanded: Dp = 120.dp
     val inputHPadding: Dp = 12.dp
     val sendButtonSize: Dp = 40.dp
 
