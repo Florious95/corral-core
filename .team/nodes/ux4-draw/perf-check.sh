@@ -2,7 +2,7 @@
 # perf-check.sh — A-dw-ui（r7）
 # 双密度 d480 / d440；改前(opt=0)/改后(opt=1)。
 # 保持：n≥120；cellsNonBlank 与 textDraw 都非 0 且组间 ≤10%。
-# 断言：两组密度 dt_us_p95 都 < 8000µs。
+# 断言：两个密度的改后（opt=1）dt_us_p95 都 < 8000µs。改前只记录、不设门槛。
 # 断言：onDraw 之外 = gfxinfo_p95_ms*1000 − dt_us_p95，且 > dt_us_p95。
 # 删除：两个密度 p95 都必须下降。
 # trap：IME 111、wm density reset。
@@ -358,8 +358,8 @@ for density in (480, 440):
     for label, draw, gfx in (("before", before, gfx_b), ("after", after, gfx_a)):
         total, janky, p95ms = gfx
         dt = draw["p95"]
-        if dt >= 8000:
-            fail("d%s %s dt_us_p95=%s ≥ 8000" % (density, label, dt))
+        if label == "after" and dt >= 8000:
+            fail("d%s after dt_us_p95=%s ≥ 8000" % (density, dt))
         if p95ms is None:
             fail("d%s %s 读不到 gfxinfo p95_ms total=%s" % (density, label, total))
         outside = int(round(p95ms * 1000)) - dt
