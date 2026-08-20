@@ -61,8 +61,8 @@ class TermColsGridConvergenceDiscriminationTest {
         }
     }
 
-    /** SGR 47（Indexed 7）ARGB（TerminalSpec 浅色 ansi[7]）。用它过滤单元格矩形。 */
-    private val whiteBg = TermPalette.Light.ansi16[7]!!
+    /** SGR 47（Indexed 7）ARGB（当前浅槽 ansi[7]）。用它过滤单元格矩形。 */
+    private val whiteBg = TermPalette.of(false).ansi16[7]!!
 
     private fun draw(view: TermSurfaceView, w: Int, h: Int): RecordingCanvas {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -124,6 +124,7 @@ class TermColsGridConvergenceDiscriminationTest {
         presenter.seedCellMetrics(realCellW, realCellH) // 一次算对：不经回写
         val view = TermSurfaceView(RuntimeEnvironment.getApplication()).apply {
             this.presenter = presenter
+            nightOverride = false
             layout(0, 0, canvasW, canvasH)
         }
         // 99 个 ASCII 填满可见列，宽字符主格落在第 99 列（末列）。

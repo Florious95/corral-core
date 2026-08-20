@@ -68,39 +68,39 @@ class TermThemeTest {
     fun lightCanvasComesFromAppThemePaletteAndMessageBlockIsDarker() {
         val (view, canvas) = render(dark = false)
         val pal = TermPalette.of(false)
-        assertEquals("数据来源必须是 TermPalette.Light，不许另写浅色字面量", TermPalette.SOURCE, pal.source)
-        assertEquals(TermPalette.Light.defaultBg, pal.defaultBg)
+        assertEquals("浅槽默认源是 Vesper.itermcolors", "Vesper.itermcolors", pal.source)
+        assertEquals(
+            0xFF101010.toInt(),
+            pal.defaultBg,
+        )
 
         val canvasBg = canvas.rects.firstOrNull { it.color == pal.defaultBg }
-        assertTrue("浅色模式清屏没用 TermPalette.Light.defaultBg", canvasBg != null)
+        assertTrue("浅槽清屏没用当前 Scheme.defaultBg", canvasBg != null)
 
         val msg = canvas.rects.firstOrNull { it.color == pal.userBlockBg }
         assertTrue("夹具失效：没画出 48;5;254 用户消息块", msg != null)
-        assertTrue(
-            "浅色：用户消息块必须比整体底更深（白底开更深块）。canvas=${TermPalette.luma(pal.defaultBg)} msg=${TermPalette.luma(pal.userBlockBg)}",
-            TermPalette.luma(pal.userBlockBg) < TermPalette.luma(pal.defaultBg),
-        )
+        assertPaperUserBlockRelation(pal, darkSlot = false)
         assertEquals(TermPalette.token(false), view.contentDescription)
-        assertTrue(view.contentDescription.contains("source=${TermPalette.SOURCE}"))
+        assertTrue(view.contentDescription.startsWith("term-theme-"))
+        assertTrue(view.contentDescription.contains("source=${pal.source}"))
     }
 
     @Test
     fun darkCanvasInvertsMessageBlockRelationship() {
         val (view, canvas) = render(dark = true)
         val pal = TermPalette.of(true)
-        assertEquals(TermPalette.Dark.defaultBg, pal.defaultBg)
+        assertEquals("Vesper.itermcolors", pal.source)
+        assertEquals(0xFF101010.toInt(), pal.defaultBg)
 
         val canvasBg = canvas.rects.firstOrNull { it.color == pal.defaultBg }
-        assertTrue("深色模式清屏没用 TermPalette.Dark.defaultBg", canvasBg != null)
+        assertTrue("深槽清屏没用当前 Scheme.defaultBg", canvasBg != null)
 
         val msg = canvas.rects.firstOrNull { it.color == pal.userBlockBg }
         assertTrue("夹具失效：没画出 48;5;254 用户消息块", msg != null)
         assertNotEquals("消息块底色必须可辨，不能与整体底同色", pal.defaultBg, pal.userBlockBg)
-        assertTrue(
-            "深色：用户消息块必须比整体底更浅。canvas=${TermPalette.luma(pal.defaultBg)} msg=${TermPalette.luma(pal.userBlockBg)}",
-            TermPalette.luma(pal.userBlockBg) > TermPalette.luma(pal.defaultBg),
-        )
+        assertPaperUserBlockRelation(pal, darkSlot = true)
         assertEquals(TermPalette.token(true), view.contentDescription)
+        assertTrue(view.contentDescription.startsWith("term-theme-"))
     }
 
     @Test
@@ -122,10 +122,31 @@ class TermThemeTest {
             return expected
         }
 
-        val lightBg = bg(false)
-        val darkBg = bg(true)
-        assertNotEquals("切换深浅色后终端背景必须真的变；写死同一套浅色会在这里红", lightBg, darkBg)
-        assertEquals(TermPalette.Light.defaultBg, lightBg)
-        assertEquals(TermPalette.Dark.defaultBg, darkBg)
+        TermPalette.bindSelectionForTest(lightFamilyId = "follow-system", darkFamilyId = "vesper")
+        try {
+            val lightBg = bg(false)
+            val darkBg = bg(true)
+            assertNotEquals("浅槽 Alabaster vs 深槽 Vesper 纸色必须不同", lightBg, darkBg)
+            assertEquals(TermPalette.of(false).defaultBg, lightBg)
+            assertEquals(TermPalette.of(true).defaultBg, darkBg)
+        } finally {
+            TermPalette.resetBindingForTest()
+        }
+    }
+
+    private fun assertPaperUserBlockRelation(pal: TermPalette.Scheme, darkSlot: Boolean) {
+        val paperY = TermPalette.luma(pal.defaultBg)
+        val blockY = TermPalette.luma(pal.userBlockBg)
+        if (paperY >= 128) {
+            assertTrue(
+                "浅纸：userBlock luma=$blockY 必须 < 纸 luma=$paperY",
+                blockY < paperY,
+            )
+        } else {
+            assertTrue(
+                "深纸：userBlock luma=$blockY 必须 > 纸 luma=$paperY（darkSlot=$darkSlot）",
+                blockY > paperY,
+            )
+        }
     }
 }

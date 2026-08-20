@@ -79,12 +79,13 @@ class TermSgrReverseVideoTest {
         return canvas
     }
 
-    private val ansiRed = TermPalette.Dark.ansi16[1]!!
-    private val ansiGreen = TermPalette.Dark.ansi16[2]!!
+    private val pal = TermPalette.of(true)
+    private val ansiRed = pal.ansi16[1]!!
+    private val ansiGreen = pal.ansi16[2]!!
 
-    // 反显钉深色套；色值来自 TerminalSpec → TermPalette.Dark，不在本文件再写一份字面量。
-    private val defaultFg = TermPalette.Dark.defaultFg
-    private val defaultBg = TermPalette.Dark.defaultBg
+    // 反显钉当前深槽 Scheme（默认 Vesper），不在本文件再写一份字面量。
+    private val defaultFg = pal.defaultFg
+    private val defaultBg = pal.defaultBg
 
     /** 判据 1：显式双色 + 反显——背景矩形须取到 fg 色，文字须取到 bg 色。 */
     @Test

@@ -8,6 +8,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -165,6 +166,8 @@ fun AppTheme(
     appearance: Appearance = LocalAppearance.current,
     content: @Composable () -> Unit,
 ) {
+    val context = LocalContext.current
+    TermPalette.bind(SharedPreferencesTermThemeStore(context))
     val dark = when (appearance) {
         Appearance.Light -> false
         Appearance.Dark -> true
@@ -183,9 +186,11 @@ fun AppTheme(
     }
 }
 
-/** 终端自绘层要用的色板 —— 与 AppTheme 同源，供 SurfaceView 侧读取。 */
+/** 终端自绘层要用的色板：16+fg/bg/cursor 来自当前槽主题，userBlock 来自 APP。 */
 @Composable
 fun currentTerminalPalette(): TerminalPalette {
+    val context = LocalContext.current
+    TermPalette.bind(SharedPreferencesTermThemeStore(context))
     val dark = LocalAppPalette.current === DarkPalette
-    return if (dark) TerminalPaletteDark else TerminalPaletteLight
+    return TermPalette.asTerminalPalette(dark)
 }

@@ -171,15 +171,20 @@ class VzVerifyRoundTest {
 
     @Test
     fun VzVerifyPaperNotAnsi0AndUserBlockDarker() {
-        val pal = TermPalette.Light
-        val paper = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = false)
-        val ansi0 = pal.ansi16[0]!!
-        val block = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = false)
-        assertEquals(pal.defaultBg, paper)
-        assertNotEquals(ansi0, paper)
-        assertTrue(TermPalette.luma(paper) > TermPalette.luma(ansi0))
-        assertEquals(pal.userBlockBg, block)
-        assertTrue(TermPalette.luma(block) < TermPalette.luma(paper))
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        try {
+            val pal = TermPalette.of(false)
+            val paper = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = false)
+            val ansi0 = pal.ansi16[0]!!
+            val block = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = false)
+            assertEquals(pal.defaultBg, paper)
+            assertNotEquals(ansi0, paper)
+            assertTrue(TermPalette.luma(paper) > TermPalette.luma(ansi0))
+            assertEquals(pal.userBlockBg, block)
+            assertTrue(TermPalette.luma(block) < TermPalette.luma(paper))
+        } finally {
+            TermPalette.resetBindingForTest()
+        }
     }
 
     @Test

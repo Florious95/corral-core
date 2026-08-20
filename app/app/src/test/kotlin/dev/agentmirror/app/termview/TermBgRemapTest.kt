@@ -67,59 +67,74 @@ class TermBgRemapTest {
 
     @Test
     fun lightGrokScreenBlackIndexed0MapsToPaperNotAnsi0() {
-        val pal = TermPalette.Light
-        val ansi0 = pal.ansi16[0]!!
-        val mapped = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = false)
-        assertEquals(
-            "40m/index0 整屏应落 background，旧路径走 ansi[0]=0x${hex(ansi0)} luma=${TermPalette.luma(ansi0)}",
-            pal.defaultBg,
-            mapped,
-        )
-        assertNotEquals("整屏不得等于 ANSI 0 暗格", ansi0, mapped)
-        assertTrue(
-            "浅底 grok 整屏 luma=${TermPalette.luma(mapped)} 必须高于暗格 luma=${TermPalette.luma(ansi0)}",
-            TermPalette.luma(mapped) > TermPalette.luma(ansi0),
-        )
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        try {
+            val pal = TermPalette.of(false)
+            val ansi0 = pal.ansi16[0]!!
+            val mapped = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = false)
+            assertEquals(
+                "40m/index0 整屏应落 background，旧路径走 ansi[0]=0x${hex(ansi0)} luma=${TermPalette.luma(ansi0)}",
+                pal.defaultBg,
+                mapped,
+            )
+            assertNotEquals("Alabaster 纸色必须 ≠ ansi0", ansi0, mapped)
+            assertTrue(
+                "浅底 grok 整屏 luma=${TermPalette.luma(mapped)} 必须高于暗格 luma=${TermPalette.luma(ansi0)}",
+                TermPalette.luma(mapped) > TermPalette.luma(ansi0),
+            )
 
-        val canvas = render("\u001b[40mXXXX\u001b[0m", dark = false)
-        assertTrue("夹具：应画出纸色格 defaultBg=0x${hex(pal.defaultBg)}", canvas.rects.any { it.color == pal.defaultBg })
-        assertTrue("40m 不得画出 ansi0 暗格", canvas.rects.none { it.color == ansi0 })
+            val canvas = render("\u001b[40mXXXX\u001b[0m", dark = false)
+            assertTrue("夹具：应画出纸色格 defaultBg=0x${hex(pal.defaultBg)}", canvas.rects.any { it.color == pal.defaultBg })
+            assertTrue("40m 不得画出 ansi0 暗格", canvas.rects.none { it.color == ansi0 })
+        } finally {
+            TermPalette.resetBindingForTest()
+        }
     }
 
     @Test
     fun lightGrokCubeBlackAndRgbBlackMapToPaper() {
-        val pal = TermPalette.Light
-        val i16 = TermPalette.colorFor(TerminalColor.Indexed(16), background = true, dark = false)
-        val rgb = TermPalette.colorFor(TerminalColor.Rgb(0, 0, 0), background = true, dark = false)
-        assertEquals("48;5;16 整屏黑 → paper", pal.defaultBg, i16)
-        assertEquals("48;2;0;0;0 真彩黑 → paper（亮度守卫）", pal.defaultBg, rgb)
-        val canvas = render("\u001b[48;2;0;0;0mBBBB\u001b[0m", dark = false)
-        assertTrue(canvas.rects.any { it.color == pal.defaultBg })
-        assertTrue("真彩黑不得原样 0xFF000000", canvas.rects.none { it.color == 0xFF000000.toInt() })
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        try {
+            val pal = TermPalette.of(false)
+            val i16 = TermPalette.colorFor(TerminalColor.Indexed(16), background = true, dark = false)
+            val rgb = TermPalette.colorFor(TerminalColor.Rgb(0, 0, 0), background = true, dark = false)
+            assertEquals("48;5;16 整屏黑 → paper", pal.defaultBg, i16)
+            assertEquals("48;2;0;0;0 真彩黑 → paper（亮度守卫）", pal.defaultBg, rgb)
+            val canvas = render("\u001b[48;2;0;0;0mBBBB\u001b[0m", dark = false)
+            assertTrue(canvas.rects.any { it.color == pal.defaultBg })
+            assertTrue("真彩黑不得原样 0xFF000000", canvas.rects.none { it.color == 0xFF000000.toInt() })
+        } finally {
+            TermPalette.resetBindingForTest()
+        }
     }
 
     @Test
     fun lightClaudeUserBlockIsDarkerGrayNotWhite() {
-        val pal = TermPalette.Light
-        val block = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = false)
-        val paper = pal.defaultBg
-        val white = 0xFFFFFFFF.toInt()
-        assertEquals(pal.userBlockBg, block)
-        assertNotEquals("用户块不得与纸色同色（刷成同色会骗「浅底」判据）", paper, block)
-        assertNotEquals("用户块不得是纯白", white, block)
-        assertTrue(
-            "浅色：块 luma=${TermPalette.luma(block)} 必须 < 纸 luma=${TermPalette.luma(paper)}",
-            TermPalette.luma(block) < TermPalette.luma(paper),
-        )
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        try {
+            val pal = TermPalette.of(false)
+            val block = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = false)
+            val paper = pal.defaultBg
+            val white = 0xFFFFFFFF.toInt()
+            assertEquals(pal.userBlockBg, block)
+            assertNotEquals("用户块不得与纸色同色（刷成同色会骗「浅底」判据）", paper, block)
+            assertNotEquals("用户块不得是纯白", white, block)
+            assertTrue(
+                "浅色：块 luma=${TermPalette.luma(block)} 必须 < 纸 luma=${TermPalette.luma(paper)}",
+                TermPalette.luma(block) < TermPalette.luma(paper),
+            )
 
-        val canvas = render("plain\n\u001b[48;5;254;38;5;16muser msg\u001b[0m", dark = false)
-        assertTrue(canvas.rects.any { it.color == paper })
-        assertTrue(canvas.rects.any { it.color == block })
+            val canvas = render("plain\n\u001b[48;5;254;38;5;16muser msg\u001b[0m", dark = false)
+            assertTrue(canvas.rects.any { it.color == paper })
+            assertTrue(canvas.rects.any { it.color == block })
+        } finally {
+            TermPalette.resetBindingForTest()
+        }
     }
 
     @Test
     fun lightTruecolorWhiteMessageMapsToUserBlockNotRawWhite() {
-        val pal = TermPalette.Light
+        val pal = TermPalette.of(false)
         val mapped = TermPalette.colorFor(TerminalColor.Rgb(255, 255, 255), background = true, dark = false)
         assertEquals("48;2;255;255;255 近白 → userBlock（亮度守卫）", pal.userBlockBg, mapped)
         assertNotEquals(0xFFFFFFFF.toInt(), mapped)
@@ -130,12 +145,12 @@ class TermBgRemapTest {
 
     @Test
     fun darkThemeInvertsPaperAndUserBlockRelationship() {
-        val pal = TermPalette.Dark
+        val pal = TermPalette.of(true)
         val paper = TermPalette.colorFor(TerminalColor.Default, background = true, dark = true)
         val grok = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = true)
         val block = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = true)
         assertEquals(pal.defaultBg, paper)
-        assertEquals("深色整屏黑仍落 paper，不是 ansi0", pal.defaultBg, grok)
+        assertEquals("深色整屏黑仍落 paper", pal.defaultBg, grok)
         assertEquals(pal.userBlockBg, block)
         assertNotEquals(paper, block)
         assertTrue(
@@ -149,38 +164,48 @@ class TermBgRemapTest {
 
     @Test
     fun switchingNightChangesPaperAndUserBlockFromPalette() {
-        val lightPaper = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = false)
-        val darkPaper = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = true)
-        val lightBlock = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = false)
-        val darkBlock = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = true)
-        assertNotEquals("切换后纸色必须变", lightPaper, darkPaper)
-        assertNotEquals("切换后用户块必须变", lightBlock, darkBlock)
-        assertEquals(TermPalette.Light.defaultBg, lightPaper)
-        assertEquals(TermPalette.Dark.defaultBg, darkPaper)
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        try {
+            val lightPaper = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = false)
+            val darkPaper = TermPalette.colorFor(TerminalColor.Indexed(0), background = true, dark = true)
+            val lightBlock = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = false)
+            val darkBlock = TermPalette.colorFor(TerminalColor.Indexed(254), background = true, dark = true)
+            assertNotEquals("浅槽 Alabaster vs 深槽 Vesper 纸色必须变", lightPaper, darkPaper)
+            assertNotEquals("切换后用户块必须变", lightBlock, darkBlock)
+            assertEquals(TermPalette.of(false).defaultBg, lightPaper)
+            assertEquals(TermPalette.of(true).defaultBg, darkPaper)
 
-        val emulator = TerminalEmulator(12, 4)
-        emulator.feed("\u001b[40mZ\u001b[0m")
-        val view = TermSurfaceView(RuntimeEnvironment.getApplication())
-        view.presenter = TermViewPresenter(emulator) { _, _ -> }
-        fun painted(dark: Boolean): Int {
-            view.nightOverride = dark
-            val bitmap = Bitmap.createBitmap(200, 80, Bitmap.Config.ARGB_8888)
-            val canvas = RecordingCanvas(bitmap)
-            view.draw(canvas)
-            bitmap.recycle()
-            val expect = TermPalette.of(dark).defaultBg
-            assertTrue("night=$dark 40m 未画到 paper 0x${hex(expect)}", canvas.rects.any { it.color == expect })
-            return expect
+            val emulator = TerminalEmulator(12, 4)
+            emulator.feed("\u001b[40mZ\u001b[0m")
+            val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+            view.presenter = TermViewPresenter(emulator) { _, _ -> }
+            fun painted(dark: Boolean): Int {
+                view.nightOverride = dark
+                val bitmap = Bitmap.createBitmap(200, 80, Bitmap.Config.ARGB_8888)
+                val canvas = RecordingCanvas(bitmap)
+                view.draw(canvas)
+                bitmap.recycle()
+                val expect = TermPalette.of(dark).defaultBg
+                assertTrue("night=$dark 40m 未画到 paper 0x${hex(expect)}", canvas.rects.any { it.color == expect })
+                return expect
+            }
+            assertNotEquals(painted(false), painted(true))
+        } finally {
+            TermPalette.resetBindingForTest()
         }
-        assertNotEquals(painted(false), painted(true))
     }
 
     @Test
     fun localAnsi8CellDoesNotCollapseToPaper() {
-        val pal = TermPalette.Light
-        val local = TermPalette.colorFor(TerminalColor.Indexed(8), background = true, dark = false)
-        assertEquals("局部暗格走 ansi[8]，不是整屏纸色", pal.ansi16[8], local)
-        assertNotEquals(pal.defaultBg, local)
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        try {
+            val pal = TermPalette.of(false)
+            val local = TermPalette.colorFor(TerminalColor.Indexed(8), background = true, dark = false)
+            assertEquals("局部暗格走 ansi[8]，不是整屏纸色", pal.ansi16[8], local)
+            assertNotEquals(pal.defaultBg, local)
+        } finally {
+            TermPalette.resetBindingForTest()
+        }
     }
 
     private fun hex(argb: Int): String = (argb.toLong() and 0xffffffffL).toString(16)
