@@ -3,8 +3,8 @@ Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 6215
-WaitTime: 6222
+TotalTime: 1577
+WaitTime: 1578
 Complete
 Night mode: yes
 Night mode: no
@@ -12,8 +12,8 @@ Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 6998
-WaitTime: 7004
+TotalTime: 1506
+WaitTime: 1507
 Complete
 Night mode: yes
 DENSITY 480 TOKEN_LIGHT term-theme-light source=app-theme

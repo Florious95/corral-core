@@ -69,8 +69,9 @@ internal fun ScreenSnapshot.plainText(): String =
  * - 进入：构造函数即 [ConnectionManager.subscribe] → 首帧 snapshot 重放 + 预取历史；
  * - 增量：delta → [TerminalEmulator.feed]；历史页 → [TerminalEmulator.prependHistory]；
  * - 滚动到顶：[syncFromPresenter] 收敛 presenter 视口信号 → 按页拉更老历史；
- * - 直通输入（059）：键盘每键经 [onPassthroughInput] 直通 CLI 输入框（草稿在 CLI）；
- *   [sendDraft] 发送只提交（裸 Enter），不再整条注入；input_ack 必达回执（003 第二条）；
+ * - 差分同步（084）：本地输入框完整编辑，每次变化经 [onPassthroughInput] 发最小按键
+ *   （公共前缀后退格 + 后缀）；纯追加退格 0，键序与逐键直通一致。IME 组合期不上行。
+ *   [sendDraft] 发送只提交（裸 Enter）；input_ack 必达回执（003 第二条）；
  * - 附件：multipart HTTP 上传（协议 §8）→ 上传成功立刻贴进 CLI pane（需求 057 发图预贴）→
  *   路径累加进 [pendingAttachmentPaths]，[sendDraft] 提交时经 input 帧的独立
  *   attachment_path 字段带上最新一次预贴路径。
@@ -346,6 +347,8 @@ class SessionViewModel(
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
         if (manager.sendInput(ref, "", attachmentPath)) {
             inputStatus = InputStatus.Sending
+            // Enter 提交后 CLI 行空；本地框跟着清。不同步会把下一轮当成「删掉上一条」。
+            syncedText = ""
         } else {
             inputStatus = InputStatus.Failed("发送失败：连接不可用")
         }
@@ -377,51 +380,51 @@ class SessionViewModel(
     }
 
     /**
-     * 直通输入（059）：键盘每键（含虚拟键盘删除键）直接进 Agent CLI 输入框。
+     * 差分同步（084）：每次 [TextFieldValue] 变化立刻对照 [syncedText] 发最小按键。
      *
-     * Compose 屏在每次 onValueChange 调用本方法，把本地输入框的增量（新旧值）转成
-     * 服务端注入：新增字符直通（[sendPassthrough]），删除字符直通 backspace。CLI 输入框
-     * 即草稿，App 本地不留草稿文本（见屏幕 InputBarRow 的镜像字段）。
-     *
-     * CJK 组合期（leader 判断，非用户裁定）：输入法组合期归输入法本地，不上行；上屏
-     * 那一刻（组合结束）把整串直通。见 [preCompositionText]。
+     * 组合期（[TextFieldValue.composition] != null）零按键；上屏同一调用内发出。
+     * 英文/数字无组合期，本方法返回前按键已发出（无 post / delay）。
      *
      * @contract
      * @pre oldValue/newValue 为输入框前后值（Compose onValueChange 参数）
-     * @post 非组合期把新增/删除增量直通到 CLI；组合期不上行，组合结束直通整串
-     * @err none（连接未就绪时 [sendPassthrough] 静默丢——CLI 没有可编辑的草稿，直通无意义）
-     * @inv 不改任何本地草稿状态；每键一次 sendInput（服务端逐键注入不回车）
+     * @post 非组合期 CLI 行尾草稿 == newValue.text；组合期不发键、synced 不变
+     * @err none（连接未就绪时发送静默丢，synced 也不推进，避免以为 CLI 已跟上）
+     * @inv 同步后光标约定在行尾；不改本地草稿；不引入额外延迟
      */
     fun onPassthroughInput(oldValue: TextFieldValue, newValue: TextFieldValue) {
         val wasComposing = oldValue.composition != null
         val isComposing = newValue.composition != null
-        when {
-            // 组合开始：记住基线（本地输入框此刻文本），组合期不上行。
-            !wasComposing && isComposing -> preCompositionText = oldValue.text
-            // 组合中：归输入法本地，不上行。
-            wasComposing && isComposing -> Unit
-            // 组合结束（上屏）：直通整串（新文本相对组合前基线的增量）。
-            wasComposing && !isComposing -> {
-                val base = preCompositionText ?: oldValue.text
-                preCompositionText = null
-                sendPassthroughDelta(base, newValue.text)
+        val composition = newValue.composition
+        if (isComposing) {
+            if (!wasComposing) {
+                DiagLog.record(
+                    "diffsync",
+                    "composing=true composition=$composition " +
+                        "current_len=${newValue.text.length} synced_len=${syncedText.length} " +
+                        "→ hold keys=0",
+                )
             }
-            // 非组合普通按键：按增量直通（新增字符 / 删除）。
-            else -> sendPassthroughDelta(oldValue.text, newValue.text)
+            return
         }
+        applyDiffSync(newValue.text)
     }
 
-    /** 直通一次文本增量到 CLI（新增字符串或 N 次 backspace）。 */
-    private fun sendPassthroughDelta(oldText: String, newText: String) {
-        when (val delta = TextDelta.of(oldText, newText)) {
-            is TextDelta.Typed -> sendPassthrough(delta.text)
-            is TextDelta.Deleted -> repeat(delta.count) { sendBackspace() }
-            is TextDelta.Replaced -> {
-                repeat(delta.deletedCount) { sendBackspace() }
-                sendPassthrough(delta.typedText)
-            }
-            TextDelta.None -> Unit
+    /** 相对 [syncedText] 发退格+后缀，立刻更新已同步文本。 */
+    private fun applyDiffSync(current: String) {
+        val plan = DiffSync.plan(syncedText, current)
+        if (plan.backspaces > 0) {
+            DiagLog.record(
+                "diffsync",
+                "prefix=${DiffSync.commonPrefixLength(syncedText, current)} " +
+                    "synced_len=${syncedText.length} current_len=${current.length} " +
+                    "backspaces=${plan.backspaces} typed_len=${plan.typed.length} " +
+                    "key_count=${plan.keyCount} → send",
+            )
         }
+        if (connectionState != ConnectionState.READY) return
+        repeat(plan.backspaces) { sendBackspace() }
+        if (plan.typed.isNotEmpty()) sendPassthrough(plan.typed)
+        syncedText = current
     }
 
     /**
@@ -439,8 +442,8 @@ class SessionViewModel(
         manager.sendBackspace(ref)
     }
 
-    /** 组合期起始基线文本（CJK 上屏整串直通用）；null = 非组合期。 */
-    private var preCompositionText: String? = null
+    /** 已同步到 CLI 行尾的文本（084）；组合期不推进。 */
+    private var syncedText: String = ""
 
     /**
      * 上传附件（协议 §8 multipart）→ 主机绝对路径**立刻**经 [ConnectionManager.sendAttachPreview]
@@ -576,44 +579,4 @@ class SessionViewModel(
     }
 }
 
-/**
- * 输入框前后值的一次文本增量（直通输入 059 用）。
- *
- * 移动输入法下 onValueChange 给出的新旧值通常只在光标处增删一个字符或一段上屏文本；
- * [of] 用公共前缀/后缀剥离中间差异区，映射为新增 / 删除 / 中间替换三态。
- */
-internal sealed interface TextDelta {
-    /** 新增了一段文本（含 CJK 上屏整串）。 */
-    data class Typed(val text: String) : TextDelta
 
-    /** 删除了 [count] 个字符（虚拟键盘删除键）。 */
-    data class Deleted(val count: Int) : TextDelta
-
-    /** 光标处中间替换：先删 [deletedCount] 个字符再键入 [typedText]。 */
-    data class Replaced(val deletedCount: Int, val typedText: String) : TextDelta
-
-    /** 无差异。 */
-    data object None : TextDelta
-
-    companion object {
-        /** 直通 backspace 的 wire 载荷（059）；与 VM 的 BACKSPACE_CHAR 同值。 */
-        const val BACKSPACE = ""
-
-        fun of(old: String, new: String): TextDelta {
-            if (old == new) return None
-            val maxCommon = minOf(old.length, new.length)
-            var p = 0
-            while (p < maxCommon && old[p] == new[p]) p++
-            var s = 0
-            while (s < maxCommon - p && old[old.length - 1 - s] == new[new.length - 1 - s]) s++
-            val oldMid = old.substring(p, old.length - s)
-            val newMid = new.substring(p, new.length - s)
-            return when {
-                oldMid.isEmpty() && newMid.isNotEmpty() -> Typed(newMid)
-                newMid.isEmpty() && oldMid.isNotEmpty() -> Deleted(oldMid.length)
-                oldMid.isEmpty() && newMid.isEmpty() -> None
-                else -> Replaced(deletedCount = oldMid.length, typedText = newMid)
-            }
-        }
-    }
-}
