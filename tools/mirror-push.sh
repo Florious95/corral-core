@@ -28,6 +28,8 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 GH=git@github.com:Florious95
+# 推到哪条远端分支。PR 流程用非 main 分支当 base，故参数化；缺省仍是 main。
+MIRROR_BRANCH="${MIRROR_BRANCH:-main}"
 ME='Florious95 <281215401+Florious95@users.noreply.github.com>'
 
 # 署名归位（用户 2026-08-14 裁定「Contributor 应该是我」）。
@@ -59,6 +61,22 @@ guard() {
   fi
 }
 
+
+# 祖先闸：filter-repo 是确定性映射，所以远端同名分支必须是本次过滤结果的祖先。
+# 不是 ⇒ 过滤规则变过（或远端被别处改过），这一推会静默重写远端历史 —— 中止。
+ancestor_gate() {
+  local remote_head
+  remote_head=$(git ls-remote origin "refs/heads/$MIRROR_BRANCH" 2>/dev/null | cut -f1)
+  [ -z "$remote_head" ] && { echo "   远端 $MIRROR_BRANCH 不存在，按新建分支推送"; return 0; }
+  if git cat-file -e "$remote_head^{commit}" 2>/dev/null && \
+     git merge-base --is-ancestor "$remote_head" HEAD; then
+    echo "   祖先闸通过：远端 $MIRROR_BRANCH @ ${remote_head:0:9} 是本次结果的祖先"
+  else
+    echo "中止：远端 $MIRROR_BRANCH @ ${remote_head:0:9} 不是过滤结果的祖先，推上去会重写远端历史" >&2
+    exit 1
+  fi
+}
+
 echo "==> corral-core（当前 App + 需求维基 + 任务书 + 文档）"
 git clone --no-hardlinks --quiet "$SRC" "$WORK/core"
 cd "$WORK/core"
@@ -75,6 +93,7 @@ TEAM_EXCLUDE=(
   --path .team/outbox-relay.sh --path .team/prod-daemon-launch.sh
   --path .team/watchdog.py --path .team/watchdog.sh --path .team/watchdog.log
   --path .team/watchdog-supervisor.sh
+  --path .team/grok/ --path .team/dynamic-role-files/
 )
 
 python3 "$FR" --force --invert-paths \
@@ -85,8 +104,9 @@ python3 "$FR" --force --invert-paths \
   --mailmap "$WORK/mailmap" --commit-callback "$STRIP_COAUTHOR" >/dev/null
 guard
 git remote add origin "$GH/corral-core.git"
-git branch -M main
-git push --force -u origin main
+git branch -M "$MIRROR_BRANCH"
+ancestor_gate
+git push --force -u origin "$MIRROR_BRANCH"
 
 echo "==> corral-serve（服务端 daemon）"
 git clone --no-hardlinks --quiet "$SRC" "$WORK/serve"
@@ -100,8 +120,9 @@ git add LICENSE
 git -c user.name=Florious95 -c user.email=281215401+Florious95@users.noreply.github.com \
     commit -q -m "补入 Apache-2.0 LICENSE（拆仓时随服务端一起带上）" || true
 git remote add origin "$GH/corral-serve.git"
-git branch -M main
-git push --force -u origin main
+git branch -M "$MIRROR_BRANCH"
+ancestor_gate
+git push --force -u origin "$MIRROR_BRANCH"
 
 # corral-app 是下一代 UI 的独立仓库，不由本单仓派生，故不在此镜像。
 echo "==> 完成。corral-app 独立维护，本脚本不动它。"
