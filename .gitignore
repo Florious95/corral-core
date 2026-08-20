@@ -36,3 +36,4 @@ web/dist/
 e2e/artifacts/**/frames*/
 e2e/artifacts/**/*-frames/
 .team/ledgers/.dispatched/
+app/.kotlin/
