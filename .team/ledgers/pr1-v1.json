@@ -565,23 +565,7 @@
      "A-recon-doc",
      "A-recon-smell"
     ]
-   },
-   "attempts": [
-    {
-     "attempt_id": "att-t.recon-seq15-t1787244694078",
-     "delivery_id": "del-t.recon-seq15-t1787244694078",
-     "state": "failed_retryable",
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=A-recon-wiki",
-      "acceptance_failure.argv=[\"sh\", \"-c\", \"{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.conn && cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.service && cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.workspace ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-recon-wiki.log 2>&1\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)="
-     ]
-    }
-   ]
+   }
   },
   "t.idea-input": {
    "title": "## 知识基底（已内联）—— tools/basegen_ledger.py 从本格 write_paths 现算的模块影响闭包。\n**正向依赖 = 你消费的契约；反向依赖 = 你的回归自查范围。**\n⛔ 不看它就动手 = 凭空猜架构。原件：.team/nodes/idea-input/BASE.md\n\n# 知识基底 · ledger.pr1.v1 / t.idea-input（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.idea-input · 输入区的方案岔路（契约 087）⛔ 只出思路，一行代码都不许改\n\n## 要回答的第一个问题（选错则 E2–E5 全部返工）\n手机那个输入框到底是什么？两种互斥答案：\n1. **本地缓冲 + 回读**：保持 084 的本地完整编辑，另外把 CLI 的输入行**读回来**校正 `已同步文本`。\n   难点：alt-screen 应用（Claude Code / Grok）的输入行是渲染出来的区域，\n   「哪几行是输入行」需要判定，⛔ 不许写死行号。\n2. **镜像 + 按键捕获**：手机框不再持有独立缓冲，一切编辑（含删除、光标移动）都转成按键转发，\n   框内显示远端输入行的镜像。E2 的「膨胀」变成「让镜像显示更多行」。\n\n**你必须回答**：成熟的手机端 Agent/终端 APP **实际是怎么消解这个矛盾的**，\n并给出选定方案在契约 087 §2 的 F-087-1 / F-087-2 / F-087-3 上**各自的代价**。\n⛔ 不许只描述方案不给代价。\n\n## ⛔⛔ 许可硬约束\nHeeler（github.com/ZingerLittleBee/Heeler）是 **AGPL-3.0**，我们是 Apache-2.0。\n- ⛔ 不许 clone、不许 `gh api .../contents/` 取源码、不许读任何 `Sources/**`、不许反编译 IPA。\n- ⛔ 「我看了它怎么写的，所以我们这样写」——一句都不许出现。\n- ✅ 允许：README / 文档站 / 官网的**行为与架构描述**、公开依赖清单、release notes、\n  它依赖的上游项目（如 Ghostty/libghostty，MIT）的公开文档。\n- 🔴 **文档开头写一行自证**：「本格未读取 Heeler 任何源码文件；信息来源见每条结论的链接。」\n- 🔴 **每条结论必须带来源链接**，⛔ 无来源不许进文档。查不清的明写「查不清」。\n\n## 还要给出 E2–E5 的做法\nE2 点击膨胀多行 / E3 按键条与打字并存（⛔ 不能互相打断）/ E4 附件与发送收进框内 / E5 观感对标。\n**给到能直接派实现席位的粒度**：改哪个文件、改什么、判据怎么写。\n⚠️ 实现席位**不会读你读过的任何东西**，只会读你这份文档 —— 写不清楚就等于没写。\n\n## 产物\n唯一产物：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md`\n⛔ 写范围只有 `.team/nodes/pr1-idea-input/`，**一行产品代码都不许改**。\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b pr/idea-input`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** 本仓本地没配 remote，远端是 `tools/mirror-push.sh` 过滤后推的镜像仓，\n   **PR 由 leader 代开**。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 `blocked` 并指出错在哪，不要自己改。\n5. **必须写合规的外骨骼注释** —— 架构维基从注释现算，注释不合规 ⇒ 维基缺节点缺边 ⇒\n   下一个席位的知识基底是残的。你的机械判据含 `archwiki --check --strict-t3`，会红给你看。\n6. **一次只修一个缺陷。** ⛔ 顺手改相邻代码 / 顺手重构 / 顺手改格式，全部禁止。\n   每一行改动都要能追溯到本格需求。\n\n## 🔴 判据纪律（三铁律）\n- 判据要断言「世界变了」；**写完先验红**（改之前跑，必须红），再改，再验绿。\n- **先验红的原始输出必须贴进 `说明.md`**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」时**必须先制造出让它出现的条件**，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**（revert/cherry-pick 会让「commit 在不在」说谎）。\n\n## 说明.md 必须包含\n分支名 / commit sha / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 每条判据的验绿原始输出 / 查不清的地方明写「查不清」。\n\n```\n\n- write_paths: .team/nodes/pr1-idea-input/\n- read_paths: /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/087-输入行发散与输入区重做.md, /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/084-输入框差分同步.md\n- 判据: A-ii-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n\n# t.idea-input · 输入区的方案岔路（契约 087）⛔ 只出思路，一行代码都不许改\n\n## 要回答的第一个问题（选错则 E2–E5 全部返工）\n手机那个输入框到底是什么？两种互斥答案：\n1. **本地缓冲 + 回读**：保持 084 的本地完整编辑，另外把 CLI 的输入行**读回来**校正 `已同步文本`。\n   难点：alt-screen 应用（Claude Code / Grok）的输入行是渲染出来的区域，\n   「哪几行是输入行」需要判定，⛔ 不许写死行号。\n2. **镜像 + 按键捕获**：手机框不再持有独立缓冲，一切编辑（含删除、光标移动）都转成按键转发，\n   框内显示远端输入行的镜像。E2 的「膨胀」变成「让镜像显示更多行」。\n\n**你必须回答**：成熟的手机端 Agent/终端 APP **实际是怎么消解这个矛盾的**，\n并给出选定方案在契约 087 §2 的 F-087-1 / F-087-2 / F-087-3 上**各自的代价**。\n⛔ 不许只描述方案不给代价。\n\n## ⛔⛔ 许可硬约束\nHeeler（github.com/ZingerLittleBee/Heeler）是 **AGPL-3.0**，我们是 Apache-2.0。\n- ⛔ 不许 clone、不许 `gh api .../contents/` 取源码、不许读任何 `Sources/**`、不许反编译 IPA。\n- ⛔ 「我看了它怎么写的，所以我们这样写」——一句都不许出现。\n- ✅ 允许：README / 文档站 / 官网的**行为与架构描述**、公开依赖清单、release notes、\n  它依赖的上游项目（如 Ghostty/libghostty，MIT）的公开文档。\n- 🔴 **文档开头写一行自证**：「本格未读取 Heeler 任何源码文件；信息来源见每条结论的链接。」\n- 🔴 **每条结论必须带来源链接**，⛔ 无来源不许进文档。查不清的明写「查不清」。\n\n## 还要给出 E2–E5 的做法\nE2 点击膨胀多行 / E3 按键条与打字并存（⛔ 不能互相打断）/ E4 附件与发送收进框内 / E5 观感对标。\n**给到能直接派实现席位的粒度**：改哪个文件、改什么、判据怎么写。\n⚠️ 实现席位**不会读你读过的任何东西**，只会读你这份文档 —— 写不清楚就等于没写。\n\n## 产物\n唯一产物：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md`\n⛔ 写范围只有 `.team/nodes/pr1-idea-input/`，**一行产品代码都不许改**。\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b pr/idea-input`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** 本仓本地没配 remote，远端是 `tools/mirror-push.sh` 过滤后推的镜像仓，\n   **PR 由 leader 代开**。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 `blocked` 并指出错在哪，不要自己改。\n5. **必须写合规的外骨骼注释** —— 架构维基从注释现算，注释不合规 ⇒ 维基缺节点缺边 ⇒\n   下一个席位的知识基底是残的。你的机械判据含 `archwiki --check --strict-t3`，会红给你看。\n6. **一次只修一个缺陷。** ⛔ 顺手改相邻代码 / 顺手重构 / 顺手改格式，全部禁止。\n   每一行改动都要能追溯到本格需求。\n\n## 🔴 判据纪律（三铁律）\n- 判据要断言「世界变了」；**写完先验红**（改之前跑，必须红），再改，再验绿。\n- **先验红的原始输出必须贴进 `说明.md`**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」时**必须先制造出让它出现的条件**，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**（revert/cherry-pick 会让「commit 在不在」说谎）。\n\n## 说明.md 必须包含\n分支名 / commit sha / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 每条判据的验绿原始输出 / 查不清的地方明写「查不清」。\n",
@@ -638,23 +622,7 @@
     "required": [
      "A-ii-doc"
     ]
-   },
-   "attempts": [
-    {
-     "attempt_id": "att-t.idea-input-seq13-t1787244693396",
-     "delivery_id": "del-t.idea-input-seq13-t1787244693396",
-     "state": "failed_retryable",
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=A-ii-doc",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import io,sys;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md';s=io.open(p,encoding='utf-8').read();need=['本格未读取 Heeler 任何源码文件', 'F-087-1', 'F-087-2', 'F-087-3', '代价', '查不清'];miss=[x for x in need if x not in s];sys.stderr.write('missing=%r len=%d'%(miss,len(s)));sys.exit(1 if miss or len(s)<800 else 0)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md'"
-     ]
-    }
-   ]
+   }
   },
   "t.idea-list": {
    "title": "## 知识基底（已内联）—— tools/basegen_ledger.py 从本格 write_paths 现算的模块影响闭包。\n**正向依赖 = 你消费的契约；反向依赖 = 你的回归自查范围。**\n⛔ 不看它就动手 = 凭空猜架构。原件：.team/nodes/idea-list/BASE.md\n\n# 知识基底 · ledger.pr1.v1 / t.idea-list（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.idea-list · 会话列表交互与 Provider 图标的方案（契约 088）⛔ 只出思路，一行代码都不许改\n\n## 要给出可直接施工的方案\n- **E10** 首列由星标改为 **Provider 图标**（收藏页首列同样）；**E11** 收藏改为**长按**弹出。\n- **E12 关闭**：三件事同时成立的**原子动作** —— 关 CLI 进程 ＋ 关它在 tmux 下的条目 ＋\n  若是收藏项则一并取消收藏。⛔ 不许出现半截状态。要二次确认。\n  **作用域（用户裁定 b）**：收藏页⛔ 不给「关闭」；**会话页长按已收藏项照给**。\n- **E13 新建 Agent**：工作区页右上角「+」，选 Provider ＋ 勾 Bypass ⇒ 新开 tmux pane 跑启动命令。\n- **E14**：设置里可改**每个 Provider 的完整启动命令**（用户自建 `claude-local` 走本地第三方模型）。\n- **E7** 列表展示不全且无下拉提示；**E8** 侧滑退出了会话而不是关列表。\n\n## Bypass 参数（leader 本机 `--help` 实测，⛔ 不要自己去猜或改）\nclaude → `--dangerously-skip-permissions` / codex → `--dangerously-bypass-approvals-and-sandbox` /\ncopilot → `--yolo` / cursor → `--force` / **grok → `--always-approve`** / pi → **无**。\n⚠️ Grok 必须**显式传** `--always-approve`：用户截图里的 always-approve 是他本地 config 已开，\n产品⛔ 不许依赖用户 config。\n\n## Provider 图标的硬指标（⛔ 不是形容词）\n1. 不透明底必须去掉（原生资产直接摆上会出现方块底，这是用户点名的问题）。\n2. 与界面互洽：统一光学尺寸、统一内边距、统一圆角容器；**深浅两主题各出一版对比图**。\n3. 观感（可爱、耐看、不突兀）走 user gate。\n4. **许可**：优先用各家官方发布的资产并归一化；**凡许可不允许再分发的，在同一视觉语言下自绘**。\n   🔴 **逐个 Provider 查清许可并写进文档**（资产地址 + 许可名 + 是否允许再分发）。查不清就明写「查不清」，\n   ⛔ 不许因为\"大家都这么用\"就当成可以。\n\n## 产物\n唯一产物：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md`，给到能直接派实现席位的粒度\n（改哪个文件、改什么、判据怎么写）。⛔ 写范围只有 `.team/nodes/pr1-idea-list/`。\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b pr/idea-list`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** 本仓本地没配 remote，远端是 `tools/mirror-push.sh` 过滤后推的镜像仓，\n   **PR 由 leader 代开**。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 `blocked` 并指出错在哪，不要自己改。\n5. **必须写合规的外骨骼注释** —— 架构维基从注释现算，注释不合规 ⇒ 维基缺节点缺边 ⇒\n   下一个席位的知识基底是残的。你的机械判据含 `archwiki --check --strict-t3`，会红给你看。\n6. **一次只修一个缺陷。** ⛔ 顺手改相邻代码 / 顺手重构 / 顺手改格式，全部禁止。\n   每一行改动都要能追溯到本格需求。\n\n## 🔴 判据纪律（三铁律）\n- 判据要断言「世界变了」；**写完先验红**（改之前跑，必须红），再改，再验绿。\n- **先验红的原始输出必须贴进 `说明.md`**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」时**必须先制造出让它出现的条件**，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**（revert/cherry-pick 会让「commit 在不在」说谎）。\n\n## 说明.md 必须包含\n分支名 / commit sha / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 每条判据的验绿原始输出 / 查不清的地方明写「查不清」。\n\n```\n\n- write_paths: .team/nodes/pr1-idea-list/\n- read_paths: /Volumes/nvme/Projects/远程Agent安卓/requirement-base/entries/088-会话列表与Agent生命周期.md\n- 判据: A-il-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n\n# t.idea-list · 会话列表交互与 Provider 图标的方案（契约 088）⛔ 只出思路，一行代码都不许改\n\n## 要给出可直接施工的方案\n- **E10** 首列由星标改为 **Provider 图标**（收藏页首列同样）；**E11** 收藏改为**长按**弹出。\n- **E12 关闭**：三件事同时成立的**原子动作** —— 关 CLI 进程 ＋ 关它在 tmux 下的条目 ＋\n  若是收藏项则一并取消收藏。⛔ 不许出现半截状态。要二次确认。\n  **作用域（用户裁定 b）**：收藏页⛔ 不给「关闭」；**会话页长按已收藏项照给**。\n- **E13 新建 Agent**：工作区页右上角「+」，选 Provider ＋ 勾 Bypass ⇒ 新开 tmux pane 跑启动命令。\n- **E14**：设置里可改**每个 Provider 的完整启动命令**（用户自建 `claude-local` 走本地第三方模型）。\n- **E7** 列表展示不全且无下拉提示；**E8** 侧滑退出了会话而不是关列表。\n\n## Bypass 参数（leader 本机 `--help` 实测，⛔ 不要自己去猜或改）\nclaude → `--dangerously-skip-permissions` / codex → `--dangerously-bypass-approvals-and-sandbox` /\ncopilot → `--yolo` / cursor → `--force` / **grok → `--always-approve`** / pi → **无**。\n⚠️ Grok 必须**显式传** `--always-approve`：用户截图里的 always-approve 是他本地 config 已开，\n产品⛔ 不许依赖用户 config。\n\n## Provider 图标的硬指标（⛔ 不是形容词）\n1. 不透明底必须去掉（原生资产直接摆上会出现方块底，这是用户点名的问题）。\n2. 与界面互洽：统一光学尺寸、统一内边距、统一圆角容器；**深浅两主题各出一版对比图**。\n3. 观感（可爱、耐看、不突兀）走 user gate。\n4. **许可**：优先用各家官方发布的资产并归一化；**凡许可不允许再分发的，在同一视觉语言下自绘**。\n   🔴 **逐个 Provider 查清许可并写进文档**（资产地址 + 许可名 + 是否允许再分发）。查不清就明写「查不清」，\n   ⛔ 不许因为\"大家都这么用\"就当成可以。\n\n## 产物\n唯一产物：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md`，给到能直接派实现席位的粒度\n（改哪个文件、改什么、判据怎么写）。⛔ 写范围只有 `.team/nodes/pr1-idea-list/`。\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b pr/idea-list`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** 本仓本地没配 remote，远端是 `tools/mirror-push.sh` 过滤后推的镜像仓，\n   **PR 由 leader 代开**。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 `blocked` 并指出错在哪，不要自己改。\n5. **必须写合规的外骨骼注释** —— 架构维基从注释现算，注释不合规 ⇒ 维基缺节点缺边 ⇒\n   下一个席位的知识基底是残的。你的机械判据含 `archwiki --check --strict-t3`，会红给你看。\n6. **一次只修一个缺陷。** ⛔ 顺手改相邻代码 / 顺手重构 / 顺手改格式，全部禁止。\n   每一行改动都要能追溯到本格需求。\n\n## 🔴 判据纪律（三铁律）\n- 判据要断言「世界变了」；**写完先验红**（改之前跑，必须红），再改，再验绿。\n- **先验红的原始输出必须贴进 `说明.md`**，⛔ 没有先验红的绿不算数。\n- 断言「某物不应出现」时**必须先制造出让它出现的条件**，否则是恒真判据。\n- 判据**查代码内容，⛔ 不查 commit 身份**（revert/cherry-pick 会让「commit 在不在」说谎）。\n\n## 说明.md 必须包含\n分支名 / commit sha / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /\n**每条判据的先验红原始输出** / 每条判据的验绿原始输出 / 查不清的地方明写「查不清」。\n",
@@ -710,23 +678,7 @@
     "required": [
      "A-il-doc"
     ]
-   },
-   "attempts": [
-    {
-     "attempt_id": "att-t.idea-list-seq14-t1787244693769",
-     "delivery_id": "del-t.idea-list-seq14-t1787244693769",
-     "state": "failed_retryable",
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=A-il-doc",
-      "acceptance_failure.argv=[\"python3\", \"-c\", \"import io,sys;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md';s=io.open(p,encoding='utf-8').read();need=['--always-approve', '许可', '自绘', '二次确认', '查不清'];miss=[x for x in need if x not in s];sys.stderr.write('missing=%r len=%d'%(miss,len(s)));sys.exit(1 if miss or len(s)<800 else 0)\"]",
-      "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)=Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md'"
-     ]
-    }
-   ]
+   }
   },
   "t.e6.rv": {
    "title": "# t.e6.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审对象：**分支 `pr/e6-upload-success`**，需求＝「已附加图片」成功态不组节点（089 §3）。\n⛔ **在这条分支上审，不要在 main 上审** —— main 上的已经晚了。\n\n## 你要做四件事\n1. `git log main..pr/e6-upload-success --stat` 看改了什么；`git diff main...pr/e6-upload-success` 逐处看。\n2. 读 `.team/nodes/pr1-e6/说明.md`，核对它写的和 diff 里真做的是不是一回事。\n3. **🔴 查「先验红」**：说明里必须有**改之前跑判据的原始输出且是红的**。\n   **没有先验红的原始输出 ⇒ 直接 refutes**，不管结论看起来多对 ——\n   没有先验红，就无法区分「判据真的抓住了问题」和「判据恒真」。\n4. **🔴 查判据是不是恒真**：断言「某物不应出现」的判据，必须先制造出让它出现的条件。\n   做不到 ⇒ refutes。\n\n## ⛔ 三条否决线（命中任一 ⇒ refutes）\n- 改动**超出本格范围**（顺手改了相邻代码 / 顺手重构 / 顺手改格式）。\n- **判据被改动过**以让它变绿。\n- 说明写得漂亮但 **diff 里没有对应的实现**。\n\n## 产物（格式是判据，⛔ 不许换写法）\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-e6-rv/verdict.md`，**第一行必须是**下面三者之一，顶格、无前缀：\n```\nVERDICT: supports\nVERDICT: refutes\nVERDICT: inconclusive\n```\n其后写理由，**逐条指到文件与行号**。理由少于 300 字视为没审。\n⛔ 你不许改任何产品代码，⛔ 不许并线。\n",
@@ -741,7 +693,7 @@
     "source": ".team/nodes/pr1-e6-rv/"
    },
    "resources": {
-    "worktree_id": "pr1.e6.rv",
+    "worktree_id": "pr1.rv",
     "write_paths": [
      ".team/nodes/pr1-e6-rv/"
     ],
@@ -810,7 +762,7 @@
     "source": ".team/nodes/pr1-d1-rv/"
    },
    "resources": {
-    "worktree_id": "pr1.d1.rv",
+    "worktree_id": "pr1.rv",
     "write_paths": [
      ".team/nodes/pr1-d1-rv/"
     ],
@@ -879,7 +831,7 @@
     "source": ".team/nodes/pr1-meter-rv/"
    },
    "resources": {
-    "worktree_id": "pr1.meter.rv",
+    "worktree_id": "pr1.rv",
     "write_paths": [
      ".team/nodes/pr1-meter-rv/"
     ],
@@ -948,7 +900,7 @@
     "source": ".team/nodes/pr1-recon-rv/"
    },
    "resources": {
-    "worktree_id": "pr1.recon.rv",
+    "worktree_id": "pr1.rv",
     "write_paths": [
      ".team/nodes/pr1-recon-rv/"
     ],
@@ -1113,7 +1065,7 @@
     "source": ".team/nodes/pr1-geom-rv/"
    },
    "resources": {
-    "worktree_id": "pr1.geom.rv",
+    "worktree_id": "pr1.rv",
     "write_paths": [
      ".team/nodes/pr1-geom-rv/"
     ],
@@ -1253,5 +1205,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 9
+ "revision": 11
 }
