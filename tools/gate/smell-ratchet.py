@@ -19,7 +19,7 @@
 退出码：0=没有新增（可以少于基线）；1=有新增；2=用法/工具链错误。
 """
 from __future__ import annotations
-import argparse, json, os, subprocess, sys, tempfile
+import argparse, json, os, re, subprocess, sys, tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -49,6 +49,21 @@ def collect(root: Path, face: str) -> list[str]:
         for t in tests[:20]: print("   x", t, file=sys.stderr)
     return sorted(smells)
 
+
+def key_of(item: str) -> str:
+    """把 `lint:Rule:path/to/File.kt:123` 归一成 `lint:Rule:path/to/File.kt`。
+
+    🔴 2026-08-21 实撞：原来整串（含行号）当键，于是**上面加一行 import 就会让
+    所有存量 finding 变成「新增」**，判据逼着席位去 @Suppress 压制真实告警 ——
+    一个制造伪阳性的判据比没有判据更糟。⇒ 键里不含行号。
+    """
+    return re.sub(r":\d+$", "", item.strip())
+
+
+def counted(items):
+    from collections import Counter
+    return Counter(key_of(x) for x in items)
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--face", required=True, choices=["app", "server"])
@@ -69,11 +84,13 @@ def main() -> int:
     base = base_all.get(a.face)
     if base is None:
         print(f"{a.face} 没有冻结基线，先跑 --freeze", file=sys.stderr); return 2
-    bset, cset = set(base), set(cur)
-    added, gone = sorted(cset - bset), sorted(bset - cset)
-    print(f"face={a.face} 基线={len(bset)} 本次={len(cset)} 新增={len(added)} 消掉={len(gone)}")
-    for x in gone:  print("  ✅ 消掉:", x)
-    for x in added: print("  ❌ 新增:", x)
+    bc, cc = counted(base), counted(cur)
+    added = sorted(k for k in cc if cc[k] > bc.get(k, 0))
+    gone  = sorted(k for k in bc if cc.get(k, 0) < bc[k])
+    print(f"face={a.face} 基线={sum(bc.values())} 本次={sum(cc.values())} "
+          f"新增={len(added)} 消掉={len(gone)}（键不含行号）")
+    for x in gone:  print(f"  ✅ 消掉: {x} ({bc[x]}→{cc.get(x,0)})")
+    for x in added: print(f"  ❌ 新增: {x} ({bc.get(x,0)}→{cc[x]})")
     if added:
         print("红：本次引入了新的代码坏味道。⛔ 不许改判据、⛔ 不许 --freeze 洗掉，请修掉新增的那几条。", file=sys.stderr)
         return 1

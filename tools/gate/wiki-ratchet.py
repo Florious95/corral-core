@@ -23,6 +23,16 @@ HERE = Path(__file__).resolve().parent
 BASELINE = HERE / "wiki-baseline.json"
 VIOL = re.compile(r"^\s*\[(T\d-\d)\]\s+(\S+)\s+(\S+)\s+")
 
+
+def key_of(item: str) -> str:
+    """去掉行号（同 smell-ratchet 的理由：行号漂移会把存量误判成新增）。"""
+    return re.sub(r":\d+$", "", item.strip())
+
+
+def counted(items):
+    from collections import Counter
+    return Counter(key_of(x) for x in items)
+
 def run(root: Path, pkg: str):
     r = subprocess.run([sys.executable, str(root / "tools/archwiki/build_wiki.py"),
                         "--root", str(root), "--check", "--strict-t3", "--pkg", pkg],
@@ -54,10 +64,13 @@ def main() -> int:
         base = base_all.get(pkg)
         if base is None:
             print(f"{pkg} 没有冻结基线，先跑 --freeze", file=sys.stderr); return 2
-        added = sorted(set(viols) - set(base)); gone = sorted(set(base) - set(viols))
-        print(f"pkg={pkg} 基线={len(base)} 本次={len(viols)} 新增={len(added)} 消掉={len(gone)}")
-        for x in gone:  print("  ✅ 消掉:", x)
-        for x in added: print("  ❌ 新增:", x)
+        bc, cc = counted(base), counted(viols)
+        added = sorted(k for k in cc if cc[k] > bc.get(k, 0))
+        gone  = sorted(k for k in bc if cc.get(k, 0) < bc[k])
+        print(f"pkg={pkg} 基线={sum(bc.values())} 本次={sum(cc.values())} "
+              f"新增={len(added)} 消掉={len(gone)}（键不含行号）")
+        for x in gone:  print(f"  ✅ 消掉: {x} ({bc[x]}→{cc.get(x,0)})")
+        for x in added: print(f"  ❌ 新增: {x} ({bc.get(x,0)}→{cc[x]})")
         if added: rc = 1
     if a.freeze:
         BASELINE.write_text(json.dumps(base_all, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
