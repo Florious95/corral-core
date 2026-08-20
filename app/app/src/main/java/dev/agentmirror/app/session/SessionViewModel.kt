@@ -17,8 +17,10 @@
 package dev.agentmirror.app.session
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.BinaryKind
@@ -71,6 +73,9 @@ internal fun ScreenSnapshot.plainText(): String =
  * - 滚动到顶：[syncFromPresenter] 收敛 presenter 视口信号 → 按页拉更老历史；
  * - 差分同步（084）：本地输入框完整编辑，每次变化经 [onPassthroughInput] 发最小按键
  *   （公共前缀后退格 + 后缀）；纯追加退格 0，键序与逐键直通一致。IME 组合期不上行。
+ *   控制键 Tab/Esc/↑/↓/Ctrl-C 的 input_ack 之后按仿真器光标回读校正 [syncedText]
+ *   （契约 087：本地缓冲 + 光标锚定，禁止写死行号）；回读完成前 [resyncPending]
+ *   挡住 DiffSync，完成后 `DiffSync.plan(新synced, 本地当前)` 一次补齐。
  *   [sendDraft] 发送只提交（裸 Enter）；input_ack 必达回执（003 第二条）；
  * - 附件：multipart HTTP 上传（协议 §8）→ 上传成功立刻贴进 CLI pane（需求 057 发图预贴）→
  *   路径累加进 [pendingAttachmentPaths]，[sendDraft] 提交时经 input 帧的独立
@@ -138,6 +143,17 @@ class SessionViewModel(
 
     /** 协议/解码错误等被动异常的可见提示（静默失效猎杀）。 */
     var transientError by mutableStateOf<String?>(null)
+
+    /**
+     * 光标锚定回读写回本地框（087）。[resyncDraftGen] 递增时会话屏把本值赋给输入框。
+     * 组合期不覆盖（composition != null → hold overlay）。
+     */
+    var resyncDraft by mutableStateOf<TextFieldValue?>(null)
+        private set
+
+    /** 回读写回代数；Compose 用它触发 overlay，避免同文案不重组。 */
+    var resyncDraftGen by mutableIntStateOf(0)
+        private set
 
     /** 是否滚到历史顶（本地滚动边界：可补页）。 */
     var atHistoryTop by mutableStateOf(false)
@@ -266,6 +282,8 @@ class SessionViewModel(
                     )
                 }
                 emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                snapshotGen++
+                maybeCompleteResync()
                 // 006 秒开：打开即预取最近一页历史，滚动边界再按需补页。
                 if (!hasPrefetchedHistory) {
                     hasPrefetchedHistory = true
@@ -273,7 +291,11 @@ class SessionViewModel(
                 }
             }
             // 增量字节流：常规推进。
-            BinaryKind.DELTA -> emulator.feed(frame.data)
+            BinaryKind.DELTA -> {
+                emulator.feed(frame.data)
+                snapshotGen++
+                maybeCompleteResync()
+            }
             // 历史分页：按服务端收敛后的实际区间头插（经验基）。
             BinaryKind.SCROLLBACK -> {
                 emulator.prependHistory(frame.data)
@@ -294,11 +316,15 @@ class SessionViewModel(
     override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) {
         // 发送态阻塞并发发送（UI 置灰），且 conn 层对每次投递只回执一次 ⇒ 在途回执即本页的。
         if (inputStatus !is InputStatus.Sending) return
+        val key = inFlightKey
+        inFlightKey = null
         if (ok) {
             // 003 发送必达：回执可见。直通模型下草稿在 CLI，本地无草稿可清；
             // 提交已发出，附件清单清空（避免跟着下一条重复发送）。
             inputStatus = InputStatus.Sent
             pendingAttachmentPaths = emptyList()
+            val trigger = resyncTriggerName(key)
+            if (trigger != null) beginResync(trigger)
         } else {
             // 失败明确报错（CLI 草稿仍在，可直接重发）。
             inputStatus = InputStatus.Failed(mapInputReason(reason))
@@ -313,6 +339,7 @@ class SessionViewModel(
 
     /** 时钟泵：重连调度 + 输入超时裁决（超时 = 明确失败）。 */
     fun onTick(nowMs: Long) {
+        noteResyncClock(nowMs)
         manager.pump(nowMs)
         manager.resolveExpiredInputs(nowMs)
     }
@@ -347,8 +374,11 @@ class SessionViewModel(
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
         if (manager.sendInput(ref, "", attachmentPath)) {
             inputStatus = InputStatus.Sending
+            inFlightKey = null
+            cancelResync()
             // Enter 提交后 CLI 行空；本地框跟着清。不同步会把下一轮当成「删掉上一条」。
             syncedText = ""
+            lastLocalText = ""
         } else {
             inputStatus = InputStatus.Failed("发送失败：连接不可用")
         }
@@ -374,6 +404,7 @@ class SessionViewModel(
         }
         if (manager.sendInputKeys(ref, key)) {
             inputStatus = InputStatus.Sending
+            inFlightKey = key
         } else {
             inputStatus = InputStatus.Failed("发送失败：连接不可用")
         }
@@ -395,6 +426,8 @@ class SessionViewModel(
         val wasComposing = oldValue.composition != null
         val isComposing = newValue.composition != null
         val composition = newValue.composition
+        lastLocalText = newValue.text
+        composingHeld = isComposing
         if (isComposing) {
             if (!wasComposing) {
                 DiagLog.record(
@@ -404,6 +437,17 @@ class SessionViewModel(
                         "→ hold keys=0",
                 )
             }
+            return
+        }
+        if (resyncPending) {
+            // 回读完成前只更新本地框、不发键（思路 §2.1）。
+            if (newValue.text != localAtResyncStart) userEditedDuringResync = true
+            return
+        }
+        val held = heldRemote
+        if (held != null) {
+            heldRemote = null
+            finishResyncWithRemote(held)
             return
         }
         applyDiffSync(newValue.text)
@@ -445,6 +489,33 @@ class SessionViewModel(
     /** 已同步到 CLI 行尾的文本（084）；组合期不推进。 */
     private var syncedText: String = ""
 
+    /** 输入框当前文本（含组合期）；回读补齐时对照。 */
+    private var lastLocalText: String = ""
+
+    /** 是否处于 IME 组合期（回读不得覆盖）。 */
+    private var composingHeld: Boolean = false
+
+    /**
+     * Tab/Esc/↑/↓/Ctrl-C 的 ack 后等待下一帧快照回读。
+     * 为 true 时 [onPassthroughInput] 不调用 [applyDiffSync]。
+     */
+    internal var resyncPending: Boolean = false
+        private set
+
+    /** 本轮回读触发源，日志字段 `trigger=` 原样写出。 */
+    private var resyncTrigger: String? = null
+
+    /** 在途 keys 帧对应的键；sendDraft 为 null。 */
+    private var inFlightKey: InputKey? = null
+
+    private var snapshotGen: Long = 0
+    private var lastTickMs: Long = 0
+    private var resyncStartedAtMs: Long = 0
+    private var resyncDeadlineMs: Long = 0
+    private var localAtResyncStart: String = ""
+    private var userEditedDuringResync: Boolean = false
+    private var heldRemote: String? = null
+
     /**
      * 上传附件（协议 §8 multipart）→ 主机绝对路径**立刻**经 [ConnectionManager.sendAttachPreview]
      * 贴进 CLI pane（需求 057：上传成功那一刻贴，不等发送，让解码在用户打字期间跑完），
@@ -481,6 +552,7 @@ class SessionViewModel(
 
     /** 视口信号收敛（会话屏时钟泵周期调用 / 测试显式调用）：滚动到顶即补页。 */
     fun syncFromPresenter() {
+        noteResyncClock(System.currentTimeMillis())
         val locked = presenter.showBackToBottom
         showBackToBottom = locked
         atHistoryTop = locked && presenter.window.first == 0
@@ -576,6 +648,161 @@ class SessionViewModel(
 
         /** ScrollWheelFrame 发送节流窗口（ms）：GestureDetector 约每 16ms 触发，节流到 ~20fps。 */
         const val SCROLL_THROTTLE_MS = 50L
+
+        /** 回读等下一帧快照的上限（思路 §2.2；与 084 §6 的 50ms 合并窗不是一回事）。 */
+        const val RESYNC_TIMEOUT_MS = 400L
+    }
+
+    private fun resyncTriggerName(key: InputKey?): String? = when (key) {
+        InputKey.TAB -> "Tab"
+        InputKey.ESC -> "Esc"
+        InputKey.UP -> "Up"
+        InputKey.DOWN -> "Down"
+        InputKey.CTRL_C -> "Ctrl-C"
+        else -> null
+    }
+
+    private fun beginResync(trigger: String) {
+        resyncPending = true
+        resyncTrigger = trigger
+        localAtResyncStart = lastLocalText
+        userEditedDuringResync = false
+        heldRemote = null
+        resyncStartedAtMs = lastTickMs
+        resyncDeadlineMs = if (lastTickMs == 0L) 0L else lastTickMs + RESYNC_TIMEOUT_MS
+        DiagLog.record(
+            "input-resync",
+            "begin trigger=$trigger pending=true synced_len=${syncedText.length} " +
+                "local_len=${lastLocalText.length} snapshot_gen=$snapshotGen " +
+                "deadline_ms=$resyncDeadlineMs last_tick_ms=$lastTickMs",
+        )
+    }
+
+    private fun cancelResync() {
+        resyncPending = false
+        resyncTrigger = null
+        resyncDeadlineMs = 0L
+        userEditedDuringResync = false
+        heldRemote = null
+    }
+
+    private fun noteResyncClock(nowMs: Long) {
+        lastTickMs = nowMs
+        if (!resyncPending) return
+        if (resyncDeadlineMs == 0L) {
+            resyncStartedAtMs = nowMs
+            resyncDeadlineMs = nowMs + RESYNC_TIMEOUT_MS
+            return
+        }
+        if (nowMs >= resyncDeadlineMs) failResyncVisible("timeout")
+    }
+
+    private fun maybeCompleteResync() {
+        if (!resyncPending) return
+        val trigger = resyncTrigger ?: "Tab"
+        val snap = emulator.snapshot()
+        val extracted = InputLineExtract.extractByCursor(snap)
+        val waitMs = (lastTickMs - resyncStartedAtMs).coerceAtLeast(0)
+        when (extracted) {
+            is InputLineExtract.Result.Fail -> {
+                DiagLog.record(
+                    "input-resync",
+                    "src=$trigger cursorY=${snap.cursorY} cursorX=${snap.cursorX} " +
+                        "alt=${if (snap.altScreen) 1 else 0} remote_len=-1 " +
+                        "synced_len=${syncedText.length} equal=false pending=true " +
+                        "reason=${extracted.reason} snapshot_gen=$snapshotGen " +
+                        "resync_wait_ms=$waitMs trigger=$trigger → extract-fail",
+                )
+                // 这一帧抽不到：继续等后续快照，直到 400ms 超时才可见失败。
+            }
+            is InputLineExtract.Result.Ok -> {
+                DiagLog.record(
+                    "input-resync",
+                    "src=$trigger viewport_rows=${snap.rows} " +
+                        "extract_rows=${extracted.startRow}..${extracted.endRow} " +
+                        "boundary=${extracted.boundary} snapshot_gen=$snapshotGen " +
+                        "resync_wait_ms=$waitMs trigger=$trigger → ok",
+                )
+                finishResyncWithRemote(extracted.text)
+            }
+        }
+    }
+
+    private fun finishResyncWithRemote(remote: String) {
+        val trigger = resyncTrigger ?: "Tab"
+        val waitMs = (lastTickMs - resyncStartedAtMs).coerceAtLeast(0)
+        val snap = emulator.snapshot()
+        val equal = remote == syncedText
+        DiagLog.record(
+            "input-resync",
+            "src=$trigger cursorY=${snap.cursorY} cursorX=${snap.cursorX} " +
+                "alt=${if (snap.altScreen) 1 else 0} remote_len=${remote.length} " +
+                "synced_len=${syncedText.length} equal=$equal pending=$resyncPending " +
+                "snapshot_gen=$snapshotGen resync_wait_ms=$waitMs trigger=$trigger",
+        )
+        if (composingHeld) {
+            DiagLog.record(
+                "input-resync",
+                "composing=true trigger=$trigger → hold overlay " +
+                    "remote_len=${remote.length} synced_len=${syncedText.length} " +
+                    "snapshot_gen=$snapshotGen resync_wait_ms=$waitMs",
+            )
+            heldRemote = remote
+            userEditedDuringResync = false
+            resyncPending = false
+            resyncDeadlineMs = 0L
+            return
+        }
+        resyncPending = false
+        resyncDeadlineMs = 0L
+        val localNow = lastLocalText
+        val edited = userEditedDuringResync
+        userEditedDuringResync = false
+        syncedText = remote
+        applyResyncOverlay(remote)
+        if (edited && localNow != remote) {
+            val plan = DiffSync.plan(syncedText, localNow)
+            DiagLog.record(
+                "diffsync",
+                "prefix=${DiffSync.commonPrefixLength(syncedText, localNow)} " +
+                    "synced_len=${syncedText.length} current_len=${localNow.length} " +
+                    "backspaces=${plan.backspaces} typed_len=${plan.typed.length} " +
+                    "key_count=${plan.keyCount} → send",
+            )
+            applyDiffSync(localNow)
+            applyResyncOverlay(localNow)
+        }
+    }
+
+    private fun applyResyncOverlay(text: String) {
+        lastLocalText = text
+        resyncDraft = TextFieldValue(text, TextRange(text.length))
+        resyncDraftGen++
+        DiagLog.record(
+            "input-resync",
+            "overlay len=${text.length} gen=$resyncDraftGen " +
+                "cursorY=${emulator.snapshot().cursorY} → overwrite",
+        )
+    }
+
+    private fun failResyncVisible(reason: String) {
+        if (!resyncPending) return
+        val trigger = resyncTrigger ?: "Tab"
+        val waitMs = (lastTickMs - resyncStartedAtMs).coerceAtLeast(0)
+        val snap = emulator.snapshot()
+        DiagLog.record(
+            "input-resync",
+            "src=$trigger cursorY=${snap.cursorY} cursorX=${snap.cursorX} " +
+                "alt=${if (snap.altScreen) 1 else 0} remote_len=-1 " +
+                "synced_len=${syncedText.length} equal=false pending=true " +
+                "reason=$reason snapshot_gen=$snapshotGen resync_wait_ms=$waitMs " +
+                "trigger=$trigger → fail-visible",
+        )
+        transientError = "远端输入行无法读取"
+        resyncPending = false
+        resyncDeadlineMs = 0L
+        resyncTrigger = null
+        // 失败禁止用空串覆盖 syncedText。
     }
 }
 

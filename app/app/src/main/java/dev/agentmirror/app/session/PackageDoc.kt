@@ -22,7 +22,8 @@ package dev.agentmirror.app.session
  * 组合终端渲染（termview）与输入下发（conn），承载缩放、手势与快捷输入条；
  * 图片附件走 multipart HTTP 上传（上传基地址由 service 装配的 ServiceWire 统一注入），
  * 跨层共享连接经 service 的 ServiceWire.uiConnector 扇出订阅。会话页已完整落位：
- * 镜像流（snapshot/delta/scrollback 本地滚动补页）、发送必达回执、附件路径注入光标处。
+ * 镜像流（snapshot/delta/scrollback 本地滚动补页）、发送必达回执、附件路径注入光标处；
+ * 控制键 ack 后按仿真器光标回读校正已同步文本（契约 087，禁止写死行号）。
  *
  * @consumes dev.agentmirror.app.conn
  * @consumes dev.agentmirror.app.service
