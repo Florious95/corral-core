@@ -1,31 +1,57 @@
-# 知识基底 · ledger.v72.v1 / t.icons（tools/basegen_ledger.py 编译产物，手工编辑无效）
+# 知识基底 · ledger.pr2.v1 / t.icons（tools/basegen_ledger.py 编译产物，手工编辑无效）
 
 ## 1. 任务信封（账本原文，机械抽取）
 ```
-修列表行的三个 UI 缺陷。契约 requirement-base/entries/072-查看改二级菜单与图标修正.md **§2/§3/§4**。手测照 .claude/skills/emulator-manual-test/SKILL.md。
-① **「进行中」徽章错位**：`进行中` 与 `空闲` 高低不一（用户截图 developer-d72 vs d75）。要求同一列表内 `进行中`/`空闲`/星星**垂直中心线一致**、徽章右边缘对齐。
-② **点收藏出现灰色正方形框**：Material 默认 bounded ripple 落在方形边界上。点击反馈必须是**圆形或无界**，⛔ 不得出现方形色块。
-③ **星星移到每行最前面**（会话名之前）——**推翻 067 §2 的「状态标左边」**。用户理由：星星和状态挤在右侧时对齐问题互相放大、点击热区互相干扰。
-🔴 ⛔ **不得改坏收藏闭环**（点星→实心→收藏栏出现→点它直接进会话，已验通）。
-配套测试名须含 `RowLayout`。模拟器截图自证 ≥3 张（星星在行首/两种徽章对齐/点击无方框），存 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/ui-fix/。
-✅ 模拟器已解禁。AVD `agentmirror_geo_1260x2800` 在跑，adb=~/Library/Android/sdk/platform-tools/adb，`adb reverse tcp:9900 tcp:9900` 已建。角色文件里「禁止启动模拟器」那句已作废。
-🔴 截图必须是**不同现场**（判据会核 md5 互不相同；上一轮有人交三张相同的图充数）。
-🔴 worktree_id 只是并发互斥标签。**必须在仓根干活**。⛔ 不要 git worktree add。
-🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。
-⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。
-🔴 **先完整读知识基底 .team/nodes/icons/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。
+# t.icons · E10/E11/E15 · 首列 Provider 图标 + 长按菜单（收藏页无「关闭」）（契约 088）
+
+方案 §4
+
+🔴 **施工方案已定，⛔ 你不要自己另选**：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md` 里对应小节写清了「改什么/外骨骼/判据」，**照它做**。
+有异议报 `blocked` 说明，不要静默改方案。
+
+---
+## 🔴 流程（PR 链）
+开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。
+1. 建分支 `git checkout -b pr/icons-longpress`，只改自己 worktree 里的文件。
+2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— **封版由 leader 自动做**（判据 `A-icons-seal`
+   在你报完后把改动提交到 `pr/icons-longpress` 并断言分支非空）。⚠️ **报完别再改那棵 worktree**，改了就漂了。
+3. ⛔ 不许写 `/tmp` 或任何项目外路径；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-icons/tmp/`（自己 mkdir -p）。
+4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked` 并指出错在哪。
+5. **一次只改一个缺陷**，⛔ 顺手改相邻代码/重构/改格式一律禁止。
+
+## 🔴 判据纪律
+- 判据要断言「世界变了」；**先验红**（改之前跑，必须红）→ 改 → 验绿。
+  **先验红的原始输出必须贴进说明.md**，⛔ 没有先验红的绿不算数。
+- 断言「某物不应出现」必须先造出让它出现的条件，否则是恒真判据。
+- 判据**查代码内容，⛔ 不查 commit 身份**。
+
+## 🔴 两条常态判据：不许新增（⛔ 不是必须为 0）
+main 上已有存量（app lint 16 条、archwiki T3 若干）。**不是你造成的，⛔ 不要去修** —— 修了 diff 就超范围。
+两条判据都会**逐条点名新增了哪几条**（含文件行号）。⛔ 不许 `--freeze` 洗基线。T1 判据仍必须全绿。
+
+## 说明.md 必须含
+分支名 / `pwd` 与 `git branch --show-current` 的输出 / 改了哪些文件 /
+**每条判据的先验红原始输出** / 验绿原始输出 / 查不清的明写「查不清」。
+
 ```
 
-- write_paths: app/, .team/nodes/ui-fix/
-- read_paths: requirement-base/entries/072-查看改二级菜单与图标修正.md, .claude/skills/emulator-manual-test/SKILL.md, app/app/src/, .team/nodes/icons/BASE.md
-- 判据: A-ui-test, A-ui-shots, A-ui-doc, A-ui-suite
+- write_paths: app/app/src/main/java/dev/agentmirror/app/workspace/, .team/nodes/pr2-icons/
+- read_paths: requirement-base/entries/088-会话列表与Agent生命周期.md, .team/nodes/pr1-idea-list/方案.md, .team/nodes/pr2-icons/说明.md
+- 判据: A-icons-suite, A-icons-wiki, A-icons-smell, A-icons-doc, A-icons-seal
 
 ## 2. 架构基（wiki 现算影响闭包）
-- 写作用域包：dev.agentmirror.app
-- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace
-- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service
+- 写作用域包：dev.agentmirror.app.workspace
+- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_conn, kt_dev_agentmirror_app_tsnet, kt_dev_agentmirror_app_ui_theme
+- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app
 
 ### 闭包架构卡内联
+
+### Kotlin · dev.agentmirror.app.workspace
+
+- **职责**：工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」、002「两级分组」。
+- **导出面**：ConnectionUi, SessionUi, StateBadge, StateBadgeStyle, WorkspaceScreen, WorkspaceUi, WorkspaceUiState, WorkspaceViewModel
+- **依赖边**：dev.agentmirror.app.conn, dev.agentmirror.app.tsnet, dev.agentmirror.app.ui.theme
+- **doc 全文**：工作区：两级导航（舰队 → 会话），对应需求 001「舰队视角」、002「两级分组」。 - [WorkspaceViewModel]：纯 JVM 视图模型，消费 conn 层 listing/list_delta 帧流 → UI 状态；聚合字段（session_count / aggregate_state）为服务端权威值，只渲染不重算（012）。 - [WorkspaceScreen] / [StateBadge]：薄 Compose 渲染层；状态徽章五值（008）。 二级导航经 [WorkspaceScreen] 的 onOpenSession 回调把 (ref, name) 交给根路由 [AgentMirrorApp]，由其挂载 [SessionRoute] 进入会话页。 @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet @consumes dev.agentmirror.app.ui.theme
 
 ### Kotlin · dev.agentmirror.app
 
@@ -34,15 +60,8 @@
 - **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace
 - **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace
 
-### Kotlin · dev.agentmirror.app.service
-
-- **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。
-- **导出面**：AppClockPump, MirrorForegroundService, NetworkConnectivityWatcher, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, OnScreenFallbackPump, ServiceWire, StateWatcher, TsnetBootstrap
-- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn, dev.agentmirror.app.tsnet
-- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet
-
 ## 3. 需求基
-- 标题引用条目：requirement-base/entries/072*
+- 标题引用条目：（无编号引用）
 - requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）
 
 ## 4. 纪律（本工程通用，违反即返工）

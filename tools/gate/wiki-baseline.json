@@ -36,5 +36,15 @@
  "dev.agentmirror.app.termview": [
   "T3-1 dev.agentmirror.app.termview app/app/src/main/java/dev/agentmirror/app/termview/ViewportGeomStore.kt:39",
   "T3-1 dev.agentmirror.app.termview app/app/src/main/java/dev/agentmirror/app/termview/ViewportGeomStore.kt:44"
- ]
+ ],
+ "dev.agentmirror.app": [
+  "T3-4 dev.agentmirror.app :0"
+ ],
+ "internal/api": [
+  "T3-3 internal/api server/internal/api/level2.go:207",
+  "T3-3 internal/api server/internal/api/level2.go:227",
+  "T3-4 internal/api :0"
+ ],
+ "internal/protocol": [],
+ "dev.agentmirror.app.diag": []
 }
