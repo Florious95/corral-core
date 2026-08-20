@@ -28,7 +28,11 @@ package dev.agentmirror.app.session
  * @consumes dev.agentmirror.app.service
  * @consumes dev.agentmirror.app.termview
  * @consumes dev.agentmirror.app.tsnet
+ * @consumes dev.agentmirror.app.ui.components
+ * @consumes dev.agentmirror.app.ui.model
+ * @consumes dev.agentmirror.app.ui.screens
  * @consumes dev.agentmirror.app.ui.theme
+ * @consumes dev.agentmirror.app.workspace
  * @consumes dev.agentmirror.terminal
  * @consumes dev.agentmirror.app.diag
  */
