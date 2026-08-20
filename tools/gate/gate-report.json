@@ -1,7 +1,7 @@
 {
   "schema": "agentmirror-gate-report-v1",
   "conclusion": "fail",
-  "generated_at": "2026-08-13T18:09:30+00:00",
+  "generated_at": "2026-08-20T17:39:46+00:00",
   "baseline_accept": {
     "applied": false,
     "reason": null
@@ -9,44 +9,109 @@
   "suites": [
     {
       "name": "server",
-      "ok": true,
+      "ok": false,
       "skipped": false,
-      "cases": 337,
-      "duration_ms": 16328,
-      "failures": [],
+      "cases": 353,
+      "duration_ms": 55788,
+      "failures": [
+        {
+          "test": "gofmt:internal/api/api_tmux_test.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "gofmt:internal/api/delta_merge_scenario_test.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "gofmt:internal/bridge/bridge.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "gofmt:internal/overlay/tmux.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/l2detect_footer.go:57",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:15",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:54",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:72",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:76",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:98",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:178",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:185",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:192",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:199",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:242",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:248",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay_test.go:70",
+          "category": "unclassified"
+        }
+      ],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": 315,
-        "current": 337,
-        "action": "up"
+        "baseline": 353,
+        "current": 353,
+        "action": "same"
       }
     },
     {
       "name": "app",
       "ok": false,
       "skipped": false,
-      "cases": 452,
-      "duration_ms": 67954,
+      "cases": 1357,
+      "duration_ms": 86777,
       "failures": [
-        {
-          "test": "unparseable junit xml: app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.BackGestureNavTest.xml",
-          "category": "unclassified"
-        },
-        {
-          "test": "unparseable junit xml: app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.service.ForegroundServiceEconomyTest.xml",
-          "category": "unclassified"
-        },
-        {
-          "test": "gradle test (exit 1)",
-          "category": "unclassified"
-        },
         {
           "test": "lint:OldTargetApi:app/app/build.gradle.kts:50",
           "category": "unclassified"
         },
         {
+          "test": "lint:GradleDependency:app/app/build.gradle.kts:95",
+          "category": "unclassified"
+        },
+        {
           "test": "lint:GradleDependency:app/app/build.gradle.kts:96",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:GradleDependency:app/app/build.gradle.kts:132",
           "category": "unclassified"
         },
         {
@@ -60,14 +125,50 @@
         {
           "test": "lint:NewerVersionAvailable:app/app/build.gradle.kts:122",
           "category": "unclassified"
+        },
+        {
+          "test": "lint:ContextCastToActivity:app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt:102",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:ModifierParameter:app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:95",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2ListRendersStatusTest.kt:71",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2NavigationIdentityTest.kt:105",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2UnknownStatusTest.kt:81",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:65",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:101",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:127",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:UseOfNonLambdaOffsetOverload:app/app/src/main/java/dev/agentmirror/app/ui/components/AppBottomNav.kt:105",
+          "category": "unclassified"
         }
       ],
       "skip_reason": null,
       "detail": null,
       "ratchet": {
-        "baseline": 771,
-        "current": 452,
-        "action": "down"
+        "baseline": 1335,
+        "current": 1357,
+        "action": "up"
       }
     },
     {
@@ -75,7 +176,7 @@
       "ok": true,
       "skipped": false,
       "cases": 1,
-      "duration_ms": 9791,
+      "duration_ms": 20988,
       "failures": [],
       "skip_reason": null,
       "detail": null,
@@ -86,8 +187,6 @@
       }
     }
   ],
-  "issues": [
-    "ratchet-down: app cases 771->452 (基线棘轮只增不减，显式接受需 --accept-baseline=<理由>)"
-  ],
-  "summary": "结论 fail：3 套件共 790 用例。红：本次非全绿，详见 suites/issues。"
+  "issues": [],
+  "summary": "结论 fail：3 套件共 1711 用例。红：本次非全绿，详见 suites/issues。"
 }
