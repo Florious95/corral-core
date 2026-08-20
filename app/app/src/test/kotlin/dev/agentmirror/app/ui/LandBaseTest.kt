@@ -120,7 +120,7 @@ class LandBaseTest {
                 StatusChip(SessionStatus.Unknown)
             }
         }
-        compose.onNodeWithText("进行中").assertExists()
+        compose.onNodeWithText("运行").assertExists()
         compose.onNodeWithText("空闲").assertExists()
         compose.onNodeWithText("未知").assertExists()
     }

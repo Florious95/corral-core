@@ -22,7 +22,7 @@ import dev.agentmirror.app.conn.Session
  * 二级状态标（061）。缺省 / 乱值 / 空串一律 [UNKNOWN]，禁止回落成 [IDLE]。
  */
 enum class L2Status(val wire: String, val label: String) {
-    WORKING("working", "进行中"),
+    WORKING("working", "运行"),
     IDLE("idle", "空闲"),
     UNKNOWN("unknown", "未知"),
     ;

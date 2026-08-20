@@ -54,7 +54,9 @@ internal fun L2SessionList(
     favorited: Set<FavoriteKey> = emptySet(),
     onToggleFavorite: (L2Entry) -> Unit = {},
 ) {
-    val items = sessions.map { it.toSessionItem(starred = favorited.contains(it.favoriteKey())) }
+    val items = sortSessions(
+        sessions.map { it.toSessionItem(starred = favorited.contains(it.favoriteKey())) },
+    )
     val byId = sessions.associateBy { it.ref }
     AppTheme {
         Column(

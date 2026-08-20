@@ -89,6 +89,7 @@ import dev.agentmirror.app.workspace.FavoriteKey
 import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.cwdDisplayName
 import dev.agentmirror.app.workspace.favoriteKey
+import dev.agentmirror.app.workspace.sortSessions
 import dev.agentmirror.app.workspace.toSessionItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -218,9 +219,11 @@ fun SessionScreen(
     AppTheme {
         val darkTheme = LocalAppPalette.current === DarkPalette
         val themeToken = TermPalette.token(darkTheme)
-        val overlayItems = overlaySessions.map {
-            it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
-        }
+        val overlayItems = sortSessions(
+            overlaySessions.map {
+                it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
+            },
+        )
         val workspaceName = overlaySessions.firstOrNull()?.cwd?.let(::cwdDisplayName).orEmpty()
         val status = overlaySessions.find { it.ref == viewModel.ref }
             ?.let { sessionStatusFromL2(it.status) }

@@ -187,7 +187,9 @@ fun WorkspaceScreen(
                         SessionListScreen(
                             workspaceName = cwdDisplayName(level2Cwd),
                             workspacePath = level2Cwd,
-                            sessions = level2.sessions.map { it.toSessionItem(starred.contains(it.favoriteKey())) },
+                            sessions = sortSessions(
+                                level2.sessions.map { it.toSessionItem(starred.contains(it.favoriteKey())) },
+                            ),
                             onBack = onBackToList,
                             onSessionClick = { item -> onOpenSession(item.id, item.displayName) },
                             onToggleStar = { item ->
