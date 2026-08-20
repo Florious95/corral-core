@@ -1,59 +1,79 @@
-2026-08-20T21:27:43.711 [lifecycle] ON_CREATE
-2026-08-20T21:27:43.811 [ws] conn state STOPPED → CONNECTING
-2026-08-20T21:27:43.844 [ws] conn state CONNECTING → AUTHENTICATING
-2026-08-20T21:27:43.852 [lifecycle] ON_START
-2026-08-20T21:27:43.867 [ws] conn state AUTHENTICATING → READY
-2026-08-20T21:27:44.176 [refresh] applyListing seq=32 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T21:27:44.177 [refresh] applyListing seq=32 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T21:27:44.440 [refresh] enterLevel1 list cached=1 first_frame=already refreshing_prev=false refreshing_next=false
-2026-08-20T21:27:44.452 [refresh] applyListing seq=32 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T21:27:47.809 [refresh] enterLevel2 subscribe cwd=/private/tmp/e2e-sent/cwd painted=0 cached=0
-2026-08-20T21:27:47.821 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=161 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:<none>->idle
-2026-08-20T21:27:47.826 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=1
-2026-08-20T21:27:47.839 [refresh] applyListing seq=32 workspaces=1 refreshing_prev=true refreshing_next=false
-2026-08-20T21:27:51.399 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:27:51.404 [term-geom] source=subscribe cache=hit reason=hit rows=42 cols=48 fontSp=14 densityDpi=480 cachedRows=42 cachedCols=48 cachedFontSp=14 cachedDpi=480 fallbackRows=40 fallbackCols=120
-2026-08-20T21:27:51.419 [term-theme] raw=vesper catalogHit=true slot=light
-2026-08-20T21:27:51.420 [term-theme] raw=vesper catalogHit=true slot=dark
-2026-08-20T21:27:51.446 [term-theme] raw=vesper catalogHit=true slot=light
-2026-08-20T21:27:51.447 [term-theme] raw=vesper catalogHit=true slot=dark
-2026-08-20T21:27:51.502 [term-bg-remap] source=theme-chrome night=false defaultBg=0xff101010 ansi0=0xff101010 userBlock=0xffe6f5f2 paperLuma=16 ansi0Luma=16 blockLuma=240 verdict=PAPER_EQ_ANSI0
-2026-08-20T21:27:51.511 [viewport] source=windowVisibility visibility=0 width=0 height=0
-2026-08-20T21:27:51.532 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:27:51.532 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
-2026-08-20T21:27:51.577 [viewport] source=onViewportSizeChanged oldW=0 oldH=0 newW=1200 newH=2099 viewportSeeded=false emulatorRows=42 emulatorCols=48
-2026-08-20T21:27:51.578 [grid] viewport_width_px=1200 cell_width_nominal=25 cell_width_measured=25 reported_cols=48 canvas_capacity_cols=48 overflow_px=0 half_cell_px=12.5
-2026-08-20T21:27:51.578 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=42 candidateCols=48 emulatorRows=42 emulatorCols=48
-2026-08-20T21:27:51.579 [term-geom] source=persist rows=42 cols=48 cellW=25 cellH=49 fontSp=14 viewW=1236 viewH=2099 densityDpi=480
-2026-08-20T21:27:51.592 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=25 viewW=1236 verdict=OK ×131
-2026-08-20T21:27:51.639 [term-draw] source=onDraw n=0 dt_us_avg=0 dt_us_p50=0 dt_us_p95=0 dt_us_last=47194 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=5 dt_body_us_avg=0 dt_body_us_p95=0 dt_body_us_last=47134 dt_clear_us_avg=0 dt_clear_us_p95=0 dt_clear_us_last=114 dt_lines_us_avg=0 dt_lines_us_p95=0 dt_lines_us_last=46885 dt_chrome_us_last=135 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=9 frameTimeNanos=0 t_firstOnDraw=1787232471638 t_firstOnDrawWithCells=1787232471638 t_emit=1787232471638
-2026-08-20T21:27:51.667 [session-lamp] src=level2-push ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 overlay_n=1 hit=true hit_status=idle hit_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 lamp=Idle eq_ref=true
-2026-08-20T21:27:51.834 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=162 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
-2026-08-20T21:27:51.845 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:27:51.850 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:27:51.851 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
-2026-08-20T21:27:51.860 [session-lamp] src=level2-push ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 overlay_n=1 hit=true hit_status=idle hit_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 lamp=Idle eq_ref=true
-2026-08-20T21:27:59.875 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:28:00.001 [term-draw] source=onDraw n=0 dt_us_avg=0 dt_us_p50=0 dt_us_p95=0 dt_us_last=10204 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=0 dt_body_us_avg=0 dt_body_us_p95=0 dt_body_us_last=10188 dt_clear_us_avg=0 dt_clear_us_p95=0 dt_clear_us_last=7 dt_lines_us_avg=0 dt_lines_us_p95=0 dt_lines_us_last=10147 dt_chrome_us_last=34 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=7 frameTimeNanos=5131563430388 t_firstOnDraw=1787232471638 t_firstOnDrawWithCells=1787232471638 t_emit=1787232480001
-2026-08-20T21:28:01.010 [term-draw] source=onDraw n=54 dt_us_avg=2896 dt_us_p50=2702 dt_us_p95=3304 dt_us_last=2553 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=0 dt_body_us_avg=2889 dt_body_us_p95=3297 dt_body_us_last=2546 dt_clear_us_avg=9 dt_clear_us_p95=14 dt_clear_us_last=9 dt_lines_us_avg=2867 dt_lines_us_p95=3269 dt_lines_us_last=2521 dt_chrome_us_last=16 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=0 frameTimeNanos=5132580097014 t_firstOnDraw=1787232471638 t_firstOnDrawWithCells=1787232471638 t_emit=1787232481010
-2026-08-20T21:28:02.026 [term-draw] source=onDraw n=115 dt_us_avg=2766 dt_us_p50=2633 dt_us_p95=3495 dt_us_last=2683 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=0 dt_body_us_avg=2759 dt_body_us_p95=3485 dt_body_us_last=2676 dt_clear_us_avg=9 dt_clear_us_p95=16 dt_clear_us_last=7 dt_lines_us_avg=2738 dt_lines_us_p95=3464 dt_lines_us_last=2660 dt_chrome_us_last=9 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=0 frameTimeNanos=5133596763640 t_firstOnDraw=1787232471638 t_firstOnDrawWithCells=1787232471638 t_emit=1787232482026
-2026-08-20T21:28:02.109 [term-draw] source=onDraw n=120 dt_us_avg=2753 dt_us_p50=2633 dt_us_p95=3495 dt_us_last=2234 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=0 dt_body_us_avg=2747 dt_body_us_p95=3485 dt_body_us_last=2229 dt_clear_us_avg=9 dt_clear_us_p95=16 dt_clear_us_last=6 dt_lines_us_avg=2725 dt_lines_us_p95=3464 dt_lines_us_last=2214 dt_chrome_us_last=9 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=0 frameTimeNanos=5133680096970 t_firstOnDraw=1787232471638 t_firstOnDrawWithCells=1787232471638 t_emit=1787232482109
-2026-08-20T21:28:07.908 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:28:15.941 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:28:18.314 [refresh] applyListing seq=32 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T21:28:18.325 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=166 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
-2026-08-20T21:28:18.350 [refresh] enterLevel2 subscribe cwd=/private/tmp/e2e-sent/cwd painted=1 cached=1
-2026-08-20T21:28:18.359 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=167 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
-2026-08-20T21:28:18.371 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=1
-2026-08-20T21:28:18.372 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:28:18.373 [term-theme] raw=vesper catalogHit=true slot=light
-2026-08-20T21:28:18.374 [term-theme] raw=vesper catalogHit=true slot=dark
-2026-08-20T21:28:18.384 [refresh] applyListing seq=33 workspaces=1 refreshing_prev=true refreshing_next=false
-2026-08-20T21:28:18.392 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
-2026-08-20T21:28:18.393 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
-2026-08-20T21:28:18.628 [viewport] source=windowVisibility visibility=8 width=1236 height=2099
-2026-08-20T21:28:20.366 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=168 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:idle->idle
-2026-08-20T21:28:21.168 [refresh] enterLevel1 list cached=1 first_frame=already refreshing_prev=false refreshing_next=false
-2026-08-20T21:28:21.178 [refresh] applyListing seq=34 workspaces=1 refreshing_prev=false refreshing_next=false
-2026-08-20T21:28:24.024 [term-theme] raw=vesper catalogHit=true slot=light
-2026-08-20T21:28:24.024 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:27.423 [lifecycle] ON_CREATE
+2026-08-20T21:53:27.535 [ws] conn state STOPPED → CONNECTING
+2026-08-20T21:53:27.561 [lifecycle] ON_START
+2026-08-20T21:53:27.565 [ws] conn state CONNECTING → AUTHENTICATING
+2026-08-20T21:53:27.587 [ws] conn state AUTHENTICATING → READY
+2026-08-20T21:53:27.928 [refresh] applyListing seq=14 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:53:27.929 [refresh] applyListing seq=14 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:53:28.262 [refresh] enterLevel1 list cached=1 first_frame=already refreshing_prev=false refreshing_next=false
+2026-08-20T21:53:28.279 [refresh] applyListing seq=14 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:53:31.640 [refresh] enterLevel2 subscribe cwd=/private/tmp/e2e-sent/cwd painted=0 cached=0
+2026-08-20T21:53:31.653 [level2] applyLevel2 src=level2-push workspace=/private/tmp/e2e-sent/cwd seq=160 subscribed=/private/tmp/e2e-sent/cwd incoming=1 publish=true statuses=tmux/tmux-501/default%0:<none>->idle
+2026-08-20T21:53:31.656 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=1
+2026-08-20T21:53:31.671 [refresh] applyListing seq=14 workspaces=1 refreshing_prev=true refreshing_next=false
+2026-08-20T21:53:34.295 [ws] failure ex=EOFException msg=null
+2026-08-20T21:53:34.296 [ws] close permanent=false reason=transport failure
+2026-08-20T21:53:34.296 [ws] conn state READY → RECONNECTING
+2026-08-20T21:53:35.246 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:53:35.251 [term-geom] source=subscribe cache=hit reason=hit rows=42 cols=48 fontSp=14 densityDpi=480 cachedRows=42 cachedCols=48 cachedFontSp=14 cachedDpi=480 fallbackRows=40 fallbackCols=120
+2026-08-20T21:53:35.270 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:35.270 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:35.295 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:35.295 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:35.370 [term-bg-remap] source=theme-chrome night=false defaultBg=0xff101010 ansi0=0xff101010 userBlock=0xffe6f5f2 paperLuma=16 ansi0Luma=16 blockLuma=240 verdict=PAPER_EQ_ANSI0
+2026-08-20T21:53:35.380 [viewport] source=windowVisibility visibility=0 width=0 height=0
+2026-08-20T21:53:35.415 [view-menu] viewMenuSource current_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 current_ws=/private/tmp/e2e-sent/cwd current_socket=/private/tmp/e2e-sent/tmux/tmux-501/default overlay_ws=/private/tmp/e2e-sent/cwd overlay_socket=/private/tmp/e2e-sent/tmux/tmux-501/default last_published_ws=/private/tmp/e2e-sent/cwd sessions=1 source_match=true singleton_mismatch=false
+2026-08-20T21:53:35.416 [session-live] enterSessionLive src=session-route ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 resolved_ws=/private/tmp/e2e-sent/cwd hint_ws=/private/tmp/e2e-sent/cwd use_ws=/private/tmp/e2e-sent/cwd subscribed=/private/tmp/e2e-sent/cwd already=true cache_sessions=1 will_subscribe=false
+2026-08-20T21:53:35.489 [viewport] source=onViewportSizeChanged oldW=0 oldH=0 newW=1200 newH=2099 viewportSeeded=false emulatorRows=42 emulatorCols=48
+2026-08-20T21:53:35.490 [grid] viewport_width_px=1200 cell_width_nominal=25 cell_width_measured=25 reported_cols=48 canvas_capacity_cols=48 overflow_px=0 half_cell_px=12.5
+2026-08-20T21:53:35.491 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=42 candidateCols=48 emulatorRows=42 emulatorCols=48
+2026-08-20T21:53:35.493 [term-geom] source=persist rows=42 cols=48 cellW=25 cellH=49 fontSp=14 viewW=1236 viewH=2099 densityDpi=480
+2026-08-20T21:53:35.509 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=25 viewW=1236 verdict=OK ×131
+2026-08-20T21:53:35.563 [term-draw] source=onDraw n=0 dt_us_avg=0 dt_us_p50=0 dt_us_p95=0 dt_us_last=54756 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=4 dt_body_us_avg=0 dt_body_us_p95=0 dt_body_us_last=54747 dt_clear_us_avg=0 dt_clear_us_p95=0 dt_clear_us_last=9 dt_lines_us_avg=0 dt_lines_us_p95=0 dt_lines_us_last=54585 dt_chrome_us_last=153 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=9 frameTimeNanos=0 t_firstOnDraw=1787234015563 t_firstOnDrawWithCells=1787234015563 t_emit=1787234015563
+2026-08-20T21:53:35.599 [session-lamp] src=level2-push ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 overlay_n=1 hit=true hit_status=idle hit_ref=/private/tmp/e2e-sent/tmux/tmux-501/default%0 lamp=Idle eq_ref=true
+2026-08-20T21:53:35.684 [ws] conn state RECONNECTING → CONNECTING
+2026-08-20T21:53:35.706 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:35.707 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:35.708 [ws] failure ex=IOException msg=unexpected end of stream on http://127.0.0.1:9900/...
+2026-08-20T21:53:35.708 [ws] close permanent=false reason=unexpected end of stream on http://127.0.0.1:9900/...
+2026-08-20T21:53:35.709 [ws] conn state CONNECTING → RECONNECTING
+2026-08-20T21:53:35.743 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:35.744 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:39.694 [ws] conn state RECONNECTING → CONNECTING
+2026-08-20T21:53:39.707 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:39.707 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:39.710 [ws] failure ex=IOException msg=unexpected end of stream on http://127.0.0.1:9900/...
+2026-08-20T21:53:39.710 [ws] close permanent=false reason=unexpected end of stream on http://127.0.0.1:9900/...
+2026-08-20T21:53:39.710 [ws] conn state CONNECTING → RECONNECTING
+2026-08-20T21:53:39.724 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:39.724 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:43.699 [ws] conn state RECONNECTING → CONNECTING
+2026-08-20T21:53:43.707 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:43.707 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:43.708 [ws] failure ex=IOException msg=unexpected end of stream on http://127.0.0.1:9900/...
+2026-08-20T21:53:43.708 [ws] close permanent=false reason=unexpected end of stream on http://127.0.0.1:9900/...
+2026-08-20T21:53:43.708 [ws] conn state CONNECTING → RECONNECTING
+2026-08-20T21:53:43.724 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:43.725 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:43.923 [term-draw] source=onDraw n=0 dt_us_avg=0 dt_us_p50=0 dt_us_p95=0 dt_us_last=14951 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=0 dt_body_us_avg=0 dt_body_us_p95=0 dt_body_us_last=14934 dt_clear_us_avg=0 dt_clear_us_p95=0 dt_clear_us_last=6 dt_lines_us_avg=0 dt_lines_us_p95=0 dt_lines_us_last=14918 dt_chrome_us_last=10 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=7 frameTimeNanos=6675480035298 t_firstOnDraw=1787234015563 t_firstOnDrawWithCells=1787234015563 t_emit=1787234023923
+2026-08-20T21:53:44.926 [term-draw] source=onDraw n=54 dt_us_avg=3270 dt_us_p50=3014 dt_us_p95=5014 dt_us_last=2566 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=0 dt_body_us_avg=3261 dt_body_us_p95=5007 dt_body_us_last=2559 dt_clear_us_avg=8 dt_clear_us_p95=12 dt_clear_us_last=7 dt_lines_us_avg=3241 dt_lines_us_p95=4988 dt_lines_us_last=2541 dt_chrome_us_last=11 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=0 frameTimeNanos=6676496701924 t_firstOnDraw=1787234015563 t_firstOnDrawWithCells=1787234015563 t_emit=1787234024926
+2026-08-20T21:53:45.926 [term-draw] source=onDraw n=114 dt_us_avg=3119 dt_us_p50=2932 dt_us_p95=4153 dt_us_last=2580 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=0 dt_body_us_avg=3108 dt_body_us_p95=4144 dt_body_us_last=2573 dt_clear_us_avg=11 dt_clear_us_p95=13 dt_clear_us_last=7 dt_lines_us_avg=3085 dt_lines_us_p95=4125 dt_lines_us_last=2558 dt_chrome_us_last=8 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=0 frameTimeNanos=6677496701884 t_firstOnDraw=1787234015563 t_firstOnDrawWithCells=1787234015563 t_emit=1787234025926
+2026-08-20T21:53:46.026 [term-draw] source=onDraw n=120 dt_us_avg=3143 dt_us_p50=2937 dt_us_p95=4491 dt_us_last=2996 dt_super_us_avg=0 dt_super_us_p95=0 dt_super_us_last=0 dt_body_us_avg=3132 dt_body_us_p95=4483 dt_body_us_last=2990 dt_clear_us_avg=11 dt_clear_us_p95=13 dt_clear_us_last=11 dt_lines_us_avg=3108 dt_lines_us_p95=4463 dt_lines_us_last=2967 dt_chrome_us_last=12 dt_lock_us=-1 dt_post_us=-1 surface=view rows=42 cols=48 cellW=25 cellH=49 bgRect=1 textDraw=42 measureText=0 geomRect=0 dirtyRowsIn=0 drawnRows=42 presenterNull=0 cellsNonBlank=2016 scrollDelta=0 opt=1 skippedEmpty=0 warmupLeft=0 frameTimeNanos=6677596701880 t_firstOnDraw=1787234015563 t_firstOnDrawWithCells=1787234015563 t_emit=1787234026026
+2026-08-20T21:53:51.705 [ws] conn state RECONNECTING → CONNECTING
+2026-08-20T21:53:51.710 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:51.710 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:51.732 [ws] conn state CONNECTING → AUTHENTICATING
+2026-08-20T21:53:51.739 [ws] closed code=1008 reason=unauthorized
+2026-08-20T21:53:51.739 [ws] close permanent=true reason=unauthorized
+2026-08-20T21:53:51.739 [ws] conn state AUTHENTICATING → STOPPED
+2026-08-20T21:53:51.741 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:51.741 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:53:51.758 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:53:51.759 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T21:54:02.261 [refresh] applyListing seq=14 workspaces=1 refreshing_prev=false refreshing_next=false
+2026-08-20T21:54:02.275 [refresh] enterLevel2 subscribe cwd=/private/tmp/e2e-sent/cwd painted=1 cached=1
+2026-08-20T21:54:02.286 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=1
+2026-08-20T21:54:02.549 [viewport] source=windowVisibility visibility=8 width=1236 height=2099
+2026-08-20T21:54:05.185 [refresh] enterLevel1 list cached=1 first_frame=already refreshing_prev=true refreshing_next=true
+2026-08-20T21:54:08.141 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T21:54:08.142 [term-theme] raw=vesper catalogHit=true slot=dark
