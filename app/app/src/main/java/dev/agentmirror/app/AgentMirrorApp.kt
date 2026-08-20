@@ -99,6 +99,7 @@ fun AgentMirrorApp(
         val session = navState.activeSession
         val overlayLevel2 by workspaceViewModel.level2.collectAsState()
         val overlayFavorites by workspaceViewModel.favorites.collectAsState()
+        val overlayLiveGen by workspaceViewModel.favoriteLiveGen.collectAsState()
 
         /**
          * 根返回手势接线（D-23/D-32）。
@@ -142,18 +143,27 @@ fun AgentMirrorApp(
         ) { r ->
             when (r) {
                 // 会话页优先（在屏会话不被重配打断）。
-                is AppRoute.Session -> SessionRoute(
-                    ref = r.ref,
-                    name = r.name,
-                    connectionPath = ServiceWire.connectionPath(),
-                    onBack = { navState.activeSession = null },
-                    overlaySessions = remember(r.ref, overlayLevel2, overlayFavorites) {
-                        workspaceViewModel.viewMenuSource(r.ref).sessions
-                    },
-                    overlayFavorited = overlayFavorites.map { it.key }.toSet(),
-                    onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
-                    onOpenOverlaySession = { ref, name -> navState.activeSession = ref to name },
-                )
+                is AppRoute.Session -> {
+                    DisposableEffect(r.ref, overlayFavorites, overlayLiveGen) {
+                        workspaceViewModel.enterSessionLive(
+                            sessionRef = r.ref,
+                            workspaceHint = navState.selectedWorkspaceCwd,
+                        )
+                        onDispose { }
+                    }
+                    SessionRoute(
+                        ref = r.ref,
+                        name = r.name,
+                        connectionPath = ServiceWire.connectionPath(),
+                        onBack = { navState.activeSession = null },
+                        overlaySessions = remember(r.ref, overlayLevel2, overlayFavorites, overlayLiveGen) {
+                            workspaceViewModel.viewMenuSource(r.ref).sessions
+                        },
+                        overlayFavorited = overlayFavorites.map { it.key }.toSet(),
+                        onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
+                        onOpenOverlaySession = { ref, name -> navState.activeSession = ref to name },
+                    )
+                }
                 // 配对页：首启无配置，或用户从设置/重配入口进入。
                 AppRoute.Pairing -> PairingRoute(
                     configStore = configStore,

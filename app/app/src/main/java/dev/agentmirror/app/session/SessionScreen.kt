@@ -71,6 +71,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.InputKey
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.TermSurfaceView
 import dev.agentmirror.app.tsnet.ConnectionPath
@@ -226,6 +227,16 @@ fun SessionScreen(
             ?.let { sessionStatusFromL2(it.status) }
             ?: SessionStatus.Unknown
         val byRef = overlaySessions.associateBy { it.ref }
+        LaunchedEffect(status, overlaySessions, viewModel.ref) {
+            val hit = overlaySessions.find { it.ref == viewModel.ref }
+            DiagLog.record(
+                "session-lamp",
+                "src=level2-push ref=${viewModel.ref} overlay_n=${overlaySessions.size} " +
+                    "hit=${hit != null} hit_status=${hit?.status?.wire ?: "<none>"} " +
+                    "hit_ref=${hit?.ref ?: "<none>"} lamp=${status.name} " +
+                    "eq_ref=${hit != null && hit.ref == viewModel.ref}",
+            )
+        }
 
         Box(
             modifier = Modifier

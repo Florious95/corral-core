@@ -410,6 +410,38 @@ class WorkspaceViewModel(
     }
 
     /**
+     * 会话页在屏：订当前会话工作区的 level2，给顶栏灯和「查看」同一份推送。
+     *
+     * 收藏进会话不会经过 [enterLevel2]（三栏 HorizontalPager 在收藏页时不组 Sessions），
+     * 若不在这里订，overlay 停在进页瞬间的缓存或空表，灯卡在 Idle/Unknown。
+     * 已订同一 cwd 则不再发订阅（069：不是周期扫描）。
+     *
+     * @contract
+     * @pre [sessionRef] 为当前三级会话结构 ref
+     * @post cwd 可解析且尚未订阅时发出一次 [enterLevel2]；已订同一 cwd 为 no-op
+     * @err cwd 解析不到（收藏/缓存/hint 都空）只记操作数，不猜、不订
+     * @inv 不改身份键、不改收藏簿；unknown 不回落 idle
+     */
+    fun enterSessionLive(sessionRef: String, workspaceHint: String? = null) {
+        val src = viewMenuSource(sessionRef)
+        val resolved = src.currentWorkspace
+        val cwd = resolved.ifEmpty { workspaceHint.orEmpty() }
+        val already = cwd.isNotEmpty() && subscribedWorkspace == cwd
+        val willSubscribe = cwd.isNotEmpty() && !already
+        DiagLog.record(
+            "session-live",
+            "enterSessionLive src=session-route ref=$sessionRef " +
+                "resolved_ws=${resolved.ifEmpty { "<empty>" }} " +
+                "hint_ws=${workspaceHint?.ifEmpty { "<empty>" } ?: "<none>"} " +
+                "use_ws=${cwd.ifEmpty { "<empty>" }} " +
+                "subscribed=${subscribedWorkspace ?: "<none>"} already=$already " +
+                "cache_sessions=${src.sessions.size} will_subscribe=$willSubscribe",
+        )
+        if (!willSubscribe) return
+        enterLevel2(cwd)
+    }
+
+    /**
      * 当前会话所属工作区：收藏簿 cwd → 各工作区二级缓存里的 ref → 当前单例里的 ref。
      * 顺序故意把单例放最后，且命中单例时仍用该行自己的 cwd，不用 subscribedWorkspace 兜底成「最后收藏的」。
      */
@@ -646,17 +678,24 @@ class WorkspaceViewModel(
         // 即使当前没订着这个 cwd（离开二级的缝里），也先写入缓存，避免再进去仍是旧状态。
         val incoming = frame.sessions.map { it.toL2Entry() }
         val next = L2UiState(sessions = incoming, seq = frame.seq, banner = null)
+        val prevByRef = (level2Cache[frame.workspace]?.sessions ?: emptyList())
+            .associate { it.ref to it.status }
         rememberLevel2(frame.workspace, next)
         bumpFavoriteLive()
         onFavoriteWorkspaceFetched(frame.workspace)
         val ws = subscribedWorkspace
-        if (ws == null || frame.workspace != ws) {
-            DiagLog.record(
-                "level2",
-                "workspace mismatch frame=${frame.workspace} subscribed=${ws ?: "<none>"} seq=${frame.seq} cached=${incoming.size}",
-            )
-            return
+        val publish = ws != null && frame.workspace == ws
+        val statusOps = incoming.joinToString(",") { e ->
+            val prev = prevByRef[e.ref]?.wire ?: "<none>"
+            "${e.ref.takeLast(24)}:$prev->${e.status.wire}"
         }
+        DiagLog.record(
+            "level2",
+            "applyLevel2 src=level2-push workspace=${frame.workspace} seq=${frame.seq} " +
+                "subscribed=${ws ?: "<none>"} incoming=${incoming.size} " +
+                "publish=$publish statuses=$statusOps",
+        )
+        if (!publish) return
         lastLevel2AtMs = nowMs()
         publishLevel2(next)
         // 074：转圈跟的是 listing 往返；二级首帧是 level2_frame。首帧到了就必须停转。
