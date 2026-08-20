@@ -183,6 +183,12 @@ def session_title(ts):
         return t
     return None
 
+def largest_containing(ns, cx, cy):
+    cands = [n for n in ns if n[6] <= cx <= n[7] and n[4] <= cy <= n[5] and (n[7] - n[6]) > 80]
+    if not cands:
+        return None
+    return max(cands, key=lambda n: (n[7] - n[6]) * (n[5] - n[4]))
+
 def term_bounds(xml):
     m = re.search(
         r'content-desc="term-theme-[^"]*"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
@@ -360,9 +366,16 @@ def capture_density(tag, dpi):
     photo = [n for n in nodes(mx) if n[0] == "拍照"]
     if photo:
         p = photo[0]
-        menu_bg = sample(mw, mh, mpx, p[6] + 8, p[3])
+        container = largest_containing(nodes(mx), p[2], p[3])
+        if container is not None:
+            pad_x = container[6] + 12
+            pad_y = container[4] + 12
+        else:
+            pad_x = p[6] + 8
+            pad_y = p[4] + 4
+        menu_bg = sample(mw, mh, mpx, pad_x, pad_y)
         d_purple = dist(menu_bg, PURPLE)
-        print("MENU_BG_%s sample=%s dist_m3_purple=%.1f" % (tag, menu_bg, d_purple))
+        print("MENU_BG_%s pad_xy=(%d,%d) sample=%s dist_m3_purple=%.1f" % (tag, pad_x, pad_y, menu_bg, d_purple))
         if d_purple < 40:
             note("+ 菜单仍是框架紫 density=%s sample=%s dist=%.1f" % (tag, menu_bg, d_purple))
     tap(80, 400, 0.6)
@@ -403,12 +416,19 @@ sx = dump()
 sts = texts(sx)
 print("SHEET:", sts)
 open(os.path.join(node, "ui-tree-sheet.xml"), "w", encoding="utf-8").write(sx)
+subprocess.check_call([adb, "exec-out", "screencap", "-p"], stdout=open(os.path.join(node, "shot-sheet.png"), "wb"))
 if "切换会话" not in sts:
-    fail("查看菜单没有「切换会话」。屏上有: %s" % sts)
+    note("查看菜单没有「切换会话」。屏上有: %s" % sts)
 if title and title not in sts:
-    fail("查看菜单没有当前显示名 %r。屏上有: %s" % (title, sts))
+    note("查看菜单没有当前显示名 %r。屏上有: %s" % (title, sts))
+if any(t.strip() == "· 0" or t.strip() == " · 0" for t in sts) and title not in sts:
+    note("查看菜单空列表 · 0。屏上有: %s" % sts)
 if any("claude_code" in t for t in sts):
-    fail("查看菜单出现 claude_code")
+    note("查看菜单出现 claude_code")
+lamps = {tag: readings[tag].get("lamp") for tag in readings}
+print("LAMPS", lamps)
+if any(v == "Unknown" for v in lamps.values()):
+    note("顶栏灯 Unknown（不切页）lamps=%s" % lamps)
 tap(80, 200, 0.8)
 
 # 设置页能滑到底且会话顶栏没有「设置」

@@ -1,16 +1,16 @@
 SESSION_d480: ['远程控制 app 开发', 'LAN', '查看', 'term-theme-light source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
 GAP_d480 dpi=480 scale=3.000 surface.left_px=12 outer_dp=4.00 inner_dp=6.0 total_dp=10.00 view=(12, 305, 1248, 2404)
 PAPER_d480 token=term-theme-light source=app-theme sample=(247, 248, 251) luma=248 dist_paper=0.0 dist_ansi0=23.9 pad=(21,329)
-ALIGN_d480 back_ink_cy=208.5 title_ink_cy=214.0 delta_dp=1.83 lamp=Idle
-FAIL 光学对齐 density=d480 墨迹中心差 1.83dp > 1dp back=208.5 title=214.0
+ALIGN_d480 back_ink_cy=214.5 title_ink_cy=214.0 delta_dp=0.17 lamp=Idle
 MENU_d480: ['拍照', '从相册选择']
-MENU_BG_d480 sample=(17, 24, 39) dist_m3_purple=161.7
+MENU_BG_d480 pad_xy=(60,2132) sample=(236, 238, 242) dist_m3_purple=220.8
 SESSION_d420: ['远程控制 app 开发', 'LAN', '查看', 'term-theme-light source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '+', '❯', '↑']
 GAP_d420 dpi=420 scale=2.625 surface.left_px=11 outer_dp=4.19 inner_dp=6.0 total_dp=10.19 view=(11, 284, 1249, 2452)
 PAPER_d420 token=term-theme-light source=app-theme sample=(247, 248, 251) luma=248 dist_paper=0.0 dist_ansi0=23.9 pad=(19,305)
-ALIGN_d420 back_ink_cy=198.5 title_ink_cy=203.5 delta_dp=1.90 lamp=Unknown
-FAIL 光学对齐 density=d420 墨迹中心差 1.90dp > 1dp back=198.5 title=203.5
+ALIGN_d420 back_ink_cy=203.5 title_ink_cy=203.5 delta_dp=0.00 lamp=Idle
 MENU_d420: ['拍照', '从相册选择']
-MENU_BG_d420 sample=(17, 24, 39) dist_m3_purple=161.7
-SHEET: ['切换会话', ' · 0']
-FAIL 查看菜单没有当前显示名 '远程控制 app 开发'。屏上有: ['切换会话', ' · 0']
+MENU_BG_d420 pad_xy=(54,2201) sample=(236, 238, 242) dist_m3_purple=220.8
+SHEET: ['切换会话', '远程Agent安卓 · 19', '★', '远程控制 app 开发', '当前', '空闲', '☆', 'advisor', '空闲', '☆', 'land-v1-set', '空闲', '☆', 'land-v1-term', '空闲', '☆', 'land-v1-reflow', '空闲', '☆', 'vz-v1-glyph', '空闲', '☆', 'vz-v1-bg', '空闲', '☆', 'vz-v1-chrome', '空闲', '☆', 'vz-v1-diff', '空闲', '☆', 'vz-v1-ver', '空闲', '☆', 'theme-v1-plan', '空闲', '☆', 'theme-v1-catalog', '空闲', '☆', 'theme-v1-wire', '空闲', '☆', 'theme-v1-settings', '空闲', '☆', 'theme-v1-remap', '空闲', '☆', 'market-v1-scan', '空闲']
+LAMPS {'d480': 'Idle', 'd420': 'Idle'}
+READINGS {'d480': {'dpi': 480, 'scale': 3.0, 'outer_dp': 4.0, 'inner_dp': 6.0, 'total_dp': 10.0, 'paper': (247, 248, 251), 'dist_paper': 0.0, 'dist_ansi0': 23.93741840717165, 'align_dp': 0.16666666666666666, 'title': '远程控制 app 开发', 'lamp': 'Idle', 'lan': True, 'tailnet': False, 'surface': (12, 305, 1248, 2404)}, 'd420': {'dpi': 420, 'scale': 2.625, 'outer_dp': 4.190476190476191, 'inner_dp': 6.0, 'total_dp': 10.19047619047619, 'paper': (247, 248, 251), 'dist_paper': 0.0, 'dist_ansi0': 23.93741840717165, 'align_dp': 0.0, 'title': '远程控制 app 开发', 'lamp': 'Idle', 'lan': True, 'tailnet': False, 'surface': (11, 284, 1249, 2452)}}
+PASS t.ver vz-ver

@@ -157,3 +157,21 @@ PermissionError: [Errno 1] Operation not permitted
 [ledger-run 2026-08-20T02:13:33Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
 [ledger-run 2026-08-20T02:13:33Z] 挂起 park | token=parked ledger_id=ledger.vz.v1 revision=18 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.vz.v1 | revision: 18 | 停机原因: Failed | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 ｜ t.ver 判据未过 ｜ t.ver：判据 A-vr-ui 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ bash /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/vz-ver/ui-check.sh ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-vr-ui.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1（stderr 末20行见账本 tasks.t.ver.attempts[].artifact_refs） ｜ 未干完的任务（非 Succeeded）: t.ver=FailedRetryable | 各任务终态: t.bg=Succeeded, t.chrome=Succeeded, t.diff=Succeeded, t.glyph=Succeeded, t.ver=FailedRetryable
 resident-exit signal=term reason=human_stop
+[ledger-run 2026-08-20T04:13:40Z] 常驻开工 resident-start | 账本=.team/ledgers/vz-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-20T04:13:40Z] 开工 start | ledger_id=ledger.vz.v1 revision=19 账本=.team/ledgers/vz-v1.json 墙钟上限=6000s 派单死线=90s
+[ledger-run 2026-08-20T04:13:41Z] 轮次 round | 第 1 轮开始：前沿 ["t.ver"]（墙钟已跑 0s / 上限 6000s）
+[ledger-run 2026-08-20T04:13:41Z] 派单 dispatch | task=t.ver 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/vz-v1-ver 席位=vz-v1-ver attempt=att-t.ver-seq1-t1787199221062 delivery=del-t.ver-seq1-t1787199221062 等席位预算=600s 来源=缺省 600，不是 time_budget_seconds
+[ledger-run 2026-08-20T04:13:41Z] 投递回执 send-ok | task=t.ver case_id=ledger_vz_v1__t.ver__r19 message_id=msg_8179162dbde0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T04:13:41Z] 派单落地 dispatch-landed | task=t.ver 席位 vz-v1-ver 的收件箱已多出这条派单
+[ledger-run 2026-08-20T04:13:41Z] 等待 wait | task=t.ver 在等的 key（case_id）=ledger_vz_v1__t.ver__r19 team=grok-l2 预算=600s 来源=缺省 600，不是 time_budget_seconds
+[ledger-run 2026-08-20T04:20:21Z] 已唤醒 wait-signaled | task=t.ver 等到结果了
+[ledger-run 2026-08-20T04:20:21Z] 判据 acceptance | task=t.ver 在跑 required=["A-vr-test", "A-vr-suite", "A-vr-ui", "A-vr-shot", "A-vr-doc"]
+[ledger-run 2026-08-20T04:26:08Z] 判据通过留档 acceptance-success | task=t.ver 成功 attempt 落进 attempts[] writeback_revision=20 passed=["A-vr-test", "A-vr-suite", "A-vr-ui", "A-vr-shot", "A-vr-doc"]
+[ledger-run 2026-08-20T04:26:08Z] 延后落盘 writeback-deferred | task=t.ver 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-20T04:26:08Z] 写回 writeback | task=t.ver state=succeeded revision=19 → 20
+[ledger-run 2026-08-20T04:26:08Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.ver"] 冻结=[] 不可判=[] 墙钟已跑 748s
+[ledger-run 2026-08-20T04:26:08Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-20T04:26:08Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-20T04:26:08Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=20 hash=b5fb089edf8907ed）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T04:26:08Z] 挂起 park | token=parked ledger_id=ledger.vz.v1 revision=20 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.vz.v1 | revision: 20 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.bg=Succeeded, t.chrome=Succeeded, t.diff=Succeeded, t.glyph=Succeeded, t.ver=Succeeded
+resident-exit signal=term reason=human_stop
