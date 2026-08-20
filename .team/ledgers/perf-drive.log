@@ -25,3 +25,14 @@ resident-exit signal=term reason=human_stop
 [ledger-run 2026-08-20T07:18:46Z] 投递回执 send-ok | task=t.perf case_id=ledger_perf_v1__t.perf__r3 message_id=msg_57cdb0daf7e0 —— 回执成功≠席位收到，下一步查收件箱确认落地
 [ledger-run 2026-08-20T07:18:46Z] 派单落地 dispatch-landed | task=t.perf 席位 perf-v1-perf 的收件箱已多出这条派单
 [ledger-run 2026-08-20T07:18:46Z] 等待 wait | task=t.perf 在等的 key（case_id）=ledger_perf_v1__t.perf__r3 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T08:03:40Z] 已唤醒 wait-signaled | task=t.perf 等到结果了
+[ledger-run 2026-08-20T08:03:40Z] 判据 acceptance | task=t.perf 在跑 required=["A-pf-equiv", "A-pf-bench", "A-pf-jank", "A-pf-suite", "A-pf-doc"]
+[ledger-run 2026-08-20T08:12:02Z] 判据通过留档 acceptance-success | task=t.perf 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-pf-equiv", "A-pf-bench", "A-pf-jank", "A-pf-suite", "A-pf-doc"]
+[ledger-run 2026-08-20T08:12:02Z] 延后落盘 writeback-deferred | task=t.perf 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-20T08:12:02Z] 写回 writeback | task=t.perf state=succeeded revision=3 → 4
+[ledger-run 2026-08-20T08:12:02Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.perf"] 冻结=[] 不可判=[] 墙钟已跑 3196s
+[ledger-run 2026-08-20T08:12:02Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-20T08:12:02Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-20T08:12:02Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=4 hash=f8958ad47fe7e44a）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T08:12:02Z] 挂起 park | token=parked ledger_id=ledger.perf.v1 revision=4 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.perf.v1 | revision: 4 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.perf=Succeeded
+resident-exit signal=term reason=human_stop

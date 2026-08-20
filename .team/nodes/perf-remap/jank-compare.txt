@@ -1,0 +1,4 @@
+baseline d480 S1 viewport=4 resized_true=1 reflow=2 grid=1 enter_ms=14810 S2 total=752 janky_pct=92.69 p95=34.00 S3 empty=0/12 first_content_ms=1763 live=2 lamp=2 viewmenu=5
+baseline d440 S1 viewport=4 resized_true=1 reflow=2 grid=1 enter_ms=14598 S2 total=739 janky_pct=93.91 p95=34.00 S3 empty=4/12 first_content_ms=1645 live=6 lamp=5 viewmenu=12
+current d480 S1 viewport=4 resized_true=1 reflow=2 grid=1 enter_ms=14457 S2 total=745 janky_pct=92.89 p95=32.00 S3 empty=0/12 first_content_ms=1702 live=2 lamp=2 viewmenu=6
+current d440 S1 viewport=4 resized_true=1 reflow=2 grid=1 enter_ms=15195 S2 total=773 janky_pct=90.30 p95=32.00 S3 empty=11/12 first_content_ms=1831 live=2 lamp=2 viewmenu=6

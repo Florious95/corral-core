@@ -1,12 +1,153 @@
+Performing Streamed Install
+Success
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1819
+WaitTime: 1820
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1616
+WaitTime: 1617
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1730
+WaitTime: 1739
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1949
+WaitTime: 1952
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1627
+WaitTime: 1636
+Complete
+Performing Streamed Install
+Success
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 2187
+WaitTime: 2188
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1623
+WaitTime: 1624
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1584
+WaitTime: 1585
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 2338
+WaitTime: 2367
+Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1690
+WaitTime: 1693
+Complete
+INSTALLED app-debug.apk
+PAIR skip
 DENSITY_SET 480
-GFX d480 try=1 total=110 janky=106 pct=96.36 p95=36.0
-SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/shot-d480-after.png
-GFX d480 picked total=110 pct=96.36 p95=36.0
+PAIR skip
+SESSION_CANDIDATE team-agent 开发 ts0 ['工作区', 'LAN', '多agent协作', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '☆', 'team-agent 开发', '空闲', '☆']
+SESSION_ROW baseline 480 team-agent 开发 337 591
+S3 baseline d480 empty=0/12 first_content_ms=1763 enter_ms=14810
+EXPORT diag-baseline-d480.log bytes=7745
+DIAGTAG viewport n=4
+DIAGTAG reflow n=2
+DIAGTAG grid n=1
+DIAGTAG session-live n=2
+DIAGTAG session-lamp n=2
+DIAGTAG view-menu n=5
+S1 baseline d480 viewport=4 resized_true=1 reflow=2 grid=1
+PAIR skip
+SESSION_CANDIDATE team-agent 开发 ts0 ['工作区', 'LAN', '多agent协作', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '☆', 'team-agent 开发', '空闲', '☆']
+S2 baseline d480 total=752 janky=697 pct=92.69 p95=34.0
 DENSITY_SET 440
-GFX d440 try=1 total=102 janky=91 pct=89.22 p95=36.0
-SHOT /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/shot-d440-after.png
-GFX d440 picked total=102 pct=89.22 p95=36.0
-WROTE /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/perf-remap/jank-after.txt
-COMPARE d480 before_pct=8.24 after_pct=96.36 before_p95=38.00 after_p95=36.00
-VERDICT d480 jank_down=False frames_up=False (before_n=85 after_n=110 ×1.29)
-FAIL A-pf-jank d480 世界没变：janky% before=8.24 after=96.36；frames before=85 after=110 need_drop=20% or frames×2.0
+PAIR skip
+SESSION_CANDIDATE team-agent 开发 ts0 ['工作区', 'LAN', '多agent协作', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '☆', 'team-agent 开发', '空闲', '☆']
+SESSION_ROW baseline 440 team-agent 开发 309 554
+S3 baseline d440 empty=4/12 first_content_ms=1645 enter_ms=14598
+EXPORT diag-baseline-d440.log bytes=14391
+DIAGTAG viewport n=4
+DIAGTAG reflow n=2
+DIAGTAG grid n=1
+DIAGTAG session-live n=6
+DIAGTAG session-lamp n=5
+DIAGTAG view-menu n=12
+S1 baseline d440 viewport=4 resized_true=1 reflow=2 grid=1
+PAIR skip
+SESSION_CANDIDATE team-agent 开发 ts0 ['工作区', 'LAN', '多agent协作', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '☆', 'team-agent 开发', '空闲', '☆']
+S2 baseline d440 total=739 janky=694 pct=93.91 p95=34.0
+INSTALLED app-debug.apk
+PAIR skip
+DENSITY_SET 480
+PAIR skip
+SESSION_CANDIDATE team-agent 开发 ts0 ['工作区', 'LAN', '多agent协作', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '☆', 'team-agent 开发', '空闲', '☆']
+SESSION_ROW current 480 team-agent 开发 337 591
+S3 current d480 empty=0/12 first_content_ms=1702 enter_ms=14457
+EXPORT diag-current-d480.log bytes=8616
+DIAGTAG viewport n=4
+DIAGTAG reflow n=2
+DIAGTAG grid n=1
+DIAGTAG session-live n=2
+DIAGTAG session-lamp n=2
+DIAGTAG view-menu n=6
+S1 current d480 viewport=4 resized_true=1 reflow=2 grid=1
+PAIR skip
+SESSION_CANDIDATE team-agent 开发 ts0 ['工作区', 'LAN', '多agent协作', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '☆', 'team-agent 开发', '空闲', '☆']
+S2 current d480 total=745 janky=692 pct=92.89 p95=32.0
+DENSITY_SET 440
+PAIR skip
+SESSION_CANDIDATE team-agent 开发 ts0 ['工作区', 'LAN', '多agent协作', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '☆', 'team-agent 开发', '空闲', '☆']
+SESSION_ROW current 440 team-agent 开发 309 554
+S3 current d440 empty=11/12 first_content_ms=1831 enter_ms=15195
+EXPORT diag-current-d440.log bytes=8644
+DIAGTAG viewport n=4
+DIAGTAG reflow n=2
+DIAGTAG grid n=1
+DIAGTAG session-live n=2
+DIAGTAG session-lamp n=2
+DIAGTAG view-menu n=6
+S1 current d440 viewport=4 resized_true=1 reflow=2 grid=1
+PAIR skip
+SESSION_CANDIDATE team-agent 开发 ts0 ['工作区', 'LAN', '多agent协作', '/Users/alauda/Documents/code/agent前沿探索/多agent协作', '☆', 'team-agent 开发', '空闲', '☆']
+S2 current d440 total=773 janky=698 pct=90.3 p95=32.0
+ROW baseline d480 S1 viewport=4 resized_true=1 reflow=2 grid=1 enter_ms=14810 S2 total=752 janky_pct=92.69 p95=34.00 S3 empty=0/12 first_content_ms=1763 live=2 lamp=2 viewmenu=5
+ROW baseline d440 S1 viewport=4 resized_true=1 reflow=2 grid=1 enter_ms=14598 S2 total=739 janky_pct=93.91 p95=34.00 S3 empty=4/12 first_content_ms=1645 live=6 lamp=5 viewmenu=12
+ROW current d480 S1 viewport=4 resized_true=1 reflow=2 grid=1 enter_ms=14457 S2 total=745 janky_pct=92.89 p95=32.00 S3 empty=0/12 first_content_ms=1702 live=2 lamp=2 viewmenu=6
+ROW current d440 S1 viewport=4 resized_true=1 reflow=2 grid=1 enter_ms=15195 S2 total=773 janky_pct=90.30 p95=32.00 S3 empty=11/12 first_content_ms=1831 live=2 lamp=2 viewmenu=6
+COMPARE d480 S2 base_pct=92.69 cur_pct=92.89 base_p95=34.00 cur_p95=32.00 n=752/745
+COMPARE d480 S1 resized 1→1 enter_ms 14810→14457
+COMPARE d480 S3 empty 0/12 → 0/12 first_ms 1763→1702
+COMPARE d440 S2 base_pct=93.91 cur_pct=90.30 base_p95=34.00 cur_p95=32.00 n=739/773
+COMPARE d440 S1 resized 1→1 enter_ms 14598→15195
+COMPARE d440 S3 empty 4/12 → 11/12 first_ms 1645→1831
+PASS instrument S1/S2/S3 d480=s2_same d440=s2_same
