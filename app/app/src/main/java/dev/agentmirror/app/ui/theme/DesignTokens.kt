@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 // ─────────────────────────────────────────────────────────────
 // 间距 · 尺寸
 // ─────────────────────────────────────────────────────────────
+/** 间距与控件尺寸。 */
 object Dims {
     // 屏幕级
     val screenHPadding: Dp = 16.dp
@@ -100,6 +101,7 @@ object Dims {
 // ─────────────────────────────────────────────────────────────
 // 圆角
 // ─────────────────────────────────────────────────────────────
+/** 圆角半径。 */
 object Radii {
     val terminalCard: Dp = 14.dp
     val card: Dp = 14.dp
@@ -125,6 +127,7 @@ object Radii {
 // 字号 · 字重 · 行高
 // 中文一律走系统默认字体（FontFamily.Default），等宽只用于 ASCII 标识符 / 数字 / 按键。
 // ─────────────────────────────────────────────────────────────
+/** 字号。 */
 object TypeSizes {
     val screenTitle: TextUnit = 25.sp             // 收藏 / 工作区 / 设置
     val screenTitleSecondary: TextUnit = 23.sp    // 二级页标题（工作区名）
@@ -161,6 +164,7 @@ object TypeSizes {
 // Compose 没有 CSS 那种自由投影，这里给的是等效 elevation + 手绘描边策略。
 // 深色下不使用外投影（会变成一圈黑边），改用顶部内高光 —— 见 AppPalette.keycapTopHighlight。
 // ─────────────────────────────────────────────────────────────
+/** Elevation 档位。 */
 object Elevations {
     val terminalCardLight: Dp = 3.dp      // 浅色外壳下终端屏微微浮起
     val terminalCardDark: Dp = 0.dp       // 深色外壳下不投影，靠 1dp 描边区分
@@ -173,6 +177,7 @@ object Elevations {
 // ─────────────────────────────────────────────────────────────
 // 动效
 // ─────────────────────────────────────────────────────────────
+/** 动效曲线与时长。 */
 object Motion {
     /** Material 3 emphasized decelerate —— 全站主曲线 */
     val emphasized: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
@@ -211,6 +216,7 @@ object Motion {
 // 语义色板（M3 ColorScheme 之外、设计里实际用到的那些）
 // ─────────────────────────────────────────────────────────────
 @Immutable
+/** 语义色板（M3 ColorScheme 之外、设计实际用到的颜色）。 */
 data class AppPalette(
     // 背景层次
     val screenBackground: Color,       // 页面底色（标题区 / 导航栏所在层）
@@ -306,6 +312,7 @@ data class AppPalette(
     val outlineButtonPressed: Color,
 )
 
+/** 浅色语义色板。 */
 val LightPalette = AppPalette(
     screenBackground = Color(0xFFF4F5F8),
     listBackground = Color(0xFFFFFFFF),
@@ -391,6 +398,7 @@ val LightPalette = AppPalette(
     outlineButtonPressed = Color(0xFFF1F3F7),
 )
 
+/** 深色语义色板。 */
 val DarkPalette = AppPalette(
     screenBackground = Color(0xFF070B14),
     listBackground = Color(0xFF0D1422),
@@ -476,4 +484,5 @@ val DarkPalette = AppPalette(
     outlineButtonPressed = Color(0x1A78A0FF),
 )
 
+/** 当前语义色板 CompositionLocal。 */
 val LocalAppPalette = staticCompositionLocalOf { LightPalette }

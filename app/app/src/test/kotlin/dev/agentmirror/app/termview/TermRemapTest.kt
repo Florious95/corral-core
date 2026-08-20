@@ -171,14 +171,8 @@ class TermRemapTest {
                 failed += family.id
             }
         }
-        // 方案 §3.3：浅纸 vs APP userBlock 翻了就 halt，不准改 userBlock 去凑。
-        assertEquals(
-            listOf(
-                "catppuccin", "tokyo-night", "gruvbox", "nord",
-                "kanagawa", "everforest", "iceberg", "zenbones",
-            ).sorted(),
-            failed.sorted(),
-        )
+        // 契约 089 §1：userBlock 从主题现算后浅纸上块必须深于纸。APP 常量例外名单已失效。
+        assertEquals(emptyList<String>(), failed.sorted())
     }
 
     @Test
