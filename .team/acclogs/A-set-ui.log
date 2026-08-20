@@ -1,1 +1,50 @@
-bash: /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/theme-settings/ui-check.sh: No such file or directory
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1970
+WaitTime: 1972
+Complete
+Night mode: yes
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1732
+WaitTime: 1734
+Complete
+Night mode: yes
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1640
+WaitTime: 1641
+Complete
+Night mode: yes
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1594
+WaitTime: 1596
+Complete
+Night mode: yes
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1420
+WaitTime: 1423
+Complete
+SETTINGS: ['设置', '字体大小', '12 pt', '取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。', '4', '6', '8', '10', '12', '14', '16', '18', '20', '❯', 'claim-leader --team wiki-team', '诊断日志', '一键导出诊断日志，帮助我们定位问题。日志会自动脱敏（配对 token、密钥等不会包含）。', '导出', '查看', '外观', '深色', '列表、设置和外壳走这里。终端正文按下面选的浅槽 / 深槽主题画。', '浅色', '深色', '跟随系统', '终端主题', '外观决定此刻用浅槽还是深槽。每个槽各自记住一个主题族。', '浅色时', 'Vesper', '深色时', 'Vesper', '0.1.0', '★', '收藏', '☰', '会话', '⚙', '设置']
+DARK_ROW_BEFORE ['Vesper']
+PICKER_HAS Dracula Nord
+DARK_ROW_AFTER ['Dracula'] SCREEN ['设置', '字体大小', '12 pt', '取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。', '4', '6', '8', '10', '12', '14', '16', '18', '20', '❯', 'claim-leader --team wiki-team', '诊断日志', '一键导出诊断日志，帮助我们定位问题。日志会自动脱敏（配对 token、密钥等不会包含）。', '导出', '查看', '外观', '深色', '列表、设置和外壳走这里。终端正文按下面选的浅槽 / 深槽主题画。', '浅色', '深色', '跟随系统', '终端主题', '外观决定此刻用浅槽还是深槽。每个槽各自记住一个主题族。', '浅色时', 'Vesper', '深色时', 'Dracula', '0.1.0', '★', '收藏', '☰', '会话', '⚙', '设置']
+DRACULA_SELECTED_NODE False
+density=480 A=(16, 16, 16) distA_vesper=0 token_before=term-theme-dark source=Vesper.itermcolors pad=(24,329) bounds=(12,305,1248,2404)
+density=480 B=(33, 33, 33) distB_afterglow=0 distAB=51 token_after=term-theme-dark source=Afterglow.itermcolors pad=(24,329)
+density=440 A=(16, 16, 16) distA_vesper=0 token_before=term-theme-dark source=Vesper.itermcolors pad=(23,315) bounds=(11,291,1249,2435)
+density=440 B=(33, 33, 33) distB_afterglow=0 distAB=51 token_after=term-theme-dark source=Afterglow.itermcolors pad=(23,315)
+PASS t.settings densities [(480, (16, 16, 16), (33, 33, 33), 'term-theme-dark source=Vesper.itermcolors', 'term-theme-dark source=Afterglow.itermcolors', 0, 0, 51), (440, (16, 16, 16), (33, 33, 33), 'term-theme-dark source=Vesper.itermcolors', 'term-theme-dark source=Afterglow.itermcolors', 0, 0, 51)]
+PASS ui-check.sh

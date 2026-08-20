@@ -1,0 +1,3 @@
+=== A-wire-default ===
+grep: /Volumes/nvme/Projects/远程Agent安卓/app/app/src/main/java/dev/agentmirror/app/ui/theme/TermThemeStore.kt: No such file or directory
+default_exit:2

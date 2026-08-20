@@ -18,10 +18,11 @@ package dev.agentmirror.app.termview
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import dev.agentmirror.app.ui.theme.TermPalette
+import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -76,8 +77,8 @@ class TermBgCjkAlignTest {
         }
     }
 
-    /** SGR 47（Indexed 7）经 colorFor 的 ARGB 值（TerminalSpec 浅色 ansi[7]）。 */
-    private val whiteBg = TermPalette.Light.ansi16[7]!!
+    /** SGR 47（Indexed 7）经 colorFor 的 ARGB 值（当前浅槽 ansi[7]）。 */
+    private val whiteBg = TermPalette.of(false).ansi16[7]!!
 
     @Test
     fun bgRunWithCjkKeepsCellGridAligned() {
@@ -87,6 +88,7 @@ class TermBgCjkAlignTest {
         emulator.feed("[47;30m中文测试[31mAB[0m")
 
         val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+        view.nightOverride = false
         view.presenter = TermViewPresenter(emulator) { _, _ -> }
 
         val bitmap = Bitmap.createBitmap(400, 120, Bitmap.Config.ARGB_8888)
@@ -119,12 +121,16 @@ class TermBgCjkAlignTest {
         assertEquals("AB run 起始列漂移", origin + 8f * cellW, ab.first().x, 0.01f)
     }
 
-    /** 254 映射为 TerminalSpec.userBlockBackground（080：色值集中，不散落绘制层）。 */
-    private val recapBg = TermPalette.Light.userBlockBg
-    private val recapFg = Color.rgb(0, 0, 0)
+    @After
+    fun tearDown() {
+        TermPalette.resetBindingForTest()
+    }
 
     @Test
     fun realRecapStyleBytesKeepGridAlignedAndLegible() {
+        TermPalette.bindSelectionForTest("follow-system", "vesper")
+        val recapBg = TermPalette.of(false).userBlockBg
+        val recapFg = TermPalette.colorFor(TerminalColor.Indexed(16), background = false, dark = false)
         // 夹具 2：真实 Claude Code recap 的字节形态——256 色背景 48;5;254 + 256 色
         // 前景 38;5;16 + 中英混排 + 块内换 fg。
         // 列布局：␣(1) 递交清单(8) ：(2，全角冒号双宽) 中文渲染(8) ␣(1) = 20 列，
@@ -133,6 +139,7 @@ class TermBgCjkAlignTest {
         emulator.feed("[48;5;254;38;5;16m 递交清单：中文渲染 [38;5;196mOK[0m")
 
         val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+        view.nightOverride = false
         view.presenter = TermViewPresenter(emulator) { _, _ -> }
 
         val bitmap = Bitmap.createBitmap(600, 120, Bitmap.Config.ARGB_8888)
@@ -159,10 +166,9 @@ class TermBgCjkAlignTest {
         assertTrue("夹具失效：未画出 OK 文本", ok.isNotEmpty())
         assertEquals("OK run 起始列漂移", origin + 20f * cellW, ok.first().x, 0.01f)
 
-        // 可读性：38;5;16 前景必须落黑（色立方原点），绝不与浅底同色（模拟器实拍
-        // 第二缺陷：fg/bg 同塌缩到 15 号浅灰 → recap 块整块隐形）。
+        // 可读性：38;5;16 前景必须投影到色板且与 userBlock 不同色。
         val recapText = canvas.texts.firstOrNull { it.color == recapFg }
-        assertTrue("浅底块未提交任何黑色前景文字", recapText != null)
+        assertTrue("浅底块未提交 38;5;16 投影后的前景文字", recapText != null)
         assertTrue("recap 块前景与背景同色（文字隐形）", recapText!!.color != recapBg)
     }
 }

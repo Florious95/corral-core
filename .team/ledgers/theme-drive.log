@@ -166,3 +166,23 @@ resident-exit signal=term reason=human_stop
 [ledger-run 2026-08-20T04:46:45Z] 投递回执 send-ok | task=t.wire case_id=ledger_theme_v1__t.wire__r15 message_id=msg_33c1f46d8468 —— 回执成功≠席位收到，下一步查收件箱确认落地
 [ledger-run 2026-08-20T04:46:45Z] 派单落地 dispatch-landed | task=t.wire 席位 theme-v1-wire 的收件箱已多出这条派单
 [ledger-run 2026-08-20T04:46:45Z] 等待 wait | task=t.wire 在等的 key（case_id）=ledger_theme_v1__t.wire__r15 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T05:03:38Z] 已唤醒 wait-signaled | task=t.wire 等到结果了
+[ledger-run 2026-08-20T05:03:38Z] 判据 acceptance | task=t.wire 在跑 required=["A-wire-suite", "A-wire-noregress", "A-wire-default", "A-wire-doc"]
+[ledger-run 2026-08-20T05:04:17Z] 判据通过留档 acceptance-success | task=t.wire 成功 attempt 落进 attempts[] writeback_revision=16 passed=["A-wire-suite", "A-wire-noregress", "A-wire-default", "A-wire-doc"]
+[ledger-run 2026-08-20T05:04:17Z] 原子写回 writeback-atomic | task=t.wire state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=16 hash=fd9c2853fd12984f）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T05:04:17Z] 写回 writeback | task=t.wire state=succeeded revision=15 → 16
+[ledger-run 2026-08-20T05:04:17Z] 轮次 round | 第 3 轮开始：前沿 ["t.settings"]（墙钟已跑 1412s / 上限 34800s）
+[ledger-run 2026-08-20T05:04:17Z] 派单 dispatch | task=t.settings 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/theme-v1-settings 席位=theme-v1-settings attempt=att-t.settings-seq3-t1787202257556 delivery=del-t.settings-seq3-t1787202257556 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T05:04:17Z] 投递回执 send-ok | task=t.settings case_id=ledger_theme_v1__t.settings__r16 message_id=msg_d8640b228348 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T05:04:17Z] 派单落地 dispatch-landed | task=t.settings 席位 theme-v1-settings 的收件箱已多出这条派单
+[ledger-run 2026-08-20T05:04:17Z] 等待 wait | task=t.settings 在等的 key（case_id）=ledger_theme_v1__t.settings__r16 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T05:19:31Z] 已唤醒 wait-signaled | task=t.settings 等到结果了
+[ledger-run 2026-08-20T05:19:31Z] 判据 acceptance | task=t.settings 在跑 required=["A-set-ui", "A-set-density", "A-set-nomd5", "A-set-suite", "A-set-doc"]
+[ledger-run 2026-08-20T05:21:53Z] 判据通过留档 acceptance-success | task=t.settings 成功 attempt 落进 attempts[] writeback_revision=17 passed=["A-set-ui", "A-set-density", "A-set-nomd5", "A-set-suite", "A-set-doc"]
+[ledger-run 2026-08-20T05:21:53Z] 延后落盘 writeback-deferred | task=t.settings 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-20T05:21:53Z] 写回 writeback | task=t.settings state=succeeded revision=16 → 17
+[ledger-run 2026-08-20T05:21:53Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.catalog", "t.wire", "t.settings"] 冻结=[] 不可判=[] 墙钟已跑 2468s
+[ledger-run 2026-08-20T05:21:53Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-20T05:21:54Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-20T05:21:54Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=17 hash=2f4ed78f43d201fc）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T05:21:54Z] 挂起 park | token=parked ledger_id=ledger.theme.v1 revision=17 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.theme.v1 | revision: 17 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.catalog=Succeeded, t.plan=Succeeded, t.remap=Succeeded, t.settings=Succeeded, t.wire=Succeeded

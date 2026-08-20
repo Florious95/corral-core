@@ -32,6 +32,8 @@ import dev.agentmirror.app.diag.DiagLogViewScreen
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.ui.theme.Appearance
+import dev.agentmirror.app.ui.theme.SharedPreferencesTermThemeStore
+import dev.agentmirror.app.ui.screens.TermThemePickerScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,11 +56,12 @@ internal fun SettingsScreen(
     onAppearanceChange: (Appearance) -> Unit = {},
 ) {
     var showDiagView by remember { mutableStateOf(false) }
+    var pickerDark by remember { mutableStateOf<Boolean?>(null) }
     if (showDiagView) {
         DiagLogViewScreen(onBack = { showDiagView = false })
         return
     }
-    BackHandler(enabled = enableBackHandler, onBack = onBack)
+    BackHandler(enabled = enableBackHandler && pickerDark == null, onBack = onBack)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val fontSizeStore = remember { SharedPreferencesFontSizeStore(context) }
@@ -69,6 +72,22 @@ internal fun SettingsScreen(
     val buildLabel = remember {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
         info.versionName ?: context.packageName
+    }
+    val themeStore = remember { SharedPreferencesTermThemeStore(context) }
+    var themeSel by remember { mutableStateOf(themeStore.load()) }
+    val pickerSlot = pickerDark
+    if (pickerSlot != null) {
+        TermThemePickerScreen(
+            darkSlot = pickerSlot,
+            selectedFamilyId = if (pickerSlot) themeSel.darkFamilyId else themeSel.lightFamilyId,
+            onSelect = { id ->
+                if (pickerSlot) themeStore.saveDark(id) else themeStore.saveLight(id)
+                themeSel = themeStore.load()
+                pickerDark = null
+            },
+            onBack = { pickerDark = null },
+        )
+        return
     }
     DesignSettingsScreen(
         paired = paired,
@@ -91,6 +110,10 @@ internal fun SettingsScreen(
             }
         },
         onViewLogs = { showDiagView = true },
+        lightFamilyId = themeSel.lightFamilyId,
+        darkFamilyId = themeSel.darkFamilyId,
+        onOpenLightTheme = { pickerDark = false },
+        onOpenDarkTheme = { pickerDark = true },
     )
 }
 
