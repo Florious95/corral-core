@@ -5,3 +5,25 @@ Activity: dev.agentmirror.app/.MainActivity
 TotalTime: 1764
 WaitTime: 1766
 Complete
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 2115
+WaitTime: 2121
+Complete
+GFX density=480 opt=0 total=170 janky%=2.94 p95_ms=34.0
+DRAW density=480 opt=0 n=123 avg_us=4656 p95_us=6135 bgRect=1765 textDraw=388 cellsNonBlank=1764
+GFX density=480 opt=1 total=129 janky%=0.78 p95_ms=27.0
+DRAW density=480 opt=1 n=120 avg_us=3850 p95_us=5279 bgRect=1 textDraw=388 cellsNonBlank=1764
+OUTSIDE d480 before gfx_p95_ms=34.0 dt_us_p95=6135 outside_us=27865 (gfx*1000-dt)
+OUTSIDE d480 after gfx_p95_ms=27.0 dt_us_p95=5279 outside_us=21721 (gfx*1000-dt)
+NOTE d480 p95_delta 0.140  before=6135 after=5279（不再作为判据）
+GFX density=440 opt=0 total=129 janky%=1.55 p95_ms=32.0
+DRAW density=440 opt=0 n=120 avg_us=5550 p95_us=7777 bgRect=2217 textDraw=315 cellsNonBlank=2216
+GFX density=440 opt=1 total=130 janky%=0.77 p95_ms=31.0
+DRAW density=440 opt=1 n=120 avg_us=5002 p95_us=7050 bgRect=1 textDraw=315 cellsNonBlank=2216
+OUTSIDE d440 before gfx_p95_ms=32.0 dt_us_p95=7777 outside_us=24223 (gfx*1000-dt)
+OUTSIDE d440 after gfx_p95_ms=31.0 dt_us_p95=7050 outside_us=23950 (gfx*1000-dt)
+NOTE d440 p95_delta 0.093  before=7777 after=7050（不再作为判据）
+PASS A-dw-ui

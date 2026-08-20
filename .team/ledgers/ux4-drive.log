@@ -128,3 +128,12 @@ resident-exit signal=term reason=human_stop
 [ledger-run 2026-08-20T14:21:44Z] 等待 wait | task=t.draw 在等的 key（case_id）=ledger_ux4_v1__t.draw__r10 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
 [ledger-run 2026-08-20T14:22:19Z] 已唤醒 wait-signaled | task=t.draw 等到结果了
 [ledger-run 2026-08-20T14:22:19Z] 判据 acceptance | task=t.draw 在跑 required=["A-dw-ui", "A-dw-diag", "A-dw-suite", "A-dw-doc", "A-dw-split"]
+[ledger-run 2026-08-20T14:25:37Z] 判据通过留档 acceptance-success | task=t.draw 成功 attempt 落进 attempts[] writeback_revision=11 passed=["A-dw-ui", "A-dw-diag", "A-dw-suite", "A-dw-doc", "A-dw-split"]
+[ledger-run 2026-08-20T14:25:37Z] 延后落盘 writeback-deferred | task=t.draw 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-20T14:25:37Z] 写回 writeback | task=t.draw state=succeeded revision=10 → 11
+[ledger-run 2026-08-20T14:25:37Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.draw"] 冻结=[] 不可判=[] 墙钟已跑 233s
+[ledger-run 2026-08-20T14:25:37Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-20T14:25:37Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-20T14:25:37Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=11 hash=a9fe1852ee0cb6ce）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T14:25:37Z] 挂起 park | token=parked ledger_id=ledger.ux4.v1 revision=11 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.ux4.v1 | revision: 11 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.draw=Succeeded, t.idea=Succeeded, t.sent=Succeeded
+resident-exit signal=term reason=human_stop
