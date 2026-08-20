@@ -4,7 +4,7 @@ role: PR 异源评审席（judgment 验收）
 provider: claude_code
 auth_mode: compatible_api
 permission_mode: auto_approve
-dangerously_skip_permissions: false
+dangerously_skip_permissions: true
 profile: worker-api
 tools:
   - fs_read

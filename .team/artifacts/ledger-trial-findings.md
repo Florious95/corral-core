@@ -1187,3 +1187,44 @@ ls .worktrees/prov.whitelist/.team/nodes/prov-whitelist/  →  No such file or d
 所以归档不能就地放在账本里。规范说 `audit` 可以是 `{}`，但没说它是封闭对象。
 
 ⛔ 只收集，未投递。
+
+---
+
+## 【新】席位卡在 provider 权限提示上，编排层的症状是「投递失败」（2026-08-21）
+
+**现象**：`pr1-judge` 反复 `send.failed / send_unverified_exhausted after 3/3 attempts`，
+`action: inspect the target pane and retry the send`。
+按这个提示去「retry the send」**永远修不好**。
+
+**真因**（用户拿手机看 pane 才发现）：该席位卡在 provider 的确认提示上——
+```
+Do you want to proceed?
+ 1. Yes
+ 2. Yes, allow reading from /tmp from this project
+ 3. No
+```
+它跑了 `git show … > /tmp/x.kt`，触发了「项目外路径」确认。**整席停在这里等人按键**，
+于是任何新派单都无法确认「新一轮开始」⇒ 报成投递失败。
+
+**归属**：C（对方）+ A（我）。
+- 我的错：角色文件里 `dangerously_skip_permissions: false` 是我自己写的
+  （当时想「只读评审席不需要绕权限」），对一个要跑 `git show`/`grep` 的席位是错设定。
+- **对方的问题是症状表达**：`send_unverified_exhausted` + 「retry the send」把人指向
+  投递/网络，而真因是**被测对象停在一个交互提示上**。这两个世界在编排层的输出里**同形**。
+  它已经在读 pane 判活（stall-alert 的「pane 正文显示命令仍在跑」就是证据），
+  ⇒ 它有能力认出「pane 停在提示上」，只是没把这件事说出来。
+
+**建议（给成选项，不替对方定方案）**：
+① 投递失败时附一行 pane 尾部摘要，让人一眼看见是提示还是别的；
+② 或单独一个 `blocked_on_prompt` 症状名，别都归进 `send_unverified_exhausted`；
+③ 或 preflight 校验席位的 `dangerously_skip_permissions` 与它 `tools` 里声明的
+  `execute_bash` 是否自洽（声明了执行却不许绕权限 ⇒ 必然卡）。
+
+**我方两处处置**：
+1. 角色文件改 `dangerously_skip_permissions: true`，`reset-agent --discard-session` 重起。
+2. **更根上的一条（用户提的）**：⛔ 席位不许写 `/tmp` 或任何项目外路径，
+   临时文件一律写 `.team/nodes/<格>/tmp/`。各家 provider 对项目外路径的默认策略不同，
+   **靠加权限治不了根**；不越界则整类提示消失，且临时产物留在仓里可回看。
+   已写进全部 12 格派单正文（账本 rev12）并发补充给在跑的席位。
+
+⛔ 只收集，未投递。
