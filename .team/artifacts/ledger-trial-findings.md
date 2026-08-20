@@ -1087,3 +1087,37 @@ ls .worktrees/prov.whitelist/.team/nodes/prov-whitelist/  →  No such file or d
 - ⛔ 不许写没有适用范围的数值门槛；✅ 优化类门槛一律写明「只对改后生效」
 - ⛔ 不许用 `test -s <绝对路径>`；✅ 用 `python3 -c` 内嵌路径（同时绕开 F-23）
 - ✅ 每写一条判据自问：**「做了但表达方式不同」会不会被它判红？** 会 ⇒ 重写
+
+---
+
+## 【新】规范要求 judgment，引擎不支持 judgment（2026-08-21，pr1-v1 预检实撞）
+
+**现象**：账本按 `ledger-orchestration` §4.4 写了 `acceptance.judgment`（异源 provider、
+`judge_role`、`judge_must_not_be`、`veto: true`），预检直接拒：
+
+```
+预检拒绝：t.d1 声明了 judgment（J-d1）——本引擎不支持 judgment，改用机械门（verdict 文件 + grep）
+```
+
+**量具身份**：`ledger-run` md5 `8c1c850bec4c86d230480b99fd6cd671`，mtime 2026-08-20 15:06。
+
+**归属**：C（对方的编排框架）——**规范与实现对不上**。
+规范把判断型验收写成硬约束（「判断型验收必须使用与实现不同的 provider，且可否决」、
+「把判断 ID 也放进 `required`」），而引擎整个不支持。
+按规范写出来的账本**必然被预检拒**，且只有跑到预检才知道。
+
+**易用性问题**：错误串给了绕法（verdict 文件 + grep），这点很好；
+但**规范那一节没有任何标注说明它未实现**，照规范写就会白写一轮。
+
+**我方绕法（已用）**：审 PR 改成独立的格 + verdict 文件机械门 —— 判者写
+`VERDICT: supports|refutes|inconclusive` 顶格第一行，两条机械判据分别验「格式合法」与「结论是 supports」。
+**代价**：① 失去引擎级的 `judge_must_not_be`／`veto` 语义，异源性只能靠账本作者自觉
+（判者角色的 provider 与产出方不同，但没有任何东西强制它）；
+② `refutes` 与「判者本身失败」在退出码上同形，只能靠两条判据分开的日志区分。
+
+**⛔ 只收集，未投递**（2026-08-19 用户令；2026-08-21 用户重申：bug 直接投，优化点只收集——本条属优化点）。
+
+### 顺带两条（同一次预检发现，不单独成条）
+- `handoff.required_artifacts` 要求**绝对路径**，而 `judgment.input_artifacts` 要求**相对路径**
+  且必须能在 `read_paths`/`write_paths` 里字面命中——同一份产物两处写法相反，报错串不点明这一点。
+- 产物的**父目录必须预先存在**，否则预检拒。首份账本必然踩，错误串本身清楚，属易用性。
