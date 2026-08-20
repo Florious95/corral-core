@@ -29,7 +29,8 @@ import kotlin.math.pow
 /**
  * 终端自绘色板的取色入口（078 §2 / 080 / 083 §2 / 085 §1.5）。
  *
- * Scheme 的 16+fg/bg 来自当前槽的上游主题；[userBlockBg] 仍按外壳深浅取 APP 值。
+ * Scheme 的 16+fg/bg 来自当前槽的上游主题；[userBlockBg] 按契约 089 §1 从该主题现算
+ * （优先 `selection`，对比度不达标或缺省时从 `defaultBg` 朝 `defaultFg` 抬一档）。
  * [Light]/[Dark] 保留为目录损坏时的缺省回退，不是用户可选的「原厂绿」。
  *
  * 083 §2 触发保留：索引 0/16 背景→纸色、254/近白→userBlock、真彩背景亮度守卫。
@@ -61,6 +62,9 @@ object TermPalette {
     private const val CHROMA_SLOT = 0.06
     private const val TIE_EPS = 1e-6
     private const val CONTRAST_MIN = 3.0
+
+    /** 契约 089 §1：selection 不可用时，从 defaultBg 朝 defaultFg 插值的一档比例。 */
+    private const val USER_BLOCK_LIFT = 1.0 / 6.0
 
     data class Scheme(
         val defaultBg: Int,
@@ -411,7 +415,6 @@ object TermPalette {
         val family = resolveFamily(familyId, slot)
         val sourceFile = if (dark) family.darkSource else family.lightSource
         val colors = TermSchemeCatalog.colorsBySourceFile[sourceFile]
-        val app = if (dark) TerminalPaletteDark else TerminalPaletteLight
         if (colors == null || colors.ansi.size != 16) {
             DiagLog.record(
                 "term-theme",
@@ -422,7 +425,7 @@ object TermPalette {
         return Scheme(
             defaultBg = colors.background,
             defaultFg = colors.foreground,
-            userBlockBg = app.userBlockBackground.toArgb(),
+            userBlockBg = deriveUserBlockBg(colors.background, colors.foreground, colors.selection),
             ansi16 = colors.ansi.mapIndexed { i, c -> i to c }.toMap(),
             source = colors.sourceFile,
             cursor = colors.cursor,
@@ -445,6 +448,25 @@ object TermPalette {
             lightSource = "Vesper.itermcolors",
             darkSource = "Vesper.itermcolors",
         )
+    }
+
+    /**
+     * 用户块底：优先主题自带 selection（语义＝被强调文本的底）；
+     * 缺失或与 defaultFg 对比度达不到 [CONTRAST_MIN] 时，从 defaultBg 朝 defaultFg 抬一档。
+     */
+    private fun deriveUserBlockBg(defaultBg: Int, defaultFg: Int, selection: Int?): Int {
+        if (selection != null && contrast(selection, defaultFg) >= CONTRAST_MIN) return selection
+        return liftTowardFg(defaultBg, defaultFg)
+    }
+
+    private fun liftTowardFg(bg: Int, fg: Int): Int {
+        val t = USER_BLOCK_LIFT
+        fun ch(shift: Int): Int {
+            val a = (bg shr shift) and 0xFF
+            val b = (fg shr shift) and 0xFF
+            return (a + (b - a) * t).toInt().coerceIn(0, 255)
+        }
+        return pack(ch(16), ch(8), ch(0))
     }
 
     private fun schemeFrom(p: TerminalPalette): Scheme = Scheme(

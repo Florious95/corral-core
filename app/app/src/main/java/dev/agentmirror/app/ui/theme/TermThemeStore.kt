@@ -32,6 +32,7 @@ data class TermThemeSelection(
     }
 }
 
+/** 终端主题浅/深两槽的偏好读写。 */
 interface TermThemeStore {
     fun load(): TermThemeSelection
     fun saveLight(familyId: String)
