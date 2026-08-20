@@ -140,3 +140,29 @@ resident-exit signal=term reason=human_stop
 [ledger-run 2026-08-20T04:28:19Z] 投递回执 send-ok | task=t.catalog case_id=ledger_theme_v1__t.catalog__r12 message_id=msg_1c218a2dc7e0 —— 回执成功≠席位收到，下一步查收件箱确认落地
 [ledger-run 2026-08-20T04:28:19Z] 派单落地 dispatch-landed | task=t.catalog 席位 theme-v1-catalog 的收件箱已多出这条派单
 [ledger-run 2026-08-20T04:28:19Z] 等待 wait | task=t.catalog 在等的 key（case_id）=ledger_theme_v1__t.catalog__r12 team=grok-l2 预算=600s 来源=缺省 600，不是 time_budget_seconds
+[ledger-run 2026-08-20T04:38:19Z] 无信号 wait-no-signal | task=t.catalog 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-20T04:38:19Z] 判据 acceptance | task=t.catalog 在跑 required=["A-cat-test", "A-cat-notice", "A-cat-count", "A-cat-noimposter", "A-cat-suite", "A-cat-doc"]
+[ledger-run 2026-08-20T04:38:58Z] 原子写回 writeback-atomic | task=t.catalog missing_result=alarm，不得 succeeded → 临时文件+rename 已落盘（revision=13 hash=13ef384d8a55f753）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T04:38:58Z] 缺结果 missing-result | task=t.catalog handoff.missing_result=alarm 且预算内没有该 case 的结果——不得判 succeeded，⛔ 不重发不换席位；缺结果不是判据不可判
+[ledger-run 2026-08-20T04:38:58Z] 收工 finish | 停机原因=AwaitingHuman 写回=["t.catalog"] 冻结=[] 不可判=[] 墙钟已跑 639s
+[ledger-run 2026-08-20T04:38:58Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-20T04:38:58Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-20T04:38:58Z] 挂起 park | token=parked ledger_id=ledger.theme.v1 revision=13 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.theme.v1 | revision: 13 | 停机原因: AwaitingHuman | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 ｜ 未干完的任务（非 Succeeded）: t.catalog=Alarm, t.settings=Planned, t.wire=Planned | 各任务终态: t.catalog=Alarm, t.plan=Succeeded, t.remap=Succeeded, t.settings=Planned, t.wire=Planned
+resident-exit signal=term reason=human_stop
+[ledger-run 2026-08-20T04:40:45Z] 常驻开工 resident-start | 账本=.team/ledgers/theme-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-20T04:40:45Z] 开工 start | ledger_id=ledger.theme.v1 revision=14 账本=.team/ledgers/theme-v1.json 墙钟上限=34800s 派单死线=90s
+[ledger-run 2026-08-20T04:40:47Z] 轮次 round | 第 1 轮开始：前沿 ["t.catalog"]（墙钟已跑 2s / 上限 34800s）
+[ledger-run 2026-08-20T04:40:47Z] 派单 dispatch | task=t.catalog 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/theme-v1-catalog 席位=theme-v1-catalog attempt=att-t.catalog-seq1-t1787200847541 delivery=del-t.catalog-seq1-t1787200847541 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T04:40:48Z] 投递回执 send-ok | task=t.catalog case_id=ledger_theme_v1__t.catalog__r14 message_id=msg_4cf2ec08d438 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T04:40:48Z] 派单落地 dispatch-landed | task=t.catalog 席位 theme-v1-catalog 的收件箱已多出这条派单
+[ledger-run 2026-08-20T04:40:48Z] 等待 wait | task=t.catalog 在等的 key（case_id）=ledger_theme_v1__t.catalog__r14 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T04:46:02Z] 已唤醒 wait-signaled | task=t.catalog 等到结果了
+[ledger-run 2026-08-20T04:46:02Z] 判据 acceptance | task=t.catalog 在跑 required=["A-cat-test", "A-cat-notice", "A-cat-count", "A-cat-noimposter", "A-cat-suite", "A-cat-doc"]
+[ledger-run 2026-08-20T04:46:44Z] 判据通过留档 acceptance-success | task=t.catalog 成功 attempt 落进 attempts[] writeback_revision=15 passed=["A-cat-test", "A-cat-notice", "A-cat-count", "A-cat-noimposter", "A-cat-suite", "A-cat-doc"]
+[ledger-run 2026-08-20T04:46:44Z] 原子写回 writeback-atomic | task=t.catalog state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=15 hash=be3ace299cab8f52）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T04:46:44Z] 写回 writeback | task=t.catalog state=succeeded revision=14 → 15
+[ledger-run 2026-08-20T04:46:44Z] 轮次 round | 第 2 轮开始：前沿 ["t.wire"]（墙钟已跑 359s / 上限 34800s）
+[ledger-run 2026-08-20T04:46:44Z] 派单 dispatch | task=t.wire 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/theme-v1-wire 席位=theme-v1-wire attempt=att-t.wire-seq2-t1787201204896 delivery=del-t.wire-seq2-t1787201204896 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T04:46:45Z] 投递回执 send-ok | task=t.wire case_id=ledger_theme_v1__t.wire__r15 message_id=msg_33c1f46d8468 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T04:46:45Z] 派单落地 dispatch-landed | task=t.wire 席位 theme-v1-wire 的收件箱已多出这条派单
+[ledger-run 2026-08-20T04:46:45Z] 等待 wait | task=t.wire 在等的 key（case_id）=ledger_theme_v1__t.wire__r15 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
