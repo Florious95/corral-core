@@ -83,6 +83,44 @@
      "acceptance_failure.stderr_tail(末20行)=candidates=['/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-d1-rv/verdict.md', '/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.d1.rv/.team/nodes/pr1-d1-rv/verdict.md'] hit=[]\n产物两处都不存在"
     ]
    }
+  },
+  {
+   "task_id": "t.resync",
+   "superseded_at_revision": 8,
+   "reason": "评审席 refutes：功能判据缺先验红（原先贴的是机械判据的必然红）。产品码无需改，只补红证。",
+   "attempt": {
+    "attempt_id": "att-t.resync-seq2-t1787249094510",
+    "delivery_id": "del-t.resync-seq2-t1787249094510",
+    "state": "succeeded",
+    "writeback_revision": 4,
+    "artifact_refs": [
+     "acceptance_success.acceptance_id=A-resync-suite",
+     "acceptance_success.acceptance_id=A-resync-wiki",
+     "acceptance_success.acceptance_id=A-resync-smell",
+     "acceptance_success.acceptance_id=A-resync-doc",
+     "acceptance_success.acceptance_id=A-resync-seal",
+     "acceptance_success.writeback_revision=4"
+    ]
+   }
+  },
+  {
+   "task_id": "t.resync.rv",
+   "superseded_at_revision": 8,
+   "reason": "评审席 refutes：功能判据缺先验红（原先贴的是机械判据的必然红）。产品码无需改，只补红证。",
+   "attempt": {
+    "attempt_id": "att-t.resync.rv-seq6-t1787249551089",
+    "delivery_id": "del-t.resync.rv-seq6-t1787249551089",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-resync-rv-pass",
+     "acceptance_failure.argv=[\"python3\", \"-c\", \"import io,os,sys\\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-resync-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.input/.team/nodes/pr2-resync-rv/verdict.md']\\nhit=[c for c in cands if os.path.exists(c)]\\nsys.stderr.write('hit=%r\\\\n'%hit)\\nif not hit: sys.exit(1)\\ns=io.open(hit[0],encoding='utf-8').read()\\nfirst=(s.splitlines() or [''])[0].strip()\\nsys.stderr.write('verdict=%r len=%d\\\\n'%(first,len(s)))\\nsys.exit(0 if first=='VERDICT: supports' else 1)\\n\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)=hit=['/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.input/.team/nodes/pr2-resync-rv/verdict.md']\nverdict='VERDICT: refutes' len=1984"
+    ]
+   }
   }
  ]
 }
