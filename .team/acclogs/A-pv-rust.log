@@ -1,0 +1,29 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/Volumes/nvme/cargo-target/debug/deps/nodeprobe-9fc16c2382662042)
+
+running 10 tests
+test classify::tests::unknown_title_state_is_not_idle ... ok
+test tests::corpus_rejects_missing_kind ... ok
+test proctree::tests::ps_invocation_is_narrow_fields_only ... ok
+test providers::tests::six_rows_and_basename ... ok
+test proctree::tests::walk_hits_nested_codex_via_basename ... ok
+test classify::tests::footer_grok_running_is_count_state_stays_idle ... ok
+test classify::tests::footer_provider_without_rule_is_unknown_not_zero ... ok
+test providers::tests::provider_corpus_parity_with_go ... ok
+test classify::tests::footer_grok_vacuum_is_zero_not_constant_one ... ok
+test tests::fixtures_corpus ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/Volumes/nvme/cargo-target/debug/deps/nodeprobe-1f093f487b9ef972)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests nodeprobe
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,7 +1,10 @@
-# comm-basename	provider-id	display-name
+# comm-basename	provider-id	display-name	[match]
+# match empty = basename only; path-segment = also hit when raw comm contains /<comm-basename>/ as a directory.
+# (Needed when the executable basename is a generic interpreter such as node; never whitelist that interpreter.)
 # Shared by Go (server) and Rust (nodeprobe). Do not fork this table.
 claude	claude_code	Claude Code
 codex	codex	Codex
 copilot	copilot	Copilot
 grok	grok	Grok
-cursor-agent	cursor	Cursor
+cursor-agent	cursor	Cursor	path-segment
+pi	pi	Pi

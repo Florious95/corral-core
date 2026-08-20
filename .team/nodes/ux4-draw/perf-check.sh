@@ -305,8 +305,8 @@ def within_10(a, b):
 
 def run_burst():
     set_burst(1)
+    # 只 tap 唤醒采集。swipe 会把滚轮发给远端 TUI，改前/改后变成两块屏。
     sh(adb, "shell", "input", "tap", "630", "1400")
-    sh(adb, "shell", "input", "swipe", "630", "1200", "630", "900", "140")
     subprocess.run([adb, "shell", "dumpsys", "gfxinfo", pkg, "reset"], capture_output=True, timeout=30)
     time.sleep(16)
     gfx = subprocess.run(

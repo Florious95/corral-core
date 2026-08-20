@@ -2,49 +2,25 @@ Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1718
-WaitTime: 1721
+TotalTime: 1708
+WaitTime: 1713
 Complete
 Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
 Status: ok
 LaunchState: COLD
 Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1618
-WaitTime: 1620
+TotalTime: 1846
+WaitTime: 1849
 Complete
-Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
-Status: ok
-LaunchState: COLD
-Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1517
-WaitTime: 1519
-Complete
-Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
-Status: ok
-LaunchState: COLD
-Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1352
-WaitTime: 1355
-Complete
-Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
-Status: ok
-LaunchState: COLD
-Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1538
-WaitTime: 1539
-Complete
-Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
-Status: ok
-LaunchState: COLD
-Activity: dev.agentmirror.app/.MainActivity
-TotalTime: 1672
-WaitTime: 1677
-Complete
-GFX density=480 opt=0 total=110 janky%=0.91 p95_ms=31.0
-DRAW density=480 opt=0 n=120 avg_us=3658 p95_us=5618 body_p95=5608 lines_p95=5591 super_p95=0 clear_p95=13 bgRect=2017 textDraw=42 cellsNonBlank=2016 lock=-1 post=-1
-GFX density=480 opt=1 total=117 janky%=1.71 p95_ms=28.0
-DRAW density=480 opt=1 n=120 avg_us=3143 p95_us=4491 body_p95=4483 lines_p95=4463 super_p95=0 clear_p95=13 bgRect=1 textDraw=42 cellsNonBlank=2016 lock=-1 post=-1
-OUTSIDE d480 before gfx_p95_ms=31.0 dt_us_p95=5618 outside_us=25382 (gfx*1000-dt)
-OUTSIDE d480 after gfx_p95_ms=28.0 dt_us_p95=4491 outside_us=23509 (gfx*1000-dt)
-NOTE d480 p95_delta 0.201  before=5618 after=4491（不再作为判据）
-FAIL 进不了会话页。屏上有: ['工作区', '连接已关闭', '❯_', '连接已关闭', '与主机的连接已终止。&#10;请检查主机守护进程，或重新配对。', '★', '收藏', '☰', '会话', '⚙', '设置']
+GFX density=480 opt=0 total=774 janky%=12.02 p95_ms=31.0
+DRAW density=480 opt=0 n=120 avg_us=5264 p95_us=7905 bgRect=1637 textDraw=445 cellsNonBlank=1636
+GFX density=480 opt=1 total=794 janky%=10.08 p95_ms=29.0
+DRAW density=480 opt=1 n=120 avg_us=4479 p95_us=6496 bgRect=1 textDraw=445 cellsNonBlank=1636
+OUTSIDE d480 before gfx_p95_ms=31.0 dt_us_p95=7905 outside_us=23095 (gfx*1000-dt)
+OUTSIDE d480 after gfx_p95_ms=29.0 dt_us_p95=6496 outside_us=22504 (gfx*1000-dt)
+NOTE d480 p95_delta 0.178  before=7905 after=6496（不再作为判据）
+GFX density=440 opt=0 total=823 janky%=11.79 p95_ms=34.0
+DRAW density=440 opt=0 n=253 avg_us=5622 p95_us=8270 bgRect=2230 textDraw=365 cellsNonBlank=2229
+GFX density=440 opt=1 total=819 janky%=10.62 p95_ms=28.0
+DRAW density=440 opt=1 n=256 avg_us=4574 p95_us=6417 bgRect=14 textDraw=365 cellsNonBlank=2229
+FAIL d440 before dt_us_p95=8270 ≥ 8000

@@ -53,6 +53,7 @@ pub const PROVIDER_CLAUDE: &str = "claude_code";
 pub const PROVIDER_CODEX: &str = "codex";
 pub const PROVIDER_COPILOT: &str = "copilot";
 pub const PROVIDER_CURSOR: &str = "cursor";
+pub const PROVIDER_PI: &str = "pi";
 
 const GROK_THINK: &str = " - Thinking - ";
 const GROK_WAIT: &str = " - Waiting for response";
@@ -333,6 +334,7 @@ fn intern_expect(s: &str) -> &'static str {
         "codex" => PROVIDER_CODEX,
         "copilot" => PROVIDER_COPILOT,
         "cursor" => PROVIDER_CURSOR,
+        "pi" => PROVIDER_PI,
         _ => STATE_UNKNOWN,
     }
 }
