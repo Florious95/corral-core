@@ -79,7 +79,7 @@ class OverlayMenuTest {
         )
         compose.onNodeWithText("advisor").assertIsDisplayed()
         compose.onNodeWithText("developer").assertIsDisplayed()
-        compose.onNodeWithText("进行中").assertIsDisplayed()
+        compose.onNodeWithText("运行").assertIsDisplayed()
         compose.onNodeWithText("空闲").assertIsDisplayed()
         assertEquals(
             listOf(L2Status.WORKING, L2Status.IDLE),
