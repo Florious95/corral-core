@@ -186,3 +186,4 @@ resident-exit signal=term reason=human_stop
 [ledger-run 2026-08-20T05:21:54Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
 [ledger-run 2026-08-20T05:21:54Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=17 hash=2f4ed78f43d201fc）——中途死也不会留下半份账本，进度不会全废
 [ledger-run 2026-08-20T05:21:54Z] 挂起 park | token=parked ledger_id=ledger.theme.v1 revision=17 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.theme.v1 | revision: 17 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.catalog=Succeeded, t.plan=Succeeded, t.remap=Succeeded, t.settings=Succeeded, t.wire=Succeeded
+resident-exit signal=term reason=human_stop
