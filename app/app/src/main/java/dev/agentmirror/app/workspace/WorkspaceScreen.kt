@@ -208,6 +208,7 @@ fun WorkspaceScreen(
                                 level2.sessions.map { it.toSessionItem(starred.contains(it.favoriteKey())) },
                             ),
                             onBack = onBackToList,
+                            // 094：点击用展示项 id（= ref），不按下标回源。会话页允许动态重排。
                             onSessionClick = { item -> onOpenSession(item.id, item.displayName) },
                             onToggleStar = { item ->
                                 level2.sessions.firstOrNull { it.ref == item.id }?.let(viewModel::toggleFavorite)
