@@ -81,31 +81,46 @@ class TabScrollTest {
         compose.waitForIdle()
 
         val before = snapshot("settings-scroll", nav.homePane.ordinal)
-        val lastBefore = compose.onAllNodesWithText("跟随系统").fetchSemanticsNodes()
-            .maxBy { it.boundsInRoot.bottom }
-        val tabsBefore = compose.onNodeWithTag("bottom-tabs").fetchSemanticsNode()
-        val overflowBefore = lastBefore.boundsInRoot.bottom - tabsBefore.boundsInRoot.top
 
+        // 一次 swipe：settings-launch 卡进入布局。实测最底非零子节点 bottom=455、
+        // tabs.top=460（贴住底栏）。此时量「跟随系统」仍是 0×0 恒真。
         compose.onNodeWithTag("settings-scroll").performTouchInput { swipeUp() }
         compose.waitForIdle()
+        val midLast = launchCardLastLaidOut()
+        val midTabs = compose.onNodeWithTag("bottom-tabs").fetchSemanticsNode()
+        val midCut = midLast.boundsInRoot.bottom > midTabs.boundsInRoot.top + 1f
+        assertTrue(
+            "滚满前最后已布局控件必须贴住或越过底栏（否则 lastFullyAboveTabs 没有被切断的对照） " +
+                "midBottom=${midLast.boundsInRoot.bottom} midTop=${midLast.boundsInRoot.top} " +
+                "tabsTop=${midTabs.boundsInRoot.top} midCut=$midCut",
+            midLast.boundsInRoot.bottom > 1f &&
+                midLast.boundsInRoot.bottom >= midTabs.boundsInRoot.top - 8f,
+        )
+
         repeat(3) {
             compose.onNodeWithTag("settings-scroll").performTouchInput { swipeUp() }
             compose.waitForIdle()
         }
 
         val after = snapshot("settings-scroll", nav.homePane.ordinal)
-        compose.onNodeWithText("外观").assertIsDisplayed()
-        val lastAfter = compose.onAllNodesWithText("跟随系统").fetchSemanticsNodes()
-            .maxBy { it.boundsInRoot.bottom }
+        compose.onNodeWithTag("settings-launch").assertIsDisplayed()
+        val lastAfter = launchCardLastLaidOut()
         val tabsAfter = compose.onNodeWithTag("bottom-tabs").fetchSemanticsNode()
         val lastFullyAboveTabs = lastAfter.boundsInRoot.bottom <= tabsAfter.boundsInRoot.top + 1f
-
         assertTrue(
-            "设置页必须先溢出视口才谈得上滚（contentPx=${before.contentPx} viewportPx=${before.viewportPx} overflowBefore=$overflowBefore scrollMax=${before.scrollMax}）",
-            before.contentPx > before.viewportPx || overflowBefore > 0f,
+            "最后一项必须有真实布局（禁止 0×0 让 lastFullyAboveTabs 恒真） " +
+                "lastBottom=${lastAfter.boundsInRoot.bottom} lastTop=${lastAfter.boundsInRoot.top}",
+            lastAfter.boundsInRoot.bottom > 1f,
         )
         assertTrue(
-            "滚不动：scrollMax=${before.scrollMax}（0/NaN=没有竖直滚动参与者）。能滚但裁掉：scrollMax>0 且最后一项仍被切断。contentPx=${after.contentPx} viewportPx=${after.viewportPx} overflowBefore=$overflowBefore lastFullyAboveTabs=$lastFullyAboveTabs pagerBefore=${before.pagerPage} pagerAfter=${after.pagerPage}",
+            "设置页必须先溢出视口才谈得上滚（contentPx=${before.contentPx} viewportPx=${before.viewportPx} scrollMax=${before.scrollMax}）",
+            before.contentPx > before.viewportPx || before.scrollMax > 0f,
+        )
+        assertTrue(
+            "滚不动：scrollMax=${before.scrollMax}。能滚但裁掉：scrollMax>0 且最后一项仍被切断。" +
+                "contentPx=${after.contentPx} viewportPx=${after.viewportPx} " +
+                "lastFullyAboveTabs=$lastFullyAboveTabs lastBottom=${lastAfter.boundsInRoot.bottom} " +
+                "tabsTop=${tabsAfter.boundsInRoot.top} pagerBefore=${before.pagerPage} pagerAfter=${after.pagerPage}",
             before.scrollMax > 0f && lastFullyAboveTabs,
         )
         assertEquals(
@@ -118,6 +133,17 @@ class TabScrollTest {
             after.scrollValue > before.scrollValue,
         )
         compose.onNodeWithTag("bottom-tabs").assertExists()
+    }
+
+    /** settings-launch 卡内 bottom>1 的最底子节点；否则 Pi 文案；再否则卡本身。 */
+    private fun launchCardLastLaidOut(): androidx.compose.ui.semantics.SemanticsNode {
+        val card = compose.onNodeWithTag("settings-launch").fetchSemanticsNode()
+        val laidOut = card.children.filter { it.boundsInRoot.bottom > 1f }
+        if (laidOut.isNotEmpty()) return laidOut.maxBy { it.boundsInRoot.bottom }
+        val pi = compose.onAllNodesWithText("Pi").fetchSemanticsNodes()
+            .filter { it.boundsInRoot.bottom > 1f }
+        if (pi.isNotEmpty()) return pi.maxBy { it.boundsInRoot.bottom }
+        return card
     }
 
     @Test
