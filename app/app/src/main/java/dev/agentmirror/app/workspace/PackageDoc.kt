@@ -30,4 +30,5 @@ package dev.agentmirror.app.workspace
  * @consumes dev.agentmirror.app.conn
  * @consumes dev.agentmirror.app.tsnet
  * @consumes dev.agentmirror.app.ui.theme
+ * @consumes dev.agentmirror.app.ui.components
  */
