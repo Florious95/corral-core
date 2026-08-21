@@ -1,0 +1,477 @@
+{
+ "find": {
+  "ac588cde3bc2b7b8d": [
+   {
+    "title": "Capture-BEFORE-Resize permanently loses the SIGWINCH redraw: pipe attaches after both the capture and the resize",
+    "file": "server/internal/api/ws_handler.go",
+    "line": 157,
+    "severity": "P0",
+    "claim": "On pr/srv-first-frame the order is capture(157) → Resize(167) → pipe attach(171). bridge.Subscribe uses `pipe-pane -o` which only streams bytes emitted AFTER it attaches (stream.go:145), so every byte the pane emits in the window [capture, attach] is lost forever — and the Resize the server itself issues at :167 lands exactly inside that window, so the TUI's SIGWINCH redraw is the single most likely thing to be destroyed. The removed comment on main said the opposite is required (\"Attach the pipe before the snapshot so no output between the two is lost\").",
+    "failure_scenario": "Phone (108x96) subscribes to a live Claude Code pane sitting at host geometry 213x54. Server captures the 213-col screen, then resize-window to 108x96 → SIGWINCH → Claude Code repaints the whole screen at 108 cols → those bytes go to a pane with no pipe attached and are dropped. The pipe attaches ~10ms later. The client renders a 213-col capture inside a 108-col grid (wrapped/garbled or apparently blank right half) and, because the CLI is now idle, no further output ever arrives. Recovery requires user input. handleResize cannot fix it either: the App's next resize frame carries the same 108x96, br.Size before==after, and ws_handler.go:201 explicitly skips the corrective snapshot.",
+    "evidence": "ws_handler.go:157 `snap, err := snapshotWithCursor(c.ctx, br)`; :167 `br.Resize(c.ctx, int(s.Cols), int(s.Rows))`; :171 `ch, detach, err := br.Subscribe(c.ctx)`. bridge/stream.go:145 comment + `pipe-pane -o -t target \"cat >> \"+shellQuote(fifo)` — no retroactive buffer. handleResize takes the opposite order and documents why: ws_handler.go:213 \"tmux reflows the pane synchronously on resize-window, so capturing right after Resize is content-correct\"."
+   },
+   {
+    "title": "Re-subscribe captures the first frame in the middle of a restore-resize storm",
+    "file": "server/internal/api/ws_handler.go",
+    "line": 140,
+    "severity": "P1",
+    "claim": "c.subscribeCancel(s.Ref) at :140 runs teardownSubscription → restoreSize → paneGeometry.release, which on active→0 issues br.Resize back to the host baseline (pane_geometry.go, the `if known { br.Resize(context.Background(), cols, rows) }` branch). handleSubscribe then captures at :157 with zero settle time. So on the reconnect/replay path the capture is taken microseconds after a SIGWINCH that asked the TUI to repaint at a *different* size, and that repaint is again not in the pipe (attached at :171).",
+    "failure_scenario": "App backgrounds and returns → ConnectionManager.kt:778 re-sends SubscribeFrame for the same ref. Server: release → resize pane 108x96 → 213x54 (SIGWINCH, TUI starts clearing) → capture-pane immediately (catches the half-cleared or fully-cleared screen) → resize 213x54 → 108x96 (second SIGWINCH, repaint lost, pipe still not attached) → sends the half-cleared capture as the first frame. This is precisely the \"回前台白屏\" symptom the change was meant to remove, but only on the reconnect path — the new probe test only covers a first-time subscribe (hl092_static_alt_first_frame_probe_test.go sends exactly one Subscribe).",
+    "evidence": "ws_handler.go:140 `c.subscribeCancel(s.Ref)`; ws_conn.go:477-485 teardownSubscription → restoreOnce → restoreSize; ws_handler.go:197-199 `sub.restoreSize = func() { geom.release(c.ctx, br, c.s.log, s.Ref) }`; pane_geometry.go release: `if g.active == 0 { ... br.Resize(context.Background(), cols, rows) }`."
+   },
+   {
+    "title": "geometryFor/acquire is never released on handleSubscribe's error returns — pane stays at phone geometry forever",
+    "file": "server/internal/api/ws_handler.go",
+    "line": 149,
+    "severity": "P1",
+    "claim": "geom.acquire (:149) increments paneGeometry.active, but the three error returns that follow (:159 snapshot failure, :173 Subscribe failure, :184 encode failure) return without calling geom.release. active is then permanently inflated for that ref, so when the real subscribers later leave, active never reaches 0 and the last-leaver restore never runs. The new code moved the snapshot error path *earlier* (it used to be after Subscribe and at least called detach()), so the leak is now reachable before any pipe exists.",
+    "failure_scenario": "Client subscribes to a pane that dies between resolvePane and snapshotWithCursor (or tmux times out) → server returns session_not_found at :159, active=1 forever. Client retries, succeeds, resizes the pane to 108x96, later unsubscribes → release drops active 2→1, not 0 → br.Resize back to 213x54 is never issued. The host user's tmux pane is left at phone geometry for the life of the daemon, violating 契约 2 of fix-host-pane-geometry-accounting.",
+    "evidence": "ws_handler.go:149 `_, _, _ = geom.acquire(c.ctx, br)`; :158-161 `if err != nil { c.sendError(...); return }` — no geom.release; :172-175 and :182-186 likewise. pane_geometry.go release: `if g.active <= 0 { return }` / `g.active--; if g.active == 0 { ...restore... }`."
+   },
+   {
+    "title": "ConnMetrics is mutated concurrently by readLoop and every relay goroutine despite being documented as single-threaded",
+    "file": "server/internal/api/sendq_metrics.go",
+    "line": 62,
+    "severity": "P1",
+    "claim": "ConnMetrics is declared non-atomic on the stated ground that \"连接自身的事件都在自己的读/写/relay goroutine 内\". That is false: c.connMetrics.recordSnapshot() runs on the readLoop goroutine (via sendBinary from handleSubscribe/handleResize/handleScrollback) while c.connMetrics.recordFramesSent()/recordDrop() run on each relay goroutine (via sendMirror), and there is one relay goroutine per subscription. teardown then reads the whole struct while relays are still alive.",
+    "failure_scenario": "Client subscribes to two panes and both stream deltas while the client sends a resize. relay#1 does FramesSent++, relay#2 does FramesSent++, readLoop does SnapshotsPushed++ on the same struct — an unsynchronized read-modify-write on int64 from three goroutines. Counts are silently wrong (the exact class of defect the 'per-conn vs process-level' P0 comment at ws_conn.go:82 was written to stop), and `go test -race` on any test that overlaps a delta with a snapshot on one connection will flag it. teardown's `cm := c.connMetrics` (ws_conn.go:232) races the relays it has not yet cancelled (cancel happens at :274).",
+    "evidence": "sendq_metrics.go:62-64 \"单线程使用（连接自身的事件都在自己的读/写/relay goroutine 内），无需原子\"; ws_conn.go:305 `c.connMetrics.recordSnapshot()` inside sendBinary; ws_conn.go:318/322 `c.connMetrics.recordFramesSent()` / `recordDrop()` inside sendMirror; ws_conn.go:538 `c.sendMirror(frame)` inside relay; ws_conn.go:201 `go c.relay(...)` per subscription."
+   },
+   {
+    "title": "SnapshotsFromSubscribe counts subscribe attempts, not first frames — it can never distinguish \"快照没发\" from \"快照发了\"",
+    "file": "server/internal/api/sendq_metrics.go",
+    "line": 51,
+    "severity": "P2",
+    "claim": "recordSubscribe() increments SubscribesTotal and SnapshotsFromSubscribe on adjacent lines, and handleSubscribe calls it at :128 before resolving the ref, before capturing, before sending anything. The two counters are therefore equal by construction and neither observes whether a snapshot frame was actually written. The field comment claims it is 「订阅路径推的快照帧数（handleSubscribe 首帧）」.",
+    "failure_scenario": "A production run where every subscribe fails at :159 (pane gone) logs `total.subscribes=57 total.snapshots_from_subscribe=57` — a perfect green — while zero first frames reached any client. This is exactly the 世界A/世界B ambiguity the new probe test was written to break, and the metric that would have caught it in production is blind. Contrast recordResizeSnapshot, which is at least called on the resize path just before the send.",
+    "evidence": "sendq_metrics.go:51-54 `func (m *SendQueueMetrics) recordSubscribe() { m.SubscribesTotal.Add(1); m.SnapshotsFromSubscribe.Add(1) }`; ws_handler.go:128-129 called at the top of handleSubscribe; ws_handler.go:137 the unknown-ref return comes after it."
+   },
+   {
+    "title": "unmarkAuthed's Store(0) clamp can zero a live client's count and park the listing loop",
+    "file": "server/internal/api/server.go",
+    "line": 356,
+    "severity": "P2",
+    "claim": "`if s.authed.Add(-1) <= 0 { s.authed.Store(0) }` is not atomic as a pair. A concurrent markAuthed that runs between the Add(-1) and the Store(0) is erased.",
+    "failure_scenario": "Last client A drops at the same moment client B connects: A does Add(-1)→0; B does Add(1)→1 and pushes the 0→1 wake; A then Store(0). The listing loop consumes the wake, publishes once, loops, reads countAuthed()==0 and parks on wakeCh. B is authenticated and live but receives no list_delta at all until some third connection arrives — the level-1 menu silently stops updating for the whole session.",
+    "evidence": "server.go:356-360 unmarkAuthed; server.go:344-351 markAuthed sends on wakeCh only on the 0→1 transition; server.go:315-323 listingLoop parks whenever countAuthed()==0."
+   },
+   {
+    "title": "openFIFO timeout leaves the pipe-pane cat attached and the FIFO on disk",
+    "file": "server/internal/bridge/stream.go",
+    "line": 159,
+    "severity": "P2",
+    "claim": "Every other failure path in subscribe() removes the FIFO, and the returned detach() is what tears down `pipe-pane`. The openFIFO error path returns before detach exists and does neither: the `cat >> <fifo>` tmux pipe stays attached to the pane and the FIFO node stays in os.TempDir().",
+    "failure_scenario": "The 3s fifoOpenTimeout fires (the documented crashed-pipe / silent-toggle case). handleSubscribe gets the error at ws_handler.go:172, replies \"cannot attach mirror\", and the daemon has now leaked one FIFO file plus one tmux-owned cat process bound to a user pane. Repeat on every reconnect attempt and /tmp accumulates agentmirror-*.fifo nodes — a direct hit on the 进程卫生 / 资源有界 red lines. (Self-healing only kicks in on the *next* successful Subscribe of the same pane, via the detach-first at stream.go:141.)",
+    "evidence": "stream.go:159-162 `reader, err := openFIFO(fifo); if err != nil { return nil, nil, err }` — compare stream.go:148-154, the pipe-pane Run() failure path, which does `_ = os.Remove(fifo)`."
+   },
+   {
+    "title": "handleCloseSession blocks the connection's read loop for up to ~2.2s",
+    "file": "server/internal/api/lifecycle.go",
+    "line": 87,
+    "severity": "P2",
+    "claim": "handleCloseSession runs synchronously on the readLoop goroutine (ws_conn.go:392) and spins with 50ms/200ms sleeps until closeWait (2s) elapses. No other frame from that client is parsed during the wait.",
+    "failure_scenario": "User closes a pane whose process ignores SIGTERM. For the next ~2.2s the same connection's subscribe / input / resize frames sit unread in the socket buffer: typing feels frozen and, if the user backgrounds and returns during it, the re-subscribe is delayed past the App's own timeout. Nothing in the protocol tells the client the connection is busy rather than dead.",
+    "evidence": "lifecycle.go:26 `const closeWait = 2 * time.Second`; lifecycle.go:87-124 the poll loop with `time.Sleep(200*time.Millisecond)` / `time.Sleep(50*time.Millisecond)`; ws_conn.go:134-149 readLoop calls handleFrame inline; ws_conn.go:392 `case protocol.CloseSession: c.handleCloseSession(t)`."
+   }
+  ],
+  "ab2c3d5995849e4ef": [
+   {
+    "title": "buildSnapshot 每个 session 各 fork 一次全量 ps：N 席位 → 每 2s tick N+1 次全表 ps（卡顿引入行）",
+    "file": "server/internal/api/listing.go",
+    "line": 61,
+    "severity": "P0",
+    "claim": "dc9aab11b 把 `buildSnapshot(c)` 改成 `buildSnapshot(c, s.identifyProvider)`，循环里对每个 session 调一次 `s.identifyProvider(pid)` → `procFinder.Identify` → `f.snapshot([]int{pid})`。procFinder 的缓存键是「本次请求的 pid 集合」(`paneSetKey`)，单 pid 的键与 filterModel 刚用 `IdentifySet(全部pid)` 存下的键必然不同（N≥2 时），所以每一次 Identify 都是缓存 miss + 覆盖 paneKey → 每个 session 各 fork 一次 `ps -axo pid=,ppid=,comm=` 并解析全机进程表。改前每次 rebuild 只有 1 次 IdentifySet，键稳定 + 10s TTL ⇒ 实测 5 个连续 tick 内 0 次重新 fork。",
+    "failure_scenario": "手机客户端保持连接 + 主机上 N 个受管 pane（多 workspace 多 session）。listingLoop 每 2s 调 rebuildCatalog：filterModel 先做 1 次 IdentifySet（1 次 ps），buildSnapshot 再做 N 次 Identify（N 次 ps），每次 ps 在本机 906 个进程下实测约 48ms。N=10 → 每 tick 11 次 ps；N=30 → 每 tick 31 次 ps ≈ 1.5s 墙钟，占满 2s 周期的 3/4，daemon 持续高 CPU + 持续 fork 风暴。改前是「每 10s 1 次 ps」，量级差 50–150 倍。这直接违反工程红线①静默经济（无固定频率子进程派生）。",
+    "evidence": "listing.go:58-63 `for _, e := range entries { ... prov = identify(e.pane.PanePID) }`；server.go:297 `snap := buildSnapshot(s.catalog, s.identifyProvider)`；whitelist.go:12 `return s.providerFinder.Identify(panePID)`；proctree.go:44 `snap := f.snapshot([]int{panePID})`；proctree.go:77-89 `key := paneSetKey(panePIDs) ... if f.snap != nil && f.paneKey == key && time.Since(f.snap.taken) < procTTL { return f.snap }`；proctree.go:107 `exec.Command(\"ps\", \"-axo\", \"pid=,ppid=,comm=\")`。实测（git archive dc9aab11b 到 /private/tmp/claude-501/audit-jank 后跑）：IdentifySet(10 pid) 之后再 Identify 这 10 个 pid，重新 fork 全表 10 次、耗时 487ms；模拟 3 个 tick，每 tick 恰好 11 次 fork；而基线形状（只 IdentifySet，键不变）5 个 tick 重新 fork 0 次。本机 `ps -axo pid=,ppid=,comm= | wc -l` = 906 行，单次 ps 实测 48ms。"
+   },
+   {
+    "title": "缓存键被单 pid 覆盖，连下一 tick 的 IdentifySet 也失去 TTL 复用",
+    "file": "server/internal/api/proctree.go",
+    "line": 88,
+    "severity": "P1",
+    "claim": "`f.paneKey = key` 在每次单 pid Identify 后被写成 `\"<pid>\"`，于是下一个 tick 的 `IdentifySet(全部pid)` 键也对不上，即使距上次采样不到 10s（procTTL）也强制重采。缓存的 TTL 语义在新调用形状下被完全废掉，不只是「多 N 次」，而是「连原来那 1 次的复用也没了」。",
+    "failure_scenario": "N=10、tick 间隔 2s：基线下 IdentifySet 的键恒定，10s TTL 内 5 个 tick 只 fork 1 次；改后每个 tick 固定 11 次 fork（实测 tick0/1/2 = 11/11/11），TTL 分支一次都没命中过。",
+    "evidence": "proctree.go:76-89 `func (f *procFinder) snapshot(panePIDs []int) *procSnap { key := paneSetKey(panePIDs); ... f.snap = snap; f.paneKey = key }`；实测 TestAuditPerTickForkCount 三个 tick 各 11 次 fork，无一次 TTL 命中。最小根因修法：把 paneKey 判据换成「TTL 未过期 且 请求的每个 pid 都在 snap.parent 里」，删掉 paneKey 字段——新 pane 出现时 pid 不在表里仍会强制重采，行为不弱于现状，且 Identify/IdentifySet 两个调用方一起修好（符合「修在所有调用方都经过的地方」）。"
+   },
+   {
+    "title": "handleList 在连接读循环上同步跑这轮扫描，阻塞其后所有帧 → 进屏白屏",
+    "file": "server/internal/api/ws_handler.go",
+    "line": 79,
+    "severity": "P1",
+    "claim": "handleFrame 在 readLoop 里同步分发，handleList 直接调 `refreshListing`（= rebuildCatalog = 上面那 N+1 次 ps）。这条连接在扫描期间处理不了任何后续帧，包括 app 在 sendList() 紧接着发出的 subscribe/level2_subscribe。",
+    "failure_scenario": "app 回前台或进收藏页 → ServiceWire.onUiVisible → 传输已关则重拨 → onReady 里先 `sendList()` 再 `replaySubscriptions()`。服务端 readLoop 串行：先处理 list（N=30 时约 1.5s 全表 ps），这期间 subscribe 帧排队不处理 ⇒ 终端页在约 1.5s 内拿不到任何 level2/pty 帧，表现就是「进入白屏」。N=10 时约 0.5s，仍肉眼可见。",
+    "evidence": "ws_conn.go:134-150 readLoop 里 `if !c.handleFrame(data)`；ws_conn.go:367-370 `switch t := typed.(type) { case protocol.List: c.handleList(t)`（同步，无 goroutine）；ws_handler.go:79 `err := c.s.refreshListing(c.ctx)`；server.go:380 `if err := s.rebuildCatalog(ctx); err != nil`；ConnectionManager.kt:693-695 `setState(READY); sendList(); replaySubscriptions(reconnect)`。修复方向：让 handleList 复用最近一次快照（或把重扫挪到独立 goroutine 并异步回 listing），至少不要让它落在 readLoop 上。"
+   },
+   {
+    "title": "过滤用的 provider 判定与打标用的 provider 判定来自两张不同时刻的 ps 表，可制造每 tick 都有 ChangedSessions 的 list_delta",
+    "file": "server/internal/api/server.go",
+    "line": 296,
+    "severity": "P2",
+    "claim": "filterModel 用 T 时刻的 IdentifySet 结果决定哪些 pane 入列，buildSnapshot 用 T+k（k 为该 pane 之前所有 pane 的 ps 耗时之和，N=30 时可达 1s+）的另一张 ps 表决定 Session.Provider。两者不一致时，Provider 会在 tick 之间翻动；而 diff 的变更判据是整个 struct 比较 `old != cur`（Provider 是 struct 字段），一次翻动就产生一条 ChangedSessions。",
+    "failure_scenario": "某个 pane 的 provider 判定依赖子进程（如 cursor 靠 node 路径段、claude 靠子进程 comm），若在 filterModel 与轮到它的 Identify 之间该子进程刚好不在表里，则该 tick Provider 为空、下一 tick 又恢复 ⇒ 连续两个 tick 各发一条 ChangedSessions 的 list_delta，app 侧列表反复重组。注意：我没有观测到实际翻动样本，这是结构性可能，不是已复现事实。",
+    "evidence": "server.go:295-297 `s.catalog.rebuild(filterModel(s, model))` 紧接 `buildSnapshot(s.catalog, s.identifyProvider)`，两处各自触发独立的 readProcTable；listing.go:112-118 `if old != cur { d.ChangedSessions = append(d.ChangedSessions, cur) }`（protocol.Session 含新增的 Provider 字段，listing.go:34 `Provider: provider`）。修复方向与 P0 同一处：rebuildCatalog 里把 identifyModel 的 hits map 算一次，filterModel 与 buildSnapshot 共用同一张表——既消掉 N 次 ps，也消掉这个不一致窗口。"
+   }
+  ],
+  "aeb71622dd80a3417": [
+   {
+    "title": "A-probe-doc / A-fix-doc：substring 检查被「引用别人的判据」满足，两格自报 status=blocked 却判绿",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 402,
+    "severity": "P0",
+    "claim": "`'status=done' in s` 这种全文子串检查，会被文档里**引用其它格判据文本**的那一行满足；t.probe 与 t.fix 的说明.md 第 3 行自报 status=blocked，判据依然 exit=0，两格 state=succeeded。",
+    "failure_scenario": "席位诚实写 `status=blocked（不可判完整三件套，未造假探针）`，同时在「我读到的上游」章节里引用 `.team/nodes/hl1-repro2/复现.md：`status=done` / `复现=成功``。判据扫全文命中后者 → exit 0 → 驱动器判 t.probe succeeded → 按 requires_success 派 t.fix；t.fix 同样 blocked 同样绿，再往下派。整条回炉链带着「根因未定位」的断前提跑完。",
+    "evidence": "我原样跑了账本里的 argv：`A-probe-doc exit=0 miss=[]`、`A-fix-doc exit=0 miss=[]`。而 `.team/nodes/hl1-probe/说明.md:3` = `status=blocked（不可判完整三件套，未造假探针）`，`:36` = ``status=done` / `复现=成功``（引用 repro2 的判据）；`.team/nodes/hl1-fix/说明.md:3` = `status=blocked（不可判完整修复，未改产品代码、未造假）`，`:50` 引用 `status=done`。行首锚定提取 `^status\\s*=\\s*(.*)$` 得到的真实取值分别是 `blocked（…）` / `blocked（…）`。"
+   },
+   {
+    "title": "A-verify-doc：终验格没有任何取值断言，结果=stillblank 判绿并驱动了三条下游",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 634,
+    "severity": "P0",
+    "claim": "A-verify-doc 的 need 只有 `['结果=', '截图=']`——只查字段名在不在，不查取值，也不查 status。席位如实写 `结果=stillblank` / `status=stillblank` 时判据仍 exit=0。",
+    "failure_scenario": "t.verify 在模拟器上实测「修复后仍然白屏」，如实交付 `结果=stillblank`；A-verify-doc 绿 → t.verify 判 succeeded → 按 `t.verify→t.uiplus` 与 `t.verify→t.fav` 两条 requires_success 边，白屏根因未修的情况下直接开工两条 UI 链，t.uiplus 又继续往 t.uicmd 派。用户视角：白屏没好，而账本显示白屏链全绿、UI 增强已在做。",
+    "evidence": "账本 A-verify-doc `need=['结果=', '截图=']`（无 status、无枚举）；`.team/nodes/hl1-verify/复验.md:3` = `结果=stillblank`，另有一行 `status=stillblank`；我跑判据得 `A-verify-doc exit=0 miss=[]`；t.verify state=succeeded；dependencies 含 `{from:t.verify,to:t.uiplus}`、`{from:t.verify,to:t.fav}`（均 requires_success）。"
+   },
+   {
+    "title": "A-repro-doc：复现格无 status 断言，status=norepro 判绿后把 probe/fix 全带进死路",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 337,
+    "severity": "P0",
+    "claim": "A-repro-doc 的 need 是 `['引入commit=', '复现步骤=', '截图=']`，全是字段名；连 `status=done` 都没要求。「压根没复现出来」与「复现成功」在这条判据下同形。",
+    "failure_scenario": "t.repro 在 main 上没能复现白屏，如实写 `引入commit=未能钉死（main 未复现）` / `status=norepro`；判据绿 → t.repro succeeded → `t.repro→t.probe` 派单，t.probe 拿着一个不存在的复现去写根因探针，只能交 blocked（见上一条），t.fix 再从 blocked 的探针开工。三格连环空转，后来靠 rev12 手工「复位」补救。",
+    "evidence": "`A-repro-doc exit=0 miss=[]`；`.team/nodes/hl1-repro/复现.md:3` = `引入commit=未能钉死（main 未复现）`，另有 `status=norepro`；commit 9f28b860b 的信息即为「hl1-v1 收链重构 rev12：repro norepro⇒probe/fix 复位」。对照组 A-repro2-doc（line 1311）的 need 含 `'复现=成功'`，是账本里唯一写对的复现判据。"
+   },
+   {
+    "title": "六个评审格判据只要求字面出现 `VERDICT:`，refutes 与 supports 完全同形",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 570,
+    "severity": "P0",
+    "claim": "A-fixrv-form / A-uiplusrv-form / A-uicmdrv-form / A-uiiconrv-form / A-favrv-form / A-afixrv-form 六条的 need 都是 `['VERDICT:']`。异源评审席写 `VERDICT: refutes`（否决实现）时判据一样 exit=0，评审格判 succeeded，下游按 requires_success 继续派。",
+    "failure_scenario": "hl1-judge-blank 审 `pr/hl-blank` 空分支给出 refutes——这正是账本里已经发生过的（rev12 记「t.fix.rv 空分支派单已叫停（评审席诚实 refutes 留档）」）。判据无法区分，所以「叫停」只能靠 leader 人眼看 verdict 正文；一旦 leader 不看，`t.fix.rv→t.verify` 就会把一个被否决的修复送进模拟器终验。当前 `t.afix.rv→t.verify2`（line 1952）仍是同一形状：afix.rv 若 refutes，t.verify2 照样开跑，白烧一轮模拟器实测席位。",
+    "evidence": "六条判据正文均为 `sys.exit(0 if 'VERDICT:' in s else 1)` / `need=['VERDICT:']`（账本 line 570/801/953/1092/1246/1768）。现存 verdict：`.worktrees/hl1.rv.blank/.team/nodes/hl1-fix-rv/verdict.md:1` = `VERDICT: supports`，同文件内自述「本席 r9 / r16 对空分支 `pr/hl-blank` 的两次 refutes 仍有效」——两次 refutes 当时同样是绿。"
+   },
+   {
+    "title": "账本全链没有封版（commit）判据：pr/app-altsnap-render 领先 main 0 个提交，而 t.afix 已判 succeeded、评审 supports",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 1665,
+    "severity": "P1",
+    "claim": "hl1-v1 的 21 格里没有任何一条 A-*-seal / `git rev-list --count main..<branch>` 类判据。gradle 套件在 worktree 里跑，会连未提交工作区一起编译通过，于是「判据绿」不蕴含「交付物落在分支上」。",
+    "failure_scenario": "t.afix 的修复只以未提交工作区形式存在于 `.worktrees/hl1.afix`（`M SessionViewModel.kt` + 未跟踪的新测试文件），分支 `pr/app-altsnap-render` 是空的。任何一次 worktree 清理 / reset / 分支重建都会把这次修复整体抹掉，而账本仍显示 t.afix succeeded、t.afix.rv supports。CLAUDE.md 记录的 2026-08-12 事故（整条修复以未提交状态被回退抹掉）就是这个形状。",
+    "evidence": "`git rev-list --count main..pr/app-altsnap-render` = 0（对照：pr/ui-agent-dialog=1、pr/fav-order-binding=1、pr/srv-first-frame=1）；`git -C .worktrees/hl1.afix status --porcelain` 显示 `M app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt`、`?? app/app/src/test/kotlin/.../AltScreenSnapshotGlyphsTest.kt`。t.afix 的 mechanical 只有 suite/wiki/smell/doc 四条，无 seal。两份评审 verdict 都在正文开头专门声明「分支上没有提交」（hl1-uiplus-rv、hl1-fav-rv）——评审席每次都靠人话补这个洞。"
+   },
+   {
+    "title": "A-verify2-doc 的 `'结果=修复' in s` 会被「结果=修复失败」和派单原文引用满足",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 1832,
+    "severity": "P1",
+    "claim": "`'结果=修复'` 是 `结果=修复失败` 的前缀，也是派单正文那句「`status=done`、`结果=修复` 或 `结果=stillblank`」的子串。t.verify2 的席位只要在文档里回抄一遍派单要求（本账本席位普遍这么干），判据就绿，无论实测结论是什么。",
+    "failure_scenario": "t.verify2 席位实测仍白屏，写 `结果=stillblank`，同时按惯例在文档开头贴一段「## 派单要求」原样引用 `结果=修复 或 结果=stillblank`——A-verify2-doc 三个 need 全部命中，exit=0，白屏缺陷被判为「终验通过」。这是本账本里唯一一条真正拦白屏的判据，也是唯一还没跑的一条。",
+    "evidence": "A-verify2-doc `need=['status=done', '结果=修复', '截图=']`，检查方式为 `x not in s`（子串）；t.verify2.title 原文即含「`status=done`、`结果=修复` 或 `结果=stillblank`（如实！stillblank 判据会红…）」。同类前缀陷阱已在 `.team/nodes/hl1-uiplus/说明.md:90` 实证：该行写着「A-uiplus-doc：本文件含 `截图前=` / `改点=`」，仅这一行就足以满足 A-uiplus-doc 的全部三个 need。"
+   },
+   {
+    "title": "三条 UI 格判据只查字段名、不查 status、不查截图文件是否存在",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 732,
+    "severity": "P1",
+    "claim": "A-uiplus-doc / A-uicmd-doc / A-uiicon-doc 的 need 均为 `['截图前=', '截图后=', '改点=']`：既没有 status 断言，也不校验 `截图前=` 后面列的路径真的存在。「眼见为实铁律」在机器面完全没有落点。",
+    "failure_scenario": "席位改完 UI 但没能起模拟器，写 `## 截图前=（未取到）` / `## 截图后=（未取到）` / `## 改点=…`，判据绿 → t.uiplus succeeded → 按 `t.uiplus→t.uicmd`、`t.uiplus→t.afix` 继续派。CLAUDE.md 明令「不允许标记已修除非有模拟器实测截图」，但账本这一面是空的。",
+    "evidence": "三条判据正文 `need=['截图前=', '截图后=', '改点=']`，无 `os.path.exists` 对截图路径的任何校验；`.team/nodes/hl1-uiplus/说明.md` 全文无 `^status=` 行（行首锚定提取结果为空列表），判据仍 exit=0。对照 A-repro-doc 同样只列 `截图=` 而不验路径。"
+   },
+   {
+    "title": "依赖图里 t.verify2 是叶子：终验结论不阻断任何下游，UI 四格必定空转",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 1952,
+    "severity": "P1",
+    "claim": "dependencies 里有 `t.afix.rv→t.verify2`，但没有任何一条边**从** t.verify2 出发。整条 UI 链（t.uicmd→t.uicmd.rv→t.uiicon→t.uiicon.rv，4 格）的入边是 t.uiplus 与 t.afix，两者都已 succeeded，因此它们会在 t.verify2 给出结论之前/无论给出什么结论都跑完。",
+    "failure_scenario": "t.verify2 实测得 `结果=stillblank`（白屏没修好，t.afix 的方向错了），账本正确判红。此时 t.uicmd/t.uiicon 两格已经在 hl1.uicmd / hl1.uiicon 里基于 t.afix 的错误修复做了 UI 增强，两个评审席也已消耗；t.afix 一旦回炉重做，这 4 格的产物基底作废，全部返工。这与今天 t.fix.rv 审空分支是同一型：上游形式绿 → 下游席位烧掉一整轮上下文做无效功。",
+    "evidence": "dependencies 全表 22 条边中，`\"from\": \"t.verify2\"` 出现 0 次（grep 无结果）；`t.uicmd` 的入边是 `{from:t.uiplus,to:t.uicmd}` 与 `{from:t.afix,to:t.uicmd}`，t.uiplus/t.afix 均 state=succeeded，t.uicmd/t.uicmd.rv/t.uiicon/t.uiicon.rv 均 state=planned 待派。"
+   },
+   {
+    "title": "t.uicmd / t.uiicon 的 worktree 停在旧 detached commit，写同一片 app/ 却拿不到上游交付",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 830,
+    "severity": "P1",
+    "claim": "`requires_success` 边只传递「上游判绿」这一位信息，不传递代码。t.uicmd 声明依赖 t.uiplus 与 t.afix、write_paths 同为 `app/`，但其 worktree `hl1.uicmd` 是 detached 在 a946101a0，既不含 pr/ui-agent-dialog 的提交，也不含 hl1.afix 的未提交修复。",
+    "failure_scenario": "t.uicmd 席位在 a946101a0 的 app/ 上改 UI 并交付；并线时与 pr/ui-agent-dialog（同样动 workspace/ 下的 Compose 文件）冲突，或者更糟——merge 成功但把 t.uiplus 的改动语义性地覆盖回旧样式，而 A-uicmd-suite/wiki/smell 全绿，无人发现。t.uiicon 更旧（ce72d6c52），同样写 app/。",
+    "evidence": "`git -C .worktrees/hl1.uicmd log --oneline -1` = `a946101a0`（detached，无分支）；`git -C .worktrees/hl1.uiicon log --oneline -1` = `ce72d6c52`（detached）；`git -C .worktrees/hl1.uiplus log --oneline -1` = `f8c2aaeb3 [pr/ui-agent-dialog] 席位交付封版`。三格 resources.write_paths 均为 `['app/']`。账本里没有任何判据校验 worktree 的 base 是否含上游提交。"
+   },
+   {
+    "title": "doc 判据无新鲜度/修订号断言：重派一格时，上一轮修订留下的产物会让它开跑即绿",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 500,
+    "severity": "P2",
+    "claim": "所有 A-*-doc 都是「文件存在 + 含字符串」，没有 mtime > 派单时刻、也没有 `revision=36` 之类的本轮戳记。同一格被打针改道后重派时，旧修订的产物仍在原路径，判据在席位动手之前就已经是绿的。",
+    "failure_scenario": "leader 在 rev12 把 t.probe/t.fix 复位重派，`.team/nodes/hl1-probe/说明.md`（内容戳记为 r14，写于 17:31）原地未删；驱动器派单后立刻跑判据即 exit=0，席位哪怕一个字没写、或者中途卡死不产出，这一格也会被判 succeeded 并继续派下游。目前 t.uicmd/t.uiicon/t.verify2 的产物路径恰好为空所以没暴露，只要重派任何一个已交付过的格就会命中。",
+    "evidence": "`.team/nodes/hl1-probe/说明.md:1` = `# t.probe · 回炉②根因探针 · ledger.hl1.v1 r14`，而账本 `revision` = 36；该文件 mtime 8月21日 17:31，账本 mtime 20:16。判据正文只有 `os.path.exists` + `x not in s`。该席位自己也察觉了这个洞并写在 `:21`：「A-probe-doc 在 r7 已有说明.md，不能再当『产物不存在』的先验红」。"
+   },
+   {
+    "title": "A-verify2-doc 的候选路径写了 hl1.verify2，而该格声明的 worktree_id 是 hl1.verify",
+    "file": ".team/ledgers/hl1-v1.json",
+    "line": 1832,
+    "severity": "P2",
+    "claim": "候选列表为 `[.team/nodes/hl1-verify2/复验.md, .worktrees/hl1.verify2/.team/nodes/hl1-verify2/复验.md]`，但 t.verify2.resources.worktree_id = `hl1.verify`，`.worktrees/hl1.verify2` 不存在。方法论 §4.7「产物两处都找」在这一格实际只找到一处。",
+    "failure_scenario": "t.verify2 席位按 §4.7 惯例把复验.md 写在自己的 worktree 里（`.worktrees/hl1.verify/.team/nodes/hl1-verify2/复验.md`），两个候选都不命中 → 判据红并报「产物不存在」。这是一个假红：席位干完了活、结论也对，却被判失败，leader 还得花一轮去分辨是「真没做」还是「路径写错」。",
+    "evidence": "账本 t.verify2 `resources.worktree_id = \"hl1.verify\"`，`write_paths = ['.team/nodes/hl1-verify2/']`；A-verify2-doc 候选含 `/.worktrees/hl1.verify2/`；`ls .worktrees/` 无 hl1.verify2（有 hl1.verify）。对照 A-fixrv-form 的第二候选写的是 `.worktrees/hl1.rv.blank`，与 t.fix.rv 的 worktree_id 一致，是对的。"
+   },
+   {
+    "title": "【交付物】可直接写进 docs/编排方法论.md §10 的增补条目文本（§4.8 + §10 清单第 8/9 句）",
+    "file": "docs/编排方法论.md",
+    "line": 397,
+    "severity": "P1",
+    "claim": "下面是可原样粘贴的条目文本。设计要点：判据从「全文子串」升级为「行首锚定字段 + 取值枚举白名单」，白名单而非黑名单（黑名单会误伤：repro2 那份诚实的 done 文档里也含『未能』二字，实测会假红）；同时在派单模板里写死「如实写失败态，判据会红，由 leader 打针改道，⛔ 不许硬编」，让红是**路由信号**而不是**对席位的惩罚**——这就是「诚实失败必红」与「不逼席位造假」同时成立的支点。",
+    "failure_scenario": "不加这条，则今天三次同型事故（A-repro-doc 放过 norepro、A-probe-doc/A-fix-doc 放过 blocked、A-verify-doc 放过 stillblank）会在下一个账本原样复发：写判据的人凭「我知道要断言语义」约束不住自己，§10 已经证明只有清单管用。",
+    "evidence": "### 4.8 🔴 「文件存在 + 含字段名」不是判据，是形式绿\n\n**实撞（2026-08-21，一天三次同型）**：\n- `A-repro-doc` 只要 `引入commit=/复现步骤=/截图=` ⇒ 席位如实写 `status=norepro` 判绿 ⇒ 派 t.probe。\n- `A-probe-doc`/`A-fix-doc` 要 `'status=done' in s`，而两份说明第 3 行都是 `status=blocked` ——\n  判据被**文档里引用另一格判据的那一行**（``status=done` / `复现=成功``）满足了。⇒ 派 t.fix、派 t.fix.rv。\n- `A-verify-doc` 只要 `结果=/截图=` ⇒ 席位如实写 `结果=stillblank` 判绿 ⇒ 白屏没修好，却已开工两条 UI 链。\n\n三次的共同机理只有一个：**判据查的是字段名在不在，席位交的是取值。名和值之间没有连线。**\n子串检查更让「引用」和「自述」同形——**别人的绿可以当我的绿用**。\n\n**判据模式（写 doc 类判据一律照抄）**：\n\n1. **行首锚定取值**，⛔ 不许 `in s`：\n   `m = re.search(r'(?m)^\\s*status\\s*=\\s*(\\S+)', s)`；`m is None ⇒ 红`。\n   引用、举例、自我审计段落一律落不到行首字段位上，天然不再误绿。\n2. **取值走枚举白名单**，⛔ 不是否定词黑名单：\n   `status ∈ {done}`、`复现 ∈ {成功}`、`结果 ∈ {修复}`、`VERDICT ∈ {supports}`。\n   白名单之外**一律红**，不需要预先想全 `blocked/stillblank/norepro/refutes` 这些词——\n   下一个诚实失败态会用一个你没想到的词，黑名单必漏。\n   （实测反例：黑名单扫全部字段值时，`hl1-repro2/复现.md` 那份**诚实的 done** 因正文别处出现「未能」被判红。**黑名单造伪阳性，违反 §4.5。**）\n3. **前缀要封口**：`'结果=修复' in s` 会被 `结果=修复失败` 满足，也会被派单原文「`结果=修复` 或 `结果=stillblank`」满足。\n   锚定正则末尾加 `\\s*$` 或用 `(\\S+)\\s*$` 取整个 token 后做 `==` 比较。\n4. **路径类字段验存在**：`截图=` 列的每个路径逐个 `os.path.exists`，空列表 ⇒ 红。\n   「眼见为实铁律」必须在机器面有落点，否则它只是一句话。\n5. **评审格 = 枚举格**：`^VERDICT:\\s*(supports|refutes)$` 取值，`refutes ⇒ 红`。\n   ⛔ 不许再写 `need=['VERDICT:']`——那让「否决」和「通过」在驱动器眼里完全同形（本账本 6 条全中）。\n6. **本轮戳记**：doc 里必须含 `revision=<本轮>`，判据校验它等于账本当前 revision。\n   否则**重派一格时，上一轮的产物让它开跑即绿**（`hl1-probe/说明.md` 戳的是 r14，账本已到 r36）。\n\n**为什么这不逼席位造假**——配套的派单正文模板必须逐字写上（§1.3：席位只看派单正文）：\n\n> 如实写 `status=done` 或 `status=blocked/stillblank/norepro`。\n> **写失败态判据会红，这是预期的**：红是给 leader 的**路由信号**，由 leader 打针改道（§5），\n> **不计你返工、不扣你额度**。⛔ 严禁为了判绿而硬编、篡改探针、或把没做的事写成做了。\n\n判据变严的同时必须把「红的后果」明确成**改道**而不是**惩罚**，两件事要同一条派单里说全。\n只严不说后果 ⇒ 席位为了绿而造假；只说后果不变严 ⇒ 就是今天这三次。\n\n### §10 清单增补（第 8、9 句）\n\n8. **每条 doc 判据，都用一份「诚实失败」的样本文档跑过吗？**\n   造一份 `status=blocked` + 该格全部字段名齐全的 md，判据**必须红**。红不了 ⇒ 它是形式判据，重写。\n   （这是 §4.6「拒绝路径也要验」在 doc 类判据上的落法，三次事故全因只验了通过路径。）\n9. **下游格的 base 真的含上游交付吗？**\n   `requires_success` 只传一位「绿」，**不传代码**。凡两格 `write_paths` 相交，\n   下游 worktree 必须 `git merge-base --is-ancestor <上游分支> HEAD` 为真，\n   且上游分支 `git rev-list --count main..<br>` > 0（**没有封版判据的格，交付物只活在未提交工作区里**）。\n   ⇒ 每个实现格补一条 `A-*-seal`。\n   另：**终验格必须有出边**——`t.verify2` 现在是叶子，它判红也拦不住任何下游，这等于没验。"
+   }
+  ],
+  "a45bb4b459b329a80": [
+   {
+    "title": "srv-first-frame: pipe attaches AFTER Resize, so the SIGWINCH redraw is silently dropped",
+    "file": "server/internal/api/ws_handler.go",
+    "line": 171,
+    "severity": "P0",
+    "claim": "Moving `br.Subscribe` (pipe-pane attach) to after `br.Resize` opens a window in which every byte the CLI writes in response to SIGWINCH is written to the pane but captured by neither the snapshot (taken before the resize) nor the pipe (attached after it). For any TUI that *does* redraw on resize — the normal case, not the frozen case the probe pins — the entire post-resize repaint is lost.",
+    "failure_scenario": "Host pane is 80x24 running an active Claude Code. Phone subscribes with Rows=96 Cols=108. New order: capture (80x24 content) → Resize to 108x96 → CLI receives SIGWINCH and repaints the whole screen at 108x96 → `br.Subscribe` attaches pipe-pane only now, so that repaint is never relayed. The phone renders the 80-col snapshot inside a 108-col emulator (`emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)`), i.e. text crammed into the left 80 columns with the old wrap points, and it stays that way until the CLI happens to emit something else — indefinitely if the CLI is idle waiting for input.",
+    "evidence": "pr/srv-first-frame ws_handler.go:151-171 — the diff deletes the comment `// Attach the pipe before the snapshot so no output between the two is lost (term-bridge knowledge base: pipe first, then capture).` and reorders to capture→Resize→Subscribe. The invariant is still asserted as fact in the module it belongs to: server/internal/bridge/stream.go:7-9 `Subscribe order is fixed by the knowledge base: the pipe is attached before the caller grabs a snapshot, so no output between the two is ever lost`, and stream.go:142 `Attach the pipe before the snapshot so no output can slip between this call and the snapshot the caller takes next.` Neither doc was updated by the branch."
+   },
+   {
+    "title": "srv-first-frame: only the frozen-TUI world is pinned; nothing pins the redrawing-TUI world",
+    "file": "server/internal/api/hl092_static_alt_first_frame_probe_test.go",
+    "line": 41,
+    "severity": "P1",
+    "claim": "The probe's fixture is a script whose WINCH trap clears and never redraws (`trap 'printf \"\\033[2J\\033[H\" > /dev/tty' WINCH` then blocks on read). It therefore can only distinguish 'snapshot empty' from 'snapshot has glyphs'; it is green both under the fix and under any future change, and it is structurally incapable of catching the lost-redraw regression above. No test in the branch subscribes a pane that emits output on SIGWINCH and asserts those bytes reach the client.",
+    "failure_scenario": "Someone reverts or re-reorders the capture/Resize/Subscribe triple in a way that loses live output; `go test ./internal/api -run StaticAltScreenFirstFrame` still passes because the fixture never emits anything after subscribe. The full-suite green in .team/nodes/hl1-sfix/tmp/go-full.log likewise proves nothing about the active-TUI path.",
+    "evidence": "pr/srv-first-frame server/internal/api/hl092_static_alt_first_frame_probe_test.go:34-40 defines `frozenAltScript` with the clear-only WINCH trap; the only assertion (lines 63-80) is that the *first* KindSnapshot within 2s contains `staticAltMarker`. There is no read of subsequent frames and no assertion about deltas."
+   },
+   {
+    "title": "srv-first-frame contradicts handleResize, which still captures right after Resize",
+    "file": "server/internal/api/ws_handler.go",
+    "line": 516,
+    "severity": "P2",
+    "claim": "The branch changes handleSubscribe on the premise that a capture taken right after Resize is empty for an idle alt-screen TUI, but leaves handleResize doing exactly that, with a comment asserting the opposite premise. The same daemon therefore holds two contradictory beliefs, and the destructive empty snapshot the branch set out to eliminate is still emitted by the resize path — which is precisely the frame pr/app-altsnap-render then has to filter out client-side.",
+    "failure_scenario": "Client subscribes (good first frame, thanks to this branch), then the viewport seed sends a resize with different dims. handleResize does Resize → capture; the idle TUI cleared on WINCH and did not redraw, so `snapshotWithCursor` returns a CUP-only payload, which is pushed as KindSnapshot and wipes the good first frame on the client. The server-side fix is defeated by the server itself two frames later.",
+    "evidence": "pr/srv-first-frame ws_handler.go:504-516 keeps `Resize(...)` then `snap, err := snapshotWithCursor(...)` under the comment `tmux reflows the pane synchronously on resize-window, so capturing right after Resize is content-correct`; ws_handler.go:151-156 in the same file argues `an idle TUI that clears and does not redraw leaves capture-pane empty`. The afix worktree comment at SessionViewModel.kt:322-325 names this exact resize-repush frame as the thing it must defend against."
+   },
+   {
+    "title": "app-altsnap-render: the empty-snapshot guard also rejects legitimate blank snapshots, breaking 004 reconnect replay",
+    "file": ".worktrees/hl1.afix/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+    "line": 328,
+    "severity": "P1",
+    "claim": "`val apply = incomingGlyphs || !screenGlyphs` makes the client refuse ANY glyph-less KindSnapshot whenever the local grid is non-empty. But KindSnapshot is also the reconnect/resubscribe full-screen rebuild (requirement 004), whose whole contract is 'whatever the server says is now the truth'. A pane that genuinely became blank can no longer be represented, so the phone keeps rendering content that no longer exists on the host, with no timeout and no recovery path other than a future delta.",
+    "failure_scenario": "Phone shows a Claude Code alt-screen. Phone loses network for 30s; meanwhile the host pane is cleared (TUI exits into a cleared alt-screen, or `clear`/Ctrl-L leaves the pane empty). Phone reconnects → resubscribe → server replays a snapshot that is CUP-only → `incomingGlyphs=false`, `screenGlyphs=true` → `apply=false` → `return`. The phone still shows the stale pre-disconnect screen. The user then types; the next delta paints the echoed characters composited on top of the stale grid, producing a garbled screen that only a session re-entry can fix.",
+    "evidence": ".worktrees/hl1.afix SessionViewModel.kt:328-336: `val apply = incomingGlyphs || !screenGlyphs` … `if (!apply) { return }` placed before `emulator.replaySnapshot(...)`. The guard is unconditional on the snapshot's provenance — it cannot tell the resize-repush frame it targets from the reconnect replay frame, and onBinary has already filtered by ref (line 306) so both arrive at the same branch."
+   },
+   {
+    "title": "app-altsnap-render: the early return also skips snapshotGen++, maybeCompleteResync() and the history prefetch",
+    "file": ".worktrees/hl1.afix/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+    "line": 335,
+    "severity": "P2",
+    "claim": "The `return` is placed above the whole SNAPSHOT arm, not just above `replaySnapshot`, so a suppressed frame also fails to bump `snapshotGen`, fails to call `maybeCompleteResync()`, and fails to run the first-open history prefetch. Suppressing the *paint* and suppressing the *bookkeeping/state machine* are different decisions and the diff makes them silently the same one.",
+    "failure_scenario": "User presses Esc/Tab/Ctrl-C (a resyncTriggerName key) → beginResync sets resyncPending. The server answers the resize/resubscribe with a glyph-less snapshot. Pre-change, maybeCompleteResync would run against the current grid; now it does not, and the resync sits pending until the 400ms RESYNC_TIMEOUT_MS path fires, turning a would-be immediate readback into a visible timeout on every such frame. Diagnostics also mislead: `snapshot_gen=` in the input-resync log lines stops advancing on frames that were in fact received.",
+    "evidence": ".worktrees/hl1.afix SessionViewModel.kt:335-345 — `if (!apply) { return }` sits before `snapshotGen++`, `maybeCompleteResync()` and the `if (!hasPrefetchedHistory)` block; contrast the DELTA arm at lines 348-352 which always does `snapshotGen++; maybeCompleteResync()`. maybeCompleteResync at line 771 returns early only on `!resyncPending`, and its only other exit is the deadline in noteResyncClock (line 760)."
+   },
+   {
+    "title": "app-altsnap-render is not sealed: the branch has zero commits, all work is uncommitted in a worktree",
+    "file": ".worktrees/hl1.afix/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+    "line": 1,
+    "severity": "P1",
+    "claim": "`pr/app-altsnap-render` points at the same sha as main (41270c72e); `git diff main...pr/app-altsnap-render` is empty. The SessionViewModel change and AltScreenSnapshotGlyphsTest.kt exist only as unstaged/untracked files in .worktrees/hl1.afix. Merging this branch delivers nothing.",
+    "failure_scenario": "The four branches are merged as 'sealed'. srv-first-frame lands (first frame now captured pre-resize), the client-side guard does not, and handleResize's post-resize empty snapshot (see the handleResize finding) still wipes the first frame — so the user-visible symptom is unchanged while the ledger records the fix as delivered. Worse, if the worktree is pruned or reset the work is lost outright.",
+    "evidence": "`git rev-parse main pr/app-altsnap-render` → both 41270c72e92e2c6039ae216b2a0079da1e44eaa3; `git merge-base main pr/app-altsnap-render` → same sha. `git -C .worktrees/hl1.afix status --short` → ` M app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt` and `?? app/app/src/test/kotlin/dev/agentmirror/app/session/AltScreenSnapshotGlyphsTest.kt`. The other three branches each carry a `[pr/...] 席位交付封版` commit."
+   },
+   {
+    "title": "fav-order-binding: byId is keyed by raw ref but looked up by SessionItem.id, which falls back to a legacy- key",
+    "file": "app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteList.kt",
+    "line": 46,
+    "severity": "P2",
+    "claim": "`rows.associateBy { it.ref }` keys the map by `FavoriteRow.ref`, but the lookup key is `SessionItem.id`, which `FavoriteRow.toSessionItem()` computes as `ref.ifEmpty { \"legacy-$addedAt-$sessionName-$windowIndex-$windowName\" }`. For any row with an empty ref the two keyspaces do not intersect, so both callbacks silently no-op. The old zip-based map keyed by `it.first.id` did not have this mismatch. It is latent only because FavoriteBook currently filters empty refs.",
+    "failure_scenario": "Any FavoriteRow reaching FavoriteList with `ref == \"\"` (a legacy stored record, or any future caller that does not replicate FavoriteBook's `.filter { it.ref.isNotEmpty() }`) renders normally but is dead: `byId[item.id]` is null, so `onSessionClick` returns early and — the real loss — `onToggleStar` cannot unfavorite it. The row becomes permanently un-removable from the favorites page, contradicting the file's own doc `失联行置灰标「不在线」，不可点进，可取消收藏`.",
+    "evidence": "pr/fav-order-binding FavoriteList.kt:46 `val byId = rows.associateBy { it.ref }`, :51 `val row = byId[item.id] ?: return@FavoritesScreen`, :57 `byId[item.id]?.let(onUnfavorite)`. DesignListMapping.kt:44 `id = ref.ifEmpty { \"legacy-$addedAt-$sessionName-$windowIndex-$windowName\" }`. The only safety net is FavoriteBook.kt:103 `val snapshot = store.load().filter { it.ref.isNotEmpty() }`, in a different file with no comment tying the two together. Keying by `it.toSessionItem().id` would be mismatch-proof."
+   },
+   {
+    "title": "fav-order-binding: the session-page half of the binding test asserts against the test's own lambda, not production wiring",
+    "file": "app/app/src/test/kotlin/dev/agentmirror/app/workspace/FavoriteOrderAndClickBindingTest.kt",
+    "line": 124,
+    "severity": "P2",
+    "claim": "The session-page assertions are tautological. The test sorts the items itself, passes them straight to `SessionListScreen`, and supplies `onSessionClick = { item -> openedSession.add(item.id) }` — then asserts that the recorded id equals the displayed id. That is 'a lambda that records item.id records item.id'. It exercises no production mapping code; the real call site, WorkspaceScreen.kt:211, received only a comment in this diff and is never instantiated by the test.",
+    "failure_scenario": "Someone reintroduces an index-based lookup in WorkspaceScreen's `onSessionClick` (e.g. `level2.sessions[index]` against a sorted display list) — exactly the bug class this branch exists to kill. `FavoriteOrderAndClickBindingTest` stays green, because it never routes a click through WorkspaceScreen.",
+    "evidence": "Test lines 108-124: `val displayed = sortSessions(rawSessions.map { it.toSessionItem(starred = false) })` computed in the test, then `SessionListScreen(sessions = displayed, onSessionClick = { item -> openedSession.add(item.id) }, ...)`, then lines 152-158 assert `id == openedSession.lastOrNull()`. Contrast the favorite half (lines 133-145), which does drive the real `FavoriteList` byId lookup and is a genuine test."
+   },
+   {
+    "title": "ui-agent-dialog: the Pi/bypass-disabled rule and the empty-cwds branch are rewritten but untested",
+    "file": "app/app/src/test/kotlin/dev/agentmirror/app/workspace/NewAgentDialogUiTest.kt",
+    "line": 52,
+    "severity": "P2",
+    "claim": "The rewrite reimplements two pieces of behaviour — the Pi masking (`enabled = ui.providerId != \\\"pi\\\"`, `checked = ui.bypass && ui.providerId != \\\"pi\\\"`, and the changed toggle argument `onToggle(!checked)` where the old code passed `!ui.bypass`) and the new `if (ui.cwds.isNotEmpty())` gate that removes the whole workspace section — and the only test in the branch drives a single fixture with `providerId=\\\"claude_code\\\"` and `cwds=listOf(\\\"/iso\\\")`, so neither is covered.",
+    "failure_scenario": "The toggle argument changed from `!ui.bypass` to `!checked`, where `checked` is the Pi-masked value. If a user has bypass=true, switches provider to Pi and back, or if the masking predicate is later edited, the click emits a value derived from the masked state rather than the real state, and the argv assembled by buildNewAgentArgv silently loses or gains the bypass flag (`--dangerously-skip-permissions` / `--yolo` / `--always-approve`). Nothing in the suite fails. Separately, with `cwds` empty the dialog now shows no workspace section at all and 创建 is permanently disabled with no explanation, where the old layout at least rendered the 工作区 label.",
+    "evidence": "NewAgentDialogUiTest.kt:52-66 constructs exactly one `NewAgentUi(cwds = listOf(\"/iso\"), cwd = \"/iso\", providerId = provider)` with `onToggleBypass = {}` — the toggle callback is a no-op and is never clicked; there is no `providerId = \"pi\"` case and no empty-`cwds` case. Production: NewAgentDialog.kt:125 `if (ui.cwds.isNotEmpty())`, :143-147 `BypassBlock(enabled = ui.providerId != \"pi\", checked = ui.bypass && ui.providerId != \"pi\", ...)`, and BypassBlock's `.clickable(enabled = enabled) { onToggle(!checked) }` vs main's `.clickable(enabled = !pi) { onToggleBypass(!ui.bypass) }`."
+   }
+  ],
+  "a2aa514d3a0497c69": [
+   {
+    "title": "收藏页点击/取消收藏按下标 zip 回源，打开的是另一个会话（094 §2 在 main 上仍未修）",
+    "file": "app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteList.kt",
+    "line": 40,
+    "severity": "P0",
+    "claim": "`val byId = items.zip(rows).associate { it.first.id to it.second }` 把**已排序**的展示项与**未排序**的源行按下标配对，因此 `byId[被点行.id]` 返回的是「该行在未排序表里同一下标位置」的另一条 FavoriteRow；只要 sortSessions 改了序，点击与取消收藏就打到别的会话上。对照 L2SessionList.kt:60 的正确写法 `sessions.associateBy { it.ref }`。",
+    "failure_scenario": "收藏 A（addedAt=1，名 alpha，IDLE）、再收藏 B（addedAt=2，名 zeta，IDLE），随后 A 变 WORKING。rows（addedAt 倒序）= [B, A]；items（sortSessions：Busy 优先）= [A, B]。byId = {A.id→rows[0]=B, B.id→rows[1]=A}。用户点最上面显示 alpha 的那行 → onOpenSession(B.ref, B.identityLabel) → 打开的是 zeta。长按「取消收藏」同理删掉的是另一条收藏记录（数据丢失，且用户看不出删错了）。这正是用户 094 原话「点进去不是外面标题的对话」。",
+    "evidence": "FavoriteList.kt:39-40 `val items = sortSessions(rows.map { it.toSessionItem() })` / `val byId = items.zip(rows).associate { it.first.id to it.second }`；sortSessions（SortSessions.kt:31）`compareByDescending{starred}.thenByDescending{status==Busy}.thenBy{displayName}` 会改序。修法已存在但**未合进 main**：`git show daa881ef9`（分支 pr/fav-order-binding）把这两行改成 `rows.map{...}` + `rows.associateBy{ it.ref }`，`git branch -a --contains daa881ef9` 只输出 pr/fav-order-binding。现有 FavoriteIdentityTest.kt:129-142 之所以绿，是因为它构造的两行 status 全 UNKNOWN 且 displayName 相同，稳定排序下 items 顺序恰好等于 rows，zip 错配不可见。"
+   },
+   {
+    "title": "收藏页仍套用「运行中靠前」排序，违反 094 §1 不变序",
+    "file": "app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteList.kt",
+    "line": 39,
+    "severity": "P1",
+    "claim": "094 明写「运行中在前只属于会话页（088），收藏页不适用」，但收藏页渲染前仍调用 sortSessions，收藏次序会随运行状态和名称翻转。",
+    "failure_scenario": "用户按安装/收藏次序记住位置：第 3 行是「远控 leader」。该会话开始跑动（IDLE→WORKING，服务端 2s 一次 level2 推送）→ sortSessions 把它顶到第 1 行，其余整体下移；用户按记忆点第 3 行点到别的会话。状态回落又弹回去，列表在用户眼前来回跳。",
+    "evidence": "FavoriteList.kt:39 `sortSessions(rows.map { it.toSessionItem() })`；FavoriteBook.rows（FavoriteBook.kt）已按 `sortedByDescending { it.addedAt }` 给出稳定次序，被这一行覆盖。094 契约：「收藏页列表**不做**「运行中靠前」的动态重排」。同样只在未合并的 daa881ef9 里被改掉。"
+   },
+   {
+    "title": "WebSocket 无任何保活，半开连接下回前台永远不重连（F-090-1 的概率性残留）",
+    "file": "app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt",
+    "line": 328,
+    "severity": "P1",
+    "claim": "onUiVisible 在 READY 分支只用 `connection?.isTransportOpen`（即 OkHttp 的 onOpen/onClosed 标志）判活；而客户端 OkHttpClient 没设 pingInterval、服务端也没有任何 Ping/Pong 或读写 deadline，所以链路被中间设备静默丢弃（无 FIN/RST）时 isOpen 恒为 true、state 恒为 READY，onUiVisible 返回 kicked=false，全 app 没有第二条路径能发现这条死连接。",
+    "failure_scenario": "会话页在屏 → 息屏/切后台十几分钟（Doze 或 WiFi↔蜂窝切换，对端未发 FIN）→ 回前台。ON_START → ServiceWire.onUiVisible → ConnectionManager.onUiVisible：state=READY 且 open=true ⇒ 直接返回 false，不重拨。终端不再有任何帧、发消息永远等到 input timeout，UI 顶栏却显示已连接（无「重连中…」横幅）。用户只能退出会话页再进（触发 subscribe/重新拨号）才恢复——与 090 原话「必须退出去再进来才可以」同形，且天然是概率性的（网络给了 RST 时就能自愈，静默丢包时就不能）。",
+    "evidence": "ConnectionManager.kt:309 `val open = connection?.isTransportOpen == true`，327-330 `ConnectionState.READY -> { if (open) { false } ...}`；Connection.kt:44 `isTransportOpen get() = !closed && transport.isOpen`，isOpen 仅由 OkHttp onOpen/onClosed/onFailure 翻转（OkHttpWebSocketTransport.kt:100-131）。两个 OkHttpClient 构造（OkHttpWebSocketTransport.kt:135-140 与 155-160）都只设 connect/read/writeTimeout，**没有 pingInterval**（OkHttp 对 WebSocket 会把 socket soTimeout 置 0，readTimeout 不生效）。服务端 `grep -rn \"Ping\\|Pong\\|SetReadDeadline\" server` 零命中。ConnectionManager 里也没有任何「多久没收到帧就判死」的逻辑（checkLevel2Quiet 只改横幅，WorkspaceViewModel.kt:479-492 注释明写「不向服务端发帧」）。"
+   },
+   {
+    "title": "服务端 level2_unsubscribe 忽略 workspace 字段，一次退订会掐掉另一个工作区刚建立的订阅",
+    "file": "server/internal/api/level2.go",
+    "line": 231,
+    "severity": "P2",
+    "claim": "`handleLevel2Unsubscribe(protocol.Level2Unsubscribe)` 连参数名都没接，直接 `setLevel2(false, \"\")` 把整条连接的 level2 关掉；而客户端是按 workspace 语义发退订的（Level2UnsubscribeFrame 带 workspace，Frames.kt:599-600），两边语义不一致 ⇒ 迟到的 A 退订会取消当前已绑到 B 的订阅。",
+    "failure_scenario": "用户停在工作区 A 的二级列表，横滑到收藏页（收藏项在工作区 B）。HorizontalPager 在拖动过程中先组合 FavoritesPane → enterFavorites → subscribeLevel2(B)（服务端改绑 B）；滑动落定后 Sessions 页才被 dispose → leaveLevel2 → unsubscribeLevel2(A) → 服务端把 level2 整体关掉，B 的推送随之断流。收藏页那一格永远等不到 level2_frame，8 秒后 checkFavoriteFetch 超时跳过，该工作区的收藏行全部显示「不在线」置灰、不可点入（082 那类失真复发）。",
+    "evidence": "server/internal/api/level2.go:231-238 `func (c *wsConn) handleLevel2Unsubscribe(protocol.Level2Unsubscribe) { if c.level2Active() { c.setLevel2(false, \"\") ... } }` —— 未比较 f.Workspace 与 c.level2WS；level2.go:211-220 handleLevel2Subscribe 则是无条件 `c.setLevel2(true, f.Workspace)` 覆盖式改绑。客户端侧：WorkspaceViewModel.kt:467-473 leaveLevel2 与 696-710 leaveFavorites 都按 workspace 发退订；ThreePane.kt:136-149 的 HorizontalPager(beyondViewportPageCount=0) 使两页在拖动期间同时在组合内。"
+   },
+   {
+    "title": "空快照不写缓存，导致收藏行长期假在线、二级再进显示已死会话的幽灵行",
+    "file": "app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt",
+    "line": 942,
+    "severity": "P2",
+    "claim": "rememberLevel2 对空表直接 return，level2Cache 因此永远保留最后一份非空快照；而 liveForFavorites 的「以当前表为准」清理只覆盖 subscribedWorkspace（且要求 lastLevel2AtMs≠0），非订阅工作区的陈旧条目会被当作 live 参与收藏对账，把已消失的会话判成在线。",
+    "failure_scenario": "收藏了工作区 A 的会话 s。用户离开 A（缓存里留着含 s 的快照），s 在主机上被关掉。回到收藏页 → enterFavorites 订 A → 服务端推 level2_frame(workspace=A, sessions=[])→ applyLevel2 调 rememberLevel2 被空表守卫挡下（缓存仍含 s）→ onFavoriteWorkspaceFetched(A) 标记已取数 → favoriteRows 用陈旧缓存对上 s 的 key ⇒ 该行显示为在线 + 旧状态徽章、可点击（FavoritesScreen.kt:87 `onClick = { if (item.isOnline) onSessionClick(item) }`），点进去是一个已不存在的 ref。同一根因的第二个表现：二级列表里工作区被清空后再进 A，enterLevel2 先画 level2Cache[A]（WorkspaceViewModel.kt:425），幽灵行重新出现。契约 FavoriteRow 的 `@inv 失联行仍在 rows 里，isOnline=false` 在这条路径上失效。",
+    "evidence": "WorkspaceViewModel.kt:940-944 `/** 空表不覆盖已有缓存 */ private fun rememberLevel2(cwd, state) { if (state.sessions.isEmpty()) return; level2Cache[cwd] = state }`；766-787 liveForFavorites 先把 level2Cache 全部条目灌进 byKey，清理分支 `if (subscribed != null && lastLevel2AtMs != 0L)` 只删 `level2Cache[subscribed]` 里的多余键；911-920 applyLevel2 对空帧照样 `onFavoriteWorkspaceFetched(frame.workspace)`。"
+   }
+  ],
+  "a33147dd68415c43e": [
+   {
+    "title": "新守卫会拒收「合法的空屏快照」，让 resize/重连后的画面永久停留在已不存在的旧内容",
+    "file": ".worktrees/hl1.afix/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+    "line": 335,
+    "severity": "P1",
+    "claim": "`apply = incomingGlyphs || !screenGlyphs` 把「快照无字形」一律当成假空屏丢弃，但服务端在 handleSubscribe / handleResize 推快照的语义是「清屏重建，是唯一收敛点」；宿主 pane 真的空（clear / alt 程序退出后空屏）时，快照本来就只有一个 CUP（snapshotWithCursor 先 TrimRight(\"\\n\") 再 append `ESC[y;xH`），必然被判 incomingGlyphs=false 而被丢，客户端于是继续显示宿主上已经不存在的内容。",
+    "failure_scenario": "用户在 pane 里执行 `clear`（或全屏 alt 程序退出后 pane 变空）→ App 掉线重连（replaySubscriptions 重发 subscribe）或用户改字号触发 resize → 服务端 capture 到空屏，快照负载 = 6B `ESC[1;1H` → 守卫 apply=false，直接 `return` → 屏上仍是清屏前的旧字。空闲 pane 之后没有任何 delta，画面就永久是假的；并且服务端 handleResize 补发快照的整个目的（\"A snapshot is replayed by the client as clear-and-rebuild, which is the single convergence point\"，ws_handler.go:497-506）在这一路径上被守卫抵消，reflow 残留再也清不掉。",
+    "evidence": "worktree 新增代码：`val apply = incomingGlyphs || !screenGlyphs`（:328）、`if (!apply) { return }`（:335-337），跳过的正是 `emulator.replaySnapshot(frame.data, …)`（:338）。空快照的形状由 server/internal/api/ws_handler.go:47-50 `snap = bytes.TrimRight(snap, \"\\n\"); return append(snap, ESC[y;xH)` 决定；resize 补发路径见 ws_handler.go:497-524。守卫没有任何兜底（无连续两帧空即接受、无超时接受），也没有把 `hasPrefetchedHistory` 预取与 `maybeCompleteResync()` 与早退分开。"
+   },
+   {
+    "title": "快照强制 altActive=false，宿主 alt 程序退出时 `ESC[?1049l` 变成空操作，屏幕永久停在旧的 alt 画面",
+    "file": "app/terminal/src/main/kotlin/dev/agentmirror/terminal/TerminalEmulator.kt",
+    "line": 329,
+    "severity": "P1",
+    "claim": "replaySnapshot 无条件 `altActive=false; alt=null`，把 alt-screen 的 capture 写进主屏；此后宿主程序发出的 `ESC[?1049l` 走 exitAlt，而 exitAlt 首行 `if (!altActive) return` 直接吞掉——客户端既不恢复主屏内容，也不知道自己状态已与宿主分叉，而服务端在 alt 进出时不补发任何快照（server/internal 全仓 grep 无 1049/alternate 处理）。",
+    "failure_scenario": "用户订阅一个正在跑 Claude Code / vim 等全屏程序的 pane（首帧快照进主屏，altActive=false）→ 用户退出该程序，pipe-pane 把 `ESC[?1049l` 当 delta 送来 → 客户端 exitAlt 空转，旧的全屏画面留在网格上，随后 shell 的提示符按绝对/相对光标画在这堆旧字上 → 手机上看到「Claude 的界面里混着一个 shell 提示符」，而宿主 pane 其实是干净的 shell。因为 alt 进出不触发快照，这个错画面要一直持续到下一次 resize 或重连。",
+    "evidence": "TerminalEmulator.kt:133-141 `replaySnapshot` 开头 `altActive = false; alt = null`；:329-335 `exitAlt` 的 `if (!altActive) return`；:313-314 setPrivateMode 把 1049l 路由到 exitAlt。服务端侧 `grep -rn \"1049|alternate|alt_screen\" server/internal --include=*.go` 无命中，说明没有 alt 状态变更补快照的机制。"
+   },
+   {
+    "title": "历史分页头插后视口锚点不补偿：window.first 恒为 0，触发「每 100ms 拉一页」的失控分页 + 画面跳变",
+    "file": "app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt",
+    "line": 173,
+    "severity": "P2",
+    "claim": "`prependHistory` 在 scrollback 头部插入 N 行，所有逻辑行号整体右移 N，但 `topLine` 没有任何补偿（全仓 grep：topLine 只在 onScrollBy/onScrollToBottom 被写）。于是锁定在顶部时 topLine=0 不变，window.first 仍是 0，`atHistoryTop` 恒真，syncFromPresenter 每个 tick 再拉一页，直到服务端判顶。",
+    "failure_scenario": "用户在掉线期间用手势滚到本地历史最顶（onScrollWheel 非 READY 分支走 presenter.onScrollBy，topLine 落到 0）→ 重连 READY → SessionScreen 的 100ms tick 调 syncFromPresenter：locked=true 且 window.first==0 → requestOlderHistoryPage；每收到一页 400 行头插后 window.first 仍是 0 → 立刻再请求。结果是以最高 ~10 页/秒、4000 行/秒的速度把整个 tmux 历史拉进内存（工程红线「资源有界」），同时用户每收一页都看到画面向更早历史跳 400 行，而不是停在他正在看的那一段。",
+    "evidence": "TermViewPresenter.kt:169-176 `window` 直接用 `topLine`，`logicalCount = scrollback.size + rows`（:155）随头插增长；SessionViewModel.kt:307 `emulator.prependHistory(frame.data)` 之后只改 historyRequestInFlight/hasMoreHistory，不动 presenter；SessionViewModel.kt:580 `atHistoryTop = locked && presenter.window.first == 0`，:581-583 立即再 requestOlderHistoryPage；tick 周期 SessionScreen.kt:652 `TICK_MS = 100L`；HISTORY_PAGE=400（SessionViewModel 私有常量）。"
+   },
+   {
+    "title": "掉线期间的本地滚动会把 topLine 永久冻住，重连后远端滚动看起来「滑不动」",
+    "file": "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt",
+    "line": 614,
+    "severity": "P2",
+    "claim": "非 READY 时手势降级到 `presenter.onScrollBy`（会把 topLine 冻成具体行号）；恢复 READY 后手势改走远端 ScrollWheelFrame，永远不再调用 presenter.onScrollBy，也没有任何地方把 topLine 复位——只有用户手动点「回到底部」才解锁。期间新输出与远端 copy-mode 滚动都只改屏幕行，本地窗口却钉死在旧逻辑行上。",
+    "failure_scenario": "用户在「连接断开，正在重连…」时随手上滑看历史（topLine 被冻结）→ 重连成功 → 之后所有滑动都被送到服务端（onScrollWheel 的 READY 分支），本地 window 仍锚在断线时那一行：新输出到达不贴底、远端 copy-mode 滚动的结果也看不见，用户体感是「滑动没反应 / 画面卡住」，必须发现并点「回到底部」才恢复。",
+    "evidence": "SessionViewModel.kt:608-618 `onScrollWheel`：非 READY → `presenter.onScrollBy(deltaLines)`；READY → 只发 `manager.sendScrollWheel`，不碰 presenter。TermViewPresenter.kt:190-198/209-212：topLine 仅由 onScrollBy 与 onScrollToBottom 写；:149-152 isFollowingBottom/showBackToBottom 全看 topLine 是否为 null。"
+   },
+   {
+    "title": "MONO 段整段 drawText 与 floor 取整的字格宽不匹配，长 ASCII 行内字形相对背景格逐字累积右漂",
+    "file": "app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt",
+    "line": 807,
+    "severity": "P2",
+    "claim": "`cellW = max(1, floor(measureText(\"W\")))` 向下取整，而 MONO 段是「一段一次 drawText」，段内字形按字体真实 advance（≥cellW）推进，没有 textScaleX 归一，也不逐格重定位；背景矩形与非 MONO 段（drawCentered/BoxBlock）却都按 cellW 栅格定位，两者每字差 (advance-cellW)∈[0,1) px 并在段内累积。",
+    "failure_scenario": "字号使 measureText(\"W\") 落在非整数（如 19.6px → cellW=19）时，一行 60 个 ASCII 字符的 MONO 段末尾字形相对自己的背景格右漂约 36px ≈ 2 个格：带背景色的代码块里文字会溢出色块、光标/框线（走 BoxBlockGeometry 的几何路径，按 cellW 定位）与文字对不齐，同一行里 MONO 段与 CJK/框线段的接缝出现重叠或错位。",
+    "evidence": "TermSurfaceView.kt:806-807 `val textW = fgPaint.measureText(\"W\"); cellW = max(1, floor(textW).toInt())`；:547-559 MONO 分支 `canvas.drawText(seg.text, originX.toFloat(), …)` 整段一次绘制、只按 `TermLeftEdge.cellOriginX(seg.startCol, cellW, …)` 定位段首；GlyphRunBuilder.kt:57-107 对连续同槽位码点不做长度切分（整行 ASCII = 一个段）；全仓 grep `textScaleX|letterSpacing` 在 termview 下无命中；背景侧 TermSurfaceView.kt:464-495 按 `x += cellW` 逐格铺。"
+   }
+  ]
+ },
+ "verdicts": [
+  {
+   "label": "",
+   "real": true,
+   "reason": "断言与代码/账本实际一致，且失败场景已经真实发生过，不是假想。\n\n核实点（均亲自跑过/读过）：\n1. `.team/ledgers/hl1-v1.json` 中 `t.verify.acceptance.mechanical[0]`（acceptance_id=`A-verify-doc`）的 argv 内嵌 python 脚本，判据主体只有 `need=['结果=', '截图=']` + `miss=[x for x in need if x not in s]` + `sys.exit(1 if miss else 0)`。它只做子串存在性检查：既不解析 `结果=` 后面的取值，也不看 `status=`，没有任何枚举/白名单。\n2. `t.verify.acceptance.judgment == []`、`required == ['A-verify-doc']`，也没有 `t.verify.rv` 这样的异源评审格（tasks 里不存在），即这一格没有第二道闸。\n3. 席位实际交付 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-verify/复验.md`：第 3 行 `结果=stillblank`，第 6 行 `status=stillblank`，正文第 20 行还写明「修复只存在于 hl1.sfix 未提交工作树」「分支 SHA cb044e6d9 落后 main」。这是一份如实的「没修好」报告。\n4. 我按账本原样执行该判据（cwd=仓根），得 `miss=[] exit=0` —— 白屏未修的交付物拿到绿。\n5. 账本里 `t.verify` 的 `state=succeeded`，attempt 记录 `artifact_refs` 含 `acceptance_success.acceptance_id=A-verify-doc`。\n6. 依赖边确认存在且都是 requires_success：`{t.verify→t.uiplus}`、`{t.verify→t.fav}`；再往下 `{t.uiplus→t.uicmd}`、`{t.fav→t.uiplus}`、`{t.uiplus→t.afix}`。\n7. 后果已兑现，不是纸面推演：`t.uiplus`、`t.uiplus.rv`、`t.fav`、`t.fav.rv`、`t.afix`、`t.afix.rv` 全部 `state=succeeded` —— 也就是白屏根因未修的情况下，两条 UI 链已经跑完了。\n\n反向对照（更坐实这是判据缺陷而非有意设计）：同一账本里 `t.verify2` 的判据 `A-verify2-doc` 用的是 `need=['status=done', '结果=修复', '截图=']` —— 断言取值。同一份账本对同类「复验」格用了两套强度，`t.verify` 那套是弱的那套，可以判「东西在那儿」但判不出「世界变了」，正好违反该格基底 §4 写着的纪律原文「判据要断言『世界变了』，不是『东西在那儿』」。\n\n唯一能算减损的情节：`t.verify2`（带正确判据）仍是 `planned`，说明流程上后来补了一格想重验；但它并不阻断 `t.verify→t.uiplus`/`t.verify→t.fav` 这两条已经放行的边，也没能阻止下游六格跑完，所以不构成守卫。\n\n结论：real=true。修复建议是把 `A-verify-doc` 的 need 改成取值断言（如 `['status=done','结果=修复','截图=']`，与 `A-verify2-doc` 对齐），并对 stillblank 走 blocked/回炉路由而非 succeeded。",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "断言逐条核实成立，未能驳倒。\n\n1) 判据本体（.team/ledgers/hl1-v1.json:337-341，acceptance_id `A-repro-doc`，need 串在 341 行）确实是 `need=['引入commit=', '复现步骤=', '截图=']`，三项全是**字段名前缀**，用 `x not in s` 做子串存在性判断，对字段的**值**零约束，也不含 `status=done`。判据只断言「文件里有这三个字符串」，不断言「世界变了」——正是本工程 CLAUDE.md 纪律明令禁止的那类判据。\n\n2) 失败场景已经**实际发生过**，不是推演：`.team/nodes/hl1-repro/复现.md:3` = `引入commit=未能钉死（main 未复现）`，第 7 行 `status=norepro`，正文结论写「顶栏 + 终端画布 + 底栏都在」（即 main 上白屏根本没复现）。而该文件三个字段名齐备 ⇒ A-repro-doc `miss=[]` exit=0，ledger 里 `t.repro.state=\"succeeded\"`，attempt `att-t.repro-seq2-t1787301791304` 的 artifact_refs 写死 `acceptance_success.acceptance_id=A-repro-doc`。「压根没复现出来」与「复现成功」在这条判据下确实同形。\n\n3) 连环空转链路属实：`dependencies` 含 `{\"from\":\"t.repro\",\"to\":\"t.probe\",\"condition\":\"requires_success\"}` 与 `{\"from\":\"t.probe\",\"to\":\"t.fix\",\"condition\":\"requires_success\"}`，所以 norepro 被判绿后必然派 t.probe。t.probe 的下场有直接证据：`.team/nodes/hl1-probe/说明.md:3` = `status=blocked（不可判完整三件套，未造假探针）`——它拿不到复现，只能交 blocked。\n\n4) 手工补救属实：commit 9f28b860b 标题即「hl1-v1 收链重构 rev12：repro norepro⇒probe/fix 复位、**判据补 status=done 反造假标记**、t.repro2 高保真复现…」，说明这是事后 leader 手工纠偏而非判据自动兜住。\n\n5) 对照组成立：`A-repro2-doc`（同文件 ~1311 行）need=`['status=done', '复现=成功', '触发条件=', '截图=']`，含对**值**的断言，是账本里唯一写对的复现判据——同一账本内的正确写法就摆在几百行之外，证明这不是「当时没人想得到」而是这一格漏写。\n\n无守卫兜住：`transitions` 为空数组 `[]`，不存在按 status 值分流的路由；handoff 只要求产物文件存在。judgment 数组为空，也没有人工评审格拦这一格。",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "断言成立，逐环节核实（针对被审的 main 版本 FavoriteList.kt:39-40，注意该文件在我审计过程中已被就地改成修复版）：\n\n1) 错配机理确凿。旧两行是 `val items = sortSessions(rows.map { it.toSessionItem() })` 与 `val byId = items.zip(rows).associate { it.first.id to it.second }`。zip 按下标配对，key 取排序后 items 的 id、value 取未排序 rows 同下标的行 ⇒ 只要 sortSessions 改序，`byId[被点行.id]` 必然是另一条 FavoriteRow。\n\n2) sortSessions 确实会改序。/app/app/src/main/java/dev/agentmirror/app/workspace/SortSessions.kt:31-36 `compareByDescending{starred}.thenByDescending{status==Busy}.thenBy{displayName}`。而 DesignListMapping.kt:43-51 的 `FavoriteRow.toSessionItem()` 对所有收藏行硬写 `starred = true` ⇒ 第一比较键恒相等，实际由「Busy 优先 + displayName 升序」决定次序；rows 的来源 FavoriteBook.kt:104 `snapshot.sortedByDescending { it.addedAt }`（注释 FavoriteBook.kt:26「rows 按 addedAt 倒序」）。两个序无关 ⇒ 例子（A addedAt=1/alpha/后转 WORKING，B addedAt=2/zeta/IDLE）确实产生 rows=[B,A]、items=[A,B]、byId={A.id→B, B.id→A}，点 alpha 那行走 onOpenSession(B.ref,…) 打开 zeta；onToggleStar 同样把 `byId[item.id]` 交给 onUnfavorite ⇒ 删错记录。\n\n3) 路径可达且非死代码：ThreePane.kt:228 用真实收藏行调用它，onUnfavorite = viewModel::toggleFavorite。\n\n4) 对照写法属实：L2SessionList.kt:59-60 是 `sessions.associateBy { it.ref }`（按身份绑定），与收藏页的 zip 写法不同源。\n\n5) 无守卫兜住：onSessionClick 只做 `row.isOnline && row.ref.isNotEmpty()` 校验，不校验 row 与 item 是否同一身份，错配行为两条都在线时完全静默。\n\n6) 修法确实存在于 pr/fav-order-binding：`git show daa881ef9` 把这两行改成 `rows.map{...}` + `rows.associateBy{ it.ref }`，并加注释「094：本页不套 sortSessions……禁止 zip(sortedDisplay, unsortedRows)」；`git branch -a --contains daa881ef9` 只出 pr/fav-order-binding（不含 main）——即在我这次审计的起点，main 上仍是坏版本。第二维度断言（收藏页不该套 sortSessions）由同一提交的注释与 088/094 分工佐证。\n\n附带（非本断言，供后续注意）：修复版 `rows.associateBy { it.ref }` 的 key 是 ref，而 DesignListMapping.kt:44 的 item.id 对 ref 为空的历史行回退成 `legacy-$addedAt-...`，此类行 `byId[item.id]` 会 miss ⇒ 点击与取消收藏都变成静默 no-op（旧 zip 版对它们反而\"能命中\"）。这是修复引入的边界差异，值得单独核一遍。",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "Confirmed by running the ledger's own argv. A-probe-doc (.team/ledgers/hl1-v1.json:402) and A-fix-doc use an unanchored whole-file substring test (`miss=[x for x in need if x not in s]`). Both return exit=0 miss=[] today, while the seats honestly wrote blocked: .team/nodes/hl1-probe/说明.md:3 = `status=blocked（不可判完整三件套，未造假探针）` and .team/nodes/hl1-fix/说明.md:3 = `status=blocked（不可判完整修复，未改产品代码、未造假）`. The `status=done` needle is satisfied only by quotations of upstream t.repro2's criterion inside the \"我读到的上游\" sections (probe:36, fix:50). The other needles match negations verbatim: probe:5 `探针=（未写测试类#方法…）`, probe:6 `main红输出=未跑产品探针。`, probe:7 `父commit绿输出=未跑（…）`. The routing consequence is not hypothetical: dependencies contains {t.probe→t.fix, requires_success} and {t.fix→t.fix.rv→t.verify→t.fav/t.uiplus→t.afix}, and the ledger records t.probe.state=succeeded / t.fix.state=succeeded with artifact_refs=acceptance_success.acceptance_id=A-probe-doc. No guard bails it out: the review gate A-fixrv-form only asserts `'VERDICT:' in s`, so even a refutes exits 0 (actual file .worktrees/hl1.rv.blank/.team/nodes/hl1-fix-rv/verdict.md:1 = `VERDICT: supports`). Line-anchored `^status\\s*=\\s*(.*)$` extraction gives `blocked（…）` for both, i.e. the fix is to anchor the status check (and to make the value-bearing needles assert content rather than mere presence).",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "Confirmed by reading .team/ledgers/hl1-v1.json. All six review acceptances (lines 574/805/957/1096/1250/1772) are pure substring checks — need=['VERDICT:'] / sys.exit(0 if 'VERDICT:' in s else 1) — while the seat is told to write \"VERDICT: supports|refutes|inconclusive\" as the first line, so refutes and inconclusive both exit 0. No second gate: every rv task has \"judgment\": [] with required=[the single form acceptance], and root acceptance.mechanical_exit_code_is_authoritative=true means exit 0 ⇒ state succeeded. Routing is content-blind: dependencies contains {t.fix.rv→t.verify, requires_success} and {t.afix.rv→t.verify2, requires_success}, and transitions is [] (no compensating route). evidence_policy.required_fields lists supports_or_refutes, but per the skill spec (reference/账本撰写规范.md:181, ledger.v2.schema.json:1233) that field carries an acceptance ID, not a verdict value, so it is not a guard. Current state is not yet harmful — all verdicts on disk read \"VERDICT: supports\" (.worktrees/hl1.rv.blank/.team/nodes/hl1-fix-rv/verdict.md:1, .../hl1-afix-rv/verdict.md:1, .team/nodes/hl1-uiplus-rv/verdict.md:1, .team/nodes/hl1-fav-rv/verdict.md:1) — but t.afix.rv is succeeded with t.verify2 still planned, so the same shape is armed: a refutes there would still dispatch the emulator verification seat. Failure scenario: 异源评审席 writes \"VERDICT: refutes ...\" to hl1-afix-rv/verdict.md → A-afixrv-form exit 0 → t.afix.rv succeeded → requires_success edge fires → t.verify2 seat burns a full emulator round validating a fix that was just rejected; only a human reading verdict body can stop it. Minimal fix: startswith('VERDICT: supports') plus a rework route for refutes.",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "断言与代码逐行相符，且实测复现。listing.go:52-63 循环内 identify(e.pane.PanePID) → whitelist.go:8-13 → proctree.go:44 f.snapshot([]int{panePID})；proctree.go:77-89 缓存键是 paneSetKey(pid集合)，单 pid 键与 filterModel 刚经 identifyAll/IdentifySet(全部 pid) 写下的 N-pid 键在 N≥2 时必然不等 ⇒ 每次 Identify 都 miss，重跑 proctree.go:107 的 ps 全表，并把 paneKey 覆盖成单 pid，导致下一 tick 的 IdentifySet 也 miss。生产路径成立：server.go:191-194 默认 providerFinder=newProcFinder()，server.go:297 rebuildCatalog 每 listInterval（options.go:24 默认 2s，有客户端在线时 server.go:312-336 不 park）执行一次 ⇒ 每 tick 1+N 次全表 ps。实测（git archive dc9aab11b 到 /private/tmp/claude-501/aud2 后跑 go test，仓外执行）：IdentifySet(10 pid) 后再逐个 Identify，重新 fork 全表 10/10 次、580ms（本机 823 个进程，单次约 58ms）；而只做 IdentifySet 的基线形状 5 个 tick 重新 fork 0 次（10s TTL 生效）。无任何守卫兜住：Identify 没有回退到集合快照的逻辑，也没有别的 ProviderFinder 实现绕开。仅一处需修正量级口径——N 是过 filterModel 后的白名单会话数而非全部 pane 数，故 N=30→~1.5s/2s 属上界；结论与红线①（无固定频率子进程派生）违反成立不变。",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "Confirmed in code. ws_handler.go:148 `_, _, _ = geom.acquire(c.ctx, br)` increments paneGeometry.active, and the three subsequent early returns — :160-163 (br.Subscribe failure), :166-170 (snapshotWithCursor failure, calls detach() but not release), :176-180 (EncodeBinary failure) — all return without geom.release. The release hook is installed only at :191-193 on the success path, and teardown/subscribeCancel only reach subs already in c.subs, so nothing compensates. pane_geometry.go:76-104 release does `g.active--; if g.active==0 {restore}`, so one leaked increment blocks the last-leaver restore forever; s.paneGeoms is never pruned (only written in geometryFor / server.go:147), so the inflated tracker persists for the daemon's lifetime and the pane stays at phone geometry, violating 契约 2. Both failure paths are reachable real I/O: bridge/stream.go:75-101 subscribe has a bounded FIFO-open timeout returning a decidable error, and snapshotWithCursor (ws_handler.go:40-51) errors when Snapshot/CursorPos fail on a dying pane. Two descriptive corrections that do not change the verdict: the assertion's line numbers are off by one and it swaps the Subscribe and snapshot paths (:159 is Subscribe, :165 is snapshot); the claim that the snapshot error path was moved before any pipe exists is wrong — snapshot is still after Subscribe and does call detach(). The genuinely new pre-pipe leak is the Subscribe-failure return at :160. Related secondary hole: acquire (pane_geometry.go:60-65) also increments active when br.Size fails with origKnown=false, and since later subscribers skip the baseline snapshot when active!=0, that pane never gets a baseline at all.",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": false,
+   "reason": "断言对代码顺序的描述与实际相反。ws_handler.go 实际顺序是：:139 subscribeCancel → :148 geom.acquire → :153 br.Resize(客户端尺寸) → :159 br.Subscribe（挂管道）→ :165 capture。也就是说，两次 resize 都在挂管道之前，capture 在挂管道之后；断言所谓「capture 之后还有第二次 resize、且 :171 时管道仍未挂上」是把 :171 的 protocol.EncodeBinary（帧编码）误当成挂管道点，代码里 capture 之后没有任何 resize。因此不存在「既不在 capture 里、又不在管道里」的丢失窗口：:153→:159 之间的输出虽不入管道，但已在 tmux 自己的屏缓冲里，:165 的 capture-pane 会读到；:159 之后的重绘全部进管道走 delta。其次，断言依赖的 release 在重连路径上压根不会触发：ConnectionManager.kt:777 的 resubscribeAll 是在**新建立的 WebSocket 连接**上重发 SubscribeFrame（scheduleReconnect 里置 readyIsReconnect=true），而 subscribeCancel 查的是 per-wsConn 的 c.subs（ws_conn.go:490-492），新连接上该 map 为空 ⇒ 返回 false ⇒ 不 teardown ⇒ 不 geom.release ⇒ 不发恢复 Resize，断言描述的 108x96→213x54→108x96 抖动在重连路径上不发生。即便是同连接重订阅（确实会 release→恢复→re-acquire→再 resize），两次 resize 仍都在挂管道之前，capture 读的是 resize 后的 tmux 屏，之后的重绘以 delta 补齐，最多是瞬时空帧、不会成为「卡住的白屏」。仓库自己的定案也指向别处：commit 41270c72e「甄别定案=app渲染层（修后 daemon 108ms 发含字形快照，app 不画）」。唯一站得住的弱观察是同连接重订阅时「恢复到基线再立刻改回手机尺寸」的冗余几何抖动，但它在挂管道与 capture 之前，导不出断言的失败场景。",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "断言与代码一致，且无守卫兜住。TerminalEmulator.kt:133-137 `replaySnapshot` 无条件 `altActive=false; alt=null`，把 capture-pane 抓到的 alt 屏内容写进 main；:313 把 `?1049l` 路由到 exitAlt，而 :329 首行 `if (!altActive) return` 使其成为完全空转（连 markAllDirty/清屏都不做）。客户端 SessionViewModel.kt:290/301 分别把 SNAPSHOT 送 replaySnapshot、DELTA 直送 feed，无 alt 记账。服务端只在两处推快照：订阅时 ws_handler.go:172、handleResize 真实 reflow 后 :510（:490 明确在尺寸未变时跳过），全仓 `grep -rn \"1049|alternate|alt.screen\" server/ --include=*.go` 仅命中 bridge.go:437-448 的鼠标标志启发式注释，无任何 alt 状态跟踪或补快照。传输面证实可达：首帧走 `capture-pane -e`（bridge.go:62，pane 处于 alt 时抓到的就是备屏），增量走 `pipe-pane -o` 原始 pty 字节（stream.go:144），宿主 `ESC[?1049l` 会照送，而 tmux 自身的退出重绘只发给 attach 的 tmux 客户端、不进 pipe。故：订阅一个正在跑 Claude Code/vim 的 pane → 备屏内容落进 main 且 altActive=false → 程序退出时 1049l 被吞 → 旧全屏画面残留，shell 提示符按光标坐标画在残留字上，直到下一次真实 reflow-resize 或重连才收敛。测试面也无覆盖：AltScreenTest.kt:33/44/55/73 只测 feed 驱动的进出，没有「replaySnapshot 之后再来 1049l」的用例；docs/scenario-coverage.md:106（C4）本身就记着 alt-screen 端到端从未跑过真 TUI。唯一需要注意的边界：正确客户端也无法凭空恢复它从未收到过的宿主主屏内容，真正的修法要么服务端在 alt 迁移时补快照，要么客户端在收到不成对的 1049l 时至少清屏——当前代码两样都没做，留的是最坏那种（残留旧像素）。",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "Confirmed on pr/srv-first-frame. ws_handler.go:157 snapshotWithCursor → :167 br.Resize → :171 br.Subscribe, exactly as asserted, and the diff deletes main's comment \"Attach the pipe before the snapshot so no output between the two is lost (term-bridge knowledge base: pipe first, then capture)\". bridge/stream.go attaches with `pipe-pane -o -t <target> \"cat >> <fifo>\"` and only then opens the FIFO — there is no retroactive buffer, so every byte emitted in the [capture, attach] window is gone, and the server's own Resize now sits inside that window. bridge.go:377-391 sets `window-size latest` before `resize-window` specifically so the resize sticks against an attached host client, so SIGWINCH genuinely fires. Two independent damages result: (1) the first frame is the pre-resize screen — raw capture-pane ANSI captured at host width, replayed into the phone's narrower grid, so full-width CLI box lines wrap and a 54-row capture becomes ~108 rows in a 96-row viewport (main does not have this: it captures after the reflow); (2) the TUI's SIGWINCH repaint that would have corrected it is dropped. No guard closes it: only two snapshot sites exist in the api package (:157 and :516), geom.acquire (pane_geometry.go:56-72) only reads size and never resizes, and handleResize at :496 explicitly returns without repushing when the pane's read-back dims are unchanged. The app makes that skip the common case — SessionRoute.kt:145-152 subscribes with the cached measured rows/cols on a font+dpi cache hit, so the following resize carries identical dims (before==after) and the corrective snapshot is skipped; only the cache-miss path falls back to INITIAL_ROWS/COLS and accidentally triggers a real reflow. The branch's own probe (hl092_static_alt_first_frame_probe_test.go) pins the opposite world — a script that traps WINCH, clears, and deliberately never redraws — so it structurally cannot observe the regression against a TUI that does repaint. Minor inaccuracies in the assertion: the handleResize line refs are :496/:505 on this branch, not :201/:213. Caveat: that the repaint bytes actually land inside the ~one-tmux-exec window is inference from the code (async SIGWINCH vs subprocess spawn + FIFO open), not proven by source alone; the geometry-mismatched first frame, however, is unconditional.",
+   "confidence": "high"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "核实成立（核心维度成立，第二维度基本不成立）。\n\n代码事实（/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.afix/app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:322-345）：\n- `val incomingGlyphs = ansiPayloadHasGlyphs(frame.data)`（:322）、`val screenGlyphs = emulator.snapshot().plainText().isNotEmpty()`（:323-324）、`val apply = incomingGlyphs || !screenGlyphs`（:328），`if (!apply) { return }`（:335-337）越过 `emulator.replaySnapshot(...)`（:338）。\n- `ansiPayloadHasGlyphs`（:68-92）会跳过所有 CSI/控制字节，所以服务端 `snapshotWithCursor`（server/internal/api/ws_handler.go:40-51，`bytes.TrimRight(snap,\"\\n\")` 后 append `ESC[y;xH`）在宿主 pane 真空屏时产出的 6B 负载必然 incomingGlyphs=false。\n- `emulator.snapshot()` 取的是当前活动网格的可见屏（app/terminal/.../TerminalEmulator.kt:203-214），客户端网格只要还留着旧字，screenGlyphs=true ⇒ apply=false。\n- 守卫无任何兜底：没有「连续两帧空即接受」、没有超时接受、没有按快照来源（首帧 subscribe / resize 补发）区分。全仓仅两处测试触及 SNAPSHOT（AltScreenSnapshotGlyphsTest.kt / TermReflowTest.kt），前者只锁了「空快照不得抹掉首帧」这一个方向，真空屏方向无任何测试。\n\n可达性（我修正了断言里的一处措辞，但结论不变）：`clear` 之后 bash 会立刻重画提示符，屏上有字，所以「clear ⇒ 空快照」本身不成立；真正能到的是两条：\n① 掉线期间 pane 变成真空屏（如 `clear && <长时间无输出的命令>`、alt 程序退出后留下空的主屏），重连 replaySubscriptions 重发 subscribe（ConnectionManager.kt:695/759）→ handleSubscribe 走 snapshotWithCursor（ws_handler.go:165）→ 空快照被丢 → App 永久显示掉线前的旧屏，直到该命令产生输出，而那些输出是 delta，叠在陈旧网格上 → 残影。\n② handleSubscribe 在 capture 之前先 `br.Resize`（ws_handler.go:152），CLI 收到 SIGWINCH 常常先清屏再重画；capture 落在「已清屏未重画」窗口时同样是空快照被丢，随后的重画 delta 合成在旧几何网格上——这正是 handleResize 补发快照要消灭的那类残留（ws_handler.go:497-506 的注释明确写 snapshot 是 the single convergence point）。守卫把这个唯一收敛点在这条路径上抵消了。\n\n第二维度（return 越过 snapshotGen++/maybeCompleteResync/首开预取）我认为不构成独立缺陷，报出来会是噪声：`snapshotGen` 只进日志字符串；`maybeCompleteResync`（:771-800）是从 `emulator.snapshot()` 抽输入行的，被抑制的帧根本没改网格，跳过它与调用它等价，且 resync 有 400ms 超时兜底（noteResyncClock :760-769 → failResyncVisible(\"timeout\")）；`hasPrefetchedHistory` 预取只在首个 SNAPSHOT 触发，而首帧时 emulator 是空的 ⇒ screenGlyphs=false ⇒ apply 恒为 true，抑制不可能落在首帧上。",
+   "confidence": "medium"
+  },
+  {
+   "label": "",
+   "real": true,
+   "reason": "断言与代码一致，且找不到兜底守卫。\n\n(1) 顺序确实被改了。`git diff main...pr/srv-first-frame -- server/internal/api/ws_handler.go` 显示 main 上是 Resize → br.Subscribe(接管道) → snapshotWithCursor；分支改成 snapshotWithCursor(/Volumes/nvme/Projects/远程Agent安卓/server/internal/api/ws_handler.go 分支版第157行) → br.Resize(第167行) → br.Subscribe(第171行)，并删掉了 \"Attach the pipe before the snapshot so no output between the two is lost\" 那条注释。\n\n(2) 窗口是真的，而且不窄。`bridge.Pane.Resize`(server/internal/bridge/bridge.go:377-392) 走 display-message + set-option + resize-window + Size 四次 tmux 子进程；resize-window 一落地 CLI 就收到 SIGWINCH 开始重绘。而 `Subscribe`(server/internal/bridge/stream.go:120-160) 还要 mkfifo、pipe-pane 先 detach、pipe-pane -o 再 attach、再 openFIFO 等 writer——每步都是 fork 一个 tmux 客户端进程，量级是几十毫秒。这段时间内 CLI 写进 pane 的重绘字节，既不在快照里（快照在 resize 之前拍的），也不在管道里（管道还没接上），永久丢失。\n\n(3) 没有守卫能救回来。\n - 服务端：`geom.acquire`(server/internal/api/pane_geometry.go:56-72) 只读 Size 记基线，不 resize，所以首次订阅必然触发真 SIGWINCH。\n - 客户端：SessionViewModel.kt:290 `emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)` —— 快照按客户端自己的几何重放，80 列内容带旧折行点被塞进 108 列网格，不会重排。\n - 补救路径 handleResize(ws_handler.go:450-524) 只在「pane 实际尺寸 before≠after」时才补推快照；SessionRoute.kt:145-152 在 ViewportGeom 缓存命中（即第二次以后正常使用）时，subscribe 带的 rows/cols 就等于真实视口，TermViewPresenter 首次真实视口那一次 resize 于是变成 no-op，服务端明确 `resize no-op, skip snapshot` 直接 return。⇒ 缓存命中路径下没有任何补推。\n - 客户端 resync 只由按键/用户动作触发（maybeCompleteResync / beginResync），CLI 空闲等输入时不产生任何字节 ⇒ 陈旧首帧可以无限期停留。\n\n(4) 文档矛盾也属实：stream.go:7-9 与 stream.go:141-142 仍把「先接管道再拍快照」当作知识基底级不变量陈述，分支没同步修改，主张与实现现在自相矛盾。\n\n唯一能弱化的分支：断线重连再订阅时 pane 已是手机几何，Resize 无变化 ⇒ 无 SIGWINCH ⇒ 不丢。但首次进入会话（以及旋转后重建）走的正是有 SIGWINCH 的那条路，场景可达。",
+   "confidence": "high"
+  }
+ ]
+}
