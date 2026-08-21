@@ -231,6 +231,38 @@
     "agent": "hl1-v1-srvperf",
     "team": "grok-l2"
    }
+  },
+  "r.sprobe": {
+   "provider": "grok",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "hl1-v1-sprobe",
+    "team": "grok-l2"
+   }
+  },
+  "r.sfix": {
+   "provider": "grok",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "hl1-v1-sfix",
+    "team": "grok-l2"
+   }
   }
  },
  "tasks": {
@@ -301,7 +333,7 @@
   },
   "t.probe": {
    "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/probe/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.probe（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.probe · 回炉②：审查席根因探针（红测）\n\n输入：`.team/nodes/hl1-repro2/复现.md`（引入 commit + 初步根因）。\n你要在**分支 pr/hl-probe** 写一个**根因探针单测**：\n- 探针断言的是「根因不存在」——在当前 main 上跑必须**红**（先验红原始输出贴进说明.md）。\n- 探针要能**区分两个同形世界**：白屏因「没渲染」vs「渲染了但被盖住/尺寸为0」不是同一个探针。\n  写清你的探针命中哪一种、为什么排除另一种。\n- 回退验证：在引入 commit 的**父 commit** 上跑探针必须**绿**（贴输出）——绿说明探针钉的确实是这次引入的东西。\n交付：探针测试文件（提交到 pr/hl-probe）+ .team/nodes/hl1-probe/说明.md\n（必含：`探针=`(测试类#方法)、`main红输出=`、`父commit绿输出=`）。\n\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b pr/hl-probe`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。\n5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。\n6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。\n7. 临时文件只写 `.team/nodes/hl1-probe/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。\n8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。\n\n```\n\n- write_paths: .team/nodes/hl1-probe/, app/app/src/test/\n- read_paths: .team/nodes/hl1-repro2/复现.md\n- 判据: A-probe-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n### Kotlin · dev.agentmirror.app.service\n\n- **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。\n- **导出面**：AppClockPump, MirrorForegroundService, NetworkConnectivityWatcher, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, OnScreenFallbackPump, ServiceWire, StateWatcher, TsnetBootstrap\n- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn, dev.agentmirror.app.tsnet\n- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.probe · 回炉②：审查席根因探针（红测）\n\n输入：`.team/nodes/hl1-repro2/复现.md`（引入 commit + 初步根因）。\n你要在**分支 pr/hl-probe** 写一个**根因探针单测**：\n- 探针断言的是「根因不存在」——在当前 main 上跑必须**红**（先验红原始输出贴进说明.md）。\n- 探针要能**区分两个同形世界**：白屏因「没渲染」vs「渲染了但被盖住/尺寸为0」不是同一个探针。\n  写清你的探针命中哪一种、为什么排除另一种。\n- 回退验证：在引入 commit 的**父 commit** 上跑探针必须**绿**（贴输出）——绿说明探针钉的确实是这次引入的东西。\n交付：探针测试文件（提交到 pr/hl-probe）+ .team/nodes/hl1-probe/说明.md\n（必含：`探针=`(测试类#方法)、`main红输出=`、`父commit绿输出=`）。\n\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b pr/hl-probe`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。\n5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。\n6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。\n7. 临时文件只写 `.team/nodes/hl1-probe/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。\n8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。\n",
-   "state": "planned",
+   "state": "succeeded",
    "owner": {
     "role": "r.probe"
    },
@@ -350,11 +382,23 @@
     "required": [
      "A-probe-doc"
     ]
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.probe-seq3-t1787304226265",
+     "delivery_id": "del-t.probe-seq3-t1787304226265",
+     "state": "succeeded",
+     "writeback_revision": 15,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-probe-doc",
+      "acceptance_success.writeback_revision=15"
+     ]
+    }
+   ]
   },
   "t.fix": {
    "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/fix/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.fix（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.fix · 回炉③：修复白屏（分支 pr/hl-blank）\n\n输入：复现.md（根因）+ pr/hl-probe（根因探针）。\n1. 把探针测试 cherry-pick/合入你的分支 pr/hl-blank（探针是验收标准，⛔ 不许改探针本身）。\n2. **修根因**，⛔ 不许症状层打补丁（如「渲染好了才展示」这类遮掩手段，用户明令禁止）。\n3. 修完探针必须**绿**；全量单测不倒退。\n4. 说明.md 必含：`根因=`、`修法=`、`探针绿输出=`、先验红一节。\n\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b pr/hl-blank`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。\n5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。\n6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。\n7. 临时文件只写 `.team/nodes/hl1-fix/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。\n8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。\n\n```\n\n- write_paths: app/\n- read_paths: .team/nodes/hl1-repro2/复现.md, .team/nodes/hl1-probe/说明.md\n- 判据: A-fix-suite, A-fix-wiki, A-fix-smell, A-fix-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n### Kotlin · dev.agentmirror.app.service\n\n- **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。\n- **导出面**：AppClockPump, MirrorForegroundService, NetworkConnectivityWatcher, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, OnScreenFallbackPump, ServiceWire, StateWatcher, TsnetBootstrap\n- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn, dev.agentmirror.app.tsnet\n- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.fix · 回炉③：修复白屏（分支 pr/hl-blank）\n\n输入：复现.md（根因）+ pr/hl-probe（根因探针）。\n1. 把探针测试 cherry-pick/合入你的分支 pr/hl-blank（探针是验收标准，⛔ 不许改探针本身）。\n2. **修根因**，⛔ 不许症状层打补丁（如「渲染好了才展示」这类遮掩手段，用户明令禁止）。\n3. 修完探针必须**绿**；全量单测不倒退。\n4. 说明.md 必含：`根因=`、`修法=`、`探针绿输出=`、先验红一节。\n\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b pr/hl-blank`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。\n5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。\n6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。\n7. 临时文件只写 `.team/nodes/hl1-fix/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。\n8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。\n",
-   "state": "planned",
+   "state": "succeeded",
    "owner": {
     "role": "r.fix"
    },
@@ -439,10 +483,25 @@
      "A-fix-smell",
      "A-fix-doc"
     ]
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.fix-seq4-t1787304744648",
+     "delivery_id": "del-t.fix-seq4-t1787304744648",
+     "state": "succeeded",
+     "writeback_revision": 16,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-fix-suite",
+      "acceptance_success.acceptance_id=A-fix-wiki",
+      "acceptance_success.acceptance_id=A-fix-smell",
+      "acceptance_success.acceptance_id=A-fix-doc",
+      "acceptance_success.writeback_revision=16"
+     ]
+    }
+   ]
   },
   "t.fix.rv": {
-   "title": "# t.fix.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审对象：**分支 `pr/hl-blank`**。⛔ 在这条分支上审，不要在 main 上审。\n\n## 你要做四件事\n1. `git log main..pr/hl-blank --stat`；`git diff main...pr/hl-blank` 逐处看。\n2. 读 `.team/nodes/hl1-fix/说明.md`，核对说明写的和 diff 真做的是不是一回事。\n3. **🔴 查先验红**：说明里必须有改之前判据/探针红的**原始输出**。没有 ⇒ 直接 refutes。\n4. 核对修的是**根因**不是症状：探针没被改动（diff 里探针文件只允许由 pr/hl-probe 带来）；无「渲染好了才展示」类遮掩。\n\n交付：`.team/nodes/hl1-fix-rv/verdict.md`，首行 `VERDICT: supports|refutes|inconclusive`，\n后附逐条依据。⛔ 不许改任何产品代码。交付落盘后 report_result（status=你的 verdict）。\n",
+   "title": "# t.fix.rv · 审 PR：pr/srv-first-frame（异源评审席，⛔ 只读）\n\n被审对象：**分支 `pr/srv-first-frame`**（服务端订阅首帧修复）。你此前两轮对空分支的 refutes 与读码结论仍有效，本单是那条链的真身。\n\n## 你要做\n1. `git log main..pr/srv-first-frame --stat`；`git diff main...pr/srv-first-frame` 逐处看。\n2. 读 `.team/nodes/hl1-sfix/说明.md` 与 `.team/nodes/hl1-sprobe/说明.md`，核对说明与 diff 一致。\n3. **🔴 查先验红**：探针在 main 上红的原始输出必须在。没有 ⇒ refutes。\n4. 核对修的是根因（订阅静止 pane 及时发含内容首帧），⛔ 不是「等 delta」类绕法；探针未被改动。\n5. 你自己那条验收红线照用：**⛔ 不许拿「chrome 在 / TermSurfaceView 面积>0」当绿**——092 的绿必须是「冷点开静态 alt-screen pane，首帧内可见字形」（该条由 t.verify 在模拟器上执行，你核对 t.sfix 的机理支撑它）。\n\n交付：`/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-fix-rv/verdict.md`（**写仓根这个路径**，你的 write_paths 已含；若硬约束仍拦，写 worktree 同名路径也可，判据两处都认），首行 `VERDICT: supports|refutes|inconclusive`。⛔ 不改产品代码。落盘后 report_result（status=verdict）。\n",
    "state": "planned",
    "owner": {
     "role": "r.judge.blank"
@@ -454,8 +513,8 @@
      ".team/nodes/hl1-fix-rv/"
     ],
     "read_paths": [
-     ".team/nodes/hl1-fix/说明.md",
-     ".team/nodes/hl1-probe/说明.md"
+     ".team/nodes/hl1-sfix/说明.md",
+     ".team/nodes/hl1-sprobe/说明.md"
     ],
     "environment_fidelity": {
      "runs_real_cli": false,
@@ -480,7 +539,7 @@
       "argv": [
        "python3",
        "-c",
-       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-fix-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.fix-rv/.team/nodes/hl1-fix-rv/verdict.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('candidates=%r hit=%r\\n'%(cands,hit))\nif not hit: sys.stderr.write('产物两处都不存在\\n'); sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nneed=['VERDICT:']\nmiss=[x for x in need if x not in s]\nsys.stderr.write('miss=%r\\n'%miss)\nsys.exit(1 if miss else 0)\n"
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-fix-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.rv.blank/.team/nodes/hl1-fix-rv/verdict.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('candidates=%r hit=%r\\n'%(cands,hit))\nif not hit: sys.stderr.write('产物两处都不存在\\n'); sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nneed=['VERDICT:']\nmiss=[x for x in need if x not in s]\nsys.stderr.write('miss=%r\\n'%miss)\nsys.exit(1 if miss else 0)\n"
       ],
       "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
       "expected_exit_code": 0,
@@ -494,7 +553,7 @@
    }
   },
   "t.verify": {
-   "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/verify/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.verify（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.verify · 回炉④：模拟器亲眼看到修复（眼见为实铁律）\n\n在你的 worktree checkout 分支 pr/hl-blank，`cd app && ./gradlew -q :app:assembleDebug`，\n装到模拟器，按 t.repro 的同一复现步骤重走：\n1. 点开隔离会话 → **对话界面出现**（终端内容可见），截图留证。\n2. 不倒退抽查：返回列表再进一次；后台→前台回来一次；各截图。\n3. 交付 .team/nodes/hl1-verify/复验.md（必含 `结果=`、`截图=`、步骤逐条）。\n⚠️ 复验失败（还是白屏）⇒ 如实报 status=stillblank + 截图，⛔ 不许含糊。\n\n## 模拟器与隔离环境（契约 092 §4，照抄，别自创）\n- 模拟器 emulator-5554 已在跑（leader 起的，共享基础设施，⛔ 不要自己再起/杀模拟器）。\n  adb = ~/Library/Android/sdk/platform-tools/adb。\n- 隔离 tmux + 测试 daemon 照 e2e/layer2.sh 的做法；socket 必须自检落在自己 TMPD：\n  `TMUX_TMPDIR=<你的tmp> tmux -f /dev/null list-sessions` 能看到自己的会话才算。\n- 假 CLI：`ln -s /bin/bash <dir>/claude`（⛔ cp 出的 bash 跑不起来；shebang 脚本 comm=bash 不命中白名单）。\n- app 冷启前 `pm clear dev.agentmirror.app`（模拟器里有指向已死端口的旧配对档案）；\n  手填配对 ws://10.0.2.2:<你的端口>/ws + 你自己的 token。\n- 🔴 测试 daemon 会扫到真实舰队的 tmux —— ⛔⛔ 绝不许在 app 里点开任何真实会话，\n  只许点你隔离造出来的那个（cwd 是你自己的 tmp 目录）。\n- 截图先关输入法：`adb shell input keyevent 111`。\n\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b （本格不建分支，只读复验）`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。\n5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。\n6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。\n7. 临时文件只写 `.team/nodes/hl1-verify/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。\n8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。\n\n```\n\n- write_paths: .team/nodes/hl1-verify/\n- read_paths: .team/nodes/hl1-repro/复现.md\n- 判据: A-verify-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.verify · 回炉④：模拟器亲眼看到修复（眼见为实铁律）\n\n在你的 worktree checkout 分支 pr/hl-blank，`cd app && ./gradlew -q :app:assembleDebug`，\n装到模拟器，按 t.repro 的同一复现步骤重走：\n1. 点开隔离会话 → **对话界面出现**（终端内容可见），截图留证。\n2. 不倒退抽查：返回列表再进一次；后台→前台回来一次；各截图。\n3. 交付 .team/nodes/hl1-verify/复验.md（必含 `结果=`、`截图=`、步骤逐条）。\n⚠️ 复验失败（还是白屏）⇒ 如实报 status=stillblank + 截图，⛔ 不许含糊。\n\n## 模拟器与隔离环境（契约 092 §4，照抄，别自创）\n- 模拟器 emulator-5554 已在跑（leader 起的，共享基础设施，⛔ 不要自己再起/杀模拟器）。\n  adb = ~/Library/Android/sdk/platform-tools/adb。\n- 隔离 tmux + 测试 daemon 照 e2e/layer2.sh 的做法；socket 必须自检落在自己 TMPD：\n  `TMUX_TMPDIR=<你的tmp> tmux -f /dev/null list-sessions` 能看到自己的会话才算。\n- 假 CLI：`ln -s /bin/bash <dir>/claude`（⛔ cp 出的 bash 跑不起来；shebang 脚本 comm=bash 不命中白名单）。\n- app 冷启前 `pm clear dev.agentmirror.app`（模拟器里有指向已死端口的旧配对档案）；\n  手填配对 ws://10.0.2.2:<你的端口>/ws + 你自己的 token。\n- 🔴 测试 daemon 会扫到真实舰队的 tmux —— ⛔⛔ 绝不许在 app 里点开任何真实会话，\n  只许点你隔离造出来的那个（cwd 是你自己的 tmp 目录）。\n- 截图先关输入法：`adb shell input keyevent 111`。\n\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b （本格不建分支，只读复验）`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。\n5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。\n6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。\n7. 临时文件只写 `.team/nodes/hl1-verify/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。\n8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。\n",
+   "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算的模块影响闭包，**正向依赖=你消费的契约，反向依赖=你的回归自查范围**。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/verify/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.verify（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.verify · 回炉④：模拟器亲眼看到修复（眼见为实铁律）\n\n在你的 worktree checkout 分支 pr/srv-first-frame（服务端分支：用它 go build 出 daemon，配当前 main 的 app debug 包），`cd app && ./gradlew -q :app:assembleDebug`，\n装到模拟器，按 t.repro 的同一复现步骤重走：\n1. 复现环境照 .team/nodes/hl1-repro2/复现.md：静态 alt-screen 假 CLI + 大滚回两种 pane。冷点开 → **2s 内终端画布出现字形**（⛔ 顶栏/底栏在不算绿），截图+计秒留证。\n2. 不倒退抽查：返回列表再进一次；后台→前台回来一次；各截图。\n3. 交付 .team/nodes/hl1-verify/复验.md（必含 `结果=`、`截图=`、步骤逐条）。\n⚠️ 复验失败（还是白屏）⇒ 如实报 status=stillblank + 截图，⛔ 不许含糊。\n\n## 模拟器与隔离环境（契约 092 §4，照抄，别自创）\n- 模拟器 emulator-5554 已在跑（leader 起的，共享基础设施，⛔ 不要自己再起/杀模拟器）。\n  adb = ~/Library/Android/sdk/platform-tools/adb。\n- 隔离 tmux + 测试 daemon 照 e2e/layer2.sh 的做法；socket 必须自检落在自己 TMPD：\n  `TMUX_TMPDIR=<你的tmp> tmux -f /dev/null list-sessions` 能看到自己的会话才算。\n- 假 CLI：`ln -s /bin/bash <dir>/claude`（⛔ cp 出的 bash 跑不起来；shebang 脚本 comm=bash 不命中白名单）。\n- app 冷启前 `pm clear dev.agentmirror.app`（模拟器里有指向已死端口的旧配对档案）；\n  手填配对 ws://10.0.2.2:<你的端口>/ws + 你自己的 token。\n- 🔴 测试 daemon 会扫到真实舰队的 tmux —— ⛔⛔ 绝不许在 app 里点开任何真实会话，\n  只许点你隔离造出来的那个（cwd 是你自己的 tmp 目录）。\n- 截图先关输入法：`adb shell input keyevent 111`。\n\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b （本格不建分支，只读复验）`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。\n5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。\n6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。\n7. 临时文件只写 `.team/nodes/hl1-verify/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。\n8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。\n\n```\n\n- write_paths: .team/nodes/hl1-verify/\n- read_paths: .team/nodes/hl1-repro/复现.md\n- 判据: A-verify-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.verify · 回炉④：模拟器亲眼看到修复（眼见为实铁律）\n\n在你的 worktree checkout 分支 pr/srv-first-frame（服务端分支：用它 go build 出 daemon，配当前 main 的 app debug 包），`cd app && ./gradlew -q :app:assembleDebug`，\n装到模拟器，按 t.repro 的同一复现步骤重走：\n1. 复现环境照 .team/nodes/hl1-repro2/复现.md：静态 alt-screen 假 CLI + 大滚回两种 pane。冷点开 → **2s 内终端画布出现字形**（⛔ 顶栏/底栏在不算绿），截图+计秒留证。\n2. 不倒退抽查：返回列表再进一次；后台→前台回来一次；各截图。\n3. 交付 .team/nodes/hl1-verify/复验.md（必含 `结果=`、`截图=`、步骤逐条）。\n⚠️ 复验失败（还是白屏）⇒ 如实报 status=stillblank + 截图，⛔ 不许含糊。\n\n## 模拟器与隔离环境（契约 092 §4，照抄，别自创）\n- 模拟器 emulator-5554 已在跑（leader 起的，共享基础设施，⛔ 不要自己再起/杀模拟器）。\n  adb = ~/Library/Android/sdk/platform-tools/adb。\n- 隔离 tmux + 测试 daemon 照 e2e/layer2.sh 的做法；socket 必须自检落在自己 TMPD：\n  `TMUX_TMPDIR=<你的tmp> tmux -f /dev/null list-sessions` 能看到自己的会话才算。\n- 假 CLI：`ln -s /bin/bash <dir>/claude`（⛔ cp 出的 bash 跑不起来；shebang 脚本 comm=bash 不命中白名单）。\n- app 冷启前 `pm clear dev.agentmirror.app`（模拟器里有指向已死端口的旧配对档案）；\n  手填配对 ws://10.0.2.2:<你的端口>/ws + 你自己的 token。\n- 🔴 测试 daemon 会扫到真实舰队的 tmux —— ⛔⛔ 绝不许在 app 里点开任何真实会话，\n  只许点你隔离造出来的那个（cwd 是你自己的 tmp 目录）。\n- 截图先关输入法：`adb shell input keyevent 111`。\n\n\n---\n## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）\n\n**开工第一件事，跑这两条自检，把输出贴进说明.md：**\n```\npwd                        # 你必须在自己的 worktree 里，不是仓根\ngit branch --show-current\n```\n\n1. **建你自己的分支**：`git checkout -b （本格不建分支，只读复验）`。\n2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。\n3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。\n4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。\n5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。\n6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。\n7. 临时文件只写 `.team/nodes/hl1-verify/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。\n8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。\n",
    "state": "planned",
    "owner": {
     "role": "r.verify"
@@ -506,8 +565,8 @@
      ".team/nodes/hl1-verify/"
     ],
     "read_paths": [
-     ".team/nodes/hl1-repro/复现.md",
-     ".team/nodes/verify/BASE.md"
+     ".team/nodes/hl1-repro2/复现.md",
+     ".team/nodes/hl1-sfix/说明.md"
     ],
     "environment_fidelity": {
      "runs_real_cli": false,
@@ -1105,7 +1164,7 @@
   },
   "t.repro2": {
    "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/repro2/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.repro2（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.repro2 · 高保真复现「打开会话白屏」（契约 092 §1 · 第二梯度）\n\n第一轮 t.repro 已证：main 现编 **debug** 包 + 假 CLI（bash symlink，主屏）点开会话**正常**\n（.team/nodes/hl1-repro/复现.md，norepro）。你的任务是把保真度补齐到用户路径，逐级尝试：\n\n## 保真度阶梯（逐级做，每级截图留证，复现即停）\n1. **用户那份 release 包**：`~/Desktop/agentmirror-20260821-1324.apk`（md5 e6cbe8d9e34769c4f3e3c58f2d069af4）\n   直接安装（pm clear 后装），同隔离步骤点开会话。debug 复现不出而 release 复现出 ⇒ 立刻写明\n   「构建类型相关（R8/minify 嫌疑）」。\n2. **alt-screen 真内容**：假 CLI 升级——进入备用屏（printf '\\033[?1049h'），持续重绘彩色 TUI、\n   含 CJK 与长行（模拟 Claude Code 界面），再点开会话。\n3. **真 claude CLI**：隔离 tmux 里直接起真的 `claude`（PATH 里有），alt=1 真实界面，再点开会话。\n4. 每级都做三个动作：冷点开、退出重进、后台→前台。\n⚠️ 你的隔离 daemon 会扫到真实舰队 —— ⛔⛔ 只许点你自己造的会话。\n\n## 交付 .team/nodes/hl1-repro2/复现.md\n- 必含：`status=done`、`复现=成功` 或 `复现=norepro`、`触发条件=`（哪一级/哪个动作触发）、\n  `截图=`、每级的结果表。\n- 复现成功后**才**做定位：先对触发条件做变量隔离（构建类型/alt-screen/真CLI 哪个是必要条件），\n  再视情况 bisect 本轮 14 条 land（复现.md 里给 `引入commit=` 或 `引入commit=非本轮提交（构建类型相关）`）。\n- 全梯走完仍不复现 ⇒ 如实写 `复现=norepro` + 完整证据，report status=blocked。\n  判据会红——**这不是你的错**，leader 收链后去找用户要诊断日志。⛔ 不许硬编复现。\n## 模拟器与隔离环境（契约 092 §4，照抄，别自创）\n- 模拟器 emulator-5554 已在跑（leader 起的，共享基础设施，⛔ 不要自己再起/杀模拟器）。\n  adb = ~/Library/Android/sdk/platform-tools/adb。\n- 隔离 tmux + 测试 daemon 照 e2e/layer2.sh 的做法；socket 必须自检落在自己 TMPD：\n  `TMUX_TMPDIR=<你的tmp> tmux -f /dev/null list-sessions` 能看到自己的会话才算。\n- 假 CLI：`ln -s /bin/bash <dir>/claude`（⛔ cp 出的 bash 跑不起来；shebang 脚本 comm=bash 不命中白名单）。\n- app 冷启前 `pm clear dev.agentmirror.app`（模拟器里有指向已死端口的旧配对档案）；\n  手填配对 ws://10.0.2.2:<你的端口>/ws + 你自己的 token。\n- 🔴 测试 daemon 会扫到真实舰队的 tmux —— ⛔⛔ 绝不许在 app 里点开任何真实会话，\n  只许点你隔离造出来的那个（cwd 是你自己的 tmp 目录）。\n- 截图先关输入法：`adb shell input keyevent 111`。\n\n\n---\n纪律：不建分支（只读复现）；临时文件只写 .team/nodes/hl1-repro2/tmp/；交付落盘后才 report_result。\n\n```\n\n- write_paths: .team/nodes/hl1-repro2/\n- read_paths: .team/nodes/hl1-repro/复现.md, requirement-base/entries/092-会话页白屏回归与两处简陋UI.md\n- 判据: A-repro2-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.repro2 · 高保真复现「打开会话白屏」（契约 092 §1 · 第二梯度）\n\n第一轮 t.repro 已证：main 现编 **debug** 包 + 假 CLI（bash symlink，主屏）点开会话**正常**\n（.team/nodes/hl1-repro/复现.md，norepro）。你的任务是把保真度补齐到用户路径，逐级尝试：\n\n## 保真度阶梯（逐级做，每级截图留证，复现即停）\n1. **用户那份 release 包**：`~/Desktop/agentmirror-20260821-1324.apk`（md5 e6cbe8d9e34769c4f3e3c58f2d069af4）\n   直接安装（pm clear 后装），同隔离步骤点开会话。debug 复现不出而 release 复现出 ⇒ 立刻写明\n   「构建类型相关（R8/minify 嫌疑）」。\n2. **alt-screen 真内容**：假 CLI 升级——进入备用屏（printf '\\033[?1049h'），持续重绘彩色 TUI、\n   含 CJK 与长行（模拟 Claude Code 界面），再点开会话。\n3. **真 claude CLI**：隔离 tmux 里直接起真的 `claude`（PATH 里有），alt=1 真实界面，再点开会话。\n4. 每级都做三个动作：冷点开、退出重进、后台→前台。\n⚠️ 你的隔离 daemon 会扫到真实舰队 —— ⛔⛔ 只许点你自己造的会话。\n\n## 交付 .team/nodes/hl1-repro2/复现.md\n- 必含：`status=done`、`复现=成功` 或 `复现=norepro`、`触发条件=`（哪一级/哪个动作触发）、\n  `截图=`、每级的结果表。\n- 复现成功后**才**做定位：先对触发条件做变量隔离（构建类型/alt-screen/真CLI 哪个是必要条件），\n  再视情况 bisect 本轮 14 条 land（复现.md 里给 `引入commit=` 或 `引入commit=非本轮提交（构建类型相关）`）。\n- 全梯走完仍不复现 ⇒ 如实写 `复现=norepro` + 完整证据，report status=blocked。\n  判据会红——**这不是你的错**，leader 收链后去找用户要诊断日志。⛔ 不许硬编复现。\n## 模拟器与隔离环境（契约 092 §4，照抄，别自创）\n- 模拟器 emulator-5554 已在跑（leader 起的，共享基础设施，⛔ 不要自己再起/杀模拟器）。\n  adb = ~/Library/Android/sdk/platform-tools/adb。\n- 隔离 tmux + 测试 daemon 照 e2e/layer2.sh 的做法；socket 必须自检落在自己 TMPD：\n  `TMUX_TMPDIR=<你的tmp> tmux -f /dev/null list-sessions` 能看到自己的会话才算。\n- 假 CLI：`ln -s /bin/bash <dir>/claude`（⛔ cp 出的 bash 跑不起来；shebang 脚本 comm=bash 不命中白名单）。\n- app 冷启前 `pm clear dev.agentmirror.app`（模拟器里有指向已死端口的旧配对档案）；\n  手填配对 ws://10.0.2.2:<你的端口>/ws + 你自己的 token。\n- 🔴 测试 daemon 会扫到真实舰队的 tmux —— ⛔⛔ 绝不许在 app 里点开任何真实会话，\n  只许点你隔离造出来的那个（cwd 是你自己的 tmp 目录）。\n- 截图先关输入法：`adb shell input keyevent 111`。\n\n\n---\n纪律：不建分支（只读复现）；临时文件只写 .team/nodes/hl1-repro2/tmp/；交付落盘后才 report_result。\n",
-   "state": "planned",
+   "state": "succeeded",
    "owner": {
     "role": "r.repro2"
    },
@@ -1154,11 +1213,23 @@
     "required": [
      "A-repro2-doc"
     ]
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.repro2-seq1-t1787302851409",
+     "delivery_id": "del-t.repro2-seq1-t1787302851409",
+     "state": "succeeded",
+     "writeback_revision": 13,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-repro2-doc",
+      "acceptance_success.writeback_revision=13"
+     ]
+    }
+   ]
   },
   "t.srvperf": {
    "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/srvperf/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.srvperf（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.srvperf · 服务端卡顿对拍：今天 13:35 的新二进制 vs 上午的旧构建（measurement-only，不改代码）\n\n用户反馈：用**旧 app** 比今天上午卡顿，怀疑服务端回退。生产 daemon 13:35 换成了含今天三条 server land\n（573cfa866 e12-close / 01467a88c e13-new-pane / e943e9fe1 gofix-scrubbedenv）的新二进制。\n⚠️ 混杂变量：本机现在跑着模拟器+构建负载，上午没有。你的对拍必须把这个变量隔离掉（同机同负载下 A/B）。\n\n## 做法（照 perf-v1 的真基线对拍方法论）\n1. 基线：`git archive dc9aab11b`（今天三条 server land 之前）导出到 .team/nodes/hl1-srvperf/tmp/base/，`go build` 出 base 二进制。\n2. 对照：当前 main `go build` 出 new 二进制。\n3. 同负载对拍：各起在**隔离端口+隔离 TMUX_TMPDIR**（⛔ 不碰 9900 生产 daemon、⛔ 不碰真实舰队 tmux）；\n   隔离 tmux 里造持续高频输出的会话（yes/彩色滚屏），用 ws 客户端脚本（参考 e2e/ 里现成的）订阅终端流，\n   量化：帧到达间隔 p50/p95、每秒帧数、daemon CPU（ps -o pcpu 采样 60s）。A/B 各跑两轮取稳。\n4. 结论三选一：new 明显差于 base（给数字）/ 两者相同（卡顿另有原因，给数字）/ 不可判（说明为何）。\n## 交付 .team/nodes/hl1-srvperf/对拍.md\n必含：`status=done`、`结论=`、`base指标=`、`new指标=`、`量具身份=`（两个二进制的 md5+构建 sha）。\n纪律：不改产品代码、不建分支；临时文件只写 .team/nodes/hl1-srvperf/tmp/；如实报不可判是合法出口。\n\n```\n\n- write_paths: .team/nodes/hl1-srvperf/\n- read_paths: e2e/\n- 判据: A-srvperf-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.srvperf · 服务端卡顿对拍：今天 13:35 的新二进制 vs 上午的旧构建（measurement-only，不改代码）\n\n用户反馈：用**旧 app** 比今天上午卡顿，怀疑服务端回退。生产 daemon 13:35 换成了含今天三条 server land\n（573cfa866 e12-close / 01467a88c e13-new-pane / e943e9fe1 gofix-scrubbedenv）的新二进制。\n⚠️ 混杂变量：本机现在跑着模拟器+构建负载，上午没有。你的对拍必须把这个变量隔离掉（同机同负载下 A/B）。\n\n## 做法（照 perf-v1 的真基线对拍方法论）\n1. 基线：`git archive dc9aab11b`（今天三条 server land 之前）导出到 .team/nodes/hl1-srvperf/tmp/base/，`go build` 出 base 二进制。\n2. 对照：当前 main `go build` 出 new 二进制。\n3. 同负载对拍：各起在**隔离端口+隔离 TMUX_TMPDIR**（⛔ 不碰 9900 生产 daemon、⛔ 不碰真实舰队 tmux）；\n   隔离 tmux 里造持续高频输出的会话（yes/彩色滚屏），用 ws 客户端脚本（参考 e2e/ 里现成的）订阅终端流，\n   量化：帧到达间隔 p50/p95、每秒帧数、daemon CPU（ps -o pcpu 采样 60s）。A/B 各跑两轮取稳。\n4. 结论三选一：new 明显差于 base（给数字）/ 两者相同（卡顿另有原因，给数字）/ 不可判（说明为何）。\n## 交付 .team/nodes/hl1-srvperf/对拍.md\n必含：`status=done`、`结论=`、`base指标=`、`new指标=`、`量具身份=`（两个二进制的 md5+构建 sha）。\n纪律：不改产品代码、不建分支；临时文件只写 .team/nodes/hl1-srvperf/tmp/；如实报不可判是合法出口。\n",
-   "state": "planned",
+   "state": "succeeded",
    "owner": {
     "role": "r.srvperf"
    },
@@ -1206,6 +1277,151 @@
     "required": [
      "A-srvperf-doc"
     ]
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.srvperf-seq2-t1787302851667",
+     "delivery_id": "del-t.srvperf-seq2-t1787302851667",
+     "state": "succeeded",
+     "writeback_revision": 14,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-srvperf-doc",
+      "acceptance_success.writeback_revision=14"
+     ]
+    }
+   ]
+  },
+  "t.sprobe": {
+   "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/sprobe/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.sprobe（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.sprobe · 服务端首帧根因探针（分支 pr/srv-probe，Go 红测）\n\n根因线索（两处独立指认，都指向 server 订阅首帧路径）：\n- 探针席 r14：server `handleSubscribe`「先 Resize 再 capture」的顺序问题（.team/nodes/hl1-probe/说明.md）\n- 评审席独立读码复核属实：Resize→pipe→capture 顺序（.worktrees/hl1.rv.blank/.team/nodes/hl1-fix-rv/verdict.md 末段）\n- 复现事实（.team/nodes/hl1-repro2/复现.md）：冷订阅一个**静止**（无新 delta）的 pane——静态 alt-screen /\n  空闲真 Claude / 大滚回——>16s 无首帧；持续重绘的 pane 则正常。base(dc9aab11b) 与 new(main) 同形 ⇒ 存量缺陷。\n\n## 你要做\n在分支 pr/srv-probe 写一个 Go 探针测试（server 侧，货真价实连 handleSubscribe 路径）：\n- 断言：订阅一个已有内容但**不再产生新输出**的 pane，应在 2s 内收到含字形内容的首帧快照。\n- **先验红**：当前 main 上必须红（贴原始输出进说明.md）。\n- 探针要区分两个同形世界：「快照从没发」vs「快照发了但内容为空」——写清命中哪种。\n## 交付 .team/nodes/hl1-sprobe/说明.md\n必含：status=done、探针=（测试文件#函数）、main红输出=、机理=（订阅后快照为何不发/为空）。\n纪律：只提交到 pr/srv-probe；⛔ 不改产品代码（只加测试）；⛔ 不碰 main、不 push；临时文件只写 .team/nodes/hl1-sprobe/tmp/；如实报不可判是合法出口。\n\n```\n\n- write_paths: server/, .team/nodes/hl1-sprobe/\n- read_paths: .team/nodes/hl1-repro2/复现.md, .team/nodes/hl1-probe/说明.md, .worktrees/hl1.rv.blank/.team/nodes/hl1-fix-rv/verdict.md\n- 判据: A-sprobe-go, A-sprobe-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：internal/api\n- 正向依赖（你消费的契约，只读）：go_internal_agentstate, go_internal_bridge, go_internal_discovery, go_internal_protocol\n- **反向依赖（波及面 = 回归自查范围）**：go_cmd_agentmirrord\n\n### 闭包架构卡内联\n\n### Go · internal/api\n\n- **职责**：Package api implements the service-side WebSocket API and the image upload endpoint, wiring together discovery and bridge (task ws-api).\n- **导出面**：Discoverer, NewServer, NewStateProvider, Options, Server, StateProvider, TokenValidator\n- **依赖边**：internal/agentstate, internal/bridge, internal/discovery, internal/protocol\n\n### Go · cmd/agentmirrord\n\n- **职责**：Command agentmirrord is the service-side daemon of AgentMirror (product github.com/agentmirror/agentmirror): a sidecar that mirrors the user's existing tmux sessions to the Android app over WebSocket.\n- **导出面**：main\n- **依赖边**：internal/api, internal/config, internal/pairing, internal/tsnetd\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.sprobe · 服务端首帧根因探针（分支 pr/srv-probe，Go 红测）\n\n根因线索（两处独立指认，都指向 server 订阅首帧路径）：\n- 探针席 r14：server `handleSubscribe`「先 Resize 再 capture」的顺序问题（.team/nodes/hl1-probe/说明.md）\n- 评审席独立读码复核属实：Resize→pipe→capture 顺序（.worktrees/hl1.rv.blank/.team/nodes/hl1-fix-rv/verdict.md 末段）\n- 复现事实（.team/nodes/hl1-repro2/复现.md）：冷订阅一个**静止**（无新 delta）的 pane——静态 alt-screen /\n  空闲真 Claude / 大滚回——>16s 无首帧；持续重绘的 pane 则正常。base(dc9aab11b) 与 new(main) 同形 ⇒ 存量缺陷。\n\n## 你要做\n在分支 pr/srv-probe 写一个 Go 探针测试（server 侧，货真价实连 handleSubscribe 路径）：\n- 断言：订阅一个已有内容但**不再产生新输出**的 pane，应在 2s 内收到含字形内容的首帧快照。\n- **先验红**：当前 main 上必须红（贴原始输出进说明.md）。\n- 探针要区分两个同形世界：「快照从没发」vs「快照发了但内容为空」——写清命中哪种。\n## 交付 .team/nodes/hl1-sprobe/说明.md\n必含：status=done、探针=（测试文件#函数）、main红输出=、机理=（订阅后快照为何不发/为空）。\n纪律：只提交到 pr/srv-probe；⛔ 不改产品代码（只加测试）；⛔ 不碰 main、不 push；临时文件只写 .team/nodes/hl1-sprobe/tmp/；如实报不可判是合法出口。\n",
+   "state": "planned",
+   "owner": {
+    "role": "r.sprobe"
+   },
+   "seat_wait_seconds": 5400,
+   "resources": {
+    "worktree_id": "hl1.sprobe",
+    "write_paths": [
+     "server/",
+     ".team/nodes/hl1-sprobe/"
+    ],
+    "read_paths": [
+     ".team/nodes/hl1-repro2/复现.md",
+     ".team/nodes/hl1-probe/说明.md",
+     ".worktrees/hl1.rv.blank/.team/nodes/hl1-fix-rv/verdict.md",
+     ".team/nodes/sprobe/BASE.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": false,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "HEAD"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-sprobe-go",
+      "argv": [
+       "sh",
+       "-c",
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.sprobe/server && go build ./... && go vet ./... ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-sprobe-go.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-sprobe-doc",
+      "argv": [
+       "python3",
+       "-c",
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe/说明.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.sprobe/.team/nodes/hl1-sprobe/说明.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('candidates=%r hit=%r\\n'%(cands,hit))\nif not hit: sys.stderr.write('产物不存在\\n'); sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nneed=['status=done', '探针=', 'main红输出=', '机理=']\nmiss=[x for x in need if x not in s]\nsys.stderr.write('miss=%r\\n'%miss)\nsys.exit(1 if miss else 0)\n"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-sprobe-go",
+     "A-sprobe-doc"
+    ]
+   }
+  },
+  "t.sfix": {
+   "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/sfix/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.sfix（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.sfix · 修服务端订阅首帧（分支 pr/srv-first-frame）\n\n输入：pr/srv-probe 的根因探针 + .team/nodes/hl1-sprobe/说明.md。\n1. 把探针测试合入你的分支（⛔ 不许改探针本身）。\n2. **修根因**：订阅静止 pane 时也必须及时发出含内容的首帧快照（handleSubscribe 的 Resize/capture 顺序或等 delta 的逻辑）。⛔ 不许「等到有 delta 才发」的症状层绕法。\n3. 探针转绿 + server 全量 go test 不倒退。\n## 交付 .team/nodes/hl1-sfix/说明.md\n必含：status=done、根因=、修法=、先验红输出=、探针绿输出=。\n纪律：只提交到 pr/srv-first-frame；⛔ 不碰 main、不 push；临时文件只写 .team/nodes/hl1-sfix/tmp/；⛔ 判据红了不许改判据；如实报不可判是合法出口。\n\n```\n\n- write_paths: server/, .team/nodes/hl1-sfix/\n- read_paths: .team/nodes/hl1-sprobe/说明.md, .team/nodes/hl1-repro2/复现.md\n- 判据: A-sfix-go, A-sfix-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：internal/api\n- 正向依赖（你消费的契约，只读）：go_internal_agentstate, go_internal_bridge, go_internal_discovery, go_internal_protocol\n- **反向依赖（波及面 = 回归自查范围）**：go_cmd_agentmirrord\n\n### 闭包架构卡内联\n\n### Go · internal/api\n\n- **职责**：Package api implements the service-side WebSocket API and the image upload endpoint, wiring together discovery and bridge (task ws-api).\n- **导出面**：Discoverer, NewServer, NewStateProvider, Options, Server, StateProvider, TokenValidator\n- **依赖边**：internal/agentstate, internal/bridge, internal/discovery, internal/protocol\n\n### Go · cmd/agentmirrord\n\n- **职责**：Command agentmirrord is the service-side daemon of AgentMirror (product github.com/agentmirror/agentmirror): a sidecar that mirrors the user's existing tmux sessions to the Android app over WebSocket.\n- **导出面**：main\n- **依赖边**：internal/api, internal/config, internal/pairing, internal/tsnetd\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.sfix · 修服务端订阅首帧（分支 pr/srv-first-frame）\n\n输入：pr/srv-probe 的根因探针 + .team/nodes/hl1-sprobe/说明.md。\n1. 把探针测试合入你的分支（⛔ 不许改探针本身）。\n2. **修根因**：订阅静止 pane 时也必须及时发出含内容的首帧快照（handleSubscribe 的 Resize/capture 顺序或等 delta 的逻辑）。⛔ 不许「等到有 delta 才发」的症状层绕法。\n3. 探针转绿 + server 全量 go test 不倒退。\n## 交付 .team/nodes/hl1-sfix/说明.md\n必含：status=done、根因=、修法=、先验红输出=、探针绿输出=。\n纪律：只提交到 pr/srv-first-frame；⛔ 不碰 main、不 push；临时文件只写 .team/nodes/hl1-sfix/tmp/；⛔ 判据红了不许改判据；如实报不可判是合法出口。\n",
+   "state": "planned",
+   "owner": {
+    "role": "r.sfix"
+   },
+   "seat_wait_seconds": 5400,
+   "resources": {
+    "worktree_id": "hl1.sfix",
+    "write_paths": [
+     "server/",
+     ".team/nodes/hl1-sfix/"
+    ],
+    "read_paths": [
+     ".team/nodes/hl1-sprobe/说明.md",
+     ".team/nodes/hl1-repro2/复现.md",
+     ".team/nodes/sfix/BASE.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": false,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "HEAD"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sfix/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-sfix-go",
+      "argv": [
+       "sh",
+       "-c",
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.sfix/server && go build ./... && go vet ./... && go test ./... ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-sfix-go.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-sfix-doc",
+      "argv": [
+       "python3",
+       "-c",
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sfix/说明.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.sfix/.team/nodes/hl1-sfix/说明.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('candidates=%r hit=%r\\n'%(cands,hit))\nif not hit: sys.stderr.write('产物不存在\\n'); sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nneed=['status=done', '根因=', '修法=', '先验红输出=', '探针绿输出=']\nmiss=[x for x in need if x not in s]\nsys.stderr.write('miss=%r\\n'%miss)\nsys.exit(1 if miss else 0)\n"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-sfix-go",
+     "A-sfix-doc"
+    ]
    }
   }
  },
@@ -1218,11 +1434,6 @@
   {
    "from": "t.probe",
    "to": "t.fix",
-   "condition": "requires_success"
-  },
-  {
-   "from": "t.fix",
-   "to": "t.fix.rv",
    "condition": "requires_success"
   },
   {
@@ -1279,6 +1490,21 @@
    "from": "t.repro2",
    "to": "t.probe",
    "condition": "requires_success"
+  },
+  {
+   "from": "t.repro2",
+   "to": "t.sprobe",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.sprobe",
+   "to": "t.sfix",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.sfix",
+   "to": "t.fix.rv",
+   "condition": "requires_success"
   }
  ],
  "parallelism": [],
@@ -1327,5 +1553,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 12
+ "revision": 18
 }
