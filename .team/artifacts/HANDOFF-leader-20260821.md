@@ -1,7 +1,8 @@
 # 交接 · 远程Agent安卓 leader · 2026-08-21
 
 > 写给**刚接手、没看过过程**的人。代号首次出现都解释。
-> 落笔时间 2026-08-21 13:45 左右；**文档写的是落笔那一刻，可能已过期，先按 §0.5 核对**。
+> **本次为同日第二次更新（覆盖同一份）**，落笔约 2026-08-21 15:00，`HEAD=ece92d605`。
+> **文档写的是落笔那一刻，可能已过期，先按 §0.5 核对**。
 
 ---
 
@@ -41,7 +42,7 @@
 **第 1 步 · 先核对后开口**（文档可能已过期）：
 ```bash
 cd /Volumes/nvme/Projects/远程Agent安卓
-git log --oneline -3 && git rev-parse --short HEAD          # 期望 HEAD=14084d410 或更新
+git log --oneline -3 && git rev-parse --short HEAD          # 期望 HEAD=ece92d605 或更新
 lsof -nP -iTCP:9900 -sTCP:LISTEN                            # 期望有 agentmirrord 在听
 ps -Ao comm | grep -c 'ledger-run$'                         # 期望 0（本轮已收口）
 ls .team/nodes/_driver/                                     # 期望空
@@ -84,6 +85,10 @@ STALL_FRESH=900 STALL_NEED=8 STALL_EXCLUDE='^🟢 claude_code ' \
 - **席位卡住先读屏**：`tmux -S /private/tmp/tmux-501/ta-b7cc1c640ccf capture-pane -p -t <pane>`。
   ⛔ 禁 `tmux send-keys`（绝对禁令），⛔ 给席位发消息只走 `team-agent send`。
 - **⛔ 席位在途时不打针**（每次 `revision` 前进会把整个前沿重派）。
+- ⚠️ **cursor 席位按「restart = 失忆」对待**（框架队 2026-08-21 装机通告3 的运营事实，三路手工定性实锤）：
+  cursor vendor 的 `--resume` **不载入历史回合** ⇒ 该席位 restart 后上下文实际丢失。
+  ⇒ 若将来用 cursor 做执行席，**重要上下文必须靠任务书与产物落盘**，⛔ 不许指望席位记得。
+  **本工程当前未使用 cursor 席位**，属预防性记录（已写进 `CLAUDE.md`）。
 - **`cd` 一律绝对路径且同一条命令内自洽** —— 2026-08-21 因此把生产 daemon 停了 10 分钟（见 §3.2）。
 
 ---
@@ -190,7 +195,8 @@ STALL_FRESH=900 STALL_NEED=8 STALL_EXCLUDE='^🟢 claude_code ' \
   - `.team/artifacts/ledger-p0-派单硬约束禁止commit导致PR链断裂-20260821.md`
   - `.team/artifacts/ledger-p0-驱动器活着但零进展零派单-20260821.md`（含第二次复现与三条排除项）
 - **优化点⛔ 只收集不主动发**（2026-08-19 用户令），出口 `.team/artifacts/ledger-trial-findings.md`。
-- **coordinator 已两次热替换**，当前 inode `364985898`（md5 `efcfa29c193ce1721aa062b5e0577593`）。
+- **coordinator 已三次热替换**，当前 inode **`365334801`**（md5 `b81c70816ff504d44f1d4a041373c84f`，集成线 1f47c099）。
+  换装历史：`363660027` → `364985898` → **`365334801`**（三版都叫 0.5.66）。
   **按 inode 自证，⛔ 不按版本号**（两版都叫 0.5.66）。旧目录 `.0.5.66.previous-*` **⛔ 勿清理**（kalloc 纪律）。
 
 ### 5.4 交付物
@@ -233,7 +239,7 @@ STALL_FRESH=900 STALL_NEED=8 STALL_EXCLUDE='^🟢 claude_code ' \
 
 ---
 
-## §7 用户特别交代（原文）
+## §7 用户特别交代（原文，来自本日**第一次** `/handoff` 的参数；**本次 `/handoff` 未带参数，此条仍然有效**）
 
 > **「接下来会反馈此轮的问题，然后继续修复」**
 
