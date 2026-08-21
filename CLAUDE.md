@@ -14,6 +14,20 @@
   契约 087–091 仍有效）。重启铁律：从基线 4120c0884 起**一次一条**，用户真机实测不倒退
   （金标准=打开会话秒进秒排，092 §11）才做下一条；图标只用 Provider 原生厂家官方图标（093 §2）。
 
+## 远端仓库与推送（2026-08-22 记）
+
+- **服务端远端仓 = https://github.com/Florious95/corral-serve** ：本地 `server/` 的过滤镜像
+  （`--subdirectory-filter server`，剥凭据与二进制）。**本地服务端更新后必须推它**：
+  `bash tools/mirror-pr-serve.sh [分支...]`（无参只推 main）。
+- app/文档面远端仓 = corral-core：`bash tools/mirror-pr.sh [分支...]`。
+- ⚠️ 谱系以 mirror-pr 两脚本为准；⛔ 不要再用 mirror-push.sh 推 main（strip 实现不同源，
+  会撞祖先闸重写远端历史，2026-08-22 实撞）。
+- 🔴 **PR 开发流程违纪在案（2026-08-21/22，用户点名两次）**：那一轮本地 seal/land 走完了，
+  远端却几乎没有 PR；后来补开的 PR 又因 land 后才推而成批 closed 而非 merged，「一事一闭」
+  没有成立。**此后铁律**：每格 seal 之后、评审派单之前，先推分支并开远端 PR
+  （mirror-pr / mirror-pr-serve 会自动 `gh pr create`）；land 本地并线后立刻推 main 让该 PR
+  显示 merged——一事一 PR 一闭环，远端 PR 列表就是流程存在的证明。
+
 ## 目录地图
 
 - `requirement-wiki/` — 需求维基（LLM Wiki 概念网络：concepts/techniques/patterns/等，活库可改可删）
