@@ -38,6 +38,7 @@ import dev.agentmirror.app.ui.components.SessionNameText
 import dev.agentmirror.app.ui.components.SessionOverflowMenu
 import dev.agentmirror.app.ui.components.StatusChip
 import dev.agentmirror.app.ui.model.SessionItem
+import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.TypeSizes
@@ -177,6 +178,7 @@ private fun SessionRow(
     ) {
         ProviderIcon(
             provider = item.provider,
+            busy = item.status == SessionStatus.Busy,
             modifier = Modifier.testTag("$tagPrefix-provider-${item.id}"),
         )
         Box(
