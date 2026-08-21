@@ -279,6 +279,22 @@
     "agent": "hl1-v1-sprobe2",
     "team": "grok-l2"
    }
+  },
+  "r.afix": {
+   "provider": "grok",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "hl1-v1-afix",
+    "team": "grok-l2"
+   }
   }
  },
  "tasks": {
@@ -1168,7 +1184,7 @@
   },
   "t.fav.rv": {
    "title": "# t.fav.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审对象：**分支 `pr/fav-order-binding`**。⛔ 在这条分支上审，不要在 main 上审。\n\n## 你要做四件事\n1. `git log main..pr/fav-order-binding --stat`；`git diff main...pr/fav-order-binding` 逐处看。\n2. 读 `.team/nodes/hl1-fav/说明.md`，核对说明写的和 diff 真做的是不是一回事。\n3. **🔴 查先验红**：说明里必须有改之前两条单测红的原始输出。没有 ⇒ 直接 refutes。\n4. 核对修法红线：点击错位是按**身份绑定**修的（会话页与收藏页都对），⛔ 不是靠关掉收藏页排序遮掩；收藏页确实不再动态变序。\n\n交付：`.team/nodes/hl1-fav-rv/verdict.md`，首行 `VERDICT: supports|refutes|inconclusive`，后附逐条依据。\n⛔ 不许改任何产品代码。交付落盘后 report_result（status=你的 verdict）。\n",
-   "state": "planned",
+   "state": "succeeded",
    "owner": {
     "role": "r.judge.fav"
    },
@@ -1215,7 +1231,19 @@
     "required": [
      "A-favrv-form"
     ]
-   }
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.fav.rv-seq8-t1787309010267",
+     "delivery_id": "del-t.fav.rv-seq8-t1787309010267",
+     "state": "succeeded",
+     "writeback_revision": 26,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-favrv-form",
+      "acceptance_success.writeback_revision=26"
+     ]
+    }
+   ]
   },
   "t.repro2": {
    "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算。⛔ 不看它就动手 = 凭空猜架构。原件 .team/nodes/repro2/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.repro2（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.repro2 · 高保真复现「打开会话白屏」（契约 092 §1 · 第二梯度）\n\n第一轮 t.repro 已证：main 现编 **debug** 包 + 假 CLI（bash symlink，主屏）点开会话**正常**\n（.team/nodes/hl1-repro/复现.md，norepro）。你的任务是把保真度补齐到用户路径，逐级尝试：\n\n## 保真度阶梯（逐级做，每级截图留证，复现即停）\n1. **用户那份 release 包**：`~/Desktop/agentmirror-20260821-1324.apk`（md5 e6cbe8d9e34769c4f3e3c58f2d069af4）\n   直接安装（pm clear 后装），同隔离步骤点开会话。debug 复现不出而 release 复现出 ⇒ 立刻写明\n   「构建类型相关（R8/minify 嫌疑）」。\n2. **alt-screen 真内容**：假 CLI 升级——进入备用屏（printf '\\033[?1049h'），持续重绘彩色 TUI、\n   含 CJK 与长行（模拟 Claude Code 界面），再点开会话。\n3. **真 claude CLI**：隔离 tmux 里直接起真的 `claude`（PATH 里有），alt=1 真实界面，再点开会话。\n4. 每级都做三个动作：冷点开、退出重进、后台→前台。\n⚠️ 你的隔离 daemon 会扫到真实舰队 —— ⛔⛔ 只许点你自己造的会话。\n\n## 交付 .team/nodes/hl1-repro2/复现.md\n- 必含：`status=done`、`复现=成功` 或 `复现=norepro`、`触发条件=`（哪一级/哪个动作触发）、\n  `截图=`、每级的结果表。\n- 复现成功后**才**做定位：先对触发条件做变量隔离（构建类型/alt-screen/真CLI 哪个是必要条件），\n  再视情况 bisect 本轮 14 条 land（复现.md 里给 `引入commit=` 或 `引入commit=非本轮提交（构建类型相关）`）。\n- 全梯走完仍不复现 ⇒ 如实写 `复现=norepro` + 完整证据，report status=blocked。\n  判据会红——**这不是你的错**，leader 收链后去找用户要诊断日志。⛔ 不许硬编复现。\n## 模拟器与隔离环境（契约 092 §4，照抄，别自创）\n- 模拟器 emulator-5554 已在跑（leader 起的，共享基础设施，⛔ 不要自己再起/杀模拟器）。\n  adb = ~/Library/Android/sdk/platform-tools/adb。\n- 隔离 tmux + 测试 daemon 照 e2e/layer2.sh 的做法；socket 必须自检落在自己 TMPD：\n  `TMUX_TMPDIR=<你的tmp> tmux -f /dev/null list-sessions` 能看到自己的会话才算。\n- 假 CLI：`ln -s /bin/bash <dir>/claude`（⛔ cp 出的 bash 跑不起来；shebang 脚本 comm=bash 不命中白名单）。\n- app 冷启前 `pm clear dev.agentmirror.app`（模拟器里有指向已死端口的旧配对档案）；\n  手填配对 ws://10.0.2.2:<你的端口>/ws + 你自己的 token。\n- 🔴 测试 daemon 会扫到真实舰队的 tmux —— ⛔⛔ 绝不许在 app 里点开任何真实会话，\n  只许点你隔离造出来的那个（cwd 是你自己的 tmp 目录）。\n- 截图先关输入法：`adb shell input keyevent 111`。\n\n\n---\n纪律：不建分支（只读复现）；临时文件只写 .team/nodes/hl1-repro2/tmp/；交付落盘后才 report_result。\n\n```\n\n- write_paths: .team/nodes/hl1-repro2/\n- read_paths: .team/nodes/hl1-repro/复现.md, requirement-base/entries/092-会话页白屏回归与两处简陋UI.md\n- 判据: A-repro2-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.repro2 · 高保真复现「打开会话白屏」（契约 092 §1 · 第二梯度）\n\n第一轮 t.repro 已证：main 现编 **debug** 包 + 假 CLI（bash symlink，主屏）点开会话**正常**\n（.team/nodes/hl1-repro/复现.md，norepro）。你的任务是把保真度补齐到用户路径，逐级尝试：\n\n## 保真度阶梯（逐级做，每级截图留证，复现即停）\n1. **用户那份 release 包**：`~/Desktop/agentmirror-20260821-1324.apk`（md5 e6cbe8d9e34769c4f3e3c58f2d069af4）\n   直接安装（pm clear 后装），同隔离步骤点开会话。debug 复现不出而 release 复现出 ⇒ 立刻写明\n   「构建类型相关（R8/minify 嫌疑）」。\n2. **alt-screen 真内容**：假 CLI 升级——进入备用屏（printf '\\033[?1049h'），持续重绘彩色 TUI、\n   含 CJK 与长行（模拟 Claude Code 界面），再点开会话。\n3. **真 claude CLI**：隔离 tmux 里直接起真的 `claude`（PATH 里有），alt=1 真实界面，再点开会话。\n4. 每级都做三个动作：冷点开、退出重进、后台→前台。\n⚠️ 你的隔离 daemon 会扫到真实舰队 —— ⛔⛔ 只许点你自己造的会话。\n\n## 交付 .team/nodes/hl1-repro2/复现.md\n- 必含：`status=done`、`复现=成功` 或 `复现=norepro`、`触发条件=`（哪一级/哪个动作触发）、\n  `截图=`、每级的结果表。\n- 复现成功后**才**做定位：先对触发条件做变量隔离（构建类型/alt-screen/真CLI 哪个是必要条件），\n  再视情况 bisect 本轮 14 条 land（复现.md 里给 `引入commit=` 或 `引入commit=非本轮提交（构建类型相关）`）。\n- 全梯走完仍不复现 ⇒ 如实写 `复现=norepro` + 完整证据，report status=blocked。\n  判据会红——**这不是你的错**，leader 收链后去找用户要诊断日志。⛔ 不许硬编复现。\n## 模拟器与隔离环境（契约 092 §4，照抄，别自创）\n- 模拟器 emulator-5554 已在跑（leader 起的，共享基础设施，⛔ 不要自己再起/杀模拟器）。\n  adb = ~/Library/Android/sdk/platform-tools/adb。\n- 隔离 tmux + 测试 daemon 照 e2e/layer2.sh 的做法；socket 必须自检落在自己 TMPD：\n  `TMUX_TMPDIR=<你的tmp> tmux -f /dev/null list-sessions` 能看到自己的会话才算。\n- 假 CLI：`ln -s /bin/bash <dir>/claude`（⛔ cp 出的 bash 跑不起来；shebang 脚本 comm=bash 不命中白名单）。\n- app 冷启前 `pm clear dev.agentmirror.app`（模拟器里有指向已死端口的旧配对档案）；\n  手填配对 ws://10.0.2.2:<你的端口>/ws + 你自己的 token。\n- 🔴 测试 daemon 会扫到真实舰队的 tmux —— ⛔⛔ 绝不许在 app 里点开任何真实会话，\n  只许点你隔离造出来的那个（cwd 是你自己的 tmp 目录）。\n- 截图先关输入法：`adb shell input keyevent 111`。\n\n\n---\n纪律：不建分支（只读复现）；临时文件只写 .team/nodes/hl1-repro2/tmp/；交付落盘后才 report_result。\n",
@@ -1507,7 +1535,7 @@
   },
   "t.sprobe2": {
    "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算。原件 .team/nodes/sprobe2/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.sprobe2（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.sprobe2 · 字节级甄别：静态 alt-screen 的快照里到底有没有字形（measurement-only）\n\n背景（三份材料先读）：\n- t.verify 复验红（.team/nodes/hl1-verify/复验.md）：**装了 pr/srv-first-frame 修复的 daemon**，\n  静态 alt-screen 冷点开仍 >16s 全黑；大滚回 2.7s 有字（只差 2s 门）。\n- t.sprobe 机理（.team/nodes/hl1-sprobe/说明.md）：修复前 Resize 的 SIGWINCH 清屏 → 空快照（世界 B）。\n- t.srvperf 对拍2（.team/nodes/hl1-srvperf/对拍2.md）：WS 层静态 alt-screen 63ms 收到 KindSnapshot 89B。\n\n## 你要回答的唯一问题\n**装了修复（分支 pr/srv-first-frame，已封版 f116dd8d1）的 daemon**，对「订阅前就冻结的静态 alt-screen pane」\n发出的首个 KindSnapshot，其**字节里有没有该 TUI 的字形内容**（如 STATIC_ALT_MARKER 类标记字符）？\n- **有字形** ⇒ 服务端已修好，白屏在 **app 渲染层**（app 收到 alt-screen 快照没画出来）——写清证据。\n- **无字形（还是 CUP/清屏序列）** ⇒ 服务端修复不完整，写清快照原始字节（hexdump 前 200B）与\n  你对 capture 路径的进一步机理推断（sfix 是先 snapshot 再 Resize 了，为什么还空？\n  例如：pane 在**订阅之前**就已经历过一次 Resize/清屏？冻结方式的问题？逐项排除）。\n用 e2e/repro2/srvperf 现成的 WS 脚本改造（auth→list→subscribe→dump 帧原始字节）。隔离 tmux+隔离端口，⛔ 不碰 9900。\n静态 alt-screen 的造法照 t.verify 的 frozen-alt.sh（先冻结、订阅前 capture 自证含 marker）。\n## 交付 .team/nodes/hl1-sprobe2/甄别.md\n必含：status=done、世界=server仍空|app渲染层、快照hex=（前200B）、快照含marker=yes|no、依据=。\n纪律：不改产品代码、不建分支；临时文件只写 .team/nodes/hl1-sprobe2/tmp/；如实报不可判是合法出口。\n\n```\n\n- write_paths: .team/nodes/hl1-sprobe2/\n- read_paths: .team/nodes/hl1-verify/复验.md, .team/nodes/hl1-sprobe/说明.md, .team/nodes/hl1-srvperf/对拍2.md\n- 判据: A-sprobe2-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：（未命中已知包，报 leader）\n- 正向依赖（你消费的契约，只读）：无\n- **反向依赖（波及面 = 回归自查范围）**：无\n\n### 闭包架构卡内联\n\n（无卡命中——报 leader，不要猜）\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.sprobe2 · 字节级甄别：静态 alt-screen 的快照里到底有没有字形（measurement-only）\n\n背景（三份材料先读）：\n- t.verify 复验红（.team/nodes/hl1-verify/复验.md）：**装了 pr/srv-first-frame 修复的 daemon**，\n  静态 alt-screen 冷点开仍 >16s 全黑；大滚回 2.7s 有字（只差 2s 门）。\n- t.sprobe 机理（.team/nodes/hl1-sprobe/说明.md）：修复前 Resize 的 SIGWINCH 清屏 → 空快照（世界 B）。\n- t.srvperf 对拍2（.team/nodes/hl1-srvperf/对拍2.md）：WS 层静态 alt-screen 63ms 收到 KindSnapshot 89B。\n\n## 你要回答的唯一问题\n**装了修复（分支 pr/srv-first-frame，已封版 f116dd8d1）的 daemon**，对「订阅前就冻结的静态 alt-screen pane」\n发出的首个 KindSnapshot，其**字节里有没有该 TUI 的字形内容**（如 STATIC_ALT_MARKER 类标记字符）？\n- **有字形** ⇒ 服务端已修好，白屏在 **app 渲染层**（app 收到 alt-screen 快照没画出来）——写清证据。\n- **无字形（还是 CUP/清屏序列）** ⇒ 服务端修复不完整，写清快照原始字节（hexdump 前 200B）与\n  你对 capture 路径的进一步机理推断（sfix 是先 snapshot 再 Resize 了，为什么还空？\n  例如：pane 在**订阅之前**就已经历过一次 Resize/清屏？冻结方式的问题？逐项排除）。\n用 e2e/repro2/srvperf 现成的 WS 脚本改造（auth→list→subscribe→dump 帧原始字节）。隔离 tmux+隔离端口，⛔ 不碰 9900。\n静态 alt-screen 的造法照 t.verify 的 frozen-alt.sh（先冻结、订阅前 capture 自证含 marker）。\n## 交付 .team/nodes/hl1-sprobe2/甄别.md\n必含：status=done、世界=server仍空|app渲染层、快照hex=（前200B）、快照含marker=yes|no、依据=。\n纪律：不改产品代码、不建分支；临时文件只写 .team/nodes/hl1-sprobe2/tmp/；如实报不可判是合法出口。\n",
-   "state": "planned",
+   "state": "succeeded",
    "owner": {
     "role": "r.sprobe2"
    },
@@ -1555,6 +1583,212 @@
     "judgment": [],
     "required": [
      "A-sprobe2-doc"
+    ]
+   },
+   "attempts": [
+    {
+     "attempt_id": "att-t.sprobe2-seq9-t1787309010556",
+     "delivery_id": "del-t.sprobe2-seq9-t1787309010556",
+     "state": "succeeded",
+     "writeback_revision": 27,
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=A-sprobe2-doc",
+      "acceptance_success.writeback_revision=27"
+     ]
+    }
+   ]
+  },
+  "t.afix": {
+   "title": "## 知识基底（已内联） —— tools/basegen_ledger.py 现算。原件 .team/nodes/afix/BASE.md。\n\n# 知识基底 · ledger.hl1.v1 / t.afix（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.afix · 修 app 渲染层：alt-screen 快照收到了不画（契约 092 §1 终局，分支 pr/app-altsnap-render)\n\n证据链（必读，按序）：\n1. .team/nodes/hl1-sprobe2/甄别.md：封版 f116dd8d1 的 daemon 对静态 alt-screen 108ms 发出 KindSnapshot，\n   payload 27B=`STATIC_ALT_MARKER_092`+CUP ESC[2;1H——**字形在字节里**。\n2. .team/nodes/hl1-verify/复验.md：同场景 app 画布 >16s 全黑 ⇒ 白屏在 **app 渲染层**。\n3. .team/nodes/hl1-repro2/复现.md：持续重绘的 pane 正常 ⇒ delta 路径能画，是**快照(snapshot)应用路径**在 alt-screen 情形下丢内容。\n\n## 你要做\n1. **先验红单测**：app 侧向终端模型/渲染管线喂「alt=1 + 含字形 payload 的 KindSnapshot」（27B 样例照甄别.md 造），\n   断言画布/模型含这些字形。当前 main 必须红（贴原始输出）。\n2. 顺着快照应用路径找根因（嫌疑：alt-screen 分支丢弃快照 / 快照写进主屏 buffer 而画的是备用屏 / 等 resize 回执才应用），\n   **修根因**，红测转绿，全量单测不倒退。⛔ 不许「有 delta 才画」类绕法。\n3. 说明.md 必含：status=done、根因=、修法=、先验红输出=、转绿输出=。\n\n```\n\n- write_paths: app/, .team/nodes/hl1-afix/\n- read_paths: .team/nodes/hl1-sprobe2/甄别.md, .team/nodes/hl1-verify/复验.md, .team/nodes/hl1-repro2/复现.md\n- 判据: A-afix-suite, A-afix-wiki, A-afix-smell, A-afix-doc\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：dev.agentmirror.app\n- 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace\n- **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service\n\n### 闭包架构卡内联\n\n### Kotlin · dev.agentmirror.app\n\n- **职责**：Compose 应用根组合。\n- **导出面**：AgentMirrorApp, MainActivity, MainNavState, Session\n- **依赖边**：dev.agentmirror.app.pairing, dev.agentmirror.app.service, dev.agentmirror.app.session, dev.agentmirror.app.ui.theme, dev.agentmirror.app.workspace\n- **doc 全文**：Compose 应用根组合。 依需求 004「客户端无状态」，本组件只做路由，不持有任何业务状态。 首启路由（pairing-ui 知识基底 §1）： - 无配对配置 → 配对页（扫码/手填，可跳过进空工作区）； - 有配对配置 → 直进工作区列表； - 配对页可从设置/重配入口重进（重新配对）。 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。 导航态由 [navState]（D-3 修复）注入：MainActivity 在 onSaveInstanceState 持久化、重建恢复，深链/旋转都不丢导航位置（审计 D-2/D-3）。 工作区 VM（[workspaceViewModel]）由 MainActivity 持有（fix-workspace-wiring 修复， navState 同模式提升），本组件只负责在工作区分支用 [DisposableEffect] 把它接入 [ServiceWire.uiConnector]——配对成功后列表能渲染（此前 VM 裸建从未接线，uiConnector 全仓无调用点，见 fix-workspace-wiring 知识基底）。 @consumes dev.agentmirror.app.pairing @consumes dev.agentmirror.app.service @consumes dev.agentmirror.app.session @consumes dev.agentmirror.app.ui.theme @consumes dev.agentmirror.app.workspace\n\n### Kotlin · dev.agentmirror.app.service\n\n- **职责**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。\n- **导出面**：AppClockPump, MirrorForegroundService, NetworkConnectivityWatcher, NoopTransportFactory, NotificationHelper, OkHttpTransportFactory, OkHttpWebSocketTransport, OnScreenFallbackPump, ServiceWire, StateWatcher, TsnetBootstrap\n- **依赖边**：dev.agentmirror.app, dev.agentmirror.app.conn, dev.agentmirror.app.tsnet\n- **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n以上是基底，以下是任务。\n\n# t.afix · 修 app 渲染层：alt-screen 快照收到了不画（契约 092 §1 终局，分支 pr/app-altsnap-render)\n\n证据链（必读，按序）：\n1. .team/nodes/hl1-sprobe2/甄别.md：封版 f116dd8d1 的 daemon 对静态 alt-screen 108ms 发出 KindSnapshot，\n   payload 27B=`STATIC_ALT_MARKER_092`+CUP ESC[2;1H——**字形在字节里**。\n2. .team/nodes/hl1-verify/复验.md：同场景 app 画布 >16s 全黑 ⇒ 白屏在 **app 渲染层**。\n3. .team/nodes/hl1-repro2/复现.md：持续重绘的 pane 正常 ⇒ delta 路径能画，是**快照(snapshot)应用路径**在 alt-screen 情形下丢内容。\n\n## 你要做\n1. **先验红单测**：app 侧向终端模型/渲染管线喂「alt=1 + 含字形 payload 的 KindSnapshot」（27B 样例照甄别.md 造），\n   断言画布/模型含这些字形。当前 main 必须红（贴原始输出）。\n2. 顺着快照应用路径找根因（嫌疑：alt-screen 分支丢弃快照 / 快照写进主屏 buffer 而画的是备用屏 / 等 resize 回执才应用），\n   **修根因**，红测转绿，全量单测不倒退。⛔ 不许「有 delta 才画」类绕法。\n3. 说明.md 必含：status=done、根因=、修法=、先验红输出=、转绿输出=。\n",
+   "state": "planned",
+   "owner": {
+    "role": "r.afix"
+   },
+   "seat_wait_seconds": 5400,
+   "resources": {
+    "worktree_id": "hl1.afix",
+    "write_paths": [
+     "app/",
+     ".team/nodes/hl1-afix/"
+    ],
+    "read_paths": [
+     ".team/nodes/hl1-sprobe2/甄别.md",
+     ".team/nodes/hl1-verify/复验.md",
+     ".team/nodes/hl1-repro2/复现.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": false,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "HEAD"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-afix/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-afix-suite",
+      "argv": [
+       "sh",
+       "-c",
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.afix/app && env -u TEAM_AGENT_API_KEY ./gradlew -q :app:testDebugUnitTest ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-afix-suite.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-afix-wiki",
+      "argv": [
+       "sh",
+       "-c",
+       "{ python3 /Volumes/nvme/Projects/远程Agent安卓/tools/gate/wiki-ratchet.py --pkg dev.agentmirror.app --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.afix ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-afix-wiki.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-afix-smell",
+      "argv": [
+       "sh",
+       "-c",
+       "{ python3 /Volumes/nvme/Projects/远程Agent安卓/tools/gate/smell-ratchet.py --face app --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.afix ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-afix-smell.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-afix-doc",
+      "argv": [
+       "python3",
+       "-c",
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-afix/说明.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.afix/.team/nodes/hl1-afix/说明.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('candidates=%r hit=%r\\n'%(cands,hit))\nif not hit: sys.stderr.write('产物不存在\\n'); sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nneed=['status=done', '根因=', '修法=', '先验红输出=', '转绿输出=']\nmiss=[x for x in need if x not in s]\nsys.stderr.write('miss=%r\\n'%miss)\nsys.exit(1 if miss else 0)\n"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-afix-suite",
+     "A-afix-wiki",
+     "A-afix-smell",
+     "A-afix-doc"
+    ]
+   }
+  },
+  "t.afix.rv": {
+   "title": "# t.afix.rv · 审 PR：pr/app-altsnap-render（异源评审席，⛔ 只读）\n\n被审对象：分支 `pr/app-altsnap-render`（leader 会在你接单前封版；若 log main..分支 为空，按工作树 .worktrees/hl1.afix 实际改动审并在 verdict 里注明）。\n1. diff 逐处看；说明.md 与 diff 一致性。\n2. 🔴 先验红原始输出必须在，没有 ⇒ refutes。\n3. 修的是快照应用路径的根因，⛔ 不是「有 delta 才画」；你的老红线照用：chrome 在不算绿，**冷点开 2s 内画布见字形**才是 092 的绿（该门由 t.verify2 实测，你核机理支撑）。\n交付 `.team/nodes/hl1-afix-rv/verdict.md`（仓根或你 worktree 同名路径都认），首行 VERDICT:。落盘后 report_result（status=verdict）。\n",
+   "state": "planned",
+   "owner": {
+    "role": "r.judge.blank"
+   },
+   "seat_wait_seconds": 5400,
+   "resources": {
+    "worktree_id": "hl1.rv.blank",
+    "write_paths": [
+     ".team/nodes/hl1-afix-rv/"
+    ],
+    "read_paths": [
+     ".team/nodes/hl1-afix/说明.md",
+     ".team/nodes/hl1-sprobe2/甄别.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": false,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "HEAD"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-afix-rv/verdict.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-afixrv-form",
+      "argv": [
+       "python3",
+       "-c",
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-afix-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.rv.blank/.team/nodes/hl1-afix-rv/verdict.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('hit=%r\\n'%hit)\nif not hit: sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nsys.exit(0 if 'VERDICT:' in s else 1)\n"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-afixrv-form"
+    ]
+   }
+  },
+  "t.verify2": {
+   "title": "# t.verify2 · 模拟器终验（眼见为实；你就是跑过 t.verify 的那个装置，环境照旧）\n\n被测物：daemon=封版 pr/srv-first-frame（f116dd8d1）构建；app=分支 pr/app-altsnap-render 的 assembleDebug（leader 已封版；若分支空按 .worktrees/hl1.afix 工作树构建并注明）。\n复验步骤与量具与你上轮完全一致（frozen-alt 静态备用屏 + 大滚回两 pane；冷点开/再进/回前台；画布字形量具）。\n绿标准：**两种 pane 冷点开 2s 内画布有字形**。\n交付 .team/nodes/hl1-verify2/复验.md：status=done、结果=修复 或 结果=stillblank（如实！stillblank 判据会红，leader 处理，⛔ 不许硬编）、每步计秒表、截图=。\n",
+   "state": "planned",
+   "owner": {
+    "role": "r.verify"
+   },
+   "seat_wait_seconds": 5400,
+   "resources": {
+    "worktree_id": "hl1.verify",
+    "write_paths": [
+     ".team/nodes/hl1-verify2/"
+    ],
+    "read_paths": [
+     ".team/nodes/hl1-verify/复验.md",
+     ".team/nodes/hl1-afix/说明.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": false,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "HEAD"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-verify2/复验.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-verify2-doc",
+      "argv": [
+       "python3",
+       "-c",
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-verify2/复验.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.verify2/.team/nodes/hl1-verify2/复验.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('candidates=%r hit=%r\\n'%(cands,hit))\nif not hit: sys.stderr.write('产物不存在\\n'); sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nneed=['status=done', '结果=修复', '截图=']\nmiss=[x for x in need if x not in s]\nsys.stderr.write('miss=%r\\n'%miss)\nsys.exit(1 if miss else 0)\n"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-verify2-doc"
     ]
    }
   }
@@ -1644,6 +1878,31 @@
    "from": "t.repro2",
    "to": "t.sprobe2",
    "condition": "requires_success"
+  },
+  {
+   "from": "t.sprobe2",
+   "to": "t.afix",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.uiplus",
+   "to": "t.afix",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.afix",
+   "to": "t.afix.rv",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.afix.rv",
+   "to": "t.verify2",
+   "condition": "requires_success"
+  },
+  {
+   "from": "t.afix",
+   "to": "t.uicmd",
+   "condition": "requires_success"
   }
  ],
  "parallelism": [],
@@ -1692,5 +1951,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 25
+ "revision": 29
 }
