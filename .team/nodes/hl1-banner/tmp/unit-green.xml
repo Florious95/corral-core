@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.agentmirror.app.workspace.L2QuietBannerHumanizeTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-08-21T14:54:47.918Z" hostname="MacBook-Pro.local" time="0.054">
+  <properties/>
+  <testcase name="quietBanner_absentBeforeTimeout" classname="dev.agentmirror.app.workspace.L2QuietBannerHumanizeTest" time="0.048"/>
+  <testcase name="quietBanner_omitsDebugOperandsAndHostPath" classname="dev.agentmirror.app.workspace.L2QuietBannerHumanizeTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
