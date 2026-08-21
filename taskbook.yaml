@@ -2901,3 +2901,29 @@ tasks:
     deps: []
     write_scope: ["docs/", "taskbook.yaml"]
     evidence: ".team/evidence/decide-pane-reflow-wip.json"
+
+  - id: fix-nodeprobe-plus-title-unknown
+    title: nodeprobe 把「+ ...」开头的 grok idle 标题判成 unknown
+    status: pending
+    detail: >-
+      2026-08-21 实撞：席位 pane 标题「+ Agent 弹窗图标卡片重做 - grok」按既有样本
+      （「<摘要> - grok」=idle）应判 idle，实际输出 ❓unknown；往
+      tools/nodeprobe/fixtures/titles.tsv 追加同形样本行不改变行为（分类逻辑在编译产物里，
+      疑对行首 '+' 或全角空格分词有特判/崩规则）。unknown 不许当 idle，判活方要人工读屏兜底。
+    acceptance:
+      - "红测：以该标题字符串喂 nodeprobe 分类器，断言 idle/grok（先验红）"
+      - "修后 nodes.sh 对该 pane 不再出 ❓"
+    deps: []
+    write_scope: ["tools/nodeprobe/"]
+    evidence: ".team/evidence/fix-nodeprobe-plus-title.json"
+
+  - id: feat-fav-phone-geometry-priority
+    title: 收藏会话手机几何优先与活动让渡（契约 099）
+    status: pending
+    detail: >-
+      跨 server(pane 几何策略/活动信号)+app(连接时机)。排在 hl1-v1 打开速度链（perf0/perf1/verify2）
+      收口之后立格：设计裁定（活动信号+滞回）→ 实现 → 异源评审 → 模拟器双端验收。
+      与 P1 几何 seed 互补：P1 治首开，099 治收藏常驻。
+    deps: ["hl1-v1 收口"]
+    write_scope: ["server/", "app/"]
+    evidence: ".team/evidence/feat-fav-phone-geometry.json"
