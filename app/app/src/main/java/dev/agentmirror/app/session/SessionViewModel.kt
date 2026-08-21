@@ -250,7 +250,18 @@ class SessionViewModel(
     }
 
     override fun onBinary(frame: BinaryFrame) {
-        if (frame.ref != ref) return // 共享连接上的其它会话镜像，不消费
+        if (frame.ref != ref) {
+            // 原先静默 return：帧到了被吞 vs 帧没到，日志同形。关时最外层短路、不拼串。
+            if (PerfTrace.isEnabled()) {
+                val kind = when (frame.kind) {
+                    BinaryKind.SNAPSHOT -> "snapshot"
+                    BinaryKind.DELTA -> "delta"
+                    BinaryKind.SCROLLBACK -> "scrollback"
+                }
+                PerfTrace.emitFrameRefMismatch(frame.ref, ref, kind, frame.data.size)
+            }
+            return
+        }
         if (PerfTrace.isEnabled()) {
             val kind = when (frame.kind) {
                 BinaryKind.SNAPSHOT -> "snapshot"

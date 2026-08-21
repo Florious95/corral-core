@@ -102,6 +102,10 @@ object PerfTrace {
     private val nextSeq = AtomicLong(1L)
     private val opens = ConcurrentHashMap<String, Open>()
     private val settleRunnables = ConcurrentHashMap<String, Runnable>()
+    /** 收帧 ref 不匹配：每对 (frame_ref, want_ref) 只留一行，避免 delta 热路径刷屏。 */
+    private val refMismatchLogged = ConcurrentHashMap.newKeySet<String>()
+    private val noOpenFirstLogged = ConcurrentHashMap.newKeySet<String>()
+    private val noOpenSnapshotLogged = ConcurrentHashMap.newKeySet<String>()
     @Volatile
     private var settleHandler: Handler? = null
 
@@ -183,6 +187,9 @@ object PerfTrace {
     fun resetForTest() {
         cancelAllSettles()
         opens.clear()
+        refMismatchLogged.clear()
+        noOpenFirstLogged.clear()
+        noOpenSnapshotLogged.clear()
         enabled = true
         clock = DiagLog.Clock { 0L }
         sink = Sink { _, _ -> }
@@ -521,11 +528,42 @@ object PerfTrace {
     }
 
     /**
-     * 本打开首帧。已发过则静默（delta 热路径）；无打开态不打（单测 VM 无 bind）。
+     * 收帧口 `frame.ref != 本页 ref`：原先静默 return，帧到了和没到在日志里同形。
+     * 每对 (frame_ref, want_ref) 一行 `first_frame_recv emitted=0 reason=ref_mismatch`。
+     *
+     * @contract
+     * @pre [isEnabled] 已在调用点短路
+     * @post 一行含 frame_ref= 与 want_ref= 两边操作数
+     */
+    fun emitFrameRefMismatch(frameRef: String, wantRef: String, kind: String, bytes: Int) {
+        if (!enabled) return
+        val key = "$frameRef\u0000$wantRef"
+        if (!refMismatchLogged.add(key)) return
+        val id = opens[wantRef]?.openId ?: "-"
+        emit(
+            id,
+            EV_FIRST_FRAME_RECV,
+            "emitted=0 reason=ref_mismatch frame_ref=$frameRef want_ref=$wantRef kind=$kind bytes=$bytes",
+        )
+    }
+
+    /**
+     * 本打开首帧。已发过则静默（delta 热路径）。
+     * opens 落空：一行 `emitted=0 reason=no_open`（每 ref 一次），不再静默 return。
      */
     fun emitFirstFrameIfFirst(ref: String, kind: String, bytes: Int) {
         if (!enabled) return
-        val st = opens[ref] ?: return
+        val st = opens[ref]
+        if (st == null) {
+            if (noOpenFirstLogged.add(ref)) {
+                emit(
+                    "-",
+                    EV_FIRST_FRAME_RECV,
+                    "emitted=0 reason=no_open kind=$kind bytes=$bytes want_ref=$ref",
+                )
+            }
+            return
+        }
         if (st.firstFrame) return
         st.firstFrame = true
         firstFrameRecv(st.openId, kind, bytes)
@@ -533,10 +571,21 @@ object PerfTrace {
 
     /**
      * 本打开首次 snapshot_applied + 记重排。已发过则静默（resize 补快照热路径）。
+     * opens 落空：一行 `emitted=0 reason=no_open`（每 ref 一次）。
      */
     fun emitSnapshotIfFirst(ref: String, alt: Int, rows: Int, cols: Int) {
         if (!enabled) return
-        val st = opens[ref] ?: return
+        val st = opens[ref]
+        if (st == null) {
+            if (noOpenSnapshotLogged.add(ref)) {
+                emit(
+                    "-",
+                    EV_SNAPSHOT_APPLIED,
+                    "emitted=0 reason=no_open alt=$alt rows=$rows cols=$cols want_ref=$ref",
+                )
+            }
+            return
+        }
         if (st.snapshotApplied) return
         st.snapshotApplied = true
         val seq = st.snapshotSeq.incrementAndGet()
