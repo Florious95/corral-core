@@ -62,6 +62,38 @@ internal fun ScreenSnapshot.plainText(): String =
     }.trimEnd()
 
 /**
+ * capture-pane 快照是否含可绘字形。帧长 > 0 不够：世界 B / resize 补发常见 6B CUP
+ * （`ESC[1;1H`）无字，len 当有字会把静止备用屏首帧误判成「空屏该清」。
+ */
+internal fun ansiPayloadHasGlyphs(data: ByteArray): Boolean {
+    var i = 0
+    val n = data.size
+    while (i < n) {
+        val b = data[i].toInt() and 0xff
+        if (b == 0x1b) {
+            i++
+            if (i < n && (data[i].toInt() and 0xff) == '['.code) {
+                i++
+                while (i < n) {
+                    val c = data[i].toInt() and 0xff
+                    i++
+                    if (c in 0x40..0x7e) break
+                }
+            } else if (i < n) {
+                i++
+            }
+            continue
+        }
+        if (b in 0x00..0x1f || b == 0x7f) {
+            i++
+            continue
+        }
+        return true
+    }
+    return false
+}
+
+/**
  * 会话页状态机（003 四标准的落地面）：终端镜像 + 本地输入条 + 发送回执 + 附件管线。
  *
  * 纯 JVM 可测核心：镜像流（snapshot/delta/scrollback）、发送必达、附件路径注入、
@@ -224,6 +256,8 @@ class SessionViewModel(
             ConnectionState.RECONNECTING -> {
                 // 掉线分页意图作废：重连后快照重放，视口重锚，避免陈旧补页。
                 historyRequestInFlight = false
+                // 重连 replay 是新的订阅首帧窗口；空快照必须当收敛点应用。
+                snapshotsSinceSubscribe = 0
                 "连接断开，正在重连…"
             }
             ConnectionState.STOPPED -> "连接已断开"
@@ -287,8 +321,29 @@ class SessionViewModel(
                             "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
                     )
                 }
-                emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                val incomingGlyphs = ansiPayloadHasGlyphs(frame.data)
+                val screenText = emulator.snapshot().plainText()
+                val screenGlyphs = screenText.isNotEmpty()
+                // 订阅首帧窗口：代际 0 = 订阅/重连 capture（一律应用，含合法空屏）；
+                // 代际 1 = 视口 seed 的 resize 补发，空且屏上有字则只保留不 replay；
+                // 代际 >=2 = 普通快照，空屏照常清屏重建。
+                // 不 apply 也必须 snapshotGen++ / maybeCompleteResync（审计 early-return 漏账）。
+                val since = snapshotsSinceSubscribe
+                val inFollowUpWindow = since in 1 until SUBSCRIBE_FIRST_FRAME_WINDOW
+                val keep = !incomingGlyphs && screenGlyphs && inFollowUpWindow
+                val apply = !keep
+                if (apply) {
+                    emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                }
                 snapshotGen++
+                snapshotsSinceSubscribe++
+                DiagLog.record(
+                    "snapshot",
+                    "incoming_len=${frame.data.size} incoming_glyphs=${if (incomingGlyphs) 1 else 0} " +
+                        "screen_len=${screenText.length} screen_glyphs=${if (screenGlyphs) 1 else 0} " +
+                        "since_sub=$since window=${if (inFollowUpWindow) 1 else 0} " +
+                        "apply=${if (apply) 1 else 0} snapshot_gen=$snapshotGen",
+                )
                 maybeCompleteResync()
                 // 006 秒开：打开即预取最近一页历史，滚动边界再按需补页。
                 if (!hasPrefetchedHistory) {
@@ -531,6 +586,9 @@ class SessionViewModel(
     }
 
     private var snapshotGen: Long = 0
+
+    /** 本轮订阅（含重连 replay）已收到的 SNAPSHOT 数；0 起算。 */
+    private var snapshotsSinceSubscribe: Long = 0
     private var lastTickMs: Long = 0
     private var resyncStartedAtMs: Long = 0
     private var resyncDeadlineMs: Long = 0
@@ -674,6 +732,12 @@ class SessionViewModel(
 
         /** 回读等下一帧快照的上限（思路 §2.2；与 084 §6 的 50ms 合并窗不是一回事）。 */
         const val RESYNC_TIMEOUT_MS = 400L
+
+        /**
+         * 订阅首帧窗口长度：第 0 帧订阅 capture、第 1 帧视口 seed resize 补发。
+         * 仅第 1 帧允许「空入帧+屏上有字 ⇒ 保留」；其后普通空快照照常应用。
+         */
+        const val SUBSCRIBE_FIRST_FRAME_WINDOW = 2L
     }
 
     private fun resyncTriggerName(key: InputKey?): String? = when (key) {
