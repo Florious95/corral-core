@@ -21,11 +21,20 @@ import dev.agentmirror.app.conn.BinaryFrameCodec
 import dev.agentmirror.app.conn.BinaryKind
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
+import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FakeClock
 import dev.agentmirror.app.conn.FakeWebSocketTransport
+import dev.agentmirror.app.conn.FrameCodec
+import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.conn.InputFrame
+import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.conn.TransportFactory
+import dev.agentmirror.app.diag.DiagLog
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -41,6 +50,17 @@ import org.junit.Test
  * ⛔ 不是「等到有 delta 才画」：断言发生在只喂了 snapshot 之后。
  */
 class AltScreenSnapshotGlyphsTest {
+
+    @Before
+    fun setUp() {
+        DiagLog.resetForTest()
+        DiagLog.initialize(null)
+    }
+
+    @After
+    fun tearDown() {
+        DiagLog.resetForTest()
+    }
 
     @Test
     fun altScreenKindSnapshotGlyphsSurviveEmptyResizeSnapshot() {
@@ -66,6 +86,57 @@ class AltScreenSnapshotGlyphsTest {
         assertTrue(
             "resize 补发的空 CUP 快照不得抹掉 alt-screen 首帧字形，got=$shown",
             shown.contains(MARKER),
+        )
+    }
+
+    @Test
+    fun ordinaryEmptySnapshotAfterFirstFrameWindowApplies() {
+        val h = Harness(rows = 40, cols = 120)
+        h.deliverSnapshot(sprobe2AltSnapshot())
+        h.deliverSnapshot(EMPTY_CUP)
+        assertTrue(
+            "窗口内空 resize 仍须保住首帧，got=${h.canvasText()}",
+            h.canvasText().contains(MARKER),
+        )
+        h.deliverSnapshot(EMPTY_CUP)
+        val shown = h.canvasText()
+        assertFalse(
+            "窗口外合法空快照必须清屏重建（clear/真空屏），got=$shown",
+            shown.contains(MARKER),
+        )
+    }
+
+    @Test
+    fun reconnectEmptySnapshotAppliesEvenIfScreenHasGlyphs() {
+        val h = Harness(rows = 40, cols = 120)
+        h.deliverSnapshot(sprobe2AltSnapshot())
+        assertTrue(h.canvasText().contains(MARKER))
+        h.vm.onStateChanged(ConnectionState.RECONNECTING)
+        h.vm.onStateChanged(ConnectionState.READY)
+        h.deliverSnapshot(EMPTY_CUP)
+        val shown = h.canvasText()
+        assertFalse(
+            "重连订阅首帧空快照是收敛点，必须应用，got=$shown",
+            shown.contains(MARKER),
+        )
+    }
+
+    @Test
+    fun suppressedResizeSnapshotStillBumpsSnapshotGen() {
+        val h = Harness(rows = 40, cols = 120)
+        h.deliverSnapshot(sprobe2AltSnapshot())
+        h.vm.sendKey(InputKey.TAB)
+        val req = h.keyFrames().last().reqId
+        h.ackOk(req)
+        h.deliverSnapshot(EMPTY_CUP)
+        assertTrue(
+            "窗口内空 resize 不得抹字，got=${h.canvasText()}",
+            h.canvasText().contains(MARKER),
+        )
+        val logs = DiagLog.snapshotForTest().joinToString("\n")
+        assertTrue(
+            "early-return 不得跳过 snapshotGen++，logs=$logs",
+            logs.contains("snapshot_gen=2"),
         )
     }
 
@@ -102,10 +173,21 @@ class AltScreenSnapshotGlyphsTest {
                 vm.presenter.lineCells(row).joinToString("") { it.text }.trimEnd()
             }
         }
+
+        fun sentFrames(): List<FramePayload> =
+            transport.sentText.mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() }
+
+        fun keyFrames(): List<InputFrame> =
+            sentFrames().filterIsInstance<InputFrame>().filter { it.keys.isNotEmpty() }
+
+        fun ackOk(reqId: Long) = transport.deliverText(
+            """{"v":1,"type":"input_ack","payload":{"req_id":$reqId,"ok":true}}""",
+        )
     }
 
     companion object {
         const val MARKER = "STATIC_ALT_MARKER_092"
+        val EMPTY_CUP: ByteArray = "\u001b[1;1H".toByteArray()
 
         fun sprobe2AltSnapshot(): ByteArray =
             (MARKER + "\u001b[2;1H").toByteArray(Charsets.US_ASCII)
