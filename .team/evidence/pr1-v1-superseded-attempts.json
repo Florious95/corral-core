@@ -351,6 +351,32 @@
      "acceptance_success.writeback_revision=28"
     ]
    }
+  },
+  {
+   "task_id": "t.newpane.rv",
+   "superseded_at_revision": 31,
+   "reason": "评审 refutes：作用域越界（整包级），实现已核过无需返工；leader 补 write_paths 后重派复审",
+   "attempt": {
+    "attempt_id": "att-t.newpane.rv-seq1-t1787279305609",
+    "delivery_id": "del-t.newpane.rv-seq1-t1787279305609",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-newpane-rv-pass",
+     "acceptance_failure.argv=[\"python3\", \"-c\", \"import io,os,sys\\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr2-newpane-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.proto/.team/nodes/pr2-newpane-rv/verdict.md']\\nhit=[c for c in cands if os.path.exists(c)]\\nsys.stderr.write('hit=%r\\\\n'%hit)\\nif not hit: sys.exit(1)\\ns=io.open(hit[0],encoding='utf-8').read()\\nfirst=(s.splitlines() or [''])[0].strip()\\nsys.stderr.write('verdict=%r len=%d\\\\n'%(first,len(s)))\\nsys.exit(0 if first=='VERDICT: supports' else 1)\\n\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)=hit=['/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.proto/.team/nodes/pr2-newpane-rv/verdict.md']\nverdict='VERDICT: refutes' len=6106",
+     "acceptance_failure.acceptance_id=A-newpane-land",
+     "acceptance_failure.argv=[\"sh\", \"-c\", \"{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e13-new-pane /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.proto/.team/nodes/pr2-newpane-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-newpane-land.log 2>&1\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)="
+    ]
+   }
   }
  ]
 }
