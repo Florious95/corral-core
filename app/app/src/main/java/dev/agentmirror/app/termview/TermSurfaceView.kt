@@ -29,6 +29,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.Cell
@@ -94,6 +95,12 @@ class TermSurfaceView @JvmOverloads constructor(
      * 内部负责，View 层不感知连接状态。null 分支保留是为了在测试/预览中允许不注入 VM。
      */
     var onRemoteScrollBy: ((deltaLines: Int) -> Unit)? = null
+
+    /**
+     * 当前会话 ref（[SessionScreen] 注入）。first_draw 按 ref 查 open_id。
+     * 关路径：onDraw 只读 [PerfTrace.isEnabled]，不扫网格。
+     */
+    var sessionRef: String? = null
 
     /**
      * Compose 注入的深浅色（078 §2 B：跟系统主题，不跟主机）。
@@ -239,6 +246,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private var measureTextCount: Int = 0
     private var geomRectCount: Int = 0
     private var cellsNonBlank: Int = 0
+    /** 非空格可见字（first_draw glyphs；BLANK 是 " " 不算字）。与 cellsNonBlank 同一次扫描。 */
+    private var cellsWithGlyph: Int = 0
     private val glyphAdvanceCache = HashMap<Int, Float>(256)
 
     /** 帧是否已排入 Choreographer（防重复排队；doFrame 时复位；仅主线程触碰）。 */
@@ -369,6 +378,7 @@ class TermSurfaceView @JvmOverloads constructor(
         measureTextCount = 0
         geomRectCount = 0
         cellsNonBlank = 0
+        cellsWithGlyph = 0
         val p = presenter
         if (p == null) {
             emitDrawMeter(
@@ -427,6 +437,13 @@ class TermSurfaceView @JvmOverloads constructor(
             presenterNull = 0,
         )
         lastScrollDelta = 0
+        // first_draw：glyphs 复用本帧已扫的 cellsNonBlank，⛔ 不另做 O(rows×cols) 遍历。
+        if (PerfTrace.isEnabled()) {
+            val ref = sessionRef
+            if (ref != null) {
+                PerfTrace.emitFirstDraw(ref, cellsWithGlyph) // first_draw
+            }
+        }
     }
 
     // ---- 逐行绘制 ----
@@ -527,7 +544,10 @@ class TermSurfaceView @JvmOverloads constructor(
             }
             runColor = color
             sb.append(cell.text)
-            if (cell.text.isNotEmpty()) cellsNonBlank++
+            if (cell.text.isNotEmpty()) {
+                cellsNonBlank++
+                if (cell.text != " ") cellsWithGlyph++
+            }
             col += cell.width
         }
         if (sb.isNotEmpty()) {
