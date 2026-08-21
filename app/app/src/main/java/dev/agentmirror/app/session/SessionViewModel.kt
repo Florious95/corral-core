@@ -62,6 +62,38 @@ internal fun ScreenSnapshot.plainText(): String =
     }.trimEnd()
 
 /**
+ * capture-pane 快照是否含可绘字形。帧长 > 0 不够：世界 B / resize 补发常见 6B CUP
+ * （`ESC[1;1H`）无字，len 当有字会把静止备用屏首帧误判成「空屏该清」。
+ */
+internal fun ansiPayloadHasGlyphs(data: ByteArray): Boolean {
+    var i = 0
+    val n = data.size
+    while (i < n) {
+        val b = data[i].toInt() and 0xff
+        if (b == 0x1b) {
+            i++
+            if (i < n && (data[i].toInt() and 0xff) == '['.code) {
+                i++
+                while (i < n) {
+                    val c = data[i].toInt() and 0xff
+                    i++
+                    if (c in 0x40..0x7e) break
+                }
+            } else if (i < n) {
+                i++
+            }
+            continue
+        }
+        if (b in 0x00..0x1f || b == 0x7f) {
+            i++
+            continue
+        }
+        return true
+    }
+    return false
+}
+
+/**
  * 会话页状态机（003 四标准的落地面）：终端镜像 + 本地输入条 + 发送回执 + 附件管线。
  *
  * 纯 JVM 可测核心：镜像流（snapshot/delta/scrollback）、发送必达、附件路径注入、
@@ -286,6 +318,22 @@ class SessionViewModel(
                         "frame cols=$frameCols render cols=$renderCols " +
                             "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
                     )
+                }
+                val incomingGlyphs = ansiPayloadHasGlyphs(frame.data)
+                val screenText = emulator.snapshot().plainText()
+                val screenGlyphs = screenText.isNotEmpty()
+                // 静止备用屏：订阅首帧在 Resize/WINCH 清屏前 capture（有字），视口 seed
+                // 再 resize 会补发只有 CUP 的空快照。replaySnapshot 无条件清屏会把首帧抹掉。
+                // 空快照且屏上已有字 → 保住首帧；有字的新快照仍清屏重建。不是等 delta 才画。
+                val apply = incomingGlyphs || !screenGlyphs
+                DiagLog.record(
+                    "snapshot",
+                    "incoming_len=${frame.data.size} incoming_glyphs=${if (incomingGlyphs) 1 else 0} " +
+                        "screen_len=${screenText.length} screen_glyphs=${if (screenGlyphs) 1 else 0} " +
+                        "apply=${if (apply) 1 else 0}",
+                )
+                if (!apply) {
+                    return
                 }
                 emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
                 snapshotGen++
