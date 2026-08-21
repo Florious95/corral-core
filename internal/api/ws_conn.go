@@ -366,7 +366,9 @@ func (c *wsConn) handleFrame(data []byte) bool {
 
 	switch t := typed.(type) {
 	case protocol.List:
-		c.handleList(t)
+		// Refresh is a full discover+identify pass. Run it off the read
+		// loop so a slow List cannot stall subscribe/input (095).
+		go c.handleList(t)
 	case protocol.Subscribe:
 		c.handleSubscribe(t)
 	case protocol.Unsubscribe:

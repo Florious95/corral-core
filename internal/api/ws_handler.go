@@ -115,7 +115,9 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 // handleList answers a full listing (docs/protocol.md §5.1, requirement 069).
 // It always triggers one real rescan — not ensureInitialScan, which no-ops
 // once a snapshot exists. On scan failure the last snapshot is kept so the
-// reply is never an empty wipe of a known world.
+// reply is never an empty wipe of a known world. Invoked from a goroutine
+// off readLoop (095): the listing reply still waits for the rescan, but
+// later frames on this connection are parsed while it runs.
 func (c *wsConn) handleList(l protocol.List) {
 	prev, prevSeq := c.s.currentSnapshot()
 	prevN := snapshotSessionCount(prev)
