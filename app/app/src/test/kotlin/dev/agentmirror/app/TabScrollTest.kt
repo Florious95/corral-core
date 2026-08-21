@@ -24,6 +24,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
@@ -80,44 +82,14 @@ class TabScrollTest {
         }
         compose.waitForIdle()
 
-        val before = snapshot("settings-scroll", nav.homePane.ordinal)
-        val lastBefore = compose.onAllNodesWithText("跟随系统").fetchSemanticsNodes()
-            .maxBy { it.boundsInRoot.bottom }
-        val tabsBefore = compose.onNodeWithTag("bottom-tabs").fetchSemanticsNode()
-        val overflowBefore = lastBefore.boundsInRoot.bottom - tabsBefore.boundsInRoot.top
-
-        compose.onNodeWithTag("settings-scroll").performTouchInput { swipeUp() }
-        compose.waitForIdle()
-        repeat(3) {
-            compose.onNodeWithTag("settings-scroll").performTouchInput { swipeUp() }
-            compose.waitForIdle()
-        }
-
-        val after = snapshot("settings-scroll", nav.homePane.ordinal)
-        compose.onNodeWithTag("settings-launch").assertIsDisplayed()
-        val lastAfter = compose.onAllNodesWithText("跟随系统").fetchSemanticsNodes()
-            .maxBy { it.boundsInRoot.bottom }
-        val tabsAfter = compose.onNodeWithTag("bottom-tabs").fetchSemanticsNode()
-        val lastFullyAboveTabs = lastAfter.boundsInRoot.bottom <= tabsAfter.boundsInRoot.top + 1f
-
-        assertTrue(
-            "设置页必须先溢出视口才谈得上滚（contentPx=${before.contentPx} viewportPx=${before.viewportPx} overflowBefore=$overflowBefore scrollMax=${before.scrollMax}）",
-            before.contentPx > before.viewportPx || overflowBefore > 0f,
+        val card = compose.onNodeWithTag("settings-launch").fetchSemanticsNode()
+        val kids = card.children
+        val tabs = compose.onNodeWithTag("bottom-tabs").fetchSemanticsNode()
+        org.junit.Assert.fail(
+            "card=${card.boundsInRoot} nKids=${kids.size} " +
+                "kids=${kids.map { it.boundsInRoot.bottom }} tabs=${tabs.boundsInRoot.top} " +
+                "scroll=${snapshot("settings-scroll", nav.homePane.ordinal)}",
         )
-        assertTrue(
-            "滚不动：scrollMax=${before.scrollMax}（0/NaN=没有竖直滚动参与者）。能滚但裁掉：scrollMax>0 且最后一项仍被切断。contentPx=${after.contentPx} viewportPx=${after.viewportPx} overflowBefore=$overflowBefore lastFullyAboveTabs=$lastFullyAboveTabs pagerBefore=${before.pagerPage} pagerAfter=${after.pagerPage}",
-            before.scrollMax > 0f && lastFullyAboveTabs,
-        )
-        assertEquals(
-            "竖滑不得被 HorizontalPager 消费成切页 pagerBefore=${before.pagerPage} pagerAfter=${after.pagerPage} scrollValue ${before.scrollValue}→${after.scrollValue}",
-            ThreePane.Settings.ordinal,
-            after.pagerPage,
-        )
-        assertTrue(
-            "竖滑必须真正推进滚动 offset ${before.scrollValue}→${after.scrollValue} max=${after.scrollMax}",
-            after.scrollValue > before.scrollValue,
-        )
-        compose.onNodeWithTag("bottom-tabs").assertExists()
     }
 
     @Test
