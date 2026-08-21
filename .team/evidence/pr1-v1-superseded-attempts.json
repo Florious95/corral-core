@@ -377,6 +377,63 @@
      "acceptance_failure.stderr_tail(末20行)="
     ]
    }
+  },
+  {
+   "task_id": "t.provcmd",
+   "superseded_at_revision": 34,
+   "reason": "评审 supports，但并线在 workspace/PackageDoc.kt 上撞真冲突（E12/E13 期间并入 main）；派回 rebase",
+   "attempt": {
+    "attempt_id": "att-t.provcmd-seq1-t1787281730692",
+    "delivery_id": "del-t.provcmd-seq1-t1787281730692",
+    "state": "succeeded",
+    "writeback_revision": 33,
+    "artifact_refs": [
+     "acceptance_success.acceptance_id=A-provcmd-suite",
+     "acceptance_success.acceptance_id=A-provcmd-wiki",
+     "acceptance_success.acceptance_id=A-provcmd-smell",
+     "acceptance_success.acceptance_id=A-provcmd-doc",
+     "acceptance_success.acceptance_id=A-provcmd-seal",
+     "acceptance_success.writeback_revision=33"
+    ]
+   }
+  },
+  {
+   "task_id": "t.provcmd.rv",
+   "superseded_at_revision": 34,
+   "reason": "评审 supports，但并线在 workspace/PackageDoc.kt 上撞真冲突（E12/E13 期间并入 main）；派回 rebase",
+   "attempt": {
+    "attempt_id": "att-t.provcmd.rv-seq2-t1787282574360",
+    "delivery_id": "del-t.provcmd.rv-seq2-t1787282574360",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-provcmd-land",
+     "acceptance_failure.argv=[\"sh\", \"-c\", \"{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/e14-provider-cmd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.rv.proto/.team/nodes/pr2-provcmd-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-provcmd-land.log 2>&1\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)="
+    ]
+   }
+  },
+  {
+   "task_id": "t.gofix",
+   "superseded_at_revision": 2,
+   "reason": "A-gofix-gofmt 是 leader 写错的绝对判据（main 上本有 5 个 gofmt 存量，分支一字不差未新增），已改为增量棘轮",
+   "attempt": {
+    "attempt_id": "att-t.gofix-seq1-t1787286323786",
+    "delivery_id": "del-t.gofix-seq1-t1787286323786",
+    "state": "failed_retryable",
+    "artifact_refs": [
+     "acceptance_failure.acceptance_id=A-gofix-gofmt",
+     "acceptance_failure.argv=[\"sh\", \"-c\", \"{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix/server && test -z \\\"$(gofmt -l .)\\\" ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-gofix-gofmt.log 2>&1\"]",
+     "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+     "acceptance_failure.exit_code=1",
+     "acceptance_failure.expected_exit_code=0",
+     "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+     "acceptance_failure.stderr_tail(末20行)="
+    ]
+   }
   }
  ]
 }
