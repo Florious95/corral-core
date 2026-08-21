@@ -1,0 +1,7 @@
+--------- beginning of main
+08-22 03:56:25.520 26489 26489 D PerfTrace: open_id=1 ev=tap t=43068094
+08-22 03:56:25.530 26489 26489 D PerfTrace: open_id=1 ev=route_enter t=43068104
+08-22 03:56:25.541 26489 26489 D PerfTrace: open_id=1 ev=subscribe_sent t=43068114 emitted=1 reason=sent ready=1 conn=1 ok=1 take_before=0 replay=0 rows=41 cols=46
+08-22 03:56:25.541 26489 26489 D PerfTrace: open_id=1 ev=geom_seed t=43068115 rows=41 cols=46
+08-22 03:56:25.805 26489 26489 D PerfTrace: open_id=1 ev=first_draw t=43068379 emitted=0 reason=glyphs_zero glyphs=0
+08-22 03:56:26.060 26489 26489 D PerfTrace: open_id=1 ev=layout_settled t=43068634 quiet_ms=500 last_reflow_src=subscribe rows=41 cols=46
