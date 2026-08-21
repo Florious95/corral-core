@@ -1288,3 +1288,9 @@ pane 上的证据行：`❯ Press up to edit queued messages`，席位**停在�
 把 pane 尾行摘要带上（`Press up to edit queued messages` 一眼可辨）。
 
 ⛔ 只收集，未投递（两个对方 team 均为死队，投了无人读）。
+
+## 2026-08-21 消息入队未提交（复发）
+- 现象：`team-agent send hl1-v1-fav`（msg_0747da02a528）返回 ok:True/queued，正文进了席位输入框，
+  但 30+ 分钟无人按 Enter，席位一直 idle。同批建的 uiicon 席同流程正常提交。
+- 影响：行为自证卡死；若发生在驱动器派单上就是整链静默停摆。
+- 绕法：同内容重投一次（第二次 send 通常会触发提交）。已发生过的类似族：send_unverified_exhausted 四真因之「入队未提交」。
