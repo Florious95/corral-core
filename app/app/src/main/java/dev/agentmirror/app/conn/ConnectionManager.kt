@@ -339,12 +339,22 @@ class ConnectionManager(
      * @inv 重复订阅以最新 rows/cols 覆盖簿记（重放意图最新优先）；同一 ref 可多次立发 SubscribeFrame
      */
     fun subscribe(ref: String, rows: Int, cols: Int): Boolean {
-        if (state == ConnectionState.STOPPED) return false
+        if (state == ConnectionState.STOPPED) {
+            traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = false, reason = "stopped")
+            return false
+        }
         activeSubscriptions[ref] = rows to cols
-        val conn = connection ?: return true // 已记簿，重连后重放
-        if (!conn.isReady) return true
+        val conn = connection
+        if (conn == null) {
+            traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = false, reason = "no_conn")
+            return true // 已记簿，重连后重放
+        }
+        if (!conn.isReady) {
+            traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = true, reason = "not_ready")
+            return true
+        }
         val ok = conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols))
-        if (ok) emitSubscribeSentAndGeom(ref, rows, cols)
+        traceSubscribe(ref, rows, cols, sent = ok, replay = false, ready = true, hasConn = true, reason = if (ok) "sent" else "send_failed")
         return ok
     }
 
@@ -520,25 +530,27 @@ class ConnectionManager(
                 "bookkept_rows=${after?.first ?: -1} bookkept_cols=${after?.second ?: -1}",
         )
         if (ok && PerfTrace.isEnabled()) {
-            PerfTrace.noteReflow(ref, reason) // layout_settled
+            PerfTrace.noteReflow(ref, reason, rows, cols) // layout_settled
         }
         return ok
     }
 
     /**
-     * 订阅帧真正发出后打 subscribe_sent / geom_seed（各一次/打开）。
-     * 未就绪只记簿时不打——等 replaySubscriptions 真发出再打（断线重连后进入）。
+     * subscribe 守卫/发出打点。关时最外层短路。
+     * 重放走 [replay]=true，即使 take 已占用也打 subscribe_sent emitted=1。
      */
-    private fun emitSubscribeSentAndGeom(ref: String, rows: Int, cols: Int) {
+    private fun traceSubscribe(
+        ref: String,
+        rows: Int,
+        cols: Int,
+        sent: Boolean,
+        replay: Boolean,
+        ready: Boolean,
+        hasConn: Boolean,
+        reason: String,
+    ) {
         if (!PerfTrace.isEnabled()) return
-        val id = PerfTrace.idFor(ref) ?: return
-        if (PerfTrace.takeSubscribeSent(ref)) {
-            PerfTrace.subscribeSent(id) // subscribe_sent
-        }
-        if (PerfTrace.takeGeomSeed(ref)) {
-            PerfTrace.geomSeed(id, rows, cols) // geom_seed
-            PerfTrace.noteReflow(ref, "subscribe")
-        }
+        PerfTrace.onSubscribeResult(ref, rows, cols, sent, replay, ready, hasConn, reason)
     }
 
     // ---- 内部 ----
@@ -646,7 +658,16 @@ class ConnectionManager(
         }
         for ((ref, dims) in activeSubscriptions) {
             val ok = conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
-            if (ok) emitSubscribeSentAndGeom(ref, dims.first, dims.second)
+            traceSubscribe(
+                ref,
+                dims.first,
+                dims.second,
+                sent = ok,
+                replay = reconnect,
+                ready = true,
+                hasConn = true,
+                reason = if (ok) "sent" else "send_failed",
+            )
         }
         for (workspace in activeLevel2) {
             conn.send(Level2SubscribeFrame(workspace = workspace))

@@ -246,6 +246,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private var measureTextCount: Int = 0
     private var geomRectCount: Int = 0
     private var cellsNonBlank: Int = 0
+    /** 非空格可见字（first_draw glyphs；BLANK 是 " " 不算字）。与 cellsNonBlank 同一次扫描。 */
+    private var cellsWithGlyph: Int = 0
     private val glyphAdvanceCache = HashMap<Int, Float>(256)
 
     /** 帧是否已排入 Choreographer（防重复排队；doFrame 时复位；仅主线程触碰）。 */
@@ -376,6 +378,7 @@ class TermSurfaceView @JvmOverloads constructor(
         measureTextCount = 0
         geomRectCount = 0
         cellsNonBlank = 0
+        cellsWithGlyph = 0
         val p = presenter
         if (p == null) {
             emitDrawMeter(
@@ -437,11 +440,8 @@ class TermSurfaceView @JvmOverloads constructor(
         // first_draw：glyphs 复用本帧已扫的 cellsNonBlank，⛔ 不另做 O(rows×cols) 遍历。
         if (PerfTrace.isEnabled()) {
             val ref = sessionRef
-            if (ref != null && cellsNonBlank > 0 && PerfTrace.takeFirstDraw(ref)) {
-                val id = PerfTrace.idFor(ref)
-                if (id != null) {
-                    PerfTrace.firstDraw(id, cellsNonBlank) // first_draw
-                }
+            if (ref != null) {
+                PerfTrace.emitFirstDraw(ref, cellsWithGlyph) // first_draw
             }
         }
     }
@@ -544,7 +544,10 @@ class TermSurfaceView @JvmOverloads constructor(
             }
             runColor = color
             sb.append(cell.text)
-            if (cell.text.isNotEmpty()) cellsNonBlank++
+            if (cell.text.isNotEmpty()) {
+                cellsNonBlank++
+                if (cell.text != " ") cellsWithGlyph++
+            }
             col += cell.width
         }
         if (sb.isNotEmpty()) {

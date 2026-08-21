@@ -22,15 +22,9 @@
 > Task :app:processDebugManifest UP-TO-DATE
 > Task :app:processDebugManifestForPackage UP-TO-DATE
 > Task :app:processDebugResources UP-TO-DATE
-> Task :app:compileDebugKotlin UP-TO-DATE
 > Task :app:javaPreCompileDebug UP-TO-DATE
-> Task :app:compileDebugJavaWithJavac NO-SOURCE
-> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
-> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
-> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
 > Task :app:preDebugUnitTestBuild UP-TO-DATE
 > Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
-> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
 > Task :app:mergeDebugShaders UP-TO-DATE
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
@@ -38,20 +32,24 @@
 > Task :app:packageDebugUnitTestForUnitTest UP-TO-DATE
 > Task :app:processDebugUnitTestManifest UP-TO-DATE
 > Task :app:generateDebugUnitTestConfig UP-TO-DATE
-> Task :app:processDebugJavaRes UP-TO-DATE
-> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
 > Task :app:preReleaseBuild UP-TO-DATE
 > Task :app:createReleaseCompatibleScreenManifests UP-TO-DATE
 > Task :app:generateReleaseResValues UP-TO-DATE
 > Task :app:extractDeepLinksRelease UP-TO-DATE
 > Task :app:processReleaseMainManifest UP-TO-DATE
 > Task :app:processReleaseManifest UP-TO-DATE
-> Task :app:testDebugUnitTest UP-TO-DATE
-> Task :terminal:compileTestKotlin UP-TO-DATE
-> Task :terminal:compileTestJava NO-SOURCE
-> Task :terminal:processTestResources UP-TO-DATE
-> Task :terminal:testClasses UP-TO-DATE
-> Task :terminal:test UP-TO-DATE
 
-BUILD SUCCESSFUL in 727ms
-39 actionable tasks: 39 up-to-date
+> Task :app:compileDebugKotlin
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-pb-app/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:809:60 'field scaledDensity: Float' is deprecated. Deprecated in Java.
+
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :app:testDebugUnitTest
+
+BUILD SUCCESSFUL in 6s
+36 actionable tasks: 5 executed, 31 up-to-date
