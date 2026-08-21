@@ -285,6 +285,11 @@ object ServiceWire {
                         fanOut { it.onFrame(frame) }
                     }
 
+                    override fun perfTraceListenerRef(): String {
+                        val ui = uiConnector
+                        return ui?.perfTraceListenerRef() ?: "ui=null"
+                    }
+
                     override fun onBinary(frame: BinaryFrame) {
                         connListener.onBinary(frame)
                         serviceListener?.onBinary(frame)
