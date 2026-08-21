@@ -187,6 +187,26 @@ internal object InputFailReasonSerializer : KSerializer<InputFailReason> {
         strictDeserialize(decoder, FrameError.INVALID_FIELD) { InputFailReason.fromWire(it) }
 }
 
+@Serializable(with = CreateFailReasonSerializer::class)
+enum class CreateFailReason(val wire: String) {
+    CWD_NOT_FOUND("cwd_not_found"),
+    NO_TMUX_ANCHOR("no_tmux_anchor"),
+    CREATE_FAILED("create_failed"),
+    INTERNAL("internal");
+
+    companion object {
+        /**
+         * @contract
+         * @pre 无
+         * @post 闭集成员或 null
+         * @err 无
+         * @inv 未知串返回 null
+         */
+        fun fromWire(value: String): CreateFailReason? =
+            entries.firstOrNull { it.wire == value }
+    }
+}
+
 internal object CloseFailReasonSerializer : KSerializer<CloseFailReason> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("CloseFailReason", PrimitiveKind.STRING)
@@ -197,4 +217,16 @@ internal object CloseFailReasonSerializer : KSerializer<CloseFailReason> {
 
     override fun deserialize(decoder: Decoder): CloseFailReason =
         strictDeserialize(decoder, FrameError.INVALID_FIELD) { CloseFailReason.fromWire(it) }
+}
+
+internal object CreateFailReasonSerializer : KSerializer<CreateFailReason> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("CreateFailReason", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: CreateFailReason) {
+        encoder.encodeString(value.wire)
+    }
+
+    override fun deserialize(decoder: Decoder): CreateFailReason =
+        strictDeserialize(decoder, FrameError.INVALID_FIELD) { CreateFailReason.fromWire(it) }
 }

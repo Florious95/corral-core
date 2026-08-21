@@ -18,6 +18,7 @@ package dev.agentmirror.app.workspace
 
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.CloseSessionAckFrame
+import dev.agentmirror.app.conn.CreateSessionAckFrame
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
@@ -124,6 +125,9 @@ class WorkspaceViewModel(
     private val sendCloseSession: (String) -> Long? = { ref ->
         ServiceWire.managerOrNull()?.sendCloseSession(ref)
     },
+    private val sendCreateSession: (String, List<String>, String) -> Long? = { cwd, argv, provider ->
+        ServiceWire.managerOrNull()?.sendCreateSession(cwd, argv, provider)
+    },
 ) : ConnectionManager.Listener {
 
     private val favoriteBook = FavoriteBook(favoriteStore, nowMs)
@@ -197,6 +201,95 @@ class WorkspaceViewModel(
     }
 
     fun isFavorited(ref: String): Boolean = favoriteBook.isFavorited(ref)
+
+    data class NewAgentUi(
+        val cwds: List<String>,
+        val cwd: String,
+        val providerId: String,
+        val bypass: Boolean = false,
+        val error: String? = null,
+        val inFlight: Boolean = false,
+    )
+
+    private val _newAgent = MutableStateFlow<NewAgentUi?>(null)
+    val newAgent: StateFlow<NewAgentUi?> = _newAgent.asStateFlow()
+
+    private val _openedSession = MutableStateFlow<Pair<String, String>?>(null)
+    val openedSession: StateFlow<Pair<String, String>?> = _openedSession.asStateFlow()
+
+    private var pendingCreateReqId: Long? = null
+
+    /**
+     * @contract
+     * @pre 无
+     * @post newAgent 弹出；仅一个 cwd 时预选
+     * @err none
+     * @inv 不发 create_session
+     */
+    fun requestNewAgent() {
+        val cwds = workspaceCounts.keys.toList()
+        val cwd = cwds.singleOrNull().orEmpty()
+        pendingCreateReqId = null
+        _newAgent.value = NewAgentUi(
+            cwds = cwds,
+            cwd = cwd,
+            providerId = "claude_code",
+        )
+        DiagLog.record("create", "requestNewAgent cwds=${cwds.size} preselect=$cwd")
+    }
+
+    fun cancelNewAgent() {
+        pendingCreateReqId = null
+        _newAgent.value = null
+    }
+
+    fun selectNewAgentCwd(cwd: String) {
+        _newAgent.update { it?.copy(cwd = cwd, error = null) }
+    }
+
+    fun selectNewAgentProvider(id: String) {
+        _newAgent.update { it?.copy(providerId = id, error = null, bypass = if (id == "pi") false else it.bypass) }
+    }
+
+    fun setNewAgentBypass(bypass: Boolean) {
+        _newAgent.update { ui ->
+            if (ui == null || ui.providerId == "pi") ui
+            else ui.copy(bypass = bypass, error = null)
+        }
+    }
+
+    /**
+     * @contract
+     * @pre newAgent 已选 cwd 与 provider
+     * @post 发送成功 inFlight=true
+     * @err 未就绪对话框留下
+     * @inv 未确认不发帧
+     */
+    fun confirmNewAgent() {
+        val ui = _newAgent.value ?: return
+        if (ui.inFlight) return
+        if (ui.cwd.isEmpty() || ui.providerId.isEmpty()) {
+            _newAgent.value = ui.copy(error = "未选择工作区或 Provider")
+            return
+        }
+        val argv = buildNewAgentArgv(ui.providerId, ui.bypass)
+        val reqId = sendCreateSession(ui.cwd, argv, ui.providerId)
+        if (reqId == null) {
+            _newAgent.value = ui.copy(error = "未就绪", inFlight = false)
+            return
+        }
+        pendingCreateReqId = reqId
+        _newAgent.value = ui.copy(inFlight = true, error = null)
+        DiagLog.record(
+            "create",
+            "confirmNewAgent req_id=$reqId cwd=${ui.cwd} provider=${ui.providerId} " +
+                "bypass=${ui.bypass} argv=${argv.joinToString(" ")}",
+        )
+    }
+
+    fun consumeOpenedSession() {
+        _openedSession.value = null
+    }
 
     private fun dropFavoriteIfPresent(ref: String) {
         if (!favoriteBook.isFavorited(ref)) return
@@ -711,6 +804,7 @@ class WorkspaceViewModel(
             is Level2Frame -> applyLevel2(frame)
             is Level2HeartbeatFrame -> applyLevel2Heartbeat(frame)
             is CloseSessionAckFrame -> applyCloseAck(frame)
+            is CreateSessionAckFrame -> applyCreateAck(frame)
             else -> Unit
         }
     }
@@ -736,6 +830,26 @@ class WorkspaceViewModel(
     }
 
     // ---- listing：权威全量，整体替换 ----
+
+    private fun applyCreateAck(frame: CreateSessionAckFrame) {
+        val ui = _newAgent.value
+        val expect = pendingCreateReqId
+        DiagLog.record(
+            "create",
+            "applyCreateAck req_id=${frame.reqId} ok=${frame.ok} reason=${frame.reason?.wire ?: ""} " +
+                "ref=${frame.ref} pending=${expect ?: -1}",
+        )
+        if (expect != null && frame.reqId != expect) return
+        if (ui == null) return
+        if (!frame.ok) {
+            _newAgent.value = ui.copy(inFlight = false, error = frame.reason?.wire ?: "create_failed")
+            return
+        }
+        pendingCreateReqId = null
+        _newAgent.value = null
+        val name = NewAgentProviders.displayName(ui.providerId)
+        _openedSession.value = frame.ref to name
+    }
 
     private fun applyCloseAck(frame: CloseSessionAckFrame) {
         val ui = _closeConfirm.value

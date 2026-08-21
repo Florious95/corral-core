@@ -62,4 +62,6 @@ internal object FrameType {
     const val OVERLAY_UNSUBSCRIBE = "overlay_unsubscribe"
     const val CLOSE_SESSION = "close_session"
     const val CLOSE_SESSION_ACK = "close_session_ack"
+    const val CREATE_SESSION = "create_session"
+    const val CREATE_SESSION_ACK = "create_session_ack"
 }

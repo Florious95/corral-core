@@ -1,0 +1,6 @@
+=== RUN   TestCreateSessionRoundTrip
+    create_session_test.go:14: UnmarshalFrame(create_session): protocol: unknown frame type: "create_session"
+--- FAIL: TestCreateSessionRoundTrip (0.00s)
+FAIL
+FAIL	github.com/agentmirror/agentmirror/internal/protocol	0.494s
+FAIL

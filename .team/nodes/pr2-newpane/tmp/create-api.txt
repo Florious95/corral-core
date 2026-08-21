@@ -1,0 +1,8 @@
+=== RUN   TestCreateSessionAddsPane
+--- PASS: TestCreateSessionAddsPane (0.08s)
+=== RUN   TestCreateSessionMissingCwd
+--- PASS: TestCreateSessionMissingCwd (0.03s)
+=== RUN   TestCreateSessionNoAnchor
+--- PASS: TestCreateSessionNoAnchor (0.03s)
+PASS
+ok  	github.com/agentmirror/agentmirror/internal/api	0.623s
