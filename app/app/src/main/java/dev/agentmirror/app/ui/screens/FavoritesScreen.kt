@@ -129,6 +129,7 @@ private fun FavoriteRow(
     ) {
         ProviderIcon(
             provider = item.provider,
+            busy = item.status == SessionStatus.Busy,
             modifier = Modifier.testTag("fav-provider-${item.id}"),
         )
         Box(Modifier.weight(1f)) {
