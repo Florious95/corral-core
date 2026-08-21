@@ -23,13 +23,17 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import dev.agentmirror.app.conn.Session
+import dev.agentmirror.app.ui.components.ProviderIconIds
 import dev.agentmirror.app.ui.components.ProviderKind
+import dev.agentmirror.app.ui.components.glyphGeom
 import dev.agentmirror.app.ui.components.providerBusyFill
+import dev.agentmirror.app.ui.components.providerIconResource
 import dev.agentmirror.app.ui.components.providerKind
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.LightPalette
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -154,20 +158,43 @@ class ProviderIconMenuTest {
     }
 
     @Test
-    fun dualState_sameProviderKindsDistinctAndBusyFillsDiffer() {
-        val ids = listOf("claude_code", "codex", "copilot", "cursor", "grok", "pi")
-        val kinds = ids.map { providerKind(it) }.toSet()
-        assertEquals(6, kinds.size)
-        val fills = ids.map { providerBusyFill(providerKind(it)) }.toSet()
-        assertEquals("运行中六家实底色必须互异", 6, fills.size)
-        fills.forEach { c ->
-            assertTrue("运行中实底不得是灰描边那种低饱和近灰", c.red + c.green + c.blue > 1.2f)
-        }
-        assertTrue(
-            "idle 灰与 grok 运行色必须可分",
-            providerBusyFill(ProviderKind.Grok) != LightPalette.metaText,
+    fun glyphResources_pairwiseDistinct_andBusyIdleDiffer() {
+        val idleArgb = android.graphics.Color.argb(
+            (LightPalette.metaText.alpha * 255).toInt(),
+            (LightPalette.metaText.red * 255).toInt(),
+            (LightPalette.metaText.green * 255).toInt(),
+            (LightPalette.metaText.blue * 255).toInt(),
         )
+        val geoms = ProviderIconIds.map { id -> id to glyphGeom(providerKind(id)) }
+        assertEquals(6, geoms.size)
+        for (i in geoms.indices) {
+            for (j in i + 1 until geoms.size) {
+                assertNotEquals(
+                    "glyph 资源不得相同: ${geoms[i].first} vs ${geoms[j].first}",
+                    geoms[i].second,
+                    geoms[j].second,
+                )
+            }
+        }
+        ProviderIconIds.forEach { id ->
+            val busy = providerIconResource(id, busy = true, idleArgb = idleArgb)
+            val idle = providerIconResource(id, busy = false, idleArgb = idleArgb)
+            assertNotEquals("$id 运行/空闲两态资源必须不同", busy, idle)
+            assertTrue("$id 运行必须是实底", busy.filled)
+            assertTrue("$id 空闲必须是描边", !idle.filled)
+            assertNotEquals("$id 运行色不得等于空闲色", busy.colorArgb, idle.colorArgb)
+            assertEquals(busy.geom, idle.geom)
+        }
+        val all = ProviderIconIds.flatMap { id ->
+            listOf(
+                providerIconResource(id, true, idleArgb),
+                providerIconResource(id, false, idleArgb),
+            )
+        }
+        assertEquals("六家×两态共 12 份资源必须互异", 12, all.toSet().size)
         assertEquals(ProviderKind.Agent, providerKind(""))
-        assertEquals(ProviderKind.Agent, providerKind("unknown"))
+        assertNotEquals(glyphGeom(ProviderKind.Agent), glyphGeom(ProviderKind.Grok))
+        val fills = ProviderIconIds.map { providerBusyFill(providerKind(it)) }.toSet()
+        assertEquals("运行中六家实底色必须互异", 6, fills.size)
     }
 }
