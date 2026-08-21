@@ -2907,9 +2907,7 @@ tasks:
     status: pending
     detail: >-
       2026-08-21 实撞：席位 pane 标题「+ Agent 弹窗图标卡片重做 - grok」按既有样本
-      （「<摘要> - grok」=idle）应判 idle，实际输出 ❓unknown；往
-      tools/nodeprobe/fixtures/titles.tsv 追加同形样本行不改变行为（分类逻辑在编译产物里，
-      疑对行首 '+' 或全角空格分词有特判/崩规则）。unknown 不许当 idle，判活方要人工读屏兜底。
+      （「<摘要> - grok」=idle）应判 idle，实际输出 ❓unknown；样本行「+ Agent 弹窗图标卡片重做 - grok\tidle\tgrok\ttitle」已从 titles.tsv 暂撤（它让 TestL2FixtureCorpusParity 先红并卡住发货）；修复格开工第一步把它加回作先验红。unknown 不许当 idle，判活方要人工读屏兜底。
     acceptance:
       - "红测：以该标题字符串喂 nodeprobe 分类器，断言 idle/grok（先验红）"
       - "修后 nodes.sh 对该 pane 不再出 ❓"
