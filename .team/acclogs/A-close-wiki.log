@@ -1,0 +1,4 @@
+pkg=dev.agentmirror.app.workspace 基线=8 本次=8 新增=0 消掉=0（键不含行号）
+pkg=dev.agentmirror.app 基线=1 本次=1 新增=0 消掉=0（键不含行号）
+pkg=internal/api 基线=3 本次=3 新增=0 消掉=0（键不含行号）
+pkg=internal/protocol 基线=0 本次=0 新增=0 消掉=0（键不含行号）

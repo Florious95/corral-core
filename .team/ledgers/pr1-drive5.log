@@ -1,0 +1,96 @@
+租约抢占：pid=37106 stole from pid=69415 reason=holder pid 69415 不存在（判定已死） at=1787246449
+
+[ledger-run 2026-08-20T17:20:49Z] 常驻开工 resident-start | 账本=.team/ledgers/pr1-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-20T17:20:49Z] 开工 start | ledger_id=ledger.pr1.v1 revision=18 账本=.team/ledgers/pr1-v1.json 墙钟上限=129600s 派单死线=90s
+[ledger-run 2026-08-20T17:20:54Z] 轮次 round | 第 1 轮开始：前沿 ["t.d1.rv", "t.e6.rv", "t.geom", "t.meter", "t.recon.rv"]（墙钟已跑 5s / 上限 129600s）
+[ledger-run 2026-08-20T17:20:54Z] 派单 dispatch | task=t.d1.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge-theme 席位=pr1-judge-theme attempt=att-t.d1.rv-seq1-t1787246454832 delivery=del-t.d1.rv-seq1-t1787246454832 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:20:55Z] 投递回执 send-ok | task=t.d1.rv case_id=ledger_pr1_v1__t.d1.rv__r18 message_id=msg_07647eff6b50 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:20:55Z] 派单落地 dispatch-landed | task=t.d1.rv 席位 pr1-judge-theme 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:20:55Z] 派单 dispatch | task=t.e6.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge-session 席位=pr1-judge-session attempt=att-t.e6.rv-seq2-t1787246455079 delivery=del-t.e6.rv-seq2-t1787246455079 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:20:55Z] 投递回执 send-ok | task=t.e6.rv case_id=ledger_pr1_v1__t.e6.rv__r18 message_id=msg_07aa8cd1cb88 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:20:55Z] 派单落地 dispatch-landed | task=t.e6.rv 席位 pr1-judge-session 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:20:55Z] 派单 dispatch | task=t.geom 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-geom 席位=pr1-geom attempt=att-t.geom-seq3-t1787246455321 delivery=del-t.geom-seq3-t1787246455321 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:20:55Z] 投递回执 send-ok | task=t.geom case_id=ledger_pr1_v1__t.geom__r18 message_id=msg_07eb9afb19a8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:20:55Z] 派单落地 dispatch-landed | task=t.geom 席位 pr1-geom 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:20:55Z] 派单 dispatch | task=t.meter 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-meter 席位=pr1-meter attempt=att-t.meter-seq4-t1787246455547 delivery=del-t.meter-seq4-t1787246455547 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:20:55Z] 投递回执 send-ok | task=t.meter case_id=ledger_pr1_v1__t.meter__r18 message_id=msg_0624a8cd3390 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:20:55Z] 派单落地 dispatch-landed | task=t.meter 席位 pr1-meter 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:20:55Z] 派单 dispatch | task=t.recon.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge-conn 席位=pr1-judge-conn attempt=att-t.recon.rv-seq5-t1787246455775 delivery=del-t.recon.rv-seq5-t1787246455775 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:20:55Z] 投递回执 send-ok | task=t.recon.rv case_id=ledger_pr1_v1__t.recon.rv__r18 message_id=msg_0611b6508198 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:20:56Z] 派单落地 dispatch-landed | task=t.recon.rv 席位 pr1-judge-conn 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:20:56Z] 等待 wait | task=t.d1.rv 在等的 key（case_id）=ledger_pr1_v1__t.d1.rv__r18 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:26:28Z] 已唤醒 wait-signaled | task=t.d1.rv 等到结果了
+[ledger-run 2026-08-20T17:26:28Z] 判据 acceptance | task=t.d1.rv 在跑 required=["A-d1-rv-form", "A-d1-rv-pass"]
+[ledger-run 2026-08-20T17:27:16Z] 判据通过留档 acceptance-success | task=t.d1.rv 成功 attempt 落进 attempts[] writeback_revision=19 passed=["A-d1-rv-form", "A-d1-rv-pass"]
+[ledger-run 2026-08-20T17:27:16Z] 解挂重载 writeback-reload | task=t.d1.rv state=succeeded + revision+1：盘上 revision 19 > 我读的 18（hash 21a9ab2fe0b0360e → fc8561e49908c215）——人的解挂，重载账本重跑本轮，⛔ 不 park、不盖人的账本
+[ledger-run 2026-08-20T17:27:16Z] 轮次 round | 第 2 轮开始：前沿 ["t.d1.rv", "t.e6.rv", "t.geom", "t.meter", "t.recon.rv"]（墙钟已跑 387s / 上限 129600s）
+[ledger-run 2026-08-20T17:27:16Z] 派单 dispatch | task=t.d1.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge-theme 席位=pr1-judge-theme attempt=att-t.d1.rv-seq6-t1787246836458 delivery=del-t.d1.rv-seq6-t1787246836458 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:27:16Z] 投递回执 send-ok | task=t.d1.rv case_id=ledger_pr1_v1__t.d1.rv__r19 message_id=msg_d66b5b7bad98 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:27:16Z] 派单落地 dispatch-landed | task=t.d1.rv 席位 pr1-judge-theme 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:27:16Z] 派单 dispatch | task=t.e6.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge-session 席位=pr1-judge-session attempt=att-t.e6.rv-seq7-t1787246836744 delivery=del-t.e6.rv-seq7-t1787246836744 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:27:16Z] 投递回执 send-ok | task=t.e6.rv case_id=ledger_pr1_v1__t.e6.rv__r19 message_id=msg_d5a56a4c2898 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:27:16Z] 派单落地 dispatch-landed | task=t.e6.rv 席位 pr1-judge-session 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:27:17Z] 派单 dispatch | task=t.geom 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-geom 席位=pr1-geom attempt=att-t.geom-seq8-t1787246836990 delivery=del-t.geom-seq8-t1787246836990 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:27:17Z] 投递回执 send-ok | task=t.geom case_id=ledger_pr1_v1__t.geom__r19 message_id=msg_d5177875a1b0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:27:17Z] 派单落地 dispatch-landed | task=t.geom 席位 pr1-geom 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:27:17Z] 派单 dispatch | task=t.meter 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-meter 席位=pr1-meter attempt=att-t.meter-seq9-t1787246837219 delivery=del-t.meter-seq9-t1787246837219 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:27:17Z] 投递回执 send-ok | task=t.meter case_id=ledger_pr1_v1__t.meter__r19 message_id=msg_d4a086245900 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:27:17Z] 派单落地 dispatch-landed | task=t.meter 席位 pr1-meter 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:27:17Z] 派单 dispatch | task=t.recon.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge-conn 席位=pr1-judge-conn attempt=att-t.recon.rv-seq10-t1787246837457 delivery=del-t.recon.rv-seq10-t1787246837457 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:27:17Z] 投递回执 send-ok | task=t.recon.rv case_id=ledger_pr1_v1__t.recon.rv__r19 message_id=msg_d46294da3f50 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:27:17Z] 派单落地 dispatch-landed | task=t.recon.rv 席位 pr1-judge-conn 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:27:17Z] 等待 wait | task=t.d1.rv 在等的 key（case_id）=ledger_pr1_v1__t.d1.rv__r19 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:28:00Z] 已唤醒 wait-signaled | task=t.d1.rv 等到结果了
+[ledger-run 2026-08-20T17:28:00Z] 判据 acceptance | task=t.d1.rv 在跑 required=["A-d1-rv-form", "A-d1-rv-pass"]
+[ledger-run 2026-08-20T17:28:50Z] 判据通过留档 acceptance-success | task=t.d1.rv 成功 attempt 落进 attempts[] writeback_revision=20 passed=["A-d1-rv-form", "A-d1-rv-pass"]
+[ledger-run 2026-08-20T17:28:50Z] 原子写回 writeback-atomic | task=t.d1.rv state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=20 hash=8b6cc0740645318b）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T17:28:50Z] 写回 writeback | task=t.d1.rv state=succeeded revision=19 → 20
+[ledger-run 2026-08-20T17:28:50Z] 等待 wait | task=t.e6.rv 在等的 key（case_id）=ledger_pr1_v1__t.e6.rv__r19 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:28:50Z] 已唤醒 wait-signaled | task=t.e6.rv 等到结果了
+[ledger-run 2026-08-20T17:28:50Z] 判据 acceptance | task=t.e6.rv 在跑 required=["A-e6-rv-form", "A-e6-rv-pass"]
+[ledger-run 2026-08-20T17:29:38Z] 判据通过留档 acceptance-success | task=t.e6.rv 成功 attempt 落进 attempts[] writeback_revision=21 passed=["A-e6-rv-form", "A-e6-rv-pass"]
+[ledger-run 2026-08-20T17:29:38Z] 原子写回 writeback-atomic | task=t.e6.rv state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=21 hash=b9e527cdab206838）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T17:29:38Z] 写回 writeback | task=t.e6.rv state=succeeded revision=20 → 21
+[ledger-run 2026-08-20T17:29:38Z] 等待 wait | task=t.geom 在等的 key（case_id）=ledger_pr1_v1__t.geom__r19 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:29:38Z] 已唤醒 wait-signaled | task=t.geom 等到结果了
+[ledger-run 2026-08-20T17:29:38Z] 判据 acceptance | task=t.geom 在跑 required=["A-geom-suite", "A-geom-wiki", "A-geom-doc", "A-geom-smell", "A-geom-seal"]
+[ledger-run 2026-08-20T17:30:25Z] 判据通过留档 acceptance-success | task=t.geom 成功 attempt 落进 attempts[] writeback_revision=22 passed=["A-geom-suite", "A-geom-wiki", "A-geom-doc", "A-geom-smell", "A-geom-seal"]
+[ledger-run 2026-08-20T17:30:25Z] 原子写回 writeback-atomic | task=t.geom state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=22 hash=c9f842a6aa8e2caa）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T17:30:25Z] 写回 writeback | task=t.geom state=succeeded revision=21 → 22
+[ledger-run 2026-08-20T17:30:25Z] 等待 wait | task=t.meter 在等的 key（case_id）=ledger_pr1_v1__t.meter__r19 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:30:25Z] 已唤醒 wait-signaled | task=t.meter 等到结果了
+[ledger-run 2026-08-20T17:30:25Z] 判据 acceptance | task=t.meter 在跑 required=["A-meter-suite", "A-meter-wiki", "A-meter-doc", "A-meter-smell", "A-meter-seal"]
+[ledger-run 2026-08-20T17:31:15Z] 判据通过留档 acceptance-success | task=t.meter 成功 attempt 落进 attempts[] writeback_revision=23 passed=["A-meter-suite", "A-meter-wiki", "A-meter-doc", "A-meter-smell", "A-meter-seal"]
+[ledger-run 2026-08-20T17:31:15Z] 原子写回 writeback-atomic | task=t.meter state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=23 hash=6b76dc2dd86a9cf9）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T17:31:15Z] 写回 writeback | task=t.meter state=succeeded revision=22 → 23
+[ledger-run 2026-08-20T17:31:15Z] 等待 wait | task=t.recon.rv 在等的 key（case_id）=ledger_pr1_v1__t.recon.rv__r19 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:31:15Z] 已唤醒 wait-signaled | task=t.recon.rv 等到结果了
+[ledger-run 2026-08-20T17:31:15Z] 判据 acceptance | task=t.recon.rv 在跑 required=["A-recon-rv-form", "A-recon-rv-pass"]
+[ledger-run 2026-08-20T17:32:03Z] 判据通过留档 acceptance-success | task=t.recon.rv 成功 attempt 落进 attempts[] writeback_revision=24 passed=["A-recon-rv-form", "A-recon-rv-pass"]
+[ledger-run 2026-08-20T17:32:03Z] 原子写回 writeback-atomic | task=t.recon.rv state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=24 hash=093ed32bf54cd4a0）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T17:32:03Z] 写回 writeback | task=t.recon.rv state=succeeded revision=23 → 24
+[ledger-run 2026-08-20T17:32:03Z] 轮次 round | 第 3 轮开始：前沿 ["t.geom.rv", "t.meter.rv"]（墙钟已跑 674s / 上限 129600s）
+[ledger-run 2026-08-20T17:32:03Z] 派单 dispatch | task=t.geom.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge-view 席位=pr1-judge-view attempt=att-t.geom.rv-seq11-t1787247123176 delivery=del-t.geom.rv-seq11-t1787247123176 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:32:03Z] 投递回执 send-ok | task=t.geom.rv case_id=ledger_pr1_v1__t.geom.rv__r24 message_id=msg_c39d1d51b1c8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:32:03Z] 派单落地 dispatch-landed | task=t.geom.rv 席位 pr1-judge-view 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:32:03Z] 派单 dispatch | task=t.meter.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge-theme 席位=pr1-judge-theme attempt=att-t.meter.rv-seq12-t1787247123464 delivery=del-t.meter.rv-seq12-t1787247123464 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:32:03Z] 投递回执 send-ok | task=t.meter.rv case_id=ledger_pr1_v1__t.meter.rv__r24 message_id=msg_c3322c149068 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:32:03Z] 派单落地 dispatch-landed | task=t.meter.rv 席位 pr1-judge-theme 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:32:03Z] 等待 wait | task=t.geom.rv 在等的 key（case_id）=ledger_pr1_v1__t.geom.rv__r24 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:34:31Z] 已唤醒 wait-signaled | task=t.geom.rv 等到结果了
+[ledger-run 2026-08-20T17:34:31Z] 判据 acceptance | task=t.geom.rv 在跑 required=["A-geom-rv-form", "A-geom-rv-pass"]
+[ledger-run 2026-08-20T17:35:21Z] 判据通过留档 acceptance-success | task=t.geom.rv 成功 attempt 落进 attempts[] writeback_revision=25 passed=["A-geom-rv-form", "A-geom-rv-pass"]
+[ledger-run 2026-08-20T17:35:21Z] 原子写回 writeback-atomic | task=t.geom.rv state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=25 hash=0f61b64a26c4601b）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T17:35:21Z] 写回 writeback | task=t.geom.rv state=succeeded revision=24 → 25
+[ledger-run 2026-08-20T17:35:21Z] 等待 wait | task=t.meter.rv 在等的 key（case_id）=ledger_pr1_v1__t.meter.rv__r24 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:35:21Z] 已唤醒 wait-signaled | task=t.meter.rv 等到结果了
+[ledger-run 2026-08-20T17:35:21Z] 判据 acceptance | task=t.meter.rv 在跑 required=["A-meter-rv-form", "A-meter-rv-pass"]
+[ledger-run 2026-08-20T17:36:09Z] 判据通过留档 acceptance-success | task=t.meter.rv 成功 attempt 落进 attempts[] writeback_revision=26 passed=["A-meter-rv-form", "A-meter-rv-pass"]
+[ledger-run 2026-08-20T17:36:09Z] 延后落盘 writeback-deferred | task=t.meter.rv 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-20T17:36:09Z] 写回 writeback | task=t.meter.rv state=succeeded revision=25 → 26
+[ledger-run 2026-08-20T17:36:09Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.d1.rv", "t.e6.rv", "t.geom", "t.meter", "t.recon.rv", "t.geom.rv", "t.meter.rv"] 冻结=[] 不可判=[] 墙钟已跑 920s
+[ledger-run 2026-08-20T17:36:09Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-20T17:36:09Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+[ledger-run 2026-08-20T17:36:09Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=26 hash=a413e6c6f97cd8c6）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T17:36:09Z] 挂起 park | token=parked ledger_id=ledger.pr1.v1 revision=26 —— 已挂起，守夜继续（⛔ 不退出）。停机原因串: ledger_id: ledger.pr1.v1 | revision: 26 | 停机原因: AllSucceeded | 最后失败判据: token=parked —— 这张账本已挂起（⛔ 不退出，守夜继续）。解挂条件：**只有 revision 前进**（人真的看过并做了决定）；⛔ 不基于时间自动解挂、⛔ 不自动重投/重启/换席位/collect。进程只由人手动停 | 各任务终态: t.d1=Succeeded, t.d1.rv=Succeeded, t.e6=Succeeded, t.e6.rv=Succeeded, t.geom=Succeeded, t.geom.rv=Succeeded, t.idea-input=Succeeded, t.idea-list=Succeeded, t.meter=Succeeded, t.meter.rv=Succeeded, t.recon=Succeeded, t.recon.rv=Succeeded
+resident-exit signal=term reason=human_stop

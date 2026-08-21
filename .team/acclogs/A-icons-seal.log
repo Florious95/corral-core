@@ -1,0 +1,6 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.listui 当前分支=pr/e8-back-gesture 目标分支=pr/icons-longpress 待提交=0
+Switched to branch 'pr/icons-longpress'
+seal-pr: 工作区干净，已切到 pr/icons-longpress
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=0  head=d539c9f15
+红：封版后分支上仍无提交 —— 这一格没有可引用的交付物

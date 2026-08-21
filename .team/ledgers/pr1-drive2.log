@@ -1,0 +1,19 @@
+租约抢占：pid=97278 stole from pid=29402 reason=holder pid 29402 不存在（判定已死） at=1787245461
+
+[ledger-run 2026-08-20T17:04:21Z] 常驻开工 resident-start | 账本=.team/ledgers/pr1-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-20T17:04:21Z] 开工 start | ledger_id=ledger.pr1.v1 revision=9 账本=.team/ledgers/pr1-v1.json 墙钟上限=129600s 派单死线=90s
+[ledger-run 2026-08-20T17:04:25Z] 轮次 round | 第 1 轮开始：前沿 ["t.d1.rv", "t.e6.rv", "t.geom", "t.meter"]（墙钟已跑 4s / 上限 129600s）
+[ledger-run 2026-08-20T17:04:25Z] 派单 dispatch | task=t.d1.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge 席位=pr1-judge attempt=att-t.d1.rv-seq1-t1787245465497 delivery=del-t.d1.rv-seq1-t1787245465497 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:04:25Z] 投递回执 send-ok | task=t.d1.rv case_id=ledger_pr1_v1__t.d1.rv__r9 message_id=msg_edeb2586a688 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:04:25Z] 派单落地 dispatch-landed | task=t.d1.rv 席位 pr1-judge 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:04:25Z] 派单 dispatch | task=t.e6.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge 席位=pr1-judge attempt=att-t.e6.rv-seq2-t1787245465739 delivery=del-t.e6.rv-seq2-t1787245465739 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:04:25Z] 投递回执 send-ok | task=t.e6.rv case_id=ledger_pr1_v1__t.e6.rv__r9 message_id=msg_1247338fca48 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:04:25Z] 派单落地 dispatch-landed | task=t.e6.rv 席位 pr1-judge 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:04:25Z] 派单 dispatch | task=t.geom 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-geom 席位=pr1-geom attempt=att-t.geom-seq3-t1787245465966 delivery=del-t.geom-seq3-t1787245465966 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:04:26Z] 投递回执 send-ok | task=t.geom case_id=ledger_pr1_v1__t.geom__r9 message_id=msg_12d641240070 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:04:26Z] 派单落地 dispatch-landed | task=t.geom 席位 pr1-geom 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:04:26Z] 派单 dispatch | task=t.meter 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-meter 席位=pr1-meter attempt=att-t.meter-seq4-t1787245466194 delivery=del-t.meter-seq4-t1787245466194 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T17:04:26Z] 投递回执 send-ok | task=t.meter case_id=ledger_pr1_v1__t.meter__r9 message_id=msg_136c4e591708 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T17:04:26Z] 派单落地 dispatch-landed | task=t.meter 席位 pr1-meter 的收件箱已多出这条派单
+[ledger-run 2026-08-20T17:04:26Z] 等待 wait | task=t.d1.rv 在等的 key（case_id）=ledger_pr1_v1__t.d1.rv__r9 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+resident-exit signal=term reason=human_stop
