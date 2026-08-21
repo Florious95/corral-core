@@ -88,28 +88,3 @@ const (
 	// InputFailInternal: an unexpected server-side failure while injecting.
 	InputFailInternal InputFailReason = "internal"
 )
-
-// CloseFailReason is the machine-readable reason of a rejected CloseSessionAck
-// (S→C, contract 088 E12). It is present if and only if OK=false; it is a closed set.
-type CloseFailReason string
-
-const (
-	// CloseFailSessionNotFound is reserved for a well-formed ref the server
-	// refuses. A pane that is already gone is NOT this: that path acks OK=true
-	// (idempotent, so the client can still drop a local favorite).
-	CloseFailSessionNotFound CloseFailReason = "session_not_found"
-	// CloseFailCloseFailed: kill-pane / process wait did not both succeed.
-	CloseFailCloseFailed CloseFailReason = "close_failed"
-	// CloseFailInternal: unexpected server-side failure while closing.
-	CloseFailInternal CloseFailReason = "internal"
-)
-
-// CreateFailReason is the closed set of create_session_ack failures (088 E13).
-type CreateFailReason string
-
-const (
-	CreateFailCwdNotFound  CreateFailReason = "cwd_not_found"
-	CreateFailNoTmuxAnchor CreateFailReason = "no_tmux_anchor"
-	CreateFailCreateFailed CreateFailReason = "create_failed"
-	CreateFailInternal     CreateFailReason = "internal"
-)

@@ -43,15 +43,10 @@ func identifyModel(s *Server, model *discovery.Model) map[int]string {
 // filterModel drops panes that identifyProvider does not claim, then
 // drops workspaces (and therefore sockets) whose remaining hit count is 0.
 func filterModel(s *Server, model *discovery.Model) *discovery.Model {
-	return filterModelHits(model, identifyModel(s, model))
-}
-
-// filterModelHits is filterModel with a precomputed identity map so a
-// listing tick can share one ps table between filter and snapshot (095).
-func filterModelHits(model *discovery.Model, hits map[int]string) *discovery.Model {
 	if model == nil {
 		return &discovery.Model{}
 	}
+	hits := identifyModel(s, model)
 	out := &discovery.Model{}
 	for _, ws := range model.Workspaces {
 		var panes []discovery.Pane

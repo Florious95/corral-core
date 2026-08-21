@@ -27,7 +27,7 @@ func TestToSessionPrefersWindowName(t *testing.T) {
 		Height:      24,
 	}
 	e := &sessionEntry{ref: sessionRef(pane), pane: pane}
-	s := toSession(e, "")
+	s := toSession(e)
 	if s.Name != "wiki-r5-acceptance-tester" {
 		t.Fatalf("toSession name = %q, want the window name %q", s.Name, "wiki-r5-acceptance-tester")
 	}
@@ -47,7 +47,7 @@ func TestToSessionFallsBackToSessionName(t *testing.T) {
 		Height:      24,
 	}
 	e := &sessionEntry{ref: sessionRef(pane), pane: pane}
-	s := toSession(e, "")
+	s := toSession(e)
 	if s.Name != "team-refactor-maintainability" {
 		t.Fatalf("toSession name = %q, want the session fallback %q", s.Name, "team-refactor-maintainability")
 	}

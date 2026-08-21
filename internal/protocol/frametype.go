@@ -103,18 +103,4 @@ const (
 	// TypeOverlayFrame is one captured choose-tree screen (S→C; requirement 064).
 	// Text is the PTY bytes of the dedicated client (not a self-drawn tree).
 	TypeOverlayFrame FrameType = "overlay_frame"
-
-	// TypeCloseSession asks the server to tear down one agent pane (C→S;
-	// contract 088 E12). Idempotent: a ref that is already gone acks ok.
-	TypeCloseSession FrameType = "close_session"
-
-	// TypeCloseSessionAck is the decidable receipt of TypeCloseSession (S→C).
-	TypeCloseSessionAck FrameType = "close_session_ack"
-
-	// TypeCreateSession asks the server to open a new tmux window (C→S;
-	// contract 088 E13) in an existing workspace cwd.
-	TypeCreateSession FrameType = "create_session"
-
-	// TypeCreateSessionAck is the decidable receipt of TypeCreateSession (S→C).
-	TypeCreateSessionAck FrameType = "create_session_ack"
 )

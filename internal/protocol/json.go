@@ -121,14 +121,6 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[OverlayUnsubscribe](env)
 	case TypeOverlayFrame:
 		return decodeTyped[OverlayFrame](env)
-	case TypeCloseSession:
-		return decodeTyped[CloseSession](env)
-	case TypeCloseSessionAck:
-		return decodeTyped[CloseSessionAck](env)
-	case TypeCreateSession:
-		return decodeTyped[CreateSession](env)
-	case TypeCreateSessionAck:
-		return decodeTyped[CreateSessionAck](env)
 	// TypePaneModeChanged is S→C only; a client sending it is a protocol error.
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, env.Type)

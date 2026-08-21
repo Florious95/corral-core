@@ -1,12 +1,11 @@
 package api
 
 import (
-	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/provider"
@@ -20,13 +19,11 @@ type ProviderFinder interface {
 
 // procFinder walks pane_pid plus descendants using one cached `ps`
 // snapshot (narrow fields only). Full-table refresh happens when the
-// snapshot is older than procTTL, or a requested pid is absent from it.
-// Identity results are cached by (pid, starttime) for procTTL so a later
-// Identify(single pid) cannot evict the table (095).
+// pane-pid set changes, or when the snapshot is older than procTTL.
 type procFinder struct {
-	mu    sync.Mutex
-	snap  *procSnap
-	ident map[int]identCache
+	mu      sync.Mutex
+	snap    *procSnap
+	paneKey string
 }
 
 const procTTL = 10 * time.Second
@@ -34,66 +31,53 @@ const procTTL = 10 * time.Second
 type procSnap struct {
 	parent map[int]int
 	comm   map[int]string
-	start  map[int]string
 	kids   map[int][]int
 	taken  time.Time
 }
 
-type identCache struct {
-	id    string
-	start string
-	until time.Time
-}
-
-func newProcFinder() *procFinder { return &procFinder{ident: make(map[int]identCache)} }
+func newProcFinder() *procFinder { return &procFinder{} }
 
 func (f *procFinder) Identify(panePID int) string {
-	return f.IdentifySet([]int{panePID})[panePID]
+	if panePID <= 0 {
+		return ""
+	}
+	snap := f.snapshot([]int{panePID})
+	if snap == nil {
+		return ""
+	}
+	comms := walkComms(snap, panePID)
+	e, ok := provider.MatchComms(comms)
+	if !ok {
+		return ""
+	}
+	return e.ID
 }
 
 // IdentifySet refreshes at most once for the given pane pid set, then
-// identifies each pid. Used by the listing tick and the level-2 scan so
-// one ps covers all panes (095).
+// identifies each pid. Used by the level-2 scan so one ps covers all panes.
 func (f *procFinder) IdentifySet(panePIDs []int) map[int]string {
 	out := make(map[int]string, len(panePIDs))
 	snap := f.snapshot(panePIDs)
 	if snap == nil {
 		return out
 	}
-	now := time.Now()
-	f.mu.Lock()
-	defer f.mu.Unlock()
 	for _, pid := range panePIDs {
 		if pid <= 0 {
 			continue
 		}
-		if id := f.cachedOrWalkLocked(snap, pid, now); id != "" {
-			out[pid] = id
+		comms := walkComms(snap, pid)
+		if e, ok := provider.MatchComms(comms); ok {
+			out[pid] = e.ID
 		}
 	}
 	return out
 }
 
-func (f *procFinder) cachedOrWalkLocked(snap *procSnap, pid int, now time.Time) string {
-	start := snap.start[pid]
-	if e, ok := f.ident[pid]; ok && start != "" && e.start == start && now.Before(e.until) {
-		return e.id
-	}
-	comms := walkComms(snap, pid)
-	id := ""
-	if e, ok := provider.MatchComms(comms); ok {
-		id = e.ID
-	}
-	if start != "" {
-		f.ident[pid] = identCache{id: id, start: start, until: now.Add(procTTL)}
-	}
-	return id
-}
-
 func (f *procFinder) snapshot(panePIDs []int) *procSnap {
+	key := paneSetKey(panePIDs)
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.snap != nil && time.Since(f.snap.taken) < procTTL && snapCovers(f.snap, panePIDs) {
+	if f.snap != nil && f.paneKey == key && time.Since(f.snap.taken) < procTTL {
 		return f.snap
 	}
 	snap, err := readProcTable()
@@ -101,31 +85,26 @@ func (f *procFinder) snapshot(panePIDs []int) *procSnap {
 		return f.snap
 	}
 	f.snap = snap
+	f.paneKey = key
 	return snap
 }
 
-func snapCovers(s *procSnap, pids []int) bool {
-	for _, pid := range pids {
-		if pid <= 0 {
-			continue
+func paneSetKey(pids []int) string {
+	cp := append([]int(nil), pids...)
+	sort.Ints(cp)
+	var b strings.Builder
+	for i, p := range cp {
+		if i > 0 {
+			b.WriteByte(',')
 		}
-		if _, ok := s.comm[pid]; !ok {
-			return false
-		}
+		b.WriteString(strconv.Itoa(p))
 	}
-	return true
+	return b.String()
 }
 
-// procTableReads counts full-table `ps` forks. Tests assert a listing tick
-// issues at most one (095). Production code does not read this.
-var procTableReads atomic.Uint64
-
 func readProcTable() (*procSnap, error) {
-	procTableReads.Add(1)
-	// Narrow fields only. lstart is process starttime, not argv (068: comm
-	// only). LANG=C keeps lstart tokens stable across host locale.
-	cmd := exec.Command("ps", "-axo", "pid=,ppid=,lstart=,comm=")
-	cmd.Env = append(os.Environ(), "LANG=C", "LC_ALL=C")
+	// Narrow fields only. Do not add further -o tokens.
+	cmd := exec.Command("ps", "-axo", "pid=,ppid=,comm=")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -133,7 +112,6 @@ func readProcTable() (*procSnap, error) {
 	s := &procSnap{
 		parent: make(map[int]int),
 		comm:   make(map[int]string),
-		start:  make(map[int]string),
 		kids:   make(map[int][]int),
 		taken:  time.Now(),
 	}
@@ -142,8 +120,11 @@ func readProcTable() (*procSnap, error) {
 		if line == "" {
 			continue
 		}
+		parts := strings.SplitN(line, " ", 3)
+		// ps pads columns; collapse.
 		fields := strings.Fields(line)
-		if len(fields) < 2 {
+		if len(fields) < 3 {
+			_ = parts
 			continue
 		}
 		pid, err1 := strconv.Atoi(fields[0])
@@ -151,36 +132,12 @@ func readProcTable() (*procSnap, error) {
 		if err1 != nil || err2 != nil {
 			continue
 		}
-		yearIdx := -1
-		for i := 2; i < len(fields); i++ {
-			if len(fields[i]) == 4 && isDigits(fields[i]) {
-				yearIdx = i
-				break
-			}
-		}
-		comm := ""
-		if yearIdx >= 2 {
-			s.start[pid] = strings.Join(fields[2:yearIdx+1], " ")
-			if yearIdx+1 < len(fields) {
-				comm = strings.Join(fields[yearIdx+1:], " ")
-			}
-		} else if len(fields) >= 3 {
-			comm = strings.Join(fields[2:], " ")
-		}
+		comm := strings.Join(fields[2:], " ")
 		s.parent[pid] = ppid
 		s.comm[pid] = comm
 		s.kids[ppid] = append(s.kids[ppid], pid)
 	}
 	return s, nil
-}
-
-func isDigits(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 func walkComms(s *procSnap, root int) []string {

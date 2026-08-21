@@ -151,3 +151,16 @@ func runTmuxCmd(env []string, sock string, args ...string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
+
+// scrubbedEnv removes TMUX/TMUX_TMPDIR so nested tmux never touches the real
+// fleet.
+func scrubbedEnv() []string {
+	out := make([]string, 0, len(os.Environ()))
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "TMUX=") || strings.HasPrefix(kv, "TMUX_TMPDIR=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}

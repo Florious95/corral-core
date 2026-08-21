@@ -366,9 +366,7 @@ func (c *wsConn) handleFrame(data []byte) bool {
 
 	switch t := typed.(type) {
 	case protocol.List:
-		// Refresh is a full discover+identify pass. Run it off the read
-		// loop so a slow List cannot stall subscribe/input (095).
-		go c.handleList(t)
+		c.handleList(t)
 	case protocol.Subscribe:
 		c.handleSubscribe(t)
 	case protocol.Unsubscribe:
@@ -391,14 +389,9 @@ func (c *wsConn) handleFrame(data []byte) bool {
 		c.handleOverlaySubscribe(t)
 	case protocol.OverlayUnsubscribe:
 		c.handleOverlayUnsubscribe(t)
-	case protocol.CloseSession:
-		c.handleCloseSession(t)
-	case protocol.CreateSession:
-		c.handleCreateSession(t)
 	default:
 		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed,
-		// level2_frame, level2_heartbeat, overlay_frame, close_session_ack,
-		// create_session_ack are server-to-client only.
+		// level2_frame, level2_heartbeat, overlay_frame are server-to-client only.
 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
 	}
 	return true

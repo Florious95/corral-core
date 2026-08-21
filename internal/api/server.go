@@ -293,12 +293,8 @@ func (s *Server) rebuildCatalog(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("api: discover: %w", err)
 	}
-	// One identity pass per tick: filter and Provider tagging share the
-	// same map so we do not fork N extra ps tables and cannot emit a
-	// spurious ChangedSessions from two different snapshots (095).
-	hits := identifyModel(s, model)
-	s.catalog.rebuild(filterModelHits(model, hits))
-	snap := buildSnapshot(s.catalog, func(pid int) string { return hits[pid] })
+	s.catalog.rebuild(filterModel(s, model))
+	snap := buildSnapshot(s.catalog)
 	s.setSnapshot(snap)
 	return nil
 }

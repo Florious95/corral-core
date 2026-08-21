@@ -1,9 +1,0 @@
-{
-  "v": 1,
-  "type": "create_session_ack",
-  "payload": {
-    "req_id": 12,
-    "ok": false,
-    "reason": "no_tmux_anchor"
-  }
-}

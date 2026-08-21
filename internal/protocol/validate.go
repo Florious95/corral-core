@@ -31,10 +31,6 @@ func (Level2Heartbeat) FrameType() FrameType    { return TypeLevel2Heartbeat }
 func (OverlaySubscribe) FrameType() FrameType   { return TypeOverlaySubscribe }
 func (OverlayUnsubscribe) FrameType() FrameType { return TypeOverlayUnsubscribe }
 func (OverlayFrame) FrameType() FrameType       { return TypeOverlayFrame }
-func (CloseSession) FrameType() FrameType       { return TypeCloseSession }
-func (CloseSessionAck) FrameType() FrameType    { return TypeCloseSessionAck }
-func (CreateSession) FrameType() FrameType      { return TypeCreateSession }
-func (CreateSessionAck) FrameType() FrameType   { return TypeCreateSessionAck }
 
 // Validate reports whether the auth frame is well-formed: a non-empty token.
 func (a Auth) Validate() error {
@@ -349,86 +345,6 @@ func (f Level2Frame) Validate() error {
 		if err := s.Validate(); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-// Validate reports whether the close_session request is well-formed: ReqID >= 1
-// and a non-empty ref.
-func (c CloseSession) Validate() error {
-	if c.ReqID == 0 {
-		return fmt.Errorf("%w: close_session req_id must be >= 1", ErrInvalidField)
-	}
-	if c.Ref == "" {
-		return fmt.Errorf("%w: close_session ref must be non-empty", ErrInvalidField)
-	}
-	return nil
-}
-
-// Validate reports whether the ack is unambiguous: a rejection must carry a
-// known reason and an acceptance must not.
-func (a CloseSessionAck) Validate() error {
-	if a.ReqID == 0 {
-		return fmt.Errorf("%w: close_session_ack req_id must be >= 1", ErrInvalidField)
-	}
-	if !a.OK {
-		if a.Reason == "" {
-			return fmt.Errorf("%w: failed close_session_ack must carry a reason", ErrInvalidField)
-		}
-		switch a.Reason {
-		case CloseFailSessionNotFound, CloseFailCloseFailed, CloseFailInternal:
-		default:
-			return fmt.Errorf("%w: unknown close fail reason %q", ErrInvalidField, a.Reason)
-		}
-		return nil
-	}
-	if a.Reason != "" {
-		return fmt.Errorf("%w: accepted close_session_ack must not carry a reason", ErrInvalidField)
-	}
-	return nil
-}
-
-func (c CreateSession) Validate() error {
-	if c.ReqID == 0 {
-		return fmt.Errorf("%w: create_session req_id must be >= 1", ErrInvalidField)
-	}
-	if c.Cwd == "" {
-		return fmt.Errorf("%w: create_session cwd must be non-empty", ErrInvalidField)
-	}
-	if len(c.Argv) == 0 {
-		return fmt.Errorf("%w: create_session argv must have at least 1 element", ErrInvalidField)
-	}
-	for i, a := range c.Argv {
-		if a == "" {
-			return fmt.Errorf("%w: create_session argv[%d] empty", ErrInvalidField, i)
-		}
-	}
-	return nil
-}
-
-func (a CreateSessionAck) Validate() error {
-	if a.ReqID == 0 {
-		return fmt.Errorf("%w: create_session_ack req_id must be >= 1", ErrInvalidField)
-	}
-	if !a.OK {
-		if a.Reason == "" {
-			return fmt.Errorf("%w: failed create_session_ack must carry a reason", ErrInvalidField)
-		}
-		switch a.Reason {
-		case CreateFailCwdNotFound, CreateFailNoTmuxAnchor, CreateFailCreateFailed, CreateFailInternal:
-		default:
-			return fmt.Errorf("%w: unknown create fail reason %q", ErrInvalidField, a.Reason)
-		}
-		if a.Ref != "" {
-			return fmt.Errorf("%w: failed create_session_ack must not carry a ref", ErrInvalidField)
-		}
-		return nil
-	}
-	if a.Reason != "" {
-		return fmt.Errorf("%w: accepted create_session_ack must not carry a reason", ErrInvalidField)
-	}
-	if a.Ref == "" {
-		return fmt.Errorf("%w: accepted create_session_ack must carry a ref", ErrInvalidField)
 	}
 	return nil
 }

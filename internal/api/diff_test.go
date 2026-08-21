@@ -42,7 +42,7 @@ func snapshotFromPanes(panes []discovery.Pane) *modelSnapshot {
 	}
 	c := newSessionCatalog()
 	c.rebuild(model)
-	return buildSnapshot(c, nil)
+	return buildSnapshot(c)
 }
 
 // assertEmptyDelta fails unless every one of the delta's four sets is empty.
