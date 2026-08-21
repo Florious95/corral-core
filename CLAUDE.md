@@ -36,6 +36,10 @@
 - ⛔ **席位不许写 `/tmp` 或任何项目外路径**，临时文件写 `.team/nodes/<格>/tmp/`。
   各家 provider 对项目外路径的默认策略不同，靠加权限治不了根。
 - 多模态缺陷（需看截图判断渲染效果）用 Claude 订阅席位，不用 deepseek。
+- ⚠️ **cursor 席位按「restart = 失忆」对待**（框架队 2026-08-21 装机通告3 的运营事实，三路手工定性实锤）：
+  cursor vendor 的 `--resume` **不载入历史回合** ⇒ 该席位 restart 后上下文实际丢失，机器面已诚实标注。
+  ⇒ 若将来用 cursor 做执行席，**重要上下文必须靠任务书与产物落盘**，⛔ 不许指望席位记得。
+  （本工程当前未使用 cursor 席位，这条是预防性记录。）
 - 密钥只存在于 `.team/current/profiles/*.env`，任何席位禁止读其原文。
 - **`.team/current/profiles/tailnet-test.env` 全员禁读**（含 leader）。里面是用户 tailnet 的
   auth key，只能通过 `TS_AUTHKEY` 环境变量注入测试节点，任何形式的 cat/grep/plist/Read 都禁止。
