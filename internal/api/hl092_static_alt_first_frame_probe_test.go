@@ -105,6 +105,86 @@ func waitFrozenAltReady(t *testing.T, te *tmuxEnv) {
 	t.Fatalf("precondition: frozen alt-screen never showed marker (alt=%q capture=%q)", lastAlt, lastCap)
 }
 
+const winchRedrawMarker = "WINCH_REDRAW_MARKER_092"
+const preWinchMarker = "PRE_WINCH_MARKER_092"
+
+const redrawAltScript = `#!/bin/bash
+sleep 0.2
+printf '\033[?1049h\033[H\033[2J` + preWinchMarker + `\n' > /dev/tty
+trap 'printf "\033[2J\033[H` + winchRedrawMarker + `\n" > /dev/tty' WINCH
+while :; do read -r -t 3600 || true; done
+`
+
+// TestHandleSubscribeRedrawingTUIWinchBytesReachClient is the 092 second world:
+// a TUI that redraws on SIGWINCH. The WINCH repaint must reach the client
+// (snapshot or subsequent delta). Current pr/srv-first-frame order
+// capture→Resize→Subscribe attaches the pipe after Resize, so those bytes
+// are dropped.
+func TestHandleSubscribeRedrawingTUIWinchBytesReachClient(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "redraw-alt.sh")
+	if err := os.WriteFile(script, []byte(redrawAltScript), 0o755); err != nil {
+		t.Fatalf("write redraw alt script: %v", err)
+	}
+
+	te := startTmuxEnv(t, script)
+	waitRedrawAltReady(t, te)
+
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 96, Cols: 108})
+
+	deadline := time.Now().Add(2 * time.Second)
+	var got bytes.Buffer
+	sawSnapshot := false
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Until(deadline))
+		typ, data, err := te.wsEnv.conn.Read(ctx)
+		cancel()
+		if err != nil {
+			break
+		}
+		if typ != websocket.MessageBinary {
+			continue
+		}
+		payload, err := protocol.DecodeBinary(data)
+		if err != nil {
+			t.Fatalf("decode binary: %v", err)
+		}
+		if payload.Kind == protocol.KindSnapshot {
+			sawSnapshot = true
+		}
+		if payload.Kind != protocol.KindSnapshot && payload.Kind != protocol.KindDelta {
+			continue
+		}
+		got.Write(payload.Data)
+		if bytes.Contains(got.Bytes(), []byte(winchRedrawMarker)) {
+			return
+		}
+	}
+	t.Fatalf("WINCH 重绘字节未到达客户端: sawSnapshot=%v got=%q marker=%q", sawSnapshot, snapshotGlyphs(got.Bytes()), winchRedrawMarker)
+}
+
+func waitRedrawAltReady(t *testing.T, te *tmuxEnv) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	var lastAlt, lastCap string
+	for time.Now().Before(deadline) {
+		alt, err := runTmuxCmd(te.env, te.sock, "display-message", "-p", "-t", te.paneID, "#{alternate_on}")
+		if err != nil {
+			t.Fatalf("precondition alternate_on: %v\n%s", err, alt)
+		}
+		lastAlt = strings.TrimSpace(alt)
+		cap, err := runTmuxCmd(te.env, te.sock, "capture-pane", "-e", "-p", "-t", te.paneID)
+		if err != nil {
+			t.Fatalf("precondition capture-pane: %v\n%s", err, cap)
+		}
+		lastCap = cap
+		if lastAlt == "1" && strings.Contains(cap, preWinchMarker) {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("precondition: redrawing alt-screen never showed marker (alt=%q capture=%q)", lastAlt, lastCap)
+}
+
 // snapshotGlyphs strips CSI / ESC sequences and whitespace so a CUP-only
 // snapshot (handleSubscribe always appends ESC[row;colH) reports as empty.
 func snapshotGlyphs(data []byte) string {
