@@ -22,7 +22,7 @@ import dev.agentmirror.app.conn.Session
  * 二级状态标（061）。缺省 / 乱值 / 空串一律 [UNKNOWN]，禁止回落成 [IDLE]。
  */
 enum class L2Status(val wire: String, val label: String) {
-    WORKING("working", "运行"),
+    WORKING("working", "进行中"),
     IDLE("idle", "空闲"),
     UNKNOWN("unknown", "未知"),
     ;
@@ -50,7 +50,7 @@ data class L2Entry(
     val cwd: String = "",
     val sessionName: String = "",
     val windowIndex: String = "",
-    val windowName: String = "", val provider: String = "",
+    val windowName: String = "",
 ) {
     val identityLabel: String
         get() = sessionDisplayName(
@@ -163,6 +163,5 @@ internal fun Session.toL2Entry(): L2Entry {
         sessionName = resolvedSession,
         windowIndex = windowIndex,
         windowName = resolvedWindow,
-        provider = provider,
     )
 }

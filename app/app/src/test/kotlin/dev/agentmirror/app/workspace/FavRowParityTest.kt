@@ -111,7 +111,7 @@ class FavRowParityTest {
         assertEquals(L2Status.WORKING, row.status)
         assertEquals(live.status, row.status)
         assertEquals("looks-idle-glyph-must-not-override-wire-status", row.identityLabel)
-        assertEquals("运行", row.status.label)
+        assertEquals("进行中", row.status.label)
     }
 
     @Test
@@ -144,11 +144,11 @@ class FavRowParityTest {
         compose.onNodeWithText("远控 leader").assertExists()
         compose.onNodeWithText("多agent协作").assertExists()
         compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("运行").assertExists()
+        compose.onNodeWithText("进行中").assertExists()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
 
         val refA = live[0].ref
-        val star = compose.onNodeWithTag("fav-provider-$refA").getUnclippedBoundsInRoot()
+        val star = compose.onNodeWithTag("fav-star-$refA").getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badge = compose.onNodeWithTag("fav-status-$refA").getUnclippedBoundsInRoot()
         assertTrue(

@@ -27,8 +27,7 @@ package dev.agentmirror.app.service
  *   启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。
  * - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥
  *   （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一
- *   [ConnectionManager]，服务与 UI 都经它访问同一单例。可见性变化共同入口
- *   [ServiceWire.onUiVisible]（契约 090：回前台与收藏页在屏走同一函数）。
+ *   [ConnectionManager]，服务与 UI 都经它访问同一单例。
  *
  * 060 uproot（2026-08-15）：状态守望（会话状态沿变化→通知）随状态判定整体拔除；
  * 本服务只维护常驻连接通知。

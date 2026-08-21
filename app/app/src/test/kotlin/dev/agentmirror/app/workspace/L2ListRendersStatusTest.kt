@@ -77,7 +77,7 @@ class L2ListRendersStatusTest {
         compose.onNodeWithText("sess-work").assertExists("必须显示结构字段会话标识")
         compose.onNodeWithText("sess-idle").assertExists()
         compose.onNodeWithText("sess-unk").assertExists()
-        compose.onNodeWithText("运行").assertExists("working → 运行")
+        compose.onNodeWithText("进行中").assertExists("working → 进行中")
         compose.onNodeWithText("空闲").assertExists("idle → 空闲")
         compose.onNodeWithText("未知").assertExists("unknown → 未知")
     }

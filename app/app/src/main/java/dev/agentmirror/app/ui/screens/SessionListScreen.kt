@@ -1,7 +1,7 @@
 package dev.agentmirror.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -16,9 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,12 +31,10 @@ import dev.agentmirror.app.ui.components.BackAffordance
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.PathText
 import dev.agentmirror.app.ui.components.RowDivider
-import dev.agentmirror.app.ui.components.ProviderIcon
 import dev.agentmirror.app.ui.components.SessionNameText
-import dev.agentmirror.app.ui.components.SessionOverflowMenu
+import dev.agentmirror.app.ui.components.StarButton
 import dev.agentmirror.app.ui.components.StatusChip
 import dev.agentmirror.app.ui.model.SessionItem
-import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.TypeSizes
@@ -46,7 +42,7 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 /**
  * 会话列表（二级，某个工作区内）。
  * 顶部：‹ 工作区 + LAN，下面是工作区名 + 完整路径。
- * 行结构：Provider 图标（行首）→ 会话显示名 → 状态标。长按名称列弹菜单。
+ * 行结构：星（行首）→ 会话显示名 → 状态标。
  * 这一层每行路径都相同，所以行内不再重复路径，只在页头出现一次。
  */
 @Composable
@@ -61,7 +57,6 @@ fun SessionListScreen(
     connectionPath: ConnectionPath? = null,
     connectionBanner: String? = null,
     bottomBar: @Composable () -> Unit = {},
-    onClose: (SessionItem) -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground)) {
@@ -102,7 +97,6 @@ fun SessionListScreen(
                 sessions = sessions,
                 onSessionClick = onSessionClick,
                 onToggleStar = onToggleStar,
-                onClose = onClose,
                 modifier = Modifier.fillMaxSize(),
             )
             if (connectionBanner != null) {
@@ -135,8 +129,6 @@ fun SessionListRows(
     tagPrefix: String = "l2",
     listTestTag: String = "l2-session-list-scroll",
     showPath: Boolean = false,
-    showClose: Boolean = true,
-    onClose: (SessionItem) -> Unit = {},
 ) {
     LazyColumn(modifier.testTag(listTestTag)) {
         items(sessions, key = { it.id }) { item ->
@@ -144,10 +136,8 @@ fun SessionListRows(
                 item = item,
                 tagPrefix = tagPrefix,
                 showPath = showPath,
-                showClose = showClose,
                 onClick = { onSessionClick(item) },
                 onToggleStar = { onToggleStar(item) },
-                onClose = { onClose(item) },
             )
             RowDivider()
         }
@@ -159,15 +149,12 @@ private fun SessionRow(
     item: SessionItem,
     tagPrefix: String,
     showPath: Boolean,
-    showClose: Boolean,
     onClick: () -> Unit,
     onToggleStar: () -> Unit,
-    onClose: () -> Unit,
 ) {
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    var menu by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -176,22 +163,17 @@ private fun SessionRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dims.rowGap),
     ) {
-        ProviderIcon(
-            provider = item.provider,
-            busy = item.status == SessionStatus.Busy,
-            modifier = Modifier.testTag("$tagPrefix-provider-${item.id}"),
+        StarButton(
+            starred = item.starred,
+            onToggle = onToggleStar,
+            modifier = Modifier.testTag("$tagPrefix-star-${item.id}"),
         )
         Box(
             modifier = Modifier
                 .weight(1f)
                 .height(if (showPath) Dims.rowHeightWithSubtitle else Dims.rowHeightSingleLine)
                 .background(if (pressed) p.rowPressed else Color.Transparent)
-                .combinedClickable(
-                    interactionSource = interaction,
-                    indication = null,
-                    onClick = onClick,
-                    onLongClick = { menu = true },
-                )
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
                 .testTag("$tagPrefix-row-${item.id}"),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -210,16 +192,6 @@ private fun SessionRow(
                     Modifier.testTag("$tagPrefix-id-${item.id}"),
                 )
             }
-            SessionOverflowMenu(
-                expanded = menu,
-                onDismiss = { menu = false },
-                menuTag = "$tagPrefix-row-menu-${item.id}",
-                starred = item.starred,
-                showClose = showClose,
-                onFavorite = onToggleStar,
-                onUnfavorite = onToggleStar,
-                onClose = onClose,
-            )
         }
         StatusChip(item.status, Modifier.testTag("$tagPrefix-status-${item.id}"))
     }

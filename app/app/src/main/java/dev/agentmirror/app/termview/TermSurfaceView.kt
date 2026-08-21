@@ -318,8 +318,8 @@ class TermSurfaceView @JvmOverloads constructor(
      *
      * @contract
      * @pre visibility 是 Android 窗口可见性值；可在 presenter 未注入 / 尺寸未就绪时调用
-     * @post 非 VISIBLE 时撤销待执行帧并复位 framePending；VISIBLE 且尺寸为正时先把实测字格
-     *       写回 presenter（force，090 §2.5），再向 presenter 重放当前 viewport 并请求整帧
+     * @post 非 VISIBLE 时撤销待执行帧并复位 framePending；VISIBLE 且尺寸为正时向 presenter
+     *       重放当前 viewport（真实视口事件）并请求整帧
      * @err none
      * @inv 不可见期间 framePending=false；恢复只复用当前 width/height，不猜测历史尺寸
      */
@@ -341,10 +341,6 @@ class TermSurfaceView @JvmOverloads constructor(
         }
         if (width <= 0 || height <= 0) return
         refreshDrawOpt()
-        // 回前台必须把 View 当前实测字格写回 presenter。绑定后 applyFontMetrics 默认
-        // 不覆盖已 seed 的 presenter，字格漂了（重新实测更大）却只走 outgrew——像素没变
-        // 时守卫为 false，就会留下大字号 + 右侧被切。
-        applyFontMetrics(forcePresenter = true)
         presenter?.onRealViewportChanged(usableWidthPx(width), height)
         persistViewportGeom()
         postFrame()
@@ -784,12 +780,11 @@ class TermSurfaceView @JvmOverloads constructor(
      * （旧 measureCells 每帧执行的「先播种后回写」模式已消失）。
      *
      * 本 View 的绘制字段（[cellW]/[cellH]/[baselinePx]/[lineHeightPx]）无条件更新——绘制
-     * 只认自己实测的字号。默认只在 presenter **尚未** seed 过时才写回它
-     * （[TermViewPresenter.seedCellMetrics]）：测试直接注入实测值、或换绑已建立几何的
-     * 会话 presenter 时不得覆盖。回前台（[onWindowVisibilityChanged] VISIBLE）必须
-     * [forcePresenter]=true，把当前实测写回，否则字格漂了 presenter 仍按旧格子算列数。
+     * 只认自己实测的字号。但只在 presenter **尚未** seed 过时才写回它
+     * （[TermViewPresenter.seedCellMetrics]）：presenter 已被显式 seed 过（如测试直接注入
+     * 实测值、或本 View 换绑一个已建立几何的会话 presenter）时不得覆盖——显式 seed 优先。
      */
-    private fun applyFontMetrics(forcePresenter: Boolean = false) {
+    private fun applyFontMetrics() {
         val p = presenter ?: return
         val sizePx = fontSizeSp * resources.displayMetrics.scaledDensity
         // 主字体 textSize 决定格宽（等宽栅格基准）；回退槽字体同尺寸，逐格居中使用同指标。
@@ -807,12 +802,7 @@ class TermSurfaceView @JvmOverloads constructor(
         cellW = max(1, floor(textW).toInt())
         lineHeightPx = cellH
         glyphAdvanceCache.clear()
-        // 回前台要把实测写回 presenter；但 JVM/Robolectric 的 fontMetrics 可能退化成 1px，
-        // 覆盖测试注入的 10×20 会把 rows 算成 View 高度本身（D38 S1 变成 2800 行）。
-        // 已有非退化字格时，1px 实测不当真——真机 12sp+ 不会走到这条。
-        val degenerate = cellW <= 1 || cellH <= 1
-        val keepSeed = p.cellMetricsSeeded && degenerate && p.cellWidth > 1 && p.cellHeight > 1
-        if ((forcePresenter || !p.cellMetricsSeeded) && !keepSeed) {
+        if (!p.cellMetricsSeeded) {
             p.seedCellMetrics(cellW, cellH)
         }
         persistViewportGeom()

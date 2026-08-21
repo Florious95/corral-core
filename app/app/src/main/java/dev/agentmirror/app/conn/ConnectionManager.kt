@@ -132,18 +132,6 @@ class ConnectionManager(
         var resolved: Boolean = false
     }
 
-    private val pendingCloses = LinkedHashMap<Long, PendingClose>()
-
-    private class PendingClose(val ref: String, val deadlineMs: Long) {
-        var resolved: Boolean = false
-    }
-
-    private val pendingCreates = LinkedHashMap<Long, PendingCreate>()
-
-    private class PendingCreate(val cwd: String, val deadlineMs: Long) {
-        var resolved: Boolean = false
-    }
-
     /** 挂上上层监听。 */
     fun setListener(listener: Listener?) {
         this.listener = listener
@@ -230,49 +218,6 @@ class ConnectionManager(
                 it.remove()
             }
         }
-        resolveExpiredCloses(nowMs)
-        resolveExpiredCreates(nowMs)
-    }
-
-    private fun resolveExpiredCreates(nowMs: Long) {
-        val it = pendingCreates.iterator()
-        while (it.hasNext()) {
-            val (reqId, p) = it.next()
-            if (!p.resolved && nowMs >= p.deadlineMs) {
-                p.resolved = true
-                DiagLog.record("create", "timeout req_id=$reqId cwd=${p.cwd}")
-                listener?.onFrame(
-                    CreateSessionAckFrame(
-                        reqId = reqId,
-                        ok = false,
-                        reason = CreateFailReason.CREATE_FAILED,
-                    ),
-                )
-                it.remove()
-            }
-        }
-    }
-
-    private fun resolveExpiredCloses(nowMs: Long) {
-        val it = pendingCloses.iterator()
-        while (it.hasNext()) {
-            val (reqId, p) = it.next()
-            if (!p.resolved && nowMs >= p.deadlineMs) {
-                p.resolved = true
-                DiagLog.record(
-                    "close",
-                    "timeout req_id=$reqId ref=${p.ref} deadline_ms=${p.deadlineMs} now_ms=$nowMs",
-                )
-                listener?.onFrame(
-                    CloseSessionAckFrame(
-                        reqId = reqId,
-                        ok = false,
-                        reason = CloseFailReason.CLOSE_FAILED,
-                    ),
-                )
-                it.remove()
-            }
-        }
     }
 
     /**
@@ -290,60 +235,6 @@ class ConnectionManager(
             pendingReconnectAt = null
             attemptConnect()
         }
-    }
-
-    /**
-     * 可见性变化共同入口（契约 090）：UI 从不可见变为可见，或某一屏刚进入前台。
-     * 会话页回前台与收藏页在屏走同一函数，禁止各页再各补一份重连。
-     *
-     * 真的发起重连 = 走 [attemptConnect] / [start]（新传输被 create），不是只改状态变量。
-     *
-     * @contract
-     * @pre 无
-     * @post STOPPED → [start]；RECONNECTING → 立即 [attemptConnect]（打断退避）；
-     *       READY 且传输已关 → 立即重拨；READY 且传输仍开 / 正在拨号 → 不拨
-     * @err none
-     * @inv 不引入周期探活；只在可见性事件上判定一次
-     */
-    fun onUiVisible(source: String): Boolean {
-        val open = connection?.isTransportOpen == true
-        val pending = pendingReconnectAt
-        DiagLog.record(
-            "reconnect",
-            "onUiVisible source=$source state=$state " +
-                "pendingReconnectAt=${pending ?: -1} transportOpen=$open " +
-                "conn=${connection != null}",
-        )
-        val kicked = when (state) {
-            ConnectionState.STOPPED -> {
-                start()
-                true
-            }
-            ConnectionState.RECONNECTING -> {
-                pendingReconnectAt = null
-                attemptConnect()
-                true
-            }
-            ConnectionState.READY -> {
-                if (open) {
-                    false
-                } else {
-                    failAllPending("connection lost: ui visible transport closed")
-                    connection = null
-                    readyIsReconnect = true
-                    attemptConnect()
-                    true
-                }
-            }
-            ConnectionState.CONNECTING, ConnectionState.AUTHENTICATING -> false
-        }
-        DiagLog.record(
-            "reconnect",
-            "onUiVisible result source=$source kicked=$kicked state=$state " +
-                "transportOpen=${connection?.isTransportOpen == true} " +
-                "pendingReconnectAt=${pendingReconnectAt ?: -1}",
-        )
-        return kicked
     }
 
     /**
@@ -587,47 +478,6 @@ class ConnectionManager(
     }
 
     /**
-     * 发 close_session（契约 088 E12）。未二次确认不得调用。
-     *
-     * @contract
-     * @pre 当前处于 READY 且 connection 非空；ref 非空
-     * @post 返回 req_id（>0）时帧已发出并登记超时期限；结果经 CloseSessionAckFrame 到达 onFrame
-     * @err 未就绪 ⇒ 返回 null
-     * @inv req_id 单调递增；超时以 ok=false reason=close_failed 的本地 ack 投递
-     */
-    fun sendCloseSession(ref: String): Long? {
-        val conn = connection ?: return null
-        if (!conn.isReady) return null
-        if (ref.isEmpty()) return null
-        val reqId = nextReqId++
-        val frame = CloseSessionFrame(reqId = reqId, ref = ref)
-        if (!conn.send(frame)) return null
-        pendingCloses[reqId] = PendingClose(ref, clock.nowMs() + inputTimeoutMs)
-        DiagLog.record("close", "send close_session req_id=$reqId ref=$ref")
-        return reqId
-    }
-
-    /**
-     * 发 create_session（088 E13）。
-     *
-     * @contract
-     * @pre READY；cwd 非空；argv 至少 1 段
-     * @post 返回 req_id 时帧已发出
-     * @err 未就绪 ⇒ null
-     * @inv req_id 单调递增
-     */
-    fun sendCreateSession(cwd: String, argv: List<String>, provider: String = ""): Long? {
-        val conn = connection ?: return null
-        if (!conn.isReady) return null
-        val reqId = nextReqId++
-        val frame = CreateSessionFrame(reqId = reqId, cwd = cwd, argv = argv, provider = provider)
-        if (!conn.send(frame)) return null
-        pendingCreates[reqId] = PendingCreate(cwd, clock.nowMs() + inputTimeoutMs)
-        DiagLog.record("create", "send create_session req_id=$reqId cwd=$cwd argv=${argv.joinToString(" ")} provider=$provider")
-        return reqId
-    }
-
-    /**
      * 当前订阅簿记的行列（重连重放用）。测试与会话页仪表读这个，不是猜。
      */
     fun subscriptionSize(ref: String): Pair<Int, Int>? = activeSubscriptions[ref]
@@ -725,8 +575,6 @@ class ConnectionManager(
                     }
                 }
                 is InputAckFrame -> resolveInput(frame)
-                is CloseSessionAckFrame -> resolveClose(frame)
-                is CreateSessionAckFrame -> resolveCreate(frame)
                 else -> listener?.onFrame(frame)
             }
         }
@@ -808,28 +656,6 @@ class ConnectionManager(
         listener?.onInputResult(ack.reqId, ack.ok, ack.reason?.wire)
     }
 
-    private fun resolveClose(ack: CloseSessionAckFrame) {
-        val pending = pendingCloses.remove(ack.reqId)
-        if (pending != null) pending.resolved = true
-        DiagLog.record(
-            "close",
-            "ack req_id=${ack.reqId} ok=${ack.ok} reason=${ack.reason?.wire ?: ""} " +
-                "ref=${pending?.ref ?: "<none>"}",
-        )
-        listener?.onFrame(ack)
-    }
-
-    private fun resolveCreate(ack: CreateSessionAckFrame) {
-        val pending = pendingCreates.remove(ack.reqId)
-        if (pending != null) pending.resolved = true
-        DiagLog.record(
-            "create",
-            "ack req_id=${ack.reqId} ok=${ack.ok} reason=${ack.reason?.wire ?: ""} " +
-                "ref=${ack.ref} cwd=${pending?.cwd ?: ""}",
-        )
-        listener?.onFrame(ack)
-    }
-
     private fun failAllPending(reason: String) {
         val it = pendingInputs.iterator()
         while (it.hasNext()) {
@@ -839,38 +665,6 @@ class ConnectionManager(
                 listener?.onInputResult(reqId, false, reason)
             }
             it.remove()
-        }
-        val closes = pendingCloses.iterator()
-        while (closes.hasNext()) {
-            val (reqId, p) = closes.next()
-            if (!p.resolved) {
-                p.resolved = true
-                DiagLog.record("close", "fail pending req_id=$reqId ref=${p.ref} reason=$reason")
-                listener?.onFrame(
-                    CloseSessionAckFrame(
-                        reqId = reqId,
-                        ok = false,
-                        reason = CloseFailReason.CLOSE_FAILED,
-                    ),
-                )
-            }
-            closes.remove()
-        }
-        val creates = pendingCreates.iterator()
-        while (creates.hasNext()) {
-            val (reqId, p) = creates.next()
-            if (!p.resolved) {
-                p.resolved = true
-                DiagLog.record("create", "fail pending req_id=$reqId cwd=${p.cwd} reason=$reason")
-                listener?.onFrame(
-                    CreateSessionAckFrame(
-                        reqId = reqId,
-                        ok = false,
-                        reason = CreateFailReason.CREATE_FAILED,
-                    ),
-                )
-            }
-            creates.remove()
         }
     }
 

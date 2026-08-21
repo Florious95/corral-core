@@ -32,7 +32,6 @@ data class TerminalPalette(
     init { require(ansi.size == 16) { "ANSI palette must have exactly 16 entries" } }
 }
 
-/** 深色外壳下的 APP 终端兜底色板（目录损坏时 [TermPalette.Dark] 回退用）。 */
 val TerminalPaletteDark = TerminalPalette(
     background = Color(0xFF0A1120),
     foreground = Color(0xFFC4D0E6),
@@ -96,7 +95,6 @@ val TerminalPaletteLight = TerminalPalette(
 // ─────────────────────────────────────────────────────────────
 // 度量
 // ─────────────────────────────────────────────────────────────
-/** 终端画布字号档、行高与边距。 */
 object TerminalMetrics {
     /** 设置页字号档位，与 SettingsScreen 的 chip 一一对应 */
     val fontSizeSteps: List<Int> = listOf(4, 6, 8, 10, 12, 14, 16, 18, 20)

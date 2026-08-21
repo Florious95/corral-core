@@ -284,11 +284,9 @@ class SessionViewModelTest {
     @Test
     fun sendKeyEmitsKeysFrameWithoutText() {
         // VM 层红测（R-1）：点按键条 → 发出的 input 帧 keys 字段正确且无 text（互斥）。
-        // E3：控制键不进发送闸。
         val h = Harness()
         h.vm.sendKey(InputKey.ESC)
-        assertEquals(InputStatus.Idle, h.vm.inputStatus)
-        assertEquals(InputStatus.Sending, h.vm.controlKeyStatus)
+        assertEquals(InputStatus.Sending, h.vm.inputStatus)
         val keys = h.keyFrames()
         assertEquals(1, keys.size)
         assertEquals("s1", keys[0].ref)
@@ -303,8 +301,7 @@ class SessionViewModelTest {
         h.vm.sendKey(InputKey.CTRL_C)
         val sent = h.keyFrames().last()
         h.ackOk(sent.reqId)
-        assertEquals(InputStatus.Idle, h.vm.inputStatus)
-        assertEquals(InputStatus.Sent, h.vm.controlKeyStatus)
+        assertEquals(InputStatus.Sent, h.vm.inputStatus)
         // 未发出任何 text 帧（keys 帧互斥 text）。
         assertTrue(h.inputFrames().none { it.keys.isEmpty() })
     }
@@ -316,22 +313,9 @@ class SessionViewModelTest {
         h.vm.sendKey(InputKey.TAB)
         val sent = h.keyFrames().last()
         h.ackFail(sent.reqId, "session_not_found")
-        assertEquals(InputStatus.Idle, h.vm.inputStatus)
-        val st = h.vm.controlKeyStatus
+        val st = h.vm.inputStatus
         assertTrue(st is InputStatus.Failed)
         assertTrue((st as InputStatus.Failed).message.contains("会话已不存在"))
-    }
-
-    @Test
-    fun sendKeyWhileDraftSendingStillEmits() {
-        val h = Harness()
-        h.vm.sendDraft()
-        assertEquals(InputStatus.Sending, h.vm.inputStatus)
-        val before = h.keyFrames().size
-        h.vm.sendKey(InputKey.TAB)
-        assertEquals(before + 1, h.keyFrames().size)
-        assertEquals(listOf(InputKey.TAB), h.keyFrames().last().keys)
-        assertEquals(InputStatus.Sending, h.vm.inputStatus)
     }
 
     @Test
@@ -340,8 +324,7 @@ class SessionViewModelTest {
         val h = Harness()
         h.transport.peerClose(1006, "dropped")
         h.vm.sendKey(InputKey.UP)
-        assertTrue(h.vm.controlKeyStatus is InputStatus.Failed)
-        assertEquals(InputStatus.Idle, h.vm.inputStatus)
+        assertTrue(h.vm.inputStatus is InputStatus.Failed)
         assertTrue(h.keyFrames().isEmpty())
     }
 

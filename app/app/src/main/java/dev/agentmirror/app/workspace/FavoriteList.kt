@@ -27,12 +27,6 @@ import dev.agentmirror.app.ui.theme.AppTheme
 /**
  * 收藏列表：按加入时间倒序。失联行置灰标「不在线」，不可点进，可取消收藏。
  * 076 §3：星在行首、标题、目录副标题、右侧状态标（与会话列表同构）。
- * 094：本页不套 [sortSessions]（「运行中靠前」只属于会话页 088）；点击按 ref 身份绑定。
- *
- * @contract
- * @pre rows 已是收藏稳定次序（[FavoriteBook.rows] 按 addedAt 倒序）
- * @post 展示序与 rows 相同；onOpenSession(ref) == 被点行 ref
- * @inv 运行状态变化不改序；禁止 zip(sortedDisplay, unsortedRows)
  */
 @Composable
 fun FavoriteList(
@@ -43,7 +37,7 @@ fun FavoriteList(
     connectionBanner: String? = null,
 ) {
     val items = rows.map { it.toSessionItem() }
-    val byId = rows.associateBy { it.ref }
+    val byId = items.zip(rows).associate { it.first.id to it.second }
     AppTheme {
         FavoritesScreen(
             favorites = items,
