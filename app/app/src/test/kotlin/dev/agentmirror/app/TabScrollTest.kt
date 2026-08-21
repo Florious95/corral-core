@@ -94,7 +94,7 @@ class TabScrollTest {
         }
 
         val after = snapshot("settings-scroll", nav.homePane.ordinal)
-        compose.onNodeWithText("外观").assertIsDisplayed()
+        compose.onNodeWithTag("settings-launch").assertIsDisplayed()
         val lastAfter = compose.onAllNodesWithText("跟随系统").fetchSemanticsNodes()
             .maxBy { it.boundsInRoot.bottom }
         val tabsAfter = compose.onNodeWithTag("bottom-tabs").fetchSemanticsNode()

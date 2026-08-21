@@ -25,6 +25,7 @@ package dev.agentmirror.app.workspace
  * - [FavoriteBook] / [FavoriteStore]：收藏落盘与失联置灰对账（067）。
  * - [CloseConfirmDialog]：close_session 二次确认（088 E12）；ack.ok 后才取消收藏。
  * - [NewAgentDialog] / [buildNewAgentArgv]：工作区「+」新建 pane（088 E13）。
+ * - [ProviderLaunchStore] / [buildArgv]：每 Provider 启动命令（088 E14）；Bypass 追加旗，不经 shell。
  *
  * @consumes dev.agentmirror.app.conn
  * @consumes dev.agentmirror.app.tsnet
