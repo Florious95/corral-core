@@ -13,3 +13,4 @@ grok	idle	grok	title
 command still running	1	grok	footer
 just a prompt · nothing in flight	0	grok	footer
 send a message to interrupt	unknown	claude_code	footer
++ Agent 弹窗图标卡片重做 - grok	idle	grok	title
