@@ -1,0 +1,5 @@
+=== RUN   TestHandleSubscribeStaticAltScreenFirstFrameHasGlyphs
+--- PASS: TestHandleSubscribeStaticAltScreenFirstFrameHasGlyphs (1.10s)
+PASS
+ok  	github.com/agentmirror/agentmirror/internal/api	2.002s
+EXIT:0
