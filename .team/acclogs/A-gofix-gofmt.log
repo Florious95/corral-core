@@ -1,0 +1,14 @@
+--- main 存量 ---
+internal/api/api_tmux_test.go
+internal/api/delta_merge_scenario_test.go
+internal/api/lifecycle_test.go
+internal/bridge/bridge.go
+internal/overlay/tmux.go
+--- 本分支 ---
+internal/api/api_tmux_test.go
+internal/api/delta_merge_scenario_test.go
+internal/api/lifecycle_test.go
+internal/bridge/bridge.go
+internal/overlay/tmux.go
+--- 新增 ---
+

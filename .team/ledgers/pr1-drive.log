@@ -1,0 +1,118 @@
+[ledger-run 2026-08-20T16:31:07Z] 常驻开工 resident-start | 账本=.team/ledgers/pr1-v1.json 监视间隔=1000ms —— 停机不再等于退出：halt 会挂起并继续守着；⛔ 只有 revision 前进才解挂，进程只由人手动停
+[ledger-run 2026-08-20T16:31:07Z] 开工 start | ledger_id=ledger.pr1.v1 revision=1 账本=.team/ledgers/pr1-v1.json 墙钟上限=108000s 派单死线=90s
+[ledger-run 2026-08-20T16:31:25Z] 轮次 round | 第 1 轮开始：前沿 ["t.d1", "t.e6", "t.idea-input", "t.idea-list", "t.recon"]（墙钟已跑 17s / 上限 108000s）
+[ledger-run 2026-08-20T16:31:25Z] 派单 dispatch | task=t.d1 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-d1 席位=pr1-d1 attempt=att-t.d1-seq1-t1787243485142 delivery=del-t.d1-seq1-t1787243485142 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:31:25Z] 投递回执 send-ok | task=t.d1 case_id=ledger_pr1_v1__t.d1__r1 message_id=msg_eb040efa7c88 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:31:25Z] 派单落地 dispatch-landed | task=t.d1 席位 pr1-d1 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:31:25Z] 派单 dispatch | task=t.e6 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-e6 席位=pr1-e6 attempt=att-t.e6-seq2-t1787243485377 delivery=del-t.e6-seq2-t1787243485377 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:31:25Z] 投递回执 send-ok | task=t.e6 case_id=ledger_pr1_v1__t.e6__r1 message_id=msg_ebcf1cd42fc0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:31:25Z] 派单落地 dispatch-landed | task=t.e6 席位 pr1-e6 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:31:25Z] 派单 dispatch | task=t.idea-input 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-idea-input 席位=pr1-idea-input attempt=att-t.idea-input-seq3-t1787243485604 delivery=del-t.idea-input-seq3-t1787243485604 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:31:25Z] 投递回执 send-ok | task=t.idea-input case_id=ledger_pr1_v1__t.idea-input__r1 message_id=msg_eb8a2a58e140 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:31:25Z] 派单落地 dispatch-landed | task=t.idea-input 席位 pr1-idea-input 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:31:25Z] 派单 dispatch | task=t.idea-list 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-idea-list 席位=pr1-idea-list attempt=att-t.idea-list-seq4-t1787243485841 delivery=del-t.idea-list-seq4-t1787243485841 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:31:26Z] 投递回执 send-ok | task=t.idea-list case_id=ledger_pr1_v1__t.idea-list__r1 message_id=msg_ec4b3900d158 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:31:26Z] 派单落地 dispatch-landed | task=t.idea-list 席位 pr1-idea-list 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:31:26Z] 派单 dispatch | task=t.recon 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-recon 席位=pr1-recon attempt=att-t.recon-seq5-t1787243486078 delivery=del-t.recon-seq5-t1787243486078 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:31:26Z] 投递回执 send-ok | task=t.recon case_id=ledger_pr1_v1__t.recon__r1 message_id=msg_ec1d469b29d0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:31:26Z] 派单落地 dispatch-landed | task=t.recon 席位 pr1-recon 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:31:26Z] 等待 wait | task=t.d1 在等的 key（case_id）=ledger_pr1_v1__t.d1__r1 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:47:03Z] 已唤醒 wait-signaled | task=t.d1 等到结果了
+[ledger-run 2026-08-20T16:47:03Z] 判据 acceptance | task=t.d1 在跑 required=["A-d1-suite", "A-d1-wiki", "A-d1-doc"]
+[ledger-run 2026-08-20T16:49:29Z] 判据通过留档 acceptance-success | task=t.d1 成功 attempt 落进 attempts[] writeback_revision=2 passed=["A-d1-suite", "A-d1-wiki", "A-d1-doc"]
+[ledger-run 2026-08-20T16:49:29Z] 解挂重载 writeback-reload | task=t.d1 state=succeeded + revision+1：盘上 revision 2 > 我读的 1（hash 9212f4d7d1428997 → ca0ffc336f49c2eb）——人的解挂，重载账本重跑本轮，⛔ 不 park、不盖人的账本
+[ledger-run 2026-08-20T16:49:29Z] 轮次 round | 第 2 轮开始：前沿 ["t.d1", "t.e6", "t.idea-input", "t.idea-list", "t.recon"]（墙钟已跑 1101s / 上限 108000s）
+[ledger-run 2026-08-20T16:49:29Z] 派单 dispatch | task=t.d1 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-d1 席位=pr1-d1 attempt=att-t.d1-seq6-t1787244569085 delivery=del-t.d1-seq6-t1787244569085 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:49:29Z] 投递回执 send-ok | task=t.d1 case_id=ledger_pr1_v1__t.d1__r2 message_id=msg_be7172f67488 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:49:29Z] 派单落地 dispatch-landed | task=t.d1 席位 pr1-d1 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:49:29Z] 派单 dispatch | task=t.e6 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-e6 席位=pr1-e6 attempt=att-t.e6-seq7-t1787244569391 delivery=del-t.e6-seq7-t1787244569391 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:49:29Z] 投递回执 send-ok | task=t.e6 case_id=ledger_pr1_v1__t.e6__r2 message_id=msg_be2781db8510 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:49:29Z] 派单落地 dispatch-landed | task=t.e6 席位 pr1-e6 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:49:29Z] 派单 dispatch | task=t.idea-input 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-idea-input 席位=pr1-idea-input attempt=att-t.idea-input-seq8-t1787244569644 delivery=del-t.idea-input-seq8-t1787244569644 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:49:29Z] 投递回执 send-ok | task=t.idea-input case_id=ledger_pr1_v1__t.idea-input__r2 message_id=msg_beb192c70070 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:49:29Z] 派单落地 dispatch-landed | task=t.idea-input 席位 pr1-idea-input 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:49:29Z] 派单 dispatch | task=t.idea-list 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-idea-list 席位=pr1-idea-list attempt=att-t.idea-list-seq9-t1787244569917 delivery=del-t.idea-list-seq9-t1787244569917 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:49:30Z] 投递回执 send-ok | task=t.idea-list case_id=ledger_pr1_v1__t.idea-list__r2 message_id=msg_be8ca25a8138 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:49:30Z] 派单落地 dispatch-landed | task=t.idea-list 席位 pr1-idea-list 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:49:30Z] 派单 dispatch | task=t.recon 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-recon 席位=pr1-recon attempt=att-t.recon-seq10-t1787244570184 delivery=del-t.recon-seq10-t1787244570184 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:49:30Z] 投递回执 send-ok | task=t.recon case_id=ledger_pr1_v1__t.recon__r2 message_id=msg_a103b14882d0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:49:30Z] 派单落地 dispatch-landed | task=t.recon 席位 pr1-recon 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:49:30Z] 等待 wait | task=t.d1 在等的 key（case_id）=ledger_pr1_v1__t.d1__r2 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:50:36Z] 已唤醒 wait-signaled | task=t.d1 等到结果了
+[ledger-run 2026-08-20T16:50:36Z] 判据 acceptance | task=t.d1 在跑 required=["A-d1-suite", "A-d1-wiki", "A-d1-doc"]
+[ledger-run 2026-08-20T16:51:32Z] 判据通过留档 acceptance-success | task=t.d1 成功 attempt 落进 attempts[] writeback_revision=3 passed=["A-d1-suite", "A-d1-wiki", "A-d1-doc"]
+[ledger-run 2026-08-20T16:51:32Z] 解挂重载 writeback-reload | task=t.d1 state=succeeded + revision+1：盘上 revision 3 > 我读的 2（hash ca0ffc336f49c2eb → ff914ab6b79c186f）——人的解挂，重载账本重跑本轮，⛔ 不 park、不盖人的账本
+[ledger-run 2026-08-20T16:51:32Z] 轮次 round | 第 3 轮开始：前沿 ["t.d1", "t.e6", "t.idea-input", "t.idea-list", "t.recon"]（墙钟已跑 1224s / 上限 108000s）
+[ledger-run 2026-08-20T16:51:32Z] 派单 dispatch | task=t.d1 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-d1 席位=pr1-d1 attempt=att-t.d1-seq11-t1787244692669 delivery=del-t.d1-seq11-t1787244692669 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:51:33Z] 投递回执 send-ok | task=t.d1 case_id=ledger_pr1_v1__t.d1__r3 message_id=msg_e4343dd9df98 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:51:33Z] 派单落地 dispatch-landed | task=t.d1 席位 pr1-d1 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:51:33Z] 派单 dispatch | task=t.e6 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-e6 席位=pr1-e6 attempt=att-t.e6-seq12-t1787244693066 delivery=del-t.e6-seq12-t1787244693066 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:51:33Z] 投递回执 send-ok | task=t.e6 case_id=ledger_pr1_v1__t.e6__r3 message_id=msg_e44251fd3538 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:51:33Z] 派单落地 dispatch-landed | task=t.e6 席位 pr1-e6 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:51:33Z] 派单 dispatch | task=t.idea-input 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-idea-input 席位=pr1-idea-input attempt=att-t.idea-input-seq13-t1787244693396 delivery=del-t.idea-input-seq13-t1787244693396 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:51:33Z] 投递回执 send-ok | task=t.idea-input case_id=ledger_pr1_v1__t.idea-input__r3 message_id=msg_e7a1684cc560 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:51:33Z] 派单落地 dispatch-landed | task=t.idea-input 席位 pr1-idea-input 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:51:33Z] 派单 dispatch | task=t.idea-list 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-idea-list 席位=pr1-idea-list attempt=att-t.idea-list-seq14-t1787244693769 delivery=del-t.idea-list-seq14-t1787244693769 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:51:34Z] 投递回执 send-ok | task=t.idea-list case_id=ledger_pr1_v1__t.idea-list__r3 message_id=msg_e72f7a666468 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:51:34Z] 派单落地 dispatch-landed | task=t.idea-list 席位 pr1-idea-list 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:51:34Z] 派单 dispatch | task=t.recon 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-recon 席位=pr1-recon attempt=att-t.recon-seq15-t1787244694078 delivery=del-t.recon-seq15-t1787244694078 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:51:34Z] 投递回执 send-ok | task=t.recon case_id=ledger_pr1_v1__t.recon__r3 message_id=msg_e68c8cc6e010 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:51:34Z] 派单落地 dispatch-landed | task=t.recon 席位 pr1-recon 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:51:34Z] 等待 wait | task=t.d1 在等的 key（case_id）=ledger_pr1_v1__t.d1__r3 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:54:17Z] 已唤醒 wait-signaled | task=t.d1 等到结果了
+[ledger-run 2026-08-20T16:54:17Z] 判据 acceptance | task=t.d1 在跑 required=["A-d1-suite", "A-d1-wiki", "A-d1-doc", "A-d1-smell"]
+[ledger-run 2026-08-20T16:56:31Z] 判据通过留档 acceptance-success | task=t.d1 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-d1-suite", "A-d1-wiki", "A-d1-doc", "A-d1-smell"]
+[ledger-run 2026-08-20T16:56:31Z] 原子写回 writeback-atomic | task=t.d1 state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=4 hash=282d070606738cd8）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T16:56:31Z] 写回 writeback | task=t.d1 state=succeeded revision=3 → 4
+[ledger-run 2026-08-20T16:56:31Z] 等待 wait | task=t.e6 在等的 key（case_id）=ledger_pr1_v1__t.e6__r3 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:56:31Z] 已唤醒 wait-signaled | task=t.e6 等到结果了
+[ledger-run 2026-08-20T16:56:31Z] 判据 acceptance | task=t.e6 在跑 required=["A-e6-suite", "A-e6-wiki", "A-e6-doc", "A-e6-smell"]
+[ledger-run 2026-08-20T16:57:03Z] 判据通过留档 acceptance-success | task=t.e6 成功 attempt 落进 attempts[] writeback_revision=5 passed=["A-e6-suite", "A-e6-wiki", "A-e6-doc", "A-e6-smell"]
+[ledger-run 2026-08-20T16:57:03Z] 原子写回 writeback-atomic | task=t.e6 state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=5 hash=548f3006d72bd93d）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T16:57:03Z] 写回 writeback | task=t.e6 state=succeeded revision=4 → 5
+[ledger-run 2026-08-20T16:57:03Z] 等待 wait | task=t.idea-input 在等的 key（case_id）=ledger_pr1_v1__t.idea-input__r3 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:57:03Z] 已唤醒 wait-signaled | task=t.idea-input 等到结果了
+[ledger-run 2026-08-20T16:57:03Z] 判据 acceptance | task=t.idea-input 在跑 required=["A-ii-doc"]
+[ledger-run 2026-08-20T16:57:37Z] 判据失败诊断 acceptance-diagnostic | task=t.idea-input 判据 A-ii-doc 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import io,sys;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md';s=io.open(p,encoding='utf-8').read();need=['本格未读取 Heeler 任何源码文件', 'F-087-1', 'F-087-2', 'F-087-3', '代价', '查不清'];miss=[x for x in need if x not in s];sys.stderr.write('missing=%r len=%d'%(miss,len(s)));sys.exit(1 if miss or len(s)<800 else 0)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-input/思路.md'
+[ledger-run 2026-08-20T16:57:37Z] 原子写回 writeback-atomic | task=t.idea-input 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=5 hash=f3b2104d64a45025）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T16:57:37Z] 原子写回 writeback-atomic | task=t.idea-input 判据红下一步落盘 → 临时文件+rename 已落盘（revision=5 hash=cd1290a4da9130fd）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T16:57:37Z] 状态变坏 notify-bad-state | task=t.idea-input 判据红 停机通知：已投递
+[ledger-run 2026-08-20T16:57:37Z] 判据红 acceptance-red | task=t.idea-input required 未全过——关 attempt，默认 halt（该格已移出前沿；停机通知：已投递）
+[ledger-run 2026-08-20T16:57:37Z] 等待 wait | task=t.idea-list 在等的 key（case_id）=ledger_pr1_v1__t.idea-list__r3 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:57:37Z] 已唤醒 wait-signaled | task=t.idea-list 等到结果了
+[ledger-run 2026-08-20T16:57:37Z] 判据 acceptance | task=t.idea-list 在跑 required=["A-il-doc"]
+[ledger-run 2026-08-20T16:58:09Z] 判据失败诊断 acceptance-diagnostic | task=t.idea-list 判据 A-il-doc 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["python3", "-c", "import io,sys;p=r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md';s=io.open(p,encoding='utf-8').read();need=['--always-approve', '许可', '自绘', '二次确认', '查不清'];miss=[x for x in need if x not in s];sys.stderr.write('missing=%r len=%d'%(miss,len(s)));sys.exit(1 if miss or len(s)<800 else 0)"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr1-idea-list/方案.md'
+[ledger-run 2026-08-20T16:58:09Z] 原子写回 writeback-atomic | task=t.idea-list 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=5 hash=ed429780a4053dec）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T16:58:09Z] 原子写回 writeback-atomic | task=t.idea-list 判据红下一步落盘 → 临时文件+rename 已落盘（revision=5 hash=d8e84ac150fb591c）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T16:58:10Z] 状态变坏 notify-bad-state | task=t.idea-list 判据红 停机通知：已投递
+[ledger-run 2026-08-20T16:58:10Z] 判据红 acceptance-red | task=t.idea-list required 未全过——关 attempt，默认 halt（该格已移出前沿；停机通知：已投递）
+[ledger-run 2026-08-20T16:58:10Z] 等待 wait | task=t.recon 在等的 key（case_id）=ledger_pr1_v1__t.recon__r3 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:58:10Z] 已唤醒 wait-signaled | task=t.recon 等到结果了
+[ledger-run 2026-08-20T16:58:10Z] 判据 acceptance | task=t.recon 在跑 required=["A-recon-suite", "A-recon-wiki", "A-recon-doc", "A-recon-smell"]
+[ledger-run 2026-08-20T16:58:44Z] 判据失败诊断 acceptance-diagnostic | task=t.recon 判据 A-recon-wiki 失败：exit_code=1 (期望 0) cwd=/Volumes/nvme/Projects/远程Agent安卓 argv=["sh", "-c", "{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.conn && cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.service && cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon && python3 tools/archwiki/build_wiki.py --root /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon --check --strict-t3 --pkg dev.agentmirror.app.workspace ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-recon-wiki.log 2>&1"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-20T16:58:44Z] 原子写回 writeback-atomic | task=t.recon 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=5 hash=6339239101bd6585）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T16:58:44Z] 原子写回 writeback-atomic | task=t.recon 判据红下一步落盘 → 临时文件+rename 已落盘（revision=5 hash=0c5e3a63329192f5）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-20T16:58:44Z] 状态变坏 notify-bad-state | task=t.recon 判据红 停机通知：已投递
+[ledger-run 2026-08-20T16:58:44Z] 判据红 acceptance-red | task=t.recon required 未全过——关 attempt，默认 halt（该格已移出前沿；停机通知：已投递）
+[ledger-run 2026-08-20T16:58:44Z] 轮次 round | 第 4 轮开始：前沿 ["t.d1.rv", "t.e6.rv", "t.geom", "t.meter"]（墙钟已跑 1657s / 上限 108000s）
+[ledger-run 2026-08-20T16:58:45Z] 派单 dispatch | task=t.d1.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge 席位=pr1-judge attempt=att-t.d1.rv-seq16-t1787245124988 delivery=del-t.d1.rv-seq16-t1787245124988 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:58:45Z] 投递回执 send-ok | task=t.d1.rv case_id=ledger_pr1_v1__t.d1.rv__r5 message_id=msg_42f6dfb7ab60 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:58:45Z] 派单落地 dispatch-landed | task=t.d1.rv 席位 pr1-judge 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:58:45Z] 派单 dispatch | task=t.e6.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pr1-judge 席位=pr1-judge attempt=att-t.e6.rv-seq17-t1787245125269 delivery=del-t.e6.rv-seq17-t1787245125269 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:58:45Z] 投递回执 send-ok | task=t.e6.rv case_id=ledger_pr1_v1__t.e6.rv__r5 message_id=msg_42bbedfa9048 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:58:45Z] 派单落地 dispatch-landed | task=t.e6.rv 席位 pr1-judge 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:58:45Z] 派单 dispatch | task=t.geom 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-geom 席位=pr1-geom attempt=att-t.geom-seq18-t1787245125504 delivery=del-t.geom-seq18-t1787245125504 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:58:45Z] 投递回执 send-ok | task=t.geom case_id=ledger_pr1_v1__t.geom__r5 message_id=msg_427dfb066c30 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:58:45Z] 派单落地 dispatch-landed | task=t.geom 席位 pr1-geom 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:58:45Z] 派单 dispatch | task=t.meter 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pr1-meter 席位=pr1-meter attempt=att-t.meter-seq19-t1787245125716 delivery=del-t.meter-seq19-t1787245125716 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-20T16:58:45Z] 投递回执 send-ok | task=t.meter case_id=ledger_pr1_v1__t.meter__r5 message_id=msg_4238085f6648 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-20T16:58:45Z] 派单落地 dispatch-landed | task=t.meter 席位 pr1-meter 的收件箱已多出这条派单
+[ledger-run 2026-08-20T16:58:45Z] 等待 wait | task=t.d1.rv 在等的 key（case_id）=ledger_pr1_v1__t.d1.rv__r5 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+resident-exit signal=term reason=human_stop

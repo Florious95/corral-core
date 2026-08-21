@@ -1,0 +1,2 @@
+land-pr: branch=pr/e13-new-pane verdict=VERDICT: supports
+land-pr: pr/e13-new-pane 已在 main 里（is-ancestor），无需重复并线

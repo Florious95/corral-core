@@ -1,0 +1,2 @@
+land-pr: branch=pr/e8-back-gesture verdict=VERDICT: supports
+land-pr: pr/e8-back-gesture 已在 main 里（is-ancestor），无需重复并线

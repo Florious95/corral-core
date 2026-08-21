@@ -1,0 +1,2 @@
+land-pr: branch=pr/e7-scroll-hint verdict=VERDICT: supports
+land-pr: pr/e7-scroll-hint 已在 main 里（is-ancestor），无需重复并线

@@ -1,0 +1,2 @@
+land-pr: branch=pr/e1-resync verdict=VERDICT: supports
+land-pr: pr/e1-resync 已在 main 里（is-ancestor），无需重复并线

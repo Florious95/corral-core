@@ -1,0 +1,4 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.recon 当前分支=pr/recon-foreground 目标分支=pr/recon-foreground
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=1  head=822a4ee1b
+822a4ee1b [pr/recon-foreground] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）

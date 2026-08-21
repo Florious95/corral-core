@@ -1,0 +1,4 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.e6 当前分支=pr/e6-upload-success 目标分支=pr/e6-upload-success
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=1  head=f737cee31
+f737cee31 [pr/e6-upload-success] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）

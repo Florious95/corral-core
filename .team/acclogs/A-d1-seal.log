@@ -1,0 +1,5 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr1.d1 当前分支=pr/d1-userblock-theme 目标分支=pr/d1-userblock-theme
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=2  head=f9875ff6d
+f9875ff6d [pr/d1-userblock-theme] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+ee4102b3c userBlockBg 从当前主题现算（契约 089 §1）
