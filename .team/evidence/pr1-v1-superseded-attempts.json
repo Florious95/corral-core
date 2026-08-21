@@ -332,6 +332,25 @@
      "acceptance_failure.stderr_tail(末20行)="
     ]
    }
+  },
+  {
+   "task_id": "t.provcmd",
+   "superseded_at_revision": 30,
+   "reason": "评审 refutes：作用域（leader 账本没跟上，已补）+ TabScrollTest 的 bounds 断言恒真化（需补牙）",
+   "attempt": {
+    "attempt_id": "att-t.provcmd-seq3-t1787276258030",
+    "delivery_id": "del-t.provcmd-seq3-t1787276258030",
+    "state": "succeeded",
+    "writeback_revision": 28,
+    "artifact_refs": [
+     "acceptance_success.acceptance_id=A-provcmd-suite",
+     "acceptance_success.acceptance_id=A-provcmd-wiki",
+     "acceptance_success.acceptance_id=A-provcmd-smell",
+     "acceptance_success.acceptance_id=A-provcmd-doc",
+     "acceptance_success.acceptance_id=A-provcmd-seal",
+     "acceptance_success.writeback_revision=28"
+    ]
+   }
   }
  ]
 }
