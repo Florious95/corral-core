@@ -48,7 +48,6 @@ class FavoriteBook(
         windowIndex: String = "",
         windowName: String = "",
         cwd: String = "",
-        provider: String = "",
     ) {
         if (ref.isEmpty()) {
             DiagLog.record(
@@ -78,7 +77,6 @@ class FavoriteBook(
                     windowName = windowName,
                     cwd = cwd,
                     addedAt = nowMs(),
-                    provider = provider,
                 ),
             )
         }
@@ -126,7 +124,6 @@ class FavoriteBook(
                     cwd = cwd,
                     title = hit?.title.orEmpty(),
                     status = hit?.status ?: L2Status.UNKNOWN,
-                    provider = hit?.provider?.takeIf { it.isNotEmpty() } ?: rec.provider,
                 ),
             )
         }

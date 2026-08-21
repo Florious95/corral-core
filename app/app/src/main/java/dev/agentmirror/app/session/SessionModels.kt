@@ -59,13 +59,6 @@ fun interface AttachmentUploader {
         upload(baseUrl, attachment)
 }
 
-/**
- * 瞬时成功态标记。状态条共同出口：[bannerFrom] 命中本接口即返回 null、不组节点。
- *
- * 新成功态实现本接口即默认不组节点，不必再给状态条补 when-case。
- */
-internal interface TransientSuccess
-
 /** 发送回执状态机（003 发送必达：成功/失败都可见）。 */
 sealed interface InputStatus {
     /** 无在途发送。 */
@@ -74,8 +67,8 @@ sealed interface InputStatus {
     /** input 帧已送出，等待 input_ack（或超时）。 */
     data object Sending : InputStatus
 
-    /** input_ack ok：字节已进面板（瞬时态，UI 不组节点，短暂后收起）。 */
-    data object Sent : InputStatus, TransientSuccess
+    /** input_ack ok：字节已进面板（瞬时态，UI 短暂展示后收起）。 */
+    data object Sent : InputStatus
 
     /** input_ack fail / 超时 / 未就绪：输入框保留内容 + 明确报错。 */
     data class Failed(val message: String) : InputStatus
@@ -86,24 +79,8 @@ sealed interface UploadStatus {
     data object Idle : UploadStatus
     data object Uploading : UploadStatus
 
-    /** 已拿到主机路径并注入输入框（瞬时态，UI 不组节点）。 */
-    data class Success(val path: String) : UploadStatus, TransientSuccess
+    /** 已拿到主机路径并注入输入框（瞬时态）。 */
+    data class Success(val path: String) : UploadStatus
 
     data class Failed(val message: String) : UploadStatus
-}
-
-/**
- * 状态条文案的共同出口（089 §3）：[TransientSuccess] 一律 null，失败/在途才返回文案。
- *
- * 新成功态只要实现 [TransientSuccess]，不必再给本函数补 case。
- */
-internal fun bannerFrom(status: Any): String? {
-    if (status is TransientSuccess) return null
-    return when (status) {
-        is InputStatus.Failed -> status.message
-        is InputStatus.Sending -> "发送中…"
-        is UploadStatus.Uploading -> "上传中…"
-        is UploadStatus.Failed -> status.message
-        else -> null
-    }
 }

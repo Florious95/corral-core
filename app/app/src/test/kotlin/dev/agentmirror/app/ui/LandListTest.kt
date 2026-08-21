@@ -73,7 +73,7 @@ class LandListTest {
         val busy = statusVisuals(LightPalette, SessionStatus.Busy)
         val idle = statusVisuals(LightPalette, SessionStatus.Idle)
         val unknown = statusVisuals(LightPalette, SessionStatus.Unknown)
-        assertEquals("运行", busy.label)
+        assertEquals("进行中", busy.label)
         assertEquals("空闲", idle.label)
         assertEquals("未知", unknown.label)
         assertTrue(busy.pulse)
@@ -98,7 +98,7 @@ class LandListTest {
         compose.onNodeWithText("远控 leader").assertExists()
         compose.onNodeWithText("team-leader-2").assertExists()
         compose.onNodeWithText("远控 leader 未探测").assertExists()
-        compose.onNodeWithText("运行").assertExists()
+        compose.onNodeWithText("进行中").assertExists()
         compose.onNodeWithText("空闲").assertExists()
         compose.onNodeWithText("未知").assertExists()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
@@ -125,7 +125,7 @@ class LandListTest {
         }
         compose.waitForIdle()
         val ref = live[0].ref
-        val star = compose.onNodeWithTag("fav-provider-$ref").getUnclippedBoundsInRoot()
+        val star = compose.onNodeWithTag("fav-star-$ref").getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badge = compose.onNodeWithTag("fav-status-$ref").getUnclippedBoundsInRoot()
         assertTrue("星在行首 star.left=${star.left} id.left=${id.left}", star.left < id.left)
@@ -135,7 +135,7 @@ class LandListTest {
         compose.onNodeWithText("讨论 team-agent").assertExists()
         compose.onNodeWithText("/ws/甲").assertExists()
         compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("运行").assertExists()
+        compose.onNodeWithText("进行中").assertExists()
         compose.onNodeWithText("未知").assertExists()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
     }

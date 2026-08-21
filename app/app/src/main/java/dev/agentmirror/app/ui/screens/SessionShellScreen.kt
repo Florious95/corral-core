@@ -22,12 +22,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -38,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
@@ -102,14 +95,6 @@ fun SessionShellScreen(
     modifier: Modifier = Modifier,
     sendEnabled: Boolean = true,
     connectionBanner: String? = null,
-    composerExpanded: Boolean = false,
-    onToggleExpand: () -> Unit = {},
-    pendingAttachmentCount: Int = 0,
-    pendingAttachmentLabel: String? = null,
-    attachMenuExpanded: Boolean = false,
-    onAttachMenuChange: (Boolean) -> Unit = {},
-    onPickCamera: () -> Unit = {},
-    onPickGallery: () -> Unit = {},
     terminalContent: @Composable () -> Unit,
 ) {
     val p = LocalAppPalette.current
@@ -167,14 +152,6 @@ fun SessionShellScreen(
             sendEnabled = sendEnabled,
             onKeyPress = onKeyPress,
             onAttach = onAttach,
-            composerExpanded = composerExpanded,
-            onToggleExpand = onToggleExpand,
-            pendingAttachmentCount = pendingAttachmentCount,
-            pendingAttachmentLabel = pendingAttachmentLabel,
-            attachMenuExpanded = attachMenuExpanded,
-            onAttachMenuChange = onAttachMenuChange,
-            onPickCamera = onPickCamera,
-            onPickGallery = onPickGallery,
         )
     }
 }
@@ -298,14 +275,6 @@ private fun ConsoleBar(
     sendEnabled: Boolean,
     onKeyPress: (TerminalKey) -> Unit,
     onAttach: () -> Unit,
-    composerExpanded: Boolean,
-    onToggleExpand: () -> Unit,
-    pendingAttachmentCount: Int,
-    pendingAttachmentLabel: String?,
-    attachMenuExpanded: Boolean,
-    onAttachMenuChange: (Boolean) -> Unit,
-    onPickCamera: () -> Unit,
-    onPickGallery: () -> Unit,
 ) {
     val p = LocalAppPalette.current
     Column(
@@ -346,22 +315,15 @@ private fun ConsoleBar(
                 KeyCap(TerminalKey.CtrlC, Dims.keyWidthDanger, onKeyPress)
             }
             Box(Modifier.height(Dims.composerTopGap))
-            DraftField(
-                draft = draft,
-                onDraftChange = onDraftChange,
-                onSend = onSend,
-                sendEnabled = sendEnabled,
-                expanded = composerExpanded,
-                onToggleExpand = onToggleExpand,
-                pendingAttachmentCount = pendingAttachmentCount,
-                pendingAttachmentLabel = pendingAttachmentLabel,
-                attachMenuExpanded = attachMenuExpanded,
-                onAttachMenuChange = onAttachMenuChange,
-                onPickCamera = onPickCamera,
-                onPickGallery = onPickGallery,
-                onAttach = onAttach,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dims.composerRowGap),
+            ) {
+                PlusButton(onAttach)
+                DraftField(draft = draft, onDraftChange = onDraftChange, onSend = onSend, modifier = Modifier.weight(1f))
+                SendButton(enabled = sendEnabled, onSend = onSend)
+            }
         }
     }
 }
@@ -394,15 +356,7 @@ private fun KeyCap(
             .clip(RoundedCornerShape(Radii.key))
             .background(bg)
             .border(Dims.hairline, border, RoundedCornerShape(Radii.key))
-            .focusProperties { canFocus = false }
-            .clickable(interactionSource = interaction, indication = null) { onKeyPress(key) }
-            .testTag(
-                when (key) {
-                    TerminalKey.Esc -> "session-key-esc"
-                    TerminalKey.Tab -> "session-key-tab"
-                    else -> "session-key"
-                },
-            ),
+            .clickable(interactionSource = interaction, indication = null) { onKeyPress(key) },
         contentAlignment = Alignment.Center,
     ) {
         if (highlight.alpha > 0f && !pressed) {
@@ -437,7 +391,6 @@ private fun ArrowKeyCap(key: TerminalKey, onKeyPress: (TerminalKey) -> Unit) {
             .clip(RoundedCornerShape(Radii.keyArrow))
             .background(if (pressed) p.keycapPressed else p.keycapBackground)
             .border(Dims.hairline, p.keycapBorder, RoundedCornerShape(Radii.keyArrow))
-            .focusProperties { canFocus = false }
             .clickable(interactionSource = interaction, indication = null) { onKeyPress(key) },
         contentAlignment = Alignment.Center,
     ) {
@@ -452,15 +405,13 @@ private fun PlusButton(onAttach: () -> Unit) {
     val pressed by interaction.collectIsPressedAsState()
     Box(
         Modifier
-            .size(32.dp)
+            .size(Dims.plusButtonSize)
             .clip(RoundedCornerShape(Radii.plusButton))
             .background(if (pressed) p.accentContainerPressed else p.accentContainer)
-            .focusProperties { canFocus = false }
-            .clickable(interactionSource = interaction, indication = null, onClick = onAttach)
-            .testTag("session-attach"),
+            .clickable(interactionSource = interaction, indication = null, onClick = onAttach),
         contentAlignment = Alignment.Center,
     ) {
-        AppText("+", p.accent, 20.sp, fontWeight = FontWeight.Light, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
+        AppText("+", p.accent, 24.sp, fontWeight = FontWeight.Light, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
     }
 }
 
@@ -469,100 +420,43 @@ private fun DraftField(
     draft: TextFieldValue,
     onDraftChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
-    sendEnabled: Boolean,
-    expanded: Boolean,
-    onToggleExpand: () -> Unit,
-    pendingAttachmentCount: Int,
-    pendingAttachmentLabel: String?,
-    attachMenuExpanded: Boolean,
-    onAttachMenuChange: (Boolean) -> Unit,
-    onPickCamera: () -> Unit,
-    onPickGallery: () -> Unit,
-    onAttach: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
-    val fieldScroll = rememberScrollState()
-    Column(
+    Row(
         modifier
-            .height(if (expanded) Dims.inputHeightExpanded else Dims.inputHeight)
+            .height(Dims.inputHeight)
             .clip(RoundedCornerShape(Radii.input))
             .background(p.inputBackground)
             .border(Dims.hairline, p.inputBorder, RoundedCornerShape(Radii.input))
-            .testTag("session-composer")
-            .padding(horizontal = Dims.inputHPadding, vertical = 4.dp),
+            .padding(horizontal = Dims.inputHPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (pendingAttachmentCount > 0) {
-            AppText(
-                text = pendingAttachmentLabel?.let { "已附加 $pendingAttachmentCount · $it" }
-                    ?: "已附加 $pendingAttachmentCount 张",
-                color = p.metaText,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                lineHeightMultiplier = 1f,
-            )
-        }
-        Row(
-            Modifier.fillMaxWidth().weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Box {
-                PlusButton(onAttach = {
-                    onAttach()
-                    onAttachMenuChange(true)
-                })
-                DropdownMenu(
-                    expanded = attachMenuExpanded,
-                    onDismissRequest = { onAttachMenuChange(false) },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("拍照") },
-                        onClick = onPickCamera,
-                    )
-                    DropdownMenuItem(
-                        text = { Text("从相册选择") },
-                        onClick = onPickGallery,
-                    )
-                }
+        AppText("❯", p.promptGlyph, 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (draft.text.isEmpty()) {
+                AppText("输入指令…", p.inputPlaceholder, TypeSizes.inputText, lineHeightMultiplier = 1f)
             }
-            AppText(
-                "❯",
-                p.promptGlyph,
-                13.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = FontFamily.Monospace,
-                lineHeightMultiplier = 1f,
-                modifier = Modifier.clickable(onClick = onToggleExpand),
+            BasicTextField(
+                value = draft,
+                onValueChange = onDraftChange,
+                singleLine = true,
+                textStyle = LocalTextStyle.current.merge(
+                    TextStyle(
+                        color = p.inputText,
+                        fontSize = TypeSizes.inputText,
+                        // 中英混排，走系统默认字体
+                        fontFamily = FontFamily.Default,
+                    )
+                ),
+                cursorBrush = SolidColor(p.accent),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { onSend() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("session-draft"),
             )
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (draft.text.isEmpty()) {
-                    AppText("输入指令…", p.inputPlaceholder, TypeSizes.inputText, lineHeightMultiplier = 1f)
-                }
-                BasicTextField(
-                    value = draft,
-                    onValueChange = onDraftChange,
-                    singleLine = !expanded,
-                    maxLines = if (expanded) 5 else 1,
-                    textStyle = LocalTextStyle.current.merge(
-                        TextStyle(
-                            color = p.inputText,
-                            fontSize = TypeSizes.inputText,
-                            fontFamily = FontFamily.Default,
-                        )
-                    ),
-                    cursorBrush = SolidColor(p.accent),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { onSend() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (expanded) Modifier.verticalScroll(fieldScroll) else Modifier)
-                        .onFocusChanged { if (it.isFocused && !expanded) onToggleExpand() }
-                        .testTag("session-draft"),
-                )
-            }
-            SendButton(enabled = sendEnabled, onSend = onSend)
         }
     }
 }
@@ -573,18 +467,16 @@ private fun SendButton(enabled: Boolean, onSend: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     Box(
         Modifier
-            .size(32.dp)
+            .size(Dims.sendButtonSize)
             .clip(RoundedCornerShape(Radii.sendButton))
             .background(if (enabled) p.sendEnabledBg else p.sendDisabledBg)
-            .focusProperties { canFocus = false }
-            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onSend)
-            .testTag("session-send"),
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onSend),
         contentAlignment = Alignment.Center,
     ) {
         AppText(
             text = "↑",
             color = if (enabled) p.sendEnabledFg else p.sendDisabledFg,
-            fontSize = 16.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.Monospace,
             lineHeightMultiplier = 1f,
