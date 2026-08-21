@@ -614,6 +614,15 @@ class ConnectionManager(
         }
 
         override fun onBinary(frame: BinaryFrame) {
+            if (PerfTrace.isEnabled()) {
+                val listenerNull = if (listener == null) 1 else 0
+                val kind = when (frame.kind) {
+                    BinaryKind.SNAPSHOT -> "snapshot"
+                    BinaryKind.DELTA -> "delta"
+                    BinaryKind.SCROLLBACK -> "scrollback"
+                }
+                PerfTrace.emitNoListener(frame.ref, listenerNull, kind, frame.data.size)
+            }
             listener?.onBinary(frame)
         }
 

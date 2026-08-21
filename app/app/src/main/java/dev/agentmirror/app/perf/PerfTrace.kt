@@ -59,6 +59,9 @@ object PerfTrace {
     const val EV_FIRST_DRAW = "first_draw"
     const val EV_LAYOUT_SETTLED = "layout_settled"
 
+    /** WS 二进制读入口留痕（t.instr3，非八事件契约；emitted=0 不进基线）。 */
+    const val EV_WS_BINARY_RECV = "ws_binary_recv"
+
     /** `layout_settled` 静默窗口（ms）：最后一次重排后再无重排才结算。 */
     const val LAYOUT_SETTLED_QUIET_MS = 500
 
@@ -102,6 +105,8 @@ object PerfTrace {
     private val nextSeq = AtomicLong(1L)
     private val opens = ConcurrentHashMap<String, Open>()
     private val settleRunnables = ConcurrentHashMap<String, Runnable>()
+    private val wsBinaryRecvLogged = ConcurrentHashMap.newKeySet<String>()
+    private val noListenerLogged = ConcurrentHashMap.newKeySet<String>()
     @Volatile
     private var settleHandler: Handler? = null
 
@@ -183,6 +188,8 @@ object PerfTrace {
     fun resetForTest() {
         cancelAllSettles()
         opens.clear()
+        wsBinaryRecvLogged.clear()
+        noListenerLogged.clear()
         enabled = true
         clock = DiagLog.Clock { 0L }
         sink = Sink { _, _ -> }
@@ -518,6 +525,42 @@ object PerfTrace {
                 "emitted=0 reason=already_seeded rows=$rows cols=$cols",
             )
         }
+    }
+
+    /**
+     * WS 二进制帧已解码（Connection.onBinary）。每 ref 一行，emitted=0 不进基线。
+     * 有此行而无 no_listener ⇒ 收到了且 listener 槽非空；两行都没有 ⇒ WS 没收到。
+     *
+     * @contract @pre [isEnabled] 已在调用点短路 @post 一行 ev=ws_binary_recv kind= bytes=
+     */
+    fun emitWsBinaryRecv(frameRef: String, kind: String, bytes: Int) {
+        if (!enabled) return
+        if (!wsBinaryRecvLogged.add(frameRef)) return
+        val id = opens[frameRef]?.openId ?: "-"
+        emit(
+            id,
+            EV_WS_BINARY_RECV,
+            "emitted=0 kind=$kind bytes=$bytes frame_ref=$frameRef",
+        )
+    }
+
+    /**
+     * ConnectionManager 全局 listener 槽：每 ref 一行。
+     * `listener_null=1` ⇒ reason=no_listener（`?.onBinary` 会静默丢掉）；
+     * `listener_null=0` ⇒ reason=has_listener（槽非空，派给了当前 listener）。
+     *
+     * @contract @pre [isEnabled] 已在调用点短路 @post emitted=0 且含 frame_ref= listener_null=
+     */
+    fun emitNoListener(frameRef: String, listenerNull: Int, kind: String, bytes: Int) {
+        if (!enabled) return
+        if (!noListenerLogged.add(frameRef)) return
+        val id = opens[frameRef]?.openId ?: "-"
+        val reason = if (listenerNull == 1) "no_listener" else "has_listener"
+        emit(
+            id,
+            EV_FIRST_FRAME_RECV,
+            "emitted=0 reason=$reason frame_ref=$frameRef listener_null=$listenerNull kind=$kind bytes=$bytes",
+        )
     }
 
     /**
