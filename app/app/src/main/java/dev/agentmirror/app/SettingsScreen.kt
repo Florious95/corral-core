@@ -17,6 +17,13 @@
 package dev.agentmirror.app
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -24,7 +31,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
 import android.content.Intent
 import androidx.core.content.FileProvider
 import dev.agentmirror.app.diag.DiagLog
@@ -38,7 +51,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import dev.agentmirror.app.ui.components.AppText
+import dev.agentmirror.app.ui.components.SettingsCard
+import dev.agentmirror.app.ui.components.providerDisplayName
+import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.TypeSizes
 import dev.agentmirror.app.ui.screens.SettingsScreen as DesignSettingsScreen
+import dev.agentmirror.app.workspace.ProviderLaunch
+import dev.agentmirror.app.workspace.SharedPreferencesProviderLaunchStore
 
 /**
  * 单档设置页：重新配对成功时覆盖现有主机配置，不提前清除仍可用的档案。
@@ -75,6 +95,8 @@ internal fun SettingsScreen(
     }
     val themeStore = remember { SharedPreferencesTermThemeStore(context) }
     var themeSel by remember { mutableStateOf(themeStore.load()) }
+    val launchStore = remember { SharedPreferencesProviderLaunchStore(context) }
+    var launches by remember { mutableStateOf(launchStore.load()) }
     val pickerSlot = pickerDark
     if (pickerSlot != null) {
         TermThemePickerScreen(
@@ -114,6 +136,107 @@ internal fun SettingsScreen(
         darkFamilyId = themeSel.darkFamilyId,
         onOpenLightTheme = { pickerDark = false },
         onOpenDarkTheme = { pickerDark = true },
+        extraCards = {
+            AgentLaunchCard(
+                launches = launches,
+                onChange = { next ->
+                    launches = next
+                    launchStore.save(next)
+                },
+            )
+        },
+    )
+}
+
+/**
+ * 设置第六张卡：每个 Provider 的完整启动命令（088 E14）。
+ *
+ * @contract
+ * @pre launches 含六个白名单 id
+ * @post 改 command / bypass 立刻 save；Pi 的 bypass 输入禁用且恒为空
+ * @err none
+ * @inv 不经 shell 分词（脚注写明）
+ */
+@Composable
+private fun AgentLaunchCard(
+    launches: List<ProviderLaunch>,
+    onChange: (List<ProviderLaunch>) -> Unit,
+) {
+    val p = LocalAppPalette.current
+    SettingsCard(modifier = Modifier.testTag("settings-launch")) {
+        AppText(
+            "Agent 启动命令",
+            p.rowTitleText,
+            TypeSizes.cardTitle,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        )
+        Box(Modifier.height(8.dp))
+        AppText(
+            text = "按空白分词，不经 shell。勾选 Bypass 时把该 Provider 的旗追加到 argv（已在命令里则不重复）。Grok 必须显式带 --always-approve，不依赖本机 config。",
+            color = p.bodyText,
+            fontSize = TypeSizes.cardBody,
+            lineHeightMultiplier = TypeSizes.bodyLineHeight,
+        )
+        Box(Modifier.height(12.dp))
+        launches.forEach { item ->
+            val pi = item.providerId == "pi"
+            AppText(
+                providerDisplayName(item.providerId),
+                p.rowTitleText,
+                TypeSizes.cardBody,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            )
+            Box(Modifier.height(4.dp))
+            LaunchField(
+                value = item.command,
+                testTag = "settings-launch-command-${item.providerId}",
+                enabled = true,
+                onValueChange = { text ->
+                    onChange(launches.map { if (it.providerId == item.providerId) it.copy(command = text) else it })
+                },
+            )
+            Box(Modifier.height(4.dp))
+            LaunchField(
+                value = item.bypassFlag,
+                testTag = "settings-launch-bypass-${item.providerId}",
+                enabled = !pi,
+                onValueChange = { text ->
+                    if (pi) return@LaunchField
+                    onChange(launches.map { if (it.providerId == item.providerId) it.copy(bypassFlag = text) else it })
+                },
+            )
+            Box(Modifier.height(10.dp))
+        }
+    }
+}
+
+@Composable
+private fun LaunchField(
+    value: String,
+    testTag: String,
+    enabled: Boolean,
+    onValueChange: (String) -> Unit,
+) {
+    val p = LocalAppPalette.current
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        enabled = enabled,
+        singleLine = true,
+        textStyle = TextStyle(
+            color = if (enabled) p.rowTitleText else p.metaText,
+            fontSize = TypeSizes.cardBody,
+        ),
+        cursorBrush = SolidColor(p.accent),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag)
+            .padding(vertical = 4.dp),
+        decorationBox = { inner ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { inner() }
+            }
+        },
     )
 }
 
