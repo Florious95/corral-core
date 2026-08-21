@@ -91,6 +91,12 @@ class ConnectionManager(
 
         /** 掉线后即将重连：attempt 为下一次尝试序号（0 起），delayMs 为等待时长。 */
         fun onReconnect(attempt: Int, delayMs: Long)
+
+        /**
+         * 仪表用：接帧者身份。默认实现类名；会话 VM 覆盖为自身 ref。
+         * ⛔ 不参与收帧逻辑。
+         */
+        fun perfTraceListenerRef(): String = this.javaClass.name
     }
 
     private var listener: Listener? = null
@@ -614,6 +620,17 @@ class ConnectionManager(
         }
 
         override fun onBinary(frame: BinaryFrame) {
+            if (PerfTrace.isEnabled()) {
+                val slot = listener
+                val listenerNull = if (slot == null) 1 else 0
+                val kind = when (frame.kind) {
+                    BinaryKind.SNAPSHOT -> "snapshot"
+                    BinaryKind.DELTA -> "delta"
+                    BinaryKind.SCROLLBACK -> "scrollback"
+                }
+                val listenerRef = slot?.perfTraceListenerRef() ?: "-"
+                PerfTrace.emitNoListener(frame.ref, listenerNull, kind, frame.data.size, listenerRef)
+            }
             listener?.onBinary(frame)
         }
 
