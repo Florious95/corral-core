@@ -320,6 +320,10 @@ def tick(ledger_path, st):
 
         if rec.get("landed"):
             continue
+        # park 是终态判断，不是重试队列：同一份内容撞过一次冲突，60s 后还会撞同一次。
+        # ⛔ 不许每分钟重试（刷屏 + 反复 merge/abort），指纹变了才重新试。
+        if rec.get("parked_fp") == fp:
+            continue
         jid = gates.get(tid)
         if jid:
             jstatus, jpath = judge_verdict(led, jid)
@@ -330,6 +334,8 @@ def tick(ledger_path, st):
         ok, msg = do_land(led, tid, jid, jstatus, jpath)
         rec["landed"] = ok
         rec["land_msg"] = msg
+        if not ok:
+            rec["parked_fp"] = fp   # 记下「就是这份内容撞的」，换了内容才再试
         changed = True
         log("%s 并线 %s：%s" % (tid, "OK" if ok else "红(park，不自动解冲突)", msg.replace("\n", " / ")[:300]))
 
