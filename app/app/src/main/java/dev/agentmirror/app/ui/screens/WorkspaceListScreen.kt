@@ -54,7 +54,6 @@ fun WorkspaceListScreen(
     connectionPath: ConnectionPath? = null,
     connectionBanner: String? = null,
     bottomBar: @Composable () -> Unit = {},
-    onNewAgent: () -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     val totalSessions = remember(workspaces) { workspaces.sumOf { it.sessionCount } }
@@ -63,20 +62,7 @@ fun WorkspaceListScreen(
         ScreenHeader(
             title = "工作区",
             meta = "${workspaces.size} WORKSPACES · $totalSessions SESSIONS",
-            trailing = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(32.dp)
-                            .testTag("workspace-new-agent")
-                            .clickable(onClick = onNewAgent),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AppText("+", p.accent, 20.sp, fontWeight = FontWeight.Light)
-                    }
-                    if (connectionPath != null) LanPill(connectionPath)
-                }
-            },
+            trailing = if (connectionPath != null) ({ LanPill(connectionPath) }) else null,
         )
         Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
         Box(

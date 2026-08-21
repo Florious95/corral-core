@@ -26,8 +26,6 @@ package dev.agentmirror.app.conn
  * 2. [Connection] —— 单条 WS 生命周期状态机（握手 → 就绪 → 关闭）。
  * 3. [ConnectionManager] —— 重连策略 + 订阅簿记：重连后自动重放 auth + 全部活跃
  *    subscribe（004 无状态铁律的重放语义）；listing seq 不连续 → 自动重新 list。
- *    可见性变化经 [ConnectionManager.onUiVisible] 立即重拨（契约 090，与网络钩子同形、
- *    打断退避；UI 只走 ServiceWire 这一入口）。
  *
  * 上层（UI/service）只见回调（[ConnectionManager.Listener] / [Connection.Listener]），不见
  * WS 细节。本层不持久任何会话状态。

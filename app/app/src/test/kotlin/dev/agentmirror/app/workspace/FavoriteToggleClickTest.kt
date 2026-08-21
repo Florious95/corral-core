@@ -23,9 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import org.junit.Assert.assertEquals
@@ -95,9 +93,7 @@ class FavoriteToggleClickTest {
             }
         }
 
-        compose.onNodeWithTag("l2-row-sock\u001f%2").performTouchInput { longClick() }
-        compose.waitForIdle()
-        compose.onNodeWithTag("menu-favorite").performClick()
+        compose.onNodeWithTag("l2-star-sock\u001f%2").performClick()
         compose.runOnIdle {
             assertEquals("点星不得进会话", 0, opened)
             val written = store.load()

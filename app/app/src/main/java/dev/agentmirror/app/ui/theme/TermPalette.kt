@@ -29,8 +29,7 @@ import kotlin.math.pow
 /**
  * 终端自绘色板的取色入口（078 §2 / 080 / 083 §2 / 085 §1.5）。
  *
- * Scheme 的 16+fg/bg 来自当前槽的上游主题；[userBlockBg] 按契约 089 §1 从该主题现算
- * （优先 `selection`，对比度不达标或缺省时从 `defaultBg` 朝 `defaultFg` 抬一档）。
+ * Scheme 的 16+fg/bg 来自当前槽的上游主题；[userBlockBg] 仍按外壳深浅取 APP 值。
  * [Light]/[Dark] 保留为目录损坏时的缺省回退，不是用户可选的「原厂绿」。
  *
  * 083 §2 触发保留：索引 0/16 背景→纸色、254/近白→userBlock、真彩背景亮度守卫。
@@ -62,9 +61,6 @@ object TermPalette {
     private const val CHROMA_SLOT = 0.06
     private const val TIE_EPS = 1e-6
     private const val CONTRAST_MIN = 3.0
-
-    /** 契约 089 §1：selection 不可用时，从 defaultBg 朝 defaultFg 插值的一档比例。 */
-    private const val USER_BLOCK_LIFT = 1.0 / 6.0
 
     data class Scheme(
         val defaultBg: Int,
@@ -296,76 +292,12 @@ object TermPalette {
     }
 
     private fun indexed(index: Int, background: Boolean, pal: Scheme, againstBg: Int?): Int {
-        val raw = indexedInputRgb(index, pal)
-        val y = luma(raw)
-        val chroma = chromaOf(raw)
-        if (background && (index == 0 || index == CUBE_BLACK_INDEX)) {
-            val out = pal.defaultBg
-            logIndexed(
-                branch = "screen-black",
-                index = index,
-                raw = raw,
-                y = y,
-                chroma = chroma,
-                thresh = "index in {0,$CUBE_BLACK_INDEX} lumaMax=$SCREEN_BLACK_LUMA_MAX",
-                out = out,
-            )
-            return out
-        }
-        if (index == USER_MESSAGE_INDEX) {
-            val out = pal.userBlockBg
-            logIndexed(
-                branch = "index-254",
-                index = index,
-                raw = raw,
-                y = y,
-                chroma = chroma,
-                thresh = "index==$USER_MESSAGE_INDEX",
-                out = out,
-            )
-            return out
-        }
-        if (background && index in NEAR_WHITE_INDEXES) {
-            val out = pal.userBlockBg
-            logIndexed(
-                branch = "near-white",
-                index = index,
-                raw = raw,
-                y = y,
-                chroma = chroma,
-                thresh = "index in {231,253,255} lumaMin=$HIGHLIGHT_WHITE_LUMA_MIN",
-                out = out,
-            )
-            return out
-        }
-        if (index in 0..15) {
-            val out = pal.ansi16[index] ?: pack(128, 128, 128)
-            logIndexed(
-                branch = "ansi16",
-                index = index,
-                raw = raw,
-                y = y,
-                chroma = chroma,
-                thresh = "index in 0..15",
-                out = out,
-            )
-            return out
-        }
-        val out = if (background) {
-            guardRgbBg(raw, pal, againstBg)
-        } else {
-            project(raw, background = false, pal, againstBg)
-        }
-        logIndexed(
-            branch = if (background) "fallthrough-guardRgbBg" else "fallthrough-project",
-            index = index,
-            raw = raw,
-            y = y,
-            chroma = chroma,
-            thresh = "index not in {0,16,254,231,253,255} and not (bg && 0..15)",
-            out = out,
-        )
-        return out
+        if (background && (index == 0 || index == CUBE_BLACK_INDEX)) return pal.defaultBg
+        if (index == USER_MESSAGE_INDEX) return pal.userBlockBg
+        if (background && index in NEAR_WHITE_INDEXES) return pal.userBlockBg
+        if (index in 0..15) return pal.ansi16[index] ?: pack(128, 128, 128)
+        val raw = xtermCubeOrGray(index)
+        return if (background) guardRgbBg(raw, pal, againstBg) else project(raw, background = false, pal, againstBg)
     }
 
     /**
@@ -373,61 +305,16 @@ object TermPalette {
      */
     private fun guardRgbBg(raw: Int, pal: Scheme, againstBg: Int?): Int {
         val y = luma(raw)
-        val chroma = chromaOf(raw)
-        val (branch, thresh, out) = when {
-            y <= SCREEN_BLACK_LUMA_MAX -> Triple(
-                "luma-screen-black",
-                "luma=$y<=$SCREEN_BLACK_LUMA_MAX chroma=$chroma vs achromaMax=$ACHROMA_MAX lumaMin=$HIGHLIGHT_WHITE_LUMA_MIN",
-                pal.defaultBg,
-            )
-            y >= HIGHLIGHT_WHITE_LUMA_MIN && chroma <= ACHROMA_MAX -> Triple(
-                "luma-achroma-white",
-                "luma=$y>=$HIGHLIGHT_WHITE_LUMA_MIN chroma=$chroma<=$ACHROMA_MAX lumaMax=$SCREEN_BLACK_LUMA_MAX",
-                pal.userBlockBg,
-            )
-            y >= HIGHLIGHT_WHITE_LUMA_MIN -> Triple(
-                "luma-chroma-white",
-                "luma=$y>=$HIGHLIGHT_WHITE_LUMA_MIN chroma=$chroma>$ACHROMA_MAX lumaMax=$SCREEN_BLACK_LUMA_MAX",
-                pal.userBlockBg,
-            )
-            else -> Triple(
-                "project",
-                "luma=$y in ($SCREEN_BLACK_LUMA_MAX,$HIGHLIGHT_WHITE_LUMA_MIN) chroma=$chroma vs achromaMax=$ACHROMA_MAX",
-                project(raw, background = true, pal, againstBg),
-            )
+        val r = (raw shr 16) and 0xFF
+        val g = (raw shr 8) and 0xFF
+        val b = raw and 0xFF
+        val chroma = maxOf(r, g, b) - minOf(r, g, b)
+        return when {
+            y <= SCREEN_BLACK_LUMA_MAX -> pal.defaultBg
+            y >= HIGHLIGHT_WHITE_LUMA_MIN && chroma <= ACHROMA_MAX -> pal.userBlockBg
+            y >= HIGHLIGHT_WHITE_LUMA_MIN -> pal.userBlockBg
+            else -> project(raw, background = true, pal, againstBg)
         }
-        DiagLog.record(
-            "term-guard-bg",
-            "branch=$branch rgb=${rgbTriple(raw)} luma=$y chroma=$chroma thresh=$thresh out=0x${hex(out)}",
-            coalesceKey = "term-guard-bg|$branch|$raw|$out",
-        )
-        return out
-    }
-
-    private fun indexedInputRgb(index: Int, pal: Scheme): Int =
-        if (index in 0..15) pal.ansi16[index] ?: pack(128, 128, 128) else xtermCubeOrGray(index)
-
-    private fun chromaOf(argb: Int): Int {
-        val r = (argb shr 16) and 0xFF
-        val g = (argb shr 8) and 0xFF
-        val b = argb and 0xFF
-        return maxOf(r, g, b) - minOf(r, g, b)
-    }
-
-    private fun logIndexed(
-        branch: String,
-        index: Int,
-        raw: Int,
-        y: Int,
-        chroma: Int,
-        thresh: String,
-        out: Int,
-    ) {
-        DiagLog.record(
-            "term-indexed",
-            "branch=$branch index=$index rgb=${rgbTriple(raw)} luma=$y chroma=$chroma thresh=$thresh out=0x${hex(out)}",
-            coalesceKey = "term-indexed|$branch|$index|$raw|$out",
-        )
     }
 
     private fun project(argb: Int, background: Boolean, pal: Scheme, againstBg: Int?): Int {
@@ -524,6 +411,7 @@ object TermPalette {
         val family = resolveFamily(familyId, slot)
         val sourceFile = if (dark) family.darkSource else family.lightSource
         val colors = TermSchemeCatalog.colorsBySourceFile[sourceFile]
+        val app = if (dark) TerminalPaletteDark else TerminalPaletteLight
         if (colors == null || colors.ansi.size != 16) {
             DiagLog.record(
                 "term-theme",
@@ -534,7 +422,7 @@ object TermPalette {
         return Scheme(
             defaultBg = colors.background,
             defaultFg = colors.foreground,
-            userBlockBg = deriveUserBlockBg(colors.background, colors.foreground, colors.selection),
+            userBlockBg = app.userBlockBackground.toArgb(),
             ansi16 = colors.ansi.mapIndexed { i, c -> i to c }.toMap(),
             source = colors.sourceFile,
             cursor = colors.cursor,
@@ -557,25 +445,6 @@ object TermPalette {
             lightSource = "Vesper.itermcolors",
             darkSource = "Vesper.itermcolors",
         )
-    }
-
-    /**
-     * 用户块底：优先主题自带 selection（语义＝被强调文本的底）；
-     * 缺失或与 defaultFg 对比度达不到 [CONTRAST_MIN] 时，从 defaultBg 朝 defaultFg 抬一档。
-     */
-    private fun deriveUserBlockBg(defaultBg: Int, defaultFg: Int, selection: Int?): Int {
-        if (selection != null && contrast(selection, defaultFg) >= CONTRAST_MIN) return selection
-        return liftTowardFg(defaultBg, defaultFg)
-    }
-
-    private fun liftTowardFg(bg: Int, fg: Int): Int {
-        val t = USER_BLOCK_LIFT
-        fun ch(shift: Int): Int {
-            val a = (bg shr shift) and 0xFF
-            val b = (fg shr shift) and 0xFF
-            return (a + (b - a) * t).toInt().coerceIn(0, 255)
-        }
-        return pack(ch(16), ch(8), ch(0))
     }
 
     private fun schemeFrom(p: TerminalPalette): Scheme = Scheme(

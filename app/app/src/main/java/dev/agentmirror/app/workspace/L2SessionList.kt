@@ -45,12 +45,6 @@ internal const val L2_STAR_RIPPLE_BOUNDED = false
 /**
  * 二级菜单列表（061/067/072）：每行星标在会话名之前，右侧状态标。
  * 点行用结构 ref + 结构名，title 不参与。点星只切换收藏。
- * 094：展示可按 [sortSessions] 动态重排，点击必须按 ref 身份查源记录，禁止按下标 zip。
- *
- * @contract
- * @pre sessions 身份键为 ref
- * @post onOpenSession 的 ref == 被点展示项 id
- * @inv 重排后点击行 N 打开的仍是行 N 展示的会话
  */
 @Composable
 internal fun L2SessionList(
@@ -60,9 +54,7 @@ internal fun L2SessionList(
     favorited: Set<FavoriteKey> = emptySet(),
     onToggleFavorite: (L2Entry) -> Unit = {},
 ) {
-    val items = sortSessions(
-        sessions.map { it.toSessionItem(starred = favorited.contains(it.favoriteKey())) },
-    )
+    val items = sessions.map { it.toSessionItem(starred = favorited.contains(it.favoriteKey())) }
     val byId = sessions.associateBy { it.ref }
     AppTheme {
         Column(

@@ -65,12 +65,6 @@ class TerminalEmulator(
     private var savedCursor: SavedCursor? = null
     private var altActive = false
 
-    /**
-     * capture-pane 把宿主当前可见缓冲画进主屏，且字节里通常没有 `1049h`。
-     * 随后 pipe 送来的不成对 `1049l` 必须清主屏，否则画面停在旧 alt 内容上。
-     */
-    private var snapshotPaintedVisibleOnMain = false
-
     /** 游标是否可见（DECTCEM ?25h/l）。 */
     var cursorVisible: Boolean = true
         private set
@@ -131,8 +125,7 @@ class TerminalEmulator(
      * 保存的游标寄存器 [savedCursor] 保留不清）。
      * @contract
      * @pre cols > 0 且 rows > 0
-     * @post 主屏按 cols x rows 清屏重建；scrollback 保留；样式/游标可见性/备屏/解析器复位；
-     *       随后不成对的 1049l 清主屏（capture 不含 1049h 时宿主退出 alt 才能落地）
+     * @post 主屏按 cols x rows 清屏重建；scrollback 保留；样式/游标可见性/备屏/解析器复位
      * @err none
      * @inv none
      */
@@ -140,7 +133,6 @@ class TerminalEmulator(
     fun replaySnapshot(bytes: ByteArray, cols: Int, rows: Int) {
         altActive = false
         alt = null
-        snapshotPaintedVisibleOnMain = true
         style = TextStyle.DEFAULT
         cursorVisible = true
         parser.reset()
@@ -326,7 +318,6 @@ class TerminalEmulator(
 
     /** 进入 alternate screen：主屏与 scrollback 冻结，全新空白备屏接管。 */
     private fun enterAlt(saveMainCursor: Boolean) {
-        snapshotPaintedVisibleOnMain = false
         if (altActive) return
         if (saveMainCursor) saveCursor()
         alt = TerminalGrid(main.cols, main.rows) // 每次进入都是全新空白屏（1049 清屏语义）
@@ -336,17 +327,7 @@ class TerminalEmulator(
 
     /** 退出 alternate screen：备屏丢弃，主屏内容原样恢复。 */
     private fun exitAlt(restoreMainCursor: Boolean) {
-        if (!altActive) {
-            // replaySnapshot 把宿主可见缓冲（常是 alt）画进主屏且 altActive=false，
-            // 不成对 1049l 原先空转，画面停在旧 alt。至少清主屏。
-            if (snapshotPaintedVisibleOnMain) {
-                snapshotPaintedVisibleOnMain = false
-                main.reset()
-                main.markAllDirty()
-            }
-            return
-        }
-        snapshotPaintedVisibleOnMain = false
+        if (!altActive) return
         altActive = false
         alt = null
         if (restoreMainCursor) restoreCursor()
@@ -368,7 +349,6 @@ class TerminalEmulator(
     private fun fullReset() {
         altActive = false
         alt = null
-        snapshotPaintedVisibleOnMain = false
         style = TextStyle.DEFAULT
         cursorVisible = true
         savedCursor = null

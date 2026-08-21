@@ -236,7 +236,6 @@ object Spacing {
  * @pre none（`darkTheme` / `content` 无前置约束）
  * @post 以 MaterialTheme 渲染对应 colorScheme / typography / shapes
  * @err none
- * @inv none
  */
 @Composable
 fun AgentMirrorTheme(

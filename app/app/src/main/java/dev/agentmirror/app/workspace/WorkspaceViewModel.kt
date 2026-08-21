@@ -17,8 +17,6 @@
 package dev.agentmirror.app.workspace
 
 import dev.agentmirror.app.conn.BinaryFrame
-import dev.agentmirror.app.conn.CloseSessionAckFrame
-import dev.agentmirror.app.conn.CreateSessionAckFrame
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
@@ -122,188 +120,9 @@ class WorkspaceViewModel(
     },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     favoriteStore: FavoriteStore = MemoryFavoriteStore(),
-    private val sendCloseSession: (String) -> Long? = { ref ->
-        ServiceWire.managerOrNull()?.sendCloseSession(ref)
-    },
-    private val sendCreateSession: (String, List<String>, String) -> Long? = { cwd, argv, provider ->
-        ServiceWire.managerOrNull()?.sendCreateSession(cwd, argv, provider)
-    },
 ) : ConnectionManager.Listener {
 
     private val favoriteBook = FavoriteBook(favoriteStore, nowMs)
-
-    /**
-     * 二次确认对话框状态。null = 不显示。未确认不得发 close_session。
-     */
-    data class CloseConfirmUi(
-        val ref: String,
-        val displayName: String,
-        val error: String? = null,
-        val inFlight: Boolean = false,
-    )
-
-    private val _closeConfirm = MutableStateFlow<CloseConfirmUi?>(null)
-    val closeConfirm: StateFlow<CloseConfirmUi?> = _closeConfirm.asStateFlow()
-
-    private val _closedRef = MutableStateFlow<String?>(null)
-    val closedRef: StateFlow<String?> = _closedRef.asStateFlow()
-
-    private var pendingCloseReqId: Long? = null
-
-    /**
-     * 长按「关闭」：只弹出二次确认，不发帧。
-     *
-     * @contract
-     * @pre ref 非空
-     * @post closeConfirm 带 ref 与 displayName；inFlight=false
-     * @err 空 ref 忽略
-     * @inv 不发 close_session
-     */
-    fun requestClose(ref: String, displayName: String) {
-        if (ref.isEmpty()) return
-        pendingCloseReqId = null
-        _closeConfirm.value = CloseConfirmUi(ref = ref, displayName = displayName)
-        DiagLog.record("close", "requestClose ref=$ref name=$displayName")
-    }
-
-    /** 取消确认：不发帧。 */
-    fun cancelClose() {
-        DiagLog.record("close", "cancelClose ref=${_closeConfirm.value?.ref ?: ""}")
-        pendingCloseReqId = null
-        _closeConfirm.value = null
-    }
-
-    /**
-     * 用户点确认「关闭」：这才发 close_session。
-     *
-     * @contract
-     * @pre closeConfirm 非空且未 inFlight
-     * @post 发送成功则 inFlight=true；发送失败对话框留下并带 error
-     * @err 未就绪不发帧
-     * @inv 未确认路径不调用 sendCloseSession
-     */
-    fun confirmClose() {
-        val ui = _closeConfirm.value ?: return
-        if (ui.inFlight) return
-        val reqId = sendCloseSession(ui.ref)
-        if (reqId == null) {
-            _closeConfirm.value = ui.copy(error = "未就绪", inFlight = false)
-            DiagLog.record("close", "confirmClose send failed ref=${ui.ref}")
-            return
-        }
-        pendingCloseReqId = reqId
-        _closeConfirm.value = ui.copy(inFlight = true, error = null)
-        DiagLog.record("close", "confirmClose sent req_id=$reqId ref=${ui.ref}")
-    }
-
-    fun consumeClosedRef() {
-        _closedRef.value = null
-    }
-
-    fun isFavorited(ref: String): Boolean = favoriteBook.isFavorited(ref)
-
-    data class NewAgentUi(
-        val cwds: List<String>,
-        val cwd: String,
-        val providerId: String,
-        val bypass: Boolean = false,
-        val error: String? = null,
-        val inFlight: Boolean = false,
-    )
-
-    private val _newAgent = MutableStateFlow<NewAgentUi?>(null)
-    val newAgent: StateFlow<NewAgentUi?> = _newAgent.asStateFlow()
-
-    private val _openedSession = MutableStateFlow<Pair<String, String>?>(null)
-    val openedSession: StateFlow<Pair<String, String>?> = _openedSession.asStateFlow()
-
-    private var pendingCreateReqId: Long? = null
-
-    /**
-     * @contract
-     * @pre 无
-     * @post newAgent 弹出；仅一个 cwd 时预选
-     * @err none
-     * @inv 不发 create_session
-     */
-    fun requestNewAgent() {
-        val cwds = workspaceCounts.keys.toList()
-        val cwd = cwds.singleOrNull().orEmpty()
-        pendingCreateReqId = null
-        _newAgent.value = NewAgentUi(
-            cwds = cwds,
-            cwd = cwd,
-            providerId = "claude_code",
-        )
-        DiagLog.record("create", "requestNewAgent cwds=${cwds.size} preselect=$cwd")
-    }
-
-    fun cancelNewAgent() {
-        pendingCreateReqId = null
-        _newAgent.value = null
-    }
-
-    fun selectNewAgentCwd(cwd: String) {
-        _newAgent.update { it?.copy(cwd = cwd, error = null) }
-    }
-
-    fun selectNewAgentProvider(id: String) {
-        _newAgent.update { it?.copy(providerId = id, error = null, bypass = if (id == "pi") false else it.bypass) }
-    }
-
-    fun setNewAgentBypass(bypass: Boolean) {
-        _newAgent.update { ui ->
-            if (ui == null || ui.providerId == "pi") ui
-            else ui.copy(bypass = bypass, error = null)
-        }
-    }
-
-    /**
-     * @contract
-     * @pre newAgent 已选 cwd 与 provider
-     * @post 发送成功 inFlight=true
-     * @err 未就绪对话框留下
-     * @inv 未确认不发帧
-     */
-    fun confirmNewAgent() {
-        val ui = _newAgent.value ?: return
-        if (ui.inFlight) return
-        if (ui.cwd.isEmpty() || ui.providerId.isEmpty()) {
-            _newAgent.value = ui.copy(error = "未选择工作区或 Provider")
-            return
-        }
-        val argv = buildNewAgentArgv(ui.providerId, ui.bypass)
-        val reqId = sendCreateSession(ui.cwd, argv, ui.providerId)
-        if (reqId == null) {
-            _newAgent.value = ui.copy(error = "未就绪", inFlight = false)
-            return
-        }
-        pendingCreateReqId = reqId
-        _newAgent.value = ui.copy(inFlight = true, error = null)
-        DiagLog.record(
-            "create",
-            "confirmNewAgent req_id=$reqId cwd=${ui.cwd} provider=${ui.providerId} " +
-                "bypass=${ui.bypass} argv=${argv.joinToString(" ")}",
-        )
-    }
-
-    fun consumeOpenedSession() {
-        _openedSession.value = null
-    }
-
-    private fun dropFavoriteIfPresent(ref: String) {
-        if (!favoriteBook.isFavorited(ref)) return
-        favoriteBook.toggle(ref = ref)
-        _favorites.value = favoriteBook.records()
-        if (favoriteBook.isFavorited(ref)) {
-            favoriteBook.toggle(ref = ref)
-            _favorites.value = favoriteBook.records()
-        }
-        if (favoriteBook.isFavorited(ref)) {
-            DiagLog.record("close", "unfavorite retry failed ref=$ref")
-        }
-        bumpFavoriteLive()
-    }
 
     private val _favorites = MutableStateFlow(favoriteBook.records())
 
@@ -475,33 +294,19 @@ class WorkspaceViewModel(
     /**
      * 心跳/帧超时检查（UI 带 now 调用，本 VM 不自起定时器）。
      * 超时只改横幅，不清列表，不向服务端发帧。
-     * 横幅只说人话；quiet_for / last_at / now / workspace 进 DiagLog，不上屏。
      */
     fun checkLevel2Quiet(now: Long = nowMs(), quietTimeoutMs: Long = 20_000L) {
         val ws = subscribedWorkspace ?: return
         if (lastLevel2AtMs == 0L) return
         val quietFor = now - lastLevel2AtMs
-        val stale = quietFor >= quietTimeoutMs
-        val banner = if (stale) humanizeLevel2QuietBanner(quietFor) else null
+        val banner = if (quietFor >= quietTimeoutMs) {
+            "二级状态已停更 ${quietFor}ms（last_at=$lastLevel2AtMs now=$now workspace=$ws）"
+        } else {
+            null
+        }
         val current = _level2.value
         if (current.banner != banner) {
-            DiagLog.record(
-                "level2",
-                "checkLevel2Quiet src=quiet-timeout " +
-                    "quiet_for_ms=$quietFor timeout_ms=$quietTimeoutMs " +
-                    "last_at=$lastLevel2AtMs now=$now workspace=$ws shown=$stale",
-            )
             _level2.value = current.copy(banner = banner)
-        }
-    }
-
-    /** 停更时长四舍五入到分钟；不足 1 分钟说「不到 1 分钟」。 */
-    private fun humanizeLevel2QuietBanner(quietForMs: Long): String {
-        val minutes = (quietForMs + 30_000L) / 60_000L
-        return if (minutes < 1L) {
-            "状态已不到 1 分钟未更新，正在重连"
-        } else {
-            "状态已 $minutes 分钟未更新，正在重连"
         }
     }
 
@@ -541,7 +346,6 @@ class WorkspaceViewModel(
             windowIndex = entry.windowIndex,
             windowName = entry.windowName,
             cwd = entry.cwd,
-            provider = entry.provider,
         )
         _favorites.value = favoriteBook.records()
         bumpFavoriteLive()
@@ -554,7 +358,6 @@ class WorkspaceViewModel(
             windowIndex = row.windowIndex,
             windowName = row.windowName,
             cwd = row.cwd,
-            provider = row.provider,
         )
         _favorites.value = favoriteBook.records()
         bumpFavoriteLive()
@@ -685,8 +488,6 @@ class WorkspaceViewModel(
      * 服务端每连接只绑一个 workspace）。不是下拉刷新，也不是周期轮询（061）。
      */
     fun enterFavorites() {
-        // 契约 090：收藏页可见走与回前台同一个入口，不在这里单独 start / 另订一份。
-        ServiceWire.onUiVisible("visibility:favorites")
         val cwds = LinkedHashSet<String>()
         for (rec in _favorites.value) {
             if (rec.cwd.isNotEmpty()) cwds.add(rec.cwd)
@@ -817,8 +618,6 @@ class WorkspaceViewModel(
             is ListDeltaFrame -> applyDelta(frame)
             is Level2Frame -> applyLevel2(frame)
             is Level2HeartbeatFrame -> applyLevel2Heartbeat(frame)
-            is CloseSessionAckFrame -> applyCloseAck(frame)
-            is CreateSessionAckFrame -> applyCreateAck(frame)
             else -> Unit
         }
     }
@@ -844,54 +643,6 @@ class WorkspaceViewModel(
     }
 
     // ---- listing：权威全量，整体替换 ----
-
-    private fun applyCreateAck(frame: CreateSessionAckFrame) {
-        val ui = _newAgent.value
-        val expect = pendingCreateReqId
-        DiagLog.record(
-            "create",
-            "applyCreateAck req_id=${frame.reqId} ok=${frame.ok} reason=${frame.reason?.wire ?: ""} " +
-                "ref=${frame.ref} pending=${expect ?: -1}",
-        )
-        if (expect != null && frame.reqId != expect) return
-        if (ui == null) return
-        if (!frame.ok) {
-            _newAgent.value = ui.copy(inFlight = false, error = frame.reason?.wire ?: "create_failed")
-            return
-        }
-        pendingCreateReqId = null
-        _newAgent.value = null
-        val name = NewAgentProviders.displayName(ui.providerId)
-        _openedSession.value = frame.ref to name
-    }
-
-    private fun applyCloseAck(frame: CloseSessionAckFrame) {
-        val ui = _closeConfirm.value
-        val expect = pendingCloseReqId
-        DiagLog.record(
-            "close",
-            "applyCloseAck req_id=${frame.reqId} ok=${frame.ok} reason=${frame.reason?.wire ?: ""} " +
-                "pending_req=${expect ?: -1} dialog_ref=${ui?.ref ?: ""} " +
-                "in_flight=${ui?.inFlight == true}",
-        )
-        if (expect != null && frame.reqId != expect) return
-        if (ui == null) return
-        if (!frame.ok) {
-            _closeConfirm.value = ui.copy(
-                inFlight = false,
-                error = frame.reason?.wire ?: "close_failed",
-            )
-            return
-        }
-        dropFavoriteIfPresent(ui.ref)
-        if (favoriteBook.isFavorited(ui.ref)) {
-            _closeConfirm.value = ui.copy(inFlight = false, error = "unfavorite_failed")
-            return
-        }
-        pendingCloseReqId = null
-        _closedRef.value = ui.ref
-        _closeConfirm.value = null
-    }
 
     private fun applyListing(frame: ListingFrame) {
         // 新 listing 到达 = 刷新完成：复位刷新在途标记（进入/下拉刷共用语义）。

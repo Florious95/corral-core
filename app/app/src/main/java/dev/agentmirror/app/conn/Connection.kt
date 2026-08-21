@@ -40,9 +40,6 @@ class Connection(
     var isReady: Boolean = false
         private set
 
-    /** 传输层是否仍开着（可见性入口用来区分「状态还是 READY」和「socket 已死」）。 */
-    internal val isTransportOpen: Boolean get() = !closed && transport.isOpen
-
     /** 事件回调（单一收件线程串行到达）。 */
     interface Listener {
         /** 传输已建立；auth 帧紧随本回调上行（回调返回后立即发出），等待 auth_ack。 */

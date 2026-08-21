@@ -89,7 +89,6 @@ import dev.agentmirror.app.workspace.FavoriteKey
 import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.cwdDisplayName
 import dev.agentmirror.app.workspace.favoriteKey
-import dev.agentmirror.app.workspace.sortSessions
 import dev.agentmirror.app.workspace.toSessionItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -121,7 +120,6 @@ fun SessionScreen(
     overlayFavorited: Set<FavoriteKey> = emptySet(),
     onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
-    onCloseOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -187,15 +185,12 @@ fun SessionScreen(
     }
 
     // 回执/错误瞬时态自动收起（「已发送」/「已注入」短暂可见；错误多停留一会儿）。
-    LaunchedEffect(viewModel.inputStatus, viewModel.controlKeyStatus, viewModel.uploadStatus, viewModel.transientError) {
+    LaunchedEffect(viewModel.inputStatus, viewModel.uploadStatus, viewModel.transientError) {
         val holdMs = when {
             viewModel.inputStatus is InputStatus.Failed -> TRANSIENT_MS * 3
-            viewModel.controlKeyStatus is InputStatus.Failed -> TRANSIENT_MS * 3
             viewModel.uploadStatus is UploadStatus.Failed -> TRANSIENT_MS * 3
             viewModel.transientError != null -> TRANSIENT_MS * 3
-            viewModel.inputStatus is InputStatus.Sent ||
-                viewModel.controlKeyStatus is InputStatus.Sent ||
-                viewModel.uploadStatus is UploadStatus.Success -> TRANSIENT_MS
+            viewModel.inputStatus is InputStatus.Sent || viewModel.uploadStatus is UploadStatus.Success -> TRANSIENT_MS
             else -> return@LaunchedEffect
         }
         delay(holdMs)
@@ -203,14 +198,7 @@ fun SessionScreen(
     }
 
     var mirror by remember { mutableStateOf(TextFieldValue("")) }
-    LaunchedEffect(viewModel.resyncDraftGen) {
-        val overlay = viewModel.resyncDraft
-        if (viewModel.resyncDraftGen != 0 && overlay != null) {
-            mirror = overlay
-        }
-    }
     var attachMenu by remember { mutableStateOf(false) }
-    var composerExpanded by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
@@ -230,11 +218,9 @@ fun SessionScreen(
     AppTheme {
         val darkTheme = LocalAppPalette.current === DarkPalette
         val themeToken = TermPalette.token(darkTheme)
-        val overlayItems = sortSessions(
-            overlaySessions.map {
-                it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
-            },
-        )
+        val overlayItems = overlaySessions.map {
+            it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
+        }
         val workspaceName = overlaySessions.firstOrNull()?.cwd?.let(::cwdDisplayName).orEmpty()
         val status = overlaySessions.find { it.ref == viewModel.ref }
             ?.let { sessionStatusFromL2(it.status) }
@@ -272,7 +258,6 @@ fun SessionScreen(
                 onSend = {
                     viewModel.sendDraft()
                     mirror = TextFieldValue("")
-                    composerExpanded = false
                 },
                 onBack = onBack,
                 onOpenSwitcher = viewModel::openOverlay,
@@ -280,20 +265,6 @@ fun SessionScreen(
                 onAttach = { attachMenu = true },
                 sendEnabled = viewModel.inputStatus !is InputStatus.Sending,
                 connectionBanner = viewModel.connectionBanner,
-                composerExpanded = composerExpanded,
-                onToggleExpand = { composerExpanded = !composerExpanded },
-                pendingAttachmentCount = viewModel.pendingAttachmentPaths.size,
-                pendingAttachmentLabel = viewModel.pendingAttachmentPaths.lastOrNull(),
-                attachMenuExpanded = attachMenu,
-                onAttachMenuChange = { attachMenu = it },
-                onPickCamera = {
-                    attachMenu = false
-                    requestTakePhoto()
-                },
-                onPickGallery = {
-                    attachMenu = false
-                    pickImage()
-                },
             ) {
                 Box(Modifier.fillMaxSize()) {
                     AndroidView(
@@ -305,8 +276,6 @@ fun SessionScreen(
                                 it.presenter = viewModel.presenter
                                 it.onRemoteScrollBy = viewModel::onScrollWheel
                                 it.nightOverride = darkTheme
-                                it.isFocusable = false
-                                it.isFocusableInTouchMode = false
                             }
                         },
                         update = { view ->
@@ -356,7 +325,6 @@ fun SessionScreen(
                     currentSessionId = viewModel.ref,
                     onDismiss = viewModel::closeOverlay,
                     onSelect = { item ->
-                        // 094：浮层列表可按 sortSessions 重排，按 item.id（= ref）回源，禁止按下标。
                         val entry = byRef[item.id] ?: return@SessionSwitchSheet
                         viewModel.closeOverlay()
                         onOpenOverlaySession(entry.ref, entry.identityLabel)
@@ -364,8 +332,28 @@ fun SessionScreen(
                     onToggleStar = { item ->
                         byRef[item.id]?.let(onToggleOverlayFavorite)
                     },
-                    onClose = { item -> onCloseOverlaySession(item.id, item.displayName) },
                 )
+            }
+            Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
+                DropdownMenu(
+                    expanded = attachMenu,
+                    onDismissRequest = { attachMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("拍照") },
+                        onClick = {
+                            attachMenu = false
+                            requestTakePhoto()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("从相册选择") },
+                        onClick = {
+                            attachMenu = false
+                            pickImage()
+                        },
+                    )
+                }
             }
         }
     }
@@ -488,19 +476,25 @@ private val KEY_BAR_ENTRIES = listOf(
 
 /**
  * 回执/错误状态区：失败/在途/上传/解码错误明确可见（003）。
- * 083 §4/§12 + 089 §3：成功态经 [bannerFrom] 共同出口不组节点。
- * 不用 AnimatedVisibility——退出动画会把旧节点留在树上叠成蓝色悬浮堆。
+ * 083 §4/§12：成功态不组「已发送」节点。不用 AnimatedVisibility——
+ * 退出动画会把旧节点留在树上叠成蓝色悬浮堆。
  */
 @Composable
 private fun StatusArea(viewModel: SessionViewModel) {
-    val message = bannerFrom(viewModel.inputStatus)
-        ?: bannerFrom(viewModel.controlKeyStatus)
-        ?: bannerFrom(viewModel.uploadStatus)
-        ?: viewModel.transientError
+    val message = when (val s = viewModel.inputStatus) {
+        is InputStatus.Sent -> null
+        is InputStatus.Failed -> s.message
+        is InputStatus.Sending -> "发送中…"
+        InputStatus.Idle -> null
+    } ?: when (val u = viewModel.uploadStatus) {
+        is UploadStatus.Uploading -> "上传中…"
+        is UploadStatus.Success -> "已附加图片"
+        is UploadStatus.Failed -> u.message
+        UploadStatus.Idle -> null
+    } ?: viewModel.transientError
 
     if (message == null) return
     val isError = viewModel.inputStatus is InputStatus.Failed ||
-        viewModel.controlKeyStatus is InputStatus.Failed ||
         viewModel.uploadStatus is UploadStatus.Failed ||
         viewModel.transientError != null
     Text(

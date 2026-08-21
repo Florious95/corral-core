@@ -21,7 +21,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,13 +33,11 @@ import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.session.SessionRoute
 import dev.agentmirror.app.ui.components.NavDirection
-import dev.agentmirror.app.ui.components.ProviderIconFamilyBoard
 import dev.agentmirror.app.ui.components.navTransition
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.SharedPreferencesAppearanceStore
-import dev.agentmirror.app.workspace.CloseConfirmDialog
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
@@ -83,12 +80,6 @@ fun AgentMirrorApp(
     }
     AppTheme(appearance = appearance) {
     AgentMirrorTheme(darkTheme = darkTheme) {
-        val showIconBoard = (context as? android.app.Activity)
-            ?.intent?.getBooleanExtra("provider_icon_board", false) == true
-        if (showIconBoard) {
-            ProviderIconFamilyBoard()
-            return@AgentMirrorTheme
-        }
         // 在屏兜底时钟泵（fix-app-runtime-sa）：任一屏在屏且 App RESUMED 即挂一个兜底泵，
         // 前台服务泵不可用时接管共享连接的重连调度与输入超时裁决，服务恢复即让出（不双泵）。
         // 挂在根组合保证工作区/会话/设置/配对任一屏在屏都有兜底；服务常驻时兜底泵零工作。
@@ -109,22 +100,6 @@ fun AgentMirrorApp(
         val overlayLevel2 by workspaceViewModel.level2.collectAsState()
         val overlayFavorites by workspaceViewModel.favorites.collectAsState()
         val overlayLiveGen by workspaceViewModel.favoriteLiveGen.collectAsState()
-        val closeConfirm by workspaceViewModel.closeConfirm.collectAsState()
-        val closedRef by workspaceViewModel.closedRef.collectAsState()
-        LaunchedEffect(closedRef) {
-            val gone = closedRef ?: return@LaunchedEffect
-            if (navState.activeSession?.first == gone) {
-                navState.activeSession = null
-            }
-            workspaceViewModel.consumeClosedRef()
-        }
-        closeConfirm?.let { ui ->
-            CloseConfirmDialog(
-                ui = ui,
-                onConfirm = workspaceViewModel::confirmClose,
-                onCancel = workspaceViewModel::cancelClose,
-            )
-        }
 
         /**
          * 根返回手势接线（D-23/D-32）。
@@ -187,9 +162,6 @@ fun AgentMirrorApp(
                         overlayFavorited = overlayFavorites.map { it.key }.toSet(),
                         onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
                         onOpenOverlaySession = { ref, name -> navState.activeSession = ref to name },
-                        onCloseOverlaySession = { ref, name ->
-                            workspaceViewModel.requestClose(ref, name)
-                        },
                     )
                 }
                 // 配对页：首启无配置，或用户从设置/重配入口进入。
