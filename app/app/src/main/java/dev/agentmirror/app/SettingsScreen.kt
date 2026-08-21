@@ -17,12 +17,16 @@
 package dev.agentmirror.app
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,10 +37,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import android.content.Intent
 import androidx.core.content.FileProvider
@@ -52,12 +59,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import dev.agentmirror.app.ui.components.AppText
+import dev.agentmirror.app.ui.components.ProviderIcon
 import dev.agentmirror.app.ui.components.SettingsCard
 import dev.agentmirror.app.ui.components.providerDisplayName
+import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.Radii
+import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.ui.theme.TypeSizes
 import dev.agentmirror.app.ui.screens.SettingsScreen as DesignSettingsScreen
 import dev.agentmirror.app.workspace.ProviderLaunch
+import dev.agentmirror.app.workspace.ProviderLaunchDefaults
 import dev.agentmirror.app.workspace.SharedPreferencesProviderLaunchStore
 
 /**
@@ -149,11 +161,13 @@ internal fun SettingsScreen(
 }
 
 /**
- * 设置第六张卡：每个 Provider 的完整启动命令（088 E14）。
+ * 设置第六张卡：每个 Provider 一张内卡，带卡通图标、等宽多行命令、恢复默认（092 §3）。
+ *
+ * argv 仍走 [dev.agentmirror.app.workspace.buildArgv] 分词，不经 shell（088 §7）。
  *
  * @contract
  * @pre launches 含六个白名单 id
- * @post 改 command / bypass 立刻 save；Pi 的 bypass 输入禁用且恒为空
+ * @post 改 command / bypass 立刻 save；点恢复默认写回该 id 出厂值；Pi 的 bypass 输入禁用且恒为空
  * @err none
  * @inv 不经 shell 分词（脚注写明）
  */
@@ -168,7 +182,7 @@ private fun AgentLaunchCard(
             "Agent 启动命令",
             p.rowTitleText,
             TypeSizes.cardTitle,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            fontWeight = FontWeight.SemiBold,
         )
         Box(Modifier.height(8.dp))
         AppText(
@@ -179,34 +193,97 @@ private fun AgentLaunchCard(
         )
         Box(Modifier.height(12.dp))
         launches.forEach { item ->
-            val pi = item.providerId == "pi"
-            AppText(
-                providerDisplayName(item.providerId),
-                p.rowTitleText,
-                TypeSizes.cardBody,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-            )
-            Box(Modifier.height(4.dp))
-            LaunchField(
-                value = item.command,
-                testTag = "settings-launch-command-${item.providerId}",
-                enabled = true,
-                onValueChange = { text ->
-                    onChange(launches.map { if (it.providerId == item.providerId) it.copy(command = text) else it })
+            ProviderLaunchRow(
+                item = item,
+                onChange = { next ->
+                    onChange(launches.map { if (it.providerId == item.providerId) next else it })
                 },
-            )
-            Box(Modifier.height(4.dp))
-            LaunchField(
-                value = item.bypassFlag,
-                testTag = "settings-launch-bypass-${item.providerId}",
-                enabled = !pi,
-                onValueChange = { text ->
-                    if (pi) return@LaunchField
-                    onChange(launches.map { if (it.providerId == item.providerId) it.copy(bypassFlag = text) else it })
+                onReset = {
+                    val def = ProviderLaunchDefaults.byId(item.providerId)
+                    onChange(launches.map { if (it.providerId == item.providerId) def else it })
                 },
             )
             Box(Modifier.height(10.dp))
         }
+    }
+}
+
+/**
+ * 单个 Provider 的命令卡：图标 + 名称 + 恢复默认 + 等宽输入。
+ *
+ * @contract
+ * @pre item.providerId 属于白名单
+ * @post 命令可多行编辑；Pi 的 bypass 输入 disabled
+ * @err none
+ * @inv 不改 argv 组装规则
+ */
+@Composable
+private fun ProviderLaunchRow(
+    item: ProviderLaunch,
+    onChange: (ProviderLaunch) -> Unit,
+    onReset: () -> Unit,
+) {
+    val p = LocalAppPalette.current
+    val pi = item.providerId == "pi"
+    val shape = RoundedCornerShape(Radii.cardButton)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(p.listBackground)
+            .border(Dims.hairline, p.cardBorder, shape)
+            .testTag("settings-launch-row-${item.providerId}")
+            .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProviderIcon(provider = item.providerId)
+            AppText(
+                providerDisplayName(item.providerId),
+                p.rowTitleText,
+                TypeSizes.cardBody,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            AppText(
+                text = "恢复默认",
+                color = p.accent,
+                fontSize = TypeSizes.chip,
+                fontWeight = FontWeight.SemiBold,
+                lineHeightMultiplier = 1f,
+                modifier = Modifier
+                    .testTag("settings-launch-reset-${item.providerId}")
+                    .clickable(onClick = onReset)
+                    .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+            )
+        }
+        Box(Modifier.height(Spacing.xs))
+        AppText("命令", p.metaText, TypeSizes.footnote, fontWeight = FontWeight.Medium)
+        Box(Modifier.height(4.dp))
+        LaunchField(
+            value = item.command,
+            testTag = "settings-launch-command-${item.providerId}",
+            enabled = true,
+            singleLine = false,
+            minLines = 2,
+            maxLines = 6,
+            onValueChange = { text -> onChange(item.copy(command = text)) },
+        )
+        Box(Modifier.height(Spacing.sm))
+        AppText("Bypass 旗", p.metaText, TypeSizes.footnote, fontWeight = FontWeight.Medium)
+        Box(Modifier.height(4.dp))
+        LaunchField(
+            value = item.bypassFlag,
+            testTag = "settings-launch-bypass-${item.providerId}",
+            enabled = !pi,
+            singleLine = false,
+            minLines = 1,
+            maxLines = 3,
+            placeholder = if (pi) "Pi 无 Bypass 旗" else "",
+            onValueChange = { text ->
+                if (pi) return@LaunchField
+                onChange(item.copy(bypassFlag = text))
+            },
+        )
     }
 }
 
@@ -215,26 +292,47 @@ private fun LaunchField(
     value: String,
     testTag: String,
     enabled: Boolean,
+    singleLine: Boolean,
+    minLines: Int,
+    maxLines: Int,
     onValueChange: (String) -> Unit,
+    placeholder: String = "",
 ) {
     val p = LocalAppPalette.current
+    val shape = RoundedCornerShape(Radii.input)
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         enabled = enabled,
-        singleLine = true,
+        singleLine = singleLine,
+        minLines = if (singleLine) 1 else minLines,
+        maxLines = maxLines,
         textStyle = TextStyle(
-            color = if (enabled) p.rowTitleText else p.metaText,
-            fontSize = TypeSizes.cardBody,
+            color = if (enabled) p.inputText else p.metaText,
+            fontSize = TypeSizes.inputText,
+            fontFamily = FontFamily.Monospace,
+            lineHeight = TypeSizes.inputText * 1.4f,
         ),
         cursorBrush = SolidColor(p.accent),
         modifier = Modifier
             .fillMaxWidth()
-            .testTag(testTag)
-            .padding(vertical = 4.dp),
+            .clip(shape)
+            .background(p.inputBackground)
+            .border(Dims.hairline, p.inputBorder, shape)
+            .padding(horizontal = Dims.inputHPadding, vertical = 8.dp)
+            .testTag(testTag),
         decorationBox = { inner ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { inner() }
+            Box(Modifier.fillMaxWidth()) {
+                if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    AppText(
+                        placeholder,
+                        p.inputPlaceholder,
+                        TypeSizes.inputText,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeightMultiplier = 1.4f,
+                    )
+                }
+                inner()
             }
         },
     )
