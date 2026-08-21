@@ -82,6 +82,7 @@ fun SettingsScreen(
     darkFamilyId: String = TermThemeStore.DEFAULT_FAMILY_ID,
     onOpenLightTheme: () -> Unit = {},
     onOpenDarkTheme: () -> Unit = {},
+    extraCards: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
@@ -176,6 +177,8 @@ fun SettingsScreen(
                     onClick = onOpenDarkTheme,
                 )
             }
+
+            extraCards()
 
             AppText(
                 text = buildLabel,
