@@ -18,6 +18,10 @@
 ## 席位与模型
 
 - ⛔⛔ **禁止使用 Deepseek 模型**（2026-08-21 用户令）。这条**取代**了下面那条旧的默认通道。
+- ⛔⛔ **禁止开 Fable 5；评审席只能用 Opus 5**（2026-08-21 用户令）。
+  评审席角色文件必须写 `model: claude-opus-5`。
+  ⚠️ `model` 与 `dangerously_skip_permissions` 一样**只在启动时生效** ——
+  改文件不够，必须 `remove-agent --force` + `add-agent` 重建，并读 pane 自证底部显示 `Opus 5`。
   ⇒ 新建席位用 `provider: grok`（`grok-4.6`）或 Claude 订阅
   （`provider: claude_code` + `auth_mode: subscription` + `profile: claude-default`）。
   异源评审席必须与实现席不同源：实现走 grok ⇒ 评审走 Claude 订阅。

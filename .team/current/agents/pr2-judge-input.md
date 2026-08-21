@@ -2,6 +2,7 @@
 name: pr2-judge-input
 role: PR 异源评审席（只读，一族知识基底一席）
 provider: claude_code
+model: claude-opus-5
 auth_mode: subscription
 profile: claude-default
 permission_mode: auto_approve
