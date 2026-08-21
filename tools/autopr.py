@@ -121,16 +121,35 @@ def judges_and_gates(led):
 
 
 def judge_verdict(led, jid):
-    """读判者格的裁定书，返回 (状态, 裁定书路径)。⛔ 只认文件里的 status= 行，不猜。"""
+    """读判者格的裁定书，返回 (状态, 裁定书路径)。⛔ 只认文件里的 status= 行，不猜。
+
+    ⚠️ 判者格判 pass 之后**不是** succeeded：引擎会因为它路由去了下游而「拒关成功」
+    （`route_contradicts_success`），把它标成 blocked。所以门禁不能看 state，
+    要看**账本记下来的 status_record.status**——那才是判者真说过的话。"""
     t = led["tasks"].get(jid) or {}
-    if t.get("state") != "succeeded":
+    said = ((t.get("status_record") or {}).get("status"))
+    if said is None or t.get("state") == "planned":
         return None, None
-    for p in (t.get("resources") or {}).get("write_paths") or []:
-        cand = os.path.join(REPO, p.rstrip("/"), "裁定.md")
-        if os.path.isfile(cand):
-            with open(cand, encoding="utf-8") as f:
-                m = re.search(r"^status=(pass|rework|inconclusive)$", f.read(), re.M)
-            return (m.group(1) if m else None), cand
+
+    # 裁定书住在**判者自己的 worktree** 里（席位不在仓根干活）。⛔ 先找仓根会读到旧抄本——
+    # 实撞：仓根那份是上一轮的 rework，会把已经 pass 的链子永远卡住。
+    wid = (t.get("resources") or {}).get("worktree_id")
+    roots = ([os.path.join(REPO, ".worktrees", wid)] if wid else []) + [REPO]
+    for root in roots:
+        for p in (t.get("resources") or {}).get("write_paths") or []:
+            cand = os.path.join(root, p.rstrip("/"), "裁定.md")
+            if os.path.isfile(cand):
+                with open(cand, encoding="utf-8") as f:
+                    m = re.search(r"^status=(pass|rework|inconclusive)$", f.read(), re.M)
+                onfile = m.group(1) if m else None
+                # 账本里引擎记下的 status_record 是判者的原话，裁定书是它的证据。
+                # 两者不一致 ⇒ ⛔ 不放行（说不清以哪个为准的东西不许并线）。
+                if onfile != said:
+                    log("%s 门禁不一致：账本 status_record=%r 但 %s 写的是 %r ⇒ ⛔ 不 land"
+                        % (jid, said, cand, onfile))
+                    return None, cand
+                return said, cand
+    log("%s 判者说 %r 但找不到裁定书 ⇒ ⛔ 不 land" % (jid, said))
     return None, None
 
 
