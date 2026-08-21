@@ -183,12 +183,11 @@ class SessionViewModel(
     private var lastFrameColsKey: String? = null
 
     init {
-        // 注意：本 VM 不调用 manager.setListener(self)——共享连接（ServiceWire 单例）由
-        // fg-service 持有一个包装监听（服务常驻通知 + uiConnector 扇出）。本 VM
-        // 实现 Listener 是让接线层把 uiConnector 扇出的回调原样路由进来；自行 setListener
-        // 会顶掉服务层包装、破坏常驻通知。同模块测试对测试自建 manager 显式 setListener。
+        // 不 setListener(self)：那会顶掉 ServiceWire 包装。按 ref 登记二进制接收，
+        // 必须在 subscribe 之前，否则订阅快照会落到仍占全局槽的列表页 VM。
         connectionState = manager.state()
         onStateChanged(manager.state())
+        manager.addBinaryListener(ref, this)
         // 进入即订阅：conn 层记簿，READY 立发，重连自动重放（004 无状态）。
         manager.subscribe(ref, initialRows, initialCols)
     }
@@ -249,8 +248,21 @@ class SessionViewModel(
         DiagLog.record("overlay", "close menu ref=$ref")
     }
 
+    override fun perfTraceListenerRef(): String = ref
+
     override fun onBinary(frame: BinaryFrame) {
-        if (frame.ref != ref) return // 共享连接上的其它会话镜像，不消费
+        if (frame.ref != ref) {
+            // 原先静默 return：帧到了被吞 vs 帧没到，日志同形。关时最外层短路、不拼串。
+            if (PerfTrace.isEnabled()) {
+                val kind = when (frame.kind) {
+                    BinaryKind.SNAPSHOT -> "snapshot"
+                    BinaryKind.DELTA -> "delta"
+                    BinaryKind.SCROLLBACK -> "scrollback"
+                }
+                PerfTrace.emitFrameRefMismatch(frame.ref, ref, kind, frame.data.size)
+            }
+            return
+        }
         if (PerfTrace.isEnabled()) {
             val kind = when (frame.kind) {
                 BinaryKind.SNAPSHOT -> "snapshot"
@@ -549,6 +561,7 @@ class SessionViewModel(
     /** 离开会话页时释放：退订镜像（conn 层幂等），停用连接由服务/接线层决定。 */
     fun dispose() {
         closeOverlay()
+        manager.removeBinaryListener(ref, this)
         manager.unsubscribe(ref)
     }
 
