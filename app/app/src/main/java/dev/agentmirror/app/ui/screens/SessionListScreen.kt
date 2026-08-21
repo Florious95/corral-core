@@ -60,6 +60,7 @@ fun SessionListScreen(
     connectionPath: ConnectionPath? = null,
     connectionBanner: String? = null,
     bottomBar: @Composable () -> Unit = {},
+    onClose: (SessionItem) -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground)) {
@@ -100,6 +101,7 @@ fun SessionListScreen(
                 sessions = sessions,
                 onSessionClick = onSessionClick,
                 onToggleStar = onToggleStar,
+                onClose = onClose,
                 modifier = Modifier.fillMaxSize(),
             )
             if (connectionBanner != null) {

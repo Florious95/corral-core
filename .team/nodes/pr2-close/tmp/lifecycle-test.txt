@@ -1,0 +1,6 @@
+=== RUN   TestCloseSessionKillsPaneAndProcess
+--- PASS: TestCloseSessionKillsPaneAndProcess (0.12s)
+=== RUN   TestCloseSessionMissingRefIsOK
+--- PASS: TestCloseSessionMissingRefIsOK (0.04s)
+PASS
+ok  	github.com/agentmirror/agentmirror/internal/api	0.630s
