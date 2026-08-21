@@ -121,6 +121,7 @@ fun SessionScreen(
     overlayFavorited: Set<FavoriteKey> = emptySet(),
     onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
+    onCloseOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -362,6 +363,7 @@ fun SessionScreen(
                     onToggleStar = { item ->
                         byRef[item.id]?.let(onToggleOverlayFavorite)
                     },
+                    onClose = { item -> onCloseOverlaySession(item.id, item.displayName) },
                 )
             }
         }

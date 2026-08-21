@@ -23,6 +23,7 @@ package dev.agentmirror.app.workspace
  *   level2_frame / level2_heartbeat。二级只收推送，不轮询。
  * - [WorkspaceScreen] / [WorkspaceRow] / [L2SessionList]：一级工作区 + 二级会话列表。
  * - [FavoriteBook] / [FavoriteStore]：收藏落盘与失联置灰对账（067）。
+ * - [CloseConfirmDialog]：close_session 二次确认（088 E12）；ack.ok 后才取消收藏。
  *
  * @consumes dev.agentmirror.app.conn
  * @consumes dev.agentmirror.app.tsnet

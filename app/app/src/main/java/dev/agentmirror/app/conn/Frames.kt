@@ -67,6 +67,8 @@ sealed interface FramePayload {
                     FrameType.OVERLAY_FRAME -> json.decodeFromJsonElement(OverlayFrame.serializer(), el)
                     FrameType.OVERLAY_SUBSCRIBE -> json.decodeFromJsonElement(OverlaySubscribeFrame.serializer(), el)
                     FrameType.OVERLAY_UNSUBSCRIBE -> json.decodeFromJsonElement(OverlayUnsubscribeFrame.serializer(), el)
+                    FrameType.CLOSE_SESSION -> json.decodeFromJsonElement(CloseSessionFrame.serializer(), el)
+                    FrameType.CLOSE_SESSION_ACK -> json.decodeFromJsonElement(CloseSessionAckFrame.serializer(), el)
                     else -> throw FrameDecodeException(
                         FrameError.UNSUPPORTED_TYPE,
                         "unknown frame type: $type",
@@ -138,6 +140,8 @@ sealed interface FramePayload {
                 )
                 is OverlaySubscribeFrame -> json.encodeToJsonElement(OverlaySubscribeFrame.serializer(), frame)
                 is OverlayUnsubscribeFrame -> json.encodeToJsonElement(OverlayUnsubscribeFrame.serializer(), frame)
+                is CloseSessionFrame -> json.encodeToJsonElement(CloseSessionFrame.serializer(), frame)
+                is CloseSessionAckFrame -> json.encodeToJsonElement(CloseSessionAckFrame.serializer(), frame)
             }
         }
     }
@@ -631,5 +635,49 @@ class OverlayUnsubscribeFrame : FramePayload {
     override val frameType: String get() = FrameType.OVERLAY_UNSUBSCRIBE
     override fun equals(other: Any?) = other is OverlayUnsubscribeFrame
     override fun hashCode(): Int = frameType.hashCode()
+}
+
+/**
+ * 关闭会话 C→S（契约 088 E12）。未二次确认不得发此帧。
+ *
+ * @contract
+ * @pre reqId ≥ 1、ref 非空
+ * @post 服务端回 CloseSessionAckFrame；pane 已不在时 ok=true（幂等）
+ * @err validate() 对 reqId ≤ 0 / 空 ref 返回非空原因
+ */
+@Serializable
+data class CloseSessionFrame(
+    @SerialName("req_id") val reqId: Long,
+    @SerialName("ref") val ref: String,
+) : FramePayload {
+    override val frameType: String get() = FrameType.CLOSE_SESSION
+    override fun validate(): String? = when {
+        reqId <= 0 -> "close_session req_id must be >= 1"
+        ref.isEmpty() -> "close_session ref must be non-empty"
+        else -> null
+    }
+}
+
+/**
+ * 关闭回执 S→C。ok=true 才允许客户端取消收藏 / 退出会话页。
+ *
+ * @contract
+ * @pre reqId ≥ 1；ok=false 时 reason 非 null；ok=true 时 reason 为 null
+ * @post 客户端以 ok 决定收尾
+ * @err validate() 对 reqId ≤ 0 / 失败缺 reason / 成功带 reason 返回非空原因
+ */
+@Serializable
+data class CloseSessionAckFrame(
+    @SerialName("req_id") val reqId: Long,
+    @SerialName("ok") val ok: Boolean,
+    @SerialName("reason") val reason: CloseFailReason? = null,
+) : FramePayload {
+    override val frameType: String get() = FrameType.CLOSE_SESSION_ACK
+    override fun validate(): String? = when {
+        reqId <= 0 -> "close_session_ack req_id must be >= 1"
+        !ok && reason == null -> "failed close_session_ack must carry a reason"
+        ok && reason != null -> "accepted close_session_ack must not carry a reason"
+        else -> null
+    }
 }
 

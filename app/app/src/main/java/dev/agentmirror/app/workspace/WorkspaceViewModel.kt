@@ -17,6 +17,7 @@
 package dev.agentmirror.app.workspace
 
 import dev.agentmirror.app.conn.BinaryFrame
+import dev.agentmirror.app.conn.CloseSessionAckFrame
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.FrameError
@@ -120,9 +121,96 @@ class WorkspaceViewModel(
     },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     favoriteStore: FavoriteStore = MemoryFavoriteStore(),
+    private val sendCloseSession: (String) -> Long? = { ref ->
+        ServiceWire.managerOrNull()?.sendCloseSession(ref)
+    },
 ) : ConnectionManager.Listener {
 
     private val favoriteBook = FavoriteBook(favoriteStore, nowMs)
+
+    /**
+     * 二次确认对话框状态。null = 不显示。未确认不得发 close_session。
+     */
+    data class CloseConfirmUi(
+        val ref: String,
+        val displayName: String,
+        val error: String? = null,
+        val inFlight: Boolean = false,
+    )
+
+    private val _closeConfirm = MutableStateFlow<CloseConfirmUi?>(null)
+    val closeConfirm: StateFlow<CloseConfirmUi?> = _closeConfirm.asStateFlow()
+
+    private val _closedRef = MutableStateFlow<String?>(null)
+    val closedRef: StateFlow<String?> = _closedRef.asStateFlow()
+
+    private var pendingCloseReqId: Long? = null
+
+    /**
+     * 长按「关闭」：只弹出二次确认，不发帧。
+     *
+     * @contract
+     * @pre ref 非空
+     * @post closeConfirm 带 ref 与 displayName；inFlight=false
+     * @err 空 ref 忽略
+     * @inv 不发 close_session
+     */
+    fun requestClose(ref: String, displayName: String) {
+        if (ref.isEmpty()) return
+        pendingCloseReqId = null
+        _closeConfirm.value = CloseConfirmUi(ref = ref, displayName = displayName)
+        DiagLog.record("close", "requestClose ref=$ref name=$displayName")
+    }
+
+    /** 取消确认：不发帧。 */
+    fun cancelClose() {
+        DiagLog.record("close", "cancelClose ref=${_closeConfirm.value?.ref ?: ""}")
+        pendingCloseReqId = null
+        _closeConfirm.value = null
+    }
+
+    /**
+     * 用户点确认「关闭」：这才发 close_session。
+     *
+     * @contract
+     * @pre closeConfirm 非空且未 inFlight
+     * @post 发送成功则 inFlight=true；发送失败对话框留下并带 error
+     * @err 未就绪不发帧
+     * @inv 未确认路径不调用 sendCloseSession
+     */
+    fun confirmClose() {
+        val ui = _closeConfirm.value ?: return
+        if (ui.inFlight) return
+        val reqId = sendCloseSession(ui.ref)
+        if (reqId == null) {
+            _closeConfirm.value = ui.copy(error = "未就绪", inFlight = false)
+            DiagLog.record("close", "confirmClose send failed ref=${ui.ref}")
+            return
+        }
+        pendingCloseReqId = reqId
+        _closeConfirm.value = ui.copy(inFlight = true, error = null)
+        DiagLog.record("close", "confirmClose sent req_id=$reqId ref=${ui.ref}")
+    }
+
+    fun consumeClosedRef() {
+        _closedRef.value = null
+    }
+
+    fun isFavorited(ref: String): Boolean = favoriteBook.isFavorited(ref)
+
+    private fun dropFavoriteIfPresent(ref: String) {
+        if (!favoriteBook.isFavorited(ref)) return
+        favoriteBook.toggle(ref = ref)
+        _favorites.value = favoriteBook.records()
+        if (favoriteBook.isFavorited(ref)) {
+            favoriteBook.toggle(ref = ref)
+            _favorites.value = favoriteBook.records()
+        }
+        if (favoriteBook.isFavorited(ref)) {
+            DiagLog.record("close", "unfavorite retry failed ref=$ref")
+        }
+        bumpFavoriteLive()
+    }
 
     private val _favorites = MutableStateFlow(favoriteBook.records())
 
@@ -622,6 +710,7 @@ class WorkspaceViewModel(
             is ListDeltaFrame -> applyDelta(frame)
             is Level2Frame -> applyLevel2(frame)
             is Level2HeartbeatFrame -> applyLevel2Heartbeat(frame)
+            is CloseSessionAckFrame -> applyCloseAck(frame)
             else -> Unit
         }
     }
@@ -647,6 +736,34 @@ class WorkspaceViewModel(
     }
 
     // ---- listing：权威全量，整体替换 ----
+
+    private fun applyCloseAck(frame: CloseSessionAckFrame) {
+        val ui = _closeConfirm.value
+        val expect = pendingCloseReqId
+        DiagLog.record(
+            "close",
+            "applyCloseAck req_id=${frame.reqId} ok=${frame.ok} reason=${frame.reason?.wire ?: ""} " +
+                "pending_req=${expect ?: -1} dialog_ref=${ui?.ref ?: ""} " +
+                "in_flight=${ui?.inFlight == true}",
+        )
+        if (expect != null && frame.reqId != expect) return
+        if (ui == null) return
+        if (!frame.ok) {
+            _closeConfirm.value = ui.copy(
+                inFlight = false,
+                error = frame.reason?.wire ?: "close_failed",
+            )
+            return
+        }
+        dropFavoriteIfPresent(ui.ref)
+        if (favoriteBook.isFavorited(ui.ref)) {
+            _closeConfirm.value = ui.copy(inFlight = false, error = "unfavorite_failed")
+            return
+        }
+        pendingCloseReqId = null
+        _closedRef.value = ui.ref
+        _closeConfirm.value = null
+    }
 
     private fun applyListing(frame: ListingFrame) {
         // 新 listing 到达 = 刷新完成：复位刷新在途标记（进入/下拉刷共用语义）。
