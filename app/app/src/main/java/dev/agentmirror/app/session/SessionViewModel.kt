@@ -30,6 +30,7 @@ import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.PaneModeChangedFrame
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.termview.TermViewPresenter
 import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
@@ -250,6 +251,17 @@ class SessionViewModel(
 
     override fun onBinary(frame: BinaryFrame) {
         if (frame.ref != ref) return // 共享连接上的其它会话镜像，不消费
+        if (PerfTrace.isEnabled() && PerfTrace.takeFirstFrame(ref)) {
+            val id = PerfTrace.idFor(ref)
+            if (id != null) {
+                val kind = when (frame.kind) {
+                    BinaryKind.SNAPSHOT -> "snapshot"
+                    BinaryKind.DELTA -> "delta"
+                    BinaryKind.SCROLLBACK -> "scrollback"
+                }
+                PerfTrace.firstFrameRecv(id, kind, frame.data.size) // first_frame_recv
+            }
+        }
         when (frame.kind) {
             // 首帧快照：清屏重建（replaySnapshot 而非 feed，经验基）。
             BinaryKind.SNAPSHOT -> {
@@ -266,6 +278,15 @@ class SessionViewModel(
                     )
                 }
                 emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                if (PerfTrace.isEnabled() && PerfTrace.takeSnapshotApplied(ref)) {
+                    val id = PerfTrace.idFor(ref)
+                    if (id != null) {
+                        val seq = PerfTrace.nextSnapshotSeq(ref)
+                        val alt = if (emulator.historyAvailable) 0 else 1
+                        PerfTrace.snapshotApplied(id, seq, alt) // snapshot_applied
+                        PerfTrace.noteReflow(ref, "snapshot")
+                    }
+                }
                 // 006 秒开：打开即预取最近一页历史，滚动边界再按需补页。
                 if (!hasPrefetchedHistory) {
                     hasPrefetchedHistory = true
