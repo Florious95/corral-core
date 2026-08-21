@@ -134,7 +134,7 @@
   "read_only_shared": [],
   "rules": []
  },
- "revision": 12,
+ "revision": 14,
  "roles": {
   "r.advisor": {
    "artifact_landing": {
@@ -367,22 +367,7 @@
      "c.base"
     ]
    },
-   "attempts": [
-    {
-     "artifact_refs": [
-      "acceptance_failure.acceptance_id=c.base",
-      "acceptance_failure.argv=[\"/bin/sh\", \"tools/perfbase/judge-baseline.sh\"]",
-      "acceptance_failure.cwd=.worktrees/wt-pb-base",
-      "acceptance_failure.exit_code=1",
-      "acceptance_failure.expected_exit_code=0",
-      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
-      "acceptance_failure.stderr_tail(末20行)="
-     ],
-     "attempt_id": "att-t.base-seq3-t1787341643733",
-     "delivery_id": "del-t.base-seq3-t1787341643733",
-     "state": "failed_retryable"
-    }
-   ],
+   "attempts": [],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -961,6 +946,18 @@
      "c.instr2"
     ]
    },
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.instr2",
+      "acceptance_success.writeback_revision=13"
+     ],
+     "attempt_id": "att-t.instr2-seq1-t1787344313013",
+     "delivery_id": "del-t.instr2-seq1-t1787344313013",
+     "state": "succeeded",
+     "writeback_revision": 13
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -990,7 +987,7 @@
     ]
    },
    "seat_wait_seconds": 3600,
-   "state": "planned",
+   "state": "succeeded",
    "title": "任务一·仪表补盲（回炉前置）：pb-emu 的 30/30 冷点开里 first_frame_recv 与 snapshot_applied 一次都没出现、first_draw 恒 emitted=0 reason=glyphs_zero，而服务端旁证说推了快照（snapshots_from_subscribe=32、perf_subscribe 60-80ms）。**先读 .team/nodes/pb-emu/说明.md 全文**。问题：两个打点都在静默 return 后面——SessionViewModel.onBinary 首行 `if (frame.ref != ref) return`，以及 PerfTrace 里 `opens[ref] ?: return`——所以「帧没到」和「帧到了被 ref 守卫吞了」在日志里都是沉默，分不出来。本格**只做仪表**：给这两条静默路径各补一行 emitted=0 的留痕，ref 不匹配那行必须同时给出两边操作数（键名逐字 frame_ref= 与 want_ref=），opens 落空那行 reason=no_open。⛔ 本格不许去修白屏本身、不许改判据、不许改红测断言——先让仪表能一锤定音，再谈修（回炉纪律：不许在盲的状态下改）。判据 tools/perfbase/judge-instr2.sh。"
   },
   "t.red": {
