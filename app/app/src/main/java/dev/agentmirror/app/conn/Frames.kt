@@ -69,6 +69,8 @@ sealed interface FramePayload {
                     FrameType.OVERLAY_UNSUBSCRIBE -> json.decodeFromJsonElement(OverlayUnsubscribeFrame.serializer(), el)
                     FrameType.CLOSE_SESSION -> json.decodeFromJsonElement(CloseSessionFrame.serializer(), el)
                     FrameType.CLOSE_SESSION_ACK -> json.decodeFromJsonElement(CloseSessionAckFrame.serializer(), el)
+                    FrameType.CREATE_SESSION -> json.decodeFromJsonElement(CreateSessionFrame.serializer(), el)
+                    FrameType.CREATE_SESSION_ACK -> json.decodeFromJsonElement(CreateSessionAckFrame.serializer(), el)
                     else -> throw FrameDecodeException(
                         FrameError.UNSUPPORTED_TYPE,
                         "unknown frame type: $type",
@@ -142,6 +144,8 @@ sealed interface FramePayload {
                 is OverlayUnsubscribeFrame -> json.encodeToJsonElement(OverlayUnsubscribeFrame.serializer(), frame)
                 is CloseSessionFrame -> json.encodeToJsonElement(CloseSessionFrame.serializer(), frame)
                 is CloseSessionAckFrame -> json.encodeToJsonElement(CloseSessionAckFrame.serializer(), frame)
+                is CreateSessionFrame -> json.encodeToJsonElement(CreateSessionFrame.serializer(), frame)
+                is CreateSessionAckFrame -> json.encodeToJsonElement(CreateSessionAckFrame.serializer(), frame)
             }
         }
     }
@@ -677,6 +681,58 @@ data class CloseSessionAckFrame(
         reqId <= 0 -> "close_session_ack req_id must be >= 1"
         !ok && reason == null -> "failed close_session_ack must carry a reason"
         ok && reason != null -> "accepted close_session_ack must not carry a reason"
+        else -> null
+    }
+}
+
+/**
+ * 新建会话 C→S（088 E13）。argv 已在客户端按空白分词，不经 shell。
+ *
+ * @contract
+ * @pre reqId ≥ 1、cwd 非空、argv 至少 1 段
+ * @post 服务端回 CreateSessionAckFrame
+ * @err validate() 对缺字段返回非空
+ * @inv 不 bump 协议版本
+ */
+@Serializable
+data class CreateSessionFrame(
+    @SerialName("req_id") val reqId: Long,
+    @SerialName("cwd") val cwd: String,
+    @SerialName("argv") val argv: List<String>,
+    @SerialName("provider") val provider: String = "",
+) : FramePayload {
+    override val frameType: String get() = FrameType.CREATE_SESSION
+    override fun validate(): String? = when {
+        reqId <= 0 -> "create_session req_id must be >= 1"
+        cwd.isEmpty() -> "create_session cwd must be non-empty"
+        argv.isEmpty() || argv.any { it.isEmpty() } -> "create_session argv must have non-empty elements"
+        else -> null
+    }
+}
+
+/**
+ * 新建回执 S→C。ok 才带 ref。
+ *
+ * @contract
+ * @pre reqId ≥ 1；ok=true 时 ref 非空且 reason 空
+ * @post 客户端以 ok 决定是否打开新会话
+ * @err validate() 对矛盾组合返回非空
+ * @inv reason 存在当且仅当 ok=false
+ */
+@Serializable
+data class CreateSessionAckFrame(
+    @SerialName("req_id") val reqId: Long,
+    @SerialName("ok") val ok: Boolean,
+    @SerialName("ref") val ref: String = "",
+    @SerialName("reason") val reason: CreateFailReason? = null,
+) : FramePayload {
+    override val frameType: String get() = FrameType.CREATE_SESSION_ACK
+    override fun validate(): String? = when {
+        reqId <= 0 -> "create_session_ack req_id must be >= 1"
+        !ok && reason == null -> "failed create_session_ack must carry a reason"
+        ok && reason != null -> "accepted create_session_ack must not carry a reason"
+        ok && ref.isEmpty() -> "accepted create_session_ack must carry a ref"
+        !ok && ref.isNotEmpty() -> "failed create_session_ack must not carry a ref"
         else -> null
     }
 }

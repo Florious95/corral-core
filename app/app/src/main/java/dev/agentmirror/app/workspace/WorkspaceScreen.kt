@@ -99,7 +99,24 @@ fun WorkspaceScreen(
     val refreshing by viewModel.refreshing.collectAsState()
     val level2 by viewModel.level2.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
+    val newAgent by viewModel.newAgent.collectAsState()
+    val openedSession by viewModel.openedSession.collectAsState()
     val activity = LocalContext.current as? Activity
+    LaunchedEffect(openedSession) {
+        val s = openedSession ?: return@LaunchedEffect
+        onOpenSession(s.first, s.second)
+        viewModel.consumeOpenedSession()
+    }
+    newAgent?.let { ui ->
+        NewAgentDialog(
+            ui = ui,
+            onSelectCwd = viewModel::selectNewAgentCwd,
+            onSelectProvider = viewModel::selectNewAgentProvider,
+            onToggleBypass = viewModel::setNewAgentBypass,
+            onConfirm = viewModel::confirmNewAgent,
+            onCancel = viewModel::cancelNewAgent,
+        )
+    }
 
     // 进入即刷（069）：一级发 list，二级由 enterLevel2 重订。键是菜单身份，不是滚动。
     // 旋转重建走 suppressNextEnterRefresh，本拍不发 list。下拉见 onRefresh。
@@ -228,6 +245,7 @@ fun WorkspaceScreen(
                                 .statusBarsPadding(),
                             connectionPath = readyPath,
                             connectionBanner = reconnectBanner,
+                            onNewAgent = { viewModel.requestNewAgent() },
                         )
                     }
                 }
