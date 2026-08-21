@@ -21,6 +21,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.SharedPreferencesAppearanceStore
+import dev.agentmirror.app.workspace.CloseConfirmDialog
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
@@ -100,6 +102,22 @@ fun AgentMirrorApp(
         val overlayLevel2 by workspaceViewModel.level2.collectAsState()
         val overlayFavorites by workspaceViewModel.favorites.collectAsState()
         val overlayLiveGen by workspaceViewModel.favoriteLiveGen.collectAsState()
+        val closeConfirm by workspaceViewModel.closeConfirm.collectAsState()
+        val closedRef by workspaceViewModel.closedRef.collectAsState()
+        LaunchedEffect(closedRef) {
+            val gone = closedRef ?: return@LaunchedEffect
+            if (navState.activeSession?.first == gone) {
+                navState.activeSession = null
+            }
+            workspaceViewModel.consumeClosedRef()
+        }
+        closeConfirm?.let { ui ->
+            CloseConfirmDialog(
+                ui = ui,
+                onConfirm = workspaceViewModel::confirmClose,
+                onCancel = workspaceViewModel::cancelClose,
+            )
+        }
 
         /**
          * 根返回手势接线（D-23/D-32）。
@@ -162,6 +180,9 @@ fun AgentMirrorApp(
                         overlayFavorited = overlayFavorites.map { it.key }.toSet(),
                         onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
                         onOpenOverlaySession = { ref, name -> navState.activeSession = ref to name },
+                        onCloseOverlaySession = { ref, name ->
+                            workspaceViewModel.requestClose(ref, name)
+                        },
                     )
                 }
                 // 配对页：首启无配置，或用户从设置/重配入口进入。
