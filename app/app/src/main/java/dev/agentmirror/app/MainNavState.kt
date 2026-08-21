@@ -20,6 +20,7 @@ import android.os.Bundle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.agentmirror.app.perf.PerfTrace
 
 /**
  * 导航壳状态（D-3 修复核心）。
@@ -55,6 +56,22 @@ class MainNavState(initialShowPairing: Boolean) {
 
     /** 当前会话（ref, name）；null = 不在会话页（工作区/配对页）。重建后恢复（D-3）。 */
     var activeSession by mutableStateOf<Pair<String, String>?>(null)
+
+    /**
+     * 用户点开会话（列表 / 收藏 / 悬浮窗切换）。旋转恢复走 [restoreFrom]，不走这里。
+     *
+     * @contract
+     * @pre ref 非空
+     * @post [activeSession] = (ref, name)；开关开时为本打开生成 open_id 并打 tap
+     * @err none
+     * @inv 关时最外层短路，不 beginOpen
+     */
+    fun openSession(ref: String, name: String) {
+        if (PerfTrace.isEnabled()) {
+            PerfTrace.onUserOpen(ref) // tap
+        }
+        activeSession = ref to name
+    }
 
     /** 当前选中的工作区 cwd；非空 = 工作区二级会话选择页。重建后恢复（D-32）。 */
     var selectedWorkspaceCwd by mutableStateOf<String?>(null)

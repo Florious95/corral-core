@@ -42,6 +42,7 @@ import dev.agentmirror.app.service.MirrorForegroundService
 import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.SharedPreferencesViewportGeomStore
 import dev.agentmirror.app.workspace.FavoriteKey
@@ -84,11 +85,28 @@ fun SessionRoute(
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val sessionContext = LocalContext.current
+    // route_enter 必须在建 VM / subscribe 之前；remember(ref) 避免重组重复打点。
+    val routeOpenId = remember(ref) {
+        if (!PerfTrace.isEnabled()) {
+            null
+        } else {
+            val id = PerfTrace.beginRoute(ref)
+            PerfTrace.routeEnter(id) // route_enter
+            id
+        }
+    }
     var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
     if (viewModel == null) {
         viewModel = remember(ref) { createSessionViewModel(ref, sessionContext) }
     }
     val vm = viewModel
+    DisposableEffect(ref, routeOpenId) {
+        onDispose {
+            if (routeOpenId != null && PerfTrace.idFor(ref) == routeOpenId) {
+                PerfTrace.unbind(ref)
+            }
+        }
+    }
 
     if (vm == null) {
         // 连接未配置（配对层未落地）：明确提示，非静默白屏。
