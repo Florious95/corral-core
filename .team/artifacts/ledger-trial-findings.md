@@ -1294,3 +1294,9 @@ pane 上的证据行：`❯ Press up to edit queued messages`，席位**停在�
   但 30+ 分钟无人按 Enter，席位一直 idle。同批建的 uiicon 席同流程正常提交。
 - 影响：行为自证卡死；若发生在驱动器派单上就是整链静默停摆。
 - 绕法：同内容重投一次（第二次 send 通常会触发提交）。已发生过的类似族：send_unverified_exhausted 四真因之「入队未提交」。
+
+## 2026-08-21 send_unverified_exhausted → hl1-judge-blank（二次，无害但吵）
+- coordinator 两次报 send to hl1-judge-blank 失败 3/3（msg_e7e6…、msg_e99e…）。读屏：席位好好停在提示符
+  （Ctx 7%，待命状态正确），并无卡住提示。t.fix.rv 已被排除出前沿，无实际影响。
+- 现象归类：投递验证在「席位闲、无提示」时也会 3/3 失败并反复通知 leader——通知本身成了噪声源。
+- 未重试（内容疑为旧派单/重复通知，席位已明确待命）。
