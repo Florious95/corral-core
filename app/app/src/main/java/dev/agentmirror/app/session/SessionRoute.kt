@@ -82,6 +82,7 @@ fun SessionRoute(
     overlayFavorited: Set<FavoriteKey> = emptySet(),
     onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
+    onCloseOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val sessionContext = LocalContext.current
     var viewModel by remember(ref) { mutableStateOf<SessionViewModel?>(null) }
@@ -114,6 +115,7 @@ fun SessionRoute(
         overlayFavorited = overlayFavorited,
         onToggleOverlayFavorite = onToggleOverlayFavorite,
         onOpenOverlaySession = onOpenOverlaySession,
+        onCloseOverlaySession = onCloseOverlaySession,
     )
 }
 

@@ -195,6 +195,7 @@ fun WorkspaceScreen(
                             onToggleStar = { item ->
                                 level2.sessions.firstOrNull { it.ref == item.id }?.let(viewModel::toggleFavorite)
                             },
+                            onClose = { item -> viewModel.requestClose(item.id, item.displayName) },
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()

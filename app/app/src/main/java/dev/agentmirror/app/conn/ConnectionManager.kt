@@ -132,6 +132,12 @@ class ConnectionManager(
         var resolved: Boolean = false
     }
 
+    private val pendingCloses = LinkedHashMap<Long, PendingClose>()
+
+    private class PendingClose(val ref: String, val deadlineMs: Long) {
+        var resolved: Boolean = false
+    }
+
     /** 挂上上层监听。 */
     fun setListener(listener: Listener?) {
         this.listener = listener
@@ -215,6 +221,29 @@ class ConnectionManager(
             if (!p.resolved && nowMs >= p.deadlineMs) {
                 p.resolved = true
                 listener?.onInputResult(reqId, false, "timeout")
+                it.remove()
+            }
+        }
+        resolveExpiredCloses(nowMs)
+    }
+
+    private fun resolveExpiredCloses(nowMs: Long) {
+        val it = pendingCloses.iterator()
+        while (it.hasNext()) {
+            val (reqId, p) = it.next()
+            if (!p.resolved && nowMs >= p.deadlineMs) {
+                p.resolved = true
+                DiagLog.record(
+                    "close",
+                    "timeout req_id=$reqId ref=${p.ref} deadline_ms=${p.deadlineMs} now_ms=$nowMs",
+                )
+                listener?.onFrame(
+                    CloseSessionAckFrame(
+                        reqId = reqId,
+                        ok = false,
+                        reason = CloseFailReason.CLOSE_FAILED,
+                    ),
+                )
                 it.remove()
             }
         }
@@ -532,6 +561,27 @@ class ConnectionManager(
     }
 
     /**
+     * 发 close_session（契约 088 E12）。未二次确认不得调用。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空；ref 非空
+     * @post 返回 req_id（>0）时帧已发出并登记超时期限；结果经 CloseSessionAckFrame 到达 onFrame
+     * @err 未就绪 ⇒ 返回 null
+     * @inv req_id 单调递增；超时以 ok=false reason=close_failed 的本地 ack 投递
+     */
+    fun sendCloseSession(ref: String): Long? {
+        val conn = connection ?: return null
+        if (!conn.isReady) return null
+        if (ref.isEmpty()) return null
+        val reqId = nextReqId++
+        val frame = CloseSessionFrame(reqId = reqId, ref = ref)
+        if (!conn.send(frame)) return null
+        pendingCloses[reqId] = PendingClose(ref, clock.nowMs() + inputTimeoutMs)
+        DiagLog.record("close", "send close_session req_id=$reqId ref=$ref")
+        return reqId
+    }
+
+    /**
      * 当前订阅簿记的行列（重连重放用）。测试与会话页仪表读这个，不是猜。
      */
     fun subscriptionSize(ref: String): Pair<Int, Int>? = activeSubscriptions[ref]
@@ -629,6 +679,7 @@ class ConnectionManager(
                     }
                 }
                 is InputAckFrame -> resolveInput(frame)
+                is CloseSessionAckFrame -> resolveClose(frame)
                 else -> listener?.onFrame(frame)
             }
         }
@@ -710,6 +761,17 @@ class ConnectionManager(
         listener?.onInputResult(ack.reqId, ack.ok, ack.reason?.wire)
     }
 
+    private fun resolveClose(ack: CloseSessionAckFrame) {
+        val pending = pendingCloses.remove(ack.reqId)
+        if (pending != null) pending.resolved = true
+        DiagLog.record(
+            "close",
+            "ack req_id=${ack.reqId} ok=${ack.ok} reason=${ack.reason?.wire ?: ""} " +
+                "ref=${pending?.ref ?: "<none>"}",
+        )
+        listener?.onFrame(ack)
+    }
+
     private fun failAllPending(reason: String) {
         val it = pendingInputs.iterator()
         while (it.hasNext()) {
@@ -719,6 +781,22 @@ class ConnectionManager(
                 listener?.onInputResult(reqId, false, reason)
             }
             it.remove()
+        }
+        val closes = pendingCloses.iterator()
+        while (closes.hasNext()) {
+            val (reqId, p) = closes.next()
+            if (!p.resolved) {
+                p.resolved = true
+                DiagLog.record("close", "fail pending req_id=$reqId ref=${p.ref} reason=$reason")
+                listener?.onFrame(
+                    CloseSessionAckFrame(
+                        reqId = reqId,
+                        ok = false,
+                        reason = CloseFailReason.CLOSE_FAILED,
+                    ),
+                )
+            }
+            closes.remove()
         }
     }
 
