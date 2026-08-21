@@ -1,0 +1,9 @@
+=== last_at= now= ms（ workspace=$ in worktree main src ===
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.banner/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt:492:                    "last_at=$lastLevel2AtMs now=$now workspace=$ws shown=$stale",
+=== L2 banner assignments ===
+485:        val banner = if (stale) humanizeLevel2QuietBanner(quietFor) else null
+487:        if (current.banner != banner) {
+494:            _level2.value = current.copy(banner = banner)
+831:            _level2.update { it.copy(banner = "二级帧解码失败 code=$code reason=$message") }
+929:        val next = L2UiState(sessions = incoming, seq = frame.seq, banner = null)
+974:        _level2.update { it.copy(seq = frame.seq, banner = null) }
