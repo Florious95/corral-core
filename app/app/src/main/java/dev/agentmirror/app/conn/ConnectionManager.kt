@@ -91,9 +91,18 @@ class ConnectionManager(
 
         /** 掉线后即将重连：attempt 为下一次尝试序号（0 起），delayMs 为等待时长。 */
         fun onReconnect(attempt: Int, delayMs: Long)
+
+        /**
+         * 仪表用：接帧者身份。默认实现类名；会话 VM 覆盖为自身 ref。
+         * ⛔ 不参与收帧逻辑。
+         */
+        fun perfTraceListenerRef(): String = this.javaClass.name
     }
 
     private var listener: Listener? = null
+
+    /** 按会话 ref 登记的二进制接收者；与 [listener] 全局槽共存。 */
+    private val binaryListeners = LinkedHashMap<String, LinkedHashSet<Listener>>()
 
     /** 当前状态；[ConnectionManager] 在同一收件线程串行使用，无需加锁。 */
     private var state: ConnectionState = ConnectionState.STOPPED
@@ -136,6 +145,28 @@ class ConnectionManager(
     /** 挂上上层监听。 */
     fun setListener(listener: Listener?) {
         this.listener = listener
+    }
+
+    /**
+     * 按会话 ref 登记二进制接收者。列表页占用 [setListener] 槽时会话页仍可收本 ref 的帧。
+     *
+     * @contract
+     * @pre ref 非空
+     * @post [listener] 已登记在该 ref 下；同一对象重复登记幂等
+     */
+    fun addBinaryListener(ref: String, listener: Listener) {
+        binaryListeners.getOrPut(ref) { LinkedHashSet() }.add(listener)
+    }
+
+    /**
+     * 摘除按 ref 登记的二进制接收者。
+     *
+     * @contract @pre none @post 该 ref 下不再含此 listener；空集合删除
+     */
+    fun removeBinaryListener(ref: String, listener: Listener) {
+        val set = binaryListeners[ref] ?: return
+        set.remove(listener)
+        if (set.isEmpty()) binaryListeners.remove(ref)
     }
 
     /** 当前状态（测试与 UI 可读）。 */
@@ -614,7 +645,28 @@ class ConnectionManager(
         }
 
         override fun onBinary(frame: BinaryFrame) {
-            listener?.onBinary(frame)
+            val targeted = binaryListeners[frame.ref]
+            val recipients = LinkedHashSet<Listener>()
+            if (targeted != null && targeted.isNotEmpty()) {
+                recipients.addAll(targeted)
+            } else {
+                listener?.let { recipients.add(it) }
+            }
+            if (PerfTrace.isEnabled()) {
+                val listenerNull = if (recipients.isEmpty()) 1 else 0
+                val kind = when (frame.kind) {
+                    BinaryKind.SNAPSHOT -> "snapshot"
+                    BinaryKind.DELTA -> "delta"
+                    BinaryKind.SCROLLBACK -> "scrollback"
+                }
+                val listenerRef = if (recipients.isEmpty()) {
+                    "-"
+                } else {
+                    recipients.joinToString(",") { it.perfTraceListenerRef() }
+                }
+                PerfTrace.emitNoListener(frame.ref, listenerNull, kind, frame.data.size, listenerRef)
+            }
+            recipients.forEach { it.onBinary(frame) }
         }
 
         override fun onLocalDecodeError(code: FrameError, message: String) {

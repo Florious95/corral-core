@@ -59,6 +59,9 @@ object PerfTrace {
     const val EV_FIRST_DRAW = "first_draw"
     const val EV_LAYOUT_SETTLED = "layout_settled"
 
+    /** WS 二进制读入口留痕（t.instr3，非八事件契约；emitted=0 不进基线）。 */
+    const val EV_WS_BINARY_RECV = "ws_binary_recv"
+
     /** `layout_settled` 静默窗口（ms）：最后一次重排后再无重排才结算。 */
     const val LAYOUT_SETTLED_QUIET_MS = 500
 
@@ -102,6 +105,12 @@ object PerfTrace {
     private val nextSeq = AtomicLong(1L)
     private val opens = ConcurrentHashMap<String, Open>()
     private val settleRunnables = ConcurrentHashMap<String, Runnable>()
+    /** 收帧 ref 不匹配：每对 (frame_ref, want_ref) 只留一行，避免 delta 热路径刷屏。 */
+    private val refMismatchLogged = ConcurrentHashMap.newKeySet<String>()
+    private val noOpenFirstLogged = ConcurrentHashMap.newKeySet<String>()
+    private val noOpenSnapshotLogged = ConcurrentHashMap.newKeySet<String>()
+    private val wsBinaryRecvLogged = ConcurrentHashMap.newKeySet<String>()
+    private val noListenerLogged = ConcurrentHashMap.newKeySet<String>()
     @Volatile
     private var settleHandler: Handler? = null
 
@@ -183,6 +192,11 @@ object PerfTrace {
     fun resetForTest() {
         cancelAllSettles()
         opens.clear()
+        refMismatchLogged.clear()
+        noOpenFirstLogged.clear()
+        noOpenSnapshotLogged.clear()
+        wsBinaryRecvLogged.clear()
+        noListenerLogged.clear()
         enabled = true
         clock = DiagLog.Clock { 0L }
         sink = Sink { _, _ -> }
@@ -521,11 +535,84 @@ object PerfTrace {
     }
 
     /**
-     * 本打开首帧。已发过则静默（delta 热路径）；无打开态不打（单测 VM 无 bind）。
+     * 收帧口 `frame.ref != 本页 ref`：原先静默 return，帧到了和没到在日志里同形。
+     * 每对 (frame_ref, want_ref) 一行 `first_frame_recv emitted=0 reason=ref_mismatch`。
+     *
+     * @contract
+     * @pre [isEnabled] 已在调用点短路
+     * @post 一行含 frame_ref= 与 want_ref= 两边操作数
+     */
+    fun emitFrameRefMismatch(frameRef: String, wantRef: String, kind: String, bytes: Int) {
+        if (!enabled) return
+        val key = "$frameRef\u0000$wantRef"
+        if (!refMismatchLogged.add(key)) return
+        val id = opens[wantRef]?.openId ?: "-"
+        emit(
+            id,
+            EV_FIRST_FRAME_RECV,
+            "emitted=0 reason=ref_mismatch frame_ref=$frameRef want_ref=$wantRef kind=$kind bytes=$bytes",
+        )
+    }
+
+    /**
+     * WS 二进制帧已解码（Connection.onBinary）。每 ref 一行，emitted=0 不进基线。
+     *
+     * @contract @pre [isEnabled] 已在调用点短路 @post 一行 ev=ws_binary_recv kind= bytes=
+     */
+    fun emitWsBinaryRecv(frameRef: String, kind: String, bytes: Int) {
+        if (!enabled) return
+        if (!wsBinaryRecvLogged.add(frameRef)) return
+        val id = opens[frameRef]?.openId ?: "-"
+        emit(
+            id,
+            EV_WS_BINARY_RECV,
+            "emitted=0 kind=$kind bytes=$bytes frame_ref=$frameRef",
+        )
+    }
+
+    /**
+     * ConnectionManager 全局 listener 槽：每 ref 一行。
+     * `listener_null=1` ⇒ reason=no_listener；`listener_null=0` ⇒ reason=has_listener。
+     * `listener_ref=` 是接帧者自己的 ref 或实现类名，与 frame_ref= 并排。
+     *
+     * @contract @pre [isEnabled] 已在调用点短路 @post emitted=0 且含 frame_ref= listener_null= listener_ref=
+     */
+    fun emitNoListener(
+        frameRef: String,
+        listenerNull: Int,
+        kind: String,
+        bytes: Int,
+        listenerRef: String,
+    ) {
+        if (!enabled) return
+        if (!noListenerLogged.add(frameRef)) return
+        val id = opens[frameRef]?.openId ?: "-"
+        val reason = if (listenerNull == 1) "no_listener" else "has_listener"
+        emit(
+            id,
+            EV_FIRST_FRAME_RECV,
+            "emitted=0 reason=$reason frame_ref=$frameRef listener_null=$listenerNull " +
+                "listener_ref=$listenerRef kind=$kind bytes=$bytes",
+        )
+    }
+
+    /**
+     * 本打开首帧。已发过则静默（delta 热路径）。
+     * opens 落空：一行 `emitted=0 reason=no_open`（每 ref 一次），不再静默 return。
      */
     fun emitFirstFrameIfFirst(ref: String, kind: String, bytes: Int) {
         if (!enabled) return
-        val st = opens[ref] ?: return
+        val st = opens[ref]
+        if (st == null) {
+            if (noOpenFirstLogged.add(ref)) {
+                emit(
+                    "-",
+                    EV_FIRST_FRAME_RECV,
+                    "emitted=0 reason=no_open kind=$kind bytes=$bytes want_ref=$ref",
+                )
+            }
+            return
+        }
         if (st.firstFrame) return
         st.firstFrame = true
         firstFrameRecv(st.openId, kind, bytes)
@@ -533,10 +620,21 @@ object PerfTrace {
 
     /**
      * 本打开首次 snapshot_applied + 记重排。已发过则静默（resize 补快照热路径）。
+     * opens 落空：一行 `emitted=0 reason=no_open`（每 ref 一次）。
      */
     fun emitSnapshotIfFirst(ref: String, alt: Int, rows: Int, cols: Int) {
         if (!enabled) return
-        val st = opens[ref] ?: return
+        val st = opens[ref]
+        if (st == null) {
+            if (noOpenSnapshotLogged.add(ref)) {
+                emit(
+                    "-",
+                    EV_SNAPSHOT_APPLIED,
+                    "emitted=0 reason=no_open alt=$alt rows=$rows cols=$cols want_ref=$ref",
+                )
+            }
+            return
+        }
         if (st.snapshotApplied) return
         st.snapshotApplied = true
         val seq = st.snapshotSeq.incrementAndGet()
