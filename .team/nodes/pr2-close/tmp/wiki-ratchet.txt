@@ -1,0 +1,8 @@
+红：本次引入了新的架构维基违规。⛔ 不许改判据、⛔ 不许 --freeze 洗掉，修掉新增的那几条。
+pkg=dev.agentmirror.app.workspace 基线=8 本次=11 新增=2 消掉=0（键不含行号）
+  ❌ 新增: T3-3 dev.agentmirror.app.workspace app/app/src/main/java/dev/agentmirror/app/workspace/CloseConfirmDialog.kt (0→1)
+  ❌ 新增: T3-3 dev.agentmirror.app.workspace app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceViewModel.kt (0→2)
+pkg=dev.agentmirror.app 基线=1 本次=1 新增=0 消掉=0（键不含行号）
+pkg=internal/api 基线=3 本次=3 新增=0 消掉=0（键不含行号）
+pkg=internal/protocol 基线=0 本次=2 新增=1 消掉=0（键不含行号）
+  ❌ 新增: T3-3 internal/protocol server/internal/protocol/frames.go (0→2)
