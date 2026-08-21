@@ -151,6 +151,23 @@ def faces(led, tid):
     return out
 
 
+def worktree_fingerprint(led, tid):
+    """本格 worktree 的当前内容指纹 = HEAD + 未提交改动清单的哈希。
+    返修回环第二轮的改动只体现在这里，账本的 state 两轮都是 succeeded，分不出新旧。"""
+    wid = (led["tasks"][tid].get("resources") or {}).get("worktree_id")
+    if not wid:
+        return None
+    wt = os.path.join(REPO, ".worktrees", wid)
+    if not os.path.isdir(wt):
+        return None
+    rc1, head = run(["git", "-C", wt, "rev-parse", "HEAD"], timeout=60)
+    rc2, dirty = run(["git", "-C", wt, "status", "--porcelain"], timeout=120)
+    if rc1 != 0 or rc2 != 0:
+        return None
+    import hashlib
+    return head.strip()[:12] + ":" + hashlib.sha256(dirty.encode()).hexdigest()[:12]
+
+
 def ensure_branch(wt, br):
     """驱动器建的 worktree 是 detached HEAD，而 seal-pr.sh 见「脏 + 不在目标分支」就拒绝 checkout
     （那条守卫防的是「把树从正在干活的席位手里夺走」）。这里只在**确实安全**时先把分支建出来：
@@ -253,6 +270,16 @@ def tick(ledger_path, st):
         rec = st.setdefault(tid, {})
         if t.get("state") != "succeeded":
             continue
+
+        # 返修回环会让同一格再跑一轮，交付物随之变化。⛔ 不能拿「上轮封过版」当已收口——
+        # 那会让第二轮的修复悄悄漏出 PR。用「worktree 指纹变了就重来一遍」判增量。
+        fp = worktree_fingerprint(led, tid)
+        if fp and rec.get("fp") != fp:
+            if rec.get("fp"):
+                log("%s worktree 指纹变了（返修新一轮），重新封版+推 PR" % tid)
+            rec["fp"] = fp
+            rec["sealed"] = False
+            rec["pr"] = False
 
         if not rec.get("sealed"):
             ok, msg = do_seal(led, tid)
