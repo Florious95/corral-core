@@ -183,8 +183,12 @@ def worktree_fingerprint(led, tid):
     rc2, dirty = run(["git", "-C", wt, "status", "--porcelain"], timeout=120)
     if rc1 != 0 or rc2 != 0:
         return None
+    # ⛔ 判据自己写的日志不算「席位交了新东西」：judge-*.sh 把输出落在
+    # .team/nodes/<格>/tmp/ 下,每跑一次判据就把 worktree 弄脏,会让指纹无谓地变、
+    # 触发对**已 merged 分支**的重复封版与重推。实撞：t.app 的 green-run.log。
+    lines = [ln for ln in dirty.splitlines() if "/tmp/" not in ln]
     import hashlib
-    return head.strip()[:12] + ":" + hashlib.sha256(dirty.encode()).hexdigest()[:12]
+    return head.strip()[:12] + ":" + hashlib.sha256("\n".join(lines).encode()).hexdigest()[:12]
 
 
 def ensure_branch(wt, br):
