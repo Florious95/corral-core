@@ -99,6 +99,11 @@
    "condition": "requires_success",
    "from": "t.instr4",
    "to": "t.base"
+  },
+  {
+   "condition": "requires_success",
+   "from": "t.fixblank",
+   "to": "t.base"
   }
  ],
  "evidence_policy": {
@@ -144,7 +149,7 @@
   "read_only_shared": [],
   "rules": []
  },
- "revision": 17,
+ "revision": 19,
  "roles": {
   "r.advisor": {
    "artifact_landing": {
@@ -377,7 +382,22 @@
      "c.base"
     ]
    },
-   "attempts": [],
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_failure.acceptance_id=c.base",
+      "acceptance_failure.argv=[\"/bin/sh\", \"tools/perfbase/judge-baseline.sh\"]",
+      "acceptance_failure.cwd=.worktrees/wt-pb-base",
+      "acceptance_failure.exit_code=1",
+      "acceptance_failure.expected_exit_code=0",
+      "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+      "acceptance_failure.stderr_tail(末20行)="
+     ],
+     "attempt_id": "att-t.base-seq2-t1787349761675",
+     "delivery_id": "del-t.base-seq2-t1787349761675",
+     "state": "acceptance_pending"
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -933,6 +953,60 @@
    "state": "planned",
    "title": "重构返修 2 轮穷尽：整理两轮 rework 理由与重构现状，升报 leader 裁定，⛔ 不许静默收工。"
   },
+  "t.fixblank": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.fixblank",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-fixblank.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.fixblank"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.impl"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+    },
+    "read_paths": [
+     ".team/nodes/pb-emu/说明-r18-第四轮根因定案.md",
+     "tools/perfbase/judge-fixblank.sh",
+     ".team/tasks/perfbase/任务书-01-仪表.md"
+    ],
+    "worktree_id": "wt-pb-fixblank",
+    "write_paths": [
+     "app/",
+     ".team/nodes/pb-fixblank/"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "**修白屏根因**（先读 .team/nodes/pb-emu/说明-r18-第四轮根因定案.md 全文）。四轮实测已定案，18/18 零反例：`ConnectionManager` 只有一个**全局 listener 槽**（:96 `private var listener: Listener?`、:137 `setListener`、:617 `listener?.onBinary(frame)`），被列表页的 `WorkspaceViewModel` 占着；订阅首帧到达后被交给它、**就地丢弃**，会话页的 VM 一帧都拿不到。铁证：`ev=first_frame_recv emitted=0 reason=has_listener listener_null=0 listener_ref=dev.agentmirror.app.workspace.WorkspaceViewModel`。**先红后绿**：①先写 app/app/src/test/kotlin/dev/agentmirror/app/conn/ConnListenerRoutingTest.kt，方法名逐字 `帧只投给订阅该ref的接收者` 与 `列表页占用槽位不影响会话页收帧`，先跑一遍证明它是红的、把原始输出贴进说明.md（⛔ 没有先验红原文=交付无效）；②再改 ConnectionManager 让帧按 ref 投递给正确的接收者（多接收者共存，列表页与会话页互不吃对方的帧）。⛔ 不许拆掉 PerfTrace 仪表（listener_ref/ws_binary_recv/ref_mismatch 一个都不许删——量具没了就没法自证修好）；⛔ 不许改判据；⛔ 只改必要的地方，不顺手重构相邻代码。判据 tools/perfbase/judge-fixblank.sh。"
+  },
   "t.instr2": {
    "acceptance": {
     "judgment": [],
@@ -1090,6 +1164,18 @@
      "c.instr4"
     ]
    },
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.instr4",
+      "acceptance_success.writeback_revision=18"
+     ],
+     "attempt_id": "att-t.instr4-seq1-t1787349533236",
+     "delivery_id": "del-t.instr4-seq1-t1787349533236",
+     "state": "succeeded",
+     "writeback_revision": 18
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -1119,7 +1205,7 @@
     ]
    },
    "seat_wait_seconds": 3600,
-   "state": "planned",
+   "state": "succeeded",
    "title": "任务一·仪表收口格（合批）：**先读 .team/nodes/pb-emu/说明-r16-第三轮.md 全文**。三轮实测已排除三种世界：WS 收到了（ws_binary_recv kind=snapshot bytes>0，29/29）、ref 送对了（frame_ref 的 pane 号与所点夹具一一对应，daemon 侧也对得上）、listener 槽非空且已派发（listener_null=0，no_listener 零命中——`ConnectionManager.kt:617` 的 `?.` 已被席位自己收回，不是丢帧点）。⇒ **帧死在 SessionViewModel.onBinary 内部**。最后一格分不开的原因：instr2 的 ref_mismatch/no_open 与 instr3 的 ws_binary_recv/no_listener **从未在同一个构建里同时出现**。本格做两件事：(a) 把 pr/perfbase-instr2 与 pr/perfbase-instr3 两批留痕合进同一份代码（席位试过打补丁 2/4 hunk 冲突，请正经 merge/cherry-pick，⛔ 不许手抄漏掉哪条）；(b) 在派发点把「接帧者是谁」也打出来：listener_ref=<接帧 listener 自己的 ref 或实现类名>，与 frame_ref= 并排。⛔ 仍然只补仪表、⛔ 不许顺手改收帧逻辑（改了就分不清是修好了还是测错了）。判据 tools/perfbase/judge-instr4.sh。"
   },
   "t.red": {
