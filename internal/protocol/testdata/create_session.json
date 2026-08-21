@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "type": "create_session",
+  "payload": {
+    "req_id": 12,
+    "cwd": "/ws",
+    "argv": [
+      "sleep",
+      "30"
+    ]
+  }
+}

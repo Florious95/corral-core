@@ -33,6 +33,8 @@ func (OverlayUnsubscribe) FrameType() FrameType { return TypeOverlayUnsubscribe 
 func (OverlayFrame) FrameType() FrameType       { return TypeOverlayFrame }
 func (CloseSession) FrameType() FrameType       { return TypeCloseSession }
 func (CloseSessionAck) FrameType() FrameType    { return TypeCloseSessionAck }
+func (CreateSession) FrameType() FrameType      { return TypeCreateSession }
+func (CreateSessionAck) FrameType() FrameType   { return TypeCreateSessionAck }
 
 // Validate reports whether the auth frame is well-formed: a non-empty token.
 func (a Auth) Validate() error {
@@ -382,6 +384,51 @@ func (a CloseSessionAck) Validate() error {
 	}
 	if a.Reason != "" {
 		return fmt.Errorf("%w: accepted close_session_ack must not carry a reason", ErrInvalidField)
+	}
+	return nil
+}
+
+func (c CreateSession) Validate() error {
+	if c.ReqID == 0 {
+		return fmt.Errorf("%w: create_session req_id must be >= 1", ErrInvalidField)
+	}
+	if c.Cwd == "" {
+		return fmt.Errorf("%w: create_session cwd must be non-empty", ErrInvalidField)
+	}
+	if len(c.Argv) == 0 {
+		return fmt.Errorf("%w: create_session argv must have at least 1 element", ErrInvalidField)
+	}
+	for i, a := range c.Argv {
+		if a == "" {
+			return fmt.Errorf("%w: create_session argv[%d] empty", ErrInvalidField, i)
+		}
+	}
+	return nil
+}
+
+func (a CreateSessionAck) Validate() error {
+	if a.ReqID == 0 {
+		return fmt.Errorf("%w: create_session_ack req_id must be >= 1", ErrInvalidField)
+	}
+	if !a.OK {
+		if a.Reason == "" {
+			return fmt.Errorf("%w: failed create_session_ack must carry a reason", ErrInvalidField)
+		}
+		switch a.Reason {
+		case CreateFailCwdNotFound, CreateFailNoTmuxAnchor, CreateFailCreateFailed, CreateFailInternal:
+		default:
+			return fmt.Errorf("%w: unknown create fail reason %q", ErrInvalidField, a.Reason)
+		}
+		if a.Ref != "" {
+			return fmt.Errorf("%w: failed create_session_ack must not carry a ref", ErrInvalidField)
+		}
+		return nil
+	}
+	if a.Reason != "" {
+		return fmt.Errorf("%w: accepted create_session_ack must not carry a reason", ErrInvalidField)
+	}
+	if a.Ref == "" {
+		return fmt.Errorf("%w: accepted create_session_ack must carry a ref", ErrInvalidField)
 	}
 	return nil
 }

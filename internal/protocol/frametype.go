@@ -110,4 +110,11 @@ const (
 
 	// TypeCloseSessionAck is the decidable receipt of TypeCloseSession (S→C).
 	TypeCloseSessionAck FrameType = "close_session_ack"
+
+	// TypeCreateSession asks the server to open a new tmux window (C→S;
+	// contract 088 E13) in an existing workspace cwd.
+	TypeCreateSession FrameType = "create_session"
+
+	// TypeCreateSessionAck is the decidable receipt of TypeCreateSession (S→C).
+	TypeCreateSessionAck FrameType = "create_session_ack"
 )

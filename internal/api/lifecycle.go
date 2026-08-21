@@ -1,21 +1,24 @@
 package api
 
-// lifecycle.go implements close_session (contract 088 E12): kill the CLI and
-// its tmux pane as one atomic action. It does not add a Kill method to
-// bridge.Pane (that type stays mirror-only).
+// lifecycle.go implements close_session (088 E12) and create_session (088 E13).
+// It does not add a Kill/Create method to bridge.Pane (that type stays mirror-only).
 //
 // @consumes internal/bridge
+//
+// @consumes internal/discovery
 //
 // @consumes internal/protocol
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/discovery"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
@@ -181,6 +184,64 @@ func processComm(pid int) string {
 		return strings.TrimSpace(string(b))
 	}
 	return ""
+}
+
+// handleCreateSession opens a new tmux window on an existing workspace cwd.
+//
+// @contract
+// @pre 已认证；f.Validate 已通过
+// @post 回 CreateSessionAck；成功带 ref；空 socket 不回退默认 tmux
+// @err cwd 不存在 → cwd_not_found；无同 cwd 锚点 → no_tmux_anchor；tmux 失败 → create_failed
+// @inv 不发明默认 socket；不经 shell
+func (c *wsConn) handleCreateSession(f protocol.CreateSession) {
+	ack := func(ok bool, ref string, reason protocol.CreateFailReason) {
+		c.send(&protocol.CreateSessionAck{ReqID: f.ReqID, OK: ok, Ref: ref, Reason: reason})
+	}
+	c.s.ensureInitialScan(c.ctx)
+	if st, err := os.Stat(f.Cwd); err != nil || !st.IsDir() {
+		c.s.log.Info("create_session cwd missing",
+			"conn", c.id, "req_id", f.ReqID, "cwd", f.Cwd, "err", errString(err))
+		ack(false, "", protocol.CreateFailCwdNotFound)
+		return
+	}
+	var socket, session string
+	for _, e := range c.s.catalog.list() {
+		if e == nil {
+			continue
+		}
+		if e.pane.CWD == f.Cwd {
+			socket = e.pane.Socket
+			session = e.pane.Session
+			break
+		}
+	}
+	c.s.log.Info("create_session anchor",
+		"conn", c.id, "req_id", f.ReqID, "cwd", f.Cwd,
+		"socket", socket, "session", session, "argv", strings.Join(f.Argv, " "),
+		"provider", f.Provider)
+	if socket == "" || session == "" {
+		ack(false, "", protocol.CreateFailNoTmuxAnchor)
+		return
+	}
+	args := []string{"new-window", "-P", "-F", "#{pane_id}", "-t", session, "-c", f.Cwd, "--"}
+	args = append(args, f.Argv...)
+	out, err := runTmuxOnSocket(socket, args...)
+	paneID := strings.TrimSpace(out)
+	if err != nil || paneID == "" {
+		c.s.log.Error("create_session new-window",
+			"conn", c.id, "err", err, "out", out,
+			"socket", socket, "session", session, "cwd", f.Cwd)
+		ack(false, "", protocol.CreateFailCreateFailed)
+		return
+	}
+	if scanErr := c.s.rebuildCatalog(c.ctx); scanErr != nil {
+		c.s.log.Warn("create_session rescan", "err", scanErr, "pane_id", paneID)
+	}
+	ref := sessionRef(discovery.Pane{Socket: socket, PaneID: paneID})
+	c.s.log.Info("create_session ok",
+		"conn", c.id, "req_id", f.ReqID, "ref", ref, "pane_id", paneID,
+		"socket", socket, "session", session, "cwd", f.Cwd)
+	ack(true, ref, "")
 }
 
 func runTmuxOnSocket(socket string, args ...string) (string, error) {

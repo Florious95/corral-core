@@ -91,6 +91,9 @@ func TestControlFramesRoundTrip(t *testing.T) {
 		{"close_session", protocol.CloseSession{ReqID: 11, Ref: "s1"}},
 		{"close_session_ack ok", protocol.CloseSessionAck{ReqID: 11, OK: true}},
 		{"close_session_ack fail", protocol.CloseSessionAck{ReqID: 11, OK: false, Reason: protocol.CloseFailCloseFailed}},
+		{"create_session", protocol.CreateSession{ReqID: 12, Cwd: "/ws", Argv: []string{"sleep", "30"}}},
+		{"create_session_ack ok", protocol.CreateSessionAck{ReqID: 12, OK: true, Ref: "s1"}},
+		{"create_session_ack fail", protocol.CreateSessionAck{ReqID: 12, OK: false, Reason: protocol.CreateFailNoTmuxAnchor}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -139,6 +142,11 @@ func TestMarshalValidatesFirst(t *testing.T) {
 		{"close_session_ack fail no reason", protocol.CloseSessionAck{ReqID: 1, OK: false}},
 		{"close_session_ack ok with reason", protocol.CloseSessionAck{ReqID: 1, OK: true, Reason: protocol.CloseFailInternal}},
 		{"close_session_ack unknown reason", protocol.CloseSessionAck{ReqID: 1, OK: false, Reason: "who knows"}},
+		{"create_session req 0", protocol.CreateSession{Cwd: "/ws", Argv: []string{"sleep"}}},
+		{"create_session empty cwd", protocol.CreateSession{ReqID: 1, Argv: []string{"sleep"}}},
+		{"create_session empty argv", protocol.CreateSession{ReqID: 1, Cwd: "/ws"}},
+		{"create_session_ack ok no ref", protocol.CreateSessionAck{ReqID: 1, OK: true}},
+		{"create_session_ack fail no reason", protocol.CreateSessionAck{ReqID: 1, OK: false}},
 		{"auth_ack rejected no reason", protocol.AuthAck{OK: false}},
 		{"auth_ack accepted with reason", protocol.AuthAck{OK: true, Reason: "why"}},
 		{"error unknown code", protocol.ErrorFrame{Code: "boom"}},

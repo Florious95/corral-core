@@ -462,3 +462,32 @@ type CloseSessionAck struct {
 	OK     bool            `json:"ok"`
 	Reason CloseFailReason `json:"reason,omitempty"`
 }
+
+// CreateSession opens a new tmux window in an existing workspace (C→S; 088 E13).
+// Server executes Argv as-is; Provider is optional (logs only).
+//
+// @contract
+// @pre ReqID >= 1、Cwd 非空、Argv 至少 1 段且每段非空
+// @post 该帧在 wire 上合法
+// @err Validate 对缺字段返回 ErrInvalidField
+// @inv 不 bump 协议版本；不经 shell
+type CreateSession struct {
+	ReqID    uint32   `json:"req_id"`
+	Cwd      string   `json:"cwd"`
+	Argv     []string `json:"argv"`
+	Provider string   `json:"provider,omitempty"`
+}
+
+// CreateSessionAck is the receipt of CreateSession (S→C). OK=true carries Ref.
+//
+// @contract
+// @pre ReqID >= 1；OK=true 时 Ref 非空且 Reason 空；OK=false 时 Reason 属闭集
+// @post 客户端以 OK 决定是否打开新会话
+// @err Validate 对矛盾组合返回 ErrInvalidField
+// @inv Reason 存在当且仅当 OK=false
+type CreateSessionAck struct {
+	ReqID  uint32           `json:"req_id"`
+	OK     bool             `json:"ok"`
+	Ref    string           `json:"ref,omitempty"`
+	Reason CreateFailReason `json:"reason,omitempty"`
+}

@@ -103,3 +103,13 @@ const (
 	// CloseFailInternal: unexpected server-side failure while closing.
 	CloseFailInternal CloseFailReason = "internal"
 )
+
+// CreateFailReason is the closed set of create_session_ack failures (088 E13).
+type CreateFailReason string
+
+const (
+	CreateFailCwdNotFound  CreateFailReason = "cwd_not_found"
+	CreateFailNoTmuxAnchor CreateFailReason = "no_tmux_anchor"
+	CreateFailCreateFailed CreateFailReason = "create_failed"
+	CreateFailInternal     CreateFailReason = "internal"
+)

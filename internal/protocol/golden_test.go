@@ -71,6 +71,9 @@ var (
 		{"close_session.json", protocol.CloseSession{ReqID: 11, Ref: "s1"}},
 		{"close_session_ack_ok.json", protocol.CloseSessionAck{ReqID: 11, OK: true}},
 		{"close_session_ack_fail.json", protocol.CloseSessionAck{ReqID: 11, OK: false, Reason: protocol.CloseFailCloseFailed}},
+		{"create_session.json", protocol.CreateSession{ReqID: 12, Cwd: "/ws", Argv: []string{"sleep", "30"}}},
+		{"create_session_ack_ok.json", protocol.CreateSessionAck{ReqID: 12, OK: true, Ref: "s1"}},
+		{"create_session_ack_fail.json", protocol.CreateSessionAck{ReqID: 12, OK: false, Reason: protocol.CreateFailNoTmuxAnchor}},
 	}
 	binaryGoldenFiles = []struct {
 		file string
