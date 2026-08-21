@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "type": "close_session_ack",
+  "payload": {
+    "req_id": 11,
+    "ok": true
+  }
+}

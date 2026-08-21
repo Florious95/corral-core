@@ -432,3 +432,33 @@ type OverlayFrame struct {
 	Rows uint16 `json:"rows,omitempty"`
 	Cols uint16 `json:"cols,omitempty"`
 }
+
+// CloseSession asks the server to tear down one agent pane (C→S; contract 088
+// E12): kill the CLI process, kill the tmux pane, and let listing push the
+// removal. Idempotent: a ref that is already gone acks OK=true so the client
+// can still drop a local favorite.
+//
+// @contract
+// @pre ReqID >= 1、Ref 非空
+// @post 该帧在 wire 上合法（Validate 通过）且不附带服务端状态变更
+// @err Validate 对 ReqID 0、空 Ref 返回 ErrInvalidField
+// @inv 不 bump 协议版本
+type CloseSession struct {
+	ReqID uint32 `json:"req_id"`
+	Ref   string `json:"ref"`
+}
+
+// CloseSessionAck is the decidable receipt of CloseSession (S→C). OK=true means
+// the pane and its CLI are gone (or were already gone). OK=false means they
+// were not, and Reason is one of the closed CloseFailReason set.
+//
+// @contract
+// @pre ReqID >= 1；OK=false 时 Reason 属闭集；OK=true 时 Reason 为空
+// @post 客户端以 OK 决定是否取消收藏 / 退出会话页
+// @err Validate 对 ReqID 0、失败缺 reason、成功带 reason、未知 reason 返回 ErrInvalidField
+// @inv Reason 存在当且仅当 OK=false
+type CloseSessionAck struct {
+	ReqID  uint32          `json:"req_id"`
+	OK     bool            `json:"ok"`
+	Reason CloseFailReason `json:"reason,omitempty"`
+}

@@ -103,4 +103,11 @@ const (
 	// TypeOverlayFrame is one captured choose-tree screen (S→C; requirement 064).
 	// Text is the PTY bytes of the dedicated client (not a self-drawn tree).
 	TypeOverlayFrame FrameType = "overlay_frame"
+
+	// TypeCloseSession asks the server to tear down one agent pane (C→S;
+	// contract 088 E12). Idempotent: a ref that is already gone acks ok.
+	TypeCloseSession FrameType = "close_session"
+
+	// TypeCloseSessionAck is the decidable receipt of TypeCloseSession (S→C).
+	TypeCloseSessionAck FrameType = "close_session_ack"
 )

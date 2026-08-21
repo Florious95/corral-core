@@ -88,6 +88,9 @@ func TestControlFramesRoundTrip(t *testing.T) {
 		{"overlay_subscribe", protocol.OverlaySubscribe{Socket: "/tmp/ov-a/sock"}},
 		{"overlay_unsubscribe", protocol.OverlayUnsubscribe{}},
 		{"overlay_frame", protocol.OverlayFrame{Seq: 1, Text: "(0) - ovp: 1 windows", Rows: 24, Cols: 80}},
+		{"close_session", protocol.CloseSession{ReqID: 11, Ref: "s1"}},
+		{"close_session_ack ok", protocol.CloseSessionAck{ReqID: 11, OK: true}},
+		{"close_session_ack fail", protocol.CloseSessionAck{ReqID: 11, OK: false, Reason: protocol.CloseFailCloseFailed}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -131,6 +134,11 @@ func TestMarshalValidatesFirst(t *testing.T) {
 		{"input_ack fail no reason", protocol.InputAck{ReqID: 1, OK: false}},
 		{"input_ack ok with reason", protocol.InputAck{ReqID: 1, OK: true, Reason: protocol.InputFailInternal}},
 		{"input_ack unknown reason", protocol.InputAck{ReqID: 1, OK: false, Reason: "who knows"}},
+		{"close_session req 0", protocol.CloseSession{Ref: "s1"}},
+		{"close_session empty ref", protocol.CloseSession{ReqID: 1}},
+		{"close_session_ack fail no reason", protocol.CloseSessionAck{ReqID: 1, OK: false}},
+		{"close_session_ack ok with reason", protocol.CloseSessionAck{ReqID: 1, OK: true, Reason: protocol.CloseFailInternal}},
+		{"close_session_ack unknown reason", protocol.CloseSessionAck{ReqID: 1, OK: false, Reason: "who knows"}},
 		{"auth_ack rejected no reason", protocol.AuthAck{OK: false}},
 		{"auth_ack accepted with reason", protocol.AuthAck{OK: true, Reason: "why"}},
 		{"error unknown code", protocol.ErrorFrame{Code: "boom"}},
