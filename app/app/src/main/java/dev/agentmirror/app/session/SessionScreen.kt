@@ -275,6 +275,7 @@ fun SessionScreen(
                                 it.fontSizeSp = savedSp.toFloat()
                                 it.presenter = viewModel.presenter
                                 it.onRemoteScrollBy = viewModel::onScrollWheel
+                                it.sessionRef = viewModel.ref
                                 it.nightOverride = darkTheme
                             }
                         },
@@ -282,6 +283,7 @@ fun SessionScreen(
                             view.nightOverride = darkTheme
                             view.presenter = viewModel.presenter
                             view.onRemoteScrollBy = viewModel::onScrollWheel
+                            view.sessionRef = viewModel.ref
                         },
                         modifier = Modifier
                             .fillMaxSize()
