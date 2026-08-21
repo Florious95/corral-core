@@ -117,11 +117,12 @@ func errString(err error) string {
 	return err.Error()
 }
 
-// handleSubscribe starts mirroring a session: resize the pane to the client's
-// dims, attach the pipe (bridge.Subscribe), send a full snapshot, then relay
-// deltas. Re-subscribing the same ref is idempotent: the previous subscription
-// is torn down and a fresh snapshot is replayed (requirement 004 reconnect
-// replay). A failure to subscribe is an error frame.
+// handleSubscribe starts mirroring a session: capture the pane's current
+// screen, resize to the client's dims, attach the pipe (bridge.Subscribe),
+// send that snapshot, then relay deltas. Re-subscribing the same ref is
+// idempotent: the previous subscription is torn down and a fresh snapshot is
+// replayed (requirement 004 reconnect replay). A failure to subscribe is an
+// error frame.
 func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// 订阅计数（含首次与重复订阅；重复订阅 = 重连或客户端重订阅 → 推完整快照 → 整屏重建）。
 	c.s.sendQueue.recordSubscribe()
@@ -147,27 +148,32 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	geom := c.s.geometryFor(s.Ref)
 	_, _, _ = geom.acquire(c.ctx, br)
 
+	// Capture BEFORE Resize. Phone geometry ≠ host size, so Resize sends
+	// SIGWINCH; an idle TUI that clears and does not redraw leaves
+	// capture-pane empty, and snapshotWithCursor still emits a CUP-only
+	// KindSnapshot (world B). The first frame must be the glyphs already on
+	// the pane at subscribe time — not a post-clear window, and not a wait
+	// for a later delta.
+	snap, err := snapshotWithCursor(c.ctx, br)
+	if err != nil {
+		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		return
+	}
+
 	// Initial client dims reshape the pane so the CLI redraws for the phone
 	// (requirement 005). A resize failure is not fatal: the mirror continues at
-	// the pane's current size, and the real existence check happens below.
+	// the pane's current size. Pipe attaches after capture+resize so a
+	// SIGWINCH clear is not relayed as a delta that would wipe the first frame.
 	if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
 		c.logErr("subscribe resize", err)
 	}
 
-	// Attach the pipe before the snapshot so no output between the two is lost
-	// (term-bridge knowledge base: pipe first, then capture).
 	ch, detach, err := br.Subscribe(c.ctx)
 	if err != nil {
 		c.sendError(protocol.ErrCodeInternal, "cannot attach mirror")
 		return
 	}
 
-	snap, err := snapshotWithCursor(c.ctx, br)
-	if err != nil {
-		detach()
-		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
-		return
-	}
 	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
 		Kind: protocol.KindSnapshot,
 		Ref:  s.Ref,
