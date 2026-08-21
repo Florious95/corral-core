@@ -475,19 +475,33 @@ class WorkspaceViewModel(
     /**
      * 心跳/帧超时检查（UI 带 now 调用，本 VM 不自起定时器）。
      * 超时只改横幅，不清列表，不向服务端发帧。
+     * 横幅只说人话；quiet_for / last_at / now / workspace 进 DiagLog，不上屏。
      */
     fun checkLevel2Quiet(now: Long = nowMs(), quietTimeoutMs: Long = 20_000L) {
         val ws = subscribedWorkspace ?: return
         if (lastLevel2AtMs == 0L) return
         val quietFor = now - lastLevel2AtMs
-        val banner = if (quietFor >= quietTimeoutMs) {
-            "二级状态已停更 ${quietFor}ms（last_at=$lastLevel2AtMs now=$now workspace=$ws）"
-        } else {
-            null
-        }
+        val stale = quietFor >= quietTimeoutMs
+        val banner = if (stale) humanizeLevel2QuietBanner(quietFor) else null
         val current = _level2.value
         if (current.banner != banner) {
+            DiagLog.record(
+                "level2",
+                "checkLevel2Quiet src=quiet-timeout " +
+                    "quiet_for_ms=$quietFor timeout_ms=$quietTimeoutMs " +
+                    "last_at=$lastLevel2AtMs now=$now workspace=$ws shown=$stale",
+            )
             _level2.value = current.copy(banner = banner)
+        }
+    }
+
+    /** 停更时长四舍五入到分钟；不足 1 分钟说「不到 1 分钟」。 */
+    private fun humanizeLevel2QuietBanner(quietForMs: Long): String {
+        val minutes = (quietForMs + 30_000L) / 60_000L
+        return if (minutes < 1L) {
+            "状态已不到 1 分钟未更新，正在重连"
+        } else {
+            "状态已 $minutes 分钟未更新，正在重连"
         }
     }
 
