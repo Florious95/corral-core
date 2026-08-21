@@ -138,6 +138,12 @@ class ConnectionManager(
         var resolved: Boolean = false
     }
 
+    private val pendingCreates = LinkedHashMap<Long, PendingCreate>()
+
+    private class PendingCreate(val cwd: String, val deadlineMs: Long) {
+        var resolved: Boolean = false
+    }
+
     /** 挂上上层监听。 */
     fun setListener(listener: Listener?) {
         this.listener = listener
@@ -225,6 +231,26 @@ class ConnectionManager(
             }
         }
         resolveExpiredCloses(nowMs)
+        resolveExpiredCreates(nowMs)
+    }
+
+    private fun resolveExpiredCreates(nowMs: Long) {
+        val it = pendingCreates.iterator()
+        while (it.hasNext()) {
+            val (reqId, p) = it.next()
+            if (!p.resolved && nowMs >= p.deadlineMs) {
+                p.resolved = true
+                DiagLog.record("create", "timeout req_id=$reqId cwd=${p.cwd}")
+                listener?.onFrame(
+                    CreateSessionAckFrame(
+                        reqId = reqId,
+                        ok = false,
+                        reason = CreateFailReason.CREATE_FAILED,
+                    ),
+                )
+                it.remove()
+            }
+        }
     }
 
     private fun resolveExpiredCloses(nowMs: Long) {
@@ -582,6 +608,26 @@ class ConnectionManager(
     }
 
     /**
+     * 发 create_session（088 E13）。
+     *
+     * @contract
+     * @pre READY；cwd 非空；argv 至少 1 段
+     * @post 返回 req_id 时帧已发出
+     * @err 未就绪 ⇒ null
+     * @inv req_id 单调递增
+     */
+    fun sendCreateSession(cwd: String, argv: List<String>, provider: String = ""): Long? {
+        val conn = connection ?: return null
+        if (!conn.isReady) return null
+        val reqId = nextReqId++
+        val frame = CreateSessionFrame(reqId = reqId, cwd = cwd, argv = argv, provider = provider)
+        if (!conn.send(frame)) return null
+        pendingCreates[reqId] = PendingCreate(cwd, clock.nowMs() + inputTimeoutMs)
+        DiagLog.record("create", "send create_session req_id=$reqId cwd=$cwd argv=${argv.joinToString(" ")} provider=$provider")
+        return reqId
+    }
+
+    /**
      * 当前订阅簿记的行列（重连重放用）。测试与会话页仪表读这个，不是猜。
      */
     fun subscriptionSize(ref: String): Pair<Int, Int>? = activeSubscriptions[ref]
@@ -680,6 +726,7 @@ class ConnectionManager(
                 }
                 is InputAckFrame -> resolveInput(frame)
                 is CloseSessionAckFrame -> resolveClose(frame)
+                is CreateSessionAckFrame -> resolveCreate(frame)
                 else -> listener?.onFrame(frame)
             }
         }
@@ -772,6 +819,17 @@ class ConnectionManager(
         listener?.onFrame(ack)
     }
 
+    private fun resolveCreate(ack: CreateSessionAckFrame) {
+        val pending = pendingCreates.remove(ack.reqId)
+        if (pending != null) pending.resolved = true
+        DiagLog.record(
+            "create",
+            "ack req_id=${ack.reqId} ok=${ack.ok} reason=${ack.reason?.wire ?: ""} " +
+                "ref=${ack.ref} cwd=${pending?.cwd ?: ""}",
+        )
+        listener?.onFrame(ack)
+    }
+
     private fun failAllPending(reason: String) {
         val it = pendingInputs.iterator()
         while (it.hasNext()) {
@@ -797,6 +855,22 @@ class ConnectionManager(
                 )
             }
             closes.remove()
+        }
+        val creates = pendingCreates.iterator()
+        while (creates.hasNext()) {
+            val (reqId, p) = creates.next()
+            if (!p.resolved) {
+                p.resolved = true
+                DiagLog.record("create", "fail pending req_id=$reqId cwd=${p.cwd} reason=$reason")
+                listener?.onFrame(
+                    CreateSessionAckFrame(
+                        reqId = reqId,
+                        ok = false,
+                        reason = CreateFailReason.CREATE_FAILED,
+                    ),
+                )
+            }
+            creates.remove()
         }
     }
 
