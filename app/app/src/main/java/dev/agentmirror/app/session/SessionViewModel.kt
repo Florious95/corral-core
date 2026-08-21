@@ -251,16 +251,13 @@ class SessionViewModel(
 
     override fun onBinary(frame: BinaryFrame) {
         if (frame.ref != ref) return // 共享连接上的其它会话镜像，不消费
-        if (PerfTrace.isEnabled() && PerfTrace.takeFirstFrame(ref)) {
-            val id = PerfTrace.idFor(ref)
-            if (id != null) {
-                val kind = when (frame.kind) {
-                    BinaryKind.SNAPSHOT -> "snapshot"
-                    BinaryKind.DELTA -> "delta"
-                    BinaryKind.SCROLLBACK -> "scrollback"
-                }
-                PerfTrace.firstFrameRecv(id, kind, frame.data.size) // first_frame_recv
+        if (PerfTrace.isEnabled()) {
+            val kind = when (frame.kind) {
+                BinaryKind.SNAPSHOT -> "snapshot"
+                BinaryKind.DELTA -> "delta"
+                BinaryKind.SCROLLBACK -> "scrollback"
             }
+            PerfTrace.emitFirstFrameIfFirst(ref, kind, frame.data.size) // first_frame_recv
         }
         when (frame.kind) {
             // 首帧快照：清屏重建（replaySnapshot 而非 feed，经验基）。
@@ -278,14 +275,9 @@ class SessionViewModel(
                     )
                 }
                 emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
-                if (PerfTrace.isEnabled() && PerfTrace.takeSnapshotApplied(ref)) {
-                    val id = PerfTrace.idFor(ref)
-                    if (id != null) {
-                        val seq = PerfTrace.nextSnapshotSeq(ref)
-                        val alt = if (emulator.historyAvailable) 0 else 1
-                        PerfTrace.snapshotApplied(id, seq, alt) // snapshot_applied
-                        PerfTrace.noteReflow(ref, "snapshot")
-                    }
+                if (PerfTrace.isEnabled()) {
+                    val alt = if (emulator.historyAvailable) 0 else 1
+                    PerfTrace.emitSnapshotIfFirst(ref, alt, emulator.rows, emulator.cols) // snapshot_applied
                 }
                 // 006 秒开：打开即预取最近一页历史，滚动边界再按需补页。
                 if (!hasPrefetchedHistory) {

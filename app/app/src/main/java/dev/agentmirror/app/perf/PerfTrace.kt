@@ -75,7 +75,11 @@ object PerfTrace {
     }
 
     private val productionSink = Sink { tag, line ->
-        Log.d(tag, line)
+        try {
+            Log.d(tag, line)
+        } catch (_: Throwable) {
+            // 纯 JVM 单测没有 mock android.util.Log；DiagLog 仍落。
+        }
         DiagLog.record(tag, line)
     }
 
@@ -84,7 +88,13 @@ object PerfTrace {
 
     /** 单调时钟；测试注入。生产读 [SystemClock.elapsedRealtime]。 */
     @Volatile
-    private var clock: DiagLog.Clock = DiagLog.Clock { SystemClock.elapsedRealtime() }
+    private var clock: DiagLog.Clock = DiagLog.Clock {
+        try {
+            SystemClock.elapsedRealtime()
+        } catch (_: Throwable) {
+            0L
+        }
+    }
 
     @Volatile
     private var sink: Sink = productionSink
@@ -92,11 +102,8 @@ object PerfTrace {
     private val nextSeq = AtomicLong(1L)
     private val opens = ConcurrentHashMap<String, Open>()
     private val settleRunnables = ConcurrentHashMap<String, Runnable>()
-    private val settleHandler: Handler? = try {
-        Looper.getMainLooper()?.let { Handler(it) }
-    } catch (_: Throwable) {
-        null
-    }
+    @Volatile
+    private var settleHandler: Handler? = null
 
     private class Open(val openId: String) {
         @Volatile var routeEntered: Boolean = false
@@ -105,8 +112,11 @@ object PerfTrace {
         @Volatile var firstFrame: Boolean = false
         @Volatile var snapshotApplied: Boolean = false
         @Volatile var firstDraw: Boolean = false
+        @Volatile var emptyDrawLogged: Boolean = false
         @Volatile var settled: Boolean = false
         @Volatile var lastReflowSrc: String = "none"
+        @Volatile var lastRows: Int = -1
+        @Volatile var lastCols: Int = -1
         @Volatile var settleGen: Int = 0
         val snapshotSeq = AtomicLong(0L)
     }
@@ -235,9 +245,25 @@ object PerfTrace {
 
     /**
      * 会话页离开：取消未发出的 layout_settled 延迟消息，解绑。
-     * @contract @pre none @post 该 ref 不再持有打开态 @err none @inv 不发日志
+     * 尚未 settled 时打 `layout_settled emitted=0 reason=unbind`（含 pending/行列），
+     * 分得出「还在等 / 被离开取消 / 从未 noteReflow」。
+     *
+     * @contract @pre none @post 该 ref 不再持有打开态；未结算则一行取消原因 @err none
      */
     fun unbind(ref: String) {
+        if (enabled) {
+            val st = opens[ref]
+            if (st != null && !st.settled) {
+                val pending = if (settleRunnables.containsKey(ref)) 1 else 0
+                emit(
+                    st.openId,
+                    EV_LAYOUT_SETTLED,
+                    "emitted=0 reason=unbind settle_pending=$pending " +
+                        "last_reflow_src=${st.lastReflowSrc} rows=${st.lastRows} cols=${st.lastCols} " +
+                        "quiet_ms=$LAYOUT_SETTLED_QUIET_MS",
+                )
+            }
+        }
         cancelSettle(ref)
         opens.remove(ref)
     }
@@ -321,9 +347,19 @@ object PerfTrace {
      * 事件 `layout_settled`，必须带 `quiet_ms=` 与 `last_reflow_src=`。
      * @contract @pre [openId] 来自同一次 [beginOpen] @post 开时一行含操作数 @err none @inv 关路径立即返回
      */
-    fun layoutSettled(openId: String, quietMs: Int, lastReflowSrc: String) {
+    fun layoutSettled(
+        openId: String,
+        quietMs: Int,
+        lastReflowSrc: String,
+        rows: Int = -1,
+        cols: Int = -1,
+    ) {
         if (!enabled) return
-        emit(openId, EV_LAYOUT_SETTLED, "quiet_ms=$quietMs last_reflow_src=$lastReflowSrc")
+        emit(
+            openId,
+            EV_LAYOUT_SETTLED,
+            "quiet_ms=$quietMs last_reflow_src=$lastReflowSrc rows=$rows cols=$cols",
+        )
     }
 
     /** 产品链：本打开是否尚未发过 subscribe_sent。 */
@@ -360,20 +396,49 @@ object PerfTrace {
     /**
      * 记下一次 resize/reflow/全量重绘，并（重新）安排 500ms 一次性延迟消息。
      * ⛔ 不常驻定时器：每次重排 cancel 旧消息再 post 一条。
+     * 跳过时仍打 `layout_settled emitted=0 reason=`（no_open / already_settled / no_handler）。
      *
      * @contract
-     * @pre [isEnabled] 已在调用点短路；[src] 为最后一次重排来源（resize/snapshot/subscribe/rotate）
-     * @post 500ms 内无新重排则发 layout_settled，带 quiet_ms 与 last_reflow_src
+     * @pre [isEnabled] 已在调用点短路；[src] 为最后一次重排来源
+     * @post 500ms 内无新重排则发 layout_settled，带 quiet_ms / last_reflow_src / rows / cols
      * @err none
      * @inv 空闲零 CPU（无消息即无回调）
      */
-    fun noteReflow(ref: String, src: String) {
+    fun noteReflow(ref: String, src: String, rows: Int = -1, cols: Int = -1) {
         if (!enabled) return
-        val st = opens[ref] ?: return
-        if (st.settled) return
+        val st = opens[ref]
+        if (st == null) {
+            emit(
+                "-",
+                EV_LAYOUT_SETTLED,
+                "emitted=0 reason=no_open last_reflow_src=$src rows=$rows cols=$cols " +
+                    "quiet_ms=$LAYOUT_SETTLED_QUIET_MS",
+            )
+            return
+        }
+        if (rows >= 0) st.lastRows = rows
+        if (cols >= 0) st.lastCols = cols
+        if (st.settled) {
+            emit(
+                st.openId,
+                EV_LAYOUT_SETTLED,
+                "emitted=0 reason=already_settled last_reflow_src=$src " +
+                    "rows=${st.lastRows} cols=${st.lastCols} quiet_ms=$LAYOUT_SETTLED_QUIET_MS",
+            )
+            return
+        }
         st.lastReflowSrc = src
         val gen = synchronized(st) { ++st.settleGen }
-        val h = settleHandler ?: return
+        val h = mainHandler()
+        if (h == null) {
+            emit(
+                st.openId,
+                EV_LAYOUT_SETTLED,
+                "emitted=0 reason=no_handler last_reflow_src=$src " +
+                    "rows=${st.lastRows} cols=${st.lastCols} quiet_ms=$LAYOUT_SETTLED_QUIET_MS",
+            )
+            return
+        }
         cancelSettle(ref)
         val r = Runnable {
             if (!enabled) return@Runnable
@@ -382,10 +447,119 @@ object PerfTrace {
             if (st.settleGen != gen) return@Runnable
             if (st.settled) return@Runnable
             st.settled = true
-            layoutSettled(st.openId, LAYOUT_SETTLED_QUIET_MS, st.lastReflowSrc)
+            layoutSettled(
+                st.openId,
+                LAYOUT_SETTLED_QUIET_MS,
+                st.lastReflowSrc,
+                st.lastRows,
+                st.lastCols,
+            )
         }
         settleRunnables[ref] = r
         h.postDelayed(r, LAYOUT_SETTLED_QUIET_MS.toLong())
+    }
+
+    /**
+     * subscribe 守卫/发出的唯一打点口。未就绪、无 conn、send 失败、无 open_id、
+     * 重连重放（take 已占用）都打同一 `ev=subscribe_sent`，用 `emitted=` `reason=`
+     * 与 `ready=` `conn=` `ok=` `take_before=` `replay=` 两边操作数区分。
+     *
+     * @contract
+     * @pre [isEnabled] 已在调用点短路
+     * @post sent=true 必有一行 subscribe_sent emitted=1（重放不被 take 吞）；
+     *       首次成功另打 geom_seed；否则 geom_seed emitted=0 reason=already_seeded
+     */
+    fun onSubscribeResult(
+        ref: String,
+        rows: Int,
+        cols: Int,
+        sent: Boolean,
+        replay: Boolean,
+        ready: Boolean,
+        hasConn: Boolean,
+        reason: String,
+    ) {
+        if (!enabled) return
+        val st = opens[ref]
+        val id = st?.openId ?: "-"
+        val takeBefore = if (st?.subscribeSent == true) 1 else 0
+        if (!sent) {
+            emit(
+                id,
+                EV_SUBSCRIBE_SENT,
+                "emitted=0 reason=$reason ready=${b(ready)} conn=${b(hasConn)} ok=0 " +
+                    "take_before=$takeBefore replay=${b(replay)} rows=$rows cols=$cols",
+            )
+            return
+        }
+        if (st != null) st.subscribeSent = true
+        emit(
+            id,
+            EV_SUBSCRIBE_SENT,
+            "emitted=1 reason=$reason ready=${b(ready)} conn=${b(hasConn)} ok=1 " +
+                "take_before=$takeBefore replay=${b(replay)} rows=$rows cols=$cols",
+        )
+        if (st == null) {
+            emit(
+                id,
+                EV_GEOM_SEED,
+                "emitted=0 reason=no_open rows=$rows cols=$cols",
+            )
+            return
+        }
+        if (!st.geomSeeded) {
+            st.geomSeeded = true
+            geomSeed(id, rows, cols)
+            noteReflow(ref, "subscribe", rows, cols)
+        } else {
+            emit(
+                id,
+                EV_GEOM_SEED,
+                "emitted=0 reason=already_seeded rows=$rows cols=$cols",
+            )
+        }
+    }
+
+    /**
+     * 本打开首帧。已发过则静默（delta 热路径）；无打开态不打（单测 VM 无 bind）。
+     */
+    fun emitFirstFrameIfFirst(ref: String, kind: String, bytes: Int) {
+        if (!enabled) return
+        val st = opens[ref] ?: return
+        if (st.firstFrame) return
+        st.firstFrame = true
+        firstFrameRecv(st.openId, kind, bytes)
+    }
+
+    /**
+     * 本打开首次 snapshot_applied + 记重排。已发过则静默（resize 补快照热路径）。
+     */
+    fun emitSnapshotIfFirst(ref: String, alt: Int, rows: Int, cols: Int) {
+        if (!enabled) return
+        val st = opens[ref] ?: return
+        if (st.snapshotApplied) return
+        st.snapshotApplied = true
+        val seq = st.snapshotSeq.incrementAndGet()
+        snapshotApplied(st.openId, seq, alt)
+        noteReflow(ref, "snapshot", rows, cols)
+    }
+
+    /**
+     * onDraw 首绘。glyphs=0 打一行 emitted=0（每打开一次），>0 才算 first_draw。
+     * ⛔ 不扫网格：glyphs 由调用方从已有 cellsNonBlank 传入。
+     */
+    fun emitFirstDraw(ref: String, glyphs: Int) {
+        if (!enabled) return
+        val st = opens[ref] ?: return
+        if (glyphs <= 0) {
+            if (st.emptyDrawLogged) return
+            st.emptyDrawLogged = true
+            emit(st.openId, EV_FIRST_DRAW, "emitted=0 reason=glyphs_zero glyphs=0")
+            return
+        }
+        if (st.firstDraw) return
+        st.firstDraw = true
+        firstDraw(st.openId, glyphs)
     }
 
     /**
@@ -413,14 +587,29 @@ object PerfTrace {
 
     private fun cancelSettle(ref: String) {
         val r = settleRunnables.remove(ref) ?: return
-        settleHandler?.removeCallbacks(r)
+        mainHandler()?.removeCallbacks(r)
     }
 
     private fun cancelAllSettles() {
-        val h = settleHandler
+        val h = mainHandler()
         settleRunnables.values.forEach { r -> h?.removeCallbacks(r) }
         settleRunnables.clear()
     }
+
+    /** 懒取主线程 Handler：对象 init 时可能还没有 looper（纯 JVM 单测），Robolectric 后再取。 */
+    private fun mainHandler(): Handler? {
+        settleHandler?.let { return it }
+        val h = try {
+            val looper = Looper.getMainLooper() ?: return null
+            Handler(looper)
+        } catch (_: Throwable) {
+            null
+        }
+        settleHandler = h
+        return h
+    }
+
+    private fun b(v: Boolean): Int = if (v) 1 else 0
 
     /**
      * 进程启动读一次 `debug.agentmirror.perftrace`。`0` = 关；缺省/其它 = 开。
