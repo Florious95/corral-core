@@ -1,0 +1,5 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix 当前分支=pr/gofix-scrubbedenv 目标分支=pr/gofix-scrubbedenv 待提交=0
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=2  head=1c91b6329
+1c91b6329 [pr/gofix-scrubbedenv] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+2a1a562c8 [pr/gofix-scrubbedenv] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）

@@ -1,0 +1,2 @@
+land-pr: branch=pr/e12-close verdict=VERDICT: supports
+land-pr: pr/e12-close 已在 main 里（is-ancestor），无需重复并线

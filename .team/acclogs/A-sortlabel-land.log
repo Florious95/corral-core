@@ -1,0 +1,2 @@
+land-pr: branch=pr/sort-label verdict=VERDICT: supports
+land-pr: pr/sort-label 已在 main 里（is-ancestor），无需重复并线
