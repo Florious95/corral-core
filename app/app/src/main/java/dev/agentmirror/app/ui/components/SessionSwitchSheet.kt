@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.ui.model.SessionItem
+import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Motion
@@ -319,6 +320,7 @@ private fun SheetRow(
         ) {
             ProviderIcon(
                 provider = item.provider,
+                busy = item.status == SessionStatus.Busy,
                 modifier = Modifier.testTag("l2-provider-${item.id}"),
             )
             Box(Modifier.weight(1f)) {

@@ -34,6 +34,7 @@ import dev.agentmirror.app.service.OnScreenFallbackPump
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.session.SessionRoute
 import dev.agentmirror.app.ui.components.NavDirection
+import dev.agentmirror.app.ui.components.ProviderIconFamilyBoard
 import dev.agentmirror.app.ui.components.navTransition
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.ui.theme.AppTheme
@@ -82,6 +83,12 @@ fun AgentMirrorApp(
     }
     AppTheme(appearance = appearance) {
     AgentMirrorTheme(darkTheme = darkTheme) {
+        val showIconBoard = (context as? android.app.Activity)
+            ?.intent?.getBooleanExtra("provider_icon_board", false) == true
+        if (showIconBoard) {
+            ProviderIconFamilyBoard()
+            return@AgentMirrorTheme
+        }
         // 在屏兜底时钟泵（fix-app-runtime-sa）：任一屏在屏且 App RESUMED 即挂一个兜底泵，
         // 前台服务泵不可用时接管共享连接的重连调度与输入超时裁决，服务恢复即让出（不双泵）。
         // 挂在根组合保证工作区/会话/设置/配对任一屏在屏都有兜底；服务常驻时兜底泵零工作。
