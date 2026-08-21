@@ -1,0 +1,18 @@
+ .team/nodes/pr2-provcmd/tmp/A-provcmd-suite.txt    |   0
+ .team/nodes/pr2-provcmd/tmp/argv-green.txt         |   0
+ .team/nodes/pr2-provcmd/tmp/prior-red-argv.txt     |  28 +++++
+ .../pr2-provcmd/tmp/prior-red-tabscroll-bounds.txt |  99 ++++++++++++++++
+ .team/nodes/pr2-provcmd/tmp/tabscroll-green.txt    |  55 +++++++++
+ .team/nodes/pr2-provcmd/tmp/wiki-ratchet-1.txt     |   8 ++
+ .team/nodes/pr2-provcmd/tmp/wiki-ratchet-2.txt     |   4 +
+ .../nodes/pr2-provcmd/\350\257\264\346\230\216.md" | 128 +++++++++++++++++++++
+ .../java/dev/agentmirror/app/SettingsScreen.kt     | 123 ++++++++++++++++++++
+ .../agentmirror/app/ui/screens/SettingsScreen.kt   |   3 +
+ .../dev/agentmirror/app/workspace/PackageDoc.kt    |   1 +
+ .../agentmirror/app/workspace/ProviderLaunch.kt    |  95 +++++++++++++++
+ .../app/workspace/ProviderLaunchStore.kt           |  91 +++++++++++++++
+ .../kotlin/dev/agentmirror/app/TabScrollTest.kt    |  48 ++++++--
+ .../app/workspace/ProviderLaunchArgvTest.kt        |  61 ++++++++++
+ .../app/workspace/ProviderLaunchStoreTest.kt       |  34 ++++++
+ 16 files changed, 767 insertions(+), 11 deletions(-)
+3362d104f 立《编排方法论》：在全自动编排之上撞出来的那一套用法
