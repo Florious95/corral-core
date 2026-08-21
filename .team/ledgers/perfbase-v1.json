@@ -89,6 +89,11 @@
    "condition": "requires_success",
    "from": "t.instr2",
    "to": "t.base"
+  },
+  {
+   "condition": "requires_success",
+   "from": "t.instr3",
+   "to": "t.base"
   }
  ],
  "evidence_policy": {
@@ -134,7 +139,7 @@
   "read_only_shared": [],
   "rules": []
  },
- "revision": 14,
+ "revision": 15,
  "roles": {
   "r.advisor": {
    "artifact_landing": {
@@ -989,6 +994,61 @@
    "seat_wait_seconds": 3600,
    "state": "succeeded",
    "title": "任务一·仪表补盲（回炉前置）：pb-emu 的 30/30 冷点开里 first_frame_recv 与 snapshot_applied 一次都没出现、first_draw 恒 emitted=0 reason=glyphs_zero，而服务端旁证说推了快照（snapshots_from_subscribe=32、perf_subscribe 60-80ms）。**先读 .team/nodes/pb-emu/说明.md 全文**。问题：两个打点都在静默 return 后面——SessionViewModel.onBinary 首行 `if (frame.ref != ref) return`，以及 PerfTrace 里 `opens[ref] ?: return`——所以「帧没到」和「帧到了被 ref 守卫吞了」在日志里都是沉默，分不出来。本格**只做仪表**：给这两条静默路径各补一行 emitted=0 的留痕，ref 不匹配那行必须同时给出两边操作数（键名逐字 frame_ref= 与 want_ref=），opens 落空那行 reason=no_open。⛔ 本格不许去修白屏本身、不许改判据、不许改红测断言——先让仪表能一锤定音，再谈修（回炉纪律：不许在盲的状态下改）。判据 tools/perfbase/judge-instr2.sh。"
+  },
+  "t.instr3": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.instr3",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-instr3.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.instr3"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.impl"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+    },
+    "read_paths": [
+     ".team/nodes/pb-emu/说明-r14-第二轮.md",
+     ".team/nodes/pb-emu/说明.md",
+     "tools/perfbase/judge-instr3.sh",
+     ".team/tasks/perfbase/任务书-01-仪表.md"
+    ],
+    "worktree_id": "wt-pb-instr3",
+    "write_paths": [
+     "app/",
+     ".team/nodes/pb-instr3/"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "任务一·仪表补盲第三轮（决胜格）：**先读 .team/nodes/pb-emu/说明-r14-第二轮.md 全文**。两轮实测已把世界收窄到：subscribe 发出了、服务端说推了快照（perf_subscribe 60-80ms、snapshots_from_subscribe 每连接 1），但 t.instr2 补的 ref_mismatch/no_open 30 次一条都没打 ⇒ SessionViewModel.onBinary 根本没被调用 ⇒ 帧没走到收帧口。剩两种世界分不开：①WS 层压根没收到这一帧 ②收到了但 ConnectionManager.kt:617 `listener?.onBinary(frame)` 的单一全局槽（:96 private var listener、:137 setListener）为 null 或被别的页面覆盖，`?.` 静默吞掉。本格**只补仪表、⛔ 不修白屏**：(a) :617 补 emitted=0 reason=no_listener，带两边操作数（frame 的 ref 与 listener_null=0/1）；(b) WS 二进制读入口补一行收帧留痕 ws_binary_recv，带 kind= 与 bytes=。两处一补即可一锤定音「没收到」还是「收到没派出去」。⛔ 不许改判据、不许改红测断言、⛔ 不许顺手改收帧逻辑本身（改了就分不清是修好了还是测错了）。判据 tools/perfbase/judge-instr3.sh。"
   },
   "t.red": {
    "acceptance": {
