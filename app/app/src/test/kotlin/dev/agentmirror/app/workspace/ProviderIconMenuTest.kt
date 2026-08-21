@@ -23,9 +23,13 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import dev.agentmirror.app.conn.Session
+import dev.agentmirror.app.ui.components.ProviderKind
+import dev.agentmirror.app.ui.components.providerBusyFill
+import dev.agentmirror.app.ui.components.providerKind
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.LightPalette
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -147,5 +151,23 @@ class ProviderIconMenuTest {
             c.alpha < 1f || c.red < 0.99f || c.green < 0.99f || c.blue < 0.99f
         assertTrue("浅色 well 不得是实心白底", notWhiteBlock(LightPalette.providerIconWell))
         assertTrue("深色 well 不得是实心白底", notWhiteBlock(DarkPalette.providerIconWell))
+    }
+
+    @Test
+    fun dualState_sameProviderKindsDistinctAndBusyFillsDiffer() {
+        val ids = listOf("claude_code", "codex", "copilot", "cursor", "grok", "pi")
+        val kinds = ids.map { providerKind(it) }.toSet()
+        assertEquals(6, kinds.size)
+        val fills = ids.map { providerBusyFill(providerKind(it)) }.toSet()
+        assertEquals("运行中六家实底色必须互异", 6, fills.size)
+        fills.forEach { c ->
+            assertTrue("运行中实底不得是灰描边那种低饱和近灰", c.red + c.green + c.blue > 1.2f)
+        }
+        assertTrue(
+            "idle 灰与 grok 运行色必须可分",
+            providerBusyFill(ProviderKind.Grok) != LightPalette.metaText,
+        )
+        assertEquals(ProviderKind.Agent, providerKind(""))
+        assertEquals(ProviderKind.Agent, providerKind("unknown"))
     }
 }
