@@ -161,7 +161,7 @@ fun AgentMirrorApp(
                         },
                         overlayFavorited = overlayFavorites.map { it.key }.toSet(),
                         onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
-                        onOpenOverlaySession = { ref, name -> navState.activeSession = ref to name },
+                        onOpenOverlaySession = { ref, name -> navState.openSession(ref, name) },
                     )
                 }
                 // 配对页：首启无配置，或用户从设置/重配入口进入。

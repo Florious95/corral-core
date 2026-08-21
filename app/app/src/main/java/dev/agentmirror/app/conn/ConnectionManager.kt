@@ -17,6 +17,7 @@
 package dev.agentmirror.app.conn
 
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.perf.PerfTrace
 
 /**
  * 连接层对外状态（docs/protocol.md §3 生命周期）。
@@ -342,7 +343,9 @@ class ConnectionManager(
         activeSubscriptions[ref] = rows to cols
         val conn = connection ?: return true // 已记簿，重连后重放
         if (!conn.isReady) return true
-        return conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols))
+        val ok = conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols))
+        if (ok) emitSubscribeSentAndGeom(ref, rows, cols)
+        return ok
     }
 
     /**
@@ -516,7 +519,26 @@ class ConnectionManager(
             "resize sent rows=$rows cols=$cols reason=$reason ok=$ok " +
                 "bookkept_rows=${after?.first ?: -1} bookkept_cols=${after?.second ?: -1}",
         )
+        if (ok && PerfTrace.isEnabled()) {
+            PerfTrace.noteReflow(ref, reason) // layout_settled
+        }
         return ok
+    }
+
+    /**
+     * 订阅帧真正发出后打 subscribe_sent / geom_seed（各一次/打开）。
+     * 未就绪只记簿时不打——等 replaySubscriptions 真发出再打（断线重连后进入）。
+     */
+    private fun emitSubscribeSentAndGeom(ref: String, rows: Int, cols: Int) {
+        if (!PerfTrace.isEnabled()) return
+        val id = PerfTrace.idFor(ref) ?: return
+        if (PerfTrace.takeSubscribeSent(ref)) {
+            PerfTrace.subscribeSent(id) // subscribe_sent
+        }
+        if (PerfTrace.takeGeomSeed(ref)) {
+            PerfTrace.geomSeed(id, rows, cols) // geom_seed
+            PerfTrace.noteReflow(ref, "subscribe")
+        }
     }
 
     // ---- 内部 ----
@@ -623,7 +645,8 @@ class ConnectionManager(
             }
         }
         for ((ref, dims) in activeSubscriptions) {
-            conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
+            val ok = conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
+            if (ok) emitSubscribeSentAndGeom(ref, dims.first, dims.second)
         }
         for (workspace in activeLevel2) {
             conn.send(Level2SubscribeFrame(workspace = workspace))

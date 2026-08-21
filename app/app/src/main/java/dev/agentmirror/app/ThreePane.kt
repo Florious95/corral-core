@@ -145,7 +145,7 @@ internal fun ThreePaneHome(
                 ThreePane.Favorites -> FavoritesPane(
                     viewModel = workspaceViewModel,
                     connectionPath = ServiceWire.connectionPath(),
-                    onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                    onOpenSession = { ref, name -> navState.openSession(ref, name) },
                 )
                 ThreePane.Sessions -> WorkspaceScreen(
                     viewModel = workspaceViewModel,
@@ -158,7 +158,7 @@ internal fun ThreePaneHome(
                         navState.showSettings = true
                         navState.homePane = ThreePane.Settings
                     },
-                    onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                    onOpenSession = { ref, name -> navState.openSession(ref, name) },
                 )
                 ThreePane.Settings -> SettingsScreen(
                     onBack = {
