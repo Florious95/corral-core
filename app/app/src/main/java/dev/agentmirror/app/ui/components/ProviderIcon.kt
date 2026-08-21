@@ -1,11 +1,20 @@
 package dev.agentmirror.app.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -60,6 +69,30 @@ fun ProviderIcon(
     }
 }
 
+/**
+ * 补证用：六家 × 运行/空闲同屏。不进主导航；MainActivity extra `provider_icon_board=true` 才挂。
+ */
+@Composable
+fun ProviderIconFamilyBoard(modifier: Modifier = Modifier) {
+    val p = LocalAppPalette.current
+    Column(
+        modifier
+            .fillMaxSize()
+            .background(p.screenBackground)
+            .padding(start = 16.dp, end = 16.dp, top = 48.dp, bottom = 24.dp)
+            .testTag("provider-icon-board"),
+    ) {
+        Text("运行   空闲", color = p.metaText, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+        ProviderIconIds.forEach { id ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ProviderIcon(id, busy = true, modifier = Modifier.testTag("board-busy-$id"))
+                ProviderIcon(id, busy = false, modifier = Modifier.testTag("board-idle-$id"))
+                Text(providerDisplayName(id), color = p.rowTitleText, fontSize = 16.sp)
+            }
+        }
+    }
+}
+
 fun providerDisplayName(id: String): String = when (id) {
     "claude_code" -> "Claude Code"
     "codex" -> "Codex"
@@ -70,7 +103,69 @@ fun providerDisplayName(id: String): String = when (id) {
     else -> "Agent"
 }
 
+internal val ProviderIconIds = listOf("claude_code", "codex", "copilot", "cursor", "grok", "pi")
+
 internal enum class ProviderKind { Claude, Codex, Copilot, Cursor, Grok, Pi, Agent }
+
+/** 六家 glyph 的几何资源。复制任一家到另一家，[glyphGeom] 两两相等，单测必须红。 */
+internal fun glyphGeom(kind: ProviderKind): List<String> = when (kind) {
+    ProviderKind.Claude -> listOf(
+        "rr 3.4 6.2 16.6 18.2 6.4",
+        "ov 8.2 1.4 11.8 5.0",
+        "rr 9.25 4.4 10.75 7.0 0.7",
+    )
+    ProviderKind.Codex -> listOf(
+        "rr 4.2 3.6 15.8 17.6 3.2",
+        "rr 1.6 5.4 4.4 15.8 1.3",
+        "rr 15.6 5.4 18.4 15.8 1.3",
+    )
+    ProviderKind.Copilot -> listOf(
+        "ov 4.6 4.4 15.4 16.8",
+        "poly 2.2,7.2 6.4,10.6 2.2,14.0",
+        "poly 17.8,7.2 13.6,10.6 17.8,14.0",
+    )
+    ProviderKind.Cursor -> listOf(
+        "poly 5.0,2.6 16.8,10.2 10.4,11.6 8.2,18.0",
+    )
+    ProviderKind.Grok -> listOf(
+        "ov 4.8 5.2 15.2 15.6",
+        "ring 10 10.4 8.2",
+    )
+    ProviderKind.Pi -> listOf(
+        "rr 3.8 3.8 16.2 12.6 5.6",
+        "rr 5.6 11.4 8.4 18.2 1.4",
+        "rr 11.6 11.4 14.4 18.2 1.4",
+    )
+    ProviderKind.Agent -> listOf(
+        "ov 4.2 4.0 15.8 16.6",
+    )
+}
+
+/** 运行=实底，空闲=描边。两态资源必须不相等。 */
+internal data class ProviderIconResource(
+    val geom: List<String>,
+    val filled: Boolean,
+    val colorArgb: Int,
+)
+
+internal fun providerIconResource(id: String, busy: Boolean, idleArgb: Int): ProviderIconResource {
+    val kind = providerKind(id)
+    val fill = providerBusyFill(kind)
+    return ProviderIconResource(
+        geom = glyphGeom(kind),
+        filled = busy,
+        colorArgb = if (busy) {
+            android.graphics.Color.argb(
+                (fill.alpha * 255).toInt(),
+                (fill.red * 255).toInt(),
+                (fill.green * 255).toInt(),
+                (fill.blue * 255).toInt(),
+            )
+        } else {
+            idleArgb
+        },
+    )
+}
 
 internal fun providerKind(id: String): ProviderKind = when (id) {
     "claude_code" -> ProviderKind.Claude
@@ -125,41 +220,34 @@ private fun DrawScope.drawProviderGlyph(
     }
 }
 
-private fun glyphBody(kind: ProviderKind): Path = when (kind) {
-    ProviderKind.Claude -> Path().apply {
-        addRoundRect(RoundRect(Rect(3.4f, 6.2f, 16.6f, 18.2f), CornerRadius(6.4f, 6.4f)))
-        // 头顶天线小球
-        addOval(Rect(8.2f, 1.4f, 11.8f, 5.0f))
-        addRoundRect(RoundRect(Rect(9.25f, 4.4f, 10.75f, 7.0f), CornerRadius(0.7f, 0.7f)))
+internal fun glyphBody(kind: ProviderKind): Path {
+    val path = Path()
+    glyphGeom(kind).forEach { op ->
+        val t = op.split(' ')
+        when (t[0]) {
+            "rr" -> path.addRoundRect(
+                RoundRect(
+                    Rect(t[1].toFloat(), t[2].toFloat(), t[3].toFloat(), t[4].toFloat()),
+                    CornerRadius(t[5].toFloat(), t[5].toFloat()),
+                ),
+            )
+            "ov" -> path.addOval(Rect(t[1].toFloat(), t[2].toFloat(), t[3].toFloat(), t[4].toFloat()))
+            "poly" -> {
+                val pairs = t.drop(1).flatMap { it.split(',') }
+                if (pairs.size >= 4) {
+                    path.moveTo(pairs[0].toFloat(), pairs[1].toFloat())
+                    var i = 2
+                    while (i + 1 < pairs.size) {
+                        path.lineTo(pairs[i].toFloat(), pairs[i + 1].toFloat())
+                        i += 2
+                    }
+                    path.close()
+                }
+            }
+            "ring" -> { /* 由 drawProviderGlyph 另画描边圆，几何仍计入资源指纹 */ }
+        }
     }
-    ProviderKind.Codex -> Path().apply {
-        addRoundRect(RoundRect(Rect(4.2f, 3.6f, 15.8f, 17.6f), CornerRadius(3.2f, 3.2f)))
-        addRoundRect(RoundRect(Rect(1.6f, 5.4f, 4.4f, 15.8f), CornerRadius(1.3f, 1.3f)))
-        addRoundRect(RoundRect(Rect(15.6f, 5.4f, 18.4f, 15.8f), CornerRadius(1.3f, 1.3f)))
-    }
-    ProviderKind.Copilot -> Path().apply {
-        addOval(Rect(4.6f, 4.4f, 15.4f, 16.8f))
-        moveTo(2.2f, 7.2f); lineTo(6.4f, 10.6f); lineTo(2.2f, 14.0f); close()
-        moveTo(17.8f, 7.2f); lineTo(13.6f, 10.6f); lineTo(17.8f, 14.0f); close()
-    }
-    ProviderKind.Cursor -> Path().apply {
-        moveTo(5.0f, 2.6f)
-        lineTo(16.8f, 10.2f)
-        lineTo(10.4f, 11.6f)
-        lineTo(8.2f, 18.0f)
-        close()
-    }
-    ProviderKind.Grok -> Path().apply {
-        addOval(Rect(4.8f, 5.2f, 15.2f, 15.6f))
-    }
-    ProviderKind.Pi -> Path().apply {
-        addRoundRect(RoundRect(Rect(3.8f, 3.8f, 16.2f, 12.6f), CornerRadius(5.6f, 5.6f)))
-        addRoundRect(RoundRect(Rect(5.6f, 11.4f, 8.4f, 18.2f), CornerRadius(1.4f, 1.4f)))
-        addRoundRect(RoundRect(Rect(11.6f, 11.4f, 14.4f, 18.2f), CornerRadius(1.4f, 1.4f)))
-    }
-    ProviderKind.Agent -> Path().apply {
-        addOval(Rect(4.2f, 4.0f, 15.8f, 16.6f))
-    }
+    return path
 }
 
 private fun DrawScope.drawEyes(kind: ProviderKind, busy: Boolean, ink: Color) {
