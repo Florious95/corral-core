@@ -4,7 +4,22 @@
   "mechanical_exit_code_is_authoritative": true
  },
  "audit": {
-  "route_hops": []
+  "route_hops": [
+   {
+    "at_revision": 3,
+    "case_id": "ledger_perfbase_v1__t.app__r3",
+    "from": "t.app",
+    "status": "done",
+    "to": "t.rv.instr"
+   },
+   {
+    "at_revision": 4,
+    "case_id": "ledger_perfbase_v1__t.rv.instr__r4",
+    "from": "t.rv.instr",
+    "status": "rework",
+    "to": "t.app"
+   }
+  ]
  },
  "dependencies": [
   {
@@ -100,7 +115,7 @@
   "read_only_shared": [],
   "rules": []
  },
- "revision": 1,
+ "revision": 7,
  "roles": {
   "r.advisor": {
    "artifact_landing": {
@@ -239,6 +254,18 @@
      "c.app.green"
     ]
    },
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.app.green",
+      "acceptance_success.writeback_revision=4"
+     ],
+     "attempt_id": "att-t.app-seq3-t1787339080879",
+     "delivery_id": "del-t.app-seq3-t1787339080879",
+     "state": "succeeded",
+     "writeback_revision": 4
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -278,7 +305,7 @@
      "name": "done"
     }
    ],
-   "title": "任务一·转绿格：实现 PerfTrace 本体并把八个打点接进产品链路（tap/route_enter/subscribe_sent/geom_seed/first_frame_recv/snapshot_applied/first_draw/layout_settled），红测转绿、全量单测绿。关时必须在调用点最外层短路（关=零分配零拼串）；每个事件带操作数不只带判决；收藏页进入/断线重连后进入/旋转后重进这些路径也要覆盖。⛔ 不许改红测方法名/断言/加 @Ignore。细则读 .team/tasks/perfbase/任务书-01-仪表.md"
+   "title": "任务一·转绿格：实现 PerfTrace 本体并把八个打点接进产品链路（tap/route_enter/subscribe_sent/geom_seed/first_frame_recv/snapshot_applied/first_draw/layout_settled），红测转绿、全量单测绿。关时必须在调用点最外层短路（关=零分配零拼串）；每个事件带操作数不只带判决；收藏页进入/断线重连后进入/旋转后重进这些路径也要覆盖。⛔ 不许改红测方法名/断言/加 @Ignore。细则读 .team/tasks/perfbase/任务书-01-仪表.md｜【第2轮·返修】判者 t.rv.instr 判 rework，逐条理由与代码原文证据在 .team/nodes/pb-rv-instr/裁定.md（**先读它再动手**）。三条要修：①守卫没走进去时 PerfTrace 沉默（subscribe 未就绪/send 失败/idFor 空/take* 已占用/glyphs==0），分不出「该做而没做」与「做了但被吞」⇒ 每个守卫打一行带参与比较的两边操作数，或同 ev 带 emitted=0 reason=；②断线重连重放的 subscribe被第一次打开的 take* 吃掉，日志里看不见 ⇒ 重放必须可见；③layout_settled 不触发/被 unbind 取消时零行，且缺最终 rows=/cols= ⇒ 补终态与取消原因。⛔ 不许改判据、不许改红测断言来绕。"
   },
   "t.base": {
    "acceptance": {
@@ -881,6 +908,18 @@
      "c.red"
     ]
    },
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.red",
+      "acceptance_success.writeback_revision=2"
+     ],
+     "attempt_id": "att-t.red-seq1-t1787338594350",
+     "delivery_id": "del-t.red-seq1-t1787338594350",
+     "state": "succeeded",
+     "writeback_revision": 2
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -912,7 +951,7 @@
     ]
    },
    "seat_wait_seconds": 1800,
-   "state": "planned",
+   "state": "succeeded",
    "title": "任务一·先红格：写 PerfTrace 的 API 骨架（能编译、方法体不发日志）+ 三条红测。红测文件 app/app/src/test/kotlin/dev/agentmirror/app/perf/PerfTraceChainTest.kt，方法名逐字：perfTrace_关闭时零行 / perfTrace_一次打开产出八事件且open_id一致且时间单调 / perfTrace_两次并发打开open_id不串。判据要求「编译得过 且 测试 FAILED」——⛔ 编译不过=不可判(2)，不算先红；⛔ 不许写实现。细则读 .team/tasks/perfbase/任务书-01-仪表.md"
   },
   "t.repo": {
@@ -1192,6 +1231,15 @@
      ".team/nodes/pb-rv-instr/"
     ]
    },
+   "rounds": [
+    {
+     "at_revision": 4,
+     "case_id": "ledger_perfbase_v1__t.rv.instr__r4",
+     "n": 1,
+     "reason": "",
+     "status": "rework"
+    }
+   ],
    "seat_wait_seconds": 2400,
    "state": "planned",
    "statuses": [
@@ -1242,6 +1290,18 @@
      "c.srv.green"
     ]
    },
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.srv.green",
+      "acceptance_success.writeback_revision=3"
+     ],
+     "attempt_id": "att-t.srv-seq2-t1787338594609",
+     "delivery_id": "del-t.srv-seq2-t1787338594609",
+     "state": "succeeded",
+     "writeback_revision": 3
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -1271,7 +1331,7 @@
     ]
    },
    "seat_wait_seconds": 2400,
-   "state": "planned",
+   "state": "succeeded",
    "title": "任务一·服务端格：给 subscribe 帧打三时间戳，键名逐字 perf_subscribe/recv_ms/start_ms/done_ms/queue_ms（queue_ms=start-recv）。用 server 现有 logger，⛔ 不引新依赖，⛔ 热路径不许无条件格式化字符串。go build ./... && go test ./... 必须绿（基线退出码为 0，增量任何红即红）。细则读 .team/tasks/perfbase/任务书-01-仪表.md"
   }
  },
