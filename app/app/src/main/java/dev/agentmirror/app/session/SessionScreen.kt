@@ -356,6 +356,7 @@ fun SessionScreen(
                     currentSessionId = viewModel.ref,
                     onDismiss = viewModel::closeOverlay,
                     onSelect = { item ->
+                        // 094：浮层列表可按 sortSessions 重排，按 item.id（= ref）回源，禁止按下标。
                         val entry = byRef[item.id] ?: return@SessionSwitchSheet
                         viewModel.closeOverlay()
                         onOpenOverlaySession(entry.ref, entry.identityLabel)
