@@ -122,6 +122,9 @@ func errString(err error) string {
 // deltas. Re-subscribing the same ref is idempotent: the previous subscription
 // is torn down and a fresh snapshot is replayed (requirement 004 reconnect
 // replay). A failure to subscribe is an error frame.
+//
+// Subscribe-frame timestamps (recv/start/done/queue_ms) are logged at the
+// handleFrame call site so every return path is covered once.
 func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// 订阅计数（含首次与重复订阅；重复订阅 = 重连或客户端重订阅 → 推完整快照 → 整屏重建）。
 	c.s.sendQueue.recordSubscribe()

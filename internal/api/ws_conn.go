@@ -9,6 +9,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,6 +20,15 @@ import (
 	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
 )
+
+// perfOrigin is the process-local monotonic origin for subscribe-frame
+// timestamps. Values are elapsed milliseconds (time.Since), not wall clock
+// (UnixMilli can jump; the app-side analog is elapsedRealtime).
+var perfOrigin = time.Now()
+
+func perfNowMS() int64 {
+	return time.Since(perfOrigin).Milliseconds()
+}
 
 // connSeq assigns each connection a monotonically increasing id for logging.
 var connSeq atomic.Uint64
@@ -139,11 +149,14 @@ func (c *wsConn) readLoop() {
 			c.closeReason = "read_error: " + err.Error()
 			return
 		}
+		// Stamp recv before parse/dispatch. Integer only — no string format
+		// on this hot path. Logging happens solely on subscribe (below).
+		recvMS := perfNowMS()
 		if typ == wsBinary {
 			c.sendError(protocol.ErrCodeBadFrame, "binary frames are server-to-client only")
 			continue
 		}
-		if !c.handleFrame(data) {
+		if !c.handleFrame(data, recvMS) {
 			return
 		}
 	}
@@ -346,7 +359,7 @@ func (c *wsConn) sendClose(code websocket.StatusCode, reason string) {
 // the connection should stop reading (auth rejection). Unknown frame types and
 // unparsable frames get a protocol error; frames the server never receives
 // from a client (listing, input_ack, …) are refused as unsupported_type.
-func (c *wsConn) handleFrame(data []byte) bool {
+func (c *wsConn) handleFrame(data []byte, recvMS int64) bool {
 	typed, err := protocol.UnmarshalFrame(data)
 	if err != nil {
 		c.classifyCodecError(err)
@@ -368,7 +381,9 @@ func (c *wsConn) handleFrame(data []byte) bool {
 	case protocol.List:
 		c.handleList(t)
 	case protocol.Subscribe:
+		startMS := perfNowMS()
 		c.handleSubscribe(t)
+		c.logPerfSubscribe(t.Ref, recvMS, startMS, perfNowMS())
 	case protocol.Unsubscribe:
 		c.handleUnsubscribe(t)
 	case protocol.Input:
@@ -395,6 +410,27 @@ func (c *wsConn) handleFrame(data []byte) bool {
 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
 	}
 	return true
+}
+
+// logPerfSubscribe emits one structured line for a subscribe frame.
+// Keys are the t.srv contract (verbatim): msg=perf_subscribe plus
+// recv_ms / start_ms / done_ms / queue_ms, with queue_ms = start-recv.
+// @contract
+// @pre recvMS/startMS/doneMS are perfNowMS() samples taken at Read / dispatch / return
+// @post one Info line when the logger accepts Info; logger-off path does not format a string
+// @inv does not log pane contents, tokens, or socket paths
+func (c *wsConn) logPerfSubscribe(ref string, recvMS, startMS, doneMS int64) {
+	log := c.s.log
+	if log == nil || !log.Enabled(c.ctx, slog.LevelInfo) {
+		return
+	}
+	log.Info("perf_subscribe",
+		"recv_ms", recvMS,
+		"start_ms", startMS,
+		"done_ms", doneMS,
+		"queue_ms", startMS-recvMS,
+		"ref", ref,
+	)
 }
 
 // classifyCodecError maps a codec error to the protocol error frame and, for
