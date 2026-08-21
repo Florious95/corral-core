@@ -1,0 +1,309 @@
+{
+ "schema_version": "ledger.v2",
+ "ledger_id": "ledger.pr3.v1",
+ "run": {
+  "desired_state": "running"
+ },
+ "roles": {
+  "r.gofix": {
+   "provider": "grok",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/pr3-gofix/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "pr3-gofix",
+    "team": "grok-l2",
+    "workspace": "/Volumes/nvme/Projects/远程Agent安卓"
+   }
+  },
+  "r.gofix.rv": {
+   "provider": "claude_code",
+   "seat_policy": "fresh",
+   "artifact_landing": {
+    "path": ".team/nodes/pr3-gofix-rv/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "pr3-judge-go",
+    "team": "remote-agent-android",
+    "workspace": "/Volumes/nvme/Projects/远程Agent安卓"
+   }
+  },
+  "r.advisor": {
+   "provider": "grok",
+   "seat_policy": "resident_reuse",
+   "artifact_landing": {
+    "path": ".team/nodes/advisor/",
+    "form": "committed"
+   },
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   }
+  }
+ },
+ "tasks": {
+  "t.gofix": {
+   "title": "## 知识基底（已内联）—— basegen_ledger 从本格 write_paths 现算的模块影响闭包。\n**正向依赖 = 你消费的契约；反向依赖 = 你的回归自查范围。**\n\n# 知识基底 · ledger.pr3.v1 / t.gofix（tools/basegen_ledger.py 编译产物，手工编辑无效）\n\n## 1. 任务信封（账本原文，机械抽取）\n```\n# t.gofix · 🔴 main 上服务端编译坏了（P0 回归）\n\n## 现象（全量门在 main 上实测）\n```\nserver  cases 353 → 248（棘轮下行）  真单测失败 3\n  ❌ cmd/agentmirrord (package failure)\n  ❌ internal/api  (package failure)\n  ❌ go vet\n```\n```\n$ cd server && go build ./...\ninternal/api/lifecycle.go:252:12: undefined: scrubbedEnv\n```\n\n## 根因（leader 已定位，⛔ 你不用重新查，但要自己复核一遍）\n`server/internal/api/lifecycle.go:252` 的**生产代码**调用 `scrubbedEnv()`，\n而 `scrubbedEnv` **只定义在 `server/internal/api/tmux_test.go:157`**（测试文件）。\n⇒ `go build` 失败；`go test` 却能过（测试构建包含 `_test.go`）——所以它一直没被发现。\n\n## 你要做的\n把 `scrubbedEnv` 挪到**生产文件**里（放哪个文件你判断，`lifecycle.go` 或同包一个合适的位置），\n并**删掉 `tmux_test.go` 里那份重复定义**（同包重复定义会直接编译失败）。\n\n⚠️ `server/internal/bridge/bridge_test.go:66` 也有一个同名函数，**那是另一个包，⛔ 不要动它**。\n\n🔴 **⛔ 不要顺手改别的**。这是 P0 修复，diff 越小越好。\n\n## 判据\n- `A-gofix-build`：`go build ./... && go vet ./...` 绿。🔴 **先验红**：改之前跑，必须报\n  `undefined: scrubbedEnv`，把原始输出贴进说明.md。\n- `A-gofix-gotest`：`go test ./... -count=1` 绿，且**用例数不少于 353**\n  （本轮开始时的棘轮基线；⛔ 不许靠删测试凑绿）。\n- `A-gofix-gofmt`：`gofmt -l .` 输出为空。\n- `A-gofix-app`：App 套件仍绿（防跨面回归）。\n- `A-gofix-doc` / `A-gofix-seal`：说明含先验红原始输出 + 封版。\n\n## 🔴 这一格存在的原因，请你也读一遍\n**是我的判据只盖了半个仓**：`t.close`/`t.newpane` 改了 `server/`，\n而它们的判据只跑了 `./gradlew :app:testDebugUnitTest` + archwiki 棘轮 + Android Lint 棘轮——\n**没有任何一条编译过 Go**。四位评审席也没抓到（它们审 diff 与说明，⛔ 不跑构建）。\n⇒ 本格的判据里**同时含 `go build` 与 `go test`**：\n**`go test` 不能替代 `go build`**，生产码调 `_test.go` 里的符号，只有 `go build` 抓得到。\n\n---\n## 🔴 流程（PR 链）\n开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。\n1. 建分支 `git checkout -b pr/gofix-scrubbedenv`，只改自己 worktree 里的文件。\n2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— 封版由 leader 的判据自动做。报完⛔ 别再改那棵 worktree。\n3. ⛔ 不写 `/tmp`；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr3-gofix/tmp/`（自己 mkdir -p）。\n4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked`。\n5. **发现 `write_paths` 不够 ⇒ 报 `blocked` 让 leader 改账本，⛔ 不要自行扩写。**\n\n```\n\n- write_paths: server/internal/api/, .team/nodes/pr3-gofix/\n- read_paths: .team/nodes/pr3-gofix/说明.md\n- 判据: A-gofix-build, A-gofix-gotest, A-gofix-gofmt, A-gofix-app, A-gofix-doc, A-gofix-seal\n\n## 2. 架构基（wiki 现算影响闭包）\n- 写作用域包：internal/api\n- 正向依赖（你消费的契约，只读）：go_internal_agentstate, go_internal_bridge, go_internal_discovery, go_internal_protocol\n- **反向依赖（波及面 = 回归自查范围）**：go_cmd_agentmirrord\n\n### 闭包架构卡内联\n\n### Go · internal/api\n\n- **职责**：Package api implements the service-side WebSocket API and the image upload endpoint, wiring together discovery and bridge (task ws-api).\n- **导出面**：Discoverer, NewServer, NewStateProvider, Options, Server, StateProvider, TokenValidator\n- **依赖边**：internal/agentstate, internal/bridge, internal/discovery, internal/protocol\n\n### Go · cmd/agentmirrord\n\n- **职责**：Command agentmirrord is the service-side daemon of AgentMirror (product github.com/agentmirror/agentmirror): a sidecar that mirrors the user's existing tmux sessions to the Android app over WebSocket.\n- **导出面**：main\n- **依赖边**：internal/api, internal/config, internal/pairing, internal/tsnetd\n\n## 3. 需求基\n- 标题引用条目：（无编号引用）\n- requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）\n\n## 4. 纪律（本工程通用，违反即返工）\n- 判据要断言「世界变了」，不是「东西在那儿」。写完先拿它去跑坏状态，判不红就是白写。\n- 单测绿 ≠ 功能通。凡是用户能点到的东西，必须模拟器实测截图（见 .claude/skills/emulator-manual-test）。\n- ⛔⛔ 遍历进程只取 comm，禁止取 argv。⛔⛔ 绝不碰用户真实 tmux（默认 socket）。\n- 干完调一次 report_result，不要传 task_id 参数。不给 leader 发进度消息。\n\n\n---\n\n# t.gofix · 🔴 main 上服务端编译坏了（P0 回归）\n\n## 现象（全量门在 main 上实测）\n```\nserver  cases 353 → 248（棘轮下行）  真单测失败 3\n  ❌ cmd/agentmirrord (package failure)\n  ❌ internal/api  (package failure)\n  ❌ go vet\n```\n```\n$ cd server && go build ./...\ninternal/api/lifecycle.go:252:12: undefined: scrubbedEnv\n```\n\n## 根因（leader 已定位，⛔ 你不用重新查，但要自己复核一遍）\n`server/internal/api/lifecycle.go:252` 的**生产代码**调用 `scrubbedEnv()`，\n而 `scrubbedEnv` **只定义在 `server/internal/api/tmux_test.go:157`**（测试文件）。\n⇒ `go build` 失败；`go test` 却能过（测试构建包含 `_test.go`）——所以它一直没被发现。\n\n## 你要做的\n把 `scrubbedEnv` 挪到**生产文件**里（放哪个文件你判断，`lifecycle.go` 或同包一个合适的位置），\n并**删掉 `tmux_test.go` 里那份重复定义**（同包重复定义会直接编译失败）。\n\n⚠️ `server/internal/bridge/bridge_test.go:66` 也有一个同名函数，**那是另一个包，⛔ 不要动它**。\n\n🔴 **⛔ 不要顺手改别的**。这是 P0 修复，diff 越小越好。\n\n## 判据\n- `A-gofix-build`：`go build ./... && go vet ./...` 绿。🔴 **先验红**：改之前跑，必须报\n  `undefined: scrubbedEnv`，把原始输出贴进说明.md。\n- `A-gofix-gotest`：`go test ./... -count=1` 绿，且**用例数不少于 353**\n  （本轮开始时的棘轮基线；⛔ 不许靠删测试凑绿）。\n- `A-gofix-gofmt`：`gofmt -l .` 输出为空。\n- `A-gofix-app`：App 套件仍绿（防跨面回归）。\n- `A-gofix-doc` / `A-gofix-seal`：说明含先验红原始输出 + 封版。\n\n## 🔴 这一格存在的原因，请你也读一遍\n**是我的判据只盖了半个仓**：`t.close`/`t.newpane` 改了 `server/`，\n而它们的判据只跑了 `./gradlew :app:testDebugUnitTest` + archwiki 棘轮 + Android Lint 棘轮——\n**没有任何一条编译过 Go**。四位评审席也没抓到（它们审 diff 与说明，⛔ 不跑构建）。\n⇒ 本格的判据里**同时含 `go build` 与 `go test`**：\n**`go test` 不能替代 `go build`**，生产码调 `_test.go` 里的符号，只有 `go build` 抓得到。\n\n---\n## 🔴 流程（PR 链）\n开工先跑并把输出贴进说明.md：`pwd` 与 `git branch --show-current`。\n1. 建分支 `git checkout -b pr/gofix-scrubbedenv`，只改自己 worktree 里的文件。\n2. ⛔ 不 commit、⛔ 不 push、⛔ 不并线 —— 封版由 leader 的判据自动做。报完⛔ 别再改那棵 worktree。\n3. ⛔ 不写 `/tmp`；临时文件写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr3-gofix/tmp/`（自己 mkdir -p）。\n4. ⛔ 判据红了不许改判据让它变绿；判据本身写错 ⇒ 报 `blocked`。\n5. **发现 `write_paths` 不够 ⇒ 报 `blocked` 让 leader 改账本，⛔ 不要自行扩写。**\n",
+   "state": "planned",
+   "owner": {
+    "role": "r.gofix"
+   },
+   "seat_wait_seconds": 5400,
+   "unit": {
+    "module": "server",
+    "symbol": "scrubbedEnv",
+    "source": ".team/nodes/pr3-gofix/"
+   },
+   "resources": {
+    "worktree_id": "pr3.gofix",
+    "write_paths": [
+     "server/internal/api/",
+     ".team/nodes/pr3-gofix/"
+    ],
+    "read_paths": [
+     ".team/nodes/pr3-gofix/说明.md"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": false,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "HEAD"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr3-gofix/说明.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-gofix-build",
+      "argv": [
+       "sh",
+       "-c",
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix/server && go build ./... && go vet ./... ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-gofix-build.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800
+     },
+     {
+      "acceptance_id": "A-gofix-gotest",
+      "argv": [
+       "sh",
+       "-c",
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix/server && go test ./... -count=1 2>&1 | tee /dev/stderr | grep -c '^ok' | awk '{if($1<1) exit 1}' && go test ./... -count=1 ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-gofix-gotest.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-gofix-gofmt",
+      "argv": [
+       "sh",
+       "-c",
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix/server && test -z \"$(gofmt -l .)\" ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-gofix-gofmt.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600
+     },
+     {
+      "acceptance_id": "A-gofix-app",
+      "argv": [
+       "sh",
+       "-c",
+       "{ cd /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix/app && env -u TEAM_AGENT_API_KEY ./gradlew -q :app:testDebugUnitTest ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-gofix-app.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400
+     },
+     {
+      "acceptance_id": "A-gofix-doc",
+      "argv": [
+       "python3",
+       "-c",
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr3-gofix/说明.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix/.team/nodes/pr3-gofix/说明.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('hit=%r\\n'%hit)\nif not hit: sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nneed=['先验红','git branch --show-current','go build']\nmiss=[x for x in need if x not in s]\nsys.stderr.write('len=%d missing=%r\\n'%(len(s),miss))\nsys.exit(1 if miss or len(s)<600 else 0)\n"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-gofix-seal",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/seal-pr.sh /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix pr/gofix-scrubbedenv ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-gofix-seal.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-gofix-build",
+     "A-gofix-gotest",
+     "A-gofix-gofmt",
+     "A-gofix-app",
+     "A-gofix-doc",
+     "A-gofix-seal"
+    ]
+   }
+  },
+  "t.gofix.rv": {
+   "title": "# t.gofix.rv · 审 PR（异源评审席，⛔ 只读）\n\n被审：**分支 `pr/gofix-scrubbedenv`**，需求＝修 main 上服务端编译回归（`undefined: scrubbedEnv`）。\n⛔ 在这条分支上审，不要在 main 上审。\n\n## 四件事\n1. `git diff main...pr/gofix-scrubbedenv` 逐处看。**这是 P0 修复，diff 应当很小**——若含无关改动，refutes。\n2. 读 `.team/nodes/pr3-gofix/说明.md`，核对写的与 diff 里真做的是否一回事。\n3. 🔴 **查先验红**：说明里必须有改之前 `go build` 报 `undefined: scrubbedEnv` 的**原始输出**。\n   没有 ⇒ 直接 refutes。\n4. 🔴 **查它有没有靠删测试凑绿**：`go test` 用例数必须 ≥ 353（本轮棘轮基线）。\n\n## ⛔ 否决线\ndiff 超出修复范围；判据被改动过；说明与 diff 不符；用例数下降。\n\n## 产物\n写 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr3-gofix-rv/verdict.md`，第一行顶格为 `VERDICT: supports` / `refutes` / `inconclusive` 之一，\n理由逐条指到文件与行号，少于 300 字视为没审。⛔ 不许改产品代码、⛔ 不许写 /tmp。\n",
+   "state": "planned",
+   "owner": {
+    "role": "r.gofix.rv"
+   },
+   "seat_wait_seconds": 5400,
+   "unit": {
+    "module": "review",
+    "symbol": "gofix",
+    "source": ".team/nodes/pr3-gofix-rv/"
+   },
+   "resources": {
+    "worktree_id": "pr3.rv",
+    "write_paths": [
+     ".team/nodes/pr3-gofix-rv/"
+    ],
+    "read_paths": [
+     ".team/nodes/pr3-gofix/说明.md",
+     ".team/nodes/pr3-gofix/"
+    ],
+    "environment_fidelity": {
+     "runs_real_cli": false,
+     "injects_latency": false,
+     "carries_long_history": false
+    },
+    "provenance": {
+     "identity": "repo:remote-agent-android",
+     "revision": "HEAD"
+    }
+   },
+   "handoff": {
+    "route": "report_result",
+    "required_artifacts": [
+     "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr3-gofix-rv/verdict.md"
+    ]
+   },
+   "acceptance": {
+    "mechanical": [
+     {
+      "acceptance_id": "A-gofix-rv-form",
+      "argv": [
+       "python3",
+       "-c",
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr3-gofix-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.rv/.team/nodes/pr3-gofix-rv/verdict.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('hit=%r\\n'%hit)\nif not hit: sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nfirst=(s.splitlines() or [''])[0].strip()\nsys.stderr.write('verdict=%r\\n'%first)\nsys.exit(0 if first in ('VERDICT: supports','VERDICT: refutes','VERDICT: inconclusive') and len(s)>300 else 1)\n"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-gofix-rv-pass",
+      "argv": [
+       "python3",
+       "-c",
+       "import io,os,sys\ncands=[r'/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pr3-gofix-rv/verdict.md', r'/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.rv/.team/nodes/pr3-gofix-rv/verdict.md']\nhit=[c for c in cands if os.path.exists(c)]\nsys.stderr.write('hit=%r\\n'%hit)\nif not hit: sys.exit(1)\ns=io.open(hit[0],encoding='utf-8').read()\nfirst=(s.splitlines() or [''])[0].strip()\nsys.stderr.write('verdict=%r\\n'%first)\nsys.exit(0 if first=='VERDICT: supports' else 1)\n"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120
+     },
+     {
+      "acceptance_id": "A-gofix-land",
+      "argv": [
+       "sh",
+       "-c",
+       "{ bash /Volumes/nvme/Projects/远程Agent安卓/tools/gate/land-pr.sh pr/gofix-scrubbedenv /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.rv/.team/nodes/pr3-gofix-rv/verdict.md ; } > /Volumes/nvme/Projects/远程Agent安卓/.team/acclogs/A-gofix-land.log 2>&1"
+      ],
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 900
+     }
+    ],
+    "judgment": [],
+    "required": [
+     "A-gofix-rv-form",
+     "A-gofix-rv-pass",
+     "A-gofix-land"
+    ]
+   }
+  }
+ },
+ "dependencies": [
+  {
+   "from": "t.gofix",
+   "to": "t.gofix.rv",
+   "condition": "requires_success"
+  }
+ ],
+ "parallelism": [],
+ "transitions": [],
+ "handoff": {
+  "send_command": "team-agent send",
+  "result_route": "report_result",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "missing_result": "alarm",
+  "delivery_uncertain": "needs_reconcile"
+ },
+ "acceptance": {
+  "mechanical_exit_code_is_authoritative": true,
+  "judgment_requires_distinct_provider": true
+ },
+ "fallback": {
+  "F.ask-advisor": {
+   "agent": {
+    "role": "r.advisor"
+   },
+   "triggers": [
+    "blocked_on_unknown"
+   ],
+   "max_attempts": 1,
+   "action": "escalate_to_advisor",
+   "silent_substitution": false
+  }
+ },
+ "evidence_policy": {
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ],
+  "missing_evidence": "cannot_close_success"
+ },
+ "resource_isolation": {
+  "rules": [],
+  "read_only_shared": [],
+  "closed_read": false
+ },
+ "fanout_aggregation": {},
+ "audit": {},
+ "revision": 1
+}
