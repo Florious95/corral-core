@@ -1,0 +1,313 @@
+#!/usr/bin/env python3
+# //!
+# //! purpose: 账本收口机器人 —— 判据绿 → 封版 → 推分支 → 开远端 PR → 判者 pass → 并线 → 推 main
+# //! contract:
+# //!   provides:
+# //!     - name: autopr
+# //!       what: 轮询账本，把每一格的收口动作跑完，使远端 PR 列表成为「一事一PR一闭环」的证明
+# //! boundary:
+# //!   - ⛔ 不解冲突（解冲突是判断不是自动化）：冲突即 park 该格并记录，其余格继续
+# //!   - ⛔ 不改判据、不改账本、不动席位；只做 leader 侧的 seal/push/pr/land/push-main
+# //!   - ⛔ 判者未 pass 的格不许 land（铁律②：判据过了才并线）
+# //!   - 全程非交互：任何子进程都带超时与 BatchMode，⛔ 不许停下来等密码
+# //! maturity: wired
+#
+# 用法：
+#   python3 tools/autopr.py .team/ledgers/perfbase-v1.json            # 常驻，每 60s 一轮
+#   python3 tools/autopr.py .team/ledgers/perfbase-v1.json --once     # 跑一轮就退
+#
+# 两阶段（对应 CLAUDE.md「一事一PR一闭环」）：
+#   A 阶段 seal+PR：本格 state=succeeded（= 它自己的机械判据全绿）⇒ 封版、推分支、开远端 PR。
+#                   **在评审派单之前就开 PR**，这样评审是在 PR 上发生的。
+#   B 阶段 land+推main：管本格的判者格 pass ⇒ 并进 main，并立刻推 main 让该 PR 显示 merged。
+#                   land 之后才推 = PR 变 closed 而不是 merged，等于流程没发生过。
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATE_PATH = os.path.join(REPO, ".team", "nodes", "_driver", "autopr-state.json")
+LOG_PATH = os.path.join(REPO, ".team", "ledgers", "autopr.log")
+VERDICT_DIR = os.path.join(REPO, ".team", "nodes", "_driver", "verdicts")
+
+# 非交互环境：git/ssh/gh 任何一处弹提示都会挂死整夜，这里把所有交互入口关死。
+ENV = dict(os.environ)
+ENV.update({
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_ASKPASS": "/usr/bin/false",
+    "SSH_ASKPASS": "/usr/bin/false",
+    "GIT_SSH_COMMAND": "ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new",
+    "GH_PROMPT_DISABLED": "1",
+    "GH_NO_UPDATE_NOTIFIER": "1",
+})
+
+
+def log(msg):
+    line = "[autopr %s] %s" % (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), msg)
+    print(line, flush=True)
+    with open(LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+
+def run(argv, cwd=REPO, timeout=900):
+    """跑一条命令并返回 (rc, 合并输出)。超时按失败处理，⛔ 不重试（重试可能重复外部动作）。"""
+    try:
+        p = subprocess.run(argv, cwd=cwd, env=ENV, timeout=timeout,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode("utf-8", "replace")
+    except subprocess.TimeoutExpired:
+        return 124, "超时 %ss：%s（非交互环境下超时通常= 在等凭据）" % (timeout, " ".join(argv))
+    except OSError as e:
+        return 127, "起不来：%s" % e
+
+
+def load_state():
+    try:
+        with open(STATE_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(st):
+    os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
+    tmp = STATE_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(st, f, ensure_ascii=False, indent=1, sort_keys=True)
+    os.replace(tmp, STATE_PATH)  # 原子：中途死也不会留半份状态
+
+
+# ── 账本读取（只读；驱动器在并发写，靠它的原子 rename 保证我们读到的是完整的一份） ──
+
+def load_ledger(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def ancestors(deps, node):
+    """沿 dependencies 边（requires_success）向上取全部祖先。转移边不算依赖。"""
+    parents = {}
+    for e in deps:
+        parents.setdefault(e["to"], []).append(e["from"])
+    seen, stack = set(), list(parents.get(node, []))
+    while stack:
+        n = stack.pop()
+        if n in seen:
+            continue
+        seen.add(n)
+        stack.extend(parents.get(n, []))
+    return seen
+
+
+def judges_and_gates(led):
+    """判者格 = 词表里有 pass 的格。gated(J) = J 的祖先中，不被更靠上的判者认领的那些。"""
+    tasks = led["tasks"]
+    deps = led.get("dependencies", [])
+    judges = [tid for tid, t in tasks.items()
+              if any(s.get("name") == "pass" for s in (t.get("statuses") or []))]
+    anc = {j: ancestors(deps, j) for j in judges}
+    gates = {}
+    for j in judges:
+        claimed = set()
+        for other in judges:
+            if other != j and other in anc[j]:
+                claimed |= anc[other] | {other}
+        for t in anc[j] - claimed:
+            gates[t] = j
+    return gates
+
+
+def judge_verdict(led, jid):
+    """读判者格的裁定书，返回 (状态, 裁定书路径)。⛔ 只认文件里的 status= 行，不猜。"""
+    t = led["tasks"].get(jid) or {}
+    if t.get("state") != "succeeded":
+        return None, None
+    for p in (t.get("resources") or {}).get("write_paths") or []:
+        cand = os.path.join(REPO, p.rstrip("/"), "裁定.md")
+        if os.path.isfile(cand):
+            with open(cand, encoding="utf-8") as f:
+                m = re.search(r"^status=(pass|rework|inconclusive)$", f.read(), re.M)
+            return (m.group(1) if m else None), cand
+    return None, None
+
+
+# ── 收口三步 ──────────────────────────────────────────────────────────────
+
+def branch_of(tid):
+    return "pr/perfbase-" + tid.replace("t.", "", 1).replace(".", "-")
+
+
+def faces(led, tid):
+    """本格碰了哪张产品面 ⇒ 决定推哪个远端仓。只碰证据/文档的格不开远端 PR。"""
+    wp = (led["tasks"][tid].get("resources") or {}).get("write_paths") or []
+    out = []
+    if any(p.startswith("app/") or p == "app" for p in wp):
+        out.append("core")
+    if any(p.startswith("server/") or p == "server" for p in wp):
+        out.append("serve")
+    return out
+
+
+def ensure_branch(wt, br):
+    """驱动器建的 worktree 是 detached HEAD，而 seal-pr.sh 见「脏 + 不在目标分支」就拒绝 checkout
+    （那条守卫防的是「把树从正在干活的席位手里夺走」）。这里只在**确实安全**时先把分支建出来：
+    HEAD 是 detached、且目标分支还不存在 ⇒ `git switch -c` 只移动 ref，一个文件都不动。
+    ⛔ 已在别的分支上（席位跑偏了）或分支已被别处占用 ⇒ 不动，交给 seal-pr 的守卫拦下并 park。"""
+    rc, cur = run(["git", "-C", wt, "branch", "--show-current"], timeout=60)
+    if rc != 0:
+        return False, cur.strip()
+    if cur.strip() == br:
+        return True, "已在目标分支"
+    if cur.strip() != "":
+        return False, "worktree 在分支 %r 上（不是 detached），⛔ 不自动切" % cur.strip()
+    rc, out = run(["git", "-C", wt, "switch", "-c", br], timeout=120)
+    return rc == 0, out.strip()[-300:]
+
+
+def do_seal(led, tid):
+    wt = os.path.join(REPO, ".worktrees", (led["tasks"][tid]["resources"] or {})["worktree_id"])
+    br = branch_of(tid)
+    if not os.path.isdir(wt):
+        return False, "worktree 不存在：%s" % wt
+    ok, msg = ensure_branch(wt, br)
+    if not ok:
+        return False, "建分支失败：" + msg
+    rc, out = run(["bash", os.path.join(REPO, "tools/gate/seal-pr.sh"), wt, br], cwd=REPO, timeout=600)
+    return rc == 0, out.strip()[-800:]
+
+
+def do_pr(led, tid):
+    """推分支 + 开远端 PR。mirror-pr* 会把 gh pr create 的失败吞掉（仍 exit 0），
+    所以这里**自己再核一次 PR 到底在不在**——⛔ 不采信脚本的退出码。"""
+    br = branch_of(tid)
+    fs = faces(led, tid)
+    if not fs:
+        return True, "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）"
+    msgs = []
+    for face in fs:
+        script = "tools/mirror-pr.sh" if face == "core" else "tools/mirror-pr-serve.sh"
+        rc, out = run(["bash", os.path.join(REPO, script), br], cwd=REPO, timeout=900)
+        repo = "Florious95/corral-core" if face == "core" else "Florious95/corral-serve"
+        vrc, vout = run(["gh", "pr", "view", br, "--repo", repo, "--json", "url,state"], timeout=120)
+        if vrc != 0:
+            return False, "%s：脚本 rc=%d，但 gh pr view 查不到 PR（开 PR 很可能被吞了）\n%s\n%s" % (
+                face, rc, out.strip()[-600:], vout.strip()[-300:])
+        msgs.append("%s %s" % (face, vout.strip()))
+    return True, " | ".join(msgs)
+
+
+def write_verdict(led, tid, jid, jstatus, jpath):
+    """把账本事实翻译成 land-pr.sh 认的 verdict 文件。⛔ 这不是「代判者签字」——
+    首行 supports 的依据全部写在正文里，可逐条回溯到账本与裁定书。"""
+    os.makedirs(VERDICT_DIR, exist_ok=True)
+    t = led["tasks"][tid]
+    passed = [r.split("=")[-1] for a in (t.get("attempts") or [])
+              for r in (a.get("artifact_refs") or []) if r.startswith("acceptance_success.acceptance_id")]
+    p = os.path.join(VERDICT_DIR, tid + ".verdict")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write("VERDICT: supports\n")
+        f.write("# 本文件由 tools/autopr.py 依据账本事实生成，不是人写的裁定；依据如下，可逐条回溯。\n")
+        f.write("账本=%s revision=%s\n" % (led["ledger_id"], led.get("revision")))
+        f.write("本格=%s state=%s 通过的判据=%s\n" % (tid, t.get("state"), passed or "无（本格无机械判据）"))
+        if jid:
+            f.write("判者=%s state=succeeded status=%s 裁定书=%s\n" % (jid, jstatus, jpath))
+        else:
+            f.write("判者=无（本格是文书/证据格，不经异源评审；其内容本身即证据）\n")
+    return p
+
+
+def do_land(led, tid, jid, jstatus, jpath):
+    br = branch_of(tid)
+    v = write_verdict(led, tid, jid, jstatus, jpath)
+    rc, out = run(["bash", os.path.join(REPO, "tools/gate/land-pr.sh"), br, v], cwd=REPO, timeout=900)
+    if rc != 0:
+        # ⛔ 冲突不自动解：park 本格，其余格继续。
+        return False, out.strip()[-800:]
+    msgs = []
+    for face in faces(led, tid) or []:
+        script = "tools/mirror-pr.sh" if face == "core" else "tools/mirror-pr-serve.sh"
+        prc, pout = run(["bash", os.path.join(REPO, script)], cwd=REPO, timeout=900)  # 无参=只推 main
+        msgs.append("推 main(%s) rc=%d" % (face, prc))
+        if prc != 0:
+            msgs.append(pout.strip()[-400:])
+    return True, (out.strip()[-300:] + " | " + " ".join(msgs)).strip()
+
+
+# ── 主循环 ────────────────────────────────────────────────────────────────
+
+def tick(ledger_path, st):
+    led = load_ledger(ledger_path)
+    gates = judges_and_gates(led)
+    changed = False
+
+    # 仓根必须在 main：land-pr.sh 不做 checkout，它并进「当前 HEAD」。
+    rc, cur = run(["git", "branch", "--show-current"], timeout=60)
+    if cur.strip() != "main":
+        log("停手：仓根当前分支是 %r 而不是 main，land 会并错地方" % cur.strip())
+        return False
+
+    for tid, t in sorted(led["tasks"].items()):
+        rec = st.setdefault(tid, {})
+        if t.get("state") != "succeeded":
+            continue
+
+        if not rec.get("sealed"):
+            ok, msg = do_seal(led, tid)
+            rec["sealed"] = ok
+            rec["seal_msg"] = msg
+            changed = True
+            log("%s 封版 %s：%s" % (tid, "OK" if ok else "红", msg.replace("\n", " / ")[:300]))
+            if not ok:
+                continue
+
+        if not rec.get("pr"):
+            ok, msg = do_pr(led, tid)
+            rec["pr"] = ok
+            rec["pr_msg"] = msg
+            changed = True
+            log("%s 开 PR %s：%s" % (tid, "OK" if ok else "红", msg.replace("\n", " / ")[:300]))
+            if not ok:
+                continue
+
+        if rec.get("landed"):
+            continue
+        jid = gates.get(tid)
+        if jid:
+            jstatus, jpath = judge_verdict(led, jid)
+            if jstatus != "pass":
+                continue  # 判者还没 pass ⇒ ⛔ 不许并线（铁律②）
+        else:
+            jstatus = jpath = None
+        ok, msg = do_land(led, tid, jid, jstatus, jpath)
+        rec["landed"] = ok
+        rec["land_msg"] = msg
+        changed = True
+        log("%s 并线 %s：%s" % (tid, "OK" if ok else "红(park，不自动解冲突)", msg.replace("\n", " / ")[:300]))
+
+    return changed
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    once = "--once" in sys.argv
+    ledger_path = args[0] if args else os.path.join(REPO, ".team/ledgers/perfbase-v1.json")
+    interval = 60
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    log("起：账本=%s once=%s 间隔=%ss" % (ledger_path, once, interval))
+    while True:
+        try:
+            st = load_state()
+            if tick(ledger_path, st):
+                save_state(st)
+        except Exception as e:  # 单轮出错不许拖垮整夜
+            log("本轮异常（下轮继续）：%r" % e)
+        if once:
+            return 0
+        time.sleep(interval)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
