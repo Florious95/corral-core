@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 可分享路径（feat-diagnostic-log-export）：仅暴露诊断日志导出目录
+  filesDir/diag/，其它目录一律不可经 FileProvider 访问（最小暴露面）。
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="diag" path="diag/" />
+</paths>
