@@ -26,8 +26,25 @@ _s.excepthook = _hook
 import json, sys
 d = json.load(open(sys.argv[1]))
 
-THRESH, MIN_N = 10.0, 10
+THRESH, MIN_N = 10.0, 20
 SEGS = ("first_draw", "layout_settled")
+
+# 🔴 方法学闸（2026-08-23 用户裁定走"提高量测质量"这条路之后加的，⛔ 这是收紧不是放宽）
+# 第一轮实测失败的教训：debug 包 p50 在 1-2s 量级，而 release 地板是 ~150ms —— **差一个数量级**；
+# 同一夹具量出 p50 +34.7% 而 p95 -44.8%，**方向都对不上** ⇒ 噪声压过了效应。
+# 在那种条件下判据即使给出 0 或 1，那个数也是噪声，不是结论。所以：条件不达标 = 判不出。
+bt = d.get("build_type")
+if bt != "release":
+    print("UNJUDGEABLE build_type=%r —— 必须用 release 包对拍。" % (bt,))
+    print("     debug 包 p50 在 1-2s 量级、release 地板 ~150ms，不是同一量程，测了也不能比。")
+    sys.exit(2)
+l1 = d.get("load1")
+if not isinstance(l1, (int, float)):
+    print("UNJUDGEABLE json 里没有数值 load1，认不出测的时候机器多吵"); sys.exit(2)
+if l1 > 12.0:
+    print("UNJUDGEABLE load1=%.2f > 12 —— 机器太吵，判不出。" % l1)
+    print("     20260822 地板的负载区间是 6.87-10.49；load 上到 13-24 时，机器漂移大于要检测的效应。")
+    sys.exit(2)
 
 a5, b5 = (d.get("A") or {}).get("apk_md5"), (d.get("B") or {}).get("apk_md5")
 if not a5 or not b5:
