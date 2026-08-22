@@ -1,0 +1,23 @@
+<!--
+Copyright 2026 AgentMirror Project Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<resources>
+    <!--
+      品牌背景深蓝（自适应启动图标背景；UnusedResources stage3 #19 修复后仅存本被引用色）。
+      brand_primary 曾同值 0xFF1B2A4A，实测零引用（Compose 主题经 ui/theme 的
+      LightColorScheme/DarkColorScheme 直接取值，不读 R.color），已随 #19 删除。
+    -->
+    <color name="brand_background">#0D1626</color>
+</resources>
