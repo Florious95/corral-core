@@ -1,0 +1,6 @@
+[ledger-run 2026-08-22T07:55:32Z] 开工 start | ledger_id=ledger.coreapp.v1 revision=12 账本=.team/ledgers/coreapp-v1.json 墙钟上限=57600s 派单死线=90s
+[ledger-run 2026-08-22T07:55:32Z] 轮次 round | 第 1 轮开始：前沿 ["t.perf"]（墙钟已跑 0s / 上限 57600s）
+[ledger-run 2026-08-22T07:55:32Z] 派单 dispatch | task=t.perf 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pb-emu 席位=pb-emu attempt=att-t.perf-seq1-t1787385332940 delivery=del-t.perf-seq1-t1787385332940 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T07:55:33Z] 投递回执 send-ok | task=t.perf case_id=ledger_coreapp_v1__t.perf__r12 message_id=msg_c7d693418350 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T07:55:33Z] 派单落地 dispatch-landed | task=t.perf 席位 pb-emu 的收件箱已多出这条派单
+[ledger-run 2026-08-22T07:55:33Z] 等待 wait | task=t.perf 在等的 key（case_id）=ledger_coreapp_v1__t.perf__r12 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds

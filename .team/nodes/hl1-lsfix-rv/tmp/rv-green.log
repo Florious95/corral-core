@@ -1,0 +1,14 @@
+# 在 PR worktree（.worktrees/hl1.lsfix，HEAD=8272ec1ff）只读跑
+$ go build ./... && go vet ./... && go test ./internal/api/ -run 'TestListingTick|TestHandleListDoesNotBlock|TestProcFinder' -count=1 -race
+ok  	github.com/agentmirror/agentmirror/internal/api	1.646s
+$ go test ./... -count=1
+ok  	.../cmd/agentmirrord	0.568s
+ok  	.../internal/api	46.274s
+ok  	.../internal/bridge	22.239s
+ok  	.../internal/config	3.766s
+ok  	.../internal/discovery	4.621s
+ok  	.../internal/overlay	4.868s
+ok  	.../internal/pairing	0.964s
+ok  	.../internal/protocol	2.433s
+ok  	.../internal/provider	1.376s
+ok  	.../internal/tsnetd	1.939s

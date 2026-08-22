@@ -1,0 +1,6 @@
+[ledger-run 2026-08-22T07:17:06Z] 开工 start | ledger_id=ledger.coreapp.v1 revision=9 账本=.team/ledgers/coreapp-v1.json 墙钟上限=57600s 派单死线=90s
+[ledger-run 2026-08-22T07:17:06Z] 收工 finish | 停机原因=AwaitingHuman 写回=[] 冻结=[] 不可判=[] 墙钟已跑 0s
+[ledger-run 2026-08-22T07:17:06Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-22T07:17:06Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+ledger_id: ledger.coreapp.v1  revision: 9 → 9  wrote_back: []  frozen: []  unjudgeable: []  preflight_rejected: false  awaiting_human: true  idle_reason: Some("no_dispatch")
+notice: ledger_id: ledger.coreapp.v1 | revision: 9 | 停机原因: AwaitingHuman | 最后失败判据: 未干完的任务（非 Succeeded）: t.close=Planned, t.esc=Planned, t.perf=Planned, t.rv=Planned | 各任务终态: t.capp=Succeeded, t.close=Planned, t.esc=Planned, t.path=Succeeded, t.perf=Planned, t.pub=Succeeded, t.rv=Planned

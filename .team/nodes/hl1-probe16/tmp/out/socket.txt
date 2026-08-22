@@ -1,0 +1,1 @@
+socket=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/tmux/tmux-501/default len=82

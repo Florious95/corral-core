@@ -1,0 +1,1869 @@
+{
+  "acceptance": {
+    "judgment_requires_distinct_provider": true,
+    "mechanical_exit_code_is_authoritative": true
+  },
+  "audit": {
+    "route_hops": [
+      {
+        "from": "t.app",
+        "to": "t.rv.instr",
+        "status": "done",
+        "at_revision": 3,
+        "case_id": "ledger_perfbase_v1__t.app__r3"
+      },
+      {
+        "from": "t.rv.instr",
+        "to": "t.app",
+        "status": "rework",
+        "at_revision": 4,
+        "case_id": "ledger_perfbase_v1__t.rv.instr__r4"
+      },
+      {
+        "from": "t.app",
+        "to": "t.rv.instr",
+        "status": "done",
+        "at_revision": 7,
+        "case_id": "ledger_perfbase_v1__t.app__r7"
+      },
+      {
+        "from": "t.rv.instr",
+        "to": "t.base",
+        "status": "pass",
+        "at_revision": 8,
+        "case_id": "ledger_perfbase_v1__t.rv.instr__r8"
+      },
+      {
+        "from": "t.rv.base",
+        "to": "t.core",
+        "status": "pass",
+        "at_revision": 21,
+        "case_id": "ledger_perfbase_v1__t.rv.base__r21"
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.red",
+      "same_source_required": false,
+      "to": "t.app"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.app",
+      "same_source_required": false,
+      "to": "t.rv.instr"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.srv",
+      "same_source_required": false,
+      "to": "t.rv.instr"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.base",
+      "same_source_required": false,
+      "to": "t.rv.base"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.core",
+      "same_source_required": false,
+      "to": "t.cperf"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.cperf",
+      "same_source_required": false,
+      "to": "t.repo"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.repo",
+      "same_source_required": false,
+      "to": "t.rv.final"
+    },
+    {
+      "condition": "requires_success",
+      "from": "t.instr2",
+      "to": "t.base"
+    },
+    {
+      "condition": "requires_success",
+      "from": "t.instr3",
+      "to": "t.base"
+    },
+    {
+      "condition": "requires_success",
+      "from": "t.instr4",
+      "to": "t.base"
+    },
+    {
+      "condition": "requires_success",
+      "from": "t.fixblank",
+      "to": "t.base"
+    }
+  ],
+  "evidence_policy": {
+    "missing_evidence": "cannot_close_success",
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ]
+  },
+  "fallback": {
+    "f.escalate": {
+      "action": "escalate_to_advisor",
+      "agent": {
+        "role": "r.advisor"
+      },
+      "max_attempts": 1,
+      "silent_substitution": false,
+      "triggers": [
+        "blocked_on_unknown",
+        "result_deadline_elapsed",
+        "delivery_uncertain"
+      ]
+    }
+  },
+  "fanout_aggregation": {},
+  "handoff": {
+    "delivery_uncertain": "needs_reconcile",
+    "missing_result": "alarm",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "result_route": "report_result",
+    "send_command": "team-agent send"
+  },
+  "ledger_id": "ledger.perfbase.v1",
+  "parallelism": [],
+  "resource_isolation": {
+    "closed_read": false,
+    "read_only_shared": [],
+    "rules": []
+  },
+  "revision": 23,
+  "roles": {
+    "r.advisor": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/advisor/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.emu": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/pb-emu/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "pb-emu",
+        "team": "remote-agent-android"
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.impl": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/pb-green/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "pb-impl",
+        "team": "grok-l2"
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.rv1": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/pb-rv-instr/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "pb-rv1",
+        "team": "remote-agent-android"
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.rv2": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/pb-rv-base/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "pb-rv2",
+        "team": "remote-agent-android"
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.srv": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/pb-srv/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "pb-srv",
+        "team": "grok-l2"
+      },
+      "seat_policy": "fresh"
+    },
+    "r.test": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/pb-red/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "pb-test",
+        "team": "grok-l2"
+      },
+      "seat_policy": "fresh"
+    }
+  },
+  "run": {
+    "desired_state": "running"
+  },
+  "schema_version": "ledger.v2",
+  "tasks": {
+    "t.app": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.app.green",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-app-green.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.app.green"
+        ]
+      },
+      "attempts": [
+        {
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.app.green",
+            "acceptance_success.writeback_revision=4"
+          ],
+          "attempt_id": "att-t.app-seq3-t1787339080879",
+          "delivery_id": "del-t.app-seq3-t1787339080879",
+          "state": "succeeded",
+          "writeback_revision": 4
+        },
+        {
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.app.green",
+            "acceptance_success.writeback_revision=8"
+          ],
+          "attempt_id": "att-t.app-seq1-t1787340729511",
+          "delivery_id": "del-t.app-seq1-t1787340729511",
+          "state": "succeeded",
+          "writeback_revision": 8
+        }
+      ],
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-01-仪表.md",
+          "docs/交接任务书-性能基线与仓库重构.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-app-green.sh"
+        ],
+        "worktree_id": "wt-pb-app",
+        "write_paths": [
+          "app/",
+          ".team/nodes/pb-green/"
+        ]
+      },
+      "seat_wait_seconds": 3600,
+      "state": "succeeded",
+      "status_record": {
+        "status": "done",
+        "artifacts": {
+          "report": ".team/nodes/pb-green/说明.md"
+        },
+        "case_id": "ledger_perfbase_v1__t.app__r7",
+        "recorded_at_revision": 7
+      },
+      "statuses": [
+        {
+          "artifact": {
+            "report": ".team/nodes/<本格>/说明.md"
+          },
+          "description": "本格交付物全落盘，交下游独立判",
+          "name": "done"
+        }
+      ],
+      "title": "任务一·转绿格：实现 PerfTrace 本体并把八个打点接进产品链路（tap/route_enter/subscribe_sent/geom_seed/first_frame_recv/snapshot_applied/first_draw/layout_settled），红测转绿、全量单测绿。关时必须在调用点最外层短路（关=零分配零拼串）；每个事件带操作数不只带判决；收藏页进入/断线重连后进入/旋转后重进这些路径也要覆盖。⛔ 不许改红测方法名/断言/加 @Ignore。细则读 .team/tasks/perfbase/任务书-01-仪表.md｜【第2轮·返修】判者 t.rv.instr 判 rework，逐条理由与代码原文证据在 .team/nodes/pb-rv-instr/裁定.md（**先读它再动手**）。三条要修：①守卫没走进去时 PerfTrace 沉默（subscribe 未就绪/send 失败/idFor 空/take* 已占用/glyphs==0），分不出「该做而没做」与「做了但被吞」⇒ 每个守卫打一行带参与比较的两边操作数，或同 ev 带 emitted=0 reason=；②断线重连重放的 subscribe被第一次打开的 take* 吃掉，日志里看不见 ⇒ 重放必须可见；③layout_settled 不触发/被 unbind 取消时零行，且缺最终 rows=/cols= ⇒ 补终态与取消原因。⛔ 不许改判据、不许改红测断言来绕。"
+    },
+    "t.base": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.base",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-baseline.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 600,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.base"
+        ]
+      },
+      "attempts": [
+        {
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=c.base",
+            "acceptance_failure.argv=[\"/bin/sh\", \"tools/perfbase/judge-baseline.sh\"]",
+            "acceptance_failure.cwd=.worktrees/wt-pb-base",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ],
+          "attempt_id": "att-t.base-seq2-t1787349761675",
+          "delivery_id": "del-t.base-seq2-t1787349761675",
+          "state": "acceptance_pending"
+        },
+        {
+          "attempt_id": "att-t.base-seq2-t1787356062471",
+          "delivery_id": "del-t.base-seq2-t1787356062471",
+          "state": "succeeded",
+          "writeback_revision": 21,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.base",
+            "acceptance_success.writeback_revision=21"
+          ]
+        }
+      ],
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.emu"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-02-基线.md",
+          "docs/交接任务书-性能基线与仓库重构.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-baseline.sh",
+          "e2e/"
+        ],
+        "worktree_id": "wt-pb-base",
+        "write_paths": [
+          ".team/perf/",
+          ".team/nodes/pb-emu/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "succeeded",
+      "title": "任务二·测基线：模拟器 agentmirror_test_b 上，三夹具（real_claude_idle / redraw_tui / big_scrollback）各冷点开 ≥10 次，**只从 adb logcat -s PerfTrace 取数**（用户明令 ⛔ 不许识图、不许取帧/取间隔）。极端值 ⛔ 不许剔除，列进 outliers 并附原始日志段。落 .team/perf/baseline-<日期>.json + .team/perf/raw/。起隔离 tmux 必须自检在自己 socket 上（建 socket 失败会静默回退到用户真实 tmux）；⛔ 不碰 9900、⛔ 不点真实舰队会话；资源不够如实报不可判。细则读 .team/tasks/perfbase/任务书-02-基线.md"
+    },
+    "t.base2": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.base2",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-baseline.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 600,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.base2"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.emu"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-02-基线.md",
+          "tools/perfbase/judge-baseline.sh",
+          ".team/nodes/pb-rv-base/"
+        ],
+        "worktree_id": "wt-pb-base2",
+        "write_paths": [
+          ".team/perf/",
+          ".team/nodes/pb-emu2/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "not_applicable",
+      "statuses": [
+        {
+          "artifact": {
+            "report": ".team/nodes/<本格>/说明.md"
+          },
+          "description": "本格交付物全落盘，交下游独立判",
+          "name": "done"
+        }
+      ],
+      "title": "任务二·按评审意见重测基线：读 .team/nodes/pb-rv-base/裁定.md 的 rework 逐条，用任务书 02 完全相同的流程与环境重测，覆盖 .team/perf/baseline-<日期>.json。⛔ 不许为了让判据变绿而换夹具、减次数、剔极端值。细则读 .team/tasks/perfbase/任务书-02-基线.md"
+    },
+    "t.close": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.close",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/artifacts/perfbase-收账-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.close"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv2"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-pb-close",
+        "write_paths": [
+          ".team/artifacts/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "planned",
+      "title": "收账：把三件事的现状汇成一页给用户早上看——每件事「已验证完成 / 自报未核 / 未做」三分，各附证据路径；把 t.rv.final 的「留给用户的缺口」原样带上。⛔ 不许把自报当已完成。落 .team/artifacts/perfbase-收账-<日期>.md"
+    },
+    "t.core": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.core.split",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-core-split.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.core.split"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-03-重构.md",
+          "docs/交接任务书-性能基线与仓库重构.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-core-split.sh"
+        ],
+        "worktree_id": "wt-pb-core",
+        "write_paths": [
+          "app/",
+          ".team/nodes/pb-core/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "succeeded",
+      "title": "任务三·仓内切分：拆出纯 JVM 的 :core-protocol / :core-terminal / :core-conn，app 只剩壳。现有 :terminal 已是纯 Kotlin/JVM，优先并入或改名复用，⛔ 不许另抄一份。核模块 ⛔ 不许上 Android 插件、⛔ 源码不许 import android./androidx.；核里的打点用接口回调由 app 壳注入，八个事件名与格式不许变。一次只挪一个模块，每步跑全量单测，红了立刻回退该步。细则读 .team/tasks/perfbase/任务书-03-重构.md",
+      "attempts": [
+        {
+          "attempt_id": "att-t.core-seq4-t1787359070954",
+          "delivery_id": "del-t.core-seq4-t1787359070954",
+          "state": "succeeded",
+          "writeback_revision": 23,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.core.split",
+            "acceptance_success.writeback_revision=23"
+          ]
+        }
+      ]
+    },
+    "t.cperf": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.perf.nonregress",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-perf-nonregress.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 600,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.perf.nonregress"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.emu"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-02-基线.md",
+          "tools/perfbase/judge-perf-nonregress.sh",
+          ".team/nodes/pb-core/"
+        ],
+        "worktree_id": "wt-pb-cperf",
+        "write_paths": [
+          ".team/perf/",
+          ".team/nodes/pb-cperf/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "planned",
+      "title": "任务三·切分后复测：用任务书 02 完全相同的流程与环境复测，落 .team/perf/recheck-<日期>-split.json（同形状）。判据逐夹具逐段比 p50/p95，超基线 +10% 即红。⛔ 不许换夹具、换次数、换取数方式来让它变绿。细则读 .team/tasks/perfbase/任务书-02-基线.md 末节",
+      "attempts": [
+        {
+          "attempt_id": "att-t.cperf-seq5-t1787359801116",
+          "delivery_id": "del-t.cperf-seq5-t1787359801116",
+          "state": "failed_retryable",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=c.perf.nonregress",
+            "acceptance_failure.argv=[\"/bin/sh\", \"tools/perfbase/judge-perf-nonregress.sh\"]",
+            "acceptance_failure.cwd=.worktrees/wt-pb-cperf",
+            "acceptance_failure.exit_code=2",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 2（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ]
+        }
+      ]
+    },
+    "t.esc1": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.esc1",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/escalations/perfbase-esc1-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.esc1"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv2"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-pb-esc1",
+        "write_paths": [
+          ".team/escalations/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "not_applicable",
+      "title": "判不出升报：仪表面判不出。 把「判不出什么、缺哪份材料、下一步谁来补」写清，升报 leader 裁定。⛔ 不许静默收工，⛔ 不许把判不出改写成通过。落 .team/escalations/perfbase-esc1-<日期>.md"
+    },
+    "t.esc2": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.esc2",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/escalations/perfbase-esc2-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.esc2"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv1"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-pb-esc2",
+        "write_paths": [
+          ".team/escalations/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "not_applicable",
+      "title": "判不出升报：基线面判不出。 把「判不出什么、缺哪份材料、下一步谁来补」写清，升报 leader 裁定。⛔ 不许静默收工，⛔ 不许把判不出改写成通过。落 .team/escalations/perfbase-esc2-<日期>.md"
+    },
+    "t.esc3": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.esc3",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/escalations/perfbase-esc3-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.esc3"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv2"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-pb-esc3",
+        "write_paths": [
+          ".team/escalations/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "planned",
+      "title": "判不出升报：重构终审判不出。 把「判不出什么、缺哪份材料、下一步谁来补」写清，升报 leader 裁定。⛔ 不许静默收工，⛔ 不许把判不出改写成通过。落 .team/escalations/perfbase-esc3-<日期>.md"
+    },
+    "t.exh1": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.exh1",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/escalations/perfbase-exh1-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.exh1"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv2"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-pb-exh",
+        "write_paths": [
+          ".team/escalations/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "not_applicable",
+      "title": "仪表返修 3 轮穷尽：整理三轮 rework 理由与代码现状，升报 leader 裁定，⛔ 不许静默收工。"
+    },
+    "t.exh2": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.exh2",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/escalations/perfbase-exh2-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.exh2"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv1"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-pb-exh2",
+        "write_paths": [
+          ".team/escalations/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "not_applicable",
+      "title": "基线返修 2 轮穷尽：整理两轮 rework 理由与量测现状，升报 leader 裁定，⛔ 不许静默收工。"
+    },
+    "t.exh3": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.exh3",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/escalations/perfbase-exh3-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.exh3"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv2"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-pb-exh3",
+        "write_paths": [
+          ".team/escalations/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "planned",
+      "title": "重构返修 2 轮穷尽：整理两轮 rework 理由与重构现状，升报 leader 裁定，⛔ 不许静默收工。"
+    },
+    "t.fixblank": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.fixblank",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-fixblank.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.fixblank"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/nodes/pb-emu/说明-r18-第四轮根因定案.md",
+          "tools/perfbase/judge-fixblank.sh",
+          ".team/tasks/perfbase/任务书-01-仪表.md"
+        ],
+        "worktree_id": "wt-pb-fixblank",
+        "write_paths": [
+          "app/",
+          ".team/nodes/pb-fixblank/"
+        ]
+      },
+      "seat_wait_seconds": 3600,
+      "state": "succeeded",
+      "title": "**修白屏根因**（先读 .team/nodes/pb-emu/说明-r18-第四轮根因定案.md 全文）。四轮实测已定案，18/18 零反例：`ConnectionManager` 只有一个**全局 listener 槽**（:96 `private var listener: Listener?`、:137 `setListener`、:617 `listener?.onBinary(frame)`），被列表页的 `WorkspaceViewModel` 占着；订阅首帧到达后被交给它、**就地丢弃**，会话页的 VM 一帧都拿不到。铁证：`ev=first_frame_recv emitted=0 reason=has_listener listener_null=0 listener_ref=dev.agentmirror.app.workspace.WorkspaceViewModel`。**先红后绿**：①先写 app/app/src/test/kotlin/dev/agentmirror/app/conn/ConnListenerRoutingTest.kt，方法名逐字 `帧只投给订阅该ref的接收者` 与 `列表页占用槽位不影响会话页收帧`，先跑一遍证明它是红的、把原始输出贴进说明.md（⛔ 没有先验红原文=交付无效）；②再改 ConnectionManager 让帧按 ref 投递给正确的接收者（多接收者共存，列表页与会话页互不吃对方的帧）。⛔ 不许拆掉 PerfTrace 仪表（listener_ref/ws_binary_recv/ref_mismatch 一个都不许删——量具没了就没法自证修好）；⛔ 不许改判据；⛔ 只改必要的地方，不顺手重构相邻代码。判据 tools/perfbase/judge-fixblank.sh。",
+      "attempts": [
+        {
+          "attempt_id": "att-t.fixblank-seq1-t1787355632448",
+          "delivery_id": "del-t.fixblank-seq1-t1787355632448",
+          "state": "succeeded",
+          "writeback_revision": 20,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.fixblank",
+            "acceptance_success.writeback_revision=20"
+          ]
+        }
+      ]
+    },
+    "t.instr2": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.instr2",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-instr2.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.instr2"
+        ]
+      },
+      "attempts": [
+        {
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.instr2",
+            "acceptance_success.writeback_revision=13"
+          ],
+          "attempt_id": "att-t.instr2-seq1-t1787344313013",
+          "delivery_id": "del-t.instr2-seq1-t1787344313013",
+          "state": "succeeded",
+          "writeback_revision": 13
+        }
+      ],
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/nodes/pb-emu/说明.md",
+          ".team/tasks/perfbase/任务书-01-仪表.md",
+          "tools/perfbase/judge-instr2.sh",
+          ".team/perf/raw/"
+        ],
+        "worktree_id": "wt-pb-instr2",
+        "write_paths": [
+          "app/",
+          ".team/nodes/pb-instr2/"
+        ]
+      },
+      "seat_wait_seconds": 3600,
+      "state": "succeeded",
+      "title": "任务一·仪表补盲（回炉前置）：pb-emu 的 30/30 冷点开里 first_frame_recv 与 snapshot_applied 一次都没出现、first_draw 恒 emitted=0 reason=glyphs_zero，而服务端旁证说推了快照（snapshots_from_subscribe=32、perf_subscribe 60-80ms）。**先读 .team/nodes/pb-emu/说明.md 全文**。问题：两个打点都在静默 return 后面——SessionViewModel.onBinary 首行 `if (frame.ref != ref) return`，以及 PerfTrace 里 `opens[ref] ?: return`——所以「帧没到」和「帧到了被 ref 守卫吞了」在日志里都是沉默，分不出来。本格**只做仪表**：给这两条静默路径各补一行 emitted=0 的留痕，ref 不匹配那行必须同时给出两边操作数（键名逐字 frame_ref= 与 want_ref=），opens 落空那行 reason=no_open。⛔ 本格不许去修白屏本身、不许改判据、不许改红测断言——先让仪表能一锤定音，再谈修（回炉纪律：不许在盲的状态下改）。判据 tools/perfbase/judge-instr2.sh。"
+    },
+    "t.instr3": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.instr3",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-instr3.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.instr3"
+        ]
+      },
+      "attempts": [
+        {
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.instr3",
+            "acceptance_success.writeback_revision=16"
+          ],
+          "attempt_id": "att-t.instr3-seq1-t1787347143113",
+          "delivery_id": "del-t.instr3-seq1-t1787347143113",
+          "state": "succeeded",
+          "writeback_revision": 16
+        }
+      ],
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/nodes/pb-emu/说明-r14-第二轮.md",
+          ".team/nodes/pb-emu/说明.md",
+          "tools/perfbase/judge-instr3.sh",
+          ".team/tasks/perfbase/任务书-01-仪表.md"
+        ],
+        "worktree_id": "wt-pb-instr3",
+        "write_paths": [
+          "app/",
+          ".team/nodes/pb-instr3/"
+        ]
+      },
+      "seat_wait_seconds": 3600,
+      "state": "succeeded",
+      "title": "任务一·仪表补盲第三轮（决胜格）：**先读 .team/nodes/pb-emu/说明-r14-第二轮.md 全文**。两轮实测已把世界收窄到：subscribe 发出了、服务端说推了快照（perf_subscribe 60-80ms、snapshots_from_subscribe 每连接 1），但 t.instr2 补的 ref_mismatch/no_open 30 次一条都没打 ⇒ SessionViewModel.onBinary 根本没被调用 ⇒ 帧没走到收帧口。剩两种世界分不开：①WS 层压根没收到这一帧 ②收到了但 ConnectionManager.kt:617 `listener?.onBinary(frame)` 的单一全局槽（:96 private var listener、:137 setListener）为 null 或被别的页面覆盖，`?.` 静默吞掉。本格**只补仪表、⛔ 不修白屏**：(a) :617 补 emitted=0 reason=no_listener，带两边操作数（frame 的 ref 与 listener_null=0/1）；(b) WS 二进制读入口补一行收帧留痕 ws_binary_recv，带 kind= 与 bytes=。两处一补即可一锤定音「没收到」还是「收到没派出去」。⛔ 不许改判据、不许改红测断言、⛔ 不许顺手改收帧逻辑本身（改了就分不清是修好了还是测错了）。判据 tools/perfbase/judge-instr3.sh。"
+    },
+    "t.instr4": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.instr4",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-instr4.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.instr4"
+        ]
+      },
+      "attempts": [
+        {
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.instr4",
+            "acceptance_success.writeback_revision=18"
+          ],
+          "attempt_id": "att-t.instr4-seq1-t1787349533236",
+          "delivery_id": "del-t.instr4-seq1-t1787349533236",
+          "state": "succeeded",
+          "writeback_revision": 18
+        }
+      ],
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/nodes/pb-emu/说明-r16-第三轮.md",
+          ".team/nodes/pb-emu/说明-r14-第二轮.md",
+          "tools/perfbase/judge-instr4.sh",
+          ".team/tasks/perfbase/任务书-01-仪表.md"
+        ],
+        "worktree_id": "wt-pb-instr4",
+        "write_paths": [
+          "app/",
+          ".team/nodes/pb-instr4/"
+        ]
+      },
+      "seat_wait_seconds": 3600,
+      "state": "succeeded",
+      "title": "任务一·仪表收口格（合批）：**先读 .team/nodes/pb-emu/说明-r16-第三轮.md 全文**。三轮实测已排除三种世界：WS 收到了（ws_binary_recv kind=snapshot bytes>0，29/29）、ref 送对了（frame_ref 的 pane 号与所点夹具一一对应，daemon 侧也对得上）、listener 槽非空且已派发（listener_null=0，no_listener 零命中——`ConnectionManager.kt:617` 的 `?.` 已被席位自己收回，不是丢帧点）。⇒ **帧死在 SessionViewModel.onBinary 内部**。最后一格分不开的原因：instr2 的 ref_mismatch/no_open 与 instr3 的 ws_binary_recv/no_listener **从未在同一个构建里同时出现**。本格做两件事：(a) 把 pr/perfbase-instr2 与 pr/perfbase-instr3 两批留痕合进同一份代码（席位试过打补丁 2/4 hunk 冲突，请正经 merge/cherry-pick，⛔ 不许手抄漏掉哪条）；(b) 在派发点把「接帧者是谁」也打出来：listener_ref=<接帧 listener 自己的 ref 或实现类名>，与 frame_ref= 并排。⛔ 仍然只补仪表、⛔ 不许顺手改收帧逻辑（改了就分不清是修好了还是测错了）。判据 tools/perfbase/judge-instr4.sh。"
+    },
+    "t.red": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.red",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-red.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1800,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.red"
+        ]
+      },
+      "attempts": [
+        {
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.red",
+            "acceptance_success.writeback_revision=2"
+          ],
+          "attempt_id": "att-t.red-seq1-t1787338594350",
+          "delivery_id": "del-t.red-seq1-t1787338594350",
+          "state": "succeeded",
+          "writeback_revision": 2
+        }
+      ],
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.test"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-01-仪表.md",
+          "docs/交接任务书-性能基线与仓库重构.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-red.sh",
+          "app/app/src/main/java/dev/agentmirror/app/diag/DiagLog.kt"
+        ],
+        "worktree_id": "wt-pb-red",
+        "write_paths": [
+          "app/app/src/test/kotlin/dev/agentmirror/app/perf/",
+          "app/app/src/main/java/dev/agentmirror/app/perf/",
+          ".team/nodes/pb-red/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "succeeded",
+      "title": "任务一·先红格：写 PerfTrace 的 API 骨架（能编译、方法体不发日志）+ 三条红测。红测文件 app/app/src/test/kotlin/dev/agentmirror/app/perf/PerfTraceChainTest.kt，方法名逐字：perfTrace_关闭时零行 / perfTrace_一次打开产出八事件且open_id一致且时间单调 / perfTrace_两次并发打开open_id不串。判据要求「编译得过 且 测试 FAILED」——⛔ 编译不过=不可判(2)，不算先红；⛔ 不许写实现。细则读 .team/tasks/perfbase/任务书-01-仪表.md"
+    },
+    "t.repo": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.repo",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-repo.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.repo"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-03-重构.md",
+          "docs/交接任务书-性能基线与仓库重构.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-repo.sh",
+          "app/"
+        ],
+        "worktree_id": "wt-pb-repo",
+        "write_paths": [
+          ".team/staging/",
+          ".team/nodes/pb-repo/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "planned",
+      "statuses": [
+        {
+          "artifact": {
+            "report": ".team/nodes/<本格>/说明.md"
+          },
+          "description": "本格交付物全落盘，交下游独立判",
+          "name": "done"
+        }
+      ],
+      "title": "任务三·引用式构建暂存件：在 .team/staging/corral-app/ 造独立工程，app 壳整体搬过去，用 Gradle composite build（includeBuild）引三个核模块，写 迁移清单.md 逐条列搬了什么、还留在 core 里的 Android 残留（有就明写，⛔ 不许谎称已全部剥离）。判据要求暂存工程 ./gradlew :app:assembleDebug 绿并产出 APK。⛔ 席位不许 git push / 不许动 mirror-pr 脚本 / 不许碰远端仓库——推送是 leader 的动作。图标资产遵守 093 §2 只用 Provider 原生厂家官方图标。细则读 .team/tasks/perfbase/任务书-03-重构.md"
+    },
+    "t.rv.base": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.rv.base",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-verdict.sh",
+              ".team/nodes/pb-rv-base/裁定.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.rv.base"
+        ]
+      },
+      "blocking_reasons": [
+        "route_contradicts_success: dest=t.core"
+      ],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv2"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-04-评审.md",
+          ".team/tasks/perfbase/任务书-02-基线.md",
+          ".team/perf/",
+          ".team/nodes/pb-emu/"
+        ],
+        "worktree_id": "wt-pb-rv2",
+        "write_paths": [
+          ".team/nodes/pb-rv-base/"
+        ]
+      },
+      "seat_wait_seconds": 2400,
+      "state": "blocked",
+      "statuses": [
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "核过且成立，放行下游",
+          "name": "pass"
+        },
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "不成立，带逐条理由与代码原文证据打回",
+          "name": "rework"
+        },
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "判不出（合法终态），写清判不出什么",
+          "name": "inconclusive"
+        }
+      ],
+      "title": "任务二·异源评审：判基线可不可信当地板——三夹具是否各 ≥10 次真冷点开、数是否真来自 PerfTrace 原始日志（去 .team/perf/raw/ 核统计值对得上）、有没有剔除极端值、p95 算法、环境自证是否齐。发现动了用户真实 tmux 或点了真实舰队会话 ⇒ 直接 rework 并头行标红。裁定书落 .team/nodes/pb-rv-base/裁定.md。细则读 .team/tasks/perfbase/任务书-04-评审.md",
+      "status_record": {
+        "status": "pass",
+        "artifacts": {
+          "report": "裁定.md"
+        },
+        "case_id": "ledger_perfbase_v1__t.rv.base__r21",
+        "recorded_at_revision": 21
+      }
+    },
+    "t.rv.final": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.rv.final",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-verdict.sh",
+              ".team/nodes/pb-rv-final/裁定.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.rv.final"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv1"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-04-评审.md",
+          ".team/tasks/perfbase/任务书-03-重构.md",
+          "app/",
+          ".team/staging/",
+          ".team/perf/",
+          "tools/perfbase/"
+        ],
+        "worktree_id": "wt-pb-rvf",
+        "write_paths": [
+          ".team/nodes/pb-rv-final/"
+        ]
+      },
+      "seat_wait_seconds": 3600,
+      "state": "planned",
+      "statuses": [
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "核过且成立，放行下游",
+          "name": "pass"
+        },
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "不成立，带逐条理由与代码原文证据打回",
+          "name": "rework"
+        },
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "判不出（合法终态），写清判不出什么",
+          "name": "inconclusive"
+        }
+      ],
+      "title": "任务三·终审：自己重跑 judge-core-split / judge-perf-nonregress / judge-repo 三条判据（不是看别人的自报），并 git diff 核 tools/perfbase/ 有没有被动过——动了直接 rework。核迁移清单里「已剥离」逐条成立、核模块零 android import。最后写「留给用户的缺口」一节，至少含①用户真机装包实测『秒进秒排好』金标准门②远端 PR 推送，各写清下一步怎么做。裁定书落 .team/nodes/pb-rv-final/裁定.md。细则读 .team/tasks/perfbase/任务书-04-评审.md"
+    },
+    "t.rv.instr": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.rv.instr",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-verdict.sh",
+              ".team/nodes/pb-rv-instr/裁定.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.rv.instr"
+        ]
+      },
+      "blocking_reasons": [
+        "route_contradicts_success: dest=t.base"
+      ],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv1"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-04-评审.md",
+          ".team/tasks/perfbase/任务书-01-仪表.md",
+          "docs/交接任务书-性能基线与仓库重构.md",
+          "app/",
+          "server/",
+          ".team/nodes/pb-green/",
+          ".team/nodes/pb-srv/"
+        ],
+        "worktree_id": "wt-pb-rv1",
+        "write_paths": [
+          ".team/nodes/pb-rv-instr/"
+        ]
+      },
+      "rounds": [
+        {
+          "n": 1,
+          "status": "rework",
+          "reason": "",
+          "case_id": "ledger_perfbase_v1__t.rv.instr__r4",
+          "at_revision": 4
+        }
+      ],
+      "seat_wait_seconds": 2400,
+      "state": "blocked",
+      "status_record": {
+        "status": "pass",
+        "artifacts": {
+          "report": ".team/nodes/pb-rv-instr/裁定.md"
+        },
+        "case_id": "ledger_perfbase_v1__t.rv.instr__r8",
+        "recorded_at_revision": 8
+      },
+      "statuses": [
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "核过且成立，放行下游",
+          "name": "pass"
+        },
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "不成立，带逐条理由与代码原文证据打回",
+          "name": "rework"
+        },
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "判不出（合法终态），写清判不出什么",
+          "name": "inconclusive"
+        }
+      ],
+      "title": "任务一·异源评审：判仪表三条主线——①关时真零成本（去证明它有成本）②链路完整性与可算性（光看日志能否算出每段耗时、能否区分「该做而没做」与「做了但做错了」）③单测是不是形式绿（自己重跑 gradle 与 go test，退出码写进证据）。裁定书落 .team/nodes/pb-rv-instr/裁定.md，必须有恰好一行 status=pass|rework|inconclusive。⛔ 产出方自证不算数。细则读 .team/tasks/perfbase/任务书-04-评审.md"
+    },
+    "t.srv": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.srv.green",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-srv-green.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1800,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.srv.green"
+        ]
+      },
+      "attempts": [
+        {
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.srv.green",
+            "acceptance_success.writeback_revision=3"
+          ],
+          "attempt_id": "att-t.srv-seq2-t1787338594609",
+          "delivery_id": "del-t.srv-seq2-t1787338594609",
+          "state": "succeeded",
+          "writeback_revision": 3
+        }
+      ],
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.srv"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
+        },
+        "read_paths": [
+          ".team/tasks/perfbase/任务书-01-仪表.md",
+          "docs/交接任务书-性能基线与仓库重构.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-srv-green.sh"
+        ],
+        "worktree_id": "wt-pb-srv",
+        "write_paths": [
+          "server/",
+          ".team/nodes/pb-srv/"
+        ]
+      },
+      "seat_wait_seconds": 2400,
+      "state": "succeeded",
+      "title": "任务一·服务端格：给 subscribe 帧打三时间戳，键名逐字 perf_subscribe/recv_ms/start_ms/done_ms/queue_ms（queue_ms=start-recv）。用 server 现有 logger，⛔ 不引新依赖，⛔ 热路径不许无条件格式化字符串。go build ./... && go test ./... 必须绿（基线退出码为 0，增量任何红即红）。细则读 .team/tasks/perfbase/任务书-01-仪表.md"
+    }
+  },
+  "transitions": [
+    {
+      "assemble": {
+        "include_upstream_case": false
+      },
+      "from": "t.rv.instr",
+      "on_status": [
+        "pass"
+      ],
+      "to": "t.base"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true,
+        "prompt_prefix": "上一轮审查打回，按 reason 改。"
+      },
+      "from": "t.rv.instr",
+      "max_rounds": 3,
+      "on_exhausted": "t.exh1",
+      "on_status": [
+        "rework"
+      ],
+      "to": "t.app"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true
+      },
+      "from": "t.app",
+      "on_status": [
+        "done"
+      ],
+      "to": "t.rv.instr"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": false
+      },
+      "from": "t.rv.base",
+      "on_status": [
+        "pass"
+      ],
+      "to": "t.core"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true,
+        "prompt_prefix": "上一轮审查打回，按 reason 改。"
+      },
+      "from": "t.rv.base",
+      "max_rounds": 2,
+      "on_exhausted": "t.exh2",
+      "on_status": [
+        "rework"
+      ],
+      "to": "t.base2"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true
+      },
+      "from": "t.base2",
+      "on_status": [
+        "done"
+      ],
+      "to": "t.rv.base"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": false
+      },
+      "from": "t.rv.final",
+      "on_status": [
+        "pass"
+      ],
+      "to": "t.close"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true,
+        "prompt_prefix": "上一轮审查打回，按 reason 改。"
+      },
+      "from": "t.rv.final",
+      "max_rounds": 2,
+      "on_exhausted": "t.exh3",
+      "on_status": [
+        "rework"
+      ],
+      "to": "t.repo"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true
+      },
+      "from": "t.repo",
+      "on_status": [
+        "done"
+      ],
+      "to": "t.rv.final"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true
+      },
+      "from": "t.rv.instr",
+      "on_status": [
+        "inconclusive"
+      ],
+      "to": "t.esc1"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true
+      },
+      "from": "t.rv.base",
+      "on_status": [
+        "inconclusive"
+      ],
+      "to": "t.esc2"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true
+      },
+      "from": "t.rv.final",
+      "on_status": [
+        "inconclusive"
+      ],
+      "to": "t.esc3"
+    }
+  ]
+}

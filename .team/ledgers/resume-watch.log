@@ -1,0 +1,11 @@
+[2026-08-22T07:35:31Z] load1=106.71 free+inactive=9310MB → 未达标，等 120s
+[2026-08-22T07:37:31Z] load1=99.35 free+inactive=9368MB → 未达标，等 120s
+[2026-08-22T07:39:31Z] load1=109.42 free+inactive=9576MB → 未达标，等 120s
+[2026-08-22T07:41:31Z] load1=104.50 free+inactive=9514MB → 未达标，等 120s
+[2026-08-22T07:43:31Z] load1=122.72 free+inactive=9562MB → 未达标，等 120s
+[2026-08-22T07:45:31Z] load1=135.52 free+inactive=9770MB → 未达标，等 120s
+[2026-08-22T07:47:31Z] load1=133.73 free+inactive=9754MB → 未达标，等 120s
+[2026-08-22T07:49:31Z] load1=132.89 free+inactive=9721MB → 未达标，等 120s
+[2026-08-22T07:51:32Z] load1=109.42 free+inactive=9673MB → 未达标，等 120s
+[2026-08-22T07:53:32Z] load1=54.42 free+inactive=10210MB → 未达标，等 120s
+[2026-08-22T07:55:32Z] load1=14.26 free+inactive=10257MB → 达标，重起驱动器

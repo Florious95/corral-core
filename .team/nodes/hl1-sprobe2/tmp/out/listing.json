@@ -1,0 +1,492 @@
+{
+  "req_id": 1,
+  "seq": 1,
+  "workspaces": [
+    {
+      "cwd": "/Users/alauda",
+      "session_count": 1,
+      "sessions": [
+        {
+          "ref": "/tmp/tmux-501/default\u001f%2",
+          "name": "node",
+          "cwd": "/Users/alauda",
+          "title": "",
+          "provider": "grok",
+          "rows": 24,
+          "cols": 80
+        }
+      ]
+    },
+    {
+      "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+      "session_count": 11,
+      "sessions": [
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%0",
+          "name": "claude_code",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%1",
+          "name": "analyst-base",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%2",
+          "name": "arch-reviewer-base",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%38",
+          "name": "developer-d119",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%40",
+          "name": "developer-d120",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%41",
+          "name": "tester-t125",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%42",
+          "name": "tester-t126",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%43",
+          "name": "developer-d121",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%44",
+          "name": "tester-t127",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%5",
+          "name": "tester-t97",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a9fd5b7defbd\u001f%6",
+          "name": "developer-d108",
+          "cwd": "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        }
+      ]
+    },
+    {
+      "cwd": "/Volumes/nvme/Projects/无等编排",
+      "session_count": 6,
+      "sessions": [
+        {
+          "ref": "/tmp/tmux-501/ta-a0afa5f9c7f6\u001f%3",
+          "name": "w2-dev-a",
+          "cwd": "/Volumes/nvme/Projects/无等编排",
+          "title": "",
+          "provider": "grok",
+          "rows": 24,
+          "cols": 80
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a0afa5f9c7f6\u001f%4",
+          "name": "contract",
+          "cwd": "/Volumes/nvme/Projects/无等编排",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a0afa5f9c7f6\u001f%5",
+          "name": "review-grok",
+          "cwd": "/Volumes/nvme/Projects/无等编排",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a0afa5f9c7f6\u001f%6",
+          "name": "pr-grok",
+          "cwd": "/Volumes/nvme/Projects/无等编排",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a0afa5f9c7f6\u001f%7",
+          "name": "w2-dev-b",
+          "cwd": "/Volumes/nvme/Projects/无等编排",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a0afa5f9c7f6\u001f%8",
+          "name": "w2-dev-c",
+          "cwd": "/Volumes/nvme/Projects/无等编排",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        }
+      ]
+    },
+    {
+      "cwd": "/Volumes/nvme/Projects/本地部署",
+      "session_count": 1,
+      "sessions": [
+        {
+          "ref": "/tmp/tmux-501/ta-26fb88f58006\u001f%0",
+          "name": "claude_code",
+          "cwd": "/Volumes/nvme/Projects/本地部署",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        }
+      ]
+    },
+    {
+      "cwd": "/Volumes/nvme/Projects/研究loopx",
+      "session_count": 2,
+      "sessions": [
+        {
+          "ref": "/tmp/tmux-501/default\u001f%1",
+          "name": "node",
+          "cwd": "/Volumes/nvme/Projects/研究loopx",
+          "title": "",
+          "provider": "pi",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-ffdc525c5f83\u001f%0",
+          "name": "claude_code",
+          "cwd": "/Volumes/nvme/Projects/研究loopx",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        }
+      ]
+    },
+    {
+      "cwd": "/Volumes/nvme/Projects/讨论team-agent",
+      "session_count": 2,
+      "sessions": [
+        {
+          "ref": "/tmp/tmux-501/ta-a0afa5f9c7f6\u001f%0",
+          "name": "claude_code",
+          "cwd": "/Volumes/nvme/Projects/讨论team-agent",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-a0afa5f9c7f6\u001f%2",
+          "name": "librarian",
+          "cwd": "/Volumes/nvme/Projects/讨论team-agent",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        }
+      ]
+    },
+    {
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+      "session_count": 21,
+      "sessions": [
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%0",
+          "name": "claude_code",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%1",
+          "name": "advisor",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 24,
+          "cols": 80
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%3",
+          "name": "dev-app",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%57",
+          "name": "pr3-gofix",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%58",
+          "name": "pr3-judge-go",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%59",
+          "name": "hl1-v1-repro",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%60",
+          "name": "hl1-v1-probe",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%61",
+          "name": "hl1-v1-fix",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%62",
+          "name": "hl1-v1-verify",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%63",
+          "name": "hl1-v1-uiplus",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%64",
+          "name": "hl1-v1-uicmd",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%65",
+          "name": "hl1-judge-blank",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%66",
+          "name": "hl1-judge-ui",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%67",
+          "name": "hl1-v1-uiicon",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%68",
+          "name": "hl1-v1-fav",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%69",
+          "name": "hl1-judge-fav",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%70",
+          "name": "hl1-v1-repro2",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%71",
+          "name": "hl1-v1-srvperf",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%72",
+          "name": "hl1-v1-sprobe",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%73",
+          "name": "hl1-v1-sfix",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-b7cc1c640ccf\u001f%74",
+          "name": "hl1-v1-sprobe2",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+          "title": "",
+          "provider": "grok",
+          "rows": 50,
+          "cols": 235
+        }
+      ]
+    },
+    {
+      "cwd": "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/cwd-static",
+      "session_count": 1,
+      "sessions": [
+        {
+          "ref": "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/tmux/tmux-501/default\u001f%0",
+          "name": "bash",
+          "cwd": "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-sprobe2/tmp/cwd-static",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 24,
+          "cols": 80
+        }
+      ]
+    },
+    {
+      "cwd": "/Volumes/nvme/Projects/通用问题对话-chat",
+      "session_count": 3,
+      "sessions": [
+        {
+          "ref": "/tmp/tmux-501/default\u001f%0",
+          "name": "node",
+          "cwd": "/Volumes/nvme/Projects/通用问题对话-chat",
+          "title": "",
+          "provider": "grok",
+          "rows": 48,
+          "cols": 235
+        },
+        {
+          "ref": "/tmp/tmux-501/default\u001f%3",
+          "name": "node",
+          "cwd": "/Volumes/nvme/Projects/通用问题对话-chat",
+          "title": "",
+          "provider": "grok",
+          "rows": 24,
+          "cols": 80
+        },
+        {
+          "ref": "/tmp/tmux-501/ta-105089ea391b\u001f%0",
+          "name": "claude_code",
+          "cwd": "/Volumes/nvme/Projects/通用问题对话-chat",
+          "title": "",
+          "provider": "claude_code",
+          "rows": 50,
+          "cols": 235
+        }
+      ]
+    }
+  ]
+}

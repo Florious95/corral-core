@@ -1,0 +1,80 @@
+Skipping task ':app:processDebugUnitTestJavaRes' as it is up-to-date.
+Resolve mutations for :app:preReleaseBuild (Thread[Execution worker Thread 5,5,main]) started.
+:app:preReleaseBuild (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:preReleaseBuild UP-TO-DATE
+Skipping task ':app:preReleaseBuild' as it has no actions.
+Resolve mutations for :app:createReleaseCompatibleScreenManifests (Thread[Execution worker Thread 5,5,main]) started.
+:app:createReleaseCompatibleScreenManifests (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:createReleaseCompatibleScreenManifests UP-TO-DATE
+Caching disabled for task ':app:createReleaseCompatibleScreenManifests' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Skipping task ':app:createReleaseCompatibleScreenManifests' as it is up-to-date.
+Resolve mutations for :app:generateReleaseResValues (Thread[Execution worker Thread 5,5,main]) started.
+:app:generateReleaseResValues (Thread[Execution worker Thread 5,5,main]) started.
+
+> Task :app:generateReleaseResValues UP-TO-DATE
+Caching disabled for task ':app:generateReleaseResValues' because:
+  Build cache is disabled
+Skipping task ':app:generateReleaseResValues' as it is up-to-date.
+Resolve mutations for :app:extractDeepLinksRelease (Thread[Execution worker Thread 5,5,main]) started.
+:app:extractDeepLinksRelease (Thread[Execution worker Thread 7,5,main]) started.
+
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+Caching disabled for task ':app:extractDeepLinksRelease' because:
+  Build cache is disabled
+Skipping task ':app:extractDeepLinksRelease' as it is up-to-date.
+Resolve mutations for :app:processReleaseMainManifest (Thread[Execution worker Thread 7,5,main]) started.
+:app:processReleaseMainManifest (Thread[Execution worker Thread 7,5,main]) started.
+
+> Task :app:processReleaseMainManifest UP-TO-DATE
+Caching disabled for task ':app:processReleaseMainManifest' because:
+  Build cache is disabled
+Skipping task ':app:processReleaseMainManifest' as it is up-to-date.
+Resolve mutations for :app:processReleaseManifest (Thread[Execution worker Thread 7,5,main]) started.
+:app:processReleaseManifest (Thread[Execution worker Thread 7,5,main]) started.
+
+> Task :app:processReleaseManifest UP-TO-DATE
+Caching disabled for task ':app:processReleaseManifest' because:
+  Build cache is disabled
+Skipping task ':app:processReleaseManifest' as it is up-to-date.
+Resolve mutations for :app:testDebugUnitTest (Thread[Execution worker Thread 7,5,main]) started.
+:app:testDebugUnitTest (Thread[Execution worker Thread 7,5,main]) started.
+Gradle Test Executor 150 started executing tests.
+Gradle Test Executor 150 finished executing tests.
+
+> Task :app:testDebugUnitTest FAILED
+Caching disabled for task ':app:testDebugUnitTest' because:
+  Build cache is disabled
+Task ':app:testDebugUnitTest' is not up-to-date because:
+  Task has failed previously.
+file or directory '/Volumes/nvme/Projects/远程Agent安卓/app/app/build/intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes', not found
+Starting process 'Gradle Test Executor 150'. Working directory: /Volumes/nvme/Projects/远程Agent安卓/app/app Command: /opt/homebrew/Cellar/openjdk@17/17.0.19/libexec/openjdk.jdk/Contents/Home/bin/java -Djava.awt.headless=true -Djava.library.path=/Users/alauda/Library/Java/Extensions:/Library/Java/Extensions:/Network/Library/Java/Extensions:/System/Library/Java/Extensions:/usr/lib/java:.:/Volumes/nvme/Projects/远程Agent安卓/app/app/src/testDebug/jniLibs:/Volumes/nvme/Projects/远程Agent安卓/app/app/src/test/jniLibs -Dorg.gradle.internal.worker.tmpdir=/Volumes/nvme/Projects/远程Agent安卓/app/app/build/tmp/testDebugUnitTest/work --add-opens=java.base/java.io=ALL-UNNAMED @/Users/alauda/.gradle/.tmp/gradle-worker-classpath10176681292574823402txt -Xmx512m -Dfile.encoding=UTF-8 -Duser.country=CN -Duser.language=zh -Duser.variant -ea worker.org.gradle.process.internal.worker.GradleWorkerMain 'Gradle Test Executor 150'
+Successfully started process 'Gradle Test Executor 150'
+
+AltScreenSnapshotGlyphsTest > altScreenKindSnapshotGlyphsSurviveEmptyResizeSnapshot FAILED
+    java.lang.AssertionError: resize 补发的空 CUP 快照不得抹掉 alt-screen 首帧字形，got=
+        at org.junit.Assert.fail(Assert.java:89)
+        at org.junit.Assert.assertTrue(Assert.java:42)
+        at dev.agentmirror.app.session.AltScreenSnapshotGlyphsTest.altScreenKindSnapshotGlyphsSurviveEmptyResizeSnapshot(AltScreenSnapshotGlyphsTest.kt:66)
+
+1 test completed, 1 failed
+Finished generating test XML results (0.0 secs) into: /Volumes/nvme/Projects/远程Agent安卓/app/app/build/test-results/testDebugUnitTest
+Generating HTML test report...
+Finished generating test html results (0.001 secs) into: /Volumes/nvme/Projects/远程Agent安卓/app/app/build/reports/tests/testDebugUnitTest
+Build 2a2d2314-3d55-44a9-b7dc-2c96fd9c746a is closed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/app/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 1s
+36 actionable tasks: 1 executed, 35 up-to-date
+Watched directory hierarchies: [/Volumes/nvme/Projects/远程Agent安卓/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.uiplus/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.uiicon/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.uicmd/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.fix/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.fav/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.probe/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.repro/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr3.gofix/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.listui/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.input/app, /Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.proto/app]

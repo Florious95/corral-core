@@ -1,32 +1,45 @@
-# 知识基底 · ledger.refresh.v1 / t.probe（tools/basegen_ledger.py 编译产物，手工编辑无效）
+# 知识基底 · ledger.hl1.v1 / t.probe（tools/basegen_ledger.py 编译产物，手工编辑无效）
 
 ## 1. 任务信封（账本原文，机械抽取）
 ```
-写「进菜单即时刷新」的根因探针。契约 requirement-base/entries/069-进菜单必触发一次即时刷新.md（**§2 已经把两级各自的根因定位好了，先读**）。
-一级：handleList 调 ensureInitialScan——只在第一次扫，之后每次进来都返回缓存，**永远不重扫**。
-二级：markLevel2 只在订阅数 0→1 时唤醒轮询；App 离开不退订、回来不重订阅 ⇒ 服务端收不到「用户又进来了」。
-产出 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/probe-rf.sh，四条断言：
-①**A-rf-l1**：无人订阅时改变 tmux 世界（增/删一个含白名单 CLI 的会话）⇒ 客户端发一次 list ⇒ **返回列表必须是新世界**；
-②**A-rf-l2**：无人订阅时把某节点由空闲切到工作 ⇒ 进入二级菜单 ⇒ **首个非缓存帧就是新状态**，且不得等满一个 2s cadence；
-③**不倒退**：进入瞬间仍不得出现空列表帧（062 缓存优先）；
-④**不倒退**：没人在菜单里时仍然零轮询（061 零订阅零轮询）。
-⛔ 判据不许写成「代码里有一次 scan 调用」——那是验东西在那儿，不是验世界变了。
-🔴 现在跑必须红（①一定红）。说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/rf-probe/说明.md，记清每条红在哪。
-⛔ 这一格只产探针，不改产品代码。
-🔴 worktree_id 只是并发互斥标签，不是 git worktree。**必须在仓根干活**。⛔ 不要 git worktree add。
-🔴 静默纪律：不给 leader 发进度消息。唯一例外被卡住需裁定（class="blocking"）。
-🔴 干完调一次 report_result，**不要传 task_id 参数**。
-⛔ 禁止启动安卓模拟器。⛔⛔ 绝不碰用户真实 tmux（默认 socket）；tmux 实验自起隔离 server 并 list-sessions 自检。
-⛔⛔ 遍历进程只取 comm，禁止取 argv。
-🔴 **先完整读知识基底 .team/nodes/probe/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。
+# t.probe · 回炉②：审查席根因探针（红测）
+
+输入：`.team/nodes/hl1-repro/复现.md`（引入 commit + 初步根因）。
+你要在**分支 pr/hl-probe** 写一个**根因探针单测**：
+- 探针断言的是「根因不存在」——在当前 main 上跑必须**红**（先验红原始输出贴进说明.md）。
+- 探针要能**区分两个同形世界**：白屏因「没渲染」vs「渲染了但被盖住/尺寸为0」不是同一个探针。
+  写清你的探针命中哪一种、为什么排除另一种。
+- 回退验证：在引入 commit 的**父 commit** 上跑探针必须**绿**（贴输出）——绿说明探针钉的确实是这次引入的东西。
+交付：探针测试文件（提交到 pr/hl-probe）+ .team/nodes/hl1-probe/说明.md
+（必含：`探针=`(测试类#方法)、`main红输出=`、`父commit绿输出=`）。
+
+
+---
+## 🔴 本轮流程：PR 链（一格一分支，判据过了才并线）
+
+**开工第一件事，跑这两条自检，把输出贴进说明.md：**
+```
+pwd                        # 你必须在自己的 worktree 里，不是仓根
+git branch --show-current
 ```
 
-- write_paths: .team/nodes/rf-probe/
-- read_paths: requirement-base/entries/069-进菜单必触发一次即时刷新.md, server/internal/, app/app/src/, .team/nodes/probe/BASE.md
-- 判据: A-p-exec, A-p-doc, A-p-red
+1. **建你自己的分支**：`git checkout -b pr/hl-probe`。
+2. **只提交到本分支**。⛔ 不许并线、⛔ 不许碰 main、⛔ 不许 `git stash apply` 别人的改动。
+3. **⛔ 你不要 push。** PR 由 leader 代开。你的交付＝分支名 + commit sha + 说明.md。
+4. **⛔ 判据红了不许改判据让它变绿。** 判据本身写错 ⇒ 报 blocked 并指出错在哪。
+5. **先验红**：改之前把判据/探针跑一遍，把红的原始输出贴进说明.md。没有先验红 ⇒ 评审直接 refutes。
+6. 代码注释符合外骨骼标准（看基底里的规范引用；archwiki 棘轮会验）。
+7. 临时文件只写 `.team/nodes/hl1-probe/tmp/`，⛔ 不写 /tmp、不写任何项目外路径。
+8. 交付物全落盘后才 report_result；如实报不可判是合法出口，⛔ 不许造假。
+
+```
+
+- write_paths: .team/nodes/hl1-probe/, app/app/src/test/
+- read_paths: .team/nodes/hl1-repro/复现.md
+- 判据: A-probe-doc
 
 ## 2. 架构基（wiki 现算影响闭包）
-- 写作用域包：dev.agentmirror.app, internal/
+- 写作用域包：dev.agentmirror.app
 - 正向依赖（你消费的契约，只读）：kt_dev_agentmirror_app_pairing, kt_dev_agentmirror_app_service, kt_dev_agentmirror_app_session, kt_dev_agentmirror_app_ui_theme, kt_dev_agentmirror_app_workspace
 - **反向依赖（波及面 = 回归自查范围）**：kt_dev_agentmirror_app_service
 
@@ -47,7 +60,7 @@
 - **doc 全文**：前台服务：常驻连接 + 通知栏（需求 004 Android 前台服务路线）。 分层（fg-service 知识基底 §1）： - [StateWatcher]：纯 JVM 核心逻辑（验收单测全打这里），消费 conn 层 listing/list_delta 流，检测会话状态沿变化（→blocked/→done）→ 通知；同状态重复抑制；unknown 不通知。 - [NotificationHelper]：通知渠道（常驻/状态两条）+ 常驻通知与状态通知 + 会话页深链 PendingIntent（action/extra 由 [MainActivity] 的 handleDeepLink 消费，非本包）。 - [MirrorForegroundService]：薄 Android 层，startForeground（dataSync）+ 生命周期绑定 [ConnectionManager]（经 [ServiceWire]）；断连静默重连归 conn 层，本服务只反映状态。 已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start] 启动（startForegroundService），连接与时钟泵由本服务承接（004/011 前台服务路线）。 - [ServiceWire]：接线点——传输工厂（默认 [OkHttpTransportFactory]）、UI 监听桥 （[uiConnector]）与服务监听槽（[serviceListener]）、连接配置注入；进程级持有唯一 [ConnectionManager]，服务与 UI 都经它访问同一单例。 电量策略（004 裁定）：服务被系统杀 → 冷启动重连即恢复（客户端无状态，没有丢失可言）。 服务**不持有连接状态**（004 无状态底线）：连接是 [ServiceWire] 进程级单例，配置唯一来源 是 SharedPreferences，服务只经 [ServiceWire.managerOrNull] 读取并驱动时钟泵 （[MirrorForegroundService.pumpOnce]，2s 一拍，在屏组合不再各自持有）。服务不可用时 在屏兜底泵 [OnScreenFallbackPump] 接管（fix-app-runtime-sa：服务被杀前台仍推进）， 服务恢复即让出（泵归属判据 [ServiceWire.servicePumpActive]，不双泵）。 @consumes dev.agentmirror.app @consumes dev.agentmirror.app.conn @consumes dev.agentmirror.app.tsnet
 
 ## 3. 需求基
-- 标题引用条目：requirement-base/entries/069*
+- 标题引用条目：（无编号引用）
 - requirement-base/REVISIONS.md 必读（被推翻的结论不回改条目）
 
 ## 4. 纪律（本工程通用，违反即返工）

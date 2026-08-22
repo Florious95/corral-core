@@ -53,6 +53,20 @@
         "status": "done",
         "at_revision": 15,
         "case_id": "ledger_coreapp_v1__t.perf__r15"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 17,
+        "case_id": "ledger_coreapp_v1__t.perf__r17"
+      },
+      {
+        "from": "t.rv",
+        "to": "t.close",
+        "status": "pass",
+        "at_revision": 19,
+        "case_id": "ledger_coreapp_v1__t.rv__r19"
       }
     ]
   },
@@ -129,7 +143,7 @@
     "read_only_shared": [],
     "rules": []
   },
-  "revision": 17,
+  "revision": 23,
   "roles": {
     "r.advisor": {
       "artifact_landing": {
@@ -186,7 +200,7 @@
         "ledger_updated": true
       },
       "seat": {
-        "agent": "pb-rv1",
+        "agent": "ca-rv2",
         "team": "remote-agent-android"
       },
       "seat_policy": "resident_reuse"
@@ -202,7 +216,7 @@
         "ledger_updated": true
       },
       "seat": {
-        "agent": "pb-rv2",
+        "agent": "ca-rv2",
         "team": "remote-agent-android"
       },
       "seat_policy": "resident_reuse"
@@ -323,7 +337,6 @@
           "c.close"
         ]
       },
-      "blocking_reasons": [],
       "handoff": {
         "required_artifacts": [],
         "route": "report_result"
@@ -346,8 +359,34 @@
         ]
       },
       "seat_wait_seconds": 1800,
-      "state": "planned",
-      "title": "收账：把本轮现状汇成一页给用户——三分口径「已验证完成 / 自报未核 / 未做」，各附证据路径。必须单列一节「留给 leader 与用户的缺口」，至少含：① 推 maven 分支与推 corral-app 远端仓（席位禁 push，是 leader 的动作）；② **用户真机复验**引用式构建的包「秒开无空白」——模拟器绿不能替代金标准；③ 本仓 app/app 壳还没删（删壳是真机复验通过之后的下一步，不在本链范围）。⛔ 不许把自报当已完成。落 .team/artifacts/coreapp-收账-<日期>.md"
+      "state": "succeeded",
+      "title": "⚠️ cursor 席位 restart 会失忆 ⇒ 话写进收账文书，⛔ 不要给 leader 发消息。\n⚠️ 本轮判者裁定书在 .team/nodes/ca-rv/裁定.md（status=pass），收账以它与账本为准。\n\n收账：把本轮现状汇成一页给用户——三分口径「已验证完成 / 自报未核 / 未做」，各附证据路径。必须单列一节「留给 leader 与用户的缺口」，至少含：① 推 maven 分支与推 corral-app 远端仓（席位禁 push，是 leader 的动作）；② **用户真机复验**引用式构建的包「秒开无空白」——模拟器绿不能替代金标准；③ 本仓 app/app 壳还没删（删壳是真机复验通过之后的下一步，不在本链范围）。⛔ 不许把自报当已完成。落 .team/artifacts/coreapp-收账-<日期>.md",
+      "attempts": [
+        {
+          "attempt_id": "att-t.close-seq1-t1787404441902",
+          "delivery_id": "del-t.close-seq1-t1787404441902",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=c.close",
+            "acceptance_failure.argv=[\"/bin/sh\", \"tools/perfbase/judge-doc.sh\", \".team/artifacts/coreapp-收账-*.md\"]",
+            "acceptance_failure.cwd=.worktrees/wt-ca-close",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ]
+        },
+        {
+          "attempt_id": "att-t.close-seq1-t1787408103550",
+          "delivery_id": "del-t.close-seq1-t1787408103550",
+          "state": "succeeded",
+          "writeback_revision": 23,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.close",
+            "acceptance_success.writeback_revision=23"
+          ]
+        }
+      ]
     },
     "t.esc": {
       "acceptance": {
@@ -396,7 +435,7 @@
         ]
       },
       "seat_wait_seconds": 1800,
-      "state": "planned",
+      "state": "not_applicable",
       "title": "升报：返修穷尽或判者判不出时，把「卡在哪、试了什么、缺什么、需要 leader 决定什么」写清升报，⛔ 不许静默收工、⛔ 不许把判不出改写成通过。落 .team/escalations/coreapp-esc-<日期>.md"
     },
     "t.path": {
@@ -520,7 +559,7 @@
         ]
       },
       "seat_wait_seconds": 5400,
-      "state": "planned",
+      "state": "succeeded",
       "statuses": [
         {
           "artifact": {
@@ -541,8 +580,27 @@
             "acceptance_success.acceptance_id=c.perf",
             "acceptance_success.writeback_revision=5"
           ]
+        },
+        {
+          "attempt_id": "att-t.perf-seq1-t1787399125591",
+          "delivery_id": "del-t.perf-seq1-t1787399125591",
+          "state": "succeeded",
+          "writeback_revision": 18,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.perf",
+            "acceptance_success.writeback_revision=18"
+          ]
         }
-      ]
+      ],
+      "blocking_reasons": [],
+      "status_record": {
+        "status": "done",
+        "artifacts": {
+          "report": ".team/nodes/ca-emu/说明.md"
+        },
+        "case_id": "ledger_coreapp_v1__t.perf__r17",
+        "recorded_at_revision": 17
+      }
     },
     "t.pub": {
       "acceptance": {
@@ -665,7 +723,7 @@
         ]
       },
       "seat_wait_seconds": 3600,
-      "state": "planned",
+      "state": "blocked",
       "statuses": [
         {
           "artifact": {
@@ -689,7 +747,7 @@
           "name": "inconclusive"
         }
       ],
-      "title": "格5·异源终审：你与施工席不同席位、零上下文，⛔ 不采信自报。**自己重跑**四条判据（judge-perfpath / judge-pub / judge-capp / judge-perf-nonregress）并贴退出码原文。另外必须核：① git diff 看 tools/perfbase/ 有没有被动过——动了直接 rework；② corral-app 里确实没有核源码（自己 find，别信文档）；③ 复测的数真从 .team/perf/raw*/ 的 PerfTrace 原文来（抽查 ≥3 份对上统计值）、有没有剔极端值、load 读数在不在；④ 性能关键路径清单里的文件逐个存在且没塞无关文件。裁定书落 .team/nodes/ca-rv/裁定.md，恰好一行 status=pass|rework|inconclusive。判不出写 inconclusive，那是合法终态，⛔ 不许把没核到的写成 pass。\n\n【🔴 本轮追加·审 leader 自己的改动，这是本次终审最重要的一条】\nleader 在你之前动了两处，你要把它们当**可疑对象**核，⛔ 不许因为「是 leader 改的」就默认成立：\n① 判据 tools/perfbase/judge-perf-ab.sh 是 leader 新写的（旧判据 judge-perf-nonregress.sh 读不了 A/B 形状）。\n② **leader 把判决依据从「跨批合并 n=30」改成了「单批最大 n=20」**，理由写在脚本注释里：\n   两批之间 A 组自身 p50 从 142.0 漂到 165.5（+16.5%），机器漂移量大于要检测的效应，\n   跨批合并量到的是漂移不是差异。**改之前合并批是红的（p95 +13.6%），改之后是绿的。**\n你必须回答：**这算不算「改判据放行」？**\n a. 自己把三批数都算一遍（raw-capp/{A,B} 各 30 份、raw-capp2/{A,B} 各 40 份原文都在盘上），\n    核 leader 引的「A 组自身漂移 142.0→165.5」是不是真的、B 组是不是真的两批都稳（167.5/166.0）。\n b. 如果 A 的漂移属实 ⇒ 跨批合并确实不成立，改口径是排除混杂因素，判 pass 那一侧；\n    如果 A 的漂移不属实、或你认为合并批才是对的口径 ⇒ **直接 rework，明写「leader 放宽了判据」**。\n c. 门槛 +10% 有没有被动过？MIN_N 有没有被降过？两包 md5 检查还在不在？逐条核 git diff。\n⛔ 判不出写 inconclusive。⛔ 不许因为「leader 说得有道理」就放行——你要的是数，不是道理。\n\n细则读 .team/tasks/coreapp/任务书.md",
+      "title": "⚠️ 你是 cursor 席位，restart 会失忆 ⇒ 话一律写进裁定书，⛔ 不要给 leader 发消息。\n⚠️ 前一个判者（pb-rv1）被 grok 周额度打死（Weekly limit 0%），没留下本轮裁定；盘上 .team/nodes/ca-rv/裁定.md 是**上一轮**那份（判 rework 的），可读作背景，⛔ 不要当本轮结论。\n\n格5·异源终审：你与施工席不同席位、零上下文，⛔ 不采信自报。**自己重跑**四条判据（judge-perfpath / judge-pub / judge-capp / judge-perf-nonregress）并贴退出码原文。另外必须核：① git diff 看 tools/perfbase/ 有没有被动过——动了直接 rework；② corral-app 里确实没有核源码（自己 find，别信文档）；③ 复测的数真从 .team/perf/raw*/ 的 PerfTrace 原文来（抽查 ≥3 份对上统计值）、有没有剔极端值、load 读数在不在；④ 性能关键路径清单里的文件逐个存在且没塞无关文件。裁定书落 .team/nodes/ca-rv/裁定.md，恰好一行 status=pass|rework|inconclusive。判不出写 inconclusive，那是合法终态，⛔ 不许把没核到的写成 pass。\n\n【🔴 本轮追加·审 leader 自己的改动，这是本次终审最重要的一条】\nleader 在你之前动了两处，你要把它们当**可疑对象**核，⛔ 不许因为「是 leader 改的」就默认成立：\n① 判据 tools/perfbase/judge-perf-ab.sh 是 leader 新写的（旧判据 judge-perf-nonregress.sh 读不了 A/B 形状）。\n② **leader 把判决依据从「跨批合并 n=30」改成了「单批最大 n=20」**，理由写在脚本注释里：\n   两批之间 A 组自身 p50 从 142.0 漂到 165.5（+16.5%），机器漂移量大于要检测的效应，\n   跨批合并量到的是漂移不是差异。**改之前合并批是红的（p95 +13.6%），改之后是绿的。**\n你必须回答：**这算不算「改判据放行」？**\n a. 自己把三批数都算一遍（raw-capp/{A,B} 各 30 份、raw-capp2/{A,B} 各 40 份原文都在盘上），\n    核 leader 引的「A 组自身漂移 142.0→165.5」是不是真的、B 组是不是真的两批都稳（167.5/166.0）。\n b. 如果 A 的漂移属实 ⇒ 跨批合并确实不成立，改口径是排除混杂因素，判 pass 那一侧；\n    如果 A 的漂移不属实、或你认为合并批才是对的口径 ⇒ **直接 rework，明写「leader 放宽了判据」**。\n c. 门槛 +10% 有没有被动过？MIN_N 有没有被降过？两包 md5 检查还在不在？逐条核 git diff。\n⛔ 判不出写 inconclusive。⛔ 不许因为「leader 说得有道理」就放行——你要的是数，不是道理。\n\n细则读 .team/tasks/coreapp/任务书.md",
       "rounds": [
         {
           "n": 1,
@@ -700,7 +758,18 @@
         }
       ],
       "attempts": [],
-      "blocking_reasons": []
+      "blocking_reasons": [
+        "route_contradicts_success: dest=t.close"
+      ],
+      "status_record": {
+        "status": "pass",
+        "artifacts": {
+          "report": "裁定.md",
+          "path": ".team/nodes/ca-rv/裁定.md"
+        },
+        "case_id": "ledger_coreapp_v1__t.rv__r19",
+        "recorded_at_revision": 19
+      }
     }
   },
   "transitions": [

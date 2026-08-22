@@ -1,0 +1,19 @@
+租约抢占：pid=99655 stole from pid=14267 reason=holder pid 14267 不存在（判定已死） at=1787402762
+
+[ledger-run 2026-08-22T12:46:02Z] 开工 start | ledger_id=ledger.coreapp.v1 revision=19 账本=.team/ledgers/coreapp-v1.json 墙钟上限=57600s 派单死线=90s
+[ledger-run 2026-08-22T12:46:02Z] 轮次 round | 第 1 轮开始：前沿 ["t.rv"]（墙钟已跑 0s / 上限 57600s）
+[ledger-run 2026-08-22T12:46:02Z] 派单 dispatch | task=t.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/ca-rv2 席位=ca-rv2 attempt=att-t.rv-seq1-t1787402762805 delivery=del-t.rv-seq1-t1787402762805 等席位预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T12:46:03Z] 投递回执 send-ok | task=t.rv case_id=ledger_coreapp_v1__t.rv__r19 message_id=msg_a4bac8dc2e90 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T12:46:03Z] 派单落地 dispatch-landed | task=t.rv 席位 ca-rv2 的收件箱已多出这条派单
+[ledger-run 2026-08-22T12:46:03Z] 等待 wait | task=t.rv 在等的 key（case_id）=ledger_coreapp_v1__t.rv__r19 team=remote-agent-android 预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T12:58:50Z] 原子写回 writeback-atomic | task=t.rv status_record + route_hops → 临时文件+rename 已落盘（revision=20 hash=a195269d60c06edb）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T12:58:50Z] 状态路由点火 route-fire | task=t.rv status=pass → t.close exhausted=false reentered=false
+[ledger-run 2026-08-22T12:58:50Z] 已唤醒 wait-signaled | task=t.rv 等到结果了
+[ledger-run 2026-08-22T12:58:50Z] 判据 acceptance | task=t.rv 在跑 required=["c.rv"]
+[ledger-run 2026-08-22T12:59:00Z] 原子写回 writeback-atomic | task=t.rv 拒关成功：不得 succeeded → 临时文件+rename 已落盘（revision=20 hash=8cce317a91867544）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T12:59:00Z] 拒关成功 close-success-refused | task=t.rv route_contradicts_success: dest=t.close——不得写成 succeeded
+[ledger-run 2026-08-22T12:59:00Z] 轮次 round | 第 2 轮开始：前沿 ["t.close"]（墙钟已跑 778s / 上限 57600s）
+[ledger-run 2026-08-22T12:59:00Z] 派单 dispatch | task=t.close 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pb-rv2 席位=pb-rv2 attempt=att-t.close-seq2-t1787403540970 delivery=del-t.close-seq2-t1787403540970 等席位预算=1800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T12:59:01Z] 投递回执 send-ok | task=t.close case_id=ledger_coreapp_v1__t.close__r20 message_id=msg_6c6b01eb5200 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T12:59:01Z] 派单落地 dispatch-landed | task=t.close 席位 pb-rv2 的收件箱已多出这条派单
+[ledger-run 2026-08-22T12:59:01Z] 等待 wait | task=t.close 在等的 key（case_id）=ledger_coreapp_v1__t.close__r20 team=remote-agent-android 预算=1800s 来源=任务 seat_wait_seconds

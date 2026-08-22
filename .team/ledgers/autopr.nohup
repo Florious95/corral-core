@@ -1,0 +1,462 @@
+[autopr 2026-08-22T06:31:21Z] 起：账本=/Volumes/nvme/Projects/远程Agent安卓/.team/ledgers/coreapp-v1.json once=False 间隔=60s
+[autopr 2026-08-22T06:31:21Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:31:21Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=19 / seal-pr: 工作区待提交条目=19 / seal-pr: 已提交 a5b55dc75 / seal-pr: 分支超出 main 的提交数=9  head=a5b55dc75 / a5b55dc75 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 1bfb86757 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+[autopr 2026-08-22T06:31:21Z] t.capp 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:31:21Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:31:21Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7567ff6a9 / seal-pr: 分支超出 main 的提交数=10  head=7567ff6a9 / 7567ff6a9 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / a5b55dc75 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:31:21Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:31:22Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:31:22Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=2 / seal-pr: 工作区待提交条目=2 / seal-pr: 已提交 bda0f46ca / seal-pr: 分支超出 main 的提交数=11  head=bda0f46ca / bda0f46ca [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7567ff6a9 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:32:19Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"}
+[autopr 2026-08-22T06:33:19Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:33:19Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=11 / seal-pr: 工作区待提交条目=11 / seal-pr: 已提交 4b7c8f7cf / seal-pr: 分支超出 main 的提交数=12  head=4b7c8f7cf / 4b7c8f7cf [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / bda0f46ca [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit
+[autopr 2026-08-22T06:33:19Z] t.capp 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:33:19Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:33:19Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 e9e290aa3 / seal-pr: 分支超出 main 的提交数=13  head=e9e290aa3 / e9e290aa3 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 4b7c8f7cf [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:33:19Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:33:19Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:33:20Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 9e67a8110 / seal-pr: 分支超出 main 的提交数=14  head=9e67a8110 / 9e67a8110 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / e9e290aa3 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:33:21Z] 起：账本=/Volumes/nvme/Projects/远程Agent安卓/.team/ledgers/coreapp-v1.json once=False 间隔=60s
+[autopr 2026-08-22T06:33:21Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:33:22Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=5 / seal-pr: 工作区待提交条目=5 / seal-pr: 已提交 9c1734620 / seal-pr: 分支超出 main 的提交数=15  head=9c1734620 / 9c1734620 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 9e67a8110 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:33:22Z] t.capp 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:33:22Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:33:22Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=0 / seal-pr: 工作区待提交条目=0 / seal-pr: 分支超出 main 的提交数=15  head=9c1734620 / 9c1734620 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 9e67a8110 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / e9e290aa3 [pr/ca] 席位交付封
+[autopr 2026-08-22T06:33:22Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:33:22Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:33:22Z] t.pub 与 t.path 同分支同指纹，复用其封版结果
+[autopr 2026-08-22T06:33:22Z] t.pub 与 t.path 同分支同指纹，复用其 PR 结果
+[autopr 2026-08-22T06:34:22Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:34:23Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=8 / seal-pr: 工作区待提交条目=7 / seal-pr: 已提交 53d909f43 / seal-pr: 分支超出 main 的提交数=16  head=53d909f43 / 53d909f43 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 9c1734620 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:34:23Z] t.capp 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:34:23Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:34:23Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 331f4f63d / seal-pr: 分支超出 main 的提交数=17  head=331f4f63d / 331f4f63d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 53d909f43 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:34:23Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:34:23Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:34:23Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 27069ae3b / seal-pr: 分支超出 main 的提交数=18  head=27069ae3b / 27069ae3b [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 331f4f63d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:35:05Z] 起：账本=/Volumes/nvme/Projects/远程Agent安卓/.team/ledgers/coreapp-v1.json once=False 间隔=60s
+(eval):1: command not found: setsid
+[autopr 2026-08-22T06:37:17Z] 起：账本=/Volumes/nvme/Projects/远程Agent安卓/.team/ledgers/coreapp-v1.json once=False 间隔=60s
+[autopr 2026-08-22T06:40:17Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:40:18Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=29 / seal-pr: 工作区待提交条目=29 / seal-pr: 已提交 5d0fe9246 / seal-pr: 分支超出 main 的提交数=19  head=5d0fe9246 / 5d0fe9246 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 27069ae3b [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit
+[autopr 2026-08-22T06:40:18Z] t.capp 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:40:18Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:40:18Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=0 / seal-pr: 工作区待提交条目=0 / seal-pr: 分支超出 main 的提交数=19  head=5d0fe9246 / 5d0fe9246 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 27069ae3b [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 331f4f63d [pr/ca] 席位交付封
+[autopr 2026-08-22T06:40:18Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:40:18Z] t.perf 与 t.path 同分支同指纹，复用其封版结果
+[autopr 2026-08-22T06:40:18Z] t.perf 与 t.path 同分支同指纹，复用其 PR 结果
+[autopr 2026-08-22T06:40:18Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:40:18Z] t.pub 与 t.path 同分支同指纹，复用其封版结果
+[autopr 2026-08-22T06:40:18Z] t.pub 与 t.path 同分支同指纹，复用其 PR 结果
+[autopr 2026-08-22T06:41:19Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:41:19Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=0 / seal-pr: 工作区待提交条目=0 / seal-pr: 分支超出 main 的提交数=19  head=5d0fe9246 / 5d0fe9246 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 27069ae3b [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 331f4f63d [pr/ca] 席位交付封
+[autopr 2026-08-22T06:41:19Z] t.capp 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:46:21Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:46:21Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=6 / seal-pr: 工作区待提交条目=6 / seal-pr: 已提交 bc3170ff1 / seal-pr: 分支超出 main 的提交数=20  head=bc3170ff1 / bc3170ff1 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 5d0fe9246 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T06:46:21Z] t.capp 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:46:21Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:46:22Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=0 / seal-pr: 工作区待提交条目=0 / seal-pr: 分支超出 main 的提交数=20  head=bc3170ff1 / bc3170ff1 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 5d0fe9246 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 27069ae3b [pr/ca] 席位交付封
+[autopr 2026-08-22T06:46:22Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T06:46:22Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:46:22Z] t.perf 与 t.path 同分支同指纹，复用其封版结果
+[autopr 2026-08-22T06:46:22Z] t.perf 与 t.path 同分支同指纹，复用其 PR 结果
+[autopr 2026-08-22T06:46:22Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:46:22Z] t.pub 与 t.path 同分支同指纹，复用其封版结果
+[autopr 2026-08-22T06:46:22Z] t.pub 与 t.path 同分支同指纹，复用其 PR 结果
+[autopr 2026-08-22T06:47:22Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T06:47:22Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=0 / seal-pr: 工作区待提交条目=0 / seal-pr: 分支超出 main 的提交数=20  head=bc3170ff1 / bc3170ff1 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 5d0fe9246 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 27069ae3b [pr/ca] 席位交付封
+[autopr 2026-08-22T06:47:22Z] t.capp 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T08:16:04Z] 起：账本=/Volumes/nvme/Projects/远程Agent安卓/.team/ledgers/coreapp-v1.json once=False 间隔=60s
+[autopr 2026-08-22T11:48:10Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:48:12Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=43 / seal-pr: 工作区待提交条目=43 / seal-pr: 已提交 402bda72c / seal-pr: 分支超出 main 的提交数=22  head=402bda72c / 402bda72c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 565542972 coreapp-v1 t.perf 记不可判：本机 load1 107（ffmpeg
+[autopr 2026-08-22T11:49:04Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T11:49:04Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:49:05Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 819568090 / seal-pr: 分支超出 main 的提交数=23  head=819568090 / 819568090 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 402bda72c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:49:05Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T11:49:05Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:49:07Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 1d2040436 / seal-pr: 分支超出 main 的提交数=24  head=1d2040436 / 1d2040436 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 819568090 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:49:07Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T11:49:07Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:49:08Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 63cbd8afc / seal-pr: 分支超出 main 的提交数=25  head=63cbd8afc / 63cbd8afc [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 1d2040436 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:51:52Z] t.pub 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 4796 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T11:52:52Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:52:53Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 1f1b7c21e / seal-pr: 分支超出 main 的提交数=26  head=1f1b7c21e / 1f1b7c21e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 63cbd8afc [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:53:38Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T11:53:38Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:53:40Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7360dac6a / seal-pr: 分支超出 main 的提交数=27  head=7360dac6a / 7360dac6a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 1f1b7c21e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:53:40Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T11:53:40Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:53:41Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 0f858474e / seal-pr: 分支超出 main 的提交数=28  head=0f858474e / 0f858474e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7360dac6a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:53:41Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T11:53:41Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:53:42Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 3d1a0cdd0 / seal-pr: 分支超出 main 的提交数=29  head=3d1a0cdd0 / 3d1a0cdd0 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 0f858474e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:55:51Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T11:56:52Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:56:53Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 5e3e1aabc / seal-pr: 分支超出 main 的提交数=30  head=5e3e1aabc / 5e3e1aabc [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 3d1a0cdd0 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:57:32Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T11:57:32Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:57:33Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 ca217cac5 / seal-pr: 分支超出 main 的提交数=31  head=ca217cac5 / ca217cac5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 5e3e1aabc [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:57:33Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T11:57:33Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:57:35Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 3dae42daa / seal-pr: 分支超出 main 的提交数=32  head=3dae42daa / 3dae42daa [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / ca217cac5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:57:35Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T11:57:35Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T11:57:36Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 d28725b9c / seal-pr: 分支超出 main 的提交数=33  head=d28725b9c / d28725b9c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 3dae42daa [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T11:59:48Z] t.pub 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 12867 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T12:00:48Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:00:50Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 6b63a640a / seal-pr: 分支超出 main 的提交数=34  head=6b63a640a / 6b63a640a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / d28725b9c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:03:27Z] t.capp 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 10399 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T12:03:27Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:03:28Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 db12d622a / seal-pr: 分支超出 main 的提交数=35  head=db12d622a / db12d622a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 6b63a640a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:03:28Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:03:28Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:03:30Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 6c402853b / seal-pr: 分支超出 main 的提交数=36  head=6c402853b / 6c402853b [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / db12d622a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:03:30Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:03:30Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:03:31Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7bb7878e1 / seal-pr: 分支超出 main 的提交数=37  head=7bb7878e1 / 7bb7878e1 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 6c402853b [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:05:38Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:06:38Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:06:39Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 44d52b565 / seal-pr: 分支超出 main 的提交数=38  head=44d52b565 / 44d52b565 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7bb7878e1 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:09:08Z] t.capp 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 7216 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T12:09:08Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:09:10Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 40aded8fa / seal-pr: 分支超出 main 的提交数=39  head=40aded8fa / 40aded8fa [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 44d52b565 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:09:10Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:09:10Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:09:11Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 86a4d0913 / seal-pr: 分支超出 main 的提交数=40  head=86a4d0913 / 86a4d0913 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 40aded8fa [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:09:11Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:09:11Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:09:12Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 1fe3f38d8 / seal-pr: 分支超出 main 的提交数=41  head=1fe3f38d8 / 1fe3f38d8 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 86a4d0913 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:12:24Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:13:24Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:13:26Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 d90576c5e / seal-pr: 分支超出 main 的提交数=42  head=d90576c5e / d90576c5e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 1fe3f38d8 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:13:59Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:13:59Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:14:00Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 3705cbc16 / seal-pr: 分支超出 main 的提交数=43  head=3705cbc16 / 3705cbc16 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / d90576c5e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:14:00Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:14:00Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:14:02Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 946a676da / seal-pr: 分支超出 main 的提交数=44  head=946a676da / 946a676da [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 3705cbc16 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:14:02Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:14:02Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:14:03Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 829e30366 / seal-pr: 分支超出 main 的提交数=45  head=829e30366 / 829e30366 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 946a676da [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:16:34Z] t.pub 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 11967 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T12:17:34Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:17:36Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 030bfdb1a / seal-pr: 分支超出 main 的提交数=46  head=030bfdb1a / 030bfdb1a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 829e30366 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:18:45Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:18:45Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:18:47Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 585e69f5f / seal-pr: 分支超出 main 的提交数=47  head=585e69f5f / 585e69f5f [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 030bfdb1a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:18:47Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:18:47Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:18:48Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 38cb619ae / seal-pr: 分支超出 main 的提交数=48  head=38cb619ae / 38cb619ae [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 585e69f5f [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:18:48Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:18:48Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:18:49Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 a1cfc12ef / seal-pr: 分支超出 main 的提交数=49  head=a1cfc12ef / a1cfc12ef [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 38cb619ae [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:21:04Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:22:04Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:22:06Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 3a78281da / seal-pr: 分支超出 main 的提交数=50  head=3a78281da / 3a78281da [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / a1cfc12ef [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:23:00Z] t.capp 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 16389 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T12:23:00Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:23:02Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 8b81c755c / seal-pr: 分支超出 main 的提交数=51  head=8b81c755c / 8b81c755c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 3a78281da [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:23:02Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:23:02Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:23:03Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 b58e48b34 / seal-pr: 分支超出 main 的提交数=52  head=b58e48b34 / b58e48b34 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 8b81c755c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:23:03Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:23:03Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:23:05Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 4636150dc / seal-pr: 分支超出 main 的提交数=53  head=4636150dc / 4636150dc [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / b58e48b34 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:25:43Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:26:44Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:26:45Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 cfa16b213 / seal-pr: 分支超出 main 的提交数=54  head=cfa16b213 / cfa16b213 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 4636150dc [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:27:51Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:27:51Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:27:52Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 9b58b55a7 / seal-pr: 分支超出 main 的提交数=55  head=9b58b55a7 / 9b58b55a7 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / cfa16b213 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:27:52Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:27:52Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:27:54Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 8514eae0a / seal-pr: 分支超出 main 的提交数=56  head=8514eae0a / 8514eae0a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 9b58b55a7 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:27:54Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:27:54Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:27:55Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 14b82c299 / seal-pr: 分支超出 main 的提交数=57  head=14b82c299 / 14b82c299 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 8514eae0a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:30:37Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:31:38Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:31:40Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 fd5925f7f / seal-pr: 分支超出 main 的提交数=58  head=fd5925f7f / fd5925f7f [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 14b82c299 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:32:09Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:32:09Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:32:11Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 87315f947 / seal-pr: 分支超出 main 的提交数=59  head=87315f947 / 87315f947 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / fd5925f7f [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:32:11Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:32:11Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:32:12Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 ea5e260ee / seal-pr: 分支超出 main 的提交数=60  head=ea5e260ee / ea5e260ee [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 87315f947 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:32:12Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:32:12Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:32:13Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 1248901d8 / seal-pr: 分支超出 main 的提交数=61  head=1248901d8 / 1248901d8 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / ea5e260ee [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:35:26Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:36:26Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:36:27Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 baf0ba761 / seal-pr: 分支超出 main 的提交数=62  head=baf0ba761 / baf0ba761 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 1248901d8 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:37:01Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:37:01Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:37:02Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 97d5e8285 / seal-pr: 分支超出 main 的提交数=63  head=97d5e8285 / 97d5e8285 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / baf0ba761 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:37:02Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:37:02Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:37:03Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 95f85ae3f / seal-pr: 分支超出 main 的提交数=64  head=95f85ae3f / 95f85ae3f [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 97d5e8285 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:37:03Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:37:03Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:37:05Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 dab8ce82d / seal-pr: 分支超出 main 的提交数=65  head=dab8ce82d / dab8ce82d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 95f85ae3f [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:39:40Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:40:41Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:40:42Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7c99b5b0d / seal-pr: 分支超出 main 的提交数=66  head=7c99b5b0d / 7c99b5b0d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / dab8ce82d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:41:51Z] t.capp 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 7390 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T12:41:51Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:41:53Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 8389c7f8a / seal-pr: 分支超出 main 的提交数=67  head=8389c7f8a / 8389c7f8a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7c99b5b0d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:41:53Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:41:53Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:41:54Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 1ccc7b180 / seal-pr: 分支超出 main 的提交数=68  head=1ccc7b180 / 1ccc7b180 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 8389c7f8a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:41:54Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:41:54Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:41:55Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 533ccf027 / seal-pr: 分支超出 main 的提交数=69  head=533ccf027 / 533ccf027 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 1ccc7b180 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:45:10Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:46:10Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:46:12Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 edb9fb4af / seal-pr: 分支超出 main 的提交数=70  head=edb9fb4af / edb9fb4af [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 533ccf027 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:46:50Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:46:50Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:46:52Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7e8633b6b / seal-pr: 分支超出 main 的提交数=71  head=7e8633b6b / 7e8633b6b [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / edb9fb4af [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:46:52Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:46:52Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:46:53Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 deb4a59cd / seal-pr: 分支超出 main 的提交数=72  head=deb4a59cd / deb4a59cd [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7e8633b6b [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:46:53Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:46:53Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:46:54Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 bc5b5804c / seal-pr: 分支超出 main 的提交数=73  head=bc5b5804c / bc5b5804c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / deb4a59cd [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:50:27Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:51:27Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:51:29Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 78ede3792 / seal-pr: 分支超出 main 的提交数=74  head=78ede3792 / 78ede3792 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / bc5b5804c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:52:01Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:52:02Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:52:03Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7615331cd / seal-pr: 分支超出 main 的提交数=75  head=7615331cd / 7615331cd [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 78ede3792 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:52:03Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:52:03Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:52:04Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 bd31c2d53 / seal-pr: 分支超出 main 的提交数=76  head=bd31c2d53 / bd31c2d53 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7615331cd [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:52:04Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:52:04Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:52:06Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 9ac333306 / seal-pr: 分支超出 main 的提交数=77  head=9ac333306 / 9ac333306 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / bd31c2d53 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:54:53Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:55:53Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:55:55Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=8 / seal-pr: 工作区待提交条目=8 / seal-pr: 已提交 0d1e8b485 / seal-pr: 分支超出 main 的提交数=78  head=0d1e8b485 / 0d1e8b485 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 9ac333306 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:56:28Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T12:56:28Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:56:29Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 ab824551a / seal-pr: 分支超出 main 的提交数=79  head=ab824551a / ab824551a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 0d1e8b485 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:56:29Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:56:29Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:56:31Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 9155fcd90 / seal-pr: 分支超出 main 的提交数=80  head=9155fcd90 / 9155fcd90 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / ab824551a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:56:31Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T12:56:31Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T12:56:32Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7ce1ae0b9 / seal-pr: 分支超出 main 的提交数=81  head=7ce1ae0b9 / 7ce1ae0b9 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 9155fcd90 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T12:59:26Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:00:26Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:00:28Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=8 / seal-pr: 工作区待提交条目=8 / seal-pr: 已提交 f1efcb6e3 / seal-pr: 分支超出 main 的提交数=82  head=f1efcb6e3 / f1efcb6e3 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7ce1ae0b9 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:04:25Z] t.capp 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 6406 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T13:04:25Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:04:27Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 17517c5f2 / seal-pr: 分支超出 main 的提交数=83  head=17517c5f2 / 17517c5f2 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / f1efcb6e3 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:04:27Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:04:32Z] t.path 并线 OK：repo/dev/agentmirror/core/core-terminal/maven-metadata.xml.sha512 /  create mode 100644 app/gradle/core-maven-publish.gradle /  create mode 100644 "docs/\346\200\247\350\203\275\345\205\263\351\224\256\350\267\257\345\276\204.md" / land-pr: 已并线 2b1bbeb2c / 2b1bbeb2c land pr/ca（判据全绿 + 异源评审 VERDICT: s
+[autopr 2026-08-22T13:04:32Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:04:33Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 8b9fc10f7 / seal-pr: 分支超出 main 的提交数=1  head=8b9fc10f7 / 8b9fc10f7 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+[autopr 2026-08-22T13:04:33Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:04:38Z] t.perf 并线 OK：land-pr: branch=pr/ca verdict=VERDICT: supports / land-pr: 待并提交数=1 / Merge made by the 'ort' strategy. /  .team/nodes/ca-emu/tmp/daemon.log | 182 ++++++++++++++++++++++++++++++++++++++ /  1 file changed, 182 insertions(+) / land-pr: 已并线 47c5df536 / 47c5df536 land pr/ca（判据全绿 + 异源评审 VERDICT: supports）
+[autopr 2026-08-22T13:04:38Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:04:39Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7ffa7b5c8 / seal-pr: 分支超出 main 的提交数=1  head=7ffa7b5c8 / 7ffa7b5c8 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+[autopr 2026-08-22T13:06:56Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:08:46Z] t.pub 并线 OK：land-pr: branch=pr/ca verdict=VERDICT: supports / land-pr: 待并提交数=1 / Merge made by the 'ort' strategy. /  .team/nodes/ca-emu/tmp/daemon.log | 168 ++++++++++++++++++++++++++++++++++++++ /  1 file changed, 168 insertions(+) / land-pr: 已并线 e4fbc0c90 / e4fbc0c90 land pr/ca（判据全绿 + 异源评审 VERDICT: supports）
+[autopr 2026-08-22T13:09:46Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:09:51Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 10928af90 / seal-pr: 分支超出 main 的提交数=1  head=10928af90 / 10928af90 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+[autopr 2026-08-22T13:10:30Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:11:13Z] t.capp 并线 OK：land-pr: branch=pr/ca verdict=VERDICT: supports / land-pr: 待并提交数=1 / Merge made by the 'ort' strategy. /  .team/nodes/ca-emu/tmp/daemon.log | 8265 +++++++++++++++++++++++++++++++++++++ /  1 file changed, 8265 insertions(+) / land-pr: 已并线 fc60705af / fc60705af land pr/ca（判据全绿 + 异源评审 VERDICT: supports
+[autopr 2026-08-22T13:11:13Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:11:15Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 97ba7f03d / seal-pr: 分支超出 main 的提交数=1  head=97ba7f03d / 97ba7f03d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+[autopr 2026-08-22T13:11:15Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:11:15Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:11:17Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 f8bcc9273 / seal-pr: 分支超出 main 的提交数=2  head=f8bcc9273 / f8bcc9273 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 97ba7f03d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+[autopr 2026-08-22T13:11:17Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:11:17Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:11:18Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 472a7daee / seal-pr: 分支超出 main 的提交数=3  head=472a7daee / 472a7daee [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / f8bcc9273 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） /
+[autopr 2026-08-22T13:13:40Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:14:40Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:14:42Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 517136f80 / seal-pr: 分支超出 main 的提交数=4  head=517136f80 / 517136f80 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 472a7daee [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） /
+[autopr 2026-08-22T13:15:14Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:15:14Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:15:16Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 54520612e / seal-pr: 分支超出 main 的提交数=5  head=54520612e / 54520612e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 517136f80 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） /
+[autopr 2026-08-22T13:15:16Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:15:16Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:15:17Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 4f39e03c7 / seal-pr: 分支超出 main 的提交数=6  head=4f39e03c7 / 4f39e03c7 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 54520612e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） /
+[autopr 2026-08-22T13:15:17Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:15:17Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:15:19Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 3a5b599ed / seal-pr: 分支超出 main 的提交数=7  head=3a5b599ed / 3a5b599ed [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 4f39e03c7 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） /
+[autopr 2026-08-22T13:18:09Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:19:09Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:19:11Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 e4704a3ea / seal-pr: 分支超出 main 的提交数=8  head=e4704a3ea / e4704a3ea [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 3a5b599ed [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） /
+[autopr 2026-08-22T13:20:07Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:20:07Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:20:09Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 9c8bab337 / seal-pr: 分支超出 main 的提交数=9  head=9c8bab337 / 9c8bab337 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / e4704a3ea [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） /
+[autopr 2026-08-22T13:20:09Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:20:09Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:20:10Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 45dd4a7a5 / seal-pr: 分支超出 main 的提交数=10  head=45dd4a7a5 / 45dd4a7a5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 9c8bab337 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:20:10Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:20:10Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:20:12Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7e53a4770 / seal-pr: 分支超出 main 的提交数=11  head=7e53a4770 / 7e53a4770 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 45dd4a7a5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:22:38Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:23:38Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:23:40Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 e7d1f1d21 / seal-pr: 分支超出 main 的提交数=12  head=e7d1f1d21 / e7d1f1d21 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7e53a4770 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:26:31Z] t.capp 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 9097 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T13:26:31Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:26:33Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 70451f918 / seal-pr: 分支超出 main 的提交数=13  head=70451f918 / 70451f918 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / e7d1f1d21 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:26:33Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:26:33Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:26:34Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 a9973f21e / seal-pr: 分支超出 main 的提交数=14  head=a9973f21e / a9973f21e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 70451f918 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:26:34Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:26:34Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:26:36Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 953d4effa / seal-pr: 分支超出 main 的提交数=15  head=953d4effa / 953d4effa [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / a9973f21e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:29:47Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:30:48Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:30:49Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 b3c1e1ae2 / seal-pr: 分支超出 main 的提交数=16  head=b3c1e1ae2 / b3c1e1ae2 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 953d4effa [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:31:22Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:31:22Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:31:23Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 1f34d270d / seal-pr: 分支超出 main 的提交数=17  head=1f34d270d / 1f34d270d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / b3c1e1ae2 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:31:23Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:31:24Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:31:25Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 8b1bcee80 / seal-pr: 分支超出 main 的提交数=18  head=8b1bcee80 / 8b1bcee80 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 1f34d270d [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:31:25Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:31:25Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:31:27Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 eb89b4700 / seal-pr: 分支超出 main 的提交数=19  head=eb89b4700 / eb89b4700 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 8b1bcee80 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:36:56Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:37:56Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:37:58Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 216238061 / seal-pr: 分支超出 main 的提交数=20  head=216238061 / 216238061 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / eb89b4700 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:38:49Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:38:49Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:38:51Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 b3a22a7f0 / seal-pr: 分支超出 main 的提交数=21  head=b3a22a7f0 / b3a22a7f0 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 216238061 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:38:51Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:38:51Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:38:53Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 4b921869c / seal-pr: 分支超出 main 的提交数=22  head=4b921869c / 4b921869c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / b3a22a7f0 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:38:53Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:38:53Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:38:54Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 820f655ef / seal-pr: 分支超出 main 的提交数=23  head=820f655ef / 820f655ef [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 4b921869c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:42:45Z] t.pub 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 13816 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T13:43:45Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:43:47Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 4adcd4f40 / seal-pr: 分支超出 main 的提交数=24  head=4adcd4f40 / 4adcd4f40 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 820f655ef [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:44:31Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:44:32Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:44:33Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=8 / seal-pr: 工作区待提交条目=8 / seal-pr: 已提交 39c14716f / seal-pr: 分支超出 main 的提交数=25  head=39c14716f / 39c14716f [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 4adcd4f40 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:44:33Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:44:33Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:44:35Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 541164697 / seal-pr: 分支超出 main 的提交数=26  head=541164697 / 541164697 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 39c14716f [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:44:35Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:44:35Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:44:36Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 c78570c6c / seal-pr: 分支超出 main 的提交数=27  head=c78570c6c / c78570c6c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 541164697 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:47:38Z] t.pub 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 15566 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T13:48:38Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:48:40Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 ab1fadc28 / seal-pr: 分支超出 main 的提交数=28  head=ab1fadc28 / ab1fadc28 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / c78570c6c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:49:44Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:49:44Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:49:46Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 ad78ccc19 / seal-pr: 分支超出 main 的提交数=29  head=ad78ccc19 / ad78ccc19 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / ab1fadc28 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:49:46Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:49:46Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:49:47Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 1114cdfe7 / seal-pr: 分支超出 main 的提交数=30  head=1114cdfe7 / 1114cdfe7 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / ad78ccc19 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:49:47Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:49:47Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:49:49Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 8908e5938 / seal-pr: 分支超出 main 的提交数=31  head=8908e5938 / 8908e5938 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 1114cdfe7 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:53:43Z] t.pub 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 1833 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T13:54:43Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:54:45Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 f94a2867e / seal-pr: 分支超出 main 的提交数=32  head=f94a2867e / f94a2867e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 8908e5938 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:55:31Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T13:55:31Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:55:33Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 c3eabcdf9 / seal-pr: 分支超出 main 的提交数=33  head=c3eabcdf9 / c3eabcdf9 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / f94a2867e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:55:33Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:55:33Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:55:35Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 45a8deaf2 / seal-pr: 分支超出 main 的提交数=34  head=45a8deaf2 / 45a8deaf2 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / c3eabcdf9 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:55:35Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T13:55:35Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T13:55:36Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 f5bd0bba2 / seal-pr: 分支超出 main 的提交数=35  head=f5bd0bba2 / f5bd0bba2 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 45a8deaf2 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T13:59:10Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:00:10Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:00:12Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 967dc8df5 / seal-pr: 分支超出 main 的提交数=36  head=967dc8df5 / 967dc8df5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / f5bd0bba2 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:00:51Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:00:51Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:00:52Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 98a48ddd1 / seal-pr: 分支超出 main 的提交数=37  head=98a48ddd1 / 98a48ddd1 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 967dc8df5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:00:52Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:00:52Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:00:54Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 af1574a44 / seal-pr: 分支超出 main 的提交数=38  head=af1574a44 / af1574a44 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 98a48ddd1 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:00:54Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:00:54Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:00:55Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 4ca59613c / seal-pr: 分支超出 main 的提交数=39  head=4ca59613c / 4ca59613c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / af1574a44 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:03:52Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:04:52Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:04:54Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 984cbfe02 / seal-pr: 分支超出 main 的提交数=40  head=984cbfe02 / 984cbfe02 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 4ca59613c [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:05:36Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:05:36Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:05:37Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 5295d0c9a / seal-pr: 分支超出 main 的提交数=41  head=5295d0c9a / 5295d0c9a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 984cbfe02 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:05:37Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:05:37Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:05:39Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 feea73873 / seal-pr: 分支超出 main 的提交数=42  head=feea73873 / feea73873 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 5295d0c9a [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:05:39Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:05:39Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:05:40Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 df0473ecf / seal-pr: 分支超出 main 的提交数=43  head=df0473ecf / df0473ecf [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / feea73873 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:08:33Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:09:34Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:09:36Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 043205937 / seal-pr: 分支超出 main 的提交数=44  head=043205937 / 043205937 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / df0473ecf [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:10:13Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:10:14Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:10:15Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 7de77e7ff / seal-pr: 分支超出 main 的提交数=45  head=7de77e7ff / 7de77e7ff [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 043205937 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:10:15Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:10:15Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:10:17Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 79e955ced / seal-pr: 分支超出 main 的提交数=46  head=79e955ced / 79e955ced [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 7de77e7ff [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:10:17Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:10:17Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:10:18Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 9612eb208 / seal-pr: 分支超出 main 的提交数=47  head=9612eb208 / 9612eb208 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 79e955ced [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:14:25Z] t.pub 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 8202 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T14:15:25Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:15:27Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=6 / seal-pr: 工作区待提交条目=6 / seal-pr: 已提交 67fd04566 / seal-pr: 分支超出 main 的提交数=48  head=67fd04566 / 67fd04566 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 9612eb208 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:16:17Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:16:17Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:16:18Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 60fc2e88e / seal-pr: 分支超出 main 的提交数=49  head=60fc2e88e / 60fc2e88e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 67fd04566 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:16:18Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:16:18Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:16:20Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 a346750b8 / seal-pr: 分支超出 main 的提交数=50  head=a346750b8 / a346750b8 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 60fc2e88e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:16:20Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:16:20Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:16:21Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 aed4214f0 / seal-pr: 分支超出 main 的提交数=51  head=aed4214f0 / aed4214f0 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / a346750b8 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:19:41Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:20:41Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:20:44Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 a93df3968 / seal-pr: 分支超出 main 的提交数=52  head=a93df3968 / a93df3968 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / aed4214f0 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:23:59Z] t.capp 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 5 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T14:24:00Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:24:01Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 077b3447e / seal-pr: 分支超出 main 的提交数=53  head=077b3447e / 077b3447e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / a93df3968 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:24:01Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:24:01Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:24:03Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 2e376e205 / seal-pr: 分支超出 main 的提交数=54  head=2e376e205 / 2e376e205 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 077b3447e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:24:03Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:24:03Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:24:04Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 3b6ae4561 / seal-pr: 分支超出 main 的提交数=55  head=3b6ae4561 / 3b6ae4561 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 2e376e205 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:27:55Z] t.pub 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 295 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T14:28:55Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:28:57Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=8 / seal-pr: 工作区待提交条目=8 / seal-pr: 已提交 e8eba7915 / seal-pr: 分支超出 main 的提交数=56  head=e8eba7915 / e8eba7915 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 3b6ae4561 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:30:01Z] t.capp 开 PR OK：capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:30:02Z] t.close worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:30:02Z] t.close 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca-close 当前分支=pr/ca-close 目标分支=pr/ca-close 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 357a7b7a5 / seal-pr: 分支超出 main 的提交数=1  head=357a7b7a5 / 357a7b7a5 [pr/ca-close] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+[autopr 2026-08-22T14:30:02Z] t.close 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:30:02Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:30:03Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 e18510790 / seal-pr: 分支超出 main 的提交数=57  head=e18510790 / e18510790 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / e8eba7915 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:30:03Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:30:04Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:30:05Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 65ff4e7e5 / seal-pr: 分支超出 main 的提交数=58  head=65ff4e7e5 / 65ff4e7e5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / e18510790 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:30:05Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:30:05Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:30:07Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 d610e22b6 / seal-pr: 分支超出 main 的提交数=59  head=d610e22b6 / d610e22b6 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 65ff4e7e5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:32:57Z] t.pub 开 PR OK：core {"state":"OPEN","url":"https://github.com/Florious95/corral-core/pull/14"} | capp https://github.com/Florious95/corral-app/pull/1
+[autopr 2026-08-22T14:33:57Z] t.capp worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:33:59Z] t.capp 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 68bf5a3ba / seal-pr: 分支超出 main 的提交数=60  head=68bf5a3ba / 68bf5a3ba [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / d610e22b6 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:36:00Z] t.capp 开 PR 红：capp 推送红 rc=2：error: RPC failed; curl 18 Transferred a partial file / error: 565 bytes of body are still expected / fetch-pack: unexpected disconnect while reading sideband packet / fatal: early EOF / fatal: fetch-pack: invalid index-pack output / FAIL clone 失败
+[autopr 2026-08-22T14:36:00Z] t.close worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:36:00Z] t.close 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca-close 当前分支=pr/ca-close 目标分支=pr/ca-close 待提交=0 / seal-pr: 工作区待提交条目=0 / seal-pr: 分支超出 main 的提交数=1  head=357a7b7a5 / 357a7b7a5 [pr/ca-close] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）
+[autopr 2026-08-22T14:36:00Z] t.close 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:36:00Z] t.path worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:36:02Z] t.path 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 33c7801ff / seal-pr: 分支超出 main 的提交数=61  head=33c7801ff / 33c7801ff [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 68bf5a3ba [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:36:02Z] t.path 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:36:02Z] t.perf worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:36:03Z] t.perf 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 71cea0c39 / seal-pr: 分支超出 main 的提交数=62  head=71cea0c39 / 71cea0c39 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 33c7801ff [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 
+[autopr 2026-08-22T14:36:03Z] t.perf 开 PR OK：本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）
+[autopr 2026-08-22T14:36:04Z] t.pub worktree 指纹变了（返修新一轮），重新封版+推 PR
+[autopr 2026-08-22T14:36:05Z] t.pub 封版 OK：seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1 / seal-pr: 工作区待提交条目=1 / seal-pr: 已提交 48b7b9db3 / seal-pr: 分支超出 main 的提交数=63  head=48b7b9db3 / 48b7b9db3 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） / 71cea0c39 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit） 

@@ -1,0 +1,34 @@
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.agentmirror.app/.MainActivity
+TotalTime: 1488
+WaitTime: 1493
+Complete
+UI hierchary dumped to: /sdcard/r2.xml
+wait new-l1 0 fleet_l1
+UI hierchary dumped to: /sdcard/r2.xml
+wait new-l1 1 ok
+tapped hl1repro2cwd
+UI hierchary dumped to: /sdcard/r2.xml
+wait new-l2 0 ok
+tapped bash
+tapped_session 0.034
+burst i=0 t=0.891 dark=56 bright=26073 color=121
+burst i=1 t=1.710 dark=26250 bright=0 color=0
+burst i=2 t=2.589 dark=26250 bright=0 color=0
+burst i=3 t=3.483 dark=26250 bright=0 color=0
+burst i=4 t=4.385 dark=26250 bright=0 color=0
+burst i=5 t=5.152 dark=26250 bright=0 color=0
+burst i=6 t=5.918 dark=26250 bright=0 color=0
+burst i=7 t=6.691 dark=26250 bright=0 color=0
+burst i=8 t=7.476 dark=26250 bright=0 color=0
+burst i=9 t=8.270 dark=26250 bright=0 color=0
+burst i=10 t=9.043 dark=26250 bright=0 color=0
+burst i=11 t=9.809 dark=26250 bright=0 color=0
+burst i=12 t=10.687 dark=26250 bright=0 color=0
+burst i=13 t=11.626 dark=26250 bright=0 color=0
+burst i=14 t=12.462 dark=26250 bright=0 color=0
+burst i=15 t=13.200 dark=26250 bright=0 color=0
+burst i=16 t=13.977 dark=26250 bright=0 color=0
+RESULT first_frame_s=>14 timeout

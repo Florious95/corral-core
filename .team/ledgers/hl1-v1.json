@@ -2,7 +2,7 @@
  "schema_version": "ledger.v2",
  "ledger_id": "ledger.hl1.v1",
  "run": {
-  "desired_state": "running"
+  "desired_state": "stopped"
  },
  "roles": {
   "r.repro": {
@@ -3591,5 +3591,5 @@
  },
  "fanout_aggregation": {},
  "audit": {},
- "revision": 66
+ "revision": 67
 }

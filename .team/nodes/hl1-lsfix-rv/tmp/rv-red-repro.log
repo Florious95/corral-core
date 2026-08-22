@@ -1,0 +1,12 @@
+# 评审席独立复现（main 形状 + 仅加 fork 计数器；删掉引用 fixed-only 字段的 TestProcFinderIdentityCacheKeyedByPidStarttime）
+# scratch = server/ 全量副本，5 个产品文件用 `git show main:...` 覆盖回 main 版本
+$ go test ./internal/api/ -run 'TestListingTickFullTablePsForkAtMostOnce|TestHandleListDoesNotBlockReadLoop|TestProcFinderIdentifyDoesNotInvalidateSetCache' -count=1
+--- FAIL: TestListingTickFullTablePsForkAtMostOnce (0.65s)
+    listing_ps_storm_test.go:54: listing tick full-table ps forks=11 want<=1 (unfixed shape is N+1=11)
+--- FAIL: TestHandleListDoesNotBlockReadLoop (0.40s)
+    listing_ps_storm_test.go:86: timed out waiting for expected frame
+--- FAIL: TestProcFinderIdentifyDoesNotInvalidateSetCache (0.15s)
+    listing_ps_storm_test.go:111: Identify after IdentifySet forks=3 want 1 (single-pid key overwrote the table)
+FAIL
+FAIL	github.com/agentmirror/agentmirror/internal/api	1.726s
+FAIL

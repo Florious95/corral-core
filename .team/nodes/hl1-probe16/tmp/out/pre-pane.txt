@@ -1,0 +1,1 @@
+alt=1 80x24 cwd=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/cwd-static
