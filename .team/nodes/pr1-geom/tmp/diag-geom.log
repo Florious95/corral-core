@@ -3454,3 +3454,411 @@
 2026-08-21T12:30:06.786 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
 2026-08-21T12:30:06.786 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
 2026-08-21T12:30:06.786 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:38:13.607 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:38:13.607 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:38:13.607 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:38:13.607 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:38:13.607 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T16:38:13.607 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:38:13.607 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T16:38:13.607 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:38:53.179 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:38:53.179 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:38:53.179 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:38:53.179 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:38:53.179 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T16:38:53.179 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:38:53.179 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T16:38:53.179 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:40:06.182 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:40:06.182 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:40:06.182 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:40:06.182 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:40:06.182 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T16:40:06.182 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:40:06.182 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T16:40:06.182 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:40:45.416 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:40:45.416 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:40:45.416 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:40:45.416 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:40:45.416 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T16:40:45.416 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:40:45.416 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T16:40:45.416 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:41:50.809 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:41:50.809 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:41:50.809 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:41:50.809 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:41:50.809 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T16:41:50.809 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:41:50.809 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T16:41:50.809 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:42:30.693 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:42:30.693 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:42:30.693 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T16:42:30.693 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T16:42:30.693 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T16:42:30.693 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T16:42:30.693 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T16:42:30.693 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:16:11.769 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:16:11.769 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:16:11.769 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:16:11.769 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:16:11.769 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T17:16:11.769 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:16:11.769 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T17:16:11.769 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:16:53.320 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:16:53.320 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:16:53.320 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:16:53.320 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:16:53.320 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T17:16:53.320 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:16:53.320 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T17:16:53.320 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:18:29.721 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:18:29.721 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:18:29.721 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:18:29.721 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:18:29.721 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T17:18:29.721 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:18:29.721 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T17:18:29.721 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:19:13.899 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:19:13.899 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:19:13.899 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:19:13.899 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:19:13.899 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T17:19:13.899 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:19:13.899 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T17:19:13.899 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:34:42.969 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:34:42.969 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:34:42.969 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T17:34:42.969 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T17:34:42.969 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T17:34:42.969 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T17:34:42.969 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T17:34:42.969 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:34:24.791 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:34:24.791 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:34:24.791 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:34:24.791 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:34:24.791 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:34:24.791 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:34:24.791 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:34:24.791 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:34:32.538 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:34:32.538 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:34:32.538 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:34:32.538 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:34:32.538 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:34:32.538 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:34:32.538 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:34:32.538 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:35:02.537 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:35:02.537 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:35:02.537 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:35:02.537 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:35:02.537 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:35:02.537 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:35:02.537 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:35:02.537 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:35:55.901 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:35:55.901 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:35:55.901 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:35:55.901 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:35:55.901 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:35:55.901 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:35:55.901 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:35:55.901 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:50:56.946 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:50:56.946 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:50:56.946 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:50:56.946 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:50:56.946 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:50:56.946 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:50:56.946 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:50:56.946 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:51:31.147 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:51:31.147 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:51:31.147 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:51:31.147 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:51:31.147 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:51:31.147 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:51:31.147 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:51:31.147 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:56:26.363 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:56:26.363 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:56:26.363 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:56:26.363 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:56:26.363 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:56:26.363 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:56:26.363 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:56:26.363 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:57:08.180 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:57:08.180 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:57:08.180 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:57:08.180 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:57:08.180 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:57:08.180 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:57:08.180 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:57:08.180 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:59:22.203 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:59:22.203 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:59:22.203 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T18:59:22.203 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T18:59:22.203 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T18:59:22.203 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T18:59:22.203 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T18:59:22.203 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:04:16.877 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:04:16.877 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:04:16.877 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:04:16.877 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:04:16.877 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T19:04:16.877 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:04:16.877 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T19:04:16.877 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:04:50.207 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:04:50.207 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:04:50.207 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:04:50.207 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:04:50.207 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T19:04:50.207 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:04:50.207 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T19:04:50.207 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:22:45.847 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:22:45.847 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:22:45.847 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:22:45.847 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:22:45.847 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T19:22:45.847 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:22:45.847 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T19:22:45.847 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:31:59.611 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:31:59.611 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:31:59.611 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:31:59.611 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:31:59.611 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T19:31:59.611 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:31:59.611 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T19:31:59.611 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:33:31.659 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:33:31.659 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:33:31.659 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:33:31.659 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:33:31.659 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T19:33:31.659 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:33:31.659 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T19:33:31.659 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:34:22.771 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:34:22.771 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:34:22.771 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T19:34:22.771 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T19:34:22.771 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T19:34:22.771 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T19:34:22.771 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T19:34:22.771 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:01:47.124 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:01:47.124 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:01:47.124 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:01:47.124 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:01:47.124 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T20:01:47.124 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:01:47.124 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T20:01:47.124 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:11:20.103 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:11:20.103 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:11:20.103 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:11:20.103 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:11:20.103 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T20:11:20.103 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:11:20.103 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T20:11:20.103 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:47:58.691 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:47:58.691 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:47:58.691 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:47:58.691 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:47:58.691 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T20:47:58.691 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:47:58.691 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T20:47:58.691 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:48:36.251 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:48:36.251 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:48:36.251 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:48:36.251 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:48:36.251 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T20:48:36.251 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:48:36.251 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T20:48:36.251 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:52:40.118 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:52:40.118 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:52:40.118 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:52:40.118 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:52:40.118 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T20:52:40.118 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:52:40.118 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T20:52:40.118 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:54:49.232 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:54:49.232 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:54:49.232 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T20:54:49.232 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T20:54:49.232 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T20:54:49.232 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T20:54:49.232 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T20:54:49.232 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:29:31.414 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:29:31.414 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:29:31.414 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:29:31.414 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:29:31.414 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T21:29:31.414 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:29:31.414 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T21:29:31.414 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:30:10.135 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:30:10.135 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:30:10.135 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:30:10.135 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:30:10.135 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T21:30:10.135 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:30:10.135 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T21:30:10.135 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:39:44.949 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:39:44.949 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:39:44.949 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:39:44.949 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:39:44.949 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T21:39:44.949 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:39:44.949 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T21:39:44.949 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:40:04.635 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:40:04.635 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:40:04.635 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:40:04.635 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:40:04.635 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T21:40:04.635 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:40:04.635 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T21:40:04.635 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:40:37.440 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:40:37.440 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:40:37.440 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:40:37.440 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:40:37.440 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T21:40:37.440 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:40:37.440 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T21:40:37.440 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:54:29.339 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:54:29.339 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:54:29.339 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:54:29.339 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:54:29.339 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T21:54:29.339 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:54:29.339 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T21:54:29.339 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:56:28.033 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:56:28.033 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:56:28.033 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T21:56:28.033 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T21:56:28.033 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T21:56:28.033 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T21:56:28.034 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T21:56:28.034 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:05:07.024 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:05:07.024 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:05:07.024 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:05:07.024 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:05:07.024 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T22:05:07.024 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:05:07.024 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T22:05:07.024 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:11:22.198 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:11:22.198 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:11:22.198 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:11:22.198 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:11:22.198 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T22:11:22.198 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:11:22.198 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T22:11:22.198 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:12:04.473 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:12:04.473 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:12:04.473 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:12:04.473 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:12:04.473 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T22:12:04.473 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:12:04.473 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T22:12:04.473 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:14:18.976 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:14:18.976 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:14:18.976 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:14:18.976 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:14:18.976 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T22:14:18.976 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:14:18.976 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T22:14:18.976 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:15:01.521 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:15:01.521 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:15:01.521 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:15:01.521 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:15:01.521 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T22:15:01.521 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:15:01.521 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T22:15:01.521 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:23:23.160 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:23:23.160 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:23:23.160 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:23:23.160 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:23:23.160 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T22:23:23.160 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:23:23.160 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T22:23:23.160 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:55:31.133 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:55:31.133 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:55:31.133 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T22:55:31.133 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T22:55:31.133 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T22:55:31.133 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T22:55:31.133 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T22:55:31.133 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T23:57:54.391 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T23:57:54.391 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T23:57:54.391 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-21T23:57:54.391 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-21T23:57:54.391 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-21T23:57:54.391 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-21T23:57:54.391 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-21T23:57:54.391 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-22T00:01:07.520 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-22T00:01:07.520 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-22T00:01:07.520 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-22T00:01:07.520 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-22T00:01:07.520 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-22T00:01:07.520 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-22T00:01:07.520 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-22T00:01:07.520 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-22T00:01:23.301 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-22T00:01:23.301 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-22T00:01:23.301 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-22T00:01:23.301 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-22T00:01:23.301 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-22T00:01:23.301 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-22T00:01:23.301 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-22T00:01:23.301 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-22T00:02:06.107 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-22T00:02:06.107 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-22T00:02:06.107 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-22T00:02:06.107 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-22T00:02:06.107 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-22T00:02:06.107 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-22T00:02:06.107 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-22T00:02:06.107 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-22T00:04:03.952 [viewport] source=onViewportSizeChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-22T00:04:03.952 [viewport] viewportOutgrewEmulator: source=onViewportSizeChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-22T00:04:03.952 [viewport] source=onViewportSizeChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80
+2026-08-22T00:04:03.952 [viewport] source=onRealViewportChanged oldW=800 oldH=480 newW=800 newH=480 viewportSeeded=true emulatorRows=24 emulatorCols=80
+2026-08-22T00:04:03.952 [reflow] source=resume view_width_px=800 cell_width_px=10 derived_cols=80 last_sent_cols=80
+2026-08-22T00:04:03.952 [viewport] viewportOutgrewEmulator: source=onRealViewportChanged viewport_rows=24 emulator_rows=24 viewport_cols=80 emulator_cols=80 viewport_w=800 viewport_h=480 cell_w=10 cell_h=20 operandsReady=true → false
+2026-08-22T00:04:03.952 [viewport] source=onRealViewportChanged cellsDirty=false resume_rows=24 emulator_rows=24 resume_cols=80 emulator_cols=80 outgrew=false mismatch=false → false
+2026-08-22T00:04:03.952 [viewport] source=onRealViewportChanged result resized=false outgrewGuard=false candidateRows=24 candidateCols=80 emulatorRows=24 emulatorCols=80

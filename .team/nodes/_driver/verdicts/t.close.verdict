@@ -1,0 +1,5 @@
+VERDICT: supports
+# 本文件由 tools/autopr.py 依据账本事实生成，不是人写的裁定；依据如下，可逐条回溯。
+账本=ledger.perfbase.v1 revision=31
+本格=t.close state=succeeded 通过的判据=['c.close']
+判者=无（本格是文书/证据格，不经异源评审；其内容本身即证据）

@@ -1,0 +1,164 @@
+{
+ "t.app": {
+  "fp": "74fe840c0b4a:e3b0c44298fc",
+  "land_msg": "gentmirror/app/perf/PerfTrace.kt\n create mode 100644 app/app/src/test/kotlin/dev/agentmirror/app/perf/PerfTraceChainTest.kt\n create mode 100644 app/app/src/test/kotlin/dev/agentmirror/app/perf/PerfTraceWiringTest.kt\nland-pr: 已并线 c50ab0b77\nc50ab0b77 land pr/perfbase-app（判据全绿 + 异源评审 VERDICT: supports） | 推 main(core) rc=0",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "core {\"state\":\"MERGED\",\"url\":\"https://github.com/Florious95/corral-core/pull/7\"}",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-app 当前分支=pr/perfbase-app 目标分支=pr/perfbase-app 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=2  head=74fe840c0\n74fe840c0 [pr/perfbase-app] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n61aa65b3d [pr/perfbase-app] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.base": {
+  "fp": "c928a0f6e090:e3b0c44298fc",
+  "land_msg": "aw_tui-04.log\nAuto-merging .team/perf/raw/redraw_tui-05.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-05.log\nAuto-merging .team/perf/raw/redraw_tui-06.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-06.log\nAuto-merging .team/perf/raw/redraw_tui-07.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-07.log\nAuto-merging .team/perf/raw/redraw_tui-08.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-08.log\nAuto-merging .team/perf/raw/redraw_tui-09.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-09.log\nAuto-merging .team/perf/raw/redraw_tui-10.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-10.log\nAutomatic merge failed; fix conflicts and then commit the result.\n红：合并失败，⛔ 已中止，需人工处理",
+  "landed": false,
+  "parked_fp": "c928a0f6e090:e3b0c44298fc",
+  "pr": true,
+  "pr_msg": "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-base 当前分支=pr/perfbase-base 目标分支=pr/perfbase-base 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=1  head=c928a0f6e\nc928a0f6e [pr/perfbase-base] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.base2": {},
+ "t.capp": {
+  "fp": "3b6ae4561166:c24bc45be209",
+  "land_msg": "land-pr: branch=pr/ca verdict=VERDICT: supports\nland-pr: 待并提交数=1\nMerge made by the 'ort' strategy.\n .team/nodes/ca-emu/tmp/daemon.log | 8265 +++++++++++++++++++++++++++++++++++++\n 1 file changed, 8265 insertions(+)\nland-pr: 已并线 fc60705af\nfc60705af land pr/ca（判据全绿 + 异源评审 VERDICT: supports） | 推 main(capp) rc=0",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "capp https://github.com/Florious95/corral-app/pull/1",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=8\nseal-pr: 工作区待提交条目=8\nseal-pr: 已提交 e8eba7915\nseal-pr: 分支超出 main 的提交数=56  head=e8eba7915\ne8eba7915 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n3b6ae4561 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n2e376e205 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n077b3447e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\na93df3968 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.close": {
+  "fp": "1660e779db9f:23abee34c0e8",
+  "land_msg": "ort' strategy.\n .../perfbase-\\346\\224\\266\\350\\264\\246-20260822.md\" | 95 ++++++++++++++++++++++\n 1 file changed, 95 insertions(+)\n create mode 100644 \".team/artifacts/perfbase-\\346\\224\\266\\350\\264\\246-20260822.md\"\nland-pr: 已并线 5c643fcef\n5c643fcef land pr/perfbase-close2（判据全绿 + 异源评审 VERDICT: supports） |",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca-close 当前分支=pr/ca-close 目标分支=pr/ca-close 待提交=1\nseal-pr: 工作区待提交条目=1\nseal-pr: 已提交 357a7b7a5\nseal-pr: 分支超出 main 的提交数=1  head=357a7b7a5\n357a7b7a5 [pr/ca-close] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.core": {
+  "fp": "ff603db8a6b0:e3b0c44298fc",
+  "land_msg": "r/terminal/WrapAndScrollbackTest.kt (100%)\n rename app/{terminal => core-terminal}/src/test/resources/capture/delta.bin (100%)\n rename app/{terminal => core-terminal}/src/test/resources/capture/snapshot.bin (100%)\nland-pr: 已并线 ff87df75b\nff87df75b land pr/perfbase-core2（判据全绿 + 异源评审 VERDICT: supports） | 推 main(core) rc=0",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "core {\"state\":\"OPEN\",\"url\":\"https://github.com/Florious95/corral-core/pull/13\"}",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-core2 当前分支=pr/perfbase-core2 目标分支=pr/perfbase-core2 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=1  head=ff603db8a\nff603db8a [pr/perfbase-core2] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.cperf": {
+  "fp": "243d77d71a88:e3b0c44298fc",
+  "land_msg": "aw_tui-04.log\nAuto-merging .team/perf/raw/redraw_tui-05.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-05.log\nAuto-merging .team/perf/raw/redraw_tui-06.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-06.log\nAuto-merging .team/perf/raw/redraw_tui-07.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-07.log\nAuto-merging .team/perf/raw/redraw_tui-08.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-08.log\nAuto-merging .team/perf/raw/redraw_tui-09.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-09.log\nAuto-merging .team/perf/raw/redraw_tui-10.log\nCONFLICT (add/add): Merge conflict in .team/perf/raw/redraw_tui-10.log\nAutomatic merge failed; fix conflicts and then commit the result.\n红：合并失败，⛔ 已中止，需人工处理",
+  "landed": false,
+  "parked_fp": "243d77d71a88:e3b0c44298fc",
+  "pr": true,
+  "pr_msg": "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-cperf 当前分支=pr/perfbase-cperf 目标分支=pr/perfbase-cperf 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=1  head=243d77d71\n243d77d71 [pr/perfbase-cperf] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.esc": {},
+ "t.esc1": {},
+ "t.esc2": {},
+ "t.esc3": {},
+ "t.exh1": {},
+ "t.exh2": {},
+ "t.exh3": {},
+ "t.fixblank": {
+  "fp": "8d811c19915c:e3b0c44298fc",
+  "land_msg": "/nodes/pb-fixblank/tmp/routing-green.log\n create mode 100644 \".team/nodes/pb-fixblank/\\350\\257\\264\\346\\230\\216.md\"\n create mode 100644 app/app/src/test/kotlin/dev/agentmirror/app/conn/ConnListenerRoutingTest.kt\nland-pr: 已并线 e8343236e\ne8343236e land pr/perfbase-fixblank（判据全绿 + 异源评审 VERDICT: supports） | 推 main(core) rc=0",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "core {\"state\":\"OPEN\",\"url\":\"https://github.com/Florious95/corral-core/pull/11\"}",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-fixblank 当前分支=pr/perfbase-fixblank 目标分支=pr/perfbase-fixblank 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=1  head=8d811c199\n8d811c199 [pr/perfbase-fixblank] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.instr2": {
+  "fp": "db11dde01b64:e3b0c44298fc",
+  "land_msg": "land-pr: branch=pr/perfbase-instr2 verdict=VERDICT: supports\nland-pr: 待并提交数=1\nAuto-merging app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt\nCONFLICT (content): Merge conflict in app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt\nAuto-merging app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt\nAutomatic merge failed; fix conflicts and then commit the result.\n红：合并失败，⛔ 已中止，需人工处理",
+  "landed": false,
+  "parked_fp": "db11dde01b64:e3b0c44298fc",
+  "pr": true,
+  "pr_msg": "core {\"state\":\"OPEN\",\"url\":\"https://github.com/Florious95/corral-core/pull/8\"}",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-instr2 当前分支=pr/perfbase-instr2 目标分支=pr/perfbase-instr2 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=1  head=db11dde01\ndb11dde01 [pr/perfbase-instr2] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.instr3": {
+  "fp": "c0288d72a065:e3b0c44298fc",
+  "land_msg": "land-pr: branch=pr/perfbase-instr3 verdict=VERDICT: supports\nland-pr: 待并提交数=1\nAuto-merging app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt\nCONFLICT (content): Merge conflict in app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt\nAuto-merging app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt\nCONFLICT (content): Merge conflict in app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt\nAutomatic merge failed; fix conflicts and then commit the result.\n红：合并失败，⛔ 已中止，需人工处理",
+  "landed": false,
+  "parked_fp": "c0288d72a065:e3b0c44298fc",
+  "pr": true,
+  "pr_msg": "core {\"state\":\"OPEN\",\"url\":\"https://github.com/Florious95/corral-core/pull/9\"}",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-instr3 当前分支=pr/perfbase-instr3 目标分支=pr/perfbase-instr3 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=1  head=c0288d72a\nc0288d72a [pr/perfbase-instr3] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.instr4": {
+  "fp": "2f02ad282186:e3b0c44298fc",
+  "land_msg": "land-pr: branch=pr/perfbase-instr4 verdict=VERDICT: supports\nland-pr: 待并提交数=1\nAuto-merging app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt\nCONFLICT (content): Merge conflict in app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt\nAuto-merging app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt\nAutomatic merge failed; fix conflicts and then commit the result.\n红：合并失败，⛔ 已中止，需人工处理",
+  "landed": false,
+  "parked_fp": "2f02ad282186:e3b0c44298fc",
+  "pr": true,
+  "pr_msg": "core {\"state\":\"OPEN\",\"url\":\"https://github.com/Florious95/corral-core/pull/10\"}",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-instr4 当前分支=pr/perfbase-instr4 目标分支=pr/perfbase-instr4 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=1  head=2f02ad282\n2f02ad282 [pr/perfbase-instr4] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.path": {
+  "fp": "e8eba7915c7b:e3b0c44298fc",
+  "land_msg": "repo/dev/agentmirror/core/core-terminal/maven-metadata.xml.sha512\n create mode 100644 app/gradle/core-maven-publish.gradle\n create mode 100644 \"docs/\\346\\200\\247\\350\\203\\275\\345\\205\\263\\351\\224\\256\\350\\267\\257\\345\\276\\204.md\"\nland-pr: 已并线 2b1bbeb2c\n2b1bbeb2c land pr/ca（判据全绿 + 异源评审 VERDICT: supports） |",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1\nseal-pr: 工作区待提交条目=1\nseal-pr: 已提交 e18510790\nseal-pr: 分支超出 main 的提交数=57  head=e18510790\ne18510790 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\ne8eba7915 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n3b6ae4561 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n2e376e205 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n077b3447e [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.perf": {
+  "fp": "e185107904e4:e3b0c44298fc",
+  "land_msg": "land-pr: branch=pr/ca verdict=VERDICT: supports\nland-pr: 待并提交数=1\nMerge made by the 'ort' strategy.\n .team/nodes/ca-emu/tmp/daemon.log | 182 ++++++++++++++++++++++++++++++++++++++\n 1 file changed, 182 insertions(+)\nland-pr: 已并线 47c5df536\n47c5df536 land pr/ca（判据全绿 + 异源评审 VERDICT: supports） |",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1\nseal-pr: 工作区待提交条目=1\nseal-pr: 已提交 65ff4e7e5\nseal-pr: 分支超出 main 的提交数=58  head=65ff4e7e5\n65ff4e7e5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\ne18510790 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\ne8eba7915 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n3b6ae4561 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n2e376e205 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.pub": {
+  "fp": "65ff4e7e5c2e:e3b0c44298fc",
+  "land_msg": "land-pr: branch=pr/ca verdict=VERDICT: supports\nland-pr: 待并提交数=1\nMerge made by the 'ort' strategy.\n .team/nodes/ca-emu/tmp/daemon.log | 168 ++++++++++++++++++++++++++++++++++++++\n 1 file changed, 168 insertions(+)\nland-pr: 已并线 e4fbc0c90\ne4fbc0c90 land pr/ca（判据全绿 + 异源评审 VERDICT: supports） | 推 main(core) rc=1 es/ca-emu/tmp/daemon.log is 122.53 MB; this exceeds GitHub's file size limit of 100.00 MB        \nremote: error: GH001: Large files detected. You may want to try Git Large File Storage - https://git-lfs.github.com.        \nTo github.com:Florious95/corral-core.git\n ! [remote rejected] main -> main (pre-receive hook declined)\nerror: failed to push some refs to 'github.com:Florious95/corral-core.git' 推 main(capp) rc=0",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "core {\"state\":\"OPEN\",\"url\":\"https://github.com/Florious95/corral-core/pull/14\"} | capp https://github.com/Florious95/corral-app/pull/1",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca 当前分支=pr/ca 目标分支=pr/ca 待提交=1\nseal-pr: 工作区待提交条目=1\nseal-pr: 已提交 d610e22b6\nseal-pr: 分支超出 main 的提交数=59  head=d610e22b6\nd610e22b6 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n65ff4e7e5 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\ne18510790 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\ne8eba7915 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n3b6ae4561 [pr/ca] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.red": {
+  "fp": "d50085b0624c:e3b0c44298fc",
+  "land_msg": "land-pr: branch=pr/perfbase-red verdict=VERDICT: supports\nland-pr: 待并提交数=3\nAuto-merging app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt\nCONFLICT (add/add): Merge conflict in app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt\nAutomatic merge failed; fix conflicts and then commit the result.\n红：合并失败，⛔ 已中止，需人工处理",
+  "landed": false,
+  "parked_fp": "d50085b0624c:e3b0c44298fc",
+  "pr": true,
+  "pr_msg": "core {\"state\":\"OPEN\",\"url\":\"https://github.com/Florious95/corral-core/pull/6\"}",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-red 当前分支=pr/perfbase-red 目标分支=pr/perfbase-red 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=3  head=d50085b06\nd50085b06 [pr/perfbase-red] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\n6f3201e90 [pr/perfbase-red] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\ncfadea846 [pr/perfbase-red] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.repo": {
+  "fp": "f906aaa34130:e3b0c44298fc",
+  "land_msg": "orral-core/gradlew\n create mode 100644 .team/staging/corral-core/gradlew.bat\n create mode 100644 .team/staging/corral-core/settings.gradle.kts\n create mode 100644 .team/staging/corral-core/terminal/build.gradle.kts\nland-pr: 已并线 6cf2d0e36\n6cf2d0e36 land pr/perfbase-repo（判据全绿 + 异源评审 VERDICT: supports） |",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-repo 当前分支=pr/perfbase-repo 目标分支=pr/perfbase-repo 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=2  head=f906aaa34\nf906aaa34 [pr/perfbase-repo] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）\na02168d20 [pr/perfbase-repo] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ },
+ "t.rv": {},
+ "t.rv.base": {},
+ "t.rv.final": {},
+ "t.rv.instr": {},
+ "t.srv": {
+  "fp": "2426c5b58ddb:e3b0c44298fc",
+  "land_msg": "s/pb-srv/tmp/go-run.log\n create mode 100644 .team/nodes/pb-srv/tmp/judge-red.log\n create mode 100644 \".team/nodes/pb-srv/\\350\\257\\264\\346\\230\\216.md\"\n create mode 100644 server/internal/api/ws_perf_subscribe_test.go\nland-pr: 已并线 e53494a8d\ne53494a8d land pr/perfbase-srv（判据全绿 + 异源评审 VERDICT: supports） | 推 main(serve) rc=0",
+  "landed": true,
+  "pr": true,
+  "pr_msg": "serve {\"state\":\"OPEN\",\"url\":\"https://github.com/Florious95/corral-serve/pull/3\"}",
+  "seal_msg": "seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-srv 当前分支=pr/perfbase-srv 目标分支=pr/perfbase-srv 待提交=0\nseal-pr: 工作区待提交条目=0\nseal-pr: 分支超出 main 的提交数=1  head=2426c5b58\n2426c5b58 [pr/perfbase-srv] 席位交付封版（leader 代提交：引擎硬约束禁止席位 commit）",
+  "sealed": true
+ }
+}

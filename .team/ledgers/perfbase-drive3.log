@@ -1,0 +1,16 @@
+[ledger-run 2026-08-21T20:31:49Z] 开工 start | ledger_id=ledger.perfbase.v1 revision=12 账本=.team/ledgers/perfbase-v1.json 墙钟上限=118800s 派单死线=90s
+[ledger-run 2026-08-21T20:31:53Z] 轮次 round | 第 1 轮开始：前沿 ["t.instr2"]（墙钟已跑 3s / 上限 118800s）
+[ledger-run 2026-08-21T20:31:53Z] 派单 dispatch | task=t.instr2 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pb-impl 席位=pb-impl attempt=att-t.instr2-seq1-t1787344313013 delivery=del-t.instr2-seq1-t1787344313013 等席位预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-21T20:31:53Z] 投递回执 send-ok | task=t.instr2 case_id=ledger_perfbase_v1__t.instr2__r12 message_id=msg_adede19f8a98 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-21T20:31:53Z] 派单落地 dispatch-landed | task=t.instr2 席位 pb-impl 的收件箱已多出这条派单
+[ledger-run 2026-08-21T20:31:53Z] 等待 wait | task=t.instr2 在等的 key（case_id）=ledger_perfbase_v1__t.instr2__r12 team=grok-l2 预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-21T20:34:43Z] 已唤醒 wait-signaled | task=t.instr2 等到结果了
+[ledger-run 2026-08-21T20:34:43Z] 判据 acceptance | task=t.instr2 在跑 required=["c.instr2"]
+[ledger-run 2026-08-21T20:35:14Z] 判据通过留档 acceptance-success | task=t.instr2 成功 attempt 落进 attempts[] writeback_revision=13 passed=["c.instr2"]
+[ledger-run 2026-08-21T20:35:14Z] 原子写回 writeback-atomic | task=t.instr2 state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=13 hash=de9a1126c9f94c33）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-21T20:35:14Z] 写回 writeback | task=t.instr2 state=succeeded revision=12 → 13
+[ledger-run 2026-08-21T20:35:14Z] 收工 finish | 停机原因=AwaitingHuman 写回=["t.instr2"] 冻结=[] 不可判=[] 墙钟已跑 205s
+[ledger-run 2026-08-21T20:35:14Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-21T20:35:14Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+ledger_id: ledger.perfbase.v1  revision: 12 → 13  wrote_back: ["t.instr2"]  frozen: []  unjudgeable: []  preflight_rejected: false  awaiting_human: false  idle_reason: None
+notice: ledger_id: ledger.perfbase.v1 | revision: 13 | 停机原因: AwaitingHuman | 最后失败判据: 未干完的任务（非 Succeeded）: t.base=Planned, t.base2=Planned, t.close=Planned, t.core=Planned, t.cperf=Planned, t.esc1=NotApplicable, t.esc2=Planned, t.esc3=Planned, t.exh1=NotApplicable, t.exh2=Planned, t.exh3=Planned, t.repo=Planned, t.rv.base=Planned, t.rv.final=Planned, t.rv.instr=Blocked | 各任务终态: t.app=Succeeded, t.base=Planned, t.base2=Planned, t.close=Planned, t.core=Planned, t.cperf=Planned, t.esc1=NotApplicable, t.esc2=Planned, t.esc3=Planned, t.exh1=NotApplicable, t.exh2=Planned, t.exh3=Planned, t.instr2=Succeeded, t.red=Succeeded, t.repo=Planned, t.rv.base=Planned, t.rv.final=Planned, t.rv.instr=Blocked, t.srv=Succeeded

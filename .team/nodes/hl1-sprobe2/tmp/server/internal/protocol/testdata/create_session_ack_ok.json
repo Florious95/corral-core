@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "type": "create_session_ack",
+  "payload": {
+    "req_id": 12,
+    "ok": true,
+    "ref": "s1"
+  }
+}
