@@ -53,3 +53,39 @@ OK redraw_tui #7
 /Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-08.log
 OK redraw_tui #8
 --- redraw_tui #9 14:34:15 load=10.64 9.88 9.22
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-09.log
+OK redraw_tui #9
+--- redraw_tui #10 14:34:32 load=10.12 9.80 9.20
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-10.log
+OK redraw_tui #10
+--- big_scrollback #1 14:34:51 load=18.63 11.79 9.93
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-01.log
+OK big_scrollback #1
+--- big_scrollback #2 14:35:08 load=17.61 12.04 10.06
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-02.log
+OK big_scrollback #2
+--- big_scrollback #3 14:35:27 load=15.51 11.92 10.06
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-03.log
+OK big_scrollback #3
+--- big_scrollback #4 14:35:45 load=14.79 11.94 10.10
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-04.log
+OK big_scrollback #4
+--- big_scrollback #5 14:36:03 load=15.62 12.30 10.27
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-05.log
+OK big_scrollback #5
+--- big_scrollback #6 14:36:21 load=16.23 12.70 10.47
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-06.log
+OK big_scrollback #6
+--- big_scrollback #7 14:36:39 load=16.82 13.02 10.62
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-07.log
+OK big_scrollback #7
+--- big_scrollback #8 14:36:58 load=15.43 12.95 10.65
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-08.log
+OK big_scrollback #8
+--- big_scrollback #9 14:37:16 load=16.94 13.55 10.92
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-09.log
+OK big_scrollback #9
+--- big_scrollback #10 14:37:34 load=17.37 13.80 11.06
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-10.log
+OK big_scrollback #10
+ALLDONE
