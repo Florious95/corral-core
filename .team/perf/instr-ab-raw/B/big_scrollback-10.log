@@ -1,0 +1,11 @@
+--------- beginning of main
+08-23 06:33:04.305  4127  4127 D PerfTrace: open_id=1 ev=tap t=52606906
+08-23 06:33:04.782  4127  4127 D PerfTrace: open_id=1 ev=route_enter t=52607383
+08-23 06:33:04.934  4127  4127 D PerfTrace: open_id=1 ev=subscribe_sent t=52607533 emitted=1 reason=sent ready=1 conn=1 ok=1 take_before=0 replay=0 rows=41 cols=46
+08-23 06:33:04.935  4127  4127 D PerfTrace: open_id=1 ev=geom_seed t=52607536 rows=41 cols=46
+08-23 06:33:05.093  4127  4151 D PerfTrace: open_id=1 ev=ws_binary_recv t=52607691 emitted=0 kind=snapshot bytes=1547 frame_ref=/tmp/e2e-ip/tmux/tmux-501/default%2
+08-23 06:33:05.098  4127  4151 D PerfTrace: open_id=1 ev=first_frame_recv t=52607699 emitted=0 reason=has_listener frame_ref=/tmp/e2e-ip/tmux/tmux-501/default%2 listener_null=0 listener_ref=/tmp/e2e-ip/tmux/tmux-501/default%2 kind=snapshot bytes=1547
+08-23 06:33:05.100  4127  4151 D PerfTrace: open_id=1 ev=first_frame_recv t=52607701 kind=snapshot bytes=1547
+08-23 06:33:05.114  4127  4151 D PerfTrace: open_id=1 ev=snapshot_applied t=52607715 seq=1 alt=0
+08-23 06:33:05.293  4127  4127 D PerfTrace: open_id=1 ev=first_draw t=52607894 glyphs=758
+08-23 06:33:05.627  4127  4127 D PerfTrace: open_id=1 ev=layout_settled t=52608229 quiet_ms=500 last_reflow_src=snapshot rows=41 cols=46

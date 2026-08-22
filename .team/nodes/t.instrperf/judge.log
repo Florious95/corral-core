@@ -1,0 +1,7 @@
+判决依据批次 = batch1（单批 n=10）
+UNJUDGEABLE 数据不齐，判不了：
+  big_scrollback.first_draw 样本不足（A=10 B=9，各需 >=10）
+  big_scrollback.first_draw 样本不足（A=10 B=9，各需 >=10）
+  big_scrollback.layout_settled 样本不足（A=10 B=9，各需 >=10）
+  big_scrollback.layout_settled 样本不足（A=10 B=9，各需 >=10）
+judge_exit=2
