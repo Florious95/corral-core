@@ -155,8 +155,13 @@ def judge_verdict(led, jid):
 
 # ── 收口三步 ──────────────────────────────────────────────────────────────
 
-def branch_of(tid):
-    return "pr/perfbase-" + tid.replace("t.", "", 1).replace(".", "-")
+def branch_of(led, tid):
+    """分支名跟着 **worktree** 走，不跟任务 id 走。
+    worktree 才是隔离单位：同一格换新树重做（如 t.core 换 wt-pb-core2 在新 main 上重切）时，
+    旧树还占着按任务 id 推出来的那个分支名，`git switch -c` 会 fatal: already exists。
+    按树命名后两者天然不撞，旧分支/旧 PR 作为被取代的那次尝试原样留着。"""
+    wid = (led["tasks"][tid].get("resources") or {}).get("worktree_id") or tid
+    return "pr/perfbase-" + wid.replace("wt-pb-", "", 1).replace(".", "-")
 
 
 def faces(led, tid):
@@ -209,7 +214,7 @@ def ensure_branch(wt, br):
 
 def do_seal(led, tid):
     wt = os.path.join(REPO, ".worktrees", (led["tasks"][tid]["resources"] or {})["worktree_id"])
-    br = branch_of(tid)
+    br = branch_of(led, tid)
     if not os.path.isdir(wt):
         return False, "worktree 不存在：%s" % wt
     ok, msg = ensure_branch(wt, br)
@@ -222,7 +227,7 @@ def do_seal(led, tid):
 def do_pr(led, tid):
     """推分支 + 开远端 PR。mirror-pr* 会把 gh pr create 的失败吞掉（仍 exit 0），
     所以这里**自己再核一次 PR 到底在不在**——⛔ 不采信脚本的退出码。"""
-    br = branch_of(tid)
+    br = branch_of(led, tid)
     fs = faces(led, tid)
     if not fs:
         return True, "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）"
@@ -260,7 +265,7 @@ def write_verdict(led, tid, jid, jstatus, jpath):
 
 
 def do_land(led, tid, jid, jstatus, jpath):
-    br = branch_of(tid)
+    br = branch_of(led, tid)
     v = write_verdict(led, tid, jid, jstatus, jpath)
     rc, out = run(["bash", os.path.join(REPO, "tools/gate/land-pr.sh"), br, v], cwd=REPO, timeout=900)
     if rc != 0:
