@@ -76,18 +76,29 @@
 
 - ⛔⛔ **禁止使用 Deepseek 模型**（2026-08-21 用户令）。这条**取代**了下面那条旧的默认通道。
 - ⛔⛔ **禁止开 Fable 5**（2026-08-21 用户令）。
-- ⛔⛔ **所有席位一律 `provider: grok` / `model: grok-4.6`；⛔ 不许再开 Opus 席位**
-  （2026-08-22 用户令：「你只能开 Grok 4.6……你后面开的节点就不能再开 Opus 了」）。
-  这条**取代**了原来的「评审席只能用 Opus 5」。
+- ⛔⛔ **所有新建席位一律 `provider: cursor_agent` + grok 4.6；⛔ 不许再用别的通道开席位**
+  （2026-08-22 用户令：「只能开启 cursor grok 4.6 模型作为 TeamMate」）。
+  这条**取代**了同日早些时候的「一律 `provider: grok` / `model: grok-4.6`」——
+  模型没变（还是 grok 4.6），**变的是通道**：走 Cursor 订阅，与 Codex/Claude 订阅额度互相独立。
+  - 角色文件 frontmatter 四件套（照抄，⛔ 别手写漏字段）：
+    `provider: cursor_agent` / `auth_mode: subscription` /
+    `permission_mode: auto_approve` / `dangerously_skip_permissions: true`，外加必填 `name:`。
+  - ⛔ **不能只靠 `clone-agent` 换通道**：它整份继承源角色文件，`provider` 不会变。
+    换通道要走 clone → `stop-agent` → `remove-agent --confirm` → 写新角色文件 → `add-agent --role-file`
+    → 手动投任务书（clone 不带单）。
+  - ⚠️ **role doc 的 `model:` 会被 shim 剥掉**，实跑模型以 pane 显示为准；
+    起完 `capture-pane` 应看到底部 `Cursor Agent v<版本>` —— **自证靠这个，不靠自报**。
+  - ⚠️ **cursor 席位 restart = 失忆**（见下方那条）⇒ 派单必须**单回合自足**，
+    要延续的信息一律落盘到任务书与产物文件。
+  - 🔴 **在飞的格不许换席位**（2026-08-22 实撞）：拆席位会把它手上的派单一起销毁，
+    驱动器只会干等到预算耗尽，**账本层零症状**。换通道只在格与格之间的空档做。
   ⚠️ 实撞：只删 CLAUDE.md 里那句话**不够** —— 已经起着的 Opus 席位不会自己变，
   必须逐个 `remove-agent --force --confirm` + `add-agent` 重建并**读 pane 自证模型名**。
   ⇒ 异源评审这一层现在只剩「不同席位 + 零上下文 + 不采信自报 + 判据反造假哨兵」，
   provider 异源那一层没有了，写判据时要更狠。
   ⚠️ `model` 与 `dangerously_skip_permissions` 一样**只在启动时生效** ——
   改文件不够，必须 `remove-agent --force` + `add-agent` 重建，并读 pane 自证底部显示的模型名。
-  ⇒ 新建席位用 `provider: grok`（`grok-4.6`）或 Claude 订阅
-  （`provider: claude_code` + `auth_mode: subscription` + `profile: claude-default`）。
-  异源评审席必须与实现席不同源。
+  ⇒ 异源评审这条现在只能靠「不同席位 + 零上下文 + 判据反造假」，⛔ 已无 provider 异源可用。
 - **旧条（已作废，留档）**：默认通道 `provider: claude_code` + `auth_mode: compatible_api`
   + `profile: worker-api`（deepseek-v4-flash）。升级仅两种：① `contention: contract`；② 返工达上限。
 - 🔴 **新建席位必须在角色文件里写 `dangerously_skip_permissions: true`**（2026-08-21 实撞）。
@@ -101,8 +112,8 @@
 - 多模态缺陷（需看截图判断渲染效果）用 Claude 订阅席位，不用 deepseek。
 - ⚠️ **cursor 席位按「restart = 失忆」对待**（框架队 2026-08-21 装机通告3 的运营事实，三路手工定性实锤）：
   cursor vendor 的 `--resume` **不载入历史回合** ⇒ 该席位 restart 后上下文实际丢失，机器面已诚实标注。
-  ⇒ 若将来用 cursor 做执行席，**重要上下文必须靠任务书与产物落盘**，⛔ 不许指望席位记得。
-  （本工程当前未使用 cursor 席位，这条是预防性记录。）
+  ⇒ **重要上下文必须靠任务书与产物落盘**，⛔ 不许指望席位记得。
+  （2026-08-22 起 cursor 是本工程唯一的开席通道，这条从「预防性」升为**日常约束**。）
 - 密钥只存在于 `.team/current/profiles/*.env`，任何席位禁止读其原文。
 - **`.team/current/profiles/tailnet-test.env` 全员禁读**（含 leader）。里面是用户 tailnet 的
   auth key，只能通过 `TS_AUTHKEY` 环境变量注入测试节点，任何形式的 cat/grep/plist/Read 都禁止。
