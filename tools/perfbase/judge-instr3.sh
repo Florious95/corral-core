@@ -20,7 +20,7 @@ grep -rq -- "listener_null=" "$SRC" || {
 # ② WS 二进制读入口必须有「收到帧」的计数/留痕 —— 没有它就分不出「没收到」与「收到没派出去」
 for k in ws_binary_recv "kind=" "bytes="; do
   grep -rq -- "$k" "$SRC" || {
-    echo "FAIL WS 收帧留痕缺 $k（没有它就分不出「没收到」与「收到没派出去」）"; exit 1; }
+    echo "FAIL WS 收帧留痕缺 ${k}（没有它就分不出「没收到」与「收到没派出去」）"; exit 1; }
 done
 
 # ③ 留痕一律 emitted=0 形态，⛔ 不许伪装成正常事件把假时间戳混进基线
@@ -32,6 +32,6 @@ mkdir -p "$(dirname "$OUT")"
 ./gradlew :app:testDebugUnitTest :terminal:test --offline >"$OUT" 2>&1
 RC=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
-[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=$RC（基线为 0；见 $OUT）"; exit 1; }
+[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=${RC}（基线为 0；见 $OUT）"; exit 1; }
 echo "PASS 收帧入口与 listener 槽不再沉默"
 exit 0

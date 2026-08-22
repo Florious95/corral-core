@@ -17,6 +17,6 @@ mkdir -p "$(dirname "$OUT")"
 { go build ./... && go test ./...; } >"$OUT" 2>&1
 RC=$?
 grep -qE "^# |cannot find package|undefined:" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
-[ "$RC" -eq 0 ] || { echo "FAIL go test 红 rc=$RC（基线为 0；见 $OUT）"; exit 1; }
+[ "$RC" -eq 0 ] || { echo "FAIL go test 红 rc=${RC}（基线为 0；见 $OUT）"; exit 1; }
 echo "PASS server 三时间戳到位且全绿"
 exit 0

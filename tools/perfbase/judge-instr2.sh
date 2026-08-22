@@ -17,7 +17,7 @@ grep -rq -- "reason=no_open" "$SRC" || {
   echo "FAIL first_frame_recv/snapshot_applied 的 opens 守卫仍然沉默：找不到 reason=no_open"; exit 1; }
 # ③ 两边操作数：ref_mismatch 那行必须能同时给出 frame 侧与本页侧的 ref
 for k in frame_ref want_ref; do
-  grep -rq -- "$k" "$SRC" || { echo "FAIL 缺操作数键 $k（只记判决不记操作数 = 判不出谁对谁错）"; exit 1; }
+  grep -rq -- "$k" "$SRC" || { echo "FAIL 缺操作数键 ${k}（只记判决不记操作数 = 判不出谁对谁错）"; exit 1; }
 done
 # ④ 这两条留痕必须是 emitted=0 形态，⛔ 不许伪装成正常事件把假时间戳混进基线
 grep -rq -- "emitted=0" "$SRC" || { echo "FAIL 守卫留痕不是 emitted=0 形态"; exit 1; }
@@ -28,6 +28,6 @@ mkdir -p "$(dirname "$OUT")"
 ./gradlew :app:testDebugUnitTest :terminal:test --offline >"$OUT" 2>&1
 RC=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
-[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=$RC（基线为 0；见 $OUT）"; exit 1; }
+[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=${RC}（基线为 0；见 $OUT）"; exit 1; }
 echo "PASS 收帧侧守卫不再沉默且带两边操作数"
 exit 0
