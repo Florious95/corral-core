@@ -46,6 +46,13 @@
         "status": "done",
         "at_revision": 13,
         "case_id": "ledger_coreapp_v1__t.perf__r13"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 15,
+        "case_id": "ledger_coreapp_v1__t.perf__r15"
       }
     ]
   },
@@ -122,7 +129,7 @@
     "read_only_shared": [],
     "rules": []
   },
-  "revision": 15,
+  "revision": 17,
   "roles": {
     "r.advisor": {
       "artifact_landing": {
@@ -682,7 +689,7 @@
           "name": "inconclusive"
         }
       ],
-      "title": "格5·异源终审：你与施工席不同席位、零上下文，⛔ 不采信自报。**自己重跑**四条判据（judge-perfpath / judge-pub / judge-capp / judge-perf-nonregress）并贴退出码原文。另外必须核：① git diff 看 tools/perfbase/ 有没有被动过——动了直接 rework；② corral-app 里确实没有核源码（自己 find，别信文档）；③ 复测的数真从 .team/perf/raw*/ 的 PerfTrace 原文来（抽查 ≥3 份对上统计值）、有没有剔极端值、load 读数在不在；④ 性能关键路径清单里的文件逐个存在且没塞无关文件。裁定书落 .team/nodes/ca-rv/裁定.md，恰好一行 status=pass|rework|inconclusive。判不出写 inconclusive，那是合法终态，⛔ 不许把没核到的写成 pass。细则读 .team/tasks/coreapp/任务书.md",
+      "title": "格5·异源终审：你与施工席不同席位、零上下文，⛔ 不采信自报。**自己重跑**四条判据（judge-perfpath / judge-pub / judge-capp / judge-perf-nonregress）并贴退出码原文。另外必须核：① git diff 看 tools/perfbase/ 有没有被动过——动了直接 rework；② corral-app 里确实没有核源码（自己 find，别信文档）；③ 复测的数真从 .team/perf/raw*/ 的 PerfTrace 原文来（抽查 ≥3 份对上统计值）、有没有剔极端值、load 读数在不在；④ 性能关键路径清单里的文件逐个存在且没塞无关文件。裁定书落 .team/nodes/ca-rv/裁定.md，恰好一行 status=pass|rework|inconclusive。判不出写 inconclusive，那是合法终态，⛔ 不许把没核到的写成 pass。\n\n【🔴 本轮追加·审 leader 自己的改动，这是本次终审最重要的一条】\nleader 在你之前动了两处，你要把它们当**可疑对象**核，⛔ 不许因为「是 leader 改的」就默认成立：\n① 判据 tools/perfbase/judge-perf-ab.sh 是 leader 新写的（旧判据 judge-perf-nonregress.sh 读不了 A/B 形状）。\n② **leader 把判决依据从「跨批合并 n=30」改成了「单批最大 n=20」**，理由写在脚本注释里：\n   两批之间 A 组自身 p50 从 142.0 漂到 165.5（+16.5%），机器漂移量大于要检测的效应，\n   跨批合并量到的是漂移不是差异。**改之前合并批是红的（p95 +13.6%），改之后是绿的。**\n你必须回答：**这算不算「改判据放行」？**\n a. 自己把三批数都算一遍（raw-capp/{A,B} 各 30 份、raw-capp2/{A,B} 各 40 份原文都在盘上），\n    核 leader 引的「A 组自身漂移 142.0→165.5」是不是真的、B 组是不是真的两批都稳（167.5/166.0）。\n b. 如果 A 的漂移属实 ⇒ 跨批合并确实不成立，改口径是排除混杂因素，判 pass 那一侧；\n    如果 A 的漂移不属实、或你认为合并批才是对的口径 ⇒ **直接 rework，明写「leader 放宽了判据」**。\n c. 门槛 +10% 有没有被动过？MIN_N 有没有被降过？两包 md5 检查还在不在？逐条核 git diff。\n⛔ 判不出写 inconclusive。⛔ 不许因为「leader 说得有道理」就放行——你要的是数，不是道理。\n\n细则读 .team/tasks/coreapp/任务书.md",
       "rounds": [
         {
           "n": 1,
