@@ -82,9 +82,18 @@
   HTTP 402 `usage balance exhausted`）。⇒ `provider: grok` 的席位现在**全部是死的**，
   派给它们不会报错、只会让驱动器等到预算耗尽（账本层零症状，只有读屏能发现）。
   🔴 **派单前先核收件席位是不是 cursor 通道**；本工程残留的 `pb-*` 席位一律不可用。
-  ⚠️ **同一 workspace 同时只能有一个 cursor 席位**（`.cursor/mcp.json` 是目录级的，
-  第二个会覆盖 `TEAM_AGENT_ID`，框架直接拒绝）⇒ 实现席与终审席**只能时序错开**，
-  ⛔ 不能并存；换席位前先停驱动器，免得拆掉在飞派单。
+  ⚠️ **同一 workspace 同时只能有一个 cursor 席位**（`.cursor/mcp.json` 是目录级的）
+  ⇒ 实现席与终审席**只能时序错开**，⛔ 不能并存；换席位前先停驱动器，免得拆掉在飞派单。
+  - cursor 是 **fail-closed**：第二席被 `add-agent` **硬拒**（`ok:false` + 结构化 reason），
+    **先起的席位身份不会被回溯改写**（2026-08-22 我方实撞 + tmux桌面端 队同型对照）。
+  - 🔴 **grok 席位同样是目录作用域（`.grok/config.toml`），但 `add-agent` 不拦**
+    （2026-08-23 无等编排队实撞）⇒ **守卫只在部分 provider 生效**，grok 那边只能靠纪律。
+  - ⚠️ CLI 那句 reason `a second seat overwrites TEAM_AGENT_ID (last-writer)` 描述的是
+    **守卫所阻止的机制**，⛔ 不是「已经发生的行为」。转述几手后极易读成「它会静默覆写」——
+    **回原文分清 reason 与 observation**，否则会拿一个没发生的事去报缺陷。
+  - 🔴 **cursor 席位 pane 底栏显示的分支是它「启动时的 cwd」，⛔ 不是它实际在改的树**
+    （2026-08-23 无等编排队实撞）。判席位在哪棵树干活要**对照两棵树的 `git status`**，
+    ⛔ 不看底栏。与「`ps` 的路径名不跟 rename 走」是同一类：**显示不等于事实**。
   这条**取代**了同日早些时候的「一律 `provider: grok` / `model: grok-4.6`」——
   模型没变（还是 grok 4.6），**变的是通道**：走 Cursor 订阅，与 Codex/Claude 订阅额度互相独立。
   - 角色文件 frontmatter 四件套（照抄，⛔ 别手写漏字段）：
