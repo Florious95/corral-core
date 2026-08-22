@@ -71,6 +71,8 @@ object PerfTrace {
                 bytes: Int,
                 listenerRef: String,
             ) = this@PerfTrace.emitNoListener(frameRef, listenerNull, kind, bytes, listenerRef)
+            override fun onKeySend(ref: String, char: String) =
+                this@PerfTrace.keySend(ref, char)
         }
     }
 
@@ -87,6 +89,10 @@ object PerfTrace {
     const val EV_SNAPSHOT_APPLIED = "snapshot_applied"
     const val EV_FIRST_DRAW = "first_draw"
     const val EV_LAYOUT_SETTLED = "layout_settled"
+    /** 按键回显量具：交给传输层。配对键 seq+char。 */
+    const val EV_KEY_SEND = "key_send"
+    /** 按键回显量具：仿真器消费到该字符且本帧绘制完成。 */
+    const val EV_KEY_ECHO = "key_echo"
 
     /** WS 二进制读入口留痕（t.instr3，非八事件契约；emitted=0 不进基线）。 */
     const val EV_WS_BINARY_RECV = "ws_binary_recv"
@@ -142,6 +148,13 @@ object PerfTrace {
     private val noListenerLogged = ConcurrentHashMap.newKeySet<String>()
     @Volatile
     private var settleHandler: Handler? = null
+
+    private val keySeq = AtomicLong(1L)
+    private val keyLock = Any()
+    private val pendingKeys = ArrayDeque<PendingKey>()
+    private val consumedSinceDraw = ArrayDeque<Char>()
+
+    private data class PendingKey(val seq: Long, val char: Char)
 
     private class Open(val openId: String) {
         @Volatile var routeEntered: Boolean = false
@@ -226,6 +239,11 @@ object PerfTrace {
         noOpenSnapshotLogged.clear()
         wsBinaryRecvLogged.clear()
         noListenerLogged.clear()
+        synchronized(keyLock) {
+            pendingKeys.clear()
+            consumedSinceDraw.clear()
+        }
+        keySeq.set(1L)
         enabled = true
         clock = DiagLog.Clock { 0L }
         sink = Sink { _, _ -> }
@@ -403,6 +421,61 @@ object PerfTrace {
             EV_LAYOUT_SETTLED,
             "quiet_ms=$quietMs last_reflow_src=$lastReflowSrc rows=$rows cols=$cols",
         )
+    }
+
+    /**
+     * `key_send`：把一次 a–z 单字符交给传输层。带 seq+char 供与 [flushKeyEchoAfterDraw] 配对。
+     * 非单字符 a–z（IME 整词等）不发事件，避免配不上对。
+     */
+    fun keySend(ref: String, char: String) {
+        if (!enabled) return
+        if (char.length != 1) return
+        val c = char[0]
+        if (c !in 'a'..'z') return
+        val seq: Long
+        synchronized(keyLock) {
+            seq = keySeq.getAndIncrement()
+            pendingKeys.addLast(PendingKey(seq, c))
+        }
+        val openId = idFor(ref) ?: "-"
+        emit(openId, EV_KEY_SEND, "seq=$seq char=$c")
+    }
+
+    /** 仿真器把 a–z 写入网格。关路径：调用方不挂钩，本方法也不会被走到。 */
+    fun notePrintableEcho(char: Char) {
+        if (!enabled) return
+        if (char !in 'a'..'z') return
+        synchronized(keyLock) { consumedSinceDraw.addLast(char) }
+    }
+
+    /**
+     * 本帧绘制完成后：把本帧消费到的字符与未配对的 key_send 按 FIFO 同字符配对，发 `key_echo`。
+     * 配不上的消费（快照里的字母）丢掉，不发事件。
+     */
+    fun flushKeyEchoAfterDraw(ref: String) {
+        if (!enabled) return
+        val matched = ArrayList<PendingKey>(4)
+        synchronized(keyLock) {
+            while (consumedSinceDraw.isNotEmpty()) {
+                val c = consumedSinceDraw.removeFirst()
+                val it = pendingKeys.iterator()
+                var hit: PendingKey? = null
+                while (it.hasNext()) {
+                    val p = it.next()
+                    if (p.char == c) {
+                        it.remove()
+                        hit = p
+                        break
+                    }
+                }
+                if (hit != null) matched.add(hit)
+            }
+        }
+        if (matched.isEmpty()) return
+        val openId = idFor(ref) ?: "-"
+        for (p in matched) {
+            emit(openId, EV_KEY_ECHO, "seq=${p.seq} char=${p.char}")
+        }
     }
 
     /** 产品链：本打开是否尚未发过 subscribe_sent。 */

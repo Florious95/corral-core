@@ -41,6 +41,9 @@ interface ConnPerfHooks {
         bytes: Int,
         listenerRef: String,
     ) = Unit
+
+    /** 按键回显量具：客户端把一次输入交给传输层。关路径空实现。 */
+    fun onKeySend(ref: String, char: String) = Unit
 }
 
 object ConnPerf {
@@ -69,4 +72,6 @@ object ConnPerf {
         bytes: Int,
         listenerRef: String,
     ) = hooks.emitNoListener(frameRef, listenerNull, kind, bytes, listenerRef)
+
+    fun onKeySend(ref: String, char: String) = hooks.onKeySend(ref, char)
 }
