@@ -5,6 +5,40 @@
 原始文档真相源是 `requirement-base/`（只增不删，维基从中分解概念）；
 任务状态的唯一权威是 `taskbook.yaml` + `.team/evidence/`。
 
+## 🔴 当前稳定基线 = 2026-08-22 release（真机金标准已过，⛔ 不许回退）
+
+**用户 2026-08-22 裁定**：「现在这个 release 版本是新的基线，是新的稳定版本。
+**性能体验是最核心的体验，这个不能回退。**」
+
+- **判据来源不是模拟器**：用户在**蜂窝网络 + 广州中转打洞节点**（非直连、最苛刻路径）实测，
+  打开会话「**秒开、没有空白**」，判定「完全达到前天晚上那个版本」。
+- **坐标**（三处同源，改动前先对上）：
+  - 本地 tag `baseline-20260822-release`（main 上）
+  - corral-core tag/Release 同名：https://github.com/Florious95/corral-core/releases/tag/baseline-20260822-release
+  - corral-serve tag 同名
+  - APK md5 `0907d6881bb1e034ef33a49f89afaa44`（35044459 bytes，assembleRelease，
+    debug keystore 签名，⛔ 仅本地对比不可分发）
+- **本版含**：白屏根因修复（ConnectionManager 由单一全局 listener 槽改为**按 ref 分发**）、
+  PerfTrace 八事件全链仪表（setprop 可关、关时零成本）、服务端 subscribe 三时间戳、
+  三核模块切分 `:core-protocol`/`:core-terminal`/`:core-conn`、corral-app 引用式构建暂存工程。
+- **模拟器性能地板**（`.team/perf/baseline-20260822.json`，只从 `adb logcat -s PerfTrace` 取数，
+  适用 load1 6.87–10.49）：三夹具 `tap→first_draw` p50 1450/1478/1492ms、
+  p95 1908/2280/1892ms。⚠️ **换负载区间不可直接比较**，复测必须带 load 读数。
+- 🔴 **此后任何改动不许低于本基线，优化必须高于本基线**；模拟器地板只是回归下限，
+  **最终判据永远是用户真机「秒开无空白」**（092 §11 金标准）。
+  每个改动包上手前先复测 `tools/perfbase/judge-perf-nonregress.sh`，任何段回退 = 不出门。
+
+### 本基线未修的已知缺陷（另案，不影响基线成立）
+
+- **tsnet 身份分裂（2026-08-22 用户实撞）**：`TsnetWire.stateDirForKey` 按 auth key 的 SHA-256
+  分状态目录，而 `sanitizeHostname` 恒为 `agentmirror-<机型>` ⇒ **换一把 auth key 就在 tailnet 里
+  注册出一台同名新设备**，旧节点占位会把 `tsnet.Up` 拖到 60s deadline，表现为「一直入网中最后失败」。
+  绕过：到 tailnet 删掉旧的同名设备。修法待裁（①改设备级单一 state dir ②或把 key 指纹并进 hostname）。
+- **`GomobileTsnetBackend.start` 全程零日志**：入网失败只拿得到一句 `context deadline exceeded`，
+  分不出「同名冲突」还是「网络不通」。要修 tsnet 前先补这段留痕（带两边操作数）。
+- **重连慢 ≠ 服务端问题**（2026-08-22 实撞）：用户手机 VPN 设成全局转发时，tailnet 流量被套一层
+  ⇒ 握手与重连都慢。改成分应用转发并排除本 app 即恢复。**排查顺序：先问网络路径，再疑代码。**
+
 ## 当前待办底册（2026-08-22 全停后）
 
 - **`docs/交接任务书-性能基线与仓库重构.md`** —— 用户 2026-08-22 三连令（打开链路 Debug 日志仪表
