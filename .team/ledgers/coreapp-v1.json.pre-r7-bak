@@ -101,7 +101,7 @@
     "read_only_shared": [],
     "rules": []
   },
-  "revision": 7,
+  "revision": 6,
   "roles": {
     "r.advisor": {
       "artifact_landing": {
@@ -461,6 +461,7 @@
           "c.perf"
         ]
       },
+      "blocking_reasons": [],
       "handoff": {
         "required_artifacts": [],
         "route": "report_result"
@@ -492,7 +493,7 @@
         ]
       },
       "seat_wait_seconds": 5400,
-      "state": "planned",
+      "state": "succeeded",
       "statuses": [
         {
           "artifact": {
@@ -502,7 +503,16 @@
           "name": "done"
         }
       ],
-      "title": "格4·返修第2轮（判者 t.rv 判 rework，理由已并进本正文——依赖边重派不带上游 case，⛔ 别去找上一轮的信）。先读判定书 .team/nodes/ca-rv/裁定.md 全文。\n【判者查实的三件事，⛔ 不许辩解，照修】\n① 你把复测的 30 份 logcat 写进了 .team/perf/raw/，**覆盖掉本树原有的基线原文**（coldopen.sh:9 的 OUTDIR 默认就指那儿）。⇒ `git checkout` 恢复 raw/ 到本分支基点，复测一律另开 .team/perf/raw-capp/，改 coldopen.sh 的 OUTDIR 或用环境变量传，⛔ 不许再覆盖。\n② 判据比的地板 1450.5/1478.0/1492.0 出自 **另一个包**（app_sha=8d811c199, pr/perfbase-fixblank），它的 30 份原始 log 不在本树 ⇒ 本树根本复核不了这个地板。\n③ 于是那个 -90% 是假的：你拿 corral-app release 包（md5 3ebc9c55…）去比 fixblank 包的地板，中间隔着一整轮白屏修复。判者把两边逐事件减出来了——差异全在 snapshot→first_draw（地板 1044ms vs 复测 21ms），而 subscribe/收帧两边几乎一样（196 vs 124ms）。**这形状说明差的是绘制段的代码，不是依赖形态。** 你的负载还更高（load1 mean 12.08，30 次里只有 13 次落在地板适用区间 6.87–10.49，big_scrollback 十次全在 14.79–18.63），更高负载却快 10 倍，方向就不对。\n【本轮改测法：同机同时段 A/B，⛔ 不再跟历史地板比】\n本链要回答的只有一个问题：**把核从源码 composite 换成引用 maven 产物，性能有没有倒退。**跨包比历史地板答不了这个问题。改成：\n A 包 = 用 includeBuild 源码 composite 构建的 release APK（基点同 wt-ca 当前 HEAD）；\n B 包 = 格3 已经装出的引用式 release APK（md5 3ebc9c55703c780c842a2f410b85034e）。\n**同一台模拟器、同一时段、交替测**（A,B,A,B… 别一口气测完 A 再测 B，机器状态会漂），三夹具各 ≥10 次冷点开，只从 adb logcat -s PerfTrace 取数，极端值不剔除（另列 outliers），每批记 load 读数。落 .team/perf/recheck-<日期>-capp-ab.json，里面 A/B 两组并列，逐夹具逐段给 B 相对 A 的百分比。判据仍是 judge-perf-nonregress.sh 的 +10% 门，但比较对象换成同批的 A 组。\n⛔ 不许换夹具/换次数/换取数方式让它变绿；⛔ 不许改 tools/perfbase/*.sh。环境不具备或数据不齐 ⇒ 如实报不可判（合法终态），⛔ 不许把没核到的写成 done。\n细则读 .team/tasks/coreapp/任务书.md",
+      "title": "格4·用引用式构建的 APK 复测性能门：被测物 = 格3 装出的 release APK（记 md5 与来源）。流程与 .team/tasks/perfbase/任务书-02-基线.md **完全相同**：模拟器 agentmirror_test_b、三夹具各 ≥10 次冷点开、**只从 adb logcat -s PerfTrace 取数**（⛔ 不识图/不取帧/不取帧间隔）、**极端值不剔除**（另列 outliers）、**每批记 load 读数**。落 .team/perf/recheck-<日期>-capp.json（形状同基线文件）。逐夹具逐段比 p50/p95，超基线 +10% 即红。⛔ 不许换夹具/换次数/换取数方式来让它变绿；环境不具备或数据不齐 ⇒ 如实报不可判（合法终态）。你的前任四轮说明与现成脚本在 .team/nodes/pb-emu/，⛔ 不要重新摸索。细则读 .team/tasks/coreapp/任务书.md",
+      "status_record": {
+        "status": "done",
+        "artifacts": {
+          "path": ".team/nodes/ca-emu/说明.md",
+          "kind": "report"
+        },
+        "case_id": "ledger_coreapp_v1__t.perf__r4",
+        "recorded_at_revision": 4
+      },
       "attempts": [
         {
           "attempt_id": "att-t.perf-seq4-t1787379878976",
@@ -608,6 +618,9 @@
           "c.rv"
         ]
       },
+      "blocking_reasons": [
+        "await_reentry:t.capp"
+      ],
       "handoff": {
         "required_artifacts": [],
         "route": "report_result"
@@ -637,7 +650,7 @@
         ]
       },
       "seat_wait_seconds": 3600,
-      "state": "planned",
+      "state": "blocked",
       "statuses": [
         {
           "artifact": {
@@ -662,6 +675,14 @@
         }
       ],
       "title": "格5·异源终审：你与施工席不同席位、零上下文，⛔ 不采信自报。**自己重跑**四条判据（judge-perfpath / judge-pub / judge-capp / judge-perf-nonregress）并贴退出码原文。另外必须核：① git diff 看 tools/perfbase/ 有没有被动过——动了直接 rework；② corral-app 里确实没有核源码（自己 find，别信文档）；③ 复测的数真从 .team/perf/raw*/ 的 PerfTrace 原文来（抽查 ≥3 份对上统计值）、有没有剔极端值、load 读数在不在；④ 性能关键路径清单里的文件逐个存在且没塞无关文件。裁定书落 .team/nodes/ca-rv/裁定.md，恰好一行 status=pass|rework|inconclusive。判不出写 inconclusive，那是合法终态，⛔ 不许把没核到的写成 pass。细则读 .team/tasks/coreapp/任务书.md",
+      "status_record": {
+        "status": "rework",
+        "artifacts": {
+          "report": ".team/nodes/ca-rv/裁定.md"
+        },
+        "case_id": "ledger_coreapp_v1__t.rv__r5",
+        "recorded_at_revision": 5
+      },
       "rounds": [
         {
           "n": 1,
@@ -670,8 +691,7 @@
           "case_id": "ledger_coreapp_v1__t.rv__r5",
           "at_revision": 5
         }
-      ],
-      "attempts": []
+      ]
     }
   },
   "transitions": [

@@ -167,7 +167,11 @@ transitions = [
                assemble=Assemble(include_upstream_case=False)),
     Transition(frm="t.rv", to="t.close", on_status=["pass"],
                assemble=Assemble(include_upstream_case=False)),
-    Transition(frm="t.rv", to="t.capp", on_status=["rework"],
+    # 🔴 形状教训（2026-08-22 实撞）：返修边原本指向 t.capp，指错了格。
+    # 判者第一轮判 rework，理由全在**测量**（复测覆盖基线 raw、跨包比历史地板），
+    # 而 corral-app 改造本身判者逐条核过是干净的。返修必须落在**出问题的那格**——
+    # 链尾判者打回时，默认收件人应是它上一格（t.perf），不是链首。
+    Transition(frm="t.rv", to="t.perf", on_status=["rework"],
                assemble=Assemble(include_upstream_case=True),
                max_rounds=2, on_exhausted="t.esc"),
     Transition(frm="t.rv", to="t.esc", on_status=["inconclusive"],
