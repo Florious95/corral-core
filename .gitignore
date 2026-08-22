@@ -37,3 +37,4 @@ e2e/artifacts/**/frames*/
 e2e/artifacts/**/*-frames/
 .team/ledgers/.dispatched/
 app/.kotlin/
+.team/artifacts/apk-release/
