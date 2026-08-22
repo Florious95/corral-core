@@ -1,7 +1,7 @@
 {
   "schema_version": "ledger.v2",
   "ledger_id": "ledger.input.v1",
-  "revision": 3,
+  "revision": 6,
   "run": {
     "desired_state": "running"
   },
@@ -44,7 +44,7 @@
         "symbol": "input-passthrough-contract",
         "source": "docs/输入透传契约.md"
       },
-      "state": "planned",
+      "state": "blocked",
       "owner": {
         "role": "r.in"
       },
@@ -102,7 +102,7 @@
               "sh",
               "tools/perfbase/judge-incontract.sh"
             ],
-            "cwd": ".worktrees/wt-in0",
+            "cwd": "${worktree}",
             "expected_exit_code": 0,
             "unjudgeable_exit_codes": [
               2
@@ -118,19 +118,21 @@
           "M-contract"
         ]
       },
-      "blocking_reasons": [],
+      "blocking_reasons": [
+        "route_contradicts_success: dest=t.close"
+      ],
       "status_record": {
         "status": "done",
         "artifacts": {
           "note": "七节：鼠标归Agent且tmux不截获、只用SGR 1006、跟踪1002禁1003、重连按序重放模式、ack与预测回显同设计、send-keys可打印-l/控制-H批量、Apache-2.0下MIT可抄GPLv3只读。"
         },
-        "case_id": "ledger_input_v1__t.contract__r1",
-        "recorded_at_revision": 1
+        "case_id": "ledger_input_v1__t.contract__r3",
+        "recorded_at_revision": 3
       }
     },
     "t.escalate": {
       "title": "契约与代码冲突：升报 leader 裁定（终点格）",
-      "state": "planned",
+      "state": "not_applicable",
       "owner": {
         "role": "r.in"
       },
@@ -165,7 +167,7 @@
               "-s",
               ".team/nodes/_advisor/冲突裁定请求.md"
             ],
-            "cwd": ".worktrees/wt-in0",
+            "cwd": "${worktree}",
             "expected_exit_code": 0,
             "artifacts": [],
             "time_budget_seconds": 300
@@ -180,7 +182,7 @@
     },
     "t.close": {
       "title": "契约收口：把契约里的裁定压成一页对照表，供后续每一步开工时逐条比对",
-      "state": "planned",
+      "state": "succeeded",
       "owner": {
         "role": "r.in"
       },
@@ -216,7 +218,7 @@
               "sh",
               "tools/perfbase/judge-inclose.sh"
             ],
-            "cwd": ".worktrees/wt-in0",
+            "cwd": "${worktree}",
             "expected_exit_code": 0,
             "unjudgeable_exit_codes": [
               2
@@ -232,7 +234,19 @@
           "M-close"
         ]
       },
-      "blocking_reasons": []
+      "blocking_reasons": [],
+      "attempts": [
+        {
+          "attempt_id": "att-t.close-seq2-t1787431928840",
+          "delivery_id": "del-t.close-seq2-t1787431928840",
+          "state": "succeeded",
+          "writeback_revision": 5,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=M-close",
+            "acceptance_success.writeback_revision=5"
+          ]
+        }
+      ]
     }
   },
   "dependencies": [],
@@ -310,6 +324,13 @@
         "status": "done",
         "at_revision": 1,
         "case_id": "ledger_input_v1__t.contract__r1"
+      },
+      {
+        "from": "t.contract",
+        "to": "t.close",
+        "status": "done",
+        "at_revision": 3,
+        "case_id": "ledger_input_v1__t.contract__r3"
       }
     ]
   }
