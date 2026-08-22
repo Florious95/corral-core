@@ -1,7 +1,7 @@
 {
   "schema_version": "ledger.v2",
   "ledger_id": "ledger.input.v1",
-  "revision": 1,
+  "revision": 3,
   "run": {
     "desired_state": "running"
   },
@@ -102,7 +102,7 @@
               "sh",
               "tools/perfbase/judge-incontract.sh"
             ],
-            "cwd": ".",
+            "cwd": ".worktrees/wt-in0",
             "expected_exit_code": 0,
             "unjudgeable_exit_codes": [
               2
@@ -117,6 +117,15 @@
         "required": [
           "M-contract"
         ]
+      },
+      "blocking_reasons": [],
+      "status_record": {
+        "status": "done",
+        "artifacts": {
+          "note": "七节：鼠标归Agent且tmux不截获、只用SGR 1006、跟踪1002禁1003、重连按序重放模式、ack与预测回显同设计、send-keys可打印-l/控制-H批量、Apache-2.0下MIT可抄GPLv3只读。"
+        },
+        "case_id": "ledger_input_v1__t.contract__r1",
+        "recorded_at_revision": 1
       }
     },
     "t.escalate": {
@@ -126,7 +135,7 @@
         "role": "r.in"
       },
       "resources": {
-        "worktree_id": "wt-in0-esc",
+        "worktree_id": "wt-in0",
         "write_paths": [
           ".team/nodes/_advisor/"
         ],
@@ -156,7 +165,7 @@
               "-s",
               ".team/nodes/_advisor/冲突裁定请求.md"
             ],
-            "cwd": ".",
+            "cwd": ".worktrees/wt-in0",
             "expected_exit_code": 0,
             "artifacts": [],
             "time_budget_seconds": 300
@@ -166,7 +175,8 @@
         "required": [
           "M-esc"
         ]
-      }
+      },
+      "blocking_reasons": []
     },
     "t.close": {
       "title": "契约收口：把契约里的裁定压成一页对照表，供后续每一步开工时逐条比对",
@@ -182,7 +192,7 @@
           "identity": "git",
           "revision": "d2d658c13"
         },
-        "worktree_id": "wt-in0-close",
+        "worktree_id": "wt-in0",
         "write_paths": [
           ".team/nodes/t.close/"
         ],
@@ -206,7 +216,7 @@
               "sh",
               "tools/perfbase/judge-inclose.sh"
             ],
-            "cwd": ".",
+            "cwd": ".worktrees/wt-in0",
             "expected_exit_code": 0,
             "unjudgeable_exit_codes": [
               2
@@ -221,7 +231,8 @@
         "required": [
           "M-close"
         ]
-      }
+      },
+      "blocking_reasons": []
     }
   },
   "dependencies": [],
@@ -291,5 +302,15 @@
     "closed_read": false
   },
   "fanout_aggregation": {},
-  "audit": {}
+  "audit": {
+    "route_hops": [
+      {
+        "from": "t.contract",
+        "to": "t.close",
+        "status": "done",
+        "at_revision": 1,
+        "case_id": "ledger_input_v1__t.contract__r1"
+      }
+    ]
+  }
 }
