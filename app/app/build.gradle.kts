@@ -102,6 +102,9 @@ dependencies {
     // conn 层：协议控制帧 JSON 编解码（kotlinx-serialization-json，Apache-2.0）。
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     // 终端内核：ANSI/CSI 解析 + 字符网格 + 本地 scrollback（:terminal，term-core-android 任务交付，纯 JVM 零 Android 依赖）。
+    implementation(project(":core-terminal"))
+    implementation(project(":core-protocol"))
+    implementation(project(":core-conn"))
     implementation(project(":terminal"))
     // 配对：OkHttp WebSocket 真实传输（conn 层 WebSocketTransport 接口的 service 实现，
     // 清偿传输欠账①，leader 裁定 A）+ MockWebServer 单测（均 Apache-2.0）。
