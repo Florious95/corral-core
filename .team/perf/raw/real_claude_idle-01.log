@@ -1,12 +1,7 @@
 --------- beginning of main
-08-22 14:29:01.250  3452  3452 D PerfTrace: open_id=1 ev=tap t=88850
-08-22 14:29:01.266  3452  3452 D PerfTrace: open_id=1 ev=route_enter t=88866
-08-22 14:29:01.271  3452  3452 D PerfTrace: open_id=1 ev=subscribe_sent t=88871 emitted=1 reason=sent ready=1 conn=1 ok=1 take_before=0 replay=0 rows=40 cols=120
-08-22 14:29:01.272  3452  3452 D PerfTrace: open_id=1 ev=geom_seed t=88872 rows=40 cols=120
-08-22 14:29:01.341  3452  3452 D PerfTrace: open_id=1 ev=first_draw t=88941 emitted=0 reason=glyphs_zero glyphs=0
-08-22 14:29:01.373  3452  3471 D PerfTrace: open_id=1 ev=ws_binary_recv t=88973 emitted=0 kind=snapshot bytes=1281 frame_ref=/tmp/e2e-ca-emu/tmux-501/default%0
-08-22 14:29:01.373  3452  3471 D PerfTrace: open_id=1 ev=first_frame_recv t=88974 emitted=0 reason=has_listener frame_ref=/tmp/e2e-ca-emu/tmux-501/default%0 listener_null=0 listener_ref=/tmp/e2e-ca-emu/tmux-501/default%0 kind=snapshot bytes=1281
-08-22 14:29:01.373  3452  3471 D PerfTrace: open_id=1 ev=first_frame_recv t=88974 kind=snapshot bytes=1281
-08-22 14:29:01.378  3452  3471 D PerfTrace: open_id=1 ev=snapshot_applied t=88978 seq=1 alt=0
-08-22 14:29:01.399  3452  3452 D PerfTrace: open_id=1 ev=first_draw t=88999 glyphs=862
-08-22 14:29:01.879  3452  3452 D PerfTrace: open_id=1 ev=layout_settled t=89480 quiet_ms=500 last_reflow_src=snapshot rows=41 cols=46
+08-22 03:56:25.520 26489 26489 D PerfTrace: open_id=1 ev=tap t=43068094
+08-22 03:56:25.530 26489 26489 D PerfTrace: open_id=1 ev=route_enter t=43068104
+08-22 03:56:25.541 26489 26489 D PerfTrace: open_id=1 ev=subscribe_sent t=43068114 emitted=1 reason=sent ready=1 conn=1 ok=1 take_before=0 replay=0 rows=41 cols=46
+08-22 03:56:25.541 26489 26489 D PerfTrace: open_id=1 ev=geom_seed t=43068115 rows=41 cols=46
+08-22 03:56:25.805 26489 26489 D PerfTrace: open_id=1 ev=first_draw t=43068379 emitted=0 reason=glyphs_zero glyphs=0
+08-22 03:56:26.060 26489 26489 D PerfTrace: open_id=1 ev=layout_settled t=43068634 quiet_ms=500 last_reflow_src=subscribe rows=41 cols=46

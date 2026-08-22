@@ -1,12 +1,7 @@
 --------- beginning of main
-08-22 14:33:29.632  5023  5023 D PerfTrace: open_id=1 ev=tap t=357233
-08-22 14:33:29.650  5023  5023 D PerfTrace: open_id=1 ev=route_enter t=357250
-08-22 14:33:29.654  5023  5023 D PerfTrace: open_id=1 ev=subscribe_sent t=357255 emitted=1 reason=sent ready=1 conn=1 ok=1 take_before=0 replay=0 rows=41 cols=46
-08-22 14:33:29.655  5023  5023 D PerfTrace: open_id=1 ev=geom_seed t=357255 rows=41 cols=46
-08-22 14:33:29.726  5023  5023 D PerfTrace: open_id=1 ev=first_draw t=357327 emitted=0 reason=glyphs_zero glyphs=0
-08-22 14:33:29.753  5023  5042 D PerfTrace: open_id=1 ev=ws_binary_recv t=357353 emitted=0 kind=snapshot bytes=1056 frame_ref=/tmp/e2e-ca-emu/tmux-501/default%1
-08-22 14:33:29.753  5023  5042 D PerfTrace: open_id=1 ev=first_frame_recv t=357353 emitted=0 reason=has_listener frame_ref=/tmp/e2e-ca-emu/tmux-501/default%1 listener_null=0 listener_ref=/tmp/e2e-ca-emu/tmux-501/default%1 kind=snapshot bytes=1056
-08-22 14:33:29.753  5023  5042 D PerfTrace: open_id=1 ev=first_frame_recv t=357354 kind=snapshot bytes=1056
-08-22 14:33:29.755  5023  5042 D PerfTrace: open_id=1 ev=snapshot_applied t=357355 seq=1 alt=0
-08-22 14:33:29.787  5023  5023 D PerfTrace: open_id=1 ev=first_draw t=357388 glyphs=840
-08-22 14:33:30.257  5023  5023 D PerfTrace: open_id=1 ev=layout_settled t=357857 quiet_ms=500 last_reflow_src=snapshot rows=41 cols=46
+08-22 04:01:15.906 28022 28022 D PerfTrace: open_id=1 ev=tap t=43358480
+08-22 04:01:15.920 28022 28022 D PerfTrace: open_id=1 ev=route_enter t=43358493
+08-22 04:01:15.929 28022 28022 D PerfTrace: open_id=1 ev=subscribe_sent t=43358503 emitted=1 reason=sent ready=1 conn=1 ok=1 take_before=0 replay=0 rows=41 cols=46
+08-22 04:01:15.929 28022 28022 D PerfTrace: open_id=1 ev=geom_seed t=43358503 rows=41 cols=46
+08-22 04:01:16.209 28022 28022 D PerfTrace: open_id=1 ev=first_draw t=43358782 emitted=0 reason=glyphs_zero glyphs=0
+08-22 04:01:16.444 28022 28022 D PerfTrace: open_id=1 ev=layout_settled t=43359017 quiet_ms=500 last_reflow_src=subscribe rows=41 cols=46

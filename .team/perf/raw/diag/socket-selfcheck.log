@@ -1,13 +1,13 @@
 === 自检①：socket 路径 ===
-SOCK=/tmp/e2e-ca-emu/tmux-501/default
-srw-------  1 alauda  wheel  0  8月 22 14:27 /tmp/e2e-ca-emu/tmux-501/default
+SOCK=/tmp/e2e-pb-emu/tmux-501/default
+srw-------  1 alauda  wheel  0  8月 22 03:53 /tmp/e2e-pb-emu/tmux-501/default
 === 自检②：会话必须在我自己的 socket 上 ===
-big_scrollback: 1 windows (created Sat Aug 22 14:27:30 2026)
-real_claude_idle: 1 windows (created Sat Aug 22 14:27:30 2026)
-redraw_tui: 1 windows (created Sat Aug 22 14:27:30 2026)
+big_scrollback: 1 windows (created Sat Aug 22 03:53:09 2026)
+real_claude_idle: 1 windows (created Sat Aug 22 03:53:09 2026)
+redraw_tui: 1 windows (created Sat Aug 22 03:53:09 2026)
 === 自检③：本 socket 的 pane 进程 comm（必须是 claude）===
-real_claude_idle pane_pid=59938 comm=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/nodes/ca-emu/tmp/fakebin/claude
-redraw_tui pane_pid=59948 comm=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/nodes/ca-emu/tmp/fakebin/claude
-big_scrollback pane_pid=59954 comm=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/nodes/ca-emu/tmp/fakebin/claude
+real_claude_idle pane_pid=25769 comm=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-base/.team/nodes/pb-emu/tmp/fakebin/claude
+redraw_tui pane_pid=25780 comm=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-base/.team/nodes/pb-emu/tmp/fakebin/claude
+big_scrollback pane_pid=25791 comm=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-base/.team/nodes/pb-emu/tmp/fakebin/claude
 === 自检④：用户真实 socket 目录未被我建会话（只列不动）===
 /private/tmp/tmux-501
