@@ -101,3 +101,5 @@ INFO         | Warning: QObject::connect: Cannot queue arguments of type 'std::v
 INFO         | AVD supportsNativeGLES=1, supportsGuestAngle=1
 INFO         | Created extended window in 207.825ms
 USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
+INFO         | Boot completed in 17052 ms
+INFO         | Increasing screen off timeout, logcat buffer size to 2M.
