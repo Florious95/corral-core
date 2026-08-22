@@ -25,20 +25,14 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
+        // ① 远端 maven 分支（推上去之后走这里）；② 本地兜底 .team/staging/maven-repo
+        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/maven/") }
+        maven { url = uri(rootDir.resolve("../maven-repo")) }
         google()
         mavenCentral()
     }
 }
 
 rootProject.name = "corral-app"
-
-includeBuild("../corral-core") {
-    dependencySubstitution {
-        substitute(module("dev.agentmirror:core-protocol")).using(project(":core-protocol"))
-        substitute(module("dev.agentmirror:core-terminal")).using(project(":core-terminal"))
-        substitute(module("dev.agentmirror:core-conn")).using(project(":core-conn"))
-        substitute(module("dev.agentmirror:terminal")).using(project(":terminal"))
-    }
-}
 
 include(":app")

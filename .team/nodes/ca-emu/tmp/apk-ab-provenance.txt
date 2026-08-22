@@ -1,0 +1,7 @@
+apk_a_md5=aecdbd461deece5daec8f81c70af8e54
+apk_a_path=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/nodes/ca-emu/tmp/app-release-a.apk
+apk_a_build=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/nodes/ca-emu/tmp/appsrc-a/app/build/outputs/apk/release/app-release.apk
+apk_b_md5=3ebc9c55703c780c842a2f410b85034e
+apk_b_path=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/staging/corral-app/app/build/outputs/apk/release/app-release.apk
+built_at=2026-08-22 15:21:13
+head=565542972 coreapp-v1 t.perf 记不可判：本机 load1 107（ffmpeg 648% + 爱奇艺 + Chrome），free 55MB，起不了模拟器
