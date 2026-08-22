@@ -16,8 +16,7 @@
 
 package dev.agentmirror.app.conn
 
-import dev.agentmirror.app.diag.DiagLog
-import dev.agentmirror.app.perf.PerfTrace
+
 
 /**
  * 连接层对外状态（docs/protocol.md §3 生命周期）。
@@ -542,7 +541,7 @@ class ConnectionManager(
         val bookkept = activeSubscriptions[ref]
         // 守卫两侧都记：分得出「没调用 / 调用了被拦 / 发出去了」。
         if (conn == null || !ready || rows < 1 || cols < 1) {
-            DiagLog.record(
+            ConnDiag.record(
                 "reflow",
                 "resize skipped rows=$rows cols=$cols reason=$reason " +
                     "ready=$ready conn=${conn != null} " +
@@ -555,13 +554,13 @@ class ConnectionManager(
             activeSubscriptions[ref] = rows to cols
         }
         val after = activeSubscriptions[ref]
-        DiagLog.record(
+        ConnDiag.record(
             "reflow",
             "resize sent rows=$rows cols=$cols reason=$reason ok=$ok " +
                 "bookkept_rows=${after?.first ?: -1} bookkept_cols=${after?.second ?: -1}",
         )
-        if (ok && PerfTrace.isEnabled()) {
-            PerfTrace.noteReflow(ref, reason, rows, cols) // layout_settled
+        if (ok && ConnPerf.isEnabled()) {
+            ConnPerf.noteReflow(ref, reason, rows, cols) // layout_settled
         }
         return ok
     }
@@ -580,8 +579,8 @@ class ConnectionManager(
         hasConn: Boolean,
         reason: String,
     ) {
-        if (!PerfTrace.isEnabled()) return
-        PerfTrace.onSubscribeResult(ref, rows, cols, sent, replay, ready, hasConn, reason)
+        if (!ConnPerf.isEnabled()) return
+        ConnPerf.onSubscribeResult(ref, rows, cols, sent, replay, ready, hasConn, reason)
     }
 
     // ---- 内部 ----
@@ -652,7 +651,7 @@ class ConnectionManager(
             } else {
                 listener?.let { recipients.add(it) }
             }
-            if (PerfTrace.isEnabled()) {
+            if (ConnPerf.isEnabled()) {
                 val listenerNull = if (recipients.isEmpty()) 1 else 0
                 val kind = when (frame.kind) {
                     BinaryKind.SNAPSHOT -> "snapshot"
@@ -664,7 +663,7 @@ class ConnectionManager(
                 } else {
                     recipients.joinToString(",") { it.perfTraceListenerRef() }
                 }
-                PerfTrace.emitNoListener(frame.ref, listenerNull, kind, frame.data.size, listenerRef)
+                ConnPerf.emitNoListener(frame.ref, listenerNull, kind, frame.data.size, listenerRef)
             }
             recipients.forEach { it.onBinary(frame) }
         }
@@ -694,14 +693,14 @@ class ConnectionManager(
         val conn = connection ?: return
         if (reconnect) {
             if (activeSubscriptions.isEmpty()) {
-                DiagLog.record(
+                ConnDiag.record(
                     "reflow",
                     "reconnect ok resend_resize=no cols=-1 rows=-1 subs=0",
                 )
             } else {
                 for ((ref, dims) in activeSubscriptions) {
                     // subscribe 携带最新簿记行列 = 把当前 cols 重新交给服务端（一次，非周期）。
-                    DiagLog.record(
+                    ConnDiag.record(
                         "reflow",
                         "reconnect ok resend_resize=yes cols=${dims.second} rows=${dims.first} ref=$ref",
                     )
@@ -768,7 +767,7 @@ class ConnectionManager(
         if (state != s) {
             // 缺陷观测点：连接状态迁移（CONNECTING→AUTHENTICATING→READY→RECONNECTING→STOPPED）。
             // 配合 ws 层的关闭原因记录，能重建"何时连上、何时掉、为何掉"的完整时间线。
-            DiagLog.record("ws", "conn state $state → $s")
+            ConnDiag.record("ws", "conn state $state → $s")
             state = s
             listener?.onStateChanged(s)
         }

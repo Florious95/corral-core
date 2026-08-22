@@ -16,6 +16,8 @@
 
 package dev.agentmirror.app.perf
 
+import dev.agentmirror.app.conn.ConnPerf
+import dev.agentmirror.app.conn.ConnPerfHooks
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -44,6 +46,33 @@ import java.util.concurrent.atomic.AtomicLong
  * @inv 不为 layout_settled 起常驻定时器/协程；重排取消未发出的一次性延迟消息
  */
 object PerfTrace {
+
+    init {
+        ConnPerf.hooks = object : ConnPerfHooks {
+            override fun isEnabled(): Boolean = this@PerfTrace.isEnabled()
+            override fun emitWsBinaryRecv(frameRef: String, kind: String, bytes: Int) =
+                this@PerfTrace.emitWsBinaryRecv(frameRef, kind, bytes)
+            override fun noteReflow(ref: String, src: String, rows: Int, cols: Int) =
+                this@PerfTrace.noteReflow(ref, src, rows, cols)
+            override fun onSubscribeResult(
+                ref: String,
+                rows: Int,
+                cols: Int,
+                sent: Boolean,
+                replay: Boolean,
+                ready: Boolean,
+                hasConn: Boolean,
+                reason: String,
+            ) = this@PerfTrace.onSubscribeResult(ref, rows, cols, sent, replay, ready, hasConn, reason)
+            override fun emitNoListener(
+                frameRef: String,
+                listenerNull: Int,
+                kind: String,
+                bytes: Int,
+                listenerRef: String,
+            ) = this@PerfTrace.emitNoListener(frameRef, listenerNull, kind, bytes, listenerRef)
+        }
+    }
 
     const val TAG = "PerfTrace"
 

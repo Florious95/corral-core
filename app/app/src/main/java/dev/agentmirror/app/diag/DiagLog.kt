@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.diag
 
+import dev.agentmirror.app.conn.ConnDiag
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -52,6 +53,10 @@ import kotlin.concurrent.withLock
  *       的输出文本中零命中；本对象无任何常驻线程/定时器
  */
 object DiagLog {
+
+    init {
+        ConnDiag.record = { tag, msg -> record(tag, msg) }
+    }
 
     /** 脱敏替换串（写入点替换后的统一占位；导出/内存中都是它，绝无原文）。 */
     const val REDACTED = "[REDACTED]"

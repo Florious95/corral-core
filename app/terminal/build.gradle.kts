@@ -15,13 +15,10 @@
  */
 
 /**
- * 终端模拟内核模块（:terminal）。
- *
- * 纯 Kotlin/JVM，零 Android 依赖（工程红线，选型依据 docs/decisions/term-core.md：自研最小 VT 引擎）。
- * 被 :app 渲染层（term-view 任务）消费；本模块只做解析与网格状态，不做绘制。
- * Kotlin 插件版本由根构建脚本 classpath 统一提供（2.2.0），此处不写版本号。
+ * :terminal 门面：源码已并入 :core-terminal，本模块只转发 api，保留 :terminal:test 任务名。
  */
 plugins {
+    id("java-library")
     id("org.jetbrains.kotlin.jvm")
 }
 
@@ -30,6 +27,5 @@ kotlin {
 }
 
 dependencies {
-    // 与 :app 测试基建一致，命中本地缓存。
-    testImplementation("junit:junit:4.13.2")
+    api(project(":core-terminal"))
 }
