@@ -32,5 +32,5 @@
 > Task :core-conn:testClasses UP-TO-DATE
 > Task :core-conn:test UP-TO-DATE
 
-BUILD SUCCESSFUL in 731ms
+BUILD SUCCESSFUL in 1s
 13 actionable tasks: 13 up-to-date
