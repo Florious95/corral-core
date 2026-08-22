@@ -1,0 +1,211 @@
+===== real_claude_idle #1 A then B  16:00:01 load=9.57 34.80 71.94
+INSTALL A 16:00:01
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-01.log
+OK A real_claude_idle #1
+INSTALL B 16:00:21
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-01.log
+OK B real_claude_idle #1
+===== real_claude_idle #2 A then B  16:00:40 load=12.76 32.50 69.39
+INSTALL A 16:00:40
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-02.log
+OK A real_claude_idle #2
+INSTALL B 16:01:00
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-02.log
+OK B real_claude_idle #2
+===== real_claude_idle #3 A then B  16:01:19 load=10.95 29.48 66.58
+INSTALL A 16:01:19
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-03.log
+OK A real_claude_idle #3
+INSTALL B 16:01:38
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-03.log
+OK B real_claude_idle #3
+===== real_claude_idle #4 A then B  16:01:57 load=12.02 27.80 64.48
+INSTALL A 16:01:57
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-04.log
+OK A real_claude_idle #4
+INSTALL B 16:02:16
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-04.log
+OK B real_claude_idle #4
+===== real_claude_idle #5 A then B  16:02:35 load=12.71 26.06 62.16
+INSTALL A 16:02:35
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-05.log
+OK A real_claude_idle #5
+INSTALL B 16:02:54
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-05.log
+OK B real_claude_idle #5
+===== real_claude_idle #6 A then B  16:03:13 load=11.94 24.19 59.82
+INSTALL A 16:03:13
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-06.log
+OK A real_claude_idle #6
+INSTALL B 16:03:33
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-06.log
+OK B real_claude_idle #6
+===== real_claude_idle #7 A then B  16:03:52 load=13.16 23.16 58.01
+INSTALL A 16:03:52
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-07.log
+OK A real_claude_idle #7
+INSTALL B 16:04:11
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-07.log
+OK B real_claude_idle #7
+===== real_claude_idle #8 A then B  16:04:30 load=10.77 21.31 55.73
+INSTALL A 16:04:30
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-08.log
+OK A real_claude_idle #8
+INSTALL B 16:04:49
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-08.log
+OK B real_claude_idle #8
+===== real_claude_idle #9 A then B  16:05:08 load=12.22 20.32 53.78
+INSTALL A 16:05:08
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-09.log
+OK A real_claude_idle #9
+INSTALL B 16:05:27
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-09.log
+OK B real_claude_idle #9
+===== real_claude_idle #10 A then B  16:05:46 load=12.57 19.53 52.15
+INSTALL A 16:05:46
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/real_claude_idle-10.log
+OK A real_claude_idle #10
+INSTALL B 16:06:05
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/real_claude_idle-10.log
+OK B real_claude_idle #10
+===== redraw_tui #1 A then B  16:06:25 load=13.19 18.82 50.39
+INSTALL A 16:06:25
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-01.log
+OK A redraw_tui #1
+INSTALL B 16:06:44
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-01.log
+OK B redraw_tui #1
+===== redraw_tui #2 A then B  16:07:03 load=11.99 17.72 48.53
+INSTALL A 16:07:03
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-02.log
+OK A redraw_tui #2
+INSTALL B 16:07:23
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-02.log
+OK B redraw_tui #2
+===== redraw_tui #3 A then B  16:07:42 load=11.06 16.89 46.98
+INSTALL A 16:07:42
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-03.log
+OK A redraw_tui #3
+INSTALL B 16:08:01
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-03.log
+OK B redraw_tui #3
+===== redraw_tui #4 A then B  16:08:21 load=11.37 16.15 45.33
+INSTALL A 16:08:21
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-04.log
+OK A redraw_tui #4
+INSTALL B 16:08:40
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-04.log
+OK B redraw_tui #4
+===== redraw_tui #5 A then B  16:09:00 load=10.98 15.61 43.79
+INSTALL A 16:09:00
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-05.log
+OK A redraw_tui #5
+INSTALL B 16:09:19
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-05.log
+OK B redraw_tui #5
+===== redraw_tui #6 A then B  16:09:38 load=9.47 14.65 42.15
+INSTALL A 16:09:38
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-06.log
+OK A redraw_tui #6
+INSTALL B 16:09:57
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-06.log
+OK B redraw_tui #6
+===== redraw_tui #7 A then B  16:10:16 load=8.52 13.83 40.74
+INSTALL A 16:10:16
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-07.log
+OK A redraw_tui #7
+INSTALL B 16:10:36
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-07.log
+OK B redraw_tui #7
+===== redraw_tui #8 A then B  16:10:55 load=9.21 13.40 39.35
+INSTALL A 16:10:55
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-08.log
+OK A redraw_tui #8
+INSTALL B 16:11:14
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-08.log
+OK B redraw_tui #8
+===== redraw_tui #9 A then B  16:11:33 load=9.88 12.97 38.00
+INSTALL A 16:11:33
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-09.log
+OK A redraw_tui #9
+INSTALL B 16:11:52
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-09.log
+OK B redraw_tui #9
+===== redraw_tui #10 A then B  16:12:11 load=9.23 12.49 36.81
+INSTALL A 16:12:11
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/redraw_tui-10.log
+OK A redraw_tui #10
+INSTALL B 16:12:31
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/redraw_tui-10.log
+OK B redraw_tui #10
+===== big_scrollback #1 A then B  16:12:50 load=10.08 12.30 35.63
+INSTALL A 16:12:50
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-01.log
+OK A big_scrollback #1
+INSTALL B 16:13:09
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-01.log
+OK B big_scrollback #1
+===== big_scrollback #2 A then B  16:13:28 load=8.85 11.73 34.34
+INSTALL A 16:13:28
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-02.log
+OK A big_scrollback #2
+INSTALL B 16:13:47
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-02.log
+OK B big_scrollback #2
+===== big_scrollback #3 A then B  16:14:06 load=7.34 11.02 33.17
+INSTALL A 16:14:06
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-03.log
+OK A big_scrollback #3
+INSTALL B 16:14:25
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-03.log
+OK B big_scrollback #3
+===== big_scrollback #4 A then B  16:14:44 load=7.55 10.61 32.00
+INSTALL A 16:14:44
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-04.log
+OK A big_scrollback #4
+INSTALL B 16:15:03
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-04.log
+OK B big_scrollback #4
+===== big_scrollback #5 A then B  16:15:22 load=8.99 10.61 31.14
+INSTALL A 16:15:22
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-05.log
+OK A big_scrollback #5
+INSTALL B 16:15:41
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-05.log
+OK B big_scrollback #5
+===== big_scrollback #6 A then B  16:16:02 load=11.46 11.08 30.37
+INSTALL A 16:16:02
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-06.log
+OK A big_scrollback #6
+INSTALL B 16:16:21
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-06.log
+OK B big_scrollback #6
+===== big_scrollback #7 A then B  16:16:41 load=9.87 10.71 29.35
+INSTALL A 16:16:41
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-07.log
+OK A big_scrollback #7
+INSTALL B 16:17:00
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-07.log
+OK B big_scrollback #7
+===== big_scrollback #8 A then B  16:17:19 load=7.63 10.01 28.23
+INSTALL A 16:17:19
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-08.log
+OK A big_scrollback #8
+INSTALL B 16:17:38
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-08.log
+OK B big_scrollback #8
+===== big_scrollback #9 A then B  16:17:57 load=7.20 9.68 27.38
+INSTALL A 16:17:57
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-09.log
+OK A big_scrollback #9
+INSTALL B 16:18:16
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-09.log
+OK B big_scrollback #9
+===== big_scrollback #10 A then B  16:18:35 load=7.33 9.40 26.46
+INSTALL A 16:18:35
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/A/big_scrollback-10.log
+OK A big_scrollback #10
+INSTALL B 16:18:54
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw-capp/B/big_scrollback-10.log
+OK B big_scrollback #10
+ALLDONE

@@ -1,0 +1,107 @@
+<!--
+Copyright 2026 AgentMirror Project Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!--
+  AgentMirror App 应用清单（骨架版）。
+  MainActivity 为 Compose 单 Activity 入口；前台服务（fg-service 任务）与扫描配对等能力
+  由后续任务补充。前台服务类型 dataSync（fg-service 知识基底 §1：Android 14+ 必声）。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      出网权限（fix-app-network-manifest，e2e 层2 实证缺陷根因①）：产品本体是远程操控，
+      ws:// 与 tsnet 都要建立 socket，缺 INTERNET 则所有出网连接被系统直接拒绝。
+      此前模拟器手填 ws://10.0.2.2:9902/ws 停在「正在配对…」15s 超时即此因。
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- fix-reconnect-stale-config 扩权（leader 裁定）：网络可达性回调（registerDefaultNetworkCallback）
+         前置权限。锁屏断连后网络恢复必须打断退避立即重拨（E2 缺口收口）；普通权限，安装时授予。 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- 前台服务 + 通知：状态沿变化发系统通知、常驻通知栏（fg-service）。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 配对扫码：CameraX 相机采集（首次使用请求；不授权回退手填连接兜底）。 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 相机是可选能力（扫码配对用，已有手填连接回退，D-01）：required=false 防止无相机设备
+         （ChromeOS/部分平板）被 Play 商店判为不兼容而过滤掉（lint PermissionImpliesUnsupportedChromeOsHardware，
+         stage3 #10，Error 级）。 -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AgentMirror"
+        android:usesCleartextTraffic="true"><!--
+          明文策略（leader 裁定，debug/release 一致，勿改判）：targetSdk 35 默认禁明文，
+          ws:// 必抛 CleartextNotPermitted（e2e 实证缺陷根因②）。明文放行依据需求 007/011：
+          ws:// 是本产品出厂传输；tailnet 层已 WireGuard 加密；LAN 明文属用户自网；
+          TLS 列后续版本议题，不许用禁明文杀死产品本体。
+        -->
+
+        <!--
+          launchMode=singleTop（fix-app-nav 深链裁量）：通知 PendingIntent（NotificationHelper）
+          带 FLAG_ACTIVITY_SINGLE_TOP|CLEAR_TOP，若再叠加 manifest standard 会在已建实例时
+          重建 Activity（绕 onNewIntent）；singleTop 保证在屏时深链直接投 onNewIntent——
+          不闪白、不丢当前屏（审计 D-2 深链消费方）。FLAG_ACTIVITY_SINGLE_TOP 只约束该 intent
+          自身，launchMode 是 manifest 全局语义，二者配对本 Activity 幂等。
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          常驻连接前台服务（fg-service 任务）。startForeground 类型 dataSync：
+          Android 14+ 启动前台服务需对应权限（FOREGROUND_SERVICE_DATA_SYNC）。
+          onStartCommand START_STICKY：系统杀后重建，冷启动重连即恢复（004 无状态免疫）。
+        -->
+        <service
+            android:name=".service.MirrorForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!--
+          诊断日志导出的 FileProvider（feat-diagnostic-log-export）：设置页一键导出把
+          filesDir/diag/ 下的临时日志文件经 content URI 分享给用户选定的目标 App。
+          exported=false + grantUriPermissions：只授给分享 intent 的接收方，不对外暴露。
+          authority = {applicationId}.fileprovider（packageName 即 applicationId）。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+
+</manifest>
