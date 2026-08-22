@@ -41,3 +41,6 @@ app/.kotlin/
 
 # 每台机器各自生成，含本机 sdk.dir 路径（2026-08-23：公开仓后不再新增）
 local.properties
+
+# git worktree 挂载点，⛔ 不入库（2026-08-23 误 add -A 带进来过一次）
+.worktrees/
