@@ -1,0 +1,2 @@
+  ok   fixtures.cat             p50=   54.0ms p95=   65.2ms
+PASS 按键回显量具：n=30 未配对=0 load1=35.32 apk=5f13ee31f28e，1 组分位数自洽
