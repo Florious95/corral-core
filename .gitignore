@@ -38,3 +38,6 @@ e2e/artifacts/**/*-frames/
 .team/ledgers/.dispatched/
 app/.kotlin/
 .team/artifacts/apk-release/
+
+# 每台机器各自生成，含本机 sdk.dir 路径（2026-08-23：公开仓后不再新增）
+local.properties
