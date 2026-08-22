@@ -23,6 +23,6 @@ mkdir -p "$(dirname "$OUT")"
 ./gradlew :app:testDebugUnitTest :terminal:test --offline >"$OUT" 2>&1
 RC=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
-[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=$RC（基线为 0；见 $OUT）"; exit 1; }
+[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=${RC}（基线为 0；见 $OUT）"; exit 1; }
 echo "PASS 两批留痕同时在场且带接帧者身份"
 exit 0

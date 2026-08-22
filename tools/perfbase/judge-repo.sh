@@ -13,7 +13,7 @@ grep -q "includeBuild" "$S" || { echo "FAIL 没用 composite build（includeBuil
 # core 侧不许再有 Android 壳：三核模块内零 android import 已由 judge-core-split.sh 管；
 # 这里只查 app 壳确实**搬走了**——迁移清单必须在场且逐条可核。
 M="$STAGE/迁移清单.md"
-[ -f "$M" ] || { echo "FAIL 缺 $M（迁了什么必须逐条可核）"; exit 1; }
+[ -f "$M" ] || { echo "FAIL 缺 ${M}（迁了什么必须逐条可核）"; exit 1; }
 
 cd "$STAGE" || { echo "UNJUDGEABLE cd 失败"; exit 2; }
 OUT="$ROOT/.team/nodes/pb-repo/tmp/repo-build.log"
@@ -22,7 +22,7 @@ mkdir -p "$(dirname "$OUT")"
 ./gradlew :app:assembleDebug --offline >"$OUT" 2>&1
 RC=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
-[ "$RC" -eq 0 ] || { echo "FAIL 引用式构建装不出 APK rc=$RC（见 $OUT）"; exit 1; }
+[ "$RC" -eq 0 ] || { echo "FAIL 引用式构建装不出 APK rc=${RC}（见 $OUT）"; exit 1; }
 find "$STAGE" -name "*.apk" | head -1 | grep -q . || { echo "FAIL 构建绿但找不到 APK 产物"; exit 1; }
 echo "PASS 引用式构建成立（远端推送留给 leader）"
 exit 0

@@ -13,7 +13,7 @@ T="$ROOT/app/app/src/test/kotlin/dev/agentmirror/app/conn/ConnListenerRoutingTes
 [ -f "$T" ] || { echo "FAIL 缺路由红测 ConnListenerRoutingTest.kt"; exit 1; }
 grep -q "@Ignore" "$T" && { echo "FAIL 路由红测被 @Ignore"; exit 1; }
 for m in 帧只投给订阅该ref的接收者 列表页占用槽位不影响会话页收帧; do
-  grep -q "$m" "$T" || { echo "FAIL 路由红测缺方法 $m（名字即判据）"; exit 1; }
+  grep -q "$m" "$T" || { echo "FAIL 路由红测缺方法 ${m}（名字即判据）"; exit 1; }
 done
 
 # 仪表不许在修复时被拆掉——它是本轮唯一能证明修好了的量具
@@ -28,6 +28,6 @@ mkdir -p "$(dirname "$OUT")"
 ./gradlew :app:testDebugUnitTest :terminal:test --offline >"$OUT" 2>&1
 RC=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
-[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=$RC（基线为 0；见 $OUT）"; exit 1; }
+[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=${RC}（基线为 0；见 $OUT）"; exit 1; }
 echo "PASS 路由红测转绿且仪表未被拆"
 exit 0
