@@ -10,5 +10,5 @@ F=$(ls $P 2>/dev/null | tail -1)
 [ -n "$F" ] || { echo "FAIL 文书不存在：$P"; exit 1; }
 N=$(wc -l < "$F" | tr -d ' ')
 [ "$N" -ge 10 ] || { echo "FAIL $F 只有 $N 行，空壳不算交付"; exit 1; }
-echo "PASS $F（$N 行）"
+echo "PASS ${F}（$N 行）"
 exit 0
