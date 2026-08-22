@@ -9,7 +9,6 @@
   <groupId>dev.agentmirror.core</groupId>
   <artifactId>core-protocol</artifactId>
   <version>20260822.0</version>
-  <packaging>pom</packaging>
   <dependencies>
     <dependency>
       <groupId>org.jetbrains.kotlinx</groupId>
