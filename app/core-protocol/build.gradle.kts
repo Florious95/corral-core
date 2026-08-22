@@ -21,7 +21,12 @@ plugins {
     id("java-library")
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.kotlin.plugin.serialization") version "2.2.0"
+    id("maven-publish")
 }
+
+group = "dev.agentmirror.core"
+version = "20260822.0"
+apply(from = rootProject.file("gradle/core-maven-publish.gradle"))
 
 kotlin {
     jvmToolchain(17)

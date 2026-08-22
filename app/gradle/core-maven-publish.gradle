@@ -1,0 +1,52 @@
+/*
+ * 三核本地 maven 发布（t.pub）。坐标固定：
+ *   group=dev.agentmirror.core  artifact=模块名  version=20260822.0
+ * 仓：worktree 根 .team/staging/maven-repo/（标准 maven 布局）。
+ * 纯 JVM：本脚本不上 Android 插件。aar 只是把 jar 打成 classes.jar，
+ * 给判据 `ls jar aar` 与后续 AGP 消费；不是 com.android.library。
+ */
+group = "dev.agentmirror.core"
+version = "20260822.0"
+
+def coreVer = "20260822.0"
+
+tasks.register("makeAar", Zip) {
+    def jarTask = tasks.named("jar")
+    dependsOn(jarTask)
+    archiveBaseName.set(project.name)
+    archiveVersion.set(coreVer)
+    archiveExtension.set("aar")
+    destinationDirectory.set(layout.buildDirectory.dir("outputs/aar"))
+    from(jarTask.map { it.archiveFile }) {
+        rename { "classes.jar" }
+    }
+    def manifestDir = layout.buildDirectory.dir("tmp/aar-manifest")
+    from(manifestDir)
+    doFirst {
+        def dir = manifestDir.get().asFile
+        dir.mkdirs()
+        new File(dir, "AndroidManifest.xml").text =
+            '''<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.agentmirror.core" />
+'''
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            groupId = "dev.agentmirror.core"
+            artifactId = project.name
+            version = coreVer
+            artifact tasks.named("makeAar")
+        }
+    }
+    repositories {
+        maven {
+            name = "LocalStaging"
+            url = uri(rootProject.projectDir.toPath().resolve("../.team/staging/maven-repo").toFile())
+        }
+    }
+}
