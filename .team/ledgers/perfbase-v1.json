@@ -32,6 +32,13 @@
     "from": "t.rv.instr",
     "status": "pass",
     "to": "t.base"
+   },
+   {
+    "at_revision": 21,
+    "case_id": "ledger_perfbase_v1__t.rv.base__r21",
+    "from": "t.rv.base",
+    "status": "pass",
+    "to": "t.core"
    }
   ]
  },
@@ -149,7 +156,7 @@
   "read_only_shared": [],
   "rules": []
  },
- "revision": 19,
+ "revision": 24,
  "roles": {
   "r.advisor": {
    "artifact_landing": {
@@ -396,6 +403,16 @@
      "attempt_id": "att-t.base-seq2-t1787349761675",
      "delivery_id": "del-t.base-seq2-t1787349761675",
      "state": "acceptance_pending"
+    },
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.base",
+      "acceptance_success.writeback_revision=21"
+     ],
+     "attempt_id": "att-t.base-seq2-t1787356062471",
+     "delivery_id": "del-t.base-seq2-t1787356062471",
+     "state": "succeeded",
+     "writeback_revision": 21
     }
    ],
    "blocking_reasons": [],
@@ -428,7 +445,7 @@
     ]
    },
    "seat_wait_seconds": 5400,
-   "state": "planned",
+   "state": "succeeded",
    "title": "任务二·测基线：模拟器 agentmirror_test_b 上，三夹具（real_claude_idle / redraw_tui / big_scrollback）各冷点开 ≥10 次，**只从 adb logcat -s PerfTrace 取数**（用户明令 ⛔ 不许识图、不许取帧/取间隔）。极端值 ⛔ 不许剔除，列进 outliers 并附原始日志段。落 .team/perf/baseline-<日期>.json + .team/perf/raw/。起隔离 tmux 必须自检在自己 socket 上（建 socket 失败会静默回退到用户真实 tmux）；⛔ 不碰 9900、⛔ 不点真实舰队会话；资源不够如实报不可判。细则读 .team/tasks/perfbase/任务书-02-基线.md"
   },
   "t.base2": {
@@ -482,7 +499,7 @@
     ]
    },
    "seat_wait_seconds": 5400,
-   "state": "planned",
+   "state": "not_applicable",
    "statuses": [
     {
      "artifact": {
@@ -567,6 +584,7 @@
      "c.core.split"
     ]
    },
+   "attempts": [],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -589,7 +607,7 @@
      "CLAUDE.md",
      "tools/perfbase/judge-core-split.sh"
     ],
-    "worktree_id": "wt-pb-core",
+    "worktree_id": "wt-pb-core2",
     "write_paths": [
      "app/",
      ".team/nodes/pb-core/"
@@ -597,7 +615,7 @@
    },
    "seat_wait_seconds": 5400,
    "state": "planned",
-   "title": "任务三·仓内切分：拆出纯 JVM 的 :core-protocol / :core-terminal / :core-conn，app 只剩壳。现有 :terminal 已是纯 Kotlin/JVM，优先并入或改名复用，⛔ 不许另抄一份。核模块 ⛔ 不许上 Android 插件、⛔ 源码不许 import android./androidx.；核里的打点用接口回调由 app 壳注入，八个事件名与格式不许变。一次只挪一个模块，每步跑全量单测，红了立刻回退该步。细则读 .team/tasks/perfbase/任务书-03-重构.md"
+   "title": "任务三·仓内切分：拆出纯 JVM 的 :core-protocol / :core-terminal / :core-conn，app 只剩壳。现有 :terminal 已是纯 Kotlin/JVM，优先并入或改名复用，⛔ 不许另抄一份。核模块 ⛔ 不许上 Android 插件、⛔ 源码不许 import android./androidx.；核里的打点用接口回调由 app 壳注入，八个事件名与格式不许变。一次只挪一个模块，每步跑全量单测，红了立刻回退该步。细则读 .team/tasks/perfbase/任务书-03-重构.md｜【重做·rev24】上一轮切分的分支基点是 ed79f179c，**在仪表与白屏修复 land 进 main 之前**，所以切出来的包里 PerfTrace 符号 0 处、白屏修复 0 处，logcat 取数 0 行 ⇒ 复测格判不可判（不是性能差，是量不到）。这是 leader 的账本排序错，不是你的错。现在 main 已含仪表(t.instr*)与白屏修复(t.fixblank, e8343236e)。请**在当前 main 上重做切分**：同样拆 :core-protocol / :core-terminal / :core-conn，app 只剩壳；⛔ 切分过程中不许拆掉或改动 PerfTrace 仪表与 addBinaryListener 按 ref 分发的修复（量具与修复都得跟着进核/壳的正确一侧，否则下一格照样量不到）；⛔ 仍然只搬不改，不顺手重构被搬的代码。"
   },
   "t.cperf": {
    "acceptance": {
@@ -622,6 +640,7 @@
      "c.perf.nonregress"
     ]
    },
+   "attempts": [],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -750,7 +769,7 @@
     ]
    },
    "seat_wait_seconds": 1800,
-   "state": "planned",
+   "state": "not_applicable",
    "title": "判不出升报：基线面判不出。 把「判不出什么、缺哪份材料、下一步谁来补」写清，升报 leader 裁定。⛔ 不许静默收工，⛔ 不许把判不出改写成通过。落 .team/escalations/perfbase-esc2-<日期>.md"
   },
   "t.esc3": {
@@ -900,7 +919,7 @@
     ]
    },
    "seat_wait_seconds": 1800,
-   "state": "planned",
+   "state": "not_applicable",
    "title": "基线返修 2 轮穷尽：整理两轮 rework 理由与量测现状，升报 leader 裁定，⛔ 不许静默收工。"
   },
   "t.exh3": {
@@ -976,6 +995,18 @@
      "c.fixblank"
     ]
    },
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.fixblank",
+      "acceptance_success.writeback_revision=20"
+     ],
+     "attempt_id": "att-t.fixblank-seq1-t1787355632448",
+     "delivery_id": "del-t.fixblank-seq1-t1787355632448",
+     "state": "succeeded",
+     "writeback_revision": 20
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -1004,7 +1035,7 @@
     ]
    },
    "seat_wait_seconds": 3600,
-   "state": "planned",
+   "state": "succeeded",
    "title": "**修白屏根因**（先读 .team/nodes/pb-emu/说明-r18-第四轮根因定案.md 全文）。四轮实测已定案，18/18 零反例：`ConnectionManager` 只有一个**全局 listener 槽**（:96 `private var listener: Listener?`、:137 `setListener`、:617 `listener?.onBinary(frame)`），被列表页的 `WorkspaceViewModel` 占着；订阅首帧到达后被交给它、**就地丢弃**，会话页的 VM 一帧都拿不到。铁证：`ev=first_frame_recv emitted=0 reason=has_listener listener_null=0 listener_ref=dev.agentmirror.app.workspace.WorkspaceViewModel`。**先红后绿**：①先写 app/app/src/test/kotlin/dev/agentmirror/app/conn/ConnListenerRoutingTest.kt，方法名逐字 `帧只投给订阅该ref的接收者` 与 `列表页占用槽位不影响会话页收帧`，先跑一遍证明它是红的、把原始输出贴进说明.md（⛔ 没有先验红原文=交付无效）；②再改 ConnectionManager 让帧按 ref 投递给正确的接收者（多接收者共存，列表页与会话页互不吃对方的帧）。⛔ 不许拆掉 PerfTrace 仪表（listener_ref/ws_binary_recv/ref_mismatch 一个都不许删——量具没了就没法自证修好）；⛔ 不许改判据；⛔ 只改必要的地方，不顺手重构相邻代码。判据 tools/perfbase/judge-fixblank.sh。"
   },
   "t.instr2": {
@@ -1366,7 +1397,9 @@
      "c.rv.base"
     ]
    },
-   "blocking_reasons": [],
+   "blocking_reasons": [
+    "route_contradicts_success: dest=t.core"
+   ],
    "handoff": {
     "required_artifacts": [],
     "route": "report_result"
@@ -1394,7 +1427,15 @@
     ]
    },
    "seat_wait_seconds": 2400,
-   "state": "planned",
+   "state": "blocked",
+   "status_record": {
+    "artifacts": {
+     "report": "裁定.md"
+    },
+    "case_id": "ledger_perfbase_v1__t.rv.base__r21",
+    "recorded_at_revision": 21,
+    "status": "pass"
+   },
    "statuses": [
     {
      "artifact": {
