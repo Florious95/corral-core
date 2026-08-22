@@ -1,7 +1,12 @@
 --------- beginning of main
-08-22 03:57:23.995 26787 26787 D PerfTrace: open_id=1 ev=tap t=43126569
-08-22 03:57:24.010 26787 26787 D PerfTrace: open_id=1 ev=route_enter t=43126584
-08-22 03:57:24.017 26787 26787 D PerfTrace: open_id=1 ev=subscribe_sent t=43126591 emitted=1 reason=sent ready=1 conn=1 ok=1 take_before=0 replay=0 rows=41 cols=46
-08-22 03:57:24.017 26787 26787 D PerfTrace: open_id=1 ev=geom_seed t=43126591 rows=41 cols=46
-08-22 03:57:24.286 26787 26787 D PerfTrace: open_id=1 ev=first_draw t=43126860 emitted=0 reason=glyphs_zero glyphs=0
-08-22 03:57:24.528 26787 26787 D PerfTrace: open_id=1 ev=layout_settled t=43127102 quiet_ms=500 last_reflow_src=subscribe rows=41 cols=46
+08-22 14:29:54.899  3760  3760 D PerfTrace: open_id=1 ev=tap t=142499
+08-22 14:29:54.916  3760  3760 D PerfTrace: open_id=1 ev=route_enter t=142516
+08-22 14:29:54.921  3760  3760 D PerfTrace: open_id=1 ev=subscribe_sent t=142521 emitted=1 reason=sent ready=1 conn=1 ok=1 take_before=0 replay=0 rows=41 cols=46
+08-22 14:29:54.921  3760  3760 D PerfTrace: open_id=1 ev=geom_seed t=142521 rows=41 cols=46
+08-22 14:29:54.997  3760  3760 D PerfTrace: open_id=1 ev=first_draw t=142597 emitted=0 reason=glyphs_zero glyphs=0
+08-22 14:29:55.030  3760  3779 D PerfTrace: open_id=1 ev=ws_binary_recv t=142630 emitted=0 kind=snapshot bytes=1137 frame_ref=/tmp/e2e-ca-emu/tmux-501/default%0
+08-22 14:29:55.030  3760  3779 D PerfTrace: open_id=1 ev=first_frame_recv t=142630 emitted=0 reason=has_listener frame_ref=/tmp/e2e-ca-emu/tmux-501/default%0 listener_null=0 listener_ref=/tmp/e2e-ca-emu/tmux-501/default%0 kind=snapshot bytes=1137
+08-22 14:29:55.030  3760  3779 D PerfTrace: open_id=1 ev=first_frame_recv t=142631 kind=snapshot bytes=1137
+08-22 14:29:55.034  3760  3779 D PerfTrace: open_id=1 ev=snapshot_applied t=142634 seq=1 alt=0
+08-22 14:29:55.073  3760  3760 D PerfTrace: open_id=1 ev=first_draw t=142674 glyphs=937
+08-22 14:29:55.534  3760  3760 D PerfTrace: open_id=1 ev=layout_settled t=143134 quiet_ms=500 last_reflow_src=snapshot rows=41 cols=46
