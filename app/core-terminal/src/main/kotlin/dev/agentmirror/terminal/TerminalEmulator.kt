@@ -72,6 +72,12 @@ class TerminalEmulator(
     /** 脏区回调，feed/replay/resize 结束时按合并后的行区间通知一次。 */
     var damageListener: DamageListener? = null
 
+    /**
+     * 可选：ASCII `a`–`z` 被写入网格时通知（按键回显量具）。
+     * 默认 null；未挂钩时 [print] 只多一次空引用判断，不分配。
+     */
+    var onAsciiPrint: ((Char) -> Unit)? = null
+
     /** 历史是否可用：alternate screen（全屏 TUI）期间为 false（006 边界）。 */
     val historyAvailable: Boolean get() = !altActive
 
@@ -217,6 +223,8 @@ class TerminalEmulator(
 
     override fun print(codePoint: Int) {
         grid().write(codePoint, CharWidth.of(codePoint), style, eraseStyle())
+        val hook = onAsciiPrint
+        if (hook != null && codePoint in 97..122) hook(codePoint.toChar())
     }
 
     override fun control(byte: Int) {

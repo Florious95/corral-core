@@ -441,6 +441,7 @@ class TermSurfaceView @JvmOverloads constructor(
         if (PerfTrace.isEnabled()) {
             val ref = sessionRef
             if (ref != null) {
+                PerfTrace.flushKeyEchoAfterDraw(ref)
                 PerfTrace.emitFirstDraw(ref, cellsWithGlyph) // first_draw
             }
         }

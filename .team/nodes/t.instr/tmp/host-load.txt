@@ -1,0 +1,3 @@
+load1=35.32
+free_inactive_mib=10105
+uptime= 5:30  up 2 days,  9:51, 14 users, load averages: 35.32 22.87 18.55
