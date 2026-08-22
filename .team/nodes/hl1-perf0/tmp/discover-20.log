@@ -1,0 +1,8 @@
+=== RUN   TestDiscoverAggregatesSameCWDAcrossSockets
+--- PASS: TestDiscoverAggregatesSameCWDAcrossSockets (0.08s)
+=== RUN   TestDiscoverToleratesDeadSocket
+--- PASS: TestDiscoverToleratesDeadSocket (0.04s)
+=== RUN   TestDiscoverWithDirsTwentySocketsUnderOneSecond
+--- PASS: TestDiscoverWithDirsTwentySocketsUnderOneSecond (0.24s)
+PASS
+ok  	github.com/agentmirror/agentmirror/internal/discovery	0.793s

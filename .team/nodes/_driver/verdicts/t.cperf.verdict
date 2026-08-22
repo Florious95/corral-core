@@ -1,0 +1,5 @@
+VERDICT: supports
+# 本文件由 tools/autopr.py 依据账本事实生成，不是人写的裁定；依据如下，可逐条回溯。
+账本=ledger.perfbase.v1 revision=29
+本格=t.cperf state=succeeded 通过的判据=['c.perf.nonregress']
+判者=t.rv.final state=succeeded status=pass 裁定书=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-pb-rvf/.team/nodes/pb-rv-final/裁定.md

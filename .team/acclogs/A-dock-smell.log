@@ -1,0 +1,2 @@
+face=app 基线=16 本次=15 新增=0 消掉=1（键不含行号）
+  ✅ 消掉: lint:NewerVersionAvailable:app/app/build.gradle.kts (3→2)

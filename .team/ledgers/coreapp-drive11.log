@@ -1,0 +1,18 @@
+租约抢占：pid=58805 stole from pid=4550 reason=holder pid 4550 不存在（判定已死） at=1787408103
+
+[ledger-run 2026-08-22T14:15:03Z] 开工 start | ledger_id=ledger.coreapp.v1 revision=22 账本=.team/ledgers/coreapp-v1.json 墙钟上限=57600s 派单死线=90s
+[ledger-run 2026-08-22T14:15:03Z] 轮次 round | 第 1 轮开始：前沿 ["t.close"]（墙钟已跑 0s / 上限 57600s）
+[ledger-run 2026-08-22T14:15:03Z] 派单 dispatch | task=t.close 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/ca-rv2 席位=ca-rv2 attempt=att-t.close-seq1-t1787408103550 delivery=del-t.close-seq1-t1787408103550 等席位预算=1800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T14:15:03Z] 投递回执 send-ok | task=t.close case_id=ledger_coreapp_v1__t.close__r22 message_id=msg_c1c145edce90 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T14:15:03Z] 派单落地 dispatch-landed | task=t.close 席位 ca-rv2 的收件箱已多出这条派单
+[ledger-run 2026-08-22T14:15:03Z] 等待 wait | task=t.close 在等的 key（case_id）=ledger_coreapp_v1__t.close__r22 team=remote-agent-android 预算=1800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T14:25:05Z] 已唤醒 wait-signaled | task=t.close 等到结果了
+[ledger-run 2026-08-22T14:25:05Z] 判据 acceptance | task=t.close 在跑 required=["c.close"]
+[ledger-run 2026-08-22T14:25:19Z] 判据通过留档 acceptance-success | task=t.close 成功 attempt 落进 attempts[] writeback_revision=23 passed=["c.close"]
+[ledger-run 2026-08-22T14:25:19Z] 原子写回 writeback-atomic | task=t.close state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=23 hash=2cbede72dcebfe65）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T14:25:19Z] 写回 writeback | task=t.close state=succeeded revision=22 → 23
+[ledger-run 2026-08-22T14:25:19Z] 收工 finish | 停机原因=AwaitingHuman 写回=["t.close"] 冻结=[] 不可判=[] 墙钟已跑 616s
+[ledger-run 2026-08-22T14:25:19Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-22T14:25:19Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+ledger_id: ledger.coreapp.v1  revision: 22 → 23  wrote_back: ["t.close"]  frozen: []  unjudgeable: []  preflight_rejected: false  awaiting_human: false  idle_reason: None
+notice: ledger_id: ledger.coreapp.v1 | revision: 23 | 停机原因: AwaitingHuman | 最后失败判据: 未干完的任务（非 Succeeded）: t.esc=NotApplicable, t.rv=Blocked | 各任务终态: t.capp=Succeeded, t.close=Succeeded, t.esc=NotApplicable, t.path=Succeeded, t.perf=Succeeded, t.pub=Succeeded, t.rv=Blocked

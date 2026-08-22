@@ -1,0 +1,20 @@
+租约抢占：pid=4550 stole from pid=99655 reason=holder pid 99655 不存在（判定已死） at=1787404441
+
+[ledger-run 2026-08-22T13:14:01Z] 开工 start | ledger_id=ledger.coreapp.v1 revision=21 账本=.team/ledgers/coreapp-v1.json 墙钟上限=57600s 派单死线=90s
+[ledger-run 2026-08-22T13:14:01Z] 轮次 round | 第 1 轮开始：前沿 ["t.close"]（墙钟已跑 0s / 上限 57600s）
+[ledger-run 2026-08-22T13:14:01Z] 派单 dispatch | task=t.close 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/ca-rv2 席位=ca-rv2 attempt=att-t.close-seq1-t1787404441902 delivery=del-t.close-seq1-t1787404441902 等席位预算=1800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T13:14:02Z] 投递回执 send-ok | task=t.close case_id=ledger_coreapp_v1__t.close__r21 message_id=msg_3189ba154da0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T13:14:02Z] 派单落地 dispatch-landed | task=t.close 席位 ca-rv2 的收件箱已多出这条派单
+[ledger-run 2026-08-22T13:14:02Z] 等待 wait | task=t.close 在等的 key（case_id）=ledger_coreapp_v1__t.close__r21 team=remote-agent-android 预算=1800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T13:44:01Z] 无信号 wait-no-signal | task=t.close 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-22T13:44:01Z] 判据 acceptance | task=t.close 在跑 required=["c.close"]
+[ledger-run 2026-08-22T13:44:12Z] 判据失败诊断 acceptance-diagnostic | task=t.close 判据 c.close 失败：exit_code=1 (期望 0) cwd=.worktrees/wt-ca-close argv=["/bin/sh", "tools/perfbase/judge-doc.sh", ".team/artifacts/coreapp-收账-*.md"] error=exit_code_mismatch: expected 0, observed 1 stderr(末20行)=
+
+[ledger-run 2026-08-22T13:44:12Z] 原子写回 writeback-atomic | task=t.close 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=21 hash=0fcd9f8520cf9f72）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T13:44:12Z] 判据红 acceptance-red | task=t.close required 未全过——还没等到结果，只冻内存，接着等席位（健康长线）
+[ledger-run 2026-08-22T13:44:12Z] 在飞 in-flight | 第 1 轮没有写回，但有 1 条派单还在飞（ledger_coreapp_v1__t.close__r21）——那是【还没干完】，不是【没人在干】，继续等（墙钟已跑 1811s / 上限 57600s）
+[ledger-run 2026-08-22T13:44:12Z] 轮次 round | 第 2 轮开始：前沿 ["t.close"]（墙钟已跑 1811s / 上限 57600s）
+[ledger-run 2026-08-22T13:44:12Z] 在飞 in-flight | task=t.close case_id=ledger_coreapp_v1__t.close__r21 本次驱动循环已派过：接着等它的结果，⛔ 不重派
+[ledger-run 2026-08-22T13:44:12Z] 等待 wait | task=t.close 在等的 key（case_id）=ledger_coreapp_v1__t.close__r21 team=remote-agent-android 预算=1800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T14:14:12Z] 无信号 wait-no-signal | task=t.close 预算内没等到这把 key 的结果（照样跑判据看世界，⛔ 不重发不换席位）
+[ledger-run 2026-08-22T14:14:12Z] 判据 acceptance | task=t.close 在跑 required=["c.close"]

@@ -1,0 +1,21 @@
+--------- beginning of main
+         1787325038.616 19225 19246 I AMPROBE16: elapsed_ms=0 wall_ms=1787325038615 stage=replay_subs n=0 reconnect=false state=READY
+         1787325053.049 19225 19225 I AMPROBE16: elapsed_ms=0 wall_ms=1787325053049 stage=origin reset=1
+         1787325053.050 19225 19225 I AMPROBE16: elapsed_ms=0 wall_ms=1787325053049 stage=enter_session rows=40 cols=120 cacheHit=false reason=empty state=READY ref=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/tmux/tmux-501/default%0
+         1787325053.055 19225 19225 I AMPROBE16: elapsed_ms=6 wall_ms=1787325053055 stage=conn_state state=READY
+         1787325053.055 19225 19225 I AMPROBE16: elapsed_ms=6 wall_ms=1787325053055 stage=subscribe_call state=READY rows=40 cols=120 ref=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/tmux/tmux-501/default%0
+         1787325053.058 19225 19225 I AMPROBE16: elapsed_ms=8 wall_ms=1787325053057 stage=subscribe_wire ok=true rows=40 cols=120 bytes=158 ref=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/tmux/tmux-501/default%0
+         1787325053.059 19225 19225 I AMPROBE16: elapsed_ms=10 wall_ms=1787325053059 stage=subscribe_sent ok=true rows=40 cols=120 state=READY ref=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/tmux/tmux-501/default%0
+         1787325053.059 19225 19225 I AMPROBE16: elapsed_ms=10 wall_ms=1787325053059 stage=subscribe_call_done ok=true state=READY
+         1787325053.424 19225 19225 I AMPROBE16: elapsed_ms=374 wall_ms=1787325053423 stage=conn_state state=READY
+         1787325053.428 19225 19225 I AMPROBE16: elapsed_ms=377 wall_ms=1787325053426 stage=ui_connector_attached state=READY
+         1787325053.469 19225 19225 I AMPROBE16: elapsed_ms=418 wall_ms=1787325053467 stage=resize_wire ok=true rows=41 cols=46 ref=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/tmux/tmux-501/default%0
+         1787325053.498 19225 19225 I AMPROBE16: elapsed_ms=449 wall_ms=1787325053498 stage=first_ondraw cellsNonBlank=1886 drawnRows=41 w=1058 h=1768
+         1787325053.498 19225 19225 I AMPROBE16: elapsed_ms=449 wall_ms=1787325053498 stage=first_nonempty_draw cellsNonBlank=1886 drawnRows=41 w=1058 h=1768
+         1787325054.844 19225 19246 I AMPROBE16: elapsed_ms=1794 wall_ms=1787325054843 stage=first_binary_ws wire_len=125 kind_byte=1
+         1787325054.844 19225 19246 I AMPROBE16: elapsed_ms=1795 wall_ms=1787325054844 stage=first_binary_conn kind=SNAPSHOT data_len=27 ref=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/tmux/tmux-501/default%0
+         1787325054.844 19225 19246 I AMPROBE16: elapsed_ms=1795 wall_ms=1787325054844 stage=first_binary_mgr kind=SNAPSHOT data_len=27 listener=true ref=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/hl1-probe16/tmp/tmux/tmux-501/default%0
+         1787325054.846 19225 19246 I AMPROBE16: elapsed_ms=1797 wall_ms=1787325054846 stage=snapshot_to_emu data_len=27 incoming_glyphs=1 screen_glyphs=0 since_sub=0 apply=1 emu=46x41 preview=STATIC_ALT_MARKER_092.[2;1H
+         1787325054.848 19225 19246 I AMPROBE16: elapsed_ms=1798 wall_ms=1787325054847 stage=snapshot_applied data_len=27 incoming_glyphs=1 emu=46x41
+         1787325054.923 19225 19246 I AMPROBE16: elapsed_ms=1873 wall_ms=1787325054922 stage=snapshot_to_emu data_len=6 incoming_glyphs=0 screen_glyphs=1 since_sub=1 apply=0 emu=46x41 preview=.[1;1H
+         1787325055.067 19225 19246 I AMPROBE16: elapsed_ms=2018 wall_ms=1787325055067 stage=first_delta data_len=7

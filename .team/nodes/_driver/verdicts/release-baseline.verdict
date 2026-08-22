@@ -1,0 +1,12 @@
+VERDICT: supports
+# 依据（可逐条回溯，⛔ 非自报）：
+# 1) 机械：judge-core-split.sh / judge-perf-nonregress.sh / judge-repo.sh 三条由异源判者 t.rv.final
+#    独立重跑均 rc=0，且 diff 证明三份判据脚本与立格原文逐字节相同（未被改弱）。
+# 2) 量测：.team/perf/recheck-20260822-split.json 相对 baseline-20260822.json 逐夹具逐段
+#    p50/p95 全部低于基线（judge-perf-nonregress.sh PASS）。
+# 3) 构成自证（leader 亲核，非席位自报）：apksigner DN=Android Debug、无 debuggable 标记、
+#    dex 含 PerfTrace/addBinaryListener/listener_ref/开关属性。
+# 4) 真机金标准（用户 2026-08-22 实测，092 §11）：release 包在**蜂窝网络 + 广州中转打洞节点**
+#    路径下打开会话「秒开、没有空白」，用户判定「完全达到前天晚上那个版本」。
+#    这是本轮最强证据：非模拟器、非直连，是最苛刻的网络条件。
+# 本次改动本身只有 release 签名配置一项（isMinifyEnabled 未动）。

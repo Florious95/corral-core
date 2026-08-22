@@ -1,0 +1,6 @@
+=== RUN   TestHandleSubscribeStaticAltScreenFirstFrameHasGlyphs
+--- PASS: TestHandleSubscribeStaticAltScreenFirstFrameHasGlyphs (0.76s)
+=== RUN   TestHandleSubscribeRedrawingTUIWinchBytesReachClient
+--- PASS: TestHandleSubscribeRedrawingTUIWinchBytesReachClient (0.56s)
+PASS
+ok  github.com/agentmirror/agentmirror/internal/api1.924s

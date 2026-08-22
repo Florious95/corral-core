@@ -1,0 +1,23 @@
+租约抢占：pid=80243 stole from pid=92809 reason=holder pid 92809 不存在（判定已死） at=1787390504
+
+[ledger-run 2026-08-22T09:21:44Z] 开工 start | ledger_id=ledger.coreapp.v1 revision=13 账本=.team/ledgers/coreapp-v1.json 墙钟上限=57600s 派单死线=90s
+[ledger-run 2026-08-22T09:21:44Z] 轮次 round | 第 1 轮开始：前沿 ["t.perf"]（墙钟已跑 0s / 上限 57600s）
+[ledger-run 2026-08-22T09:21:44Z] 派单 dispatch | task=t.perf 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/ca-emu2 席位=ca-emu2 attempt=att-t.perf-seq1-t1787390504951 delivery=del-t.perf-seq1-t1787390504951 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T09:21:45Z] 投递回执 send-ok | task=t.perf case_id=ledger_coreapp_v1__t.perf__r13 message_id=msg_2cc2c79d29c0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T09:21:45Z] 派单落地 dispatch-landed | task=t.perf 席位 ca-emu2 的收件箱已多出这条派单
+[ledger-run 2026-08-22T09:21:45Z] 等待 wait | task=t.perf 在等的 key（case_id）=ledger_coreapp_v1__t.perf__r13 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T09:28:15Z] 原子写回 writeback-atomic | task=t.perf status_record + route_hops → 临时文件+rename 已落盘（revision=14 hash=defd1d96a8b0a75a）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T09:28:15Z] 状态路由点火 route-fire | task=t.perf status=done → t.rv exhausted=false reentered=false
+[ledger-run 2026-08-22T09:28:15Z] 已唤醒 wait-signaled | task=t.perf 等到结果了
+[ledger-run 2026-08-22T09:28:15Z] 判据 acceptance | task=t.perf 在跑 required=["c.perf"]
+[ledger-run 2026-08-22T09:28:25Z] 判据失败诊断 acceptance-diagnostic | task=t.perf 判据 c.perf 失败：exit_code=2 (期望 0) cwd=.worktrees/wt-ca argv=["/bin/sh", "tools/perfbase/judge-perf-nonregress.sh"] error=exit_code_mismatch: expected 0, observed 2 stderr(末20行)=
+
+[ledger-run 2026-08-22T09:28:25Z] 原子写回 writeback-atomic | task=t.perf 判据失败诊断落进 attempts[] → 临时文件+rename 已落盘（revision=14 hash=db837dabc19c212f）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T09:28:26Z] 状态变坏 notify-bad-state | task=t.perf 不可判 停机通知：已投递
+[ledger-run 2026-08-22T09:28:26Z] 判据不可判 acceptance-unjudgeable | task=t.perf 判据自己跑不起来（命令不存在/判据超时）——不是活坏，记不可判；停机通知：已投递
+[ledger-run 2026-08-22T09:28:26Z] 收工 finish | 停机原因=AwaitingHuman 写回=["t.perf"] 冻结=[] 不可判=["t.perf"] 墙钟已跑 401s
+[ledger-run 2026-08-22T09:28:26Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-22T09:28:26Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+ledger_id: ledger.coreapp.v1  revision: 13 → 14  wrote_back: ["t.perf"]  frozen: []  unjudgeable: ["t.perf"]  preflight_rejected: false  awaiting_human: false  idle_reason: None
+notice: ledger_id: ledger.coreapp.v1 | revision: 14 | 停机原因: AwaitingHuman | 最后失败判据: task=t.perf revision=14 不可判 acceptance_id=[c.perf] 判据 c.perf 失败：exit_code=2 (期望 0) cwd=.worktrees/wt-ca argv=["/bin/sh", "tools/perfbase/judge-perf-nonregress.sh"] error=exit_code_mismatch: expected 0, observed 2 | 各任务终态: t.capp=Succeeded, t.close=Planned, t.esc=Planned, t.path=Succeeded, t.perf=Planned, t.pub=Succeeded, t.rv=Planned
+notice: ledger_id: ledger.coreapp.v1 | revision: 14 | 停机原因: AwaitingHuman | 最后失败判据: t.perf：判据 c.perf 失败：exit_code=2 (期望 0) cwd=.worktrees/wt-ca argv=["/bin/sh", "tools/perfbase/judge-perf-nonregress.sh"] error=exit_code_mismatch: expected 0, observed 2（stderr 末20行见账本 tasks.t.perf.attempts[].artifact_refs） ｜ 不可判（判据自己跑不起来 / 没等到信号，不是活坏）: t.perf ｜ 未干完的任务（非 Succeeded）: t.close=Planned, t.esc=Planned, t.perf=Planned, t.rv=Planned | 各任务终态: t.capp=Succeeded, t.close=Planned, t.esc=Planned, t.path=Succeeded, t.perf=Planned, t.pub=Succeeded, t.rv=Planned

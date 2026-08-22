@@ -1,0 +1,6 @@
+=== RUN   TestHandleSubscribeRedrawingTUIWinchBytesReachClient
+    hl092_static_alt_first_frame_probe_test.go:162: WINCH 重绘字节未到达客户端: sawSnapshot=true got="PRE_WINCH_MARKER_092" marker="WINCH_REDRAW_MARKER_092"
+--- FAIL: TestHandleSubscribeRedrawingTUIWinchBytesReachClient (2.65s)
+FAIL
+FAILgithub.com/agentmirror/agentmirror/internal/api3.950s
+FAIL

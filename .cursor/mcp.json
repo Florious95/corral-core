@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "team_orchestrator": {
+      "command": "/Users/alauda/.team-agent/runtime/0.5.67/bin/team-agent",
+      "args": [
+        "mcp-server",
+        "--workspace",
+        "/Volumes/nvme/Projects/远程Agent安卓"
+      ],
+      "env": {
+        "TEAM_AGENT_AUTH_MODE": "subscription",
+        "TEAM_AGENT_ID": "ca-rv2",
+        "TEAM_AGENT_OWNER_TEAM_ID": "remote-agent-android",
+        "TEAM_AGENT_WORKSPACE": "/Volumes/nvme/Projects/远程Agent安卓"
+      }
+    }
+  }
+}
