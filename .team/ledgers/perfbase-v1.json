@@ -170,7 +170,7 @@
   "read_only_shared": [],
   "rules": []
  },
- "revision": 30,
+ "revision": 32,
  "roles": {
   "r.advisor": {
    "artifact_landing": {
@@ -282,7 +282,7 @@
   }
  },
  "run": {
-  "desired_state": "running"
+  "desired_state": "stopped"
  },
  "schema_version": "ledger.v2",
  "tasks": {
@@ -549,7 +549,18 @@
      "c.close"
     ]
    },
-   "attempts": [],
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.close",
+      "acceptance_success.writeback_revision=31"
+     ],
+     "attempt_id": "att-t.close-seq1-t1787367434535",
+     "delivery_id": "del-t.close-seq1-t1787367434535",
+     "state": "succeeded",
+     "writeback_revision": 31
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -573,7 +584,7 @@
     ]
    },
    "seat_wait_seconds": 1800,
-   "state": "planned",
+   "state": "succeeded",
    "title": "收账：把三件事的现状汇成一页给用户早上看——每件事「已验证完成 / 自报未核 / 未做」三分，各附证据路径；把 t.rv.final 的「留给用户的缺口」原样带上。⛔ 不许把自报当已完成。落 .team/artifacts/perfbase-收账-<日期>.md"
   },
   "t.core": {
