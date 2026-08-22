@@ -294,9 +294,22 @@ def tick(ledger_path, st):
         log("停手：仓根当前分支是 %r 而不是 main，land 会并错地方" % cur.strip())
         return False
 
+    # 本链多个格共用一棵 worktree（wt-ca），封版/开 PR 是**按分支**的动作，做一次就够。
+    # ⛔ 不去重的话：任一格提交 ⇒ 三个格的指纹同时变 ⇒ 同一分支被连封三次、gh 被调三次。
+    done_seal = {}
+    # 🔴 一棵 worktree 上还有在飞的格 ⇒ 席位正在往里写，指纹每分钟都在变：
+    # 封了也白封，只会把半成品一层层提交上去。等这棵树静下来再收口。
+    # ⚠️ 实撞 2026-08-22：在飞的格在账本里仍写着 planned（派单态由驱动器在内存里持有，
+    # 不落盘）⇒ ⛔ 不能靠 state 认在飞。判据改成「这棵树上还有没收口的格就别动」——
+    # 同树的格本来就共用一条分支，等全树静下来一次封版，与逐格封版产出相同。
+    busy_wt = {(t.get("resources") or {}).get("worktree_id")
+               for t in led["tasks"].values() if t.get("state") != "succeeded"}
+    busy_wt.discard(None)
     for tid, t in sorted(led["tasks"].items()):
         rec = st.setdefault(tid, {})
         if t.get("state") != "succeeded":
+            continue
+        if (t.get("resources") or {}).get("worktree_id") in busy_wt:
             continue
 
         # 返修回环会让同一格再跑一轮，交付物随之变化。⛔ 不能拿「上轮封过版」当已收口——
@@ -309,21 +322,32 @@ def tick(ledger_path, st):
             rec["sealed"] = False
             rec["pr"] = False
 
+        key = (branch_of(led, tid), fp)
         if not rec.get("sealed"):
-            ok, msg = do_seal(led, tid)
+            if key in done_seal:
+                ok, msg = done_seal[key]["seal"]
+                log("%s 与 %s 同分支同指纹，复用其封版结果" % (tid, done_seal[key]["by"]))
+            else:
+                ok, msg = do_seal(led, tid)
+                log("%s 封版 %s：%s" % (tid, "OK" if ok else "红", msg.replace("\n", " / ")[:300]))
+                done_seal.setdefault(key, {"by": tid})["seal"] = (ok, msg)
             rec["sealed"] = ok
             rec["seal_msg"] = msg
             changed = True
-            log("%s 封版 %s：%s" % (tid, "OK" if ok else "红", msg.replace("\n", " / ")[:300]))
             if not ok:
                 continue
 
         if not rec.get("pr"):
-            ok, msg = do_pr(led, tid)
+            if key in done_seal and "pr" in done_seal[key]:
+                ok, msg = done_seal[key]["pr"]
+                log("%s 与 %s 同分支同指纹，复用其 PR 结果" % (tid, done_seal[key]["by"]))
+            else:
+                ok, msg = do_pr(led, tid)
+                log("%s 开 PR %s：%s" % (tid, "OK" if ok else "红", msg.replace("\n", " / ")[:300]))
+                done_seal.setdefault(key, {"by": tid})["pr"] = (ok, msg)
             rec["pr"] = ok
             rec["pr_msg"] = msg
             changed = True
-            log("%s 开 PR %s：%s" % (tid, "OK" if ok else "红", msg.replace("\n", " / ")[:300]))
             if not ok:
                 continue
 
