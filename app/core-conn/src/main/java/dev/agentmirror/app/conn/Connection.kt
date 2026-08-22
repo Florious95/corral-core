@@ -16,8 +16,7 @@
 
 package dev.agentmirror.app.conn
 
-import dev.agentmirror.app.diag.DiagLog
-import dev.agentmirror.app.perf.PerfTrace
+
 
 /**
  * 单条 WebSocket 生命周期状态机（docs/protocol.md §3）。
@@ -180,13 +179,13 @@ class Connection(
             listener.onLocalDecodeError(e.code, e.message ?: "binary decode rejected")
             return
         }
-        if (PerfTrace.isEnabled()) {
+        if (ConnPerf.isEnabled()) {
             val kind = when (frame.kind) {
                 BinaryKind.SNAPSHOT -> "snapshot"
                 BinaryKind.DELTA -> "delta"
                 BinaryKind.SCROLLBACK -> "scrollback"
             }
-            PerfTrace.emitWsBinaryRecv(frame.ref, kind, frame.data.size)
+            ConnPerf.emitWsBinaryRecv(frame.ref, kind, frame.data.size)
         }
         listener.onBinary(frame)
     }
@@ -210,7 +209,7 @@ class Connection(
         // 缺陷观测点：单条 WS 生命周期终结（permanent=可重连判定、reason=关闭原因）。
         // ConnectionManager.setState 的 [ws] 覆盖的是聚合状态机，这里是单条连接的终结
         // 判定（READY 掉线/拨号失败/auth 被拒）——事件覆盖红测直接驱动本类，必须在此落点。
-        DiagLog.record("ws", "close permanent=$permanent reason=${reason.take(200)}")
+        ConnDiag.record("ws", "close permanent=$permanent reason=${reason.take(200)}")
         listener.onClosed(permanent, reason)
     }
 }

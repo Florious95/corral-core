@@ -28,7 +28,7 @@ import kotlinx.serialization.json.Json
  *   带默认值的可选字段落默认值后由各帧 validate() 兜底（对齐 Go 零值 + Validate 两步）。
  * - [encodeDefaults] = false：与默认值相同的字段不序列化（reason 空串等缺省即省略）。
  */
-internal val json: Json = Json {
+val json: Json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = false
 }

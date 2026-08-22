@@ -393,7 +393,7 @@ class ConnCodecTest {
 
     @Test
     fun testBinarySnapshotFixture() {
-        val bytes = FixturePath.read("snapshot.bin")
+        val bytes = ProtocolFixture.read("snapshot.bin")
         val f = BinaryFrameCodec.decode(bytes)
         assertEquals(BinaryKind.SNAPSHOT, f.kind)
         assertEquals("s1", f.ref)
@@ -406,7 +406,7 @@ class ConnCodecTest {
 
     @Test
     fun testBinaryDeltaFixture() {
-        val bytes = FixturePath.read("delta.bin")
+        val bytes = ProtocolFixture.read("delta.bin")
         val f = BinaryFrameCodec.decode(bytes)
         assertEquals(BinaryKind.DELTA, f.kind)
         assertEquals("s1", f.ref)
@@ -416,7 +416,7 @@ class ConnCodecTest {
 
     @Test
     fun testBinaryScrollbackFixture() {
-        val bytes = FixturePath.read("scrollback.bin")
+        val bytes = ProtocolFixture.read("scrollback.bin")
         val f = BinaryFrameCodec.decode(bytes)
         assertEquals(BinaryKind.SCROLLBACK, f.kind)
         assertEquals("s1", f.ref)
@@ -511,7 +511,7 @@ class ConnCodecTest {
     // ---- 工具 ----
 
     private fun decode(name: String): FramePayload {
-        val text = FixturePath.readText(name)
+        val text = ProtocolFixture.readText(name)
         return FrameCodec.decode(text)
     }
 
@@ -529,4 +529,21 @@ class ConnCodecTest {
             assertEquals("for input: $text", expected, e.code)
         }
     }
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+}
+
+/** 契约夹具（cwd = 模块目录 app/core-protocol）。 */
+internal object ProtocolFixture {
+    private val candidates = listOf(
+        java.io.File("../../server/internal/protocol/testdata"),
+        java.io.File("server/internal/protocol/testdata"),
+        java.io.File("app/server/internal/protocol/testdata"),
+    )
+    private val resolved: java.io.File by lazy {
+        candidates.firstOrNull { it.isDirectory && it.exists() }
+            ?: error("contract fixtures not found: ${candidates.joinToString { it.absolutePath }}")
+    }
+    fun read(name: String): ByteArray = java.io.File(resolved, name).readBytes()
+    fun readText(name: String): String = java.io.File(resolved, name).readText()
 }
