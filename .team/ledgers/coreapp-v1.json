@@ -1,0 +1,644 @@
+{
+ "acceptance": {
+  "judgment_requires_distinct_provider": true,
+  "mechanical_exit_code_is_authoritative": true
+ },
+ "audit": {
+  "route_hops": []
+ },
+ "dependencies": [
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.path",
+   "same_source_required": false,
+   "to": "t.pub"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.pub",
+   "same_source_required": false,
+   "to": "t.capp"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.capp",
+   "same_source_required": false,
+   "to": "t.perf"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.perf",
+   "same_source_required": false,
+   "to": "t.rv"
+  }
+ ],
+ "evidence_policy": {
+  "missing_evidence": "cannot_close_success",
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ]
+ },
+ "fallback": {
+  "f.escalate": {
+   "action": "escalate_to_advisor",
+   "agent": {
+    "role": "r.advisor"
+   },
+   "max_attempts": 1,
+   "silent_substitution": false,
+   "triggers": [
+    "blocked_on_unknown",
+    "result_deadline_elapsed",
+    "delivery_uncertain"
+   ]
+  }
+ },
+ "fanout_aggregation": {},
+ "handoff": {
+  "delivery_uncertain": "needs_reconcile",
+  "missing_result": "alarm",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "result_route": "report_result",
+  "send_command": "team-agent send"
+ },
+ "ledger_id": "ledger.coreapp.v1",
+ "parallelism": [],
+ "resource_isolation": {
+  "closed_read": false,
+  "read_only_shared": [],
+  "rules": []
+ },
+ "revision": 1,
+ "roles": {
+  "r.advisor": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/advisor/"
+   },
+   "provider": "unstated",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "r.emu": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/ca-emu/"
+   },
+   "provider": "unstated",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "pb-emu",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "r.impl": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/ca-impl/"
+   },
+   "provider": "unstated",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "pb-impl",
+    "team": "grok-l2"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "r.rv": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/ca-rv/"
+   },
+   "provider": "unstated",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "pb-rv1",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "r.rv2": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/ca-close/"
+   },
+   "provider": "unstated",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "pb-rv2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  }
+ },
+ "run": {
+  "desired_state": "running"
+ },
+ "schema_version": "ledger.v2",
+ "tasks": {
+  "t.capp": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.capp",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-capp.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.capp"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.impl"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "baseline-20260822-release"
+    },
+    "read_paths": [
+     ".team/tasks/coreapp/任务书.md",
+     "docs/基线-20260822-release.md",
+     "CLAUDE.md",
+     "tools/perfbase/judge-capp.sh",
+     ".team/nodes/ca-pub/"
+    ],
+    "worktree_id": "wt-ca",
+    "write_paths": [
+     ".team/staging/",
+     ".team/nodes/ca-app/"
+    ]
+   },
+   "seat_wait_seconds": 5400,
+   "state": "planned",
+   "statuses": [
+    {
+     "artifact": {
+      "report": ".team/nodes/<本格>/说明.md"
+     },
+     "description": "本格交付物全落盘，交下游独立判",
+     "name": "done"
+    }
+   ],
+   "title": "格3·corral-app 只引用产物：把 .team/staging/corral-app 从「源码 composite」改造成「只引用发布产物」。⛔ settings.gradle.kts 里不许再有 includeBuild；⛔ 工程内不许有核源码目录。仓库声明两个且顺序固定：① raw.githubusercontent.com/Florious95/corral-core/maven/ ② 本仓 .team/staging/maven-repo（本地兜底，maven 分支推上去之前也能构建）。依赖钉死 dev.agentmirror.core:<模块>:20260822.0。assembleRelease 必须绿并产出 APK，且 dex 里 PerfTrace/addBinaryListener/debug.agentmirror.perftrace 都还在（量具没了就没法自证不回退）。细则读 .team/tasks/coreapp/任务书.md"
+  },
+  "t.close": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.close",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-doc.sh",
+       ".team/artifacts/coreapp-收账-*.md"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.close"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.rv2"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "baseline-20260822-release"
+    },
+    "read_paths": [],
+    "worktree_id": "wt-ca-close",
+    "write_paths": [
+     ".team/artifacts/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "收账：把本轮现状汇成一页给用户——三分口径「已验证完成 / 自报未核 / 未做」，各附证据路径。必须单列一节「留给 leader 与用户的缺口」，至少含：① 推 maven 分支与推 corral-app 远端仓（席位禁 push，是 leader 的动作）；② **用户真机复验**引用式构建的包「秒开无空白」——模拟器绿不能替代金标准；③ 本仓 app/app 壳还没删（删壳是真机复验通过之后的下一步，不在本链范围）。⛔ 不许把自报当已完成。落 .team/artifacts/coreapp-收账-<日期>.md"
+  },
+  "t.esc": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.esc",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-doc.sh",
+       ".team/escalations/coreapp-esc-*.md"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.esc"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.rv2"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "baseline-20260822-release"
+    },
+    "read_paths": [],
+    "worktree_id": "wt-ca-esc",
+    "write_paths": [
+     ".team/escalations/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "升报：返修穷尽或判者判不出时，把「卡在哪、试了什么、缺什么、需要 leader 决定什么」写清升报，⛔ 不许静默收工、⛔ 不许把判不出改写成通过。落 .team/escalations/coreapp-esc-<日期>.md"
+  },
+  "t.path": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.path",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-perfpath.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.path"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.impl"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "baseline-20260822-release"
+    },
+    "read_paths": [
+     ".team/tasks/coreapp/任务书.md",
+     "docs/基线-20260822-release.md",
+     "CLAUDE.md",
+     "tools/perfbase/judge-perfpath.sh"
+    ],
+    "worktree_id": "wt-ca",
+    "write_paths": [
+     "docs/",
+     ".team/nodes/ca-impl/"
+    ]
+   },
+   "seat_wait_seconds": 5400,
+   "state": "planned",
+   "title": "格1·钉住性能关键路径：产出 docs/性能关键路径.md，把八个事件逐条列出（事件｜在核还是在壳｜真实存在的文件路径｜慢了会表现成什么）+ 一节「改动纪律」。判据会逐个 test -e 你写的路径，写错即红；必须标明「核」或「壳」。⛔ 不许只写模块名糊弄、⛔ 不许把不在链路上的文件塞进来充数（那会让守门判据天天误报）。细则读 .team/tasks/coreapp/任务书.md"
+  },
+  "t.perf": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.perf",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-perf-nonregress.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1200,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.perf"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.emu"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "baseline-20260822-release"
+    },
+    "read_paths": [
+     ".team/tasks/coreapp/任务书.md",
+     "docs/基线-20260822-release.md",
+     "CLAUDE.md",
+     "tools/perfbase/judge-perf-nonregress.sh",
+     ".team/tasks/perfbase/任务书-02-基线.md",
+     ".team/nodes/pb-emu/",
+     ".team/perf/"
+    ],
+    "worktree_id": "wt-ca",
+    "write_paths": [
+     ".team/perf/",
+     ".team/nodes/ca-emu/"
+    ]
+   },
+   "seat_wait_seconds": 5400,
+   "state": "planned",
+   "statuses": [
+    {
+     "artifact": {
+      "report": ".team/nodes/<本格>/说明.md"
+     },
+     "description": "本格交付物全落盘，交下游独立判",
+     "name": "done"
+    }
+   ],
+   "title": "格4·用引用式构建的 APK 复测性能门：被测物 = 格3 装出的 release APK（记 md5 与来源）。流程与 .team/tasks/perfbase/任务书-02-基线.md **完全相同**：模拟器 agentmirror_test_b、三夹具各 ≥10 次冷点开、**只从 adb logcat -s PerfTrace 取数**（⛔ 不识图/不取帧/不取帧间隔）、**极端值不剔除**（另列 outliers）、**每批记 load 读数**。落 .team/perf/recheck-<日期>-capp.json（形状同基线文件）。逐夹具逐段比 p50/p95，超基线 +10% 即红。⛔ 不许换夹具/换次数/换取数方式来让它变绿；环境不具备或数据不齐 ⇒ 如实报不可判（合法终态）。你的前任四轮说明与现成脚本在 .team/nodes/pb-emu/，⛔ 不要重新摸索。细则读 .team/tasks/coreapp/任务书.md"
+  },
+  "t.pub": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.pub",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-pub.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 2400,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.pub"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.impl"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "baseline-20260822-release"
+    },
+    "read_paths": [
+     ".team/tasks/coreapp/任务书.md",
+     "docs/基线-20260822-release.md",
+     "CLAUDE.md",
+     "tools/perfbase/judge-pub.sh"
+    ],
+    "worktree_id": "wt-ca",
+    "write_paths": [
+     "app/",
+     ".team/staging/",
+     ".team/nodes/ca-pub/"
+    ]
+   },
+   "seat_wait_seconds": 5400,
+   "state": "planned",
+   "title": "格2·三核发布成 maven 产物：给 core-protocol/core-terminal/core-conn 加 maven-publish，坐标 group=dev.agentmirror.core、artifact=模块名、version=20260822.0（对应基线 tag），产物发到本地目录 .team/staging/maven-repo/（标准 maven 布局）。三核必须仍是纯 JVM：⛔ 不许上 Android 插件、⛔ 源码不许 import android./androidx.；三核单测必须绿。⛔ 你不许 push——推 maven 分支是 leader 的动作。细则读 .team/tasks/coreapp/任务书.md"
+  },
+  "t.rv": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "c.rv",
+      "argv": [
+       "/bin/sh",
+       "tools/perfbase/judge-verdict.sh",
+       ".team/nodes/ca-rv/裁定.md"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "c.rv"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "r.rv"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "baseline-20260822-release"
+    },
+    "read_paths": [
+     ".team/tasks/coreapp/任务书.md",
+     "app/",
+     ".team/staging/",
+     ".team/perf/",
+     "tools/perfbase/",
+     "docs/"
+    ],
+    "worktree_id": "wt-ca-rv",
+    "write_paths": [
+     ".team/nodes/ca-rv/"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "statuses": [
+    {
+     "artifact": {
+      "report": "裁定.md"
+     },
+     "description": "四条判据自己重跑均过且核过未被改弱",
+     "name": "pass"
+    },
+    {
+     "artifact": {
+      "report": "裁定.md"
+     },
+     "description": "不成立，带逐条理由与代码原文证据打回",
+     "name": "rework"
+    },
+    {
+     "artifact": {
+      "report": "裁定.md"
+     },
+     "description": "判不出（合法终态），写清判不出什么",
+     "name": "inconclusive"
+    }
+   ],
+   "title": "格5·异源终审：你与施工席不同席位、零上下文，⛔ 不采信自报。**自己重跑**四条判据（judge-perfpath / judge-pub / judge-capp / judge-perf-nonregress）并贴退出码原文。另外必须核：① git diff 看 tools/perfbase/ 有没有被动过——动了直接 rework；② corral-app 里确实没有核源码（自己 find，别信文档）；③ 复测的数真从 .team/perf/raw*/ 的 PerfTrace 原文来（抽查 ≥3 份对上统计值）、有没有剔极端值、load 读数在不在；④ 性能关键路径清单里的文件逐个存在且没塞无关文件。裁定书落 .team/nodes/ca-rv/裁定.md，恰好一行 status=pass|rework|inconclusive。判不出写 inconclusive，那是合法终态，⛔ 不许把没核到的写成 pass。细则读 .team/tasks/coreapp/任务书.md"
+  }
+ },
+ "transitions": [
+  {
+   "assemble": {
+    "include_upstream_case": false
+   },
+   "from": "t.capp",
+   "on_status": [
+    "done"
+   ],
+   "to": "t.perf"
+  },
+  {
+   "assemble": {
+    "include_upstream_case": false
+   },
+   "from": "t.perf",
+   "on_status": [
+    "done"
+   ],
+   "to": "t.rv"
+  },
+  {
+   "assemble": {
+    "include_upstream_case": false
+   },
+   "from": "t.rv",
+   "on_status": [
+    "pass"
+   ],
+   "to": "t.close"
+  },
+  {
+   "assemble": {
+    "include_upstream_case": true
+   },
+   "from": "t.rv",
+   "max_rounds": 2,
+   "on_exhausted": "t.esc",
+   "on_status": [
+    "rework"
+   ],
+   "to": "t.capp"
+  },
+  {
+   "assemble": {
+    "include_upstream_case": true
+   },
+   "from": "t.rv",
+   "on_status": [
+    "inconclusive"
+   ],
+   "to": "t.esc"
+  }
+ ]
+}
