@@ -7,3 +7,9 @@
 14:30:40	real_claude_idle	7	9.31 9.52 8.98
 14:30:58	real_claude_idle	8	7.89 9.16 8.87
 14:31:16	real_claude_idle	9	8.26 9.17 8.88
+14:31:34	real_claude_idle	10	9.90 9.50 9.00
+14:31:52	redraw_tui	1	9.36 9.39 8.97
+14:32:10	redraw_tui	2	8.30 9.15 8.89
+14:32:27	redraw_tui	3	8.01 9.02 8.85
+14:32:45	redraw_tui	4	8.42 9.06 8.87
+14:33:03	redraw_tui	5	11.55 9.65 9.08
