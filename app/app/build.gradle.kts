@@ -41,6 +41,20 @@ android {
     // compileSdk 36：BOM 2025.12.01 依赖链（androidx.core 1.18.0）要求 API 36+，本机已装 platforms 36。
     // targetSdk 保持 35，不改变运行时行为。
     compileSdk = 36
+    // 仅供本地 debug vs release 性能对比，⛔ 不可用于分发。
+    // 口令是 Android SDK 公开的 debug keystore 固定值（storePassword/keyAlias/keyPassword），不是秘密。
+    val debugKeystore = file(System.getProperty("user.home") + "/.android/debug.keystore")
+    signingConfigs {
+        create("releasePerfCompare") {
+            require(debugKeystore.isFile) {
+                "release 签名失败：未找到 Android debug keystore（${debugKeystore.absolutePath}）。请先用 SDK 生成该文件，或跑一次 debug 构建；⛔ 不许静默跳过签名。"
+            }
+            storeFile = debugKeystore
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
     defaultConfig {
         // applicationId = dev.agentmirror.app（014 落账裁定）：与 namespace、源码包三方对齐。
         // 无 agentmirror.com 域名，com.* 名不副实；.dev 为开源惯例。naming 曾偏离改 com.*，
@@ -53,6 +67,7 @@ android {
     }
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("releasePerfCompare")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
