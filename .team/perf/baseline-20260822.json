@@ -1,358 +1,576 @@
 {
   "baseline_date": "2026-08-22",
-  "app_sha": "fb50a388b",
-  "server_sha": "2426c5b58",
-  "apk_md5": "d096b250ffe3b6cc4ca62049a2f72ef9",
+  "round": "r20（第五轮，被测物 = pr/perfbase-fixblank 8d811c199，白屏根因已修：二进制帧按 ref 分发）",
+  "app_sha": "8d811c199 (pr/perfbase-fixblank)",
+  "server_sha": "8d811c199（server/ 与 instr3/instr4 逐字相同）",
+  "apk_md5": "f7db6f47d2177234605c04bbb4c711c4",
   "emulator": "agentmirror_test_b / sdk_gphone64_arm64 Android 15 (API 35) arm64-v8a, fingerprint google/sdk_gphone64_arm64/emu64a:15/AE3A.240806.043/12960925:userdebug/dev-keys",
   "measured_by": "pb-emu",
-  "method": "只从 adb logcat -s PerfTrace 取数（⛔ 不识图/不取帧/不取帧间隔）",
+  "method": "只从 adb logcat -s PerfTrace 取数（⛔ 不识图/不取帧/不取帧间隔）；emitted=0 行不计入时间戳",
   "unit": "ms，相对该次 tap 的 elapsedRealtime 差值",
-  "verdict": "INCONCLUSIVE 判不出：30/30 次冷点开都缺 first_frame_recv / snapshot_applied，且 first_draw 恒为 emitted=0 reason=glyphs_zero。八键不齐 ⇒ 无法产出可当地板的基线。详见 .team/nodes/pb-emu/说明.md",
+  "host_load": "逐次记录见 raw/diag/host-load.tsv：本批 load1 均值 9.16、峰值 10.49（10 核）",
+  "verdict": "PASS-with-caveat：白屏修复后八键首次齐全，三夹具各 10 次合格样本，stats 四项齐、极端值未剔除另列 outliers。⚠️ 两条必须随基线一起读：①big_scrollback 第 7 次首跑导航失败，即时同环境重试补采 1 次（该样本 note 已标注，可剔除后按 9 次看）；②本批 load1 均值 9.16，与前四轮 load 9.9–17.1 不可比——此基线只在同负载区间成立，复测须带 load 读数。",
   "fixtures": {
     "real_claude_idle": {
-      "samples": [],
-      "stats": {
-        "first_draw": {
-          "mean": null,
-          "p50": null,
-          "p95": null,
-          "max": null,
-          "n": 0
-        },
-        "layout_settled": {
-          "mean": null,
-          "p50": null,
-          "p95": null,
-          "max": null,
-          "n": 0
-        }
-      },
-      "outliers": [
+      "samples": [
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 72,
+            "subscribe_sent": 125,
+            "geom_seed": 126,
+            "first_frame_recv": 196,
+            "snapshot_applied": 268,
+            "first_draw": 1312,
+            "layout_settled": 1446
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-01.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 73,
+            "subscribe_sent": 115,
+            "geom_seed": 119,
+            "first_frame_recv": 258,
+            "snapshot_applied": 366,
+            "first_draw": 1628,
+            "layout_settled": 1726
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-02.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 62,
+            "subscribe_sent": 365,
+            "geom_seed": 375,
+            "first_frame_recv": 495,
+            "snapshot_applied": 739,
+            "first_draw": 2137,
+            "layout_settled": 2227
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-03.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 59,
+            "subscribe_sent": 120,
+            "geom_seed": 121,
+            "first_frame_recv": 193,
+            "snapshot_applied": 258,
+            "first_draw": 1336,
+            "layout_settled": 1409
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-04.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 71,
+            "subscribe_sent": 226,
+            "geom_seed": 227,
+            "first_frame_recv": 321,
+            "snapshot_applied": 521,
+            "first_draw": 1615,
+            "layout_settled": 1744
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-05.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 119,
+            "subscribe_sent": 173,
+            "geom_seed": 190,
+            "first_frame_recv": 271,
+            "snapshot_applied": 327,
+            "first_draw": 1388,
+            "layout_settled": 1568
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-06.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 37,
+            "subscribe_sent": 100,
+            "geom_seed": 106,
+            "first_frame_recv": 209,
+            "snapshot_applied": 277,
+            "first_draw": 1513,
+            "layout_settled": 1614
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-07.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 110,
+            "subscribe_sent": 148,
+            "geom_seed": 150,
+            "first_frame_recv": 270,
+            "snapshot_applied": 415,
+            "first_draw": 1534,
+            "layout_settled": 1656
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-08.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 112,
+            "subscribe_sent": 158,
+            "geom_seed": 161,
+            "first_frame_recv": 268,
+            "snapshot_applied": 372,
+            "first_draw": 1352,
+            "layout_settled": 1479
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-09.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 39,
+            "subscribe_sent": 80,
+            "geom_seed": 85,
+            "first_frame_recv": 183,
+            "snapshot_applied": 337,
+            "first_draw": 1384,
+            "layout_settled": 1439
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/real_claude_idle-10.log"
         }
       ],
+      "stats": {
+        "first_draw": {
+          "mean": 1519.9,
+          "p50": 1450.5,
+          "p95": 1908.0,
+          "max": 2137,
+          "n": 10
+        },
+        "layout_settled": {
+          "mean": 1630.8,
+          "p50": 1591.0,
+          "p95": 2009.7,
+          "max": 2227,
+          "n": 10
+        }
+      },
+      "outliers": [],
       "partial_runs": [
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-01.log",
           "t": {
             "tap": 0,
-            "route_enter": 10,
-            "subscribe_sent": 20,
-            "geom_seed": 21,
-            "layout_settled": 540
+            "route_enter": 72,
+            "subscribe_sent": 125,
+            "geom_seed": 126,
+            "first_frame_recv": 196,
+            "snapshot_applied": 268,
+            "first_draw": 1312,
+            "layout_settled": 1446
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-02.log",
           "t": {
             "tap": 0,
-            "route_enter": 11,
-            "subscribe_sent": 19,
-            "geom_seed": 19,
-            "layout_settled": 541
+            "route_enter": 73,
+            "subscribe_sent": 115,
+            "geom_seed": 119,
+            "first_frame_recv": 258,
+            "snapshot_applied": 366,
+            "first_draw": 1628,
+            "layout_settled": 1726
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-03.log",
           "t": {
             "tap": 0,
-            "route_enter": 12,
-            "subscribe_sent": 20,
-            "geom_seed": 20,
-            "layout_settled": 534
+            "route_enter": 62,
+            "subscribe_sent": 365,
+            "geom_seed": 375,
+            "first_frame_recv": 495,
+            "snapshot_applied": 739,
+            "first_draw": 2137,
+            "layout_settled": 2227
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-04.log",
           "t": {
             "tap": 0,
-            "route_enter": 15,
-            "subscribe_sent": 22,
-            "geom_seed": 22,
-            "layout_settled": 533
+            "route_enter": 59,
+            "subscribe_sent": 120,
+            "geom_seed": 121,
+            "first_frame_recv": 193,
+            "snapshot_applied": 258,
+            "first_draw": 1336,
+            "layout_settled": 1409
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-05.log",
           "t": {
             "tap": 0,
-            "route_enter": 15,
-            "subscribe_sent": 22,
-            "geom_seed": 23,
-            "layout_settled": 532
+            "route_enter": 71,
+            "subscribe_sent": 226,
+            "geom_seed": 227,
+            "first_frame_recv": 321,
+            "snapshot_applied": 521,
+            "first_draw": 1615,
+            "layout_settled": 1744
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-06.log",
           "t": {
             "tap": 0,
-            "route_enter": 14,
-            "subscribe_sent": 22,
-            "geom_seed": 22,
-            "layout_settled": 538
+            "route_enter": 119,
+            "subscribe_sent": 173,
+            "geom_seed": 190,
+            "first_frame_recv": 271,
+            "snapshot_applied": 327,
+            "first_draw": 1388,
+            "layout_settled": 1568
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-07.log",
           "t": {
             "tap": 0,
-            "route_enter": 15,
-            "subscribe_sent": 24,
-            "geom_seed": 24,
-            "layout_settled": 531
+            "route_enter": 37,
+            "subscribe_sent": 100,
+            "geom_seed": 106,
+            "first_frame_recv": 209,
+            "snapshot_applied": 277,
+            "first_draw": 1513,
+            "layout_settled": 1614
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-08.log",
           "t": {
             "tap": 0,
-            "route_enter": 12,
-            "subscribe_sent": 19,
-            "geom_seed": 21,
-            "layout_settled": 536
+            "route_enter": 110,
+            "subscribe_sent": 148,
+            "geom_seed": 150,
+            "first_frame_recv": 270,
+            "snapshot_applied": 415,
+            "first_draw": 1534,
+            "layout_settled": 1656
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-09.log",
           "t": {
             "tap": 0,
-            "route_enter": 20,
-            "subscribe_sent": 28,
-            "geom_seed": 31,
-            "layout_settled": 552
+            "route_enter": 112,
+            "subscribe_sent": 158,
+            "geom_seed": 161,
+            "first_frame_recv": 268,
+            "snapshot_applied": 372,
+            "first_draw": 1352,
+            "layout_settled": 1479
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/real_claude_idle-10.log",
           "t": {
             "tap": 0,
-            "route_enter": 12,
-            "subscribe_sent": 20,
-            "geom_seed": 20,
-            "layout_settled": 536
+            "route_enter": 39,
+            "subscribe_sent": 80,
+            "geom_seed": 85,
+            "first_frame_recv": 183,
+            "snapshot_applied": 337,
+            "first_draw": 1384,
+            "layout_settled": 1439
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         }
       ],
       "partial_stats": {
         "route_enter": {
-          "mean": 13.6,
-          "p50": 13.0,
-          "p95": 17.8,
-          "max": 20,
-          "min": 10,
+          "mean": 75.4,
+          "p50": 71.5,
+          "p95": 115.9,
+          "max": 119,
+          "min": 37,
           "n": 10
         },
         "subscribe_sent": {
-          "mean": 21.6,
-          "p50": 21.0,
-          "p95": 26.2,
-          "max": 28,
-          "min": 19,
+          "mean": 161.0,
+          "p50": 136.5,
+          "p95": 302.5,
+          "max": 365,
+          "min": 80,
           "n": 10
         },
         "geom_seed": {
-          "mean": 22.3,
-          "p50": 21.5,
-          "p95": 27.9,
-          "max": 31,
-          "min": 19,
+          "mean": 166.0,
+          "p50": 138.0,
+          "p95": 308.4,
+          "max": 375,
+          "min": 85,
           "n": 10
         },
         "first_frame_recv": {
-          "n": 0
+          "mean": 266.4,
+          "p50": 263.0,
+          "p95": 416.7,
+          "max": 495,
+          "min": 183,
+          "n": 10
         },
         "snapshot_applied": {
-          "n": 0
+          "mean": 388.0,
+          "p50": 351.5,
+          "p95": 640.9,
+          "max": 739,
+          "min": 258,
+          "n": 10
         },
         "first_draw": {
-          "n": 0
+          "mean": 1519.9,
+          "p50": 1450.5,
+          "p95": 1908.0,
+          "max": 2137,
+          "min": 1312,
+          "n": 10
         },
         "layout_settled": {
-          "mean": 537.3,
-          "p50": 536.0,
-          "p95": 547.0,
-          "max": 552,
-          "min": 531,
+          "mean": 1630.8,
+          "p50": 1591.0,
+          "p95": 2009.7,
+          "max": 2227,
+          "min": 1409,
           "n": 10
         }
       }
     },
     "redraw_tui": {
-      "samples": [],
+      "samples": [
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 85,
+            "subscribe_sent": 169,
+            "geom_seed": 170,
+            "first_frame_recv": 254,
+            "snapshot_applied": 329,
+            "first_draw": 1430,
+            "layout_settled": 1592
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-01.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 127,
+            "subscribe_sent": 181,
+            "geom_seed": 187,
+            "first_frame_recv": 270,
+            "snapshot_applied": 351,
+            "first_draw": 1323,
+            "layout_settled": 1467
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-02.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 41,
+            "subscribe_sent": 97,
+            "geom_seed": 107,
+            "first_frame_recv": 241,
+            "snapshot_applied": 322,
+            "first_draw": 1310,
+            "layout_settled": 1348
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-03.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 89,
+            "subscribe_sent": 172,
+            "geom_seed": 178,
+            "first_frame_recv": 268,
+            "snapshot_applied": 377,
+            "first_draw": 1526,
+            "layout_settled": 1626
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-04.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 55,
+            "subscribe_sent": 94,
+            "geom_seed": 95,
+            "first_frame_recv": 205,
+            "snapshot_applied": 301,
+            "first_draw": 1400,
+            "layout_settled": 1464
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-05.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 71,
+            "subscribe_sent": 102,
+            "geom_seed": 103,
+            "first_frame_recv": 211,
+            "snapshot_applied": 315,
+            "first_draw": 2644,
+            "layout_settled": 2777
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-06.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 101,
+            "subscribe_sent": 140,
+            "geom_seed": 152,
+            "first_frame_recv": 250,
+            "snapshot_applied": 341,
+            "first_draw": 1715,
+            "layout_settled": 1817
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-07.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 53,
+            "subscribe_sent": 142,
+            "geom_seed": 143,
+            "first_frame_recv": 247,
+            "snapshot_applied": 314,
+            "first_draw": 1410,
+            "layout_settled": 1525
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-08.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 119,
+            "subscribe_sent": 224,
+            "geom_seed": 225,
+            "first_frame_recv": 355,
+            "snapshot_applied": 486,
+            "first_draw": 1612,
+            "layout_settled": 1731
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-09.log"
+        },
+        {
+          "open_id": "1",
+          "t": {
+            "tap": 0,
+            "route_enter": 62,
+            "subscribe_sent": 166,
+            "geom_seed": 174,
+            "first_frame_recv": 252,
+            "snapshot_applied": 319,
+            "first_draw": 1835,
+            "layout_settled": 1947
+          },
+          "note": "",
+          "raw_log_path": ".team/perf/raw/redraw_tui-10.log"
+        }
+      ],
       "stats": {
         "first_draw": {
-          "mean": null,
-          "p50": null,
-          "p95": null,
-          "max": null,
-          "n": 0
+          "mean": 1620.5,
+          "p50": 1478.0,
+          "p95": 2280.0,
+          "max": 2644,
+          "n": 10
         },
         "layout_settled": {
-          "mean": null,
-          "p50": null,
-          "p95": null,
-          "max": null,
-          "n": 0
+          "mean": 1729.4,
+          "p50": 1609.0,
+          "p95": 2403.5,
+          "max": 2777,
+          "n": 10
         }
       },
       "outliers": [
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-01.log"
-        },
-        {
-          "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-02.log"
-        },
-        {
-          "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-03.log"
-        },
-        {
-          "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-04.log"
-        },
-        {
-          "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-05.log"
-        },
-        {
-          "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "reason": "极端值（未剔除，已计入统计）: first_draw=2644ms vs p50=1478.0ms p95=2280.0ms",
           "raw_log_path": ".team/perf/raw/redraw_tui-06.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-07.log"
-        },
-        {
-          "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-08.log"
-        },
-        {
-          "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-09.log"
-        },
-        {
-          "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
-          "raw_log_path": ".team/perf/raw/redraw_tui-10.log"
+          "reason": "极端值（未剔除，已计入统计）: layout_settled=2777ms vs p50=1609.0ms p95=2403.5ms",
+          "raw_log_path": ".team/perf/raw/redraw_tui-06.log"
         }
       ],
       "partial_runs": [
@@ -361,478 +579,588 @@
           "raw_log_path": ".team/perf/raw/redraw_tui-01.log",
           "t": {
             "tap": 0,
-            "route_enter": 14,
-            "subscribe_sent": 25,
-            "geom_seed": 25,
-            "layout_settled": 543
+            "route_enter": 85,
+            "subscribe_sent": 169,
+            "geom_seed": 170,
+            "first_frame_recv": 254,
+            "snapshot_applied": 329,
+            "first_draw": 1430,
+            "layout_settled": 1592
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-02.log",
           "t": {
             "tap": 0,
-            "route_enter": 19,
-            "subscribe_sent": 28,
-            "geom_seed": 29,
-            "layout_settled": 536
+            "route_enter": 127,
+            "subscribe_sent": 181,
+            "geom_seed": 187,
+            "first_frame_recv": 270,
+            "snapshot_applied": 351,
+            "first_draw": 1323,
+            "layout_settled": 1467
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-03.log",
           "t": {
             "tap": 0,
-            "route_enter": 11,
-            "subscribe_sent": 18,
-            "geom_seed": 18,
-            "layout_settled": 537
+            "route_enter": 41,
+            "subscribe_sent": 97,
+            "geom_seed": 107,
+            "first_frame_recv": 241,
+            "snapshot_applied": 322,
+            "first_draw": 1310,
+            "layout_settled": 1348
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-04.log",
           "t": {
             "tap": 0,
-            "route_enter": 16,
-            "subscribe_sent": 23,
-            "geom_seed": 23,
-            "layout_settled": 528
+            "route_enter": 89,
+            "subscribe_sent": 172,
+            "geom_seed": 178,
+            "first_frame_recv": 268,
+            "snapshot_applied": 377,
+            "first_draw": 1526,
+            "layout_settled": 1626
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-05.log",
           "t": {
             "tap": 0,
-            "route_enter": 14,
-            "subscribe_sent": 20,
-            "geom_seed": 22,
-            "layout_settled": 540
+            "route_enter": 55,
+            "subscribe_sent": 94,
+            "geom_seed": 95,
+            "first_frame_recv": 205,
+            "snapshot_applied": 301,
+            "first_draw": 1400,
+            "layout_settled": 1464
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-06.log",
           "t": {
             "tap": 0,
-            "route_enter": 13,
-            "subscribe_sent": 23,
-            "geom_seed": 23,
-            "layout_settled": 537
+            "route_enter": 71,
+            "subscribe_sent": 102,
+            "geom_seed": 103,
+            "first_frame_recv": 211,
+            "snapshot_applied": 315,
+            "first_draw": 2644,
+            "layout_settled": 2777
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-07.log",
           "t": {
             "tap": 0,
-            "route_enter": 11,
-            "subscribe_sent": 18,
-            "geom_seed": 19,
-            "layout_settled": 540
+            "route_enter": 101,
+            "subscribe_sent": 140,
+            "geom_seed": 152,
+            "first_frame_recv": 250,
+            "snapshot_applied": 341,
+            "first_draw": 1715,
+            "layout_settled": 1817
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-08.log",
           "t": {
             "tap": 0,
-            "route_enter": 10,
-            "subscribe_sent": 18,
-            "geom_seed": 18,
-            "layout_settled": 535
+            "route_enter": 53,
+            "subscribe_sent": 142,
+            "geom_seed": 143,
+            "first_frame_recv": 247,
+            "snapshot_applied": 314,
+            "first_draw": 1410,
+            "layout_settled": 1525
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-09.log",
           "t": {
             "tap": 0,
-            "route_enter": 15,
-            "subscribe_sent": 21,
-            "geom_seed": 21,
-            "layout_settled": 528
+            "route_enter": 119,
+            "subscribe_sent": 224,
+            "geom_seed": 225,
+            "first_frame_recv": 355,
+            "snapshot_applied": 486,
+            "first_draw": 1612,
+            "layout_settled": 1731
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/redraw_tui-10.log",
           "t": {
             "tap": 0,
-            "route_enter": 15,
-            "subscribe_sent": 22,
-            "geom_seed": 23,
-            "layout_settled": 542
+            "route_enter": 62,
+            "subscribe_sent": 166,
+            "geom_seed": 174,
+            "first_frame_recv": 252,
+            "snapshot_applied": 319,
+            "first_draw": 1835,
+            "layout_settled": 1947
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         }
       ],
       "partial_stats": {
         "route_enter": {
-          "mean": 13.8,
-          "p50": 14.0,
-          "p95": 17.7,
-          "max": 19,
-          "min": 10,
+          "mean": 80.3,
+          "p50": 78.0,
+          "p95": 123.4,
+          "max": 127,
+          "min": 41,
           "n": 10
         },
         "subscribe_sent": {
-          "mean": 21.6,
-          "p50": 21.5,
-          "p95": 26.7,
-          "max": 28,
-          "min": 18,
+          "mean": 148.7,
+          "p50": 154.0,
+          "p95": 204.7,
+          "max": 224,
+          "min": 94,
           "n": 10
         },
         "geom_seed": {
-          "mean": 22.1,
-          "p50": 22.5,
-          "p95": 27.2,
-          "max": 29,
-          "min": 18,
+          "mean": 153.4,
+          "p50": 161.0,
+          "p95": 207.9,
+          "max": 225,
+          "min": 95,
           "n": 10
         },
         "first_frame_recv": {
-          "n": 0
+          "mean": 255.3,
+          "p50": 251.0,
+          "p95": 316.8,
+          "max": 355,
+          "min": 205,
+          "n": 10
         },
         "snapshot_applied": {
-          "n": 0
+          "mean": 345.5,
+          "p50": 325.5,
+          "p95": 437.0,
+          "max": 486,
+          "min": 301,
+          "n": 10
         },
         "first_draw": {
-          "n": 0
+          "mean": 1620.5,
+          "p50": 1478.0,
+          "p95": 2280.0,
+          "max": 2644,
+          "min": 1310,
+          "n": 10
         },
         "layout_settled": {
-          "mean": 536.6,
-          "p50": 537.0,
-          "p95": 542.5,
-          "max": 543,
-          "min": 528,
+          "mean": 1729.4,
+          "p50": 1609.0,
+          "p95": 2403.5,
+          "max": 2777,
+          "min": 1348,
           "n": 10
         }
       }
     },
     "big_scrollback": {
-      "samples": [],
-      "stats": {
-        "first_draw": {
-          "mean": null,
-          "p50": null,
-          "p95": null,
-          "max": null,
-          "n": 0
-        },
-        "layout_settled": {
-          "mean": null,
-          "p50": null,
-          "p95": null,
-          "max": null,
-          "n": 0
-        }
-      },
-      "outliers": [
+      "samples": [
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 41,
+            "subscribe_sent": 99,
+            "geom_seed": 100,
+            "first_frame_recv": 250,
+            "snapshot_applied": 373,
+            "first_draw": 1463,
+            "layout_settled": 1565
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-01.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 65,
+            "subscribe_sent": 132,
+            "geom_seed": 143,
+            "first_frame_recv": 227,
+            "snapshot_applied": 253,
+            "first_draw": 1521,
+            "layout_settled": 1608
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-02.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 49,
+            "subscribe_sent": 195,
+            "geom_seed": 196,
+            "first_frame_recv": 347,
+            "snapshot_applied": 375,
+            "first_draw": 1574,
+            "layout_settled": 1703
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-03.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 34,
+            "subscribe_sent": 122,
+            "geom_seed": 124,
+            "first_frame_recv": 202,
+            "snapshot_applied": 240,
+            "first_draw": 1244,
+            "layout_settled": 1315
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-04.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 56,
+            "subscribe_sent": 117,
+            "geom_seed": 120,
+            "first_frame_recv": 190,
+            "snapshot_applied": 208,
+            "first_draw": 1685,
+            "layout_settled": 1797
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-05.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 71,
+            "subscribe_sent": 127,
+            "geom_seed": 128,
+            "first_frame_recv": 228,
+            "snapshot_applied": 252,
+            "first_draw": 1617,
+            "layout_settled": 1700
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-06.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 37,
+            "subscribe_sent": 113,
+            "geom_seed": 116,
+            "first_frame_recv": 229,
+            "snapshot_applied": 253,
+            "first_draw": 1308,
+            "layout_settled": 1377
+          },
+          "note": "补采：本批首跑该次导航失败（二级页未出现会话行，见 raw/diag/navigation-runlog.log），批跑结束后 3 分钟内同一 daemon/同一夹具/同一构建即时重试一次，load1=7.37（本批均值 9.16）。⛔ 未剔除任何数据；若判者认为不算同一批，剔掉此样本后 big_scrollback 为 9 次。",
           "raw_log_path": ".team/perf/raw/big_scrollback-07.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 64,
+            "subscribe_sent": 114,
+            "geom_seed": 115,
+            "first_frame_recv": 473,
+            "snapshot_applied": 640,
+            "first_draw": 2061,
+            "layout_settled": 2220
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-08.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 80,
+            "subscribe_sent": 139,
+            "geom_seed": 140,
+            "first_frame_recv": 220,
+            "snapshot_applied": 283,
+            "first_draw": 1294,
+            "layout_settled": 1517
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-09.log"
         },
         {
           "open_id": "1",
-          "reason": "八键不齐，缺 first_frame_recv,snapshot_applied,first_draw",
+          "t": {
+            "tap": 0,
+            "route_enter": 65,
+            "subscribe_sent": 104,
+            "geom_seed": 106,
+            "first_frame_recv": 216,
+            "snapshot_applied": 262,
+            "first_draw": 1246,
+            "layout_settled": 1396
+          },
+          "note": "",
           "raw_log_path": ".team/perf/raw/big_scrollback-10.log"
         }
       ],
+      "stats": {
+        "first_draw": {
+          "mean": 1501.3,
+          "p50": 1492.0,
+          "p95": 1891.8,
+          "max": 2061,
+          "n": 10
+        },
+        "layout_settled": {
+          "mean": 1619.8,
+          "p50": 1586.5,
+          "p95": 2029.7,
+          "max": 2220,
+          "n": 10
+        }
+      },
+      "outliers": [],
       "partial_runs": [
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-01.log",
           "t": {
             "tap": 0,
-            "route_enter": 14,
-            "subscribe_sent": 22,
-            "geom_seed": 24,
-            "layout_settled": 542
+            "route_enter": 41,
+            "subscribe_sent": 99,
+            "geom_seed": 100,
+            "first_frame_recv": 250,
+            "snapshot_applied": 373,
+            "first_draw": 1463,
+            "layout_settled": 1565
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-02.log",
           "t": {
             "tap": 0,
-            "route_enter": 16,
-            "subscribe_sent": 25,
-            "geom_seed": 28,
-            "layout_settled": 547
+            "route_enter": 65,
+            "subscribe_sent": 132,
+            "geom_seed": 143,
+            "first_frame_recv": 227,
+            "snapshot_applied": 253,
+            "first_draw": 1521,
+            "layout_settled": 1608
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-03.log",
           "t": {
             "tap": 0,
-            "route_enter": 20,
-            "subscribe_sent": 30,
-            "geom_seed": 31,
-            "layout_settled": 552
+            "route_enter": 49,
+            "subscribe_sent": 195,
+            "geom_seed": 196,
+            "first_frame_recv": 347,
+            "snapshot_applied": 375,
+            "first_draw": 1574,
+            "layout_settled": 1703
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-04.log",
           "t": {
             "tap": 0,
-            "route_enter": 20,
-            "subscribe_sent": 30,
-            "geom_seed": 30,
-            "layout_settled": 535
+            "route_enter": 34,
+            "subscribe_sent": 122,
+            "geom_seed": 124,
+            "first_frame_recv": 202,
+            "snapshot_applied": 240,
+            "first_draw": 1244,
+            "layout_settled": 1315
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-05.log",
           "t": {
             "tap": 0,
-            "route_enter": 15,
-            "subscribe_sent": 22,
-            "geom_seed": 24,
-            "layout_settled": 545
+            "route_enter": 56,
+            "subscribe_sent": 117,
+            "geom_seed": 120,
+            "first_frame_recv": 190,
+            "snapshot_applied": 208,
+            "first_draw": 1685,
+            "layout_settled": 1797
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-06.log",
           "t": {
             "tap": 0,
-            "route_enter": 8,
-            "subscribe_sent": 19,
-            "geom_seed": 20,
-            "layout_settled": 538
+            "route_enter": 71,
+            "subscribe_sent": 127,
+            "geom_seed": 128,
+            "first_frame_recv": 228,
+            "snapshot_applied": 252,
+            "first_draw": 1617,
+            "layout_settled": 1700
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-07.log",
           "t": {
             "tap": 0,
-            "route_enter": 20,
-            "subscribe_sent": 30,
-            "geom_seed": 33,
-            "layout_settled": 549
+            "route_enter": 37,
+            "subscribe_sent": 113,
+            "geom_seed": 116,
+            "first_frame_recv": 229,
+            "snapshot_applied": 253,
+            "first_draw": 1308,
+            "layout_settled": 1377
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-08.log",
           "t": {
             "tap": 0,
-            "route_enter": 14,
-            "subscribe_sent": 24,
-            "geom_seed": 24,
-            "layout_settled": 544
+            "route_enter": 64,
+            "subscribe_sent": 114,
+            "geom_seed": 115,
+            "first_frame_recv": 473,
+            "snapshot_applied": 640,
+            "first_draw": 2061,
+            "layout_settled": 2220
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-09.log",
           "t": {
             "tap": 0,
-            "route_enter": 16,
-            "subscribe_sent": 25,
-            "geom_seed": 26,
-            "layout_settled": 544
+            "route_enter": 80,
+            "subscribe_sent": 139,
+            "geom_seed": 140,
+            "first_frame_recv": 220,
+            "snapshot_applied": 283,
+            "first_draw": 1294,
+            "layout_settled": 1517
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         },
         {
           "open_id": "1",
           "raw_log_path": ".team/perf/raw/big_scrollback-10.log",
           "t": {
             "tap": 0,
-            "route_enter": 13,
-            "subscribe_sent": 20,
-            "geom_seed": 20,
-            "layout_settled": 536
+            "route_enter": 65,
+            "subscribe_sent": 104,
+            "geom_seed": 106,
+            "first_frame_recv": 216,
+            "snapshot_applied": 262,
+            "first_draw": 1246,
+            "layout_settled": 1396
           },
-          "missing": [
-            "first_frame_recv",
-            "snapshot_applied",
-            "first_draw"
-          ]
+          "missing": []
         }
       ],
       "partial_stats": {
         "route_enter": {
-          "mean": 15.6,
-          "p50": 15.5,
-          "p95": 20.0,
-          "max": 20,
-          "min": 8,
+          "mean": 56.2,
+          "p50": 60.0,
+          "p95": 76.0,
+          "max": 80,
+          "min": 34,
           "n": 10
         },
         "subscribe_sent": {
-          "mean": 24.7,
-          "p50": 24.5,
-          "p95": 30.0,
-          "max": 30,
-          "min": 19,
+          "mean": 126.2,
+          "p50": 119.5,
+          "p95": 169.8,
+          "max": 195,
+          "min": 99,
           "n": 10
         },
         "geom_seed": {
-          "mean": 26.0,
-          "p50": 25.0,
-          "p95": 32.1,
-          "max": 33,
-          "min": 20,
+          "mean": 128.8,
+          "p50": 122.0,
+          "p95": 172.2,
+          "max": 196,
+          "min": 100,
           "n": 10
         },
         "first_frame_recv": {
-          "n": 0
+          "mean": 258.2,
+          "p50": 227.5,
+          "p95": 416.3,
+          "max": 473,
+          "min": 190,
+          "n": 10
         },
         "snapshot_applied": {
-          "n": 0
+          "mean": 313.9,
+          "p50": 257.5,
+          "p95": 520.8,
+          "max": 640,
+          "min": 208,
+          "n": 10
         },
         "first_draw": {
-          "n": 0
+          "mean": 1501.3,
+          "p50": 1492.0,
+          "p95": 1891.8,
+          "max": 2061,
+          "min": 1244,
+          "n": 10
         },
         "layout_settled": {
-          "mean": 543.2,
-          "p50": 544.0,
-          "p95": 550.6,
-          "max": 552,
-          "min": 535,
+          "mean": 1619.8,
+          "p50": 1586.5,
+          "p95": 2029.7,
+          "max": 2220,
+          "min": 1315,
           "n": 10
         }
       }
