@@ -44,3 +44,6 @@ local.properties
 
 # git worktree 挂载点，⛔ 不入库（2026-08-23 误 add -A 带进来过一次）
 .worktrees/
+
+# 席位临时目录里的 daemon 日志会长到 140MB+，超 GitHub 100MB 上限（2026-08-23 实撞：镜像推 main 被 pre-receive 拒）
+.team/nodes/*/tmp/daemon.log
