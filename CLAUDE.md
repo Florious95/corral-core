@@ -76,8 +76,15 @@
 
 - ⛔⛔ **禁止使用 Deepseek 模型**（2026-08-21 用户令）。这条**取代**了下面那条旧的默认通道。
 - ⛔⛔ **禁止开 Fable 5**（2026-08-21 用户令）。
-- ⛔⛔ **所有新建席位一律 `provider: cursor_agent` + grok 4.6；⛔ 不许再用别的通道开席位**
+- ⛔⛔ **所有席位一律 `provider: cursor_agent` + grok 4.6；⛔ 不许再用别的通道开席位**
   （2026-08-22 用户令：「只能开启 cursor grok 4.6 模型作为 TeamMate」）。
+  **原因是事实不是偏好：Grok Build 的额度已经耗尽**（`Weekly limit left: 0%`，
+  HTTP 402 `usage balance exhausted`）。⇒ `provider: grok` 的席位现在**全部是死的**，
+  派给它们不会报错、只会让驱动器等到预算耗尽（账本层零症状，只有读屏能发现）。
+  🔴 **派单前先核收件席位是不是 cursor 通道**；本工程残留的 `pb-*` 席位一律不可用。
+  ⚠️ **同一 workspace 同时只能有一个 cursor 席位**（`.cursor/mcp.json` 是目录级的，
+  第二个会覆盖 `TEAM_AGENT_ID`，框架直接拒绝）⇒ 实现席与终审席**只能时序错开**，
+  ⛔ 不能并存；换席位前先停驱动器，免得拆掉在飞派单。
   这条**取代**了同日早些时候的「一律 `provider: grok` / `model: grok-4.6`」——
   模型没变（还是 grok 4.6），**变的是通道**：走 Cursor 订阅，与 Codex/Claude 订阅额度互相独立。
   - 角色文件 frontmatter 四件套（照抄，⛔ 别手写漏字段）：
