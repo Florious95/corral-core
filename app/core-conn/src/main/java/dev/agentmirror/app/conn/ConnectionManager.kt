@@ -336,6 +336,8 @@ class ConnectionManager(
         val frame = InputFrame(reqId = reqId, ref = ref, text = char)
         if (!conn.send(frame)) return false
         pendingInputs[reqId] = PendingInput(clock.nowMs() + inputTimeoutMs)
+        // 只打点，不改发送行为。关路径：isEnabled 短路，不拼串。
+        if (ConnPerf.isEnabled()) ConnPerf.onKeySend(ref, char)
         return true
     }
 
