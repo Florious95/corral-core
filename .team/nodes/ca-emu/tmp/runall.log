@@ -1,0 +1,91 @@
+--- real_claude_idle #1 14:28:52 load=10.21 9.64 8.95
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-01.log
+OK real_claude_idle #1
+--- real_claude_idle #2 14:29:10 load=9.43 9.49 8.91
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-02.log
+OK real_claude_idle #2
+--- real_claude_idle #3 14:29:28 load=10.98 9.82 9.04
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-03.log
+OK real_claude_idle #3
+--- real_claude_idle #4 14:29:46 load=10.59 9.79 9.05
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-04.log
+OK real_claude_idle #4
+--- real_claude_idle #5 14:30:04 load=9.99 9.68 9.02
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-05.log
+OK real_claude_idle #5
+--- real_claude_idle #6 14:30:22 load=9.09 9.48 8.96
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-06.log
+OK real_claude_idle #6
+--- real_claude_idle #7 14:30:40 load=9.31 9.52 8.98
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-07.log
+OK real_claude_idle #7
+--- real_claude_idle #8 14:30:58 load=7.89 9.16 8.87
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-08.log
+OK real_claude_idle #8
+--- real_claude_idle #9 14:31:16 load=8.26 9.17 8.88
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-09.log
+OK real_claude_idle #9
+--- real_claude_idle #10 14:31:34 load=9.90 9.50 9.00
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/real_claude_idle-10.log
+OK real_claude_idle #10
+--- redraw_tui #1 14:31:52 load=9.36 9.39 8.97
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-01.log
+OK redraw_tui #1
+--- redraw_tui #2 14:32:10 load=8.30 9.15 8.89
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-02.log
+OK redraw_tui #2
+--- redraw_tui #3 14:32:27 load=8.01 9.02 8.85
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-03.log
+OK redraw_tui #3
+--- redraw_tui #4 14:32:45 load=8.42 9.06 8.87
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-04.log
+OK redraw_tui #4
+--- redraw_tui #5 14:33:03 load=11.55 9.65 9.08
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-05.log
+OK redraw_tui #5
+--- redraw_tui #6 14:33:21 load=11.52 9.78 9.14
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-06.log
+OK redraw_tui #6
+--- redraw_tui #7 14:33:39 load=12.11 10.00 9.23
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-07.log
+OK redraw_tui #7
+--- redraw_tui #8 14:33:57 load=11.64 10.03 9.26
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-08.log
+OK redraw_tui #8
+--- redraw_tui #9 14:34:15 load=10.64 9.88 9.22
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-09.log
+OK redraw_tui #9
+--- redraw_tui #10 14:34:32 load=10.12 9.80 9.20
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/redraw_tui-10.log
+OK redraw_tui #10
+--- big_scrollback #1 14:34:51 load=18.63 11.79 9.93
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-01.log
+OK big_scrollback #1
+--- big_scrollback #2 14:35:08 load=17.61 12.04 10.06
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-02.log
+OK big_scrollback #2
+--- big_scrollback #3 14:35:27 load=15.51 11.92 10.06
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-03.log
+OK big_scrollback #3
+--- big_scrollback #4 14:35:45 load=14.79 11.94 10.10
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-04.log
+OK big_scrollback #4
+--- big_scrollback #5 14:36:03 load=15.62 12.30 10.27
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-05.log
+OK big_scrollback #5
+--- big_scrollback #6 14:36:21 load=16.23 12.70 10.47
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-06.log
+OK big_scrollback #6
+--- big_scrollback #7 14:36:39 load=16.82 13.02 10.62
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-07.log
+OK big_scrollback #7
+--- big_scrollback #8 14:36:58 load=15.43 12.95 10.65
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-08.log
+OK big_scrollback #8
+--- big_scrollback #9 14:37:16 load=16.94 13.55 10.92
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-09.log
+OK big_scrollback #9
+--- big_scrollback #10 14:37:34 load=17.37 13.80 11.06
+/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-ca/.team/perf/raw/big_scrollback-10.log
+OK big_scrollback #10
+ALLDONE
