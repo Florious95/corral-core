@@ -1,0 +1,99 @@
+
+> Configure project :app
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-pb-core2/app/app/build.gradle.kts:83:9: 'jvmTarget: String' is deprecated. Please migrate to the compilerOptions DSL. More details are here: https://kotl.in/u1r8ln
+
+> Task :core-terminal:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core-terminal:compileKotlin UP-TO-DATE
+> Task :core-terminal:compileJava NO-SOURCE
+> Task :terminal:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :terminal:compileKotlin NO-SOURCE
+> Task :terminal:compileJava NO-SOURCE
+> Task :terminal:processResources NO-SOURCE
+> Task :terminal:classes UP-TO-DATE
+> Task :terminal:jar UP-TO-DATE
+> Task :core-terminal:processResources NO-SOURCE
+> Task :core-terminal:classes UP-TO-DATE
+> Task :core-terminal:jar UP-TO-DATE
+> Task :core-conn:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core-protocol:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core-protocol:compileKotlin UP-TO-DATE
+> Task :core-protocol:compileJava NO-SOURCE
+> Task :core-conn:compileKotlin UP-TO-DATE
+> Task :core-conn:compileJava NO-SOURCE
+> Task :core-conn:processResources NO-SOURCE
+> Task :core-conn:classes UP-TO-DATE
+> Task :core-conn:jar UP-TO-DATE
+> Task :core-protocol:processResources NO-SOURCE
+> Task :core-protocol:classes UP-TO-DATE
+> Task :core-protocol:jar UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders
+> Task :app:buildKotlinToolingMetadata
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:processReleaseNavigationResources
+> Task :app:checkReleaseDuplicateClasses
+> Task :app:compileReleaseNavigationResources
+> Task :app:generateReleaseResValues UP-TO-DATE
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:checkReleaseAarMetadata
+> Task :app:mergeReleaseNativeLibs
+> Task :app:packageReleaseResources
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+> Task :app:processReleaseMainManifest UP-TO-DATE
+> Task :app:processReleaseManifest
+> Task :app:parseReleaseLocalResources
+> Task :app:javaPreCompileRelease
+> Task :app:mergeReleaseStartupProfile
+
+> Task :app:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libgojni.so, libimage_processing_util_jni.so, libsurface_util_jni.so. Run with --info option to learn more.
+
+> Task :app:mergeReleaseResources
+> Task :app:processReleaseManifestForPackage
+> Task :app:mergeReleaseArtProfile
+> Task :app:extractReleaseNativeSymbolTables
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:mergeReleaseShaders
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:mergeReleaseAssets
+> Task :app:compressReleaseAssets
+> Task :app:desugarReleaseFileDependencies
+> Task :app:extractReleaseVersionControlInfo
+> Task :app:processReleaseResources
+> Task :app:mergeExtDexRelease
+> Task :app:extractProguardFiles
+> Task :app:collectReleaseDependencies
+> Task :app:sdkReleaseDependencyData
+> Task :app:validateSigningRelease
+> Task :app:writeReleaseAppMetadata
+> Task :app:writeReleaseSigningConfigVersions
+> Task :app:optimizeReleaseResources
+
+> Task :app:compileReleaseKotlin
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-pb-core2/app/app/src/main/java/dev/agentmirror/app/MainActivity.kt:78:60 'static field SOFT_INPUT_ADJUST_RESIZE: Int' is deprecated. Deprecated in Java.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-pb-core2/app/app/src/main/java/dev/agentmirror/app/diag/DiagLog.kt:227:17 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'SimpleDateFormat?'.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-pb-core2/app/app/src/main/java/dev/agentmirror/app/diag/DiagLogViewScreen.kt:81:21 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-pb-core2/app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt:459:22 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes ExposedDropdownMenuAnchorType and enabled parameters.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-pb-core2/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:809:60 'field scaledDensity: Float' is deprecated. Deprecated in Java.
+
+> Task :app:compileReleaseJavaWithJavac NO-SOURCE
+> Task :app:dexBuilderRelease
+> Task :app:mergeReleaseGlobalSynthetics
+> Task :app:generateReleaseLintVitalReportModel
+> Task :app:processReleaseJavaRes
+> Task :app:mergeReleaseJavaResource
+> Task :app:mergeDexRelease
+> Task :app:compileReleaseArtProfile
+> Task :app:lintVitalAnalyzeRelease
+> Task :app:lintVitalReportRelease
+> Task :app:lintVitalRelease
+> Task :app:packageRelease
+> Task :app:createReleaseApkListingFileRedirect
+> Task :app:assembleRelease
+
+BUILD SUCCESSFUL in 1m 8s
+57 actionable tasks: 47 executed, 10 up-to-date
