@@ -1300,3 +1300,66 @@ pane 上的证据行：`❯ Press up to edit queued messages`，席位**停在�
   （Ctx 7%，待命状态正确），并无卡住提示。t.fix.rv 已被排除出前沿，无实际影响。
 - 现象归类：投递验证在「席位闲、无提示」时也会 3/3 失败并反复通知 leader——通知本身成了噪声源。
 - 未重试（内容疑为旧派单/重复通知，席位已明确待命）。
+
+## 2026-08-21 打针格的 worktree 未被创建（t.afix）
+- 现象：注入格 t.afix（resources.worktree_id=hl1.afix）被派单执行，但 .worktrees/hl1.afix 从未被创建；
+  同批注入的 repro2/sfix/sprobe2 的 worktree 都正常建了。席位落到仓根主树干活，判据 cd 不进 worktree 全红。
+- 影响：席位改动污染主树 + 判据必红；靠 leader 手工 stash 迁移恢复。
+- 时序线索：t.afix 派单与 t.uiplus 写回同秒（11:08:38），疑创建竞态被吞。
+
+---
+
+# 2026-08-22 · perfbase-v1 整夜无人值守（rev1→32，17 格，4 个 merged PR）
+
+> 补记说明：本节是**事后补的**。跑链期间我只把三条停机类直投了，优化类一条没积攒——
+> 违反铁律⑧「优化类只积攒」。材料来自当夜 commit 与驱动器日志，⛔ 不是回忆编的。
+
+## A. 框架侧（只积攒，⛔ 不逐条投）
+
+| # | 现象 | 状态 |
+|---|---|---|
+| A1 | **返修回环第二轮不自转**：判 rework 后引擎记 route_hop、把判者格转 `blocked['await_reentry:X']`，但**不复位 fix 格 X** ⇒ 前沿空 ⇒ AwaitingHuman | **已投**，对方确认是已知欠账 P13，提到 v0.1.2 首位 |
+| A2 | **依赖边重派不带 route hop 的上游 case** ⇒ 复位后席位收不到返工理由，回环转起来也是转空 | **已投**（与 A1 配套，对方按一件登记） |
+| A3 | **停机通知重复**：N 种文本 × M 个 team = N×M 条 | **已投**，对方采用此形状并入 F-08 |
+| A4 | `frozen_no_new_case` 报错说了「未换新 case_id」，但**没说怎么换**（= 清该格 `attempts[]` 里 failed_retryable）。文档三处都没写 | 未投 |
+| A5 | **判据脚本从各格自己的 worktree 取**（cwd=`${worktree}`）⇒ 在 main 上修好判据，对**已建好的树无效**。踩到时表现为"我明明修了它还是红" | 未投 |
+| A6 | **重建席位会连带销毁它手上在飞的派单**，引擎无任何告警，驱动器继续 `wait` 到预算耗尽（本次 5400s）。日志上零症状，只有读屏能发现新席位里只有 `session_start` | 未投（**价值最高的一条**） |
+| A7 | 席位被 provider 错误（`API Error: 529 Overloaded`）打断死在半路时，**账本层零症状**——投递回执早已 ok。只有读屏能看到报错 | 未投 |
+| A8 | **判者判 pass 之后 state 是 `blocked`**（`route_contradicts_success`），不是 succeeded。外部工具拿 state 当门禁会**永远不放行**（我的 autopr 就这么中过招）。建议给一个稳定的"判者裁定"字段或在文档点明 | 未投 |
+| A9 | 停机通知只有人类文本，**没有机器可读 JSON**，每轮心跳都要正则解析 | 未投 |
+| A10 | 判据失败的 stderr 被截断，详情要去 `tasks[].attempts[].artifact_refs` 里翻 | 未投 |
+| A11 | worktree 建为 **detached HEAD**，seal 必须自己先建分支；而 seal 的"不夺树"守卫见"脏且不在目标分支"就拒 ⇒ 每条链都要先处理一次 | 未投 |
+| A12 | 书写面字段名不好猜：mechanical 的 `time_budget_seconds`（我写 `budget_seconds` 被 schema 拒）、cwd 的 `${worktree}`（我写 `<WORKTREE>` 被 preflight 拒）。⇒ 属 ledgerdsl 侧，可随下次反馈一起给 | 未投 |
+
+## B. 我方侧（我自己的错，⛔ 不投框架，自己改）
+
+**账本形状（三次卡死里两次源于此）**
+- B1 先红格与转绿格**各起一棵 worktree 改同一批文件** ⇒ land 时必然 add/add 冲突（PR #6 park）。
+  ⇒ 改法：这类格串在**同一棵 worktree** 上，或让下游分支从上游分支起。
+- B2 `t.fixblank` 基于 `instr4` 分支而不是等它 land ⇒ 两个入口，后者必冲突（PR #10 park）。
+- B3 **依赖 land 结果的格与 land 竞速**：`t.core` 的树建在仪表 land 进 main 之前 ⇒ 切分包内 PerfTrace 符号 0 处、logcat 取数 0 行、复测判「不可判」。
+  ⇒ 改法：账本里显式等 land 完成，或让该格自己从最新 main 起树。
+
+**收口机器人 autopr.py（当夜修掉 5 个真 bug）**
+- B4 拿"上轮封过版"当已收口 ⇒ **返修第二轮的修复悄悄不进 PR**。改成 worktree 指纹判增量。
+- B5 门禁看 `state=="succeeded"` ⇒ 判者 pass 后是 `blocked`，永远不 land。改看 `status_record.status`。
+- B6 裁定书先找仓根 ⇒ 读到上一轮的旧抄本，把已 pass 的链子卡死。改成先读判者自己的 worktree，且账本与文件不一致 ⇒ ⛔ 不放行。
+- B7 **park 被当成重试队列**：同一份冲突每 60s 重试一次、反复 merge/abort 刷屏。改成记 `parked_fp`。
+- B8 分支名跟任务 id 而非 worktree ⇒ 换新树重做时撞 `already exists`。改成跟 worktree。
+
+**判据自己的坑**
+- B9 **全角括号紧跟 `$VAR`** ⇒ bash 3.2 把多字节字节并进变量名 ⇒ `set -u` unbound variable ⇒ 退出 1。
+  后果比崩溃更坏：**判据自己坏了却被记成「判据不通过」**，不是不可判(2)。13 处，9 个脚本，只有 1 处在成功分支上才暴露——**那是运气不是没病**。
+  ⇒ 规矩：判据里凡 `$VAR` 后接非 ASCII，一律写 `${VAR}`；且判据自身异常应尽量映射到 2 而非 1。
+
+**运维**
+- B10 我在一格**在飞时**拆了席位（换模型），造成 A6 那种静默卡死。⇒ 重建前先看驱动器在等谁。
+- B11 停滞告警对"长任务席位"误报率高：当夜 4 次告警 **3 假 1 真**。阈值要按**最长格的节奏**定（模拟器一轮 30 次冷点开 >30min），否则狼来了。
+  但那 1 次真的救了场（席位死于 provider 529）——⛔ 不要因为吵就关掉它。
+
+## C. 好用的，⛔ 别在"优化"里弄没了
+
+- C1 `--dry-run` 的 `excluded` 每条都给**为什么不动**（`dependency_unsatisfied` / `awaiting_route_hop` / `frozen_no_new_case`），一眼定位，省掉大量猜测。
+- C2 三个守卫都真的救过场：`frozen_no_new_case`（防判据红后空转）、`route_contradicts_success`（防判者被误关成功）、`in-flight 不重派`（我手工重启驱动器时没造成重复派单）。
+- C3 **四态里的「不可判」真在起作用**：`t.cperf` 因为取数 0 行判 exit 2 而不是红，避免了在"性能差"这个错误前提上继续推进。判据四态不是形式主义。
+- C4 原子写回 + revision 单调：当夜驱动器被杀/重起 6 次，**一次进度都没丢**。
