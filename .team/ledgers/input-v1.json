@@ -1,0 +1,295 @@
+{
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.input.v1",
+  "revision": 1,
+  "run": {
+    "desired_state": "running"
+  },
+  "roles": {
+    "r.in": {
+      "provider": "cursor_agent",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/t.contract/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "in-dev",
+        "team": "remote-agent-android",
+        "workspace": "/Volumes/nvme/Projects/远程Agent安卓"
+      }
+    },
+    "r.advisor": {
+      "provider": "unstated",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/_advisor/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    }
+  },
+  "tasks": {
+    "t.contract": {
+      "title": "输入透传：输入模型契约落纸（⛔ 不碰产品码）",
+      "unit": {
+        "module": "docs",
+        "symbol": "input-passthrough-contract",
+        "source": "docs/输入透传契约.md"
+      },
+      "state": "planned",
+      "owner": {
+        "role": "r.in"
+      },
+      "resources": {
+        "worktree_id": "wt-in0",
+        "write_paths": [
+          "docs/输入透传契约.md",
+          ".team/nodes/t.contract/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "d2d658c13"
+        },
+        "read_paths": [
+          ".team/nodes/t.contract/任务书.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-incontract.sh",
+          "server/internal/protocol/frames.go",
+          "server/internal/bridge/tmux.go",
+          "app/core-protocol/src",
+          ".team/artifacts/HANDOFF-leader-20260823.md"
+        ]
+      },
+      "statuses": [
+        {
+          "name": "done",
+          "description": "契约与说明两份产物都落盘",
+          "artifact": {
+            "note": "string，一句话说写了哪七节"
+          }
+        },
+        {
+          "name": "blocked_conflict",
+          "description": "任务书与代码原文打架，需 leader 裁定",
+          "artifact": {
+            "reason": "string，冲突两边的原文"
+          }
+        }
+      ],
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "docs/输入透传契约.md",
+          ".team/nodes/t.contract/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "M-contract",
+            "argv": [
+              "sh",
+              "tools/perfbase/judge-incontract.sh"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "unjudgeable_exit_codes": [
+              2
+            ],
+            "artifacts": [
+              ".team/nodes/t.contract/judge-incontract.log"
+            ],
+            "time_budget_seconds": 300
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "M-contract"
+        ]
+      }
+    },
+    "t.escalate": {
+      "title": "契约与代码冲突：升报 leader 裁定（终点格）",
+      "state": "planned",
+      "owner": {
+        "role": "r.in"
+      },
+      "resources": {
+        "worktree_id": "wt-in0-esc",
+        "write_paths": [
+          ".team/nodes/_advisor/"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "d2d658c13"
+        },
+        "read_paths": [
+          ".team/nodes/t.contract/"
+        ]
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/_advisor/冲突裁定请求.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "M-esc",
+            "argv": [
+              "test",
+              "-s",
+              ".team/nodes/_advisor/冲突裁定请求.md"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "artifacts": [],
+            "time_budget_seconds": 300
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "M-esc"
+        ]
+      }
+    },
+    "t.close": {
+      "title": "契约收口：把契约里的裁定压成一页对照表，供后续每一步开工时逐条比对",
+      "state": "planned",
+      "owner": {
+        "role": "r.in"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "d2d658c13"
+        },
+        "worktree_id": "wt-in0-close",
+        "write_paths": [
+          ".team/nodes/t.close/"
+        ],
+        "read_paths": [
+          ".team/nodes/t.close/任务书.md",
+          "docs/输入透传契约.md",
+          ".team/nodes/t.contract/说明.md"
+        ]
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/t.close/裁定对照表.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "M-close",
+            "argv": [
+              "sh",
+              "tools/perfbase/judge-inclose.sh"
+            ],
+            "cwd": ".",
+            "expected_exit_code": 0,
+            "unjudgeable_exit_codes": [
+              2
+            ],
+            "time_budget_seconds": 300,
+            "artifacts": [
+              ".team/nodes/t.close/judge.log"
+            ]
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "M-close"
+        ]
+      }
+    }
+  },
+  "dependencies": [],
+  "parallelism": [],
+  "transitions": [
+    {
+      "from": "t.contract",
+      "to": "t.escalate",
+      "on_status": [
+        "blocked_conflict"
+      ],
+      "assemble": {
+        "include_upstream_case": true
+      }
+    },
+    {
+      "from": "t.contract",
+      "to": "t.close",
+      "on_status": [
+        "done"
+      ],
+      "assemble": {
+        "include_upstream_case": false
+      }
+    }
+  ],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "report_result",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "alarm",
+    "delivery_uncertain": "needs_reconcile"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": true
+  },
+  "fallback": {
+    "F.ask-advisor": {
+      "agent": {
+        "role": "r.advisor"
+      },
+      "triggers": [
+        "blocked_on_unknown"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_advisor",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "cannot_close_success"
+  },
+  "resource_isolation": {
+    "rules": [],
+    "read_only_shared": [],
+    "closed_read": false
+  },
+  "fanout_aggregation": {},
+  "audit": {}
+}
