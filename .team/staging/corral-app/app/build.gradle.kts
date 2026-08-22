@@ -41,6 +41,19 @@ android {
     // compileSdk 36：BOM 2025.12.01 依赖链（androidx.core 1.18.0）要求 API 36+，本机已装 platforms 36。
     // targetSdk 保持 35，不改变运行时行为。
     compileSdk = 36
+    // 仅供本地性能对比，不可分发。口令是 Android SDK 公开的 debug keystore 固定值。
+    val debugKeystore = file(System.getProperty("user.home") + "/.android/debug.keystore")
+    signingConfigs {
+        create("releasePerfCompare") {
+            require(debugKeystore.isFile) {
+                "release 签名失败：未找到 Android debug keystore（${debugKeystore.absolutePath}）。"
+            }
+            storeFile = debugKeystore
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
     defaultConfig {
         // applicationId = dev.agentmirror.app（014 落账裁定）：与 namespace、源码包三方对齐。
         // 无 agentmirror.com 域名，com.* 名不副实；.dev 为开源惯例。naming 曾偏离改 com.*，
@@ -53,6 +66,7 @@ android {
     }
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("releasePerfCompare")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -101,11 +115,10 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     // conn 层：协议控制帧 JSON 编解码（kotlinx-serialization-json，Apache-2.0）。
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    // 终端内核：ANSI/CSI 解析 + 字符网格 + 本地 scrollback（:terminal，term-core-android 任务交付，纯 JVM 零 Android 依赖）。
-    implementation("dev.agentmirror:core-terminal")
-    implementation("dev.agentmirror:core-protocol")
-    implementation("dev.agentmirror:core-conn")
-    implementation("dev.agentmirror:terminal")
+    // 三核以发布产物引用（group=dev.agentmirror.core，version 钉死基线 tag）。
+    implementation("dev.agentmirror.core:core-protocol:20260822.0")
+    implementation("dev.agentmirror.core:core-terminal:20260822.0")
+    implementation("dev.agentmirror.core:core-conn:20260822.0")
     // 配对：OkHttp WebSocket 真实传输（conn 层 WebSocketTransport 接口的 service 实现，
     // 清偿传输欠账①，leader 裁定 A）+ MockWebServer 单测（均 Apache-2.0）。
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
