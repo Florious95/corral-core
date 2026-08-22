@@ -41,6 +41,9 @@ publishing {
             artifactId = project.name
             version = coreVer
             artifact tasks.named("makeAar")
+            pom {
+                packaging = "jar"
+            }
         }
     }
     repositories {
