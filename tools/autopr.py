@@ -161,7 +161,7 @@ def branch_of(led, tid):
     旧树还占着按任务 id 推出来的那个分支名，`git switch -c` 会 fatal: already exists。
     按树命名后两者天然不撞，旧分支/旧 PR 作为被取代的那次尝试原样留着。"""
     wid = (led["tasks"][tid].get("resources") or {}).get("worktree_id") or tid
-    return "pr/perfbase-" + wid.replace("wt-pb-", "", 1).replace(".", "-")
+    return "pr/" + wid.replace("wt-", "", 1).replace(".", "-")
 
 
 def faces(led, tid):
@@ -354,7 +354,7 @@ def tick(ledger_path, st):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     once = "--once" in sys.argv
-    ledger_path = args[0] if args else os.path.join(REPO, ".team/ledgers/perfbase-v1.json")
+    ledger_path = args[0] if args else os.path.join(REPO, ".team/ledgers/coreapp-v1.json")
     interval = 60
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
     log("起：账本=%s once=%s 间隔=%ss" % (ledger_path, once, interval))
