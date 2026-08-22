@@ -6,7 +6,8 @@ T="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$T/uilib.sh"
 FX="$1"; N="$2"
 CWD="$T/cwd"
-RAW="$T/../../../../.team/perf/raw"     # 占位，实际由 OUTDIR 覆盖
+CWD_LABEL="$(basename "$CWD")"
+RAW="$T/../../../../.team/perf/raw-capp"  # 复测另开目录，⛔ 不再覆盖基线 raw/
 OUT="${OUTDIR:?OUTDIR required}"
 mkdir -p "$OUT"
 LOG="$OUT/${FX}-$(printf '%02d' "$N").log"
@@ -17,16 +18,17 @@ sleep 2
 "$ADB" logcat -c >/dev/null 2>&1
 "$ADB" shell am start -W -n "$PKG/.MainActivity" >/dev/null 2>&1
 
-# 等列表页出现夹具工作区行（最多 30s）
+# 等列表页出现夹具工作区行（最多 30s）。UI 可能只露出末段目录名。
 ok=0
 for i in $(seq 1 45); do
   dumpui > "$T/cur.xml"
-  if grep -q "$CWD" "$T/cur.xml"; then ok=1; break; fi
+  if grep -q "$CWD" "$T/cur.xml" || grep -q "text=\"$CWD_LABEL\"" "$T/cur.xml"; then ok=1; break; fi
   sleep 1
 done
 [ "$ok" = 1 ] || { echo "FAIL($FX#$N): 列表页未出现夹具工作区" | tee -a "$LOG"; exit 2; }
 
 c=$(node_center "$T/cur.xml" "$CWD")
+[ -z "$c" ] && c=$(node_center "$T/cur.xml" "$CWD_LABEL")
 [ -n "$c" ] || { echo "FAIL($FX#$N): 工作区行无坐标" | tee -a "$LOG"; exit 2; }
 "$ADB" shell input tap ${c% *} ${c#* } >/dev/null 2>&1
 

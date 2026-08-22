@@ -1,0 +1,4 @@
+=== load probe r15 2026-08-22 19:16:17 ===
+19:16  up 1 day, 23:37, 14 users, load averages: 6.69 7.20 6.80
+free_mb=292 inactive_mb=8417 sum_mb=8709
+gate: load1<=15 and free+inactive>=3072 → PASS (load from uptime above)

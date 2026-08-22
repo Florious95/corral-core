@@ -1,0 +1,8 @@
+started_at=2026-08-22 14:28:32
+uptime=14:28  up 1 day, 18:49, 14 users, load averages: 10.48 9.66 8.95
+Pages free:                                    15102.
+Pages inactive:                               446246.
+apk_md5=3ebc9c55703c780c842a2f410b85034e
+apk_source=.team/staging/corral-app/app/build/outputs/apk/release/app-release.apk
+port=9324
+gpu=host Apple M1 Pro

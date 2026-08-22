@@ -11,7 +11,7 @@ INFO         |   Checking: hasSufficientHwGpu
 INFO         |      Ok: Hardware GPU requirements to run avd: `agentmirror_test_b` are passed
 INFO         |   Checking: hasSufficientSystem
 INFO         |      Ok: System requirements to run avd: `agentmirror_test_b` are met
-INFO         | Storing crashdata in: /tmp/android-alauda/emu-crash-37.2.4.db, detection is enabled for process: 59302
+INFO         | Storing crashdata in: /tmp/android-alauda/emu-crash-37.2.4.db, detection is enabled for process: 69041
 INFO         | Initializing gfxstream backend
 INFO         | startOpenglesRendererImpl: gpu info
 INFO         | 
@@ -75,11 +75,11 @@ INFO         |   androidboot.veritymode=enforcing
 INFO         | Monitoring duration of emulator setup.
 WARNING      | The emulator now requires a signed jwt token for gRPC access! Use the -grpc flag if you really want an open unprotected grpc port
 INFO         | Using security allow list from: /Users/alauda/Library/Android/sdk/emulator/lib/emulator_access.json
-INFO         | The active JSON Web Key Sets can be found here: /Users/alauda/Library/Caches/TemporaryItems/avd/running/59302/jwks/7a0bc10d-c69c-4fb7-908c-052e96baba23/active.jwk
-INFO         | Scanning /Users/alauda/Library/Caches/TemporaryItems/avd/running/59302/jwks/7a0bc10d-c69c-4fb7-908c-052e96baba23 for jwk keys.
+INFO         | The active JSON Web Key Sets can be found here: /Users/alauda/Library/Caches/TemporaryItems/avd/running/69041/jwks/c09a18d1-5c9c-4e1f-b037-02fcc7680d62/active.jwk
+INFO         | Scanning /Users/alauda/Library/Caches/TemporaryItems/avd/running/69041/jwks/c09a18d1-5c9c-4e1f-b037-02fcc7680d62 for jwk keys.
 INFO         | Started GRPC server at 127.0.0.1:8554, security: Local, auth: +token
 ERROR        | 'https' scheme not supported in proxy URI
-INFO         | Advertising in: /Users/alauda/Library/Caches/TemporaryItems/avd/running/pid_59302.ini
+INFO         | Advertising in: /Users/alauda/Library/Caches/TemporaryItems/avd/running/pid_69041.ini
 ERROR        | 'https' scheme not supported in proxy URI
 INFO         | Activated packet streamer for bluetooth emulation
 INFO         | Successfully initialized netsim WiFi
@@ -95,15 +95,11 @@ INFO         |      Ok: System requirements to run avd: `agentmirror_test_b` are
 INFO         | emulatorSetupEnvironment: Environment scene is not required
 INFO         | Warning: QMetaObject::connectSlotsByName: No matching signal for on_rgbcSensorValueWidget_valueChanged() (:0, )
 INFO         | Warning: QMetaObject::connectSlotsByName: No matching signal for on_posture_valueChanged(int) (:0, )
-INFO         | TouchpadHolder: registering via hw_xr_led agent for instance=0x7a924a440
+INFO         | TouchpadHolder: registering via hw_xr_led agent for instance=0xc6ef153c0
 INFO         | Warning: QObject::connect: Cannot queue arguments of type 'std::vector<android::emulation::control::SnapshotInfo>'
 (Make sure 'std::vector<android::emulation::control::SnapshotInfo>' is registered using qRegisterMetaType().) (:0, )
 INFO         | AVD supportsNativeGLES=1, supportsGuestAngle=1
-INFO         | Created extended window in 207.825ms
 USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
-INFO         | Boot completed in 17052 ms
+INFO         | Created extended window in 125.921ms
+INFO         | Boot completed in 17035 ms
 INFO         | Increasing screen off timeout, logcat buffer size to 2M.
-INFO         | Wait for emulator (pid 59302) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
-
-INFO         | Wait for emulator (pid 59302) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
-

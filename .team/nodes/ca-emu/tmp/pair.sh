@@ -40,7 +40,8 @@ ok=0
 for i in $(seq 1 30); do
   sleep 1
   dumpui > "$T/p3.xml"
-  if grep -q "$T/cwd" "$T/p3.xml"; then ok=1; break; fi
+  # 列表行可能只渲染末段目录名（cwd），不全量打印绝对路径
+  if grep -q "$T/cwd" "$T/p3.xml" || grep -q 'text="cwd"' "$T/p3.xml"; then ok=1; break; fi
   if grep -q '手填连接' "$T/p3.xml"; then
     echo "PAIR still on form at t=${i}s"
   fi
