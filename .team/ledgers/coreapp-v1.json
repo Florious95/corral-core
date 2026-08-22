@@ -39,6 +39,13 @@
         "status": "done",
         "at_revision": 10,
         "case_id": "ledger_coreapp_v1__t.perf__r10"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 13,
+        "case_id": "ledger_coreapp_v1__t.perf__r13"
       }
     ]
   },
@@ -115,7 +122,7 @@
     "read_only_shared": [],
     "rules": []
   },
-  "revision": 13,
+  "revision": 15,
   "roles": {
     "r.advisor": {
       "artifact_landing": {
@@ -460,7 +467,7 @@
             "acceptance_id": "c.perf",
             "argv": [
               "/bin/sh",
-              "tools/perfbase/judge-perf-nonregress.sh"
+              "tools/perfbase/judge-perf-ab.sh"
             ],
             "artifacts": [],
             "cwd": "${worktree}",
@@ -516,7 +523,7 @@
           "name": "done"
         }
       ],
-      "title": "格4·**只汇总，⛔ 不重新采集**（前任 pb-emu 在测完之后被 grok 周额度打死：402 usage balance exhausted、Weekly limit left 0%，测量本身跑完了 18m57s，死在汇总这一步）。\n【已经在盘上的东西，⛔ 不许重跑模拟器、⛔ 不许再点一次冷点开】\n .team/perf/raw-capp/A/  —— A 组（includeBuild 源码 composite 构建）30 份 logcat + host-load.tsv\n .team/perf/raw-capp/B/  —— B 组（引用 maven 产物构建）30 份 logcat + host-load.tsv\n 三夹具 real_claude_idle / redraw_tui / big_scrollback，各组各夹具 10 次，A,B 交替测的。\n A 包 md5 aecdbd461deece5daec8f81c70af8e54，B 包 md5 3ebc9c55703c780c842a2f410b85034e。\n【你要做的三件事】\n① 把这 60 份 logcat 汇总成 .team/perf/recheck-<日期>-capp-ab.json：A/B 两组并列，逐夹具逐段（first_draw / layout_settled）给 p50/p95/max，**极端值不剔除**（另列 outliers），带上两组各自的 load 读数。形状照 .team/perf/baseline-20260822.json。\n② 逐夹具逐段算 **B 相对 A** 的百分比。判据地板 = **同批 A 组**，⛔ 不跟历史基线比（上一轮就是跨包比历史地板才得出假的 -90%，被判者打回过）。\n③ 把结论写进 .team/nodes/ca-emu/说明.md：B 有没有比 A 慢超过 10%，逐段列。\n【纪律】⛔ 不许编数、⛔ 不许剔极端值、⛔ 不许改 tools/perfbase/*.sh、⛔ 不许碰 .team/perf/raw/（那是基线原文，上一轮被覆盖过一次）。数据不齐或算不出 ⇒ 如实报不可判（合法终态）。\n⚠️ 你是 cursor 席位，restart 会失忆 ⇒ 想说的话一律落盘到说明.md，⛔ 不要给 leader 发消息。\n细则读 .team/tasks/coreapp/任务书.md；上一轮判定书 .team/nodes/ca-rv/裁定.md。",
+      "title": "格4·加样本证伪那个红（⛔ 只测 big_scrollback 一个夹具，别动另外两个）。\n【上一轮结果：12 段里 10 段过，2 段红】\n RED  big_scrollback first_draw p50  A=142.0ms B=167.5ms (+18.0%)\n RED  big_scrollback first_draw p95  A=160.8ms B=212.9ms (+32.4%)\n 其余 10 段（含 redraw_tui first_draw p50 +9.2%）都在 +10% 门内。两组 load 几乎一样（A 8.57 / B 8.51），不是负载差。B 的红主要由右尾两次（192、230）拉起，但 p50 本身已 +18%。\n【为什么要加样本，⛔ 不是为了让它变绿】\nA/B 两个包 dex 内容等价、大小同为 35044459 bytes，纯换依赖形态造成 18% 在机理上讲不通。\n但「讲不通」不是证据——10 次样本对这个夹具可能不够。**加样本是让数据自己说话：**\n红扛住 ⇒ 是真回退，得从 app 侧找原因；红塌了 ⇒ 是噪声，同时说明最小样本数要提。\n⛔ 你无权决定它是噪声，只负责把数打出来。\n【怎么做】\n① 只跑 big_scrollback，A/B **各 20 次**，仍然 A,B,A,B 交替，冷点开流程不变；\n② 复用已有脚本与包：A=.team/nodes/ca-emu/tmp/app-release-a.apk（md5 aecdbd46…）、B=.team/staging/corral-app/app/build/outputs/apk/release/app-release.apk（md5 3ebc9c55…）；\n③ 新样本落 .team/perf/raw-capp2/{A,B}/，⛔ 不许覆盖 raw-capp/ 与 raw/；\n④ 汇总进 .team/perf/recheck-<日期>-capp-ab.json（判据只读最新那份），形状与上一份相同，**把上一轮的 10 次与本轮 20 次分开列，不要合并成一堆**，另给合并后的统计；\n⑤ 每批记 load 读数；极端值不剔除。\n⛔ 不许编数、⛔ 不许剔极端值、⛔ 不许改 tools/perfbase/*.sh、⛔ 不许碰 .team/perf/raw/。\n起模拟器前先探 load1 ≤15；探不到就如实报不可判（合法终态）。\n⚠️ cursor 席位 restart 会失忆 ⇒ 话写进 .team/nodes/ca-emu/说明.md，⛔ 不要给 leader 发消息。",
       "attempts": [
         {
           "attempt_id": "att-t.perf-seq4-t1787379878976",
