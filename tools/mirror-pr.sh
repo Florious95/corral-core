@@ -34,7 +34,7 @@ for BR in "$@"; do
   gh pr create --repo Florious95/corral-core --base main --head "$BR" \
     --title "$BR" --body "$(git log main.."$BR" --format='- %s' | head -5)
 
-由账本 hl1-v1 驱动：一格一分支，异源评审 verdict 与判据日志见仓内 .team/nodes/。
+由账本编排驱动：一格一分支，判据日志与评审 verdict 见仓内 .team/nodes/。
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)" || echo "开 PR 失败：$BR"
 done
