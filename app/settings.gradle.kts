@@ -42,5 +42,14 @@ rootProject.name = "agentmirror-app"
 // :app —— 主应用模块（本任务建立）
 include(":app")
 
-// :terminal —— 终端模拟内核模块（纯 Kotlin/JVM，零 Android 依赖），term-core-android 任务建立。
+// :terminal —— 门面，api 转发 :core-terminal（源码已改名并入，未另抄）。
 include(":terminal")
+
+// :core-terminal —— 终端模型（由 :terminal 改名复用）
+include(":core-terminal")
+
+// :core-protocol —— 帧编解码 / 协议类型
+include(":core-protocol")
+
+// :core-conn —— 连接状态机
+include(":core-conn")

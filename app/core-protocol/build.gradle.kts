@@ -15,11 +15,12 @@
  */
 
 /**
- * :terminal 门面：源码已并入 :core-terminal，本模块只转发 api，保留 :terminal:test 任务名。
+ * 客户端协议核（:core-protocol）：帧编解码 / 协议类型。纯 Kotlin/JVM，零 Android。
  */
 plugins {
     id("java-library")
     id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.0"
 }
 
 kotlin {
@@ -27,5 +28,6 @@ kotlin {
 }
 
 dependencies {
-    api(project(":core-terminal"))
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    testImplementation("junit:junit:4.13.2")
 }

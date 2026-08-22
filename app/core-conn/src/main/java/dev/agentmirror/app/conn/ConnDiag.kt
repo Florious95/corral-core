@@ -14,18 +14,13 @@
  * limitations under the License.
  */
 
+package dev.agentmirror.app.conn
+
 /**
- * :terminal 门面：源码已并入 :core-terminal，本模块只转发 api，保留 :terminal:test 任务名。
+ * 核模块诊断出口：由 app 壳注入 [dev.agentmirror.app.diag.DiagLog.record]。
+ * 默认空操作（零分配 lambda 之外仅函数引用），关路径不碰 Android。
  */
-plugins {
-    id("java-library")
-    id("org.jetbrains.kotlin.jvm")
-}
-
-kotlin {
-    jvmToolchain(17)
-}
-
-dependencies {
-    api(project(":core-terminal"))
+object ConnDiag {
+    @Volatile
+    var record: (tag: String, message: String) -> Unit = { _, _ -> }
 }

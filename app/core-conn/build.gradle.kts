@@ -15,7 +15,7 @@
  */
 
 /**
- * :terminal 门面：源码已并入 :core-terminal，本模块只转发 api，保留 :terminal:test 任务名。
+ * 连接状态机核（:core-conn）：auth / 订阅 / 重连。纯 Kotlin/JVM，零 Android。
  */
 plugins {
     id("java-library")
@@ -27,5 +27,6 @@ kotlin {
 }
 
 dependencies {
-    api(project(":core-terminal"))
+    api(project(":core-protocol"))
+    testImplementation("junit:junit:4.13.2")
 }

@@ -30,5 +30,5 @@ package dev.agentmirror.app.conn
  * 上层（UI/service）只见回调（[ConnectionManager.Listener] / [Connection.Listener]），不见
  * WS 细节。本层不持久任何会话状态。
  *
- * @consumes dev.agentmirror.app.diag
+ * 诊断出口经 [ConnDiag] 由 app 壳注入 DiagLog（核模块零 Android）。
  */
