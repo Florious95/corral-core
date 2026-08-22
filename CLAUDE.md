@@ -42,7 +42,13 @@
 
 - ⛔⛔ **禁止使用 Deepseek 模型**（2026-08-21 用户令）。这条**取代**了下面那条旧的默认通道。
 - ⛔⛔ **禁止开 Fable 5**（2026-08-21 用户令）。
-  （原「评审席只能用 Opus 5」一句已按 2026-08-22 用户令删除。）
+- ⛔⛔ **所有席位一律 `provider: grok` / `model: grok-4.6`；⛔ 不许再开 Opus 席位**
+  （2026-08-22 用户令：「你只能开 Grok 4.6……你后面开的节点就不能再开 Opus 了」）。
+  这条**取代**了原来的「评审席只能用 Opus 5」。
+  ⚠️ 实撞：只删 CLAUDE.md 里那句话**不够** —— 已经起着的 Opus 席位不会自己变，
+  必须逐个 `remove-agent --force --confirm` + `add-agent` 重建并**读 pane 自证模型名**。
+  ⇒ 异源评审这一层现在只剩「不同席位 + 零上下文 + 不采信自报 + 判据反造假哨兵」，
+  provider 异源那一层没有了，写判据时要更狠。
   ⚠️ `model` 与 `dangerously_skip_permissions` 一样**只在启动时生效** ——
   改文件不够，必须 `remove-agent --force` + `add-agent` 重建，并读 pane 自证底部显示的模型名。
   ⇒ 新建席位用 `provider: grok`（`grok-4.6`）或 Claude 订阅
