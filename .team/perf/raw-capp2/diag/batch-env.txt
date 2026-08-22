@@ -1,0 +1,8 @@
+started_at=2026-08-22 19:17:11
+uptime=19:17  up 1 day, 23:38, 14 users, load averages: 9.00 7.71 7.01
+apk_a=aecdbd461deece5daec8f81c70af8e54
+apk_b=3ebc9c55703c780c842a2f410b85034e
+port=9325 gpu=host
+fixture=big_scrollback_only n=20_each alternate_AB
+outdir=.team/perf/raw-capp2
+note=does_not_touch raw-capp or raw

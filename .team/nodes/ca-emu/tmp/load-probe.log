@@ -1,0 +1,17 @@
+probe 1 15:21:14 load1=74.47 free_mb=2984 inactive_mb=8246 fi_mb=11230
+probe 2 15:21:59 load1=73.45 free_mb=843 inactive_mb=8149 fi_mb=8992
+probe 3 15:22:44 load1=83.45 free_mb=154 inactive_mb=8217 fi_mb=8371
+probe 4 15:23:29 load1=78.92 free_mb=457 inactive_mb=8257 fi_mb=8714
+probe 5 15:24:14 load1=85.10 free_mb=1202 inactive_mb=8244 fi_mb=9446
+probe 6 15:24:59 load1=87.70 free_mb=55 inactive_mb=8234 fi_mb=8289
+probe 7 15:25:44 load1=90.20 free_mb=84 inactive_mb=8234 fi_mb=8318
+probe 8 15:26:29 load1=109.09 free_mb=73 inactive_mb=8355 fi_mb=8428
+probe 9 15:27:14 load1=138.73 free_mb=66 inactive_mb=8617 fi_mb=8683
+probe 10 15:28:00 load1=117.94 free_mb=66 inactive_mb=8709 fi_mb=8775
+probe 11 15:28:45 load1=109.24 free_mb=75 inactive_mb=8635 fi_mb=8710
+probe 12 15:29:30 load1=106.34 free_mb=58 inactive_mb=8683 fi_mb=8741
+probe 13 15:30:15 load1=107.36 free_mb=76 inactive_mb=9444 fi_mb=9520
+probe 14 15:31:00 load1=129.63 free_mb=70 inactive_mb=8675 fi_mb=8745
+probe 15 15:31:45 load1=134.77 free_mb=66 inactive_mb=8600 fi_mb=8666
+probe 16 15:32:30 load1=135.77 free_mb=180 inactive_mb=8543 fi_mb=8723
+threshold load1<=15 and free+inactive>=3000MB : NEVER MET

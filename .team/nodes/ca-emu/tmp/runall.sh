@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 T="$(cd "$(dirname "$0")" && pwd)"
-export OUTDIR="${OUTDIR:-$T/../../../../.team/perf/raw}"
+export OUTDIR="${OUTDIR:-$T/../../../../.team/perf/raw-capp}"
 mkdir -p "$OUTDIR"
 NAVLOG="$OUTDIR/diag/navigation-runlog.log"
 mkdir -p "$OUTDIR/diag"
