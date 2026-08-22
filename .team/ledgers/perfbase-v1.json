@@ -39,6 +39,20 @@
     "from": "t.rv.base",
     "status": "pass",
     "to": "t.core"
+   },
+   {
+    "at_revision": 27,
+    "case_id": "ledger_perfbase_v1__t.repo__r27",
+    "from": "t.repo",
+    "status": "done",
+    "to": "t.rv.final"
+   },
+   {
+    "at_revision": 28,
+    "case_id": "ledger_perfbase_v1__t.rv.final__r28",
+    "from": "t.rv.final",
+    "status": "pass",
+    "to": "t.close"
    }
   ]
  },
@@ -156,7 +170,7 @@
   "read_only_shared": [],
   "rules": []
  },
- "revision": 26,
+ "revision": 30,
  "roles": {
   "r.advisor": {
    "artifact_landing": {
@@ -535,6 +549,7 @@
      "c.close"
     ]
    },
+   "attempts": [],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -552,7 +567,7 @@
      "revision": "2d4e1d66f098e5bc36c23c75bc9fbd4f19513c99"
     },
     "read_paths": [],
-    "worktree_id": "wt-pb-close",
+    "worktree_id": "wt-pb-close2",
     "write_paths": [
      ".team/artifacts/"
     ]
@@ -651,7 +666,18 @@
      "c.perf.nonregress"
     ]
    },
-   "attempts": [],
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.perf.nonregress",
+      "acceptance_success.writeback_revision=27"
+     ],
+     "attempt_id": "att-t.cperf-seq1-t1787364488812",
+     "delivery_id": "del-t.cperf-seq1-t1787364488812",
+     "state": "succeeded",
+     "writeback_revision": 27
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -680,7 +706,7 @@
     ]
    },
    "seat_wait_seconds": 5400,
-   "state": "planned",
+   "state": "succeeded",
    "title": "任务三·切分后复测：用任务书 02 完全相同的流程与环境复测，落 .team/perf/recheck-<日期>-split.json（同形状）。判据逐夹具逐段比 p50/p95，超基线 +10% 即红。⛔ 不许换夹具、换次数、换取数方式来让它变绿。细则读 .team/tasks/perfbase/任务书-02-基线.md 末节"
   },
   "t.esc1": {
@@ -830,7 +856,7 @@
     ]
    },
    "seat_wait_seconds": 1800,
-   "state": "planned",
+   "state": "not_applicable",
    "title": "判不出升报：重构终审判不出。 把「判不出什么、缺哪份材料、下一步谁来补」写清，升报 leader 裁定。⛔ 不许静默收工，⛔ 不许把判不出改写成通过。落 .team/escalations/perfbase-esc3-<日期>.md"
   },
   "t.exh1": {
@@ -980,7 +1006,7 @@
     ]
    },
    "seat_wait_seconds": 1800,
-   "state": "planned",
+   "state": "not_applicable",
    "title": "重构返修 2 轮穷尽：整理两轮 rework 理由与重构现状，升报 leader 裁定，⛔ 不许静默收工。"
   },
   "t.fixblank": {
@@ -1342,6 +1368,18 @@
      "c.repo"
     ]
    },
+   "attempts": [
+    {
+     "artifact_refs": [
+      "acceptance_success.acceptance_id=c.repo",
+      "acceptance_success.writeback_revision=28"
+     ],
+     "attempt_id": "att-t.repo-seq2-t1787366090216",
+     "delivery_id": "del-t.repo-seq2-t1787366090216",
+     "state": "succeeded",
+     "writeback_revision": 28
+    }
+   ],
    "blocking_reasons": [],
    "handoff": {
     "required_artifacts": [],
@@ -1372,7 +1410,15 @@
     ]
    },
    "seat_wait_seconds": 5400,
-   "state": "planned",
+   "state": "succeeded",
+   "status_record": {
+    "artifacts": {
+     "report": ".team/nodes/pb-repo/说明.md"
+    },
+    "case_id": "ledger_perfbase_v1__t.repo__r27",
+    "recorded_at_revision": 27,
+    "status": "done"
+   },
    "statuses": [
     {
      "artifact": {
@@ -1496,7 +1542,9 @@
      "c.rv.final"
     ]
    },
-   "blocking_reasons": [],
+   "blocking_reasons": [
+    "route_contradicts_success: dest=t.close"
+   ],
    "handoff": {
     "required_artifacts": [],
     "route": "report_result"
@@ -1526,7 +1574,15 @@
     ]
    },
    "seat_wait_seconds": 3600,
-   "state": "planned",
+   "state": "blocked",
+   "status_record": {
+    "artifacts": {
+     "report": ".team/nodes/pb-rv-final/裁定.md"
+    },
+    "case_id": "ledger_perfbase_v1__t.rv.final__r28",
+    "recorded_at_revision": 28,
+    "status": "pass"
+   },
    "statuses": [
     {
      "artifact": {
