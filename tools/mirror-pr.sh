@@ -28,15 +28,21 @@ python3 "$FR" --force --invert-paths \
   --path-glob '*/tmp/daemon.log' \
   --mailmap "$WORK/mailmap" --commit-callback "$STRIP" >/dev/null
 git remote add origin "$GH/corral-core.git"
-git push --force -u origin main
+# 🔴 次序是**先分支+开 PR，后推 main**（2026-08-23 实撞后改）。
+# 原来是先推 main：一旦本地已经把分支并进 main，远端 main 就先拿到了那些提交，
+# 等到开 PR 时 `gh` 报 "No commits between main and <BR>" —— 分支推上去了，PR 却立不起来，
+# 远端只留下一条孤儿分支。用户已为此点名三次「一事一 PR」没成立。
+# 反过来：先开 PR（此时远端 main 还没有这些提交，diff 成立），再推 main，
+# 该 PR 会被 GitHub 自动判为 merged —— 一事一 PR 一闭环。
 for BR in "$@"; do
   git push --force origin "$BR"
   gh pr view "$BR" --repo Florious95/corral-core >/dev/null 2>&1 && { echo "PR 已存在：$BR"; continue; }
   gh pr create --repo Florious95/corral-core --base main --head "$BR" \
-    --title "$BR" --body "$(git log main.."$BR" --format='- %s' | head -5)
+    --title "$BR" --body "$(git log origin/main.."$BR" --format='- %s' 2>/dev/null | head -5)
 
 由账本编排驱动：一格一分支，判据日志与评审 verdict 见仓内 .team/nodes/。
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)" || echo "开 PR 失败：$BR"
 done
+git push --force -u origin main
 echo "==> mirror-pr 完成"
