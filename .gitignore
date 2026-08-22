@@ -47,3 +47,7 @@ local.properties
 
 # 席位临时目录里的 daemon 日志会长到 140MB+，超 GitHub 100MB 上限（2026-08-23 实撞：镜像推 main 被 pre-receive 拒）
 .team/nodes/*/tmp/daemon.log
+# 席位 tmp 里会落二进制(30MB agentmirrord)与大日志——只收证据文本，⛔ 不收产物
+.team/nodes/*/tmp/agentmirrord
+.team/nodes/*/tmp/bin/
+.team/nodes/*/tmp/daemon-state/
