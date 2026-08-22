@@ -17,6 +17,7 @@
 package dev.agentmirror.app.conn
 
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.perf.PerfTrace
 
 /**
  * 单条 WebSocket 生命周期状态机（docs/protocol.md §3）。
@@ -178,6 +179,14 @@ class Connection(
         } catch (e: FrameDecodeException) {
             listener.onLocalDecodeError(e.code, e.message ?: "binary decode rejected")
             return
+        }
+        if (PerfTrace.isEnabled()) {
+            val kind = when (frame.kind) {
+                BinaryKind.SNAPSHOT -> "snapshot"
+                BinaryKind.DELTA -> "delta"
+                BinaryKind.SCROLLBACK -> "scrollback"
+            }
+            PerfTrace.emitWsBinaryRecv(frame.ref, kind, frame.data.size)
         }
         listener.onBinary(frame)
     }
