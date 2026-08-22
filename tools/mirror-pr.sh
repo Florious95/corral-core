@@ -25,6 +25,7 @@ python3 "$FR" --force --invert-paths \
   --path e2e/artifacts/ --path e2e/bin/ --path server/ \
   --path-glob '*/build/*' --path-glob '*/.gradle/*' \
   --path-glob '*.env' --path-glob '*.apk' --path-glob 'agentmirrord*' \
+  --path-glob '*/tmp/daemon.log' \
   --mailmap "$WORK/mailmap" --commit-callback "$STRIP" >/dev/null
 git remote add origin "$GH/corral-core.git"
 git push --force -u origin main
