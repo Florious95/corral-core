@@ -172,6 +172,11 @@ def faces(led, tid):
         out.append("core")
     if any(p.startswith("server/") or p == "server" for p in wp):
         out.append("serve")
+    # 🔴 2026-08-22 用户点名第三次：corral-app 远端仓 8 天没动静。
+    # 根因就在这张表——只映射了 app/ 与 server/，写 .team/staging/ 的格永远轮不到 PR，
+    # 于是「本地走完、远端 PR 列表空着」的老毛病又复现一次。
+    if any(p.startswith(".team/staging/") for p in wp):
+        out.append("capp")
     return out
 
 
@@ -233,6 +238,21 @@ def do_pr(led, tid):
         return True, "本格无产品面改动，跳过远端 PR（仍会 land 进 main 留证据）"
     msgs = []
     for face in fs:
+        if face == "capp":
+            # corral-app 不是 monorepo 的过滤镜像（它是独立工程），走专用脚本。
+            # 该脚本推之前四道自检（无 includeBuild / 无核源码 / 依赖钉死版本 / 无凭据），
+            # 任何一条不过就拒推——⛔ 判据不许绕，机器人也不例外。
+            wid = (led["tasks"][tid].get("resources") or {}).get("worktree_id")
+            src = os.path.join(REPO, ".worktrees", wid, ".team/staging/corral-app") if wid else ""
+            if not os.path.isdir(src):
+                msgs.append("capp 跳过：源目录不在 %s" % src)
+                continue
+            rc, out = run(["sh", os.path.join(REPO, "tools/push-corral-app.sh"), src],
+                          cwd=REPO, timeout=900)
+            if rc != 0:
+                return False, "capp 推送红 rc=%d：%s" % (rc, out.strip()[-600:])
+            msgs.append("capp %s" % out.strip().splitlines()[-1] if out.strip() else "capp OK")
+            continue
         script = "tools/mirror-pr.sh" if face == "core" else "tools/mirror-pr-serve.sh"
         rc, out = run(["bash", os.path.join(REPO, script), br], cwd=REPO, timeout=900)
         repo = "Florious95/corral-core" if face == "core" else "Florious95/corral-serve"
