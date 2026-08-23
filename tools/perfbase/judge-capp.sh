@@ -3,6 +3,16 @@
 # 这条是「禁止从 app 侧改核」的**物理保证**：没有源码就改不了。
 # 四态：0=通过；1=不通过；2=不可判。
 set -u
+
+# 🔴 worktree 里没有 local.properties（它按机器路径生成、已 gitignore），
+# gradle 会报 "SDK location not found"。⛔ 别往仓里塞 local.properties——
+# 那是机器相关路径。这里用环境变量供给，缺了就判**不可判**（不是判红：
+# 那是本机环境不具备，不是被测物有问题）。2026-08-23 实撞。
+ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+[ -d "$ANDROID_HOME" ] || { echo "UNJUDGEABLE 找不到 Android SDK（ANDROID_HOME=$ANDROID_HOME），跑不了 gradle"; exit 2; }
+export ANDROID_HOME
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+
 ROOT=$(pwd)
 APPDIR="$ROOT/.team/staging/corral-app"
 VER="20260822.0"
