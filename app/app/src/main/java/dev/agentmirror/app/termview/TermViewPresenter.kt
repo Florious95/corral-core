@@ -69,6 +69,10 @@ class TermViewPresenter(
     var cellHeight: Int = DEFAULT_CELL_HEIGHT
         private set
 
+    /** 内核网格列/行（触点换算钳位用；只读，不分配）。 */
+    val gridCols: Int get() = emulator.cols
+    val gridRows: Int get() = emulator.rows
+
     /** 视图像素尺寸，字号→行列数换算的基准。 */
     private var viewportWidthPx: Int = 0
     private var viewportHeightPx: Int = 0

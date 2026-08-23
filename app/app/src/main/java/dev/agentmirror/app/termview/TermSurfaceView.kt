@@ -26,6 +26,7 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.GestureDetector
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import dev.agentmirror.app.diag.DiagLog
@@ -97,6 +98,20 @@ class TermSurfaceView @JvmOverloads constructor(
     var onRemoteScrollBy: ((deltaLines: Int) -> Unit)? = null
 
     /**
+     * 鼠标/触点采集（输入透传第 4 步）：行列 1-based，修饰键已从 MotionEvent 拆出。
+     * 返回 true = 核层编码后已发出（跟踪开着）。跟踪未开时返回 false，手势仍走滚轮。
+     */
+    var onTermMouse: ((
+        column: Int,
+        row: Int,
+        press: Boolean,
+        motion: Boolean,
+        shift: Boolean,
+        meta: Boolean,
+        ctrl: Boolean,
+    ) -> Boolean)? = null
+
+    /**
      * 当前会话 ref（[SessionScreen] 注入）。first_draw 按 ref 查 open_id。
      * 关路径：onDraw 只读 [PerfTrace.isEnabled]，不扫网格。
      */
@@ -130,6 +145,9 @@ class TermSurfaceView @JvmOverloads constructor(
      * 丢失的亚行像素，两层累加器职责不重叠。
      */
     private var pendingScrollPx: Float = 0f
+
+    private val mouseCap = TermMouseCapture()
+    private var mouseHeld: Boolean = false
 
     private var backToBottomLabel: String? = null
 
@@ -357,11 +375,52 @@ class TermSurfaceView @JvmOverloads constructor(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        presenter ?: return super.onTouchEvent(event)
+        val p = presenter ?: return super.onTouchEvent(event)
         if (event.actionMasked == MotionEvent.ACTION_DOWN) refreshBurst()
-        val handled = gestureDetector.onTouchEvent(event)
-        if (!handled) super.onTouchEvent(event)
+        val wasHeld = mouseHeld
+        dispatchTermMouse(p, event)
+        if (!wasHeld && !mouseHeld) {
+            val handled = gestureDetector.onTouchEvent(event)
+            if (!handled) super.onTouchEvent(event)
+        }
         return true
+    }
+
+    /** 按下/跨格拖动/抬起。同格 motion 不上报。跟踪未开则 [onTermMouse] 返回 false，滚轮路径照旧。 */
+    private fun dispatchTermMouse(p: TermViewPresenter, event: MotionEvent) {
+        val sink = onTermMouse ?: return
+        val cw = p.cellWidth
+        val ch = p.cellHeight
+        if (!mouseCap.hit(event.x, event.y, cw, ch, p.gridCols, p.gridRows)) return
+        val shift = event.metaState and KeyEvent.META_SHIFT_ON != 0
+        val meta = event.metaState and KeyEvent.META_ALT_ON != 0
+        val ctrl = event.metaState and KeyEvent.META_CTRL_ON != 0
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                mouseCap.reset()
+                mouseCap.hit(event.x, event.y, cw, ch, p.gridCols, p.gridRows)
+                if (sink(mouseCap.col, mouseCap.row, true, false, shift, meta, ctrl)) {
+                    mouseHeld = true
+                    mouseCap.markReported()
+                } else {
+                    mouseHeld = false
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (mouseHeld && mouseCap.crossedCell()) {
+                    if (sink(mouseCap.col, mouseCap.row, true, true, shift, meta, ctrl)) {
+                        mouseCap.markReported()
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (mouseHeld) {
+                    sink(mouseCap.col, mouseCap.row, false, false, shift, meta, ctrl)
+                    mouseHeld = false
+                    mouseCap.reset()
+                }
+            }
+        }
     }
 
     /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */

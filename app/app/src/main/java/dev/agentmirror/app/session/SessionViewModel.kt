@@ -525,6 +525,37 @@ class SessionViewModel(
     }
 
     /**
+     * 壳采集的一次鼠标/触点：行列已是 1-based。编码只问核层 [TerminalEmulator.encodeMouse]，
+     * 返回 null 则不发帧（对面没开跟踪）。非空才走 [ConnectionManager.sendRawBytes]。
+     *
+     * 不走 sendDraft 发送闸，避免一次点击把键盘路径卡在 Sending。
+     *
+     * @return true 当且仅当发出了带 bytes 的 input 帧
+     */
+    fun onTermMouse(
+        column: Int,
+        row: Int,
+        press: Boolean,
+        motion: Boolean = false,
+        shift: Boolean = false,
+        meta: Boolean = false,
+        ctrl: Boolean = false,
+    ): Boolean {
+        val bytes = emulator.encodeMouse(
+            button = 0,
+            column = column,
+            row = row,
+            press = press,
+            motion = motion,
+            shift = shift,
+            meta = meta,
+            ctrl = ctrl,
+        ) ?: return false
+        if (bytes.isEmpty()) return false
+        return manager.sendRawBytes(ref, bytes)
+    }
+
+    /**
      * 处理手势滚动（缺陷④ 远端滚动投送，由 TermSurfaceView 经 onRemoteScrollBy 回调触发）。
      *
      * READY 状态：以 50ms 节流发 ScrollWheelFrame 到服务端；delta = -deltaLines（协议约定
