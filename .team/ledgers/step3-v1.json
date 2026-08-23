@@ -1,7 +1,7 @@
 {
   "schema_version": "ledger.v2",
   "ledger_id": "ledger.step3.v1",
-  "revision": 1,
+  "revision": 2,
   "run": {
     "desired_state": "running"
   },
@@ -54,7 +54,7 @@
         },
         "provenance": {
           "identity": "git",
-          "revision": "eaf394108"
+          "revision": "e96a98f03"
         },
         "worktree_id": "wt-step3",
         "write_paths": [
