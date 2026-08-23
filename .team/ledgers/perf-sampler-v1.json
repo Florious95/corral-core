@@ -1,0 +1,404 @@
+{
+ "acceptance": {
+  "judgment_requires_distinct_provider": true,
+  "mechanical_exit_code_is_authoritative": true
+ },
+ "audit": {
+  "route_hops": []
+ },
+ "dependencies": [
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.sampler.test",
+   "same_source_required": false,
+   "to": "t.sampler.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.sampler.probe",
+   "same_source_required": false,
+   "to": "t.sampler.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.sampler.impl",
+   "same_source_required": false,
+   "to": "t.sampler.verify"
+  }
+ ],
+ "evidence_policy": {
+  "missing_evidence": "cannot_close_success",
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ]
+ },
+ "fallback": {
+  "F.escalate": {
+   "action": "escalate_to_advisor",
+   "agent": {
+    "role": "advisor"
+   },
+   "max_attempts": 1,
+   "silent_substitution": false,
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed",
+    "delivery_uncertain"
+   ]
+  }
+ },
+ "fanout_aggregation": {},
+ "handoff": {
+  "delivery_uncertain": "needs_reconcile",
+  "missing_result": "alarm",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "result_route": "report_result",
+  "send_command": "team-agent send"
+ },
+ "ledger_id": "ledger.perf-sampler.v1",
+ "parallelism": [
+  {
+   "failure_policy": "halt",
+   "group": "sampler-wave",
+   "max_concurrency": 3
+  }
+ ],
+ "resource_isolation": {
+  "closed_read": false,
+  "read_only_shared": [],
+  "rules": []
+ },
+ "revision": 1,
+ "roles": {
+  "advisor": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/advisor/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-advisor-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "impl": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/sampler-impl/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-dev-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "probe": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/sampler-probe/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-review-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "test": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/sampler-test/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-test-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "verify": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/sampler-verify/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-review-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  }
+ },
+ "run": {
+  "desired_state": "running"
+ },
+ "schema_version": "ledger.v2",
+ "tasks": {
+  "t.sampler.impl": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.sampler.impl",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/sampler-impl.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.sampler.impl"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/input-full-auto/sampler-impl/IMPL.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "impl"
+   },
+   "parallel": {
+    "group": "sampler-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "7bce762bd"
+    },
+    "read_paths": [
+     ".team/nodes/input-full-auto/sampler-impl/任务书.md",
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-charlie",
+    "write_paths": [
+     "tools/perfbase/run-input-ab.sh",
+     "tools/perfbase/parse-input-ab.py",
+     ".team/nodes/input-full-auto/sampler-impl/"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "按 `.team/nodes/input-full-auto/sampler-impl/任务书.md` 并行实现新 sampler/parser 与 self-test；不得改旧判据或产品码，齐后 report_result。"
+  },
+  "t.sampler.probe": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.sampler.probe",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/sampler-probe.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.sampler.probe"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/input-full-auto/sampler-probe/PROBE.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "probe"
+   },
+   "parallel": {
+    "group": "sampler-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "7bce762bd"
+    },
+    "read_paths": [
+     ".team/nodes/input-full-auto/sampler-probe/任务书.md",
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-bravo",
+    "write_paths": [
+     ".team/nodes/input-full-auto/sampler-probe/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/input-full-auto/sampler-probe/任务书.md` 并行产出独立根因探针与破坏齿；只写本格产物，齐后 report_result。"
+  },
+  "t.sampler.test": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.sampler.test",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/sampler-test.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.sampler.test"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/input-full-auto/sampler-test/RED.md",
+     ".team/nodes/input-full-auto/sampler-test/cases.json"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "test"
+   },
+   "parallel": {
+    "group": "sampler-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "7bce762bd"
+    },
+    "read_paths": [
+     ".team/nodes/input-full-auto/sampler-test/任务书.md",
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-alpha",
+    "write_paths": [
+     ".team/nodes/input-full-auto/sampler-test/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/input-full-auto/sampler-test/任务书.md` 并行产出场景红测矩阵；只写本格产物，齐后 report_result。"
+  },
+  "t.sampler.verify": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.sampler.verify",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/sampler-verify.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.sampler.verify"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/input-full-auto/sampler-verify/VERDICT.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "verify"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "7bce762bd"
+    },
+    "read_paths": [
+     ".team/nodes/input-full-auto/sampler-verify/任务书.md",
+     "tools/perfbase/run-input-ab.sh",
+     "tools/perfbase/parse-input-ab.py"
+    ],
+    "worktree_id": "wt-charlie",
+    "write_paths": [
+     ".team/nodes/input-full-auto/sampler-verify/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/input-full-auto/sampler-verify/任务书.md` 独立终审 wt-charlie 实现；重跑 self-test 并做破坏齿，齐后 report_result。"
+  }
+ },
+ "transitions": []
+}
