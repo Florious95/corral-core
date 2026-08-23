@@ -1,0 +1,4 @@
+  ok   测试文件：server/internal/bridge/raw_bytes_test.go server/internal/api/api_tmux_test.go server/internal/api/raw_bytes_api_test.go 
+  …  go test -count=1 ./internal/...
+PASS 三条断言在仓里、说明贴了改前的红并写清闭集位置、server 全量 go test -count=1 绿
+     ⚠️ 性能⛔ 不在本判据内——粗筛只拦大幅退化，最终判据是用户真机「秒开无空白」。
