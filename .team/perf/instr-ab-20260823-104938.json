@@ -1,0 +1,1517 @@
+{
+  "kind": "instr-ab2 (t.instrperf3)\uff1a\u540c\u6279 A/B \u4ea4\u66ff\uff0crelease \u5305\uff0cn>=20\uff0cload1<=12\uff0ckeyecho \u5173",
+  "method": "adb logcat -s PerfTrace\uff1b\u8df3\u8fc7 emitted=0\uff1b\u76f8\u5bf9\u8be5\u6b21 tap \u7684 elapsedRealtime \u5dee\u503c",
+  "unit": "ms",
+  "floor": "\u540c\u6279 A \u7ec4\uff08\u26d4 \u4e0d\u8ddf\u5386\u53f2\u57fa\u7ebf\u6bd4\uff09",
+  "threshold_pct": 10,
+  "build_type": "release",
+  "load1": 11.98,
+  "load1_mean": 9.58,
+  "A": {
+    "apk_md5": "ba84e6edc1b167514503a517a02762fd",
+    "commit": "a706915ef4410fdc27f7e51c9c86a971b94a0492",
+    "label": "input/instr-v1 \u7236\u63d0\u4ea4\uff08\u65e0 key_send/key_echo\uff09",
+    "build_type": "release"
+  },
+  "B": {
+    "apk_md5": "9fe59d8fb6afb219784e2c3859f0c55f",
+    "commit": "630c76ab9d8103d4efd5ef045641c3af10c5dd6c",
+    "label": "630c76ab9 \u56de\u7089\u4fee\u590d\uff08\u6253\u70b9 + \u72ec\u7acb\u5f00\u5173\uff0c\u6d4b\u65f6 keyecho \u5173\uff09",
+    "build_type": "release"
+  },
+  "host_load": {
+    "A": {
+      "n": 60,
+      "load1_min": 6.62,
+      "load1_max": 11.98,
+      "load1_mean": 9.54,
+      "source": ".team/perf/instr-ab2-raw/A/host-load.tsv",
+      "rows": [
+        {
+          "ts": "09:32:41",
+          "fixture": "real_claude_idle",
+          "n": 1,
+          "load1": 8.95
+        },
+        {
+          "ts": "09:34:25",
+          "fixture": "real_claude_idle",
+          "n": 2,
+          "load1": 11.9
+        },
+        {
+          "ts": "09:37:03",
+          "fixture": "real_claude_idle",
+          "n": 3,
+          "load1": 10.15
+        },
+        {
+          "ts": "09:38:07",
+          "fixture": "real_claude_idle",
+          "n": 4,
+          "load1": 7.87
+        },
+        {
+          "ts": "09:39:09",
+          "fixture": "real_claude_idle",
+          "n": 5,
+          "load1": 7.45
+        },
+        {
+          "ts": "09:40:16",
+          "fixture": "real_claude_idle",
+          "n": 6,
+          "load1": 7.13
+        },
+        {
+          "ts": "09:41:19",
+          "fixture": "real_claude_idle",
+          "n": 7,
+          "load1": 7.41
+        },
+        {
+          "ts": "09:42:26",
+          "fixture": "real_claude_idle",
+          "n": 8,
+          "load1": 7.76
+        },
+        {
+          "ts": "09:43:29",
+          "fixture": "real_claude_idle",
+          "n": 9,
+          "load1": 8.17
+        },
+        {
+          "ts": "09:44:34",
+          "fixture": "real_claude_idle",
+          "n": 10,
+          "load1": 6.62
+        },
+        {
+          "ts": "09:45:51",
+          "fixture": "real_claude_idle",
+          "n": 11,
+          "load1": 8.84
+        },
+        {
+          "ts": "09:46:53",
+          "fixture": "real_claude_idle",
+          "n": 12,
+          "load1": 8.44
+        },
+        {
+          "ts": "09:47:58",
+          "fixture": "real_claude_idle",
+          "n": 13,
+          "load1": 9.79
+        },
+        {
+          "ts": "09:49:00",
+          "fixture": "real_claude_idle",
+          "n": 14,
+          "load1": 8.76
+        },
+        {
+          "ts": "09:50:02",
+          "fixture": "real_claude_idle",
+          "n": 15,
+          "load1": 8.5
+        },
+        {
+          "ts": "09:51:06",
+          "fixture": "real_claude_idle",
+          "n": 16,
+          "load1": 8.29
+        },
+        {
+          "ts": "09:52:11",
+          "fixture": "real_claude_idle",
+          "n": 17,
+          "load1": 10.68
+        },
+        {
+          "ts": "09:53:12",
+          "fixture": "real_claude_idle",
+          "n": 18,
+          "load1": 11.92
+        },
+        {
+          "ts": "09:54:35",
+          "fixture": "real_claude_idle",
+          "n": 19,
+          "load1": 11.5
+        },
+        {
+          "ts": "09:55:58",
+          "fixture": "real_claude_idle",
+          "n": 20,
+          "load1": 10.21
+        },
+        {
+          "ts": "09:57:58",
+          "fixture": "redraw_tui",
+          "n": 1,
+          "load1": 11.57
+        },
+        {
+          "ts": "09:59:00",
+          "fixture": "redraw_tui",
+          "n": 2,
+          "load1": 11.79
+        },
+        {
+          "ts": "10:00:46",
+          "fixture": "redraw_tui",
+          "n": 3,
+          "load1": 11.07
+        },
+        {
+          "ts": "10:01:50",
+          "fixture": "redraw_tui",
+          "n": 4,
+          "load1": 10.3
+        },
+        {
+          "ts": "10:02:53",
+          "fixture": "redraw_tui",
+          "n": 5,
+          "load1": 9.95
+        },
+        {
+          "ts": "10:03:55",
+          "fixture": "redraw_tui",
+          "n": 6,
+          "load1": 9.69
+        },
+        {
+          "ts": "10:05:40",
+          "fixture": "redraw_tui",
+          "n": 7,
+          "load1": 11.13
+        },
+        {
+          "ts": "10:06:46",
+          "fixture": "redraw_tui",
+          "n": 8,
+          "load1": 10.23
+        },
+        {
+          "ts": "10:07:49",
+          "fixture": "redraw_tui",
+          "n": 9,
+          "load1": 10.59
+        },
+        {
+          "ts": "10:08:51",
+          "fixture": "redraw_tui",
+          "n": 10,
+          "load1": 10.09
+        },
+        {
+          "ts": "10:09:54",
+          "fixture": "redraw_tui",
+          "n": 11,
+          "load1": 8.42
+        },
+        {
+          "ts": "10:10:57",
+          "fixture": "redraw_tui",
+          "n": 12,
+          "load1": 9.0
+        },
+        {
+          "ts": "10:13:32",
+          "fixture": "redraw_tui",
+          "n": 13,
+          "load1": 10.09
+        },
+        {
+          "ts": "10:14:42",
+          "fixture": "redraw_tui",
+          "n": 14,
+          "load1": 11.49
+        },
+        {
+          "ts": "10:15:51",
+          "fixture": "redraw_tui",
+          "n": 15,
+          "load1": 9.57
+        },
+        {
+          "ts": "10:16:54",
+          "fixture": "redraw_tui",
+          "n": 16,
+          "load1": 8.97
+        },
+        {
+          "ts": "10:17:59",
+          "fixture": "redraw_tui",
+          "n": 17,
+          "load1": 8.72
+        },
+        {
+          "ts": "10:19:01",
+          "fixture": "redraw_tui",
+          "n": 18,
+          "load1": 7.56
+        },
+        {
+          "ts": "10:20:02",
+          "fixture": "redraw_tui",
+          "n": 19,
+          "load1": 6.69
+        },
+        {
+          "ts": "10:21:08",
+          "fixture": "redraw_tui",
+          "n": 20,
+          "load1": 8.34
+        },
+        {
+          "ts": "10:23:15",
+          "fixture": "big_scrollback",
+          "n": 1,
+          "load1": 10.53
+        },
+        {
+          "ts": "10:24:16",
+          "fixture": "big_scrollback",
+          "n": 2,
+          "load1": 9.38
+        },
+        {
+          "ts": "10:25:21",
+          "fixture": "big_scrollback",
+          "n": 3,
+          "load1": 7.12
+        },
+        {
+          "ts": "10:26:25",
+          "fixture": "big_scrollback",
+          "n": 4,
+          "load1": 7.9
+        },
+        {
+          "ts": "10:27:28",
+          "fixture": "big_scrollback",
+          "n": 5,
+          "load1": 7.61
+        },
+        {
+          "ts": "10:28:31",
+          "fixture": "big_scrollback",
+          "n": 6,
+          "load1": 8.01
+        },
+        {
+          "ts": "10:29:34",
+          "fixture": "big_scrollback",
+          "n": 7,
+          "load1": 8.37
+        },
+        {
+          "ts": "10:30:38",
+          "fixture": "big_scrollback",
+          "n": 8,
+          "load1": 8.77
+        },
+        {
+          "ts": "10:31:51",
+          "fixture": "big_scrollback",
+          "n": 9,
+          "load1": 10.76
+        },
+        {
+          "ts": "10:34:15",
+          "fixture": "big_scrollback",
+          "n": 10,
+          "load1": 11.98
+        },
+        {
+          "ts": "10:35:21",
+          "fixture": "big_scrollback",
+          "n": 11,
+          "load1": 11.61
+        },
+        {
+          "ts": "10:36:25",
+          "fixture": "big_scrollback",
+          "n": 12,
+          "load1": 9.57
+        },
+        {
+          "ts": "10:37:28",
+          "fixture": "big_scrollback",
+          "n": 13,
+          "load1": 10.69
+        },
+        {
+          "ts": "10:38:32",
+          "fixture": "big_scrollback",
+          "n": 14,
+          "load1": 10.07
+        },
+        {
+          "ts": "10:39:36",
+          "fixture": "big_scrollback",
+          "n": 15,
+          "load1": 9.1
+        },
+        {
+          "ts": "10:41:04",
+          "fixture": "big_scrollback",
+          "n": 16,
+          "load1": 11.37
+        },
+        {
+          "ts": "10:42:06",
+          "fixture": "big_scrollback",
+          "n": 17,
+          "load1": 11.15
+        },
+        {
+          "ts": "10:43:31",
+          "fixture": "big_scrollback",
+          "n": 18,
+          "load1": 11.98
+        },
+        {
+          "ts": "10:45:48",
+          "fixture": "big_scrollback",
+          "n": 19,
+          "load1": 11.14
+        },
+        {
+          "ts": "10:47:11",
+          "fixture": "big_scrollback",
+          "n": 20,
+          "load1": 9.86
+        }
+      ]
+    },
+    "B": {
+      "n": 60,
+      "load1_min": 6.52,
+      "load1_max": 11.74,
+      "load1_mean": 9.61,
+      "source": ".team/perf/instr-ab2-raw/B/host-load.tsv",
+      "rows": [
+        {
+          "ts": "09:33:19",
+          "fixture": "real_claude_idle",
+          "n": 1,
+          "load1": 9.96
+        },
+        {
+          "ts": "09:36:29",
+          "fixture": "real_claude_idle",
+          "n": 2,
+          "load1": 10.88
+        },
+        {
+          "ts": "09:37:35",
+          "fixture": "real_claude_idle",
+          "n": 3,
+          "load1": 9.81
+        },
+        {
+          "ts": "09:38:37",
+          "fixture": "real_claude_idle",
+          "n": 4,
+          "load1": 7.62
+        },
+        {
+          "ts": "09:39:45",
+          "fixture": "real_claude_idle",
+          "n": 5,
+          "load1": 7.77
+        },
+        {
+          "ts": "09:40:48",
+          "fixture": "real_claude_idle",
+          "n": 6,
+          "load1": 6.52
+        },
+        {
+          "ts": "09:41:53",
+          "fixture": "real_claude_idle",
+          "n": 7,
+          "load1": 7.78
+        },
+        {
+          "ts": "09:42:57",
+          "fixture": "real_claude_idle",
+          "n": 8,
+          "load1": 6.87
+        },
+        {
+          "ts": "09:44:00",
+          "fixture": "real_claude_idle",
+          "n": 9,
+          "load1": 7.35
+        },
+        {
+          "ts": "09:45:14",
+          "fixture": "real_claude_idle",
+          "n": 10,
+          "load1": 8.19
+        },
+        {
+          "ts": "09:46:22",
+          "fixture": "real_claude_idle",
+          "n": 11,
+          "load1": 9.51
+        },
+        {
+          "ts": "09:47:26",
+          "fixture": "real_claude_idle",
+          "n": 12,
+          "load1": 10.37
+        },
+        {
+          "ts": "09:48:29",
+          "fixture": "real_claude_idle",
+          "n": 13,
+          "load1": 9.99
+        },
+        {
+          "ts": "09:49:32",
+          "fixture": "real_claude_idle",
+          "n": 14,
+          "load1": 8.06
+        },
+        {
+          "ts": "09:50:34",
+          "fixture": "real_claude_idle",
+          "n": 15,
+          "load1": 9.67
+        },
+        {
+          "ts": "09:51:37",
+          "fixture": "real_claude_idle",
+          "n": 16,
+          "load1": 8.62
+        },
+        {
+          "ts": "09:52:42",
+          "fixture": "real_claude_idle",
+          "n": 17,
+          "load1": 11.74
+        },
+        {
+          "ts": "09:53:43",
+          "fixture": "real_claude_idle",
+          "n": 18,
+          "load1": 10.82
+        },
+        {
+          "ts": "09:55:05",
+          "fixture": "real_claude_idle",
+          "n": 19,
+          "load1": 10.8
+        },
+        {
+          "ts": "09:56:29",
+          "fixture": "real_claude_idle",
+          "n": 20,
+          "load1": 10.53
+        },
+        {
+          "ts": "09:58:29",
+          "fixture": "redraw_tui",
+          "n": 1,
+          "load1": 9.99
+        },
+        {
+          "ts": "09:59:31",
+          "fixture": "redraw_tui",
+          "n": 2,
+          "load1": 10.81
+        },
+        {
+          "ts": "10:01:18",
+          "fixture": "redraw_tui",
+          "n": 3,
+          "load1": 10.44
+        },
+        {
+          "ts": "10:02:22",
+          "fixture": "redraw_tui",
+          "n": 4,
+          "load1": 10.51
+        },
+        {
+          "ts": "10:03:24",
+          "fixture": "redraw_tui",
+          "n": 5,
+          "load1": 10.1
+        },
+        {
+          "ts": "10:04:48",
+          "fixture": "redraw_tui",
+          "n": 6,
+          "load1": 11.44
+        },
+        {
+          "ts": "10:06:12",
+          "fixture": "redraw_tui",
+          "n": 7,
+          "load1": 9.96
+        },
+        {
+          "ts": "10:07:18",
+          "fixture": "redraw_tui",
+          "n": 8,
+          "load1": 10.91
+        },
+        {
+          "ts": "10:08:20",
+          "fixture": "redraw_tui",
+          "n": 9,
+          "load1": 10.9
+        },
+        {
+          "ts": "10:09:22",
+          "fixture": "redraw_tui",
+          "n": 10,
+          "load1": 10.28
+        },
+        {
+          "ts": "10:10:25",
+          "fixture": "redraw_tui",
+          "n": 11,
+          "load1": 8.44
+        },
+        {
+          "ts": "10:12:53",
+          "fixture": "redraw_tui",
+          "n": 12,
+          "load1": 10.12
+        },
+        {
+          "ts": "10:14:03",
+          "fixture": "redraw_tui",
+          "n": 13,
+          "load1": 8.16
+        },
+        {
+          "ts": "10:15:20",
+          "fixture": "redraw_tui",
+          "n": 14,
+          "load1": 11.22
+        },
+        {
+          "ts": "10:16:23",
+          "fixture": "redraw_tui",
+          "n": 15,
+          "load1": 9.71
+        },
+        {
+          "ts": "10:17:27",
+          "fixture": "redraw_tui",
+          "n": 16,
+          "load1": 9.33
+        },
+        {
+          "ts": "10:18:30",
+          "fixture": "redraw_tui",
+          "n": 17,
+          "load1": 8.67
+        },
+        {
+          "ts": "10:19:31",
+          "fixture": "redraw_tui",
+          "n": 18,
+          "load1": 6.67
+        },
+        {
+          "ts": "10:20:32",
+          "fixture": "redraw_tui",
+          "n": 19,
+          "load1": 9.29
+        },
+        {
+          "ts": "10:22:15",
+          "fixture": "redraw_tui",
+          "n": 20,
+          "load1": 11.44
+        },
+        {
+          "ts": "10:23:45",
+          "fixture": "big_scrollback",
+          "n": 1,
+          "load1": 8.08
+        },
+        {
+          "ts": "10:24:48",
+          "fixture": "big_scrollback",
+          "n": 2,
+          "load1": 8.17
+        },
+        {
+          "ts": "10:25:52",
+          "fixture": "big_scrollback",
+          "n": 3,
+          "load1": 7.18
+        },
+        {
+          "ts": "10:26:56",
+          "fixture": "big_scrollback",
+          "n": 4,
+          "load1": 7.37
+        },
+        {
+          "ts": "10:28:01",
+          "fixture": "big_scrollback",
+          "n": 5,
+          "load1": 7.96
+        },
+        {
+          "ts": "10:29:02",
+          "fixture": "big_scrollback",
+          "n": 6,
+          "load1": 9.53
+        },
+        {
+          "ts": "10:30:05",
+          "fixture": "big_scrollback",
+          "n": 7,
+          "load1": 9.01
+        },
+        {
+          "ts": "10:31:18",
+          "fixture": "big_scrollback",
+          "n": 8,
+          "load1": 9.1
+        },
+        {
+          "ts": "10:33:22",
+          "fixture": "big_scrollback",
+          "n": 9,
+          "load1": 11.17
+        },
+        {
+          "ts": "10:34:48",
+          "fixture": "big_scrollback",
+          "n": 10,
+          "load1": 11.48
+        },
+        {
+          "ts": "10:35:53",
+          "fixture": "big_scrollback",
+          "n": 11,
+          "load1": 10.89
+        },
+        {
+          "ts": "10:36:57",
+          "fixture": "big_scrollback",
+          "n": 12,
+          "load1": 10.06
+        },
+        {
+          "ts": "10:38:00",
+          "fixture": "big_scrollback",
+          "n": 13,
+          "load1": 11.23
+        },
+        {
+          "ts": "10:39:03",
+          "fixture": "big_scrollback",
+          "n": 14,
+          "load1": 9.82
+        },
+        {
+          "ts": "10:40:09",
+          "fixture": "big_scrollback",
+          "n": 15,
+          "load1": 10.06
+        },
+        {
+          "ts": "10:41:35",
+          "fixture": "big_scrollback",
+          "n": 16,
+          "load1": 11.59
+        },
+        {
+          "ts": "10:42:56",
+          "fixture": "big_scrollback",
+          "n": 17,
+          "load1": 10.34
+        },
+        {
+          "ts": "10:44:02",
+          "fixture": "big_scrollback",
+          "n": 18,
+          "load1": 10.72
+        },
+        {
+          "ts": "10:46:40",
+          "fixture": "big_scrollback",
+          "n": 19,
+          "load1": 11.12
+        },
+        {
+          "ts": "10:47:43",
+          "fixture": "big_scrollback",
+          "n": 20,
+          "load1": 10.5
+        }
+      ]
+    }
+  },
+  "raw": {
+    "A": {
+      "real_claude_idle": {
+        "segments": {
+          "first_draw": {
+            "p50": 529.5,
+            "p95": 753.3,
+            "max": 759,
+            "n": 20,
+            "samples": [
+              665,
+              565,
+              531,
+              391,
+              502,
+              467,
+              350,
+              435,
+              400,
+              753,
+              423,
+              759,
+              656,
+              573,
+              389,
+              752,
+              467,
+              646,
+              535,
+              528
+            ]
+          },
+          "layout_settled": {
+            "p50": 1089.0,
+            "p95": 1472.0,
+            "max": 1605,
+            "n": 20,
+            "samples": [
+              1465,
+              1605,
+              1010,
+              1060,
+              1282,
+              1417,
+              1081,
+              1281,
+              974,
+              950,
+              946,
+              851,
+              969,
+              745,
+              1217,
+              1011,
+              1151,
+              1225,
+              1097,
+              1275
+            ]
+          }
+        },
+        "outliers": []
+      },
+      "redraw_tui": {
+        "segments": {
+          "first_draw": {
+            "p50": 464.0,
+            "p95": 1023.2,
+            "max": 1197,
+            "n": 20,
+            "samples": [
+              1014,
+              457,
+              390,
+              338,
+              388,
+              669,
+              482,
+              443,
+              566,
+              403,
+              577,
+              1197,
+              509,
+              437,
+              471,
+              448,
+              540,
+              392,
+              423,
+              608
+            ]
+          },
+          "layout_settled": {
+            "p50": 1063.0,
+            "p95": 1380.1,
+            "max": 2446,
+            "n": 20,
+            "samples": [
+              1057,
+              1022,
+              1099,
+              877,
+              819,
+              1304,
+              1068,
+              1116,
+              1324,
+              1058,
+              1248,
+              2446,
+              1070,
+              1176,
+              1074,
+              975,
+              735,
+              990,
+              1028,
+              807
+            ]
+          }
+        },
+        "outliers": []
+      },
+      "big_scrollback": {
+        "segments": {
+          "first_draw": {
+            "p50": 464.0,
+            "p95": 665.7,
+            "max": 717,
+            "n": 20,
+            "samples": [
+              717,
+              647,
+              573,
+              663,
+              556,
+              492,
+              634,
+              381,
+              434,
+              358,
+              455,
+              469,
+              412,
+              441,
+              428,
+              463,
+              443,
+              436,
+              465,
+              508
+            ]
+          },
+          "layout_settled": {
+            "p50": 966.5,
+            "p95": 1378.4,
+            "max": 1652,
+            "n": 20,
+            "samples": [
+              855,
+              798,
+              1251,
+              780,
+              830,
+              1219,
+              898,
+              1081,
+              773,
+              991,
+              1652,
+              1121,
+              1305,
+              1170,
+              1364,
+              775,
+              783,
+              942,
+              1109,
+              900
+            ]
+          }
+        },
+        "outliers": []
+      }
+    },
+    "B": {
+      "real_claude_idle": {
+        "segments": {
+          "first_draw": {
+            "p50": 482.5,
+            "p95": 716.6,
+            "max": 841,
+            "n": 20,
+            "samples": [
+              841,
+              532,
+              315,
+              531,
+              710,
+              497,
+              453,
+              410,
+              424,
+              644,
+              474,
+              421,
+              446,
+              583,
+              491,
+              332,
+              406,
+              704,
+              526,
+              414
+            ]
+          },
+          "layout_settled": {
+            "p50": 1093.5,
+            "p95": 1532.8,
+            "max": 1890,
+            "n": 20,
+            "samples": [
+              1056,
+              1890,
+              1008,
+              1130,
+              1376,
+              1278,
+              1514,
+              1057,
+              1238,
+              866,
+              972,
+              1140,
+              991,
+              1279,
+              1004,
+              997,
+              854,
+              879,
+              1345,
+              1348
+            ]
+          }
+        },
+        "outliers": []
+      },
+      "redraw_tui": {
+        "segments": {
+          "first_draw": {
+            "p50": 557.5,
+            "p95": 2683.7,
+            "max": 6648,
+            "n": 20,
+            "samples": [
+              2475,
+              6648,
+              993,
+              531,
+              539,
+              518,
+              570,
+              406,
+              548,
+              373,
+              393,
+              348,
+              617,
+              333,
+              846,
+              567,
+              594,
+              669,
+              453,
+              598
+            ]
+          },
+          "layout_settled": {
+            "p50": 1091.5,
+            "p95": 2747.2,
+            "max": 6721,
+            "n": 20,
+            "samples": [
+              2538,
+              6721,
+              1101,
+              1058,
+              1078,
+              1220,
+              1301,
+              1143,
+              1111,
+              984,
+              1115,
+              949,
+              1229,
+              981,
+              871,
+              1082,
+              811,
+              819,
+              1197,
+              836
+            ]
+          }
+        },
+        "outliers": []
+      },
+      "big_scrollback": {
+        "segments": {
+          "first_draw": {
+            "p50": 510.5,
+            "p95": 758.0,
+            "max": 833,
+            "n": 20,
+            "samples": [
+              530,
+              439,
+              833,
+              451,
+              754,
+              368,
+              472,
+              452,
+              671,
+              385,
+              715,
+              409,
+              388,
+              412,
+              641,
+              499,
+              551,
+              557,
+              522,
+              583
+            ]
+          },
+          "layout_settled": {
+            "p50": 1097.0,
+            "p95": 1320.0,
+            "max": 1414,
+            "n": 20,
+            "samples": [
+              857,
+              814,
+              957,
+              1209,
+              1069,
+              1133,
+              1308,
+              1052,
+              964,
+              1123,
+              1414,
+              1095,
+              1099,
+              732,
+              914,
+              1143,
+              1315,
+              734,
+              1185,
+              1174
+            ]
+          }
+        },
+        "outliers": []
+      }
+    }
+  },
+  "comparison": {
+    "batch1": {
+      "real_claude_idle": {
+        "first_draw": {
+          "A": {
+            "p50": 529.5,
+            "p95": 753.3,
+            "max": 759,
+            "n": 20,
+            "samples": [
+              665,
+              565,
+              531,
+              391,
+              502,
+              467,
+              350,
+              435,
+              400,
+              753,
+              423,
+              759,
+              656,
+              573,
+              389,
+              752,
+              467,
+              646,
+              535,
+              528
+            ]
+          },
+          "B": {
+            "p50": 482.5,
+            "p95": 716.6,
+            "max": 841,
+            "n": 20,
+            "samples": [
+              841,
+              532,
+              315,
+              531,
+              710,
+              497,
+              453,
+              410,
+              424,
+              644,
+              474,
+              421,
+              446,
+              583,
+              491,
+              332,
+              406,
+              704,
+              526,
+              414
+            ]
+          },
+          "B_vs_A_pct": {
+            "p50": -8.9,
+            "p95": -4.9
+          }
+        },
+        "layout_settled": {
+          "A": {
+            "p50": 1089.0,
+            "p95": 1472.0,
+            "max": 1605,
+            "n": 20,
+            "samples": [
+              1465,
+              1605,
+              1010,
+              1060,
+              1282,
+              1417,
+              1081,
+              1281,
+              974,
+              950,
+              946,
+              851,
+              969,
+              745,
+              1217,
+              1011,
+              1151,
+              1225,
+              1097,
+              1275
+            ]
+          },
+          "B": {
+            "p50": 1093.5,
+            "p95": 1532.8,
+            "max": 1890,
+            "n": 20,
+            "samples": [
+              1056,
+              1890,
+              1008,
+              1130,
+              1376,
+              1278,
+              1514,
+              1057,
+              1238,
+              866,
+              972,
+              1140,
+              991,
+              1279,
+              1004,
+              997,
+              854,
+              879,
+              1345,
+              1348
+            ]
+          },
+          "B_vs_A_pct": {
+            "p50": 0.4,
+            "p95": 4.1
+          }
+        }
+      },
+      "redraw_tui": {
+        "first_draw": {
+          "A": {
+            "p50": 464.0,
+            "p95": 1023.2,
+            "max": 1197,
+            "n": 20,
+            "samples": [
+              1014,
+              457,
+              390,
+              338,
+              388,
+              669,
+              482,
+              443,
+              566,
+              403,
+              577,
+              1197,
+              509,
+              437,
+              471,
+              448,
+              540,
+              392,
+              423,
+              608
+            ]
+          },
+          "B": {
+            "p50": 557.5,
+            "p95": 2683.7,
+            "max": 6648,
+            "n": 20,
+            "samples": [
+              2475,
+              6648,
+              993,
+              531,
+              539,
+              518,
+              570,
+              406,
+              548,
+              373,
+              393,
+              348,
+              617,
+              333,
+              846,
+              567,
+              594,
+              669,
+              453,
+              598
+            ]
+          },
+          "B_vs_A_pct": {
+            "p50": 20.2,
+            "p95": 162.3
+          }
+        },
+        "layout_settled": {
+          "A": {
+            "p50": 1063.0,
+            "p95": 1380.1,
+            "max": 2446,
+            "n": 20,
+            "samples": [
+              1057,
+              1022,
+              1099,
+              877,
+              819,
+              1304,
+              1068,
+              1116,
+              1324,
+              1058,
+              1248,
+              2446,
+              1070,
+              1176,
+              1074,
+              975,
+              735,
+              990,
+              1028,
+              807
+            ]
+          },
+          "B": {
+            "p50": 1091.5,
+            "p95": 2747.2,
+            "max": 6721,
+            "n": 20,
+            "samples": [
+              2538,
+              6721,
+              1101,
+              1058,
+              1078,
+              1220,
+              1301,
+              1143,
+              1111,
+              984,
+              1115,
+              949,
+              1229,
+              981,
+              871,
+              1082,
+              811,
+              819,
+              1197,
+              836
+            ]
+          },
+          "B_vs_A_pct": {
+            "p50": 2.7,
+            "p95": 99.1
+          }
+        }
+      },
+      "big_scrollback": {
+        "first_draw": {
+          "A": {
+            "p50": 464.0,
+            "p95": 665.7,
+            "max": 717,
+            "n": 20,
+            "samples": [
+              717,
+              647,
+              573,
+              663,
+              556,
+              492,
+              634,
+              381,
+              434,
+              358,
+              455,
+              469,
+              412,
+              441,
+              428,
+              463,
+              443,
+              436,
+              465,
+              508
+            ]
+          },
+          "B": {
+            "p50": 510.5,
+            "p95": 758.0,
+            "max": 833,
+            "n": 20,
+            "samples": [
+              530,
+              439,
+              833,
+              451,
+              754,
+              368,
+              472,
+              452,
+              671,
+              385,
+              715,
+              409,
+              388,
+              412,
+              641,
+              499,
+              551,
+              557,
+              522,
+              583
+            ]
+          },
+          "B_vs_A_pct": {
+            "p50": 10.0,
+            "p95": 13.9
+          }
+        },
+        "layout_settled": {
+          "A": {
+            "p50": 966.5,
+            "p95": 1378.4,
+            "max": 1652,
+            "n": 20,
+            "samples": [
+              855,
+              798,
+              1251,
+              780,
+              830,
+              1219,
+              898,
+              1081,
+              773,
+              991,
+              1652,
+              1121,
+              1305,
+              1170,
+              1364,
+              775,
+              783,
+              942,
+              1109,
+              900
+            ]
+          },
+          "B": {
+            "p50": 1097.0,
+            "p95": 1320.0,
+            "max": 1414,
+            "n": 20,
+            "samples": [
+              857,
+              814,
+              957,
+              1209,
+              1069,
+              1133,
+              1308,
+              1052,
+              964,
+              1123,
+              1414,
+              1095,
+              1099,
+              732,
+              914,
+              1143,
+              1315,
+              734,
+              1185,
+              1174
+            ]
+          },
+          "B_vs_A_pct": {
+            "p50": 13.5,
+            "p95": -4.2
+          }
+        }
+      }
+    }
+  },
+  "note": "\u91cf\u7684\u662f\u6253\u70b9\u5f00\u7740\u3001\u6309\u952e\u56de\u663e\u5f00\u5173\u5173\u7740\u65f6\u7684\u4ee3\u4ef7\uff08coldopen \u9760 PerfTrace \u53d6\u6570\uff09\u3002\u5c31\u7b97\u5168\u7eff\u4e5f\u53ea\u8bc1\u660e\u6ca1\u9000\u8d85\u8fc7\u5224\u636e\u95e8 10%\uff0c\u4e0d\u662f\u4e00\u70b9\u6ca1\u9000\u3002"
+}
