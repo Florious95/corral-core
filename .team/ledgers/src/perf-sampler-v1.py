@@ -2,10 +2,10 @@ from ledgerdsl import WT, Check, EnvironmentFidelity, FallbackDef, Handoff, Ledg
 
 base = dict(environment_fidelity=EnvironmentFidelity(runs_real_cli=True), provenance=Provenance(identity="git", revision="7bce762bd"))
 roles = {
- "test": role(".team/nodes/input-full-auto/sampler-test/", agent="input-test-luna", team="remote-agent-android", provider="codex"),
- "probe": role(".team/nodes/input-full-auto/sampler-probe/", agent="input-review-luna", team="remote-agent-android", provider="codex"),
- "impl": role(".team/nodes/input-full-auto/sampler-impl/", agent="input-dev-luna", team="remote-agent-android", provider="codex"),
- "verify": role(".team/nodes/input-full-auto/sampler-verify/", agent="input-review-luna", team="remote-agent-android", provider="codex"),
+ "test": role(".team/nodes/input-full-auto/sampler-test/", agent="sampler-test-luna2", team="remote-agent-android", provider="codex"),
+ "probe": role(".team/nodes/input-full-auto/sampler-probe/", agent="sampler-review-luna2", team="remote-agent-android", provider="codex"),
+ "impl": role(".team/nodes/input-full-auto/sampler-impl/", agent="sampler-dev-luna2", team="remote-agent-android", provider="codex"),
+ "verify": role(".team/nodes/input-full-auto/sampler-verify/", agent="sampler-review-luna2", team="remote-agent-android", provider="codex"),
  "advisor": role(".team/nodes/input-full-auto/advisor/", agent="input-advisor-luna", team="remote-agent-android", provider="codex"),
 }
 test = Task(title="按 `.team/nodes/input-full-auto/sampler-test/任务书.md` 并行产出场景红测矩阵；只写本格产物，齐后 report_result。", owner_role="test", seat_wait_seconds=1800, parallel="sampler-wave", resources=Resources(worktree_id="wt-alpha", write_paths=[".team/nodes/input-full-auto/sampler-test/"], read_paths=[".team/nodes/input-full-auto/sampler-test/任务书.md", ".team/nodes/input-full-auto/perf-design/CONTRACT.md", "tools/perfbase/"], **base), handoff=Handoff(required_artifacts=[".team/nodes/input-full-auto/sampler-test/RED.md", ".team/nodes/input-full-auto/sampler-test/cases.json"]), checks=[Check(id="M.sampler.test", script=ScriptRef(path=".team/ledgers/acceptance/sampler-test.sh"), cwd=WT, budget=120)])
