@@ -1,0 +1,320 @@
+{
+ "acceptance": {
+  "judgment_requires_distinct_provider": true,
+  "mechanical_exit_code_is_authoritative": true
+ },
+ "audit": {
+  "route_hops": []
+ },
+ "dependencies": [
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.perf.design",
+   "same_source_required": false,
+   "to": "t.perf.measure"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.perf.measure",
+   "same_source_required": false,
+   "to": "t.perf.verify"
+  }
+ ],
+ "evidence_policy": {
+  "missing_evidence": "cannot_close_success",
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ]
+ },
+ "fallback": {
+  "F.escalate": {
+   "action": "escalate_to_advisor",
+   "agent": {
+    "role": "advisor"
+   },
+   "max_attempts": 1,
+   "silent_substitution": false,
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed",
+    "delivery_uncertain"
+   ]
+  }
+ },
+ "fanout_aggregation": {},
+ "handoff": {
+  "delivery_uncertain": "needs_reconcile",
+  "missing_result": "alarm",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "result_route": "report_result",
+  "send_command": "team-agent send"
+ },
+ "ledger_id": "ledger.input-full-auto.v1",
+ "parallelism": [],
+ "resource_isolation": {
+  "closed_read": false,
+  "read_only_shared": [],
+  "rules": []
+ },
+ "revision": 1,
+ "roles": {
+  "advisor": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/advisor/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-advisor-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "perf_design": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/perf-design/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "pi-codex-bridge",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "perf_measure": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/perf-measure/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-test-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "perf_verify": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/perf-verify/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-review-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  }
+ },
+ "run": {
+  "desired_state": "running"
+ },
+ "schema_version": "ledger.v2",
+ "tasks": {
+  "t.perf.design": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.perf.design",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/input-perf-design.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.perf.design"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "perf_design"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "carries_long_history": true,
+     "injects_latency": true,
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "d65ba733f6aa76b5e624a721b5b394f282040ecf"
+    },
+    "read_paths": [
+     ".team/nodes/input-full-auto/perf-design/任务书.md",
+     ".team/nodes/feat-remote-scroll-mouse-wheel/perf-attribution-20260823.md",
+     "CLAUDE.md",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-input-perf",
+    "write_paths": [
+     ".team/nodes/input-full-auto/perf-design/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按任务书 `.team/nodes/input-full-auto/perf-design/任务书.md` 冻结可执行性能契约：以用户裁定的稳定 tag+参考 md5 为行为基线，废弃 null JSON 的可执行权威；只落 CONTRACT.md，不能唯一证明安全采样入口就如实 blocked，产物齐后 report_result。"
+  },
+  "t.perf.measure": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.perf.measure",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/input-perf-measure.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.perf.measure"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/input-full-auto/perf-measure/perf-ab.json",
+     ".team/nodes/input-full-auto/perf-measure/MEASURE.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "perf_measure"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "carries_long_history": true,
+     "injects_latency": true,
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "d65ba733f6aa76b5e624a721b5b394f282040ecf"
+    },
+    "read_paths": [
+     ".team/nodes/input-full-auto/perf-measure/任务书.md",
+     ".team/nodes/input-full-auto/perf-design/",
+     "CLAUDE.md",
+     "tools/perfbase/",
+     ".team/perf/"
+    ],
+    "worktree_id": "wt-input-perf",
+    "write_paths": [
+     ".team/nodes/input-full-auto/perf-measure/"
+    ]
+   },
+   "seat_wait_seconds": 10800,
+   "state": "planned",
+   "title": "按任务书 `.team/nodes/input-full-auto/perf-measure/任务书.md` 执行稳定 tag A 与当前候选 B 的同批 A/B/A/B 新鲜测量；先 envcheck，三夹具×四段各包 n>=10；不得改产品/判据/历史基线，产物齐后 report_result。"
+  },
+  "t.perf.verify": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.perf.verify",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/input-perf-verify.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.perf.verify"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/input-full-auto/perf-verify/VERDICT.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "perf_verify"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "carries_long_history": true,
+     "injects_latency": true,
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "d65ba733f6aa76b5e624a721b5b394f282040ecf"
+    },
+    "read_paths": [
+     ".team/nodes/input-full-auto/perf-verify/任务书.md",
+     ".team/nodes/input-full-auto/perf-design/",
+     ".team/nodes/input-full-auto/perf-measure/",
+     ".team/ledgers/acceptance/input-perf-measure.sh",
+     "CLAUDE.md"
+    ],
+    "worktree_id": "wt-input-perf",
+    "write_paths": [
+     ".team/nodes/input-full-auto/perf-verify/"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "按任务书 `.team/nodes/input-full-auto/perf-verify/任务书.md` 零上下文独立复算三夹具×四段，并做越过 1.10 的破坏齿；不改产品/测量产物/判据，只有证据完整才 verdict: pass，产物齐后 report_result。"
+  }
+ },
+ "transitions": []
+}
