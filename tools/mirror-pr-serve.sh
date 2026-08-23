@@ -19,7 +19,9 @@ GIT_AUTHOR_DATE='2026-08-14T16:35:00+00:00' GIT_COMMITTER_DATE='2026-08-14T16:35
 git -c user.name=Florious95 -c user.email=281215401+Florious95@users.noreply.github.com \
     commit -q -m "补入 Apache-2.0 LICENSE（拆仓时随服务端一起带上）" || true
 git remote add origin "$GH/corral-serve.git"
-git push --force -u origin main
+# 🔴 次序＝先分支+开 PR，后推 main（2026-08-23 与 mirror-pr.sh 同源修，⛔ 别再只改一个）。
+# 先推 main 的话，本地已并线时远端 main 就先拿到了那些提交，`gh` 会报
+# "No commits between main and <BR>"：分支推上去了、PR 却立不起来，只剩一条孤儿分支。
 for BR in "$@"; do
   git push --force origin "$BR"
   gh pr view "$BR" --repo Florious95/corral-serve >/dev/null 2>&1 && { echo "PR 已存在：$BR"; continue; }
@@ -30,4 +32,5 @@ for BR in "$@"; do
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)" || echo "开 PR 失败：$BR"
 done
+git push --force -u origin main
 echo "==> mirror-pr-serve 完成"
