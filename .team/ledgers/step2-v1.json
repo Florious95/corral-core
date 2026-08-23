@@ -1,7 +1,7 @@
 {
   "schema_version": "ledger.v2",
   "ledger_id": "ledger.step2.v1",
-  "revision": 1,
+  "revision": 2,
   "run": {
     "desired_state": "running"
   },
