@@ -79,7 +79,7 @@
   "read_only_shared": [],
   "rules": []
  },
- "revision": 1,
+ "revision": 2,
  "roles": {
   "advisor": {
    "artifact_landing": {
@@ -108,7 +108,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "input-dev-luna",
+    "agent": "sampler-dev-luna2",
     "team": "remote-agent-android"
    },
    "seat_policy": "resident_reuse"
@@ -124,7 +124,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "input-review-luna",
+    "agent": "sampler-review-luna2",
     "team": "remote-agent-android"
    },
    "seat_policy": "resident_reuse"
@@ -140,7 +140,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "input-test-luna",
+    "agent": "sampler-test-luna2",
     "team": "remote-agent-android"
    },
    "seat_policy": "resident_reuse"
@@ -156,7 +156,7 @@
     "ledger_updated": true
    },
    "seat": {
-    "agent": "input-review-luna",
+    "agent": "sampler-review-luna2",
     "team": "remote-agent-android"
    },
    "seat_policy": "resident_reuse"
