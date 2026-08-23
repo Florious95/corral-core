@@ -14,7 +14,7 @@ if [ "$N" -lt 30 ]; then
   exit 1
 fi
 
-NODE="$ROOT/.team/nodes/t.instr"
+NODE="$ROOT/.team/nodes/t.armfix"
 TMP="$NODE/tmp"
 mkdir -p "$TMP" "$ROOT/.team/perf"
 # unix socket 短路径（与 e2e/layer2 同类例外：worktree 路径超 unix socket ~104 字节上限）。
@@ -77,8 +77,12 @@ cleanup() {
     TMUX='' TMUX_TMPDIR="$TMUX_ROOT" tmux -f /dev/null kill-server 2>/dev/null || true
   fi
   rm -rf "$SOCKROOT" 2>/dev/null || true
-  if [ -n "${ADB:-}" ] && [ -n "${PORT:-}" ]; then
-    "$ADB" reverse --remove "tcp:$PORT" >/dev/null 2>&1 || true
+  if [ -n "${ADB:-}" ]; then
+    "$ADB" shell setprop debug.agentmirror.keyecho 0 >/dev/null 2>&1 || true
+    "$ADB" shell am force-stop "${PKG:-dev.agentmirror.app}" >/dev/null 2>&1 || true
+    if [ -n "${PORT:-}" ]; then
+      "$ADB" reverse --remove "tcp:$PORT" >/dev/null 2>&1 || true
+    fi
   fi
 }
 trap cleanup EXIT
@@ -183,6 +187,8 @@ WSURL="ws://10.0.2.2:$PORT/ws"
 "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1
 "$ADB" shell pm clear "$PKG" >/dev/null 2>&1
 "$ADB" shell setprop debug.agentmirror.perftrace 1 >/dev/null 2>&1 || true
+# 按键回显独立开关（默认关）。必须在进程启动前打开，否则 onAsciiPrint 保持 null、量不到。
+"$ADB" shell setprop debug.agentmirror.keyecho 1 >/dev/null 2>&1 || true
 "$ADB" logcat -c >/dev/null 2>&1
 "$ADB" shell am start -W -n "$PKG/.MainActivity" >/dev/null
 sleep 4
@@ -252,42 +258,103 @@ sys.exit(0)
 PY
 tap_text "$TMP/pair.xml" "连接" || { echo "FAIL 连不上（无「连接」按钮）"; exit 1; }
 
-# 等真实 WS：info 级 `listing: refresh on open`（客户端 auth 后必发 list）；debug 级 first snapshot 作辅证。
+# 点「包含该精确 text 的最小 clickable 祖先」——Compose 行上 text 节点往往 clickable=false。
+tap_clickable_row() {
+  python3 - "$1" "$2" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+want = sys.argv[2]
+nodes = []
+for m in re.finditer(r"<node[^>]*/?>", xml):
+    n = m.group(0)
+    t = re.search(r'text="([^"]*)"', n)
+    b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
+    c = re.search(r'clickable="(true|false)"', n)
+    if not b:
+        continue
+    x1, y1, x2, y2 = map(int, b.groups())
+    nodes.append((x1, y1, x2, y2, t.group(1) if t else "", c.group(1) if c else "false"))
+hits = [n for n in nodes if n[4] == want]
+if not hits:
+    sys.exit(1)
+leaf = hits[0]
+best = None
+for a in nodes:
+    if a[5] != "true":
+        continue
+    if a[0] <= leaf[0] and a[1] <= leaf[1] and a[2] >= leaf[2] and a[3] >= leaf[3]:
+        area = (a[2] - a[0]) * (a[3] - a[1])
+        if best is None or area < best[0]:
+            best = (area, a)
+tgt = best[1] if best else leaf
+print((tgt[0] + tgt[2]) // 2, (tgt[1] + tgt[3]) // 2)
+PY
+}
+
+CWD_REAL="$(cd "$CWD" && pwd -P)"
+CWD_LABEL="$(basename "$CWD_REAL")"
+
+# 等配对页走掉（探针 WS 会马上 client close；列表可能是探针带过来的缓存行）。
 ok=0
 for i in $(seq 1 40); do
-  if grep -q "listing: refresh on open" "$TMP/daemon.log" 2>/dev/null \
-     || grep -q "listing: first snapshot" "$TMP/daemon.log" 2>/dev/null; then
+  sleep 1
+  UI="$(dumpui)"; echo "$UI" > "$TMP/after-pair.xml"
+  if grep -q "工作区" "$TMP/after-pair.xml" && ! grep -q "连接主机" "$TMP/after-pair.xml"; then
     ok=1; break
   fi
-  sleep 0.5
 done
-[ "$ok" = 1 ] || { echo "FAIL 未建立 WS（daemon 无 listing refresh/snapshot）"; tail -40 "$TMP/daemon.log"; exit 1; }
-ok=0
-for i in $(seq 1 20); do
-  grep -E 'cur_sessions=[1-9]' "$TMP/daemon.log" >/dev/null 2>&1 && { ok=1; break; }
-  sleep 0.5
-done
-[ "$ok" = 1 ] || { echo "FAIL listing 会话数为 0（白名单可能仍滤掉 cat/claude 假 CLI）"; tail -20 "$TMP/daemon.log"; exit 1; }
-sleep 2
-sleep 2
+[ "$ok" = 1 ] || { echo "FAIL 配对后未进工作区列表"; exit 1; }
 
-# 点进工作区 / 会话（两级：cwd 行 → 会话名）。UI 显示 realpath。
-CWD_REAL="$(cd "$CWD" && pwd -P)"
+# 配对探针 stop() 会关掉第一条 WS。冷启走 ServiceWire 持久连接
+# （与 instrperf2 coldopen 同路径），否则点进二级是空的。
+"$ADB" shell am force-stop "$PKG" >/dev/null 2>&1
+sleep 2
+"$ADB" shell setprop debug.agentmirror.perftrace 1 >/dev/null 2>&1 || true
+"$ADB" shell setprop debug.agentmirror.keyecho 1 >/dev/null 2>&1 || true
+"$ADB" logcat -c >/dev/null 2>&1
+"$ADB" shell am start -W -n "$PKG/.MainActivity" >/dev/null
+sleep 3
+
+# 只看到 cwd 名还不够——那是缓存行，点进去二级是空的（instrperf2 复现）。
+# 等到计数里真有会话再点。
 ok=0
-for i in $(seq 1 20); do
+for i in $(seq 1 45); do
   UI="$(dumpui)"; echo "$UI" > "$TMP/list.xml"
-  if grep -qF "$CWD_REAL" "$TMP/list.xml" || grep -q keyecho_cat "$TMP/list.xml"; then
+  if grep -q "工作区" "$TMP/list.xml" && grep -qE '[1-9] SESSIONS' "$TMP/list.xml" && \
+     { grep -qF "$CWD_REAL" "$TMP/list.xml" || grep -q "text=\"$CWD_LABEL\"" "$TMP/list.xml" || grep -q keyecho_cat "$TMP/list.xml"; }; then
     ok=1; break
   fi
   sleep 1
 done
-[ "$ok" = 1 ] || { echo "FAIL 列表不见隔离 cwd=$CWD_REAL"; exit 1; }
-tap_text "$TMP/list.xml" "$CWD_REAL" || tap_text "$TMP/list.xml" "$(basename "$CWD_REAL")" || {
-  echo "FAIL 点不开 cwd 行"; exit 1
-}
-sleep 2
-UI="$(dumpui)"; echo "$UI" > "$TMP/ws.xml"
-tap_text "$TMP/ws.xml" "keyecho_cat" || { echo "FAIL 点不开会话 keyecho_cat"; exit 1; }
+[ "$ok" = 1 ] || { echo "FAIL 冷启后列表不见隔离 cwd=$CWD_REAL 或 1 SESSIONS"; exit 1; }
+
+unset CX CY
+read CX CY < <(tap_clickable_row "$TMP/list.xml" "$CWD_LABEL") || \
+  read CX CY < <(tap_clickable_row "$TMP/list.xml" "$CWD_REAL") || true
+if [ -n "${CX:-}" ]; then
+  "$ADB" shell input tap "$CX" "$CY" >/dev/null
+else
+  tap_text "$TMP/list.xml" "$CWD_REAL" || tap_text "$TMP/list.xml" "$CWD_LABEL" || {
+    echo "FAIL 点不开 cwd 行"; exit 1
+  }
+fi
+
+ok=0
+for i in $(seq 1 30); do
+  sleep 1
+  UI="$(dumpui)"; echo "$UI" > "$TMP/ws.xml"
+  if grep -q 'text="keyecho_cat"' "$TMP/ws.xml"; then
+    ok=1; break
+  fi
+done
+[ "$ok" = 1 ] || { echo "FAIL 二级页未出现会话行 keyecho_cat"; exit 1; }
+unset CX CY
+read CX CY < <(tap_clickable_row "$TMP/ws.xml" "keyecho_cat") || true
+if [ -n "${CX:-}" ]; then
+  "$ADB" shell input tap "$CX" "$CY" >/dev/null
+else
+  tap_text "$TMP/ws.xml" "keyecho_cat" || { echo "FAIL 点不开会话 keyecho_cat"; exit 1; }
+fi
 sleep 4
 
 # 必须进会话页（顶栏 + 输入条），否则会把键打到列表搜索框
