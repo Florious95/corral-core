@@ -58,3 +58,15 @@ team-agent inbox pi-codex-bridge --workspace . --team remote-agent-android
 判断边界：未读框架源码，不判断 timeout 发生在 team-agent CLI、coordinator 回执还是 ledger-run 等待层；也不替框架指定实现。正确行为可选为：超时后按同一 delivery/case 对账，或结构化进入 `needs_reconcile`，但不得自动生成第二次外部投递。
 
 绕行与代价：我方不重投；保留当前席位继续完成已落地任务，结果到达后提升 ledger revision 解挂并消费。这会增加一次人工 revision 手术，但避免重复执行。
+
+## 新对照：fresh seats + revision 2 仍精确 30 秒超时
+
+用户禁止人肉补投后，我方移除了收到人工救援消息的旧三席，新增三个从未收过任务的 Codex fresh seats，并把 `ledger.perf-sampler.v1` 提升到 revision 2。preflight、dry-run 均绿，前沿为 impl/probe/test 三格并行。新驱动器仍在第一条自动派单上精确 30 秒超时并 park：
+
+```text
+[ledger-run 2026-08-23T15:21:36Z] 派单 dispatch | task=t.sampler.impl ... 席位=sampler-dev-luna2 ...
+[ledger-run 2026-08-23T15:22:06Z] 停机 halt | 投递失败: t.sampler.impl ...（Timeout { timeout: 30s }）
+[ledger-run 2026-08-23T15:22:07Z] 挂起 park | token=parked ledger_id=ledger.perf-sampler.v1 revision=2
+```
+
+独立 nodeprobe 随后显示全部 Codex 席位 idle。这个对照排除了旧席位 inbox 积压、旧 case、旧 revision 和单一角色损坏；失败族收敛为：**ledger-run 自动 send 调用系统性在固定 30 秒超时，而同 workspace 的直接 Team Agent 通信此前可完成 durable round-trip**。按用户要求，我方不再用直接 send 顶替全自动编排，因此产品任务当前诚实阻塞。

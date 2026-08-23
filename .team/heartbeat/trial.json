@@ -1,0 +1,8 @@
+{
+  "script_sha256": "d0c6ae58e18a710a47806d185dfe9d5fa507fa236bd09979ba4d113250a37779",
+  "workspace": "/Volumes/nvme/Projects/远程Agent安卓",
+  "interval_seconds": 1800,
+  "state_script": "/Users/alauda/.claude/skills/tmux-node-activity/scripts/state.sh",
+  "tested_at": "2026-08-23T15:25:32.561372+00:00",
+  "direct_leader_send": "passed"
+}
