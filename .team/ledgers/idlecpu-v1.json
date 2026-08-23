@@ -1,0 +1,152 @@
+{
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.idlecpu.v1",
+  "revision": 1,
+  "run": {
+    "desired_state": "running"
+  },
+  "roles": {
+    "r.in": {
+      "provider": "cursor_agent",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/t.contract/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "in-dev2",
+        "team": "remote-agent-android",
+        "workspace": "/Volumes/nvme/Projects/远程Agent安卓"
+      }
+    },
+    "r.advisor": {
+      "provider": "unstated",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/_advisor/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    }
+  },
+  "tasks": {
+    "t.idlecpu": {
+      "title": "用户实撞白屏：服务端空闲烧 CPU 先复现再定根因（⛔ 不碰生产 :9900）",
+      "unit": {
+        "module": "server",
+        "symbol": "idle-cpu",
+        "source": "server/"
+      },
+      "state": "planned",
+      "owner": {
+        "role": "r.in"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "767cc1787"
+        },
+        "worktree_id": "wt-idlecpu",
+        "write_paths": [
+          ".team/perf/",
+          ".team/nodes/t.idlecpu/"
+        ],
+        "read_paths": [
+          ".team/nodes/t.idlecpu/任务书.md",
+          "server/",
+          "e2e/layer2.sh",
+          "tools/perfbase/judge-idlecpu.sh",
+          "docs/基线-20260822-release.md",
+          "CLAUDE.md"
+        ]
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/t.idlecpu/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "M-idlecpu",
+            "argv": [
+              "sh",
+              "tools/perfbase/judge-idlecpu.sh"
+            ],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "unjudgeable_exit_codes": [
+              2
+            ],
+            "time_budget_seconds": 7200,
+            "artifacts": [
+              ".team/nodes/t.idlecpu/judge.log"
+            ]
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "M-idlecpu"
+        ]
+      }
+    }
+  },
+  "dependencies": [],
+  "parallelism": [],
+  "transitions": [],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "report_result",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "alarm",
+    "delivery_uncertain": "needs_reconcile"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": true
+  },
+  "fallback": {
+    "F.ask-advisor": {
+      "agent": {
+        "role": "r.advisor"
+      },
+      "triggers": [
+        "blocked_on_unknown"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_advisor",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "cannot_close_success"
+  },
+  "resource_isolation": {
+    "rules": [],
+    "read_only_shared": [],
+    "closed_read": false
+  },
+  "fanout_aggregation": {},
+  "audit": {}
+}
