@@ -1,0 +1,153 @@
+{
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.tmuxmouse.v1",
+  "revision": 1,
+  "run": {
+    "desired_state": "running"
+  },
+  "roles": {
+    "r.in": {
+      "provider": "cursor_agent",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/t.contract/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "in-dev2",
+        "team": "remote-agent-android",
+        "workspace": "/Volumes/nvme/Projects/远程Agent安卓"
+      }
+    },
+    "r.advisor": {
+      "provider": "unstated",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/_advisor/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    }
+  },
+  "tasks": {
+    "t.tmuxmouse": {
+      "title": "实测 tmux mouse 开关对我方注入路径有没有影响（⛔ 不许把结论往契约那边靠）",
+      "unit": {
+        "module": "server",
+        "symbol": "tmux-mouse-effect",
+        "source": "server/internal/bridge/inject_raw.go"
+      },
+      "state": "planned",
+      "owner": {
+        "role": "r.in"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "ef19fdbb2"
+        },
+        "worktree_id": "wt-tmuxmouse",
+        "write_paths": [
+          ".team/perf/",
+          ".team/nodes/t.tmuxmouse/"
+        ],
+        "read_paths": [
+          ".team/nodes/t.tmuxmouse/任务书.md",
+          "docs/输入透传契约.md",
+          "server/internal/bridge/inject_raw.go",
+          "server/internal/bridge/bridge.go",
+          "tools/perfbase/judge-tmuxmouse.sh",
+          "e2e/layer2.sh",
+          "CLAUDE.md"
+        ]
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/t.tmuxmouse/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "M-tmuxmouse",
+            "argv": [
+              "sh",
+              "tools/perfbase/judge-tmuxmouse.sh"
+            ],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "unjudgeable_exit_codes": [
+              2
+            ],
+            "time_budget_seconds": 7200,
+            "artifacts": [
+              ".team/nodes/t.tmuxmouse/judge.log"
+            ]
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "M-tmuxmouse"
+        ]
+      }
+    }
+  },
+  "dependencies": [],
+  "parallelism": [],
+  "transitions": [],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "report_result",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "alarm",
+    "delivery_uncertain": "needs_reconcile"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": true
+  },
+  "fallback": {
+    "F.ask-advisor": {
+      "agent": {
+        "role": "r.advisor"
+      },
+      "triggers": [
+        "blocked_on_unknown"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_advisor",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "cannot_close_success"
+  },
+  "resource_isolation": {
+    "rules": [],
+    "read_only_shared": [],
+    "closed_read": false
+  },
+  "fanout_aggregation": {},
+  "audit": {}
+}
