@@ -32,6 +32,78 @@ const paneFormat = "#{session_name}|#{window_index}|#{pane_id}|#{pane_current_pa
 // this budget is treated as unreachable and skipped.
 const socketTimeout = 5 * time.Second
 
+type socketClass struct {
+	allowed bool
+	name    string
+}
+
+// classifySocketDirectory is intentionally evaluated before ReadDir. A
+// tmux-<other uid> directory is outside this daemon's discovery object and
+// must not even have its entries considered for a tmux child process.
+func classifySocketDirectory(dir string) socketClass {
+	base := filepath.Base(filepath.Clean(dir))
+	current := "tmux-" + strconv.Itoa(os.Getuid())
+	if base != current {
+		if strings.HasPrefix(base, "tmux-") {
+			return socketClass{name: "other_uid_directory"}
+		}
+		return socketClass{name: "unknown_directory"}
+	}
+	return socketClass{allowed: true, name: "current_uid_directory"}
+}
+
+func tmuxEnvSocket() string {
+	value := os.Getenv("TMUX")
+	if value == "" {
+		return ""
+	}
+	return filepath.Clean(strings.SplitN(value, ",", 2)[0])
+}
+
+func pathHasIsolatedAncestor(path string) bool {
+	clean := filepath.Clean(path)
+	parts := strings.Split(clean, string(os.PathSeparator))
+	for i := 0; i < len(parts); i++ {
+		if base := parts[i]; strings.HasPrefix(base, "ta-") || strings.HasPrefix(base, "e2e-") || strings.HasPrefix(base, "agentmirror-tmux-test-") {
+			return true
+		}
+		if i+3 < len(parts) && parts[i] == ".team" && parts[i+1] == "nodes" && parts[i+3] == "tmp" {
+			return true
+		}
+	}
+	return false
+}
+
+// classifySocket runs without touching the socket. Its result is the sole
+// gate before probeSocket and scanServer, so forbidden candidates cannot
+// cause even a tmux child process as a side effect of classification.
+func classifySocket(path string) socketClass {
+	clean := filepath.Clean(path)
+	base := filepath.Base(clean)
+	if strings.HasPrefix(base, "ta-") {
+		return socketClass{name: "ta_private"}
+	}
+	if strings.HasPrefix(base, "test-") || strings.HasPrefix(base, "e2e-") || pathHasIsolatedAncestor(clean) {
+		return socketClass{name: "isolated_path"}
+	}
+	if clean == tmuxEnvSocket() && tmuxEnvSocket() != "" {
+		return socketClass{allowed: true, name: "tmux_env_socket"}
+	}
+	if base == "default" {
+		return socketClass{allowed: true, name: "default_socket"}
+	}
+	return socketClass{name: "unknown_socket_name"}
+}
+
+func logSocketDecision(logger *slog.Logger, path string, decision socketClass) {
+	action := "skip"
+	if decision.allowed {
+		action = "allow"
+	}
+	logger.Debug("discovery: socket classification", "socket", path, "path", path,
+		"classification", decision.name, "action", action)
+}
+
 // Discover scans every tmux server socket on the host and aggregates the panes
 // into the two-level workspace model (requirements 001 and 002). It walks
 // DefaultSocketDirs(), skipping unreachable or stale sockets so one dead server
@@ -67,6 +139,11 @@ func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []str
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		dirDecision := classifySocketDirectory(dir)
+		if !dirDecision.allowed {
+			logSocketDecision(logger, dir, dirDecision)
+			continue
+		}
 		sockets, err := listSocketFiles(dir)
 		if err != nil {
 			logger.Debug("discovery: skipping socket directory", "dir", dir, "err", err)
@@ -75,6 +152,11 @@ func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []str
 		for _, sock := range sockets {
 			if err := ctx.Err(); err != nil {
 				return nil, err
+			}
+			decision := classifySocket(sock)
+			logSocketDecision(logger, sock, decision)
+			if !decision.allowed {
+				continue
 			}
 			ok, ident, err := probeSocket(sock)
 			if err != nil {
@@ -166,7 +248,10 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 	ctx, cancel := context.WithTimeout(ctx, socketTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "tmux", "-S", socketPath, "list-panes", "-a", "-F", paneFormat)
+	argv := []string{"tmux", "-S", socketPath, "list-panes", "-a", "-F", paneFormat}
+	logger.Debug("discovery: invoking tmux", "socket", socketPath, "path", socketPath,
+		"classification", "allowed", "action", "list-panes", "argv", argv)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	// Strip TMUX so tmux never trips the nested-session guard and refuses to
 	// run (this daemon legitimately runs attached to tmux itself).
 	cmd.Env = envWithout(os.Environ(), "TMUX")

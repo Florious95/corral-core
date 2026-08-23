@@ -83,8 +83,14 @@ func startTestServer(t *testing.T, tmp, caseName, cwd string, extra ...string) s
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	sockName := fmt.Sprintf("test-disc-%d-%s", os.Getpid(), caseName)
+	sockName := "default"
+	if caseName == "srv-b" {
+		sockName = "focus"
+	}
 	socket := filepath.Join(dir, sockName)
+	if sockName == "focus" {
+		t.Setenv("TMUX", socket+",123,0")
+	}
 
 	args := append([]string{"-S", socket, "new-session", "-d", "-c", cwd}, extra...)
 	runTMUX(t, tmp, args...)
@@ -377,7 +383,7 @@ func TestDiscoverRevivesReplacedSocket(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	sock := filepath.Join(dir, "revive-sock")
+	sock := filepath.Join(dir, "default")
 	createStaleSocket(t, sock)
 
 	model, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{dir})
