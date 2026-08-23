@@ -20,7 +20,7 @@ grep -q "@Ignore" "$T" && { echo "FAIL 红测被 @Ignore"; exit 1; }
 cd "$ROOT/app" || { echo "UNJUDGEABLE 无 app 工程"; exit 2; }
 OUT="$ROOT/.team/nodes/pb-red/tmp/red-run.log"
 mkdir -p "$(dirname "$OUT")"
-./gradlew :app:testDebugUnitTest --offline --tests 'dev.agentmirror.app.perf.PerfTraceChainTest' >"$OUT" 2>&1
+./gradlew :app:testDebugUnitTest --offline --tests 'dev.agentmirror.app.perf.PerfTraceChainTest' --rerun-tasks >"$OUT" 2>&1
 RC=$?
 
 # 编译失败 ⇒ 不可判（不是「红」）

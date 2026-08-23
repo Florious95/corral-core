@@ -25,7 +25,7 @@ grep -qE "enabled" "$CORE" || { echo "FAIL PerfTrace 没有开关字段"; exit 1
 cd "$ROOT/app" || { echo "UNJUDGEABLE 无 app 工程"; exit 2; }
 OUT="$ROOT/.team/nodes/pb-green/tmp/green-run.log"
 mkdir -p "$(dirname "$OUT")"
-./gradlew :app:testDebugUnitTest :terminal:test --offline >"$OUT" 2>&1
+./gradlew :app:testDebugUnitTest :terminal:test --offline --rerun-tasks >"$OUT" 2>&1
 RC=$?
 if grep -qE "Compilation error|Unresolved reference|Could not resolve" "$OUT"; then
   echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2
