@@ -532,10 +532,12 @@ func (c *wsConn) subscribeCancel(ref string) bool {
 }
 
 // relay drains a bridge delta stream and forwards each chunk as a binary
-// delta frame. On stream close (pane died or pipe detached) it tears down the
-// subscription so a later input on the same ref gets not_subscribed instead
-// of a silent no-op. The context is the subscription's own; teardown cancels
-// it when the connection closes.
+// delta frame. On unexpected stream close (pane died or pipe displaced) it
+// sendError so the client is not left frozen on the last frame, then tears
+// down the subscription so a later input on the same ref gets not_subscribed
+// instead of a silent no-op. Voluntary unsubscribe cancels ctx first and
+// stays silent (docs/protocol.md §4.2). The context is the subscription's
+// own; teardown cancels it when the connection closes.
 func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte) {
 	defer func() {
 		// Single teardown path (fix-host-pane-geometry-accounting 契约 2): the
@@ -555,6 +557,13 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 		select {
 		case chunk, ok := <-ch:
 			if !ok {
+				// Unexpected close (pane gone, or the pipe was stolen): the
+				// client must see a control frame, not a frozen last snapshot.
+				// Voluntary unsubscribe/teardown cancels ctx first, so that
+				// path stays silent as protocol §4.2 requires.
+				if ctx.Err() == nil {
+					c.sendError(protocol.ErrCodeSessionNotFound, "mirror closed: pipe displaced or pane gone")
+				}
 				return
 			}
 			frame, err := protocol.EncodeBinary(protocol.BinaryPayload{

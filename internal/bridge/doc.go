@@ -6,7 +6,8 @@
 // on a bare pane id over one socket, routed through the exec seam in tmux.go:
 //
 //   - Snapshot / Scrollback — capture-pane -e (-S/-E for history paging);
-//   - Subscribe — pipe-pane -o incremental byte stream via a FIFO;
+//   - Subscribe — pipe-pane -o incremental byte stream via a FIFO, fan-out
+//     to N in-process subscribers (one tmux pipe per pane);
 //   - Inject — send-keys -l (single line) or paste-buffer (multi-line), then
 //     Enter; returns a decidable ack, so "sent but no reply" is impossible
 //     (requirement 003);
