@@ -25,7 +25,7 @@ grep -rq -- "emitted=0" "$SRC" || { echo "FAIL 守卫留痕不是 emitted=0 形�
 cd "$ROOT/app" || { echo "UNJUDGEABLE cd 失败"; exit 2; }
 OUT="$ROOT/.team/nodes/pb-instr2/tmp/green.log"
 mkdir -p "$(dirname "$OUT")"
-./gradlew :app:testDebugUnitTest :terminal:test --offline >"$OUT" 2>&1
+./gradlew :app:testDebugUnitTest :terminal:test --offline --rerun-tasks >"$OUT" 2>&1
 RC=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
 [ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=${RC}（基线为 0；见 $OUT）"; exit 1; }

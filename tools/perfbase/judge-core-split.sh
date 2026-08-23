@@ -25,7 +25,7 @@ done
 cd "$ROOT/app" || { echo "UNJUDGEABLE cd 失败"; exit 2; }
 OUT="$ROOT/.team/nodes/pb-core/tmp/split-run.log"
 mkdir -p "$(dirname "$OUT")"
-./gradlew :app:testDebugUnitTest :terminal:test :core-protocol:test :core-terminal:test :core-conn:test --offline >"$OUT" 2>&1
+./gradlew :app:testDebugUnitTest :terminal:test :core-protocol:test :core-terminal:test :core-conn:test --offline --rerun-tasks >"$OUT" 2>&1
 RC=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
 [ "$RC" -eq 0 ] || { echo "FAIL 切分后单测红 rc=${RC}（见 $OUT）"; exit 1; }
