@@ -1,0 +1,390 @@
+{
+  "injected_bytes": "\u001b[<0;5;3M\u001b[<0;5;3m",
+  "injected_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+  "inject_path": "send-keys -H 1b + send-keys -l '[<0;5;3M' + same for release m (InjectRaw split)",
+  "sink_mode_flags": {
+    "after_start": "std=0 btn=1 all=0 sgr=1",
+    "off": "std=0 btn=1 all=0 sgr=1",
+    "on": "std=0 btn=1 all=0 sgr=1"
+  },
+  "load1": 11.07,
+  "off": {
+    "n": 10,
+    "received_count": 10,
+    "byte_exact_match_count": 10,
+    "entered_copy_mode_count": 0,
+    "pane_layout_changed_count": 0
+  },
+  "on": {
+    "n": 10,
+    "received_count": 10,
+    "byte_exact_match_count": 10,
+    "entered_copy_mode_count": 0,
+    "pane_layout_changed_count": 0
+  },
+  "off_samples": [
+    {
+      "i": 0,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 1,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 2,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 3,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 4,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 5,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 6,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 7,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 8,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 9,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    }
+  ],
+  "on_samples": [
+    {
+      "i": 0,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 1,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 2,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 3,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 4,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 5,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 6,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 7,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 8,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    },
+    {
+      "i": 9,
+      "got_hex": "1b5b3c303b353b334d1b5b3c303b353b336d",
+      "got_len": 18,
+      "exact": true,
+      "before": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      },
+      "after": {
+        "pane_in_mode": "0",
+        "window_panes": "2",
+        "pane_id": "%0",
+        "pane_active": "1"
+      }
+    }
+  ],
+  "socket": "/tmp/e2e-tmxm/tmxm.sock"
+}
