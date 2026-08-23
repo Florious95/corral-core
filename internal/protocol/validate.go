@@ -174,8 +174,18 @@ func (i Input) Validate() error {
 	if i.Ref == "" {
 		return fmt.Errorf("%w: input ref must be non-empty", ErrInvalidField)
 	}
-	if (i.Text != "" || i.AttachmentPath != "") && len(i.Keys) > 0 {
-		return fmt.Errorf("%w: input carries both text/attachment_path and keys; at most one is allowed", ErrInvalidField)
+	n := 0
+	if i.Text != "" || i.AttachmentPath != "" {
+		n++
+	}
+	if len(i.Keys) > 0 {
+		n++
+	}
+	if len(i.Bytes) > 0 {
+		n++
+	}
+	if n > 1 {
+		return fmt.Errorf("%w: input carries more than one of text/attachment_path, keys, bytes; at most one is allowed", ErrInvalidField)
 	}
 	for _, k := range i.Keys {
 		if !k.IsValid() {

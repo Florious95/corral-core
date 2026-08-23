@@ -127,6 +127,7 @@ func TestMarshalValidatesFirst(t *testing.T) {
 		{"subscribe zero cols", protocol.Subscribe{Ref: "s1", Rows: 24, Cols: 0}},
 		{"input req 0", protocol.Input{ReqID: 0, Ref: "s1"}},
 		{"input both text and keys", protocol.Input{ReqID: 1, Ref: "s1", Text: "hi", Keys: []protocol.Key{protocol.KeyEsc}}},
+		{"input both text and bytes", protocol.Input{ReqID: 1, Ref: "s1", Text: "hi", Bytes: []byte{'a'}}},
 		{"input unknown key", protocol.Input{ReqID: 1, Ref: "s1", Keys: []protocol.Key{"home"}}},
 		{"input_ack fail no reason", protocol.InputAck{ReqID: 1, OK: false}},
 		{"input_ack ok with reason", protocol.InputAck{ReqID: 1, OK: true, Reason: protocol.InputFailInternal}},
@@ -163,6 +164,7 @@ func TestUnmarshalRedPaths(t *testing.T) {
 		{"scrollback zero count", `{"v":1,"type":"scrollback","payload":{"req_id":1,"ref":"s1","from_line":0,"count":0}}`, protocol.ErrInvalidField},
 		{"input unknown named key", `{"v":1,"type":"input","payload":{"req_id":1,"ref":"s1","keys":["home"]}}`, protocol.ErrInvalidField},
 		{"input both text and keys", `{"v":1,"type":"input","payload":{"req_id":1,"ref":"s1","text":"hi","keys":["esc"]}}`, protocol.ErrInvalidField},
+		{"input both text and bytes", `{"v":1,"type":"input","payload":{"req_id":1,"ref":"s1","text":"hi","bytes":"YQ=="}}`, protocol.ErrInvalidField},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {

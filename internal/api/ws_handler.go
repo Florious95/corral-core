@@ -286,12 +286,32 @@ func (c *wsConn) handleInput(i protocol.Input) {
 		ack(true, "")
 		return
 	}
+	// Raw-byte passthrough (input step 1): arbitrary bytes including C0/CSI.
+	// Same max-input-bytes / too_large gate as Text — no backdoor. Same
+	// decidable ack taxonomy. Does not append Enter.
+	if len(i.Bytes) > 0 {
+		if len(i.Bytes) > c.s.maxInput {
+			ack(false, protocol.InputFailTooLarge)
+			return
+		}
+		if err := br.InjectRaw(c.ctx, i.Bytes); err != nil {
+			if errors.Is(err, bridge.ErrPaneNotFound) {
+				ack(false, protocol.InputFailSessionNotFound)
+			} else {
+				ack(false, protocol.InputFailInjectFailed)
+			}
+			return
+		}
+		ack(true, "")
+		return
+	}
 	if len(i.Text) > c.s.maxInput {
 		ack(false, protocol.InputFailTooLarge)
 		return
 	}
 	// 直通输入（059，取代 003 第1条「一次性注入」）：App 键盘每键直通，CLI 输入框即草稿。
-	// 三种路径：
+	// 四种路径：
+	//   0. Bytes 非空 → 裸字节透传（InjectRaw），不追加 Enter；
 	//   1. AttachmentPath 非空 → 提交带图（预贴路径已在 pane，发文字[若有]+Enter 提交；
 	//      命中预贴记录走 InjectAfterPreview 只补沉降，未命中走 InjectWithAttachment 兼容）；
 	//   2. Text 非空且无附件 → 直通：文本打到 CLI 输入框，**不追加 Enter**（TypeKeys）；
