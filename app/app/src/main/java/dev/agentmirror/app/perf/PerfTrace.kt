@@ -34,6 +34,8 @@ import java.util.concurrent.atomic.AtomicLong
  * 双出口：`Log.d("PerfTrace", line)` + `DiagLog.record("PerfTrace", line)`。
  *
  * 关：`adb shell setprop debug.agentmirror.perftrace 0`，进程启动读一次。
+ * 按键回显另有独立开关 `debug.agentmirror.keyecho`（默认关；`1` = 开）。
+ * 即使 PerfTrace 开着，未开按键开关时 `onAsciiPrint` 必须保持 null。
  * 调用方须在最外层 `if (PerfTrace.isEnabled())` 短路——参数不求值、不拼串、不分配 lambda。
  *
  * 八事件名即契约：`tap` `route_enter` `subscribe_sent` `geom_seed`
@@ -81,6 +83,12 @@ object PerfTrace {
     /** 进程启动读取的系统属性：`0` = 关。默认开（未设或非 0）。 */
     const val PROP_ENABLED = "debug.agentmirror.perftrace"
 
+    /**
+     * 按键回显量具独立开关。`1` = 开；缺省/其它 = **关**。
+     * 与 [PROP_ENABLED] 分开：开会话测量必须开 PerfTrace，但不得因此挂钩逐字符回调。
+     */
+    const val PROP_KEY_ECHO = "debug.agentmirror.keyecho"
+
     const val EV_TAP = "tap"
     const val EV_ROUTE_ENTER = "route_enter"
     const val EV_SUBSCRIBE_SENT = "subscribe_sent"
@@ -123,6 +131,9 @@ object PerfTrace {
 
     @Volatile
     private var enabled: Boolean = readProcessProp()
+
+    @Volatile
+    private var keyEchoEnabled: Boolean = readKeyEchoProp()
 
     /** 单调时钟；测试注入。生产读 [SystemClock.elapsedRealtime]。 */
     @Volatile
@@ -182,6 +193,30 @@ object PerfTrace {
      * @inv 不读系统属性、不 I/O
      */
     fun isEnabled(): Boolean = enabled
+
+    /**
+     * 按键回显挂钩开关（调用点与 [isEnabled] 合取）。默认关。
+     *
+     * @contract
+     * @pre none
+     * @post 返回当前缓存；未设 prop / 非 `1` / [setKeyEchoEnabledForTest](false) 均为关
+     * @err none
+     * @inv 不读系统属性、不 I/O
+     */
+    fun isKeyEchoEnabled(): Boolean = keyEchoEnabled
+
+    /**
+     * 测试注入按键回显开关（替代 `adb shell setprop debug.agentmirror.keyecho 1`）。
+     *
+     * @contract
+     * @pre none
+     * @post [isKeyEchoEnabled] 等于 [value]
+     * @err none
+     * @inv 不发日志
+     */
+    fun setKeyEchoEnabledForTest(value: Boolean) {
+        keyEchoEnabled = value
+    }
 
     /**
      * 测试注入开关（替代 `adb shell setprop debug.agentmirror.perftrace 0`）。
@@ -245,6 +280,7 @@ object PerfTrace {
         }
         keySeq.set(1L)
         enabled = true
+        keyEchoEnabled = false
         clock = DiagLog.Clock { 0L }
         sink = Sink { _, _ -> }
         nextSeq.set(1L)
@@ -824,5 +860,20 @@ object PerfTrace {
             null
         }
         return v != "0"
+    }
+
+    /**
+     * 进程启动读一次 `debug.agentmirror.keyecho`。`1` = 开；缺省/其它 = 关。
+     * @contract @pre none @post 不抛；读不到当关 @err none @inv 只在对象初始化调用一次
+     */
+    private fun readKeyEchoProp(): Boolean {
+        val v = try {
+            val clz = Class.forName("android.os.SystemProperties")
+            val m = clz.getMethod("get", String::class.java, String::class.java)
+            m.invoke(null, PROP_KEY_ECHO, "") as? String
+        } catch (_: Throwable) {
+            null
+        }
+        return v == "1"
     }
 }

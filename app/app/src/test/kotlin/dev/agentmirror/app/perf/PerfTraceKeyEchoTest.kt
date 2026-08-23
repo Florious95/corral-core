@@ -42,6 +42,12 @@ class PerfTraceKeyEchoTest {
     }
 
     @Test
+    fun keyEcho_独立开关默认关即使PerfTrace开着() {
+        assertTrue("PerfTrace 默认开", PerfTrace.isEnabled())
+        assertFalse("keyecho 默认必须关，否则开会话测量会挂钩逐字符回调", PerfTrace.isKeyEchoEnabled())
+    }
+
+    @Test
     fun keyEcho_关闭时零行() {
         PerfTrace.setEnabledForTest(false)
         assertFalse(PerfTrace.isEnabled())
