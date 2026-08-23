@@ -1,0 +1,154 @@
+{
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.input.paired.v1",
+  "revision": 1,
+  "run": {
+    "desired_state": "running"
+  },
+  "roles": {
+    "r.in": {
+      "provider": "cursor_agent",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/t.contract/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "in-dev2",
+        "team": "remote-agent-android",
+        "workspace": "/Volumes/nvme/Projects/远程Agent安卓"
+      }
+    },
+    "r.advisor": {
+      "provider": "unstated",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/_advisor/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    }
+  },
+  "tasks": {
+    "t.paired": {
+      "title": "配对统计重算：不重测，回答「这台量具能分辨多大效应」",
+      "unit": {
+        "module": "tools",
+        "symbol": "paired",
+        "source": "tools/perfbase/paired.py"
+      },
+      "state": "planned",
+      "owner": {
+        "role": "r.in"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "8a2c4d9c7"
+        },
+        "worktree_id": "wt-paired",
+        "write_paths": [
+          "tools/perfbase/paired.py",
+          ".team/perf/",
+          ".team/nodes/t.paired/"
+        ],
+        "read_paths": [
+          ".team/nodes/t.paired/任务书.md",
+          "tools/perfbase/coldopen.sh",
+          "tools/perfbase/judge-paired.sh",
+          ".team/perf/instr-ab2-raw/",
+          ".team/nodes/t.instrperf2/说明.md",
+          ".team/nodes/t.instrperf3/说明.md",
+          "CLAUDE.md"
+        ]
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/t.paired/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "M-paired",
+            "argv": [
+              "sh",
+              "tools/perfbase/judge-paired.sh"
+            ],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "unjudgeable_exit_codes": [
+              2
+            ],
+            "time_budget_seconds": 5400,
+            "artifacts": [
+              ".team/nodes/t.paired/judge.log"
+            ]
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "M-paired"
+        ]
+      }
+    }
+  },
+  "dependencies": [],
+  "parallelism": [],
+  "transitions": [],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "report_result",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "alarm",
+    "delivery_uncertain": "needs_reconcile"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": true
+  },
+  "fallback": {
+    "F.ask-advisor": {
+      "agent": {
+        "role": "r.advisor"
+      },
+      "triggers": [
+        "blocked_on_unknown"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_advisor",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "cannot_close_success"
+  },
+  "resource_isolation": {
+    "rules": [],
+    "read_only_shared": [],
+    "closed_read": false
+  },
+  "fanout_aggregation": {},
+  "audit": {}
+}
