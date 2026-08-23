@@ -33,6 +33,8 @@ object ProtocolVersion {
     const val BINARY = 1
     const val MAGIC = "RA"
     const val MAX_BINARY_PAYLOAD = 1 shl 20 // 1 MiB
+    /** 与服务端 max-input-bytes 缺省一致：一帧 Input.bytes / text 上限 1 MiB。 */
+    const val MAX_INPUT_BYTES = 1 shl 20
     const val MAX_REF_LEN = 255
 }
 
