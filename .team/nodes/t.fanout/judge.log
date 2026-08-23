@@ -1,0 +1,6 @@
+  ok   找到测试文件：server/internal/bridge/fanout_test.go server/internal/api/fanout_test.go server/internal/api/host_pane_geometry_red_test.go 
+  …  go test ./internal/bridge/ ./internal/api/
+ok  	github.com/agentmirror/agentmirror/internal/bridge	17.787s
+ok  	github.com/agentmirror/agentmirror/internal/api	45.389s
+PASS 三条断言的测试在仓里且齐、说明贴了改前的红、bridge+api 两包 go test 绿
+     ⚠️ 本判据⛔ 不判性能——单订阅者路径的对照由 leader 读说明。
