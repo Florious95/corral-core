@@ -1,0 +1,177 @@
+{
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.modeseed.v1",
+  "revision": 1,
+  "run": {
+    "desired_state": "running"
+  },
+  "roles": {
+    "r.in": {
+      "provider": "cursor_agent",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/t.contract/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "in-dev2",
+        "team": "remote-agent-android",
+        "workspace": "/Volumes/nvme/Projects/远程Agent安卓"
+      }
+    },
+    "r.advisor": {
+      "provider": "unstated",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/_advisor/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    },
+    "r.rp": {
+      "provider": "claude_code",
+      "seat_policy": "fresh",
+      "artifact_landing": {
+        "path": ".team/nodes/t.reply4/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "dev-opus",
+        "team": "remote-agent-android",
+        "workspace": "/Volumes/nvme/Projects/远程Agent安卓"
+      }
+    }
+  },
+  "tasks": {
+    "t.modeseed": {
+      "title": "订阅时播种鼠标模式：修「有时候能点、Grok 始终不能」",
+      "unit": {
+        "module": "server",
+        "symbol": "mode-seed",
+        "source": "server/internal/api/ws_handler.go"
+      },
+      "state": "planned",
+      "owner": {
+        "role": "r.rp"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "bc2d6b263"
+        },
+        "worktree_id": "wt-modeseed",
+        "write_paths": [
+          "server/",
+          "app/core-protocol/",
+          "app/core-conn/",
+          "app/core-terminal/",
+          ".team/nodes/t.modeseed/"
+        ],
+        "read_paths": [
+          ".team/nodes/t.modeseed/任务书.md",
+          ".team/nodes/t.step3/说明.md",
+          ".team/nodes/t.step2/说明.md",
+          "docs/输入透传契约.md",
+          "server/internal/",
+          "app/core-terminal/",
+          "app/core-conn/",
+          "app/core-protocol/",
+          "tools/perfbase/judge-modeseed.sh",
+          "e2e/layer2.sh",
+          "CLAUDE.md"
+        ]
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          ".team/nodes/t.modeseed/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "M-modeseed",
+            "argv": [
+              "sh",
+              "tools/perfbase/judge-modeseed.sh"
+            ],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "unjudgeable_exit_codes": [
+              2
+            ],
+            "time_budget_seconds": 10800,
+            "artifacts": [
+              ".team/nodes/t.modeseed/judge.log"
+            ]
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "M-modeseed"
+        ]
+      }
+    }
+  },
+  "dependencies": [],
+  "parallelism": [],
+  "transitions": [],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "report_result",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "alarm",
+    "delivery_uncertain": "needs_reconcile"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": true
+  },
+  "fallback": {
+    "F.ask-advisor": {
+      "agent": {
+        "role": "r.advisor"
+      },
+      "triggers": [
+        "blocked_on_unknown"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_advisor",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "cannot_close_success"
+  },
+  "resource_isolation": {
+    "rules": [],
+    "read_only_shared": [],
+    "closed_read": false
+  },
+  "fanout_aggregation": {},
+  "audit": {}
+}
