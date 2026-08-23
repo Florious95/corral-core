@@ -27,7 +27,7 @@ OUT="$ROOT/.team/nodes/pb-fixblank/tmp/green.log"
 mkdir -p "$(dirname "$OUT")"
 ./gradlew :app:testDebugUnitTest :terminal:test --offline --rerun-tasks >"$OUT" 2>&1
 RC=$?
-grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
-[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=${RC}（基线为 0；见 $OUT）"; exit 1; }
+grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 ${OUT}）"; exit 2; }
+[ "$RC" -eq 0 ] || { echo "FAIL 全量单测红 rc=${RC}（基线为 0；见 ${OUT}）"; exit 1; }
 echo "PASS 路由红测转绿且仪表未被拆"
 exit 0
