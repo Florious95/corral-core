@@ -5,6 +5,16 @@
 # 本判据只判「守卫不再沉默且带了参与比较的两边操作数」，⛔ 不判白屏修没修（那是下一格的事）。
 # 四态：0=通过；1=不通过；2=不可判。
 set -u
+
+# 🔴 worktree 里没有 local.properties（它按机器路径生成、已 gitignore），
+# gradle 会报 "SDK location not found"。⛔ 别往仓里塞 local.properties——
+# 那是机器相关路径。这里用环境变量供给，缺了就判**不可判**（不是判红：
+# 那是本机环境不具备，不是被测物有问题）。2026-08-23 实撞。
+ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+[ -d "$ANDROID_HOME" ] || { echo "UNJUDGEABLE 找不到 Android SDK（ANDROID_HOME=$ANDROID_HOME），跑不了 gradle"; exit 2; }
+export ANDROID_HOME
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+
 ROOT=$(pwd)
 SRC="$ROOT/app/app/src/main"
 [ -d "$SRC" ] || { echo "UNJUDGEABLE 无 app 源码"; exit 2; }
