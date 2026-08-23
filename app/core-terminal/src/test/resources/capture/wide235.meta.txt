@@ -1,0 +1,9 @@
+source=tmux capture-pane -e -p
+tmux=tmux 3.6a
+geometry=235x24
+session=scself
+socket=/tmp/e2e-selfcheck/s
+bytes=1348
+sha256=2dc8b7eeaf2fcf6d43eb121ce431ecad7da0a6d087c744ca1d793f86539f1550
+command=new-session -d -x 235 -y 24 cat; load-buffer; paste-buffer
+note=NOT hand-crafted. Taken from isolated tmux on this host.

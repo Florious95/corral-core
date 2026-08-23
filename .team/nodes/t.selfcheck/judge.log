@@ -1,0 +1,6 @@
+  ok   fixture：app/core-terminal/src/test/resources/capture/wide235.bin app/core-terminal/src/test/resources/capture/wide235.meta.txt app/core-terminal/src/test/kotlin/dev/agentmirror/terminal/WideHost235ReplayTest.kt 
+  ok   测试：app/core-terminal/src/test/kotlin/dev/agentmirror/terminal/WideHost235ReplayTest.kt app/core-terminal/src/test/kotlin/dev/agentmirror/terminal/WideCharTest.kt 
+  narrow   d=0ms→0.0%  d=20ms→0.0%  d=50ms→0.0%  d=100ms→0.0%  d=200ms→0.0%  d=500ms→0.0%
+  widen    d=0ms→0.0%  d=20ms→0.0%  d=50ms→0.0%  d=100ms→0.0%  d=200ms→0.0%  d=500ms→0.0%
+PASS E1 两方向 × >=4 档 × n>=20 齐、含 delay=0；E2 测试与真 fixture 在仓里；说明交代了改哪句话
+     ⚠️ 本判据⛔ 不判断言成立与否——不成立就是我方缺陷，那也是合法且重要的结果。
