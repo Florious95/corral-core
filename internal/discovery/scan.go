@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 )
 
@@ -50,7 +53,7 @@ func Discover(ctx context.Context, logger *slog.Logger) (*Model, error) {
 // @pre ctx 必须非 nil；socketDirs 为要扫描的目录列表，可为空
 // @post 返回一次全新快照 Model；每个目录内不可达或过期的 socket 被跳过
 // @err ctx 取消或超时时返回 ctx.Err()；目录读取失败仅记日志并跳过，不返回错误
-// @inv 不做缓存；空 socketDirs 返回空 Model 且 error 为 nil
+// @inv 模型不缓存；空 socketDirs 返回空 Model 且 error 为 nil。不可达 socket 的探活失败会按 path+inode 短期记忆，以免每 tick fork tmux。
 func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []string) (*Model, error) {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
@@ -73,13 +76,24 @@ func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []str
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			ps, err := scanServer(ctx, sock, logger)
+			ok, ident, err := probeSocket(sock)
 			if err != nil {
-				// A stale socket (server exited without unlinking) or a refused
-				// connection is normal; skip it and keep scanning (red line).
 				logger.Debug("discovery: skipping unreachable socket", "socket", sock, "err", err)
 				continue
 			}
+			if !ok {
+				continue
+			}
+			ps, err := scanServer(ctx, sock, logger)
+			if err != nil {
+				// Probe succeeded but tmux still failed (raced to death, or
+				// hung past socketTimeout). Remember it so the next tick does
+				// not pay another fork.
+				markStale(sock, ident)
+				logger.Debug("discovery: skipping unreachable socket", "socket", sock, "err", err)
+				continue
+			}
+			clearStale(sock)
 			panes = append(panes, ps...)
 		}
 	}
@@ -145,6 +159,9 @@ func listSocketFiles(dir string) ([]string, error) {
 // is returned as an error for the caller to skip — a dead socket is expected
 // (tmux does not unlink its socket on exit) and must never abort the scan.
 func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]Pane, error) {
+	if scanServerHook != nil {
+		scanServerHook(socketPath)
+	}
 	// Bound one query so a hung server cannot stall the whole scan.
 	ctx, cancel := context.WithTimeout(ctx, socketTimeout)
 	defer cancel()
@@ -238,4 +255,99 @@ func envWithout(environ []string, name string) []string {
 		out = append(out, kv)
 	}
 	return out
+}
+
+// --- stale-socket probe cache (2026-08-23 idle CPU) -------------------------
+//
+// Production listed every file in the tmux socket dir and fork/exec'd
+// `tmux list-panes` against each one. Dead sockets fail fast at connect, but
+// 140 of those forks every 2s still burned ~23% idle CPU. Probe with
+// net.DialTimeout first; only a listening socket pays a tmux child. Failures
+// are remembered by path+inode/mtime so a replaced file (dead → live) is
+// retried immediately; a still-dead inode is retried after staleTTL.
+
+type fileIdent struct {
+	dev   uint64
+	ino   uint64
+	mtime int64
+}
+
+type staleRec struct {
+	until time.Time
+	ident fileIdent
+}
+
+var (
+	staleMu    sync.Mutex
+	staleCache = map[string]staleRec{}
+	staleTTL   = 30 * time.Second
+	probeTO    = 80 * time.Millisecond
+	// scanServerHook is a test seam: production leaves it nil.
+	scanServerHook func(socketPath string)
+)
+
+func resetStaleCache() {
+	staleMu.Lock()
+	staleCache = map[string]staleRec{}
+	staleMu.Unlock()
+}
+
+func identOf(fi os.FileInfo) fileIdent {
+	id := fileIdent{mtime: fi.ModTime().UnixNano()}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		id.dev = uint64(st.Dev)
+		id.ino = uint64(st.Ino)
+	}
+	return id
+}
+
+func isStaleCached(path string, ident fileIdent) bool {
+	staleMu.Lock()
+	defer staleMu.Unlock()
+	r, ok := staleCache[path]
+	if !ok {
+		return false
+	}
+	if r.ident != ident || time.Now().After(r.until) {
+		delete(staleCache, path)
+		return false
+	}
+	return true
+}
+
+func markStale(path string, ident fileIdent) {
+	staleMu.Lock()
+	defer staleMu.Unlock()
+	staleCache[path] = staleRec{until: time.Now().Add(staleTTL), ident: ident}
+}
+
+func clearStale(path string) {
+	staleMu.Lock()
+	delete(staleCache, path)
+	staleMu.Unlock()
+}
+
+// probeSocket reports whether sock is a listening unix socket worth handing to
+// tmux. ok=false with err=nil means "skip silently" (not a socket, or recently
+// confirmed dead with the same inode). ok=false with err!=nil is a fresh miss
+// that has already been entered in the stale cache.
+func probeSocket(path string) (ok bool, ident fileIdent, err error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return false, fileIdent{}, err
+	}
+	if fi.Mode()&os.ModeSocket == 0 {
+		return false, fileIdent{}, nil
+	}
+	ident = identOf(fi)
+	if isStaleCached(path, ident) {
+		return false, ident, nil
+	}
+	c, err := net.DialTimeout("unix", path, probeTO)
+	if err != nil {
+		markStale(path, ident)
+		return false, ident, err
+	}
+	_ = c.Close()
+	return true, ident, nil
 }

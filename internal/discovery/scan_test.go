@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // --- isolated tmux helpers -------------------------------------------------
@@ -330,5 +331,113 @@ func TestDiscoverHonorsCancellation(t *testing.T) {
 	cancel()
 	if _, err := DiscoverWithDirs(ctx, discardLogger(), []string{testSocketDir(t, root)}); err == nil {
 		t.Fatal("want error when ctx is already canceled")
+	}
+}
+
+func TestDiscoverDoesNotForkTmuxForStaleSockets(t *testing.T) {
+	resetStaleCache()
+	root := testSocketRoot(t)
+	tmp := t.TempDir()
+	cwd := mkdirTmp(t, tmp, "ws-nofork")
+	dir := testSocketDir(t, root)
+	startTestServer(t, root, "live", cwd, "-s", "live")
+	for i := 0; i < 20; i++ {
+		createStaleSocket(t, filepath.Join(dir, fmt.Sprintf("stale-%d", i)))
+	}
+	var n int
+	scanServerHook = func(string) { n++ }
+	t.Cleanup(func() { scanServerHook = nil; resetStaleCache() })
+
+	model, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{dir})
+	if err != nil {
+		t.Fatalf("DiscoverWithDirs: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("scanServer called %d times, want 1 (live only; 20 stale must not fork tmux)", n)
+	}
+	if len(model.Workspaces) != 1 || model.Workspaces[0].Count() != 1 {
+		t.Fatalf("live pane missing: %+v", model.Workspaces)
+	}
+
+	n = 0
+	if _, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{dir}); err != nil {
+		t.Fatalf("second scan: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("second scan scanServer called %d times, want 1 (stale cache must hold)", n)
+	}
+}
+
+func TestDiscoverRevivesReplacedSocket(t *testing.T) {
+	resetStaleCache()
+	root := testSocketRoot(t)
+	tmp := t.TempDir()
+	cwd := mkdirTmp(t, tmp, "ws-revive")
+	dir := testSocketDir(t, root)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sock := filepath.Join(dir, "revive-sock")
+	createStaleSocket(t, sock)
+
+	model, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{dir})
+	if err != nil {
+		t.Fatalf("DiscoverWithDirs on stale: %v", err)
+	}
+	if len(model.Workspaces) != 0 {
+		t.Fatalf("stale socket produced panes: %+v", model.Workspaces)
+	}
+
+	if err := os.Remove(sock); err != nil {
+		t.Fatal(err)
+	}
+	runTMUX(t, root, "-S", sock, "new-session", "-d", "-c", cwd, "-s", "revived")
+	t.Cleanup(func() {
+		cmd := exec.Command("tmux", "-S", sock, "kill-server")
+		cmd.Env = append(envWithout(os.Environ(), "TMUX"), "TMUX_TMPDIR="+root)
+		_ = cmd.Run()
+		resetStaleCache()
+	})
+
+	model, err = DiscoverWithDirs(context.Background(), discardLogger(), []string{dir})
+	if err != nil {
+		t.Fatalf("DiscoverWithDirs after revive: %v", err)
+	}
+	if len(model.Workspaces) != 1 || model.Workspaces[0].Count() != 1 {
+		t.Fatalf("revived socket not discovered: %+v", model.Workspaces)
+	}
+	if model.Workspaces[0].Panes[0].Session != "revived" {
+		t.Fatalf("pane session = %q, want revived", model.Workspaces[0].Panes[0].Session)
+	}
+}
+
+func TestDiscoverReprobesAfterTTLWithoutFork(t *testing.T) {
+	resetStaleCache()
+	old := staleTTL
+	staleTTL = 40 * time.Millisecond
+	t.Cleanup(func() { staleTTL = old; resetStaleCache(); scanServerHook = nil })
+
+	root := testSocketRoot(t)
+	dir := testSocketDir(t, root)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	createStaleSocket(t, filepath.Join(dir, "ttl-dead"))
+	var n int
+	scanServerHook = func(string) { n++ }
+
+	if _, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{dir}); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("dead socket forked tmux (%d)", n)
+	}
+	time.Sleep(60 * time.Millisecond)
+	n = 0
+	if _, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{dir}); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("after TTL, still-dead socket forked tmux (%d); probe may retry but must not fork", n)
 	}
 }
