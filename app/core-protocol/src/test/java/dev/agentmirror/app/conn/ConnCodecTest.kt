@@ -352,6 +352,7 @@ class ConnCodecTest {
             SubscribeFrame("s1", 0, 100),
             InputFrame(0, "s1"),
             InputFrame(1, "s1", text = "hi", keys = listOf(InputKey.ESC)), // text 与 keys 互斥
+            InputFrame(1, "s1", text = "hi", bytes = byteArrayOf(0x03)), // text 与 bytes 互斥
             InputAckFrame(1, ok = false), // 缺 reason
             InputAckFrame(1, ok = true, reason = InputFailReason.INTERNAL), // ok 带 reason
             ScrollbackFrame(5, "s1", 0, 0),

@@ -362,6 +362,29 @@ class ConnectionManager(
     }
 
     /**
+     * 裸字节透传（输入透传第 2 步）：发 InputFrame.bytes，不追加回车。
+     * 与 [sendKeystroke] 同款决定性链路（input_ack 必达）。超 [ProtocolVersion.MAX_INPUT_BYTES]
+     * 或空载荷直接 false，不拼超大帧。
+     *
+     * @contract
+     * @pre 当前处于 READY 且 connection 非空；raw 非空且长度 ≤ MAX_INPUT_BYTES
+     * @post 返回 true 时 input 帧（bytes=raw，无 text/keys）已发出且 pendingInputs 登记超时期限
+     * @err 未就绪 / 空 / 超限 / 编码校验不过 ⇒ 返回 false
+     * @inv 不追加回车；不改 ack 节奏；text / keys / bytes 互斥（本方法只用 bytes）
+     */
+    fun sendRawBytes(ref: String, raw: ByteArray): Boolean {
+        val conn = connection ?: return false
+        if (!conn.isReady) return false
+        if (raw.isEmpty()) return false
+        if (raw.size > ProtocolVersion.MAX_INPUT_BYTES) return false
+        val reqId = nextReqId++
+        val frame = InputFrame(reqId = reqId, ref = ref, bytes = raw)
+        if (!conn.send(frame)) return false
+        pendingInputs[reqId] = PendingInput(clock.nowMs() + inputTimeoutMs)
+        return true
+    }
+
+    /**
      * 订阅会话镜像；记簿待重放，已就绪则立发。
      *
      * @contract

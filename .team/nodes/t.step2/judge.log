@@ -1,0 +1,12 @@
+  ok   测试文件：app/core-protocol/src/test/java/dev/agentmirror/app/conn/InputBytesCodecTest.kt 
+  …  app/gradlew :core-protocol:test :core-conn:test --offline
+> Task :core-conn:compileTestKotlin UP-TO-DATE
+> Task :core-conn:compileTestJava NO-SOURCE
+> Task :core-conn:processTestResources NO-SOURCE
+> Task :core-conn:testClasses UP-TO-DATE
+> Task :core-conn:test UP-TO-DATE
+
+BUILD SUCCESSFUL in 1s
+8 actionable tasks: 8 up-to-date
+PASS 三条断言在仓里、说明贴了改前的红、服务端零改动、core-protocol+core-conn 测试绿
+     ⚠️ 性能⛔ 不在本判据内——最终判据是用户真机「秒开无空白」。

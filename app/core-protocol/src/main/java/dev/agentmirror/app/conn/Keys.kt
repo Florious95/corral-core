@@ -34,7 +34,7 @@ import kotlinx.serialization.encoding.Encoder
  * 按坏帧拒绝（闭集外即错，防协议漂移）。
  *
  * 使用约束（契约 §4.2，InputFrame.validate 兜底）：
- * - text 与 keys 一帧至多其一（互斥，两者都有判协议错误）；
+ * - text / keys / bytes 一帧至多其一（互斥，多于一类判协议错误）；
  * - keys 注入**不附加回车**（快捷键条语义 = 按一下那个键）。
  */
 @Serializable(with = InputKeySerializer::class)
