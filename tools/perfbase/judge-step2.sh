@@ -35,15 +35,21 @@ grep -qE 'FAIL|红|failed' "$S" || {
   echo "FAIL 说明里没有贴改前的红原文 —— 复现先红是铁律，没红过的修复不算数"; exit 1; }
 
 # ② 真跑
-if [ -x ./gradlew ]; then
-  echo "  …  ./gradlew :core-protocol:test :core-conn:test"
-  out=$(./gradlew --console=plain -q :core-protocol:test :core-conn:test 2>&1)
-  rc=$?
-  printf '%s\n' "$out" | tail -12
-  [ "$rc" -eq 0 ] || { echo "FAIL gradle 测试未通过（rc=${rc}）"; exit 1; }
-else
-  echo "UNJUDGEABLE 没有 ./gradlew，跑不了 JVM 测试"; exit 2
-fi
+# ⚠️ gradlew 在 app/ 下，⛔ 不在仓根（2026-08-23 实撞：本判据第一版假设在仓根，
+# 当场返回「不可判」把自己挡了——四态在这里救了一次，⛔ 没把量具坏了误判成席位没干活）。
+ROOT=$(pwd)
+[ -x "$ROOT/app/gradlew" ] || { echo "UNJUDGEABLE 没有可执行 app/gradlew，跑不了 JVM 测试"; exit 2; }
+OUT="$ROOT/.team/nodes/t.step2/tmp/gradle-run.log"
+mkdir -p "$(dirname "$OUT")"
+# 🔴 --rerun-tasks：gradle 的 UP-TO-DATE 与 go test 的 (cached) 是同一类陷阱——
+# 缓存的绿不是这次跑出来的绿。本工程 2026-08-23 一天内在两个判据上各踩一次。
+echo "  …  app/gradlew :core-protocol:test :core-conn:test --offline --rerun-tasks"
+( cd "$ROOT/app" && ./gradlew --console=plain :core-protocol:test :core-conn:test --offline --rerun-tasks ) >"$OUT" 2>&1
+rc=$?
+grep -qE "Compilation error|Unresolved reference" "$OUT" && {
+  echo "UNJUDGEABLE 编译不过（见 $OUT）"; tail -8 "$OUT"; exit 2; }
+tail -8 "$OUT"
+[ "$rc" -eq 0 ] || { echo "FAIL gradle 测试未通过（rc=${rc}，见 $OUT）"; exit 1; }
 
 echo "PASS 三条断言在仓里、说明贴了改前的红、服务端零改动、core-protocol+core-conn 测试绿"
 echo "     ⚠️ 性能⛔ 不在本判据内——最终判据是用户真机「秒开无空白」。"
