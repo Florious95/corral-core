@@ -150,17 +150,30 @@ type Unsubscribe struct {
 	Ref string `json:"ref"`
 }
 
-// Input injects one whole text line into a session (C→S; requirement 003 —
-// whole-line send-keys, never per-keystroke). The server appends a newline
-// (Enter) after Text, matching "inject then Enter"; an empty Text is a bare
-// Enter and is allowed. The server MUST reply with InputAck so "sent with no
-// effect" cannot happen.
+// Input injects keystrokes into a session (C→S; requirement 003 send-must-
+// arrive). The server MUST reply with InputAck so "sent with no effect"
+// cannot happen.
+//
+// Live path (requirement 059): a non-empty Text is typed via send-keys -l
+// WITHOUT appending Enter — the CLI input box is the draft. An empty Text
+// (and no Keys / Bytes / AttachmentPath) is a bare Enter. The historical
+// comment that "the server appends a newline after Text" is stale and does
+// not describe the live path.
 //
 // Keys is the R-1 named-key alternative (requirement 017): when present, the
 // server sends the named special keys without appending an Enter — the
-// shortcut-bar semantics are "press that key once". Text and Keys are mutually
-// exclusive (a frame carrying both is a protocol error, docs/protocol.md §4.2);
-// neither present means a bare Enter, matching the pre-Keys behavior.
+// shortcut-bar semantics are "press that key once".
+//
+// Bytes is the raw-byte passthrough (input step 1): an arbitrary byte
+// sequence, including control bytes and CSI. Printable runs use send-keys -l;
+// control bytes (C0 / DEL) use send-keys -H; consecutive same-kind bytes share
+// one tmux invocation. JSON encodes Bytes as standard base64. Old clients omit
+// the field and are byte-identical to the pre-Bytes path.
+//
+// Text, Keys, Bytes, and AttachmentPath are mutually exclusive in pairs:
+// at most one of (Text or AttachmentPath), Keys, Bytes may be non-empty
+// (a frame carrying more than one class is a protocol error). Neither present
+// means a bare Enter, matching the pre-Keys behavior.
 //
 // AttachmentPath is an additive optional field (feat-image-upload-inline,
 // requirement 042; two-step preview added by requirement 057): the
@@ -188,17 +201,19 @@ type Unsubscribe struct {
 //     behavior, kept as the compatibility path.
 //
 // @contract
-// @pre ReqID >= 1、Ref 非空、(Text 或 AttachmentPath 非空) 与 Keys 至多一类非空、Keys 中每个键都属闭集
+// @pre ReqID >= 1、Ref 非空、(Text 或 AttachmentPath)、(Keys)、(Bytes) 三类至多一类非空、Keys 中每个键都属闭集
 // @post 该帧在 wire 上合法（Validate 通过）且不附带服务端状态变更
-// @err Validate 对 ReqID 0、空 Ref、(text/attachment)+keys 并存、未知 key 返回 ErrInvalidField
-// @inv 空 Text 且空 Keys 且空 AttachmentPath 是合法的裸 Enter，服务端必须接受；
+// @err Validate 对 ReqID 0、空 Ref、多类 payload 并存、未知 key 返回 ErrInvalidField
+// @inv 空 Text 且空 Keys 且空 Bytes 且空 AttachmentPath 是合法的裸 Enter，服务端必须接受；
 //
-//	AttachmentPath 为空时的行为与本字段引入前逐字节一致
+//	AttachmentPath 为空且 Bytes 为空时的行为与本字段引入前逐字节一致
 type Input struct {
 	ReqID uint32 `json:"req_id"`
 	Ref   string `json:"ref"`
 	Text  string `json:"text,omitempty"`
 	Keys  []Key  `json:"keys,omitempty"`
+	// Bytes is the raw-byte passthrough payload (base64 on the wire).
+	Bytes []byte `json:"bytes,omitempty"`
 	// AttachmentPath is the host-absolute path of an uploaded image; see the
 	// two handling modes documented above.
 	AttachmentPath string `json:"attachment_path,omitempty"`
