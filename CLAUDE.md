@@ -21,12 +21,15 @@
 - **本版含**：白屏根因修复（ConnectionManager 由单一全局 listener 槽改为**按 ref 分发**）、
   PerfTrace 八事件全链仪表（setprop 可关、关时零成本）、服务端 subscribe 三时间戳、
   三核模块切分 `:core-protocol`/`:core-terminal`/`:core-conn`、corral-app 引用式构建暂存工程。
-- **模拟器性能地板**（`.team/perf/baseline-20260822.json`，只从 `adb logcat -s PerfTrace` 取数，
-  适用 load1 6.87–10.49）：三夹具 `tap→first_draw` p50 1450/1478/1492ms、
-  p95 1908/2280/1892ms。⚠️ **换负载区间不可直接比较**，复测必须带 load 读数。
+- **模拟器性能地板**：2026-08-23 归因后，tag 同路径 `.team/perf/baseline-20260822.json`
+  实际是 `INCONCLUSIVE` / 全 null，**不得再当可执行门或复述其中 p50/p95**。
+  行为身份仍绑定本段的 tag 与参考 APK md5；可执行 A/B 门见
+  `.team/nodes/input-full-auto/perf-design/CONTRACT.md`（三夹具四段、同批 A/B/A/B、B/A≤1.10）。
 - 🔴 **此后任何改动不许低于本基线，优化必须高于本基线**；模拟器地板只是回归下限，
   **最终判据永远是用户真机「秒开无空白」**（092 §11 金标准）。
-  每个改动包上手前先复测 `tools/perfbase/judge-perf-nonregress.sh`，任何段回退 = 不出门。
+  每个改动包上手前先过 `sh tools/perfbase/envcheck.sh --gate`，再按 CONTRACT 做同批 A/B；
+  旧入口 `tools/perfbase/judge-perf-nonregress.sh` 会因夹具 schema 读成空而 exit 2，
+  那是**不可判**，⛔ 不得改判据放行、也不得把不可判说成通过。
 
 ### 本基线未修的已知缺陷（另案，不影响基线成立）
 
@@ -39,11 +42,19 @@
 - **重连慢 ≠ 服务端问题**（2026-08-22 实撞）：用户手机 VPN 设成全局转发时，tailnet 流量被套一层
   ⇒ 握手与重连都慢。改成分应用转发并排除本 app 即恢复。**排查顺序：先问网络路径，再疑代码。**
 
-## 当前待办底册（2026-08-22 全停后）
+## 当前待办底册（2026-08-24 接续）
 
+- **输入透传**（现行产品链，全自动账本驱动，⛔ 人肉补投）：
+  1. 四段 A/B/A/B 性能采样器 `ledger.perf-sampler.v1`（性能门未过前 ⛔ 改产品码）
+  2. 订阅时播种鼠标模式（解决「有的 CLI 能点、有的不能 / 有时能点」）
+  3. 双指滚轮
+  4. 客户端选区高亮
+  5. 预测性本地回显
+  可执行性能门正本：`.team/nodes/input-full-auto/perf-design/CONTRACT.md`。
+  ⚠️ `.team/perf/baseline-20260822.json` 及其 tag 同路径内容是 `INCONCLUSIVE/null`，
+  **不是**可执行门；行为身份仍绑定 tag `baseline-20260822-release` 与参考 APK md5。
 - **`docs/交接任务书-性能基线与仓库重构.md`** —— 用户 2026-08-22 三连令（打开链路 Debug 日志仪表
   →模拟器性能基线（此后不许低于、优化须高于）→corral-core 重构为可被 corral-app 与桌面端引用）。
-  下一任 leader 的开工首读，含打点位表/测定流程/切分骨架/红线。
 - **`docs/优化点清单-1820.md`** —— 用户 2026-08-20 晚的 18 个优化点唯一底册（本轮实现已全部作废，
   契约 087–091 仍有效）。重启铁律：从基线 4120c0884 起**一次一条**，用户真机实测不倒退
   （金标准=打开会话秒进秒排，092 §11）才做下一条；图标只用 Provider 原生厂家官方图标（093 §2）。
@@ -72,76 +83,66 @@
 - `agents/` — 席位角色文件（retired/ 为退役归档）
 - `.team/evidence/` — 任务证据 JSON（状态唯一来源）
 
-## 席位与模型
+## 席位与模型（2026-08-24 供给正本）
 
-- ⛔⛔ **禁止使用 Deepseek 模型**（2026-08-21 用户令）。这条**取代**了下面那条旧的默认通道。
-- ⛔⛔ **禁止开 Fable 5**（2026-08-21 用户令）。
-- ⛔⛔ **开席位禁止用 Opus，只能用 Sonnet 5**（2026-08-23 用户令，**全局 CLAUDE.md 第三条硬禁令**）。
-  这条管的是**席位**，⛔ 不管 leader 自己跑在哪个模型上。
-  ⚠️ **它取代了同日早些时候「按用户口头令开 Opus 席位」那次例外**——
-  当天起过的 `rp-opus` / `dev-opus` 属于旧令产物，必须换成 Sonnet 5。
-  🔴 **未清的待办（2026-08-23 记）**：`rp-opus` 已换成 `rp-sonnet`（pane 自证 `Sonnet 5`）；
-  **`dev-opus` 当时正在飞 `ledger.modeseed.v1`，按「在飞不许换」留到该格收口后再换**。
-  ⇒ 下一任 leader 若看到 `dev-opus` 还在，说明这条待办没做完，**先换掉再派任何新活**。
-  ⚠️ `model` 只在启动时生效：改角色文件**不够**，必须 `remove-agent --force --confirm` + `add-agent`
-  重建，并**读 pane 自证底部显示的模型名**（⛔ 不采信自报）。
-  ⚠️ **在飞的格不许换席位**——拆席位会把派单一起销毁且账本层零症状，只在格与格之间的空档换。
-- ⚠️ **旧条（2026-08-22 用户令：「只能开启 cursor grok 4.6 模型作为 TeamMate」）已被上面那条收窄**：
-  cursor 通道仍可用（它跑的是 grok 4.6，不是 Opus，不违反新令），
-  但「⛔ 不许再用别的通道」这半句**作废**——claude_code 通道允许，前提是 **Sonnet 5，⛔ 不是 Opus**。
-  **原因是事实不是偏好：Grok Build 的额度已经耗尽**（`Weekly limit left: 0%`，
-  HTTP 402 `usage balance exhausted`）。⇒ `provider: grok` 的席位现在**全部是死的**，
-  派给它们不会报错、只会让驱动器等到预算耗尽（账本层零症状，只有读屏能发现）。
-  🔴 **派单前先核收件席位是不是 cursor 通道**；本工程残留的 `pb-*` 席位一律不可用。
-  ⚠️ **同一 workspace 同时只能有一个 cursor 席位**（`.cursor/mcp.json` 是目录级的）
-  ⇒ 实现席与终审席**只能时序错开**，⛔ 不能并存；换席位前先停驱动器，免得拆掉在飞派单。
-  - cursor 是 **fail-closed**：第二席被 `add-agent` **硬拒**（`ok:false` + 结构化 reason），
-    **先起的席位身份不会被回溯改写**（2026-08-22 我方实撞 + tmux桌面端 队同型对照）。
-  - 🔴 **grok 席位同样是目录作用域（`.grok/config.toml`），但 `add-agent` 不拦**
-    （2026-08-23 无等编排队实撞）⇒ **守卫只在部分 provider 生效**，grok 那边只能靠纪律。
-  - ⚠️ CLI 那句 reason `a second seat overwrites TEAM_AGENT_ID (last-writer)` 描述的是
-    **守卫所阻止的机制**，⛔ 不是「已经发生的行为」。转述几手后极易读成「它会静默覆写」——
-    **回原文分清 reason 与 observation**，否则会拿一个没发生的事去报缺陷。
-  - 🔴 **cursor 席位 pane 底栏显示的分支是它「启动时的 cwd」，⛔ 不是它实际在改的树**
-    （2026-08-23 无等编排队实撞）。判席位在哪棵树干活要**对照两棵树的 `git status`**，
-    ⛔ 不看底栏。与「`ps` 的路径名不跟 rename 走」是同一类：**显示不等于事实**。
-  这条**取代**了同日早些时候的「一律 `provider: grok` / `model: grok-4.6`」——
-  模型没变（还是 grok 4.6），**变的是通道**：走 Cursor 订阅，与 Codex/Claude 订阅额度互相独立。
-  - 角色文件 frontmatter 四件套（照抄，⛔ 别手写漏字段）：
-    `provider: cursor_agent` / `auth_mode: subscription` /
-    `permission_mode: auto_approve` / `dangerously_skip_permissions: true`，外加必填 `name:`。
-  - ⛔ **不能只靠 `clone-agent` 换通道**：它整份继承源角色文件，`provider` 不会变。
-    换通道要走 clone → `stop-agent` → `remove-agent --confirm` → 写新角色文件 → `add-agent --role-file`
-    → 手动投任务书（clone 不带单）。
-  - ⚠️ **role doc 的 `model:` 会被 shim 剥掉**，实跑模型以 pane 显示为准；
-    起完 `capture-pane` 应看到底部 `Cursor Agent v<版本>` —— **自证靠这个，不靠自报**。
-  - ⚠️ **cursor 席位 restart = 失忆**（见下方那条）⇒ 派单必须**单回合自足**，
-    要延续的信息一律落盘到任务书与产物文件。
-  - 🔴 **在飞的格不许换席位**（2026-08-22 实撞）：拆席位会把它手上的派单一起销毁，
-    驱动器只会干等到预算耗尽，**账本层零症状**。换通道只在格与格之间的空档做。
-  ⚠️ 实撞（2026-08-22，2026-08-23 再次适用）：只删 CLAUDE.md 里那句话**不够** ——
-  已经起着的 Opus 席位不会自己变，必须逐个 `remove-agent --force --confirm` + `add-agent`
-  重建并**读 pane 自证模型名**。
-  ⇒ 异源评审这一层现在只剩「不同席位 + 零上下文 + 不采信自报 + 判据反造假哨兵」，
-  provider 异源那一层没有了，写判据时要更狠。
-  ⚠️ `model` 与 `dangerously_skip_permissions` 一样**只在启动时生效** ——
-  改文件不够，必须 `remove-agent --force` + `add-agent` 重建，并读 pane 自证底部显示的模型名。
-  ⇒ 异源评审这条现在只能靠「不同席位 + 零上下文 + 判据反造假」，⛔ 已无 provider 异源可用。
-- **旧条（已作废，留档）**：默认通道 `provider: claude_code` + `auth_mode: compatible_api`
-  + `profile: worker-api`（deepseek-v4-flash）。升级仅两种：① `contention: contract`；② 返工达上限。
-- 🔴 **新建席位必须在角色文件里写 `dangerously_skip_permissions: true`**（2026-08-21 实撞）。
-  写 `false` 的席位会**停在 provider 的第一个确认提示上等人按键**，而编排层给出的唯一症状是
-  `send_unverified_exhausted`（读起来像投递问题）。**该字段只在启动时生效**——
-  改了文件再 `reset-agent` **不够**，必须 `remove-agent --force` + `add-agent` 重建。
+正本对齐 `ledger-orchestration-trial` 入口「增量（2026-08-24）」。过时供给句已删；
+**删的是过时事实，不是恢复旧通道。**
+
+### 现行可调度
+
+- **执行席默认 Codex subscription**。精确 slug 仅 `gpt-5.6-luna` 与 `gpt-5.6-sol`。
+  - **写账本 / 任务书用 sol**（成本约 luna 的 10 倍、能力更高）→ **leader 审核** → 再 `plan/apply` 驱动。
+  - **执行席默认 luna**。
+  - 角色文件必须 `dangerously_skip_permissions: true`（只在启动时生效；改文件再 `reset-agent` 不够，
+    必须 `remove-agent --force` + `add-agent` 重建）。
+- **Claude 已登出，⛔ 不可调度**（含 Opus / Sonnet / claude_code）。
+  历史令「开席位禁止 Opus、只能 Sonnet 5」（2026-08-23）仍有效，但当前通道不可用，
+  不得再按它去 `add-agent`。已起着的 Claude/Opus 席位不会自己变，空档里 `remove-agent --force --confirm`。
+- **Grok 执行席暂不开**，等用户点名再开。⛔ **不得把「Grok 额度已满 / 已耗尽」写成现行事实。**
+  leader 自己可以跑在 Grok 上；那不等于可以开 Grok 工作席。
+- ⛔⛔ **禁止 Deepseek**（2026-08-21）。⛔⛔ **禁止 Fable 5**（2026-08-21）。
+- `model` 只在启动时生效。实跑模型以 pane 自证为准，⛔ 不采信自报。
+- ⚠️ **在飞的格不许换席位**——拆席位会把派单一起销毁且账本层零症状，只在格与格之间的空档换。
+
+### 全自动编排（2026-08-23/24 用户令）
+
+此后产品任务**只走 `ledger-run` 自动派单**。⛔ leader 用人肉 `team-agent send` 补投、催单、
+顶替调度。写账本用 ledgerdsl，打针/解挂走 `plan` / `apply`（`.lease` 在则先停驱动器），
+⛔ 不再手写拼 JSON。`working=0` 且账本非终态 = **停滞**；驱动器 PID 活着不算在推进。
+
+### 干完仍空等到 `seat_wait_seconds`（不是缺判据脚本）
+
+实证形状：席位已完成并 idle、产物已落盘，账本非终态，driver 活着却一直等到预算边界。
+有人归因「没写判据脚本」——**归因错了。** 判据不是文件监听器：只在 `report_result` 被
+waiter 消费之后才跑；磁盘上有产物不会自己交棒。
+
+空等的真实形状（可并存）：
+
+1. result 已在 store，waiter 不醒（silent / message↔case 关联）。框架已裁定：不是少写判据、
+   也不是该靠缩短等待秒数绕过。
+2. 账本声明了自定义 `statuses`，Codex 交标准 result 且 `status=""` → `route-nofire missing_status`，
+   同一 case 每满预算空转一次。无路由链不要声明 `statuses`，只用 `requires_success`。
+3. 人工 `collect` 抢走 active ledger 的 durable result，原格到预算边界 Alarm。
+   **N10：active case 的 result 归 waiter；直接/手工任务才 collect。**
+
+下一棒：标准 `report_result` 一次 + 现有判据脚本；active ledger 在途不 collect；
+⛔ 不要靠再补一份判据脚本治这个断法。
+
+另案（2026-08-23 已报 P0）：`ledger-run` 自动 `send` 固定 30 秒超时后 park，但消息实际落地。
+这是投递不确定，不是「没派出去」；⛔ 不要因此重投同一 case。
+
+### 仍有效的席位操作铁律
+
 - 🔴 **席位卡住时读它的屏**：`tmux -S /private/tmp/tmux-501/ta-<team> capture-pane -p -t <pane>`
-  （team 私有 socket，不是用户真实 tmux）。用户不在屏幕前时，这是唯一能认出「卡在提示上」的手段。
+  （team 私有 socket，不是用户真实 tmux）。
 - ⛔ **席位不许写 `/tmp` 或任何项目外路径**，临时文件写 `.team/nodes/<格>/tmp/`。
-  各家 provider 对项目外路径的默认策略不同，靠加权限治不了根。
-- 多模态缺陷（需看截图判断渲染效果）用 Claude 订阅席位，不用 deepseek。
-- ⚠️ **cursor 席位按「restart = 失忆」对待**（框架队 2026-08-21 装机通告3 的运营事实，三路手工定性实锤）：
-  cursor vendor 的 `--resume` **不载入历史回合** ⇒ 该席位 restart 后上下文实际丢失，机器面已诚实标注。
-  ⇒ **重要上下文必须靠任务书与产物落盘**，⛔ 不许指望席位记得。
-  （2026-08-22 起 cursor 是本工程唯一的开席通道，这条从「预防性」升为**日常约束**。）
+- 判活只认 nodeprobe；⛔ `worker_state` / `last_output_at`。
+- **旧条（已作废，留档）**：默认通道 `provider: claude_code` + `auth_mode: compatible_api`
+  + `profile: worker-api`（deepseek-v4-flash）。cursor 曾作过唯一开席通道（2026-08-22）；
+  现行执行席是 Codex luna/sol。cursor 若再开：同一 workspace 同时只能一席（`.cursor/mcp.json`
+  目录作用域）、restart=失忆、角色文件 `provider: cursor_agent`，不能靠 `clone-agent` 换通道。
+  grok 的 `.grok/config.toml` 同样是目录作用域，但 `add-agent` 不拦，只能靠纪律。
+
 - 密钥只存在于 `.team/current/profiles/*.env`，任何席位禁止读其原文。
 - **`.team/current/profiles/tailnet-test.env` 全员禁读**（含 leader）。里面是用户 tailnet 的
   auth key，只能通过 `TS_AUTHKEY` 环境变量注入测试节点，任何形式的 cat/grep/plist/Read 都禁止。
@@ -150,7 +151,8 @@
   （2026-08-13 实发，已请用户轮换）。同类禁令：无过滤 `ps aux`（暴露席位 API key）、
   `tail .team/logs/agentmirrord-prod.log`（daemon 明文打配对 token）。
   **Shadowrocket 的偏好 plist 与 `tailscale_keys.bin` 列入禁读。**
-- 给席位发消息只走 `team-agent send`，禁 tmux `send-keys`。
+- 给席位发消息只走 `team-agent send`，禁 tmux `send-keys`。产品任务由 `ledger-run` 发；
+  leader 只在编排调整（走不下去 / 约束打架 / 红线）时直发，⛔ 补投产品格。
 - **凭据已泄露 ≠ 停工**（2026-08-13 用户裁定，2026-08-14 重申并批评过一次违反）：
   用户对 `tailnet-test.env` 的长期决定是「既然泄露了，就写进文件，接下来就用它去测」。
   再次泄露时**只做三件事：一行上报（不复述泄露的值）、就地收紧做法、继续干活**。
@@ -241,8 +243,9 @@
 
 - 用户原话：「如果框架停下来，你不用停下来。我们来日方长，使用这个框架的机会还很多。
   你把报告投递了，就可以让任务继续了。」
-- **凡是编排中断、又没有提醒我结束的，一律 P0**（2026-08-18 令），必须写报告投递，
-  收件人是 `/Volumes/nvme/Projects/讨论team-agent::team/leader`。
+- **凡是编排中断、又没有提醒我结束的，一律 P0**（2026-08-18 令），必须写报告投递。
+  收件人是 `/Volumes/nvme/Projects/讨论team-agent::wiki/leader`
+  （2026-08-22 双方证实 `::team` 是死队；ledger-orchestration / ledger-run 相关一律投 `::wiki`）。
 - 仍然不许：绕过缺陷自己打补丁改他们的 skill/引擎、人肉编排顶替全自动编排、
   为框架队做复现取证阶梯（2026-08-15 那条边界不变）。
 - 仍然要先分归属：我方账本/任务书写错（我自己改任务书重跑，不算框架缺陷），
