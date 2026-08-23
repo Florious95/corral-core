@@ -329,8 +329,14 @@ data class UnsubscribeFrame(
  * 整条文本注入 C→S（send-keys 语义，非逐键）；text 为空 = 仅回车，允许。
  *
  * keys（R-1 快捷键条，017 裁定，可选字段前向兼容增量不 bump 版本）：携带时发送命名
- * 特殊键且**不附加回车**（快捷键条语义 = 按一下那个键）。(text 或 attachmentPath) 与 keys
- * 一帧至多其一，两者都有判协议错误（契约 §4.2）；三者皆无 = 仅回车（既有语义不变）。
+ * 特殊键且**不附加回车**（快捷键条语义 = 按一下那个键）。
+ *
+ * bytes（输入透传第 2 步，可选字段前向兼容增量不 bump 版本）：裸字节透传，JSON 为
+ * 标准 RFC 4648 base64（[InputBytesAsStdBase64Serializer] / `java.util.Base64.getEncoder()`，
+ * 非 URL-safe）。缺省 null，encodeDefaults=false ⇒ 不发 bytes 时线格式与该字段引入前逐字段相同。
+ *
+ * (text 或 attachmentPath) / keys / bytes 三类一帧至多其一，多于一类判协议错误
+ * （契约 §4.2，对齐 Go validate.go）；三者皆无 = 仅回车（既有语义不变）。
  *
  * attachmentPath（feat-image-upload-inline，需求 042，可选字段前向兼容增量不 bump 版本）：
  * 已上传图片的主机绝对路径。服务端收到非空 attachmentPath 时按三步序列注入
@@ -342,10 +348,11 @@ data class UnsubscribeFrame(
  * 输入框发不出去）。attachmentPath 为空时行为与该字段引入前逐字节一致。
  *
  * @contract
- * @pre reqId ≥ 1、ref 非空、(text 或 attachmentPath) 与 keys 至多一类非空
- * @post 该帧在 wire 上合法（validate 通过）；空 text 空 keys 空 attachmentPath 是合法的裸 Enter
- * @err validate() 对 reqId ≤ 0 / 空 ref / (text/attachmentPath)+keys 并存返回非空原因
- * @inv keys 注入不附加回车；attachmentPath 为空时与该字段引入前逐字节一致
+ * @pre reqId ≥ 1、ref 非空、(text 或 attachmentPath) / keys / bytes 至多一类非空；
+ *      bytes 非空时长度 ≤ [ProtocolVersion.MAX_INPUT_BYTES]
+ * @post 该帧在 wire 上合法（validate 通过）；空 text 空 keys 空 bytes 空 attachmentPath 是合法的裸 Enter
+ * @err validate() 对 reqId ≤ 0 / 空 ref / 多类 payload 并存 / bytes 超上限返回非空原因
+ * @inv keys 注入不附加回车；bytes 为 null 时与该字段引入前逐字段一致
  */
 @Serializable
 data class InputFrame(
@@ -354,15 +361,48 @@ data class InputFrame(
     @SerialName("text") val text: String = "",
     @SerialName("keys") val keys: List<InputKey> = emptyList(),
     @SerialName("attachment_path") val attachmentPath: String = "",
+    // ByteArray? 缺省 null：encodeDefaults=false 时省略该键，避免 "bytes":null 改变线格式。
+    // 不用空 ByteArray 作缺省——数组 equals 按引用，空数组仍会被编进 JSON。
+    // 显式标准 base64：kotlinx 默认会把 ByteArray 编成 JSON 数组，服务端认的是字符串。
+    @Serializable(with = InputBytesAsStdBase64Serializer::class)
+    @SerialName("bytes") val bytes: ByteArray? = null,
 ) : FramePayload {
     override val frameType: String get() = FrameType.INPUT
-    override fun validate(): String? = when {
-        reqId <= 0 -> "input req_id must be >= 1"
-        ref.isEmpty() -> "input ref must be non-empty"
-        // 契约 §4.2：(text/attachmentPath) 与 keys 互斥，一帧至多其一（对齐 Go validate.go）。
-        (text.isNotEmpty() || attachmentPath.isNotEmpty()) && keys.isNotEmpty() ->
-            "input carries both text/attachment_path and keys; at most one is allowed"
-        else -> null
+    override fun validate(): String? {
+        if (reqId <= 0) return "input req_id must be >= 1"
+        if (ref.isEmpty()) return "input ref must be non-empty"
+        val n = (if (text.isNotEmpty() || attachmentPath.isNotEmpty()) 1 else 0) +
+            (if (keys.isNotEmpty()) 1 else 0) +
+            (if (bytes != null && bytes.isNotEmpty()) 1 else 0)
+        if (n > 1) {
+            return "input carries more than one of text/attachment_path, keys, bytes; at most one is allowed"
+        }
+        if (bytes != null && bytes.size > ProtocolVersion.MAX_INPUT_BYTES) {
+            return "input bytes exceeds max-input-bytes (${ProtocolVersion.MAX_INPUT_BYTES})"
+        }
+        return null
+    }
+
+    // ByteArray 在 data class 里按引用 equals；带 bytes 的往返比较走 contentEquals。
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is InputFrame) return false
+        if (reqId != other.reqId) return false
+        if (ref != other.ref) return false
+        if (text != other.text) return false
+        if (keys != other.keys) return false
+        if (attachmentPath != other.attachmentPath) return false
+        return bytes.contentEquals(other.bytes)
+    }
+
+    override fun hashCode(): Int {
+        var h = reqId.hashCode()
+        h = 31 * h + ref.hashCode()
+        h = 31 * h + text.hashCode()
+        h = 31 * h + keys.hashCode()
+        h = 31 * h + attachmentPath.hashCode()
+        h = 31 * h + (bytes?.contentHashCode() ?: 0)
+        return h
     }
 }
 
