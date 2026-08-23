@@ -1,0 +1,8 @@
+  ok   测试文件：app/app/src/test/java/dev/agentmirror/app/BackGestureNavTest.kt app/app/src/test/java/dev/agentmirror/app/session/SessionViewModelTest.kt app/app/src/test/java/dev/agentmirror/app/session/MouseCaptureTest.kt 
+  …  app/gradlew :app:testDebugUnitTest --offline --rerun-tasks
+> Task :app:testDebugUnitTest
+
+BUILD SUCCESSFUL in 39s
+41 actionable tasks: 41 executed
+PASS 四条断言在仓里、壳未自拼 CSI、说明贴了改前的红、服务端与核层零改动、app 单测真跑绿
+     ⚠️ 性能⛔ 不在本判据内——最终判据是用户真机。
