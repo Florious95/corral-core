@@ -57,6 +57,7 @@ class TerminalEmulator(
     private val main = TerminalGrid(cols, rows)
     private var alt: TerminalGrid? = null
     private val parser = AnsiParser(this)
+    private val mouse = MouseModeTracker()
 
     /** 本地 scrollback（仅主屏滚出的行进入）。 */
     val scrollback = ScrollbackBuffer(scrollbackCapacity)
@@ -68,6 +69,18 @@ class TerminalEmulator(
     /** 游标是否可见（DECTCEM ?25h/l）。 */
     var cursorVisible: Boolean = true
         private set
+
+    /** 当前鼠标跟踪协议：0=关，1000=按键，1002=cell-motion（1003 请求会落到 1002）。 */
+    val mouseTrackingMode: Int get() = mouse.tracking
+
+    /** 当前鼠标编码：0=关，1006=SGR。其它编码码只记账，不用于发送。 */
+    val mouseEncodingMode: Int get() = mouse.encoding
+
+    /** 鼠标相关 DEC 模式的到达顺序（码 + 开/关），重连重放用。 */
+    val mouseModeOrder: List<MouseModeEvent> get() = mouse.snapshotOrder()
+
+    /** 最近一次 1003→1002 降级留痕，形如 `requested=1003 enabled=1002`。 */
+    val lastMouseDowngradeTrace: String? get() = mouse.lastDowngradeTrace
 
     /** 脏区回调，feed/replay/resize 结束时按合并后的行区间通知一次。 */
     var damageListener: DamageListener? = null
@@ -120,6 +133,25 @@ class TerminalEmulator(
         flushDamage()
     }
 
+    /**
+     * 把一次点击编成 SGR 1006 字节；跟踪未开或编码不是 1006 时返回 null（不发）。
+     * [column]/[row] 为 1-based。[button] 0=左。
+     */
+    @Synchronized
+    fun encodeMouse(
+        button: Int,
+        column: Int,
+        row: Int,
+        press: Boolean,
+        motion: Boolean = false,
+        shift: Boolean = false,
+        meta: Boolean = false,
+        ctrl: Boolean = false,
+    ): ByteArray? {
+        if (!mouse.canEncode()) return null
+        return MouseSgr.encode(button, column, row, press, motion, shift, meta, ctrl)
+    }
+
     /** 便捷入口：按 UTF-8 编码喂入文本。 */
     fun feed(text: String) = feed(text.toByteArray(Charsets.UTF_8))
 
@@ -141,6 +173,7 @@ class TerminalEmulator(
         alt = null
         style = TextStyle.DEFAULT
         cursorVisible = true
+        mouse.reset()
         parser.reset()
         main.resize(cols, rows)
         main.reset()
@@ -316,11 +349,12 @@ class TerminalEmulator(
         (params.getOrNull(index) ?: 1).coerceAtLeast(1)
 
     private fun setPrivateMode(mode: Int, on: Boolean) {
+        mouse.apply(mode, on)
         when (mode) {
             25 -> cursorVisible = on
             47, 1047 -> if (on) enterAlt(saveMainCursor = false) else exitAlt(restoreMainCursor = false)
             1049 -> if (on) enterAlt(saveMainCursor = true) else exitAlt(restoreMainCursor = true)
-            else -> {} // 鼠标上报/括号粘贴等模式与内核无关，忽略
+            else -> {}
         }
     }
 
@@ -360,6 +394,7 @@ class TerminalEmulator(
         style = TextStyle.DEFAULT
         cursorVisible = true
         savedCursor = null
+        mouse.reset()
         main.reset()
     }
 
