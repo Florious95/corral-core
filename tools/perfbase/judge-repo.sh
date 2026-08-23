@@ -21,8 +21,8 @@ mkdir -p "$(dirname "$OUT")"
 [ -x ./gradlew ] || { echo "UNJUDGEABLE 暂存工程没有可执行 gradlew"; exit 2; }
 ./gradlew :app:assembleDebug --offline >"$OUT" 2>&1
 RC=$?
-grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 $OUT）"; exit 2; }
-[ "$RC" -eq 0 ] || { echo "FAIL 引用式构建装不出 APK rc=${RC}（见 $OUT）"; exit 1; }
+grep -qE "Compilation error|Unresolved reference" "$OUT" && { echo "UNJUDGEABLE 编译不过（见 ${OUT}）"; exit 2; }
+[ "$RC" -eq 0 ] || { echo "FAIL 引用式构建装不出 APK rc=${RC}（见 ${OUT}）"; exit 1; }
 find "$STAGE" -name "*.apk" | head -1 | grep -q . || { echo "FAIL 构建绿但找不到 APK 产物"; exit 1; }
 echo "PASS 引用式构建成立（远端推送留给 leader）"
 exit 0
