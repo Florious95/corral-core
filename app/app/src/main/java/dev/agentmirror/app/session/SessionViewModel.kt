@@ -188,8 +188,8 @@ class SessionViewModel(
         connectionState = manager.state()
         onStateChanged(manager.state())
         manager.addBinaryListener(ref, this)
-        // 按键回显量具：只在 PerfTrace 开时挂钩，关时零回调。
-        if (PerfTrace.isEnabled()) {
+        // 按键回显量具：必须 PerfTrace 开 **且** 按键开关开。开会话测量只开前者，挂钩保持 null。
+        if (PerfTrace.isEnabled() && PerfTrace.isKeyEchoEnabled()) {
             emulator.onAsciiPrint = { ch -> PerfTrace.notePrintableEcho(ch) }
         }
         // 进入即订阅：conn 层记簿，READY 立发，重连自动重放（004 无状态）。
