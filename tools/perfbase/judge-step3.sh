@@ -53,9 +53,9 @@ echo "  …  app/gradlew :core-terminal:test --offline --rerun-tasks"
 ( cd "$ROOT/app" && ./gradlew --console=plain :core-terminal:test --offline --rerun-tasks ) >"$OUT" 2>&1
 rc=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && {
-  echo "UNJUDGEABLE 编译不过（见 $OUT）"; tail -8 "$OUT"; exit 2; }
+  echo "UNJUDGEABLE 编译不过（见 ${OUT}）"; tail -8 "$OUT"; exit 2; }
 tail -4 "$OUT"
-[ "$rc" -eq 0 ] || { echo "FAIL gradle 测试未通过（rc=${rc}，见 $OUT）"; exit 1; }
+[ "$rc" -eq 0 ] || { echo "FAIL gradle 测试未通过（rc=${rc}，见 ${OUT}）"; exit 1; }
 grep -q 'up-to-date' "$OUT" && { echo "UNJUDGEABLE 测试是 up-to-date（缓存），不是这次跑出来的"; exit 2; }
 
 echo "PASS 四条断言在仓里、无 1005/1015 后门、说明贴了改前的红、服务端与壳零改动、core-terminal 测试真跑绿"

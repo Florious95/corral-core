@@ -25,13 +25,13 @@ RC=$?
 
 # 编译失败 ⇒ 不可判（不是「红」）
 if grep -qE "Compilation error|e: file:///|Could not resolve|Unresolved reference" "$OUT"; then
-  echo "UNJUDGEABLE 编译不过——红测必须编译得过才算红（见 $OUT）"; exit 2
+  echo "UNJUDGEABLE 编译不过——红测必须编译得过才算红（见 ${OUT}）"; exit 2
 fi
 
 if [ "$RC" -eq 0 ]; then
-  echo "FAIL 红测竟然全绿：实现还没写，绿=测试没验到东西（见 $OUT）"; exit 1
+  echo "FAIL 红测竟然全绿：实现还没写，绿=测试没验到东西（见 ${OUT}）"; exit 1
 fi
 grep -qE "PerfTraceChainTest > .* FAILED|tests completed, .* failed" "$OUT" || {
-  echo "UNJUDGEABLE 非零退出但看不到测试 FAILED 行——分不清是没跑到还是真红（见 $OUT）"; exit 2; }
+  echo "UNJUDGEABLE 非零退出但看不到测试 FAILED 行——分不清是没跑到还是真红（见 ${OUT}）"; exit 2; }
 echo "PASS 先红成立 rc=$RC"
 exit 0

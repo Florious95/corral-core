@@ -47,9 +47,9 @@ echo "  …  app/gradlew :core-protocol:test :core-conn:test --offline --rerun-t
 ( cd "$ROOT/app" && ./gradlew --console=plain :core-protocol:test :core-conn:test --offline --rerun-tasks ) >"$OUT" 2>&1
 rc=$?
 grep -qE "Compilation error|Unresolved reference" "$OUT" && {
-  echo "UNJUDGEABLE 编译不过（见 $OUT）"; tail -8 "$OUT"; exit 2; }
+  echo "UNJUDGEABLE 编译不过（见 ${OUT}）"; tail -8 "$OUT"; exit 2; }
 tail -8 "$OUT"
-[ "$rc" -eq 0 ] || { echo "FAIL gradle 测试未通过（rc=${rc}，见 $OUT）"; exit 1; }
+[ "$rc" -eq 0 ] || { echo "FAIL gradle 测试未通过（rc=${rc}，见 ${OUT}）"; exit 1; }
 
 echo "PASS 三条断言在仓里、说明贴了改前的红、服务端零改动、core-protocol+core-conn 测试绿"
 echo "     ⚠️ 性能⛔ 不在本判据内——最终判据是用户真机「秒开无空白」。"
