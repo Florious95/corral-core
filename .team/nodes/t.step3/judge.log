@@ -1,0 +1,8 @@
+  ok   测试文件：app/core-terminal/src/test/kotlin/dev/agentmirror/terminal/SgrParsingTest.kt app/core-terminal/src/test/kotlin/dev/agentmirror/terminal/MouseTrackingEncodeTest.kt app/core-terminal/src/test/kotlin/dev/agentmirror/terminal/WrapAndScrollbackTest.kt 
+  …  app/gradlew :core-terminal:test --offline --rerun-tasks
+> Task :core-terminal:test
+
+BUILD SUCCESSFUL in 2s
+5 actionable tasks: 5 executed
+PASS 四条断言在仓里、无 1005/1015 后门、说明贴了改前的红、服务端与壳零改动、core-terminal 测试真跑绿
+     ⚠️ 性能⛔ 不在本判据内——最终判据是用户真机。
