@@ -1,0 +1,3 @@
+command: ledger-run --preflight --json candidate
+{"ok":true,"preflight_rejected":false,"issues":[]}
+exit_code: 0
