@@ -1,6 +1,6 @@
 #!/bin/sh
-# //! purpose: 以真实 perf-regress 现场先红证明缺冻结 A 会落入 failed_retryable park。
-# //! contract: 0=真实旧链红已复现并留档；1=复现/交付失败；2=环境或事实不可判。
+# //! purpose: 两次运行真实 probe，经固定 schema 转译“预期旧红”为 repro acceptance 通过。
+# //! contract: 0=预期旧红证据齐；1=非预期/伪造/矛盾；2=probe/证据/provenance 不可判。
 # ledger: expected_exit_code=0; unjudgeable_exit_codes=[2]
 
 set -u
@@ -9,22 +9,33 @@ unjudgeable() { printf '%s\n' "UNJUDGEABLE baseline-bundle-repro: $*" >&2; exit 
 script_dir=$(CDPATH='' cd "$(dirname "$0")" 2>/dev/null && pwd) || unjudgeable "cannot resolve script directory"
 repo_root=$(CDPATH='' cd "$script_dir/../../.." 2>/dev/null && pwd) || unjudgeable "cannot resolve repository root"
 probe="$script_dir/baseline-bundle-real-chain-probe.sh"
-report="$repo_root/.team/nodes/baseline-bundle-repro/REPRO.md"
+translate="$script_dir/baseline-bundle-repro-translate.sh"
+node="$repo_root/.team/nodes/baseline-bundle-repro"
+report_json="$node/REPRO.json"
+report_md="$node/REPRO.md"
+tmp="$node/tmp/acceptance-$$"
 
 [ -r "$probe" ] || unjudgeable "real-chain probe unreadable"
-sh "$probe"
-probe_rc=$?
-case "$probe_rc" in
-    1) printf '%s\n' "BASELINE_MISSING_DEADLOCK_REPRO real_chain=observed legacy_state=failed_retryable frontier=empty verify=dependency_unsatisfied" ;;
-    0) fail "legacy chain is already cured; this repro task must retain its earlier red evidence" ;;
-    2) unjudgeable "real perf-regress chain cannot be judged" ;;
-    *) unjudgeable "unsupported real-chain probe rc=$probe_rc" ;;
-esac
-[ -e "$report" ] || fail "missing REPRO.md after behavioral probe"
-[ -r "$report" ] || unjudgeable "REPRO.md unreadable"
-[ -s "$report" ] || fail "REPRO.md empty"
-for token in 'ledger.perf-regress.v1' 'revision: 4' 'failed_retryable' 'frontier: []' 'dependency_unsatisfied' 'measurement: unjudgeable' 'blocked_missing_baseline' 'recover_exact_artifact' 'rebaseline_with_equivalence_proof'; do
-    grep -F "$token" "$report" >/dev/null 2>&1 || fail "REPRO.md omits $token"
-done
-printf '%s\n' "PASS baseline-bundle-repro: real missing-A failed_retryable park reproduced"
+[ -r "$translate" ] || unjudgeable "repro translator unreadable"
+mkdir -p "$tmp" 2>/dev/null || unjudgeable "cannot create node-local acceptance temp"
+cleanup() { [ ! -d "$tmp" ] || find "$tmp" -depth -delete 2>/dev/null || :; }
+trap cleanup EXIT HUP INT TERM
 
+run1_output=$(sh "$probe" 2>&1)
+rc1=$?
+printf '%s\n' "$run1_output" > "$tmp/run1.raw"
+printf '%s\n' "$run1_output"
+printf '%s\n' "$run1_output" | sed -n 's/^REAL_CHAIN_PROBE_JSON //p' > "$tmp/run1.json"
+run2_output=$(sh "$probe" 2>&1)
+rc2=$?
+printf '%s\n' "$run2_output" > "$tmp/run2.raw"
+printf '%s\n' "$run2_output"
+printf '%s\n' "$run2_output" | sed -n 's/^REAL_CHAIN_PROBE_JSON //p' > "$tmp/run2.json"
+
+sh "$translate" "$tmp/run1.json" "$rc1" "$tmp/run2.json" "$rc2" "$report_json"
+translate_rc=$?
+case "$translate_rc" in 0) ;; 1) fail "expected-red translation rejected" ;; 2) unjudgeable "expected-red translation lacks judgeable evidence" ;; *) unjudgeable "translator returned rc=$translate_rc" ;; esac
+[ -e "$report_md" ] || fail "missing human-readable REPRO.md"
+[ -r "$report_md" ] || unjudgeable "REPRO.md unreadable"
+[ -s "$report_md" ] || fail "REPRO.md empty"
+printf '%s\n' "PASS baseline-bundle-repro: two real expected-red probes translated to acceptance exit 0 with REPRO.json provenance"

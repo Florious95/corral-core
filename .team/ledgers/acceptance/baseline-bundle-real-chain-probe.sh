@@ -6,6 +6,8 @@
 set -u
 unjudgeable() { printf '%s\n' "UNJUDGEABLE baseline-bundle-real-chain: $*" >&2; exit 2; }
 primary=/Volumes/nvme/Projects/远程Agent安卓
+script_dir=$(CDPATH='' cd "$(dirname "$0")" 2>/dev/null && pwd) || unjudgeable "cannot resolve probe directory"
+probe="$script_dir/baseline-bundle-real-chain-probe.sh"
 ledger="$primary/.team/ledgers/perf-regress-v1.json"
 lease="$ledger.lease"
 pidfile="$primary/.team/nodes/_driver/perf-regress-v1.pid"
@@ -58,6 +60,25 @@ x={e.get("task_id"):(e.get("code"),e.get("reason","")) for e in d.get("excluded"
 if x.get("t.perf-regress.impl",("",))[0] != "state_not_dispatchable": raise SystemExit(2)
 if x.get("t.perf-regress.verify",("",))[0] != "dependency_unsatisfied": raise SystemExit(2)
 ' || unjudgeable "dry-run no longer proves empty frontier/dependency block"
+        record=$(printf '%s' "$dry" | python3 -c '
+import hashlib,json,pathlib,sys
+probe,ledger,fixed,lease,pidfile,lease_pid,pid_value=sys.argv[1:]
+raw=sys.stdin.read()
+def sha(path): return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+d=json.loads(raw)
+excluded={x.get("task_id"):x.get("code") for x in d.get("excluded",[])}
+record={
+ "schema":"agentmirror.baseline-bundle.real-chain.v1",
+ "classification":"legacy_missing_baseline_park",
+ "probe":{"path":".team/ledgers/acceptance/baseline-bundle-real-chain-probe.sh","sha256":sha(probe)},
+ "ledger":{"path":".team/ledgers/perf-regress-v1.json","sha256":sha(ledger),"ledger_id":"ledger.perf-regress.v1","revision":4,"desired_state":"running","impl_state":"failed_retryable"},
+ "measurement":{"worktree_id":"wt-pr-impl","path":".team/nodes/perf-regress/FIXED-MEASURE.md","sha256":sha(fixed),"verdict":"unjudgeable"},
+ "process":{"lease_path":".team/ledgers/perf-regress-v1.json.lease","lease_sha256":sha(lease),"pidfile_path":".team/nodes/_driver/perf-regress-v1.pid","pidfile_sha256":sha(pidfile),"lease_pid":int(lease_pid),"pidfile_pid":int(pid_value),"comm":"ledger-run"},
+ "dry_run":{"sha256":hashlib.sha256(raw.encode()).hexdigest(),"frontier":d.get("frontier"),"impl_exclusion":excluded.get("t.perf-regress.impl"),"verify_exclusion":excluded.get("t.perf-regress.verify")}
+}
+print(json.dumps(record,sort_keys=True,separators=(",",":")))
+' "$probe" "$ledger" "$fixed" "$lease" "$pidfile" "$lease_pid" "$pid_value") || unjudgeable "cannot emit machine-readable real-chain evidence"
+        printf '%s\n' "REAL_CHAIN_PROBE_JSON $record"
         printf '%s\n' "FAIL baseline-bundle-real-chain: state=failed_retryable frontier=[] verify=dependency_unsatisfied measurement=unjudgeable lease_pid=$lease_pid"
         exit 1
         ;;

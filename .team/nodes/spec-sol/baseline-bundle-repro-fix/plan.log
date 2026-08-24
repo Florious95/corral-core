@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "<stdin>", line 20, in <module>
+  File "/Users/alauda/.agents/skills/ledger-orchestration/reference/ledgerdsl-0.1.1/ledgerdsl/applyops.py", line 310, in plan
+    live_split[tid] = _split_task(tid, lt, task_creative_keys)
+  File "/Users/alauda/.agents/skills/ledger-orchestration/reference/ledgerdsl-0.1.1/ledgerdsl/applyops.py", line 122, in _split_task
+    raise LedgerCompileError(
+ledgerdsl.errors.LedgerCompileError: 现盘账本任务 t.baseline-bundle.impl 含映射层不认识的字段 ['parallel']
+规则: 字段所有权表（field_ownership()）之外的键无法拆面，静默丢弃=丢数据；运行面词表: ['attempts', 'blocking_reasons', 'completion', 'replan', 'replay', 'rounds', 'state', 'status_record', 'succession_gap', 'workspace_repair_required']
+建议: 该字段若是新 schema 能力，先给 DSL 模型补字段再 apply
+command: ledgerdsl.plan(source, live_path)
+ledgerdsl_version_path: /Users/alauda/.agents/skills/ledger-orchestration/reference/ledgerdsl-0.1.1
+live_revision: 1
+prospective_revision_if_plan_then_later_apply: 2
+live_repro_state: failed_retryable
+live_repro_attempt_count: 1
+live_repro_attempt_ids: att-t.baseline-bundle.repro-seq1-t1787590762873
+live_sha256_before: 89ba716e85f151b06f05bf61a5631eacbcad910c0f1190a8f264a9b69a6b5723
+lease_sha256_before: absent
+plan_status: blocked
+plan_exception_type: LedgerCompileError
+plan_exception: 现盘账本任务 t.baseline-bundle.impl 含映射层不认识的字段 ['parallel'] | 规则: 字段所有权表（field_ownership()）之外的键无法拆面，静默丢弃=丢数据；运行面词表: ['attempts', 'blocking_reasons', 'completion', 'replan', 'replay', 'rounds', 'state', 'status_record', 'succession_gap', 'workspace_repair_required'] | 建议: 该字段若是新 schema 能力，先给 DSL 模型补字段再 apply
+live_sha256_after: 89ba716e85f151b06f05bf61a5631eacbcad910c0f1190a8f264a9b69a6b5723
+lease_sha256_after: absent
+live_unchanged: True
+lease_unchanged: True
+apply_executed: false
+exit_code: 2

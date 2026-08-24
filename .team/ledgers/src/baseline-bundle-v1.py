@@ -15,11 +15,14 @@ roles = {
 }
 
 repro = Task(
-    title="按 `.team/nodes/spec-sol/baseline-bundle/repro-任务书.md` 只读真实 perf-regress 现场并用 dry-run 连续两次先红复现缺 A 后 failed_retryable 空 frontier；不得改变真实 ledger/emulator/daemon，产物齐后 report_result。",
+    title="返修新 case：按 `.team/nodes/spec-sol/baseline-bundle/repro-任务书.md` 沿用上轮语义分析但必须重新连续运行两次真实 probe，交 REPRO.json 固定 schema+REPRO.md；由 translator 把完整的 expected legacy red 转为 acceptance 0，probe 2 仍传 2，伪造/非预期为 1。不得改变真实 ledger/emulator/daemon，产物齐后 report_result。",
     owner_role="repro", seat_wait_seconds=3600,
-    resources=Resources(worktree_id="wt-bundle-core", write_paths=[".team/nodes/baseline-bundle-repro/"], read_paths=[".team/nodes/spec-sol/baseline-bundle/任务书.md", ".team/nodes/spec-sol/baseline-bundle/repro-任务书.md", ".team/ledgers/perf-regress-v1.json", ".team/ledgers/perf-regress-v1.json.lease", ".team/nodes/_driver/perf-regress-v1.pid", ".team/ledgers/acceptance/perf-regress.sh", ".team/ledgers/acceptance/baseline-bundle-real-chain-probe.sh"], **base),
-    handoff=Handoff(required_artifacts=[".team/nodes/baseline-bundle-repro/REPRO.md"]),
-    checks=[Check(id="M.baseline-bundle.repro", script=ScriptRef(path=".team/ledgers/acceptance/baseline-bundle-repro.sh", expect=0, unjudgeable=[2]), cwd=WT, budget=600)],
+    resources=Resources(worktree_id="wt-bundle-core", write_paths=[".team/nodes/baseline-bundle-repro/"], read_paths=[".team/nodes/spec-sol/baseline-bundle/任务书.md", ".team/nodes/spec-sol/baseline-bundle/repro-任务书.md", ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md", ".team/ledgers/perf-regress-v1.json", ".team/ledgers/perf-regress-v1.json.lease", ".team/nodes/_driver/perf-regress-v1.pid", ".team/ledgers/acceptance/perf-regress.sh", ".team/ledgers/acceptance/baseline-bundle-real-chain-probe.sh", ".team/ledgers/acceptance/baseline-bundle-repro-translate.sh", ".team/ledgers/acceptance/baseline-bundle-repro-regression.sh"], **base),
+    handoff=Handoff(required_artifacts=[".team/nodes/baseline-bundle-repro/REPRO.json", ".team/nodes/baseline-bundle-repro/REPRO.md"]),
+    checks=[
+        Check(id="M.baseline-bundle.repro", script=ScriptRef(path=".team/ledgers/acceptance/baseline-bundle-repro.sh", expect=0, unjudgeable=[2]), cwd=WT, budget=600),
+        Check(id="M.baseline-bundle.repro-regression", script=ScriptRef(path=".team/ledgers/acceptance/baseline-bundle-repro-regression.sh", expect=0, unjudgeable=[2]), cwd=WT, budget=300),
+    ],
 )
 
 test = Task(
