@@ -1,0 +1,7 @@
+command: PYTHONPATH=ledgerdsl-0.1.1 /usr/bin/python3 .team/ledgers/src/baseline-bundle-v1.py
+candidate_path: .team/nodes/spec-sol/baseline-bundle-repro-fix/baseline-bundle-v1.candidate.json
+ledger_id: ledger.baseline-bundle.v1
+compiled_seed_revision: 1
+repro_checks: M.baseline-bundle.repro,M.baseline-bundle.repro-regression
+required_artifacts: .team/nodes/baseline-bundle-repro/REPRO.json,.team/nodes/baseline-bundle-repro/REPRO.md
+exit_code: 0

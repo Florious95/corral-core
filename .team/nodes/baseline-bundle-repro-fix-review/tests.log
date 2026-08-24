@@ -1,0 +1,43 @@
+baseline-bundle-repro-fix independent fresh review
+workspace=/Volumes/nvme/Projects/远程Agent安卓
+mode=read-only; apply=false
+
+[candidate schema/preflight/dry-run]
+command: ledger-run --preflight --json .team/nodes/spec-sol/baseline-bundle-repro-fix/baseline-bundle-v1.candidate.json
+result: exit 0; {"ok":true,"preflight_rejected":false,"issues":[]}
+This engine preflight includes the ledger.v2 JSON-schema gate.
+command: ledger-run --dry-run --json .team/nodes/spec-sol/baseline-bundle-repro-fix/baseline-bundle-v1.candidate.json
+result: exit 0; revision=1; desired_state=running; frontier=[t.baseline-bundle.repro]; downstream tasks excluded by requires_success.
+The standalone ledgerdsl Python module was also attempted with its documented reference path, but this host lacks pydantic; it was not treated as evidence. The built-in ledger-run schema/preflight gate above is the fresh schema result.
+
+[fresh real probe twice]
+command: sh .team/ledgers/acceptance/baseline-bundle-real-chain-probe.sh (run 1)
+result: exit 1; classification=legacy_missing_baseline_park; ledger=ledger.perf-regress.v1 revision=4 desired_state=running impl_state=failed_retryable; measurement=unjudgeable; frontier=[]; impl_exclusion=state_not_dispatchable; verify_exclusion=dependency_unsatisfied; lease_pid=pidfile_pid=85754; comm=ledger-run.
+command: sh .team/ledgers/acceptance/baseline-bundle-real-chain-probe.sh (run 2)
+result: exit 1; same semantic record and provenance; lease_sha256 was allowed to vary as specified by the taskbook.
+
+[expected-red translation]
+command: baseline-bundle-repro-translate.sh with the two fresh REAL_CHAIN_PROBE_JSON records, rc=1/1, and candidate REPRO.json
+result: exit 0; REPRO_TRANSLATION schema=agentmirror.baseline-bundle.repro.v1 input=expected_legacy_red probe_runs=2 acceptance_exit=0.
+The candidate acceptance remains expected_exit_code=0; no expected code was changed to wash the legacy red.
+
+[four-state and anti-forgery checks]
+command: translator with rc=2/1 and otherwise irrelevant inputs
+result: exit 2 (unjudgeable propagated).
+command: translator with forged rc=0/1
+result: exit 1.
+command: translator with forged shape impl_state=succeeded
+result: exit 1.
+command: translator with forged 64-hex ledger provenance digest
+result: exit 1 (fresh provenance comparison rejected it).
+command: sh .team/ledgers/acceptance/baseline-bundle-repro-regression.sh
+result: exit 0; semantic_without_magic_tokens=0 forged_rc=1 missing_provenance=2 forged_shape=1.
+The regression human control contained none of the retired magic tokens and still passed; the direct forged-provenance check above returned 1.
+
+[shell checks]
+command: sh -n and shellcheck -s sh on baseline-bundle-repro.sh, baseline-bundle-repro-translate.sh, baseline-bundle-repro-regression.sh, baseline-bundle-real-chain-probe.sh
+result: sh_n=0; shellcheck=0.
+
+[live ledger/first failure preservation]
+live .team/ledgers/baseline-bundle-v1.json remains revision=1; t.baseline-bundle.repro remains failed_retryable with exactly the original attempt att-t.baseline-bundle.repro-seq1-t1787590762873 and its acceptance exit_code=1/expected_exit_code=0 stderr tail. Candidate is a detached planned JSON (revision=1, no runtime attempts field); it was not applied, so the live failed attempt was not deleted or replaced.
+No apply, dispatch, retry, attempt cleanup, lease/PID/ledger mutation, product change, emulator, or daemon action was performed.
