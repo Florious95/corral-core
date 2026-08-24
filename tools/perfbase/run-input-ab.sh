@@ -108,14 +108,35 @@ PY
 emulator_cleanup() {
   CLEANUP_STATUS=0
   if [ -n "${EMULATOR_CLEANUP_MARKER:-}" ]; then printf 'cleanup qemu=%s launcher=%s\n' "${EMU_QEMU_PID:-none}" "${EMU_LAUNCH_PID:-none}" >> "$EMULATOR_CLEANUP_MARKER"; fi
+  runner_event "cleanup_begin owned_qemu=${EMU_QEMU_PID:-none} launcher_pid=${EMU_LAUNCH_PID:-none}"
   if [ -n "${EMU_QEMU_PID:-}" ] && kill -0 "$EMU_QEMU_PID" 2>/dev/null; then
-    kill "$EMU_QEMU_PID" 2>/dev/null || CLEANUP_STATUS=2
+    set +e; kill "$EMU_QEMU_PID" 2>/dev/null; kill_rc=$?; set -e
+    [ "$kill_rc" -eq 0 ] || CLEANUP_STATUS=2
+    runner_event "cleanup_kill qemu_pid=$EMU_QEMU_PID rc=$kill_rc"
   fi
   if [ -n "${EMU_LAUNCH_PID:-}" ] && [ "${EMU_LAUNCH_PID:-}" != "${EMU_QEMU_PID:-}" ] && kill -0 "$EMU_LAUNCH_PID" 2>/dev/null; then
-    kill "$EMU_LAUNCH_PID" 2>/dev/null || CLEANUP_STATUS=2
+    set +e; kill "$EMU_LAUNCH_PID" 2>/dev/null; kill_rc=$?; set -e
+    [ "$kill_rc" -eq 0 ] || CLEANUP_STATUS=2
+    runner_event "cleanup_kill launcher_pid=$EMU_LAUNCH_PID rc=$kill_rc"
   fi
   if [ -n "${EMU_LAUNCH_PID:-}" ]; then
-    wait "$EMU_LAUNCH_PID" 2>/dev/null || CLEANUP_STATUS=2
+    set +e; wait "$EMU_LAUNCH_PID" 2>/dev/null; wait_rc=$?; set -e
+    # Launcher wait status is observational only: qemu kill/reap owns the
+    # cleanup verdict, and a launcher terminated by our TERM commonly waits
+    # as 143.  A nonzero launcher wait must not turn the signal exit into 2.
+    runner_event "cleanup_wait launcher_pid=$EMU_LAUNCH_PID rc=$wait_rc"
+  fi
+  if [ -n "${EMU_QEMU_PID:-}" ]; then
+    for _ in 1 2 3 4 5; do
+      kill -0 "$EMU_QEMU_PID" 2>/dev/null || break
+      sleep 1
+    done
+    if kill -0 "$EMU_QEMU_PID" 2>/dev/null; then
+      CLEANUP_STATUS=2; remaining=1
+    else
+      remaining=0
+    fi
+    runner_event "cleanup_reap qemu_pid=$EMU_QEMU_PID remaining=$remaining"
   fi
   if [ "$CLEANUP_STATUS" -ne 0 ]; then
     echo "UNJUDGEABLE emulator cleanup failed: owned qemu/launcher could not be reaped" >&2
@@ -127,6 +148,9 @@ emulator_exit() {
   trap - EXIT INT TERM HUP
   emulator_cleanup
   [ "$CLEANUP_STATUS" -eq 0 ] || exit 2
+  if [ "$rc" -ne 0 ] && [ -n "${EMU_LAUNCH_PID:-}" ]; then
+    emulator_recover "${ENV_CHECK:-$T/envcheck.sh}" || exit 2
+  fi
   exit "$rc"
 }
 
@@ -137,8 +161,31 @@ emulator_signal() {
   exit 143
 }
 
-emulator_qemu_pid() {
-  ps -eo pid=,comm= 2>/dev/null | awk '$2 ~ /^qemu-system/ {print $1}'
+runner_event() {
+  printf 'RUNNER_EVENT %s\n' "$*" >&2
+  [ -n "${RUNNER_EVENT_LOG:-}" ] || return 0
+  printf '%s\n' "$*" >> "$RUNNER_EVENT_LOG"
+}
+
+emulator_recover() {
+  local env_check="$1" timeout="${EMULATOR_RECOVERY_TIMEOUT:-10}" i rc
+  runner_event "recovery_begin timeout=$timeout"
+  for i in $(seq 1 "$timeout"); do
+    set +e; sh "$env_check" --gate >/dev/null 2>&1; rc=$?; set -e
+    runner_event "recovery_gate attempt=$i/$timeout rc=$rc"
+    [ "$rc" -eq 0 ] && { runner_event recovery_pass; return 0; }
+    sleep 1
+  done
+  echo "UNJUDGEABLE host did not recover after emulator cleanup" >&2
+  runner_event "recovery_timeout limit=$timeout"
+  return 2
+}
+
+emulator_qemu_rows() {
+  local ps_output ps_rc
+  ps_output=$(ps -eo pid=,ppid=,comm= 2>/dev/null); ps_rc=$?
+  [ "$ps_rc" -eq 0 ] || return 2
+  printf '%s\n' "$ps_output" | awk 'NF >= 2 {raw=$3; if (raw == "") raw=$2; base=raw; sub(".*/", "", base); if (base ~ /^qemu-system/) print $1 "\t" raw "\t" base}'
 }
 
 run_emulator_phase() {
@@ -148,26 +195,37 @@ run_emulator_phase() {
   local launcher="${EMULATOR_LAUNCHER:-${ANDROID_EMULATOR:-$HOME/Library/Android/sdk/emulator/emulator}}"
   local avd="${EMULATOR_AVD:-agentmirror_test_b}"
   local timeout="${EMULATOR_READY_TIMEOUT:-60}"
-  local i qemu_list qemu_count state boot
+  local i qemu_rows qemu_count qemu_summary state boot qemu_rc
   [ -f "$env_check" ] || { echo "UNJUDGEABLE envcheck missing: $env_check" >&2; return 2; }
   set +e; sh "$env_check" --gate; local gate_rc=$?; set -e
+  runner_event "preflight rc=$gate_rc"
   [ "$gate_rc" -eq 0 ] || { echo "UNJUDGEABLE preflight exit=$gate_rc" >&2; return 2; }
   [ -x "$launcher" ] || { echo "UNJUDGEABLE emulator launcher missing: $launcher" >&2; return 2; }
   trap emulator_exit EXIT
   trap emulator_signal INT TERM HUP
+  runner_event launcher
   "$launcher" -avd "$avd" -no-window -no-audio -no-boot-anim >/dev/null 2>&1 &
   EMU_LAUNCH_PID=$!
+  runner_event "launcher_pid=$EMU_LAUNCH_PID rc=0"
   for i in $(seq 1 "$timeout"); do
-    qemu_list="$(emulator_qemu_pid)"
-    qemu_count="$(printf '%s\n' "$qemu_list" | awk 'NF {n++} END {print n+0}')"
+    set +e; qemu_rows="$(emulator_qemu_rows)"; qemu_rc=$?; set -e
+    [ "$qemu_rc" -eq 0 ] || { echo "UNJUDGEABLE qemu process meter unavailable" >&2; return 2; }
+    qemu_count="$(printf '%s\n' "$qemu_rows" | awk 'NF {n++} END {print n+0}')"
+    qemu_summary="$(printf '%s\n' "$qemu_rows" | tr '\n' ',')"
+    runner_event "qemu_candidates count=$qemu_count rows=${qemu_summary:-none} meter_rc=$qemu_rc"
     [ "$qemu_count" -eq 1 ] && break
     kill -0 "$EMU_LAUNCH_PID" 2>/dev/null || { echo "UNJUDGEABLE emulator exited before qemu ownership" >&2; return 2; }
     sleep 1
   done
-  qemu_list="$(emulator_qemu_pid)"
-  qemu_count="$(printf '%s\n' "$qemu_list" | awk 'NF {n++} END {print n+0}')"
+  set +e; qemu_rows="$(emulator_qemu_rows)"; qemu_rc=$?; set -e
+  [ "$qemu_rc" -eq 0 ] || { echo "UNJUDGEABLE qemu process meter unavailable" >&2; return 2; }
+  qemu_count="$(printf '%s\n' "$qemu_rows" | awk 'NF {n++} END {print n+0}')"
+  qemu_summary="$(printf '%s\n' "$qemu_rows" | tr '\n' ',')"
+  runner_event "qemu_candidates count=$qemu_count rows=${qemu_summary:-none} meter_rc=$qemu_rc"
   [ "$qemu_count" -eq 1 ] || { echo "UNJUDGEABLE qemu ownership count=$qemu_count" >&2; return 2; }
-  EMU_QEMU_PID="$(printf '%s\n' "$qemu_list" | head -1)"
+  EMU_QEMU_PID="$(printf '%s\n' "$qemu_rows" | awk -F '\t' 'NR == 1 {print $1}')"
+  EMU_QEMU_COMM="$(printf '%s\n' "$qemu_rows" | awk -F '\t' 'NR == 1 {print $2}')"
+  runner_event "qemu_bound pid=$EMU_QEMU_PID comm=$EMU_QEMU_COMM"
   for i in $(seq 1 "$timeout"); do
     state="$("$adb_bin" devices 2>/dev/null | awk -v serial="$serial" '$1 == serial {print $2; exit}')"
     if [ "$state" = device ]; then
@@ -177,7 +235,10 @@ run_emulator_phase() {
     sleep 1
   done
   [ "${state:-}" = device ] && [ "${boot:-}" = 1 ] || { echo "UNJUDGEABLE adb serial=$serial state=${state:-none} boot=${boot:-none}" >&2; return 2; }
+  runner_event "adb_bound serial=$serial state=$state boot=$boot rc=0"
+  runner_event measurement
   set +e; sh "$env_check" --measurement "$EMU_QEMU_PID" "$serial"; local measurement_rc=$?; set -e
+  runner_event "measurement_rc=$measurement_rc pid=$EMU_QEMU_PID serial=$serial"
   [ "$measurement_rc" -eq 0 ] || { echo "UNJUDGEABLE measurement gate exit=$measurement_rc" >&2; return 2; }
   printf 'PERFBASE_EMULATOR_BOUND pid=%s serial=%s\n' "$EMU_QEMU_PID" "$serial"
   if [ "${RUNNER_EMULATOR_TEST_WAIT:-0}" = 1 ]; then while :; do sleep 1; done; fi
