@@ -1,0 +1,412 @@
+{
+ "acceptance": {
+  "judgment_requires_distinct_provider": true,
+  "mechanical_exit_code_is_authoritative": true
+ },
+ "audit": {
+  "route_hops": []
+ },
+ "dependencies": [
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.envcheck-emu.test",
+   "same_source_required": false,
+   "to": "t.envcheck-emu.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.envcheck-emu.probe",
+   "same_source_required": false,
+   "to": "t.envcheck-emu.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.envcheck-emu.impl",
+   "same_source_required": false,
+   "to": "t.envcheck-emu.verify"
+  }
+ ],
+ "evidence_policy": {
+  "missing_evidence": "cannot_close_success",
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ]
+ },
+ "fallback": {
+  "F.escalate": {
+   "action": "escalate_to_advisor",
+   "agent": {
+    "role": "advisor"
+   },
+   "max_attempts": 1,
+   "silent_substitution": false,
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed",
+    "delivery_uncertain"
+   ]
+  }
+ },
+ "fanout_aggregation": {},
+ "handoff": {
+  "delivery_uncertain": "needs_reconcile",
+  "missing_result": "alarm",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "result_route": "report_result",
+  "send_command": "team-agent send"
+ },
+ "ledger_id": "ledger.envcheck-emu.v1",
+ "parallelism": [
+  {
+   "failure_policy": "halt",
+   "group": "envcheck-emu-wave",
+   "max_concurrency": 3
+  }
+ ],
+ "resource_isolation": {
+  "closed_read": false,
+  "read_only_shared": [],
+  "rules": []
+ },
+ "revision": 1,
+ "roles": {
+  "advisor": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/advisor/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-advisor-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "impl": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/envcheck-emu/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-dev-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "probe": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/envcheck-emu-probe/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-review-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "test": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/envcheck-emu-test/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-test-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "verify": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/envcheck-emu-verify/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-review-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  }
+ },
+ "run": {
+  "desired_state": "running"
+ },
+ "schema_version": "ledger.v2",
+ "tasks": {
+  "t.envcheck-emu.impl": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.envcheck-emu.impl",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/envcheck-emu.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.envcheck-emu.impl"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/envcheck-emu/IMPL.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "impl"
+   },
+   "parallel": {
+    "group": "envcheck-emu-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "3029dfae6b0adb40e01b7e9052bf3a02f9d2d32c"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/envcheck-emu/任务书.md",
+     ".team/ledgers/acceptance/envcheck-emu.sh",
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md",
+     "CLAUDE.md",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-envcheck-impl",
+    "write_paths": [
+     "tools/perfbase/envcheck.sh",
+     "tools/perfbase/run-input-ab.sh",
+     "tools/perfbase/test-envcheck-measurement-emulator.sh",
+     ".team/nodes/envcheck-emu/"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "按 `.team/nodes/spec-sol/envcheck-emu/任务书.md` 并行实现严格 preflight 与 owned-emulator measurement 两阶段闸及聚焦测试；只改任务书列明路径，齐后 report_result。"
+  },
+  "t.envcheck-emu.probe": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.envcheck-emu.probe",
+      "argv": [
+       "/bin/sh",
+       "-c",
+       "f=.team/nodes/envcheck-emu-probe/PROBE.md\n[ -e \"$f\" ] || exit 1\n[ -r \"$f\" ] || exit 2\n[ -s \"$f\" ] || exit 1\ncommand -v grep >/dev/null 2>&1 || exit 2\ngrep -F qemu-system \"$f\" >/dev/null || exit 1\ngrep -F adb \"$f\" >/dev/null || exit 1\ngrep -F trap \"$f\" >/dev/null || exit 1\ngrep -F MAX_LOAD=12 \"$f\" >/dev/null || exit 1\n"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.envcheck-emu.probe"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/envcheck-emu-probe/PROBE.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "probe"
+   },
+   "parallel": {
+    "group": "envcheck-emu-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "3029dfae6b0adb40e01b7e9052bf3a02f9d2d32c"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/envcheck-emu/任务书.md",
+     ".team/ledgers/acceptance/envcheck-emu.sh",
+     "tools/perfbase/envcheck.sh",
+     "tools/perfbase/run-input-ab.sh"
+    ],
+    "worktree_id": "wt-envcheck-probe",
+    "write_paths": [
+     ".team/nodes/envcheck-emu-probe/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/spec-sol/envcheck-emu/任务书.md` 并行产出所有权/清理根因探针；只写 PROBE.md，须覆盖 qemu-system PID、adb、trap、MAX_LOAD=12，齐后 report_result。"
+  },
+  "t.envcheck-emu.test": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.envcheck-emu.test",
+      "argv": [
+       "/bin/sh",
+       "-c",
+       "f=.team/nodes/envcheck-emu-test/RED.md\n[ -e \"$f\" ] || exit 1\n[ -r \"$f\" ] || exit 2\n[ -s \"$f\" ] || exit 1\ncommand -v grep >/dev/null 2>&1 || exit 2\ngrep -F owned_high_load \"$f\" >/dev/null || exit 1\ngrep -F extra_qemu \"$f\" >/dev/null || exit 1\ngrep -F cleanup_signal \"$f\" >/dev/null || exit 1\n"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.envcheck-emu.test"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/envcheck-emu-test/RED.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "test"
+   },
+   "parallel": {
+    "group": "envcheck-emu-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "3029dfae6b0adb40e01b7e9052bf3a02f9d2d32c"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/envcheck-emu/任务书.md",
+     ".team/ledgers/acceptance/envcheck-emu.sh",
+     "tools/perfbase/envcheck.sh",
+     "tools/perfbase/run-input-ab.sh"
+    ],
+    "worktree_id": "wt-envcheck-test",
+    "write_paths": [
+     ".team/nodes/envcheck-emu-test/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/spec-sol/envcheck-emu/任务书.md` 并行产出八臂场景红测审计；只写 RED.md，须覆盖 owned_high_load、extra_qemu、cleanup_signal，齐后 report_result。"
+  },
+  "t.envcheck-emu.verify": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.envcheck-emu.verify",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/envcheck-emu.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.envcheck-emu.verify"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/envcheck-emu-verify/VERDICT.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "verify"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "3029dfae6b0adb40e01b7e9052bf3a02f9d2d32c"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/envcheck-emu/任务书.md",
+     ".team/nodes/envcheck-emu-test/",
+     ".team/nodes/envcheck-emu-probe/",
+     ".team/ledgers/acceptance/envcheck-emu.sh",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-envcheck-impl",
+    "write_paths": [
+     ".team/nodes/envcheck-emu-verify/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/spec-sol/envcheck-emu/任务书.md` 独立终审 wt-envcheck-impl；重跑机械门并选择所有权/额外 qemu 破坏齿，齐后 report_result。"
+  }
+ },
+ "transitions": []
+}
