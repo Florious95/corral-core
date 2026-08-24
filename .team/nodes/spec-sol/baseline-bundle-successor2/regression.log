@@ -1,0 +1,4 @@
+command: sh .team/ledgers/acceptance/baseline-bundle-repro-regression.sh
+REPRO_REGRESSION semantic_without_magic_tokens=0 forged_rc=1 missing_provenance=2 forged_shape=1
+PASS baseline-bundle-repro-regression: translation layer preserves 0/1/2 and rejects formal false-red regression
+exit_code: 0
