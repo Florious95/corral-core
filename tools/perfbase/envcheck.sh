@@ -1,85 +1,108 @@
 #!/bin/sh
-# 环境卫生闸：任何性能测量／回归测试**开跑之前**先过这一关。
-#
-# 为什么存在（2026-08-23 实撞，用户在真机上撞到的）：
-#   服务端源码 0 提交、生产二进制 33 小时没换、用户手机 APP 也没换——**两端都没变**，
-#   但「打开会话白屏很久 + 终端不断整屏重绘」。根因是**环境中间变量**：
-#   `/private/tmp/tmux-501/` 里积了 161 个 tmux socket，其中 **140 个是死的**；
-#   而 daemon 每 2 秒（list-interval 缺省）重扫一遍，做法是
-#   **对每一个 socket 文件 fork 一个 `tmux list-panes`**（scan.go:152），
-#   死 socket 要等连接失败才跳过 ⇒ 约 80 次 fork/秒 ⇒ daemon 空闲 CPU 均值 ~23%。
-#   删掉那 140 个死 socket 之后，均值当场掉到 ~1.7%（降一个数量级），用户实测「变好了」。
-#
-# 教训（用户原话）：「一旦这种中间变量导致回退，就有可能极大地影响我们的测试以及回归测试，
-#   就会极大地影响我们定位的成本。」
-#   ⇒ 环境脏的时候测出来的**任何**性能数字都不可信：绿是假绿，红是假红。
-#      所以这一关**不达标就判「不可判」，⛔ 不判通过也不判失败**。
-#
-# 用法：sh tools/perfbase/envcheck.sh            # 只报告
-#       sh tools/perfbase/envcheck.sh --gate     # 不达标 exit 2（不可判）
-#       sh tools/perfbase/envcheck.sh --clean    # 顺手清掉死 socket（⛔ 只删连不上的）
-#
-# 退出码：0=环境干净；2=环境脏（不可判）；⛔ 不返回 1——环境脏不是「测试失败」。
+# Strict environment gate for performance measurements.
+# --gate is the preflight phase. --measurement relaxes load1 only for the
+# qemu PID and adb serial bound by run-input-ab.sh.
 set -u
-MODE="${1:-}"
-DIR="/private/tmp/tmux-501"
-MAX_DEAD=10          # 死 socket 上限；超过就认定环境脏
-MAX_LOAD=12          # 与 20260822 地板负载区间 6.87-10.49 对齐留一点余量
-
+MODE=${1:-}
+MAX_DEAD=10
+MAX_LOAD=12
+MAX_DAEMON_CPU=5
+SOCKET_DIR=${ENVCHECK_SOCKET_DIR:-/private/tmp/tmux-501}
+ADB_BIN=${ADB:-adb}
+OWNED_PID=${2:-}
+SERIAL=${3:-}
+case "$MODE" in
+  --gate|--clean) PHASE=preflight ;;
+  --measurement)
+    PHASE=measurement
+    case "$OWNED_PID" in ''|*[!0-9]*) echo "UNJUDGEABLE measurement owned_pid missing or invalid" >&2; exit 2;; esac
+    [ -n "$SERIAL" ] || { echo "UNJUDGEABLE measurement adb serial missing" >&2; exit 2; }
+    ;;
+  *) echo "usage: $0 --gate|--clean|--measurement PID SERIAL" >&2; exit 2;;
+esac
 dirty=0
-
-# ① 死 tmux socket ——本次事故的直接肇因
-dead=0; live=0
-if [ -d "$DIR" ]; then
-  for f in "$DIR"/*; do
-    [ -S "$f" ] || continue
-    if tmux -S "$f" list-sessions >/dev/null 2>&1; then live=$((live+1)); else dead=$((dead+1)); fi
+dead=0
+live=0
+for required_tool in ps uptime lsof top tmux; do
+  if ! command -v "$required_tool" >/dev/null 2>&1; then
+    echo "UNJUDGEABLE required tool unavailable: $required_tool" >&2
+    dirty=1
+  fi
+done
+if [ -d "$SOCKET_DIR" ]; then
+  for socket in "$SOCKET_DIR"/*; do
+    [ -e "$socket" ] || continue
+    [ -S "$socket" ] || continue
+    tmux -S "$socket" list-sessions >/dev/null 2>&1
+    tmux_rc=$?
+    if [ "$tmux_rc" -eq 0 ]; then
+      live=$((live + 1))
+    else
+      dead=$((dead + 1))
+      [ "$tmux_rc" -eq 1 ] || dirty=1
+      if [ "$MODE" = --clean ]; then rm -f "$socket"; fi
+    fi
   done
 fi
-echo "tmux socket：活 ${live}  死 ${dead}（阈值 ${MAX_DEAD}）"
-if [ "$dead" -gt "$MAX_DEAD" ]; then
+[ "$MODE" = --clean ] && [ "$dead" -gt "$MAX_DEAD" ] && dead=0
+uptime_output=$(uptime 2>/dev/null); uptime_rc=$?
+if [ "$uptime_rc" -ne 0 ]; then
   dirty=1
-  echo "  ⚠️ 死 socket 超阈值 —— daemon 每 2s 会为每一个 socket fork 一次 tmux，死的也要 fork 完才跳过"
-  if [ "$MODE" = "--clean" ]; then
-    n=0
-    for f in "$DIR"/*; do
-      [ -S "$f" ] || continue
-      tmux -S "$f" list-sessions >/dev/null 2>&1 || { rm -f "$f" && n=$((n+1)); }
-    done
-    echo "  已清理死 socket ${n} 个（⛔ 只删连不上的，活着的一个没动）"
-    dead=0; dirty=0
+  uptime_output=''
+fi
+load1=$(printf '%s\n' "$uptime_output" | sed -E 's/.*load averages?: *([0-9.]+).*/\1/')
+case "$load1" in ''|*[!0-9.]*|.*.*) dirty=1; load1='?';; esac
+if [ "$load1" != '?' ] && [ "$PHASE" != measurement ]; then
+  [ "$(awk -v value="$load1" -v limit="$MAX_LOAD" 'BEGIN {print (value > limit) ? 1 : 0}')" -eq 0 ] || dirty=1
+fi
+ps_output=$(ps -eo pid=,comm= 2>/dev/null); ps_rc=$?
+if [ "$ps_rc" -ne 0 ]; then
+  dirty=1
+  ps_output=''
+fi
+qemu_pids=$(printf '%s\n' "$ps_output" | awk '$2 ~ /^qemu-system/ {print $1}')
+qemu_count=$(printf '%s\n' "$qemu_pids" | awk 'NF {n++} END {print n+0}')
+if [ "$PHASE" = preflight ]; then
+  [ "$qemu_count" -eq 0 ] || dirty=1
+else
+  owned_count=$(printf '%s\n' "$qemu_pids" | awk -v wanted="$OWNED_PID" '$1 == wanted {n++} END {print n+0}')
+  [ "$qemu_count" -eq 1 ] && [ "$owned_count" -eq 1 ] || dirty=1
+fi
+lsof_output=$(lsof -nP -iTCP:9900 -sTCP:LISTEN -t 2>/dev/null); lsof_rc=$?
+if [ "$lsof_rc" -gt 1 ]; then dirty=1; lsof_output=''; fi
+daemon_pid=$(printf '%s\n' "$lsof_output" | head -1)
+daemon_cpu=none
+if [ -n "$daemon_pid" ]; then
+  top_output=$(top -l 5 -pid "$daemon_pid" -stats pid,cpu -n 1 2>/dev/null); top_rc=$?
+  if [ "$top_rc" -ne 0 ]; then dirty=1; top_output=''; fi
+  daemon_cpu=$(printf '%s\n' "$top_output" |
+    awk -v wanted="$daemon_pid" '$1 == wanted {sum += $2; n++} END {if (n) printf "%.1f", sum/n; else print "?"}')
+  [ -n "$daemon_cpu" ] || daemon_cpu='?'
+  case "$daemon_cpu" in
+    '?'|*[!0-9.]*|.*.*) dirty=1;;
+    *) [ "$(awk -v value="$daemon_cpu" -v limit="$MAX_DAEMON_CPU" 'BEGIN {print (value > limit) ? 1 : 0}')" -eq 0 ] || dirty=1;;
+  esac
+fi
+adb_state=not-checked
+boot=not-checked
+if [ "$PHASE" = measurement ]; then
+  if ! command -v "$ADB_BIN" >/dev/null 2>&1; then
+    adb_state=missing; dirty=1
+  else
+    adb_state=$("$ADB_BIN" devices 2>/dev/null | awk -v serial="$SERIAL" '$1 == serial {print $2; exit}')
+    [ "$adb_state" = device ] || dirty=1
+    if [ "$adb_state" = device ]; then
+      boot=$("$ADB_BIN" -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | tail -1)
+      [ "$boot" = 1 ] || dirty=1
+    fi
   fi
 fi
-
-# ② 机器负载 —— 换负载区间的性能数不能直接比较
-l1=$(uptime | sed -E 's/.*load averages?: *([0-9.]+).*/\1/')
-echo "load1：${l1}（阈值 ${MAX_LOAD}）"
-case "$(echo "$l1 $MAX_LOAD" | awk '{print ($1>$2)}')" in
-  1) dirty=1; echo "  ⚠️ 负载过高 —— 机器漂移会大过要检测的效应" ;;
-esac
-
-# ③ 残留模拟器 —— 单进程约 6 核 + 2.4GB
-emu=$(ps -eo comm 2>/dev/null | grep -c 'qemu-system' || true)
-echo "模拟器进程：${emu}"
-
-# ④ 生产 daemon 空闲 CPU —— 静默经济红线（工程常识红线第 1 条）
-pid=$(lsof -nP -iTCP:9900 -sTCP:LISTEN -t 2>/dev/null | head -1)
-if [ -n "${pid:-}" ]; then
-  cpu=$(top -l 5 -pid "$pid" -stats pid,cpu -n 1 2>/dev/null | grep "^${pid}" \
-        | awk '{s+=$2; n++} END{if(n)printf "%.1f", s/n; else print "?"}')
-  echo "生产 daemon(pid ${pid}) 空闲 CPU 均值：${cpu}%（红线：趋近 0）"
-  case "$(echo "${cpu:-0} 5" | awk '{print ($1>$2)}')" in
-    1) dirty=1; echo "  ⚠️ 空闲 CPU 偏高 —— 它会跟你的被测路径抢 CPU，白屏/掉帧都可能是它" ;;
-  esac
-else
-  echo "生产 daemon：未在 :9900 监听"
-fi
-
+printf 'ENVCHECK phase=%s load1=%s/%s dead=%s/%s daemon_cpu=%s/%s observed_qemu=%s owned_pid=%s serial=%s state=%s boot=%s\n' \
+  "$PHASE" "$load1" "$MAX_LOAD" "$dead" "$MAX_DEAD" "$daemon_cpu" "$MAX_DAEMON_CPU" \
+  "${qemu_pids:-none}" "${OWNED_PID:-none}" "${SERIAL:-none}" "$adb_state" "$boot"
 if [ "$dirty" -ne 0 ]; then
-  echo "UNJUDGEABLE 环境不干净 —— 此刻测出来的性能数字不可信（绿是假绿，红是假红）"
-  echo "     先清干净再测：sh tools/perfbase/envcheck.sh --clean"
-  [ "$MODE" = "--gate" ] && exit 2
+  echo "UNJUDGEABLE envcheck phase=$PHASE" >&2
   exit 2
 fi
-echo "PASS 环境干净：死 socket ${dead}、load1 ${l1}、模拟器 ${emu}"
+echo "PASS envcheck phase=$PHASE"
 exit 0

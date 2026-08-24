@@ -105,14 +105,98 @@ PY
   echo "SELF-TEST PASS order identity fixtures segments samples ratio env"
 }
 
+emulator_cleanup() {
+  CLEANUP_STATUS=0
+  if [ -n "${EMULATOR_CLEANUP_MARKER:-}" ]; then printf 'cleanup qemu=%s launcher=%s\n' "${EMU_QEMU_PID:-none}" "${EMU_LAUNCH_PID:-none}" >> "$EMULATOR_CLEANUP_MARKER"; fi
+  if [ -n "${EMU_QEMU_PID:-}" ] && kill -0 "$EMU_QEMU_PID" 2>/dev/null; then
+    kill "$EMU_QEMU_PID" 2>/dev/null || CLEANUP_STATUS=2
+  fi
+  if [ -n "${EMU_LAUNCH_PID:-}" ] && [ "${EMU_LAUNCH_PID:-}" != "${EMU_QEMU_PID:-}" ] && kill -0 "$EMU_LAUNCH_PID" 2>/dev/null; then
+    kill "$EMU_LAUNCH_PID" 2>/dev/null || CLEANUP_STATUS=2
+  fi
+  if [ -n "${EMU_LAUNCH_PID:-}" ]; then
+    wait "$EMU_LAUNCH_PID" 2>/dev/null || CLEANUP_STATUS=2
+  fi
+  if [ "$CLEANUP_STATUS" -ne 0 ]; then
+    echo "UNJUDGEABLE emulator cleanup failed: owned qemu/launcher could not be reaped" >&2
+  fi
+}
+
+emulator_exit() {
+  local rc=$?
+  trap - EXIT INT TERM HUP
+  emulator_cleanup
+  [ "$CLEANUP_STATUS" -eq 0 ] || exit 2
+  exit "$rc"
+}
+
+emulator_signal() {
+  trap - EXIT INT TERM HUP
+  emulator_cleanup
+  [ "$CLEANUP_STATUS" -eq 0 ] || exit 2
+  exit 143
+}
+
+emulator_qemu_pid() {
+  ps -eo pid=,comm= 2>/dev/null | awk '$2 ~ /^qemu-system/ {print $1}'
+}
+
+run_emulator_phase() {
+  local env_check="${ENV_CHECK:-$T/envcheck.sh}"
+  local adb_bin="${ADB:-adb}"
+  local serial="${EMULATOR_SERIAL:-emulator-5554}"
+  local launcher="${EMULATOR_LAUNCHER:-${ANDROID_EMULATOR:-$HOME/Library/Android/sdk/emulator/emulator}}"
+  local avd="${EMULATOR_AVD:-agentmirror_test_b}"
+  local timeout="${EMULATOR_READY_TIMEOUT:-60}"
+  local i qemu_list qemu_count state boot
+  [ -f "$env_check" ] || { echo "UNJUDGEABLE envcheck missing: $env_check" >&2; return 2; }
+  set +e; sh "$env_check" --gate; local gate_rc=$?; set -e
+  [ "$gate_rc" -eq 0 ] || { echo "UNJUDGEABLE preflight exit=$gate_rc" >&2; return 2; }
+  [ -x "$launcher" ] || { echo "UNJUDGEABLE emulator launcher missing: $launcher" >&2; return 2; }
+  trap emulator_exit EXIT
+  trap emulator_signal INT TERM HUP
+  "$launcher" -avd "$avd" -no-window -no-audio -no-boot-anim >/dev/null 2>&1 &
+  EMU_LAUNCH_PID=$!
+  for i in $(seq 1 "$timeout"); do
+    qemu_list="$(emulator_qemu_pid)"
+    qemu_count="$(printf '%s\n' "$qemu_list" | awk 'NF {n++} END {print n+0}')"
+    [ "$qemu_count" -eq 1 ] && break
+    kill -0 "$EMU_LAUNCH_PID" 2>/dev/null || { echo "UNJUDGEABLE emulator exited before qemu ownership" >&2; return 2; }
+    sleep 1
+  done
+  qemu_list="$(emulator_qemu_pid)"
+  qemu_count="$(printf '%s\n' "$qemu_list" | awk 'NF {n++} END {print n+0}')"
+  [ "$qemu_count" -eq 1 ] || { echo "UNJUDGEABLE qemu ownership count=$qemu_count" >&2; return 2; }
+  EMU_QEMU_PID="$(printf '%s\n' "$qemu_list" | head -1)"
+  for i in $(seq 1 "$timeout"); do
+    state="$("$adb_bin" devices 2>/dev/null | awk -v serial="$serial" '$1 == serial {print $2; exit}')"
+    if [ "$state" = device ]; then
+      boot="$("$adb_bin" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | tail -1)"
+      [ "$boot" = 1 ] && break
+    fi
+    sleep 1
+  done
+  [ "${state:-}" = device ] && [ "${boot:-}" = 1 ] || { echo "UNJUDGEABLE adb serial=$serial state=${state:-none} boot=${boot:-none}" >&2; return 2; }
+  set +e; sh "$env_check" --measurement "$EMU_QEMU_PID" "$serial"; local measurement_rc=$?; set -e
+  [ "$measurement_rc" -eq 0 ] || { echo "UNJUDGEABLE measurement gate exit=$measurement_rc" >&2; return 2; }
+  printf 'PERFBASE_EMULATOR_BOUND pid=%s serial=%s\n' "$EMU_QEMU_PID" "$serial"
+  if [ "${RUNNER_EMULATOR_TEST_WAIT:-0}" = 1 ]; then while :; do sleep 1; done; fi
+  [ "${RUNNER_EMULATOR_ONLY:-0}" = 1 ] && return "${RUNNER_EMULATOR_TEST_EXIT:-0}"
+  return 0
+}
+
 if [ "${1:-}" = "--self-test" ]; then
   set -e; self_test; exit $?
+fi
+if [ "${1:-}" = "--emulator-self-test" ]; then
+  set -e; run_emulator_phase
+  exit $?
 fi
 [ -x "$PARSER" ] || { echo "UNJUDGEABLE parser missing or not executable: $PARSER" >&2; exit 2; }
 ENV_CHECK="${ENV_CHECK:-$T/envcheck.sh}"
 [ -f "$ENV_CHECK" ] || { echo "UNJUDGEABLE envcheck missing: $ENV_CHECK" >&2; exit 2; }
-set +e; sh "$ENV_CHECK" --gate; env_rc=$?; set -e
-[ "$env_rc" -eq 0 ] || { echo "UNJUDGEABLE envcheck exit=$env_rc" >&2; exit 2; }
+set +e; run_emulator_phase; env_rc=$?; set -e
+[ "$env_rc" -eq 0 ] || { echo "UNJUDGEABLE emulator phase exit=$env_rc" >&2; exit 2; }
 
 # Capture the comparable host readings only after the environment gate passes.
 # Values are MiB for memory, and load1 is the one-minute host load.
