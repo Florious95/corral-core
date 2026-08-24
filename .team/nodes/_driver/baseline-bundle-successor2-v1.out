@@ -1,0 +1,22 @@
+[ledger-run 2026-08-24T18:39:12Z] 开工 start | ledger_id=ledger.baseline-bundle.successor2.v1 revision=1 账本=/Volumes/nvme/Projects/远程Agent安卓/.team/ledgers/baseline-bundle-successor2-v1.json 墙钟上限=115200s 派单死线=90s
+[ledger-run 2026-08-24T18:39:31Z] 轮次 round | 第 1 轮开始：前沿 ["t.baseline-bundle.repro"]（墙钟已跑 18s / 上限 115200s）
+[ledger-run 2026-08-24T18:39:31Z] 派单 dispatch | task=t.baseline-bundle.repro 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/sampler-test-luna2 席位=sampler-test-luna2 attempt=att-t.baseline-bundle.repro-seq1-t1787596771420 delivery=del-t.baseline-bundle.repro-seq1-t1787596771420 等席位预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-24T18:39:31Z] 投递回执 send-ok | task=t.baseline-bundle.repro case_id=ledger_baseline-bundle_successor2_v1__t.baseline-bundle.repro__r1 message_id=msg_53d8f00d8f08 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-24T18:39:31Z] 派单落地 dispatch-landed | task=t.baseline-bundle.repro 席位 sampler-test-luna2 的收件箱已多出这条派单
+[ledger-run 2026-08-24T18:39:31Z] 等待 wait | task=t.baseline-bundle.repro 在等的 key（case_id）=ledger_baseline-bundle_successor2_v1__t.baseline-bundle.repro__r1 team=remote-agent-android 预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-24T18:43:37Z] 已唤醒 wait-signaled | task=t.baseline-bundle.repro 等到结果了
+[ledger-run 2026-08-24T18:43:37Z] 判据 acceptance | task=t.baseline-bundle.repro 在跑 required=["M.baseline-bundle.repro", "M.baseline-bundle.repro-regression"]
+[ledger-run 2026-08-24T18:43:39Z] 判据通过留档 acceptance-success | task=t.baseline-bundle.repro 成功 attempt 落进 attempts[] writeback_revision=2 passed=["M.baseline-bundle.repro", "M.baseline-bundle.repro-regression"]
+[ledger-run 2026-08-24T18:43:39Z] 原子写回 writeback-atomic | task=t.baseline-bundle.repro state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=2 hash=be40e97b44b0d3f8）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-24T18:43:39Z] 写回 writeback | task=t.baseline-bundle.repro state=succeeded revision=1 → 2
+[ledger-run 2026-08-24T18:43:39Z] 轮次 round | 第 2 轮开始：前沿 ["t.baseline-bundle.impl", "t.baseline-bundle.probe", "t.baseline-bundle.test"]（墙钟已跑 266s / 上限 115200s）
+[ledger-run 2026-08-24T18:43:39Z] 派单 dispatch | task=t.baseline-bundle.impl 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/sampler-dev-luna2 席位=sampler-dev-luna2 attempt=att-t.baseline-bundle.impl-seq2-t1787597019088 delivery=del-t.baseline-bundle.impl-seq2-t1787597019088 等席位预算=10800s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-24T18:43:39Z] 投递回执 send-ok | task=t.baseline-bundle.impl case_id=ledger_baseline-bundle_successor2_v1__t.baseline-bundle.impl__r2 message_id=msg_9a329a447750 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-24T18:43:39Z] 派单落地 dispatch-landed | task=t.baseline-bundle.impl 席位 sampler-dev-luna2 的收件箱已多出这条派单
+[ledger-run 2026-08-24T18:43:39Z] 派单 dispatch | task=t.baseline-bundle.probe 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/sampler-review-luna2 席位=sampler-review-luna2 attempt=att-t.baseline-bundle.probe-seq3-t1787597019370 delivery=del-t.baseline-bundle.probe-seq3-t1787597019370 等席位预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-24T18:43:39Z] 投递回执 send-ok | task=t.baseline-bundle.probe case_id=ledger_baseline-bundle_successor2_v1__t.baseline-bundle.probe__r2 message_id=msg_9a92a9ec08d0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-24T18:43:39Z] 派单落地 dispatch-landed | task=t.baseline-bundle.probe 席位 sampler-review-luna2 的收件箱已多出这条派单
+[ledger-run 2026-08-24T18:43:39Z] 派单 dispatch | task=t.baseline-bundle.test 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/sampler-test-luna2 席位=sampler-test-luna2 attempt=att-t.baseline-bundle.test-seq4-t1787597019633 delivery=del-t.baseline-bundle.test-seq4-t1787597019633 等席位预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-24T18:43:39Z] 投递回执 send-ok | task=t.baseline-bundle.test case_id=ledger_baseline-bundle_successor2_v1__t.baseline-bundle.test__r2 message_id=msg_9af0ba2e47f8 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-24T18:43:39Z] 派单落地 dispatch-landed | task=t.baseline-bundle.test 席位 sampler-test-luna2 的收件箱已多出这条派单
+[ledger-run 2026-08-24T18:43:39Z] 等待 wait | task=t.baseline-bundle.impl 在等的 key（case_id）=ledger_baseline-bundle_successor2_v1__t.baseline-bundle.impl__r2 team=remote-agent-android 预算=10800s 来源=任务 seat_wait_seconds
