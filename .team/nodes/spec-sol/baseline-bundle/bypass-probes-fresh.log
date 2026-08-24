@@ -1,0 +1,5 @@
+BYPASS_TOOTH impl legacy=0 hardened=2 fixture=short-digest-stub-manifest
+BYPASS_TOOTH measure legacy=0 hardened=2 fixture=empty-raw-fabricated-json
+PASS baseline-bundle-bypass-probes: both frozen old-door bypasses are rejected by hardened gates
+expected_exit_code: 0
+observed_exit_code: 0
