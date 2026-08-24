@@ -1,0 +1,3 @@
+command: ledger-run --preflight --json successor2
+{"ok":true,"preflight_rejected":false,"issues":[]}
+exit_code: 0
