@@ -1,0 +1,24 @@
+successor4 fresh ledger-run preflight and dry-run
+
+commands:
+  ledger-run --preflight .team/ledgers/baseline-bundle-successor4-v1.json --json
+  ledger-run --dry-run .team/ledgers/baseline-bundle-successor4-v1.json --json
+
+preflight:
+  {"ok":true,"preflight_rejected":false,"issues":[]}
+  rc=0
+
+dry-run summary:
+  ok=true
+  ledger_id=ledger.baseline-bundle.successor4.v1
+  revision=1
+  desired_state=running
+  workflow_state=active
+  frontier=[t.baseline-bundle.repro]
+  excluded_count=8
+  each excluded task has dependency_unsatisfied
+  rc=0
+
+No --drive/--once command was executed.
+
+result: pass
