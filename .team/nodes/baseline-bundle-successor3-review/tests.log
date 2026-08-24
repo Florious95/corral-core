@@ -1,0 +1,41 @@
+successor3 fresh prelaunch review (read-only; no drive/worktree/product action)
+
+[compile + schema]
+command: PYTHONPATH=/Users/alauda/.claude/skills/ledger-orchestration/reference/ledgerdsl-0.1.1 /usr/bin/python3 .team/ledgers/src/baseline-bundle-successor3-v1.py
+result: exit 0; ledger_id=ledger.baseline-bundle.successor3.v1 revision=1; 9 planned tasks; no attempts.
+fresh canonical compile vs .team/ledgers/baseline-bundle-successor3-v1.json: semantic_equal=True; canonical_sha256=5a46959fc47bfd90c7081bedcaa0ba6ca5107d9ffa5e6a131ffbc1142babf509.
+schema: jsonschema Draft202012Validator errors=0, exit 0.
+
+[ledger-run]
+command: ledger-run --preflight .team/ledgers/baseline-bundle-successor3-v1.json --json
+result: {"ok":true,"preflight_rejected":false}, exit 0.
+command: ledger-run --dry-run .team/ledgers/baseline-bundle-successor3-v1.json --json
+result: exit 0; frontier exactly t.baseline-bundle.repro; all other 8 tasks excluded by requires_success dependencies.
+
+[graph / isolation / continuity]
+graph: repro -> (test || probe || impl) -> verify -> user-gate -> migrate -> measure -> final; 10 requires_success edges; wave max_concurrency=3, failure_policy=halt; no statuses, no AllSucceeded shortcut.
+worktree ids: wt-b3-mainline, wt-b3-redcase, wt-b3-oracle; each disk_exists=False and git metadata count=0.
+old ledger SHA-256 unchanged: v1=89ba716e85f151b06f05bf61a5631eacbcad910c0f1190a8f264a9b69a6b5723; successor1=d0e11364813b81dde02e1056682a3216743b43faac0ddd3e5a1927480ebf58be; successor2=39bb9fcf77f04dc1212a098f1e5f50166b10b45d550bb43a2af7d4e4c0e2a9c0.
+HEAD=6575cefc084871738f9817236220eb91e3173a6e. Old ledger/attempt files were not modified by this review.
+
+[shell syntax]
+sh -n and shellcheck -s sh: successor3-impl/test/probe/measure/bypass scripts all exit 0.
+
+[fresh four-state / teeth checks]
+command: sh .team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh
+result: exit 0; legacy impl=0, legacy measure=0, hardened impl=1, hardened measure=1. The hardened impl rejection is explicitly "repository root mismatch" and hardened measure rejection is "empty raw log"; these are apparatus/root and empty-raw failures, not a proof that the fixed forged manifest is rejected by canonical implementation.
+isolated copied fixture with the fixed blob absent: exit 2, "fixed fixture missing".
+isolated copied fixture with digest altered: exit 2, "fixed fixture provenance digest drift".
+IMPL unjudgeable rule: static fresh check of the required last-line equality (`implementation: pass`) rejects `implementation: unjudgeable` with exit 1; no current IMPL artifact exists, so the live gate currently exits 1 on missing IMPL.
+
+[canonical red/green audit]
+The inline Python at baseline-bundle-successor3-impl.sh:41-75 exits 0 for stale!=final hash. It constructs synthetic dicts with `"frozen"`, repeated `"1"*64`/`"2"*64`/`"3"*64`, computes `identity()` twice, and never invokes baseline_bundle.py, creates a manifest, or runs a stale-id rejection path. Lines 64-72 are tautological comparisons against `identity(final)`. Therefore the advertised red/green tooth is not a real implementation lock.
+
+[test/probe independence audit]
+successor3-test.sh:16-18 and successor3-probe.sh:16-18 only grep token names in RED.md/PROBE.md. They do not execute the required canonical, SDK, fixture, or IMPL-unjudgeable scenarios. At fresh state both required artifacts are absent and each gate exits 1.
+
+[critical provenance finding]
+git cat-file -e HEAD:<successor3 DSL/candidate/acceptance/fixed-fixture path> failed for all four checked paths. `git ls-files` likewise shows the successor3 package and fixture as untracked. A future ledger-run worktree created from HEAD therefore cannot contain the successor3 acceptance scripts, task package, or frozen fixture, despite the taskbook asserting that current main includes them. This makes the first dispatch non-startable in a fresh WT.
+
+[invariants retained]
+Taskbook/source retain envcheck --gate, no-cache Gradle flags, Go -count=1, n>=10, nearest-rank p50/p95, B/A<=1.10, cellular+广州中转 user gate, and migration preconditions (exact PID/TERM only after verify+user gate). No credential path was read; no drive, worktree creation, migration, daemon stop, APK build, or product modification was performed.
