@@ -1,0 +1,416 @@
+{
+ "acceptance": {
+  "judgment_requires_distinct_provider": true,
+  "mechanical_exit_code_is_authoritative": true
+ },
+ "audit": {
+  "route_hops": []
+ },
+ "dependencies": [
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.emu-own.test",
+   "same_source_required": false,
+   "to": "t.emu-own.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.emu-own.probe",
+   "same_source_required": false,
+   "to": "t.emu-own.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.emu-own.impl",
+   "same_source_required": false,
+   "to": "t.emu-own.verify"
+  }
+ ],
+ "evidence_policy": {
+  "missing_evidence": "cannot_close_success",
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ]
+ },
+ "fallback": {
+  "F.escalate": {
+   "action": "escalate_to_advisor",
+   "agent": {
+    "role": "advisor"
+   },
+   "max_attempts": 1,
+   "silent_substitution": false,
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed",
+    "delivery_uncertain"
+   ]
+  }
+ },
+ "fanout_aggregation": {},
+ "handoff": {
+  "delivery_uncertain": "needs_reconcile",
+  "missing_result": "alarm",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "result_route": "report_result",
+  "send_command": "team-agent send"
+ },
+ "ledger_id": "ledger.emu-own.v1",
+ "parallelism": [
+  {
+   "failure_policy": "halt",
+   "group": "emu-own-wave",
+   "max_concurrency": 3
+  }
+ ],
+ "resource_isolation": {
+  "closed_read": false,
+  "read_only_shared": [],
+  "rules": []
+ },
+ "revision": 1,
+ "roles": {
+  "advisor": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/advisor/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-advisor-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "impl": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/emu-own/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-dev-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "probe": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/emu-own-probe/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-review-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "test": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/emu-own-test/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-test-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "verify": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/emu-own-verify/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-review-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  }
+ },
+ "run": {
+  "desired_state": "running"
+ },
+ "schema_version": "ledger.v2",
+ "tasks": {
+  "t.emu-own.impl": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.emu-own.impl",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/emu-own.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.emu-own.impl"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/emu-own/IMPL.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "impl"
+   },
+   "parallel": {
+    "group": "emu-own-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "6625b2c25190db8e042aa347be0606c1a85b81f8"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/emu-own/任务书.md",
+     ".team/nodes/spec-sol/envcheck-emu/任务书.md",
+     ".team/ledgers/acceptance/emu-own.sh",
+     ".team/ledgers/acceptance/envcheck-emu.sh",
+     "CLAUDE.md",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-emu-own-impl",
+    "write_paths": [
+     "tools/perfbase/run-input-ab.sh",
+     "tools/perfbase/envcheck.sh",
+     "tools/perfbase/test-run-input-ab-emulator-ownership.sh",
+     ".team/nodes/emu-own/"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "按 `.team/nodes/spec-sol/emu-own/任务书.md` 并行实现 runner 启动、唯一 qemu PID 与 adb serial 绑定、失败清理/恢复及聚焦测试；只改任务书列明路径，齐后 report_result。"
+  },
+  "t.emu-own.probe": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.emu-own.probe",
+      "argv": [
+       "/bin/sh",
+       "-c",
+       "f=.team/nodes/emu-own-probe/PROBE.md\n[ -e \"$f\" ] || exit 1\n[ -r \"$f\" ] || exit 2\n[ -s \"$f\" ] || exit 1\ncommand -v grep >/dev/null 2>&1 || exit 2\ngrep -F qemu-system \"$f\" >/dev/null || exit 1\ngrep -F basename \"$f\" >/dev/null || exit 1\ngrep -F measurement \"$f\" >/dev/null || exit 1\ngrep -F only_owned_pid \"$f\" >/dev/null || exit 1\n"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.emu-own.probe"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/emu-own-probe/PROBE.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "probe"
+   },
+   "parallel": {
+    "group": "emu-own-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "6625b2c25190db8e042aa347be0606c1a85b81f8"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/emu-own/任务书.md",
+     ".team/nodes/spec-sol/envcheck-emu/任务书.md",
+     ".team/ledgers/acceptance/emu-own.sh",
+     "tools/perfbase/run-input-ab.sh",
+     "tools/perfbase/envcheck.sh"
+    ],
+    "worktree_id": "wt-emu-own-probe",
+    "write_paths": [
+     ".team/nodes/emu-own-probe/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/spec-sol/emu-own/任务书.md` 并行产出 qemu PID/adb serial 绑定与清理根因探针；只写 PROBE.md，须覆盖 qemu-system、basename、measurement、only_owned_pid，齐后 report_result。"
+  },
+  "t.emu-own.test": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.emu-own.test",
+      "argv": [
+       "/bin/sh",
+       "-c",
+       "f=.team/nodes/emu-own-test/RED.md\n[ -e \"$f\" ] || exit 1\n[ -r \"$f\" ] || exit 2\n[ -s \"$f\" ] || exit 1\ncommand -v grep >/dev/null 2>&1 || exit 2\ngrep -F fullpath_qemu_bound \"$f\" >/dev/null || exit 1\ngrep -F zero_count_exit \"$f\" >/dev/null || exit 1\ngrep -F zero_count_no_orphan \"$f\" >/dev/null || exit 1\n"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.emu-own.test"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/emu-own-test/RED.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "test"
+   },
+   "parallel": {
+    "group": "emu-own-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "6625b2c25190db8e042aa347be0606c1a85b81f8"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/emu-own/任务书.md",
+     ".team/nodes/spec-sol/envcheck-emu/任务书.md",
+     ".team/ledgers/acceptance/emu-own.sh",
+     "tools/perfbase/run-input-ab.sh",
+     "tools/perfbase/envcheck.sh"
+    ],
+    "worktree_id": "wt-emu-own-test",
+    "write_paths": [
+     ".team/nodes/emu-own-test/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/spec-sol/emu-own/任务书.md` 并行产出模拟器所有权场景红测审计；只写 RED.md，须覆盖 fullpath_qemu_bound、zero_count_exit、zero_count_no_orphan，齐后 report_result。"
+  },
+  "t.emu-own.verify": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.emu-own.verify",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/emu-own.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.emu-own.verify"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/emu-own-verify/VERDICT.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "verify"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "6625b2c25190db8e042aa347be0606c1a85b81f8"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/emu-own/任务书.md",
+     ".team/nodes/emu-own-test/",
+     ".team/nodes/emu-own-probe/",
+     ".team/ledgers/acceptance/emu-own.sh",
+     ".team/ledgers/acceptance/envcheck-emu.sh",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-emu-own-impl",
+    "write_paths": [
+     ".team/nodes/emu-own-verify/"
+    ]
+   },
+   "seat_wait_seconds": 1800,
+   "state": "planned",
+   "title": "按 `.team/nodes/spec-sol/emu-own/任务书.md` 独立终审 wt-emu-own-impl；重跑机械门并选择 comm 归一或 PID 绑定破坏齿，齐后 report_result。"
+  }
+ },
+ "transitions": []
+}
