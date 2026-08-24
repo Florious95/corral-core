@@ -1,0 +1,10 @@
+fresh_at: 2026-08-25 Asia/Singapore
+source: team_orchestrator.get_team_status
+pane_self_proof: tmux private socket /private/tmp/tmux-501/ta-b7cc1c640ccf, exact team-grok-l2 window, prompt model line
+sampler-dev-luna2: status=running provider=codex model=gpt-5.6-luna
+sampler-test-luna2: status=running provider=codex model=gpt-5.6-luna
+sampler-review-luna2: status=running provider=codex model=gpt-5.6-luna
+takeover-codex-luna: status=running provider=codex model=gpt-5.6-luna
+input-advisor-luna: status=running provider=codex model=gpt-5.6-luna
+spec-sol: status=running provider=codex model=gpt-5.6-sol
+note: each listed execution seat prompt self-proved gpt-5.6-luna; spec-sol prompt self-proved gpt-5.6-sol. worker_state/last_output_at were not used as liveness evidence.

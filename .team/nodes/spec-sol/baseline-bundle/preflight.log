@@ -1,0 +1,4 @@
+fresh_at: 2026-08-25 Asia/Singapore
+command: ledger-run --preflight --json .team/ledgers/baseline-bundle-v1.json
+{"ok":true,"preflight_rejected":false,"issues":[]}
+exit_code: 0

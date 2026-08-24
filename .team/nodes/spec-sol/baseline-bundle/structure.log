@@ -1,0 +1,16 @@
+fresh_at: 2026-08-25 Asia/Singapore
+ledger_id: ledger.baseline-bundle.v1 revision: 1
+custom_statuses: False transitions: []
+t.baseline-bundle.final role=final wt=wt-bundle-core required=M.baseline-bundle.final,M.baseline-bundle.final-real-chain,M.baseline-bundle.final-bypass
+t.baseline-bundle.impl role=impl wt=wt-bundle-core required=M.baseline-bundle.impl,M.baseline-bundle.impl-bypass
+t.baseline-bundle.measure role=measure wt=wt-bundle-core required=M.baseline-bundle.measure,M.baseline-bundle.measure-bypass
+t.baseline-bundle.migrate role=migrate wt=wt-bundle-core required=M.baseline-bundle.migrate
+t.baseline-bundle.probe role=probe wt=wt-archive-probe required=M.baseline-bundle.probe
+t.baseline-bundle.repro role=repro wt=wt-bundle-core required=M.baseline-bundle.repro
+t.baseline-bundle.test role=test wt=wt-bb-test required=M.baseline-bundle.test
+t.baseline-bundle.user-gate role=user wt=wt-bundle-core required=M.baseline-bundle.user
+t.baseline-bundle.verify role=verify wt=wt-bundle-core required=M.baseline-bundle.verify,M.baseline-bundle.verify-bypass
+parallel: [{'failure_policy': 'halt', 'group': 'baseline-bundle-wave', 'max_concurrency': 3}]
+dependencies: 10
+four_state_check_errors: []
+exit_code: 0
