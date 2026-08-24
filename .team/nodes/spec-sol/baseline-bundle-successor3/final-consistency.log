@@ -1,0 +1,17 @@
+successor3 final post-write consistency
+
+head=f0fce0a44182558c23e4bba66d6b0b6ea91bdf1d
+bootstrap_is_ancestor_of_head=true
+source_recompile_cmp=pass
+compiled_sha256=f6cd694aa7bd811c9331d364885cba3dc84f60436cc7d86e3593e8b47618f4ac
+jsonschema=pass
+preflight=pass
+dry_run_frontier=t.baseline-bundle.repro
+dry_run_excluded=8 dependency_unsatisfied
+reserved_worktrees_absent=true
+lease_absent=true
+driver_pid_absent=true
+final_result_last_line=verdict: pass
+ledger_started=false
+
+result: pass

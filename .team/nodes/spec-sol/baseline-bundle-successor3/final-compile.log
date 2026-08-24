@@ -1,0 +1,40 @@
+successor3 stage2 final DSL compile
+
+source:
+  .team/ledgers/src/baseline-bundle-successor3-v1.py
+compiled:
+  .team/ledgers/baseline-bundle-successor3-v1.json
+ledgerdsl:
+  /Users/alauda/.claude/skills/ledger-orchestration/reference/ledgerdsl-0.1.1
+
+command:
+  PYTHONPATH=<ledgerdsl-0.1.1> /usr/bin/python3 .team/ledgers/src/baseline-bundle-successor3-v1.py > .team/ledgers/baseline-bundle-successor3-v1.json
+result:
+  compile_rc=0
+  ledger_id=ledger.baseline-bundle.successor3.v1
+  revision=1
+  desired_state=running
+  tasks=9
+  dependencies=10
+  transitions=0
+  attempts=0
+  statuses=0
+  compiled_sha256=f6cd694aa7bd811c9331d364885cba3dc84f60436cc7d86e3593e8b47618f4ac
+
+graph:
+  repro -> (test || probe || impl) -> verify -> user-gate -> migrate -> measure -> final
+parallelism:
+  group=baseline-bundle-wave max_concurrency=3 failure_policy=halt
+worktrees:
+  core=wt-bundle3-core-f0
+  test=wt-canon-red-lane
+  probe=wt-provenance-oracle
+
+mechanical audit:
+  all checks cwd=WT, expected=0, unjudgeable=[2]
+  original repro/test/probe/verify/user/migrate/final/real-chain/bypass gates remain required
+  successor3 impl and measure wrappers retain their original base gate internally
+  bootstrap successor3 test/probe/impl/measure/bypass gates are additionally required
+  measure and final titles freeze B/A<=1.10; user gate freezes exact bundle and 真机“秒开、没有空白”
+
+result: pass
