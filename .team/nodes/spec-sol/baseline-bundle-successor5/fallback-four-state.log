@@ -1,0 +1,27 @@
+successor5 host-safe SDK fallback and mutation teeth
+
+command:
+  env -u ANDROID_SDK_ROOT -u ANDROID_HOME sh .team/ledgers/acceptance/baseline-bundle-successor5-sdk-regression.sh
+
+host-source handling:
+  repository-root app/local.properties was passed through the whitelist parser
+  source content and sdk.dir value were not printed or logged
+  safe source parse and SDK-directory boolean validation succeeded
+  no repository-root file was written or copied verbatim
+
+isolated node-local fixture results:
+  safe fallback rc=0; output_bytes=0; target_lines=1; target_mode=0600; git_tracked=false
+  extra non-sdk.dir key rc=2
+  duplicate sdk.dir rc=2
+  invalid sdk.dir directory rc=2
+  target staged in fixture Git index rc=1
+  valid environment with unsafe source rc=0; output_bytes=0
+  invalid environment with safe source fallback rc=0; output_bytes=0
+
+overall regression output:
+  PASS baseline-bundle-successor5-sdk-regression: fallback controls and four-state teeth verified
+  rc=0
+
+No SDK path or local.properties value appears in this log.
+
+result: pass

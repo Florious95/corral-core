@@ -1,0 +1,26 @@
+successor5 required exact-set and obsolete-name negative teeth
+
+candidate assertions:
+  ledger_id=ledger.baseline-bundle.successor5.v1 revision=1
+  tasks=9 dependencies=10 transitions=0
+  test_required=[M.baseline-bundle.successor5-test]
+  probe_required=[M.baseline-bundle.successor5-probe]
+  impl_required=[M.baseline-bundle.successor5-impl,M.baseline-bundle.successor5-bypass]
+  mechanical id/argv/cwd/expect0/unjudgeable2/cardinality exact=true
+  legacy and successor4 impl/probe acceptance ids absent=true
+  Gradle-capable tasks authorize non-versioned app/local.properties=6
+  B/A<=1.10 retained=true
+  user-gate before migrate=true
+
+fresh isolated mutations of the production structure checker:
+  exact_rc=0
+  legacy-impl_rc=1
+  legacy-probe_rc=1
+  successor4-impl_rc=1
+  old-argv_rc=1
+  bad-fourstate_rc=1
+  missing-candidate_rc=2
+
+Only node-local copies were mutated; candidate and frozen ledgers were not edited.
+
+result: pass
