@@ -1,0 +1,18 @@
+successor4 fresh compile and schema
+
+tool identity:
+  ledgerdsl version=0.1.1
+  ledgerdsl __init__.py sha256=9241d5aef5e5782bc70eb7b127e11d6b7b7e1243e2d9ce73ad3bfd14130f7fe2
+  ledger-run sha256=1cf44a9d40d2dbf025fd9c0bd65ab6ae345e40d7ef103916474d6160c3414175
+
+commands:
+  PYTHONPATH=<ledgerdsl-0.1.1> /usr/bin/python3 .team/ledgers/src/baseline-bundle-successor4-v1.py > .team/ledgers/baseline-bundle-successor4-v1.json
+  PYTHONPATH=<ledgerdsl-0.1.1> /usr/bin/python3 -m ledgerdsl --repo-root /Volumes/nvme/Projects/远程Agent安卓 .team/ledgers/baseline-bundle-successor4-v1.json
+
+output:
+  门③ jsonschema: PASS
+  门④ preflight: {"ok": true, "preflight_rejected": false, "issues": []}
+  compile_rc=0
+  schema_and_dsl_preflight_rc=0
+
+result: pass
