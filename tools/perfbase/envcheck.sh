@@ -60,7 +60,7 @@ if [ "$ps_rc" -ne 0 ]; then
   dirty=1
   ps_output=''
 fi
-qemu_pids=$(printf '%s\n' "$ps_output" | awk '$2 ~ /^qemu-system/ {print $1}')
+qemu_pids=$(printf '%s\n' "$ps_output" | awk '{name=$2; sub(".*/", "", name); if (name ~ /^qemu-system/) print $1}')
 qemu_count=$(printf '%s\n' "$qemu_pids" | awk 'NF {n++} END {print n+0}')
 if [ "$PHASE" = preflight ]; then
   [ "$qemu_count" -eq 0 ] || dirty=1
