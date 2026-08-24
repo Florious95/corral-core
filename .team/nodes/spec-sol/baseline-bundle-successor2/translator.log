@@ -1,0 +1,3 @@
+fresh_probe_rc1=1 fresh_probe_rc2=1 fixture_build_rc=0
+REPRO_TRANSLATION schema=agentmirror.baseline-bundle.repro.v1 input=expected_legacy_red probe_runs=2 acceptance_exit=0
+translator_exit_code: 0

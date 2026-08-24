@@ -1,0 +1,32 @@
+baseline-bundle successor2 startup review — fresh evidence (2026-08-25 Asia/Singapore)
+
+0. Previous-round intake
+   Read .team/nodes/baseline-bundle-prelaunch-review/PRELAUNCH-VERDICT.md and tests.log first. Read the a3421f19f run1 diagnosis and the successor1 review; treated their pass/refutes text as historical context only.
+
+1. Fresh ledger construction and gates
+   PYTHONPATH=/Users/alauda/.agents/skills/ledger-orchestration/reference/ledgerdsl-0.1.1 /usr/bin/python3 .team/ledgers/src/baseline-bundle-successor2-v1.py: exit 0.
+   jsonschema against ledger.v2.schema.json: exit 0.
+   ledger-run --preflight --json .team/ledgers/baseline-bundle-successor2-v1.json: exit 0, ok=true, issues=[].
+   ledger-run --dry-run --json ...: exit 0, ledger_id=ledger.baseline-bundle.successor2.v1, revision=1, frontier=[t.baseline-bundle.repro]; all other eight tasks excluded by requires_success.
+   Fresh ledger shape: nine tasks, all state=planned, zero attempts. Source SHA-256=8d7ffe890b9069702f6ea499836b8b899e5ece03cd96fabf9dc68d41f26f49df; compiled JSON SHA-256=25394cd278dec6a5cd31ec74e94e7d768c4a287ef01af989bcdead0dd0889a3a.
+
+2. Worktree and provenance isolation
+   git worktree metadata contains no wt-b2-mainline, wt-b2-redcase, or wt-b2-oracle; .worktrees/<each> is absent. Existing wt-bundle-core, wt-bb-test, and wt-archive-probe remain separate old identities.
+   Current main is an ancestor of ef7a02c1d23d85eaf08c1093efafd50376fa4db5 and 488a1f25bc8b0a35afb62df85e3afd5ce666bf8e (both merge-base checks exit 0). git cat-file confirms all four required acceptance scripts are reachable at ef7a02c1d: real-chain probe, repro, translator, regression.
+   Three successor2 worktree IDs are used only as specified: mainline for the serial chain, redcase for test, oracle for probe. The repro->(test||probe||impl)->verify->user-gate->migrate->measure->final graph and max_concurrency=3/failure_policy=halt are preserved; parallel write paths are disjoint and shared mainline tasks are dependency-ordered.
+
+3. Historical continuity
+   Current old live ledger SHA-256 remains 89ba716e85f151b06f05bf61a5631eacbcad910c0f1190a8f264a9b69a6b5723; it remains ledger.baseline-bundle.v1 revision 1, repro=failed_retryable, with attempt att-t.baseline-bundle.repro-seq1-t1787590762873. Current successor1 JSON remains ledger.baseline-bundle.successor.v1 revision 1 and retains its run1 attempt. Successor2 is a new ledger with no attempts; it does not rewrite either history.
+   The taskbook/source explicitly says supersedes is for future execution only and names the immutable c4846de54, 488a1f25b, ef7a02c1d and a3421f19f/a prior diagnosis provenance. No plan/apply, driver stop, dispatch, worktree creation, framework patch, or product action was run.
+
+4. Fresh syntax and contract checks
+   sh -n on the four successor2 repro/real-chain scripts: exit 0.
+   shellcheck -s sh on those four scripts: exit 0.
+   Static/taskbook scan retained expected_exit_code=0 and unjudgeable_exit_codes=[2] on every required check, plus the repro regression check. It retained the three-fixture A/B/A/B contract, n>=10, nearest-rank p50/p95, every B/A<=1.10, no-cache rule, envcheck gate, migration preconditions, and the cellular+Guangzhou-relay real-device user gate. No AllSucceeded substitute, missing_status route, credential read, argv/credential use, unbounded retry, or forbidden direct-message completion instruction was found.
+
+5. Fresh real-chain/provenance translator/regression
+   Two direct fresh sh baseline-bundle-real-chain-probe.sh runs both exited 1 and both reported legacy_missing_baseline_park with ledger.perf-regress.v1 revision 4, running/failed_retryable, frontier=[], state_not_dispatchable, verify dependency_unsatisfied, measurement=unjudgeable, and matching lease/pidfile PID 85754 with comm=ledger-run.
+   Fresh translator run against those two records exited 0 and printed REPRO_TRANSLATION ... probe_runs=2 acceptance_exit=0. It did not convert probe rc=1 directly: its fixed schema/shape/provenance checks were exercised. Regression exited 0 with semantic_without_magic_tokens=0, forged_rc=1, missing_provenance=2, forged_shape=1. Thus expected legacy red is preserved as evidence while acceptance success is only the fixed translation, and probe 2 remains unjudgeable rather than pass.
+
+6. Mutation/side-effect boundary
+   No migration, TERM, --drive, plan/apply, APK/emulator/daemon action, credential read, product edit, or worktree creation was performed. Only the requested review directory and its fresh temporary evidence were written.

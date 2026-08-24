@@ -1,0 +1,3 @@
+command: python3 -m ledgerdsl successor2 --repo-root /Volumes/nvme/Projects/远程Agent安卓 --skip-preflight
+门③ jsonschema: PASS
+exit_code: 0
