@@ -1,0 +1,28 @@
+bootstrap fixed-fixture four-state checks; fresh after digest freeze
+
+fixed path:
+  .team/ledgers/acceptance/fixtures/baseline-bundle-successor3/control-contract.json
+fixed sha256:
+  ffcea3d0d3282618ad91f9db44c7a99616868b6610c88516e022385e59bd3fd9
+
+case: fixed contract absent in isolated copy
+output:
+  UNJUDGEABLE baseline-bundle-successor3-canonical: fixed bootstrap input missing
+  missing_contract_rc=2
+
+case: fixed contract bytes changed in isolated copy
+output:
+  UNJUDGEABLE baseline-bundle-successor3-canonical: fixed control contract digest drift
+  drift_contract_rc=2
+
+case: fixed contract exact and real implementation controls match
+evidence:
+  bootstrap-real-teeth.log
+  canonical_wrapper_rc=0
+  bypass_wrapper_rc=0
+
+classification:
+  fixture absent or digest drift is apparatus/provenance unavailable => 2.
+  exact controlled provenance forgery is product/judge rejection => hardened classification 1 inside a meta-tooth whose own successful assertion exits 0.
+
+result: pass
