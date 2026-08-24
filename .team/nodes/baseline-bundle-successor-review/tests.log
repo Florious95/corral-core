@@ -1,0 +1,35 @@
+baseline-bundle successor independent zero-context startup review
+workspace=/Volumes/nvme/Projects/远程Agent安卓
+mode=read-only; drive=false; apply=false
+
+[provenance]
+commits c4846de5497903bf1a0b2db98fe9ede4c2d8ac5d and 488a1f25bc8b0a35afb62df85e3afd5ce666bf8e both resolve as commit objects.
+repro-diagnosis sha256=a336e7a1201937d267a27b40e7c5b73e0f49a7aa9e586dd55415a77f3e0441e0
+repro-fix-review verdict sha256=d1e5740a0388f4c5dba936af79a6d889c4939f2becb2d8b69dcdd52fdf04fdf0
+P0 sha256=8ca38991f6a2249688ebcced1ed0dae85abf131bf7716edf5153e81f505d303f
+
+[fresh successor compile/schema/preflight/dry-run]
+command: PYTHONPATH=/Users/alauda/.agents/skills/ledger-orchestration/reference/ledgerdsl-0.1.1 /usr/bin/python3 .team/ledgers/src/baseline-bundle-successor-v1.py
+result: exit 0; fresh output byte-compared to .team/ledgers/baseline-bundle-successor-v1.json (cmp exit 0); pydantic=2.13.4, jsonschema=4.25.1 available in /usr/bin/python3.
+command: ledger-run --preflight --json .team/ledgers/baseline-bundle-successor-v1.json
+result: exit 0; preflight_rejected=false; issues=[] (embedded ledger.v2 schema gate).
+command: ledger-run --dry-run --json .team/ledgers/baseline-bundle-successor-v1.json
+result: exit 0; ledger_id=ledger.baseline-bundle.successor.v1 revision=1; frontier exactly [t.baseline-bundle.repro]; downstream excluded by requires_success.
+
+[runtime continuity]
+old live .team/ledgers/baseline-bundle-v1.json sha256=89ba716e85f151b06f05bf61a5631eacbcad910c0f1190a8f264a9b69a6b5723; revision=1; ledger_id=ledger.baseline-bundle.v1; repro state=failed_retryable; exactly one attempt=att-t.baseline-bundle.repro-seq1-t1787590762873.
+successor sha256=1e6291bdb7c43c9e759f49120fc9ccd8dd2e9351b23de80b5fc3c1ed61522042; revision=1; nine tasks all planned; all task attempts arrays absent/empty; successor lease and pidfile absent.
+The old live ledger and attempt were not edited, cleared, replayed, or superseded in place. No drive, dispatch, lease, PID, plan, apply, framework patch, product change, emulator, or daemon action was performed.
+
+[task graph / gates comparison]
+Fresh JSON comparison: task sets equal (9); roles equal; dependencies equal (10 all requires_success); parallelism equal (baseline-bundle-wave, max_concurrency=3, failure_policy=halt); every task worktree_id and write_paths equal; every old required Check is retained; only the successor repro adds M.baseline-bundle.repro-regression and REPRO.json handoff. No required check was removed.
+Taskbook/source retain the exact A2/equivalence, envcheck, nonempty raw, strict A/B/A/B, n>=10, nearest-rank p50/p95, B/A<=1.10, no-cache Gradle/Go rules, cellular+Guangzhou relay real-device seconds-open/no-blank user gate, verify/user-gate migration prerequisite, and no AllSucceeded substitution.
+
+[fresh repro translator / regression]
+Two fresh executions of baseline-bundle-real-chain-probe.sh both returned exit 1 with classification=legacy_missing_baseline_park, ledger.perf-regress.v1 revision=4 running impl=failed_retryable, measurement=unjudgeable, frontier=[], state_not_dispatchable, dependency_unsatisfied, lease/pidfile=85754 and comm=ledger-run. Lease SHA changed only as heartbeat provenance.
+The two fresh records plus successor REPRO.json passed baseline-bundle-repro-translate.sh with exit 0: schema=agentmirror.baseline-bundle.repro.v1, input=expected_legacy_red, probe_runs=2, acceptance_exit=0. Acceptance expected code remains 0.
+baseline-bundle-repro-regression.sh fresh exit 0: semantic_without_magic_tokens=0 forged_rc=1 missing_provenance=2 forged_shape=1. No old magic-token grep was used as a success condition.
+Fresh sh -n and ShellCheck -s sh on repro.sh, translator.sh, regression.sh, and real-chain-probe.sh: both 0.
+
+[interpretation]
+The successor is a new ledger identity/revision-1 planned execution surface, not a claim that the old failed runtime succeeded. Its read-only continuity paths point at the old ledger, prior independent verdicts, and P0; the taskbook explicitly forbids using successor creation to stop/migrate the old chain. The existing P0 plan/apply field-ownership blocker remains an external prerequisite and was not bypassed.
