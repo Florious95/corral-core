@@ -1,0 +1,21 @@
+bootstrap SDK and IMPL four-state checks
+
+fixture root:
+  .team/nodes/spec-sol/baseline-bundle-successor3/tmp/bootstrap-sdk-impl-clone-v3
+construction:
+  local shared clone at current main; successor3 bootstrap scripts and the real implementation entry copied into the isolated clone; no git worktree created.
+
+case: IMPL.md last line is implementation: unjudgeable
+output:
+  FAIL baseline-bundle-successor3-impl: IMPL.md does not end in implementation: pass
+  impl_unjudgeable_rc=1
+
+case: IMPL.md last line is implementation: pass and app/local.properties is absent
+output:
+  UNJUDGEABLE baseline-bundle-successor3-impl: app/local.properties missing
+  missing_local_properties_rc=2
+
+secrecy assertion:
+  the gate reports only the missing precondition category; it did not read or print local.properties values, SDK paths, credentials or tool contents.
+
+result: pass
