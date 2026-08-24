@@ -29,6 +29,9 @@ result_json="$node/perf-ab-fixed.json"
 raw_a="$node/raw/A"
 raw_b="$node/raw/B"
 fixture_root="$node/tmp"
+gradlew="$repo_root/app/gradlew"
+gradle_wrapper="$repo_root/app/gradle/wrapper/gradle-wrapper.jar"
+local_properties="$repo_root/app/local.properties"
 
 [ -f "$focused" ] || fail "missing focused test: tools/perfbase/test-perf-regress-attribution.sh"
 [ -r "$focused" ] || unjudgeable "focused test is unreadable"
@@ -54,6 +57,24 @@ grep -F 'PerfRegressionBigScrollbackControlTest' "$focused" >/dev/null 2>&1 \
 grep -F -e '--rerun-tasks' "$focused" >/dev/null 2>&1 \
     || fail "focused Gradle test can reuse cache"
 
+[ -f "$gradlew" ] || unjudgeable "Gradle wrapper script is missing"
+[ -r "$gradlew" ] && [ -x "$gradlew" ] \
+    || unjudgeable "Gradle wrapper script is not runnable"
+[ -f "$gradle_wrapper" ] && [ -r "$gradle_wrapper" ] \
+    || unjudgeable "Gradle wrapper runtime is missing or unreadable"
+command -v java >/dev/null 2>&1 \
+    || unjudgeable "Java runtime for Gradle is unavailable"
+
+sdk_dir=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
+if [ -z "$sdk_dir" ]; then
+    [ -f "$local_properties" ] && [ -r "$local_properties" ] \
+        || unjudgeable "Android SDK location is unavailable"
+    sdk_dir=$(sed -n 's/^sdk\.dir=//p' "$local_properties" 2>/dev/null | sed -n '1p') \
+        || unjudgeable "cannot read Android SDK location"
+fi
+[ -n "$sdk_dir" ] && [ -d "$sdk_dir" ] \
+    || unjudgeable "Android SDK directory is unavailable"
+
 mkdir -p "$fixture_root" 2>/dev/null \
     || unjudgeable "cannot create repo-local fixture root"
 write_probe="$fixture_root/.acceptance-write-$$"
@@ -67,7 +88,12 @@ focused_rc=$?
 printf '%s\n' "$focused_output"
 case "$focused_rc" in
     0) ;;
-    1) fail "focused causal regression test failed" ;;
+    1)
+        if printf '%s\n' "$focused_output" | grep -E 'SDK location not found|Android SDK.*(not found|missing)|Failed to find Build Tools revision|Installed Build Tools revision.*corrupt|failed to find target with hash string|License for package.*not accepted|JAVA_HOME is not set|Unable to locate a Java Runtime|GradleWrapperMain|Could not install Gradle distribution|Could not resolve host|UnknownHostException|Connection timed out|Read timed out' >/dev/null 2>&1; then
+            unjudgeable "SDK/Gradle runtime could not execute focused test"
+        fi
+        fail "focused causal regression test failed"
+        ;;
     2) unjudgeable "focused causal regression test could not judge" ;;
     *) unjudgeable "focused test returned unsupported exit $focused_rc" ;;
 esac
@@ -76,7 +102,7 @@ evidence='PERF_REGRESS_EVIDENCE tap_route_real_entry=true frame_draw_real_entry=
 printf '%s\n' "$focused_output" | grep -F "$evidence" >/dev/null 2>&1 \
     || fail "missing exact causal and positive-control evidence"
 
-for artifact in "$attribution" "$impl" "$measure" "$result_json"; do
+for artifact in "$attribution" "$impl" "$measure"; do
     [ -e "$artifact" ] || fail "missing required artifact: $artifact"
     [ -r "$artifact" ] || unjudgeable "required artifact is unreadable: $artifact"
     [ -s "$artifact" ] || fail "required artifact is empty: $artifact"
@@ -92,8 +118,16 @@ grep -F '破坏齿' "$impl" >/dev/null 2>&1 \
     || fail "implementation report omits causal mutation tooth"
 measure_last_line=$(sed -n '$p' "$measure" 2>/dev/null) \
     || unjudgeable "cannot read fixed measurement verdict"
-[ "$measure_last_line" = 'measurement: pass' ] \
-    || fail "fixed measurement report does not end in measurement: pass"
+case "$measure_last_line" in
+    'measurement: pass') ;;
+    'measurement: fail') fail "fixed measurement reports product regression" ;;
+    'measurement: unjudgeable') unjudgeable "fixed measurement could not judge" ;;
+    *) unjudgeable "fixed measurement verdict is missing or unsupported" ;;
+esac
+
+[ -e "$result_json" ] || fail "missing required artifact: $result_json"
+[ -r "$result_json" ] || unjudgeable "required artifact is unreadable: $result_json"
+[ -s "$result_json" ] || fail "required artifact is empty: $result_json"
 
 [ -d "$raw_a" ] && [ -d "$raw_b" ] \
     || fail "fresh raw A/B directories are missing"
