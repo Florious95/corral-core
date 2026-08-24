@@ -1,0 +1,31 @@
+bootstrap audit continuity and stable-path checks
+
+current main HEAD:
+  37baef7f7ba362d28995045948b644526c733fd8
+
+old immutable ledger sha256:
+  .team/ledgers/baseline-bundle-v1.json = 89ba716e85f151b06f05bf61a5631eacbcad910c0f1190a8f264a9b69a6b5723
+  .team/ledgers/baseline-bundle-successor-v1.json = d0e11364813b81dde02e1056682a3216743b43faac0ddd3e5a1927480ebf58be
+  .team/ledgers/baseline-bundle-successor2-v1.json = 39bb9fcf77f04dc1212a098f1e5f50166b10b45d550bb43a2af7d4e4c0e2a9c0
+
+frozen commits present as commit objects:
+  c4846de5497903bf1a0b2db98fe9ede4c2d8ac5d
+  488a1f25bc8b0a35afb62df85e3afd5ce666bf8e
+  ef7a02c1d23d85eaf08c1093efafd50376fa4db5
+  6575cefc084871738f9817236220eb91e3173a6e
+
+bootstrap stable paths are not ignored and are eligible for the leader's reviewed bootstrap commit:
+  .team/ledgers/acceptance/baseline-bundle-successor3-canonical.sh
+  .team/ledgers/acceptance/baseline-bundle-successor3-real-fixture.py
+  .team/ledgers/acceptance/fixtures/baseline-bundle-successor3/control-contract.json
+  .team/nodes/spec-sol/baseline-bundle-successor3/任务书.md
+
+fixed contract sha256:
+  ffcea3d0d3282618ad91f9db44c7a99616868b6610c88516e022385e59bd3fd9
+
+scope:
+  no old live ledger or attempt was modified, cleared or dispatched by this bootstrap task.
+  no App/server/tools/perfbase product implementation was changed by this bootstrap task.
+  a pre-existing unrelated server/agentmirrord-night-4120c0884 modification remains untouched.
+
+result: pass
