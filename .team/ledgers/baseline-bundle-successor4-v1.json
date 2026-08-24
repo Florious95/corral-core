@@ -1,0 +1,1309 @@
+{
+ "acceptance": {
+  "judgment_requires_distinct_provider": true,
+  "mechanical_exit_code_is_authoritative": true
+ },
+ "audit": {
+  "route_hops": []
+ },
+ "dependencies": [
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.repro",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.test"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.repro",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.probe"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.repro",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.impl"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.test",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.probe",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.impl",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.verify"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.verify",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.user-gate"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.user-gate",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.migrate"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.migrate",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.measure"
+  },
+  {
+   "carries_artifact": false,
+   "condition": "requires_success",
+   "from": "t.baseline-bundle.measure",
+   "same_source_required": false,
+   "to": "t.baseline-bundle.final"
+  }
+ ],
+ "evidence_policy": {
+  "missing_evidence": "cannot_close_success",
+  "required_fields": [
+   "reported_by",
+   "revision",
+   "supports_or_refutes",
+   "observed_at",
+   "freshness"
+  ]
+ },
+ "fallback": {
+  "F.escalate": {
+   "action": "escalate_to_advisor",
+   "agent": {
+    "role": "advisor"
+   },
+   "max_attempts": 1,
+   "silent_substitution": false,
+   "triggers": [
+    "blocked_on_unknown",
+    "provider_unavailable",
+    "result_deadline_elapsed",
+    "delivery_uncertain"
+   ]
+  }
+ },
+ "fanout_aggregation": {},
+ "handoff": {
+  "delivery_uncertain": "needs_reconcile",
+  "missing_result": "alarm",
+  "required_envelope_fields": [
+   "task_id",
+   "status"
+  ],
+  "result_route": "report_result",
+  "send_command": "team-agent send"
+ },
+ "ledger_id": "ledger.baseline-bundle.successor4.v1",
+ "parallelism": [
+  {
+   "failure_policy": "halt",
+   "group": "baseline-bundle-wave",
+   "max_concurrency": 3
+  }
+ ],
+ "resource_isolation": {
+  "closed_read": false,
+  "read_only_shared": [],
+  "rules": []
+ },
+ "revision": 1,
+ "roles": {
+  "advisor": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/input-full-auto/advisor/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "input-advisor-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "final": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-final/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-review-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "impl": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-impl/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-dev-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "measure": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-measure/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-dev-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "migrate": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-migrate/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-dev-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "probe": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-probe/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-review-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "repro": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-repro/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-test-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "test": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-test/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-test-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "user": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-user/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "takeover-codex-luna",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  },
+  "verify": {
+   "artifact_landing": {
+    "form": "committed",
+    "path": ".team/nodes/baseline-bundle-verify/"
+   },
+   "provider": "codex",
+   "retirement_condition": {
+    "artifacts_persisted": true,
+    "ledger_updated": true
+   },
+   "seat": {
+    "agent": "sampler-review-luna2",
+    "team": "remote-agent-android"
+   },
+   "seat_policy": "resident_reuse"
+  }
+ },
+ "run": {
+  "desired_state": "running"
+ },
+ "schema_version": "ledger.v2",
+ "tasks": {
+  "t.baseline-bundle.final": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-sdk-final",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.final",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-final.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 3600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.final-real-chain",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-real-chain-probe.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.final-bypass",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-bypass-probes.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-final-bypass",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.successor4-sdk-final",
+     "M.baseline-bundle.final",
+     "M.baseline-bundle.final-real-chain",
+     "M.baseline-bundle.final-bypass",
+     "M.baseline-bundle.successor4-final-bypass"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-final/VERDICT.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "final"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/final-任务书.md",
+     ".team/nodes/baseline-bundle-impl/",
+     ".team/nodes/baseline-bundle-verify/",
+     ".team/nodes/baseline-bundle-user/",
+     ".team/nodes/baseline-bundle-migrate/",
+     ".team/nodes/baseline-bundle-measure/",
+     ".team/private/baseline-vault/",
+     ".team/private/baseline-backup/",
+     ".team/ledgers/perf-regress-v1.json",
+     ".team/ledgers/acceptance/baseline-bundle-final.sh",
+     ".team/ledgers/acceptance/baseline-bundle-real-chain-probe.sh",
+     ".team/ledgers/acceptance/baseline-bundle-bypass-probes.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh",
+     ".team/ledgers/acceptance/fixtures/baseline-bundle-successor3/",
+     "tools/perfbase/",
+     "app/"
+    ],
+    "worktree_id": "wt-atlas-42",
+    "write_paths": [
+     ".team/nodes/baseline-bundle-final/",
+     ".team/nodes/spec-sol/baseline-bundle/tmp/",
+     "app/local.properties"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "按原 final 与 successor4 总任务书独立终审 exact/A2、canonical bundle/双归档、SDK/fixture四态、迁移、fresh B/A<=1.10 与真机‘秒开无空白’；任何 Gradle 前安全生成非版本化 local.properties。产物齐后只 report_result。"
+  },
+  "t.baseline-bundle.impl": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-impl",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor4-impl.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 3600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-bypass",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.successor4-impl",
+     "M.baseline-bundle.successor4-bypass"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-impl/ROUTE.md",
+     ".team/nodes/baseline-bundle-impl/IMPL.md",
+     ".team/nodes/baseline-bundle-impl/BUNDLE-MANIFEST.json",
+     ".team/nodes/baseline-bundle-impl/INSTALL.md",
+     ".team/nodes/baseline-bundle-impl/RETRIEVE.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "impl"
+   },
+   "parallel": {
+    "group": "baseline-bundle-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/impl-任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/impl-任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor4/impl-任务书.md",
+     ".team/nodes/baseline-bundle-repro/",
+     ".team/nodes/baseline-bundle-test/",
+     ".team/nodes/baseline-bundle-probe/",
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md",
+     ".team/ledgers/baseline-bundle-successor4-v1.json",
+     ".team/ledgers/acceptance/perf-regress.sh",
+     ".team/ledgers/acceptance/baseline-bundle-impl.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-impl.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-structure.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-canonical.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-impl.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-real-fixture.py",
+     ".team/ledgers/acceptance/fixtures/baseline-bundle-successor3/",
+     ".team/nodes/spec-sol/perf-regress/任务书.md",
+     ".team/nodes/pb-core/tmp/apksigner-verify.txt",
+     "CLAUDE.md",
+     "app/",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-atlas-42",
+    "write_paths": [
+     "tools/perfbase/baseline-bundle.sh",
+     "tools/perfbase/baseline_bundle.py",
+     "tools/perfbase/test-baseline-bundle.sh",
+     "tools/perfbase/migrate-perf-regress.sh",
+     "tools/perfbase/run-input-ab.sh",
+     "tools/perfbase/parse-input-ab.py",
+     ".gitignore",
+     ".team/baseline-bundles/",
+     ".team/private/baseline-vault/",
+     ".team/private/baseline-backup/",
+     ".team/nodes/baseline-bundle-impl/",
+     ".team/nodes/spec-sol/baseline-bundle/tmp/",
+     "app/local.properties"
+    ]
+   },
+   "seat_wait_seconds": 10800,
+   "state": "planned",
+   "title": "按 successor4 impl 任务书在 fresh core WT 修 canonicalization、真实 bundle/retrieve/archive；任何 Gradle 前从 SDK 环境无输出生成非版本化 app/local.properties，缺失2。required 只挂 successor4 impl 与已 bootstrap controlled bypass，禁止 legacy impl-bypass。产物齐后只 report_result。"
+  },
+  "t.baseline-bundle.measure": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-sdk-measure",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.successor3-measure",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor3-measure.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 1800,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.measure-bypass",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-bypass-probes.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-measure-bypass",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.successor4-sdk-measure",
+     "M.baseline-bundle.successor3-measure",
+     "M.baseline-bundle.measure-bypass",
+     "M.baseline-bundle.successor4-measure-bypass"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-measure/MEASURE.md",
+     ".team/nodes/baseline-bundle-measure/perf-ab-bundle.json",
+     ".team/nodes/baseline-bundle-measure/PRE-MEASURE.json"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "measure"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/measure-任务书.md",
+     ".team/nodes/baseline-bundle-impl/",
+     ".team/nodes/baseline-bundle-verify/",
+     ".team/nodes/baseline-bundle-user/",
+     ".team/nodes/baseline-bundle-migrate/",
+     ".team/private/baseline-vault/",
+     ".team/private/baseline-backup/",
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-measure.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh",
+     ".team/ledgers/acceptance/baseline-bundle-bypass-probes.sh",
+     ".team/ledgers/acceptance/fixtures/baseline-bundle-successor3/",
+     "tools/perfbase/",
+     "app/"
+    ],
+    "worktree_id": "wt-atlas-42",
+    "write_paths": [
+     ".team/nodes/baseline-bundle-measure/",
+     ".team/private/baseline-candidates/",
+     ".team/nodes/spec-sol/baseline-bundle/tmp/",
+     "app/local.properties"
+    ]
+   },
+   "seat_wait_seconds": 10800,
+   "state": "planned",
+   "title": "按原 measure 与 successor4 总任务书先安全生成非版本化 app/local.properties、过 SDK/资产取回/摘要/安装/envcheck，再做唯一 fresh 三夹具四段 A/B/A/B；每段n>=10、同批A2/B、nearest-rank p50/p95、全格B/A<=1.10。产物齐后只 report_result。"
+  },
+  "t.baseline-bundle.migrate": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.migrate",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-migrate.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.migrate"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-migrate/MIGRATION.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "migrate"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/migrate-任务书.md",
+     ".team/nodes/baseline-bundle-impl/",
+     ".team/nodes/baseline-bundle-verify/",
+     ".team/nodes/baseline-bundle-user/",
+     ".team/nodes/perf-regress/FIXED-MEASURE.md",
+     ".team/ledgers/acceptance/baseline-bundle-migrate.sh",
+     "tools/perfbase/migrate-perf-regress.sh"
+    ],
+    "worktree_id": "wt-atlas-42",
+    "write_paths": [
+     ".team/nodes/baseline-bundle-migrate/",
+     ".team/ledgers/src/perf-regress-v1.py",
+     ".team/ledgers/perf-regress-v1.json",
+     ".team/ledgers/perf-regress-v1.json.lease",
+     ".team/nodes/_driver/perf-regress-v1.pid"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "按原 migrate 任务书仅在 successor4 verify+用户 gate 全绿后，以精确 PID/账本状态前置 TERM 旧 perf-regress，并用 ledgerdsl plan/apply paused；漂移不发信号，不清历史。产物齐后只 report_result。"
+  },
+  "t.baseline-bundle.probe": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-probe",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor4-probe.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.successor4-probe"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-probe/PROBE.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "probe"
+   },
+   "parallel": {
+    "group": "baseline-bundle-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/probe-任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/probe-任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor4/probe-任务书.md",
+     ".team/nodes/baseline-bundle-repro/",
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md",
+     ".team/ledgers/baseline-bundle-successor4-v1.json",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-probe.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-structure.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-impl.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh",
+     ".team/ledgers/acceptance/fixtures/baseline-bundle-successor3/",
+     ".team/nodes/pb-core/tmp/apksigner-verify.txt",
+     "app/",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-nimbus-93",
+    "write_paths": [
+     ".team/nodes/baseline-bundle-probe/",
+     "app/local.properties"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "按 successor4 probe 任务书在全新隔离 WT 独立重算 canonical/fixed-fixture/SDK 与 required-list legacy-negative 操作数；probe 门不要求 source_tree_sha256。任何 Gradle 前无输出生成非版本化 app/local.properties，环境缺失2。只写 PROBE.md，产物齐后只 report_result。"
+  },
+  "t.baseline-bundle.repro": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.repro",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-repro.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.repro-regression",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-repro-regression.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.repro",
+     "M.baseline-bundle.repro-regression"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-repro/REPRO.json",
+     ".team/nodes/baseline-bundle-repro/REPRO.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "repro"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/repro-任务书.md",
+     ".team/ledgers/perf-regress-v1.json",
+     ".team/ledgers/perf-regress-v1.json.lease",
+     ".team/nodes/_driver/perf-regress-v1.pid",
+     ".team/ledgers/acceptance/perf-regress.sh",
+     ".team/ledgers/acceptance/baseline-bundle-real-chain-probe.sh",
+     ".team/ledgers/acceptance/baseline-bundle-repro-translate.sh",
+     ".team/ledgers/acceptance/baseline-bundle-repro-regression.sh"
+    ],
+    "worktree_id": "wt-atlas-42",
+    "write_paths": [
+     ".team/nodes/baseline-bundle-repro/"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "successor4 首格：按原 repro 任务书在 fresh core WT 重跑真实 legacy probe 两次并交固定 schema REPRO.json+REPRO.md；旧四本 attempts 只作 provenance。translator 仅完整 expected red 转0，probe 2传2，非预期形1。不得修改旧账，产物齐后只 report_result。"
+  },
+  "t.baseline-bundle.test": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-test",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor4-test.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.successor4-test"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-test/RED.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "test"
+   },
+   "parallel": {
+    "group": "baseline-bundle-wave"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/test-任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/test-任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor4/test-任务书.md",
+     ".team/nodes/baseline-bundle-repro/",
+     ".team/nodes/input-full-auto/perf-design/CONTRACT.md",
+     ".team/ledgers/baseline-bundle-successor4-v1.json",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-test.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-structure.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-test.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-impl.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh",
+     ".team/ledgers/acceptance/fixtures/baseline-bundle-successor3/",
+     "app/",
+     "tools/perfbase/"
+    ],
+    "worktree_id": "wt-quartz-77",
+    "write_paths": [
+     ".team/nodes/baseline-bundle-test/",
+     "app/local.properties"
+    ]
+   },
+   "seat_wait_seconds": 3600,
+   "state": "planned",
+   "title": "按 successor4 test 任务书在全新隔离 WT 独立交 canonical/fixture/SDK 与 required-list legacy-negative 红测；任何 Gradle 前无输出生成非版本化 app/local.properties，环境缺失2。只写 RED.md，产物齐后只 report_result。"
+  },
+  "t.baseline-bundle.user-gate": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.user",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-user-gate.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 120,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.user"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-user/USER-GATE.json",
+     ".team/nodes/baseline-bundle-user/USER-GATE.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "user"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/user-gate-任务书.md",
+     ".team/nodes/baseline-bundle-impl/BUNDLE-MANIFEST.json",
+     ".team/nodes/baseline-bundle-verify/",
+     ".team/ledgers/acceptance/baseline-bundle-user-gate.sh"
+    ],
+    "worktree_id": "wt-atlas-42",
+    "write_paths": [
+     ".team/nodes/baseline-bundle-user/"
+    ]
+   },
+   "seat_wait_seconds": 10800,
+   "state": "planned",
+   "title": "按原 user-gate 任务书仅结构化用户对确切 successor4 bundle 的蜂窝+广州中转真机‘秒开、没有空白’裁定；agent/模拟器/旧口述不得代判，产物齐后只 report_result。"
+  },
+  "t.baseline-bundle.verify": {
+   "acceptance": {
+    "judgment": [],
+    "mechanical": [
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-sdk-verify",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.verify",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-verify.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 3600,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.verify-bypass",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-bypass-probes.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     },
+     {
+      "acceptance_id": "M.baseline-bundle.successor4-verify-bypass",
+      "argv": [
+       "/bin/sh",
+       ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh"
+      ],
+      "artifacts": [],
+      "cwd": "${worktree}",
+      "expected_exit_code": 0,
+      "time_budget_seconds": 300,
+      "unjudgeable_exit_codes": [
+       2
+      ]
+     }
+    ],
+    "required": [
+     "M.baseline-bundle.successor4-sdk-verify",
+     "M.baseline-bundle.verify",
+     "M.baseline-bundle.verify-bypass",
+     "M.baseline-bundle.successor4-verify-bypass"
+    ]
+   },
+   "blocking_reasons": [],
+   "handoff": {
+    "required_artifacts": [
+     ".team/nodes/baseline-bundle-verify/VERDICT.md"
+    ],
+    "route": "report_result"
+   },
+   "owner": {
+    "role": "verify"
+   },
+   "resources": {
+    "environment_fidelity": {
+     "runs_real_cli": true
+    },
+    "provenance": {
+     "identity": "git",
+     "revision": "ec1145820186b8862949b84fe56f9309c1b0754f"
+    },
+    "read_paths": [
+     ".team/nodes/spec-sol/baseline-bundle-successor4/任务书.md",
+     ".team/nodes/baseline-bundle-successor3-run1-diagnosis/VERDICT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/BOOTSTRAP-RESULT.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-real-teeth.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-fixture-four-state.log",
+     ".team/nodes/spec-sol/baseline-bundle-successor3/bootstrap-sdk-impl-four-state.log",
+     ".team/nodes/baseline-bundle-successor3-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor3-review/tests.log",
+     ".team/ledgers/baseline-bundle-v1.json",
+     ".team/ledgers/baseline-bundle-successor-v1.json",
+     ".team/ledgers/baseline-bundle-successor2-v1.json",
+     ".team/ledgers/baseline-bundle-successor3-v1.json",
+     ".team/nodes/baseline-bundle-repro-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-repro-fix-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor-run1-diagnosis/VERDICT.md",
+     ".team/nodes/baseline-bundle-successor2-review/VERDICT.md",
+     ".team/nodes/baseline-bundle-impl-run1-diagnosis/VERDICT.md",
+     ".team/artifacts/ledger-p0-ledgerdsl-plan-rejects-parallel-20260824.md",
+     ".team/artifacts/ledger-p0-drive-resume-redispatch-before-consume-20260824.md",
+     ".team/nodes/spec-sol/baseline-bundle/任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle/verify-任务书.md",
+     ".team/nodes/spec-sol/baseline-bundle-successor4/impl-任务书.md",
+     ".team/nodes/baseline-bundle-repro/",
+     ".team/nodes/baseline-bundle-test/",
+     ".team/nodes/baseline-bundle-probe/",
+     ".team/nodes/baseline-bundle-impl/",
+     ".team/private/baseline-vault/",
+     ".team/private/baseline-backup/",
+     ".team/ledgers/acceptance/baseline-bundle-verify.sh",
+     ".team/ledgers/acceptance/baseline-bundle-bypass-probes.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor4-sdk.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-bypass.sh",
+     ".team/ledgers/acceptance/baseline-bundle-successor3-real-fixture.py",
+     ".team/ledgers/acceptance/fixtures/baseline-bundle-successor3/",
+     "tools/perfbase/",
+     "app/"
+    ],
+    "worktree_id": "wt-atlas-42",
+    "write_paths": [
+     ".team/nodes/baseline-bundle-verify/",
+     ".team/nodes/spec-sol/baseline-bundle/tmp/",
+     "app/local.properties"
+    ]
+   },
+   "seat_wait_seconds": 7200,
+   "state": "planned",
+   "title": "按原 verify 与 successor4 总任务书独立核 canonical bundle、固定 fixture、双归档取回、安装与破坏齿；任何 Gradle 前安全生成非版本化 app/local.properties，SDK 缺失2。旧 result/自报不算，产物齐后只 report_result。"
+  }
+ },
+ "transitions": []
+}

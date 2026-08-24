@@ -1,0 +1,13 @@
+successor4 fresh deterministic compile and shell checks
+
+commands and results:
+  compile source again to node-local tmp/recompiled.json; cmp candidate recompile
+  byte_recompile_rc=0
+  sh -n .team/ledgers/acceptance/baseline-bundle-successor4-*.sh
+  sh_n_rc=0
+  shellcheck -s sh .team/ledgers/acceptance/baseline-bundle-successor4-*.sh
+  shellcheck_rc=0
+  sh .team/ledgers/acceptance/baseline-bundle-successor4-structure.sh
+  structure_exact_rc=0
+
+result: pass
