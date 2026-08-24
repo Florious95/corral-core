@@ -128,7 +128,7 @@
     "read_only_shared": [],
     "rules": []
   },
-  "revision": 2,
+  "revision": 4,
   "roles": {
     "advisor": {
       "artifact_landing": {
@@ -513,7 +513,30 @@
       },
       "seat_wait_seconds": 10800,
       "state": "planned",
-      "title": "按 `.team/nodes/spec-sol/baseline-bundle/impl-任务书.md` 并行实现诚实 exact/A2 路线、Baseline Bundle v1、私有双份归档/恢复、runner 消费与安全迁移工具；不改 App/server，产物齐后 report_result。"
+      "title": "按 `.team/nodes/spec-sol/baseline-bundle/impl-任务书.md` 并行实现诚实 exact/A2 路线、Baseline Bundle v1、私有双份归档/恢复、runner 消费与安全迁移工具；不改 App/server，产物齐后 report_result。",
+      "attempts": [
+        {
+          "attempt_id": "att-t.baseline-bundle.impl-seq1-t1787601574226",
+          "delivery_id": "del-t.baseline-bundle.impl-seq1-t1787601574226",
+          "state": "failed_retryable",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=M.baseline-bundle.impl",
+            "acceptance_failure.argv=[\"/bin/sh\", \".team/ledgers/acceptance/baseline-bundle-impl.sh\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-b2-mainline",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=FAIL baseline-bundle-impl: IMPL.md does not end in implementation: pass",
+            "acceptance_failure.acceptance_id=M.baseline-bundle.impl-bypass",
+            "acceptance_failure.argv=[\"/bin/sh\", \".team/ledgers/acceptance/baseline-bundle-bypass-probes.sh\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-b2-mainline",
+            "acceptance_failure.exit_code=2",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 2（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)=UNJUDGEABLE baseline-bundle-bypass-probes: frozen bypass fixture missing /Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-b2-mainline/.team/nodes/baseline-bundle-prelaunch-review/tmp/impl-bypass/.team/ledgers/acceptance/baseline-bundle-impl.sh"
+          ]
+        }
+      ]
     },
     "t.baseline-bundle.measure": {
       "acceptance": {
@@ -756,8 +779,20 @@
         ]
       },
       "seat_wait_seconds": 3600,
-      "state": "planned",
-      "title": "按 `.team/nodes/spec-sol/baseline-bundle/probe-任务书.md` 并行产出运行内容等价、双份归档、旧 park 迁移操作数与破坏齿；只写 PROBE.md，产物齐后 report_result。"
+      "state": "succeeded",
+      "title": "按 `.team/nodes/spec-sol/baseline-bundle/probe-任务书.md` 并行产出运行内容等价、双份归档、旧 park 迁移操作数与破坏齿；只写 PROBE.md，产物齐后 report_result。",
+      "attempts": [
+        {
+          "attempt_id": "att-t.baseline-bundle.probe-seq2-t1787601574491",
+          "delivery_id": "del-t.baseline-bundle.probe-seq2-t1787601574491",
+          "state": "succeeded",
+          "writeback_revision": 3,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=M.baseline-bundle.probe",
+            "acceptance_success.writeback_revision=3"
+          ]
+        }
+      ]
     },
     "t.baseline-bundle.repro": {
       "acceptance": {
@@ -929,8 +964,20 @@
         ]
       },
       "seat_wait_seconds": 3600,
-      "state": "planned",
-      "title": "按 `.team/nodes/spec-sol/baseline-bundle/test-任务书.md` 并行产出缺资产、exact、A2、归档恢复、迁移与性能门红测设计；只写 RED.md，产物齐后 report_result。"
+      "state": "succeeded",
+      "title": "按 `.team/nodes/spec-sol/baseline-bundle/test-任务书.md` 并行产出缺资产、exact、A2、归档恢复、迁移与性能门红测设计；只写 RED.md，产物齐后 report_result。",
+      "attempts": [
+        {
+          "attempt_id": "att-t.baseline-bundle.test-seq3-t1787601574763",
+          "delivery_id": "del-t.baseline-bundle.test-seq3-t1787601574763",
+          "state": "succeeded",
+          "writeback_revision": 4,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=M.baseline-bundle.test",
+            "acceptance_success.writeback_revision=4"
+          ]
+        }
+      ]
     },
     "t.baseline-bundle.user-gate": {
       "acceptance": {
