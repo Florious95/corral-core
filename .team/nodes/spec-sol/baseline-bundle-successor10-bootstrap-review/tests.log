@@ -1,0 +1,35 @@
+successor10 AVD-create bootstrap; fresh read-only review
+
+syntax:
+  python3 -m py_compile baseline-bundle-successor10-avd.py: exit=0
+  sh -n regression+owned-wrapper: exit=0
+  shellcheck -s sh regression+owned-wrapper: exit=0
+
+fake_regression:
+  command: sh .team/ledgers/acceptance/baseline-bundle-successor10-avd-regression.sh
+  exit: 0
+  result: PASS success mode existing license input device package timeout no-leak zero-launch evidence-teeth
+  coverage: 0600 raw capture, stdin EOF, exact package/device argv, owned timeout reaping, evidence mutations
+
+wrapper_order:
+  strict_envcheck: first external gate
+  selector_before_avd_create: true
+  avd_create_before_successor7_ownership_runner: true
+  failure_before_emulator: true
+  production_test_override_rejection: present
+
+provenance:
+  HEAD: 918b4c06ff93271b0c84bfc187bde1f3a5a93db3
+  tracked_predecessor_selector_ownership_fixture_inputs: true
+  successor10_final_ledger: absent
+  reviewed_file_sha256:
+    avd.py: f9c545c6ea22b20642d0763394c5f234a0feed44caddb51050cbea34383354fe
+    regression.sh: fd2fd77a2a581e5ac89ed1295ebfd413f0b21389c1f1104b8b1388f591aa30ee
+    owned-emulator.sh: 66def18d6dece6331b59e5efcc77130b94df70aae47a05d98225d7f05356a31f
+    taskbook: 55fd1c5f66259e7a05437b2066af1c5043d95393b2d50bc6f9bce4ae6f8787d7
+
+execution_boundary:
+  production_selector_wrapper_device_ledger: not run
+  product_changes: none
+
+verdict: pass

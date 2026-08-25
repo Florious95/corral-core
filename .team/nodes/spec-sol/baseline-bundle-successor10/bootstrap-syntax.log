@@ -1,0 +1,7 @@
+PASS bootstrap-syntax
+python3 -m py_compile baseline-bundle-successor10-avd.py: exit 0; PYTHONPYCACHEPREFIX=node-local
+sh -n baseline-bundle-successor10-avd-regression.sh: exit 0
+sh -n baseline-bundle-successor10-owned-emulator.sh: exit 0
+shellcheck -s sh both POSIX scripts: exit 0; no output
+script modes: avd.py=0755 avd-regression.sh=0755 owned-emulator.sh=0755
+
