@@ -1,71 +1,32 @@
-successor6 final startup review; read-only, no ledger drive/once
+successor6 final2 lineage-only review; no semantic rerun, no ledger drive/once
 
-1. ledger identity/state
-   compiled=.team/ledgers/baseline-bundle-successor6-v1.json
-   ledger_id=ledger.baseline-bundle.successor6.v1 revision=1 schema=ledger.v2
-   tasks=9 dependencies=10 transitions=0
-   task_states=[planned] task_status_fields=0 attempts_key_present=false statuses_key_present=false
-   run.desired_state=running
+1. bootstrap commit retrieval
+   commit=548572dfd7d8ee2e3f602a274268e8bd881ef8b2
+   git cat-file checked=17 missing=0
+   covered final wrappers, final/impl/test/probe taskbooks, bootstrap result,
+   projection helper and both successor6 fixed fixtures
+   git merge-base --is-ancestor commit HEAD: exit=0
 
-2. provenance and worktrees
-   declared provenance=fdf7f64970351d51e616491850e2c49d03d24b22
-   git merge-base --is-ancestor fdf7f64970351d51e616491850e2c49d03d24b22 HEAD: exit=0
-   wt-maple-core disk=absent metadata=absent
-   wt-indigo-tests disk=absent metadata=absent
-   wt-falcon-review disk=absent metadata=absent
-   pairwise distinct resources=true; no ledger lease/driver pid
+2. DSL and compiled provenance
+   DSL provenance_revision=548572dfd7d8ee2e3f602a274268e8bd881ef8b2
+   DSL byte compile: exit=0 (in-memory compile; no pyc write)
+   compiled JSON parse/schema_version=ledger.v2: exit=0
+   ledger_id=ledger.baseline-bundle.successor6.v1 revision=1 tasks=9
+   all task resources provenance revision=548572dfd7d8ee2e3f602a274268e8bd881ef8b2
 
-3. script references and four-state
-   scriptref_count=17 missing=0
-   every cwd=${worktree}, expected_exit_code=0, unjudgeable_exit_codes=[2]
-   all referenced acceptance paths exist in the current tree
-   fresh sh .team/ledgers/acceptance/baseline-bundle-successor6-structure.sh: exit=0
-   exact required sets:
-     test=[M.baseline-bundle.successor6-test]
-     probe=[M.baseline-bundle.successor6-probe]
-     impl=[M.baseline-bundle.successor6-impl,M.baseline-bundle.successor6-bypass]
-     verify=[M.baseline-bundle.successor6-verify,M.baseline-bundle.successor6-verify-bypass]
-     final=[M.baseline-bundle.successor6-final,M.baseline-bundle.final-real-chain,M.baseline-bundle.successor6-final-bypass]
-   compiled serialization has no legacy impl-bypass/probe, old baseline-bundle-impl.sh,
-   or successor3 impl wrapper. Final structure mutation evidence: exact=0,
-   legacy-impl=1, legacy-probe=1, old-argv=1, bad-fourstate=1, missing=2.
+3. startup boundary
+   wt-maple-core disk=false metadata=false
+   wt-indigo-tests disk=false metadata=false
+   wt-falcon-review disk=false metadata=false
+   successor6 lease=false driver_pid=false
 
-4. real successor5 projection and bootstrap deep preservation
-   frozen manifest read-only projection:
-     old legacy prefix predicate=1
-     SUCCESSOR6_CANONICAL_IDENTITY equal=true
-     SUCCESSOR6_SLOT_PROJECTION schema=true non_circular=true stable=true no_traversal=true independent=true
-     SUCCESSOR6_ARCHIVE_PROJECTION content_addressed=true
-   fresh projection regression:
-     legal=0 bundle_id_tamper=1 traversal=1 slot_tamper=1 slot_swap=1 legacy_scoped=1 malformed=1 missing=2
-     exit=0
-   deep diff: old/new=200/200 lines; only semantic prefix change is independent
-   build safe prefix from .team/private/baseline-vault/{bundle_id}/builds/ to
-   .team/private/baseline-vault/; source/APK/runtime/signature/provenance/archive/A2/
-   focused anti-forgery checks preserved. Wrapper calls no old impl or successor3 impl;
-   it retains successor5 SDK, projection, deep, canonical-real and controlled-bypass gates.
+4. engine gates
+   ledger-run --preflight --json .team/ledgers/baseline-bundle-successor6-v1.json
+   exit=0 preflight_rejected=false issues=[]
+   ledger-run --dry-run --json .team/ledgers/baseline-bundle-successor6-v1.json
+   exit=0 frontier=[t.baseline-bundle.repro] drive_invoked=false worktree_created=false
 
-5. safety, graph, and frontier
-   successor5 SDK fallback regression: exit=0, output_suppressed=true
-   successor6 projection/probe/test structure teeth: exit=0
-   graph=repro -> (test || probe || impl) -> verify -> user-gate -> migrate -> measure -> final
-   ratio_1_10_retained=true; user_gold_retained=true; migrate prerequisite retained
-   ledger-run --preflight --json ...: exit=0, preflight_rejected=false
-   ledger-run --dry-run --json ...: exit=0, frontier=[t.baseline-bundle.repro]
-   drive_invoked=false worktree_created=false
+No semantic gates were rerun or reclassified; this review only confirms closure of the
+prior untracked/provenance refute.
 
-6. tracked provenance failure
-   git status and git ls-files show these final-package inputs are UNTRACKED:
-     .team/ledgers/baseline-bundle-successor6-v1.json
-     .team/ledgers/src/baseline-bundle-successor6-v1.py
-     .team/ledgers/acceptance/baseline-bundle-successor6-final.sh
-     .team/ledgers/acceptance/baseline-bundle-successor6-probe.sh
-     .team/ledgers/acceptance/baseline-bundle-successor6-structure.sh
-     .team/ledgers/acceptance/baseline-bundle-successor6-test.sh
-     .team/ledgers/acceptance/baseline-bundle-successor6-verify.sh
-     .team/nodes/spec-sol/baseline-bundle-successor6/final-任务书.md
-   git cat-file at fdf7f64970351d51e616491850e2c49d03d24b22 confirms the final ledger
-   and final DSL are absent there. Therefore bootstrap provenance cannot retrieve the
-   final package; startup precondition “all references tracked” is false.
-
-verdict: refutes
+verdict: pass
