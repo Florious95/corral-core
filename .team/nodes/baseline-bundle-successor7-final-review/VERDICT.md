@@ -1,32 +1,31 @@
-# successor7 post-commit lineage review
+# successor7 compatible-pair post-commit review
 
-Scope was limited to the committed package at `79cd08f0f`; prior semantic
-pass items were not re-run or reclassified.
+Scope was limited to the committed package and the explicitly supplied
+command-executor binary. Previously passed semantic items were not re-run or
+reclassified.
 
-The immutable lineage checks pass:
+The supplied binary is auditable: it is the arm64 executable at
+`/Volumes/nvme/cargo-target-w7-builder-b/debug/ledger-run` with SHA-256
+`3090060248410c463a2194d5a4840b7782494a2c1415062f71431571735172cc`; its
+source worktree `/Volumes/nvme/Projects/无等编排/.worktrees/wt-cmd-executor`
+HEAD is exactly `7485102b26ed34eb828e94900902147d5e00e995` (`feat: add command
+task executor`).
 
-- `git cat-file` can retrieve the successor7 DSL, compiled ledger, all
-  successor7 acceptance wrappers, path-level taskbooks, bootstrap fixture
-  files, and review/package logs. A NUL-safe sweep covered 50 successor7
-  paths with zero missing objects.
-- The compiled ledger is
-  `ledger.baseline-bundle.successor7.v1`, revision `1`, with nine planned
-  tasks, zero task `attempts` fields, and no `statuses` field. Its 12 compiled
-  script references all resolve in the same commit.
-- `wt-s7-cedar` and `wt-s7-orbit` are absent from worktree metadata; retained
-  `wt-maple-core` is present. Successor7 lease and driver PID paths are
-  absent. The pre-existing perf-regress lease/PID are not successor7 state.
+With that compatible pair, fresh `--preflight --json` and `--dry-run --json`
+both return 0. Dry-run reports exactly the three initial task IDs:
+`continuity`, `apparatus-test`, and `apparatus-probe`. The compiled apparatus
+task retains `executor=command` and the exact owned-emulator argv; it is not
+dropped by the compatible validator. The default installed binary returning
+2 is only a dialect contrast, not evidence against this package pair.
 
-The post-commit live mechanical check does not pass: using the real
-`ledger-run` against the committed ledger, both `--preflight --json` and
-`--dry-run --json` exit `2` with:
+The immutable lineage checks also pass: commit `79cd08f0f` yields all 50
+successor7 paths through NUL-safe `git cat-file`; the ledger is revision 1
+with nine planned tasks and no attempts/statuses; `wt-s7-cedar` and
+`wt-s7-orbit` plus successor7 lease/PID are absent, while retained
+`wt-maple-core` remains present. No drive, dispatch, WT creation, or device
+launch occurred.
 
-`/tasks/t.baseline-bundle.apparatus Additional properties are not allowed ('command', 'executor' were unexpected)`
+Minimal follow-up is operational: launch only with the supplied compatible
+binary/source pair, preserving the committed ledger and prior semantic gates.
 
-Thus the requested fresh first-frontier check is not executable, and the
-previous logged frontier cannot substitute for it. Minimal repair boundary:
-freeze and commit a compatible DSL compiler/validator dialect pair, then
-regenerate and re-cat the compiled ledger; do not alter the already-passed
-semantic gates.
-
-verdict: refutes
+verdict: pass
