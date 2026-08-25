@@ -1,0 +1,16 @@
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-apparatus.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-bypass-regression.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-continuity.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-emulator-regression.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-final.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-impl-bypass.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-measure.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-migrate.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-owned-emulator.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-probe.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-structure.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-test.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-user-gate.sh
+sh_n=pass .team/ledgers/acceptance/baseline-bundle-successor7-verify.sh
+shellcheck=pass
+py_compile=pass

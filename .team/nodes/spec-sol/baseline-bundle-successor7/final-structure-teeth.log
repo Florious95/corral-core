@@ -1,0 +1,30 @@
+case=canonical
+SUCCESSOR7_STRUCTURE tasks=9 dependencies=8 frontier=continuity+apparatus-test+apparatus-probe retained_wt=wt-maple-core test_wt=wt-s7-cedar probe_wt=wt-s7-orbit apparatus_command=owned-emulator required=exact-no-legacy statuses=none frontier_device_action=false
+rc=0 expected=0
+case=apparatus_argv
+FAIL baseline-bundle-successor7-structure: apparatus argv
+rc=1 expected=1
+case=legacy_required
+FAIL baseline-bundle-successor7-structure: legacy required t.baseline-bundle.apparatus-test, required t.baseline-bundle.apparatus-test
+rc=1 expected=1
+case=statuses
+FAIL baseline-bundle-successor7-structure: statuses t.baseline-bundle.verify
+rc=1 expected=1
+case=probe_wt
+FAIL baseline-bundle-successor7-structure: worktree t.baseline-bundle.apparatus-probe
+rc=1 expected=1
+case=dependency
+FAIL baseline-bundle-successor7-structure: dependencies
+rc=1 expected=1
+case=review_device_ban
+FAIL baseline-bundle-successor7-structure: review frontier device ban t.baseline-bundle.apparatus-probe
+rc=1 expected=1
+case=missing_ledger
+UNJUDGEABLE baseline-bundle-successor7-structure: compiled successor7 ledger missing
+rc=2 expected=2
+case=test_missing_RED
+FAIL baseline-bundle-successor7-test: RED.md missing
+rc=1 expected=1
+case=probe_missing_PROBE
+FAIL baseline-bundle-successor7-probe: PROBE.md missing
+rc=1 expected=1
