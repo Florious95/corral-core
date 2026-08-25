@@ -1,0 +1,6 @@
+SUCCESSOR11_CONSUME kind=apparatus-probe successor10_revision=5 state=succeeded original_worktree=wt-s7-orbit frozen_artifacts=true
+SUCCESSOR7_STRUCTURE tasks=9 dependencies=8 frontier=continuity+apparatus-test+apparatus-probe retained_wt=wt-maple-core test_wt=wt-s7-cedar probe_wt=wt-s7-orbit apparatus_command=owned-emulator required=exact-no-legacy statuses=none frontier_device_action=false
+SUCCESSOR7_IMPL_BYPASS historical_legacy=0 historical_hardened=2 permanent_green=0 permanent_forged=1 permanent_missing=2 provenance=548572dfd7d8ee2e3f602a274268e8bd881ef8b2
+PASS baseline-bundle-successor7-impl-bypass: permanent Git fixture and real projection rejection verified
+PASS baseline-bundle-successor7-probe: independent apparatus coordinates and permanent fixture agree
+PASS baseline-bundle-successor11-consume: apparatus-probe successor10 r5 success consumed without redispatch or device action

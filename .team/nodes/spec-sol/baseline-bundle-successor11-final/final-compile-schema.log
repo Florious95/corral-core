@@ -1,0 +1,2 @@
+jsonschema: pass tasks=9 dependencies=8 revision=1
+compile_rc=0 recompile_rc=0 byte_cmp_rc=0 schema_rc=0
