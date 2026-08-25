@@ -1,0 +1,7 @@
+PASS baseline-bundle-successor10-avd-regression: success mode existing license input device package timeout no-leak zero-launch evidence-teeth
+PASS baseline-bundle-successor9-sdk-regression: same-root wrong-root ambiguity escaping two-line unknown-key tracked symlink missing exact-package no-leak
+SUCCESSOR7_CONTINUITY evidence_commit=3528c2ad5 four_tasks=succeeded worktree=wt-maple-core manifest_bound=true archives_bound=true
+avd_regression_rc=0 selector_regression_rc=0 continuity_rc=0
+cwd=retained-wt-maple-core
+production_owned_wrapper_run=false device_started=false
+
