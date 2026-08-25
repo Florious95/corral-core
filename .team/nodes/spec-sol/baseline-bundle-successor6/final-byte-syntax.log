@@ -1,0 +1,11 @@
+sh_n_rc=0
+shellcheck_rc=0
+py_compile_rc=0
+SUCCESSOR6_LEGACY_PREFIX_REPRO old_constraint_rc=1 legal_successor5_projection=true
+SUCCESSOR6_PROJECTION_RED_GREEN legal=0 bundle_id_tamper=1 traversal=1 slot_tamper=1 slot_swap=1 legacy_scoped=1 malformed=1 missing=2
+PASS baseline-bundle-successor6-projection-regression: content identity and independent slot teeth verified
+projection_regression_rc=0
+sdk_fallback_regression_rc=0 output_suppressed=true
+.team/ledgers/acceptance/baseline-bundle-successor6-final.sh:11:node="$repo_root/.team/nodes/baseline-bundle-final"
+.team/ledgers/acceptance/baseline-bundle-successor6-verify.sh:11:node="$repo_root/.team/nodes/baseline-bundle-verify"
+artifact_node_binding_rc=0
