@@ -1,0 +1,19 @@
+successor6 fixed fixture red/green and four-state teeth
+
+fixed input sha256:
+  projection helper=00682de427e9597980f17d1b70707b859e9f49d7d093aa0577bf4bb0a5170d33
+  projection contract=c51e84bc7dd17961e78d24b143ae074dcf0dc816582cf18a6c4f544d8d7979be
+  legal successor5 manifest=60b27f49819c1254ea6d11b01cc619f5f243bcd8bc537943430d9ef74ab86bd3
+
+command:
+  sh .team/ledgers/acceptance/baseline-bundle-successor6-projection-regression.sh
+
+output:
+  SUCCESSOR6_LEGACY_PREFIX_REPRO old_constraint_rc=1 legal_successor5_projection=true
+  SUCCESSOR6_PROJECTION_RED_GREEN legal=0 bundle_id_tamper=1 traversal=1 slot_tamper=1 slot_swap=1 legacy_scoped=1 malformed=1 missing=2
+  PASS baseline-bundle-successor6-projection-regression: content identity and independent slot teeth verified
+  rc=0
+
+Path mutations were independently canonicalized before the slot judge, so their rc1 cannot be explained by stale bundle_id. Only the bundle_id-tamper tooth intentionally leaves the canonical projection unchanged.
+
+result: pass

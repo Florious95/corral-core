@@ -1,0 +1,50 @@
+{
+  "schema": "agentmirror.baseline-bundle.v1",
+  "bundle_id": "763b364d515af93f0a4f3200f1b98b0da4134a7bc4304e1fca4d44474452a671",
+  "source": {
+    "tag": "baseline-20260822-release",
+    "commit": "26f46642d3960b1bd96a39753b3f25516c5821eb",
+    "dirty": false,
+    "tree_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "runtime": {
+    "normalized_runtime_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "entry_count": 1,
+    "package_name": "dev.agentmirror.app",
+    "version_code": "1",
+    "version_name": "1"
+  },
+  "artifact": {
+    "apk_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "apk_md5": "44444444444444444444444444444444",
+    "size_bytes": 1,
+    "signer_certificate_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "build": {
+    "command": "./gradlew :app:assembleRelease --rerun-tasks --no-build-cache",
+    "independent_builds": [
+      {
+        "build_root": "fixture-build-root-a",
+        "apk_relpath": ".team/private/baseline-vault/builds/build-1.apk"
+      },
+      {
+        "build_root": "fixture-build-root-b",
+        "apk_relpath": ".team/private/baseline-vault/builds-second/build-2.apk"
+      }
+    ]
+  },
+  "equivalence": {
+    "route": "rebaseline_with_equivalence_proof",
+    "matched": true
+  },
+  "implementation": {
+    "bundle_py": {
+      "path": "tools/perfbase/baseline_bundle.py",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    }
+  },
+  "archive": {
+    "primary_relpath": ".team/private/baseline-vault/763b364d515af93f0a4f3200f1b98b0da4134a7bc4304e1fca4d44474452a671/baseline.apk",
+    "backup_relpath": ".team/private/baseline-backup/763b364d515af93f0a4f3200f1b98b0da4134a7bc4304e1fca4d44474452a671/baseline.apk"
+  }
+}
