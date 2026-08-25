@@ -1,0 +1,21 @@
+SUCCESSOR11_STRUCTURE tasks=9 frontier=four-command successor10_r5=frozen fresh_verify=three-required legacy_verify=absent downstream=unchanged ratio=1.10 user_gate=real-device statuses=none
+case=green expected=0 got=0
+UNJUDGEABLE baseline-bundle-successor11-structure: compiled successor11 ledger unavailable
+case=missing expected=2 got=2
+FAIL baseline-bundle-successor11-structure: t.baseline-bundle.apparatus-consume is not exact consume command
+case=command_to_agent expected=1 got=1
+FAIL baseline-bundle-successor11-structure: dependency graph weakened or changed
+case=missing_consume_edge expected=1 got=1
+FAIL baseline-bundle-successor11-structure: M.baseline-bundle.successor11-verify script or four-state mapping mismatch
+case=legacy_verify expected=1 got=1
+FAIL baseline-bundle-successor11-structure: fresh verify exact required set mismatch
+case=drop_regression expected=1 got=1
+FAIL baseline-bundle-successor11-structure: measure 1.10 contract weakened
+case=weaken_ratio expected=1 got=1
+FAIL baseline-bundle-successor11-structure: final required weakened
+case=legacy_final expected=1 got=1
+FAIL baseline-bundle-successor11-structure: custom statuses forbidden
+case=custom_status expected=1 got=1
+FAIL baseline-bundle-successor11-structure: resource provenance mismatch
+case=bad_provenance expected=1 got=1
+structure_teeth=pass green=0 mutations=1 missing=2

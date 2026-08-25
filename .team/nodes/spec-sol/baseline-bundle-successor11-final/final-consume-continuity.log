@@ -1,0 +1,3 @@
+SUCCESSOR11_CONSUME kind=continuity successor10_revision=5 state=succeeded original_worktree=wt-maple-core frozen_artifacts=true
+SUCCESSOR7_CONTINUITY evidence_commit=3528c2ad5 four_tasks=succeeded worktree=wt-maple-core manifest_bound=true archives_bound=true
+PASS baseline-bundle-successor11-consume: continuity successor10 r5 success consumed without redispatch or device action

@@ -1,0 +1,8 @@
+SUCCESSOR11_CONSUME kind=apparatus-test successor10_revision=5 state=succeeded original_worktree=wt-s7-cedar frozen_artifacts=true
+SUCCESSOR7_STRUCTURE tasks=9 dependencies=8 frontier=continuity+apparatus-test+apparatus-probe retained_wt=wt-maple-core test_wt=wt-s7-cedar probe_wt=wt-s7-orbit apparatus_command=owned-emulator required=exact-no-legacy statuses=none frontier_device_action=false
+SUCCESSOR7_EMULATOR_EVIDENCE preflight_first=true fresh_task_avd=true owned_pid_serial=true install=true success_cleanup=true invalid_mode_exit=1 production_test_override_exit=1 production_empty_test_override_exit=1 unknown_test_override_exit=1 explicit_test_mode=true evidence_mode_0600=true derived_mode_0600=true evidence_0644_exit=1 dirty_preflight_exit=2 dirty_preflight_no_launch=true adb_timeout_exit=2 timeout_cleanup=true bounded_term_exit=2 bounded_term_seconds=3 forced_runner_exit=2 forced_runner_seconds=13 forced_runner_cleanup=true ambient_untouched=true foreign_qemu_touched=false forged_evidence_exit=1 missing_evidence_exit=2 emu_own_regression=true
+SUCCESSOR7_IMPL_BYPASS historical_legacy=0 historical_hardened=2 permanent_green=0 permanent_forged=1 permanent_missing=2 provenance=548572dfd7d8ee2e3f602a274268e8bd881ef8b2
+PASS baseline-bundle-successor7-impl-bypass: permanent Git fixture and real projection rejection verified
+PASS baseline-bundle-successor7-bypass-regression: stable fixture rejects forgery and reports missing as unjudgeable
+PASS baseline-bundle-successor7-test: isolated apparatus red/green and structure teeth pass
+PASS baseline-bundle-successor11-consume: apparatus-test successor10 r5 success consumed without redispatch or device action

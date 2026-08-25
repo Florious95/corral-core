@@ -1,0 +1,15 @@
+main_head=3597b823204c7d25d5a77367bf2022347532e5d3
+maple_head=ebd0dc5c285ee65244824b99db6667a1bc569c83
+pair_head=7485102b26ed34eb828e94900902147d5e00e995
+runner_md5=627f5e6fa5f47a61d23a09b918b50567
+ancestor ebd0dc5c285ee65244824b99db6667a1bc569c83 3597b823204c7d25d5a77367bf2022347532e5d3 rc=0
+ancestor 13c301fd086092b02e1cb8535d1eff38ffcf0173 3597b823204c7d25d5a77367bf2022347532e5d3 rc=0
+ancestor 7c1a856ba0043c87b1aeb9ed8ffac0fefe9ebfce 3597b823204c7d25d5a77367bf2022347532e5d3 rc=0
+cat_file ebd0dc5c285ee65244824b99db6667a1bc569c83:.team/ledgers/acceptance/baseline-bundle-successor11-verify.sh rc=0
+cat_file ebd0dc5c285ee65244824b99db6667a1bc569c83:.team/ledgers/acceptance/baseline-bundle-successor11-verify-regression.sh rc=0
+cat_file ebd0dc5c285ee65244824b99db6667a1bc569c83:.team/ledgers/acceptance/fixtures/baseline-bundle-successor11/verify-contract.json rc=0
+cat_file ebd0dc5c285ee65244824b99db6667a1bc569c83:.team/nodes/spec-sol/baseline-bundle-successor11/任务书.md rc=0
+cat_file 3597b823204c7d25d5a77367bf2022347532e5d3:.team/nodes/baseline-bundle-successor11-wt-preflight/VERDICT.md rc=0
+cat_file 13c301fd086092b02e1cb8535d1eff38ffcf0173:.team/ledgers/baseline-bundle-successor10-v1.json rc=0
+cat_file 7c1a856ba0043c87b1aeb9ed8ffac0fefe9ebfce:.team/nodes/baseline-bundle-successor10-verify-diagnosis/VERDICT.md rc=0
+provenance_rc=0
