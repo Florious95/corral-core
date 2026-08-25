@@ -1,0 +1,30 @@
+case=canonical
+SUCCESSOR8_STRUCTURE tasks=9 dependencies=8 frontier=three-command worktrees=maple+cedar+orbit r1_dispatch_runs=2 red_sha=true probe_sha=true provenance=79cd+25517d+132e command_pair=7485102 statuses=none apparatus_locked=true
+rc=0 expected=0
+case=consume_executor
+FAIL baseline-bundle-successor8-structure: consume command t.baseline-bundle.apparatus-test-consume, consume executor t.baseline-bundle.apparatus-test-consume
+rc=1 expected=1
+case=consume_argv
+FAIL baseline-bundle-successor8-structure: consume command t.baseline-bundle.apparatus-probe-consume
+rc=1 expected=1
+case=consume_wt
+FAIL baseline-bundle-successor8-structure: consume isolation t.baseline-bundle.apparatus-test-consume
+rc=1 expected=1
+case=required_leak
+FAIL baseline-bundle-successor8-structure: consume self-report leak t.baseline-bundle.continuity-consume
+rc=1 expected=1
+case=dependency
+FAIL baseline-bundle-successor8-structure: dependencies
+rc=1 expected=1
+case=statuses
+FAIL baseline-bundle-successor8-structure: statuses t.baseline-bundle.verify
+rc=1 expected=1
+case=apparatus_required
+FAIL baseline-bundle-successor8-structure: apparatus required
+rc=1 expected=1
+case=downstream_measure_required
+FAIL baseline-bundle-successor8-structure: downstream weakened t.baseline-bundle.measure field=acceptance
+rc=1 expected=1
+case=missing_compiled
+UNJUDGEABLE baseline-bundle-successor8-structure: compiled successor8 ledger missing
+rc=2 expected=2
