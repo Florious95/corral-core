@@ -1,0 +1,19 @@
+successor11 final recovery fresh review (read-only; no ledger/device launch)
+
+ledger identity: ledger.baseline-bundle.successor11.v1 revision=1 tasks=9 dependencies=8
+ledger state: attempts=0 statuses=none; first frontier=4 command consumers; successor11 lease/trace/driver-pid=absent
+structure.sh: rc=0; exact four-consumer frontier, three fresh-verify required gates, legacy verify absent, downstream ratio/user gate retained
+DSL recompile: rc=0; generated SHA-256=bc94e0fb845ba5d076474485dd378d59548a94690de22e661bb8b87816530257; compiled ledger SHA-256 matches
+fixed ledger-run 7485102b26ed34eb828e94900902147d5e00e995: preflight rc=0; dry-run rc=0; frontier exactly four consumers; command argv retained
+frozen provenance: ebd0dc5c2, 3597b8232, 13c301fd0, 7c1a856ba all cat-file retrievable; fixed pair 7485102b2 retrievable in command-executor source repository
+fresh consume continuity: rc=0
+fresh consume apparatus-test: rc=0; successor7 apparatus ownership/timeout/cleanup teeth passed without device action
+fresh consume apparatus-probe: rc=0; permanent fixture and no-legacy structure checks passed
+fresh consume apparatus: rc=0; permanent fixture green/forged/missing=0/1/2
+fresh retained continuity gate: rc=0
+successor11 verify regression: rc=0; adb-absent=0 live-adb-ignored=0 legacy-missing=0 permanent-missing=2 permanent-forged=1 verify-0644=1 stale-last-line=1 forbidden-actions=0
+syntax/static: Python compile=0, sh -n=0, shellcheck=0
+structure mutation teeth (recorded fresh log): green=0, mutation=1, missing=2
+device safety: no qemu-system or emulator process; an existing adb daemon was visible only in the ambient process table, and no adb command queried, started, killed, or used it
+
+blocking startup precondition: successor11 DSL/compiled ledger, acceptance scripts, and final taskbook/log package are untracked in the main worktree; no immutable final-package commit is present. retained wt-maple-core remains at ebd0dc5c2 rather than a committed successor11 package. The taskbook requires committing the reviewed package and fast-forwarding retained wt-maple-core before launch, so launch-readiness cannot be judged from this mutable package.
