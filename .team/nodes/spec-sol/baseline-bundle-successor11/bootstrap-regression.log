@@ -1,0 +1,3 @@
+SUCCESSOR11_VERIFY_REGRESSION control=0 adb_absent=0 live_adb_ignored=0 legacy_missing=0 permanent_missing=2 permanent_forged=1 verify0644=1 stale_last_line=1 forbidden_actions=0
+PASS baseline-bundle-successor11-verify-regression: archived facts and fresh private evidence are fail-closed
+exit_code=0
