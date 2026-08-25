@@ -1,0 +1,3 @@
+sh-n: pass files=5
+shellcheck: pass files=5
+python-byte-compile: pass files=2
