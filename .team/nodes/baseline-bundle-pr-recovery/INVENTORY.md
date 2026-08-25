@@ -3,7 +3,8 @@
 ## 审计边界
 
 本盘点只读完成于 2026-08-25，范围为本地 Git 历史、`pr/*` 分支、
-`gh pr list --repo Florious95/corral-core --state all` 和 `tools/mirror-pr.sh`。
+`gh api --method GET repos/Florious95/corral-core/pulls?state=all&per_page=100`（REST，未用
+GraphQL）和 `tools/mirror-pr.sh`。
 未安装工具、未推送、未开 PR、未改历史、未改脚本。
 
 结论先行：原 45 个关键点均已有对应的 GitHub PR 且当前为 `MERGED`；#17–#60
@@ -11,9 +12,10 @@
 #62 是独立 recovery review，不计入 45 个关键点。故唯一关键点 PR 缺口为 0，
 覆盖率 `45/45`，额外独立 review 为 `1`。
 
-这些 PR 均由本地已落 `main` 的单提交恢复分支产生；本地只有
-`pr/baseline-bundle-successor11`，且 `git rev-list --left-right --count
-main...pr/baseline-bundle-successor11` 为 `0 0`。原矩阵中的“缺 PR”是初始盘点快照，
+这些 PR 均由本地已落 `main` 的单提交恢复分支产生；初始审计时
+`git rev-list --left-right --count main...pr/baseline-bundle-successor11` 为 `0 0`，
+该数值保留为初始事实。本次 fresh 核验同一命令为 `2 0`：#61/#62 合并后
+`main` 前进两提交，而 successor11 分支未前进。原矩阵中的“缺 PR”是初始盘点快照，
 以下补表是本次只读核实后的覆盖状态，不改变原 45 关键点矩阵。
 
 GitHub 全量只读列表为 #1–#16 与 #17–#62；#1–#16 是其它 input/perf/ui/docs 主题，
@@ -57,7 +59,7 @@ GitHub 全量只读列表为 #1–#16 与 #17–#62；#1–#16 是其它 input/p
 |successor10 AVD bootstrap：`ad7468f74`, `9ea73dff8`|AVD selector/owned-emulator acceptance；`.team/nodes/spec-sol/baseline-bundle-successor10/BOOTSTRAP-RESULT.md`；`.team/nodes/baseline-bundle-successor10-bootstrap-review/VERDICT.md`；`.team/nodes/baseline-bundle-successor10-wt-preflight/{COMMAND.md,VERDICT.md}`|`recovery/bundle-s10-ad7468`, `recovery/bundle-s10-9ea73d` / `baseline-bundle successor10: preflight and freeze bounded AVD bootstrap`|分别 PR，`9ea73d` 依赖 `ad7468`；缺 PR。bootstrap 与 WT 预检不可合并为一 PR。|
 |successor10 final ledger：`c10186285`|`.team/ledgers/{baseline-bundle-successor10-v1.json,src/baseline-bundle-successor10-v1.py}`；`.team/nodes/spec-sol/baseline-bundle-successor10-final/{RESULT.md,final-compile-schema.log,final-preflight-dry-run.log,final-regressions.log}`；`.team/nodes/baseline-bundle-successor10-final-review/VERDICT.md`|`recovery/bundle-s10-c10186` / `baseline-bundle successor10: freeze AVD recovery ledger`|依赖 `9ea73dff8`；缺 PR。ledger 独立 PR。|
 |successor10 verify/AVD 归因：`7c1a856ba`, `13c301fd0`|`.team/nodes/baseline-bundle-successor10-verify-diagnosis/VERDICT.md`；`.team/nodes/_driver/baseline-bundle-successor10-v1.out`；ledger 状态更新|`recovery/bundle-s10-7c1a85`, `recovery/bundle-s10-13c301` / `baseline-bundle successor10: preserve stale-gate diagnosis` / `baseline-bundle successor10: preserve verify unjudgeable state`|分别 PR，依赖 `c10186285`；缺 PR。状态更新`不可单独回退`。|
-|successor11 verify bootstrap：`ebd0dc5c2`|`.team/ledgers/acceptance/baseline-bundle-successor11-verify{.py,.sh,-regression.sh}`；fixture `verify-contract.json`；`.team/nodes/spec-sol/baseline-bundle-successor11/{BOOTSTRAP-RESULT.md,bootstrap-*.log}`；`.team/nodes/baseline-bundle-successor11-bootstrap-review/{VERDICT.md,tests.log}`|`recovery/bundle-s11-ebd0dc` / `baseline-bundle successor11: freeze archive-backed verify gate`|依赖 successor10 final；缺 PR。bootstrap 可独立回退。|
+|successor11 verify bootstrap：`ebd0dc5c2`|`.team/ledgers/acceptance/baseline-bundle-successor11-verify{.py,.sh,-regression.sh}`；fixture `verify-contract.json`；`.team/nodes/spec-sol/baseline-bundle-successor11/{BOOTSTRAP-RESULT.md,bootstrap-*.log}`；`.team/nodes/spec-sol/baseline-bundle-successor11-bootstrap-review/{VERDICT.md,tests.log}`|`recovery/bundle-s11-ebd0dc` / `baseline-bundle successor11: freeze archive-backed verify gate`|依赖 successor10 final；缺 PR。bootstrap 可独立回退。|
 |successor11 WT preflight：`3597b8232`|`.team/nodes/baseline-bundle-successor11-wt-preflight/{COMMAND.md,VERDICT.md}`|`recovery/bundle-s11-3597b8` / `baseline-bundle successor11: record retained-WT preflight`|依赖 `ebd0dc5c2`；缺 PR。只读文档，可独立回退。|
 |successor11 recovery ledger：`7e8c93bda`|`.team/ledgers/{baseline-bundle-successor11-v1.json,src/baseline-bundle-successor11-v1.py}`、四个 consume/structure/final acceptance；`.team/nodes/spec-sol/baseline-bundle-successor11-final/{RESULT.md,final-compile-schema.log,final-preflight-dry-run.log,final-consume-*.log,final-structure-teeth.log}`；`.team/nodes/baseline-bundle-successor11-final-review/VERDICT.md`|`recovery/bundle-s11-7e8c93` / `baseline-bundle successor11: define recovery ledger and consume gates`|依赖 `3597b8232`；缺 PR。ledger/acceptance 是一个提交内的 bootstrap，但不应和后续 review commit 合并。|
 |successor11 launch review：`49250115a`|`.team/nodes/baseline-bundle-successor11-final-wt-preflight/{COMMAND.md,VERDICT.md}`（cwd 修正需保持在该提交之后审计）；`.team/nodes/spec-sol/baseline-bundle-successor11-final-review/{VERDICT.md,tests.log}`|`recovery/bundle-s11-492501` / `baseline-bundle successor11: record launch-readiness review`|依赖 `7e8c93bda`；缺 PR。文档/评审可独立 PR。|
@@ -65,7 +67,12 @@ GitHub 全量只读列表为 #1–#16 与 #17–#62；#1–#16 是其它 input/p
 
 ## PR 覆盖补表（45/45）
 
-下列映射逐个对应上表的 45 个 commit 单位；每个状态均由 `gh pr view/list` 只读核实，
+本次 REST 投影快照（#17–#62 共 46 条，含 `number/state/merged_at/head/title`）为
+`.team/nodes/baseline-bundle-pr-recovery/PR-17-62-SNAPSHOT.json`，SHA-256 为
+`c7c14cab2a20eea7afadc4ac85bb3f33452031bcd6f8b39dba026b87685f38bf`。原始 `state` 为
+`closed`；`merged_at` 非空才归类为 `MERGED`。
+
+下列映射逐个对应上表的 45 个 commit 单位；每个状态均由上述 `gh api` REST 快照只读核实，
 `MERGED` 后附 GitHub PR 号。#61/#62 的时间顺序晚于 #60，但不改变前序依赖。
 
 - baseline：`9468854e1` → **#17 MERGED**；`c4846de54` → **#18 MERGED**；`488a1f25b` → **#19 MERGED**。
@@ -84,7 +91,7 @@ GitHub 全量只读列表为 #1–#16 与 #17–#62；#1–#16 是其它 input/p
 
 ## GitHub PR #17–#62 只读状态
 
-以下为本次 `gh pr list --state all` 的逐号快照；每号均核对 head、title、state、mergedAt。
+以下为本次 `gh api` REST 快照的逐号投影；每号均核对 head、title、state、merged_at。
 
 |PR|head|title|state|mergedAt|
 |---:|---|---|---|---|
@@ -161,12 +168,15 @@ python3 -c 'import git_filter_repo;print(git_filter_repo.__file__)'
 本机只读核验结果为 `ModuleNotFoundError: No module named 'git_filter_repo'`；
 `git-filter-repo` 可执行文件也不存在。直接运行会在 clone/filter/push/gh create 之前退出。
 
-本轮 PR 恢复使用的是既有脚本的临时受管入口：在不改脚本、不系统安装、不使用裸
-`git push` 的边界内，以 uv 临时固定依赖后调用原脚本：
+本轮 PR 恢复使用的是既有脚本的临时受管入口：在不改脚本、不系统安装、无未过滤
+原仓直推的边界内，以 uv 临时固定依赖后调用原脚本：
 
 ```sh
 uv run --with git-filter-repo==2.47.0 -- bash tools/mirror-pr.sh <recovery-branch>...
 ```
+
+`mirror-pr` 在过滤临时仓内按设计执行 `git push --force`；这不是未过滤原仓直推，
+而是该镜像流程的受管过滤发布步骤。
 
 该入口只把 `git_filter_repo` 注入本次脚本进程；本机普通 `python3` import 仍失败，
 故无系统安装。#17–#60 的 44 个关键点 PR、#61 的 fdf7 HTTP504 后审计补救及 #62
@@ -177,7 +187,7 @@ uv run --with git-filter-repo==2.47.0 -- bash tools/mirror-pr.sh <recovery-branc
 现有入口只有 `tools/mirror-pr.sh`、`tools/mirror-push.sh`、`tools/mirror-pr-serve.sh`。
 `git help -a` 仅显示 Git 内置 `filter-branch`、`fast-import`、`replace` 等低层命令；
 它们不是该脚本相同的过滤/mailmap/commit-callback 受管实现，且 `filter-branch` 是重写
-工具，不能在“不改脚本、不裸推、不系统安装”的边界下替代 `git_filter_repo`。
+工具，不能在“不改脚本、无未过滤原仓直推、不系统安装”的边界下替代 `git_filter_repo`。
 
 已有 driver 日志只证明早期的 `input/*` mirror 尝试：
 `.team/nodes/_driver/mirror-pr.log` 记录 `No commits between main and input/contract-v1`；
@@ -186,7 +196,7 @@ baseline-bundle。baseline/successor 的远端成功状态以本次 `gh` PR #17�
 不以这些旧 driver 日志代替。
 
 因此 PR 谱系的唯一缺口已归零：45/45 关键点均有 `MERGED` PR；额外 #62 为独立 review。
-工具层仍应长期提供同等固定版本的受管入口，但当前恢复不依赖系统安装或裸推。
+工具层仍应长期提供同等固定版本的受管入口，但当前恢复不依赖系统安装或未过滤原仓直推。
 未改产品、未改历史、未改脚本。
 
 verdict: pass

@@ -1,0 +1,469 @@
+{
+  "source": "GET /repos/Florious95/corral-core/pulls?state=all&per_page=100",
+  "range": [
+    17,
+    62
+  ],
+  "prs": [
+    {
+      "head": {
+        "ref": "recovery/bundle-baseline-9468854",
+        "sha": "1b19226ae73f577e9a242e32d7a3f6f6bf31464f"
+      },
+      "merged_at": "2026-08-25T11:55:05Z",
+      "number": 17,
+      "state": "closed",
+      "title": "编排基线资产丢失死锁根治链"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-baseline-c4846de",
+        "sha": "488d372ba031f5df769d48521d11cad6a1edd51b"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 18,
+      "state": "closed",
+      "title": "记录基线包首格形式红证据"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-baseline-488a1f",
+        "sha": "a5b13d74b65b2fc0980db838763962700f907df8"
+      },
+      "merged_at": "2026-08-25T11:55:05Z",
+      "number": 19,
+      "state": "closed",
+      "title": "修正基线包先红形式契约"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s1-ef7a02c",
+        "sha": "f1fbae13240f3908312b7ae69e04b61a8b35b071"
+      },
+      "merged_at": "2026-08-25T11:55:05Z",
+      "number": 20,
+      "state": "closed",
+      "title": "建立基线包根治审计连续性账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s1-a3421f",
+        "sha": "9e6d786ed80ca137e6a13c985d76cc968169e141"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 21,
+      "state": "closed",
+      "title": "记录successor复用旧worktree不可判证据"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s2-2263fd",
+        "sha": "ffe6d1ae3a5b0c184fc3fd9e5ed419b2f9c0cb86"
+      },
+      "merged_at": "2026-08-25T11:55:05Z",
+      "number": 22,
+      "state": "closed",
+      "title": "建立全新worktree基线包根治账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s2-98bf318",
+        "sha": "7fbc70fa69506f0ab7df5322d4be2076c6c7ab58"
+      },
+      "merged_at": "2026-08-25T11:55:05Z",
+      "number": 23,
+      "state": "closed",
+      "title": "基线包根治先红格通过并派出三席"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s2-99675a",
+        "sha": "cb8d264ec29325c8b0f6a1c122f9be5dc31d2a23"
+      },
+      "merged_at": "2026-08-25T11:55:05Z",
+      "number": 24,
+      "state": "closed",
+      "title": "基线包探针与测试通过实现格不可判"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s3-37baef7",
+        "sha": "41538ea903db61ca7ef35631389bb8e12e173c80"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 25,
+      "state": "closed",
+      "title": "记录successor3启动审查否决"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s3-f0fce0",
+        "sha": "4fbae189b38502d910841a75c61337a5475ead3f"
+      },
+      "merged_at": "2026-08-25T11:55:05Z",
+      "number": 26,
+      "state": "closed",
+      "title": "冻结基线包successor3真实判据bootstrap"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s3-171db68",
+        "sha": "9c3b549ac5ee206a36e36d6f8e1f825a6f5fdbad"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 27,
+      "state": "closed",
+      "title": "冻结并审过基线包successor3最终账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s3-3401706",
+        "sha": "86667b9ba18807ae6ef3e3a160b303472d96a9d9"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 28,
+      "state": "closed",
+      "title": "记录successor3实现不可判与探针红"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s3-ec1145",
+        "sha": "3b747f60fa8a104efcd5677c215de9084678ff44"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 29,
+      "state": "closed",
+      "title": "归因successor3残留旧门与SDK前置缺失"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s4-2f7634",
+        "sha": "513c5a4f68bcbc37517e11e2528892aa38a7e5de"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 30,
+      "state": "closed",
+      "title": "冻结并审过基线包successor4账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s5-b2af6f",
+        "sha": "e3c2178c8f88d18ead57307e0c0e20398bf1dcbb"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 31,
+      "state": "closed",
+      "title": "冻结并审过基线包successor5账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s5-4c1005",
+        "sha": "1bb905d517fc39123e6ebbee998258c632572867"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 32,
+      "state": "closed",
+      "title": "基线包三门通过实现格实质红"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s6-548572",
+        "sha": "07036ffd3d59b657d534aae97410e4e67f8398a2"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 33,
+      "state": "closed",
+      "title": "冻结successor6最终门与审查谱系"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s6-87ce64",
+        "sha": "1ffab0d0d7a2257dfab491bea1bf65131c20ca3a"
+      },
+      "merged_at": "2026-08-25T11:55:05Z",
+      "number": 34,
+      "state": "closed",
+      "title": "冻结并审过基线包successor6最终账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s6-3528c2",
+        "sha": "a1a2a1c53bf8b4831fb06b12ff9998b94ddd1580"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 35,
+      "state": "closed",
+      "title": "基线包四格通过验证格不可判"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s7-6e729d",
+        "sha": "80365d3db6484de2843b2cb161dc26e00c38779e"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 36,
+      "state": "closed",
+      "title": "记录successor7设备bootstrap安全审查否决"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s7-da46a6",
+        "sha": "e06194f2f1733be9ef2b51c2ee67ffa8b6730943"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 37,
+      "state": "closed",
+      "title": "冻结successor7设备与永久夹具bootstrap"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s7-0df3562",
+        "sha": "402edcd7347ea3e1a30e6851bb29ad7ffe39f231"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 38,
+      "state": "closed",
+      "title": "记录successor7保留工作树安全快进"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s7-79cd08",
+        "sha": "d999111276362ea73ffe2668ff1daffbf1d17630"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 39,
+      "state": "closed",
+      "title": "冻结并审过successor7最终账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s7-1df02d",
+        "sha": "ed6a753e59363e3015c30c564c5c4d1fd4b5027b"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 40,
+      "state": "closed",
+      "title": "记录successor7命令执行器方言拒绝"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s7-25517d",
+        "sha": "57a1bf3563411898cb0d680dcf97df58682ebf72"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 41,
+      "state": "closed",
+      "title": "审过successor7兼容命令执行器组合"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s7-132e63",
+        "sha": "d4d1fb8edd636e877690e22188673911b3d79152"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 42,
+      "state": "closed",
+      "title": "记录successor7三前格产物与waiter恢复方案"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s8-1481f4",
+        "sha": "cf2fa51885012559366c49b4cb68bcb13b445410"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 43,
+      "state": "closed",
+      "title": "冻结并审过successor8命令恢复账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s8-61af5e",
+        "sha": "a2ab417d673d400ead4aa08548e026cdc6552e1e"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 44,
+      "state": "closed",
+      "title": "successor8三前格通过设备格不可判"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s8-6dbf11",
+        "sha": "6462348688a7a2f844734059449a3cf6309382b7"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 45,
+      "state": "closed",
+      "title": "归因successor8设备镜像缺失不可判"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s9-0fdee1",
+        "sha": "40eb13d7e02f92080bd4ca85c030e5b977cd0cff"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 46,
+      "state": "closed",
+      "title": "冻结successor9唯一SDK根选择器bootstrap"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s9-e6c2e2",
+        "sha": "ccd4bdd7acdb6b5132e0b624aec210b08c5d3c82"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 47,
+      "state": "closed",
+      "title": "记录successor9保留工作树SDK快进"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s9-5ab91a",
+        "sha": "cee8899c4e494eee65166e9f8e957b37d9ad0822"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 48,
+      "state": "closed",
+      "title": "冻结并审过successor9设备恢复账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s9-efed31",
+        "sha": "64f9a2b49dc871f3623131dc6e9541bf5654e982"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 49,
+      "state": "closed",
+      "title": "successor9三前格通过设备仍不可判"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s9-918b4c",
+        "sha": "c8f01b42e53a5803ec0ec3ad34ffd0bb654e133e"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 50,
+      "state": "closed",
+      "title": "归因successor9新AVD创建失败"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s10-9ea73d",
+        "sha": "2a50d40bf27e01fab1353237c3d2d80cabf8fde7"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 51,
+      "state": "closed",
+      "title": "冻结successor10有界AVD创建bootstrap"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s10-ad7468",
+        "sha": "a2b1e8f5dfea64ccb851580636d66cef56d377a8"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 52,
+      "state": "closed",
+      "title": "记录successor10保留工作树AVD快进"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s10-c10186",
+        "sha": "a0d63ddcb37983846184cd220879cea72927cc48"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 53,
+      "state": "closed",
+      "title": "冻结并审过successor10设备恢复账本"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s10-13c301",
+        "sha": "0bcae8cfc2a2c58eadfc2b0a0accd6be39a6301c"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 54,
+      "state": "closed",
+      "title": "successor10设备链通过验证格不可判"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s10-7c1a85",
+        "sha": "437f5ae941e9103479670e20e97637373f73845c"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 55,
+      "state": "closed",
+      "title": "归因successor10验证格残留实时ADB旧夹具门"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s11-ebd0dc",
+        "sha": "addef6e3d67ff4c9d7ec63ac8e20fe78bc660a22"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 56,
+      "state": "closed",
+      "title": "test: bootstrap successor11 fresh verify gate"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s11-3597b8",
+        "sha": "76b9fb192d62d84d0de16f44c3745d13a9da8a3b"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 57,
+      "state": "closed",
+      "title": "docs: record successor11 retained worktree preflight"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s11-7e8c93",
+        "sha": "14250add4f5cecc2be628690cca128aa13e81bfd"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 58,
+      "state": "closed",
+      "title": "test: define successor11 recovery ledger"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s11-492501",
+        "sha": "af280536a81a92c4e8625d6178578aa67929b641"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 59,
+      "state": "closed",
+      "title": "docs: verify successor11 launch readiness"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s11-80f6c3",
+        "sha": "77a1eb70966a79e61cb72f1ef5da5797cb75f629"
+      },
+      "merged_at": "2026-08-25T11:55:04Z",
+      "number": 60,
+      "state": "closed",
+      "title": "docs: record successor11 user gate wait"
+    },
+    {
+      "head": {
+        "ref": "recovery/bundle-s6-fdf7f6-audit",
+        "sha": "df6f98fa43d93380816f3836b6e1be58cd43af29"
+      },
+      "merged_at": "2026-08-25T12:04:24Z",
+      "number": 61,
+      "state": "closed",
+      "title": "baseline-bundle successor6: restore projection bootstrap audit"
+    },
+    {
+      "head": {
+        "ref": "pr/baseline-bundle-s6-fdf7-review",
+        "sha": "f734fa134d4cd37d4a2d562ba3ccb9645536094f"
+      },
+      "merged_at": "2026-08-25T12:07:00Z",
+      "number": 62,
+      "state": "closed",
+      "title": "baseline-bundle successor6: record recovery review"
+    }
+  ]
+}
