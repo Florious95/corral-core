@@ -1,0 +1,37 @@
+successor9 SDK selector bootstrap zero-context review; read-only package review
+
+fresh mechanical checks:
+- `sh .team/ledgers/acceptance/baseline-bundle-successor9-sdk-regression.sh`
+  exit=0:
+  same-root wrong-root ambiguity escaping two-line unknown-key tracked symlink
+  missing exact-package no-leak
+- shell `sh -n` for selector, regression, and owned-emulator wrappers=pass
+- shellcheck for all three wrappers=pass
+- selector Python AST parse=pass
+- production wrapper order assertion=pass:
+  strict envcheck < selector < `exec sh successor7-owned-emulator`
+- production wrapper has no `SUCCESSOR9_TEST_` reference and no final ledger
+  reference; selector test mode allows only exact mode=1/harness and node-local
+  temp coordinates
+
+selector contract inspection:
+- candidate labels are env-root/env-home/root-local/sdkmanager-derived;
+  canonical path plus `(st_dev, st_ino)` deduplication is present
+- exact package id and package.xml regular/non-symlink checks are present
+- adb/emulator/avdmanager must be executable and remain under candidate root
+- sdkmanager exact `--sdk_root=<candidate> --list_installed` is bounded to 30s,
+  captured, and must report the fixed package
+- valid root count must equal one; invalid source candidates continue
+- target is fixed to current worktree `app/local.properties`, must be existing,
+  untracked, regular, non-symlink; output is atomic one-line 0600 and fsyncs
+  file plus directory
+- failure mapping is fail=1 for identity/policy contradictions and
+  unjudgeable=2 for missing/ambiguous environment; no candidate value is
+  printed
+
+safety/phase boundary:
+- final successor9 DSL/compiled ledger absent
+- no production selector execution, target rewrite, adb/qemu/emulator launch,
+  ledger drive, or product modification
+
+verdict: pass
