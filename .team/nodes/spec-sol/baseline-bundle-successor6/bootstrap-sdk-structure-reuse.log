@@ -1,0 +1,19 @@
+successor6 SDK and structure continuity
+
+SDK fallback reuse:
+  command=env -u ANDROID_SDK_ROOT -u ANDROID_HOME sh baseline-bundle-successor5-sdk-regression.sh
+  output=PASS baseline-bundle-successor5-sdk-regression: fallback controls and four-state teeth verified
+  rc=0
+  no SDK value printed=true
+
+structure-tooth reuse baseline:
+  command=sh .team/ledgers/acceptance/baseline-bundle-successor5-structure.sh
+  rc=0
+
+successor6 bootstrap boundary:
+  final successor6 ledger source absent=true
+  final successor6 compiled ledger absent=true
+  therefore no successor6 required-list gate is fabricated in stage one
+  stage two must generate successor6-only exact required/mechanical structure and rerun the same legacy-name/argv/four-state mutations after the bootstrap commit is reachable
+
+result: pass
