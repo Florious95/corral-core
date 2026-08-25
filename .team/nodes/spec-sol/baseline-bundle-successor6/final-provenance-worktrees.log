@@ -1,0 +1,9 @@
+head=b2ee4f9d259e0cacffeea4d124a8c658f070d601
+bootstrap_ancestry_rc=0
+bootstrap_tracked_semantic_paths_rc=0 count=16
+wt-maple-core disk=absent metadata=absent
+wt-indigo-tests disk=absent metadata=absent
+wt-falcon-review disk=absent metadata=absent
+ledger_lease=absent driver_pid=absent
+pairwise_distinct=true core_serial_reuse=true parallel_write_isolation=true
+final_only_wrappers_present=true commit_before_start_required=true
