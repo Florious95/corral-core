@@ -1,0 +1,24 @@
+{
+  "schema": "agentmirror.successor11.verify-contract.v1",
+  "apparatus": {
+    "relpath": ".team/nodes/baseline-bundle-apparatus/APPARATUS.json",
+    "sha256": "fd27d1638ba097ab6a310bc497d80e20720f7625974f61a414a2e63132f23b9d",
+    "schema": "agentmirror.successor7.apparatus.v1",
+    "mode": "production",
+    "created_epoch": 1787645018,
+    "bundle_id": "e8f2cb5fc477237dfe9b47f49e157657d5c45eb5fa8cae0bcea03a894f0fc27f",
+    "manifest_sha256": "0f5638e15805c61fb06734ac7ddf9611644c1d6f29f4744033c63159c095baea",
+    "producer_relpath": ".team/ledgers/acceptance/baseline-bundle-successor10-owned-emulator.sh",
+    "producer_sha256": "66def18d6dece6331b59e5efcc77130b94df70aae47a05d98225d7f05356a31f"
+  },
+  "manifest": {
+    "relpath": ".team/nodes/baseline-bundle-impl/BUNDLE-MANIFEST.json",
+    "sha256": "0f5638e15805c61fb06734ac7ddf9611644c1d6f29f4744033c63159c095baea"
+  },
+  "permanent_fixture": {
+    "relpath": ".team/ledgers/acceptance/fixtures/baseline-bundle-successor7/impl-bypass/BUNDLE-MANIFEST.json",
+    "sha256": "e1b5333e417e4b45d62b22f27b29fc662dac88e7098b5e42b977570eee4296b9"
+  },
+  "verify_dir": ".team/nodes/baseline-bundle-verify",
+  "freshness_seconds": 7200
+}
