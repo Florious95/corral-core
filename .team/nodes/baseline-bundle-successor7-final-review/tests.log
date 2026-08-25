@@ -1,45 +1,34 @@
-successor7 final pre-launch zero-context review (fresh, read-only)
+successor7 post-commit lineage review; commit=79cd08f0f; read-only
 
-Ledger facts independently re-read:
-- ledger id `ledger.baseline-bundle.successor7.v1`, revision 1;
-- exactly 9 tasks, all `state=planned`; no task has an `attempts` or `status`
-  field and the compiled root has no statuses collection;
-- exactly 8 requires_success edges. Initial frontier is exactly continuity,
-  apparatus-test, apparatus-probe; apparatus is dependency-unsatisfied;
-- worktree resources are retained `wt-maple-core`, new test/probe ids are
-  `wt-s7-cedar` and `wt-s7-orbit`; the latter two are absent from Git
-  worktree metadata and disk. Retained wt-maple-core is registered.
+cat-file:
+- NUL-safe `git ls-tree -rz --name-only 79cd08f0f` successor7 sweep:
+  50 paths, missing=0.
+- DSL, compiled ledger, 12 compiled ScriptRef/command script paths,
+  successor7 final wrappers, path-level taskbooks, and bootstrap fixture
+  paths all resolved from 79cd08f0f.
 
-Structure/execution facts:
-- apparatus executor is `command`, cwd `${worktree}`, argv exactly
-  `/bin/sh .team/ledgers/acceptance/baseline-bundle-successor7-owned-emulator.sh`,
-  expected exit 0 and unjudgeable exit 2;
-- apparatus required is exactly apparatus + permanent fixture + continuity;
-  all other required/mechanical sets are successor7-specific with no legacy
-  temporary bypass required;
-- fresh dry-run log reports rc0 and the exact three-item first frontier with
-  `device_started=false`; no ledger drive, WT creation, or device command was
-  run in this review.
+ledger snapshot:
+- ledger_id=ledger.baseline-bundle.successor7.v1 revision=1 tasks=9
+- all nine states=planned; task attempts fields=0; task statuses fields=0;
+  root statuses field absent
+- current worktree metadata: wt-maple-core present; wt-s7-cedar and
+  wt-s7-orbit absent
+- successor7 lease and driver PID absent; old perf-regress lease/PID present
+  as pre-migration state and not part of successor7 launch state
 
-Contract facts:
-- dependency chain is three frontier tasks -> apparatus -> verify -> user-gate
-  -> migrate -> measure -> final;
-- taskbooks and logs retain envcheck-first, A/B/A/B, three fixtures, n>=10,
-  nearest-rank p50/p95, same-batch A2/B, B/A<=1.10, cellular+Guangzhou-relay
-  real-device “秒开、没有空白”, migration preconditions, and four-state
-  0/1/2 handling;
-- permanent fixture log records green=0, forged=1, missing=2 and continuity
-  binds the four successor6 successes, retained bundle and archives. No old
-  temporary fixture or old attempt is used as a successor7 success.
+fresh mechanical check against the committed working-tree ledger:
+- `ledger-run --preflight --json .team/ledgers/baseline-bundle-successor7-v1.json`
+  exit=2
+- `ledger-run --dry-run --json .team/ledgers/baseline-bundle-successor7-v1.json`
+  exit=2
+- both report schema rejection at
+  `/tasks/t.baseline-bundle.apparatus`: `command` and `executor` are
+  unexpected additional properties
+- expected first frontier was not asserted because schema validation stopped
+  before frontier evaluation; no ledger drive, task dispatch, WT creation,
+  adb/qemu/emulator launch, or product modification occurred
 
-Provenance boundary:
-- bootstrap paths are cat-file-addressable from `da46a6b2b`; the final package
-  paths are working-tree candidates and are not yet present in the current
-  `0df3562b7` object. This is the declared pre-start state, not a launch
-  proof. Leader must commit the final package, then cat-file every DSL,
-  compiled ledger, taskbook, acceptance, fixture and log path before starting.
+The result is a package/runtime schema compatibility refutation, not a redo
+or reversal of the previously passed semantic review.
 
-Syntax/compile/schema/preflight/dry-run/structure/provenance logs were read;
-the package remains launch-blocked until that post-commit cat-file check.
-
-verdict: pass
+verdict: refutes
