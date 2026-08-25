@@ -1,0 +1,19 @@
+successor6 real successor5 manifest projection probe
+
+input:
+  manifest=.worktrees/wt-cedar-main/.team/nodes/baseline-bundle-impl/BUNDLE-MANIFEST.json
+  diagnosis=.team/nodes/baseline-bundle-successor5-impl-diagnosis/VERDICT.md
+  fixed contract=.team/ledgers/acceptance/fixtures/baseline-bundle-successor6/projection-contract.json
+
+read-only legacy predicate:
+  actual_manifest_legacy_prefix_rc=1
+
+new independent projection gate:
+  SUCCESSOR6_CANONICAL_IDENTITY equal=true
+  SUCCESSOR6_SLOT_PROJECTION schema=true non_circular=true stable=true no_traversal=true independent=true
+  SUCCESSOR6_ARCHIVE_PROJECTION content_addressed=true
+  projection_rc=0
+
+No manifest, old WT, ledger or attempt was modified. No APK content, SDK value or credential was printed.
+
+result: pass

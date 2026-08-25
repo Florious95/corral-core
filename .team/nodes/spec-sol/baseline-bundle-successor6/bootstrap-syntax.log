@@ -1,0 +1,12 @@
+successor6 bootstrap syntax checks
+
+commands and results:
+  sh -n .team/ledgers/acceptance/baseline-bundle-successor6-*.sh rc=0
+  shellcheck -s sh .team/ledgers/acceptance/baseline-bundle-successor6-*.sh rc=0
+  PYTHONPYCACHEPREFIX=<successor6 node tmp> python3 -m py_compile baseline-bundle-successor6-projection.py rc=0
+  fixed fixture JSON parse rc=0
+  final ledger source/json absence rc=0
+
+No cache or temporary artifact was written outside this case's `.team/nodes/spec-sol/baseline-bundle-successor6/tmp/`.
+
+result: pass
