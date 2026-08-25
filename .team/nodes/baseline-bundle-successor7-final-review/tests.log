@@ -1,34 +1,42 @@
-successor7 post-commit lineage review; commit=79cd08f0f; read-only
+successor7 compatible-pair post-commit review; commit=79cd08f0f; read-only
 
-cat-file:
-- NUL-safe `git ls-tree -rz --name-only 79cd08f0f` successor7 sweep:
-  50 paths, missing=0.
-- DSL, compiled ledger, 12 compiled ScriptRef/command script paths,
-  successor7 final wrappers, path-level taskbooks, and bootstrap fixture
-  paths all resolved from 79cd08f0f.
+binary/source identity:
+- binary=`/Volumes/nvme/cargo-target-w7-builder-b/debug/ledger-run`
+- file=`Mach-O 64-bit executable arm64`
+- sha256=`3090060248410c463a2194d5a4840b7782494a2c1415062f71431571735172cc`
+- source worktree=`/Volumes/nvme/Projects/无等编排/.worktrees/wt-cmd-executor`
+- source HEAD=`7485102b26ed34eb828e94900902147d5e00e995`
+- HEAD subject=`feat: add command task executor`; requested commit is present
+  exactly at HEAD
 
-ledger snapshot:
-- ledger_id=ledger.baseline-bundle.successor7.v1 revision=1 tasks=9
-- all nine states=planned; task attempts fields=0; task statuses fields=0;
-  root statuses field absent
-- current worktree metadata: wt-maple-core present; wt-s7-cedar and
-  wt-s7-orbit absent
-- successor7 lease and driver PID absent; old perf-regress lease/PID present
-  as pre-migration state and not part of successor7 launch state
-
-fresh mechanical check against the committed working-tree ledger:
+compatible binary fresh checks:
 - `ledger-run --preflight --json .team/ledgers/baseline-bundle-successor7-v1.json`
-  exit=2
+  exit=0; output `{"ok":true,"preflight_rejected":false,"issues":[]}`
 - `ledger-run --dry-run --json .team/ledgers/baseline-bundle-successor7-v1.json`
-  exit=2
-- both report schema rejection at
-  `/tasks/t.baseline-bundle.apparatus`: `command` and `executor` are
-  unexpected additional properties
-- expected first frontier was not asserted because schema validation stopped
-  before frontier evaluation; no ledger drive, task dispatch, WT creation,
-  adb/qemu/emulator launch, or product modification occurred
+  exit=0; output ledger id=`ledger.baseline-bundle.successor7.v1`, revision=1
+- parsed `frontier[].task_id` is exactly the three-item set
+  `{t.baseline-bundle.continuity,t.baseline-bundle.apparatus-test,
+  t.baseline-bundle.apparatus-probe}`
+- compiled apparatus task: `executor=command`, argv exactly
+  `/bin/sh .team/ledgers/acceptance/baseline-bundle-successor7-owned-emulator.sh`
 
-The result is a package/runtime schema compatibility refutation, not a redo
-or reversal of the previously passed semantic review.
+default binary dialect contrast:
+- installed default `ledger-run --preflight --json` exit=2 with schema error
+  that `command` and `executor` are unexpected at
+  `/tasks/t.baseline-bundle.apparatus`; this is not used to judge the supplied
+  compatible pair
 
-verdict: refutes
+lineage/state:
+- NUL-safe `git ls-tree -rz --name-only 79cd08f0f` successor7 sweep:
+  50 paths, missing=0
+- ledger revision=1, tasks=9, all states=planned, attempts fields=0,
+  statuses fields=0, root statuses absent
+- `wt-s7-cedar`/`wt-s7-orbit` absent; retained `wt-maple-core` present;
+  successor7 lease and driver PID absent
+- no ledger drive, dispatch, WT creation, adb/qemu/emulator launch, or product
+  modification
+
+harness note: an initial frontier assertion treated JSON objects as strings;
+the assertion was corrected to use `frontier[].task_id` and then passed.
+
+verdict: pass
