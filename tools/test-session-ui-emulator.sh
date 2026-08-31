@@ -17,6 +17,16 @@ echo "discovered_count=$discovered_count discovered_names=[$discovered_names]"
 for n in "${PLANNED[@]}"; do printf '%s\n' "${discovered[@]}" | grep -Fxq "$n" || { echo "missing test $n" >&2; exit 3; }; done
 [[ "${#PLANNED[@]}" -eq "${#discovered[@]}" ]] || exit 3
 if [[ "${1:-}" == "--list-tests" ]]; then exit 0; fi
+if [[ "${1:-}" == "--functional-gate" ]]; then
+  mode=${2:-}; [[ "$mode" == prestart ]] || { echo 'functional gate requires prestart'; exit 2; }
+  load=$(sysctl -n vm.loadavg 2>/dev/null | awk '{print $2}' || true); load=${load:-unknown}
+  free=$(df -Pk "$ROOT" | awk 'NR==2 {print $4}')
+  qemu=$(pgrep -f 'qemu-system' | wc -l | tr -d ' ')
+  echo "functional_gate=prestart load1=$load free_kb=$free qemu_count=$qemu dead_sockets=informational"
+  awk -v x="$load" 'BEGIN {exit !(x != "unknown" && x <= 12.0)}' || exit 2
+  [[ "$qemu" == 0 ]] || exit 2
+  exit 0
+fi
 ADB=${ADB:-adb}
 if ! command -v "$ADB" >/dev/null 2>&1; then
   echo 'executed_count=0 execution_state=NOT_RUN_NO_DEVICE failed_names=UNAVAILABLE_NOT_RUN rc=2'
