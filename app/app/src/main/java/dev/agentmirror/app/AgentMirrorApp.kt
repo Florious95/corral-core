@@ -159,6 +159,9 @@ fun AgentMirrorApp(
                         overlaySessions = remember(r.ref, overlayLevel2, overlayFavorites, overlayLiveGen) {
                             workspaceViewModel.viewMenuSource(r.ref).sessions
                         },
+                        favoriteRows = remember(overlayLevel2, overlayFavorites, overlayLiveGen) {
+                            workspaceViewModel.favoriteRows()
+                        },
                         overlayFavorited = overlayFavorites.map { it.key }.toSet(),
                         onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
                         onOpenOverlaySession = { ref, name -> navState.openSession(ref, name) },
