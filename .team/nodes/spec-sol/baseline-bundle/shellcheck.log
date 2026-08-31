@@ -1,3 +1,0 @@
-fresh_at: 2026-08-25 Asia/Singapore
-command: shellcheck -s sh .team/ledgers/acceptance/baseline-bundle-*.sh
-exit_code: 0

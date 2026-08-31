@@ -1,5 +1,0 @@
-fresh_at: 2026-08-25 Asia/Singapore
-purpose: true behavioral first-red; this is the inner three-state probe, not a missing-artifact wrapper
-FAIL baseline-bundle-real-chain: state=failed_retryable frontier=[] verify=dependency_unsatisfied measurement=unjudgeable lease_pid=85754
-expected_old_chain_exit_code: 1
-observed_exit_code: 1

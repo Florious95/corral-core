@@ -1,3 +1,0 @@
-command: ledger-run --preflight --json .team/ledgers/baseline-bundle-successor-v1.json
-{"ok":true,"preflight_rejected":false,"issues":[]}
-exit_code: 0

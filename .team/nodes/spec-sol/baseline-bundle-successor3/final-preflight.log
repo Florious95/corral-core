@@ -1,9 +1,0 @@
-successor3 fresh ledger-run preflight
-
-command:
-  ledger-run --preflight .team/ledgers/baseline-bundle-successor3-v1.json --json
-output:
-  {"ok":true,"preflight_rejected":false,"issues":[]}
-  preflight_rc=0
-
-result: pass

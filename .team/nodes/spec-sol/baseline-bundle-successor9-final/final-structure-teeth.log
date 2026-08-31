@@ -1,9 +1,0 @@
-SUCCESSOR9_STRUCTURE tasks=9 dependencies=8 frontier=three-command r4_consumes=succeeded apparatus_history=unjudgeable sdk_selector=required downstream=unchanged provenance=61af+6dbf+bd482+0fdee+e6c2 pair=7485102 worktrees=maple+cedar+orbit statuses=none
-green rc=0
-old-apparatus rc=1
-drop-selector rc=1
-consume-agent rc=1
-weaken-measure rc=1
-statuses rc=1
-drop-edge rc=1
-missing rc=2

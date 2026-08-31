@@ -1,3 +1,0 @@
-bootstrap-structure: pass files=5 apparatus_order=envcheck-selector-owned test_isolation=closed final_ledger=absent
-target-shape: regular=true symlink=false tracked=false lines=2 keys=comment+sdk.dir values_logged=false
-continuity-freeze: successor8-consume=maple+cedar+orbit downstream=apparatus+verify+user-gate+migrate+measure+final
