@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,25 +73,29 @@ class SessionUiAcceptanceActivity : ComponentActivity() {
                     .fillMaxSize()
                     .semantics { testTagsAsResourceId = true },
             ) {
-                SessionScreen(
-                    viewModel = f.vm,
-                    name = f.currentName,
-                    onBack = { f.backCount++; changed() },
-                    overlaySessions = f.viewRows,
-                    favoriteRows = f.favorites,
-                    onOpenSwitcher = {
-                        f.viewOpenCount++
-                        f.vm.openOverlay()
-                        changed()
-                    },
-                    onOpenOverlaySession = { ref, name ->
-                        if (f.viewRows.any { it.ref == ref }) f.viewSelections += ref to name
-                        else f.favoriteSelections += ref to name
-                        f.currentRef = ref
-                        f.currentName = name
-                        changed()
-                    },
-                )
+                // Fixture replacement is a new debug scenario: reset remembered shell mode without
+                // changing production SessionScreen's normal in-process mode persistence.
+                key(f) {
+                    SessionScreen(
+                        viewModel = f.vm,
+                        name = f.currentName,
+                        onBack = { f.backCount++; changed() },
+                        overlaySessions = f.viewRows,
+                        favoriteRows = f.favorites,
+                        onOpenSwitcher = {
+                            f.viewOpenCount++
+                            f.vm.openOverlay()
+                            changed()
+                        },
+                        onOpenOverlaySession = { ref, name ->
+                            if (f.viewRows.any { it.ref == ref }) f.viewSelections += ref to name
+                            else f.favoriteSelections += ref to name
+                            f.currentRef = ref
+                            f.currentName = name
+                            changed()
+                        },
+                    )
+                }
                 val stateText = snapshot().asSemanticState()
                 Text(
                     text = stateText,

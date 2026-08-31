@@ -74,10 +74,12 @@ class SessionUiSmokeTest {
     @Test
     fun sessionsSourceIsEntryIndependentAndEmptyNeverFallsBack() {
         reset("full", "favorites")
+        assertDefaultDock()
         rule.onNodeWithTag("dock_sessions").performClick()
         val fromFavorites = renderedFavoriteRefs()
 
         reset("full", "ordinary")
+        assertDefaultDock()
         rule.onNodeWithTag("dock_sessions").performClick()
         val fromOrdinary = renderedFavoriteRefs()
         assertEquals(fromFavorites, fromOrdinary)
@@ -85,6 +87,7 @@ class SessionUiSmokeTest {
         assertFalse(fromOrdinary.contains("current"))
 
         reset("empty", "ordinary")
+        assertDefaultDock()
         assertTrue(snapshot().viewRefs.contains("must-not-render"))
         rule.onNodeWithTag("dock_sessions").performClick()
         rule.onNodeWithText("暂无收藏").assertIsDisplayed()
