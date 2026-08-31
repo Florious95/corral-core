@@ -2,6 +2,10 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../app" && pwd)
 ADB=${ADB:-adb}
+if ! command -v "$ADB" >/dev/null 2>&1; then
+  echo "adb unavailable: set ANDROID_HOME or ADB" >&2
+  exit 2
+fi
 serials=()
 while IFS= read -r serial; do
   [[ -n "$serial" ]] || continue
@@ -27,7 +31,8 @@ PY
 )
 log="$ROOT/build/session-ui-emulator.log"
 mkdir -p "$(dirname "$log")"
-printf 'serial=%s api=%s\ncommand=./gradlew :app:connectedDebugAndroidTest :app:assembleRelease --rerun-tasks --no-build-cache\n' "$ANDROID_SERIAL" "$api" | tee "$log"
+planned='SessionUiSmokeTest#realComposeDockAndFavoritesSemantics SessionUiSmokeTest#favoriteSourceExcludesCurrentForBothEntryFixturesAndEmptyState'
+printf 'serial=%s api=%s planned=%s\ncommand=./gradlew :app:connectedDebugAndroidTest :app:assembleRelease --rerun-tasks --no-build-cache\n' "$ANDROID_SERIAL" "$api" "$planned" | tee "$log"
 cd "$ROOT"
 start=$(date +%s)
 python3 - "$log" <<'PY'
@@ -37,6 +42,9 @@ with open(sys.argv[1],"a") as log:
     raise SystemExit(p.returncode)
 PY
 cat "$log"
-count=$(grep -Eo '[0-9]+ tests? completed' "$log" | tail -1 | awk '{print $1}')
-[[ "${count:-0}" -gt 0 ]] || { echo 'no executed instrumentation tests' >&2; exit 3; }
-printf 'duration_seconds=%s executed_tests=%s\n' "$(( $(date +%s) - start ))" "$count" | tee -a "$log"
+xml_count=$(find "$ROOT/build/outputs/androidTest-results" -name 'TEST-*.xml' -print0 2>/dev/null | xargs -0 grep -h -Eo 'tests="[0-9]+"' | awk -F'"' '{s+=$2} END {print s+0}')
+failed_count=$(find "$ROOT/build/outputs/androidTest-results" -name 'TEST-*.xml' -print0 2>/dev/null | xargs -0 grep -h -c -E '<failure|<error' | awk '{s+=$1} END {print s+0}')
+[[ "$xml_count" -gt 0 ]] || { echo 'no executed instrumentation tests' >&2; exit 3; }
+[[ "$xml_count" -eq 2 ]] || { echo "planned/discovered mismatch: expected 2 got $xml_count" >&2; exit 3; }
+printf 'duration_seconds=%s planned_count=2 discovered_count=%s executed_count=%s failed_names=%s\n' "$(( $(date +%s) - start ))" "$xml_count" "$xml_count" "count=$failed_count" | tee -a "$log"
+[[ "$failed_count" -eq 0 ]] || { echo 'failed instrumentation tests' >&2; exit 4; }
