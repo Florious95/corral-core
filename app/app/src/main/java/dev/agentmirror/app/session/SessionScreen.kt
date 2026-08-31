@@ -122,6 +122,7 @@ fun SessionScreen(
     overlayFavorited: Set<FavoriteKey> = emptySet(),
     onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
+    onOpenSwitcher: () -> Unit = viewModel::openOverlay,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -262,7 +263,7 @@ fun SessionScreen(
                     mirror = TextFieldValue("")
                 },
                 onBack = onBack,
-                onOpenSwitcher = viewModel::openOverlay,
+                onOpenSwitcher = onOpenSwitcher,
                 onKeyPress = { viewModel.sendKey(it.toInputKey()) },
                 onAttach = { attachMenu = true },
                 favoriteRows = favoriteRows,

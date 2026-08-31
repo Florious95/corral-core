@@ -101,8 +101,10 @@ class SessionUiSmokeTest {
         reset("full", "ordinary")
         val before = snapshot()
         assertFalse(before.overlayOpen)
+        assertEquals(0, before.viewOpenCount)
+        assertEquals(listOf("view-a", "view-b"), before.viewRefs)
         rule.onNodeWithTag("dock_view").performClick()
-        rule.waitUntil(2_000) { snapshot().overlayOpen }
+        rule.waitUntil(2_000) { snapshot().overlayOpen && snapshot().viewOpenCount == 1 }
         rule.onNodeWithTag("session-overlay").assertIsDisplayed()
         rule.onNodeWithTag("l2-row-view-a").assertExists()
         rule.onNodeWithTag("l2-row-view-b").assertExists()
@@ -110,13 +112,15 @@ class SessionUiSmokeTest {
 
         rule.onNodeWithTag("session-overlay-scrim").performClick()
         rule.waitUntil(2_000) { !snapshot().overlayOpen }
+        assertEquals(1, snapshot().viewOpenCount)
         assertTrue(snapshot().viewSelections.isEmpty())
         assertTrue(snapshot().favoriteSelections.isEmpty())
 
         rule.onNodeWithTag("dock_view").performClick()
-        rule.waitUntil(2_000) { snapshot().overlayOpen }
+        rule.waitUntil(2_000) { snapshot().overlayOpen && snapshot().viewOpenCount == 2 }
         rule.onNodeWithTag("l2-row-view-b").performClick()
         rule.waitUntil(2_000) { !snapshot().overlayOpen }
+        assertEquals(2, snapshot().viewOpenCount)
         assertEquals(listOf("view-b" to "workspace-view-b"), snapshot().viewSelections)
         assertTrue(snapshot().favoriteSelections.isEmpty())
 
