@@ -6,13 +6,11 @@ T1-1                  : PASS — 无环（10 个 Go 包）
 T1-2                  : PASS — Go 10 包、Kotlin 16 包均有模块 doc
 
 == T3 判据（全部包，严格（计入退出码）） ==
-T3-1                  : FAIL — 符号级 doc 覆盖：20 条违规
+T3-1                  : FAIL — 符号级 doc 覆盖：18 条违规
   [T3-1] dev.agentmirror.app.conn  app/core-conn/src/main/java/dev/agentmirror/app/conn/ConnPerf.kt:49  `ConnPerf` — 顶层 public 声明缺紧邻 KDoc
   [T3-1] dev.agentmirror.app.termview  app/app/src/main/java/dev/agentmirror/app/termview/ViewportGeomStore.kt:39  `ViewportGeomStore` — 顶层 public 声明缺紧邻 KDoc
   [T3-1] dev.agentmirror.app.termview  app/app/src/main/java/dev/agentmirror/app/termview/ViewportGeomStore.kt:44  `SharedPreferencesViewportGeomStore` — 顶层 public 声明缺紧邻 KDoc
   [T3-1] dev.agentmirror.app.ui.components  app/app/src/main/java/dev/agentmirror/app/ui/components/CommonUi.kt:275  `BackChevron` — 顶层 public 声明缺紧邻 KDoc
-  [T3-1] dev.agentmirror.app.ui.screens  app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:31  `TerminalKey` — 顶层 public 声明缺紧邻 KDoc
-  [T3-1] dev.agentmirror.app.ui.screens  app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:33  `SessionDockMode` — 顶层 public 声明缺紧邻 KDoc
   [T3-1] dev.agentmirror.app.ui.theme  app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:22  `Dims` — 顶层 public 声明缺紧邻 KDoc
   [T3-1] dev.agentmirror.app.ui.theme  app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:103  `Radii` — 顶层 public 声明缺紧邻 KDoc
   [T3-1] dev.agentmirror.app.ui.theme  app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:128  `TypeSizes` — 顶层 public 声明缺紧邻 KDoc
@@ -97,3 +95,4 @@ T3-4                  : FAIL — 跨层声明一致：31 条违规
   [T3-4] internal/api  :0  `internal/overlay` — import 了却未声明 @consumes（架构漂移）
   [T3-4] internal/api  :0  `internal/provider` — import 了却未声明 @consumes（架构漂移）
 结果：未通过（exit 1）
+archwiki_rc=1

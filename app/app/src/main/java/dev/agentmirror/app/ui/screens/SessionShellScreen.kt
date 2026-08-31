@@ -7,6 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,8 +31,10 @@ import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.workspace.FavoriteRow
 
+/** Existing terminal key mapping exposed by the session hotkey row. */
 enum class TerminalKey(val label: String, val danger: Boolean = false) { Esc("Esc"), Tab("Tab"), Up("↑"), Down("↓"), Left("←"), Right("→"), CtrlC("Ctrl-C", true) }
 
+/** Mutually-exclusive local presentation state for the session dock. */
 enum class SessionDockMode { Menu, Hotkeys, View, Sessions }
 
 /** 097 shell: one terminal host, with dock state kept outside the terminal slot. */
@@ -97,11 +102,11 @@ fun SessionShellScreen(
 
 @Composable private fun FavoritePanel(c: SessionChromeColors, rows: List<FavoriteRow>, currentRef: String, onOpen: (FavoriteRow) -> Unit, onBack: () -> Unit) {
     val candidates = otherFavoriteRows(rows, currentRef)
-    Row(Modifier.fillMaxWidth().background(c.surface).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(c.surface).padding(8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
         if (candidates.isEmpty()) Text("暂无收藏", color = c.text)
         candidates.forEach { row ->
             val enabled = row.isOnline
-            TextButton(onClick = { if (enabled) onOpen(row) }, enabled = enabled, modifier = Modifier.fillMaxWidth().semantics { contentDescription = if (row.ref == currentRef) "当前会话 ${row.identityLabel}" else row.identityLabel }) {
+            TextButton(onClick = { if (enabled) onOpen(row) }, enabled = enabled, modifier = Modifier.semantics { contentDescription = if (row.ref == currentRef) "当前会话 ${row.identityLabel}" else row.identityLabel }) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(row.identityLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.text)
                     if (!enabled) Text("不在线", color = c.muted)
@@ -115,9 +120,10 @@ fun SessionShellScreen(
 internal fun otherFavoriteRows(rows: List<FavoriteRow>, currentRef: String): List<FavoriteRow> = rows.filter { it.ref != currentRef }
 
 @Composable private fun InputCapsule(draft: TextFieldValue, onChange: (TextFieldValue) -> Unit, onSend: () -> Unit, onAttach: () -> Unit, enabled: Boolean, c: SessionChromeColors) {
+    var focused by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().background(c.surface).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = onAttach, modifier = Modifier.semantics { contentDescription = "添加图片附件" }) { Text("＋", color = c.accent, fontSize = 22.sp) }
-        BasicTextField(value = draft, onValueChange = onChange, singleLine = false, maxLines = 4, textStyle = LocalTextStyle.current.copy(color = c.text), cursorBrush = SolidColor(c.accent), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { onSend() }), modifier = Modifier.weight(1f).background(c.input, RoundedCornerShape(24.dp)).border(1.dp, c.outline, RoundedCornerShape(24.dp)).padding(horizontal = 14.dp, vertical = 10.dp).testTag("session-draft"))
+        BasicTextField(value = draft, onValueChange = onChange, singleLine = !focused, maxLines = if (focused) 4 else 1, textStyle = LocalTextStyle.current.copy(color = c.text), cursorBrush = SolidColor(c.accent), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { onSend() }), modifier = Modifier.weight(1f).heightIn(min = 48.dp, max = if (focused) 140.dp else 48.dp).onFocusChanged { focused = it.isFocused }.background(c.input, RoundedCornerShape(24.dp)).border(1.dp, c.outline, RoundedCornerShape(24.dp)).padding(horizontal = 14.dp, vertical = 10.dp).testTag("session-draft"))
         TextButton(onClick = onSend, enabled = enabled, modifier = Modifier.semantics { contentDescription = "发送" }) { Text("↑", color = c.accent, fontSize = 20.sp) }
     }
 }

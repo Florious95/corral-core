@@ -14,6 +14,7 @@ data class SessionChromeColors(
     val interrupt: Color,
 ) {
     companion object {
+        /** Maps terminal background/foreground/ANSI slots to readable session roles. */
         fun from(scheme: TermPalette.Scheme): SessionChromeColors {
             val bg = scheme.defaultBg
             val fg = scheme.defaultFg

@@ -1,9 +1,11 @@
-# session-ui-shell implementation evidence
+# session-ui-shell rework evidence
 
-- Goal digest: `b4483865bb46c9c2740fead723e2419b8e9f2bf2c11131d571f5912e3fda016b`
+- Frozen Goal digest: `203a1372af12a71bcb2506d18a0ab48695b81fdff16acc971ec9df8c25e25320`
 - Base: `4605951e427f9ba6627375498dcb3c757c05bf36`
-- Session dock mode is mutually exclusive: menu buttons switch the same second row to hotkeys/view/other-favorites chips; `返回菜单` restores menu.
-- Favorite candidates are always `otherFavoriteRows(favoriteRows, currentRef)`, with no level2/all-session fallback. Empty candidates render `暂无收藏`; offline rows render `不在线` and are disabled.
-- Build command: `ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin --rerun-tasks --no-build-cache` (35 tasks, success).
-- Emulator script was attempted; no eligible emulator was attached (exit 2), so connected test/mobile-tree/APK-copy evidence remains unknown.
-- Archwiki command attempted with `--check --strict-t3`; exit 1, output in `archwiki.log`.
+- Rework local head under test: pending commit.
+- Sessions dock is a same-row replacement: menu has exactly 快捷键/查看/会话; sessions state uses a bounded horizontally scrolling chip row plus 返回菜单. Candidate source is always reconciled favorite rows filtered by current ref; no all-session/level2 fallback.
+- Input is one line unfocused and bounded multiline only while focused. Existing controlled TextFieldValue and attachment callbacks remain wired.
+- Real Compose instrumentation now renders SessionShellScreen, clicks dock/hotkeys/chips, checks semantics, callback counts, current exclusion, offline disabled, empty filtering, and scheme changes. JVM-only smoke replacement removed.
+- Fresh compile: `ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew :app:compileDebugAndroidTestKotlin --rerun-tasks --no-build-cache` succeeded (35 tasks executed).
+- Fresh strict architecture command: exit 1; output `archwiki-strict-t3.log`. Remaining names are baseline violations; PR-local declarations are not listed.
+- Fresh emulator harness: exit 2, exact reason `expected exactly one Android emulator, found 0`; no planned/discovered/executed counts, APK, or mobile-tree evidence claimed. Raw output `emulator-fresh.log`.
