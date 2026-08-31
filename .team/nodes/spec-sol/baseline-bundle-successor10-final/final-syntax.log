@@ -1,5 +1,0 @@
-SYNTAX_PASS sh-n=6 shellcheck=6 py_compile=3 cache=node-local
-sh-n: successor10 structure/AVD regression/owned wrapper, successor9 SDK selector/regression, successor7 continuity
-shellcheck -s sh: same six scripts; exit 0; no output
-python byte compile: successor10 ledger source, successor10 AVD helper, successor9 SDK selector; exit 0
-

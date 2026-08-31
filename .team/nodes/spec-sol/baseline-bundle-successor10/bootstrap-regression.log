@@ -1,5 +1,0 @@
-PASS baseline-bundle-successor10-avd-regression: success mode existing license input device package timeout no-leak zero-launch evidence-teeth
-exit_code: 0
-scope: fake avdmanager only; production selector, adb, emulator and qemu not invoked
-dynamic teeth: raw fd modes 0600; stdin EOF; exact package/device argv; owned timeout process group reaped; evidence 0600/unknown-field/digest/missing mappings
-

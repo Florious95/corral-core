@@ -1,2 +1,0 @@
-command: PYTHONPATH=ledgerdsl-0.1.1 /usr/bin/python3 .team/ledgers/src/baseline-bundle-successor-v1.py
-exit_code: 0

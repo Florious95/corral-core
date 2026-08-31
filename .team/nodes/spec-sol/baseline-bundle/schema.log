@@ -1,4 +1,0 @@
-fresh_at: 2026-08-25 Asia/Singapore
-command: PYTHONPATH=/Users/alauda/.agents/skills/ledger-orchestration/reference/ledgerdsl-0.1.1 /usr/bin/python3 -m ledgerdsl .team/ledgers/baseline-bundle-v1.json --repo-root /Volumes/nvme/Projects/远程Agent安卓 --skip-preflight
-门③ jsonschema: PASS
-exit_code: 0

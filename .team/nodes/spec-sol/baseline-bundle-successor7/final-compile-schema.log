@@ -1,6 +1,0 @@
-dsl_python=/usr/bin/python3
-dsl_source_commit=7485102b26ed34eb828e94900902147d5e00e995
-byte_recompile=pass
-jsonschema=pass tasks=9 dependencies=8
-b0b2210e9d2bffa364b39c8b03c930a961c3620afe425b457977d1f20a0bc884  .team/ledgers/src/baseline-bundle-successor7-v1.py
-447d8a6fb608c2ab520c0a4f3a3d7bb5ab69f9818d2e008bb049096d103320dd  .team/ledgers/baseline-bundle-successor7-v1.json
