@@ -102,14 +102,18 @@ fun SessionShellScreen(
 
 @Composable private fun FavoritePanel(c: SessionChromeColors, rows: List<FavoriteRow>, currentRef: String, onOpen: (FavoriteRow) -> Unit, onBack: () -> Unit) {
     val candidates = otherFavoriteRows(rows, currentRef)
-    Row(Modifier.fillMaxWidth().background(c.surface).padding(8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-        if (candidates.isEmpty()) Text("暂无收藏", color = c.text)
-        candidates.forEach { row ->
+    Row(Modifier.fillMaxWidth().background(c.surface).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (candidates.isEmpty()) Text("暂无收藏", color = c.text)
+                candidates.forEach { row ->
             val enabled = row.isOnline
             TextButton(onClick = { if (enabled) onOpen(row) }, enabled = enabled, modifier = Modifier.semantics { contentDescription = if (row.ref == currentRef) "当前会话 ${row.identityLabel}" else row.identityLabel }) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(row.identityLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.text)
                     if (!enabled) Text("不在线", color = c.muted)
+                }
+            }
                 }
             }
         }
