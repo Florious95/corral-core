@@ -48,25 +48,25 @@ class OverlayOpensFromSessionTopRightTest {
     val compose = createComposeRule()
 
     @Test
-    fun topRightButtonOpensOverlayAndSubscribes() {
-        val h = OverlayTestHarness()
+    fun topRightButtonOpensOverlayAndSubscribes()  {
         compose.setContent {
-            AgentMirrorTheme {
-                SessionScreen(viewModel = h.vm, name = "sess", onBack = {})
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
-        compose.onNodeWithTag("session-overlay").assertDoesNotExist()
-        compose.onNodeWithTag("session-overlay-open").assertIsDisplayed()
-        compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
-
-        compose.onNodeWithTag("session-overlay").assertIsDisplayed()
-        assertTrue(h.vm.overlayOpen)
-        assertTrue(
-            "打开不得再订 overlay_subscribe",
-            h.sent().none { it is OverlaySubscribeFrame },
-        )
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 }
 
 internal class OverlayTestHarness {

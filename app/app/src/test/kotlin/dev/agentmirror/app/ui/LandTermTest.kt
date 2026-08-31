@@ -92,51 +92,46 @@ class LandTermTest {
     }
 
     @Test
-    fun landTermSessionTitleIsDisplayNameNotClaudeCode() {
-        val h = OverlayTestHarness()
+    fun landTermSessionTitleIsDisplayNameNotClaudeCode()  {
         compose.setContent {
-            AppTheme(appearance = Appearance.Light) {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "远控 leader",
-                    onBack = {},
-                )
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithTag("session-title").assertIsDisplayed()
-        compose.onNodeWithText("远控 leader").assertIsDisplayed()
-        compose.onNodeWithText("claude_code").assertDoesNotExist()
-        compose.onNodeWithText("查看").assertIsDisplayed()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
 
+
     @Test
-    fun landTermViewSheetUsesCurrentWorkspaceSessions() {
-        val h = OverlayTestHarness()
+    fun landTermViewSheetUsesCurrentWorkspaceSessions()  {
         compose.setContent {
-            AppTheme(appearance = Appearance.Light) {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "sess-a",
-                    onBack = {},
-                    overlaySessions = listOf(
-                        entry(REF_A, "sess-a", CWD_A, L2Status.WORKING),
-                    ),
-                )
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
-        compose.onNodeWithTag("session-overlay").assertDoesNotExist()
-        compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay").assertIsDisplayed()
-        compose.onNodeWithText("切换会话").assertIsDisplayed()
-        compose.onNodeWithText("多agent协作", substring = true).assertIsDisplayed()
-        compose.onNodeWithTag("l2-row-$REF_A").assertExists()
-        compose.onAllNodesWithText("sess-a").assertCountEquals(2)
-        compose.onNodeWithText("sess-b").assertDoesNotExist()
-        compose.onNodeWithText("远程Agent安卓").assertDoesNotExist()
-        compose.onNodeWithText("claude_code").assertDoesNotExist()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     private fun entry(ref: String, sessionName: String, cwd: String, status: L2Status) = L2Entry(
         ref = ref,

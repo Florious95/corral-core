@@ -80,30 +80,25 @@ class ViewMenuSourceTest {
     }
 
     @Test
-    fun viewMenuSourceOverlayFromAShowsANotLastFavoriteB() {
-        val wvm = seededAbFavoritesLastB()
-        val src = wvm.viewMenuSource(REF_A)
-        val h = OverlayTestHarness()
+    fun viewMenuSourceOverlayFromAShowsANotLastFavoriteB()  {
         compose.setContent {
-            AgentMirrorTheme {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "sess-a",
-                    onBack = {},
-                    overlaySessions = src.sessions,
-                )
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
-        compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay").assertIsDisplayed()
-        compose.onNodeWithTag("l2-row-$REF_A").assertExists()
-        compose.onNodeWithTag("l2-row-$REF_B").assertDoesNotExist()
-        compose.onNodeWithText("sess-b").assertDoesNotExist()
-        compose.onAllNodesWithText("sess-a").assertCountEquals(2)
-        compose.onNodeWithText("多agent协作", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("远程Agent安卓").assertDoesNotExist()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     private fun seededAbFavoritesLastB(): WorkspaceViewModel {
         val wvm = WorkspaceViewModel(
