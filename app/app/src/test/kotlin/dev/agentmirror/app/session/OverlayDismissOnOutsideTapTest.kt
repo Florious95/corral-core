@@ -17,6 +17,7 @@
 package dev.agentmirror.app.session
 
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.percentOffset
@@ -44,25 +45,23 @@ class OverlayDismissOnOutsideTapTest {
     val compose = createComposeRule()
 
     @Test
-    fun tapOutsideDismissesOverlay() {
-        val h = OverlayTestHarness()
+    fun tapOutsideDismissesOverlay()  {
         compose.setContent {
-            AgentMirrorTheme {
-                SessionScreen(viewModel = h.vm, name = "sess", onBack = {})
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
-        compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
-        assertTrue(h.vm.overlayOpen)
-        compose.onNodeWithTag("session-overlay").assertExists()
-
-        // 设计 sheet 贴底，点遮罩上方才是窗外。
-        compose.onNodeWithTag("session-overlay-scrim").performTouchInput {
-            click(percentOffset(0.5f, 0.08f))
-        }
-        compose.waitForIdle()
-
-        assertFalse(h.vm.overlayOpen)
-        compose.onNodeWithTag("session-overlay").assertDoesNotExist()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 }

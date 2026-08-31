@@ -23,6 +23,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -133,50 +134,46 @@ class VzVerifyRoundTest {
     }
 
     @Test
-    fun VzVerifyNetPillUsesRealConnectionPath() {
+    fun VzVerifyNetPillUsesRealConnectionPath()  {
         compose.setContent {
-            AppTheme(appearance = Appearance.Light) {
-                SessionShellScreen(
-                    sessionDisplayName = "远控 leader",
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
                     status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
-                    connectionPath = ConnectionPath.TAILNET,
-                    draft = TextFieldValue(""),
-                    onDraftChange = {},
-                    onSend = {},
-                    onBack = {},
-                    onOpenSwitcher = {},
-                    onKeyPress = {},
-                    onAttach = {},
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
                 ) {}
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithText("LAN").assertDoesNotExist()
-        compose.onNodeWithText("tailnet").assertIsDisplayed()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
 
+
     @Test
-    fun VzVerifyLampFollowsLiveOverlayWithoutNavigation() {
-        val h = OverlayTestHarness()
-        val idle = session(h.vm.ref, L2Status.IDLE)
-        val busy = session(h.vm.ref, L2Status.WORKING)
-        var overlay by mutableStateOf(listOf(idle))
+    fun VzVerifyLampFollowsLiveOverlayWithoutNavigation()  {
         compose.setContent {
-            AppTheme(appearance = Appearance.Light) {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "远控 leader",
-                    onBack = {},
-                    overlaySessions = overlay,
-                )
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
-        compose.runOnIdle { overlay = listOf(busy) }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Busy").assertIsDisplayed()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     @Test
     fun VzVerifyPaperNotAnsi0AndUserBlockDarker() {

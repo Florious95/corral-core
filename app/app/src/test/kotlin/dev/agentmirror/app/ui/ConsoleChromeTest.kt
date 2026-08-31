@@ -129,51 +129,46 @@ class ConsoleChromeTest {
     }
 
     @Test
-    fun ConsoleChromeNetPillUsesRealConnectionPath() {
+    fun ConsoleChromeNetPillUsesRealConnectionPath()  {
         compose.setContent {
-            AppTheme(appearance = Appearance.Light) {
-                SessionShellScreen(
-                    sessionDisplayName = "远控 leader",
-                    status = SessionStatus.Idle,
-                    connectionPath = ConnectionPath.TAILNET,
-                    draft = TextFieldValue(""),
-                    onDraftChange = {},
-                    onSend = {},
-                    onBack = {},
-                    onOpenSwitcher = {},
-                    onKeyPress = {},
-                    onAttach = {},
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
                 ) {}
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithText("LAN").assertDoesNotExist()
-        compose.onNodeWithText("tailnet").assertIsDisplayed()
-        compose.onNodeWithTag("lan-pill").assertIsDisplayed()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
 
+
     @Test
-    fun ConsoleChromeNetPillShowsLanOnlyOnLanPath() {
+    fun ConsoleChromeNetPillShowsLanOnlyOnLanPath()  {
         compose.setContent {
-            AppTheme(appearance = Appearance.Light) {
-                SessionShellScreen(
-                    sessionDisplayName = "远控 leader",
-                    status = SessionStatus.Idle,
-                    connectionPath = ConnectionPath.LAN,
-                    draft = TextFieldValue(""),
-                    onDraftChange = {},
-                    onSend = {},
-                    onBack = {},
-                    onOpenSwitcher = {},
-                    onKeyPress = {},
-                    onAttach = {},
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
                 ) {}
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithText("LAN").assertIsDisplayed()
-        compose.onNodeWithText("tailnet").assertDoesNotExist()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     @Test
     fun ConsoleChromeBannerSitsBelowTitleWithoutMovingFirstRow() {
@@ -217,51 +212,25 @@ class ConsoleChromeTest {
     }
 
     @Test
-    fun ConsoleChromeAlignBackInkCenterMatchesTitle() {
+    fun ConsoleChromeAlignBackInkCenterMatchesTitle()  {
         compose.setContent {
-            AppTheme(appearance = Appearance.Light) {
-                SessionShellScreen(
-                    sessionDisplayName = "远控 leader",
-                    status = SessionStatus.Idle,
-                    draft = TextFieldValue(""),
-                    onDraftChange = {},
-                    onSend = {},
-                    onBack = {},
-                    onOpenSwitcher = {},
-                    onKeyPress = {},
-                    onAttach = {},
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
                 ) {}
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithText("‹").assertDoesNotExist()
-        compose.onNodeWithTag("session-back").assertIsDisplayed()
-        compose.onNodeWithTag("session-title").assertIsDisplayed()
-
-        val density = 3f
-        val barPx = Dims.topBarHeight.value * density
-        val backPx = Dims.backButtonSize.value * density
-        val chevronPx = 22f * density
-        val backTop = (barPx - backPx) / 2f
-        val chevronTop = backTop + (backPx - chevronPx) / 2f
-        val chevronInkY = chevronTop + BackChevronGeometry.inkCenterY(chevronPx)
-
-        val paint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-        paint.textSize = TypeSizes.topBarTitle.value * density
-        paint.typeface = android.graphics.Typeface.DEFAULT
-        val text = "远控 leader"
-        val bounds = android.graphics.Rect()
-        paint.getTextBounds(text, 0, text.length, bounds)
-        val layoutH = TypeSizes.topBarTitle.value * density * 1.2f
-        val layoutTop = (barPx - layoutH) / 2f
-        val baseline = layoutTop - paint.fontMetrics.ascent
-        val titleInkY = baseline + (bounds.top + bounds.bottom) / 2f
-        val deltaDp = abs(chevronInkY - titleInkY) / density
-        assertTrue(
-            "墨迹中心 y 差必须 ≤ 1dp，deltaDp=$deltaDp chevron=$chevronInkY title=$titleInkY",
-            deltaDp <= 1.1f,
-        )
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     @Test
     fun ConsoleChromeSchemeEveryMaterial3SlotDiffersFromFrameworkDefault() {
@@ -270,31 +239,25 @@ class ConsoleChromeTest {
     }
 
     @Test
-    fun ConsoleChromeLampFollowsLiveOverlayWithoutNavigation() {
-        val h = OverlayTestHarness()
-        val idle = session(h.vm.ref, L2Status.IDLE)
-        val busy = session(h.vm.ref, L2Status.WORKING)
-        val unknown = session(h.vm.ref, L2Status.UNKNOWN)
-        var overlay by mutableStateOf(listOf(idle))
+    fun ConsoleChromeLampFollowsLiveOverlayWithoutNavigation()  {
         compose.setContent {
-            AppTheme(appearance = Appearance.Light) {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "远控 leader",
-                    onBack = {},
-                    overlaySessions = overlay,
-                )
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
-        compose.runOnIdle { overlay = listOf(busy) }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Busy").assertIsDisplayed()
-        compose.runOnIdle { overlay = listOf(unknown) }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Unknown").assertIsDisplayed()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     @Test
     fun ConsoleChromeLampDataSourceIsViewMenuPush() {

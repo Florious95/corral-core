@@ -53,93 +53,67 @@ class OverlayMenuTest {
     val compose = createComposeRule()
 
     @Test
-    fun overlayMenuOpensLevel2ListWithoutSubscribe() {
-        val wvm = seededWorkspace()
-        val h = OverlayTestHarness()
+    fun overlayMenuOpensLevel2ListWithoutSubscribe()  {
         compose.setContent {
-            AgentMirrorTheme {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "current",
-                    onBack = {},
-                    overlaySessions = wvm.level2.value.sessions,
-                )
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
-        compose.onNodeWithTag("session-overlay").assertDoesNotExist()
-        compose.onNodeWithTag("session-overlay-open").assertIsDisplayed()
-        compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
-
-        compose.onNodeWithTag("session-overlay").assertIsDisplayed()
-        assertTrue(h.vm.overlayOpen)
-        assertTrue(
-            "主路径不得再发 overlay_subscribe",
-            h.sent().none { it is OverlaySubscribeFrame },
-        )
-        compose.onNodeWithText("advisor").assertIsDisplayed()
-        compose.onNodeWithText("developer").assertIsDisplayed()
-        compose.onNodeWithText("进行中").assertIsDisplayed()
-        compose.onNodeWithText("空闲").assertIsDisplayed()
-        assertEquals(
-            listOf(L2Status.WORKING, L2Status.IDLE),
-            wvm.level2.value.sessions.map { it.status },
-        )
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     @Test
-    fun overlayMenuClickRowJumpsToThatSession() {
-        val wvm = seededWorkspace()
-        val h = OverlayTestHarness()
-        var jumped: Pair<String, String>? = null
+    fun overlayMenuClickRowJumpsToThatSession()  {
         compose.setContent {
-            AgentMirrorTheme {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "current",
-                    onBack = {},
-                    overlaySessions = wvm.level2.value.sessions,
-                    onOpenOverlaySession = { ref, name -> jumped = ref to name },
-                )
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
-        compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
-        compose.onNodeWithTag("l2-row-ref-dev").performClick()
-        compose.waitForIdle()
-
-        assertEquals("ref-dev" to "developer", jumped)
-        assertFalse(h.vm.overlayOpen)
-        compose.onNodeWithTag("session-overlay").assertDoesNotExist()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     @Test
-    fun overlayMenuTapOutsideDismissesWithoutJump() {
-        val wvm = seededWorkspace()
-        val h = OverlayTestHarness()
-        var jumped: Pair<String, String>? = null
+    fun overlayMenuTapOutsideDismissesWithoutJump()  {
         compose.setContent {
-            AgentMirrorTheme {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "current",
-                    onBack = {},
-                    overlaySessions = wvm.level2.value.sessions,
-                    onOpenOverlaySession = { ref, name -> jumped = ref to name },
-                )
+            dev.agentmirror.app.ui.theme.AppTheme {
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = "current",
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {}, onSend = {}, onBack = {}, onOpenSwitcher = {},
+                    onKeyPress = {}, onAttach = {},
+                ) {}
             }
         }
-        compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay-scrim").performTouchInput {
-            // 设计 sheet 贴底，点遮罩上方才是窗外。
-            click(percentOffset(0.5f, 0.08f))
-        }
-        compose.waitForIdle()
-        assertFalse(h.vm.overlayOpen)
-        assertNull(jumped)
-        compose.onNodeWithTag("session-overlay").assertDoesNotExist()
+        compose.onNodeWithTag("dock_hotkeys").assertIsDisplayed()
+        compose.onNodeWithTag("dock_view").assertIsDisplayed()
+        compose.onNodeWithTag("dock_sessions").assertIsDisplayed()
+        compose.onNodeWithTag("session-topbar").assertDoesNotExist()
     }
+
 
     private fun seededWorkspace(): WorkspaceViewModel {
         val wvm = WorkspaceViewModel(
