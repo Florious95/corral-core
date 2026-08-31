@@ -71,15 +71,15 @@ fun SessionShellScreen(
             SessionDockMode.Hotkeys -> KeyPanel(chrome, onKeyPress) { mode = SessionDockMode.Menu }
             SessionDockMode.View -> ViewPanel(chrome, onOpenSwitcher) { mode = SessionDockMode.Menu }
             SessionDockMode.Sessions -> FavoritePanel(chrome, favoriteRows, currentRef, onOpenFavorite) { mode = SessionDockMode.Menu }
-            SessionDockMode.Menu -> Dock(chrome) { mode = it }
+            SessionDockMode.Menu -> Dock(chrome, onMode = { mode = it }, onView = onOpenSwitcher)
         }
     }
 }
 
-@Composable private fun Dock(c: SessionChromeColors, onMode: (SessionDockMode) -> Unit) {
+@Composable private fun Dock(c: SessionChromeColors, onMode: (SessionDockMode) -> Unit, onView: () -> Unit) {
     Row(Modifier.fillMaxWidth().background(c.surface).padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
         listOf(SessionDockMode.Hotkeys to "快捷键", SessionDockMode.View to "查看", SessionDockMode.Sessions to "会话").forEach { (m, label) ->
-            TextButton(onClick = { onMode(m) }, modifier = Modifier.testTag("dock_${when(m){SessionDockMode.Hotkeys->"hotkeys";SessionDockMode.View->"view";else->"sessions"}}").semantics { contentDescription = label }) { Text(label, color = c.text) }
+            TextButton(onClick = { if (m == SessionDockMode.View) onView() else onMode(m) }, modifier = Modifier.testTag("dock_${when(m){SessionDockMode.Hotkeys->"hotkeys";SessionDockMode.View->"view";else->"sessions"}}").semantics { contentDescription = label }) { Text(label, color = c.text) }
         }
     }
 }
