@@ -78,6 +78,11 @@ class SessionUiAcceptanceActivity : ComponentActivity() {
                     onBack = { f.backCount++; changed() },
                     overlaySessions = f.viewRows,
                     favoriteRows = f.favorites,
+                    onOpenSwitcher = {
+                        f.viewOpenCount++
+                        f.vm.openOverlay()
+                        changed()
+                    },
                     onOpenOverlaySession = { ref, name ->
                         if (f.viewRows.any { it.ref == ref }) f.viewSelections += ref to name
                         else f.favoriteSelections += ref to name
@@ -154,6 +159,7 @@ class SessionUiAcceptanceActivity : ComponentActivity() {
             keyValues = fixture.transport.inputFrames.flatMap { it.keys }.map { it.wire },
             inputTexts = fixture.transport.inputFrames.map { it.text },
             overlayOpen = fixture.vm.overlayOpen,
+            viewOpenCount = fixture.viewOpenCount,
             backCount = fixture.backCount,
             terminalCount = terminals.size,
             terminalIdentity = terminal?.let(System::identityHashCode) ?: 0,
@@ -189,6 +195,7 @@ class SessionUiAcceptanceActivity : ComponentActivity() {
         val keyValues: List<String>,
         val inputTexts: List<String>,
         val overlayOpen: Boolean,
+        val viewOpenCount: Int,
         val backCount: Int,
         val terminalCount: Int,
         val terminalIdentity: Int,
@@ -204,7 +211,7 @@ class SessionUiAcceptanceActivity : ComponentActivity() {
                 "current_ref=$currentRef current_name=$currentName favorite_refs=${favoriteRefs.joinToString(",")} " +
                 "view_refs=${viewRefs.joinToString(",")} favorite_selected=${favoriteSelections.joinToString(",") { it.first }} " +
                 "view_selected=${viewSelections.joinToString(",") { it.first }} keys=${keyValues.joinToString(",")} " +
-                "inputs=${inputTexts.size} overlay=$overlayOpen back=$backCount terminal_count=$terminalCount " +
+                "inputs=${inputTexts.size} overlay=$overlayOpen view_open_count=$viewOpenCount back=$backCount terminal_count=$terminalCount " +
                 "terminal_id=$terminalIdentity presenter_id=$presenterIdentity terminal_ref=$terminalRef " +
                 "theme=$themeId scheme=$schemeId chrome=$chrome"
     }
@@ -225,6 +232,7 @@ private class DebugSessionFixture(
     var currentName = "acceptance-current"
     val favoriteSelections = mutableListOf<Pair<String, String>>()
     val viewSelections = mutableListOf<Pair<String, String>>()
+    var viewOpenCount = 0
     var backCount = 0
     var themeId = "vesper"
 
