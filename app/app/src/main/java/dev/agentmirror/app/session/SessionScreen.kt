@@ -86,6 +86,7 @@ import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.cwdDisplayName
 import dev.agentmirror.app.workspace.favoriteKey
@@ -117,6 +118,7 @@ fun SessionScreen(
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
     overlaySessions: List<L2Entry> = emptyList(),
+    favoriteRows: List<FavoriteRow> = emptyList(),
     overlayFavorited: Set<FavoriteKey> = emptySet(),
     onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
@@ -263,6 +265,9 @@ fun SessionScreen(
                 onOpenSwitcher = viewModel::openOverlay,
                 onKeyPress = { viewModel.sendKey(it.toInputKey()) },
                 onAttach = { attachMenu = true },
+                favoriteRows = favoriteRows,
+                currentRef = viewModel.ref,
+                onOpenFavorite = { row -> onOpenOverlaySession(row.ref, row.identityLabel) },
                 sendEnabled = viewModel.inputStatus !is InputStatus.Sending,
                 connectionBanner = viewModel.connectionBanner,
             ) {

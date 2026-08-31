@@ -46,6 +46,7 @@ import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.SharedPreferencesViewportGeomStore
 import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Entry
 
 /**
@@ -80,6 +81,7 @@ fun SessionRoute(
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
     overlaySessions: List<L2Entry> = emptyList(),
+    favoriteRows: List<FavoriteRow> = emptyList(),
     overlayFavorited: Set<FavoriteKey> = emptySet(),
     onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
@@ -129,6 +131,7 @@ fun SessionRoute(
         connectionPath = connectionPath,
         onBack = onBack,
         overlaySessions = overlaySessions,
+        favoriteRows = favoriteRows,
         overlayFavorited = overlayFavorited,
         onToggleOverlayFavorite = onToggleOverlayFavorite,
         onOpenOverlaySession = onOpenOverlaySession,
