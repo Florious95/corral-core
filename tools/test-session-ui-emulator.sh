@@ -62,3 +62,12 @@ executed=$(find "$xml_dir" -name 'TEST-*.xml' -print0 2>/dev/null | xargs -0 gre
 failed=$(find "$xml_dir" -name 'TEST-*.xml' -print0 2>/dev/null | xargs -0 grep -h -c -E '<failure|<error' | awk '{s+=$1} END {print s+0}')
 printf 'planned_count=18 discovered_count=18 executed_count=%s failed_names_count=%s gradle_rc=%s duration_seconds=%s\n' "$executed" "$failed" "$gradle_rc" "$(( $(date +%s)-start ))" | tee -a "$log"
 [[ "$gradle_rc" -eq 0 && "$executed" -eq 18 && "$failed" -eq 0 ]] || exit 4
+component=dev.agentmirror.app/.SessionUiAcceptanceActivity
+start_result=$("$ADB" -s "$ANDROID_SERIAL" shell am start -W -n "$component" --es session_ui_fixture full 2>&1)
+printf 'persistent_component=%s start_result=%s\n' "$component" "$start_result" | tee -a "$log"
+foreground=''; for _ in 1 2 3 4 5 6 7 8 9 10; do foreground=$("$ADB" -s "$ANDROID_SERIAL" shell dumpsys activity activities 2>/dev/null | grep -m1 mResumedActivity || true); [[ "$foreground" == *SessionUiAcceptanceActivity* ]] && break; done
+printf 'foreground=%s serial=%s\n' "$foreground" "$ANDROID_SERIAL" | tee -a "$log"
+[[ "$foreground" == *SessionUiAcceptanceActivity* ]] || exit 5
+release_manifest="$ROOT/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml"
+! grep -q 'SessionUiAcceptanceActivity' "$release_manifest"
+printf 'release_fixture_absent=true\n' | tee -a "$log"
