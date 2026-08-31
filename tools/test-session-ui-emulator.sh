@@ -20,11 +20,17 @@ if [[ "${1:-}" == "--list-tests" ]]; then exit 0; fi
 if [[ "${1:-}" == "--functional-gate" ]]; then
   mode=${2:-}; [[ "$mode" == prestart ]] || { echo 'functional gate requires prestart'; exit 2; }
   load=$(sysctl -n vm.loadavg 2>/dev/null | awk '{print $2}' || true); load=${load:-unknown}
-  free=$(df -Pk "$ROOT" | awk 'NR==2 {print $4}')
-  qemu=$(pgrep -f 'qemu-system' | wc -l | tr -d ' ')
-  echo "functional_gate=prestart load1=$load free_kb=$free qemu_count=$qemu dead_sockets=informational"
+  free=$(df -Pk "$ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true); free=${free:-unknown}
+  qemu_pids=$(pgrep -f qemu-system 2>/dev/null || true); qemu_count=$(printf '%s\n' "$qemu_pids" | awk 'NF {n++} END {print n+0}')
+  branch=$(git -C "$ROOT/.." branch --show-current 2>/dev/null || true); head=$(git -C "$ROOT/.." rev-parse HEAD 2>/dev/null || true)
+  adb_path=$(command -v "${ADB:-adb}" 2>/dev/null || true)
+  adb_rows=$([[ -n "$adb_path" ]] && "$adb_path" devices -l 2>/dev/null || true)
+  dead=$(find /private/tmp -maxdepth 2 -type s -name 'default' 2>/dev/null | wc -l | tr -d ' ' || true)
+  echo "functional_gate=prestart cwd=$(pwd) branch=$branch head=$head sdk=${ANDROID_HOME:-unknown} adb=$adb_path"
+  echo "raw_inventory=planned_count=$planned_count discovered_count=$discovered_count planned_names=[$planned_names] discovered_names=[$discovered_names]"
+  echo "raw_load1=$load raw_disk_free_kb=$free raw_qemu_pids=[$qemu_pids] qemu_count=$qemu_count raw_adb_devices=[$adb_rows] dead_tmux_sockets=$dead informational"
   awk -v x="$load" 'BEGIN {exit !(x != "unknown" && x <= 12.0)}' || exit 2
-  [[ "$qemu" == 0 ]] || exit 2
+  [[ "$qemu_count" == 0 ]] || exit 2
   exit 0
 fi
 ADB=${ADB:-adb}
