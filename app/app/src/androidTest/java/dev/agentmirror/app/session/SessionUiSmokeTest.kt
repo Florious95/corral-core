@@ -18,11 +18,13 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
+private var callbackCounter = 0
+
 class SessionUiSmokeTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     private val rows = listOf(FavoriteRow("current", "", "", 1, true, ref="cur"), FavoriteRow("online", "", "", 2, true, ref="online"), FavoriteRow("offline", "", "", 3, false, ref="offline"), FavoriteRow("a-very-long-session-name-that-ellipsizes", "", "", 4, true, ref="long"))
     private fun render(rows: List<FavoriteRow> = this.rows, ref: String = "cur", onOpen: (FavoriteRow) -> Unit = {}, onKey: (dev.agentmirror.app.ui.screens.TerminalKey) -> Unit = {}) {
-        rule.setContent { AppTheme { SessionShellScreen("current", SessionStatus.Unknown, draft=TextFieldValue(""), onDraftChange={}, onSend={}, onBack={}, onOpenSwitcher={}, onKeyPress=onKey, onAttach={}, favoriteRows=rows, currentRef=ref, onOpenFavorite=onOpen) { Box(Modifier.testTag("terminal-host")) } } }
+        rule.setContent { AppTheme { SessionShellScreen("current", SessionStatus.Unknown, draft=TextFieldValue(""), onDraftChange={ callbackCounter++ }, onSend={ callbackCounter++ }, onBack={ callbackCounter++ }, onOpenSwitcher={ callbackCounter++ }, onKeyPress=onKey, onAttach={ callbackCounter++ }, favoriteRows=rows, currentRef=ref, onOpenFavorite={ callbackCounter++; onOpen(it) }) { Box(Modifier.testTag("terminal-host")) } } }
     }
     @Test fun defaultDock_rendersExactlyThreeControlsInOrder() { render(); rule.onNodeWithTag("dock_hotkeys").assertExists(); rule.onNodeWithTag("dock_view").assertExists(); rule.onNodeWithTag("dock_sessions").assertExists(); rule.onNodeWithTag("session-topbar").assertDoesNotExist() }
     @Test fun sessionsMode_replacesSameRowWithoutOverlay() { render(); rule.onNodeWithTag("dock_sessions").performClick(); rule.onNodeWithTag("sessions-back").assertExists(); rule.onNodeWithTag("dock_hotkeys").assertDoesNotExist() }
