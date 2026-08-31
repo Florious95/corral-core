@@ -2,7 +2,15 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../app" && pwd)
 ADB=${ADB:-adb}
-mapfile -t devices < <(python3 - "$ADB" <<'PY'
+serials=()
+while IFS= read -r serial; do
+  [[ -n "$serial" ]] || continue
+  [[ "$(python3 - "$ADB" "$serial" <<'PY'
+import subprocess,sys
+print(subprocess.run([sys.argv[1],"-s",sys.argv[2],"shell","getprop","ro.kernel.qemu"],capture_output=True,text=True,timeout=20,check=True).stdout.strip())
+PY
+)" == "1" ]] && serials+=("$serial")
+done < <(python3 - "$ADB" <<'PY'
 import subprocess,sys
 p=subprocess.run([sys.argv[1],"devices"],capture_output=True,text=True,timeout=20,check=True)
 for line in p.stdout.splitlines()[1:]:
@@ -10,14 +18,6 @@ for line in p.stdout.splitlines()[1:]:
     if len(parts)==2 and parts[1]=="device": print(parts[0])
 PY
 )
-serials=()
-for serial in "${devices[@]}"; do
-  [[ "$(python3 - "$ADB" "$serial" <<'PY'
-import subprocess,sys
-print(subprocess.run([sys.argv[1],"-s",sys.argv[2],"shell","getprop","ro.kernel.qemu"],capture_output=True,text=True,timeout=20,check=True).stdout.strip())
-PY
-)" == "1" ]] && serials+=("$serial")
-done
 [[ ${#serials[@]} -eq 1 ]] || { echo "expected exactly one Android emulator, found ${#serials[@]}" >&2; exit 2; }
 export ANDROID_SERIAL=${serials[0]}
 api=$(python3 - "$ADB" "$ANDROID_SERIAL" <<'PY'
