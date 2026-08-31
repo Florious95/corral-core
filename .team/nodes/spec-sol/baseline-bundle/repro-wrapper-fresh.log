@@ -1,5 +1,0 @@
-FAIL baseline-bundle-real-chain: state=failed_retryable frontier=[] verify=dependency_unsatisfied measurement=unjudgeable lease_pid=85754
-BASELINE_MISSING_DEADLOCK_REPRO real_chain=observed legacy_state=failed_retryable frontier=empty verify=dependency_unsatisfied
-FAIL baseline-bundle-repro: missing REPRO.md after behavioral probe
-expected_pre_task_exit_code: 1
-observed_exit_code: 1

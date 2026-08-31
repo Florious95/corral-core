@@ -1,3 +1,0 @@
-SUCCESSOR7_IMPL_BYPASS historical_legacy=0 historical_hardened=2 permanent_green=0 permanent_forged=1 permanent_missing=2 provenance=548572dfd7d8ee2e3f602a274268e8bd881ef8b2
-PASS baseline-bundle-successor7-impl-bypass: permanent Git fixture and real projection rejection verified
-PASS baseline-bundle-successor7-bypass-regression: stable fixture rejects forgery and reports missing as unjudgeable

@@ -1,2 +1,0 @@
-SUCCESSOR11_STRUCTURE tasks=9 frontier=four-command successor10_r5=frozen fresh_verify=three-required legacy_verify=absent downstream=unchanged ratio=1.10 user_gate=real-device statuses=none
-structure=0 json=0 predecessor_sha=0 no_lease=0 no_driver_pid=0

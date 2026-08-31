@@ -1,5 +1,0 @@
-SUCCESSOR7_CONTINUITY evidence_commit=3528c2ad5 four_tasks=succeeded worktree=wt-maple-core manifest_bound=true archives_bound=true
-SUCCESSOR7_IMPL_BYPASS historical_legacy=0 historical_hardened=2 permanent_green=0 permanent_forged=1 permanent_missing=2 provenance=548572dfd7d8ee2e3f602a274268e8bd881ef8b2
-PASS baseline-bundle-successor7-impl-bypass: permanent Git fixture and real projection rejection verified
-UNJUDGEABLE baseline-bundle-successor7-apparatus: apparatus evidence unavailable
-bootstrap_apparatus_without_command_exit=2
