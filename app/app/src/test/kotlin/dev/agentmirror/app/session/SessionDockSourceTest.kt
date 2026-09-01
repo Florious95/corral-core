@@ -10,15 +10,22 @@
 
 package dev.agentmirror.app.session
 
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -29,7 +36,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.workspace.FavoriteKey
 import dev.agentmirror.app.workspace.L2Entry
@@ -86,17 +96,22 @@ class SessionDockSourceTest {
     }
 
     @Test
-    fun inputFocusExpandsAndBlurOrSendCollapsesWithSourceTiming() {
+    fun inputFocusExpandsAndRealTerminalTapOrSendCollapsesWithSourceTiming() {
         var sent = ""
-        var clearInputFocus: () -> Unit = {}
         compose.mainClock.autoAdvance = false
         compose.setContent {
             var value by remember { mutableStateOf(TextFieldValue("")) }
             val focusManager = LocalFocusManager.current
-            clearInputFocus = { focusManager.clearFocus() }
+            val listState = rememberLazyListState()
             AgentMirrorTheme {
                 SessionDockTheme(dark = false) {
-                    CommandInputBar(
+                    SessionScreenScaffold(
+                        terminalCanvas = { Box(Modifier.fillMaxSize()) },
+                        dockMode = DockRowMode.Sessions,
+                        onDockModeChange = {},
+                        sessions = emptyList(),
+                        sessionListState = listState,
+                        onSessionSelect = {},
                         value = value,
                         onValueChange = { value = it },
                         onSendText = {
@@ -105,23 +120,28 @@ class SessionDockSourceTest {
                             focusManager.clearFocus()
                         },
                         onPickAttachment = {},
+                        onKeyToken = {},
+                        onBack = {},
+                        onOpenViewMenu = {},
                     )
                 }
             }
         }
         compose.waitForIdle()
         val collapsed = inputFieldHeight()
+        assertEquals(32f, collapsed, 0.5f)
 
         compose.onNodeWithTag("session-command-editor").performClick()
         compose.mainClock.advanceTimeBy(SessionDockMotion.InputHeightMillis.toLong() + 1)
         compose.waitForIdle()
         val expanded = inputFieldHeight()
-        assertTrue("focused input must expand: collapsed=$collapsed expanded=$expanded", expanded > collapsed * 2f)
+        assertEquals(72f, expanded, 0.5f)
 
-        compose.runOnIdle { clearInputFocus() }
+        // A genuine pointer action on the terminal, not a focus-manager test hook.
+        compose.onNodeWithTag("session-terminal-canvas").performTouchInput { click() }
         compose.mainClock.advanceTimeBy(SessionDockMotion.InputHeightMillis.toLong() + 1)
         compose.waitForIdle()
-        assertTrue(abs(inputFieldHeight() - collapsed) < 0.5f)
+        assertEquals(32f, inputFieldHeight(), 0.5f)
 
         compose.onNodeWithTag("session-command-editor").performClick()
         compose.mainClock.advanceTimeBy(SessionDockMotion.InputHeightMillis.toLong() + 1)
@@ -129,9 +149,34 @@ class SessionDockSourceTest {
         compose.onNodeWithContentDescription("发送").performClick()
         compose.mainClock.advanceTimeBy(SessionDockMotion.InputHeightMillis.toLong() + 1)
         compose.waitForIdle()
-        val sentCollapsed = inputFieldHeight()
         assertEquals("ls", sent)
-        assertTrue(abs(sentCollapsed - collapsed) < 0.5f)
+        assertEquals(32f, inputFieldHeight(), 0.5f)
+    }
+
+    @Test
+    fun imeDockUsesSourceThreeHundredMillisecondStandardCurveInBothDirections() {
+        val opening = TargetBasedAnimation(
+            animationSpec = sourceImeAnimationSpec,
+            typeConverter = Dp.VectorConverter,
+            initialValue = 0.dp,
+            targetValue = 236.dp,
+        )
+        val closing = TargetBasedAnimation(
+            animationSpec = sourceImeAnimationSpec,
+            typeConverter = Dp.VectorConverter,
+            initialValue = 236.dp,
+            targetValue = 0.dp,
+        )
+        val midpointNanos = 150_000_000L
+        val expectedOpeningMidpoint = 236f * SessionDockMotion.Standard.transform(0.5f)
+        val expectedClosingMidpoint = 236f * (1f - SessionDockMotion.Standard.transform(0.5f))
+
+        assertEquals(300_000_000L, opening.durationNanos)
+        assertEquals(300_000_000L, closing.durationNanos)
+        assertEquals(expectedOpeningMidpoint, opening.getValueFromNanos(midpointNanos).value, 0.1f)
+        assertEquals(expectedClosingMidpoint, closing.getValueFromNanos(midpointNanos).value, 0.1f)
+        assertEquals(236f, opening.getValueFromNanos(opening.durationNanos).value, 0.1f)
+        assertEquals(0f, closing.getValueFromNanos(closing.durationNanos).value, 0.1f)
     }
 
     @Test
@@ -195,6 +240,11 @@ class SessionDockSourceTest {
         assertEquals(200, SessionDockMotion.PopInMillis)
         assertEquals(250, SessionDockMotion.InputHeightMillis)
         assertEquals(300, SessionDockMotion.KeyboardPushMillis)
+        assertEquals(32, sourceInputFieldHeightDp(focused = false, expandedLines = 3))
+        assertEquals(52, sourceInputFieldHeightDp(focused = true, expandedLines = 2))
+        assertEquals(72, sourceInputFieldHeightDp(focused = true, expandedLines = 3))
+        assertEquals(92, sourceInputFieldHeightDp(focused = true, expandedLines = 4))
+        assertEquals(112, sourceInputFieldHeightDp(focused = true, expandedLines = 5))
         assertEquals(1_100, SessionDockMotion.CursorBlinkMillis)
         assertEquals(255, SessionDockMotion.cursorAlphaAt(0))
         assertEquals(255, SessionDockMotion.cursorAlphaAt(549))
