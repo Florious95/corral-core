@@ -30,9 +30,10 @@ import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.BackAffordance
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.PathText
+import dev.agentmirror.app.ui.components.ProviderMark
+import dev.agentmirror.app.ui.components.FavoriteLongPressMenu
 import dev.agentmirror.app.ui.components.RowDivider
 import dev.agentmirror.app.ui.components.SessionNameText
-import dev.agentmirror.app.ui.components.StarButton
 import dev.agentmirror.app.ui.components.StatusChip
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.theme.Dims
@@ -155,6 +156,7 @@ private fun SessionRow(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    FavoriteLongPressMenu(starred = item.starred, onClick = onClick, onToggle = onToggleStar, modifier = Modifier.fillMaxWidth()) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -163,17 +165,13 @@ private fun SessionRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dims.rowGap),
     ) {
-        StarButton(
-            starred = item.starred,
-            onToggle = onToggleStar,
-            modifier = Modifier.testTag("$tagPrefix-star-${item.id}"),
-        )
+        ProviderMark(dev.agentmirror.app.ui.model.providerPresentation(item.provider, item.activity, item.health), Modifier.testTag("$tagPrefix-provider-${item.id}"))
         Box(
             modifier = Modifier
                 .weight(1f)
                 .height(if (showPath) Dims.rowHeightWithSubtitle else Dims.rowHeightSingleLine)
                 .background(if (pressed) p.rowPressed else Color.Transparent)
-                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                .clickable(interactionSource = interaction, indication = null, onClick = {})
                 .testTag("$tagPrefix-row-${item.id}"),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -194,5 +192,6 @@ private fun SessionRow(
             }
         }
         StatusChip(item.status, Modifier.testTag("$tagPrefix-status-${item.id}"))
+    }
     }
 }

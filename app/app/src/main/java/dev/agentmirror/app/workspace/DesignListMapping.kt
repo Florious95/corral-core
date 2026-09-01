@@ -18,7 +18,7 @@ package dev.agentmirror.app.workspace
 
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.WorkspaceItem
-import dev.agentmirror.app.ui.model.sessionStatusFromL2
+import dev.agentmirror.app.ui.model.sessionStatusFromAxes
 
 /** 一级 cwd 聚合 → 设计包 [WorkspaceItem]。显示名取末段，路径不截断。 */
 internal fun WorkspaceUi.toWorkspaceItem(): WorkspaceItem = WorkspaceItem(
@@ -33,9 +33,12 @@ internal fun L2Entry.toSessionItem(starred: Boolean): SessionItem = SessionItem(
     id = ref,
     displayName = identityLabel,
     path = cwd,
-    status = sessionStatusFromL2(status),
+    status = sessionStatusFromAxes(activity.wire, health),
     starred = starred,
     isOnline = true,
+    provider = provider,
+    activity = activity.wire,
+    health = health,
 )
 
 /** 收藏对账行 → 设计包 [SessionItem]。失联仍输出，isOnline=false。 */
@@ -43,7 +46,10 @@ internal fun FavoriteRow.toSessionItem(): SessionItem = SessionItem(
     id = ref.ifEmpty { "legacy-$addedAt-$sessionName-$windowIndex-$windowName" },
     displayName = identityLabel,
     path = cwd,
-    status = sessionStatusFromL2(status),
+    status = sessionStatusFromAxes(if (isOnline) activity.wire else "unknown", if (isOnline) health else "unknown"),
     starred = true,
     isOnline = isOnline,
+    provider = if (isOnline) provider else "unknown",
+    activity = if (isOnline) activity.wire else "unknown",
+    health = if (isOnline) health else "unknown",
 )

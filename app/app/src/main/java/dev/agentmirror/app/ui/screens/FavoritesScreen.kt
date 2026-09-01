@@ -30,10 +30,11 @@ import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.PathText
+import dev.agentmirror.app.ui.components.ProviderMark
+import dev.agentmirror.app.ui.components.FavoriteLongPressMenu
 import dev.agentmirror.app.ui.components.RowDivider
 import dev.agentmirror.app.ui.components.ScreenHeader
 import dev.agentmirror.app.ui.components.SessionNameText
-import dev.agentmirror.app.ui.components.StarButton
 import dev.agentmirror.app.ui.components.StatusChip
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.SessionStatus
@@ -114,6 +115,7 @@ private fun FavoriteRow(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    FavoriteLongPressMenu(starred = true, onClick = onClick, onToggle = onToggleStar, modifier = Modifier.fillMaxWidth()) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -123,17 +125,13 @@ private fun FavoriteRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dims.rowGap),
     ) {
-        StarButton(
-            starred = item.starred,
-            onToggle = onToggleStar,
-            modifier = Modifier.testTag("fav-star-${item.id}"),
-        )
+        ProviderMark(dev.agentmirror.app.ui.model.providerPresentation(item.provider, item.activity, item.health), Modifier.testTag("fav-provider-${item.id}"))
         Column(
             modifier = Modifier
                 .weight(1f)
                 .height(Dims.rowHeightWithSubtitle)
                 .background(if (pressed) p.rowPressed else Color.Transparent)
-                .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                .clickable(interactionSource = interaction, indication = null, onClick = {})
                 .testTag("fav-row-${item.id}"),
             verticalArrangement = Arrangement.Center,
         ) {
@@ -149,6 +147,7 @@ private fun FavoriteRow(
         } else {
             OfflineChip(ref = item.id)
         }
+    }
     }
 }
 

@@ -124,6 +124,9 @@ class FavoriteBook(
                     cwd = cwd,
                     title = hit?.title.orEmpty(),
                     status = hit?.status ?: L2Status.UNKNOWN,
+                    provider = hit?.provider ?: "unknown",
+                    activity = hit?.activity ?: L2Status.UNKNOWN,
+                    health = hit?.health ?: "unknown",
                 ),
             )
         }
