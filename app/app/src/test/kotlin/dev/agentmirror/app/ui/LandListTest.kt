@@ -225,5 +225,8 @@ class LandListTest {
         sessionName = "team",
         windowIndex = "0",
         windowName = "claude_code",
+        provider = "claude_code",
+        activity = status,
+        health = if (status == "working" || status == "idle") "normal" else "unknown",
     ).toL2Entry()
 }

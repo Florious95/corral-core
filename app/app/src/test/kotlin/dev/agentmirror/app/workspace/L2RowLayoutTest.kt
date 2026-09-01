@@ -162,5 +162,8 @@ class L2RowLayoutTest {
             sessionName = name,
             windowIndex = windowIndex,
             windowName = name,
+            provider = "codex",
+            activity = status,
+            health = if (status == "working" || status == "idle") "normal" else "unknown",
         ).toL2Entry()
 }
