@@ -278,6 +278,7 @@ internal object BackChevronGeometry {
     fun inkCenterY(h: Float): Float = h * 0.50f
 }
 
+/** 绘制与垂直中心对称的返回箭头，不承载点击行为。 */
 @Composable
 fun BackChevron(
     tint: Color,

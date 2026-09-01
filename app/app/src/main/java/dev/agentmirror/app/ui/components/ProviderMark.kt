@@ -32,6 +32,7 @@ private val resources = mapOf(
     "pi" to R.drawable.provider_pi,
 )
 
+/** 渲染已由状态轴投影完成的 Provider 官方标记与可访问状态文案。 */
 @Composable
 fun ProviderMark(presentation: ProviderPresentation, modifier: Modifier = Modifier) {
     val description = "${presentation.label}，${when (presentation.state) { ProviderMarkState.Running -> "运行中"; ProviderMarkState.Idle -> "空闲"; ProviderMarkState.Abnormal -> "异常"; ProviderMarkState.Unknown -> "未知" }}"
@@ -50,6 +51,7 @@ fun ProviderMark(presentation: ProviderPresentation, modifier: Modifier = Modifi
     }
 }
 
+/** 保留行短按，并将唯一收藏切换动作限制在行长按菜单中。 */
 @Composable
 fun FavoriteLongPressMenu(
     starred: Boolean,

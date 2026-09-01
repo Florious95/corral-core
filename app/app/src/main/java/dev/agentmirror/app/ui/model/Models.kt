@@ -8,8 +8,10 @@ import dev.agentmirror.app.workspace.L2Status
  */
 enum class SessionStatus { Busy, Idle, Abnormal, Unknown }
 
+/** Provider 标记的封闭状态集；未知或非法轴值只能投影为 [Unknown]。 */
 enum class ProviderMarkState { Running, Idle, Abnormal, Unknown }
 
+/** Provider 标记渲染所需的规范身份、资源键、状态与强调度。 */
 data class ProviderPresentation(
     val providerId: String,
     val label: String,
