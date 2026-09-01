@@ -150,7 +150,7 @@ class FavRowParityTest {
         val refA = live[0].ref
         val star = compose.onNodeWithTag("fav-provider-${refA.replace('\u001f', '_')}", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val badge = compose.onNodeWithTag("fav-status-$refA").getUnclippedBoundsInRoot()
+        val badge = compose.onNodeWithTag("fav-status-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertTrue(
             "076 §3c：星必须在标题之前 star.left=${star.left} id.left=${id.left}",
             star.left < id.left,
