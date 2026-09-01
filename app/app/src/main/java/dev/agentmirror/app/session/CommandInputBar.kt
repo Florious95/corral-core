@@ -13,9 +13,9 @@
  *   时底色填 primaryContainer 作可用暗示；
  * - 胶囊描边聚焦时 animateColorAsState 过渡到 primary。
  *
- * 尺寸决策（1px≈1dp，取整到 4dp 网格）：
+ * 尺寸严格对应源码 CSS：
  * - 胶囊圆角 24dp、内边距 4dp（左）/8dp（右）/4dp（上下）；
- * - 单行文本区高 32dp、每行行高 20sp → 展开高 = 24dp × 行数；
+ * - 未聚焦 32dp；聚焦高度 = 20dp × expandLines + 12dp（expandLines 2–5）；
  * - 加号 36×32dp 纯图标；发送 32dp 圆钮。
  * - 等宽字体：终端指令语境，FontFamily.Monospace。
  * 仅有的本地 remember 是「焦点视觉态」（非业务状态，仓库规范允许）。
@@ -45,21 +45,28 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
+internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
+    if (focused) 20 * expandedLines.coerceIn(2, 5) + 12 else 32
 
 /** Source input capsule with attachment, expanding editor, and send action. */
 @Composable
@@ -72,10 +79,21 @@ fun CommandInputBar(
     expandedLines: Int = 3,
 ) {
     val cs = MaterialTheme.colorScheme
-    // 焦点视觉态（非业务状态）：驱动膨胀与描边高亮
+    val keyboardController = LocalSoftwareKeyboardController.current
+    // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(focused) {
+        if (focused) {
+            // The text-input session is attached on the next frame; showing before that is ignored.
+            withFrameNanos { }
+            keyboardController?.show()
+        } else {
+            keyboardController?.hide()
+        }
+    }
+    val sourceExpandedLines = expandedLines.coerceIn(2, 5)
     val fieldHeight by animateDpAsState(
-        targetValue = if (focused) (24 * expandedLines).dp else 32.dp,
+        targetValue = sourceInputFieldHeightDp(focused, sourceExpandedLines).dp,
         animationSpec = tween(
             durationMillis = SessionDockMotion.InputHeightMillis,
             easing = SessionDockMotion.Standard,
@@ -122,7 +140,7 @@ fun CommandInputBar(
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
-                    maxLines = if (focused) expandedLines else 1,
+                    maxLines = if (focused) sourceExpandedLines else 1,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
                         fontFamily = FontFamily.Monospace,
                         color = cs.onSurface,

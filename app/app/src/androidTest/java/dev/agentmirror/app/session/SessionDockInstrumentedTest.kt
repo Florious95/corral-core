@@ -10,7 +10,9 @@
 
 package dev.agentmirror.app.session
 
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +27,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -35,6 +38,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.input.TextFieldValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -50,14 +54,16 @@ class SessionDockInstrumentedTest {
     @Test
     fun favoriteSwitchPreservesScrollModeAndExpandedInputThenSendsAndCollapses() {
         val selected = mutableListOf<String>()
-        var clearInputFocus: () -> Unit = {}
+        compose.runOnUiThread {
+            compose.activity.enableEdgeToEdge()
+            compose.activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
         compose.setContent {
             var activeId by remember { mutableStateOf("0") }
             var mode by remember { mutableStateOf(DockRowMode.Sessions) }
             var value by remember { mutableStateOf(TextFieldValue("")) }
             val listState = rememberLazyListState()
             val focusManager = LocalFocusManager.current
-            clearInputFocus = { focusManager.clearFocus() }
             val sessions = (0..8).map {
                 SessionChipUi(
                     id = it.toString(),
@@ -94,14 +100,26 @@ class SessionDockInstrumentedTest {
         }
 
         val collapsed = inputHeight()
-        compose.onNodeWithTag("session-command-editor").performClick()
-        compose.waitUntil(timeoutMillis = 5_000) { inputHeight() > collapsed * 2f }
+        val restingInputBottom = inputBottom()
+        assertEquals(32f, collapsed, 0.5f)
+        compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
+        compose.waitUntil(timeoutMillis = 5_000) {
+            inputHeight() >= 71.5f && inputBottom() < restingInputBottom - 100f
+        }
         val expanded = inputHeight()
+        val imeRaisedInputBottom = inputBottom()
+        assertEquals(72f, expanded, 0.5f)
 
-        compose.runOnIdle { clearInputFocus() }
-        compose.waitUntil(timeoutMillis = 5_000) { inputHeight() <= collapsed + 0.5f }
-        compose.onNodeWithTag("session-command-editor").performClick()
-        compose.waitUntil(timeoutMillis = 5_000) { inputHeight() >= expanded - 0.5f }
+        // Real outside pointer action must blur, collapse, and return the dock from IME raise.
+        compose.onNodeWithTag("session-terminal-canvas").performTouchInput { click() }
+        compose.waitUntil(timeoutMillis = 5_000) {
+            inputHeight() <= 32.5f && abs(inputBottom() - restingInputBottom) < 0.5f
+        }
+        assertEquals(32f, inputHeight(), 0.5f)
+        compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
+        compose.waitUntil(timeoutMillis = 5_000) {
+            inputHeight() >= 71.5f && abs(inputBottom() - imeRaisedInputBottom) < 0.5f
+        }
 
         compose.onNodeWithTag("favorite-session-list")
             .performScrollToNode(hasText("收藏-6"))
@@ -122,7 +140,10 @@ class SessionDockInstrumentedTest {
 
         compose.onNodeWithTag("session-command-editor").performTextInput("ls")
         compose.onNodeWithContentDescription("发送").performClick()
-        compose.waitUntil(timeoutMillis = 5_000) { inputHeight() <= collapsed + 0.5f }
+        compose.waitUntil(timeoutMillis = 5_000) {
+            inputHeight() <= 32.5f && abs(inputBottom() - restingInputBottom) < 0.5f
+        }
+        assertEquals(32f, inputHeight(), 0.5f)
 
         compose.onNodeWithContentDescription("返回菜单").performClick()
         compose.waitForIdle()
@@ -135,6 +156,9 @@ class SessionDockInstrumentedTest {
         val node = compose.onNodeWithTag("favorite-session-list").fetchSemanticsNode()
         return node.config[SemanticsProperties.HorizontalScrollAxisRange].value()
     }
+
+    private fun inputBottom(): Float = compose.onNodeWithTag("session-command-input-field")
+        .getUnclippedBoundsInRoot().bottom.value
 
     private fun inputHeight(): Float {
         val bounds = compose.onNodeWithTag("session-command-input-field")
