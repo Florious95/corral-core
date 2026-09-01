@@ -1,0 +1,18 @@
+TAP version 13
+# pi extension lifecycle protocol ok
+# Subtest: tools/nodeprobe/tests/pi_extension.mjs
+ok 1 - tools/nodeprobe/tests/pi_extension.mjs
+  ---
+  duration_ms: 277.226375
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 288.310209
+exit=0 duration_seconds=0

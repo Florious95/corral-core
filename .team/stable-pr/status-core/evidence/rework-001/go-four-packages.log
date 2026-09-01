@@ -1,0 +1,4 @@
+ok  	github.com/agentmirror/agentmirror/cmd/agentmirrord	1.417s
+ok  	github.com/agentmirror/agentmirror/internal/nodeprobe	3.975s
+ok  	github.com/agentmirror/agentmirror/internal/api	48.466s
+ok  	github.com/agentmirror/agentmirror/internal/protocol	1.811s
