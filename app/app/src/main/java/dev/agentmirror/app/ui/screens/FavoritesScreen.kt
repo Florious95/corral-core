@@ -131,7 +131,6 @@ private fun FavoriteRow(
                 .weight(1f)
                 .height(Dims.rowHeightWithSubtitle)
                 .background(if (pressed) p.rowPressed else Color.Transparent)
-                .clickable(interactionSource = interaction, indication = null, onClick = {})
                 .testTag("fav-row-${item.id}"),
             verticalArrangement = Arrangement.Center,
         ) {

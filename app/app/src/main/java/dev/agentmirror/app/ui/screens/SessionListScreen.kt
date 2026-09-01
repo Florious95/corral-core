@@ -171,7 +171,6 @@ private fun SessionRow(
                 .weight(1f)
                 .height(if (showPath) Dims.rowHeightWithSubtitle else Dims.rowHeightSingleLine)
                 .background(if (pressed) p.rowPressed else Color.Transparent)
-                .clickable(interactionSource = interaction, indication = null, onClick = {})
                 .testTag("$tagPrefix-row-${item.id}"),
             contentAlignment = Alignment.CenterStart,
         ) {
