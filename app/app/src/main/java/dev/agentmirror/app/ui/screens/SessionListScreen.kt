@@ -156,7 +156,7 @@ private fun SessionRow(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    FavoriteLongPressMenu(starred = item.starred, onClick = onClick, onToggle = onToggleStar, modifier = Modifier.fillMaxWidth()) {
+    FavoriteLongPressMenu(starred = item.starred, onClick = onClick, onToggle = onToggleStar, modifier = Modifier.fillMaxWidth(), rowTag = "$tagPrefix-row-${item.id}", actionTag = "$tagPrefix-favorite-action-${item.id}") {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -170,8 +170,7 @@ private fun SessionRow(
             modifier = Modifier
                 .weight(1f)
                 .height(if (showPath) Dims.rowHeightWithSubtitle else Dims.rowHeightSingleLine)
-                .background(if (pressed) p.rowPressed else Color.Transparent)
-                .testTag("$tagPrefix-row-${item.id}"),
+                .background(if (pressed) p.rowPressed else Color.Transparent),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (showPath) {
