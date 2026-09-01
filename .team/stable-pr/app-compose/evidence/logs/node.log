@@ -1,0 +1,25 @@
+candidate=dce90469fbfb767bc2a3d2fe1afedc94fda41587
+tree=576a2b0e33fea860b11b01f41686fc3f8b98ef87
+app_tree=9e8301f64b377505dbb16f2a82ff4457f978e38b
+started_utc=2026-09-01T13:00:05Z
+uname=Darwin MacBook-Pro.local 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:18:58 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6000 arm64
+command=node --test tools/nodeprobe/tests/pi_extension.mjs
+TAP version 13
+# pi extension lifecycle protocol ok
+# Subtest: tools/nodeprobe/tests/pi_extension.mjs
+ok 1 - tools/nodeprobe/tests/pi_extension.mjs
+  ---
+  duration_ms: 239.594
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 247.144542
+exit=0
+duration_seconds=0

@@ -1,0 +1,7 @@
+candidate=dce90469fbfb767bc2a3d2fe1afedc94fda41587
+app_tree=9e8301f64b377505dbb16f2a82ff4457f978e38b
+source=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/app/app/build/outputs/apk/release/app-release.apk
+apk=/Users/alauda/Downloads/agentmirror-app-compose-dce90469fbfb-release.apk
+size=35074128
+sha256=9765f25dd10d615774256c964fbcb11b96f6fec00142e40517d7eb9d4e974c1e
+built_by=:app:assembleRelease --rerun-tasks --no-build-cache

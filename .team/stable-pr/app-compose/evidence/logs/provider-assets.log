@@ -1,0 +1,23 @@
+candidate=dce90469fbfb767bc2a3d2fe1afedc94fda41587
+tree=576a2b0e33fea860b11b01f41686fc3f8b98ef87
+app_tree=9e8301f64b377505dbb16f2a82ff4457f978e38b
+started_utc=2026-09-01T13:04:29Z
+command=frozen provider RESOURCE-MAP/license/package/NOTICE SHA-256 validation
+src/claude-color.svg a3101f3047a119aa11825ad9369510f0c472428c8c52d420e31bc62db44a8364
+src/codex-color.svg 4a2f43ce46b5b6e3722c95088f88d26ef91e6a8c2e598e70642a1c54367386e4
+src/copilot-color.svg 04f15d0556fbac10a4e0f82d1560610db8b33cd04780a4f24ad3b91c4abd278d
+src/cursor.svg 0cb51bddf264ae108926fd554c063ef40fc1aac3c5c921ddb39ad184e4e5d0ef
+src/grok.svg 9175fc90c22655160231976c849f25a03b888d7cc0e04c5f1b987b659bb07c95
+src/pi.svg d82978781b824273c55473822c1f243a6ed34fc6e8c2dbfe1a90dfc66ae43ee8
+LICENSE add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a
+Traceback (most recent call last):
+  File "<stdin>", line 20, in <module>
+  File "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py", line 777, in read_bytes
+    with self.open(mode='rb', buffering=0) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/app/app/src/main/res/drawable-nodpi/provider_claude_color.png'
+exit=1
+duration_seconds=0

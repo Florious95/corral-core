@@ -1,0 +1,236 @@
+=== four axes ===
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteBook.kt:47:        sessionName: String = "",
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteRecord.kt:45:    @SerialName("session_name") val sessionName: String = "",
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteRecord.kt:64:    val sessionName: String,
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteRecord.kt:73:    val provider: String = "unknown",
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteRecord.kt:74:    val activity: L2Status = L2Status.UNKNOWN,
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteRecord.kt:75:    val health: String = "unknown",
+app/app/src/main/java/dev/agentmirror/app/workspace/L2Models.kt:50:    val provider: String = "unknown",
+app/app/src/main/java/dev/agentmirror/app/workspace/L2Models.kt:51:    val activity: L2Status = status,
+app/app/src/main/java/dev/agentmirror/app/workspace/L2Models.kt:52:    val health: String = "unknown",
+app/app/src/main/java/dev/agentmirror/app/workspace/L2Models.kt:54:    val sessionName: String = "",
+app/app/src/main/java/dev/agentmirror/app/workspace/L2Models.kt:78:    sessionName: String = "",
+app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:234:    @SerialName("provider") val provider: String = "unknown",
+app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:236:    @SerialName("activity") val activity: String = "",
+app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:240:    @SerialName("session_name") val sessionName: String? = null,
+app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:242:    @SerialName("health") val health: String = "unknown",
+tools/nodeprobe/src/classify.rs:26:    pub provider: &'static str,
+tools/nodeprobe/src/classify.rs:117:            provider: PROVIDER_UNKNOWN,
+tools/nodeprobe/src/classify.rs:123:            provider: PROVIDER_UNKNOWN,
+tools/nodeprobe/src/classify.rs:129:            provider: PROVIDER_UNKNOWN,
+tools/nodeprobe/src/classify.rs:148:pub fn classify_for(provider: &str, title: &str) -> Class {
+tools/nodeprobe/src/classify.rs:154:            provider: PROVIDER_PI,
+tools/nodeprobe/src/classify.rs:168:            provider: intern_expect(provider),
+tools/nodeprobe/src/classify.rs:177:        provider: intern_expect(provider),
+tools/nodeprobe/src/classify.rs:192:        want_provider: &'static str,
+tools/nodeprobe/src/classify.rs:198:        provider: String,
+tools/nodeprobe/src/classify.rs:227:                want_provider: intern_expect(provider),
+tools/nodeprobe/src/classify.rs:237:                provider: provider.to_string(),
+tools/nodeprobe/src/classify.rs:314:pub fn background_tasks_for(provider: &str, footer: &str) -> BackgroundTasks {
+tools/nodeprobe/src/lib.rs:57:    pub provider: String,
+tools/nodeprobe/src/lib.rs:60:    pub activity: String,
+tools/nodeprobe/src/lib.rs:63:    pub health: String,
+tools/nodeprobe/src/lib.rs:104:pub fn classify_provider(provider: &str, title: &str) -> Class {
+tools/nodeprobe/src/lib.rs:126:        pi_activity::HEALTH_UNKNOWN,
+tools/nodeprobe/src/lib.rs:134:    activity: &str,
+tools/nodeprobe/src/lib.rs:136:    health: &str,
+tools/nodeprobe/src/lib.rs:186:    title: Option<&pi_activity::TitleName>,
+tools/nodeprobe/src/lib.rs:190:        Some(pi_activity::TitleName::Parsed(Some(title))) => match channel {
+tools/nodeprobe/src/lib.rs:194:        Some(pi_activity::TitleName::Parsed(None)) => match channel {
+tools/nodeprobe/src/lib.rs:198:        Some(pi_activity::TitleName::Ambiguous) | None => Ok(channel),
+tools/nodeprobe/src/lib.rs:336:            Some(pi_activity::observe(
+tools/nodeprobe/src/lib.rs:337:                pi_activity::channel_dir().as_deref(),
+tools/nodeprobe/src/lib.rs:339:                pi_activity::now_millis(),
+tools/nodeprobe/src/lib.rs:340:                pi_activity::DEFAULT_MAX_AGE_MS,
+tools/nodeprobe/src/lib.rs:350:            pi_activity::title_name(&p.title)
+tools/nodeprobe/src/lib.rs:355:            Some(pi_activity::TitleName::Parsed(name)) => name.clone(),
+tools/nodeprobe/src/lib.rs:356:            Some(pi_activity::TitleName::Ambiguous) | None => None,
+tools/nodeprobe/src/lib.rs:379:                            pi_activity::ACTIVITY_UNKNOWN,
+tools/nodeprobe/src/lib.rs:381:                            pi_activity::HEALTH_UNKNOWN,
+tools/nodeprobe/src/lib.rs:393:                pi_activity::HEALTH_UNKNOWN,
+tools/nodeprobe/src/lib.rs:410:            provider: class.provider.to_string(),
+tools/nodeprobe/src/lib.rs:412:            activity: activity.to_string(),
+tools/nodeprobe/src/lib.rs:414:            health: health.to_string(),
+tools/nodeprobe/src/lib.rs:604:        use pi_activity::TitleName;
+tools/nodeprobe/src/lib.rs:631:            (pi_activity::ACTIVITY_WORKING, pi_activity::HEALTH_NORMAL),
+tools/nodeprobe/src/lib.rs:632:            (pi_activity::ACTIVITY_IDLE, pi_activity::HEALTH_NORMAL),
+tools/nodeprobe/src/lib.rs:633:            (pi_activity::ACTIVITY_UNKNOWN, pi_activity::HEALTH_UNKNOWN),
+tools/nodeprobe/src/lib.rs:635:            let detail = if activity == pi_activity::ACTIVITY_UNKNOWN {
+tools/nodeprobe/src/pi_activity.rs:21:    pub provider: String,
+tools/nodeprobe/src/pi_activity.rs:24:    pub activity: String,
+tools/nodeprobe/src/pi_activity.rs:33:    pub activity: &'static str,
+tools/nodeprobe/src/pi_activity.rs:36:    pub health: &'static str,
+tools/nodeprobe/src/pi_activity.rs:136:            activity: ACTIVITY_UNKNOWN,
+tools/nodeprobe/src/pi_activity.rs:139:            health: HEALTH_UNKNOWN,
+tools/nodeprobe/src/pi_activity.rs:152:            activity: ACTIVITY_UNKNOWN,
+tools/nodeprobe/src/pi_activity.rs:155:            health: HEALTH_UNKNOWN,
+tools/nodeprobe/src/pi_activity.rs:163:            activity: if record.activity == ACTIVITY_WORKING {
+tools/nodeprobe/src/pi_activity.rs:170:            health: HEALTH_NORMAL,
+tools/nodeprobe/src/pi_activity.rs:177:            activity: ACTIVITY_UNKNOWN,
+tools/nodeprobe/src/pi_activity.rs:180:            health: HEALTH_UNKNOWN,
+tools/nodeprobe/src/pi_activity.rs:184:            activity: ACTIVITY_UNKNOWN,
+tools/nodeprobe/src/pi_activity.rs:187:            health: HEALTH_ABNORMAL,
+tools/nodeprobe/src/pi_activity.rs:223:    fn record(dir: &Path, pid: i32, activity: &str, updated_at_ms: u64) {
+tools/nodeprobe/src/pi_activity.rs:227:            provider: "pi".into(),
+tools/nodeprobe/src/pi_activity.rs:230:            activity: activity.into(),
+=== session UI labels/actions ===
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt:51: * 会话页跳转沿用 session-ui 挂载的 [SessionRoute]。
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt:85:        // 挂在根组合保证工作区/会话/设置/配对任一屏在屏都有兜底；服务常驻时兜底泵零工作。
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt:87:        // 工作区 VM 常挂 listConnector：进会话后 uiConnector 被会话 VM 占用，
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt:110:         * @inv 返回只经导航壳逐级裁决；本层不直接跳过会话选择/工作区列表层级
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt:145:                // 会话页优先（在屏会话不被重配打断）。
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt:182:                // 三栏主页：底部标签 收藏 / 会话 / 设置（067 §4.1）。设置不再盖一层。
+app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt:214:/** 根路由四分支的转场键（data class 让同名不同 ref 的会话切换也触发转场）。 */
+app/app/src/main/java/dev/agentmirror/app/MainActivity.kt:42: * 在屏切换）两处消费，直达对应会话页。launchMode=singleTop（manifest）：通知点按在屏时走
+app/app/src/main/java/dev/agentmirror/app/MainActivity.kt:77:        // 交给 Compose（会话页底部集群 imePadding 单点消费），键盘弹出内容重排跟随不留洞。
+app/app/src/main/java/dev/agentmirror/app/MainNavState.kt:41: * @post [writeTo] 落全部非空导航态（无工作区/会话时不写对应键）；[restoreFrom] 仅在
+app/app/src/main/java/dev/agentmirror/app/MainNavState.kt:54:    /** 三栏当前页；冷启动默认中间会话页。 */
+app/app/src/main/java/dev/agentmirror/app/MainNavState.kt:57:    /** 当前会话（ref, name）；null = 不在会话页（工作区/配对页）。重建后恢复（D-3）。 */
+app/app/src/main/java/dev/agentmirror/app/MainNavState.kt:61:     * 用户点开会话（列表 / 收藏 / 悬浮窗切换）。旋转恢复走 [restoreFrom]，不走这里。
+app/app/src/main/java/dev/agentmirror/app/MainNavState.kt:76:    /** 当前选中的工作区 cwd；非空 = 工作区二级会话选择页。重建后恢复（D-32）。 */
+app/app/src/main/java/dev/agentmirror/app/MainNavState.kt:80:     * 系统返回逐级裁决（D-23/D-32）：会话 → 会话选择 → 工作区列表 → 配对根。
+app/app/src/main/java/dev/agentmirror/app/ThreePane.kt:58: * 窄屏三栏（067 §4.1）：底部标签栏 收藏 / 会话 / 设置。
+app/app/src/main/java/dev/agentmirror/app/ThreePane.kt:59: * 滑动可保留为附加手势，不得作为唯一入口。冷启动默认「会话」。
+app/app/src/main/java/dev/agentmirror/app/ThreePane.kt:62:    Favorites("收藏", "★", "bottom-tab-favorites"),
+app/app/src/main/java/dev/agentmirror/app/ThreePane.kt:63:    Sessions("会话", "☰", "bottom-tab-sessions"),
+app/app/src/main/java/dev/agentmirror/app/ThreePane.kt:216:                        text = "暂无收藏",
+app/app/src/main/java/dev/agentmirror/app/ThreePane.kt:221:                        text = "在会话列表里点星星即可收藏。",
+app/app/src/main/java/dev/agentmirror/app/overlay/PackageDoc.kt:23: * 主流程「查看」已改为二级菜单列表（契约 072 §1），本包不再被 Session 主路径调用。
+app/app/src/main/java/dev/agentmirror/app/overlay/PackageDoc.kt:26: * 会话内悬浮窗渲染（066）：[OverlayEmulator] 把 overlay_frame.text 解成可见网格。
+app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt:505:/** 手填输入框配色：卡内输入用更低一层底色拉开层次（与会话页草稿框同语法）。 */
+app/app/src/main/java/dev/agentmirror/app/pairing/PersistentConnection.kt:57: * 启动失败不阻塞调用方流程：连接未就绪时前台服务/会话页的 [ServiceWire.manager] 兜底会
+app/app/src/main/java/dev/agentmirror/app/perf/PackageDoc.kt:20: * 打开会话全链路性能仪表。
+app/app/src/main/java/dev/agentmirror/app/perf/PackageDoc.kt:23: * 调用方：列表/收藏/悬浮窗点开会话（tap）、[dev.agentmirror.app.session.SessionRoute]
+app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt:30: * 打开会话全链路 PerfTrace 仪表（任务一）。
+app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt:88:     * 与 [PROP_ENABLED] 分开：开会话测量必须开 PerfTrace，但不得因此挂钩逐字符回调。
+app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt:306:     * 把 [openId] 绑到会话 [ref]（收藏/列表/悬浮窗/旋转重进共用）。
+app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt:316:     * 会话页进入：承接尚未 route_enter 的 tap；否则（旋转/重连后重进）新开一条。
+app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt:344:     * 会话页离开：取消未发出的 layout_settled 延迟消息，解绑。
+app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt:369:     * 用户点击会话行（列表 / 收藏 / 悬浮窗切换共用）。
+app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt:380:     * 事件 `tap`（用户点击会话行）。
+app/app/src/main/java/dev/agentmirror/app/perf/PerfTrace.kt:389:     * 事件 `route_enter`（会话页路由进入）。
+app/app/src/main/java/dev/agentmirror/app/service/AppClockPump.kt:75: * 挂在 [dev.agentmirror.app.AgentMirrorApp] 根组合：任一屏（工作区/会话/设置/配对）在屏即
+app/app/src/main/java/dev/agentmirror/app/service/MirrorForegroundService.kt:50: * - 启动：配对成功 / 冷启动有配置 / 进入会话 三处经 [MirrorForegroundService.start] 启动
+app/app/src/main/java/dev/agentmirror/app/service/MirrorForegroundService.kt:187:            // 输入回执归会话页 UI（ServiceWire.uiConnector），本服务不消费。
+app/app/src/main/java/dev/agentmirror/app/service/MirrorForegroundService.kt:206:         * 启动前台服务（配对成功 / 冷启动有配置 / 进入会话的接线点）。
+app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt:35: * 060 uproot（2026-08-15）：状态通知（blocked 唤醒 + 会话深链）随状态判定整体拔除——
+app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt:36: * 二级会话列表改为实时流，状态通知链路不再存在。
+app/app/src/main/java/dev/agentmirror/app/service/NotificationHelper.kt:60:     * 点按打开应用（无会话深链）。
+app/app/src/main/java/dev/agentmirror/app/service/PackageDoc.kt:26: *   已接线（feat-fg-service-wiring）：配对成功/冷启动/进入会话经 [MirrorForegroundService.start]
+app/app/src/main/java/dev/agentmirror/app/service/PackageDoc.kt:32: * 060 uproot（2026-08-15）：状态守望（会话状态沿变化→通知）随状态判定整体拔除；
+app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt:72:     * （fix-cold-start-reconnect 层2 实证：force-stop 重开只显示一个真实舰队工作区，隔离会话
+app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt:94:     * 工作区列表监听槽（083 §10）：会话页占用 [uiConnector] 时，二级状态仍要进
+app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt:164:     * - 相同配置重复注入（重复扫同码 / 冷启动同一 storedConfig）⇒ 保持单例，不闪断既有会话。
+app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt:185:     * 当前持久连接配置的只读快照；会话上传与 WebSocket 认证必须消费同一 token 来源。
+app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt:199:     * Up 后重试才切为 TAILNET。工作区/会话顶栏直接读 [connectionPath]，若这里只是普通字段，
+app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt:20: * 会话页：单个 tmux 会话的交互界面。
+app/app/src/main/java/dev/agentmirror/app/session/PackageDoc.kt:24: * 跨层共享连接经 service 的 ServiceWire.uiConnector 扇出订阅。会话页已完整落位：
+app/app/src/main/java/dev/agentmirror/app/session/SessionModels.kt:20: * 会话页领域模型（纯 JVM，可单测）。
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:53: * 会话页路由挂载（[AgentMirrorApp] 的 Session 分支唯一入口；本组合同时承担接线层：
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:54: * 把当前会话 VM 挂到 [ServiceWire.uiConnector] 扇出，并安全创建共享连接）。
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:61: * - 把会话 VM 挂到 [ServiceWire.uiConnector]（当前屏持有，退出即复位）；
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:66: * **不再各自持有**——会话页不再有 LaunchedEffect 时钟泵，[SessionViewModel.onTick] 的
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:119:    // 接线：把当前会话 VM 接入 ServiceWire.uiConnector 扇出；退出即复位 + 退订镜像。
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:141:/** 安全构造会话 VM：获取共享 manager（未配置抛错则返回 null）→ 启动连接 → 注入生产上传器。
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:143: *  [context] 为前台服务启动所需（进入会话即确保服务在运行，幂等）；纯 JVM 测试传 null。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:153:    // feat-fg-service-wiring：进入会话即确保前台服务在运行（幂等）——连接与时钟泵由服务
+app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt:207:                text = "会话不可用：连接尚未配置\n请先完成配对后进入会话。",
+app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt:101: * 会话页 Compose 屏（003 四标准的渲染壳）：终端画布 + 紧凑顶栏 + 底部输入区。018 重设计版。
+app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt:104: * - 紧凑顶栏（018 §一.7 顶栏不喧宾夺主）：48dp 单行，会话名等宽**单行中段省略**——
+app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt:425: * 快捷键条（R-1，017）：输入条上方，最小集 Esc / Tab / ↑ ↓ ← → / Ctrl-C（2026-08-15 裁定）。
+app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt:469:/** 快捷键条条目：显示文案 + 线上键值 + 无障碍语义标注（2026-08-15 裁定顺序）。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt:476:/** 快捷键条最小集（2026-08-15 用户裁定顺序：Esc / Tab / ↑ ↓ ← → / Ctrl-C）。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:38:/** 会话 ref = socket + U+001F + pane_id；悬浮窗订阅只取 socket。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:64: * 会话页状态机（003 四标准的落地面）：终端镜像 + 本地输入条 + 发送回执 + 附件管线。
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:98:        // 再同步内核（让 CLI 自己重画）；几何只在进入会话时算一次（seedCellMetrics）。
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:111:    /** 会话内悬浮窗是否打开（072：二级菜单列表，不再订 overlay 抓屏流）。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:118:     * 已贴进本会话 CLI pane、尚未确认发送的图片路径（需求 057）：上传成功那一刻就
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:127:     * **选了图不发、或离开会话，不清理 pane。**（需求 057 第 3 款）App 是 pane 的镜像，
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:149:    /** 是否锁定在历史中（"回到底部"可见性；会话屏 Compose 悬浮钮按此渲染）。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:191:        // 按键回显量具：必须 PerfTrace 开 **且** 按键开关开。开会话测量只开前者，挂钩保持 null。
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:234:     * 打开悬浮窗：展示二级会话列表（072）。不再订 overlay 抓屏流。
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:387:     * 点按快捷键条（R-1，017）：注入 keys 帧，**不附加回车**。
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:511:    /** 视口信号收敛（会话屏时钟泵周期调用 / 测试显式调用）：滚动到顶即补页。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:521:    /** 回到底部：恢复跟随（会话屏「回到底部」悬浮钮点击回调）。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:596:    /** 离开会话页时释放：退订镜像（conn 层幂等），停用连接由服务/接线层决定。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:603:    /** 收起瞬时状态（Sent / 上传 Success / 错误提示，会话屏 LaunchedEffect 延迟后自动触发）。 */
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:626:        "session_not_found" -> "会话已不存在"
+app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt:627:        "not_subscribed" -> "未订阅该会话"
+app/app/src/main/java/dev/agentmirror/app/termview/GlyphFallbackPolicy.kt:35: * [probe] 判定结果按码点缓存：字体在一次 App 会话内不变，缓存终身有效（无需失效）。
+app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:91:     * 远端滚动回调（缺陷④）：由会话层（SessionViewModel）注入，将手势档位数投送到远端 pane。
+app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:94:     * 注意：SessionScreen 在 AndroidView update lambda 里永远设此回调（只要会话页存活），
+app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:95:     * 因此 null 分支在正常会话中不会触达——降级逻辑（READY 判断）实际由 SessionViewModel
+app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:115:     * 当前会话 ref（[SessionScreen] 注入）。first_draw 按 ref 查 open_id。
+app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:865:     * 实测值、或本 View 换绑一个已建立几何的会话 presenter）时不得覆盖——显式 seed 优先。
+app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt:33: * 字号→尺寸（feat-font-size-setting-drop-pinch，取代原 005 捏合）：字号是设置页选定、进入会话前
+app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt:377:     * （[onViewportSizeChanged] 首次调用）承担，本方法只落定尺寸——避免同一次「进入会话」
+app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt:390:     * @inv 正常生命周期内应在首次 [onViewportSizeChanged] 之前调用（进入会话前尺寸即定，契约④）
+app/app/src/main/java/dev/agentmirror/app/ui/components/AppBottomNav.kt:162:    NavTab.Favorites -> "收藏"
+app/app/src/main/java/dev/agentmirror/app/ui/components/AppBottomNav.kt:163:    NavTab.Sessions -> "会话"
+app/app/src/main/java/dev/agentmirror/app/ui/components/CommonUi.kt:152: * 会话显示名 —— 可能是中文。
+app/app/src/main/java/dev/agentmirror/app/ui/components/CommonUi.kt:302:/** 星标 —— 40dp 圆形触控区，行首位置。★ = 已收藏，☆ = 未收藏。 */
+app/app/src/main/java/dev/agentmirror/app/ui/components/CommonUi.kt:419:/** 顶栏右侧的文字按钮（「查看」） */
+app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:23:import dev.agentmirror.app.ui.model.ProviderMarkState
+app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:36:fun ProviderMark(presentation: ProviderPresentation, modifier: Modifier = Modifier) {
+app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:37:    val description = "${presentation.label}，${when (presentation.state) { ProviderMarkState.Running -> "运行中"; ProviderMarkState.Idle -> "空闲"; ProviderMarkState.Abnormal -> "异常"; ProviderMarkState.Unknown -> "未知" }}"
+app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:44:                colorFilter = if (presentation.state == ProviderMarkState.Idle || presentation.state == ProviderMarkState.Unknown) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null,
+app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:48:        if (presentation.state == ProviderMarkState.Abnormal) Text("!", modifier = Modifier.size(18.dp), color = Color.Gray)
+app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:49:        if (presentation.state == ProviderMarkState.Unknown) Text("?", modifier = Modifier.size(18.dp), color = Color.Gray)
+app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:65:        modifier.combinedClickable(onClick = onClick, onLongClick = { expanded = true }).then(if (rowTag != null) Modifier.testTag(rowTag) else Modifier),
+app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:70:                text = { Text(if (starred) "取消收藏" else "收藏") },
+app/app/src/main/java/dev/agentmirror/app/ui/components/SessionSwitchSheet.kt:53: * 「查看」二级菜单浮层 —— 会话切换抽屉。
+app/app/src/main/java/dev/agentmirror/app/ui/components/SessionSwitchSheet.kt:57: * 当前会话有左侧 3dp 轨 + 轻着色底 + 「当前」标记 —— 切换器里必须能看出自己在哪一个。
+app/app/src/main/java/dev/agentmirror/app/ui/components/SessionSwitchSheet.kt:60: * 用法：套在会话页最外层的 Box 里，与 SessionShellScreen 同级。
+app/app/src/main/java/dev/agentmirror/app/ui/components/SessionSwitchSheet.kt:136:                        text = "切换会话",
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:6: * 会话运行状态。本工程是三态（062）：Busy / Idle / Unknown。
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:11:enum class ProviderMarkState { Running, Idle, Abnormal, Unknown }
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:17:    val state: ProviderMarkState,
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:40:        health == "abnormal" -> ProviderMarkState.Abnormal
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:41:        health == "normal" && activity == "working" -> ProviderMarkState.Running
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:42:        health == "normal" && activity == "idle" -> ProviderMarkState.Idle
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:43:        else -> ProviderMarkState.Unknown
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:45:    return ProviderPresentation(id, providerLabels[id] ?: "未知 Provider", id.takeUnless { it == "unknown" }, state, if (state == ProviderMarkState.Idle || state == ProviderMarkState.Unknown) .4f else 1f)
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:82: * 会话。
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:83: * displayName 是会话的真实显示名，可能是中文（例如「远控 leader」），
+app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:92:    /** 收藏页失联行：false 时标「不在线」，不得当成 Idle。默认在线（二级列表）。 */
+app/app/src/main/java/dev/agentmirror/app/ui/screens/FavoritesScreen.kt:33:import dev.agentmirror.app.ui.components.ProviderMark
+app/app/src/main/java/dev/agentmirror/app/ui/screens/FavoritesScreen.kt:47: * 收藏页。
+app/app/src/main/java/dev/agentmirror/app/ui/screens/FavoritesScreen.kt:49: * 星在行首，40dp 圆形触控区，与二级会话列表完全一致。
+app/app/src/main/java/dev/agentmirror/app/ui/screens/FavoritesScreen.kt:66:            title = "收藏",
+app/app/src/main/java/dev/agentmirror/app/ui/screens/FavoritesScreen.kt:128:        ProviderMark(dev.agentmirror.app.ui.model.providerPresentation(item.provider, item.activity, item.health), Modifier.testTag("fav-provider-${item.id.replace('\u001f', '_')}"))
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionListScreen.kt:33:import dev.agentmirror.app.ui.components.ProviderMark
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionListScreen.kt:44: * 会话列表（二级，某个工作区内）。
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionListScreen.kt:46: * 行结构：星（行首）→ 会话显示名 → 状态标。
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionListScreen.kt:122: * 会话行列表（无页头）。二级全屏走 [SessionListScreen]；悬浮窗 / 单测走本函数。
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionListScreen.kt:168:        ProviderMark(dev.agentmirror.app.ui.model.providerPresentation(item.provider, item.activity, item.health), Modifier.testTag("$tagPrefix-provider-${item.id.replace('\u001f', '_')}"))
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:97:            modifier = Modifier.testTag("dock_hotkeys").semantics { contentDescription = "快捷键" },
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:98:        ) { Text("快捷键", color = c.text) }
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:101:            modifier = Modifier.testTag("dock_view").semantics { contentDescription = "查看" },
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:102:        ) { Text("查看", color = c.text) }
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:105:            modifier = Modifier.testTag("dock_sessions").semantics { contentDescription = "会话" },
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:106:        ) { Text("会话", color = c.text) }
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:140:                if (candidates.isEmpty()) Text("暂无收藏", color = c.text)
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SettingsScreen.kt:117:                CardBody("取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。")
+app/app/src/main/java/dev/agentmirror/app/ui/screens/SettingsScreen.kt:142:                    CardOutlineButton("查看", onViewLogs, Modifier.weight(1f))
+app/app/src/main/java/dev/agentmirror/app/ui/screens/WorkspaceListScreen.kt:46: * 行结构：❯ 方块 → 名称 / 路径 → 会话数 → ›
+app/app/src/main/java/dev/agentmirror/app/ui/screens/WorkspaceListScreen.kt:150:            AppText("会话", p.pathText, 10.5f.sp, lineHeightMultiplier = 1f)
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:37:    val rowHeightWithSubtitle: Dp = 66.dp // 收藏页 / 工作区列表（双行）
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:38:    val rowHeightSingleLine: Dp = 60.dp   // 会话列表（单行 + 状态标）
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:39:    val rowHeightSheet: Dp = 58.dp        // 「查看」浮层内的行
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:58:    // 会话页 · 终端卡片（083 §3：外 8→4，与内 padding 合计 10dp）
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:61:    // 会话页 · 功能键排
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:73:    // 会话页 · 输入条
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:90:    // 「查看」浮层
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:129:    val screenTitle: TextUnit = 25.sp             // 收藏 / 工作区 / 设置
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:131:    val topBarTitle: TextUnit = 16.sp             // 会话显示名
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:196:    // 「查看」浮层
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:261:    // 会话页外壳
+app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:283:    // 「查看」浮层
+app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt:136:// 相对 M3 默认整体收紧标题字重（SemiBold）：本产品页面信息密度高（路径/会话名/徽章），
+app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt:194:/** 等宽字体：路径 / 会话名 / 终端相关文本统一用它（终端产品的身份语言）。 */
+app/app/src/main/java/dev/agentmirror/app/workspace/DesignListMapping.kt:44:/** 收藏对账行 → 设计包 [SessionItem]。失联仍输出，isOnline=false。 */
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteBook.kt:22: * 收藏账本：toggle 立刻落盘；对账时失联行保留并置灰（keep_gray），绝不按 live 丢掉。
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteBook.kt:93:     * 082：live 必须覆盖**每个收藏项自己的工作区**，不能只拿最近进过的那一个。
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteList.kt:28: * 收藏列表：按加入时间倒序。失联行置灰标「不在线」，不可点进，可取消收藏。
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteList.kt:29: * 076 §3：星在行首、标题、目录副标题、右侧状态标（与会话列表同构）。
+app/app/src/main/java/dev/agentmirror/app/workspace/FavoriteRecord.kt:23: * 收藏身份：与服务端 session ref 同源（socket + U+001F + pane id）。

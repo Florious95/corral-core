@@ -1,0 +1,8 @@
+candidate=dce90469fbfb767bc2a3d2fe1afedc94fda41587
+tree=576a2b0e33fea860b11b01f41686fc3f8b98ef87
+app_tree=9e8301f64b377505dbb16f2a82ff4457f978e38b
+started_utc=2026-09-01T13:07:45Z
+command=tools/test-session-ui-emulator.sh --list-tests
+planned_count=7 discovered_count=7 names=defaultDockAndHotkeys sessionsRowFiltersNavigatesAndReturns sessionsSourceIsEntryIndependentAndEmptyNeverFallsBack viewUsesExistingCurrentWorkspaceSheet controlledInputAndIme terminalHostStaysSameAcrossDockModes terminalThemeChangesSessionChrome
+exit=0
+duration_seconds=1
