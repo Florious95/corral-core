@@ -1,0 +1,4 @@
+nodeprobe -S <socket-path>
+nodeprobe -L <socket-name>
+nodeprobe fixtures [titles.tsv]
+exit=0

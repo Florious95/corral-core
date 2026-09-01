@@ -1,4 +1,4 @@
-use nodeprobe::{default_fixtures, probe, run_fixtures, SocketSpec};
+use nodeprobe::{default_fixtures, error_report, probe, run_fixtures, SocketSpec};
 use std::ffi::OsString;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -54,7 +54,7 @@ fn main() -> ExitCode {
         }
     };
 
-    match probe(spec) {
+    match probe(spec.clone()) {
         Ok(report) => match serde_json::to_string_pretty(&report) {
             Ok(s) => {
                 let _ = writeln!(io::stdout(), "{s}");
@@ -66,7 +66,16 @@ fn main() -> ExitCode {
             }
         },
         Err(e) => {
-            let _ = writeln!(io::stderr(), "nodeprobe: {e}");
+            // Preserve a machine-readable error and non-zero status. An
+            // inventory failure is never represented as an empty success.
+            match serde_json::to_string_pretty(&error_report(&spec, e)) {
+                Ok(s) => {
+                    let _ = writeln!(io::stdout(), "{s}");
+                }
+                Err(json_err) => {
+                    let _ = writeln!(io::stderr(), "nodeprobe: {json_err}");
+                }
+            }
             ExitCode::from(1)
         }
     }

@@ -1,0 +1,169 @@
+{
+  "schema": "status-core-evidence.v1",
+  "base": "4605951e427f9ba6627375498dcb3c757c05bf36",
+  "accepted_commit": "ff316dc0afe8ab280e61d30934e7624579be6224",
+  "accepted_tree": "5217a41aa914ddcb72c27f39f1b4af9ead68b1b6",
+  "environment": {
+    "os": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "python": "3.14.6"
+  },
+  "runtime": {
+    "binary": {
+      "path": "/Users/alauda/.local/bin/nodeprobe",
+      "size": 781728,
+      "sha256": "4ae8a87380025f810dad221f96b64764e4a312ae6de127d83cc641884d60a5d9"
+    },
+    "extension": {
+      "path": "/Users/alauda/.pi/agent/extensions/nodeprobe-pi-activity.mjs",
+      "size": 3406,
+      "sha256": "fce8c7fac3b4274d3c8e38261022b6ae31ad021247b7ff39bbf0f6dd04088850"
+    }
+  },
+  "canonical_corpora": [
+    "tools/nodeprobe/fixtures/titles.tsv",
+    "tools/nodeprobe/fixtures/providers.tsv"
+  ],
+  "changed_paths": [
+    ".team/stable-pr/status-core/evidence/architecture-closure.md",
+    ".team/stable-pr/status-core/evidence/implementation.md",
+    ".team/stable-pr/status-core/evidence/logs/app-final.log",
+    ".team/stable-pr/status-core/evidence/logs/archwiki-base.log",
+    ".team/stable-pr/status-core/evidence/logs/archwiki-head-final.log",
+    ".team/stable-pr/status-core/evidence/logs/archwiki-strict-t3.log",
+    ".team/stable-pr/status-core/evidence/logs/go-final.log",
+    ".team/stable-pr/status-core/evidence/logs/go.log",
+    ".team/stable-pr/status-core/evidence/logs/launcher-help.log",
+    ".team/stable-pr/status-core/evidence/logs/node.log",
+    ".team/stable-pr/status-core/evidence/logs/rust.log",
+    ".team/stable-pr/status-core/evidence/logs/static-provenance-final.log",
+    ".team/stable-pr/status-core/evidence/logs/static-provenance.log",
+    ".team/stable-pr/status-core/evidence/receipt.json",
+    "app/app/src/main/java/dev/agentmirror/app/workspace/L2Models.kt",
+    "app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2UnknownStatusTest.kt",
+    "app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt",
+    "app/core-protocol/src/test/java/dev/agentmirror/app/conn/ConnCodecTest.kt",
+    "server/cmd/agentmirrord/main.go",
+    "server/internal/api/api_test.go",
+    "server/internal/api/connected_idle_economy_test.go",
+    "server/internal/api/detect.go",
+    "server/internal/api/diff_test.go",
+    "server/internal/api/discovery_failure_test.go",
+    "server/internal/api/doc.go",
+    "server/internal/api/l2detect_claudecode.go",
+    "server/internal/api/l2detect_claudecode_test.go",
+    "server/internal/api/l2detect_codex.go",
+    "server/internal/api/l2detect_copilot.go",
+    "server/internal/api/l2detect_corpus_parity_test.go",
+    "server/internal/api/l2detect_cursor.go",
+    "server/internal/api/l2detect_footer.go",
+    "server/internal/api/l2detect_footer_test.go",
+    "server/internal/api/l2detect_grok.go",
+    "server/internal/api/l2detect_grok_test.go",
+    "server/internal/api/l2detect_test.go",
+    "server/internal/api/level2.go",
+    "server/internal/api/level2_test.go",
+    "server/internal/api/listing.go",
+    "server/internal/api/nodeprobe_status_test.go",
+    "server/internal/api/nodeprobe_test.go",
+    "server/internal/api/noloop_count_test.go",
+    "server/internal/api/options.go",
+    "server/internal/api/proctree.go",
+    "server/internal/api/provider_whitelist_test.go",
+    "server/internal/api/refresh_on_open_test.go",
+    "server/internal/api/server.go",
+    "server/internal/api/session.go",
+    "server/internal/api/tmux_test.go",
+    "server/internal/api/whitelist.go",
+    "server/internal/nodeprobe/accepted-source.json",
+    "server/internal/nodeprobe/accepted_integration_test.go",
+    "server/internal/nodeprobe/nodeprobe.go",
+    "server/internal/nodeprobe/nodeprobe_test.go",
+    "server/internal/protocol/frames.go",
+    "server/internal/protocol/golden_test.go",
+    "server/internal/protocol/json_test.go",
+    "server/internal/protocol/validate.go",
+    "server/internal/provider/table.go",
+    "server/internal/provider/table_test.go",
+    "tools/gate/nodeprobe-status-core.py",
+    "tools/nodeprobe.sh",
+    "tools/nodeprobe/README.md",
+    "tools/nodeprobe/docs/api-architecture.md",
+    "tools/nodeprobe/docs/consumer-migration-map.md",
+    "tools/nodeprobe/pi/nodeprobe-pi-activity.mjs",
+    "tools/nodeprobe/src/classify.rs",
+    "tools/nodeprobe/src/lib.rs",
+    "tools/nodeprobe/src/main.rs",
+    "tools/nodeprobe/src/pi_activity.rs",
+    "tools/nodeprobe/src/proctree.rs",
+    "tools/nodeprobe/src/providers.rs",
+    "tools/nodeprobe/tests/fake_tmux.rs",
+    "tools/nodeprobe/tests/pi_extension.mjs"
+  ],
+  "untouched": {
+    "canonical_corpora": true,
+    "session_ui": true,
+    "provider_icons": true,
+    "device_emulator": true
+  },
+  "tests": [
+    {
+      "command": "cargo test --locked --manifest-path tools/nodeprobe/Cargo.toml -- --test-threads=1",
+      "status": "passed",
+      "executed": 35,
+      "failures": [],
+      "duration_seconds": 11,
+      "log": "logs/rust.log"
+    },
+    {
+      "command": "node --test tools/nodeprobe/tests/pi_extension.mjs",
+      "status": "passed",
+      "executed": 1,
+      "failures": [],
+      "duration_seconds": 0,
+      "log": "logs/node.log"
+    },
+    {
+      "command": "cd server && go test -count=1 ./cmd/agentmirrord ./internal/nodeprobe ./internal/api ./internal/protocol",
+      "status": "passed",
+      "failures": [],
+      "duration_seconds": 107,
+      "log": "logs/go-final.log"
+    },
+    {
+      "command": "cd app && ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew :core-protocol:test :app:testDebugUnitTest --rerun-tasks",
+      "status": "passed",
+      "executed": 605,
+      "failures": [],
+      "duration_seconds": 66,
+      "log": "logs/app-final.log"
+    },
+    {
+      "command": "python3 tools/gate/nodeprobe-status-core.py",
+      "status": "passed",
+      "failures": [],
+      "duration_seconds": 1,
+      "log": "logs/static-provenance.log"
+    },
+    {
+      "command": "python3 tools/archwiki/build_wiki.py --check --strict-t3",
+      "status": "baseline_red",
+      "exit": 1,
+      "head_pr_local_findings": [],
+      "base_exit": 1,
+      "log": "logs/archwiki-head-final.log",
+      "base_log": "logs/archwiki-base.log"
+    }
+  ],
+  "accepted_upstream_risk": [
+    "future timestamps within the upstream freshness window remain accepted unchanged",
+    "challenge response socket_path is not independently rebound unchanged",
+    "no product-side correction or shadow rejection was added"
+  ],
+  "rollback": "Revert this one PR to restore the previous consumers; no external accepted rollout asset was modified.",
+  "baseline_go_red_from_frozen_synthesis": [
+    "TestConnectedIdleEconomyScopedDiscoveryConsumesOnlyExplicitDirs",
+    "TestProviderWhitelistLiveFiveAndBare"
+  ],
+  "baseline_go_disposition": "first fixture corrected to allowed tmux-<uid>/default layout; obsolete provider authority test deleted; final changed-package run has zero failures"
+}
