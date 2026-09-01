@@ -115,7 +115,7 @@ private fun FavoriteRow(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    FavoriteLongPressMenu(starred = true, onClick = onClick, onToggle = onToggleStar, modifier = Modifier.fillMaxWidth()) {
+    FavoriteLongPressMenu(starred = true, onClick = onClick, onToggle = onToggleStar, modifier = Modifier.fillMaxWidth(), rowTag = "fav-row-${item.id}", actionTag = "fav-favorite-action-${item.id}") {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -130,8 +130,7 @@ private fun FavoriteRow(
             modifier = Modifier
                 .weight(1f)
                 .height(Dims.rowHeightWithSubtitle)
-                .background(if (pressed) p.rowPressed else Color.Transparent)
-                .testTag("fav-row-${item.id}"),
+                .background(if (pressed) p.rowPressed else Color.Transparent),
             verticalArrangement = Arrangement.Center,
         ) {
             SessionNameText(

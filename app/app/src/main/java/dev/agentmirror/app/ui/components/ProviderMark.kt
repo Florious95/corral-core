@@ -56,17 +56,20 @@ fun FavoriteLongPressMenu(
     onClick: () -> Unit,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    rowTag: String? = null,
+    actionTag: String? = null,
     content: @Composable () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(
-        modifier.combinedClickable(onClick = onClick, onLongClick = { expanded = true }),
+        modifier.combinedClickable(onClick = onClick, onLongClick = { expanded = true }).then(if (rowTag != null) Modifier.testTag(rowTag) else Modifier),
     ) {
         content()
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = { Text(if (starred) "取消收藏" else "收藏") },
                 onClick = { expanded = false; onToggle() },
+                modifier = if (actionTag != null) Modifier.testTag(actionTag) else Modifier,
             )
         }
     }
