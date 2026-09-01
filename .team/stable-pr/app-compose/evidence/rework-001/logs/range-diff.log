@@ -1,0 +1,41 @@
+status 3
+1:  f1c4fdd4d = 1:  db61e7a94 status-core: integrate accepted nodeprobe four-axis state
+2:  22483b670 = 2:  0b929e299 test: determinize zero-subscriber level2 gate
+3:  22bc9e695 = 3:  74811b8bb test: record status-core rework verification
+
+session 24
+ 1:  70fffb5ca =  1:  0c7279270 session-ui: rebuild the 097 session shell
+ 2:  2edd0d211 =  2:  8b3cb5305 test: make emulator harness portable
+ 3:  779b67e2b =  3:  03de58f9a session-ui: complete compose acceptance rework
+ 4:  92e492bff =  4:  822628e52 session-ui: harden acceptance rework
+ 5:  eee45b0a8 =  5:  24dd778e1 docs: refresh session acceptance evidence
+ 6:  8de0df043 =  6:  b6715ab09 test: add complete session UI inventory
+ 7:  33e48bded =  7:  b9fbefd1b test: harden session UI inventory and gate
+ 8:  bc2dbe10e =  8:  6523271c7 evidence: record frozen unit test blocker
+ 9:  65fba500a =  9:  25915eb67 evidence: record rework 006 test gate
+10:  b858615ee = 10:  5ba731c55 test: migrate session shell unit contracts
+11:  4f8129237 = 11:  84893503b evidence: bind session acceptance inventory
+12:  5b0748f1d = 12:  fa2f7717e evidence: record rework 007 blockers
+13:  67b76b09f = 13:  d67a5be81 test: add session integration adapters
+14:  8eda2593a = 14:  32fea50c0 test: expose static contract findings
+15:  0652dbc9a = 15:  adaa7e04d session-ui: wire dock view entry
+16:  a55aa029f = 16:  55bef619f test: connect transport seam recorder
+17:  1d3971676 = 17:  6cb4113e5 test: connect session acceptance seams
+18:  8185ec705 = 18:  a04ad965a refactor: return session UI to lean acceptance
+19:  25cca07d0 = 19:  d147cdc49 chore: remove superseded session acceptance machinery
+20:  b08458140 = 20:  59d4829ce test: wire debug activity to real session screen
+21:  31272f9c8 = 21:  df9bcba5f test: bind lean acceptance fixture state
+22:  844b0002b = 22:  bf73b6fbd test(session): exercise real debug session fixture
+23:  74e79ee93 = 23:  f690996ba fix(session): wire debug view switcher state
+24:  123848a92 = 24:  5fbb28b52 fix(session): reset debug dock with fixture
+
+provider 9
+ 1:  01356cc23 =  1:  419caacaa ui: add provider status marks and long-press favorites
+ 2:  2f661a630 =  2:  29bfa6a80 fix: repair provider row gestures and shared status projection
+ 3:  ec0696a5c =  3:  4bf83f973 test: expose provider row gesture contract
+ 4:  5574ab606 =  4:  17ef1de53 test: migrate provider favorite contracts to row gestures
+ 5:  acaa9498c =  5:  aad03dd94 test: migrate remaining provider status fixtures
+ 6:  e25297d9f =  6:  867d9b9c2 fix: preserve provider row test semantics
+ 7:  cc7d11b6c =  7:  5ad4c3b0a fix: retain per-row provider mark tags
+ 8:  74d42fbb5 =  8:  2f6133a7d test: assert provider mark geometry in merged rows
+ 9:  1b12e92d8 =  9:  dce90469f test: query merged status tags from unmerged tree

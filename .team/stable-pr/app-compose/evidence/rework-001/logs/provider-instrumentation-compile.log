@@ -1,0 +1,114 @@
+candidate=d9a55311982b414680a5d3b1177cdd6813c3cb78
+tree=5d962dddd15e5c84e10a46c8fe6b4920df64e383
+app_tree=2fe7062f21030142327e081f59f04251a03749b9
+started_utc=2026-09-01T14:05:46Z
+command=./gradlew :app:assembleDebugAndroidTest --rerun-tasks --no-build-cache
+> Task :core-terminal:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :terminal:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :terminal:processResources NO-SOURCE
+> Task :core-terminal:processResources NO-SOURCE
+> Task :core-conn:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core-protocol:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core-conn:processResources NO-SOURCE
+> Task :core-protocol:processResources NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:processDebugNavigationResources
+> Task :app:compileDebugNavigationResources
+> Task :app:generateDebugResValues
+> Task :app:checkDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :core-terminal:compileKotlin
+> Task :core-terminal:compileJava NO-SOURCE
+> Task :terminal:compileKotlin NO-SOURCE
+> Task :terminal:compileJava NO-SOURCE
+> Task :terminal:classes UP-TO-DATE
+> Task :terminal:jar
+> Task :core-terminal:classes UP-TO-DATE
+> Task :core-terminal:jar
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:javaPreCompileDebug
+> Task :app:mergeDebugResources
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:checkDebugAndroidTestAarMetadata
+> Task :app:processDebugAndroidTestNavigationResources
+> Task :app:compileDebugAndroidTestNavigationResources
+> Task :app:generateDebugAndroidTestResValues
+> Task :app:mapDebugAndroidTestSourceSetPaths
+> Task :app:generateDebugAndroidTestResources
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugAndroidTestManifest
+> Task :app:javaPreCompileDebugAndroidTest
+> Task :app:mergeDebugAndroidTestShaders
+> Task :app:compileDebugAndroidTestShaders NO-SOURCE
+> Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :app:mergeDebugAndroidTestResources
+> Task :app:mergeDebugAndroidTestAssets
+> Task :app:compressDebugAndroidTestAssets
+> Task :app:desugarDebugAndroidTestFileDependencies
+> Task :app:checkDebugAndroidTestDuplicateClasses
+> Task :app:processDebugAndroidTestResources
+
+> Task :core-protocol:compileKotlin
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:75:25 This declaration needs opt-in. Its usage should be marked with '@kotlinx.serialization.ExperimentalSerializationApi' or '@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)'
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:79:48 This declaration needs opt-in. Its usage should be marked with '@kotlinx.serialization.ExperimentalSerializationApi' or '@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)'
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:79:50 This declaration needs opt-in. Its usage should be marked with '@kotlinx.serialization.ExperimentalSerializationApi' or '@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)'
+
+> Task :app:processDebugResources
+> Task :core-protocol:compileJava NO-SOURCE
+> Task :core-protocol:classes UP-TO-DATE
+> Task :core-protocol:jar
+> Task :app:mergeDebugAndroidTestJniLibFolders
+> Task :app:mergeDebugJniLibFolders
+> Task :app:validateSigningDebugAndroidTest
+> Task :app:writeDebugAndroidTestSigningConfigVersions
+> Task :app:mergeExtDexDebugAndroidTest
+> Task :core-conn:compileKotlin
+> Task :core-conn:compileJava NO-SOURCE
+> Task :core-conn:classes UP-TO-DATE
+> Task :core-conn:jar
+> Task :app:mergeLibDexDebugAndroidTest
+> Task :app:mergeDebugNativeLibs
+> Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+
+> Task :app:compileDebugKotlin
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/debug/java/dev/agentmirror/app/SessionUiAcceptanceActivity.kt:60:27 The corresponding parameter in the supertype 'ComponentActivity' is named 'savedInstanceState'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/debug/java/dev/agentmirror/app/SessionUiAcceptanceActivity.kt:62:60 'static field SOFT_INPUT_ADJUST_RESIZE: Int' is deprecated. Deprecated in Java.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/main/java/dev/agentmirror/app/MainActivity.kt:78:60 'static field SOFT_INPUT_ADJUST_RESIZE: Int' is deprecated. Deprecated in Java.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/main/java/dev/agentmirror/app/diag/DiagLog.kt:227:17 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'SimpleDateFormat?'.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/main/java/dev/agentmirror/app/diag/DiagLogViewScreen.kt:81:21 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt:459:22 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes ExposedDropdownMenuAnchorType and enabled parameters.
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt:869:60 'field scaledDensity: Float' is deprecated. Deprecated in Java.
+
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:bundleDebugClassesToCompileJar
+
+> Task :app:compileDebugAndroidTestKotlin FAILED
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/androidTest/java/dev/agentmirror/app/provider/ProviderUiSmokeTest.kt:5:33 Unresolved reference 'assertDoesNotExist'.
+e: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.team/nodes/pi-compose-dev/worktree/app/app/src/androidTest/java/dev/agentmirror/app/provider/ProviderUiSmokeTest.kt:6:33 Unresolved reference 'assertExists'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugAndroidTestKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 14s
+48 actionable tasks: 48 executed
+exit=1
+duration_seconds=15

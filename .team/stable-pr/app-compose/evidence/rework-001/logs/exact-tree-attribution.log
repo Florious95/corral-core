@@ -1,0 +1,11 @@
+strict_run_candidate=50e3798ce14d5b06bb600ec3f2e4262f332821ff
+strict_run_app_tree=2fe7062f21030142327e081f59f04251a03749b9
+final_code_candidate=ac84f22ef15e62eb74208592ce5fa258020c862e
+final_app_tree=f1ec0edd5a55d96c857b8f070efd964b4b5af694
+post_strict_changed_paths:
+app/app/src/androidTest/java/dev/agentmirror/app/provider/ProviderUiSmokeTest.kt
+server/internal/api/raw_bytes_api_test.go
+session_test_delta_from_frozen_head:
+session_range_count=24
+status_range_count=3
+provider_range_count=9

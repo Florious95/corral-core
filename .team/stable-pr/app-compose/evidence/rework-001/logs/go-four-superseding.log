@@ -1,0 +1,11 @@
+candidate=d9a55311982b414680a5d3b1177cdd6813c3cb78
+tree=5d962dddd15e5c84e10a46c8fe6b4920df64e383
+server_tree=54d28cf738b6b0dd9650b162f2d926b44980ec6b
+started_utc=2026-09-01T13:55:07Z
+command=(cd server && go test -count=1 ./cmd/agentmirrord ./internal/nodeprobe ./internal/api ./internal/protocol)
+ok  	github.com/agentmirror/agentmirror/cmd/agentmirrord	0.702s
+ok  	github.com/agentmirror/agentmirror/internal/nodeprobe	4.530s
+ok  	github.com/agentmirror/agentmirror/internal/api	49.246s
+ok  	github.com/agentmirror/agentmirror/internal/protocol	1.997s
+exit=0
+duration_seconds=54

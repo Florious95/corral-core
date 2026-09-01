@@ -1,0 +1,26 @@
+candidate=50e3798ce14d5b06bb600ec3f2e4262f332821ff
+tree=5121a5ed7d926d3044c2ec5ec53566c584e0f4ad
+app_tree=2fe7062f21030142327e081f59f04251a03749b9
+cwd=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree
+started_utc=2026-09-01T13:49:56Z
+command=frozen provider source/generated/package/license/NOTICE validation
+source_root=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/provider-icons/lobehub-1.94.0
+generated_root=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/app/app/src/main/res/drawable-nodpi
+source path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/provider-icons/lobehub-1.94.0/src/claude-color.svg sha256=a3101f3047a119aa11825ad9369510f0c472428c8c52d420e31bc62db44a8364
+source path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/provider-icons/lobehub-1.94.0/src/codex-color.svg sha256=4a2f43ce46b5b6e3722c95088f88d26ef91e6a8c2e598e70642a1c54367386e4
+source path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/provider-icons/lobehub-1.94.0/src/copilot-color.svg sha256=04f15d0556fbac10a4e0f82d1560610db8b33cd04780a4f24ad3b91c4abd278d
+source path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/provider-icons/lobehub-1.94.0/src/cursor.svg sha256=0cb51bddf264ae108926fd554c063ef40fc1aac3c5c921ddb39ad184e4e5d0ef
+source path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/provider-icons/lobehub-1.94.0/src/grok.svg sha256=9175fc90c22655160231976c849f25a03b888d7cc0e04c5f1b987b659bb07c95
+source path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/provider-icons/lobehub-1.94.0/src/pi.svg sha256=d82978781b824273c55473822c1f243a6ed34fc6e8c2dbfe1a90dfc66ae43ee8
+generated path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/app/app/src/main/res/drawable-nodpi/provider_claude_color.png sha256=6585bdfc6397ed6c4eefc80cace6a2853459afbb3116dac3600918eb63f6e584
+generated path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/app/app/src/main/res/drawable-nodpi/provider_codex_color.png sha256=cdfc4f2eecc16469176a3cdfb0decb43646e7e3ac44e894f0cc94d330d897260
+generated path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/app/app/src/main/res/drawable-nodpi/provider_copilot_color.png sha256=49faef29cb14fa7aaa73672ef126acee65ff504c2463a6672d9a9364fa75c54a
+generated path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/app/app/src/main/res/drawable-nodpi/provider_cursor.png sha256=4f1b7f3ef8f415118a923653d1a63771781388852077ddb9c9e62f36da733aa1
+generated path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/app/app/src/main/res/drawable-nodpi/provider_grok.png sha256=515fd702a733df33e669a431f7d0b465350c8332c344c59672f2782f5ce3ff10
+generated path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/app/app/src/main/res/drawable-nodpi/provider_pi.png sha256=9d59066fac0cb0361fb7cf663e87d0f29beb654e49780baa55aab74aa4757b2f
+license path=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/third_party/provider-icons/lobehub-1.94.0/LICENSE sha256=add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a
+package=@lobehub/icons-static-svg@1.94.0 license=MIT
+notice_head=fbd2d56e3f734e889f1373e71c8368cc4e60e0d7
+executed_hashes=13 mappings=6 failed_names=[] status=PASS
+exit=0
+duration_seconds=0

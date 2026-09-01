@@ -1,0 +1,11 @@
+=== RUN   TestPassthroughNoEnter
+--- PASS: TestPassthroughNoEnter (0.35s)
+PASS
+ok  	github.com/agentmirror/agentmirror/internal/api	1.023s
+
+coordinate=4605951e427f9ba6627375498dcb3c757c05bf36
+server_tree=eaa33d13857c155ba5c8e2f240442d0f83f91064
+api_test_blob=6785b9ca4db2e6e6928c0a3da81e646c9421002c
+command=(cd server && go test -count=1 -timeout=30s -run ^TestPassthroughNoEnter$ -v ./internal/api)
+exit=0
+elapsed_seconds=5

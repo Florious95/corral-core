@@ -1,0 +1,26 @@
+candidate=50e3798ce14d5b06bb600ec3f2e4262f332821ff
+tree=5121a5ed7d926d3044c2ec5ec53566c584e0f4ad
+app_tree=2fe7062f21030142327e081f59f04251a03749b9
+server_tree=a6a7e63f4f906ce7034b5950ebaefbd59278388d
+cwd=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree
+started_utc=2026-09-01T13:49:56Z
+command=node --test tools/nodeprobe/tests/pi_extension.mjs
+TAP version 13
+# pi extension lifecycle protocol ok
+# Subtest: tools/nodeprobe/tests/pi_extension.mjs
+ok 1 - tools/nodeprobe/tests/pi_extension.mjs
+  ---
+  duration_ms: 1151.289125
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1171.666417
+exit=0
+duration_seconds=2

@@ -1,0 +1,6 @@
+candidate=ac84f22ef15e62eb74208592ce5fa258020c862e
+tree=a338cec1b881d2fb6204434debec674d71de4a07
+app_tree=f1ec0edd5a55d96c857b8f070efd964b4b5af694
+apk=/Users/alauda/Downloads/agentmirror-app-compose-ac84f22ef15e-release.apk
+size=35074128
+sha256=dd7a340b19d972d30b30c68ef94c6d92cd05bb9c13e72783883b14cea6e368b1

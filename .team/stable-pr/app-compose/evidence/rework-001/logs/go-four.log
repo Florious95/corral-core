@@ -1,0 +1,17 @@
+candidate=50e3798ce14d5b06bb600ec3f2e4262f332821ff
+tree=5121a5ed7d926d3044c2ec5ec53566c584e0f4ad
+app_tree=2fe7062f21030142327e081f59f04251a03749b9
+server_tree=a6a7e63f4f906ce7034b5950ebaefbd59278388d
+cwd=/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/pi-compose-dev/worktree/server
+started_utc=2026-09-01T13:49:56Z
+command=go test -count=1 ./cmd/agentmirrord ./internal/nodeprobe ./internal/api ./internal/protocol
+ok  	github.com/agentmirror/agentmirror/cmd/agentmirrord	1.146s
+ok  	github.com/agentmirror/agentmirror/internal/nodeprobe	4.282s
+--- FAIL: TestPassthroughNoEnter (0.32s)
+    api_tmux_test.go:645: input_ack = protocol.InputAck{ReqID:0x1, OK:true, Reason:""}, want req_id=2 ok
+FAIL
+FAIL	github.com/agentmirror/agentmirror/internal/api	50.472s
+ok  	github.com/agentmirror/agentmirror/internal/protocol	1.978s
+FAIL
+exit=1
+duration_seconds=57

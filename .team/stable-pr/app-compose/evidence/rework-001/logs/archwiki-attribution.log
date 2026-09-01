@@ -1,0 +1,18 @@
+baseline=implementation compose dce90469 raw strict log
+candidate=50e3798ce raw strict log; subsequent changes are androidTest/import and server test only
+baseline_normalized_findings=68 candidate_normalized_findings=61 new_findings=0 removed_findings=7
+new:
+removed:
+[T3-1] dev.agentmirror.app.ui.components  app/app/src/main/java/dev/agentmirror/app/ui/components/CommonUi.kt:<line>  `BackChevron` — 顶层 public 声明缺紧邻 KDoc
+[T3-1] dev.agentmirror.app.ui.components  app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:<line>  `FavoriteLongPressMenu` — 顶层 public 声明缺紧邻 KDoc
+[T3-1] dev.agentmirror.app.ui.components  app/app/src/main/java/dev/agentmirror/app/ui/components/ProviderMark.kt:<line>  `ProviderMark` — 顶层 public 声明缺紧邻 KDoc
+[T3-1] dev.agentmirror.app.ui.model  app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:<line>  `ProviderMarkState` — 顶层 public 声明缺紧邻 KDoc
+[T3-1] dev.agentmirror.app.ui.model  app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt:<line>  `ProviderPresentation` — 顶层 public 声明缺紧邻 KDoc
+[T3-4] dev.agentmirror.app.ui.components  :<line>  `dev.agentmirror.app.ui.model` — import 了却未声明 @consumes（架构漂移）
+[T3-4] dev.agentmirror.app.ui.components  :<line>  `dev.agentmirror.app.ui.theme` — import 了却未声明 @consumes（架构漂移）
+baseline_t1:
+T1-1                  : PASS — 无环（10 个 Go 包）
+T1-2                  : FAIL — 缺 doc 注释的包: kt:dev.agentmirror.app.ui.components
+candidate_t1:
+T1-1                  : PASS — 无环（10 个 Go 包）
+T1-2                  : PASS — Go 10 包、Kotlin 16 包均有模块 doc
