@@ -35,7 +35,7 @@ private val resources = mapOf(
 @Composable
 fun ProviderMark(presentation: ProviderPresentation, modifier: Modifier = Modifier) {
     val description = "${presentation.label}，${when (presentation.state) { ProviderMarkState.Running -> "运行中"; ProviderMarkState.Idle -> "空闲"; ProviderMarkState.Abnormal -> "异常"; ProviderMarkState.Unknown -> "未知" }}"
-    Box(modifier.size(40.dp).semantics { contentDescription = description }.testTag("provider-mark-${presentation.providerId}")) {
+    Box(Modifier.size(40.dp).testTag("provider-mark-${presentation.providerId}").then(modifier).semantics { contentDescription = description }) {
         presentation.assetKey?.let { key ->
             Image(
                 painter = painterResource(resources.getValue(key)),
