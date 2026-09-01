@@ -8,9 +8,8 @@
  * 倒数第二行三态（DockSecondRow）+ 最底行输入胶囊（CommandInputBar）。
  *
  * 布局决策：
- * - Column + imePadding()：IME 弹出时整个 dock 被键盘顶起（对应
- *   HTML 版键盘推起动画，Android 交给系统 windowInsets，记得
- *   Activity 配 android:windowSoftInputMode="adjustResize"）；
+ * - 读取真实 imeAnimationTarget，以源码 `.3s cubic-bezier(.4,0,.2,1)`
+ *   独立动画底部 inset；不依赖系统 IME 动画的厂商时长/曲线；
  * - dock 水平内边距 12dp、行间距 8dp、底部 8dp + navigationBarsPadding
  *   由宿主 Scaffold 决定（此处不重复加，避免双倍 inset）。
  *
@@ -42,14 +41,21 @@
  */
 package dev.agentmirror.app.session
 
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
@@ -57,14 +63,44 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
+    durationMillis = SessionDockMotion.KeyboardPushMillis,
+    easing = SessionDockMotion.Standard,
+)
+
+/** Production IME inset animator shared by real-window wiring and deterministic motion tests. */
+@Composable
+internal fun SourceImeMotionLayout(
+    targetBottom: Dp,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val animatedBottom by animateDpAsState(
+        targetValue = targetBottom,
+        animationSpec = sourceImeAnimationSpec,
+        label = "sourceImeBottom",
+    )
+    Box(modifier.padding(bottom = animatedBottom)) {
+        content()
+    }
+}
+
 /** Source session layout: terminal slot above a constant two-row IME-aware dock. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SessionScreenScaffold(
     terminalCanvas: @Composable () -> Unit,
@@ -83,36 +119,58 @@ fun SessionScreenScaffold(
     modifier: Modifier = Modifier,
     inputExpandedLines: Int = 3,
 ) {
-    Column(
+    val density = LocalDensity.current
+    val focusManager = LocalFocusManager.current
+    val imeTargetBottom = with(density) {
+        WindowInsets.imeAnimationTarget.getBottom(this).toDp()
+    }
+    SourceImeMotionLayout(
+        targetBottom = imeTargetBottom,
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .imePadding(),
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        // 终端画布：占满两行 dock 之上的全部空间。⛔ 不在 Compose 里画终端。
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            terminalCanvas()
-        }
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            DockSecondRow(
-                mode = dockMode,
-                onModeChange = onDockModeChange,
-                sessions = sessions,
-                sessionListState = sessionListState,
-                onSessionSelect = onSessionSelect,
-                onKeyToken = onKeyToken,
-                onOpenViewMenu = onOpenViewMenu,
-            )
-            CommandInputBar(
-                value = value,
-                onValueChange = onValueChange,
-                onSendText = onSendText,
-                onPickAttachment = onPickAttachment,
-                expandedLines = inputExpandedLines,
-            )
+        Column(Modifier.fillMaxSize()) {
+            // Observe terminal pointer-down without consuming it: the real AndroidView keeps its
+            // scroll/mouse gestures, while a genuine outside touch blurs the source textarea.
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .testTag("session-terminal-canvas")
+                    .pointerInput(focusManager) {
+                        awaitEachGesture {
+                            awaitFirstDown(
+                                requireUnconsumed = false,
+                                pass = PointerEventPass.Initial,
+                            )
+                            focusManager.clearFocus()
+                        }
+                    }
+            ) {
+                terminalCanvas()
+            }
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DockSecondRow(
+                    mode = dockMode,
+                    onModeChange = onDockModeChange,
+                    sessions = sessions,
+                    sessionListState = sessionListState,
+                    onSessionSelect = onSessionSelect,
+                    onKeyToken = onKeyToken,
+                    onOpenViewMenu = onOpenViewMenu,
+                )
+                CommandInputBar(
+                    value = value,
+                    onValueChange = onValueChange,
+                    onSendText = onSendText,
+                    onPickAttachment = onPickAttachment,
+                    expandedLines = inputExpandedLines,
+                )
+            }
         }
     }
 }
