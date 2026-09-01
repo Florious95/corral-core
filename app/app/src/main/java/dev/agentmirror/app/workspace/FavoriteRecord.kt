@@ -70,6 +70,9 @@ data class FavoriteRow(
     val cwd: String = "",
     val title: String = "",
     val status: L2Status = L2Status.UNKNOWN,
+    val provider: String = "unknown",
+    val activity: L2Status = L2Status.UNKNOWN,
+    val health: String = "unknown",
 ) {
     val gray: Boolean get() = !isOnline
 

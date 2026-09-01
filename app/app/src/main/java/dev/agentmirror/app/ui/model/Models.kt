@@ -8,6 +8,43 @@ import dev.agentmirror.app.workspace.L2Status
  */
 enum class SessionStatus { Busy, Idle, Unknown }
 
+enum class ProviderMarkState { Running, Idle, Abnormal, Unknown }
+
+data class ProviderPresentation(
+    val providerId: String,
+    val label: String,
+    val assetKey: String?,
+    val state: ProviderMarkState,
+    val emphasis: Float,
+)
+
+private val providerLabels = mapOf(
+    "claude_code" to "Claude Code",
+    "codex" to "Codex",
+    "copilot" to "Copilot",
+    "grok" to "Grok Code",
+    "cursor" to "Cursor",
+    "pi" to "Pi",
+)
+
+fun sessionStatusFromAxes(activity: String, health: String): SessionStatus = when {
+    health == "abnormal" -> SessionStatus.Unknown
+    health == "normal" && activity == "working" -> SessionStatus.Busy
+    health == "normal" && activity == "idle" -> SessionStatus.Idle
+    else -> SessionStatus.Unknown
+}
+
+fun providerPresentation(provider: String, activity: String, health: String): ProviderPresentation {
+    val id = provider.takeIf { it in providerLabels } ?: "unknown"
+    val state = when {
+        health == "abnormal" -> ProviderMarkState.Abnormal
+        health == "normal" && activity == "working" -> ProviderMarkState.Running
+        health == "normal" && activity == "idle" -> ProviderMarkState.Idle
+        else -> ProviderMarkState.Unknown
+    }
+    return ProviderPresentation(id, providerLabels[id] ?: "未知 Provider", id.takeUnless { it == "unknown" }, state, if (state == ProviderMarkState.Idle || state == ProviderMarkState.Unknown) .4f else 1f)
+}
+
 /**
  * 把本工程现有三态 [L2Status] 转成设计包 [SessionStatus]。
  *
@@ -54,6 +91,9 @@ data class SessionItem(
     val starred: Boolean,
     /** 收藏页失联行：false 时标「不在线」，不得当成 Idle。默认在线（二级列表）。 */
     val isOnline: Boolean = true,
+    val provider: String = "unknown",
+    val activity: String = "unknown",
+    val health: String = "unknown",
 )
 
 /** 底部导航的三个位置 */

@@ -1,0 +1,75 @@
+package dev.agentmirror.app.ui.components
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import dev.agentmirror.app.R
+import dev.agentmirror.app.ui.model.ProviderMarkState
+import dev.agentmirror.app.ui.model.ProviderPresentation
+
+private val resources = mapOf(
+    "claude_code" to R.drawable.provider_claude_color,
+    "codex" to R.drawable.provider_codex_color,
+    "copilot" to R.drawable.provider_copilot_color,
+    "grok" to R.drawable.provider_grok,
+    "cursor" to R.drawable.provider_cursor,
+    "pi" to R.drawable.provider_pi,
+)
+
+@Composable
+fun ProviderMark(presentation: ProviderPresentation, modifier: Modifier = Modifier) {
+    val description = "${presentation.label}，${when (presentation.state) { ProviderMarkState.Running -> "运行中"; ProviderMarkState.Idle -> "空闲"; ProviderMarkState.Abnormal -> "异常"; ProviderMarkState.Unknown -> "未知" }}"
+    Box(modifier.size(40.dp).pointerInput(Unit) { detectTapGestures { } }.semantics { contentDescription = description }.testTag("provider-mark-${presentation.providerId}")) {
+        presentation.assetKey?.let { key ->
+            Image(
+                painter = painterResource(resources.getValue(key)),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                colorFilter = if (presentation.state == ProviderMarkState.Idle || presentation.state == ProviderMarkState.Unknown) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null,
+                modifier = Modifier.size(18.dp).alpha(presentation.emphasis),
+            )
+        } ?: Text("?", modifier = Modifier.size(18.dp), color = Color.Gray)
+        if (presentation.state == ProviderMarkState.Abnormal) Text("!", modifier = Modifier.size(18.dp), color = Color.Gray)
+        if (presentation.state == ProviderMarkState.Unknown) Text("?", modifier = Modifier.size(18.dp), color = Color.Gray)
+    }
+}
+
+@Composable
+fun FavoriteLongPressMenu(
+    starred: Boolean,
+    onClick: () -> Unit,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(
+        modifier.combinedClickable(onClick = onClick, onLongClick = { expanded = true }),
+    ) {
+        content()
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(if (starred) "取消收藏" else "收藏") },
+                onClick = { expanded = false; onToggle() },
+            )
+        }
+    }
+}
