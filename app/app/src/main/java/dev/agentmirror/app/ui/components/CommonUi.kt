@@ -79,6 +79,13 @@ fun statusVisuals(p: AppPalette, status: SessionStatus): StatusVisuals = when (s
         label = "空闲",
         pulse = false,
     )
+    SessionStatus.Abnormal -> StatusVisuals(
+        chipBg = p.unknownChipBg,
+        chipText = p.unknownChipText,
+        lamp = p.unknownDot,
+        label = "异常",
+        pulse = false,
+    )
     SessionStatus.Unknown -> StatusVisuals(
         chipBg = p.unknownChipBg,
         chipText = p.unknownChipText,

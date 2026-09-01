@@ -6,7 +6,7 @@ import dev.agentmirror.app.workspace.L2Status
  * 会话运行状态。本工程是三态（062）：Busy / Idle / Unknown。
  * ⛔ unknown 绝不能当 Idle —— 那是把「不知道」染成「确定空闲」。
  */
-enum class SessionStatus { Busy, Idle, Unknown }
+enum class SessionStatus { Busy, Idle, Abnormal, Unknown }
 
 enum class ProviderMarkState { Running, Idle, Abnormal, Unknown }
 
@@ -28,7 +28,7 @@ private val providerLabels = mapOf(
 )
 
 fun sessionStatusFromAxes(activity: String, health: String): SessionStatus = when {
-    health == "abnormal" -> SessionStatus.Unknown
+    health == "abnormal" -> SessionStatus.Abnormal
     health == "normal" && activity == "working" -> SessionStatus.Busy
     health == "normal" && activity == "idle" -> SessionStatus.Idle
     else -> SessionStatus.Unknown

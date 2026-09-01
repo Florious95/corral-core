@@ -3,7 +3,6 @@ package dev.agentmirror.app.ui.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -16,7 +15,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -37,7 +35,7 @@ private val resources = mapOf(
 @Composable
 fun ProviderMark(presentation: ProviderPresentation, modifier: Modifier = Modifier) {
     val description = "${presentation.label}，${when (presentation.state) { ProviderMarkState.Running -> "运行中"; ProviderMarkState.Idle -> "空闲"; ProviderMarkState.Abnormal -> "异常"; ProviderMarkState.Unknown -> "未知" }}"
-    Box(modifier.size(40.dp).pointerInput(Unit) { detectTapGestures { } }.semantics { contentDescription = description }.testTag("provider-mark-${presentation.providerId}")) {
+    Box(modifier.size(40.dp).semantics { contentDescription = description }.testTag("provider-mark-${presentation.providerId}")) {
         presentation.assetKey?.let { key ->
             Image(
                 painter = painterResource(resources.getValue(key)),
