@@ -25,6 +25,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import org.junit.Assert.assertEquals
@@ -153,7 +155,8 @@ class TestFavorite {
                 )
             }
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.onNodeWithTag("l2-row-ref-x").performTouchInput { longClick() }
+        compose.onNodeWithTag("l2-favorite-action-ref-x").performClick()
         compose.runOnIdle {
             assertEquals(0, opened)
             assertEquals(1, vm.favorites.value.size)
@@ -162,7 +165,8 @@ class TestFavorite {
             assertEquals("4", vm.favorites.value.single().windowIndex)
             assertEquals("win-x", vm.favorites.value.single().windowName)
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.onNodeWithTag("l2-row-ref-x").performTouchInput { longClick() }
+        compose.onNodeWithTag("l2-favorite-action-ref-x").performClick()
         compose.runOnIdle {
             assertEquals(0, opened)
             assertTrue(vm.favorites.value.isEmpty())
@@ -188,7 +192,8 @@ class TestFavorite {
         compose.onNodeWithTag("fav-row-gone-ref").performClick()
         compose.runOnIdle { assertEquals(0, opened) }
         compose.onNodeWithText("不在线").assertExists()
-        compose.onNodeWithTag("fav-star-gone-ref").performClick()
+        compose.onNodeWithTag("fav-row-gone-ref").performTouchInput { longClick() }
+        compose.onNodeWithTag("fav-favorite-action-gone-ref").performClick()
         compose.runOnIdle {
             assertEquals(0, opened)
             assertTrue(store.load().isEmpty())

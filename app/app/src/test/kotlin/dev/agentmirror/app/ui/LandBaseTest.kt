@@ -54,7 +54,7 @@ class LandBaseTest {
     @Test
     fun sessionStatusHasThreeValues() {
         assertEquals(
-            setOf(SessionStatus.Busy, SessionStatus.Idle, SessionStatus.Unknown),
+            setOf(SessionStatus.Busy, SessionStatus.Idle, SessionStatus.Abnormal, SessionStatus.Unknown),
             SessionStatus.entries.toSet(),
         )
     }
