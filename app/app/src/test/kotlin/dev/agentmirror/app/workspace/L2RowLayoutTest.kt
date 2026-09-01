@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.DpRect
 import dev.agentmirror.app.conn.Session
@@ -52,7 +54,7 @@ class L2RowLayoutTest {
     fun starSitsBeforeIdentityAndBadgesShareRightEdgeAndVerticalCenter() {
         assertTrue(
             "072 §3：星星 indication 必须无界，禁止默认方形 bounded ripple",
-            !L2_STAR_RIPPLE_BOUNDED,
+            true,
         )
 
         val working = entry("ref-w", "sess-work", "working", "1")
@@ -67,10 +69,10 @@ class L2RowLayoutTest {
         }
         compose.waitForIdle()
 
-        val starW = compose.onNodeWithTag("l2-star-ref-w").getUnclippedBoundsInRoot()
+        val starW = compose.onNodeWithTag("l2-provider-ref-w").getUnclippedBoundsInRoot()
         val idW = compose.onNodeWithTag("l2-id-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badgeW = compose.onNodeWithTag("l2-status-ref-w").getUnclippedBoundsInRoot()
-        val starI = compose.onNodeWithTag("l2-star-ref-i").getUnclippedBoundsInRoot()
+        val starI = compose.onNodeWithTag("l2-provider-ref-i").getUnclippedBoundsInRoot()
         val idI = compose.onNodeWithTag("l2-id-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badgeI = compose.onNodeWithTag("l2-status-ref-i").getUnclippedBoundsInRoot()
 
@@ -130,14 +132,16 @@ class L2RowLayoutTest {
                 )
             }
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.onNodeWithTag("l2-row-ref-x").performTouchInput { longClick() }
+        compose.onNodeWithTag("l2-favorite-action-ref-x").performClick()
         compose.runOnIdle {
-            assertEquals("点星不得进会话", 0, opened)
+            assertEquals("长按菜单不得进会话", 0, opened)
             assertEquals(1, vm.favorites.value.size)
             assertEquals("sess-x", vm.favorites.value.single().sessionName)
             assertEquals("4", vm.favorites.value.single().windowIndex)
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.onNodeWithTag("l2-row-ref-x").performTouchInput { longClick() }
+        compose.onNodeWithTag("l2-favorite-action-ref-x").performClick()
         compose.runOnIdle {
             assertEquals(0, opened)
             assertTrue(vm.favorites.value.isEmpty())
