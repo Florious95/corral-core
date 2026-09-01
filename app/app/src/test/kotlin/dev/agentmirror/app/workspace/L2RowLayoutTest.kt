@@ -69,10 +69,10 @@ class L2RowLayoutTest {
         }
         compose.waitForIdle()
 
-        val starW = compose.onNodeWithTag("l2-provider-ref-w").getUnclippedBoundsInRoot()
+        val starW = compose.onNodeWithTag("l2-provider-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val idW = compose.onNodeWithTag("l2-id-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badgeW = compose.onNodeWithTag("l2-status-ref-w").getUnclippedBoundsInRoot()
-        val starI = compose.onNodeWithTag("l2-provider-ref-i").getUnclippedBoundsInRoot()
+        val starI = compose.onNodeWithTag("l2-provider-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val idI = compose.onNodeWithTag("l2-id-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badgeI = compose.onNodeWithTag("l2-status-ref-i").getUnclippedBoundsInRoot()
 

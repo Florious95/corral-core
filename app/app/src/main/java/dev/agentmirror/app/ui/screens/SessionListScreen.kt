@@ -165,7 +165,7 @@ private fun SessionRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dims.rowGap),
     ) {
-        ProviderMark(dev.agentmirror.app.ui.model.providerPresentation(item.provider, item.activity, item.health), Modifier.testTag("$tagPrefix-provider-${item.id}"))
+        ProviderMark(dev.agentmirror.app.ui.model.providerPresentation(item.provider, item.activity, item.health), Modifier.testTag("$tagPrefix-provider-${item.id.replace('\u001f', '_')}"))
         Box(
             modifier = Modifier
                 .weight(1f)
