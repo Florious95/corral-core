@@ -125,7 +125,7 @@ private fun FavoriteRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dims.rowGap),
     ) {
-        ProviderMark(dev.agentmirror.app.ui.model.providerPresentation(item.provider, item.activity, item.health), Modifier.testTag("fav-provider-${item.id}"))
+        ProviderMark(dev.agentmirror.app.ui.model.providerPresentation(item.provider, item.activity, item.health), Modifier.testTag("fav-provider-${item.id.replace('\u001f', '_')}"))
         Column(
             modifier = Modifier
                 .weight(1f)

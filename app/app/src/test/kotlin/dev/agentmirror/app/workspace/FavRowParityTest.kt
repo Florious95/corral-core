@@ -148,7 +148,7 @@ class FavRowParityTest {
         compose.onNodeWithText("claude_code").assertDoesNotExist()
 
         val refA = live[0].ref
-        val star = compose.onNodeWithTag("fav-provider-$refA").getUnclippedBoundsInRoot()
+        val star = compose.onNodeWithTag("fav-provider-${refA.replace('\u001f', '_')}", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badge = compose.onNodeWithTag("fav-status-$refA").getUnclippedBoundsInRoot()
         assertTrue(

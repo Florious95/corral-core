@@ -125,7 +125,7 @@ class LandListTest {
         }
         compose.waitForIdle()
         val ref = live[0].ref
-        val star = compose.onNodeWithTag("fav-provider-$ref").getUnclippedBoundsInRoot()
+        val star = compose.onNodeWithTag("fav-provider-${ref.replace('\u001f', '_')}", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val badge = compose.onNodeWithTag("fav-status-$ref").getUnclippedBoundsInRoot()
         assertTrue("星在行首 star.left=${star.left} id.left=${id.left}", star.left < id.left)
