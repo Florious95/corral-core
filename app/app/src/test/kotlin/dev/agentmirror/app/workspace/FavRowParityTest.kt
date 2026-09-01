@@ -176,6 +176,9 @@ class FavRowParityTest {
         sessionName = "team",
         windowIndex = "0",
         windowName = "claude_code",
+        provider = if (status == "working") "claude_code" else "codex",
+        activity = status,
+        health = if (status == "working" || status == "idle") "normal" else "unknown",
     ).toL2Entry()
 
     private fun grokAdvisor(): L2Entry = Session(

@@ -93,5 +93,8 @@ class L2ListRendersStatusTest {
         sessionName = name,
         windowIndex = "1",
         windowName = name,
+        provider = if (status == "working") "claude_code" else "codex",
+        activity = status,
+        health = if (status == "working" || status == "idle") "normal" else "unknown",
     )
 }

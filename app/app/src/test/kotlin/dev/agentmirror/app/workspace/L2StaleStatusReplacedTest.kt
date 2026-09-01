@@ -121,6 +121,9 @@ class L2StaleStatusReplacedTest {
                 sessionName = identity.first,
                 windowIndex = identity.second,
                 windowName = identity.third,
+                provider = if (status == "working") "claude_code" else "codex",
+                activity = status,
+                health = if (status == "working" || status == "idle") "normal" else "unknown",
             ),
         ),
     )
