@@ -156,7 +156,7 @@ class VzVerifyRoundTest {
     }
 
     @Test
-    fun VzVerifyLampFollowsLiveOverlayWithoutNavigation() {
+    fun VzVerifyFavoriteChipFollowsLiveOverlayWithoutNavigation() {
         val h = OverlayTestHarness()
         val idle = session(h.vm.ref, L2Status.IDLE)
         val busy = session(h.vm.ref, L2Status.WORKING)
@@ -168,6 +168,7 @@ class VzVerifyRoundTest {
                     name = "远控 leader",
                     onBack = {},
                     overlaySessions = overlay,
+                    overlayFavorited = setOf(FavoriteKey(h.vm.ref)),
                 )
             }
         }
@@ -175,7 +176,7 @@ class VzVerifyRoundTest {
         compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
         compose.runOnIdle { overlay = listOf(busy) }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Busy").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Running").assertIsDisplayed()
     }
 
     @Test

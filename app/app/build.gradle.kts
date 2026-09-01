@@ -64,6 +64,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         release {
@@ -149,6 +150,10 @@ dependencies {
     // releaseImplementation 进 release 主 manifest，见下方 fix-release-test-host 注释）。
     testImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     // release 单测变体的 Compose 测试宿主（fix-release-test-host 清偿门债：testReleaseUnitTest
     // 原 13 红，统一 Unable to resolve ComponentActivity）。

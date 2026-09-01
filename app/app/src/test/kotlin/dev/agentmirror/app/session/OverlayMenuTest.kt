@@ -19,6 +19,7 @@ package dev.agentmirror.app.session
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.percentOffset
@@ -67,6 +68,8 @@ class OverlayMenuTest {
             }
         }
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-open").assertIsDisplayed()
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
@@ -103,6 +106,8 @@ class OverlayMenuTest {
                 )
             }
         }
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("l2-row-ref-dev").performClick()
@@ -129,6 +134,8 @@ class OverlayMenuTest {
                 )
             }
         }
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-scrim").performTouchInput {

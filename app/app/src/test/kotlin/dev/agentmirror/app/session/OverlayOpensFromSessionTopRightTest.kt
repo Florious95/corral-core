@@ -18,6 +18,7 @@ package dev.agentmirror.app.session
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import dev.agentmirror.app.conn.ConnectionConfig
@@ -48,7 +49,7 @@ class OverlayOpensFromSessionTopRightTest {
     val compose = createComposeRule()
 
     @Test
-    fun topRightButtonOpensOverlayAndSubscribes() {
+    fun menuViewButtonOpensOverlayWithoutSubscribing() {
         val h = OverlayTestHarness()
         compose.setContent {
             AgentMirrorTheme {
@@ -56,6 +57,8 @@ class OverlayOpensFromSessionTopRightTest {
             }
         }
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-open").assertIsDisplayed()
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
@@ -69,7 +72,7 @@ class OverlayOpensFromSessionTopRightTest {
     }
 }
 
-internal class OverlayTestHarness {
+internal class OverlayTestHarness(ref: String = "/tmp/tmux-1000/default\u001f%3") {
     val transport = FakeWebSocketTransport()
     val manager = ConnectionManager(
         config = ConnectionConfig(url = "ws://host:0/ws", token = "tok"),
@@ -85,7 +88,7 @@ internal class OverlayTestHarness {
             manager = manager,
             uploader = AttachmentUploader { _, _ -> UploadOutcome.Failure("unused") },
             baseUrl = null,
-            ref = "/tmp/tmux-1000/default\u001f%3",
+            ref = ref,
             initialRows = 24,
             initialCols = 80,
         )

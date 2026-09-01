@@ -23,6 +23,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.GestureDetector
@@ -31,6 +32,7 @@ import android.view.MotionEvent
 import android.view.View
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
+import dev.agentmirror.app.session.SessionDockMotion
 import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.Cell
@@ -46,8 +48,9 @@ import kotlin.math.roundToInt
 /**
  * 终端画布视图：Canvas 逐格绘制 + 拖动手势 + Choreographer 帧调度（薄层，业务状态全在 [TermViewPresenter]）。
  *
- * 帧循环纯数据驱动：presenter 的脏区取走后整帧重绘可见窗口（滚动/快照仍全窗；
- * [TermDrawMeter.optEnabled] 时跳过已由清屏铺过的默认底并合并同色底，像素等价）。
+ * 内容帧由 presenter 脏区驱动；唯一的定时 UI 帧是 Claude Design 源码要求的
+ * 1.1s steps(1) 光标闪烁（每 550ms 一次，不跑 60fps）。滚动/快照仍整窗；
+ * [TermDrawMeter.optEnabled] 时跳过已由清屏铺过的默认底并合并同色底，像素等价。
  * 脏区行数记入仪表，不按脏行裁剪滚动帧（思路 S2-a 滚动暂全绘）。
  * 拖动滚动只改本地视口零网络。字号（[fontSizeSp]，Settings 持久化，取代原 005 捏合）经
  * [applyFontMetrics] 实测换算 cellWidth/cellHeight 后写回 presenter，视口建立时presenter
@@ -153,6 +156,10 @@ class TermSurfaceView @JvmOverloads constructor(
 
     // ---- 绘制工具 ----
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val cursorPaint = Paint().apply {
+        isAntiAlias = false
+        style = Paint.Style.FILL
+    }
     private val fgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.MONOSPACE
     }
@@ -228,6 +235,12 @@ class TermSurfaceView @JvmOverloads constructor(
             return true
         }
     })
+
+    private var cursorBlinkScheduled = false
+    private val cursorBlinkTick = Runnable {
+        cursorBlinkScheduled = false
+        postFrame()
+    }
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -309,6 +322,12 @@ class TermSurfaceView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         refreshDrawOpt()
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(cursorBlinkTick)
+        cursorBlinkScheduled = false
+        super.onDetachedFromWindow()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -468,6 +487,7 @@ class TermSurfaceView @JvmOverloads constructor(
             drawLine(canvas, p.lineCells(logical), rowY)
             drawnRows++
         }
+        drawSourceCursor(canvas, p, win)
         val tLines = System.nanoTime()
 
         // 视图内"回到底部"悬浮钮为历史遗留死代码：backToBottomLabel 全仓库无赋值点，本块永不走；
@@ -503,6 +523,28 @@ class TermSurfaceView @JvmOverloads constructor(
                 PerfTrace.flushKeyEchoAfterDraw(ref)
                 PerfTrace.emitFirstDraw(ref, cellsWithGlyph) // first_draw
             }
+        }
+    }
+
+    private fun drawSourceCursor(canvas: Canvas, presenter: TermViewPresenter, window: IntRange) {
+        if (!isAttachedToWindow || cellW <= 0 || cellH <= 0) return
+        val cursor = presenter.visibleCursorCell() ?: return
+        val now = SystemClock.uptimeMillis()
+        val alpha = SessionDockMotion.cursorAlphaAt(now)
+        val base = if (isNight()) Color.rgb(207, 211, 229) else Color.rgb(89, 93, 108)
+        cursorPaint.color = Color.argb(alpha, Color.red(base), Color.green(base), Color.blue(base))
+        val left = contentLeftPx() + cursor.column * cellW
+        val top = (cursor.logicalRow - window.first) * cellH
+        canvas.drawRect(
+            left.toFloat(),
+            top.toFloat(),
+            (left + cellW).coerceAtMost(width).toFloat(),
+            (top + cellH).toFloat(),
+            cursorPaint,
+        )
+        if (!cursorBlinkScheduled) {
+            cursorBlinkScheduled = true
+            postDelayed(cursorBlinkTick, SessionDockMotion.millisToNextCursorStep(now))
         }
     }
 

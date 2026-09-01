@@ -59,9 +59,14 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
  * 全仓无调用点，见 fix-workspace-wiring 知识基底）。
  *
  * @consumes dev.agentmirror.app.pairing
+ * @consumes dev.agentmirror.app.perf
  * @consumes dev.agentmirror.app.service
  * @consumes dev.agentmirror.app.session
  * @consumes dev.agentmirror.app.termview
+ * @consumes dev.agentmirror.app.tsnet
+ * @consumes dev.agentmirror.app.ui.components
+ * @consumes dev.agentmirror.app.ui.model
+ * @consumes dev.agentmirror.app.ui.screens
  * @consumes dev.agentmirror.app.ui.theme
  * @consumes dev.agentmirror.app.workspace
  */
@@ -129,6 +134,9 @@ fun AgentMirrorApp(
         // 新屏先挂新 VM、旧屏 onDispose 发现已非自己则不复位——不误伤。
         AnimatedContent(
             targetState = route,
+            // 会话 chips 连续切换复用同一 composition：dock 模式、输入焦点与 LazyRow
+            // 滚动位置不因 ref/name 变化被 dispose/recreate；跨页面仍保留原路由转场。
+            contentKey = { if (it is AppRoute.Session) "agent-cli-session" else it },
             transitionSpec = {
                 val dir = when {
                     initialState !is AppRoute.Session && targetState is AppRoute.Session ->
@@ -208,7 +216,7 @@ fun AgentMirrorApp(
     }
 }
 
-/** 根路由四分支的转场键（data class 让同名不同 ref 的会话切换也触发转场）。 */
+/** 根路由四分支的状态；会话间切换由 AnimatedContent.contentKey 复用同一 UI composition。 */
 private sealed interface AppRoute {
     data class Session(val ref: String, val name: String) : AppRoute
     data object Pairing : AppRoute

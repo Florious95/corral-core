@@ -20,6 +20,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -94,13 +95,15 @@ class ViewMenuSourceTest {
                 )
             }
         }
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
         compose.onNodeWithTag("l2-row-$REF_A").assertExists()
         compose.onNodeWithTag("l2-row-$REF_B").assertDoesNotExist()
         compose.onNodeWithText("sess-b").assertDoesNotExist()
-        compose.onAllNodesWithText("sess-a").assertCountEquals(2)
+        compose.onAllNodesWithText("sess-a").assertCountEquals(1)
         compose.onNodeWithText("多agent协作", substring = true).assertIsDisplayed()
         compose.onNodeWithText("远程Agent安卓").assertDoesNotExist()
     }

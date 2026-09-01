@@ -23,6 +23,9 @@ import dev.agentmirror.terminal.DamageListener
 import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
 
+/** Cursor location projected into the presenter's logical-line coordinate space. */
+internal data class VisibleCursorCell(val logicalRow: Int, val column: Int)
+
 /**
  * 终端视口状态机：跟随/锁定历史、可见行窗口、字格像素→行列数换算、脏区合并（渲染逻辑与 Android View 分离的可测核心）。
  *
@@ -502,6 +505,23 @@ class TermViewPresenter(
         val snap = frameSnapshot ?: emulator.snapshot()
         val index = row - sb
         return if (index in snap.lines.indices) snap.lines[index] else emptyList()
+    }
+
+    /**
+     * Source cursor projected onto the current visible window.
+     *
+     * @contract
+     * @pre none
+     * @post hidden/out-of-window cursor → null; otherwise returns its visible logical row/column
+     * @err none
+     * @inv does not mutate emulator, scrollback, or viewport state
+     */
+    internal fun visibleCursorCell(): VisibleCursorCell? {
+        val snapshot = frameSnapshot ?: emulator.snapshot()
+        if (!snapshot.cursorVisible) return null
+        val logicalRow = emulator.scrollback.size + snapshot.cursorY
+        if (logicalRow !in window) return null
+        return VisibleCursorCell(logicalRow, snapshot.cursorX)
     }
 
     // ---- 内部实现 ----
