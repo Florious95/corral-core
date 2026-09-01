@@ -36,11 +36,13 @@ data class ViewportGeom(
     val densityDpi: Int,
 )
 
+/** Persists the last valid terminal viewport geometry. */
 interface ViewportGeomStore {
     fun load(): ViewportGeom?
     fun save(geom: ViewportGeom)
 }
 
+/** SharedPreferences implementation of [ViewportGeomStore]. */
 class SharedPreferencesViewportGeomStore(context: Context) : ViewportGeomStore {
 
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

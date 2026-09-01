@@ -270,7 +270,7 @@ class ConsoleChromeTest {
     }
 
     @Test
-    fun ConsoleChromeLampFollowsLiveOverlayWithoutNavigation() {
+    fun ConsoleChromeFavoriteChipFollowsLiveStatusWithoutUnknownLabel() {
         val h = OverlayTestHarness()
         val idle = session(h.vm.ref, L2Status.IDLE)
         val busy = session(h.vm.ref, L2Status.WORKING)
@@ -283,6 +283,7 @@ class ConsoleChromeTest {
                     name = "远控 leader",
                     onBack = {},
                     overlaySessions = overlay,
+                    overlayFavorited = setOf(dev.agentmirror.app.workspace.FavoriteKey(h.vm.ref)),
                 )
             }
         }
@@ -290,10 +291,11 @@ class ConsoleChromeTest {
         compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
         compose.runOnIdle { overlay = listOf(busy) }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Busy").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Running").assertIsDisplayed()
         compose.runOnIdle { overlay = listOf(unknown) }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Unknown").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Unknown").assertDoesNotExist()
     }
 
     @Test

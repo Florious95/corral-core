@@ -31,4 +31,7 @@ package dev.agentmirror.app.session
  * @consumes dev.agentmirror.app.ui.theme
  * @consumes dev.agentmirror.terminal
  * @consumes dev.agentmirror.app.diag
+ * @consumes dev.agentmirror.app.perf
+ * @consumes dev.agentmirror.app.ui.components
+ * @consumes dev.agentmirror.app.workspace
  */

@@ -1,12 +1,11 @@
 package dev.agentmirror.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,16 +24,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -42,18 +37,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.agentmirror.app.session.SessionDockMotion
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
-import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
  * 「查看」二级菜单浮层 —— 会话切换抽屉。
  *
- * 改自原来那个占满 80% 屏幕、下半全空的白卡：现在高度贴合内容，
- * 从底部滑起（320ms，末端轻微减速），遮罩 180ms 淡入，五行依次上浮（40ms 起，34ms 间隔）。
+ * 列表内容复用既有「查看」业务；显隐严格采用 Claude Design popIn：
+ * 200ms CSS ease，从 10dp 下方、0.97 倍与透明态进入；遮罩为 rgba(0,0,0,.45)。
  * 当前会话有左侧 3dp 轨 + 轻着色底 + 「当前」标记 —— 切换器里必须能看出自己在哪一个。
  * 每行重复的同一条路径已去掉，只留显示名和状态。
  *
@@ -72,16 +67,17 @@ fun SessionSwitchSheet(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
+    val popRisePx = with(LocalDensity.current) { 10.dp.roundToPx() }
     Box(modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(tween(Motion.scrimFade, easing = Motion.linear)),
-            exit = fadeOut(tween(Motion.scrimFade, easing = Motion.linear)),
+            enter = fadeIn(tween(durationMillis = 0)),
+            exit = fadeOut(tween(durationMillis = 0)),
         ) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(p.scrim)
+                    .background(Color(0x73000000))
                     .testTag("session-overlay-scrim")
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -93,14 +89,26 @@ fun SessionSwitchSheet(
         AnimatedVisibility(
             visible = visible,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(
-                animationSpec = tween(Motion.sheetSlideIn, easing = Motion.sheetEnter),
-                initialOffsetY = { it },
+            enter = fadeIn(
+                animationSpec = tween(
+                    SessionDockMotion.PopInMillis,
+                    easing = SessionDockMotion.Ease,
+                ),
+            ) + slideInVertically(
+                animationSpec = tween(
+                    SessionDockMotion.PopInMillis,
+                    easing = SessionDockMotion.Ease,
+                ),
+                initialOffsetY = { popRisePx },
+            ) + scaleIn(
+                animationSpec = tween(
+                    SessionDockMotion.PopInMillis,
+                    easing = SessionDockMotion.Ease,
+                ),
+                initialScale = 0.97f,
             ),
-            exit = slideOutVertically(
-                animationSpec = tween(Motion.sheetSlideOut, easing = Motion.emphasized),
-                targetOffsetY = { it },
-            ),
+            // Prototype conditional removal has no exit transition.
+            exit = fadeOut(tween(durationMillis = 0)),
         ) {
             Column(
                 Modifier
@@ -166,51 +174,19 @@ fun SessionSwitchSheet(
                         .background(p.sheetSurface)
                 ) {
                     Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
-                    sessions.forEachIndexed { index, item ->
-                        StaggeredRow(index = index, replayKey = visible) {
-                            SheetRow(
-                                item = item,
-                                isCurrent = item.id == currentSessionId,
-                                onClick = { onSelect(item) },
-                                onToggleStar = { onToggleStar(item) },
-                            )
-                        }
+                    sessions.forEach { item ->
+                        SheetRow(
+                            item = item,
+                            isCurrent = item.id == currentSessionId,
+                            onClick = { onSelect(item) },
+                            onToggleStar = { onToggleStar(item) },
+                        )
                         Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
                     }
                 }
             }
         }
     }
-}
-
-/**
- * 逐行上浮。
- * 这里的 remember 只是动画状态，不是业务状态 —— replayKey 变化时重新播放。
- */
-@Composable
-private fun StaggeredRow(
-    index: Int,
-    replayKey: Any,
-    content: @Composable () -> Unit,
-) {
-    var shown by remember(replayKey) { mutableStateOf(false) }
-    LaunchedEffect(replayKey) { shown = true }
-    val progress by animateFloatAsState(
-        targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = Motion.sheetRow,
-            delayMillis = Motion.sheetRowDelayBase + Motion.sheetRowStagger * index,
-            easing = Motion.emphasized,
-        ),
-        label = "sheetRow$index",
-    )
-    val rise = with(LocalDensity.current) { Motion.sheetRowRiseDp.dp.toPx() }
-    Box(
-        Modifier.graphicsLayer {
-            alpha = progress
-            translationY = (1f - progress) * rise
-        }
-    ) { content() }
 }
 
 @Composable
