@@ -76,7 +76,7 @@ func TestAuthBadToken(t *testing.T) {
 // TestListReturnsFullListing verifies list → listing carries the two-level
 // model with server-computed aggregates (requirement 012) and a seq >= 1.
 func TestListReturnsFullListing(t *testing.T) {
-	e := startWS(t, Options{Token: "test-token", Discoverer: scriptedDiscoverer{model: testModel()}, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: scriptedDiscoverer{model: testModel()}})
 	e.auth()
 
 	e.sendFrame(&protocol.List{ReqID: 7})
@@ -111,7 +111,7 @@ func TestListReturnsFullListing(t *testing.T) {
 // model changes, a list_delta with a strictly greater seq is pushed.
 func TestListDeltaSeqMonotonic(t *testing.T) {
 	md := &mutableDiscoverer{model: testModel()}
-	e := startWS(t, Options{Token: "test-token", Discoverer: md, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: md})
 	e.auth()
 
 	// Let the baseline scan run with the original model (several ticks of the

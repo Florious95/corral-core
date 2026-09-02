@@ -1,0 +1,45 @@
+{
+  "binary": {
+    "path": "/Users/alauda/.local/bin/nodeprobe",
+    "sha256": "8ef9c5fe89ae76f2c8eb6aeb16bf5fb9060a79bcf81aa4d790df3f4614c2fb5f",
+    "size": 770432
+  },
+  "corpora": [
+    {
+      "base_blob": "2f89a312ffeb628bf799e1b385e925f70d114d64",
+      "path": "tools/nodeprobe/fixtures/titles.tsv",
+      "sha256": "c0ec2de2e9aae61c200e1fd65e9865664bd4bcddc4a17361c1eb6bb2673e91ae"
+    },
+    {
+      "base_blob": "e93afa54e473e90099f03cb932d9a54798c0dfe4",
+      "path": "tools/nodeprobe/fixtures/providers.tsv",
+      "sha256": "c68f50115b33ae6a6806b463cc27c71d8bbfc92273435a533502e9bb84b8b522"
+    }
+  ],
+  "pi_extension": {
+    "path": "/Users/alauda/.pi/agent/extensions/nodeprobe-pi-activity.js",
+    "sha256": "ee8b088ef78428e7e74b905d8e770d4271562f2778a083da489612713f43533c",
+    "size": 3538
+  },
+  "platform": "darwin/arm64",
+  "source_commit": "863c316ff66add549f8fa6dd215cedeedd037f8b",
+  "source_tree": "ce667e3c464d0efb2ac9483862ff84a38008e674",
+  "sources": {
+    "Cargo.toml": "7fef1cb5ac3173215d94b3c450fde0a928cd5af2ac304b4cc7111f5beb9bc08f",
+    "Cargo.lock": "297185c9c0683bdaeadaf4d57a0688c6b91bcfe43a2495a86a9181a479749696",
+    "README.md": "59d48e9375d6334ac4c80372f6206c5b0ad041e51a2528de05194f16ad1de47c",
+    "docs/api-architecture.md": "88e2ac8f8bbfe81a230cee9de82866ff3f3f25d04c31888f02fcdbcce62f557f",
+    "docs/consumer-migration-map.md": "40fc2cbfa14fee2af6f7044af33a95643e0015f4cd88d4e32f2cce2f3d849849",
+    "pi/nodeprobe-pi-activity.js": "ee8b088ef78428e7e74b905d8e770d4271562f2778a083da489612713f43533c",
+    "src/classify.rs": "8e04ba11aa1ebc91c869a55ec887f66b6a0df5ae23cf04347726da6087e5736f",
+    "src/lib.rs": "6e5448a1b201e28824abd3d03498635b561af758a8492a85e89e1849b1ec4b25",
+    "src/main.rs": "767698d753987ecc06858f178819f377f0fecf17487de1fcc4ae89805bd953a9",
+    "src/pi_activity.rs": "1760bb7be905788285953c43eb2f5ea2e3fc52310b82adfe676f0a4ce08ce8e5",
+    "src/proctree.rs": "a2552446bb8d66e0058cb14ccb8408fa8cdf2ca77c40350f68fbd33793f70d54",
+    "src/providers.rs": "5fa17fce92d0ca1b5525475526bc88e8ae3a8f6a44d981f45d7d1a9ec91a3a57",
+    "src/web.rs": "27a518f9a9e9ab2c1714f1ad5811f96499b2fea34302fcade22926faec98b192",
+    "tests/fake_tmux.rs": "432ab8f312662c796014f2b1462fa6d371598fd3b510424616a78be2d311ade0",
+    "tests/pi-deterministic.js": "cab70f837f19b6fc6a5791f8a8993aa234a8a3d0812111a0e2a1772a797965b1",
+    "tests/pi_extension.mjs": "2ca01c45862458477c691d100cbdd20b3938f37ea9f98a9bf0af71e0107e0ed9"
+  }
+}

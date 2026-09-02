@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
 	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 )
 
 // sessionRef returns the stable, opaque session ref for a discovered pane.
@@ -29,9 +30,10 @@ func sessionRef(p discovery.Pane) string {
 // bare id is the only tmux addressing form that passes the exact existence
 // check (term-bridge knowledge base §5).
 type sessionEntry struct {
-	ref    string
-	pane   discovery.Pane
-	bridge *bridge.Pane
+	ref         string
+	pane        discovery.Pane
+	observation nodeprobe.Observation
+	bridge      *bridge.Pane
 }
 
 // sessionCatalog holds every pane currently discovered on the host, keyed by
@@ -54,16 +56,22 @@ func newSessionCatalog() *sessionCatalog {
 // indexed, and existing panes keep their identity. The bridge binding is
 // (re)constructed from the pane's socket and id — never from anything a
 // client supplied.
-func (c *sessionCatalog) rebuild(model *discovery.Model) {
+func (c *sessionCatalog) rebuild(model *discovery.Model, observations map[string]nodeprobe.Observation) {
 	next := make(map[string]*sessionEntry)
 	for i := range model.Workspaces {
 		ws := &model.Workspaces[i]
 		for j := range ws.Panes {
 			p := ws.Panes[j]
+			ref := sessionRef(p)
+			observation, ok := observations[ref]
+			if !ok {
+				observation = nodeprobe.Unknown()
+			}
 			e := &sessionEntry{
-				ref:    sessionRef(p),
-				pane:   p,
-				bridge: bridge.NewPane(p.Socket, p.PaneID),
+				ref:         ref,
+				pane:        p,
+				observation: observation,
+				bridge:      bridge.NewPane(p.Socket, p.PaneID),
 			}
 			next[e.ref] = e
 		}

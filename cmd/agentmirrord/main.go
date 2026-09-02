@@ -18,10 +18,11 @@
 //     /upload on the group's listener;
 //   - graceful shutdown on SIGINT/SIGTERM.
 //
-// The four internal modules it imports are declared as the dependency surface
+// The internal modules it imports are declared as the dependency surface
 // below so the architecture wiki can derive the graph from code.
 // @consumes internal/config
 // @consumes internal/pairing
+// @consumes internal/nodeprobe
 // @consumes internal/tsnetd
 // @consumes internal/api
 package main
@@ -43,8 +44,8 @@ import (
 
 	"github.com/agentmirror/agentmirror/internal/api"
 	"github.com/agentmirror/agentmirror/internal/config"
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/pairing"
-	"github.com/agentmirror/agentmirror/internal/provider"
 	"github.com/agentmirror/agentmirror/internal/tsnetd"
 )
 
@@ -80,18 +81,15 @@ func run(args []string) int {
 
 	logger := newLogger(cfg.LogLevel)
 
-	// 白名单表（tools/nodeprobe/fixtures/providers.tsv，契约 068）必须在启动时就位。
-	// 加载失败时 provider.Lookup 会对每个 pane 返回 false ⇒ 所有节点被判成「不是节点」
-	// ⇒ 一级/二级菜单静默全空。2026-08-12 已经用这种死法给用户发过一次坏包，
-	// 所以这里必须**响亮失败**：宁可起不来，也不要起来之后交一个空列表。
-	if entries, err := provider.Load(); err != nil {
-		logger.Error("provider whitelist table unavailable; refusing startup",
-			"err", err,
-			"want", "tools/nodeprobe/fixtures/providers.tsv")
+	capability, err := nodeprobe.ResolveCapability()
+	if err != nil {
+		logger.Error("accepted nodeprobe capability unavailable; refusing startup", "err", err)
 		return 1
-	} else {
-		logger.Info("provider whitelist loaded", "entries", len(entries))
 	}
+	if capability.PiExtensionFault != nil {
+		logger.Error("official Pi activity extension unavailable; Pi status will follow exact nodeprobe unknown/abnormal output", "err", capability.PiExtensionFault)
+	}
+	logger.Info("accepted nodeprobe capability verified", "binary", capability.Binary, "titles", capability.Titles, "providers", capability.Providers)
 	// Install signal cancellation before any control-plane handshake so SIGTERM
 	// can abort tsnet Up and reach deferred cleanup instead of waiting 60 seconds.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -143,6 +141,7 @@ func run(args []string) int {
 		MaxUploadBytes: cfg.MaxUploadBytes,
 		MaxInputBytes:  int(cfg.MaxInputBytes),
 		ListInterval:   cfg.ListInterval,
+		Nodeprobe:      nodeprobe.NewRunner(capability),
 		Log:            logger,
 	})
 	defer apiServer.Close()

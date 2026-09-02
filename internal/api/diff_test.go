@@ -41,7 +41,7 @@ func snapshotFromPanes(panes []discovery.Pane) *modelSnapshot {
 		model.Workspaces = append(model.Workspaces, discovery.Workspace{CWD: cwd, Panes: ps})
 	}
 	c := newSessionCatalog()
-	c.rebuild(model)
+	c.rebuild(model, nil)
 	return buildSnapshot(c)
 }
 

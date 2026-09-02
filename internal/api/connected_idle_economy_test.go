@@ -84,11 +84,11 @@ func TestConnectedIdleEconomyScopedDiscoveryConsumesOnlyExplicitDirs(t *testing.
 		t.Fatalf("MkdirTemp: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	socketDir := filepath.Join(root, "sockets")
+	socketDir := filepath.Join(root, fmt.Sprintf("tmux-%d", os.Getuid()))
 	if err := os.Mkdir(socketDir, 0o700); err != nil {
 		t.Fatalf("mkdir socket dir: %v", err)
 	}
-	socket := filepath.Join(socketDir, "only-this-server")
+	socket := filepath.Join(socketDir, "default")
 	name := fmt.Sprintf("scoped-%d", os.Getpid())
 	start := exec.Command(realTmux, "-S", socket, "new-session", "-d", "-s", name, "-c", t.TempDir(), "cat")
 	start.Env = scrubbedEnv()

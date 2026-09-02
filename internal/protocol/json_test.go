@@ -1,6 +1,7 @@
 package protocol_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -336,5 +337,32 @@ func TestPaneModeChangedMarshal(t *testing.T) {
 	}
 	if p.Ref != "s1" || !p.InCopyMode {
 		t.Errorf("payload = %+v", p)
+	}
+}
+
+func TestSessionFourAxisJSONAndValidation(t *testing.T) {
+	name := "seat"
+	s := protocol.Session{Ref: "r", Name: "n", Cwd: "/w", Rows: 24, Cols: 80, Provider: "pi", Activity: "working", SessionName: &name, Health: "normal", Status: "working"}
+	frame := protocol.Level2Frame{Workspace: "/w", Seq: 1, Sessions: []protocol.Session{s}}
+	got := roundTrip(t, frame).(protocol.Level2Frame).Sessions[0]
+	if got.Provider != "pi" || got.Activity != "working" || got.Status != got.Activity || got.SessionName == nil || *got.SessionName != "seat" || got.Health != "normal" {
+		t.Fatalf("round trip=%+v", got)
+	}
+	s.SessionName = nil
+	data, err := protocol.MarshalFrame(protocol.Level2Frame{Workspace: "/w", Seq: 1, Sessions: []protocol.Session{s}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte(`"session_name":null`)) {
+		t.Fatalf("nullable name not JSON null: %s", data)
+	}
+	for _, bad := range []protocol.Session{
+		{Ref: "r", Cwd: "/w", Rows: 1, Cols: 1, Provider: "pi", Activity: "busy", Health: "normal", Status: "busy"},
+		{Ref: "r", Cwd: "/w", Rows: 1, Cols: 1, Provider: "pi", Activity: "working", Health: "healthy", Status: "working"},
+		{Ref: "r", Cwd: "/w", Rows: 1, Cols: 1, Provider: "pi", Activity: "working", Health: "normal", Status: "idle"},
+	} {
+		if bad.Validate() == nil {
+			t.Fatalf("invalid session accepted: %+v", bad)
+		}
 	}
 }

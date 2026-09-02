@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/overlay"
 )
 
@@ -88,9 +89,10 @@ type Options struct {
 	// client while subscribers exist (requirement 064). Zero defaults to 100ms.
 	OverlayInterval time.Duration
 
-	// ProviderFinder maps pane_pid → whitelist provider id (requirement 068).
-	// Nil builds the production process-tree walker (comm basename only).
-	ProviderFinder ProviderFinder
+	// Nodeprobe samples the accepted status authority once per discovered socket.
+	// Production startup always supplies the verified runner; nil is a fail-closed
+	// test/library default that emits unknown observations without inference.
+	Nodeprobe nodeprobe.Sampler
 
 	// OverlayCapturer captures choose-tree via a dedicated scratch-session
 	// client. Nil builds the production tmux capturer scoped to the same
