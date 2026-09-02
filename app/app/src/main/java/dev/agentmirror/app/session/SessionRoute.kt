@@ -45,7 +45,9 @@ import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.SharedPreferencesViewportGeomStore
+import dev.agentmirror.app.workspace.FavoriteKey
 import dev.agentmirror.app.workspace.FavoriteRow
+import dev.agentmirror.app.workspace.L2Entry
 
 /**
  * 会话页路由挂载（[AgentMirrorApp] 的 Session 分支唯一入口；本组合同时承担接线层：
@@ -79,6 +81,9 @@ fun SessionRoute(
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
     favoriteRows: List<FavoriteRow> = emptyList(),
+    overlaySessions: List<L2Entry> = emptyList(),
+    overlayFavorited: Set<FavoriteKey> = emptySet(),
+    onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val sessionContext = LocalContext.current
@@ -126,6 +131,9 @@ fun SessionRoute(
         connectionPath = connectionPath,
         onBack = onBack,
         favoriteRows = favoriteRows,
+        overlaySessions = overlaySessions,
+        overlayFavorited = overlayFavorited,
+        onToggleOverlayFavorite = onToggleOverlayFavorite,
         onOpenOverlaySession = onOpenOverlaySession,
     )
 }
@@ -149,9 +157,8 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
     context?.let(MirrorForegroundService::start)
     // 上传基地址与认证 token 均取 ServiceWire 的当前配对配置链：HTTP 上传与 WebSocket
     // 认证同源。token 只作为参数下传，禁止日志/回显；配置未落地时 manager() 已阻止建 VM。
-    val fontSpF = context?.let { SharedPreferencesFontSizeStore(it).load()?.toFloat() }
+    val fontSp = context?.let { SharedPreferencesFontSizeStore(it).load() }
         ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
-    val fontSp = kotlin.math.round(fontSpF).toInt()
     val densityDpi = context?.resources?.displayMetrics?.densityDpi ?: -1
     val cached = context?.let { SharedPreferencesViewportGeomStore(it).load() }
     val cacheHit = cached != null &&

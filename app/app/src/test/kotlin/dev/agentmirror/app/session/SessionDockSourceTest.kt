@@ -304,7 +304,7 @@ class SessionDockSourceTest {
             }
         }
         compose.waitForIdle()
-        assertRect("session-terminal-canvas", 11f, 49f, 368f, 661f)
+        assertRect("session-terminal-canvas", 0f, 42.667f, 390f, 675.333f)
         assertRect("favorite-session-list", 11f, 718f, 320f, 40f)
         assertRect("session-command-input", 11f, 766f, 368f, 46f)
         assertRect("session-command-input-field", 60f, 773f, 272f, 32f)

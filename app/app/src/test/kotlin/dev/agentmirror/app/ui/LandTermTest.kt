@@ -124,9 +124,8 @@ class LandTermTest {
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
-        compose.onNodeWithText("查看弹出菜单（原生实现，此处仅占位）").assertIsDisplayed()
-        compose.onNodeWithText("点任意处关闭").assertIsDisplayed()
-        compose.onNodeWithText("切换会话").assertDoesNotExist()
-        compose.onNodeWithText("claude_code").assertDoesNotExist()
+        compose.onNodeWithText("切换会话").assertIsDisplayed()
+        compose.onNodeWithText("查看弹出菜单（原生实现，此处仅占位）").assertDoesNotExist()
+        compose.onNodeWithText("点任意处关闭").assertDoesNotExist()
     }
 }

@@ -177,13 +177,12 @@ class SessionRouteImeBodyInstrumentedTest {
     }
 
     private fun assertSourceFont(view: TermSurfaceView) {
-        assertEquals(12.5f, view.fontSizeSp, 0.0f)
-        val sizePx = view.fontSizeSp * view.resources.displayMetrics.scaledDensity
-        val expectedCellH = (sizePx * SharedPreferencesFontSizeStore.SOURCE_LINE_HEIGHT_MULTIPLIER)
-            .roundToInt()
-            .coerceAtLeast(1)
-        assertEquals(expectedCellH, view.presenter!!.cellHeight)
-        val cellHDp = view.presenter!!.cellHeight / view.resources.displayMetrics.density
-        assertEquals(21.875f, cellHDp, 0.2f)
+        assertEquals(SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP.toFloat(), view.fontSizeSp, 0.0f)
+        assertEquals(14f, view.fontSizeSp, 0.0f)
+        assertTrue(view.presenter!!.cellHeight >= 1)
+        val htmlPlaceholderCellH = (
+            view.fontSizeSp * view.resources.displayMetrics.scaledDensity * 1.75f
+            ).roundToInt()
+        assertTrue(view.presenter!!.cellHeight != htmlPlaceholderCellH)
     }
 }

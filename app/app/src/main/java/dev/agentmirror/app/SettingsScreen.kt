@@ -66,10 +66,7 @@ internal fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val fontSizeStore = remember { SharedPreferencesFontSizeStore(context) }
     var fontSizeSp by remember {
-        mutableIntStateOf(
-            fontSizeStore.load()
-                ?: kotlin.math.round(SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP).toInt(),
-        )
+        mutableIntStateOf(fontSizeStore.load() ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP)
     }
     val paired = remember { SharedPreferencesPairingConfigStore(context).load() != null }
     val buildLabel = remember {

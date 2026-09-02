@@ -17,15 +17,13 @@
 package dev.agentmirror.app.termview
 
 /**
- * 终端渲染：快照/增量渲染 + 本地滚动视口（内容数据驱动，源码光标 550ms 阶跃，需求 006）。
+ * 终端渲染：快照/增量渲染 + 本地滚动视口（60fps，需求 006）。
  *
  * [TermViewPresenter] 纯 JVM 视口状态机（跟随/锁定历史、可见行窗口、字号→行列数换算、
  * 脏区合并），单测全部打在它上；[TermSurfaceView] 薄 Android 层（Canvas 画格、拖动手势、
  * Choreographer 帧调度）。内核为 :terminal 模块；resize 协议帧由上层接线（conn/session）。
  *
  * @consumes dev.agentmirror.app.diag
- * @consumes dev.agentmirror.app.perf
- * @consumes dev.agentmirror.app.session
  * @consumes dev.agentmirror.app.ui.theme
  * @consumes dev.agentmirror.terminal
  */

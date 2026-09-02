@@ -36,13 +36,11 @@ data class ViewportGeom(
     val densityDpi: Int,
 )
 
-/** Persists the last valid terminal viewport geometry. */
 interface ViewportGeomStore {
     fun load(): ViewportGeom?
     fun save(geom: ViewportGeom)
 }
 
-/** SharedPreferences implementation of [ViewportGeomStore]. */
 class SharedPreferencesViewportGeomStore(context: Context) : ViewportGeomStore {
 
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -57,10 +55,7 @@ class SharedPreferencesViewportGeomStore(context: Context) : ViewportGeomStore {
             cols = cols,
             cellW = prefs.getInt(KEY_CELL_W, 0),
             cellH = prefs.getInt(KEY_CELL_H, 0),
-            fontSizeSp = prefs.getInt(
-                KEY_FONT_SP,
-                kotlin.math.round(SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP).toInt(),
-            ),
+            fontSizeSp = prefs.getInt(KEY_FONT_SP, SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP),
             viewW = prefs.getInt(KEY_VIEW_W, 0),
             viewH = prefs.getInt(KEY_VIEW_H, 0),
             densityDpi = prefs.getInt(KEY_DPI, 0),

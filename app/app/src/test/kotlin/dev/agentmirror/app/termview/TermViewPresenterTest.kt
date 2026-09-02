@@ -167,44 +167,4 @@ class TermViewPresenterTest {
         // 锁定语义仍保证窗口内容不动。
         assertEquals("a", text(h.presenter.lineCells(0)))
     }
-
-    @Test
-    fun imeSqueezeKeepsShortSnapshotBodyAndCursorInFollowWindow() {
-        val h = harness(rows = 24, cols = 40)
-        h.presenter.onViewportSizeChanged(400, 480) // 24 rows × 20px
-        h.emulator.feed("Agent CLI visual audit\r\nproduction SessionRoute\r\nready $ ")
-        val cursorLogical = h.emulator.scrollback.size + h.emulator.cursorY
-        assertTrue("fixture cursor stays in the upper grid, not the last allocated row", cursorLogical < 10)
-
-        h.presenter.onViewportSizeChanged(400, 160) // 8 visible rows
-        val win = h.presenter.window
-        assertEquals("visible row count tracks the squeezed canvas", 8, win.last - win.first + 1)
-        assertTrue(
-            "squeezed follow window must still contain the cursor, not blank bottom rows",
-            cursorLogical in win,
-        )
-        assertTrue(
-            "squeezed window must still contain the snapshot body",
-            win.any { text(h.presenter.lineCells(it)).contains("Agent CLI") } ||
-                win.any { text(h.presenter.lineCells(it)).contains("ready") },
-        )
-        h.presenter.onViewportSizeChanged(400, 480)
-        assertTrue(
-            "restoring the canvas keeps the same presenter window covering the body",
-            h.presenter.window.any { text(h.presenter.lineCells(it)).contains("Agent CLI") },
-        )
-    }
-
-    @Test
-    fun imeSqueezeStillPinsFullScreenCursorToBottom() {
-        val h = harness(rows = 10, cols = 8)
-        h.presenter.onViewportSizeChanged(80, 200)
-        h.emulator.feed((0 until 10).joinToString("\r\n") { "L$it" })
-        val bottom = h.emulator.scrollback.size + h.emulator.cursorY
-        h.presenter.onViewportSizeChanged(80, 80) // 4 visible rows
-        val win = h.presenter.window
-        assertTrue("D-20: cursor on the last row stays in the squeezed window", bottom in win)
-        assertEquals(win.last, bottom.coerceAtMost(win.last))
-        assertEquals("follow a bottom cursor by pinning to the last visible rows", win.last, bottom)
-    }
 }

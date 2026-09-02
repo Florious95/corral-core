@@ -41,6 +41,33 @@ internal data class UploadResponseDto(
     @SerialName("path") val path: String,
 )
 
+/** Server JSON error body from writeUploadError; never includes credentials. */
+@Serializable
+internal data class UploadErrorDto(
+    val code: String = "",
+    val reason: String = "",
+)
+
+/**
+ * Map HTTP status + optional JSON error body to a token-free, branch-tagged failure.
+ * Operands: status and branch only. Never logs Authorization or file bytes.
+ */
+internal fun classifyUploadFailure(code: Int, body: String): String {
+    val parsed = runCatching {
+        json.decodeFromString(UploadErrorDto.serializer(), body)
+    }.getOrNull()
+    val branch = when {
+        code == 401 -> "unauthorized"
+        code == 413 -> "too_large"
+        code == 507 || parsed?.code == "storage_limit_exceeded" -> "storage_limit"
+        parsed?.code == "upload_dir" || parsed?.reason == "resolve dir" -> "upload_dir"
+        code == 500 -> "server_internal"
+        else -> "http_$code"
+    }
+    DiagLog.record("upload", "status=$code branch=$branch body_len=${body.length}")
+    return "上传失败（HTTP $code · $branch）"
+}
+
 /**
  * 生产附件上传器（协议 §8 multipart）：`POST {baseUrl}/upload` → 主机绝对路径。
  *
@@ -140,11 +167,10 @@ class HttpUrlConnectionUploader : AttachmentUploader {
             // 非 2xx 时 getInputStream() 抛异常（JDK 契约），只能经 responseCode 判定；
             // 2xx 才读响应体。text 对非 2xx 无意义（readHttpResponse 先判 code）。
             val code = conn.responseCode
-            val text = if (code in 200..299) {
-                conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-            } else {
-                ""
-            }
+            val text = runCatching {
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                stream?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty()
+            }.getOrDefault("")
             return readHttpResponse(code, text)
         } finally {
             conn.disconnect()
@@ -184,12 +210,8 @@ class HttpUrlConnectionUploader : AttachmentUploader {
             }
             val resp = client.newCall(requestBuilder.build()).execute()
             try {
-                val text = resp.body?.string()
-                return when {
-                    resp.code !in 200..299 -> UploadOutcome.Failure("上传失败（HTTP ${resp.code}）")
-                    text == null -> UploadOutcome.Failure("上传响应无法解析")
-                    else -> readHttpResponse(resp.code, text)
-                }
+                val text = resp.body?.string().orEmpty()
+                return readHttpResponse(resp.code, text)
             } finally {
                 resp.close()
             }
@@ -205,7 +227,9 @@ class HttpUrlConnectionUploader : AttachmentUploader {
 
     /** 共享响应折叠：非 2xx / JSON 无 path / path 空 → 明确失败（两路径同一契约）。 */
     private fun readHttpResponse(code: Int, text: String): UploadOutcome {
-        if (code !in 200..299) return UploadOutcome.Failure("上传失败（HTTP $code）")
+        if (code !in 200..299) {
+            return UploadOutcome.Failure(classifyUploadFailure(code, text))
+        }
         val dto = try {
             json.decodeFromString(UploadResponseDto.serializer(), text)
         } catch (e: Exception) {

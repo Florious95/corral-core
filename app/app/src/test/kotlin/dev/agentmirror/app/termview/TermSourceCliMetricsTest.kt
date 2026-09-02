@@ -18,6 +18,7 @@ package dev.agentmirror.app.termview
 
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -26,40 +27,30 @@ import org.robolectric.annotation.Config
 import kotlin.math.roundToInt
 
 /**
- * Agent CLI Mobile `.cli { font-size:12.5px; line-height:1.75 }` is the unique
- * fresh-install typography source. Cell height is CSS line-height, not Paint
- * ascent/descent packing.
+ * Baseline 4605951e terminal typography: default 14sp, cell height from
+ * Paint font metrics — not the HTML CLI placeholder 12.5px / 1.75 line-height.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class TermSourceCliMetricsTest {
 
     @Test
-    fun freshInstallWiresSourceFontSizeAndCssLineHeight() {
+    fun freshInstallKeepsBaselineFontSizeNotHtmlPlaceholder() {
         val emulator = TerminalEmulator(80, 24)
         val presenter = TermViewPresenter(emulator) { _, _ -> }
         val view = TermSurfaceView(RuntimeEnvironment.getApplication()).apply {
-            fontSizeSp = SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
+            fontSizeSp = SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP.toFloat()
             this.presenter = presenter
         }
-        val sizePx = view.fontSizeSp * view.resources.displayMetrics.scaledDensity
-        val expectedCellH = (sizePx * SharedPreferencesFontSizeStore.SOURCE_LINE_HEIGHT_MULTIPLIER)
-            .roundToInt()
-            .coerceAtLeast(1)
-        assertEquals(12.5f, view.fontSizeSp, 0.0f)
-        assertEquals(1.75f, SharedPreferencesFontSizeStore.SOURCE_LINE_HEIGHT_MULTIPLIER, 0.0f)
-        assertEquals(
-            "cellH must be CSS 12.5px × 1.75, not font-metrics packing",
-            expectedCellH,
-            presenter.cellHeight,
-        )
-        val density = view.resources.displayMetrics.density
-        val cellHDp = presenter.cellHeight / density
-        assertEquals(
-            "390dp source frame: 12.5px × 1.75 = 21.875dp",
-            21.875f,
-            cellHDp,
-            0.2f,
+        assertEquals(14, SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP)
+        assertEquals(14f, view.fontSizeSp, 0.0f)
+        val htmlPlaceholderCellH = (
+            view.fontSizeSp * view.resources.displayMetrics.scaledDensity * 1.75f
+            ).roundToInt()
+        assertTrue(presenter.cellHeight >= 1)
+        assertTrue(
+            "cellH must stay font-metrics packing, not HTML placeholder 1.75 line-height",
+            presenter.cellHeight != htmlPlaceholderCellH,
         )
     }
 }

@@ -23,7 +23,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.GestureDetector
@@ -32,7 +31,6 @@ import android.view.MotionEvent
 import android.view.View
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
-import dev.agentmirror.app.session.SessionDockMotion
 import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.Cell
@@ -48,9 +46,8 @@ import kotlin.math.roundToInt
 /**
  * 终端画布视图：Canvas 逐格绘制 + 拖动手势 + Choreographer 帧调度（薄层，业务状态全在 [TermViewPresenter]）。
  *
- * 内容帧由 presenter 脏区驱动；唯一的定时 UI 帧是 Claude Design 源码要求的
- * 1.1s steps(1) 光标闪烁（每 550ms 一次，不跑 60fps）。滚动/快照仍整窗；
- * [TermDrawMeter.optEnabled] 时跳过已由清屏铺过的默认底并合并同色底，像素等价。
+ * 帧循环纯数据驱动：presenter 的脏区取走后整帧重绘可见窗口（滚动/快照仍全窗；
+ * [TermDrawMeter.optEnabled] 时跳过已由清屏铺过的默认底并合并同色底，像素等价）。
  * 脏区行数记入仪表，不按脏行裁剪滚动帧（思路 S2-a 滚动暂全绘）。
  * 拖动滚动只改本地视口零网络。字号（[fontSizeSp]，Settings 持久化，取代原 005 捏合）经
  * [applyFontMetrics] 实测换算 cellWidth/cellHeight 后写回 presenter，视口建立时presenter
@@ -70,10 +67,6 @@ class TermSurfaceView @JvmOverloads constructor(
      *  内部对 [TermViewPresenter.cellMetricsSeeded] 的判断：显式 seed 优先于 View 默认字号。 */
     var presenter: TermViewPresenter? = null
         set(value) {
-            if (field === value) {
-                if (value != null) value.onFrameRequested = { requestFrameFromAnyThread() }
-                return
-            }
             field?.onFrameRequested = null // 换 presenter 时摘旧钩，避免旧实例继续唤醒
             field = value
             if (value != null) {
@@ -88,7 +81,7 @@ class TermSurfaceView @JvmOverloads constructor(
      * [dev.agentmirror.app.termview.SharedPreferencesFontSizeStore]）。唯一决定单元格像素
      * 尺寸的独立输入（契约①④），设置即触发 [applyFontMetrics] 重新实测。
      */
-    var fontSizeSp: Float = SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
+    var fontSizeSp: Float = SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP.toFloat()
         set(value) {
             field = value
             applyFontMetrics()
@@ -137,20 +130,6 @@ class TermSurfaceView @JvmOverloads constructor(
             invalidate()
         }
 
-    /** Optional session-shell paper/ink colors; null keeps every non-Agent-CLI caller unchanged. */
-    var defaultBackgroundOverrideArgb: Int? = null
-        set(value) {
-            if (field == value) return
-            field = value
-            invalidate()
-        }
-    var defaultForegroundOverrideArgb: Int? = null
-        set(value) {
-            if (field == value) return
-            field = value
-            invalidate()
-        }
-
     /** 像素高度对应一逻辑行的行高（视口向下滚动超过一行时对齐整格）。 */
     private var lineHeightPx: Int = 0
 
@@ -174,10 +153,6 @@ class TermSurfaceView @JvmOverloads constructor(
 
     // ---- 绘制工具 ----
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val cursorPaint = Paint().apply {
-        isAntiAlias = false
-        style = Paint.Style.FILL
-    }
     private val fgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.MONOSPACE
     }
@@ -253,12 +228,6 @@ class TermSurfaceView @JvmOverloads constructor(
             return true
         }
     })
-
-    private var cursorBlinkScheduled = false
-    private val cursorBlinkTick = Runnable {
-        cursorBlinkScheduled = false
-        postFrame()
-    }
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -342,28 +311,10 @@ class TermSurfaceView @JvmOverloads constructor(
         refreshDrawOpt()
     }
 
-    override fun onDetachedFromWindow() {
-        removeCallbacks(cursorBlinkTick)
-        cursorBlinkScheduled = false
-        super.onDetachedFromWindow()
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        // Compose AndroidView may pass AT_MOST remaining IME height. A plain View's
-        // suggested minimum is 0, which would collapse the canvas to empty. Honor the
-        // incoming spec size so the remaining constraints survive the measure chain.
-        setMeasuredDimension(specSize(widthMeasureSpec), specSize(heightMeasureSpec))
-    }
-
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         presenter?.onViewportSizeChanged(usableWidthPx(w), h)
         persistViewportGeom()
-    }
-
-    private fun specSize(spec: Int): Int {
-        val size = MeasureSpec.getSize(spec).coerceAtLeast(0)
-        return if (MeasureSpec.getMode(spec) == MeasureSpec.UNSPECIFIED) 0 else size
     }
 
     /**
@@ -517,7 +468,6 @@ class TermSurfaceView @JvmOverloads constructor(
             drawLine(canvas, p.lineCells(logical), rowY)
             drawnRows++
         }
-        drawSourceCursor(canvas, p, win)
         val tLines = System.nanoTime()
 
         // 视图内"回到底部"悬浮钮为历史遗留死代码：backToBottomLabel 全仓库无赋值点，本块永不走；
@@ -553,28 +503,6 @@ class TermSurfaceView @JvmOverloads constructor(
                 PerfTrace.flushKeyEchoAfterDraw(ref)
                 PerfTrace.emitFirstDraw(ref, cellsWithGlyph) // first_draw
             }
-        }
-    }
-
-    private fun drawSourceCursor(canvas: Canvas, presenter: TermViewPresenter, window: IntRange) {
-        if (!isAttachedToWindow || cellW <= 0 || cellH <= 0) return
-        val cursor = presenter.visibleCursorCell() ?: return
-        val now = SystemClock.uptimeMillis()
-        val alpha = SessionDockMotion.cursorAlphaAt(now)
-        val base = if (isNight()) Color.rgb(207, 211, 229) else Color.rgb(89, 93, 108)
-        cursorPaint.color = Color.argb(alpha, Color.red(base), Color.green(base), Color.blue(base))
-        val left = contentLeftPx() + cursor.column * cellW
-        val top = (cursor.logicalRow - window.first) * cellH
-        canvas.drawRect(
-            left.toFloat(),
-            top.toFloat(),
-            (left + cellW).coerceAtMost(width).toFloat(),
-            (top + cellH).toFloat(),
-            cursorPaint,
-        )
-        if (!cursorBlinkScheduled) {
-            cursorBlinkScheduled = true
-            postDelayed(cursorBlinkTick, SessionDockMotion.millisToNextCursorStep(now))
         }
     }
 
@@ -943,17 +871,12 @@ class TermSurfaceView @JvmOverloads constructor(
         fgPaint.textSize = sizePx
         glyphs().setTextSize(sizePx)
         val metrics = fgPaint.fontMetrics
-        val fontHeight = metrics.descent - metrics.ascent
-        // Agent CLI Mobile `.cli { line-height: 1.75 }` is the unique source row pitch.
-        // Font-metrics packing (ascent+descent ≈ 16.33dp at 14sp) is not the source.
-        val cssLinePx = sizePx * SharedPreferencesFontSizeStore.SOURCE_LINE_HEIGHT_MULTIPLIER
         // 下界 1px（同 cellW 的 max(1, …)）：字格不可能是 0px 高——JVM 测试环境（Robolectric
         // legacy graphics）的 fontMetrics 在部分路径下是 stub，可能诚实地测出 descent==ascent==0，
         // 若不设下界会让 recomputeGeometry 的既有 guard 永久跳过、真机上则本就不会发生。
-        cellH = max(1, cssLinePx.roundToInt())
-        // CSS half-leading: extra line-box space is split above and below the em box.
-        val leading = cellH - fontHeight
-        baselinePx = -metrics.ascent + leading / 2f
+        cellH = max(1, (metrics.descent - metrics.ascent).roundToInt())
+        // ascent 为负（基线上方高度）：基线偏移 = -ascent，保证首行字形完整落在 y∈[0,cellH)。
+        baselinePx = -metrics.ascent
         // 实测字形推进宽 = 等宽栅格的唯一来源：上报 cols 与绘制列推进必须同源。
         val textW = fgPaint.measureText("W")
         cellW = max(1, floor(textW).toInt())
@@ -966,13 +889,8 @@ class TermSurfaceView @JvmOverloads constructor(
     }
 
     /** 终端色 → ARGB。色值与 083 §2 重映射都在 [TermPalette.colorFor]，这里不写字面量。 */
-    private fun colorFor(color: TerminalColor, background: Boolean): Int = when {
-        color == TerminalColor.Default && background && defaultBackgroundOverrideArgb != null ->
-            defaultBackgroundOverrideArgb!!
-        color == TerminalColor.Default && !background && defaultForegroundOverrideArgb != null ->
-            defaultForegroundOverrideArgb!!
-        else -> TermPalette.colorFor(color, background, isNight())
-    }
+    private fun colorFor(color: TerminalColor, background: Boolean): Int =
+        TermPalette.colorFor(color, background, isNight())
 
     /** SGR 7 反显：背景画笔改取 fg 字段（作为"前景默认"语义解析，即 background=false），
      *  前景画笔改取 bg 字段（作为"背景默认"语义解析）——两个字段与 background 旗标一起互换，
@@ -990,10 +908,8 @@ class TermSurfaceView @JvmOverloads constructor(
         return night == Configuration.UI_MODE_NIGHT_YES
     }
 
-    private fun themeBgArgb(): Int =
-        defaultBackgroundOverrideArgb ?: TermPalette.of(isNight()).defaultBg
-    private fun themeFgArgb(): Int =
-        defaultForegroundOverrideArgb ?: TermPalette.of(isNight()).defaultFg
+    private fun themeBgArgb(): Int = TermPalette.of(isNight()).defaultBg
+    private fun themeFgArgb(): Int = TermPalette.of(isNight()).defaultFg
 
     private fun publishThemeChrome() {
         val night = isNight()
