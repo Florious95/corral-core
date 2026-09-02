@@ -79,6 +79,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.Elevations
@@ -87,6 +88,7 @@ import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.currentTerminalPalette
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.core.view.ViewCompat
@@ -105,16 +107,19 @@ internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
 /**
  * System Back / IME-swipe can hide the keyboard without moving Compose focus.
  * Collapse the source capsule when the *current* IME inset or root window IME
- * visibility transitions to hidden. Animation-target is ignored: a cancelled
- * show can leave the target stuck non-zero and would never blur.
+ * visibility transitions to hidden. The animation target is observed to catch
+ * system Back at hide start; a cancelled show still cannot clear focus by itself.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ClearFocusWhenImeHides() {
-    val focusManager = LocalFocusManager.current
+internal fun ClearFocusWhenImeHides(
+    collapseRequested: Boolean,
+    onImeHideStarted: () -> Unit,
+) {
     val density = LocalDensity.current
     val view = LocalView.current
     val imeCurrentPx = WindowInsets.ime.getBottom(density)
+    val imeTargetPx = WindowInsets.imeAnimationTarget.getBottom(density)
     var rootImeVisible by remember { mutableStateOf(false) }
     DisposableEffect(view) {
         fun readRootIme(): Boolean =
@@ -132,14 +137,20 @@ internal fun ClearFocusWhenImeHides() {
         }
     }
     val imeVisible = rootImeVisible || imeCurrentPx > 0
+    val imeTargetVisible = imeTargetPx > 0
     var wasVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(imeVisible) {
-        if (imeVisible) {
+    var hideNotified by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible, imeTargetVisible, collapseRequested) {
+        if (imeTargetVisible) {
             wasVisible = true
-        } else if (wasVisible) {
-            wasVisible = false
-            focusManager.clearFocus(force = true)
+            hideNotified = false
+        } else if (wasVisible && !collapseRequested && !hideNotified) {
+            // System Back starts the inset transition before the current inset reaches zero.
+            // Request the same-frame source collapse; do not wait for IME hidden.
+            hideNotified = true
+            onImeHideStarted()
         }
+        if (!imeVisible && !imeTargetVisible) wasVisible = false
     }
 }
 
@@ -182,15 +193,43 @@ fun SessionScreenScaffold(
 ) {
     val density = LocalDensity.current
     val focusManager = LocalFocusManager.current
-    val imeTargetBottom = with(density) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val view = LocalView.current
+    val imeSystemTargetBottom = with(density) {
         WindowInsets.imeAnimationTarget.getBottom(this).toDp()
     }
-    ClearFocusWhenImeHides()
+    var imeHideRequested by remember { mutableStateOf(false) }
+    var collapseRequest by remember { mutableStateOf(0) }
+    val requestDockCollapse: (String) -> Unit = remember(focusManager, keyboardController, view) {
+        { source ->
+            if (!imeHideRequested) {
+                val inputStartNs = System.nanoTime()
+                imeHideRequested = true
+                collapseRequest++
+                val imeStartNs = System.nanoTime()
+                keyboardController?.hide()
+                ViewCompat.getWindowInsetsController(view)?.hide(WindowInsetsCompat.Type.ime())
+                focusManager.clearFocus(force = true)
+                DiagLog.record(
+                    "session-dock-motion",
+                    "collapse source=$source input_start_ns=$inputStartNs " +
+                        "ime_hide_start_ns=$imeStartNs start_delta_ns=${imeStartNs - inputStartNs} " +
+                        "input_duration_ms=${SessionDockMotion.InputHeightMillis} " +
+                        "ime_duration_ms=${SessionDockMotion.KeyboardPushMillis} " +
+                        "total_duration_ms=${maxOf(SessionDockMotion.InputHeightMillis, SessionDockMotion.KeyboardPushMillis)}",
+                )
+            }
+        }
+    }
+    ClearFocusWhenImeHides(
+        collapseRequested = imeHideRequested,
+        onImeHideStarted = { requestDockCollapse("system-back") },
+    )
     val palette = LocalAppPalette.current
     val terminalCard = currentTerminalPalette()
     val source = sessionDockSourceTokens()
     SourceImeMotionLayout(
-        targetBottom = imeTargetBottom,
+        targetBottom = if (imeHideRequested) 0.dp else imeSystemTargetBottom,
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
@@ -203,13 +242,13 @@ fun SessionScreenScaffold(
                     .weight(1f)
                     .fillMaxWidth()
                     .testTag("session-terminal-canvas")
-                    .pointerInput(focusManager) {
+                    .pointerInput(focusManager, requestDockCollapse) {
                         awaitEachGesture {
                             awaitFirstDown(
                                 requireUnconsumed = false,
                                 pass = PointerEventPass.Initial,
                             )
-                            focusManager.clearFocus()
+                            requestDockCollapse("focus-loss")
                         }
                     }
             ) {
@@ -260,9 +299,18 @@ fun SessionScreenScaffold(
                 CommandInputBar(
                     value = value,
                     onValueChange = onValueChange,
-                    onSendText = onSendText,
+                    onSendText = { text ->
+                        requestDockCollapse("send")
+                        onSendText(text)
+                    },
                     onPickAttachment = onPickAttachment,
                     expandedLines = inputExpandedLines,
+                    collapseRequest = collapseRequest,
+                    onExpandRequested = {
+                        imeHideRequested = false
+                        collapseRequest = 0
+                    },
+                    onCollapseRequested = { requestDockCollapse("system-back") },
                 )
             }
         }

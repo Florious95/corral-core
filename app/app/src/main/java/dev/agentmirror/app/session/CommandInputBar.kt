@@ -105,6 +105,9 @@ fun CommandInputBar(
     onPickAttachment: () -> Unit,
     modifier: Modifier = Modifier,
     expandedLines: Int = 3,
+    collapseRequest: Int = 0,
+    onExpandRequested: () -> Unit = {},
+    onCollapseRequested: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val source = sessionDockSourceTokens()
@@ -118,6 +121,7 @@ fun CommandInputBar(
     // stays system-focused; ignore that gain so the capsule still returns to 46dp.
     var suppressFocusGain by remember { mutableStateOf(false) }
     fun collapseEditor() {
+        onCollapseRequested?.invoke()
         suppressFocusGain = true
         focused = false
         keyboardController?.hide()
@@ -130,6 +134,12 @@ fun CommandInputBar(
                 .hide(WindowInsetsCompat.Type.ime())
         }
         focusManager.clearFocus(force = true)
+    }
+    LaunchedEffect(collapseRequest) {
+        if (collapseRequest > 0) {
+            suppressFocusGain = true
+            focused = false
+        }
     }
     LaunchedEffect(focused) {
         if (focused) {
@@ -189,8 +199,9 @@ fun CommandInputBar(
         }
     }
     val sourceExpandedLines = expandedLines.coerceIn(2, 5)
+    val editorExpanded = focused && collapseRequest == 0
     val fieldHeight by animateDpAsState(
-        targetValue = sourceInputFieldHeightDp(focused, sourceExpandedLines).dp,
+        targetValue = sourceInputFieldHeightDp(editorExpanded, sourceExpandedLines).dp,
         animationSpec = tween(
             durationMillis = SessionDockMotion.InputHeightMillis,
             easing = SessionDockMotion.Standard,
@@ -237,7 +248,7 @@ fun CommandInputBar(
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
-                    maxLines = if (focused) sourceExpandedLines else 1,
+                    maxLines = if (editorExpanded) sourceExpandedLines else 1,
                     textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.5.sp,
@@ -283,13 +294,18 @@ fun CommandInputBar(
                                     pass = PointerEventPass.Initial,
                                 )
                                 suppressFocusGain = false
+                                onExpandRequested()
                                 focused = true
                             }
                         }
                         .onFocusChanged { state ->
                             if (state.isFocused) {
-                                if (!suppressFocusGain) focused = true
+                                if (!suppressFocusGain) {
+                                    onExpandRequested()
+                                    focused = true
+                                }
                             } else {
+                                if (focused && !suppressFocusGain) onCollapseRequested?.invoke()
                                 suppressFocusGain = false
                                 focused = false
                             }
