@@ -70,6 +70,10 @@ class TermSurfaceView @JvmOverloads constructor(
      *  内部对 [TermViewPresenter.cellMetricsSeeded] 的判断：显式 seed 优先于 View 默认字号。 */
     var presenter: TermViewPresenter? = null
         set(value) {
+            if (field === value) {
+                if (value != null) value.onFrameRequested = { requestFrameFromAnyThread() }
+                return
+            }
             field?.onFrameRequested = null // 换 presenter 时摘旧钩，避免旧实例继续唤醒
             field = value
             if (value != null) {
@@ -84,7 +88,7 @@ class TermSurfaceView @JvmOverloads constructor(
      * [dev.agentmirror.app.termview.SharedPreferencesFontSizeStore]）。唯一决定单元格像素
      * 尺寸的独立输入（契约①④），设置即触发 [applyFontMetrics] 重新实测。
      */
-    var fontSizeSp: Float = SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP.toFloat()
+    var fontSizeSp: Float = SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
         set(value) {
             field = value
             applyFontMetrics()
@@ -344,10 +348,22 @@ class TermSurfaceView @JvmOverloads constructor(
         super.onDetachedFromWindow()
     }
 
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        // Compose AndroidView may pass AT_MOST remaining IME height. A plain View's
+        // suggested minimum is 0, which would collapse the canvas to empty. Honor the
+        // incoming spec size so the remaining constraints survive the measure chain.
+        setMeasuredDimension(specSize(widthMeasureSpec), specSize(heightMeasureSpec))
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         presenter?.onViewportSizeChanged(usableWidthPx(w), h)
         persistViewportGeom()
+    }
+
+    private fun specSize(spec: Int): Int {
+        val size = MeasureSpec.getSize(spec).coerceAtLeast(0)
+        return if (MeasureSpec.getMode(spec) == MeasureSpec.UNSPECIFIED) 0 else size
     }
 
     /**
@@ -927,12 +943,17 @@ class TermSurfaceView @JvmOverloads constructor(
         fgPaint.textSize = sizePx
         glyphs().setTextSize(sizePx)
         val metrics = fgPaint.fontMetrics
+        val fontHeight = metrics.descent - metrics.ascent
+        // Agent CLI Mobile `.cli { line-height: 1.75 }` is the unique source row pitch.
+        // Font-metrics packing (ascent+descent ≈ 16.33dp at 14sp) is not the source.
+        val cssLinePx = sizePx * SharedPreferencesFontSizeStore.SOURCE_LINE_HEIGHT_MULTIPLIER
         // 下界 1px（同 cellW 的 max(1, …)）：字格不可能是 0px 高——JVM 测试环境（Robolectric
         // legacy graphics）的 fontMetrics 在部分路径下是 stub，可能诚实地测出 descent==ascent==0，
         // 若不设下界会让 recomputeGeometry 的既有 guard 永久跳过、真机上则本就不会发生。
-        cellH = max(1, (metrics.descent - metrics.ascent).roundToInt())
-        // ascent 为负（基线上方高度）：基线偏移 = -ascent，保证首行字形完整落在 y∈[0,cellH)。
-        baselinePx = -metrics.ascent
+        cellH = max(1, cssLinePx.roundToInt())
+        // CSS half-leading: extra line-box space is split above and below the em box.
+        val leading = cellH - fontHeight
+        baselinePx = -metrics.ascent + leading / 2f
         // 实测字形推进宽 = 等宽栅格的唯一来源：上报 cols 与绘制列推进必须同源。
         val textW = fgPaint.measureText("W")
         cellW = max(1, floor(textW).toInt())

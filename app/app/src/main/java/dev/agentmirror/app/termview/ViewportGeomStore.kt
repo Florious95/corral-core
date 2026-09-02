@@ -57,7 +57,10 @@ class SharedPreferencesViewportGeomStore(context: Context) : ViewportGeomStore {
             cols = cols,
             cellW = prefs.getInt(KEY_CELL_W, 0),
             cellH = prefs.getInt(KEY_CELL_H, 0),
-            fontSizeSp = prefs.getInt(KEY_FONT_SP, SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP),
+            fontSizeSp = prefs.getInt(
+                KEY_FONT_SP,
+                kotlin.math.round(SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP).toInt(),
+            ),
             viewW = prefs.getInt(KEY_VIEW_W, 0),
             viewH = prefs.getInt(KEY_VIEW_H, 0),
             densityDpi = prefs.getInt(KEY_DPI, 0),

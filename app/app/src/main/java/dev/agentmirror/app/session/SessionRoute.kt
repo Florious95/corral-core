@@ -149,8 +149,9 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
     context?.let(MirrorForegroundService::start)
     // 上传基地址与认证 token 均取 ServiceWire 的当前配对配置链：HTTP 上传与 WebSocket
     // 认证同源。token 只作为参数下传，禁止日志/回显；配置未落地时 manager() 已阻止建 VM。
-    val fontSp = context?.let { SharedPreferencesFontSizeStore(it).load() }
+    val fontSpF = context?.let { SharedPreferencesFontSizeStore(it).load()?.toFloat() }
         ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
+    val fontSp = kotlin.math.round(fontSpF).toInt()
     val densityDpi = context?.resources?.displayMetrics?.densityDpi ?: -1
     val cached = context?.let { SharedPreferencesViewportGeomStore(it).load() }
     val cacheHit = cached != null &&

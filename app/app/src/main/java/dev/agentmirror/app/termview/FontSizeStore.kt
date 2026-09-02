@@ -39,7 +39,11 @@ class SharedPreferencesFontSizeStore(context: Context) : FontSizeStore {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     override fun load(): Int? =
-        if (prefs.contains(KEY_FONT_SIZE_SP)) prefs.getInt(KEY_FONT_SIZE_SP, DEFAULT_FONT_SIZE_SP) else null
+        if (prefs.contains(KEY_FONT_SIZE_SP)) {
+            prefs.getInt(KEY_FONT_SIZE_SP, DEFAULT_FONT_SIZE_SP.toInt())
+        } else {
+            null
+        }
 
     override fun save(sp: Int) {
         // KTX edit {}（同 PairingConfigStore 写法）：默认 apply（异步落盘）足够，字号无同步语义要求。
@@ -56,7 +60,13 @@ class SharedPreferencesFontSizeStore(context: Context) : FontSizeStore {
          */
         val PRESET_SIZES_SP: List<Int> = listOf(4, 6, 8, 10, 12, 14, 16, 18, 20)
 
-        /** 从未设置过时的默认字号（sp）。 */
-        const val DEFAULT_FONT_SIZE_SP = 14
+        /**
+         * Fresh-install terminal size: Agent CLI Mobile `.cli` is `font-size:12.5px`.
+         * CSS px on the 390dp source frame maps 1:1 onto sp at fontScale 1.
+         */
+        const val DEFAULT_FONT_SIZE_SP = 12.5f
+
+        /** CSS `.cli { line-height: 1.75 }` → 21.875px at 12.5px. */
+        const val SOURCE_LINE_HEIGHT_MULTIPLIER = 1.75f
     }
 }
