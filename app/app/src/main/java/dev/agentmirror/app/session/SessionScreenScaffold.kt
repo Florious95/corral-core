@@ -11,7 +11,7 @@
  * - 读取真实 imeAnimationTarget，以源码 `.3s cubic-bezier(.4,0,.2,1)`
  *   独立动画底部 inset；不依赖系统 IME 动画的厂商时长/曲线；
  * - 终端容器复用基线 SessionShellScreen 卡片：外 4dp、圆角 14dp、浅色投影 /
- *   深色 1dp 描边，内容 clip 在圆角内；底边 4dp 呼吸 + hairline，避免直边硬拼 dock；
+ *   深色 1dp 描边，内容 clip 在圆角内；底边由卡片与页面背景自然过渡到 dock；
  * - dock 水平内边距 11dp、行间距 8dp、底部 8dp，宿主锁定源码 24dp 底部安全区。
  *
  * ── ConversationPageColors 映射表（由你们接线，⛔ 本代码不硬编码）──
@@ -79,7 +79,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.zIndex
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
@@ -228,7 +227,6 @@ fun SessionScreenScaffold(
     )
     val palette = LocalAppPalette.current
     val terminalCard = currentTerminalPalette()
-    val source = sessionDockSourceTokens()
     SourceImeMotionLayout(
         targetBottom = if (imeHideRequested) 0.dp else imeSystemTargetBottom,
         modifier = modifier
@@ -275,16 +273,6 @@ fun SessionScreenScaffold(
                 ) {
                     terminalCanvas()
                 }
-                Box(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(Dims.hairline)
-                        .background(source.neutral800)
-                        // Keep the rule above the elevated card's edge shadow at the screen boundary.
-                        .zIndex(1f)
-                        .testTag("session-terminal-dock-rule"),
-                )
             }
             Column(
                 modifier = Modifier.fillMaxWidth().padding(start = 11.dp, end = 11.dp, bottom = 8.dp),
