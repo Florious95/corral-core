@@ -33,13 +33,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -58,7 +59,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -79,8 +79,13 @@ import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.ui.theme.TermPalette
+import dev.agentmirror.app.workspace.FavoriteKey
 import dev.agentmirror.app.workspace.FavoriteRow
+import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.L2Status
+import dev.agentmirror.app.workspace.cwdDisplayName
+import dev.agentmirror.app.workspace.favoriteKey
+import dev.agentmirror.app.workspace.toSessionItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -102,6 +107,9 @@ fun SessionScreen(
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
     favoriteRows: List<FavoriteRow> = emptyList(),
+    overlaySessions: List<L2Entry> = emptyList(),
+    overlayFavorited: Set<FavoriteKey> = emptySet(),
+    onToggleOverlayFavorite: (L2Entry) -> Unit = {},
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
@@ -244,47 +252,38 @@ fun SessionScreen(
         }
 
         SessionDockTheme(darkTheme) {
-            val source = sessionDockSourceTokens()
+            val overlayItems = overlaySessions.map {
+                it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
+            }
+            val workspaceName = overlaySessions.firstOrNull()?.cwd?.let(::cwdDisplayName).orEmpty()
+            val byRef = overlaySessions.associateBy { it.ref }
             Box(modifier = Modifier.fillMaxSize()) {
                 SessionScreenScaffold(
                     terminalCanvas = {
-                        BoxWithConstraints(Modifier.fillMaxSize()) {
+                        Box(Modifier.fillMaxSize()) {
                             AndroidView(
                                 factory = { ctx ->
                                     TermSurfaceView(ctx).also {
-                                        val savedSp = SharedPreferencesFontSizeStore(ctx).load()?.toFloat()
+                                        val savedSp = SharedPreferencesFontSizeStore(ctx).load()
                                             ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
-                                        it.fontSizeSp = savedSp
+                                        it.fontSizeSp = savedSp.toFloat()
                                         it.presenter = viewModel.presenter
                                         it.onRemoteScrollBy = viewModel::onScrollWheel
                                         it.onTermMouse = viewModel::onTermMouse
                                         it.sessionRef = viewModel.ref
                                         it.nightOverride = darkTheme
-                                        it.defaultBackgroundOverrideArgb = source.cliGround.toArgb()
-                                        it.defaultForegroundOverrideArgb = source.neutral300.toArgb()
                                     }
                                 },
                                 update = { view ->
                                     view.nightOverride = darkTheme
-                                    view.defaultBackgroundOverrideArgb = source.cliGround.toArgb()
-                                    view.defaultForegroundOverrideArgb = source.neutral300.toArgb()
                                     view.presenter = viewModel.presenter
                                     view.onRemoteScrollBy = viewModel::onScrollWheel
                                     view.onTermMouse = viewModel::onTermMouse
                                     view.sessionRef = viewModel.ref
                                 },
-                                modifier = (
-                                    if (
-                                        maxWidth.value.isFinite() &&
-                                        maxHeight.value.isFinite() &&
-                                        maxWidth.value > 0f &&
-                                        maxHeight.value > 0f
-                                    ) {
-                                        Modifier.size(maxWidth, maxHeight)
-                                    } else {
-                                        Modifier.fillMaxSize()
-                                    }
-                                    ).semantics { contentDescription = themeToken },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .semantics { contentDescription = themeToken },
                             )
                             Text(
                                 text = themeToken,
@@ -330,11 +329,22 @@ fun SessionScreen(
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
                     onBack = onBack,
                     onOpenViewMenu = viewModel::openOverlay,
-                    modifier = Modifier.padding(top = 42.667.dp, bottom = 24.dp),
+                    modifier = Modifier.statusBarsPadding().navigationBarsPadding(),
                 )
                 SessionSwitchSheet(
                     visible = viewModel.overlayOpen,
+                    workspaceName = workspaceName,
+                    sessions = overlayItems,
+                    currentSessionId = viewModel.ref,
                     onDismiss = viewModel::closeOverlay,
+                    onSelect = { item ->
+                        val entry = byRef[item.id] ?: return@SessionSwitchSheet
+                        viewModel.closeOverlay()
+                        onOpenOverlaySession(entry.ref, entry.identityLabel)
+                    },
+                    onToggleStar = { item ->
+                        byRef[item.id]?.let(onToggleOverlayFavorite)
+                    },
                 )
                 Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
                     DropdownMenu(

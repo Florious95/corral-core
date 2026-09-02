@@ -110,9 +110,6 @@ class TerminalEmulator(
     /** 当前行数。 */
     val rows: Int get() = grid().rows
 
-    /** Active-grid cursor row. Cheap; does not copy the screen. */
-    val cursorY: Int get() = grid().cursorY
-
     init {
         main.onLineScrolledOut = { line -> scrollback.appendTail(line) }
     }
