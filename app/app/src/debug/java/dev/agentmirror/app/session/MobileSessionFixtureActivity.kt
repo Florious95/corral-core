@@ -106,7 +106,12 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                         )
                         SessionSwitchSheet(
                             visible = overlayOpen,
+                            workspaceName = "workspace",
+                            sessions = emptyList(),
+                            currentSessionId = activeId,
                             onDismiss = { overlayOpen = false },
+                            onSelect = {},
+                            onToggleStar = {},
                         )
                     }
                 }

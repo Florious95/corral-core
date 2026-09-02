@@ -18,7 +18,6 @@ package dev.agentmirror.app.session
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -28,6 +27,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import dev.agentmirror.app.conn.OverlaySubscribeFrame
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
+import dev.agentmirror.app.workspace.L2Entry
+import dev.agentmirror.app.workspace.L2Status
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -38,7 +39,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Claude Design source contract for the session “查看” placeholder card. */
+/** 「查看」必须复用真实会话列表，不得渲染 HTML 占位卡。 */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w390dp-h844dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -48,52 +49,67 @@ class OverlayMenuTest {
     val compose = createComposeRule()
 
     @Test
-    fun viewOpensOnlySourceCardWithoutStartingAnotherSubscription() {
+    fun viewOpensRealSessionListWithoutStartingAnotherSubscription() {
         val h = OverlayTestHarness()
+        val selected = mutableListOf<String>()
         compose.setContent {
             AgentMirrorTheme {
-                SessionScreen(viewModel = h.vm, name = "current", onBack = {})
+                SessionScreen(
+                    viewModel = h.vm,
+                    name = "current",
+                    onBack = {},
+                    overlaySessions = sampleSessions(),
+                    onOpenOverlaySession = { ref, _ -> selected += ref },
+                )
             }
         }
         openView()
 
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
-        compose.onNodeWithText("查看弹出菜单（原生实现，此处仅占位）").assertIsDisplayed()
-        compose.onNodeWithText("点任意处关闭").assertIsDisplayed()
-        compose.onNodeWithText("切换会话").assertDoesNotExist()
+        compose.onNodeWithText("切换会话").assertIsDisplayed()
+        compose.onNodeWithText("会话甲").assertIsDisplayed()
+        compose.onNodeWithText("会话乙").assertIsDisplayed()
+        compose.onNodeWithText("查看弹出菜单（原生实现，此处仅占位）").assertDoesNotExist()
+        compose.onNodeWithText("点任意处关闭").assertDoesNotExist()
         assertTrue(h.vm.overlayOpen)
         assertTrue(h.sent().none { it is OverlaySubscribeFrame })
-
-        val card = compose.onNodeWithTag("session-overlay").getUnclippedBoundsInRoot()
-        assertEquals(145f, card.left.value, 0.7f)
-        assertEquals(230f, card.right.value - card.left.value, 0.7f)
-        assertEquals(94.1f, card.bottom.value - card.top.value, 1.0f)
-        assertEquals(618.91f, card.top.value, 0.7f)
-        assertEquals(713f, card.bottom.value, 0.7f)
     }
 
     @Test
-    fun tappingCardDismissesBecauseSourceSaysAnyPoint() {
+    fun selectingOverlaySessionUsesRealListCallback() {
         val h = OverlayTestHarness()
+        val selected = mutableListOf<String>()
         compose.setContent {
             AgentMirrorTheme {
-                SessionScreen(viewModel = h.vm, name = "current", onBack = {})
+                SessionScreen(
+                    viewModel = h.vm,
+                    name = "current",
+                    onBack = {},
+                    overlaySessions = sampleSessions(),
+                    onOpenOverlaySession = { ref, _ -> selected += ref },
+                )
             }
         }
         openView()
-        compose.onNodeWithTag("session-overlay").performClick()
+        compose.onNodeWithText("会话乙").performClick()
         compose.waitForIdle()
 
+        assertEquals(listOf("ref-b"), selected)
         assertFalse(h.vm.overlayOpen)
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
     }
 
     @Test
-    fun tappingScrimDismissesSourceCard() {
+    fun tappingScrimDismissesRealList() {
         val h = OverlayTestHarness()
         compose.setContent {
             AgentMirrorTheme {
-                SessionScreen(viewModel = h.vm, name = "current", onBack = {})
+                SessionScreen(
+                    viewModel = h.vm,
+                    name = "current",
+                    onBack = {},
+                    overlaySessions = sampleSessions(),
+                )
             }
         }
         openView()
@@ -112,4 +128,31 @@ class OverlayMenuTest {
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
     }
+
+    private fun sampleSessions() = listOf(
+        L2Entry(
+            ref = "ref-a",
+            name = "a",
+            title = "a",
+            rows = 24,
+            cols = 80,
+            status = L2Status.WORKING,
+            cwd = "/ws",
+            sessionName = "s",
+            windowIndex = "0",
+            windowName = "会话甲",
+        ),
+        L2Entry(
+            ref = "ref-b",
+            name = "b",
+            title = "b",
+            rows = 24,
+            cols = 80,
+            status = L2Status.IDLE,
+            cwd = "/ws",
+            sessionName = "s",
+            windowIndex = "1",
+            windowName = "会话乙",
+        ),
+    )
 }
