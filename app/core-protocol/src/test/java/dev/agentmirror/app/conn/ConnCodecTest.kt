@@ -84,6 +84,27 @@ class ConnCodecTest {
     }
 
     @Test
+    fun testSessionFourAxisNewOldNullAndDivergence() {
+        fun session(payload: String): Session {
+            val frame = FrameCodec.decode("""{"v":1,"type":"level2_frame","payload":{"workspace":"/w","seq":1,"sessions":[$payload]}}""") as Level2Frame
+            return frame.sessions.single()
+        }
+        val base = """"ref":"r","name":"n","cwd":"/w","rows":24,"cols":80"""
+        val current = session("""{$base,"provider":"pi","activity":"working","status":"working","session_name":null,"health":"normal"}""")
+        assertEquals("pi", current.provider)
+        assertEquals("working", current.effectiveActivity)
+        assertEquals(null, current.sessionName)
+        assertEquals("normal", current.health)
+
+        val old = session("""{$base,"status":"idle"}""")
+        assertEquals("idle", old.effectiveActivity)
+        val divergent = session("""{$base,"activity":"working","status":"idle","health":"normal"}""")
+        assertEquals("unknown", divergent.effectiveActivity)
+        val invalid = session("""{$base,"activity":"busy","status":"busy","health":"healthy"}""")
+        assertEquals("unknown", invalid.effectiveActivity)
+    }
+
+    @Test
     fun testGoldenListDeltaFrame() {
         val f = decode("list_delta.json") as ListDeltaFrame
         assertEquals(45L, f.seq)

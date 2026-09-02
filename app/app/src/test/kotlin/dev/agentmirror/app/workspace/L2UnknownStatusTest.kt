@@ -88,6 +88,29 @@ class L2UnknownStatusTest {
     }
 
     @Test
+    fun fourAxesCarryThroughAndDivergenceFailsClosed() {
+        val good = Session(
+            ref = "r", name = "n", cwd = "/w", rows = 24, cols = 80,
+            provider = "pi", activity = "working", status = "working",
+            sessionName = null, health = "normal", title = "✳ must-not-infer",
+        ).toL2Entry()
+        assertEquals("pi", good.provider)
+        assertEquals(L2Status.WORKING, good.activity)
+        assertEquals(L2Status.WORKING, good.status)
+        assertEquals("n", good.sessionName)
+        assertEquals("normal", good.health)
+
+        val divergent = Session(
+            ref = "r", name = "n", cwd = "/w", rows = 24, cols = 80,
+            provider = "pi", activity = "working", status = "idle", health = "broken",
+            title = "◐ must-not-infer",
+        ).toL2Entry()
+        assertEquals(L2Status.UNKNOWN, divergent.activity)
+        assertEquals(L2Status.UNKNOWN, divergent.status)
+        assertEquals("unknown", divergent.health)
+    }
+
+    @Test
     fun missingOrGarbageStatusStaysUnknownNotIdle() {
         val vm = WorkspaceViewModel(
             requestList = {},
