@@ -11,6 +11,7 @@
 package dev.agentmirror.app.session
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Bitmap
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -25,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
@@ -59,6 +61,46 @@ class SessionDockInstrumentedTest {
 
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun dividerRuleUsesOneOpaqueSourceColorAcrossTheFullRule() {
+        compose.setContent {
+            SessionDockTheme(dark = false) {
+                SessionScreenScaffold(
+                    terminalCanvas = { Box(Modifier.fillMaxSize().background(Color(0xFFE9F2EC))) },
+                    dockMode = DockRowMode.Sessions,
+                    onDockModeChange = {},
+                    sessions = emptyList(),
+                    sessionListState = rememberLazyListState(),
+                    onSessionSelect = {},
+                    value = TextFieldValue(""),
+                    onValueChange = {},
+                    onSendText = {},
+                    onPickAttachment = {},
+                    onKeyToken = {},
+                    onBack = {},
+                    onOpenViewMenu = {},
+                )
+            }
+        }
+        compose.waitForIdle()
+        val bounds = compose.onNodeWithTag("session-terminal-dock-rule").getUnclippedBoundsInRoot()
+        val density = compose.activity.resources.displayMetrics.density
+        val decorLocation = IntArray(2)
+        compose.activity.window.decorView.getLocationOnScreen(decorLocation)
+        val x0 = (bounds.left.value * density).toInt() + decorLocation[0]
+        val x1 = (bounds.right.value * density).toInt() + decorLocation[0]
+        val y = ((bounds.top.value + bounds.bottom.value) * density / 2f).toInt() + decorLocation[1]
+        val screenshot: Bitmap = InstrumentationRegistry.getInstrumentation()
+            .uiAutomation
+            .takeScreenshot()
+        assertTrue("divider must have more than one sampled pixel", x1 - x0 > 1)
+        assertTrue("divider must be inside screenshot", x0 >= 0 && x1 <= screenshot.width && y in 0 until screenshot.height)
+        val expected = Color(0xFFD4D9EA).toArgb()
+        for (x in x0 until x1) {
+            assertEquals("divider pixel x=$x", expected, screenshot.getPixel(x, y))
+        }
+    }
 
     @Test
     fun favoriteSwitchPreservesScrollModeAndExpandedInputThenSendsAndCollapses() {
