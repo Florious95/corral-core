@@ -58,6 +58,10 @@ pub const PROVIDER_PI: &str = "pi";
 const GROK_THINK: &str = " - Thinking - ";
 const GROK_WAIT: &str = " - Waiting for response";
 const GROK_IDLE_SUFFIX: &str = " - grok";
+const CODEX_SPINNER: [char; 10] = [
+    '\u{280B}', '\u{2819}', '\u{2839}', '\u{2838}', '\u{283C}', '\u{2834}', '\u{2826}', '\u{2827}',
+    '\u{2807}', '\u{280F}',
+];
 
 pub fn first_non_space(title: &str) -> Option<char> {
     title.chars().find(|c| !c.is_whitespace())
@@ -101,6 +105,11 @@ fn grok_match(title: &str) -> Option<&'static str> {
     None
 }
 
+fn codex_match(title: &str) -> Option<&'static str> {
+    let c = first_non_space(title)?;
+    CODEX_SPINNER.contains(&c).then_some(STATE_WORKING)
+}
+
 fn fallback(title: &str) -> Class {
     match first_non_space(title) {
         None => Class {
@@ -127,6 +136,19 @@ fn fallback(title: &str) -> Class {
 /// Title-only classify (fixture corpus). Live nodes use classify_for after
 /// comm identity so detectors never compete on one title.
 pub fn classify(title: &str) -> Class {
+    // After a Pi process exits, its strict official title is the only safe
+    // provider fallback. Ambiguous/malformed π titles remain unclaimed.
+    if matches!(
+        crate::pi_activity::title_name(title),
+        Some(crate::pi_activity::TitleName::Parsed(_))
+    ) {
+        return Class {
+            state: STATE_UNKNOWN,
+            provider: PROVIDER_PI,
+            first: first_non_space(title),
+            known: false,
+        };
+    }
     fallback(title)
 }
 
@@ -137,9 +159,20 @@ pub fn classify(title: &str) -> Class {
 /// 刚起的会话标题是光秃秃的产品名，本家检测器不认领，于是每个新会话都先判「未知」。
 /// 正确语义：无前导符号（字母/数字/空）⇒ 空闲；unknown 只由**认不出的前导符号**产生。
 pub fn classify_for(provider: &str, title: &str) -> Class {
+    // Pi currently keeps a static `π` identity title across idle and active
+    // turns.  Title-only observation therefore has no honest state signal.
+    if provider == PROVIDER_PI {
+        return Class {
+            state: STATE_UNKNOWN,
+            provider: PROVIDER_PI,
+            first: first_non_space(title),
+            known: false,
+        };
+    }
     let hit = match provider {
         PROVIDER_CLAUDE => claude_match(title),
         PROVIDER_GROK => grok_match(title),
+        PROVIDER_CODEX => codex_match(title),
         _ => None,
     };
     if let Some(state) = hit {
@@ -254,7 +287,9 @@ fn footer_rules() -> &'static HashMap<String, FooterRules> {
 }
 
 pub fn default_titles_tsv() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/titles.tsv")
+    std::env::var_os("NODEPROBE_FIXTURES")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/titles.tsv"))
 }
 
 fn load_footer_rules(path: &Path) -> HashMap<String, FooterRules> {
@@ -387,5 +422,71 @@ mod tests {
         assert_eq!(got.state, STATE_UNKNOWN);
         assert_ne!(got.state, STATE_IDLE);
         assert!(got.first.is_some());
+    }
+
+    #[test]
+    fn pi_official_title_is_provider_fallback_but_activity_unknown() {
+        let class = classify("π - build-main - repo");
+        assert_eq!(class.provider, PROVIDER_PI);
+        assert_eq!(class.state, STATE_UNKNOWN);
+        assert!(!class.known);
+        assert_eq!(
+            classify("π - build - main - repo").provider,
+            PROVIDER_UNKNOWN
+        );
+    }
+
+    #[test]
+    fn pi_observed_title_is_unknown_not_idle() {
+        let title = "π - pi-activity-sample-subject-luna - 多agent协作";
+        let got = classify_for(PROVIDER_PI, title);
+        assert_eq!(got.state, STATE_UNKNOWN);
+        assert_eq!(got.provider, PROVIDER_PI);
+        assert_eq!(got.first, Some('π'));
+        assert!(!got.known);
+    }
+
+    #[test]
+    fn pi_identical_active_and_idle_labels_have_no_title_signal() {
+        let title = "π - pi-activity-sample-subject-luna - 多agent协作";
+        for (label, observed_title) in [("active", title), ("idle", title)] {
+            let got = classify_for(PROVIDER_PI, observed_title);
+            assert_eq!(got.state, STATE_UNKNOWN, "label={label}");
+            assert_eq!(got.provider, PROVIDER_PI, "label={label}");
+        }
+    }
+
+    #[test]
+    fn pi_unrecognized_glyph_remains_unknown() {
+        let got = classify_for(PROVIDER_PI, "※ Pi task");
+        assert_eq!(got.state, STATE_UNKNOWN);
+        assert_eq!(got.provider, PROVIDER_PI);
+        assert_eq!(got.first, Some('※'));
+        assert!(!got.known);
+    }
+
+    #[test]
+    fn codex_spinner_frames_are_working() {
+        for frame in CODEX_SPINNER {
+            let title = format!("{frame} Codex task");
+            let got = classify_for(PROVIDER_CODEX, &title);
+            assert_eq!(got.state, STATE_WORKING, "title={title:?}");
+            assert_eq!(got.provider, PROVIDER_CODEX);
+        }
+    }
+
+    #[test]
+    fn codex_plain_title_is_idle() {
+        let got = classify_for(PROVIDER_CODEX, "Codex CLI");
+        assert_eq!(got.state, STATE_IDLE);
+        assert_eq!(got.provider, PROVIDER_CODEX);
+    }
+
+    #[test]
+    fn codex_unknown_braille_is_unknown() {
+        let got = classify_for(PROVIDER_CODEX, "⠁ Codex task");
+        assert_eq!(got.state, STATE_UNKNOWN);
+        assert_eq!(got.first, Some('⠁'));
+        assert_eq!(got.provider, PROVIDER_CODEX);
     }
 }

@@ -1,0 +1,19 @@
+> Task :core-protocol:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core-protocol:processResources NO-SOURCE
+> Task :core-protocol:processTestResources NO-SOURCE
+
+> Task :core-protocol:compileKotlin
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-status-core-863c/app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:75:25 This declaration needs opt-in. Its usage should be marked with '@kotlinx.serialization.ExperimentalSerializationApi' or '@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)'
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-status-core-863c/app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:79:48 This declaration needs opt-in. Its usage should be marked with '@kotlinx.serialization.ExperimentalSerializationApi' or '@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)'
+w: file:///Volumes/nvme/Projects/%E8%BF%9C%E7%A8%8BAgent%E5%AE%89%E5%8D%93/.worktrees/wt-status-core-863c/app/core-protocol/src/main/java/dev/agentmirror/app/conn/Frames.kt:79:50 This declaration needs opt-in. Its usage should be marked with '@kotlinx.serialization.ExperimentalSerializationApi' or '@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)'
+
+> Task :core-protocol:compileJava NO-SOURCE
+> Task :core-protocol:classes UP-TO-DATE
+> Task :core-protocol:jar
+> Task :core-protocol:compileTestKotlin
+> Task :core-protocol:compileTestJava NO-SOURCE
+> Task :core-protocol:testClasses UP-TO-DATE
+> Task :core-protocol:test
+
+BUILD SUCCESSFUL in 3s
+4 actionable tasks: 4 executed
