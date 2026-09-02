@@ -52,6 +52,7 @@ limitations under the License.
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.AgentMirror"
+        android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="true"><!--
           明文策略（leader 裁定，debug/release 一致，勿改判）：targetSdk 35 默认禁明文，
           ws:// 必抛 CleartextNotPermitted（e2e 实证缺陷根因②）。明文放行依据需求 007/011：
