@@ -33,6 +33,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -247,13 +248,13 @@ fun SessionScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 SessionScreenScaffold(
                     terminalCanvas = {
-                        Box(Modifier.fillMaxSize()) {
+                        BoxWithConstraints(Modifier.fillMaxSize()) {
                             AndroidView(
                                 factory = { ctx ->
                                     TermSurfaceView(ctx).also {
-                                        val savedSp = SharedPreferencesFontSizeStore(ctx).load()
+                                        val savedSp = SharedPreferencesFontSizeStore(ctx).load()?.toFloat()
                                             ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
-                                        it.fontSizeSp = savedSp.toFloat()
+                                        it.fontSizeSp = savedSp
                                         it.presenter = viewModel.presenter
                                         it.onRemoteScrollBy = viewModel::onScrollWheel
                                         it.onTermMouse = viewModel::onTermMouse
@@ -272,9 +273,18 @@ fun SessionScreen(
                                     view.onTermMouse = viewModel::onTermMouse
                                     view.sessionRef = viewModel.ref
                                 },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .semantics { contentDescription = themeToken },
+                                modifier = (
+                                    if (
+                                        maxWidth.value.isFinite() &&
+                                        maxHeight.value.isFinite() &&
+                                        maxWidth.value > 0f &&
+                                        maxHeight.value > 0f
+                                    ) {
+                                        Modifier.size(maxWidth, maxHeight)
+                                    } else {
+                                        Modifier.fillMaxSize()
+                                    }
+                                    ).semantics { contentDescription = themeToken },
                             )
                             Text(
                                 text = themeToken,

@@ -40,8 +40,8 @@ internal data class VisibleCursorCell(val logicalRow: Int, val column: Int)
  *
  * resize 抑制（raw/019 裁定②，fix-ime-no-resize）：[onViewportSizeChanged] 只在**首次真实视口**
  * 建立时换算一次 rows/cols 并上抛（「仅首次进入 CLI 时 resize 一次」）；此后 IME 弹起 / 输入框
- * 变高引起的视口收缩（及复原）只更新 [visibleRows]（可见行数）——渲染窗口随之下移/上推露出底行
- * （视口上推，内容区平移，最后一行始终可见，D-20），**不再**改 rows/cols、不再上抛 resize。
+ * 变高引起的视口收缩（及复原）只更新 [visibleRows]（可见行数）——跟随窗口保持光标在视口内
+ * （短输出贴内容、满屏贴底行，D-20），**不再**改 rows/cols、不再上抛 resize。
  */
 class TermViewPresenter(
     private val emulator: TerminalEmulator,
@@ -116,9 +116,9 @@ class TermViewPresenter(
      * 当前可见行数（≤ 内核行数）；null = 未挤压，取 [TerminalEmulator.rows]。
      *
      * 视口上推的载体（raw/019）：IME/输入框把 View 高度挤小时，本值收缩为
-     * `viewportHeightPx / cellHeight`，[window] 随之只覆盖内容**底部**这几行——
-     * 跟随态贴底露出末行（D-20 最后一行仍可见），而非把末行裁出画布。像素挤压是布局
-     * 必然，真正被消灭的是 rows/cols 变化引发的服务端重排（resize 帧）。
+     * `viewportHeightPx / cellHeight`，[window] 随之只覆盖能画下的行——跟随态把
+     * 光标留在窗口内（短输出/夹具正文在网格上部时不再误锚到空白底行）。像素挤压是
+     * 布局必然，真正被消灭的是 rows/cols 变化引发的服务端重排（resize 帧）。
      */
     private var visibleRowsOverride: Int? = null
 
@@ -157,19 +157,19 @@ class TermViewPresenter(
      * 当前可见逻辑行区间（含端点，长度恒为可见行数，钳制在逻辑行空间内）。
      *
      * 可见行数 = [visibleRowsOverride]（IME/输入框挤压时收缩）或内核行数。收缩时跟随态
-     * 窗口仍贴底——露出内容末行（D-20 最后一行可见），这就是「视口上推，内容区平移」。
+     * 把光标留在窗口内：光标在底行则贴底（D-20），光标仍在短输出处则露出正文而非空白底行。
      *
      * @contract
      * @pre none
      * @post 返回 [top, bottom] 且长度恒为可见行数（顶部钳制在 [0, maxTop]，底部钳制到末逻辑行）
      * @err none
-     * @inv 跟随态（topLine == null）窗口贴底；锁定态窗口顶 == 冻结的 topLine
+     * @inv 跟随态（topLine == null）窗口含光标；锁定态窗口顶 == 冻结的 topLine
      */
     val window: IntRange
         get() {
             val height = visibleRows
             val maxTop = (logicalCount - height).coerceAtLeast(0)
-            val top = (topLine ?: maxTop).coerceIn(0, maxTop)
+            val top = (topLine ?: followTop(height, maxTop)).coerceIn(0, maxTop)
             val bottom = (top + height - 1).coerceAtMost((logicalCount - 1).coerceAtLeast(0))
             return top..bottom
         }
@@ -189,7 +189,7 @@ class TermViewPresenter(
     fun onScrollBy(deltaLines: Int) {
         val height = visibleRows
         val maxTop = (logicalCount - height).coerceAtLeast(0)
-        val current = topLine ?: maxTop
+        val current = topLine ?: followTop(height, maxTop)
         val next = (current - deltaLines).coerceIn(0, maxTop)
         topLine = if (next >= maxTop) null else next
         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
@@ -367,8 +367,23 @@ class TermViewPresenter(
             "source=$source result resized=$resized outgrewGuard=$outgrewGuard " +
                 "candidateRows=${if (cellHeight > 0) viewportHeightPx / cellHeight else -1} " +
                 "candidateCols=${if (cellWidth > 0) viewportWidthPx / cellWidth else -1} " +
-                "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+                "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols} " +
+                "visibleRows=$visibleRows cursorY=${emulator.cursorY} " +
+                "window=${window.first}..${window.last} logicalCount=$logicalCount " +
+                "viewportH=$viewportHeightPx cellH=$cellHeight",
         )
+    }
+
+    /**
+     * Follow-mode window top: keep the cursor in view, preferring it on the last visible
+     * row. A prompt on the last emulator row still pins to [maxTop] (D-20). A short
+     * snapshot whose cursor still sits in the upper grid no longer jumps to blank
+     * bottom rows when IME shrinks [visibleRows].
+     */
+    private fun followTop(height: Int, maxTop: Int): Int {
+        val lastLogical = (logicalCount - 1).coerceAtLeast(0)
+        val cursorLogical = (emulator.scrollback.size + emulator.cursorY).coerceIn(0, lastLogical)
+        return (cursorLogical - height + 1).coerceIn(0, maxTop)
     }
 
     /**
