@@ -8,7 +8,7 @@
  *
  * 布局决策：
  * - 行高 40dp（与按键条/菜单行一致，dock 总高恒定，不跳动）；
- * - 块间距 8dp，块内水平 padding 12dp，圆角 8dp（Nocturne radius-md）；
+ * - 块间距 8dp，块内水平 padding 13dp、点文间距 7dp，圆角 8dp；
  * - 当前会话块用 primaryContainer 底 + primary 描边高亮，其余
  *   surfaceVariant 底 + outlineVariant 描边；
  * - 状态点 6dp：运行中 = tertiary（待映射 success 扩展色），空闲 = outline。
@@ -39,11 +39,15 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /** Horizontally scrollable favorite-session chips plus the fixed return action. */
 @Composable
@@ -63,7 +67,8 @@ fun SessionSwitcherRow(
             modifier = Modifier.weight(1f).fillMaxHeight().testTag("favorite-session-list"),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(sessions, key = { it.id }) { chip ->
+            // Keep the numeric viewport fixed when current-session exclusion swaps one chip.
+            items(sessions) { chip ->
                 SessionChip(chip, onClick = { onSessionSelect(chip.id) })
             }
         }
@@ -73,24 +78,24 @@ fun SessionSwitcherRow(
 
 @Composable
 private fun SessionChip(chip: SessionChipUi, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
+    val source = sessionDockSourceTokens()
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxHeight(),
         shape = RoundedCornerShape(8.dp),
-        color = if (chip.isActive) cs.primaryContainer else cs.surfaceVariant,
-        border = BorderStroke(1.dp, if (chip.isActive) cs.primary else cs.outlineVariant),
+        color = if (chip.isActive) source.accent900 else source.neutral900,
+        border = BorderStroke(1.dp, if (chip.isActive) source.accent700 else source.neutral800),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp),
+            modifier = Modifier.padding(horizontal = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             Box(
                 Modifier
                     .size(6.dp)
                     .background(
-                        if (chip.isRunning) cs.tertiary else cs.outline,
+                        if (chip.isRunning) Color(0xFF7DD3A0) else source.neutral600,
                         CircleShape,
                     )
                     .semantics {
@@ -99,8 +104,12 @@ private fun SessionChip(chip: SessionChipUi, onClick: () -> Unit) {
             )
             Text(
                 chip.name,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (chip.isActive) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                style = TextStyle(
+                    fontFamily = SessionDockSans,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Normal,
+                ),
+                color = if (chip.isActive) source.accent200 else source.neutral300,
                 maxLines = 1,
             )
         }

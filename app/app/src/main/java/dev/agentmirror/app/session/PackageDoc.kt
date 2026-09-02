@@ -24,6 +24,7 @@ package dev.agentmirror.app.session
  * 跨层共享连接经 service 的 ServiceWire.uiConnector 扇出订阅。会话页已完整落位：
  * 镜像流（snapshot/delta/scrollback 本地滚动补页）、发送必达回执、附件路径注入光标处。
  *
+ * @consumes dev.agentmirror.app
  * @consumes dev.agentmirror.app.conn
  * @consumes dev.agentmirror.app.service
  * @consumes dev.agentmirror.app.termview

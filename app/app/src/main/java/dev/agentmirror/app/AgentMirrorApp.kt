@@ -102,7 +102,6 @@ fun AgentMirrorApp(
         // 配对配置存储（SharedPreferences）：首启判定 + 重配入口共用。
         val configStore = remember { SharedPreferencesPairingConfigStore(context) }
         val session = navState.activeSession
-        val overlayLevel2 by workspaceViewModel.level2.collectAsState()
         val overlayFavorites by workspaceViewModel.favorites.collectAsState()
         val overlayLiveGen by workspaceViewModel.favoriteLiveGen.collectAsState()
 
@@ -164,11 +163,9 @@ fun AgentMirrorApp(
                         name = r.name,
                         connectionPath = ServiceWire.connectionPath(),
                         onBack = { navState.activeSession = null },
-                        overlaySessions = remember(r.ref, overlayLevel2, overlayFavorites, overlayLiveGen) {
-                            workspaceViewModel.viewMenuSource(r.ref).sessions
+                        favoriteRows = remember(overlayFavorites, overlayLiveGen) {
+                            workspaceViewModel.favoriteRows()
                         },
-                        overlayFavorited = overlayFavorites.map { it.key }.toSet(),
-                        onToggleOverlayFavorite = { workspaceViewModel.toggleFavorite(it) },
                         onOpenOverlaySession = { ref, name -> navState.openSession(ref, name) },
                     )
                 }

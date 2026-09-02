@@ -14,7 +14,7 @@
  * - 胶囊描边聚焦时 animateColorAsState 过渡到 primary。
  *
  * 尺寸严格对应源码 CSS：
- * - 胶囊圆角 24dp、内边距 4dp（左）/8dp（右）/4dp（上下）；
+ * - 胶囊圆角 22dp；Compose 内边距含源码 1dp border inset，视觉值仍是 4/6/6/6；
  * - 未聚焦 32dp；聚焦高度 = 20dp × expandLines + 12dp（expandLines 2–5）；
  * - 加号 36×32dp 纯图标；发送 32dp 圆钮。
  * - 等宽字体：终端指令语境，FontFamily.Monospace。
@@ -58,7 +58,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -79,6 +81,7 @@ fun CommandInputBar(
     expandedLines: Int = 3,
 ) {
     val cs = MaterialTheme.colorScheme
+    val source = sessionDockSourceTokens()
     val keyboardController = LocalSoftwareKeyboardController.current
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
@@ -101,7 +104,7 @@ fun CommandInputBar(
         label = "inputFieldHeight",
     )
     val borderColor by animateColorAsState(
-        targetValue = if (focused) cs.primary else cs.outlineVariant,
+        targetValue = if (focused) source.accent700 else source.neutral800,
         animationSpec = tween(
             durationMillis = SessionDockMotion.InputBorderMillis,
             easing = SessionDockMotion.Ease,
@@ -110,15 +113,15 @@ fun CommandInputBar(
     )
     Surface(
         modifier = modifier.fillMaxWidth().testTag("session-command-input"),
-        shape = RoundedCornerShape(24.dp),
-        color = cs.surfaceVariant,
+        shape = RoundedCornerShape(22.dp),
+        color = source.neutral900,
         border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
             // 底对齐：膨胀时加号/发送钉在底边，与主流 Chat App 一致
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            modifier = Modifier.padding(start = 5.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
         ) {
             Surface(
                 onClick = onPickAttachment,
@@ -129,7 +132,7 @@ fun CommandInputBar(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         DockIconPlus, contentDescription = "添加附件",
-                        modifier = Modifier.width(20.dp), tint = cs.onSurfaceVariant,
+                        modifier = Modifier.width(20.dp), tint = source.neutral400,
                     )
                 }
             }
@@ -141,10 +144,12 @@ fun CommandInputBar(
                     value = value,
                     onValueChange = onValueChange,
                     maxLines = if (focused) sourceExpandedLines else 1,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
-                        color = cs.onSurface,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Normal,
                         lineHeight = 20.sp,
+                        color = cs.onSurface,
                     ),
                     cursorBrush = SolidColor(cs.primary),
                     decorationBox = { inner ->
@@ -152,7 +157,12 @@ fun CommandInputBar(
                             if (value.text.isEmpty()) {
                                 Text(
                                     "输入指令…",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                                    style = TextStyle(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        lineHeight = 20.sp,
+                                    ),
                                     color = cs.onSurfaceVariant,
                                 )
                             }
@@ -161,13 +171,15 @@ fun CommandInputBar(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(fieldHeight)
+                        .padding(vertical = 6.dp)
                         .testTag("session-command-editor")
                         .onFocusChanged { focused = it.isFocused },
                 )
             }
             val hasText = value.text.isNotBlank()
             val sendBackground by animateColorAsState(
-                targetValue = if (hasText) cs.primaryContainer else Color.Transparent,
+                targetValue = if (hasText) source.accent900 else Color.Transparent,
                 animationSpec = tween(
                     durationMillis = SessionDockMotion.InputBorderMillis,
                     easing = SessionDockMotion.Ease,
@@ -175,7 +187,7 @@ fun CommandInputBar(
                 label = "sendBackground",
             )
             val sendForeground by animateColorAsState(
-                targetValue = if (hasText) cs.onPrimaryContainer else cs.primary,
+                targetValue = if (hasText) source.accent200 else source.accent,
                 animationSpec = tween(
                     durationMillis = SessionDockMotion.InputBorderMillis,
                     easing = SessionDockMotion.Ease,
@@ -186,7 +198,7 @@ fun CommandInputBar(
                 onClick = { if (hasText) onSendText(value.text) },
                 shape = CircleShape,
                 color = sendBackground,
-                border = BorderStroke(1.dp, cs.primary),
+                border = BorderStroke(1.dp, source.accent),
                 modifier = Modifier.size(32.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {

@@ -33,6 +33,7 @@ import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.app.ui.theme.TypeSizes
 import dev.agentmirror.app.ui.theme.appDarkScheme
 import dev.agentmirror.app.ui.theme.appLightScheme
+import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Status
 import dev.agentmirror.app.workspace.MemoryFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
@@ -272,9 +273,9 @@ class ConsoleChromeTest {
     @Test
     fun ConsoleChromeFavoriteChipFollowsLiveStatusWithoutUnknownLabel() {
         val h = OverlayTestHarness()
-        val idle = session(h.vm.ref, L2Status.IDLE)
-        val busy = session(h.vm.ref, L2Status.WORKING)
-        val unknown = session(h.vm.ref, L2Status.UNKNOWN)
+        val idle = session("favorite-ref", L2Status.IDLE).toFavoriteRow()
+        val busy = session("favorite-ref", L2Status.WORKING).toFavoriteRow()
+        val unknown = session("favorite-ref", L2Status.UNKNOWN).toFavoriteRow()
         var overlay by mutableStateOf(listOf(idle))
         compose.setContent {
             AppTheme(appearance = Appearance.Light) {
@@ -282,8 +283,7 @@ class ConsoleChromeTest {
                     viewModel = h.vm,
                     name = "远控 leader",
                     onBack = {},
-                    overlaySessions = overlay,
-                    overlayFavorited = setOf(dev.agentmirror.app.workspace.FavoriteKey(h.vm.ref)),
+                    favoriteRows = overlay,
                 )
             }
         }
@@ -319,6 +319,18 @@ class ConsoleChromeTest {
         )
         assertEquals(L2Status.WORKING, wvm.viewMenuSource("ref-1").sessions.single().status)
     }
+
+    private fun dev.agentmirror.app.workspace.L2Entry.toFavoriteRow() = FavoriteRow(
+        sessionName = sessionName,
+        windowIndex = windowIndex,
+        windowName = windowName,
+        addedAt = 0L,
+        isOnline = true,
+        ref = ref,
+        cwd = cwd,
+        title = title,
+        status = status,
+    )
 
     private fun session(ref: String, status: L2Status) = dev.agentmirror.app.workspace.L2Entry(
         ref = ref,

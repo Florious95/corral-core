@@ -14,6 +14,8 @@ import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,10 +43,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
-import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.L2Status
-import dev.agentmirror.app.workspace.favoriteKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -56,7 +57,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "w411dp-h891dp")
+@Config(sdk = [34], qualifiers = "w390dp-h844dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SessionDockSourceTest {
 
@@ -73,15 +74,15 @@ class SessionDockSourceTest {
         }
 
         compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
-        compose.onAllNodesWithText("常用快捷键").assertCountEquals(0)
+        compose.onAllNodesWithText("快捷键").assertCountEquals(0)
         compose.onNodeWithContentDescription("返回菜单").performClick()
         compose.waitForIdle()
 
-        compose.onAllNodesWithText("常用快捷键").assertCountEquals(1)
+        compose.onAllNodesWithText("快捷键").assertCountEquals(1)
         compose.onAllNodesWithText("查看").assertCountEquals(1)
-        compose.onAllNodesWithText("收藏会话").assertCountEquals(1)
-        compose.onNodeWithText("快捷键").assertDoesNotExist()
-        compose.onNodeWithText("会话").assertDoesNotExist()
+        compose.onAllNodesWithText("会话").assertCountEquals(1)
+        compose.onNodeWithText("常用快捷键").assertDoesNotExist()
+        compose.onNodeWithText("收藏会话").assertDoesNotExist()
 
         compose.onNodeWithTag("dock-open-hotkeys").performClick()
         compose.waitForIdle()
@@ -182,7 +183,7 @@ class SessionDockSourceTest {
     @Test
     fun lateFavoriteSwitchKeepsScrollModeAndExpandedInputThenSwitchesAgain() {
         val entries = (0..8).map(::favoriteEntry)
-        val favorites: Set<FavoriteKey> = entries.mapTo(linkedSetOf()) { it.favoriteKey() }
+        val favorites = entries.map { it.toFavoriteRow() }
         val harnesses = listOf(0, 6, 7).associate { index ->
             entries[index].ref to OverlayTestHarness(entries[index].ref)
         }
@@ -195,8 +196,7 @@ class SessionDockSourceTest {
                     viewModel = active,
                     name = "favorite",
                     onBack = {},
-                    overlaySessions = entries,
-                    overlayFavorited = favorites,
+                    favoriteRows = favorites,
                     onOpenOverlaySession = { ref, _ ->
                         selected += ref
                         active = harnesses.getValue(ref).vm
@@ -219,7 +219,7 @@ class SessionDockSourceTest {
         val scrollAfterFirst = horizontalScrollValue()
         val expandedAfterFirst = inputFieldHeight()
         compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
-        compose.onNodeWithText("常用快捷键").assertDoesNotExist()
+        compose.onNodeWithText("快捷键").assertDoesNotExist()
         assertTrue(abs(scrollAfterFirst - scrollBefore) < 0.5f)
         assertTrue(abs(expandedAfterFirst - expandedBefore) < 0.5f)
 
@@ -228,6 +228,61 @@ class SessionDockSourceTest {
         assertEquals(listOf(entries[6].ref, entries[7].ref), selected)
         assertTrue(abs(horizontalScrollValue() - scrollBefore) < 0.5f)
         assertTrue(abs(inputFieldHeight() - expandedBefore) < 0.5f)
+    }
+
+    @Test
+    fun sourceViewportUsesExactPanelDockInputAndHotkeyGeometry() {
+        compose.setContent {
+            Box(Modifier.size(width = 390.dp, height = 844.dp)) {
+                Box(Modifier.fillMaxSize().padding(top = 42.667.dp, bottom = 24.dp)) {
+                    var mode by remember { mutableStateOf(DockRowMode.Sessions) }
+                    SessionDockTheme(dark = false) {
+                        SessionScreenScaffold(
+                            terminalCanvas = { Box(Modifier.fillMaxSize()) },
+                            dockMode = mode,
+                            onDockModeChange = { mode = it },
+                            sessions = emptyList(),
+                            sessionListState = rememberLazyListState(),
+                            onSessionSelect = {},
+                            value = TextFieldValue(""),
+                            onValueChange = {},
+                            onSendText = {},
+                            onPickAttachment = {},
+                            onKeyToken = {},
+                            onBack = {},
+                            onOpenViewMenu = {},
+                        )
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        assertRect("session-terminal-canvas", 11f, 49f, 368f, 661f)
+        assertRect("favorite-session-list", 11f, 718f, 320f, 40f)
+        assertRect("session-command-input", 11f, 766f, 368f, 46f)
+        assertRect("session-command-input-field", 60f, 773f, 272f, 32f)
+
+        val returnBounds = compose.onNodeWithContentDescription("返回菜单").getUnclippedBoundsInRoot()
+        assertEquals(339f, returnBounds.left.value, 0.7f)
+        assertEquals(718f, returnBounds.top.value, 0.7f)
+        assertEquals(40f, returnBounds.right.value - returnBounds.left.value, 0.7f)
+        assertEquals(40f, returnBounds.bottom.value - returnBounds.top.value, 0.7f)
+
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
+        assertRect("dock-open-hotkeys", 11f, 718f, 117.333f, 40f)
+        assertRect("session-overlay-open", 136.333f, 718f, 117.333f, 40f)
+        assertRect("dock-open-favorites", 261.667f, 718f, 117.333f, 40f)
+
+        compose.onNodeWithTag("dock-open-hotkeys").performClick()
+        compose.waitForIdle()
+        assertRect("hotkey-Esc", 11f, 718f, 43.94f, 40f)
+        assertRect("hotkey-Tab", 60.94f, 718f, 43.94f, 40f)
+        assertRect("hotkey-Up", 114.88f, 718f, 34.25f, 40f)
+        assertRect("hotkey-Down", 152.13f, 718f, 34.27f, 40f)
+        assertRect("hotkey-Left", 189.39f, 718f, 34.27f, 40f)
+        assertRect("hotkey-Right", 226.66f, 718f, 34.27f, 40f)
+        assertRect("hotkey-Ctrl-C", 270.92f, 718f, 60.08f, 40f)
     }
 
     @Test
@@ -254,6 +309,20 @@ class SessionDockSourceTest {
         assertEquals(1, SessionDockMotion.millisToNextCursorStep(549))
     }
 
+    private fun assertRect(
+        tag: String,
+        left: Float,
+        top: Float,
+        width: Float,
+        height: Float,
+    ) {
+        val bounds = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot()
+        assertEquals("$tag left", left, bounds.left.value, 0.7f)
+        assertEquals("$tag top", top, bounds.top.value, 0.7f)
+        assertEquals("$tag width", width, bounds.right.value - bounds.left.value, 0.7f)
+        assertEquals("$tag height", height, bounds.bottom.value - bounds.top.value, 0.7f)
+    }
+
     private fun horizontalScrollValue(): Float {
         val node = compose.onNodeWithTag("favorite-session-list").fetchSemanticsNode()
         return node.config[SemanticsProperties.HorizontalScrollAxisRange].value()
@@ -263,6 +332,18 @@ class SessionDockSourceTest {
         val bounds = compose.onNodeWithTag("session-command-input-field").getUnclippedBoundsInRoot()
         return bounds.bottom.value - bounds.top.value
     }
+
+    private fun L2Entry.toFavoriteRow() = FavoriteRow(
+        sessionName = sessionName,
+        windowIndex = windowIndex,
+        windowName = windowName,
+        addedAt = 0L,
+        isOnline = true,
+        ref = ref,
+        cwd = cwd,
+        title = title,
+        status = status,
+    )
 
     private fun favoriteEntry(index: Int): L2Entry = L2Entry(
         ref = "/tmp/tmux-1000/favorites\u001f%$index",
