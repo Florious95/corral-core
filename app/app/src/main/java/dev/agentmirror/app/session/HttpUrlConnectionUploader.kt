@@ -56,15 +56,24 @@ internal fun classifyUploadFailure(code: Int, body: String): String {
     val parsed = runCatching {
         json.decodeFromString(UploadErrorDto.serializer(), body)
     }.getOrNull()
+    val reason = parsed?.reason.orEmpty()
     val branch = when {
         code == 401 -> "unauthorized"
         code == 413 -> "too_large"
         code == 507 || parsed?.code == "storage_limit_exceeded" -> "storage_limit"
-        parsed?.code == "upload_dir" || parsed?.reason == "resolve dir" -> "upload_dir"
+        parsed?.code == "upload_dir" || reason == "resolve dir" -> "upload_dir"
+        code == 500 && reason.startsWith("resolve_dir") -> "resolve_dir"
+        code == 500 && reason.startsWith("measure_dir") -> "measure_dir"
+        code == 500 && reason.startsWith("write_file") -> "write_file"
+        code == 500 && reason.startsWith("marshal_resp") -> "marshal_resp"
         code == 500 -> "server_internal"
         else -> "http_$code"
     }
-    DiagLog.record("upload", "status=$code branch=$branch body_len=${body.length}")
+    val operand = reason.substringAfter(':', missingDelimiterValue = "").take(64)
+    DiagLog.record(
+        "upload",
+        "status=$code branch=$branch operand=$operand body_len=${body.length}",
+    )
     return "上传失败（HTTP $code · $branch）"
 }
 

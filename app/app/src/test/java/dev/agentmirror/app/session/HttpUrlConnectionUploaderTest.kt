@@ -167,6 +167,42 @@ class HttpUrlConnectionUploaderTest {
     }
 
     @Test
+    fun upload_http500_jsonBranchClassifiesResolveDirOperand() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"code":"server_internal","reason":"resolve_dir:not a directory"}"""),
+        )
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
+
+        assertEquals("上传失败（HTTP 500 · resolve_dir）", (result as UploadOutcome.Failure).reason)
+    }
+
+    @Test
+    fun upload_http500_jsonBranchClassifiesMeasureDirOperand() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"code":"server_internal","reason":"measure_dir:permission denied"}"""),
+        )
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
+
+        assertEquals("上传失败（HTTP 500 · measure_dir）", (result as UploadOutcome.Failure).reason)
+    }
+
+    @Test
+    fun upload_http500_jsonBranchClassifiesWriteFileOperand() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"code":"server_internal","reason":"write_file:permission denied"}"""),
+        )
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
+
+        assertEquals("上传失败（HTTP 500 · write_file）", (result as UploadOutcome.Failure).reason)
+    }
+
+    @Test
     fun upload_unparsableJson_mapsToFailureText() {
         // 200 但 JSON 不可解析 → "上传响应无法解析"（坏响应绝不静默吞）。
         server.enqueue(MockResponse().setResponseCode(200).setBody("<html>not json</html>"))
