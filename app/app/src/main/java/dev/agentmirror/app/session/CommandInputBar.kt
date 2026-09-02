@@ -23,6 +23,7 @@
  */
 package dev.agentmirror.app.session
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -56,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -83,6 +85,7 @@ fun CommandInputBar(
     val cs = MaterialTheme.colorScheme
     val source = sessionDockSourceTokens()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
     LaunchedEffect(focused) {
@@ -93,6 +96,12 @@ fun CommandInputBar(
         } else {
             keyboardController?.hide()
         }
+    }
+    // System Back while the editor is focused must hide IME and blur (source onBlur → 46dp)
+    // instead of leaving the capsule expanded or consuming the host session-pop BackHandler.
+    BackHandler(enabled = focused) {
+        keyboardController?.hide()
+        focusManager.clearFocus(force = true)
     }
     val sourceExpandedLines = expandedLines.coerceIn(2, 5)
     val fieldHeight by animateDpAsState(

@@ -21,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
@@ -152,6 +154,51 @@ class SessionDockSourceTest {
         compose.waitForIdle()
         assertEquals("ls", sent)
         assertEquals(32f, inputFieldHeight(), 0.5f)
+    }
+
+    @Test
+    fun systemBackWhileEditorFocusedCollapsesCapsuleWithoutHostOnBack() {
+        var hostBack = 0
+        lateinit var dispatcher: OnBackPressedDispatcher
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            dispatcher = LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            var value by remember { mutableStateOf(TextFieldValue("")) }
+            SessionDockTheme(dark = false) {
+                SessionScreenScaffold(
+                    terminalCanvas = { Box(Modifier.fillMaxSize()) },
+                    dockMode = DockRowMode.Sessions,
+                    onDockModeChange = {},
+                    sessions = emptyList(),
+                    sessionListState = rememberLazyListState(),
+                    onSessionSelect = {},
+                    value = value,
+                    onValueChange = { value = it },
+                    onSendText = {},
+                    onPickAttachment = {},
+                    onKeyToken = {},
+                    onBack = { hostBack++ },
+                    onOpenViewMenu = {},
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-command-editor").performClick()
+        compose.mainClock.advanceTimeBy(SessionDockMotion.InputHeightMillis.toLong() + 1)
+        compose.waitForIdle()
+        assertEquals(72f, inputFieldHeight(), 0.5f)
+        assertEquals(86f, inputCapsuleHeight(), 0.5f)
+
+        dispatcher.onBackPressed()
+        compose.mainClock.advanceTimeBy(SessionDockMotion.InputHeightMillis.toLong() + 1)
+        compose.waitForIdle()
+        assertEquals(
+            "system Back must blur the focused editor; host onBack must not pop the session",
+            0,
+            hostBack,
+        )
+        assertEquals(32f, inputFieldHeight(), 0.5f)
+        assertEquals(46f, inputCapsuleHeight(), 0.5f)
     }
 
     @Test
@@ -330,6 +377,11 @@ class SessionDockSourceTest {
 
     private fun inputFieldHeight(): Float {
         val bounds = compose.onNodeWithTag("session-command-input-field").getUnclippedBoundsInRoot()
+        return bounds.bottom.value - bounds.top.value
+    }
+
+    private fun inputCapsuleHeight(): Float {
+        val bounds = compose.onNodeWithTag("session-command-input").getUnclippedBoundsInRoot()
         return bounds.bottom.value - bounds.top.value
     }
 

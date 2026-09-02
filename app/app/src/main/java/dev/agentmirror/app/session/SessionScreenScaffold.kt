@@ -41,6 +41,7 @@
  */
 package dev.agentmirror.app.session
 
+import android.view.ViewTreeObserver
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -56,6 +57,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
@@ -64,6 +66,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,7 +79,10 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
@@ -88,6 +94,47 @@ internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
     durationMillis = SessionDockMotion.KeyboardPushMillis,
     easing = SessionDockMotion.Standard,
 )
+
+/**
+ * System Back hides IME without moving Compose focus. Collapse the source capsule
+ * when any real IME-visible signal (animation target, current ime inset, or root
+ * window insets) transitions to hidden.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ClearFocusWhenImeHides() {
+    val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
+    val view = LocalView.current
+    val imeTargetPx = WindowInsets.imeAnimationTarget.getBottom(density)
+    val imeCurrentPx = WindowInsets.ime.getBottom(density)
+    var rootImeVisible by remember { mutableStateOf(false) }
+    DisposableEffect(view) {
+        fun readRootIme(): Boolean =
+            ViewCompat.getRootWindowInsets(view)
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        rootImeVisible = readRootIme()
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            val visible = readRootIme()
+            view.post { rootImeVisible = visible }
+        }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose {
+            val observer = view.viewTreeObserver
+            if (observer.isAlive) observer.removeOnGlobalLayoutListener(listener)
+        }
+    }
+    val imeVisible = rootImeVisible || imeTargetPx > 0 || imeCurrentPx > 0
+    var wasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
+            wasVisible = true
+        } else if (wasVisible) {
+            wasVisible = false
+            focusManager.clearFocus(force = true)
+        }
+    }
+}
 
 /** Production IME inset animator shared by real-window wiring and deterministic motion tests. */
 @Composable
@@ -131,16 +178,7 @@ fun SessionScreenScaffold(
     val imeTargetBottom = with(density) {
         WindowInsets.imeAnimationTarget.getBottom(this).toDp()
     }
-    var imeWasVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(imeTargetBottom) {
-        if (imeTargetBottom > 0.dp) {
-            imeWasVisible = true
-        } else if (imeWasVisible) {
-            // System Back hides IME without moving focus; source blur must still collapse the editor.
-            imeWasVisible = false
-            focusManager.clearFocus()
-        }
-    }
+    ClearFocusWhenImeHides()
     val source = sessionDockSourceTokens()
     val terminalShape = RoundedCornerShape(14.dp)
     SourceImeMotionLayout(
