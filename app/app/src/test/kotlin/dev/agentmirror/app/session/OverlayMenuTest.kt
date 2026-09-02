@@ -26,9 +26,10 @@ import androidx.compose.ui.test.percentOffset
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import dev.agentmirror.app.conn.OverlaySubscribeFrame
+import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.workspace.L2Entry
-import dev.agentmirror.app.workspace.L2Status
+import dev.agentmirror.app.workspace.toL2Entry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -129,27 +130,29 @@ class OverlayMenuTest {
         compose.waitForIdle()
     }
 
-    private fun sampleSessions() = listOf(
-        L2Entry(
+    private fun sampleSessions(): List<L2Entry> = protocolSessions().map { it.toL2Entry() }
+
+    private fun protocolSessions() = listOf(
+        Session(
             ref = "ref-a",
-            name = "a",
-            title = "a",
+            name = "会话甲",
+            cwd = "/ws",
             rows = 24,
             cols = 80,
-            status = L2Status.WORKING,
-            cwd = "/ws",
+            title = "会话甲",
+            status = "working",
             sessionName = "s",
             windowIndex = "0",
             windowName = "会话甲",
         ),
-        L2Entry(
+        Session(
             ref = "ref-b",
-            name = "b",
-            title = "b",
+            name = "会话乙",
+            cwd = "/ws",
             rows = 24,
             cols = 80,
-            status = L2Status.IDLE,
-            cwd = "/ws",
+            title = "会话乙",
+            status = "idle",
             sessionName = "s",
             windowIndex = "1",
             windowName = "会话乙",

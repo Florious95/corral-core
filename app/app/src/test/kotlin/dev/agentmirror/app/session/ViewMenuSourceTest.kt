@@ -26,6 +26,7 @@ import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.workspace.MemoryFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
+import dev.agentmirror.app.workspace.toL2Entry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -75,6 +76,47 @@ class ViewMenuSourceTest {
         assertEquals(listOf(CWD_A), src.sessions.map { it.cwd }.distinct())
         assertEquals(listOf("sess-a"), src.sessions.map { it.sessionName })
         assertTrue(src.sessions.none { it.cwd == CWD_B || it.sessionName == "sess-b" })
+    }
+
+    @Test
+    fun viewMenuSourceMatchesProtocolLevel2ListUsedByDockAndTopRightView() {
+        val wvm = WorkspaceViewModel(
+            requestList = {},
+            subscribeLevel2 = {},
+            unsubscribeLevel2 = {},
+            favoriteStore = MemoryFavoriteStore(),
+        )
+        val protocol = listOf(
+            Session(
+                ref = REF_A,
+                name = "sess-a",
+                cwd = CWD_A,
+                rows = 24,
+                cols = 80,
+                title = "sess-a",
+                status = "idle",
+                sessionName = "sess-a",
+                windowIndex = "1",
+                windowName = "sess-a",
+            ),
+            Session(
+                ref = "$SOCK_A\u001f%9",
+                name = "sess-a-peer",
+                cwd = CWD_A,
+                rows = 24,
+                cols = 80,
+                title = "sess-a-peer",
+                status = "working",
+                sessionName = "sess-a-peer",
+                windowIndex = "2",
+                windowName = "sess-a-peer",
+            ),
+        )
+        wvm.enterLevel2(CWD_A)
+        wvm.onFrame(Level2Frame(workspace = CWD_A, seq = 1, sessions = protocol))
+        val src = wvm.viewMenuSource(REF_A)
+        assertEquals(protocol.map { it.toL2Entry() }, src.sessions)
+        assertEquals(protocol.map { it.windowName }, src.sessions.map { it.identityLabel })
     }
 
     @Test

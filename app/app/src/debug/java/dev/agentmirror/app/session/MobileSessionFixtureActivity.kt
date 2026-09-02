@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.ui.components.SessionSwitchSheet
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.Appearance
+import dev.agentmirror.app.workspace.ProductionOverlayFixture
 
 /** Debug-only host used for Mobile MCP source UI inspection without pairing credentials. */
 class MobileSessionFixtureActivity : ComponentActivity() {
@@ -48,6 +49,8 @@ class MobileSessionFixtureActivity : ComponentActivity() {
             var mode by remember { mutableStateOf(DockRowMode.Sessions) }
             var value by remember { mutableStateOf(TextFieldValue("")) }
             var overlayOpen by remember { mutableStateOf(false) }
+            var overlayCurrent by remember { mutableStateOf(ProductionOverlayFixture.CURRENT_REF) }
+            val overlayItems = remember { ProductionOverlayFixture.overlayItems() }
             val listState = rememberLazyListState()
             val focusManager = LocalFocusManager.current
             val visibleOrder = remember { mutableStateListOf(*(1..8).toList().toTypedArray()) }
@@ -106,11 +109,14 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                         )
                         SessionSwitchSheet(
                             visible = overlayOpen,
-                            workspaceName = "workspace",
-                            sessions = emptyList(),
-                            currentSessionId = activeId,
+                            workspaceName = ProductionOverlayFixture.workspaceLabel(),
+                            sessions = overlayItems,
+                            currentSessionId = overlayCurrent,
                             onDismiss = { overlayOpen = false },
-                            onSelect = {},
+                            onSelect = { item ->
+                                overlayCurrent = item.id
+                                overlayOpen = false
+                            },
                             onToggleStar = {},
                         )
                     }
