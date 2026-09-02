@@ -10,7 +10,8 @@
  * 布局决策：
  * - 读取真实 imeAnimationTarget，以源码 `.3s cubic-bezier(.4,0,.2,1)`
  *   独立动画底部 inset；不依赖系统 IME 动画的厂商时长/曲线；
- * - 终端 panel 为源码 11/49/368/661 几何，圆角 14dp，border 后内容 padding 14/14/10；
+ * - 终端容器复用基线 SessionShellScreen 卡片：外 4dp、圆角 14dp、浅色投影 /
+ *   深色 1dp 描边，内容 clip 在圆角内；底边 4dp 呼吸 + hairline，避免直边硬拼 dock；
  * - dock 水平内边距 11dp、行间距 8dp、底部 8dp，宿主锁定源码 24dp 底部安全区。
  *
  * ── ConversationPageColors 映射表（由你们接线，⛔ 本代码不硬编码）──
@@ -45,6 +46,7 @@ import android.view.ViewTreeObserver
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -60,7 +62,9 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -75,6 +79,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import dev.agentmirror.app.ui.theme.DarkPalette
+import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.Elevations
+import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.Radii
+import dev.agentmirror.app.ui.theme.currentTerminalPalette
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
@@ -176,6 +186,8 @@ fun SessionScreenScaffold(
         WindowInsets.imeAnimationTarget.getBottom(this).toDp()
     }
     ClearFocusWhenImeHides()
+    val palette = LocalAppPalette.current
+    val terminalCard = currentTerminalPalette()
     SourceImeMotionLayout(
         targetBottom = imeTargetBottom,
         modifier = modifier
@@ -200,7 +212,36 @@ fun SessionScreenScaffold(
                         }
                     }
             ) {
-                terminalCanvas()
+                // Baseline SessionShellScreen terminal card (4dp / 14dp / clip / dark hairline).
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(Dims.terminalCardMargin)
+                        .testTag("session-terminal-card"),
+                    shape = RoundedCornerShape(Radii.terminalCard),
+                    color = terminalCard.background,
+                    tonalElevation = Elevations.none,
+                    shadowElevation = if (palette === DarkPalette) {
+                        Elevations.terminalCardDark
+                    } else {
+                        Elevations.terminalCardLight
+                    },
+                    border = if (palette === DarkPalette) {
+                        BorderStroke(Dims.hairline, palette.divider)
+                    } else {
+                        null
+                    },
+                ) {
+                    terminalCanvas()
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(Dims.hairline)
+                        .background(palette.divider)
+                        .testTag("session-terminal-dock-rule"),
+                )
             }
             Column(
                 modifier = Modifier.fillMaxWidth().padding(start = 11.dp, end = 11.dp, bottom = 8.dp),
