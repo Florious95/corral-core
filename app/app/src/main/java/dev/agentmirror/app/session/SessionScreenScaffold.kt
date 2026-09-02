@@ -79,6 +79,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
@@ -280,6 +281,8 @@ fun SessionScreenScaffold(
                         .fillMaxWidth()
                         .height(Dims.hairline)
                         .background(source.neutral800)
+                        // Keep the rule above the elevated card's edge shadow at the screen boundary.
+                        .zIndex(1f)
                         .testTag("session-terminal-dock-rule"),
                 )
             }
