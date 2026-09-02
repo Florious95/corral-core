@@ -188,6 +188,7 @@ fun SessionScreenScaffold(
     ClearFocusWhenImeHides()
     val palette = LocalAppPalette.current
     val terminalCard = currentTerminalPalette()
+    val source = sessionDockSourceTokens()
     SourceImeMotionLayout(
         targetBottom = imeTargetBottom,
         modifier = modifier
@@ -239,7 +240,7 @@ fun SessionScreenScaffold(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(Dims.hairline)
-                        .background(palette.divider)
+                        .background(source.neutral800)
                         .testTag("session-terminal-dock-rule"),
                 )
             }
