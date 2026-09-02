@@ -193,7 +193,6 @@ fun SessionScreen(
         mutableStateOf(DockRowMode.Sessions)
     }
     val favoriteListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
@@ -323,7 +322,6 @@ fun SessionScreen(
                     onSendText = {
                         viewModel.sendDraft()
                         mirror = TextFieldValue("")
-                        focusManager.clearFocus()
                     },
                     onPickAttachment = { attachMenu = true },
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
