@@ -23,6 +23,9 @@
  */
 package dev.agentmirror.app.session
 
+import android.os.Build
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -46,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -86,6 +91,7 @@ fun CommandInputBar(
     val source = sessionDockSourceTokens()
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val view = LocalView.current
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
     LaunchedEffect(focused) {
@@ -99,9 +105,42 @@ fun CommandInputBar(
     }
     // System Back while the editor is focused must hide IME and blur (source onBlur → 46dp)
     // instead of leaving the capsule expanded or consuming the host session-pop BackHandler.
-    BackHandler(enabled = focused) {
+    val collapseEditor = {
         keyboardController?.hide()
         focusManager.clearFocus(force = true)
+    }
+    BackHandler(enabled = focused) { collapseEditor() }
+    // API 33+ IME registers its own OnBackInvokedCallback at DEFAULT, so GLOBAL_ACTION_BACK
+    // (and the first system Back) never reaches Compose BackHandler while the IME is attaching
+    // or shown. Overlay priority keeps the focused editor on the same closed loop.
+    DisposableEffect(focused, view, focusManager, keyboardController) {
+        if (!focused || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return@DisposableEffect onDispose { }
+        }
+        var disposed = false
+        var callback: OnBackInvokedCallback? = null
+        var dispatcher: OnBackInvokedDispatcher? = null
+        fun register() {
+            if (disposed || callback != null) return
+            val nextDispatcher = view.findOnBackInvokedDispatcher() ?: return
+            val nextCallback = OnBackInvokedCallback { collapseEditor() }
+            nextDispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+                nextCallback,
+            )
+            dispatcher = nextDispatcher
+            callback = nextCallback
+        }
+        register()
+        if (callback == null) view.post { register() }
+        onDispose {
+            disposed = true
+            val registered = callback
+            val owner = dispatcher
+            if (registered != null && owner != null) {
+                owner.unregisterOnBackInvokedCallback(registered)
+            }
+        }
     }
     val sourceExpandedLines = expandedLines.coerceIn(2, 5)
     val fieldHeight by animateDpAsState(

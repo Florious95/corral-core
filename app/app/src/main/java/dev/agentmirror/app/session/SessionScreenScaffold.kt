@@ -93,9 +93,10 @@ internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
 )
 
 /**
- * System Back hides IME without moving Compose focus. Collapse the source capsule
- * when any real IME-visible signal (animation target, current ime inset, or root
- * window insets) transitions to hidden.
+ * System Back / IME-swipe can hide the keyboard without moving Compose focus.
+ * Collapse the source capsule when the *current* IME inset or root window IME
+ * visibility transitions to hidden. Animation-target is ignored: a cancelled
+ * show can leave the target stuck non-zero and would never blur.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -103,7 +104,6 @@ internal fun ClearFocusWhenImeHides() {
     val focusManager = LocalFocusManager.current
     val density = LocalDensity.current
     val view = LocalView.current
-    val imeTargetPx = WindowInsets.imeAnimationTarget.getBottom(density)
     val imeCurrentPx = WindowInsets.ime.getBottom(density)
     var rootImeVisible by remember { mutableStateOf(false) }
     DisposableEffect(view) {
@@ -121,7 +121,7 @@ internal fun ClearFocusWhenImeHides() {
             if (observer.isAlive) observer.removeOnGlobalLayoutListener(listener)
         }
     }
-    val imeVisible = rootImeVisible || imeTargetPx > 0 || imeCurrentPx > 0
+    val imeVisible = rootImeVisible || imeCurrentPx > 0
     var wasVisible by remember { mutableStateOf(false) }
     LaunchedEffect(imeVisible) {
         if (imeVisible) {
