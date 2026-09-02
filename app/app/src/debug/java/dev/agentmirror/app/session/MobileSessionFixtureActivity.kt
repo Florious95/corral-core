@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,8 +34,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.ui.components.SessionSwitchSheet
-import dev.agentmirror.app.ui.model.SessionItem
-import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.Appearance
 
@@ -51,33 +50,25 @@ class MobileSessionFixtureActivity : ComponentActivity() {
             var overlayOpen by remember { mutableStateOf(false) }
             val listState = rememberLazyListState()
             val focusManager = LocalFocusManager.current
-            val sessions = (0..8).map { index ->
+            val visibleOrder = remember { mutableStateListOf(*(1..8).toList().toTypedArray()) }
+            val sessions = visibleOrder.map { index ->
                 SessionChipUi(
                     id = index.toString(),
                     name = "收藏会话-$index",
-                    isActive = activeId == index.toString(),
+                    isActive = false,
                     isRunning = index % 2 == 0,
                 )
             }
-            val overlaySessions = sessions.map { item ->
-                SessionItem(
-                    id = item.id,
-                    displayName = item.name,
-                    path = "/workspace/${item.id}",
-                    status = if (item.isRunning) SessionStatus.Busy else SessionStatus.Idle,
-                    starred = true,
-                )
-            }
-
             AppTheme(appearance = Appearance.Light) {
                 SessionDockTheme(dark = false) {
+                    val source = sessionDockSourceTokens()
                     Box(Modifier.fillMaxSize()) {
                         SessionScreenScaffold(
                             terminalCanvas = {
                                 Column(
                                     Modifier
                                         .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.surface)
+                                        .background(source.cliGround)
                                         .padding(16.dp),
                                 ) {
                                     Text(
@@ -87,7 +78,7 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                                     )
                                     Text(
                                         "$ git status\nOn branch feat/agent-cli-mobile-source-ui\nworking tree clean",
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                        color = source.neutral300,
                                         fontFamily = FontFamily.Monospace,
                                     )
                                 }
@@ -96,7 +87,11 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                             onDockModeChange = { mode = it },
                             sessions = sessions,
                             sessionListState = listState,
-                            onSessionSelect = { activeId = it },
+                            onSessionSelect = { next ->
+                                val slot = visibleOrder.indexOf(next.toInt())
+                                if (slot >= 0) visibleOrder[slot] = activeId.toInt()
+                                activeId = next
+                            },
                             value = value,
                             onValueChange = { value = it },
                             onSendText = {
@@ -107,18 +102,11 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                             onKeyToken = {},
                             onBack = {},
                             onOpenViewMenu = { overlayOpen = true },
+                            modifier = Modifier.padding(top = 42.667.dp, bottom = 24.dp),
                         )
                         SessionSwitchSheet(
                             visible = overlayOpen,
-                            workspaceName = "Agent CLI Mobile",
-                            sessions = overlaySessions,
-                            currentSessionId = activeId,
                             onDismiss = { overlayOpen = false },
-                            onSelect = {
-                                activeId = it.id
-                                overlayOpen = false
-                            },
-                            onToggleStar = {},
                         )
                     }
                 }

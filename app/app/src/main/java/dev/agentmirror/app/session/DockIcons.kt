@@ -112,7 +112,7 @@ fun DockIconButton(
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 icon, contentDescription,
-                modifier = Modifier.width(20.dp),
+                modifier = Modifier.width(17.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
