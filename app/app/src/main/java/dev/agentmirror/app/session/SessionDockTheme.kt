@@ -11,11 +11,18 @@
 package dev.agentmirror.app.session
 
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import dev.agentmirror.app.R
 
 /**
  * Claude Design Nocturne variables mapped one-for-one onto the Material slots consumed by the dock.
@@ -64,6 +71,75 @@ internal val sessionDockLightScheme = lightColorScheme(
     scrim = Color(0x73000000),
 )
 
+internal val SessionDockSans = FontFamily(
+    Font(R.font.inter_variable, FontWeight.Normal),
+)
+
+internal data class SessionDockSourceTokens(
+    val surface: Color,
+    val neutral200: Color,
+    val neutral300: Color,
+    val neutral400: Color,
+    val neutral500: Color,
+    val neutral600: Color,
+    val neutral700: Color,
+    val neutral800: Color,
+    val neutral900: Color,
+    val accent: Color,
+    val accent200: Color,
+    val accent300: Color,
+    val accent600: Color,
+    val accent700: Color,
+    val accent900: Color,
+    val cliGround: Color,
+)
+
+internal val sessionDockLightTokens = SessionDockSourceTokens(
+    surface = Color.White,
+    neutral200 = Color(0xFF292B31),
+    neutral300 = Color(0xFF3F424D),
+    neutral400 = Color(0xFF595D6C),
+    neutral500 = Color(0xFF75798C),
+    neutral600 = Color(0xFF9397AB),
+    neutral700 = Color(0xFFB2B6CA),
+    neutral800 = Color(0xFFD4D9EA),
+    neutral900 = Color(0xFFE9ECF7),
+    accent = Color(0xFF6A5CC0),
+    accent200 = Color(0xFF423A6A),
+    accent300 = Color(0xFF5D5294),
+    accent600 = Color(0xFF796CBF),
+    accent700 = Color(0xFF968AE0),
+    accent900 = Color(0xFFE7E5FE),
+    cliGround = Color(0xFFE9F2EC),
+)
+
+internal val sessionDockDarkTokens = SessionDockSourceTokens(
+    surface = Color(0xFF232532),
+    neutral200 = Color(0xFFE4E7F5),
+    neutral300 = Color(0xFFCFD3E5),
+    neutral400 = Color(0xFFB2B6CA),
+    neutral500 = Color(0xFF9397AB),
+    neutral600 = Color(0xFF75798C),
+    neutral700 = Color(0xFF595D6C),
+    neutral800 = Color(0xFF3F424D),
+    neutral900 = Color(0xFF292B31),
+    accent = Color(0xFF9184D9),
+    accent200 = Color(0xFFE7E5FE),
+    accent300 = Color(0xFFD2CEFD),
+    accent600 = Color(0xFF796CBF),
+    accent700 = Color(0xFF5D5294),
+    accent900 = Color(0xFF2B2741),
+    cliGround = Color(0xFF0F111C),
+)
+
+@Composable
+internal fun sessionDockSourceTokens(): SessionDockSourceTokens =
+    if (MaterialTheme.colorScheme.background == sessionDockLightScheme.background) {
+        sessionDockLightTokens
+    } else {
+        sessionDockDarkTokens
+    }
+
 internal val sessionDockDarkScheme = darkColorScheme(
     primary = Color(0xFF9184D9),
     onPrimary = Color(0xFF161826),
@@ -87,10 +163,13 @@ internal val sessionDockDarkScheme = darkColorScheme(
 
 @Composable
 internal fun SessionDockTheme(dark: Boolean, content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (dark) sessionDockDarkScheme else sessionDockLightScheme,
-        typography = MaterialTheme.typography,
-        shapes = MaterialTheme.shapes,
-        content = content,
-    )
+    // The source uses real 40/36/32px controls rather than Material's injected 48dp target.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+        MaterialTheme(
+            colorScheme = if (dark) sessionDockDarkScheme else sessionDockLightScheme,
+            typography = MaterialTheme.typography,
+            shapes = MaterialTheme.shapes,
+            content = content,
+        )
+    }
 }

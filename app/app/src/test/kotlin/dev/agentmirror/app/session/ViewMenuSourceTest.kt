@@ -18,9 +18,6 @@ package dev.agentmirror.app.session
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -81,31 +78,27 @@ class ViewMenuSourceTest {
     }
 
     @Test
-    fun viewMenuSourceOverlayFromAShowsANotLastFavoriteB() {
+    fun sessionChipsUseGlobalFavoritesAndExcludeCurrentSession() {
         val wvm = seededAbFavoritesLastB()
-        val src = wvm.viewMenuSource(REF_A)
-        val h = OverlayTestHarness()
+        val h = OverlayTestHarness(REF_A)
+        var selected: Pair<String, String>? = null
         compose.setContent {
             AgentMirrorTheme {
                 SessionScreen(
                     viewModel = h.vm,
                     name = "sess-a",
                     onBack = {},
-                    overlaySessions = src.sessions,
+                    favoriteRows = wvm.favoriteRows(),
+                    onOpenOverlaySession = { ref, name -> selected = ref to name },
                 )
             }
         }
-        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
+        compose.onNodeWithText("sess-a").assertDoesNotExist()
+        compose.onNodeWithText("sess-b").assertIsDisplayed()
+        compose.onNodeWithText("sess-b").performClick()
         compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay-open").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay").assertIsDisplayed()
-        compose.onNodeWithTag("l2-row-$REF_A").assertExists()
-        compose.onNodeWithTag("l2-row-$REF_B").assertDoesNotExist()
-        compose.onNodeWithText("sess-b").assertDoesNotExist()
-        compose.onAllNodesWithText("sess-a").assertCountEquals(1)
-        compose.onNodeWithText("多agent协作", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("远程Agent安卓").assertDoesNotExist()
+        assertEquals(REF_B to "sess-b", selected)
     }
 
     private fun seededAbFavoritesLastB(): WorkspaceViewModel {

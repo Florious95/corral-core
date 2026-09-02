@@ -42,6 +42,7 @@ import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.app.ui.theme.appDarkScheme
 import dev.agentmirror.app.ui.theme.appLightScheme
 import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Status
 import dev.agentmirror.app.workspace.favoriteKey
 import dev.agentmirror.app.workspace.sessionDisplayName
@@ -158,8 +159,8 @@ class VzVerifyRoundTest {
     @Test
     fun VzVerifyFavoriteChipFollowsLiveOverlayWithoutNavigation() {
         val h = OverlayTestHarness()
-        val idle = session(h.vm.ref, L2Status.IDLE)
-        val busy = session(h.vm.ref, L2Status.WORKING)
+        val idle = session("favorite-ref", L2Status.IDLE).toFavoriteRow()
+        val busy = session("favorite-ref", L2Status.WORKING).toFavoriteRow()
         var overlay by mutableStateOf(listOf(idle))
         compose.setContent {
             AppTheme(appearance = Appearance.Light) {
@@ -167,8 +168,7 @@ class VzVerifyRoundTest {
                     viewModel = h.vm,
                     name = "远控 leader",
                     onBack = {},
-                    overlaySessions = overlay,
-                    overlayFavorited = setOf(FavoriteKey(h.vm.ref)),
+                    favoriteRows = overlay,
                 )
             }
         }
@@ -274,6 +274,18 @@ class VzVerifyRoundTest {
         assertNotEquals(darkDefault.surfaceContainer, appDarkScheme.surfaceContainer)
         assertNotEquals(lightDefault.primary, appLightScheme.primary)
     }
+
+    private fun dev.agentmirror.app.workspace.L2Entry.toFavoriteRow() = FavoriteRow(
+        sessionName = sessionName,
+        windowIndex = windowIndex,
+        windowName = windowName,
+        addedAt = 0L,
+        isOnline = true,
+        ref = ref,
+        cwd = cwd,
+        title = title,
+        status = status,
+    )
 
     private fun session(ref: String, status: L2Status) = dev.agentmirror.app.workspace.L2Entry(
         ref = ref,

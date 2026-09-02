@@ -45,8 +45,7 @@ import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.SharedPreferencesViewportGeomStore
-import dev.agentmirror.app.workspace.FavoriteKey
-import dev.agentmirror.app.workspace.L2Entry
+import dev.agentmirror.app.workspace.FavoriteRow
 
 /**
  * 会话页路由挂载（[AgentMirrorApp] 的 Session 分支唯一入口；本组合同时承担接线层：
@@ -79,9 +78,7 @@ fun SessionRoute(
     name: String,
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
-    overlaySessions: List<L2Entry> = emptyList(),
-    overlayFavorited: Set<FavoriteKey> = emptySet(),
-    onToggleOverlayFavorite: (L2Entry) -> Unit = {},
+    favoriteRows: List<FavoriteRow> = emptyList(),
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val sessionContext = LocalContext.current
@@ -128,9 +125,7 @@ fun SessionRoute(
         name = name,
         connectionPath = connectionPath,
         onBack = onBack,
-        overlaySessions = overlaySessions,
-        overlayFavorited = overlayFavorited,
-        onToggleOverlayFavorite = onToggleOverlayFavorite,
+        favoriteRows = favoriteRows,
         onOpenOverlaySession = onOpenOverlaySession,
     )
 }

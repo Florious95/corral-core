@@ -37,11 +37,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -52,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -79,11 +78,8 @@ import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.ui.theme.TermPalette
-import dev.agentmirror.app.workspace.FavoriteKey
-import dev.agentmirror.app.workspace.L2Entry
-import dev.agentmirror.app.workspace.cwdDisplayName
-import dev.agentmirror.app.workspace.favoriteKey
-import dev.agentmirror.app.workspace.toSessionItem
+import dev.agentmirror.app.workspace.FavoriteRow
+import dev.agentmirror.app.workspace.L2Status
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -93,9 +89,9 @@ import java.io.ByteArrayOutputStream
 /**
  * Claude Design Agent CLI Mobile 会话屏：原生终端画布 + 恒定两行 dock。
  *
- * 默认行只显示收藏会话 chips；返回进入「常用快捷键 / 查看 / 收藏会话」菜单。
+ * 默认行只显示全局收藏减当前会话的 chips；返回进入「快捷键 / 查看 / 会话」菜单。
  * 输入胶囊包裹附件、受控文本与发送，焦点膨胀由导出源码驱动，IME 通过
- * [SessionScreenScaffold] 的 imePadding 推起整只 dock。业务状态与动作仍全部委托
+ * [SessionScreenScaffold] 的源码曲线 inset 动画推起整只 dock。业务状态与动作仍全部委托
  * [SessionViewModel]，本层只接现有会话切换、查看列表、快捷键和附件入口。
  */
 @Composable
@@ -104,9 +100,7 @@ fun SessionScreen(
     name: String,
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
-    overlaySessions: List<L2Entry> = emptyList(),
-    overlayFavorited: Set<FavoriteKey> = emptySet(),
-    onToggleOverlayFavorite: (L2Entry) -> Unit = {},
+    favoriteRows: List<FavoriteRow> = emptyList(),
     onOpenOverlaySession: (ref: String, name: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
@@ -211,23 +205,45 @@ fun SessionScreen(
     AppTheme {
         val darkTheme = LocalAppPalette.current === DarkPalette
         val themeToken = TermPalette.token(darkTheme)
-        val overlayItems = overlaySessions.map {
-            it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
+        val favoriteByRef = favoriteRows.associateBy { it.ref }
+        val favoriteOrder = remember {
+            mutableStateListOf<String>().apply {
+                addAll(favoriteRows.map { it.ref }.filterNot { it == viewModel.ref })
+            }
         }
-        val workspaceName = overlaySessions.firstOrNull()?.cwd?.let(::cwdDisplayName).orEmpty()
-        val byRef = overlaySessions.associateBy { it.ref }
-        val favoriteSessions = overlaySessions
-            .filter { overlayFavorited.contains(it.favoriteKey()) }
-            .map {
+        var favoriteOrderCurrent by remember { mutableStateOf(viewModel.ref) }
+        LaunchedEffect(favoriteRows.map { it.ref }, viewModel.ref) {
+            val desired = favoriteRows.map { it.ref }.filterNot { it == viewModel.ref }
+            if (favoriteOrderCurrent != viewModel.ref) {
+                val replacementIndex = favoriteOrder.indexOf(viewModel.ref)
+                if (replacementIndex >= 0) {
+                    if (favoriteOrderCurrent in desired) {
+                        favoriteOrder[replacementIndex] = favoriteOrderCurrent
+                    } else {
+                        favoriteOrder.removeAt(replacementIndex)
+                    }
+                }
+                favoriteOrderCurrent = viewModel.ref
+            }
+            val desiredSet = desired.toSet()
+            for (index in favoriteOrder.lastIndex downTo 0) {
+                if (favoriteOrder[index] !in desiredSet) favoriteOrder.removeAt(index)
+            }
+            desired.forEach { ref -> if (ref !in favoriteOrder) favoriteOrder += ref }
+        }
+        val favoriteSessions = favoriteOrder.mapNotNull { ref ->
+            favoriteByRef[ref]?.let {
                 SessionChipUi(
                     id = it.ref,
                     name = it.identityLabel,
-                    isActive = it.ref == viewModel.ref,
-                    isRunning = it.status == dev.agentmirror.app.workspace.L2Status.WORKING,
+                    isActive = false,
+                    isRunning = it.isOnline && it.status == L2Status.WORKING,
                 )
             }
+        }
 
         SessionDockTheme(darkTheme) {
+            val source = sessionDockSourceTokens()
             Box(modifier = Modifier.fillMaxSize()) {
                 SessionScreenScaffold(
                     terminalCanvas = {
@@ -243,10 +259,14 @@ fun SessionScreen(
                                         it.onTermMouse = viewModel::onTermMouse
                                         it.sessionRef = viewModel.ref
                                         it.nightOverride = darkTheme
+                                        it.defaultBackgroundOverrideArgb = source.cliGround.toArgb()
+                                        it.defaultForegroundOverrideArgb = source.neutral300.toArgb()
                                     }
                                 },
                                 update = { view ->
                                     view.nightOverride = darkTheme
+                                    view.defaultBackgroundOverrideArgb = source.cliGround.toArgb()
+                                    view.defaultForegroundOverrideArgb = source.neutral300.toArgb()
                                     view.presenter = viewModel.presenter
                                     view.onRemoteScrollBy = viewModel::onScrollWheel
                                     view.onTermMouse = viewModel::onTermMouse
@@ -274,7 +294,16 @@ fun SessionScreen(
                     sessions = favoriteSessions,
                     sessionListState = favoriteListState,
                     onSessionSelect = { id ->
-                        val entry = byRef[id] ?: return@SessionScreenScaffold
+                        val entry = favoriteByRef[id] ?: return@SessionScreenScaffold
+                        val slot = favoriteOrder.indexOf(id)
+                        if (slot >= 0) {
+                            if (viewModel.ref in favoriteByRef) {
+                                favoriteOrder[slot] = viewModel.ref
+                            } else {
+                                favoriteOrder.removeAt(slot)
+                            }
+                        }
+                        favoriteOrderCurrent = id
                         onOpenOverlaySession(entry.ref, entry.identityLabel)
                     },
                     value = mirror,
@@ -291,22 +320,11 @@ fun SessionScreen(
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
                     onBack = onBack,
                     onOpenViewMenu = viewModel::openOverlay,
-                    modifier = Modifier.statusBarsPadding().navigationBarsPadding(),
+                    modifier = Modifier.padding(top = 42.667.dp, bottom = 24.dp),
                 )
                 SessionSwitchSheet(
                     visible = viewModel.overlayOpen,
-                    workspaceName = workspaceName,
-                    sessions = overlayItems,
-                    currentSessionId = viewModel.ref,
                     onDismiss = viewModel::closeOverlay,
-                    onSelect = { item ->
-                        val entry = byRef[item.id] ?: return@SessionSwitchSheet
-                        viewModel.closeOverlay()
-                        onOpenOverlaySession(entry.ref, entry.identityLabel)
-                    },
-                    onToggleStar = { item ->
-                        byRef[item.id]?.let(onToggleOverlayFavorite)
-                    },
                 )
                 Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
                     DropdownMenu(

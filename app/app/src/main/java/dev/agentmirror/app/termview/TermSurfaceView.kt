@@ -133,6 +133,20 @@ class TermSurfaceView @JvmOverloads constructor(
             invalidate()
         }
 
+    /** Optional session-shell paper/ink colors; null keeps every non-Agent-CLI caller unchanged. */
+    var defaultBackgroundOverrideArgb: Int? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+    var defaultForegroundOverrideArgb: Int? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+
     /** 像素高度对应一逻辑行的行高（视口向下滚动超过一行时对齐整格）。 */
     private var lineHeightPx: Int = 0
 
@@ -931,8 +945,13 @@ class TermSurfaceView @JvmOverloads constructor(
     }
 
     /** 终端色 → ARGB。色值与 083 §2 重映射都在 [TermPalette.colorFor]，这里不写字面量。 */
-    private fun colorFor(color: TerminalColor, background: Boolean): Int =
-        TermPalette.colorFor(color, background, isNight())
+    private fun colorFor(color: TerminalColor, background: Boolean): Int = when {
+        color == TerminalColor.Default && background && defaultBackgroundOverrideArgb != null ->
+            defaultBackgroundOverrideArgb!!
+        color == TerminalColor.Default && !background && defaultForegroundOverrideArgb != null ->
+            defaultForegroundOverrideArgb!!
+        else -> TermPalette.colorFor(color, background, isNight())
+    }
 
     /** SGR 7 反显：背景画笔改取 fg 字段（作为"前景默认"语义解析，即 background=false），
      *  前景画笔改取 bg 字段（作为"背景默认"语义解析）——两个字段与 background 旗标一起互换，
@@ -950,8 +969,10 @@ class TermSurfaceView @JvmOverloads constructor(
         return night == Configuration.UI_MODE_NIGHT_YES
     }
 
-    private fun themeBgArgb(): Int = TermPalette.of(isNight()).defaultBg
-    private fun themeFgArgb(): Int = TermPalette.of(isNight()).defaultFg
+    private fun themeBgArgb(): Int =
+        defaultBackgroundOverrideArgb ?: TermPalette.of(isNight()).defaultBg
+    private fun themeFgArgb(): Int =
+        defaultForegroundOverrideArgb ?: TermPalette.of(isNight()).defaultFg
 
     private fun publishThemeChrome() {
         val night = isNight()

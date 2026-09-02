@@ -10,8 +10,8 @@
  * 布局决策：
  * - 读取真实 imeAnimationTarget，以源码 `.3s cubic-bezier(.4,0,.2,1)`
  *   独立动画底部 inset；不依赖系统 IME 动画的厂商时长/曲线；
- * - dock 水平内边距 12dp、行间距 8dp、底部 8dp + navigationBarsPadding
- *   由宿主 Scaffold 决定（此处不重复加，避免双倍 inset）。
+ * - 终端 panel 为源码 11/49/368/661 几何，圆角 14dp，border 后内容 padding 14/14/10；
+ * - dock 水平内边距 11dp、行间距 8dp、底部 8dp，宿主锁定源码 24dp 底部安全区。
  *
  * ── ConversationPageColors 映射表（由你们接线，⛔ 本代码不硬编码）──
  * 深色（Nocturne 令牌实测值 → colorScheme 槽位）：
@@ -45,6 +45,7 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -63,9 +64,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -74,6 +80,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -124,6 +131,18 @@ fun SessionScreenScaffold(
     val imeTargetBottom = with(density) {
         WindowInsets.imeAnimationTarget.getBottom(this).toDp()
     }
+    var imeWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeTargetBottom) {
+        if (imeTargetBottom > 0.dp) {
+            imeWasVisible = true
+        } else if (imeWasVisible) {
+            // System Back hides IME without moving focus; source blur must still collapse the editor.
+            imeWasVisible = false
+            focusManager.clearFocus()
+        }
+    }
+    val source = sessionDockSourceTokens()
+    val terminalShape = RoundedCornerShape(14.dp)
     SourceImeMotionLayout(
         targetBottom = imeTargetBottom,
         modifier = modifier
@@ -137,6 +156,10 @@ fun SessionScreenScaffold(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .padding(start = 11.dp, end = 11.dp, top = 6.333.dp, bottom = 8.dp)
+                    .clip(terminalShape)
+                    .background(source.cliGround)
+                    .border(1.dp, source.neutral900, terminalShape)
                     .testTag("session-terminal-canvas")
                     .pointerInput(focusManager) {
                         awaitEachGesture {
@@ -148,10 +171,16 @@ fun SessionScreenScaffold(
                         }
                     }
             ) {
-                terminalCanvas()
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(start = 15.dp, end = 15.dp, top = 15.dp, bottom = 11.dp),
+                ) {
+                    terminalCanvas()
+                }
             }
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = 11.dp, end = 11.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 DockSecondRow(

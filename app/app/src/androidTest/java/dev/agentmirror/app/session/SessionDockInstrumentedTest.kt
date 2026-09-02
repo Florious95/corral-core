@@ -10,6 +10,7 @@
 
 package dev.agentmirror.app.session
 
+import android.accessibilityservice.AccessibilityService
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,6 +42,13 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.test.platform.app.InstrumentationRegistry
+import dev.agentmirror.app.conn.ConnectionConfig
+import dev.agentmirror.app.service.MirrorForegroundService
+import dev.agentmirror.app.service.NoopTransportFactory
+import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.workspace.FavoriteRow
+import dev.agentmirror.app.workspace.L2Status
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -64,7 +73,8 @@ class SessionDockInstrumentedTest {
             var value by remember { mutableStateOf(TextFieldValue("")) }
             val listState = rememberLazyListState()
             val focusManager = LocalFocusManager.current
-            val sessions = (0..8).map {
+            val visibleOrder = remember { mutableStateListOf(*(1..8).toList().toTypedArray()) }
+            val sessions = visibleOrder.map {
                 SessionChipUi(
                     id = it.toString(),
                     name = "收藏-$it",
@@ -81,9 +91,11 @@ class SessionDockInstrumentedTest {
                     onDockModeChange = { mode = it },
                     sessions = sessions,
                     sessionListState = listState,
-                    onSessionSelect = {
-                        selected += it
-                        activeId = it
+                    onSessionSelect = { next ->
+                        selected += next
+                        val slot = visibleOrder.indexOf(next.toInt())
+                        if (slot >= 0) visibleOrder[slot] = activeId.toInt()
+                        activeId = next
                     },
                     value = value,
                     onValueChange = { value = it },
@@ -102,6 +114,7 @@ class SessionDockInstrumentedTest {
         val collapsed = inputHeight()
         val restingInputBottom = inputBottom()
         assertEquals(32f, collapsed, 0.5f)
+        assertEquals(46f, inputCapsuleHeight(), 0.5f)
         compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
         compose.waitUntil(timeoutMillis = 5_000) {
             inputHeight() >= 71.5f && inputBottom() < restingInputBottom - 100f
@@ -109,6 +122,23 @@ class SessionDockInstrumentedTest {
         val expanded = inputHeight()
         val imeRaisedInputBottom = inputBottom()
         assertEquals(72f, expanded, 0.5f)
+        assertEquals(86f, inputCapsuleHeight(), 0.5f)
+
+        // A real system Back first hides the IME; IME-hidden reconciliation must clear focus.
+        assertTrue(
+            InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(
+                AccessibilityService.GLOBAL_ACTION_BACK,
+            ),
+        )
+        compose.waitUntil(timeoutMillis = 5_000) {
+            inputHeight() <= 32.5f && abs(inputBottom() - restingInputBottom) < 0.5f
+        }
+        assertEquals(32f, inputHeight(), 0.5f)
+        assertEquals(46f, inputCapsuleHeight(), 0.5f)
+        compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
+        compose.waitUntil(timeoutMillis = 5_000) {
+            inputHeight() >= 71.5f && inputBottom() < restingInputBottom - 100f
+        }
 
         // Real outside pointer action must blur, collapse, and return the dock from IME raise.
         compose.onNodeWithTag("session-terminal-canvas").performTouchInput { click() }
@@ -116,6 +146,7 @@ class SessionDockInstrumentedTest {
             inputHeight() <= 32.5f && abs(inputBottom() - restingInputBottom) < 0.5f
         }
         assertEquals(32f, inputHeight(), 0.5f)
+        assertEquals(46f, inputCapsuleHeight(), 0.5f)
         compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
         compose.waitUntil(timeoutMillis = 5_000) {
             inputHeight() >= 71.5f && abs(inputBottom() - imeRaisedInputBottom) < 0.5f
@@ -147,9 +178,84 @@ class SessionDockInstrumentedTest {
 
         compose.onNodeWithContentDescription("返回菜单").performClick()
         compose.waitForIdle()
-        compose.onAllNodesWithText("常用快捷键").assertCountEquals(1)
+        compose.onAllNodesWithText("快捷键").assertCountEquals(1)
         compose.onAllNodesWithText("查看").assertCountEquals(1)
-        compose.onAllNodesWithText("收藏会话").assertCountEquals(1)
+        compose.onAllNodesWithText("会话").assertCountEquals(1)
+    }
+
+    @Test
+    fun productionSessionRouteKeepsGlobalFavoriteViewportDockAndInputAcrossTwoSwitches() {
+        val previousFactory = ServiceWire.transportFactory
+        val selected = mutableListOf<String>()
+        compose.runOnUiThread {
+            compose.activity.enableEdgeToEdge()
+            compose.activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            ServiceWire.releaseManager()
+            ServiceWire.resetConfigForTest()
+            ServiceWire.transportFactory = NoopTransportFactory
+            ServiceWire.setConfig(ConnectionConfig("ws://127.0.0.1:9/ws", "instrumentation-test"))
+        }
+        try {
+            compose.setContent {
+                var activeRef by remember { mutableStateOf("favorite-0") }
+                val favorites = (0..8).map { index ->
+                    FavoriteRow(
+                        sessionName = "favorite-$index",
+                        windowIndex = index.toString(),
+                        windowName = "收藏-$index",
+                        addedAt = index.toLong(),
+                        isOnline = true,
+                        ref = "favorite-$index",
+                        cwd = "/workspace/$index",
+                        title = "收藏-$index",
+                        status = if (index % 2 == 0) L2Status.WORKING else L2Status.IDLE,
+                    )
+                }
+                SessionRoute(
+                    ref = activeRef,
+                    name = activeRef,
+                    onBack = {},
+                    favoriteRows = favorites,
+                    onOpenOverlaySession = { ref, _ ->
+                        selected += ref
+                        activeRef = ref
+                    },
+                )
+            }
+            compose.onNodeWithText("收藏-0").assertDoesNotExist()
+            compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
+            compose.waitUntil(timeoutMillis = 5_000) { inputHeight() >= 71.5f }
+            val expanded = inputHeight()
+
+            compose.onNodeWithTag("favorite-session-list").performScrollToNode(hasText("收藏-6"))
+            compose.waitUntil(timeoutMillis = 5_000) { scrollValue() > 0f }
+            val scroll = scrollValue()
+            compose.onNodeWithText("收藏-6").performClick()
+            compose.waitForIdle()
+
+            assertEquals(listOf("favorite-6"), selected)
+            compose.onNodeWithText("收藏-6").assertDoesNotExist()
+            compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
+            assertTrue(abs(scrollValue() - scroll) < 0.5f)
+            assertTrue(abs(inputHeight() - expanded) < 0.5f)
+
+            compose.onNodeWithText("收藏-7").performClick()
+            compose.waitForIdle()
+            assertEquals(listOf("favorite-6", "favorite-7"), selected)
+            compose.onNodeWithText("收藏-7").assertDoesNotExist()
+            compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
+            compose.onAllNodesWithText("快捷键").assertCountEquals(0)
+            assertTrue(abs(scrollValue() - scroll) < 0.5f)
+            assertTrue(abs(inputHeight() - expanded) < 0.5f)
+        } finally {
+            compose.runOnUiThread {
+                MirrorForegroundService.stop(compose.activity)
+                ServiceWire.uiConnector = null
+                ServiceWire.releaseManager()
+                ServiceWire.resetConfigForTest()
+                ServiceWire.transportFactory = previousFactory
+            }
+        }
     }
 
     private fun scrollValue(): Float {
@@ -159,6 +265,11 @@ class SessionDockInstrumentedTest {
 
     private fun inputBottom(): Float = compose.onNodeWithTag("session-command-input-field")
         .getUnclippedBoundsInRoot().bottom.value
+
+    private fun inputCapsuleHeight(): Float {
+        val bounds = compose.onNodeWithTag("session-command-input").getUnclippedBoundsInRoot()
+        return bounds.bottom.value - bounds.top.value
+    }
 
     private fun inputHeight(): Float {
         val bounds = compose.onNodeWithTag("session-command-input-field")
