@@ -62,7 +62,7 @@ class L2RowLayoutTest {
         compose.waitForIdle()
 
         compose.onNodeWithTag("l2-star-ref-w").assertDoesNotExist()
-        compose.onNodeWithTag("l2-provider-ref-w", useUnmergedTree = true).assertDoesNotExist()
+        val markW = compose.onNodeWithTag("l2-provider-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val lampW = compose.onNodeWithTag("l2-motion-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val idW = compose.onNodeWithTag("l2-id-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val pathW = compose.onNodeWithTag("l2-path-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
@@ -71,6 +71,7 @@ class L2RowLayoutTest {
         val pathI = compose.onNodeWithTag("l2-path-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val rowW = compose.onNodeWithTag("l2-row-ref-w").getUnclippedBoundsInRoot()
         val rowI = compose.onNodeWithTag("l2-row-ref-i").getUnclippedBoundsInRoot()
+        assertTrue("provider mark right of name mark.left=${markW.left} id.right=${idW.right}", markW.left > idW.right)
 
         assertTrue("working lamp before name lamp.left=${lampW.left} id.left=${idW.left}", lampW.left < idW.left)
         assertTrue("idle lamp before name lamp.left=${lampI.left} id.left=${idI.left}", lampI.left < idI.left)
@@ -135,7 +136,7 @@ class L2RowLayoutTest {
             activity = status,
             status = status,
             health = "normal",
-            provider = "pi",
+            provider = if (status == "working") "claude_code" else "codex",
             sessionName = name,
             windowIndex = windowIndex,
             windowName = name,
