@@ -143,24 +143,23 @@ class FavRowParityTest {
 
         compose.onNodeWithText("远控 leader").assertExists()
         compose.onNodeWithText("多agent协作").assertExists()
-        compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("进行中").assertExists()
+        compose.onNodeWithText("空闲").assertDoesNotExist()
+        compose.onNodeWithText("进行中").assertDoesNotExist()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
 
         val refA = live[0].ref
-        val star = compose.onNodeWithTag("fav-star-$refA").getUnclippedBoundsInRoot()
+        compose.onNodeWithTag("fav-star-$refA").assertDoesNotExist()
+        val lamp = compose.onNodeWithTag("fav-motion-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val badge = compose.onNodeWithTag("fav-status-$refA").getUnclippedBoundsInRoot()
+        val mark = compose.onNodeWithTag("fav-provider-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertTrue(
-            "076 §3c：星必须在标题之前 star.left=${star.left} id.left=${id.left}",
-            star.left < id.left,
+            "灯在标题之前 lamp.left=${lamp.left} id.left=${id.left}",
+            lamp.left < id.left,
         )
         assertTrue(
-            "076 §3c：状态标必须在标题之后 id.right=${id.right} badge.left=${badge.left}",
-            id.right <= badge.left,
+            "Provider 图标在标题之后 id.right=${id.right} mark.left=${mark.left}",
+            id.right <= mark.left,
         )
-        val delta = kotlin.math.abs(centerY(star).value - centerY(badge).value)
-        assertTrue("星与状态标垂直中心应对齐 delta=$delta", delta < 1f)
     }
 
     private fun centerY(rect: DpRect) = (rect.top + rect.bottom) / 2
@@ -172,7 +171,10 @@ class FavRowParityTest {
         rows = 24,
         cols = 80,
         title = title,
+        provider = "claude_code",
+        activity = status,
         status = status,
+        health = if (status == "unknown") "unknown" else "normal",
         sessionName = "team",
         windowIndex = "0",
         windowName = "claude_code",
@@ -185,7 +187,10 @@ class FavRowParityTest {
         rows = 24,
         cols = 80,
         title = "Team Agent message from leader: … - grok",
+        provider = "grok",
+        activity = "working",
         status = "working",
+        health = "normal",
         sessionName = "team-grok-l2",
         windowIndex = "3",
         windowName = "advisor",

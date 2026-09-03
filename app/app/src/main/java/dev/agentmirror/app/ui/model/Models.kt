@@ -54,7 +54,39 @@ data class SessionItem(
     val starred: Boolean,
     /** 收藏页失联行：false 时标「不在线」，不得当成 Idle。默认在线（二级列表）。 */
     val isOnline: Boolean = true,
+    /** Canonical provider id from the status-core DTO. APP must not guess. */
+    val provider: String = "unknown",
+    /** Closed health axis from the status-core DTO. */
+    val health: String = "unknown",
 )
+
+/**
+ * Left-slot motion for the unified external list row.
+ *
+ * Working animation plays only when the row is online, health is normal, and
+ * activity is working. Idle is the same lamp, static. Unknown/abnormal play
+ * nothing and must not be labeled as idle or as repeated「未知」.
+ *
+ * @contract
+ * @pre [activity] is already fail-closed (unknown on divergence/garbage)
+ * @post Working only for online+normal+Busy; Idle only for online+normal+Idle; else None
+ * @err none
+ */
+enum class SessionRowMotion { Working, Idle, None }
+
+fun sessionRowMotion(
+    activity: SessionStatus,
+    health: String,
+    isOnline: Boolean,
+): SessionRowMotion {
+    if (!isOnline) return SessionRowMotion.None
+    if (health != "normal") return SessionRowMotion.None
+    return when (activity) {
+        SessionStatus.Busy -> SessionRowMotion.Working
+        SessionStatus.Idle -> SessionRowMotion.Idle
+        SessionStatus.Unknown -> SessionRowMotion.None
+    }
+}
 
 /** 底部导航的三个位置 */
 enum class NavTab { Favorites, Sessions, Settings }
