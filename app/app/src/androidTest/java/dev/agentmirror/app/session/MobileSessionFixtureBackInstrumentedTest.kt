@@ -30,8 +30,11 @@ class MobileSessionFixtureBackInstrumentedTest {
     @Test
     fun fixtureKeycodeBackReturnsFromHotkeysWithoutFinishingActivity() {
         compose.onNodeWithContentDescription("返回菜单", useUnmergedTree = true).performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("dock-open-hotkeys").performClick()
+        compose.waitForIdle()
         compose.onNodeWithText("Esc").assertIsDisplayed()
+        assertTrue(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks())
 
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(timeoutMillis = 5_000) {

@@ -50,6 +50,7 @@ class MobileSessionFixtureActivity : ComponentActivity() {
             var value by remember { mutableStateOf(TextFieldValue("")) }
             var overlayOpen by remember { mutableStateOf(false) }
             var overlayCurrent by remember { mutableStateOf(ProductionOverlayFixture.CURRENT_REF) }
+            var inputFocused by remember { mutableStateOf(false) }
             val overlayItems = remember { ProductionOverlayFixture.overlayItems() }
             val listState = rememberLazyListState()
             val focusManager = LocalFocusManager.current
@@ -67,6 +68,11 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                     val source = sessionDockSourceTokens()
                     Box(Modifier.fillMaxSize()) {
                         SessionScreenBackHandler(
+                            focused = { inputFocused },
+                            onCollapseFocused = {
+                                inputFocused = false
+                                focusManager.clearFocus(force = true)
+                            },
                             overlayOpen = { overlayOpen },
                             dockMode = { mode },
                             onCloseOverlay = { overlayOpen = false },
@@ -110,10 +116,8 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                             },
                             onPickAttachment = {},
                             onKeyToken = {},
-                            onOpenViewMenu = {
-                                mode = DockRowMode.Sessions
-                                overlayOpen = true
-                            },
+                            onInputFocusedChanged = { inputFocused = it },
+                            onOpenViewMenu = { overlayOpen = true },
                             modifier = Modifier.padding(top = 42.667.dp, bottom = 24.dp),
                         )
                         SessionSwitchSheet(

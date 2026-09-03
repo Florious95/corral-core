@@ -162,8 +162,22 @@ class SessionDockSourceTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             dispatcher = LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            var focused by remember { mutableStateOf(false) }
             var value by remember { mutableStateOf(TextFieldValue("")) }
+            val focusManager = LocalFocusManager.current
             SessionDockTheme(dark = false) {
+                SessionScreenBackHandler(
+                    focused = { focused },
+                    onCollapseFocused = {
+                        focused = false
+                        focusManager.clearFocus(force = true)
+                    },
+                    overlayOpen = { false },
+                    dockMode = { DockRowMode.Sessions },
+                    onCloseOverlay = {},
+                    onDockModeChange = {},
+                    onBack = { hostBack++ },
+                )
                 SessionScreenScaffold(
                     terminalCanvas = { Box(Modifier.fillMaxSize()) },
                     dockMode = DockRowMode.Sessions,
@@ -176,6 +190,7 @@ class SessionDockSourceTest {
                     onSendText = {},
                     onPickAttachment = {},
                     onKeyToken = {},
+                    onInputFocusedChanged = { focused = it },
                     onOpenViewMenu = {},
                 )
             }
@@ -197,6 +212,123 @@ class SessionDockSourceTest {
         )
         assertEquals(32f, inputFieldHeight(), 0.5f)
         assertEquals(46f, inputCapsuleHeight(), 0.5f)
+    }
+
+    @Test
+    fun sessionBackHandlerClosesOverlayAndReturnsDefaultBeforeHost() {
+        var host = 0
+        var overlay = true
+        var dock = DockRowMode.Menu
+        dispatchSessionBack(
+            focused = false,
+            overlayOpen = overlay,
+            dockMode = dock,
+            onCollapseFocused = {},
+            onCloseOverlay = { overlay = false },
+            onDockModeChange = { dock = it },
+            onBack = { host++ },
+        )
+        assertEquals(false, overlay)
+        assertEquals(DockRowMode.Sessions, dock)
+        assertEquals(0, host)
+        dispatchSessionBack(
+            focused = false,
+            overlayOpen = overlay,
+            dockMode = dock,
+            onCollapseFocused = {},
+            onCloseOverlay = { overlay = false },
+            onDockModeChange = { dock = it },
+            onBack = { host++ },
+        )
+        assertEquals(1, host)
+    }
+
+    @Test
+    fun sessionBackHandlerReturnsHotkeysThenSessionsHostFallthrough() {
+        var host = 0
+        var dock = DockRowMode.Hotkeys
+        dispatchSessionBack(
+            focused = false,
+            overlayOpen = false,
+            dockMode = dock,
+            onCollapseFocused = {},
+            onCloseOverlay = {},
+            onDockModeChange = { dock = it },
+            onBack = { host++ },
+        )
+        assertEquals(DockRowMode.Sessions, dock)
+        assertEquals(0, host)
+        dispatchSessionBack(
+            focused = false,
+            overlayOpen = false,
+            dockMode = dock,
+            onCollapseFocused = {},
+            onCloseOverlay = {},
+            onDockModeChange = { dock = it },
+            onBack = { host++ },
+        )
+        assertEquals(1, host)
+    }
+
+    @Test
+    fun sessionBackHandlerFocusedWinsOverOverlayAndDock() {
+        var host = 0
+        var focused = true
+        var overlay = true
+        var dock = DockRowMode.Hotkeys
+        dispatchSessionBack(
+            focused = focused,
+            overlayOpen = overlay,
+            dockMode = dock,
+            onCollapseFocused = { focused = false },
+            onCloseOverlay = { overlay = false },
+            onDockModeChange = { dock = it },
+            onBack = { host++ },
+        )
+        assertEquals(false, focused)
+        assertEquals(true, overlay)
+        assertEquals(DockRowMode.Hotkeys, dock)
+        assertEquals(0, host)
+    }
+
+    @Test
+    fun sessionBackHandlerDefaultSessionsPopsHostImmediately() {
+        var host = 0
+        dispatchSessionBack(
+            focused = false,
+            overlayOpen = false,
+            dockMode = DockRowMode.Sessions,
+            onCollapseFocused = {},
+            onCloseOverlay = {},
+            onDockModeChange = {},
+            onBack = { host++ },
+        )
+        assertEquals(1, host)
+    }
+
+    @Test
+    fun sessionBackHandlerRapidDockBackPopsHostExactlyOnce() {
+        var host = 0
+        var dock = DockRowMode.Hotkeys
+        lateinit var dispatcher: OnBackPressedDispatcher
+        compose.setContent {
+            dispatcher = LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            SessionScreenBackHandler(
+                focused = { false },
+                onCollapseFocused = {},
+                overlayOpen = { false },
+                dockMode = { dock },
+                onCloseOverlay = {},
+                onDockModeChange = { dock = it },
+                onBack = { host++ },
+            )
+        }
+        compose.runOnIdle {
+            dispatcher.onBackPressed()
+            dispatcher.onBackPressed()
+        }
+        assertEquals(DockRowMode.Sessions, dock)
+        assertEquals(1, host)
     }
 
     @Test

@@ -164,6 +164,7 @@ class SessionRouteOverlayInstrumentedTest {
         runProductionRoute(onBack = { hostBackCount++ }) {
             openMenu()
             compose.onNodeWithTag("dock-open-hotkeys").performClick()
+            compose.waitForIdle()
             compose.onNodeWithText("Esc").assertIsDisplayed()
             assertTrue(performGlobalBack())
             compose.waitUntil(timeoutMillis = 5_000) {
@@ -173,7 +174,7 @@ class SessionRouteOverlayInstrumentedTest {
             assertEquals(0, hostBackCount)
             compose.onNodeWithText("Esc").assertDoesNotExist()
             assertSessionStillResumed()
-            assertTrue(performGlobalBack())
+            performDispatcherBack()
             compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
             assertSessionStillResumed()
         }
@@ -190,6 +191,7 @@ class SessionRouteOverlayInstrumentedTest {
                     compose.onAllNodesWithTag("dock-open-hotkeys").fetchSemanticsNodes().isEmpty()
             }
             compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
+            compose.waitForIdle()
             assertTrue(performGlobalBack())
             compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
             assertSessionStillResumed()
@@ -202,13 +204,14 @@ class SessionRouteOverlayInstrumentedTest {
         runProductionRoute(onBack = { hostBackCount++ }) {
             openView()
             compose.onNodeWithTag("session-overlay").assertIsDisplayed()
+            compose.waitForIdle()
             assertTrue(performGlobalBack())
             compose.waitUntil(timeoutMillis = 5_000) {
                 compose.onAllNodesWithTag("session-overlay").fetchSemanticsNodes().isEmpty()
             }
             compose.onNodeWithTag("session-command-input").assertIsDisplayed()
             assertEquals(0, hostBackCount)
-            assertTrue(performGlobalBack())
+            performDispatcherBack()
             compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
             assertSessionStillResumed()
         }
@@ -230,6 +233,7 @@ class SessionRouteOverlayInstrumentedTest {
 
             openView()
             compose.onNodeWithTag("session-overlay").assertIsDisplayed()
+            compose.waitForIdle()
             assertTrue(performGlobalBack())
             compose.waitUntil(timeoutMillis = 5_000) {
                 compose.onAllNodesWithTag("session-overlay").fetchSemanticsNodes().isEmpty()
@@ -252,19 +256,28 @@ class SessionRouteOverlayInstrumentedTest {
         var hostBackCount = 0
         runProductionRoute(onBack = { hostBackCount++ }) {
             val originalCallback = compose.activity.window.callback
-            compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
-            compose.waitUntil(timeoutMillis = 5_000) { inputCapsuleHeight() >= 85.5f }
+            val ime = SessionImeExpandProbe(compose)
+            ime.attach()
+            try {
+            ime.clickEditorWhenImeHiddenThenAwaitHeightAndShow(
+                heightReady = { inputCapsuleHeight() >= 85.5f },
+                heightOperand = { "capsule=${inputCapsuleHeight()}" },
+            )
             assertSame(originalCallback, compose.activity.window.callback)
 
+            compose.waitForIdle()
             assertTrue(performGlobalBack())
             compose.waitUntil(timeoutMillis = 5_000) { inputCapsuleHeight() <= 46.5f }
             assertEquals(0, hostBackCount)
             assertSame(originalCallback, compose.activity.window.callback)
             assertSessionStillResumed()
 
-            assertTrue(performGlobalBack())
+            performDispatcherBack()
             compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
             assertSessionStillResumed()
+            } finally {
+                ime.detach()
+            }
         }
     }
 
@@ -305,10 +318,17 @@ class SessionRouteOverlayInstrumentedTest {
     }
 
     private fun performGlobalBack(): Boolean {
+        compose.waitForIdle()
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val accepted = automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
         automation.waitForIdle(100, 5_000)
         return accepted
+    }
+
+    private fun performDispatcherBack() {
+        compose.waitForIdle()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
     }
 
     private fun runProductionRoute(
@@ -339,6 +359,7 @@ class SessionRouteOverlayInstrumentedTest {
                 )
             }
             compose.waitForIdle()
+            assertTrue(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks())
             block()
         } finally {
             compose.runOnUiThread {
