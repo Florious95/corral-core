@@ -18,6 +18,7 @@ package dev.agentmirror.app.session
 
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.percentOffset
 import androidx.compose.ui.test.performClick
@@ -51,6 +52,8 @@ class OverlayDismissOnOutsideTapTest {
                 SessionScreen(viewModel = h.vm, name = "sess", onBack = {})
             }
         }
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
         assertTrue(h.vm.overlayOpen)

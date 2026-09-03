@@ -18,7 +18,9 @@ package dev.agentmirror.app.session
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
@@ -27,7 +29,9 @@ import dev.agentmirror.app.conn.FakeWebSocketTransport
 import dev.agentmirror.app.conn.FrameCodec
 import dev.agentmirror.app.conn.OverlaySubscribeFrame
 import dev.agentmirror.app.conn.TransportFactory
+import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
+import dev.agentmirror.app.workspace.toL2Entry
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -48,19 +52,29 @@ class OverlayOpensFromSessionTopRightTest {
     val compose = createComposeRule()
 
     @Test
-    fun topRightButtonOpensOverlayAndSubscribes() {
+    fun menuViewButtonOpensOverlayWithoutSubscribing() {
         val h = OverlayTestHarness()
         compose.setContent {
             AgentMirrorTheme {
-                SessionScreen(viewModel = h.vm, name = "sess", onBack = {})
+                SessionScreen(
+                    viewModel = h.vm,
+                    name = "sess",
+                    onBack = {},
+                    overlaySessions = topRightProtocolSessions().map { it.toL2Entry() },
+                )
             }
         }
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-open").assertIsDisplayed()
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
 
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
+        compose.onNodeWithText("切换会话").assertIsDisplayed()
+        compose.onNodeWithText("右上看甲").assertIsDisplayed()
+        compose.onNodeWithText("右上看乙").assertIsDisplayed()
         assertTrue(h.vm.overlayOpen)
         assertTrue(
             "打开不得再订 overlay_subscribe",
@@ -69,7 +83,7 @@ class OverlayOpensFromSessionTopRightTest {
     }
 }
 
-internal class OverlayTestHarness {
+internal class OverlayTestHarness(ref: String = "/tmp/tmux-1000/default\u001f%3") {
     val transport = FakeWebSocketTransport()
     val manager = ConnectionManager(
         config = ConnectionConfig(url = "ws://host:0/ws", token = "tok"),
@@ -85,7 +99,7 @@ internal class OverlayTestHarness {
             manager = manager,
             uploader = AttachmentUploader { _, _ -> UploadOutcome.Failure("unused") },
             baseUrl = null,
-            ref = "/tmp/tmux-1000/default\u001f%3",
+            ref = ref,
             initialRows = 24,
             initialCols = 80,
         )
@@ -94,3 +108,30 @@ internal class OverlayTestHarness {
 
     fun sent() = transport.sentText.mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() }
 }
+
+private fun topRightProtocolSessions() = listOf(
+    Session(
+        ref = "ref-top-a",
+        name = "右上看甲",
+        cwd = "/ws",
+        rows = 24,
+        cols = 80,
+        title = "右上看甲",
+        status = "working",
+        sessionName = "s",
+        windowIndex = "0",
+        windowName = "右上看甲",
+    ),
+    Session(
+        ref = "ref-top-b",
+        name = "右上看乙",
+        cwd = "/ws",
+        rows = 24,
+        cols = 80,
+        title = "右上看乙",
+        status = "idle",
+        sessionName = "s",
+        windowIndex = "1",
+        windowName = "右上看乙",
+    ),
+)

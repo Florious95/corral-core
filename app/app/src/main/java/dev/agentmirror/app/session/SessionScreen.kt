@@ -26,6 +26,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,7 +38,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -52,14 +52,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
@@ -68,17 +73,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import dev.agentmirror.app.conn.ConnectionState
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.TermSurfaceView
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.SessionSwitchSheet
-import dev.agentmirror.app.ui.model.SessionStatus
-import dev.agentmirror.app.ui.model.sessionStatusFromL2
-import dev.agentmirror.app.ui.screens.SessionShellScreen
-import dev.agentmirror.app.ui.screens.TerminalKey
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.LocalAppPalette
@@ -86,7 +88,9 @@ import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Entry
+import dev.agentmirror.app.workspace.L2Status
 import dev.agentmirror.app.workspace.cwdDisplayName
 import dev.agentmirror.app.workspace.favoriteKey
 import dev.agentmirror.app.workspace.toSessionItem
@@ -97,25 +101,64 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
 /**
- * 会话页 Compose 屏（003 四标准的渲染壳）：终端画布 + 紧凑顶栏 + 底部输入区。018 重设计版。
+ * Claude Design Agent CLI Mobile 会话屏：原生终端画布 + 恒定两行 dock。
  *
- * 图29/图31 实锤缺陷修复：
- * - 紧凑顶栏（018 §一.7 顶栏不喧宾夺主）：48dp 单行，会话名等宽**单行中段省略**——
- *   64 字符名不再换两行压住返回键与状态栏；statusBarsPadding 进 safe-area；
- * - IME 重排（图31）：MainActivity 已把窗口锁 adjustResize（edge-to-edge 下系统默认
- *   解析成 pan，整窗上移 + imePadding 双重补偿 = 巨幅空洞的根因）；本屏底部集群
- *   （状态区+键条+输入条）统一 navigationBarsPadding().imePadding()，键盘弹出时终端区
- *   weight 收缩内容重排跟随，不留洞；
- * - 底部集群坐 surfaceContainer 面板底，与终端画布形成明确分区。
- *
- * 薄层纪律不变：所有业务状态与动作在 [SessionViewModel]（纯 JVM 已测），本组合只做绑定。
+ * 默认行只显示全局收藏减当前会话的 chips；返回进入「快捷键 / 查看 / 会话」菜单。
+ * 输入胶囊包裹附件、受控文本与发送，焦点膨胀由导出源码驱动，IME 通过
+ * [SessionScreenScaffold] 的源码曲线 inset 动画推起整只 dock。业务状态与动作仍全部委托
+ * [SessionViewModel]，本层只接现有会话切换、查看列表、快捷键和附件入口。
  */
+internal fun dispatchSessionBack(
+    focused: Boolean,
+    overlayOpen: Boolean,
+    dockMode: DockRowMode,
+    onCollapseFocused: () -> Unit,
+    onCloseOverlay: () -> Unit,
+    onDockModeChange: (DockRowMode) -> Unit,
+    onBack: () -> Unit,
+) {
+    when {
+        focused -> onCollapseFocused()
+        overlayOpen -> {
+            onCloseOverlay()
+            onDockModeChange(DockRowMode.Sessions)
+        }
+        dockMode != DockRowMode.Sessions -> onDockModeChange(DockRowMode.Sessions)
+        else -> onBack()
+    }
+}
+
+@Composable
+internal fun SessionScreenBackHandler(
+    focused: () -> Boolean,
+    onCollapseFocused: () -> Unit,
+    overlayOpen: () -> Boolean,
+    dockMode: () -> DockRowMode,
+    onCloseOverlay: () -> Unit,
+    onDockModeChange: (DockRowMode) -> Unit,
+    onBack: () -> Unit,
+) {
+    val dispatch = rememberUpdatedState {
+        dispatchSessionBack(
+            focused = focused(),
+            overlayOpen = overlayOpen(),
+            dockMode = dockMode(),
+            onCollapseFocused = onCollapseFocused,
+            onCloseOverlay = onCloseOverlay,
+            onDockModeChange = onDockModeChange,
+            onBack = onBack,
+        )
+    }
+    BackHandler(enabled = true) { dispatch.value() }
+}
+
 @Composable
 fun SessionScreen(
     viewModel: SessionViewModel,
     name: String,
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
+    favoriteRows: List<FavoriteRow> = emptyList(),
     overlaySessions: List<L2Entry> = emptyList(),
     overlayFavorited: Set<FavoriteKey> = emptySet(),
     onToggleOverlayFavorite: (L2Entry) -> Unit = {},
@@ -123,6 +166,34 @@ fun SessionScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val view = LocalView.current
+    var inputFocused by remember { mutableStateOf(false) }
+    var imeHideRequested by remember { mutableStateOf(false) }
+    var collapseRequest by remember { mutableStateOf(0) }
+    val requestDockCollapse: (String) -> Unit = remember(focusManager, keyboardController, view) {
+        { source ->
+            if (!imeHideRequested) {
+                val inputStartNs = System.nanoTime()
+                inputFocused = false
+                imeHideRequested = true
+                collapseRequest++
+                val imeStartNs = System.nanoTime()
+                keyboardController?.hide()
+                ViewCompat.getWindowInsetsController(view)?.hide(WindowInsetsCompat.Type.ime())
+                focusManager.clearFocus(force = true)
+                DiagLog.record(
+                    "session-dock-motion",
+                    "collapse source=$source input_start_ns=$inputStartNs " +
+                        "ime_hide_start_ns=$imeStartNs start_delta_ns=${imeStartNs - inputStartNs} " +
+                        "input_duration_ms=${SessionDockMotion.InputHeightMillis} " +
+                        "ime_duration_ms=${SessionDockMotion.KeyboardPushMillis} " +
+                        "total_duration_ms=${maxOf(SessionDockMotion.InputHeightMillis, SessionDockMotion.KeyboardPushMillis)}",
+                )
+            }
+        }
+    }
     var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
 
     // 附件选择:Photo Picker(ActivityResultContracts.PickVisualMedia,无权限弹窗)。
@@ -198,6 +269,19 @@ fun SessionScreen(
     }
 
     var mirror by remember { mutableStateOf(TextFieldValue("")) }
+    var dockMode by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(DockRowMode.Sessions)
+    }
+    SessionScreenBackHandler(
+        focused = { inputFocused },
+        onCollapseFocused = { requestDockCollapse("system-back") },
+        overlayOpen = { viewModel.overlayOpen },
+        dockMode = { dockMode },
+        onCloseOverlay = viewModel::closeOverlay,
+        onDockModeChange = { dockMode = it },
+        onBack = onBack,
+    )
+    val favoriteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
@@ -218,118 +302,143 @@ fun SessionScreen(
     AppTheme {
         val darkTheme = LocalAppPalette.current === DarkPalette
         val themeToken = TermPalette.token(darkTheme)
-        val overlayItems = overlaySessions.map {
-            it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
+        val favoriteByRef = favoriteRows.associateBy { it.ref }
+        val favoriteOrder = remember {
+            mutableStateListOf<String>().apply {
+                addAll(favoriteRows.map { it.ref }.filterNot { it == viewModel.ref })
+            }
         }
-        val workspaceName = overlaySessions.firstOrNull()?.cwd?.let(::cwdDisplayName).orEmpty()
-        val status = overlaySessions.find { it.ref == viewModel.ref }
-            ?.let { sessionStatusFromL2(it.status) }
-            ?: SessionStatus.Unknown
-        val byRef = overlaySessions.associateBy { it.ref }
-        LaunchedEffect(status, overlaySessions, viewModel.ref) {
-            val hit = overlaySessions.find { it.ref == viewModel.ref }
-            DiagLog.record(
-                "session-lamp",
-                "src=level2-push ref=${viewModel.ref} overlay_n=${overlaySessions.size} " +
-                    "hit=${hit != null} hit_status=${hit?.status?.wire ?: "<none>"} " +
-                    "hit_ref=${hit?.ref ?: "<none>"} lamp=${status.name} " +
-                    "eq_ref=${hit != null && hit.ref == viewModel.ref}",
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .imePadding(),
-        ) {
-            SessionShellScreen(
-                sessionDisplayName = name,
-                status = status,
-                connectionPath = connectionPath.takeIf {
-                    viewModel.connectionState == ConnectionState.READY
-                },
-                draft = mirror,
-                onDraftChange = {
-                    viewModel.onPassthroughInput(mirror, it)
-                    mirror = it
-                },
-                onSend = {
-                    viewModel.sendDraft()
-                    mirror = TextFieldValue("")
-                },
-                onBack = onBack,
-                onOpenSwitcher = viewModel::openOverlay,
-                onKeyPress = { viewModel.sendKey(it.toInputKey()) },
-                onAttach = { attachMenu = true },
-                sendEnabled = viewModel.inputStatus !is InputStatus.Sending,
-                connectionBanner = viewModel.connectionBanner,
-            ) {
-                Box(Modifier.fillMaxSize()) {
-                    AndroidView(
-                        factory = { ctx ->
-                            TermSurfaceView(ctx).also {
-                                val savedSp = SharedPreferencesFontSizeStore(ctx).load()
-                                    ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
-                                it.fontSizeSp = savedSp.toFloat()
-                                it.presenter = viewModel.presenter
-                                it.onRemoteScrollBy = viewModel::onScrollWheel
-                                it.onTermMouse = viewModel::onTermMouse
-                                it.sessionRef = viewModel.ref
-                                it.nightOverride = darkTheme
-                            }
-                        },
-                        update = { view ->
-                            view.nightOverride = darkTheme
-                            view.presenter = viewModel.presenter
-                            view.onRemoteScrollBy = viewModel::onScrollWheel
-                            view.onTermMouse = viewModel::onTermMouse
-                            view.sessionRef = viewModel.ref
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .semantics { contentDescription = themeToken },
-                    )
-                    Text(
-                        text = themeToken,
-                        color = Color.Transparent,
-                        fontSize = 1.sp,
-                        lineHeight = 1.sp,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .size(1.dp),
-                        maxLines = 1,
-                    )
-                    if (viewModel.showBackToBottom) {
-                        BackToBottomButton(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(Spacing.lg),
-                            onClick = { viewModel.onScrollToBottom() },
-                        )
-                    }
-                    if (viewModel.inCopyMode) {
-                        CopyModeIndicator(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(Spacing.sm),
-                        )
-                    }
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                        StatusArea(viewModel)
+        var favoriteOrderCurrent by remember { mutableStateOf(viewModel.ref) }
+        LaunchedEffect(favoriteRows.map { it.ref }, viewModel.ref) {
+            val desired = favoriteRows.map { it.ref }.filterNot { it == viewModel.ref }
+            if (favoriteOrderCurrent != viewModel.ref) {
+                val replacementIndex = favoriteOrder.indexOf(viewModel.ref)
+                if (replacementIndex >= 0) {
+                    if (favoriteOrderCurrent in desired) {
+                        favoriteOrder[replacementIndex] = favoriteOrderCurrent
+                    } else {
+                        favoriteOrder.removeAt(replacementIndex)
                     }
                 }
+                favoriteOrderCurrent = viewModel.ref
             }
-            if (viewModel.overlayOpen) {
+            val desiredSet = desired.toSet()
+            for (index in favoriteOrder.lastIndex downTo 0) {
+                if (favoriteOrder[index] !in desiredSet) favoriteOrder.removeAt(index)
+            }
+            desired.forEach { ref -> if (ref !in favoriteOrder) favoriteOrder += ref }
+        }
+        val favoriteSessions = favoriteOrder.mapNotNull { ref ->
+            favoriteByRef[ref]?.let {
+                SessionChipUi(
+                    id = it.ref,
+                    name = it.identityLabel,
+                    isActive = false,
+                    isRunning = it.isOnline && it.status == L2Status.WORKING,
+                )
+            }
+        }
+
+        SessionDockTheme(darkTheme) {
+            val overlayItems = overlaySessions.map {
+                it.toSessionItem(starred = overlayFavorited.contains(it.favoriteKey()))
+            }
+            val workspaceName = overlaySessions.firstOrNull()?.cwd?.let(::cwdDisplayName).orEmpty()
+            val byRef = overlaySessions.associateBy { it.ref }
+            Box(modifier = Modifier.fillMaxSize()) {
+                SessionScreenScaffold(
+                    terminalCanvas = {
+                        Box(Modifier.fillMaxSize()) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    TermSurfaceView(ctx).also {
+                                        val savedSp = SharedPreferencesFontSizeStore(ctx).load()
+                                            ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
+                                        it.fontSizeSp = savedSp.toFloat()
+                                        it.presenter = viewModel.presenter
+                                        it.onRemoteScrollBy = viewModel::onScrollWheel
+                                        it.onTermMouse = viewModel::onTermMouse
+                                        it.sessionRef = viewModel.ref
+                                        it.nightOverride = darkTheme
+                                    }
+                                },
+                                update = { view ->
+                                    view.nightOverride = darkTheme
+                                    view.presenter = viewModel.presenter
+                                    view.onRemoteScrollBy = viewModel::onScrollWheel
+                                    view.onTermMouse = viewModel::onTermMouse
+                                    view.sessionRef = viewModel.ref
+                                },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .semantics { contentDescription = themeToken },
+                            )
+                            Text(
+                                text = themeToken,
+                                color = Color.Transparent,
+                                fontSize = 1.sp,
+                                lineHeight = 1.sp,
+                                modifier = Modifier.align(Alignment.TopStart).size(1.dp),
+                                maxLines = 1,
+                            )
+                            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                                StatusArea(viewModel)
+                            }
+                        }
+                    },
+                    dockMode = dockMode,
+                    onDockModeChange = { dockMode = it },
+                    imeHideRequested = imeHideRequested,
+                    collapseRequest = collapseRequest,
+                    onDockCollapse = requestDockCollapse,
+                    onInputFocusedChanged = { inputFocused = it },
+                    onInputExpanded = {
+                        inputFocused = true
+                        imeHideRequested = false
+                        collapseRequest = 0
+                    },
+                    sessions = favoriteSessions,
+                    sessionListState = favoriteListState,
+                    onSessionSelect = { id ->
+                        val entry = favoriteByRef[id] ?: return@SessionScreenScaffold
+                        val slot = favoriteOrder.indexOf(id)
+                        if (slot >= 0) {
+                            if (viewModel.ref in favoriteByRef) {
+                                favoriteOrder[slot] = viewModel.ref
+                            } else {
+                                favoriteOrder.removeAt(slot)
+                            }
+                        }
+                        favoriteOrderCurrent = id
+                        onOpenOverlaySession(entry.ref, entry.identityLabel)
+                    },
+                    value = mirror,
+                    onValueChange = {
+                        viewModel.onPassthroughInput(mirror, it)
+                        mirror = it
+                    },
+                    onSendText = {
+                        viewModel.sendDraft()
+                        mirror = TextFieldValue("")
+                    },
+                    onPickAttachment = { attachMenu = true },
+                    onKeyToken = { viewModel.sendKey(it.toInputKey()) },
+                    onOpenViewMenu = viewModel::openOverlay,
+                    modifier = Modifier.statusBarsPadding().navigationBarsPadding(),
+                )
                 SessionSwitchSheet(
-                    visible = true,
+                    visible = viewModel.overlayOpen,
                     workspaceName = workspaceName,
                     sessions = overlayItems,
                     currentSessionId = viewModel.ref,
                     onDismiss = viewModel::closeOverlay,
                     onSelect = { item ->
                         val entry = byRef[item.id] ?: return@SessionSwitchSheet
+                        val slot = favoriteOrder.indexOf(entry.ref)
+                        if (slot >= 0) {
+                            favoriteOrder[slot] = viewModel.ref
+                        }
+                        favoriteOrderCurrent = entry.ref
                         viewModel.closeOverlay()
                         onOpenOverlaySession(entry.ref, entry.identityLabel)
                     },
@@ -337,40 +446,41 @@ fun SessionScreen(
                         byRef[item.id]?.let(onToggleOverlayFavorite)
                     },
                 )
-            }
-            Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
-                DropdownMenu(
-                    expanded = attachMenu,
-                    onDismissRequest = { attachMenu = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("拍照") },
-                        onClick = {
-                            attachMenu = false
-                            requestTakePhoto()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("从相册选择") },
-                        onClick = {
-                            attachMenu = false
-                            pickImage()
-                        },
-                    )
+                Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
+                    DropdownMenu(
+                        expanded = attachMenu,
+                        onDismissRequest = { attachMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("拍照") },
+                            onClick = {
+                                attachMenu = false
+                                requestTakePhoto()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("从相册选择") },
+                            onClick = {
+                                attachMenu = false
+                                pickImage()
+                            },
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-private fun TerminalKey.toInputKey(): InputKey = when (this) {
-    TerminalKey.Esc -> InputKey.ESC
-    TerminalKey.Tab -> InputKey.TAB
-    TerminalKey.Up -> InputKey.UP
-    TerminalKey.Down -> InputKey.DOWN
-    TerminalKey.Left -> InputKey.LEFT
-    TerminalKey.Right -> InputKey.RIGHT
-    TerminalKey.CtrlC -> InputKey.CTRL_C
+private fun String.toInputKey(): InputKey = when (this) {
+    "Esc" -> InputKey.ESC
+    "Tab" -> InputKey.TAB
+    "Up" -> InputKey.UP
+    "Down" -> InputKey.DOWN
+    "Left" -> InputKey.LEFT
+    "Right" -> InputKey.RIGHT
+    "Ctrl-C" -> InputKey.CTRL_C
+    else -> error("unknown dock key token=$this")
 }
 
 /** 附件入口只做动作分流：拍照与系统 Photo Picker 最终复用同一上传链。 */
@@ -511,51 +621,6 @@ private fun StatusArea(viewModel: SessionViewModel) {
             .fillMaxWidth()
             .padding(horizontal = Spacing.pageH, vertical = Spacing.xs),
     )
-}
-
-/** 「回到底部」悬浮钮（锁定历史时点击恢复跟随，006）：tonal 胶囊 + ripple。 */
-@Composable
-private fun BackToBottomButton(
-    modifier: Modifier,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedPill,
-        color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f),
-        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-    ) {
-        Text(
-            text = "↓ 回到底部",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-        )
-    }
-}
-
-/** 悬浮钮胶囊形状（全圆角）。 */
-private val RoundedPill = androidx.compose.foundation.shape.RoundedCornerShape(50)
-
-/**
- * copy-mode 角标（缺陷④ 远端滚动投送）：pane 进入 tmux copy-mode 时显示，
- * 提示用户当前打字被 copy-mode 拦截（服务端 handleInput 会自动 cancel，
- * 但 UI 让用户「看得见自己在什么模式」，防止「敲了没反应」的困惑）。
- */
-@Composable
-private fun CopyModeIndicator(modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedPill,
-        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.90f),
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-    ) {
-        Text(
-            text = "copy-mode",
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 4.dp),
-        )
-    }
 }
 
 /**

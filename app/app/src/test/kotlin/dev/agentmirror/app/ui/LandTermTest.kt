@@ -18,10 +18,9 @@ package dev.agentmirror.app.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -37,8 +36,6 @@ import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.app.ui.theme.TerminalPaletteDark
 import dev.agentmirror.app.ui.theme.TerminalPaletteLight
-import dev.agentmirror.app.workspace.L2Entry
-import dev.agentmirror.app.workspace.L2Status
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -92,7 +89,7 @@ class LandTermTest {
     }
 
     @Test
-    fun landTermSessionTitleIsDisplayNameNotClaudeCode() {
+    fun landTermUsesSourceDockWithoutLegacyTopBar() {
         val h = OverlayTestHarness()
         compose.setContent {
             AppTheme(appearance = Appearance.Light) {
@@ -104,54 +101,31 @@ class LandTermTest {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithTag("session-title").assertIsDisplayed()
-        compose.onNodeWithText("远控 leader").assertIsDisplayed()
+        compose.onNodeWithTag("session-title").assertDoesNotExist()
+        compose.onNodeWithText("远控 leader").assertDoesNotExist()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
+        compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithText("查看").assertIsDisplayed()
     }
 
     @Test
-    fun landTermViewSheetUsesCurrentWorkspaceSessions() {
+    fun landTermViewUsesExactSourcePlaceholderCard() {
         val h = OverlayTestHarness()
         compose.setContent {
             AppTheme(appearance = Appearance.Light) {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "sess-a",
-                    onBack = {},
-                    overlaySessions = listOf(
-                        entry(REF_A, "sess-a", CWD_A, L2Status.WORKING),
-                    ),
-                )
+                SessionScreen(viewModel = h.vm, name = "sess-a", onBack = {})
             }
         }
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("session-overlay-open").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
         compose.onNodeWithText("切换会话").assertIsDisplayed()
-        compose.onNodeWithText("多agent协作", substring = true).assertIsDisplayed()
-        compose.onNodeWithTag("l2-row-$REF_A").assertExists()
-        compose.onAllNodesWithText("sess-a").assertCountEquals(2)
-        compose.onNodeWithText("sess-b").assertDoesNotExist()
-        compose.onNodeWithText("远程Agent安卓").assertDoesNotExist()
-        compose.onNodeWithText("claude_code").assertDoesNotExist()
+        compose.onNodeWithText("查看弹出菜单（原生实现，此处仅占位）").assertDoesNotExist()
+        compose.onNodeWithText("点任意处关闭").assertDoesNotExist()
     }
-
-    private fun entry(ref: String, sessionName: String, cwd: String, status: L2Status) = L2Entry(
-        ref = ref,
-        name = sessionName,
-        title = "t",
-        rows = 24,
-        cols = 80,
-        status = status,
-        cwd = cwd,
-        sessionName = sessionName,
-        windowIndex = "1",
-        windowName = sessionName,
-    )
 }
-
-private const val CWD_A = "/Volumes/nvme/Projects/多agent协作"
-private const val SOCK_A = "/tmp/tmux-1000/collab"
-private const val REF_A = "$SOCK_A\u001f%1"
