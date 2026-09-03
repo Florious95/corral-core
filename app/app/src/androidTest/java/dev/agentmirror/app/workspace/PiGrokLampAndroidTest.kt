@@ -59,8 +59,8 @@ class PiGrokLampAndroidTest {
                 .joinToString()
         }
         val w0 = motion("pi-w")
-        assertTrue("pi working lamp is working:* got=$w0", w0.startsWith("working:"))
-        assertTrue(w0.contains("radius="))
+        assertTrue("pi working lamp is working:* got=$w0", w0.startsWith("working:glyph=•:"))
+        assertEquals("working:glyph=•:elapsed=0:position=0:intensity=0.0", w0)
         assertEquals("idle:static", motion("pi-i"))
         assertTrue(motion("pi-u").isEmpty())
         assertTrue(motion("pi-a").isEmpty())
@@ -69,21 +69,31 @@ class PiGrokLampAndroidTest {
         }
         rule.onNodeWithText("pi-real-session").assertExists()
 
-        rule.mainClock.advanceTimeBy(1260)
-        rule.mainClock.advanceTimeByFrame()
-        val peak = motion("pi-w")
-        assertTrue("working marker must reach the frozen ring frame: $peak", peak.contains("radius=4.") || peak.contains("radius=5.0"))
-        assertTrue(peak.contains("alpha=0.0"))
+        val frames = buildList {
+            add(w0)
+            repeat(62) {
+                rule.mainClock.advanceTimeBy(32)
+                add(motion("pi-w"))
+            }
+        }
+        val elapsed = frames.map { field(it, "elapsed") }
+        assertEquals((0..1984 step 32).toList(), elapsed)
+        val positions = frames.map { field(it, "position") }
+        assertEquals((0..1984 step 32).map { it * 21 / 2000 }, positions)
+        assertEquals(21, positions.toSet().size)
+        assertEquals(0, positions.first())
+        assertEquals(20, positions.last())
+        assertTrue(frames.any { it.contains(":intensity=1.0") })
 
-        rule.mainClock.advanceTimeBy(540)
-        rule.mainClock.advanceTimeByFrame()
-        val end = motion("pi-w")
-        assertTrue("working marker must return to its quiet frame: $end", end.contains("radius=0.") || end.contains("radius=1."))
-        assertTrue(end.contains("alpha="))
+        rule.mainClock.advanceTimeBy(16)
+        assertEquals("working:glyph=•:elapsed=0:position=0:intensity=0.0", motion("pi-w"))
         assertEquals("idle:static", motion("pi-i"))
         assertTrue(motion("pi-u").isEmpty())
         assertTrue(motion("pi-a").isEmpty())
     }
+
+    private fun field(description: String, name: String): Int =
+        description.substringAfter(":$name=").substringBefore(":").toInt()
 
     private fun row(
         id: String,

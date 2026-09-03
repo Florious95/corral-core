@@ -229,6 +229,8 @@ object SessionRowMarker {
 
     data class Frame(
         val glyph: String,
+        val sourceMillis: Long,
+        val position: Int,
         val intensity: Float,
         val color: Color,
     )
@@ -245,6 +247,8 @@ object SessionRowMarker {
         }
         return Frame(
             glyph = workingGlyph,
+            sourceMillis = sourceMillis,
+            position = position,
             intensity = intensity,
             color = blend(background, foreground, intensity * 0.9f),
         )

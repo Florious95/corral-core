@@ -85,7 +85,7 @@ fun CliWorkingLamp(
             MarkerText(
                 glyph = frame.glyph,
                 color = frame.color,
-                description = "working:glyph=${frame.glyph}:intensity=${frame.intensity}",
+                description = "working:glyph=${frame.glyph}:elapsed=${frame.sourceMillis}:position=${frame.position}:intensity=${frame.intensity}",
                 modifier = slot,
             )
         }
