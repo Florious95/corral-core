@@ -43,6 +43,11 @@ internal object ExtractedProviderIcon {
     val CodexTint = Color(0xFF6D6A63)
     val CursorTint = Color(0xFF6D6A63)
 
+    fun draws(canonicalId: String): Boolean = when (canonicalId) {
+        "claude_code", "codex", "grok", "cursor" -> true
+        else -> false
+    }
+
     private val blobPath = PathParser.createPathFromPathData(BLOB_PATH)!!
     private val grokInner = PathParser.createPathFromPathData(GROK_INNER)!!
     private val cursorInner = PathParser.createPathFromPathData(CURSOR_INNER)!!
