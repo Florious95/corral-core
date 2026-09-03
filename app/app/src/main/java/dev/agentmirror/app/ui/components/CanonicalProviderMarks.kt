@@ -35,8 +35,10 @@ data class CanonicalProviderMark(
 )
 
 /**
- * Exact-id drawable table. HTML extracts for claude_code/codex/cursor;
- * prior-app PNG blobs for grok/Pi/Copilot. Does not fetch icons or parse SVG.
+ * Exact-id drawable table. HTML extracts for claude_code/cursor; the Codex
+ * prior-app PNG blob is retained because it is the shipped Codex brand mark.
+ * Prior-app PNG blobs are also used for grok/Pi/Copilot. Does not fetch icons
+ * or parse SVG.
  *
  * @contract
  * @pre canonicalId is the DTO provider string, already fail-closed upstream
@@ -59,13 +61,14 @@ object CanonicalProviderMarks {
     fun of(canonicalId: String): CanonicalProviderMark? = byId[canonicalId]
 
     /**
-     * HTML `icon()` extracts for four ids; prior-app PNG blobs for Pi and Copilot
+     * HTML `icon()` extracts for Claude Code and Cursor; the prior-app Codex,
+     * Grok, Pi and Copilot PNG blobs
      * from owning commit 1b12e92d8efb1c0eec41e14a264f9d80ee833ad9
      * (drawable resources provider_pi and provider_copilot_color).
      */
     fun drawableRes(canonicalId: String): Int? = when (canonicalId) {
         "claude_code" -> R.raw.provider_icon_claude_code
-        "codex" -> R.raw.provider_icon_codex
+        "codex" -> R.drawable.provider_codex_color
         "grok" -> R.drawable.provider_grok
         "cursor" -> R.raw.provider_icon_cursor
         "copilot" -> R.drawable.provider_copilot_color

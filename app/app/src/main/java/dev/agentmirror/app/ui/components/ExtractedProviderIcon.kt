@@ -16,7 +16,6 @@
 
 package dev.agentmirror.app.ui.components
 
-import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.Color
@@ -30,15 +29,15 @@ import androidx.core.graphics.PathParser
  * Runtime draws these primitives; it does not parse the companion raw SVG.
  *
  * @contract
- * @pre canonicalId is one of claude_code, codex, cursor
- * @post draws() is true only for those three; grok is not this X fallback
+ * @pre canonicalId is one of claude_code, cursor
+ * @post draws() is true only for those two; Codex and grok are never an X fallback
  * @err none
  * @inv does not load or parse the raw SVG bytes
  */
 internal object ExtractedProviderIcon {
     const val BLOB_PATH =
         "M12 2.8c1.7-.8 3.6-.3 4.6 1.1 1.7.2 2.9 1.7 2.7 3.4 1.1 1.2 1.2 3 .2 4.3.5 1.6-.2 3.3-1.7 4-.4 1.6-1.9 2.7-3.6 2.5-1.1 1.2-3 1.4-4.3.5-1.7.3-3.3-.8-3.7-2.4-1.5-.6-2.4-2.2-2-3.8-1.1-1.3-1-3.1.1-4.3-.2-1.7 1-3.2 2.6-3.5C8.1 3.2 9.9 2.5 11.5 3l.5-.2Z"
-    /** Unreachable `icon()` switch case for grok: grok is in BRAND so tiles use img(slug grok), not this X. */
+    /** Retained only as a regression sentinel: no runtime path may draw this. */
     const val GROK_ICON_SWITCH_X_FALLBACK =
         "M9 15.5 15 9M9.2 9.2l2.3 2.3M14.8 14.8l-2.3-2.3"
     const val CURSOR_INNER =
@@ -46,11 +45,10 @@ internal object ExtractedProviderIcon {
     const val CLAUDE_TEXT = "\u276F_"
 
     val ClaudeTint = Color(0xFFD97757)
-    val CodexTint = Color(0xFF6D6A63)
     val CursorTint = Color(0xFF6D6A63)
 
     fun draws(canonicalId: String): Boolean = when (canonicalId) {
-        "claude_code", "codex", "cursor" -> true
+        "claude_code", "cursor" -> true
         else -> false
     }
 
@@ -60,7 +58,6 @@ internal object ExtractedProviderIcon {
     fun draw(scope: DrawScope, canonicalId: String) {
         val tint = when (canonicalId) {
             "claude_code" -> ClaudeTint
-            "codex" -> CodexTint
             "cursor" -> CursorTint
             else -> return
         }
@@ -85,10 +82,6 @@ internal object ExtractedProviderIcon {
                     typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
                 }
                 canvas.drawText(CLAUDE_TEXT, 12f, 15f, text)
-            }
-            "codex" -> {
-                stroke.pathEffect = DashPathEffect(floatArrayOf(3.4f, 1.5f), 0f)
-                canvas.drawCircle(12f, 12f, 3.6f, stroke)
             }
             "cursor" -> {
                 stroke.strokeWidth = 1.2f
