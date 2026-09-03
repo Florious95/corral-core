@@ -20,8 +20,8 @@ import dev.agentmirror.app.R
 
 /**
  * Closed canonical Provider ids the UI may name. This is not detection and
- * is not an icon atlas: a drawable exists only when the HTML design source
- * contains a unique inline glyph for that id.
+ * is not an icon atlas: a drawable exists only from a frozen source (HTML
+ * extract or prior-app PNG blob).
  *
  * @contract
  * @pre [id] is the status-core DTO canonical provider string
@@ -48,14 +48,16 @@ object CanonicalProviderMarks {
     fun of(canonicalId: String): CanonicalProviderMark? = byId[canonicalId]
 
     /**
-     * Raw SVG extract from Agent App Prototype.dc.html `icon()` fallbacks.
-     * Copilot and Pi have no source glyph.
+     * HTML `icon()` extracts for four ids; prior-app PNG blobs for Pi and Copilot
+     * (`1b12e92d8efb1c0eec41e14a264f9d80ee833ad9` `R.drawable.provider_*`).
      */
     fun drawableRes(canonicalId: String): Int? = when (canonicalId) {
         "claude_code" -> R.raw.provider_icon_claude_code
         "codex" -> R.raw.provider_icon_codex
         "grok" -> R.raw.provider_icon_grok
         "cursor" -> R.raw.provider_icon_cursor
+        "copilot" -> R.drawable.provider_copilot_color
+        "pi" -> R.drawable.provider_pi
         else -> null
     }
 }
