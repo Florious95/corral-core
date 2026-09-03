@@ -144,8 +144,14 @@ class ListRouteParityTest {
         assertTrue("path slots present", h(l2Path) > 0f && h(favPath) > 0f)
         assertEquals(h(l2Id), h(favId), 1f)
         assertEquals(h(l2Path), h(favPath), 1f)
-        compose.onNodeWithTag("l2-provider-$ref", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithTag("fav-provider-$ref", useUnmergedTree = true).assertDoesNotExist()
+        val l2Mark = compose.onNodeWithTag("l2-provider-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val favMark = compose.onNodeWithTag("fav-provider-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertTrue("provider mark right of title l2", l2Mark.left > l2Id.right)
+        assertTrue("provider mark right of title fav", favMark.left > favId.right)
+        assertTrue(
+            "provider marks share size",
+            kotlin.math.abs((l2Mark.right.value - l2Mark.left.value) - (favMark.right.value - favMark.left.value)) < 1f,
+        )
         val l2Right = l2Row.right.value
         val favRight = favRow.right.value
         assertTrue(

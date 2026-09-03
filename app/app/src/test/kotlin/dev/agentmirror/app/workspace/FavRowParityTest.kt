@@ -149,11 +149,12 @@ class FavRowParityTest {
 
         val refA = live[0].ref
         compose.onNodeWithTag("fav-star-$refA").assertDoesNotExist()
-        compose.onNodeWithTag("fav-provider-$refA", useUnmergedTree = true).assertDoesNotExist()
+        val mark = compose.onNodeWithTag("fav-provider-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val lamp = compose.onNodeWithTag("fav-motion-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val path = compose.onNodeWithTag("fav-path-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val row = compose.onNodeWithTag("fav-row-$refA").getUnclippedBoundsInRoot()
+        assertTrue("provider mark right of title mark.left=${mark.left} id.right=${id.right}", mark.left > id.right)
         assertTrue(
             "灯在标题之前 lamp.left=${lamp.left} id.left=${id.left}",
             lamp.left < id.left,
