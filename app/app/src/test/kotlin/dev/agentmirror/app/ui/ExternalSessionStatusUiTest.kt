@@ -25,6 +25,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.graphics.Color
 import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.SessionRow
 import dev.agentmirror.app.ui.theme.SessionRowMarker
@@ -84,23 +85,28 @@ class ExternalSessionStatusUiTest {
     }
 
     @Test
-    fun workingMarkerMatchesFrozenNativePulseFramesAndCadence() {
+    fun workingMarkerMatchesCodexNativeShimmerFramesAndCadence() {
         assertEquals(8f, SessionRowMarker.size.value, 0f)
-        assertEquals(5f, SessionRowMarker.ringRadius.value, 0f)
-        assertEquals(1800, SessionRowMarker.durationMillis)
-        assertEquals(1260, SessionRowMarker.peakMillis)
+        assertEquals(12f, SessionRowMarker.fontSize.value, 0f)
+        assertEquals(2000, SessionRowMarker.periodMillis)
+        assertEquals(32, SessionRowMarker.redrawCadenceMillis)
+        assertEquals(10, SessionRowMarker.paddingCells)
+        assertEquals(5, SessionRowMarker.bandHalfWidthCells)
+        assertEquals(21, SessionRowMarker.periodCells)
 
-        val start = SessionRowMarker.frameAt(0)
-        val peak = SessionRowMarker.frameAt(SessionRowMarker.peakMillis.toLong())
-        val end = SessionRowMarker.frameAt(SessionRowMarker.durationMillis.toLong())
-        assertEquals(0f, start.ringRadiusDp, 0.001f)
-        assertEquals(SessionRowMarker.ring.alpha, start.ringAlpha, 0.001f)
-        assertEquals(SessionRowMarker.ringRadius.value, peak.ringRadiusDp, 0.001f)
-        assertEquals(0f, peak.ringAlpha, 0.001f)
-        assertEquals(0f, end.ringRadiusDp, 0.001f)
-        assertEquals(0f, end.ringAlpha, 0.001f)
-        assertTrue(SessionRowMarker.frameAt(900).ringRadiusDp > start.ringRadiusDp)
-        assertTrue(SessionRowMarker.frameAt(1500).ringRadiusDp < peak.ringRadiusDp)
+        val foreground = Color.Black
+        val background = Color.White
+        val start = SessionRowMarker.frameAt(0, foreground, background)
+        val peak = SessionRowMarker.frameAt(960, foreground, background)
+        val end = SessionRowMarker.frameAt(2000, foreground, background)
+        assertEquals("•", start.glyph)
+        assertEquals(0f, start.intensity, 0.001f)
+        assertEquals(1f, peak.intensity, 0.001f)
+        assertEquals(0f, end.intensity, 0.001f)
+        assertEquals(background, start.color)
+        assertNotEquals(start.color, peak.color)
+        assertNotEquals(start.intensity, SessionRowMarker.frameAt(640, foreground, background).intensity)
+        assertEquals(start.intensity, end.intensity, 0.001f)
     }
 
     @Test

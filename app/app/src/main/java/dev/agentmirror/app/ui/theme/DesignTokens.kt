@@ -176,8 +176,6 @@ object Elevations {
 object Motion {
     /** Material 3 emphasized decelerate —— 全站主曲线 */
     val emphasized: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-    /** CSS `ease-out` used by the desktop ordinary session-list pulse. */
-    val cssEaseOut: Easing = CubicBezierEasing(0f, 0f, 0.58f, 1f)
     /** 浮层滑起用，末端轻微减速过冲感 */
     val sheetEnter: Easing = CubicBezierEasing(0.16f, 0.9f, 0.3f, 1f)
     val linear: Easing = LinearEasing
@@ -209,33 +207,58 @@ object Motion {
     const val statusDotPulse = 1900         // 「进行中」呼吸点一个来回
 }
 
-/** Ctrl+W+B ordinary session-list marker, frozen from the desktop pulse source. */
+/**
+ * Ctrl+W+B ordinary session-list marker, mapped from Codex CLI 0.149.0's
+ * `motion::activity_indicator` and `shimmer::shimmer_spans`.
+ *
+ * The upstream implementation draws one `•` Unicode cell. It sweeps a
+ * five-cell cosine band across a ten-cell leading pad over two seconds and
+ * requests redraws every 32ms. Android keeps the existing 8dp leading slot;
+ * the glyph is centered in that slot so title/path geometry stays unchanged.
+ */
 object SessionRowMarker {
     val size: Dp = 8.dp
-    val ringRadius: Dp = 5.dp
-    val center: Color = Color(0xFF34C759)
-    val ring: Color = Color(0x8C34C759)
-    val idleBorder: Color = Color(0xFFB8B4AB)
-    const val durationMillis = 1800
-    const val peakMillis = 1260
+    val fontSize = 12.sp
+    const val periodMillis = 2000
+    const val redrawCadenceMillis = 32
+    const val paddingCells = 10
+    const val bandHalfWidthCells = 5
+    const val periodCells = 21
+    const val workingGlyph = "•"
+    const val idleGlyph = "◦"
 
-    data class Frame(val ringRadiusDp: Float, val ringAlpha: Float)
+    data class Frame(
+        val glyph: String,
+        val intensity: Float,
+        val color: Color,
+    )
 
-    /** CSS pulse keyframes evaluated at a source-timeline millisecond. */
-    fun frameAt(elapsedMillis: Long): Frame {
-        if (elapsedMillis > 0L && elapsedMillis % durationMillis == 0L) {
-            return Frame(0f, 0f)
-        }
-        val t = Math.floorMod(elapsedMillis, durationMillis.toLong()).toInt()
-        return if (t <= peakMillis) {
-            val eased = Motion.cssEaseOut.transform(t / peakMillis.toFloat())
-            Frame(ringRadius.value * eased, ring.alpha * (1f - eased))
+    /** One true-color frame from upstream `shimmer_spans`, at source time. */
+    fun frameAt(elapsedMillis: Long, foreground: Color, background: Color): Frame {
+        val sourceMillis = Math.floorMod(elapsedMillis, periodMillis.toLong())
+        val position = (sourceMillis / periodMillis.toFloat() * periodCells).toInt()
+        val distance = kotlin.math.abs(paddingCells - position).toFloat()
+        val intensity = if (distance <= bandHalfWidthCells) {
+            0.5f * (1f + kotlin.math.cos(Math.PI * distance / bandHalfWidthCells).toFloat())
         } else {
-            val eased = Motion.cssEaseOut.transform(
-                (t - peakMillis) / (durationMillis - peakMillis).toFloat(),
-            )
-            Frame(ringRadius.value * (1f - eased), 0f)
+            0f
         }
+        return Frame(
+            glyph = workingGlyph,
+            intensity = intensity,
+            color = blend(background, foreground, intensity * 0.9f),
+        )
+    }
+
+    /** `color::blend(fg, bg, alpha)` from the upstream RGB implementation. */
+    private fun blend(highlight: Color, base: Color, alpha: Float): Color {
+        val a = alpha.coerceIn(0f, 1f)
+        return Color(
+            red = highlight.red * a + base.red * (1f - a),
+            green = highlight.green * a + base.green * (1f - a),
+            blue = highlight.blue * a + base.blue * (1f - a),
+            alpha = 1f,
+        )
     }
 }
 
