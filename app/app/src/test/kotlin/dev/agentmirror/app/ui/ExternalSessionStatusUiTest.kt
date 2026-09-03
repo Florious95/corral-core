@@ -126,7 +126,7 @@ class ExternalSessionStatusUiTest {
                 0f
             }
             assertEquals("intensity at slot ${slots[index]}", intensity, frame.intensity, 0.001f)
-            val blend = (intensity * 0.9f * 255f).toInt() / 255f
+            val blend = kotlin.math.round((intensity * 0.9f * 255f).toDouble()).toInt().coerceIn(0, 255) / 255f
             assertEquals("red blend at slot ${slots[index]}", blend, frame.color.red, 0.001f)
             assertEquals("green blend at slot ${slots[index]}", blend, frame.color.green, 0.001f)
             assertEquals("blue blend at slot ${slots[index]}", blend, frame.color.blue, 0.001f)
