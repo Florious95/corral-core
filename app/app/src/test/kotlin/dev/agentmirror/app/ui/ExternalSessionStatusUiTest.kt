@@ -25,8 +25,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.graphics.Color
 import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.SessionRow
+import dev.agentmirror.app.ui.theme.SessionRowMarker
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.SessionRowMotion
 import dev.agentmirror.app.ui.model.SessionStatus
@@ -83,6 +85,55 @@ class ExternalSessionStatusUiTest {
     }
 
     @Test
+    fun workingMarkerMatchesCodexNativeShimmerFramesAndCadence() {
+        assertEquals(8f, SessionRowMarker.size.value, 0f)
+        assertEquals(12f, SessionRowMarker.fontSize.value, 0f)
+        assertEquals(2000, SessionRowMarker.periodMillis)
+        assertEquals(32, SessionRowMarker.redrawCadenceMillis)
+        assertEquals(10, SessionRowMarker.paddingCells)
+        assertEquals(5, SessionRowMarker.bandHalfWidthCells)
+        assertEquals(21, SessionRowMarker.periodCells)
+
+        val foreground = Color.Black
+        val background = Color.White
+        val slots = (0..1984 step SessionRowMarker.redrawCadenceMillis).toList()
+        val frames = slots.map { elapsed ->
+            SessionRowMarker.frameAt(elapsed.toLong(), foreground, background)
+        }
+        assertEquals(slots.map { it.toLong() }, frames.map { it.sourceMillis })
+        assertEquals(slots.map { it * 21 / 2000 }, frames.map { it.position })
+        assertEquals(21, frames.map { it.position }.toSet().size)
+
+        val start = frames.first()
+        val peak = frames[30]
+        val end = SessionRowMarker.frameAt(2000, foreground, background)
+        assertEquals("•", start.glyph)
+        assertEquals(0f, start.intensity, 0.001f)
+        assertEquals(1f, peak.intensity, 0.001f)
+        assertEquals(0f, end.intensity, 0.001f)
+        assertEquals(0, end.sourceMillis)
+        assertEquals(0, end.position)
+        assertEquals(foreground, start.color)
+        assertNotEquals(start.color, peak.color)
+        assertNotEquals(start.intensity, frames[20].intensity)
+        assertEquals(start.intensity, end.intensity, 0.001f)
+
+        frames.forEachIndexed { index, frame ->
+            val distance = kotlin.math.abs(10 - frame.position).toFloat()
+            val intensity = if (distance <= 5f) {
+                0.5f * (1f + kotlin.math.cos(Math.PI * distance / 5f).toFloat())
+            } else {
+                0f
+            }
+            assertEquals("intensity at slot ${slots[index]}", intensity, frame.intensity, 0.001f)
+            val blend = kotlin.math.round((intensity * 0.9f * 255f).toDouble()).toInt().coerceIn(0, 255) / 255f
+            assertEquals("red blend at slot ${slots[index]}", blend, frame.color.red, 0.001f)
+            assertEquals("green blend at slot ${slots[index]}", blend, frame.color.green, 0.001f)
+            assertEquals("blue blend at slot ${slots[index]}", blend, frame.color.blue, 0.001f)
+        }
+    }
+
+    @Test
     fun sixCanonicalProvidersAndUnknownHaveExactTableHits() {
         val ids = CanonicalProviderMarks.all.map { it.id }
         assertEquals(
@@ -102,6 +153,35 @@ class ExternalSessionStatusUiTest {
         assertNull(CanonicalProviderMarks.of("claude"))
         assertNull(CanonicalProviderMarks.of("cursor-agent"))
         assertNull(CanonicalProviderMarks.of("Grok Code"))
+    }
+
+    @Test
+    fun piWorkingNormalDtoProjectsToWorkingMotionIndependentOfProvider() {
+        assertEquals(
+            SessionRowMotion.Working,
+            sessionRowMotion(SessionStatus.Busy, "normal", true),
+        )
+        val piWorking = item("pi-w", SessionStatus.Busy, "pi", "normal")
+        val piIdle = item("pi-i", SessionStatus.Idle, "pi", "normal")
+        val piUnknown = item("pi-u", SessionStatus.Unknown, "pi", "unknown")
+        val piAbnormal = item("pi-a", SessionStatus.Busy, "pi", "abnormal")
+        assertEquals(
+            SessionRowMotion.Working,
+            sessionRowMotion(piWorking.status, piWorking.health, piWorking.isOnline),
+        )
+        assertEquals(
+            SessionRowMotion.Idle,
+            sessionRowMotion(piIdle.status, piIdle.health, piIdle.isOnline),
+        )
+        assertEquals(
+            SessionRowMotion.None,
+            sessionRowMotion(piUnknown.status, piUnknown.health, piUnknown.isOnline),
+        )
+        assertEquals(
+            SessionRowMotion.None,
+            sessionRowMotion(piAbnormal.status, piAbnormal.health, piAbnormal.isOnline),
+        )
+        assertEquals("pi", piWorking.provider)
     }
 
     @Test
@@ -127,6 +207,37 @@ class ExternalSessionStatusUiTest {
         assertNotEquals("working lamp must change frames", working0, working1)
         assertEquals("idle lamp must stay static", idle0, idle1)
         assertTrue(working1.startsWith("working:"))
+    }
+
+    @Test
+    fun piWorkingLampCrossesBusyDotFramesIdleStaticUnknownAbnormalHaveNoWorkingAnim() {
+        val working = item("pi-w", SessionStatus.Busy, "pi", "normal")
+        val idle = item("pi-i", SessionStatus.Idle, "pi", "normal")
+        val unknown = item("pi-u", SessionStatus.Unknown, "pi", "unknown")
+        val abnormal = item("pi-a", SessionStatus.Busy, "pi", "abnormal")
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppTheme {
+                SessionRow(working, "l2", {}, {}, false)
+                SessionRow(idle, "l2", {}, {}, false)
+                SessionRow(unknown, "l2", {}, {}, false)
+                SessionRow(abnormal, "l2", {}, {}, false)
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val w0 = desc("l2-motion-pi-w")
+        assertTrue("pi working starts as working:* got=$w0", w0.startsWith("working:"))
+        assertEquals("idle:static", desc("l2-motion-pi-i"))
+        assertTrue(desc("l2-motion-pi-u").isEmpty())
+        assertTrue(desc("l2-motion-pi-a").isEmpty())
+        compose.mainClock.advanceTimeBy(950)
+        compose.mainClock.advanceTimeByFrame()
+        val w1 = desc("l2-motion-pi-w")
+        assertNotEquals("pi working lamp must change busyDot frames", w0, w1)
+        assertTrue(w1.startsWith("working:"))
+        assertEquals("idle:static", desc("l2-motion-pi-i"))
+        assertTrue(desc("l2-motion-pi-u").isEmpty())
+        assertTrue(desc("l2-motion-pi-a").isEmpty())
     }
 
     @Test
