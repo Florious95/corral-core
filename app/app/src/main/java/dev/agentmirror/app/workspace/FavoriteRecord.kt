@@ -81,6 +81,7 @@ data class FavoriteRow(
             sessionName = sessionName,
             name = windowName,
             title = title,
+            provider = provider,
         )
 
     val key: FavoriteKey

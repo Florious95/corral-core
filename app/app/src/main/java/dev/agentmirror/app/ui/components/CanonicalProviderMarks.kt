@@ -35,8 +35,8 @@ data class CanonicalProviderMark(
 )
 
 /**
- * Exact-id drawable table. HTML extracts for four ids; prior-app PNG blobs
- * for Pi and Copilot. Does not fetch icons or parse SVG at runtime.
+ * Exact-id drawable table. HTML extracts for claude_code/codex/cursor;
+ * prior-app PNG blobs for grok/Pi/Copilot. Does not fetch icons or parse SVG.
  *
  * @contract
  * @pre canonicalId is the DTO provider string, already fail-closed upstream
@@ -66,7 +66,7 @@ object CanonicalProviderMarks {
     fun drawableRes(canonicalId: String): Int? = when (canonicalId) {
         "claude_code" -> R.raw.provider_icon_claude_code
         "codex" -> R.raw.provider_icon_codex
-        "grok" -> R.raw.provider_icon_grok
+        "grok" -> R.drawable.provider_grok
         "cursor" -> R.raw.provider_icon_cursor
         "copilot" -> R.drawable.provider_copilot_color
         "pi" -> R.drawable.provider_pi

@@ -16,37 +16,37 @@
 
 package dev.agentmirror.app.ui.components
 
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import dev.agentmirror.app.ui.model.SessionRowMotion
-import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
-import dev.agentmirror.app.ui.theme.Motion
+import dev.agentmirror.app.ui.theme.SessionRowMarker
 
 /**
- * Existing list/CLI working lamp (StatusChip busyDot / SessionShell RunningDot).
- * Frames: alpha 1.0 ↔ 0.35, tween(Motion.statusDotPulse / 2, emphasized), Reverse.
- * Idle uses the same 5dp lamp without the infinite transition. None is an empty
- * same-size slot: no question mark, no「未知」text.
+ * Ordinary session-list marker, sourced from Codex CLI's native shimmer bullet.
+ * Working is one `•` glyph with the upstream 2s cosine sweep; idle is a static
+ * `◦`; None is an empty same-size slot: no question mark, no「未知」text.
  *
  * @contract
  * @pre motion is already fail-closed (unknown/abnormal/offline → None)
- * @post Working pulses; Idle is static; None is an empty same-size slot
+ * @post Working shimmers; Idle is static; None is an empty same-size slot
  * @err none
  * @inv never renders a question mark or the word 未知
  */
@@ -55,35 +55,63 @@ fun CliWorkingLamp(
     motion: SessionRowMotion,
     modifier: Modifier = Modifier,
 ) {
-    val p = LocalAppPalette.current
-    val slot = modifier.size(Dims.statusDotSize)
+    val slot = modifier.size(SessionRowMarker.size)
     when (motion) {
         SessionRowMotion.None -> Box(slot)
-        SessionRowMotion.Idle -> Box(
-            slot
-                .clip(CircleShape)
-                .background(p.idleChipText)
-                .semantics { contentDescription = "idle:static" },
+        SessionRowMotion.Idle -> MarkerText(
+            glyph = SessionRowMarker.idleGlyph,
+            color = LocalAppPalette.current.metaText,
+            description = "idle:static",
+            modifier = slot,
         )
         SessionRowMotion.Working -> {
-            val transition = rememberInfiniteTransition(label = "busyDot")
-            val pulse by transition.animateFloat(
-                initialValue = 1f,
-                targetValue = 0.35f,
+            val p = LocalAppPalette.current
+            val transition = rememberInfiniteTransition(label = "sessionRowPulse")
+            val elapsed by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = SessionRowMarker.periodMillis.toFloat(),
                 animationSpec = infiniteRepeatable(
-                    animation = tween(Motion.statusDotPulse / 2, easing = Motion.emphasized),
-                    repeatMode = RepeatMode.Reverse,
+                    animation = tween(SessionRowMarker.periodMillis, easing = LinearEasing),
                 ),
-                label = "busyDotAlpha",
+                label = "sessionRowPulseElapsed",
             )
-            Box(
-                slot
-                    .alpha(pulse)
-                    .clip(CircleShape)
-                    .background(p.busyDot)
-                    .semantics { contentDescription = "working:$pulse" },
+            val sourceElapsed = elapsed.toLong() / SessionRowMarker.redrawCadenceMillis *
+                SessionRowMarker.redrawCadenceMillis
+            val frame = SessionRowMarker.frameAt(
+                sourceElapsed,
+                foreground = p.rowTitleText,
+                background = p.listBackground,
+            )
+            MarkerText(
+                glyph = frame.glyph,
+                color = frame.color,
+                description = "working:glyph=${frame.glyph}:elapsed=${frame.sourceMillis}:position=${frame.position}:intensity=${frame.intensity}",
+                modifier = slot,
             )
         }
+    }
+}
+
+@Composable
+private fun MarkerText(
+    glyph: String,
+    color: Color,
+    description: String,
+    modifier: Modifier,
+) {
+    Box(
+        modifier = modifier.semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = glyph,
+            color = color,
+            fontSize = SessionRowMarker.fontSize,
+            fontWeight = FontWeight.Bold,
+            lineHeight = SessionRowMarker.fontSize,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 

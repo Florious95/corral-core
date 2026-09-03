@@ -104,5 +104,18 @@ class ExternalSessionListGestureTest {
         assertEquals(l2.bottom.value - l2.top.value, fav.bottom.value - fav.top.value, 1f)
         rule.onNodeWithTag("l2-path-codex-i", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("fav-path-fav-on", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("l2-session-list-scroll").performScrollToNode(hasTestTag("l2-row-grok-a"))
+        rule.onNodeWithTag("l2-provider-grok-a", useUnmergedTree = true).assertExists()
+        val grokDesc = rule.onNodeWithTag("l2-provider-grok-a", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }
+            .joinToString()
+        assertEquals("Grok", grokDesc)
+        assertTrue(!grokDesc.contains("X"))
+        val grokLamp = rule.onNodeWithTag("l2-motion-grok-a", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }
+            .joinToString()
+        assertTrue("abnormal grok must not use working lamp got=$grokLamp", grokLamp.isEmpty())
     }
 }
