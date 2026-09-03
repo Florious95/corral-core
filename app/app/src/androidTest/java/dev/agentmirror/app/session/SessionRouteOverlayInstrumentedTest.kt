@@ -16,24 +16,31 @@
 
 package dev.agentmirror.app.session
 
+import android.accessibilityservice.AccessibilityService
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.percentOffset
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.test.platform.app.InstrumentationRegistry
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.service.MirrorForegroundService
 import dev.agentmirror.app.service.NoopTransportFactory
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.workspace.FavoriteRow
+import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.L2Status
 import dev.agentmirror.app.workspace.ProductionOverlayFixture
 import org.junit.Assert.assertEquals
@@ -125,6 +132,219 @@ class SessionRouteOverlayInstrumentedTest {
             }
         }
     }
+
+    @Test
+    fun productionSessionRouteViewOverlayScrollsToLastRowAndSelects() {
+        val selected = mutableListOf<String>()
+        val overlay = productionOverlayEntries(20)
+        runProductionRoute(
+            onOpenOverlaySession = { ref, _ -> selected += ref },
+            overlaySessions = overlay,
+            onBack = {},
+        ) {
+            openView()
+            compose.onNodeWithTag("session-overlay-list").assertIsDisplayed()
+            compose.onNodeWithTag("session-overlay-list").performScrollToNode(
+                hasText("查看会话-20"),
+            )
+            compose.onNodeWithText("查看会话-20").assertIsDisplayed()
+            compose.onNodeWithText("查看会话-20").performClick()
+            compose.waitForIdle()
+            assertEquals(listOf(overlay.last().ref), selected)
+            compose.onNodeWithTag("session-overlay").assertDoesNotExist()
+        }
+    }
+
+    @Test
+    fun productionSessionRouteBackFromHotkeysReturnsDefaultBeforeHost() {
+        var hostBackCount = 0
+        runProductionRoute(onBack = { hostBackCount++ }) {
+            openMenu()
+            compose.onNodeWithTag("dock-open-hotkeys").performClick()
+            compose.onNodeWithText("Esc").assertIsDisplayed()
+            assertTrue(performGlobalBack())
+            compose.onNodeWithTag("session-command-input").assertIsDisplayed()
+            assertEquals(0, hostBackCount)
+            assertTrue(performGlobalBack())
+            compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
+        }
+    }
+
+    @Test
+    fun productionSessionRouteBackFromSessionsReturnsDefaultBeforeHost() {
+        var hostBackCount = 0
+        runProductionRoute(onBack = { hostBackCount++ }) {
+            openMenu()
+            compose.onNodeWithTag("dock-open-favorites").performClick()
+            compose.waitUntil(timeoutMillis = 5_000) {
+                compose.onAllNodesWithTag("dock-open-favorites").fetchSemanticsNodes().isEmpty() &&
+                    compose.onAllNodesWithTag("dock-open-hotkeys").fetchSemanticsNodes().isEmpty()
+            }
+            compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
+            assertTrue(performGlobalBack())
+            compose.waitForIdle()
+            assertEquals(0, hostBackCount)
+            assertTrue(performGlobalBack())
+            compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
+        }
+    }
+
+    @Test
+    fun productionSessionRouteBackFromViewOverlayReturnsDefaultBeforeHost() {
+        var hostBackCount = 0
+        runProductionRoute(onBack = { hostBackCount++ }) {
+            openView()
+            compose.onNodeWithTag("session-overlay").assertIsDisplayed()
+            assertTrue(performGlobalBack())
+            compose.waitUntil(timeoutMillis = 5_000) {
+                compose.onAllNodesWithTag("session-overlay").fetchSemanticsNodes().isEmpty()
+            }
+            compose.onNodeWithTag("session-command-input").assertIsDisplayed()
+            assertEquals(0, hostBackCount)
+            assertTrue(performGlobalBack())
+            compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
+        }
+    }
+
+    @Test
+    fun productionSessionRouteRestoresFavoriteAnchorAfterViewOverlay() {
+        val favoriteRows = productionFavoriteRows(24)
+        runProductionRoute(
+            onBack = {},
+            favoriteRows = favoriteRows,
+        ) {
+            compose.onNodeWithTag("favorite-session-list").performScrollToNode(
+                hasText("收藏-18"),
+            )
+            compose.waitForIdle()
+            val before = firstVisibleFavoriteAnchor(favoriteRows.size)
+            val beforeScroll = horizontalScrollValue()
+
+            openView()
+            compose.onNodeWithTag("session-overlay").assertIsDisplayed()
+            assertTrue(performGlobalBack())
+            compose.waitUntil(timeoutMillis = 5_000) {
+                compose.onAllNodesWithTag("session-overlay").fetchSemanticsNodes().isEmpty()
+            }
+            compose.onNodeWithTag("session-command-input").assertIsDisplayed()
+
+            val after = firstVisibleFavoriteAnchor(favoriteRows.size)
+            assertEquals(before.first, after.first)
+            assertEquals(before.second, after.second, 0.5f)
+            assertEquals(beforeScroll, horizontalScrollValue(), 0.5f)
+            compose.onNodeWithTag("favorite-session-list").performScrollToNode(
+                hasText("收藏-24"),
+            )
+            compose.onNodeWithText("收藏-24").assertIsDisplayed()
+        }
+    }
+
+    private fun openMenu() {
+        compose.onNodeWithContentDescription("返回菜单", useUnmergedTree = true).performClick()
+        compose.waitForIdle()
+    }
+
+    private fun performGlobalBack(): Boolean {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val accepted = automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        automation.waitForIdle(100, 5_000)
+        return accepted
+    }
+
+    private fun runProductionRoute(
+        onBack: () -> Unit,
+        favoriteRows: List<FavoriteRow> = emptyList(),
+        overlaySessions: List<L2Entry> = ProductionOverlayFixture.overlayEntries(),
+        onOpenOverlaySession: (String, String) -> Unit = { _, _ -> },
+        block: () -> Unit,
+    ) {
+        val previousFactory = ServiceWire.transportFactory
+        compose.runOnUiThread {
+            compose.activity.enableEdgeToEdge()
+            compose.activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            ServiceWire.releaseManager()
+            ServiceWire.resetConfigForTest()
+            ServiceWire.transportFactory = NoopTransportFactory
+            ServiceWire.setConfig(ConnectionConfig("ws://127.0.0.1:9/ws", "instrumentation-test"))
+        }
+        try {
+            compose.setContent {
+                BackHandler(enabled = true, onBack = onBack)
+                SessionRoute(
+                    ref = "production-current",
+                    name = "生产当前会话",
+                    onBack = onBack,
+                    favoriteRows = favoriteRows,
+                    overlaySessions = overlaySessions,
+                    onOpenOverlaySession = onOpenOverlaySession,
+                )
+            }
+            compose.waitForIdle()
+            block()
+        } finally {
+            compose.runOnUiThread {
+                MirrorForegroundService.stop(compose.activity)
+                ServiceWire.uiConnector = null
+                ServiceWire.releaseManager()
+                ServiceWire.resetConfigForTest()
+                ServiceWire.transportFactory = previousFactory
+            }
+        }
+    }
+
+    private fun firstVisibleFavoriteAnchor(count: Int): Pair<Int, Float> {
+        val viewport = compose.onNodeWithTag("favorite-session-list").fetchSemanticsNode().boundsInRoot
+        return (0 until count).mapNotNull { index ->
+            val node = compose.onAllNodesWithTag(
+                "session-chip-primary-favorite-$index",
+                useUnmergedTree = true,
+            ).fetchSemanticsNodes().firstOrNull() ?: return@mapNotNull null
+            val bounds = node.boundsInRoot
+            if (bounds.right > viewport.left && bounds.left < viewport.right) {
+                index to bounds.left
+            } else {
+                null
+            }
+        }.minByOrNull { it.second } ?: error("no visible favorite anchor")
+    }
+
+    private fun horizontalScrollValue(): Float {
+        val node = compose.onNodeWithTag("favorite-session-list").fetchSemanticsNode()
+        return node.config[SemanticsProperties.HorizontalScrollAxisRange].value()
+    }
+
+    private fun productionFavoriteRows(count: Int): List<FavoriteRow> =
+        (0 until count).map { index ->
+            val id = "primary-favorite-$index"
+            FavoriteRow(
+                sessionName = id,
+                windowIndex = "0",
+                windowName = "收藏-${index + 1}",
+                addedAt = index.toLong(),
+                isOnline = true,
+                ref = id,
+                cwd = ProductionOverlayFixture.WORKSPACE,
+                title = "收藏-${index + 1}",
+                status = if (index % 2 == 0) L2Status.WORKING else L2Status.IDLE,
+            )
+        }
+
+    private fun productionOverlayEntries(count: Int): List<L2Entry> =
+        (0 until count).map { index ->
+            val number = index + 1
+            L2Entry(
+                ref = "/tmp/tmux-1000/audit\\u001f%$number",
+                name = "查看会话-$number",
+                title = "查看会话-$number",
+                rows = 24,
+                cols = 80,
+                status = if (index % 2 == 0) L2Status.WORKING else L2Status.IDLE,
+                cwd = ProductionOverlayFixture.WORKSPACE,
+                sessionName = "audit",
+                windowIndex = number.toString(),
+                windowName = "查看会话-$number",
+            )
+        }
 
     private fun openView() {
         val alreadyMenu = compose.onAllNodesWithTag("session-overlay-open")

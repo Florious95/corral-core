@@ -17,15 +17,18 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,7 +78,7 @@ fun SessionSwitchSheet(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
-    Box(modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
             enter = fadeIn(tween(SessionDockMotion.PopInMillis, easing = SessionDockMotion.Ease)),
@@ -116,7 +119,7 @@ fun SessionSwitchSheet(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .wrapContentHeight()
+                    .heightIn(max = maxHeight * 0.8f)
                     .clip(RoundedCornerShape(topStart = Radii.sheetTop, topEnd = Radii.sheetTop))
                     .background(p.sheetBackground)
                     .testTag("session-overlay")
@@ -171,13 +174,20 @@ fun SessionSwitchSheet(
                         )
                     }
                 }
-                Column(
-                    Modifier
+                LazyColumn(
+                    modifier = Modifier
                         .fillMaxWidth()
+                        .weight(1f, fill = false)
                         .background(p.sheetSurface)
+                        .testTag("session-overlay-list"),
                 ) {
-                    Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
-                    sessions.forEachIndexed { index, item ->
+                    item {
+                        Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
+                    }
+                    itemsIndexed(
+                        items = sessions,
+                        key = { _, item -> item.id },
+                    ) { index, item ->
                         StaggeredRow(index = index, replayKey = visible) {
                             SheetRow(
                                 item = item,
