@@ -10,8 +10,9 @@ as `statusDot(running, label)` and `@keyframes pulse`.
 ## Frozen render contract
 
 - Slot: 8 CSS px square, pill radius; Android maps this to the existing 8 dp
-  status slot. Its center is the row metadata baseline, immediately before the
-  provider/path metadata. It is not a provider icon and owns no gesture.
+  left status slot immediately before the session name. Its center is the row
+  centerline, matching the source marker's row placement. It is not a provider
+  icon and owns no gesture.
 - Working frame set/order: one solid center dot plus an outward box-shadow ring.
   At 0% the ring is radius 0 with `rgba(52,199,89,.55)`; at 70% it is radius
   5 px with transparent green; at 100% it returns to radius 0 transparent.

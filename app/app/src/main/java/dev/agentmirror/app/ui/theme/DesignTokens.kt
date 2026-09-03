@@ -176,6 +176,8 @@ object Elevations {
 object Motion {
     /** Material 3 emphasized decelerate —— 全站主曲线 */
     val emphasized: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+    /** CSS `ease-out` used by the desktop ordinary session-list pulse. */
+    val cssEaseOut: Easing = CubicBezierEasing(0f, 0f, 0.58f, 1f)
     /** 浮层滑起用，末端轻微减速过冲感 */
     val sheetEnter: Easing = CubicBezierEasing(0.16f, 0.9f, 0.3f, 1f)
     val linear: Easing = LinearEasing
@@ -205,6 +207,33 @@ object Motion {
     // 微交互
     const val pressFeedback = 90
     const val statusDotPulse = 1900         // 「进行中」呼吸点一个来回
+}
+
+/** Ctrl+W+B ordinary session-list marker, frozen from the desktop pulse source. */
+object SessionRowMarker {
+    val size: Dp = 8.dp
+    val ringRadius: Dp = 5.dp
+    val center: Color = Color(0xFF34C759)
+    val ring: Color = Color(0x8C34C759)
+    val idleBorder: Color = Color(0xFFB8B4AB)
+    const val durationMillis = 1800
+    const val peakMillis = 1260
+
+    data class Frame(val ringRadiusDp: Float, val ringAlpha: Float)
+
+    /** CSS pulse keyframes evaluated at a source-timeline millisecond. */
+    fun frameAt(elapsedMillis: Long): Frame {
+        val t = Math.floorMod(elapsedMillis, durationMillis.toLong()).toInt()
+        return if (t <= peakMillis) {
+            val eased = Motion.cssEaseOut.transform(t / peakMillis.toFloat())
+            Frame(ringRadius.value * eased, ring.alpha * (1f - eased))
+        } else {
+            val eased = Motion.cssEaseOut.transform(
+                (t - peakMillis) / (durationMillis - peakMillis).toFloat(),
+            )
+            Frame(ringRadius.value * (1f - eased), 0f)
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────

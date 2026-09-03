@@ -27,6 +27,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.SessionRow
+import dev.agentmirror.app.ui.theme.SessionRowMarker
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.SessionRowMotion
 import dev.agentmirror.app.ui.model.SessionStatus
@@ -80,6 +81,26 @@ class ExternalSessionStatusUiTest {
                 sessionRowMotion(activity, health, online),
             )
         }
+    }
+
+    @Test
+    fun workingMarkerMatchesFrozenNativePulseFramesAndCadence() {
+        assertEquals(8f, SessionRowMarker.size.value, 0f)
+        assertEquals(5f, SessionRowMarker.ringRadius.value, 0f)
+        assertEquals(1800, SessionRowMarker.durationMillis)
+        assertEquals(1260, SessionRowMarker.peakMillis)
+
+        val start = SessionRowMarker.frameAt(0)
+        val peak = SessionRowMarker.frameAt(SessionRowMarker.peakMillis.toLong())
+        val end = SessionRowMarker.frameAt(SessionRowMarker.durationMillis.toLong())
+        assertEquals(0f, start.ringRadiusDp, 0.001f)
+        assertEquals(SessionRowMarker.ring.alpha, start.ringAlpha, 0.001f)
+        assertEquals(SessionRowMarker.ringRadius.value, peak.ringRadiusDp, 0.001f)
+        assertEquals(0f, peak.ringAlpha, 0.001f)
+        assertEquals(0f, end.ringRadiusDp, 0.001f)
+        assertEquals(0f, end.ringAlpha, 0.001f)
+        assertTrue(SessionRowMarker.frameAt(900).ringRadiusDp > start.ringRadiusDp)
+        assertTrue(SessionRowMarker.frameAt(1500).ringRadiusDp < peak.ringRadiusDp)
     }
 
     @Test
