@@ -23,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.DpRect
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
@@ -37,8 +36,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 072 §2/§3/§4：同一列表内星星在会话名前；进行中/空闲/星星垂直中心对齐；
- * 徽章右边缘对齐；点击指示无界。修前（星在右侧、默认 bounded ripple）必红。
+ * Unified external row: working/idle lamps left of the name, official Provider
+ * mark on the right, no persistent star. Long-press is the favorite owner.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp")
@@ -49,12 +48,7 @@ class L2RowLayoutTest {
     val compose = createComposeRule()
 
     @Test
-    fun starSitsBeforeIdentityAndBadgesShareRightEdgeAndVerticalCenter() {
-        assertTrue(
-            "072 §3：星星 indication 必须无界，禁止默认方形 bounded ripple",
-            !L2_STAR_RIPPLE_BOUNDED,
-        )
-
+    fun lampLeadsIdentityAndProviderMarkSitsOnTheRight() {
         val working = entry("ref-w", "sess-work", "working", "1")
         val idle = entry("ref-i", "sess-idle", "idle", "2")
         compose.setContent {
@@ -67,42 +61,19 @@ class L2RowLayoutTest {
         }
         compose.waitForIdle()
 
-        val starW = compose.onNodeWithTag("l2-star-ref-w").getUnclippedBoundsInRoot()
+        compose.onNodeWithTag("l2-star-ref-w").assertDoesNotExist()
+        val lampW = compose.onNodeWithTag("l2-motion-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val idW = compose.onNodeWithTag("l2-id-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val badgeW = compose.onNodeWithTag("l2-status-ref-w").getUnclippedBoundsInRoot()
-        val starI = compose.onNodeWithTag("l2-star-ref-i").getUnclippedBoundsInRoot()
+        val markW = compose.onNodeWithTag("l2-provider-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val lampI = compose.onNodeWithTag("l2-motion-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val idI = compose.onNodeWithTag("l2-id-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val badgeI = compose.onNodeWithTag("l2-status-ref-i").getUnclippedBoundsInRoot()
+        val markI = compose.onNodeWithTag("l2-provider-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
 
-        assertTrue(
-            "072 §4：星星必须在会话名之前（working）star.left=${starW.left} id.left=${idW.left}",
-            starW.left < idW.left,
-        )
-        assertTrue(
-            "072 §4：星星必须在会话名之前（idle）star.left=${starI.left} id.left=${idI.left}",
-            starI.left < idI.left,
-        )
-        assertTrue(
-            "徽章必须在会话名之后（working）id.right=${idW.right} badge.left=${badgeW.left}",
-            idW.right <= badgeW.left,
-        )
-
-        val rightDelta = kotlin.math.abs(badgeW.right.value - badgeI.right.value)
-        assertTrue(
-            "072 §2：进行中/空闲徽章右边缘应对齐 working.right=${badgeW.right} idle.right=${badgeI.right}",
-            rightDelta < 1f,
-        )
-
-        val workDelta = kotlin.math.abs(centerY(starW).value - centerY(badgeW).value)
-        val idleDelta = kotlin.math.abs(centerY(starI).value - centerY(badgeI).value)
-        assertTrue(
-            "072 §2：同行星星与进行中徽章垂直中心应对齐 delta=$workDelta star=${centerY(starW)} badge=${centerY(badgeW)}",
-            workDelta < 1f,
-        )
-        assertTrue(
-            "072 §2：同行星星与空闲徽章垂直中心应对齐 delta=$idleDelta star=${centerY(starI)} badge=${centerY(badgeI)}",
-            idleDelta < 1f,
-        )
+        assertTrue("working lamp before name lamp.left=${lampW.left} id.left=${idW.left}", lampW.left < idW.left)
+        assertTrue("idle lamp before name lamp.left=${lampI.left} id.left=${idI.left}", lampI.left < idI.left)
+        assertTrue("provider mark after name id.right=${idW.right} mark.left=${markW.left}", idW.right <= markW.left)
+        val rightDelta = kotlin.math.abs(markW.right.value - markI.right.value)
+        assertTrue("provider marks share right edge delta=$rightDelta", rightDelta < 2f)
     }
 
     @Test
@@ -130,14 +101,14 @@ class L2RowLayoutTest {
                 )
             }
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.longPressFavorite("l2-row-ref-x", "收藏")
         compose.runOnIdle {
-            assertEquals("点星不得进会话", 0, opened)
+            assertEquals("长按收藏不得进会话", 0, opened)
             assertEquals(1, vm.favorites.value.size)
             assertEquals("sess-x", vm.favorites.value.single().sessionName)
             assertEquals("4", vm.favorites.value.single().windowIndex)
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.longPressFavorite("l2-row-ref-x", "取消收藏")
         compose.runOnIdle {
             assertEquals(0, opened)
             assertTrue(vm.favorites.value.isEmpty())
@@ -154,7 +125,10 @@ class L2RowLayoutTest {
             rows = 24,
             cols = 80,
             title = "title-not-identity",
+            activity = status,
             status = status,
+            health = "normal",
+            provider = "pi",
             sessionName = name,
             windowIndex = windowIndex,
             windowName = name,

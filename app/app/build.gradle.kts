@@ -64,6 +64,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         release {
@@ -136,6 +137,10 @@ dependencies {
     // libtailscale 无任何预构建 artifact，实测 Maven Central 0 命中；由 tools/tsnetbind
     // 重建，见 libs/README.md）。tailscale 系 BSD-3，Apache-2.0 兼容，零 GMS。
     implementation(files("libs/tsnetbind.aar"))
+    // Official Provider SVG renderer (Apache-2.0). Local jar so Gradle does not
+    // need network; bytes keep original LobeHub SVG geometry including Copilot
+    // gradients. SHA-256 729c67ef475f19f112d01e4fc8e55b1f23841912f8e5090db27992801a04f79d
+    implementation(files("libs/androidsvg-1.4.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     // Robolectric 基建（fix-app-nav 引入，后续 seams 任务共用）：Activity/生命周期级单测。
@@ -162,4 +167,6 @@ dependencies {
     // createComposeRule/ActivityScenario 显式 launch 使用），对本应用主流程零影响；
     // debug 变体本就经 debugImplementation 带同一宿主，双变体行为自此对称。
     releaseImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }
