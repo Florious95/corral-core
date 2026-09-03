@@ -22,9 +22,11 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import dev.agentmirror.app.ExternalSessionListAcceptanceActivity
 import org.junit.Assert.assertEquals
@@ -49,8 +51,6 @@ class ExternalSessionListGestureTest {
         rule.onNodeWithTag("l2-path-codex-i", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("l2-provider-claude-w", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("l2-provider-codex-i", useUnmergedTree = true).assertExists()
-        rule.onNodeWithTag("l2-provider-copilot-u", useUnmergedTree = true).assertDoesNotExist()
-        rule.onNodeWithTag("l2-provider-pi-w", useUnmergedTree = true).assertDoesNotExist()
 
         rule.onNodeWithTag("l2-row-codex-i").performClick()
         rule.onNodeWithTag("l2-row-codex-i").performTouchInput { longClick() }
@@ -63,6 +63,10 @@ class ExternalSessionListGestureTest {
         rule.waitUntil(2_000) {
             rule.onAllNodesWithTag("l2-favorite-action").fetchSemanticsNodes().isEmpty()
         }
+        rule.onNodeWithTag("l2-session-list-scroll").performScrollToNode(hasTestTag("l2-row-pi-w"))
+        rule.onNodeWithTag("l2-provider-pi-w", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("l2-session-list-scroll").performScrollToNode(hasTestTag("l2-row-copilot-u"))
+        rule.onNodeWithTag("l2-provider-copilot-u", useUnmergedTree = true).assertExists()
     }
 
     @Test
