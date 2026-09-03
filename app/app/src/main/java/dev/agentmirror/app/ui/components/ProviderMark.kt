@@ -16,33 +16,26 @@
 
 package dev.agentmirror.app.ui.components
 
-import android.graphics.Picture
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.caverock.androidsvg.SVG
-import dev.agentmirror.app.ui.theme.LocalAppPalette
 
 private val MarkSize = 18.dp
-private const val Viewport = 24
 
 /**
- * Right-side official Provider mark. Renders the vendored SVG bytes as-is.
- * Unrecognized canonical ids draw nothing (no question mark, no fallback brand).
+ * Right-side official Provider mark. Draws only a frozen static resource for
+ * an exact canonical id. Unrecognized ids and ids without a source glyph draw
+ * nothing (no question mark, no fallback brand, no runtime SVG).
  *
  * @contract
  * @pre [canonicalId] is the DTO provider field, already fail-closed to unknown
- * @post exact table hit draws that mark; miss draws no node content
+ * @post exact drawable hit draws that mark; miss draws no node content
  * @err none
  */
 @Composable
@@ -51,35 +44,12 @@ fun ProviderMark(
     modifier: Modifier = Modifier,
     testTag: String? = null,
 ) {
-    val spec = CanonicalProviderMarks.of(canonicalId)
-    if (spec == null) return
-    val context = LocalContext.current
-    val tint = LocalAppPalette.current.rowTitleText.toArgb()
-    val picture: Picture = remember(spec.assetPath, spec.currentColor, tint) {
-        val raw = context.assets.open(spec.assetPath).bufferedReader().use { it.readText() }
-        val svgText = if (spec.currentColor) {
-            val hex = String.format("#%06X", tint and 0xFFFFFF)
-            raw.replace("currentColor", hex)
-        } else {
-            raw
-        }
-        val svg = SVG.getFromString(svgText)
-        svg.setDocumentWidth(Viewport.toFloat())
-        svg.setDocumentHeight(Viewport.toFloat())
-        svg.renderToPicture(Viewport, Viewport)
-    }
+    val spec = CanonicalProviderMarks.of(canonicalId) ?: return
+    val res = CanonicalProviderMarks.drawableRes(canonicalId) ?: return
     val tagged = if (testTag != null) modifier.testTag(testTag) else modifier
-    Canvas(
-        tagged
-            .size(MarkSize)
-            .semantics { contentDescription = spec.displayName },
-    ) {
-        val scale = size.minDimension / Viewport.toFloat()
-        drawIntoCanvas { canvas ->
-            canvas.save()
-            canvas.scale(scale, scale)
-            canvas.nativeCanvas.drawPicture(picture)
-            canvas.restore()
-        }
-    }
+    Image(
+        painter = painterResource(res),
+        contentDescription = spec.displayName,
+        modifier = tagged.size(MarkSize).semantics { contentDescription = spec.displayName },
+    )
 }

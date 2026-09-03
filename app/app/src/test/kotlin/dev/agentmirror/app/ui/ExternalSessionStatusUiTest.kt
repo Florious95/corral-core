@@ -89,7 +89,10 @@ class ExternalSessionStatusUiTest {
             listOf("claude_code", "codex", "copilot", "grok", "cursor", "pi"),
             ids,
         )
-        ids.forEach { assertTrue(CanonicalProviderMarks.of(it) != null) }
+        ids.forEach {
+            assertTrue(CanonicalProviderMarks.of(it) != null)
+            assertNull("no invented drawable for $it", CanonicalProviderMarks.drawableRes(it))
+        }
         assertNull(CanonicalProviderMarks.of("unknown"))
         assertNull(CanonicalProviderMarks.of("claude"))
         assertNull(CanonicalProviderMarks.of("cursor-agent"))
@@ -103,8 +106,8 @@ class ExternalSessionStatusUiTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             AppTheme {
-                SessionRow(working, "l2", false, {}, {}, false)
-                SessionRow(idle, "l2", false, {}, {}, false)
+                SessionRow(working, "l2", {}, {}, false)
+                SessionRow(idle, "l2", {}, {}, false)
             }
         }
         compose.mainClock.advanceTimeByFrame()
@@ -157,12 +160,13 @@ class ExternalSessionStatusUiTest {
         compose.onNodeWithText("创建").assertDoesNotExist()
         compose.onNodeWithText("配置").assertDoesNotExist()
         compose.onNodeWithTag("l2-star-claude-w").assertDoesNotExist()
-        compose.onNodeWithTag("l2-provider-claude-w", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("l2-provider-codex-i", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("l2-provider-copilot-u", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("l2-provider-grok-a", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("l2-provider-cursor-n", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("l2-provider-pi-w", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("l2-path-claude-w", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("l2-provider-claude-w", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("l2-provider-codex-i", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("l2-provider-copilot-u", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("l2-provider-grok-a", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("l2-provider-cursor-n", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("l2-provider-pi-w", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("l2-provider-unk-p", useUnmergedTree = true).assertDoesNotExist()
         assertTrue(desc("l2-motion-claude-w").startsWith("working:"))
         assertEquals("idle:static", desc("l2-motion-codex-i"))
