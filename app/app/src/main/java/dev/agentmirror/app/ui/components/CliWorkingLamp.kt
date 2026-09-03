@@ -43,6 +43,12 @@ import dev.agentmirror.app.ui.theme.Motion
  * Frames: alpha 1.0 ↔ 0.35, tween(Motion.statusDotPulse / 2, emphasized), Reverse.
  * Idle uses the same 5dp lamp without the infinite transition. None is an empty
  * same-size slot: no question mark, no「未知」text.
+ *
+ * @contract
+ * @pre motion is already fail-closed (unknown/abnormal/offline → None)
+ * @post Working pulses; Idle is static; None is an empty same-size slot
+ * @err none
+ * @inv never renders a question mark or the word 未知
  */
 @Composable
 fun CliWorkingLamp(
@@ -81,8 +87,18 @@ fun CliWorkingLamp(
     }
 }
 
+/** Semantics/test tag for the left-slot lamp of one row. */
 fun motionTestTag(prefix: String, id: String): String = "$prefix-motion-$id"
 
+/**
+ * [CliWorkingLamp] with the row's motion test tag applied.
+ *
+ * @contract
+ * @pre prefix/id identify the row; motion is fail-closed
+ * @post lamp is tagged for virtual-clock tests; drawing matches [CliWorkingLamp]
+ * @err none
+ * @inv tag is not a click target
+ */
 @Composable
 fun CliWorkingLampTagged(
     motion: SessionRowMotion,

@@ -27,12 +27,23 @@ import dev.agentmirror.app.R
  * @pre [id] is the status-core DTO canonical provider string
  * @post lookup is exact id match only; no title/argv/alias heuristics
  * @err none
+ * @inv table membership is the six DTO ids; unknown spellings never alias in
  */
 data class CanonicalProviderMark(
     val id: String,
     val displayName: String,
 )
 
+/**
+ * Exact-id drawable table. HTML extracts for four ids; prior-app PNG blobs
+ * for Pi and Copilot. Does not fetch icons or parse SVG at runtime.
+ *
+ * @contract
+ * @pre canonicalId is the DTO provider string, already fail-closed upstream
+ * @post of/drawableRes return a table hit or null; never a substitute id
+ * @err none
+ * @inv drawableRes is null for any id not in the frozen table
+ */
 object CanonicalProviderMarks {
     val all: List<CanonicalProviderMark> = listOf(
         CanonicalProviderMark("claude_code", "Claude Code"),
@@ -49,7 +60,8 @@ object CanonicalProviderMarks {
 
     /**
      * HTML `icon()` extracts for four ids; prior-app PNG blobs for Pi and Copilot
-     * (`1b12e92d8efb1c0eec41e14a264f9d80ee833ad9` `R.drawable.provider_*`).
+     * from owning commit 1b12e92d8efb1c0eec41e14a264f9d80ee833ad9
+     * (drawable resources provider_pi and provider_copilot_color).
      */
     fun drawableRes(canonicalId: String): Int? = when (canonicalId) {
         "claude_code" -> R.raw.provider_icon_claude_code
