@@ -30,38 +30,36 @@ import androidx.core.graphics.PathParser
  * Runtime draws these primitives; it does not parse the companion raw SVG.
  *
  * @contract
- * @pre canonicalId is one of claude_code, codex, grok, cursor
- * @post draws() is true only for those four; draw() paints blob+inner from frozen path text
+ * @pre canonicalId is one of claude_code, codex, cursor
+ * @post draws() is true only for those three; grok is not this X fallback
  * @err none
  * @inv does not load or parse the raw SVG bytes
  */
 internal object ExtractedProviderIcon {
     const val BLOB_PATH =
         "M12 2.8c1.7-.8 3.6-.3 4.6 1.1 1.7.2 2.9 1.7 2.7 3.4 1.1 1.2 1.2 3 .2 4.3.5 1.6-.2 3.3-1.7 4-.4 1.6-1.9 2.7-3.6 2.5-1.1 1.2-3 1.4-4.3.5-1.7.3-3.3-.8-3.7-2.4-1.5-.6-2.4-2.2-2-3.8-1.1-1.3-1-3.1.1-4.3-.2-1.7 1-3.2 2.6-3.5C8.1 3.2 9.9 2.5 11.5 3l.5-.2Z"
-    const val GROK_INNER =
+    /** Unreachable `icon()` switch case for grok: grok is in BRAND so tiles use img(slug grok), not this X. */
+    const val GROK_ICON_SWITCH_X_FALLBACK =
         "M9 15.5 15 9M9.2 9.2l2.3 2.3M14.8 14.8l-2.3-2.3"
     const val CURSOR_INNER =
         "M12 8l3.4 2v4L12 16l-3.4-2v-4L12 8Zm0 0v4m3.4-2L12 12m-3.4-2 3.4 2"
     const val CLAUDE_TEXT = "\u276F_"
 
     val ClaudeTint = Color(0xFFD97757)
-    val GrokTint = Color(0xFF3A3835)
     val CodexTint = Color(0xFF6D6A63)
     val CursorTint = Color(0xFF6D6A63)
 
     fun draws(canonicalId: String): Boolean = when (canonicalId) {
-        "claude_code", "codex", "grok", "cursor" -> true
+        "claude_code", "codex", "cursor" -> true
         else -> false
     }
 
     private val blobPath = PathParser.createPathFromPathData(BLOB_PATH)!!
-    private val grokInner = PathParser.createPathFromPathData(GROK_INNER)!!
     private val cursorInner = PathParser.createPathFromPathData(CURSOR_INNER)!!
 
     fun draw(scope: DrawScope, canonicalId: String) {
         val tint = when (canonicalId) {
             "claude_code" -> ClaudeTint
-            "grok" -> GrokTint
             "codex" -> CodexTint
             "cursor" -> CursorTint
             else -> return
@@ -87,11 +85,6 @@ internal object ExtractedProviderIcon {
                     typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
                 }
                 canvas.drawText(CLAUDE_TEXT, 12f, 15f, text)
-            }
-            "grok" -> {
-                stroke.strokeWidth = 1.6f
-                stroke.strokeCap = Paint.Cap.ROUND
-                canvas.drawPath(grokInner, stroke)
             }
             "codex" -> {
                 stroke.pathEffect = DashPathEffect(floatArrayOf(3.4f, 1.5f), 0f)
