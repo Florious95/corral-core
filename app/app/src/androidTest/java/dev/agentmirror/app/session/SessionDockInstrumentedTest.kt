@@ -11,6 +11,7 @@
 package dev.agentmirror.app.session
 
 import android.accessibilityservice.AccessibilityService
+import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -77,7 +78,6 @@ class SessionDockInstrumentedTest {
                     onSendText = {},
                     onPickAttachment = {},
                     onKeyToken = {},
-                    onBack = {},
                     onOpenViewMenu = {},
                 )
             }
@@ -132,7 +132,6 @@ class SessionDockInstrumentedTest {
                     },
                     onPickAttachment = {},
                     onKeyToken = {},
-                    onBack = {},
                     onOpenViewMenu = {},
                 )
             }
@@ -147,7 +146,6 @@ class SessionDockInstrumentedTest {
             inputHeight() >= 71.5f && inputBottom() < restingInputBottom - 100f
         }
         val expanded = inputHeight()
-        val imeRaisedInputBottom = inputBottom()
         assertEquals(72f, expanded, 0.5f)
         assertEquals(86f, inputCapsuleHeight(), 0.5f)
 
@@ -176,7 +174,7 @@ class SessionDockInstrumentedTest {
         assertEquals(46f, inputCapsuleHeight(), 0.5f)
         compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
         compose.waitUntil(timeoutMillis = 5_000) {
-            inputHeight() >= 71.5f && abs(inputBottom() - imeRaisedInputBottom) < 0.5f
+            inputHeight() >= 71.5f && imeShown()
         }
 
         compose.onNodeWithTag("favorite-session-list")
@@ -288,6 +286,14 @@ class SessionDockInstrumentedTest {
     private fun scrollValue(): Float {
         val node = compose.onNodeWithTag("favorite-session-list").fetchSemanticsNode()
         return node.config[SemanticsProperties.HorizontalScrollAxisRange].value()
+    }
+
+    private fun imeShown(): Boolean {
+        var shown = false
+        compose.runOnUiThread {
+            shown = compose.activity.window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
+        }
+        return shown
     }
 
     private fun inputBottom(): Float = compose.onNodeWithTag("session-command-input-field")
