@@ -50,4 +50,25 @@ class PiWorkingDtoProjectionTest {
             sessionRowMotion(item.status, item.health, item.isOnline),
         )
     }
+
+    @Test
+    fun piDisplayNamePrefersRealSessionNameOverGenericNodeWindowName() {
+        val entry = Session(
+            ref = "r",
+            name = "node",
+            cwd = "/w",
+            rows = 24,
+            cols = 80,
+            provider = "pi",
+            sessionName = "pi-real-session",
+            windowName = "node",
+            activity = "idle",
+            status = "idle",
+            health = "normal",
+        ).toL2Entry()
+
+        assertEquals("pi-real-session", entry.identityLabel)
+        assertEquals("pi-real-session", entry.toSessionItem(false).displayName)
+        assertEquals("node", entry.navigationName)
+    }
 }
