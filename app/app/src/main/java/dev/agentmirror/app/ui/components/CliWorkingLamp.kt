@@ -40,13 +40,13 @@ import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.SessionRowMarker
 
 /**
- * Ordinary session-list marker, sourced from Codex CLI's native shimmer bullet.
- * Working is one `•` glyph with the upstream 2s cosine sweep; idle is a static
- * `◦`; None is an empty same-size slot: no question mark, no「未知」text.
+ * Ordinary session-list marker, sourced from Codex CLI 0.149.0's native
+ * conversation-leading spinner. Working uses the exact ten Braille glyphs at
+ * the upstream 100ms cadence; idle is a static `◦`; None is an empty slot.
  *
  * @contract
  * @pre motion is already fail-closed (unknown/abnormal/offline → None)
- * @post Working shimmers; Idle is static; None is an empty same-size slot
+ * @post Working spins with the frozen upstream sequence; Idle is static; None is empty
  * @err none
  * @inv never renders a question mark or the word 未知
  */
@@ -66,26 +66,22 @@ fun CliWorkingLamp(
         )
         SessionRowMotion.Working -> {
             val p = LocalAppPalette.current
-            val transition = rememberInfiniteTransition(label = "sessionRowPulse")
+            val transition = rememberInfiniteTransition(label = "sessionRowSpinner")
             val elapsed by transition.animateFloat(
                 initialValue = 0f,
                 targetValue = SessionRowMarker.periodMillis.toFloat(),
                 animationSpec = infiniteRepeatable(
                     animation = tween(SessionRowMarker.periodMillis, easing = LinearEasing),
                 ),
-                label = "sessionRowPulseElapsed",
+                label = "sessionRowSpinnerElapsed",
             )
-            val sourceElapsed = elapsed.toLong() / SessionRowMarker.redrawCadenceMillis *
-                SessionRowMarker.redrawCadenceMillis
-            val frame = SessionRowMarker.frameAt(
-                sourceElapsed,
-                foreground = p.rowTitleText,
-                background = p.listBackground,
-            )
+            val sourceElapsed = elapsed.toLong() / SessionRowMarker.frameIntervalMillis *
+                SessionRowMarker.frameIntervalMillis
+            val frame = SessionRowMarker.frameAt(sourceElapsed)
             MarkerText(
                 glyph = frame.glyph,
-                color = frame.color,
-                description = "working:glyph=${frame.glyph}:elapsed=${frame.sourceMillis}:position=${frame.position}:intensity=${frame.intensity}",
+                color = p.rowTitleText,
+                description = "working:glyph=${frame.glyph}:elapsed=${frame.sourceMillis}:position=${frame.position}",
                 modifier = slot,
             )
         }

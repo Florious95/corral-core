@@ -209,59 +209,40 @@ object Motion {
 
 /**
  * Ctrl+W+B ordinary session-list marker, mapped from Codex CLI 0.149.0's
- * `motion::activity_indicator` and `shimmer::shimmer_spans`.
+ * conversation-leading spinner at
+ * `codex-rs/tui/src/chatwidget/status_surfaces.rs:28-33`.
  *
- * The upstream implementation draws one `•` Unicode cell. It sweeps a
- * five-cell cosine band across a ten-cell leading pad over two seconds and
- * requests redraws every 32ms. Android keeps the existing 8dp leading slot;
- * the glyph is centered in that slot so title/path geometry stays unchanged.
+ * Source commit: 758ef40f50c1a458425c7cfbf1eb12cbc07af0b0.
+ * The source file SHA-256 is b745ca9bc1717590c23f7c390d26a7933911e0ad48b34d4bed248b347b02c433.
+ * Android preserves the existing 8dp leading slot and centered 12sp glyph;
+ * the source has no idle glyph, so idle remains the accepted static `◦`.
  */
 object SessionRowMarker {
+    const val sourceCliVersion = "0.149.0"
+    const val sourceCommit = "758ef40f50c1a458425c7cfbf1eb12cbc07af0b0"
+    const val sourceCoordinate = "codex-rs/tui/src/chatwidget/status_surfaces.rs:28-33"
+    const val sourceSha256 = "b745ca9bc1717590c23f7c390d26a7933911e0ad48b34d4bed248b347b02c433"
     val size: Dp = 8.dp
     val fontSize = 12.sp
-    const val periodMillis = 2000
-    const val redrawCadenceMillis = 32
-    const val paddingCells = 10
-    const val bandHalfWidthCells = 5
-    const val periodCells = 21
-    const val workingGlyph = "•"
+    const val frameIntervalMillis = 100
+    const val periodMillis = 1000
+    val spinnerFrames = listOf("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
     const val idleGlyph = "◦"
 
     data class Frame(
         val glyph: String,
         val sourceMillis: Long,
         val position: Int,
-        val intensity: Float,
-        val color: Color,
     )
 
-    /** One true-color frame from upstream `shimmer_spans`, at source time. */
-    fun frameAt(elapsedMillis: Long, foreground: Color, background: Color): Frame {
+    /** One exact source spinner frame at the quantized source time. */
+    fun frameAt(elapsedMillis: Long): Frame {
         val sourceMillis = Math.floorMod(elapsedMillis, periodMillis.toLong())
-        val position = (sourceMillis / periodMillis.toFloat() * periodCells).toInt()
-        val distance = kotlin.math.abs(paddingCells - position).toFloat()
-        val intensity = if (distance <= bandHalfWidthCells) {
-            0.5f * (1f + kotlin.math.cos(Math.PI * distance / bandHalfWidthCells).toFloat())
-        } else {
-            0f
-        }
+        val position = (sourceMillis / frameIntervalMillis).toInt() % spinnerFrames.size
         return Frame(
-            glyph = workingGlyph,
+            glyph = spinnerFrames[position],
             sourceMillis = sourceMillis,
             position = position,
-            intensity = intensity,
-            color = blend(background, foreground, intensity * 0.9f),
-        )
-    }
-
-    /** `color::blend(fg, bg, alpha)` from the upstream RGB implementation. */
-    private fun blend(highlight: Color, base: Color, alpha: Float): Color {
-        val a = alpha.coerceIn(0f, 1f)
-        return Color(
-            red = highlight.red * a + base.red * (1f - a),
-            green = highlight.green * a + base.green * (1f - a),
-            blue = highlight.blue * a + base.blue * (1f - a),
-            alpha = 1f,
         )
     }
 }
