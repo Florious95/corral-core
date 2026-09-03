@@ -103,7 +103,7 @@ class ExternalSessionStatusUiTest {
         assertEquals(0f, start.intensity, 0.001f)
         assertEquals(1f, peak.intensity, 0.001f)
         assertEquals(0f, end.intensity, 0.001f)
-        assertEquals(background, start.color)
+        assertEquals(foreground, start.color)
         assertNotEquals(start.color, peak.color)
         assertNotEquals(start.intensity, SessionRowMarker.frameAt(640, foreground, background).intensity)
         assertEquals(start.intensity, end.intensity, 0.001f)
