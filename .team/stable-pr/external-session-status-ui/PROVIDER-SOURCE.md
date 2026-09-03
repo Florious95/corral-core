@@ -15,7 +15,7 @@ JPEG pointer (not an icon sheet):
 |---|---|---|---|---|
 | `claude_code` | HTML `icon()` `blob(mtext('❯_'))` | `raw/provider_icon_claude_code.svg` | 927 | `5d2a03146e55387d8d58cfc44cc1c0fb90c47b559648dbe52f0420f0d9757626` |
 | `codex` | HTML `icon()` dashed circle | `raw/provider_icon_codex.svg` | 879 | `9cb405c0c50125d8562fd7a2c9fa4220376d2fc8ecae5ac99f4032e40cf85f7c` |
-| `grok` | HTML `icon()` inner paths | `raw/provider_icon_grok.svg` | 901 | `2425946f7e10d26d978e9fd3cd642cfb6d6db3033d2b4a0819b2b989503540b2` |
+| `grok` | BRAND img slug `grok` (not icon() X fallback) | `drawable-nodpi/provider_grok.png` | 1718 | `515fd702a733df33e669a431f7d0b465350c8332c344c59672f2782f5ce3ff10` |
 | `cursor` | HTML `icon()` diamond path | `raw/provider_icon_cursor.svg` | 921 | `66d07e0c2cc8f227d55fedafbdfcb98825905cbb8b1d071b9a8b68abeb901684` |
 
 ## Prior APP (Pi + Copilot) — not missing

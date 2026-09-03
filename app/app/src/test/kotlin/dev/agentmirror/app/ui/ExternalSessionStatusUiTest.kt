@@ -105,6 +105,35 @@ class ExternalSessionStatusUiTest {
     }
 
     @Test
+    fun piWorkingNormalDtoProjectsToWorkingMotionIndependentOfProvider() {
+        assertEquals(
+            SessionRowMotion.Working,
+            sessionRowMotion(SessionStatus.Busy, "normal", true),
+        )
+        val piWorking = item("pi-w", SessionStatus.Busy, "pi", "normal")
+        val piIdle = item("pi-i", SessionStatus.Idle, "pi", "normal")
+        val piUnknown = item("pi-u", SessionStatus.Unknown, "pi", "unknown")
+        val piAbnormal = item("pi-a", SessionStatus.Busy, "pi", "abnormal")
+        assertEquals(
+            SessionRowMotion.Working,
+            sessionRowMotion(piWorking.status, piWorking.health, piWorking.isOnline),
+        )
+        assertEquals(
+            SessionRowMotion.Idle,
+            sessionRowMotion(piIdle.status, piIdle.health, piIdle.isOnline),
+        )
+        assertEquals(
+            SessionRowMotion.None,
+            sessionRowMotion(piUnknown.status, piUnknown.health, piUnknown.isOnline),
+        )
+        assertEquals(
+            SessionRowMotion.None,
+            sessionRowMotion(piAbnormal.status, piAbnormal.health, piAbnormal.isOnline),
+        )
+        assertEquals("pi", piWorking.provider)
+    }
+
+    @Test
     fun virtualClockAdvancesWorkingLampAndLeavesIdleStatic() {
         val working = item("w", SessionStatus.Busy, "claude_code", "normal")
         val idle = item("i", SessionStatus.Idle, "codex", "normal")
@@ -127,6 +156,37 @@ class ExternalSessionStatusUiTest {
         assertNotEquals("working lamp must change frames", working0, working1)
         assertEquals("idle lamp must stay static", idle0, idle1)
         assertTrue(working1.startsWith("working:"))
+    }
+
+    @Test
+    fun piWorkingLampCrossesBusyDotFramesIdleStaticUnknownAbnormalHaveNoWorkingAnim() {
+        val working = item("pi-w", SessionStatus.Busy, "pi", "normal")
+        val idle = item("pi-i", SessionStatus.Idle, "pi", "normal")
+        val unknown = item("pi-u", SessionStatus.Unknown, "pi", "unknown")
+        val abnormal = item("pi-a", SessionStatus.Busy, "pi", "abnormal")
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppTheme {
+                SessionRow(working, "l2", {}, {}, false)
+                SessionRow(idle, "l2", {}, {}, false)
+                SessionRow(unknown, "l2", {}, {}, false)
+                SessionRow(abnormal, "l2", {}, {}, false)
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val w0 = desc("l2-motion-pi-w")
+        assertTrue("pi working starts as working:* got=$w0", w0.startsWith("working:"))
+        assertEquals("idle:static", desc("l2-motion-pi-i"))
+        assertTrue(desc("l2-motion-pi-u").isEmpty())
+        assertTrue(desc("l2-motion-pi-a").isEmpty())
+        compose.mainClock.advanceTimeBy(950)
+        compose.mainClock.advanceTimeByFrame()
+        val w1 = desc("l2-motion-pi-w")
+        assertNotEquals("pi working lamp must change busyDot frames", w0, w1)
+        assertTrue(w1.startsWith("working:"))
+        assertEquals("idle:static", desc("l2-motion-pi-i"))
+        assertTrue(desc("l2-motion-pi-u").isEmpty())
+        assertTrue(desc("l2-motion-pi-a").isEmpty())
     }
 
     @Test
