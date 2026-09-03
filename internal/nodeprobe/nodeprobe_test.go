@@ -3,8 +3,10 @@ package nodeprobe
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -128,6 +130,96 @@ printf '%s' '{"schema_version":1,"socket":"/s","sampled_at":"x","nodes":[{"socke
 	if n.Activity != "idle" || n.SessionName != nil || n.WorkspacePath != "/tmp/project" || n.ProjectName != "project" || n.Socket != "/s" {
 		t.Fatalf("got=%+v", n)
 	}
+}
+
+func TestRunnerPassesLocaleToUnicodeTmuxPaneAndTitle(t *testing.T) {
+	bin, env := unicodeTmuxFixture(t)
+	r := &Runner{capability: Capability{Binary: bin, Titles: "/titles", Providers: "/providers"}, timeout: time.Second}
+	got, err := r.Sample(context.Background(), "/tmp/locale-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Nodes) != 1 || got.Nodes[0].WindowName != "中文标题" {
+		t.Fatalf("unicode tmux row was not preserved: %+v", got.Nodes)
+	}
+	if value, ok := envValue(env, "LC_CTYPE"); !ok || !strings.Contains(strings.ToUpper(value), "UTF-8") {
+		t.Fatalf("accepted environment has no UTF-8 locale: %v", env)
+	}
+	if _, ok := envValue(env, "NODEPROBE_TEST_SECRET"); ok {
+		t.Fatal("accepted environment leaked an arbitrary parent variable")
+	}
+}
+
+func TestAcceptedEnvLocaleOmissionIsUnicodeTmuxCounterexample(t *testing.T) {
+	bin, env := unicodeTmuxFixture(t)
+	cmd := exec.Command(bin, "-S", "/tmp/locale-test")
+	cmd.Env = withoutEnv(env, "LANG", "LC_CTYPE", "LC_ALL")
+	if err := cmd.Run(); err == nil {
+		t.Fatal("locale omission unexpectedly accepted the malformed tmux row")
+	}
+}
+
+func unicodeTmuxFixture(t *testing.T) (string, []string) {
+	t.Helper()
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "tmux"), []byte(`#!/bin/sh
+sep=$(printf '\037')
+if [ -z "${LC_CTYPE}${LANG}${LC_ALL}" ]; then
+  printf 'session\n'
+  exit 1
+fi
+printf 'session%s0%s中文标题%s%%0%s999999%s中文标题%s/tmp/project\n' "$sep" "$sep" "$sep" "$sep" "$sep" "$sep"
+`), 0700); err != nil {
+		t.Fatal(err)
+	}
+	nodeprobe := filepath.Join(d, "nodeprobe")
+	if err := os.WriteFile(nodeprobe, []byte(`#!/bin/sh
+row=$(tmux -S "$2" list-panes -a -F ignored)
+sep=$(printf '\037')
+case "$row" in
+  *"$sep"*中文标题*)
+    printf '%s' '{"schema_version":1,"socket":"/tmp/locale-test","nodes":[{"socket":"/tmp/locale-test","workspace_path":"/tmp/project","project_name":"project","session":"session","window_index":0,"window_name":"中文标题","pane_id":"%0","name":"中文标题","provider":"unknown","state":"unknown","activity":"unknown","session_name":null,"health":"unknown","background_tasks":"unknown","evidence":{}}]}'
+    ;;
+  *)
+    printf '%s' '{"schema_version":1,"socket":"/tmp/locale-test","nodes":[],"error":{"kind":"tmux_inventory","message":"malformed row"}}'
+    exit 1
+    ;;
+esac
+`), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", d)
+	t.Setenv("LC_CTYPE", "C.UTF-8")
+	t.Setenv("NODEPROBE_TEST_SECRET", "must-not-pass")
+	env := acceptedEnv(Capability{Titles: "/titles", Providers: "/providers"})
+	return nodeprobe, env
+}
+
+func envValue(env []string, key string) (string, bool) {
+	prefix := key + "="
+	for _, item := range env {
+		if strings.HasPrefix(item, prefix) {
+			return strings.TrimPrefix(item, prefix), true
+		}
+	}
+	return "", false
+}
+
+func withoutEnv(env []string, keys ...string) []string {
+	var out []string
+	for _, item := range env {
+		keep := true
+		for _, key := range keys {
+			if strings.HasPrefix(item, key+"=") {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func TestAcceptedUniquePiMissingChannelHealthIsNormal(t *testing.T) {

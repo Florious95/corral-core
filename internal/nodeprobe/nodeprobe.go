@@ -269,7 +269,10 @@ func (r *Runner) Sample(ctx context.Context, socket string) (Report, error) {
 
 func acceptedEnv(c Capability) []string {
 	env := []string{"NODEPROBE_FIXTURES=" + c.Titles, "NODEPROBE_PROVIDERS=" + c.Providers}
-	for _, key := range []string{"PATH", "HOME", "TMPDIR", "NODEPROBE_PI_ACTIVITY_DIR"} {
+	// tmux emits the pane inventory separator according to the active locale.
+	// Keep the child environment sanitized, while preserving only the locale
+	// operands needed for its UTF-8 output (never the arbitrary parent env).
+	for _, key := range []string{"LANG", "LC_CTYPE", "LC_ALL", "PATH", "HOME", "TMPDIR", "NODEPROBE_PI_ACTIVITY_DIR"} {
 		if v, ok := os.LookupEnv(key); ok {
 			env = append(env, key+"="+v)
 		}
