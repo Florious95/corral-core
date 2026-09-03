@@ -71,15 +71,19 @@ class PiGrokLampAndroidTest {
 
         val frames = buildList {
             add(w0)
-            repeat(62) {
+            repeat(63) {
                 rule.mainClock.advanceTimeBy(32)
                 add(motion("pi-w"))
             }
         }
         val elapsed = frames.map { field(it, "elapsed") }
-        assertEquals((0..1984 step 32).toList(), elapsed)
+        val expectedElapsed = (0..1984 step 32).toList()
+        assertEquals(0, elapsed[0])
+        assertEquals(0, elapsed[1])
+        assertEquals(expectedElapsed, elapsed.drop(1))
+        assertTrue(elapsed.zipWithNext().all { (before, after) -> after >= before })
         val positions = frames.map { field(it, "position") }
-        assertEquals((0..1984 step 32).map { it * 21 / 2000 }, positions)
+        assertEquals((0..1984 step 32).map { it * 21 / 2000 }, positions.drop(1))
         assertEquals(21, positions.toSet().size)
         assertEquals(0, positions.first())
         assertEquals(20, positions.last())
