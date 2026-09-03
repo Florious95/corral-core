@@ -66,7 +66,6 @@ fun FavoritesScreen(
                     SessionRow(
                         item = item,
                         tagPrefix = "fav",
-                        showPath = true,
                         onClick = { onSessionClick(item) },
                         onToggleFavorite = { onToggleStar(item) },
                         unfavoriteOnly = true,

@@ -51,9 +51,9 @@ import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
- * Unified ordinary/favorite session row.
+ * Unified ordinary/favorite session row (title + cwd path, 66dp).
  * Left: existing CLI working lamp (animated iff working+normal) or「不在线」.
- * Middle: display name (+ path when asked). Right: official Provider mark only.
+ * Middle: display name and path. Right: official Provider mark only.
  * The row is the sole gesture owner: short-press opens when online; long-press
  * shows exactly one favorite action. Icons and the lamp are not clickable.
  */
@@ -62,7 +62,6 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 fun SessionRow(
     item: SessionItem,
     tagPrefix: String,
-    showPath: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     unfavoriteOnly: Boolean,
@@ -72,7 +71,7 @@ fun SessionRow(
     val pressed by interaction.collectIsPressedAsState()
     var menu by remember { mutableStateOf(false) }
     val motion = sessionRowMotion(item.status, item.health, item.isOnline)
-    val rowHeight = if (showPath) Dims.rowHeightWithSubtitle else Dims.rowHeightSingleLine
+    val rowHeight = Dims.rowHeightWithSubtitle
     val actionLabel = if (unfavoriteOnly || item.starred) "取消收藏" else "收藏"
     Box {
         Row(
@@ -107,19 +106,15 @@ fun SessionRow(
                     .height(rowHeight),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                if (showPath) {
-                    Column {
-                        SessionNameText(
-                            item.displayName,
-                            Modifier.testTag("$tagPrefix-id-${item.id}"),
-                        )
-                        Box(Modifier.height(Dims.subtitleGap))
-                        PathText(item.path)
-                    }
-                } else {
+                Column {
                     SessionNameText(
                         item.displayName,
                         Modifier.testTag("$tagPrefix-id-${item.id}"),
+                    )
+                    Box(Modifier.height(Dims.subtitleGap))
+                    PathText(
+                        item.path,
+                        Modifier.testTag("$tagPrefix-path-${item.id}"),
                     )
                 }
             }

@@ -1,5 +1,0 @@
-androidsvg 1.4
-https://repo1.maven.org/maven2/com/caverock/androidsvg/1.4/androidsvg-1.4.jar
-SHA-256: 729c67ef475f19f112d01e4fc8e55b1f23841912f8e5090db27992801a04f79d
-License: Apache License, Version 2.0
-Used only to render the vendored official Provider SVG marks.

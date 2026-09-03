@@ -91,7 +91,6 @@ internal fun L2SessionList(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                showPath = true,
             )
         }
     }

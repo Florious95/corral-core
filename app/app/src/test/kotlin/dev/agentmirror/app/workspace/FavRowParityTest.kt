@@ -149,17 +149,17 @@ class FavRowParityTest {
 
         val refA = live[0].ref
         compose.onNodeWithTag("fav-star-$refA").assertDoesNotExist()
+        compose.onNodeWithTag("fav-provider-$refA", useUnmergedTree = true).assertDoesNotExist()
         val lamp = compose.onNodeWithTag("fav-motion-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val mark = compose.onNodeWithTag("fav-provider-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val path = compose.onNodeWithTag("fav-path-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val row = compose.onNodeWithTag("fav-row-$refA").getUnclippedBoundsInRoot()
         assertTrue(
             "灯在标题之前 lamp.left=${lamp.left} id.left=${id.left}",
             lamp.left < id.left,
         )
-        assertTrue(
-            "Provider 图标在标题之后 id.right=${id.right} mark.left=${mark.left}",
-            id.right <= mark.left,
-        )
+        assertTrue("cwd path slot present", path.bottom.value - path.top.value > 0f)
+        assertEquals(66.0, (row.bottom.value - row.top.value).toDouble(), 1.0)
     }
 
     private fun centerY(rect: DpRect) = (rect.top + rect.bottom) / 2
