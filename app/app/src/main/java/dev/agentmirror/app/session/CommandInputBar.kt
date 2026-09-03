@@ -23,16 +23,7 @@
  */
 package dev.agentmirror.app.session
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import android.os.Build
-import android.view.KeyEvent
-import android.view.View
-import android.view.Window
 import android.view.inputmethod.InputMethodManager
-import android.window.OnBackInvokedCallback
-import android.window.OnBackInvokedDispatcher
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -58,7 +49,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,14 +60,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -89,8 +73,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 
 /** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
 internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
@@ -114,7 +96,6 @@ fun CommandInputBar(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val view = LocalView.current
-    val activity = LocalContext.current.findActivity()
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
     // GLOBAL_ACTION_BACK during IME attach can fail hide/clearFocus while the field
@@ -128,10 +109,6 @@ fun CommandInputBar(
         view.windowToken?.let { token ->
             view.context.getSystemService(InputMethodManager::class.java)
                 ?.hideSoftInputFromWindow(token, 0)
-        }
-        activity?.let {
-            WindowCompat.getInsetsController(it.window, view)
-                .hide(WindowInsetsCompat.Type.ime())
         }
         focusManager.clearFocus(force = true)
     }
@@ -153,51 +130,6 @@ fun CommandInputBar(
     // System Back while the editor is focused must hide IME and blur (source onBlur → 46dp)
     // instead of leaving the capsule expanded or consuming the host session-pop BackHandler.
     BackHandler(enabled = focused) { collapseEditor() }
-    // Register on the Activity dispatcher (always present) at OVERLAY so a BACK that
-    // arrives while IME is attaching is not lost to view.findOnBackInvokedDispatcher()==null
-    // or to IME's DEFAULT callback. Do not key this on keyboardController (re-register gap).
-    DisposableEffect(focused, activity) {
-        if (!focused || activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            return@DisposableEffect onDispose { }
-        }
-        val dispatcher = activity.onBackInvokedDispatcher
-        val callback = OnBackInvokedCallback { collapseEditor() }
-        dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_OVERLAY, callback)
-        onDispose { dispatcher.unregisterOnBackInvokedCallback(callback) }
-    }
-    DisposableEffect(focused, view) {
-        if (!focused) return@DisposableEffect onDispose { }
-        val listener = View.OnKeyListener { _, keyCode, event ->
-            if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
-                collapseEditor()
-                true
-            } else {
-                false
-            }
-        }
-        view.setOnKeyListener(listener)
-        onDispose { view.setOnKeyListener(null) }
-    }
-    // Accessibility GLOBAL_ACTION_BACK injects KEYCODE_BACK at the window when
-    // predictive-back callbacks are not the active path (IME attaching).
-    DisposableEffect(focused, activity) {
-        if (!focused || activity == null) return@DisposableEffect onDispose { }
-        val window = activity.window
-        val previous = window.callback ?: return@DisposableEffect onDispose { }
-        val wrapped = object : Window.Callback by previous {
-            override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-                if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                    if (event.action == KeyEvent.ACTION_UP) collapseEditor()
-                    return true
-                }
-                return previous.dispatchKeyEvent(event)
-            }
-        }
-        window.callback = wrapped
-        onDispose {
-            if (window.callback === wrapped) window.callback = previous
-        }
-    }
     val sourceExpandedLines = expandedLines.coerceIn(2, 5)
     val editorExpanded = focused && collapseRequest == 0
     val fieldHeight by animateDpAsState(
@@ -279,14 +211,6 @@ fun CommandInputBar(
                         .height(fieldHeight)
                         .padding(vertical = 6.dp)
                         .testTag("session-command-editor")
-                        .onPreviewKeyEvent { event ->
-                            if (event.key == Key.Back && event.type == KeyEventType.KeyUp) {
-                                collapseEditor()
-                                true
-                            } else {
-                                false
-                            }
-                        }
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 awaitFirstDown(
@@ -346,12 +270,6 @@ fun CommandInputBar(
             }
         }
     }
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }
 
 @Preview(name = "CommandInputBar · Light", showBackground = true)

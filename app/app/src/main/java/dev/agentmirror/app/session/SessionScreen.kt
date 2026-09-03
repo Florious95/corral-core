@@ -102,6 +102,23 @@ import java.io.ByteArrayOutputStream
  * [SessionViewModel]，本层只接现有会话切换、查看列表、快捷键和附件入口。
  */
 @Composable
+internal fun SessionScreenBackHandler(
+    overlayOpen: () -> Boolean,
+    dockMode: () -> DockRowMode,
+    onCloseOverlay: () -> Unit,
+    onDockModeChange: (DockRowMode) -> Unit,
+    onBack: () -> Unit,
+) {
+    BackHandler(enabled = true) {
+        when {
+            overlayOpen() -> onCloseOverlay()
+            dockMode() != DockRowMode.Sessions -> onDockModeChange(DockRowMode.Sessions)
+            else -> onBack()
+        }
+    }
+}
+
+@Composable
 fun SessionScreen(
     viewModel: SessionViewModel,
     name: String,
@@ -193,12 +210,13 @@ fun SessionScreen(
     var dockMode by androidx.compose.runtime.saveable.rememberSaveable {
         mutableStateOf(DockRowMode.Sessions)
     }
-    var commandDockBackArmed by remember { mutableStateOf(false) }
-    BackHandler(enabled = viewModel.overlayOpen || commandDockBackArmed) {
-        if (viewModel.overlayOpen) viewModel.closeOverlay()
-        dockMode = DockRowMode.Sessions
-        commandDockBackArmed = false
-    }
+    SessionScreenBackHandler(
+        overlayOpen = { viewModel.overlayOpen },
+        dockMode = { dockMode },
+        onCloseOverlay = viewModel::closeOverlay,
+        onDockModeChange = { dockMode = it },
+        onBack = onBack,
+    )
     val favoriteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
@@ -305,10 +323,7 @@ fun SessionScreen(
                         }
                     },
                     dockMode = dockMode,
-                    onDockModeChange = {
-                        if (dockMode != it) commandDockBackArmed = true
-                        dockMode = it
-                    },
+                    onDockModeChange = { dockMode = it },
                     sessions = favoriteSessions,
                     sessionListState = favoriteListState,
                     onSessionSelect = { id ->
@@ -335,9 +350,8 @@ fun SessionScreen(
                     },
                     onPickAttachment = { attachMenu = true },
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
-                    onBack = onBack,
                     onOpenViewMenu = {
-                        commandDockBackArmed = true
+                        dockMode = DockRowMode.Sessions
                         viewModel.openOverlay()
                     },
                     modifier = Modifier.statusBarsPadding().navigationBarsPadding(),

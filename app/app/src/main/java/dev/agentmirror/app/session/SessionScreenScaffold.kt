@@ -2,7 +2,7 @@
  * ─────────────────────────────────────────────────────────────
  * SessionScreenScaffold.kt — 对话页顶层组合
  *
- * 对应设计稿：无顶栏（返回=系统边缘手势，由宿主处理 onBack）；
+ * 对应设计稿：无顶栏（返回=系统边缘手势，由会话屏统一处理）；
  * 中间终端画布占满剩余空间（AndroidView{TermSurfaceView} 从
  * terminalCanvas 插槽传入，本文件不触碰其内容）；底部恒定两行 dock：
  * 倒数第二行三态（DockSecondRow）+ 最底行输入胶囊（CommandInputBar）。
@@ -186,7 +186,6 @@ fun SessionScreenScaffold(
     onSendText: (String) -> Unit,
     onPickAttachment: () -> Unit,
     onKeyToken: (String) -> Unit,
-    onBack: () -> Unit, // 无顶栏：仅供宿主接 PredictiveBack/边缘手势，UI 上不出现
     onOpenViewMenu: () -> Unit,
     modifier: Modifier = Modifier,
     inputExpandedLines: Int = 3,
@@ -340,7 +339,7 @@ private fun PreviewScaffoldLight() {
             onSessionSelect = {},
             value = TextFieldValue(""), onValueChange = {},
             onSendText = {}, onPickAttachment = {}, onKeyToken = {},
-            onBack = {}, onOpenViewMenu = {},
+            onOpenViewMenu = {},
         )
     }
 }
@@ -358,7 +357,7 @@ private fun PreviewScaffoldDark() {
             onSessionSelect = {},
             value = TextFieldValue("bazel test //..."), onValueChange = {},
             onSendText = {}, onPickAttachment = {}, onKeyToken = {},
-            onBack = {}, onOpenViewMenu = {},
+            onOpenViewMenu = {},
         )
     }
 }

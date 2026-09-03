@@ -19,14 +19,15 @@ package dev.agentmirror.app.session
 import android.accessibilityservice.AccessibilityService
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -43,7 +44,9 @@ import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.L2Status
 import dev.agentmirror.app.workspace.ProductionOverlayFixture
+import androidx.lifecycle.Lifecycle
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -163,10 +166,16 @@ class SessionRouteOverlayInstrumentedTest {
             compose.onNodeWithTag("dock-open-hotkeys").performClick()
             compose.onNodeWithText("Esc").assertIsDisplayed()
             assertTrue(performGlobalBack())
-            compose.onNodeWithTag("session-command-input").assertIsDisplayed()
+            compose.waitUntil(timeoutMillis = 5_000) {
+                compose.onAllNodesWithText("Esc").fetchSemanticsNodes().isEmpty() &&
+                    compose.onAllNodesWithTag("favorite-session-list").fetchSemanticsNodes().isNotEmpty()
+            }
             assertEquals(0, hostBackCount)
+            compose.onNodeWithText("Esc").assertDoesNotExist()
+            assertSessionStillResumed()
             assertTrue(performGlobalBack())
             compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
+            assertSessionStillResumed()
         }
     }
 
@@ -182,10 +191,8 @@ class SessionRouteOverlayInstrumentedTest {
             }
             compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
             assertTrue(performGlobalBack())
-            compose.waitForIdle()
-            assertEquals(0, hostBackCount)
-            assertTrue(performGlobalBack())
             compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
+            assertSessionStillResumed()
         }
     }
 
@@ -203,6 +210,7 @@ class SessionRouteOverlayInstrumentedTest {
             assertEquals(0, hostBackCount)
             assertTrue(performGlobalBack())
             compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
+            assertSessionStillResumed()
         }
     }
 
@@ -239,6 +247,58 @@ class SessionRouteOverlayInstrumentedTest {
         }
     }
 
+    @Test
+    fun productionSessionRouteFocusedBackCollapsesThenDefaultBackReachesHost() {
+        var hostBackCount = 0
+        runProductionRoute(onBack = { hostBackCount++ }) {
+            val originalCallback = compose.activity.window.callback
+            compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
+            compose.waitUntil(timeoutMillis = 5_000) { inputCapsuleHeight() >= 85.5f }
+            assertSame(originalCallback, compose.activity.window.callback)
+
+            assertTrue(performGlobalBack())
+            compose.waitUntil(timeoutMillis = 5_000) { inputCapsuleHeight() <= 46.5f }
+            assertEquals(0, hostBackCount)
+            assertSame(originalCallback, compose.activity.window.callback)
+            assertSessionStillResumed()
+
+            assertTrue(performGlobalBack())
+            compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
+            assertSessionStillResumed()
+        }
+    }
+
+    @Test
+    fun productionSessionRouteRapidDispatcherBackPopsHostExactlyOnce() {
+        var hostBackCount = 0
+        runProductionRoute(onBack = { hostBackCount++ }) {
+            openMenu()
+            compose.onNodeWithTag("dock-open-hotkeys").performClick()
+            compose.onNodeWithText("Esc").assertIsDisplayed()
+            compose.runOnUiThread {
+                compose.activity.onBackPressedDispatcher.onBackPressed()
+                compose.activity.onBackPressedDispatcher.onBackPressed()
+            }
+            compose.waitUntil(timeoutMillis = 5_000) { hostBackCount == 1 }
+            assertSessionStillResumed()
+            assertEquals(1, hostBackCount)
+        }
+    }
+
+    private fun inputCapsuleHeight(): Float {
+        val bounds = compose.onNodeWithTag("session-command-input").getUnclippedBoundsInRoot()
+        return bounds.bottom.value - bounds.top.value
+    }
+
+    private fun assertSessionStillResumed() {
+        assertTrue(
+            "session activity must remain resumed",
+            compose.activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+        )
+        assertTrue("session activity must not finish", !compose.activity.isFinishing)
+        assertTrue("session activity must not be destroyed", !compose.activity.isDestroyed)
+    }
+
     private fun openMenu() {
         compose.onNodeWithContentDescription("返回菜单", useUnmergedTree = true).performClick()
         compose.waitForIdle()
@@ -269,7 +329,6 @@ class SessionRouteOverlayInstrumentedTest {
         }
         try {
             compose.setContent {
-                BackHandler(enabled = true, onBack = onBack)
                 SessionRoute(
                     ref = "production-current",
                     name = "生产当前会话",
