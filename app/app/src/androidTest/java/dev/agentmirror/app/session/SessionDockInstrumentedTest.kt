@@ -11,7 +11,6 @@
 package dev.agentmirror.app.session
 
 import android.accessibilityservice.AccessibilityService
-import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -141,10 +140,13 @@ class SessionDockInstrumentedTest {
         val restingInputBottom = inputBottom()
         assertEquals(32f, collapsed, 0.5f)
         assertEquals(46f, inputCapsuleHeight(), 0.5f)
-        compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
-        compose.waitUntil(timeoutMillis = 5_000) {
-            inputHeight() >= 71.5f && inputBottom() < restingInputBottom - 100f
-        }
+        val ime = SessionImeExpandProbe(compose)
+        ime.attach()
+        try {
+        ime.clickEditorWhenImeHiddenThenAwaitHeightAndShow(
+            heightReady = { inputHeight() >= 71.5f },
+            heightOperand = { "field=${inputHeight()} capsule=${inputCapsuleHeight()}" },
+        )
         val expanded = inputHeight()
         assertEquals(72f, expanded, 0.5f)
         assertEquals(86f, inputCapsuleHeight(), 0.5f)
@@ -160,10 +162,10 @@ class SessionDockInstrumentedTest {
         }
         assertEquals(32f, inputHeight(), 0.5f)
         assertEquals(46f, inputCapsuleHeight(), 0.5f)
-        compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
-        compose.waitUntil(timeoutMillis = 5_000) {
-            inputHeight() >= 71.5f && inputBottom() < restingInputBottom - 100f
-        }
+        ime.clickEditorWhenImeHiddenThenAwaitHeightAndShow(
+            heightReady = { inputHeight() >= 71.5f },
+            heightOperand = { "field=${inputHeight()} capsule=${inputCapsuleHeight()}" },
+        )
 
         // Real outside pointer action must blur, collapse, and return the dock from IME raise.
         compose.onNodeWithTag("session-terminal-canvas").performTouchInput { click() }
@@ -172,10 +174,10 @@ class SessionDockInstrumentedTest {
         }
         assertEquals(32f, inputHeight(), 0.5f)
         assertEquals(46f, inputCapsuleHeight(), 0.5f)
-        compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
-        compose.waitUntil(timeoutMillis = 5_000) {
-            inputHeight() >= 71.5f && imeShown()
-        }
+        ime.clickEditorWhenImeHiddenThenAwaitHeightAndShow(
+            heightReady = { inputHeight() >= 71.5f },
+            heightOperand = { "field=${inputHeight()} capsule=${inputCapsuleHeight()}" },
+        )
 
         compose.onNodeWithTag("favorite-session-list")
             .performScrollToNode(hasText("收藏-6"))
@@ -206,6 +208,9 @@ class SessionDockInstrumentedTest {
         compose.onAllNodesWithText("快捷键").assertCountEquals(1)
         compose.onAllNodesWithText("查看").assertCountEquals(1)
         compose.onAllNodesWithText("会话").assertCountEquals(1)
+        } finally {
+            ime.detach()
+        }
     }
 
     @Test
@@ -286,14 +291,6 @@ class SessionDockInstrumentedTest {
     private fun scrollValue(): Float {
         val node = compose.onNodeWithTag("favorite-session-list").fetchSemanticsNode()
         return node.config[SemanticsProperties.HorizontalScrollAxisRange].value()
-    }
-
-    private fun imeShown(): Boolean {
-        var shown = false
-        compose.runOnUiThread {
-            shown = compose.activity.window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
-        }
-        return shown
     }
 
     private fun inputBottom(): Float = compose.onNodeWithTag("session-command-input-field")

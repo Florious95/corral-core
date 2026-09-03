@@ -108,8 +108,13 @@ class SessionRouteImeBodyInstrumentedTest {
             assertSourceFont(surface)
             val restingCapsule = inputCapsuleHeight()
 
-            compose.onNodeWithTag("session-command-editor").performTouchInput { click() }
-            compose.waitUntil(timeoutMillis = 5_000) { inputCapsuleHeight() >= 85.5f }
+            val ime = SessionImeExpandProbe(compose)
+            ime.attach()
+            try {
+            ime.clickEditorWhenImeHiddenThenAwaitHeightAndShow(
+                heightReady = { inputCapsuleHeight() >= 85.5f },
+                heightOperand = { "capsule=${inputCapsuleHeight()}" },
+            )
             assertEquals(86f, inputCapsuleHeight(), 0.5f)
             lateinit var focused: TermSurfaceView
             compose.runOnUiThread { focused = termSurface() }
@@ -118,6 +123,7 @@ class SessionRouteImeBodyInstrumentedTest {
             assertTrue("IME squeeze must leave a real measured canvas", focused.width > 0 && focused.height > 0)
             assertSourceFont(focused)
 
+            compose.waitForIdle()
             assertTrue(
                 InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(
                     AccessibilityService.GLOBAL_ACTION_BACK,
@@ -132,6 +138,9 @@ class SessionRouteImeBodyInstrumentedTest {
             assertTrue("terminal body must remain visible after Back", bodyIsVisible())
             assertEquals(46f, inputCapsuleHeight(), 0.5f)
             assertSourceFont(after)
+            } finally {
+                ime.detach()
+            }
         } finally {
             compose.runOnUiThread {
                 MirrorForegroundService.stop(compose.activity)
