@@ -39,6 +39,7 @@ private val MarkSize = 18.dp
  * @pre [canonicalId] is the DTO provider field, already fail-closed to unknown
  * @post exact extract/PNG hit draws that mark; miss draws no node content
  * @err none
+ * @inv no question-mark, status overlay, or click handler on the mark
  */
 @Composable
 fun ProviderMark(

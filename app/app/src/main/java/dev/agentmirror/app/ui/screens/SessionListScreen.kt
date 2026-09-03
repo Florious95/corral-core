@@ -35,6 +35,16 @@ import dev.agentmirror.app.ui.theme.TypeSizes
  * 顶部：‹ 工作区 + LAN，下面是工作区名 + 完整路径。
  * 行结构：CLI 工作灯 → 会话显示名 + cwd 路径（66dp）→ 右侧官方 Provider 图标。
  * 整行是唯一手势 owner：短按打开（在线），长按弹出收藏/取消收藏。
+ *
+ * @contract
+ * @pre sessions carry fail-closed DTO provider/activity/health
+ * @post every row is the shared 66dp title+path SessionRow
+ * @err none
+ * @inv this screen does not offer close/create/config actions
+ * @consumes dev.agentmirror.app.tsnet
+ * @consumes dev.agentmirror.app.ui.components
+ * @consumes dev.agentmirror.app.ui.model
+ * @consumes dev.agentmirror.app.ui.theme
  */
 @Composable
 fun SessionListScreen(

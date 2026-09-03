@@ -28,3 +28,13 @@ Owning commit `1b12e92d8efb1c0eec41e14a264f9d80ee833ad9`. Mapping `"pi" to R.dra
 | `copilot` | `drawable-nodpi/provider_copilot_color.png` | `90c8b385064a918ab2b01d93f19ab95ef64dc2e3` | 4669 | `49faef29cb14fa7aaa73672ef126acee65ff504c2463a6672d9a9364fa75c54a` |
 
 See `SOURCE-AUDIT.md`.
+
+## Prior-app LICENSE / NOTICE (two blobs only)
+
+Exact files from `1b12e92d8efb1c0eec41e14a264f9d80ee833ad9`, no icon pack/runtime:
+
+- `third_party/provider-icons/lobehub-1.94.0/LICENSE` git blob `1dd53d2a9d99e5f91113831a850276ef530cb9d2` SHA-256 `add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a`
+- `third_party/provider-icons/lobehub-1.94.0/NOTICE` git blob `28bb8f4ebf056e6233b015cf61a106c6335185a5` SHA-256 `92418dde8a6ea4eff4be9bf02a5a9e5581124fe935f0b41b42726d214dc09e14`
+- `third_party/provider-icons/lobehub-1.94.0/PROVENANCE-pi-copilot.txt` (the two RESOURCE-MAP lines + current git blobs)
+
+No `src/*.svg`, no AndroidSVG, no LobeHub runtime.
