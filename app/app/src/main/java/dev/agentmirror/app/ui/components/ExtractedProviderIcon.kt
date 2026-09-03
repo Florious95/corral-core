@@ -28,6 +28,12 @@ import androidx.core.graphics.PathParser
 /**
  * Frozen geometry copied from `icon()` in Agent App Prototype.dc.html.
  * Runtime draws these primitives; it does not parse the companion raw SVG.
+ *
+ * @contract
+ * @pre canonicalId is one of claude_code, codex, grok, cursor
+ * @post draws() is true only for those four; draw() paints blob+inner from frozen path text
+ * @err none
+ * @inv does not load or parse the raw SVG bytes
  */
 internal object ExtractedProviderIcon {
     const val BLOB_PATH =
