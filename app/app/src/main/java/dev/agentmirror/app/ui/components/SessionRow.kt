@@ -56,6 +56,16 @@ import dev.agentmirror.app.ui.theme.TypeSizes
  * Middle: display name and path. Right: official Provider mark only.
  * The row is the sole gesture owner: short-press opens when online; long-press
  * shows exactly one favorite action. Icons and the lamp are not clickable.
+ *
+ * @contract
+ * @pre item.provider/health/status are fail-closed DTO fields
+ * @post 66dp title+path; lamp motion from sessionRowMotion; mark has no gestures
+ * @err none
+ * @inv short-press opens only when online; long-press is the single favorite action
+ * @consumes dev.agentmirror.app
+ * @consumes dev.agentmirror.app.tsnet
+ * @consumes dev.agentmirror.app.ui.model
+ * @consumes dev.agentmirror.app.ui.theme
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

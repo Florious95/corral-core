@@ -30,6 +30,12 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 /**
  * 收藏页。与普通会话列表同一行结构：CLI 工作灯 / 不在线、标题+路径、右侧官方 Provider 图标。
  * 整行唯一手势：在线短按打开，离线短按不导航；长按唯一「取消收藏」。
+ *
+ * @contract
+ * @pre favorites are the same SessionItem rows as the ordinary list
+ * @post row layout matches SessionListScreen; long-press is unfavorite only
+ * @err none
+ * @inv offline short-press does not navigate
  */
 @Composable
 fun FavoritesScreen(
