@@ -16,7 +16,9 @@
 
 package dev.agentmirror.app.workspace
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import dev.agentmirror.app.conn.Level2Frame
 import dev.agentmirror.app.conn.Session
@@ -31,7 +33,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 061：状态为未知时就显示「未知」，不许显示成空闲。
+ * Unknown activity/health must not render as idle or as repeated「未知」text.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -83,8 +85,13 @@ class L2UnknownStatusTest {
                 )
             }
         }
-        compose.onNodeWithText("未知").assertExists("unknown 必须显示「未知」")
+        compose.onNodeWithText("未知").assertDoesNotExist()
         compose.onNodeWithText("空闲").assertDoesNotExist()
+        val motion = compose.onNodeWithTag("l2-motion-ref-unk", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }
+            .joinToString()
+        assertEquals("", motion)
     }
 
     @Test

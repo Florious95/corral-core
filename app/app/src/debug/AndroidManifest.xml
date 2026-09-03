@@ -6,5 +6,8 @@
             android:name="dev.agentmirror.app.session.MobileSessionFixtureActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+        <activity
+            android:name=".ExternalSessionListAcceptanceActivity"
+            android:exported="true" />
     </application>
 </manifest>
