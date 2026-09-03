@@ -21,30 +21,31 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.ui.model.SessionRowMotion
 import dev.agentmirror.app.ui.theme.SessionRowMarker
 
 /**
- * Ordinary session-list marker, sourced from the desktop `agents-dot` pulse.
- * Working is a solid 8dp green center with a 0→5dp→0 outward ring over 1.8s;
- * it is not the older two-alpha-frame busyDot. Idle is a static hollow marker.
- * None is an empty same-size slot: no question mark, no「未知」text.
+ * Ordinary session-list marker, sourced from Codex CLI's native shimmer bullet.
+ * Working is one `•` glyph with the upstream 2s cosine sweep; idle is a static
+ * `◦`; None is an empty same-size slot: no question mark, no「未知」text.
  *
  * @contract
  * @pre motion is already fail-closed (unknown/abnormal/offline → None)
- * @post Working pulses; Idle is static; None is an empty same-size slot
+ * @post Working shimmers; Idle is static; None is an empty same-size slot
  * @err none
  * @inv never renders a question mark or the word 未知
  */
@@ -56,46 +57,60 @@ fun CliWorkingLamp(
     val slot = modifier.size(SessionRowMarker.size)
     when (motion) {
         SessionRowMotion.None -> Box(slot)
-        SessionRowMotion.Idle -> Canvas(
-            modifier = slot.semantics { contentDescription = "idle:static" },
-        ) {
-            drawCircle(
-                color = SessionRowMarker.idleBorder,
-                radius = size.minDimension / 2f - 0.75.dp.toPx(),
-                style = Stroke(width = 1.5.dp.toPx()),
-            )
-        }
+        SessionRowMotion.Idle -> MarkerText(
+            glyph = SessionRowMarker.idleGlyph,
+            color = LocalAppPalette.current.metaText,
+            description = "idle:static",
+            modifier = slot,
+        )
         SessionRowMotion.Working -> {
+            val p = LocalAppPalette.current
             val transition = rememberInfiniteTransition(label = "sessionRowPulse")
             val elapsed by transition.animateFloat(
                 initialValue = 0f,
-                targetValue = SessionRowMarker.durationMillis.toFloat(),
+                targetValue = SessionRowMarker.periodMillis.toFloat(),
                 animationSpec = infiniteRepeatable(
-                    animation = tween(SessionRowMarker.durationMillis, easing = LinearEasing),
+                    animation = tween(SessionRowMarker.periodMillis, easing = LinearEasing),
                 ),
                 label = "sessionRowPulseElapsed",
             )
-            val frame = SessionRowMarker.frameAt(elapsed.toLong())
-            Canvas(
-                modifier = slot.semantics {
-                    contentDescription =
-                        "working:radius=${frame.ringRadiusDp}:alpha=${frame.ringAlpha}"
-                },
-            ) {
-                val center = Offset(size.width / 2f, size.height / 2f)
-                drawCircle(
-                    color = SessionRowMarker.ring.copy(alpha = frame.ringAlpha),
-                    radius = size.minDimension / 2f + frame.ringRadiusDp.dp.toPx(),
-                    center = center,
-                    style = Stroke(width = 1.dp.toPx()),
-                )
-                drawCircle(
-                    color = SessionRowMarker.center,
-                    radius = size.minDimension / 2f,
-                    center = center,
-                )
-            }
+            val sourceElapsed = elapsed.toLong() / SessionRowMarker.redrawCadenceMillis *
+                SessionRowMarker.redrawCadenceMillis
+            val frame = SessionRowMarker.frameAt(
+                sourceElapsed,
+                foreground = p.rowTitleText,
+                background = p.listBackground,
+            )
+            MarkerText(
+                glyph = frame.glyph,
+                color = frame.color,
+                description = "working:glyph=${frame.glyph}:intensity=${frame.intensity}",
+                modifier = slot,
+            )
         }
+    }
+}
+
+@Composable
+private fun MarkerText(
+    glyph: String,
+    color: Color,
+    description: String,
+    modifier: Modifier,
+) {
+    Box(
+        modifier = modifier.semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = glyph,
+            color = color,
+            fontSize = SessionRowMarker.fontSize,
+            fontWeight = FontWeight.Bold,
+            lineHeight = SessionRowMarker.fontSize,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
