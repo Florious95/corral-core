@@ -62,18 +62,25 @@ class L2RowLayoutTest {
         compose.waitForIdle()
 
         compose.onNodeWithTag("l2-star-ref-w").assertDoesNotExist()
+        compose.onNodeWithTag("l2-provider-ref-w", useUnmergedTree = true).assertDoesNotExist()
         val lampW = compose.onNodeWithTag("l2-motion-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val idW = compose.onNodeWithTag("l2-id-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val markW = compose.onNodeWithTag("l2-provider-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val pathW = compose.onNodeWithTag("l2-path-ref-w", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val lampI = compose.onNodeWithTag("l2-motion-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val idI = compose.onNodeWithTag("l2-id-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val markI = compose.onNodeWithTag("l2-provider-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val pathI = compose.onNodeWithTag("l2-path-ref-i", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val rowW = compose.onNodeWithTag("l2-row-ref-w").getUnclippedBoundsInRoot()
+        val rowI = compose.onNodeWithTag("l2-row-ref-i").getUnclippedBoundsInRoot()
 
         assertTrue("working lamp before name lamp.left=${lampW.left} id.left=${idW.left}", lampW.left < idW.left)
         assertTrue("idle lamp before name lamp.left=${lampI.left} id.left=${idI.left}", lampI.left < idI.left)
-        assertTrue("provider mark after name id.right=${idW.right} mark.left=${markW.left}", idW.right <= markW.left)
-        val rightDelta = kotlin.math.abs(markW.right.value - markI.right.value)
-        assertTrue("provider marks share right edge delta=$rightDelta", rightDelta < 2f)
+        assertTrue("path under/after name id.bottom=${idW.bottom} path.top=${pathW.top}", pathW.top.value + 0.5f >= idW.top.value)
+        val hW = rowW.bottom.value - rowW.top.value
+        val hI = rowI.bottom.value - rowI.top.value
+        val heightDelta = kotlin.math.abs(hW - hI)
+        assertTrue("both rows 66dp height delta=$heightDelta w=$hW i=$hI", heightDelta < 1f)
+        assertEquals(66.0, hW.toDouble(), 1.0)
+        assertTrue("path slots share right-ish edge", kotlin.math.abs(pathW.right.value - pathI.right.value) < 2f)
     }
 
     @Test

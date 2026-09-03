@@ -17,9 +17,9 @@
 package dev.agentmirror.app.ui.components
 
 /**
- * Presentation table from an already-canonical Provider id to a vendored
- * official mark. This is not detection: unknown/unrecognized ids return null
- * and the row shows no icon, no guessed neighbor, and no question mark.
+ * Closed canonical Provider ids the UI may name. This is not detection and
+ * is not an icon atlas: a drawable exists only when the user-frozen visual
+ * source contains one unique glyph for that id.
  *
  * @contract
  * @pre [id] is the status-core DTO canonical provider string
@@ -29,21 +29,22 @@ package dev.agentmirror.app.ui.components
 data class CanonicalProviderMark(
     val id: String,
     val displayName: String,
-    val assetPath: String,
-    val currentColor: Boolean,
 )
 
 object CanonicalProviderMarks {
     val all: List<CanonicalProviderMark> = listOf(
-        CanonicalProviderMark("claude_code", "Claude Code", "provider-icons/claude-color.svg", false),
-        CanonicalProviderMark("codex", "Codex", "provider-icons/codex-color.svg", false),
-        CanonicalProviderMark("copilot", "Copilot", "provider-icons/copilot-color.svg", false),
-        CanonicalProviderMark("grok", "Grok", "provider-icons/grok.svg", true),
-        CanonicalProviderMark("cursor", "Cursor", "provider-icons/cursor.svg", true),
-        CanonicalProviderMark("pi", "Pi", "provider-icons/pi.svg", true),
+        CanonicalProviderMark("claude_code", "Claude Code"),
+        CanonicalProviderMark("codex", "Codex"),
+        CanonicalProviderMark("copilot", "Copilot"),
+        CanonicalProviderMark("grok", "Grok"),
+        CanonicalProviderMark("cursor", "Cursor"),
+        CanonicalProviderMark("pi", "Pi"),
     )
 
     private val byId = all.associateBy { it.id }
 
     fun of(canonicalId: String): CanonicalProviderMark? = byId[canonicalId]
+
+    /** No glyph from the frozen JPEG source; never invent a substitute. */
+    fun drawableRes(canonicalId: String): Int? = null
 }
