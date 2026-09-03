@@ -56,11 +56,15 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
@@ -69,7 +73,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import dev.agentmirror.app.conn.InputKey
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.TermSurfaceView
 import dev.agentmirror.app.tsnet.ConnectionPath
@@ -101,21 +108,48 @@ import java.io.ByteArrayOutputStream
  * [SessionScreenScaffold] 的源码曲线 inset 动画推起整只 dock。业务状态与动作仍全部委托
  * [SessionViewModel]，本层只接现有会话切换、查看列表、快捷键和附件入口。
  */
+internal fun dispatchSessionBack(
+    focused: Boolean,
+    overlayOpen: Boolean,
+    dockMode: DockRowMode,
+    onCollapseFocused: () -> Unit,
+    onCloseOverlay: () -> Unit,
+    onDockModeChange: (DockRowMode) -> Unit,
+    onBack: () -> Unit,
+) {
+    when {
+        focused -> onCollapseFocused()
+        overlayOpen -> {
+            onCloseOverlay()
+            onDockModeChange(DockRowMode.Sessions)
+        }
+        dockMode != DockRowMode.Sessions -> onDockModeChange(DockRowMode.Sessions)
+        else -> onBack()
+    }
+}
+
 @Composable
 internal fun SessionScreenBackHandler(
+    focused: () -> Boolean,
+    onCollapseFocused: () -> Unit,
     overlayOpen: () -> Boolean,
     dockMode: () -> DockRowMode,
     onCloseOverlay: () -> Unit,
     onDockModeChange: (DockRowMode) -> Unit,
     onBack: () -> Unit,
 ) {
-    BackHandler(enabled = true) {
-        when {
-            overlayOpen() -> onCloseOverlay()
-            dockMode() != DockRowMode.Sessions -> onDockModeChange(DockRowMode.Sessions)
-            else -> onBack()
-        }
+    val dispatch = rememberUpdatedState {
+        dispatchSessionBack(
+            focused = focused(),
+            overlayOpen = overlayOpen(),
+            dockMode = dockMode(),
+            onCollapseFocused = onCollapseFocused,
+            onCloseOverlay = onCloseOverlay,
+            onDockModeChange = onDockModeChange,
+            onBack = onBack,
+        )
     }
+    BackHandler(enabled = true) { dispatch.value() }
 }
 
 @Composable
@@ -132,6 +166,34 @@ fun SessionScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val view = LocalView.current
+    var inputFocused by remember { mutableStateOf(false) }
+    var imeHideRequested by remember { mutableStateOf(false) }
+    var collapseRequest by remember { mutableStateOf(0) }
+    val requestDockCollapse: (String) -> Unit = remember(focusManager, keyboardController, view) {
+        { source ->
+            if (!imeHideRequested) {
+                val inputStartNs = System.nanoTime()
+                inputFocused = false
+                imeHideRequested = true
+                collapseRequest++
+                val imeStartNs = System.nanoTime()
+                keyboardController?.hide()
+                ViewCompat.getWindowInsetsController(view)?.hide(WindowInsetsCompat.Type.ime())
+                focusManager.clearFocus(force = true)
+                DiagLog.record(
+                    "session-dock-motion",
+                    "collapse source=$source input_start_ns=$inputStartNs " +
+                        "ime_hide_start_ns=$imeStartNs start_delta_ns=${imeStartNs - inputStartNs} " +
+                        "input_duration_ms=${SessionDockMotion.InputHeightMillis} " +
+                        "ime_duration_ms=${SessionDockMotion.KeyboardPushMillis} " +
+                        "total_duration_ms=${maxOf(SessionDockMotion.InputHeightMillis, SessionDockMotion.KeyboardPushMillis)}",
+                )
+            }
+        }
+    }
     var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
 
     // 附件选择:Photo Picker(ActivityResultContracts.PickVisualMedia,无权限弹窗)。
@@ -211,6 +273,8 @@ fun SessionScreen(
         mutableStateOf(DockRowMode.Sessions)
     }
     SessionScreenBackHandler(
+        focused = { inputFocused },
+        onCollapseFocused = { requestDockCollapse("system-back") },
         overlayOpen = { viewModel.overlayOpen },
         dockMode = { dockMode },
         onCloseOverlay = viewModel::closeOverlay,
@@ -324,6 +388,15 @@ fun SessionScreen(
                     },
                     dockMode = dockMode,
                     onDockModeChange = { dockMode = it },
+                    imeHideRequested = imeHideRequested,
+                    collapseRequest = collapseRequest,
+                    onDockCollapse = requestDockCollapse,
+                    onInputFocusedChanged = { inputFocused = it },
+                    onInputExpanded = {
+                        inputFocused = true
+                        imeHideRequested = false
+                        collapseRequest = 0
+                    },
                     sessions = favoriteSessions,
                     sessionListState = favoriteListState,
                     onSessionSelect = { id ->
@@ -350,10 +423,7 @@ fun SessionScreen(
                     },
                     onPickAttachment = { attachMenu = true },
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
-                    onOpenViewMenu = {
-                        dockMode = DockRowMode.Sessions
-                        viewModel.openOverlay()
-                    },
+                    onOpenViewMenu = viewModel::openOverlay,
                     modifier = Modifier.statusBarsPadding().navigationBarsPadding(),
                 )
                 SessionSwitchSheet(

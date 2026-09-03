@@ -187,6 +187,11 @@ fun SessionScreenScaffold(
     onPickAttachment: () -> Unit,
     onKeyToken: (String) -> Unit,
     onOpenViewMenu: () -> Unit,
+    imeHideRequested: Boolean? = null,
+    collapseRequest: Int? = null,
+    onDockCollapse: ((String) -> Unit)? = null,
+    onInputExpanded: (() -> Unit)? = null,
+    onInputFocusedChanged: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
     inputExpandedLines: Int = 3,
 ) {
@@ -197,14 +202,18 @@ fun SessionScreenScaffold(
     val imeSystemTargetBottom = with(density) {
         WindowInsets.imeAnimationTarget.getBottom(this).toDp()
     }
-    var imeHideRequested by remember { mutableStateOf(false) }
-    var collapseRequest by remember { mutableStateOf(0) }
-    val requestDockCollapse: (String) -> Unit = remember(focusManager, keyboardController, view) {
+    var localImeHideRequested by remember { mutableStateOf(false) }
+    var localCollapseRequest by remember { mutableStateOf(0) }
+    val requestDockCollapse: (String) -> Unit = onDockCollapse ?: remember(
+        focusManager,
+        keyboardController,
+        view,
+    ) {
         { source ->
-            if (!imeHideRequested) {
+            if (!localImeHideRequested) {
                 val inputStartNs = System.nanoTime()
-                imeHideRequested = true
-                collapseRequest++
+                localImeHideRequested = true
+                localCollapseRequest++
                 val imeStartNs = System.nanoTime()
                 keyboardController?.hide()
                 ViewCompat.getWindowInsetsController(view)?.hide(WindowInsetsCompat.Type.ime())
@@ -220,14 +229,20 @@ fun SessionScreenScaffold(
             }
         }
     }
+    val effectiveImeHideRequested = imeHideRequested ?: localImeHideRequested
+    val effectiveCollapseRequest = collapseRequest ?: localCollapseRequest
+    val requestDockExpand: () -> Unit = onInputExpanded ?: {
+        localImeHideRequested = false
+        localCollapseRequest = 0
+    }
     ClearFocusWhenImeHides(
-        collapseRequested = imeHideRequested,
+        collapseRequested = effectiveImeHideRequested,
         onImeHideStarted = { requestDockCollapse("system-back") },
     )
     val palette = LocalAppPalette.current
     val terminalCard = currentTerminalPalette()
     SourceImeMotionLayout(
-        targetBottom = if (imeHideRequested) 0.dp else imeSystemTargetBottom,
+        targetBottom = if (effectiveImeHideRequested) 0.dp else imeSystemTargetBottom,
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
@@ -240,7 +255,7 @@ fun SessionScreenScaffold(
                     .weight(1f)
                     .fillMaxWidth()
                     .testTag("session-terminal-canvas")
-                    .pointerInput(focusManager, requestDockCollapse) {
+                    .pointerInput(requestDockCollapse) {
                         awaitEachGesture {
                             awaitFirstDown(
                                 requireUnconsumed = false,
@@ -295,11 +310,9 @@ fun SessionScreenScaffold(
                     },
                     onPickAttachment = onPickAttachment,
                     expandedLines = inputExpandedLines,
-                    collapseRequest = collapseRequest,
-                    onExpandRequested = {
-                        imeHideRequested = false
-                        collapseRequest = 0
-                    },
+                    collapseRequest = effectiveCollapseRequest,
+                    onFocusedChanged = { onInputFocusedChanged?.invoke(it) },
+                    onExpandRequested = requestDockExpand,
                     onCollapseRequested = { requestDockCollapse("system-back") },
                 )
             }

@@ -23,8 +23,6 @@
  */
 package dev.agentmirror.app.session
 
-import android.view.inputmethod.InputMethodManager
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -62,9 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -88,30 +84,18 @@ fun CommandInputBar(
     modifier: Modifier = Modifier,
     expandedLines: Int = 3,
     collapseRequest: Int = 0,
+    onFocusedChanged: (Boolean) -> Unit = {},
     onExpandRequested: () -> Unit = {},
     onCollapseRequested: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val source = sessionDockSourceTokens()
     val keyboardController = LocalSoftwareKeyboardController.current
-    val focusManager = LocalFocusManager.current
-    val view = LocalView.current
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
     // GLOBAL_ACTION_BACK during IME attach can fail hide/clearFocus while the field
     // stays system-focused; ignore that gain so the capsule still returns to 46dp.
     var suppressFocusGain by remember { mutableStateOf(false) }
-    fun collapseEditor() {
-        onCollapseRequested?.invoke()
-        suppressFocusGain = true
-        focused = false
-        keyboardController?.hide()
-        view.windowToken?.let { token ->
-            view.context.getSystemService(InputMethodManager::class.java)
-                ?.hideSoftInputFromWindow(token, 0)
-        }
-        focusManager.clearFocus(force = true)
-    }
     LaunchedEffect(collapseRequest) {
         if (collapseRequest > 0) {
             suppressFocusGain = true
@@ -127,9 +111,6 @@ fun CommandInputBar(
             keyboardController?.hide()
         }
     }
-    // System Back while the editor is focused must hide IME and blur (source onBlur → 46dp)
-    // instead of leaving the capsule expanded or consuming the host session-pop BackHandler.
-    BackHandler(enabled = focused) { collapseEditor() }
     val sourceExpandedLines = expandedLines.coerceIn(2, 5)
     val editorExpanded = focused && collapseRequest == 0
     val fieldHeight by animateDpAsState(
@@ -220,6 +201,7 @@ fun CommandInputBar(
                                 suppressFocusGain = false
                                 onExpandRequested()
                                 focused = true
+                                onFocusedChanged(true)
                             }
                         }
                         .onFocusChanged { state ->
@@ -227,11 +209,13 @@ fun CommandInputBar(
                                 if (!suppressFocusGain) {
                                     onExpandRequested()
                                     focused = true
+                                    onFocusedChanged(true)
                                 }
                             } else {
                                 if (focused && !suppressFocusGain) onCollapseRequested?.invoke()
                                 suppressFocusGain = false
                                 focused = false
+                                onFocusedChanged(false)
                             }
                         },
                 )
