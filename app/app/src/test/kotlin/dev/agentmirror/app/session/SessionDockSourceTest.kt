@@ -124,7 +124,6 @@ class SessionDockSourceTest {
                         },
                         onPickAttachment = {},
                         onKeyToken = {},
-                        onBack = {},
                         onOpenViewMenu = {},
                     )
                 }
@@ -177,7 +176,6 @@ class SessionDockSourceTest {
                     onSendText = {},
                     onPickAttachment = {},
                     onKeyToken = {},
-                    onBack = { hostBack++ },
                     onOpenViewMenu = {},
                 )
             }
@@ -296,7 +294,6 @@ class SessionDockSourceTest {
                             onSendText = {},
                             onPickAttachment = {},
                             onKeyToken = {},
-                            onBack = {},
                             onOpenViewMenu = {},
                         )
                     }

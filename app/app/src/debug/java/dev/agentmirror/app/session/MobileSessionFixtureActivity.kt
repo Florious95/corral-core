@@ -66,6 +66,13 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                 SessionDockTheme(dark = false) {
                     val source = sessionDockSourceTokens()
                     Box(Modifier.fillMaxSize()) {
+                        SessionScreenBackHandler(
+                            overlayOpen = { overlayOpen },
+                            dockMode = { mode },
+                            onCloseOverlay = { overlayOpen = false },
+                            onDockModeChange = { mode = it },
+                            onBack = {},
+                        )
                         SessionScreenScaffold(
                             terminalCanvas = {
                                 Column(
@@ -103,8 +110,10 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                             },
                             onPickAttachment = {},
                             onKeyToken = {},
-                            onBack = {},
-                            onOpenViewMenu = { overlayOpen = true },
+                            onOpenViewMenu = {
+                                mode = DockRowMode.Sessions
+                                overlayOpen = true
+                            },
                             modifier = Modifier.padding(top = 42.667.dp, bottom = 24.dp),
                         )
                         SessionSwitchSheet(
