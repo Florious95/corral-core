@@ -96,17 +96,41 @@ class ExternalSessionStatusUiTest {
 
         val foreground = Color.Black
         val background = Color.White
-        val start = SessionRowMarker.frameAt(0, foreground, background)
-        val peak = SessionRowMarker.frameAt(960, foreground, background)
+        val slots = (0..1984 step SessionRowMarker.redrawCadenceMillis).toList()
+        val frames = slots.map { elapsed ->
+            SessionRowMarker.frameAt(elapsed.toLong(), foreground, background)
+        }
+        assertEquals(slots.map { it.toLong() }, frames.map { it.sourceMillis })
+        assertEquals(slots.map { it * 21 / 2000 }, frames.map { it.position })
+        assertEquals(21, frames.map { it.position }.toSet().size)
+
+        val start = frames.first()
+        val peak = frames[30]
         val end = SessionRowMarker.frameAt(2000, foreground, background)
         assertEquals("•", start.glyph)
         assertEquals(0f, start.intensity, 0.001f)
         assertEquals(1f, peak.intensity, 0.001f)
         assertEquals(0f, end.intensity, 0.001f)
+        assertEquals(0, end.sourceMillis)
+        assertEquals(0, end.position)
         assertEquals(foreground, start.color)
         assertNotEquals(start.color, peak.color)
-        assertNotEquals(start.intensity, SessionRowMarker.frameAt(640, foreground, background).intensity)
+        assertNotEquals(start.intensity, frames[20].intensity)
         assertEquals(start.intensity, end.intensity, 0.001f)
+
+        frames.forEachIndexed { index, frame ->
+            val distance = kotlin.math.abs(10 - frame.position).toFloat()
+            val intensity = if (distance <= 5f) {
+                0.5f * (1f + kotlin.math.cos(Math.PI * distance / 5f).toFloat())
+            } else {
+                0f
+            }
+            assertEquals("intensity at slot ${slots[index]}", intensity, frame.intensity, 0.001f)
+            val blend = intensity * 0.9f
+            assertEquals("red blend at slot ${slots[index]}", blend, frame.color.red, 0.001f)
+            assertEquals("green blend at slot ${slots[index]}", blend, frame.color.green, 0.001f)
+            assertEquals("blue blend at slot ${slots[index]}", blend, frame.color.blue, 0.001f)
+        }
     }
 
     @Test
