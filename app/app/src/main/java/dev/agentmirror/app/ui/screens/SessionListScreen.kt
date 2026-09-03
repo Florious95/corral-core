@@ -33,7 +33,7 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 /**
  * 会话列表（二级，某个工作区内）。
  * 顶部：‹ 工作区 + LAN，下面是工作区名 + 完整路径。
- * 行结构：CLI 工作灯 → 会话显示名 → 右侧官方 Provider 图标。
+ * 行结构：CLI 工作灯 → 会话显示名 + cwd 路径（66dp）→ 右侧官方 Provider 图标。
  * 整行是唯一手势 owner：短按打开（在线），长按弹出收藏/取消收藏。
  */
 @Composable
@@ -119,14 +119,12 @@ fun SessionListRows(
     modifier: Modifier = Modifier,
     tagPrefix: String = "l2",
     listTestTag: String = "l2-session-list-scroll",
-    showPath: Boolean = false,
 ) {
     LazyColumn(modifier.testTag(listTestTag)) {
         items(sessions, key = { it.id }) { item ->
             SessionRow(
                 item = item,
                 tagPrefix = tagPrefix,
-                showPath = showPath,
                 onClick = { onSessionClick(item) },
                 onToggleFavorite = { onToggleStar(item) },
                 unfavoriteOnly = false,
