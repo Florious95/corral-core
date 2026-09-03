@@ -47,7 +47,7 @@ type Config struct {
 
 	// UploadDir is where POST /upload writes images (docs/protocol.md §8),
 	// consumed by api.Options.UploadDir. Empty defaults to
-	// ~/Downloads/agentmirror-uploads.
+	// ~/Downloads/agentmirror-uploads (last-good).
 	UploadDir string
 
 	// MaxUploadBytes caps one uploaded image. Consumed by
