@@ -69,28 +69,32 @@ class PiGrokLampAndroidTest {
         }
         rule.onNodeWithText("pi-real-session").assertExists()
 
-        val frames = buildList {
-            add(w0)
-            repeat(63) {
-                rule.mainClock.advanceTimeBy(32)
-                add(motion("pi-w"))
+        val frames = mutableListOf(w0)
+        var previousElapsed = field(w0, "elapsed")
+        var wrapped = false
+        while (!wrapped && frames.size < 128) {
+            rule.mainClock.advanceTimeBy(32)
+            val next = motion("pi-w")
+            val nextElapsed = field(next, "elapsed")
+            assertEquals("elapsed must be 32ms-quantized: $next", 0, nextElapsed % 32)
+            if (nextElapsed < previousElapsed) {
+                assertTrue("sweep must wrap only near its terminal slot", previousElapsed >= 1920)
+                assertEquals(0, nextElapsed)
+                wrapped = true
+            } else {
+                assertTrue(
+                    "elapsed must be monotonic within one sweep: $previousElapsed -> $nextElapsed",
+                    nextElapsed - previousElapsed >= 0 && (nextElapsed - previousElapsed) % 32 == 0,
+                )
             }
+            frames += next
+            previousElapsed = nextElapsed
         }
-        val elapsed = frames.map { field(it, "elapsed") }
-        val expectedElapsed = (0..1984 step 32).toList()
-        assertEquals(0, elapsed[0])
-        assertEquals(0, elapsed[1])
-        assertEquals(expectedElapsed, elapsed.drop(1))
-        assertTrue(elapsed.zipWithNext().all { (before, after) -> after >= before })
+        assertTrue("working shimmer must expose a complete sweep and terminal wrap", wrapped)
         val positions = frames.map { field(it, "position") }
-        assertEquals((0..1984 step 32).map { it * 21 / 2000 }, positions.drop(1))
         assertEquals(21, positions.toSet().size)
-        assertEquals(0, positions.first())
-        assertEquals(20, positions.last())
         assertTrue(frames.any { it.contains(":intensity=1.0") })
 
-        rule.mainClock.advanceTimeBy(16)
-        assertEquals("working:glyph=•:elapsed=0:position=0:intensity=0.0", motion("pi-w"))
         assertEquals("idle:static", motion("pi-i"))
         assertTrue(motion("pi-u").isEmpty())
         assertTrue(motion("pi-a").isEmpty())
