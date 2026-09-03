@@ -26,6 +26,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -192,6 +193,12 @@ fun SessionScreen(
     var dockMode by androidx.compose.runtime.saveable.rememberSaveable {
         mutableStateOf(DockRowMode.Sessions)
     }
+    var commandDockBackArmed by remember { mutableStateOf(false) }
+    BackHandler(enabled = viewModel.overlayOpen || commandDockBackArmed) {
+        if (viewModel.overlayOpen) viewModel.closeOverlay()
+        dockMode = DockRowMode.Sessions
+        commandDockBackArmed = false
+    }
     val favoriteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
@@ -298,7 +305,10 @@ fun SessionScreen(
                         }
                     },
                     dockMode = dockMode,
-                    onDockModeChange = { dockMode = it },
+                    onDockModeChange = {
+                        if (dockMode != it) commandDockBackArmed = true
+                        dockMode = it
+                    },
                     sessions = favoriteSessions,
                     sessionListState = favoriteListState,
                     onSessionSelect = { id ->
@@ -326,7 +336,10 @@ fun SessionScreen(
                     onPickAttachment = { attachMenu = true },
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
                     onBack = onBack,
-                    onOpenViewMenu = viewModel::openOverlay,
+                    onOpenViewMenu = {
+                        commandDockBackArmed = true
+                        viewModel.openOverlay()
+                    },
                     modifier = Modifier.statusBarsPadding().navigationBarsPadding(),
                 )
                 SessionSwitchSheet(
@@ -337,6 +350,11 @@ fun SessionScreen(
                     onDismiss = viewModel::closeOverlay,
                     onSelect = { item ->
                         val entry = byRef[item.id] ?: return@SessionSwitchSheet
+                        val slot = favoriteOrder.indexOf(entry.ref)
+                        if (slot >= 0) {
+                            favoriteOrder[slot] = viewModel.ref
+                        }
+                        favoriteOrderCurrent = entry.ref
                         viewModel.closeOverlay()
                         onOpenOverlaySession(entry.ref, entry.identityLabel)
                     },

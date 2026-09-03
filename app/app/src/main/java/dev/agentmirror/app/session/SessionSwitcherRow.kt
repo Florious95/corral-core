@@ -81,7 +81,7 @@ private fun SessionChip(chip: SessionChipUi, onClick: () -> Unit) {
     val source = sessionDockSourceTokens()
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxHeight(),
+        modifier = Modifier.fillMaxHeight().testTag("session-chip-${chip.id}"),
         shape = RoundedCornerShape(8.dp),
         color = if (chip.isActive) source.accent900 else source.neutral900,
         border = BorderStroke(1.dp, if (chip.isActive) source.accent700 else source.neutral800),
