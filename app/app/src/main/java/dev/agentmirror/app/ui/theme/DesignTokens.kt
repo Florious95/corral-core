@@ -223,6 +223,9 @@ object SessionRowMarker {
 
     /** CSS pulse keyframes evaluated at a source-timeline millisecond. */
     fun frameAt(elapsedMillis: Long): Frame {
+        if (elapsedMillis > 0L && elapsedMillis % durationMillis == 0L) {
+            return Frame(0f, 0f)
+        }
         val t = Math.floorMod(elapsedMillis, durationMillis.toLong()).toInt()
         return if (t <= peakMillis) {
             val eased = Motion.cssEaseOut.transform(t / peakMillis.toFloat())
