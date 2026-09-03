@@ -47,8 +47,10 @@ class ExternalSessionListGestureTest {
         rule.onNodeWithText("配置").assertDoesNotExist()
         rule.onNodeWithTag("l2-path-claude-w", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("l2-path-codex-i", useUnmergedTree = true).assertExists()
-        rule.onNodeWithTag("l2-provider-claude-w", useUnmergedTree = true).assertDoesNotExist()
-        rule.onNodeWithTag("l2-provider-codex-i", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("l2-provider-claude-w", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("l2-provider-codex-i", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("l2-provider-copilot-u", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("l2-provider-pi-w", useUnmergedTree = true).assertDoesNotExist()
 
         rule.onNodeWithTag("l2-row-codex-i").performClick()
         rule.onNodeWithTag("l2-row-codex-i").performTouchInput { longClick() }
