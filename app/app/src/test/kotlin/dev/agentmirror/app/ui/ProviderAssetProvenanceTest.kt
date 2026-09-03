@@ -39,7 +39,7 @@ class ProviderAssetProvenanceTest {
             R.raw.provider_icon_claude_code,
             CanonicalProviderMarks.drawableRes("claude_code"),
         )
-        assertEquals(R.raw.provider_icon_codex, CanonicalProviderMarks.drawableRes("codex"))
+        assertEquals(R.drawable.provider_codex_color, CanonicalProviderMarks.drawableRes("codex"))
         assertEquals(R.drawable.provider_grok, CanonicalProviderMarks.drawableRes("grok"))
         assertEquals(R.raw.provider_icon_cursor, CanonicalProviderMarks.drawableRes("cursor"))
         assertEquals(R.drawable.provider_copilot_color, CanonicalProviderMarks.drawableRes("copilot"))
@@ -49,7 +49,6 @@ class ProviderAssetProvenanceTest {
         val ctx = RuntimeEnvironment.getApplication()
         val expectedSvg = mapOf(
             R.raw.provider_icon_claude_code to "5d2a03146e55387d8d58cfc44cc1c0fb90c47b559648dbe52f0420f0d9757626",
-            R.raw.provider_icon_codex to "9cb405c0c50125d8562fd7a2c9fa4220376d2fc8ecae5ac99f4032e40cf85f7c",
             R.raw.provider_icon_cursor to "66d07e0c2cc8f227d55fedafbdfcb98825905cbb8b1d071b9a8b68abeb901684",
         )
         expectedSvg.forEach { (res, sha) ->
@@ -61,6 +60,7 @@ class ProviderAssetProvenanceTest {
             assertTrue(!text.contains("lobehub"))
         }
         val expectedPng = mapOf(
+            R.drawable.provider_codex_color to "cdfc4f2eecc16469176a3cdfb0decb43646e7e3ac44e894f0cc94d330d897260",
             R.drawable.provider_pi to "9d59066fac0cb0361fb7cf663e87d0f29beb654e49780baa55aab74aa4757b2f",
             R.drawable.provider_copilot_color to "49faef29cb14fa7aaa73672ef126acee65ff504c2463a6672d9a9364fa75c54a",
             R.drawable.provider_grok to "515fd702a733df33e669a431f7d0b465350c8332c344c59672f2782f5ce3ff10",
@@ -79,6 +79,7 @@ class ProviderAssetProvenanceTest {
         assertNull(javaClass.classLoader.getResource("com/caverock/androidsvg/SVG.class"))
         assertNotNull(CanonicalProviderMarks.drawableRes("pi"))
         assertTrue(ExtractedProviderIcon.draws("claude_code"))
+        assertTrue(!ExtractedProviderIcon.draws("codex"))
         assertTrue(!ExtractedProviderIcon.draws("pi"))
         assertTrue(!ExtractedProviderIcon.draws("copilot"))
         assertTrue(!ExtractedProviderIcon.draws("grok"))
