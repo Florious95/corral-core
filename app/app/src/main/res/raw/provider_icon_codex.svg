@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Copyright 2026 AgentMirror Project Authors
+Licensed under the Apache License, Version 2.0.
+
+Deterministic extract of Agent App Prototype.dc.html icon() inline SVG.
+Source HTML SHA-256: 9c81f24bfdb57fb54fbcfe0a6abf825d6299e0d19482f790ec3f4e057d4bb0fc
+Do not fetch LobeHub. Do not parse this file at runtime.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <path d="M12 2.8c1.7-.8 3.6-.3 4.6 1.1 1.7.2 2.9 1.7 2.7 3.4 1.1 1.2 1.2 3 .2 4.3.5 1.6-.2 3.3-1.7 4-.4 1.6-1.9 2.7-3.6 2.5-1.1 1.2-3 1.4-4.3.5-1.7.3-3.3-.8-3.7-2.4-1.5-.6-2.4-2.2-2-3.8-1.1-1.3-1-3.1.1-4.3-.2-1.7 1-3.2 2.6-3.5C8.1 3.2 9.9 2.5 11.5 3l.5-.2Z" stroke="#6d6a63" stroke-width="1.5" stroke-linejoin="round"/>
+  <circle cx="12" cy="12" r="3.6" stroke="#6d6a63" stroke-width="1.5" stroke-dasharray="3.4 1.5"/>
+</svg>

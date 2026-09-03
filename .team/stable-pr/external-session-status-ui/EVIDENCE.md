@@ -1,15 +1,16 @@
-# External session status UI — evidence
+# External session status UI — evidence (HTML extract rework)
 
-- Local base: `064bf78b84737e5fca941876f0598d4704d85b2f`
+- Local worktree: `pr/external-session-status-ui`
 - GitHub stacked base: corral-core PR#70 `23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5`
-- CLI working lamp: existing StatusChip busyDot frames (`alpha 1.0↔0.35`, `Motion.statusDotPulse/2`, `emphasized`, Reverse)
-- Provider marks: `@lobehub/icons-static-svg@1.94.0` exact SHA-256s in `third_party/lobehub-icons-static-svg-1.94.0/PROVENANCE.txt`
-- JVM: `./gradlew :app:testDebugUnitTest --rerun-tasks --no-build-cache` → **612/0/0**
-- Connected: API35 qemu serial `emulator-5578` AVD `pi_ext_status_ui_api35`
-  `./gradlew :app:connectedDebugAndroidTest --rerun-tasks --no-build-cache` class `ExternalSessionListGestureTest` → **2/0**
-- Same-serial element tree: `uiautomator-emulator-5578.xml` (Mobile MCP not connected)
-  HIT: Claude Working, Codex Idle, 不在线, 收藏 (page title), Online Fav
-  MISS: 关闭, 创建, 配置, 未知, ☆, ★
-- ArchWiki: Kotlin UI paths empty/partial unjudgeable (no Rust YAML fences)
-- Debug fixture Activity is debug-only; release merged manifest has no `ExternalSessionListAcceptanceActivity`
-- No merge, no release APK
+- Owning PR: https://github.com/Florious95/corral-core/pull/71 (OPEN, unmerged)
+- Design source: `Agent App Prototype.dc.html` SHA-256 `9c81f24bfdb57fb54fbcfe0a6abf825d6299e0d19482f790ec3f4e057d4bb0fc`
+- Provider marks: extracted `icon()` inline SVG fallbacks for `claude_code` `codex` `grok` `cursor`; `copilot`/`pi` absent in source (blank, no guess)
+- CLI lamp unchanged: busyDot `alpha 1.0↔0.35`
+- Rows: unified 66dp title+path; row is sole gesture owner
+- JVM: `:app:testDebugUnitTest --rerun-tasks --no-build-cache` → **613/0/0**
+- assembleDebug + assembleRelease: BUILD SUCCESSFUL
+- Connected: AVD `pi_ext_status_ui_r2_api35` serial `emulator-5580` API35
+  class `ExternalSessionListGestureTest` → **3/0**
+- uiautomator `uiautomator-emulator-5580-r3.xml`: HIT Claude Working, Codex Idle, 不在线, /ws/codex-i; MISS 关闭/创建/配置/未知/☆/★
+- Mobile MCP: not connected
+- No merge, no APK delivery
