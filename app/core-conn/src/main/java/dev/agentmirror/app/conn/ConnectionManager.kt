@@ -495,6 +495,7 @@ class ConnectionManager(
     /** 二级退订：离开二级时发 [Level2UnsubscribeFrame]，并移出重放簿记。幂等。 */
     fun unsubscribeLevel2(workspace: String): Boolean {
         activeLevel2.remove(workspace)
+        level2RefreshInFlight.remove(workspace)
         val conn = connection ?: return true
         if (!conn.isReady) return true
         return conn.send(Level2UnsubscribeFrame(workspace = workspace))
