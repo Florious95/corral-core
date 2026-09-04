@@ -153,6 +153,7 @@ class WorkspaceViewModel(
 
     private var subscribedWorkspace: String? = null
     private var lastLevel2AtMs: Long = 0L
+    private var lastQuietDiagnosticStale: Boolean? = null
 
     /**
      * 旋转/配置变更重建时置位：下一次 [enterLevel1] / [enterLevel2] 不得再发 list
@@ -299,7 +300,16 @@ class WorkspaceViewModel(
         val ws = subscribedWorkspace ?: return
         if (lastLevel2AtMs == 0L) return
         val quietFor = now - lastLevel2AtMs
-        val banner = if (quietFor >= quietTimeoutMs) {
+        val stale = quietFor >= quietTimeoutMs
+        if (lastQuietDiagnosticStale != stale) {
+            DiagLog.record(
+                "level2",
+                "quiet_check workspace=$ws last_at=$lastLevel2AtMs now=$now quiet_for=$quietFor " +
+                    "timeout=$quietTimeoutMs stale=$stale",
+            )
+            lastQuietDiagnosticStale = stale
+        }
+        val banner = if (stale) {
             "二级状态已停更 ${quietFor}ms（last_at=$lastLevel2AtMs now=$now workspace=$ws）"
         } else {
             null
