@@ -209,8 +209,8 @@ object Motion {
 
 /**
  * Ctrl+W+B ordinary session-list marker, mapped from Codex CLI 0.149.0's
- * conversation-leading spinner at
- * `codex-rs/tui/src/chatwidget/status_surfaces.rs:28-33`.
+ * conversation-leading spinner. The frozen upstream source coordinate and
+ * digest are recorded in `.team/stable-pr/external-session-status-ui/EVIDENCE.md`.
  *
  * Source commit: 758ef40f50c1a458425c7cfbf1eb12cbc07af0b0.
  * The source file SHA-256 is b745ca9bc1717590c23f7c390d26a7933911e0ad48b34d4bed248b347b02c433.
