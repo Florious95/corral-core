@@ -10,7 +10,7 @@
 - Cherry-picks, in order: `1c998c4453220d1361a82bcad3b9353bfca66690`, `0ab816b132598db2d76d20d9730e0cfecbec6ad5`, `5c5e6b77b098cf9b489c088bf09aa5ff00fe1047`, `97ec915006021b9b11e877bb472ee56087fa54ce`
 - Composed code head built on Grok Bot: `f52db062a004cd52cda963e23bbb35154b8458ee`
 - Composed product tree: `8bf386d46f87baedb2df048e6dc68aba527c9558`
-- Final PR72 branch head: `c7ad51ccf347d1c9e704b3e33b48c32988d0520e` (receipt-only append; product code remains the tested `f52db062...` tree)
+- Receipt-only documentation commits after the tested code: `c7ad51ccf347d1c9e704b3e33b48c32988d0520e`, `349824b6e31aa02b9d8e51164fb6e6dcc01a7459`; product code remains the tested `f52db062...` tree.
 
 The status-core and session ranges are already patch-id/product-tree equivalent in PR72. The four listed commits were cherry-picked onto PR72 with zero conflicts; no complete PR73 merge was used. The eight affected external paths match accepted local `97ec915...`; status/session paths have no additional changes. The documented debug Manifest semantic union remains unchanged. No owning PR history was rewritten and PR72 remains open/unmerged.
 
