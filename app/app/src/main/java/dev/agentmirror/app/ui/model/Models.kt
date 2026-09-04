@@ -15,6 +15,7 @@ enum class SessionStatus { Busy, Idle, Unknown }
  * @pre none
  * @post WORKING→Busy, IDLE→Idle, UNKNOWN→Unknown；unknown 不会变成 Idle
  * @err none
+ * @inv unknown never becomes Idle
  */
 fun sessionStatusFromL2(status: L2Status): SessionStatus = when (status) {
     L2Status.WORKING -> SessionStatus.Busy
@@ -29,6 +30,7 @@ fun sessionStatusFromL2(status: L2Status): SessionStatus = when (status) {
  * @pre none
  * @post working→Busy, idle→Idle, 其余（含 unknown/空串/垃圾）→Unknown
  * @err none
+ * @inv garbage and empty strings map to Unknown, never Idle
  */
 fun sessionStatusFromWire(raw: String): SessionStatus =
     sessionStatusFromL2(L2Status.fromWire(raw))
@@ -54,7 +56,50 @@ data class SessionItem(
     val starred: Boolean,
     /** 收藏页失联行：false 时标「不在线」，不得当成 Idle。默认在线（二级列表）。 */
     val isOnline: Boolean = true,
+    /** Canonical provider id from the status-core DTO. APP must not guess. */
+    val provider: String = "unknown",
+    /** Closed health axis from the status-core DTO. */
+    val health: String = "unknown",
 )
+
+/**
+ * Left-slot motion for the unified external list row.
+ *
+ * Working animation plays only when the row is online, health is normal, and
+ * activity is working. Idle is the same lamp, static. Unknown/abnormal play
+ * nothing and must not be labeled as idle or as repeated「未知」.
+ *
+ * @contract
+ * @pre [activity] is already fail-closed (unknown on divergence/garbage)
+ * @post Working only for online+normal+Busy; Idle only for online+normal+Idle; else None
+ * @err none
+ * @inv unknown/abnormal/offline never become Idle or Working
+ * @consumes dev.agentmirror.app.workspace
+ */
+enum class SessionRowMotion { Working, Idle, None }
+
+/**
+ * Fail-closed left-slot motion from the four-axis DTO.
+ *
+ * @contract
+ * @pre activity is already fail-closed; health is the DTO health string
+ * @post Working iff online+normal+Busy; Idle iff online+normal+Idle; else None
+ * @err none
+ * @inv does not invent Idle from unknown
+ */
+fun sessionRowMotion(
+    activity: SessionStatus,
+    health: String,
+    isOnline: Boolean,
+): SessionRowMotion {
+    if (!isOnline) return SessionRowMotion.None
+    if (health != "normal") return SessionRowMotion.None
+    return when (activity) {
+        SessionStatus.Busy -> SessionRowMotion.Working
+        SessionStatus.Idle -> SessionRowMotion.Idle
+        SessionStatus.Unknown -> SessionRowMotion.None
+    }
+}
 
 /** 底部导航的三个位置 */
 enum class NavTab { Favorites, Sessions, Settings }

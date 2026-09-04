@@ -153,7 +153,7 @@ class TestFavorite {
                 )
             }
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.longPressFavorite("l2-row-ref-x", "收藏")
         compose.runOnIdle {
             assertEquals(0, opened)
             assertEquals(1, vm.favorites.value.size)
@@ -162,7 +162,7 @@ class TestFavorite {
             assertEquals("4", vm.favorites.value.single().windowIndex)
             assertEquals("win-x", vm.favorites.value.single().windowName)
         }
-        compose.onNodeWithTag("l2-star-ref-x").performClick()
+        compose.longPressFavorite("l2-row-ref-x", "取消收藏")
         compose.runOnIdle {
             assertEquals(0, opened)
             assertTrue(vm.favorites.value.isEmpty())
@@ -188,7 +188,7 @@ class TestFavorite {
         compose.onNodeWithTag("fav-row-gone-ref").performClick()
         compose.runOnIdle { assertEquals(0, opened) }
         compose.onNodeWithText("不在线").assertExists()
-        compose.onNodeWithTag("fav-star-gone-ref").performClick()
+        compose.longPressFavorite("fav-row-gone-ref", "取消收藏")
         compose.runOnIdle {
             assertEquals(0, opened)
             assertTrue(store.load().isEmpty())

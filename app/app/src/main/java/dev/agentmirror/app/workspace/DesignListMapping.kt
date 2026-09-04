@@ -33,9 +33,11 @@ internal fun L2Entry.toSessionItem(starred: Boolean): SessionItem = SessionItem(
     id = ref,
     displayName = identityLabel,
     path = cwd,
-    status = sessionStatusFromL2(status),
+    status = sessionStatusFromL2(activity),
     starred = starred,
     isOnline = true,
+    provider = provider,
+    health = health,
 )
 
 /** 收藏对账行 → 设计包 [SessionItem]。失联仍输出，isOnline=false。 */
@@ -46,4 +48,6 @@ internal fun FavoriteRow.toSessionItem(): SessionItem = SessionItem(
     status = sessionStatusFromL2(status),
     starred = true,
     isOnline = isOnline,
+    provider = provider,
+    health = health,
 )
