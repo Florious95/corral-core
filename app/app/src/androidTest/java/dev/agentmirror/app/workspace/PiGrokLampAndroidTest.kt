@@ -27,6 +27,7 @@ import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.AppTheme
+import dev.agentmirror.app.ui.theme.SessionRowMarker
 import dev.agentmirror.app.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -97,9 +98,38 @@ class PiGrokLampAndroidTest {
         assertTrue("working spinner must expose a complete sweep and terminal wrap", wrapped)
         val positions = frames.map { field(it, "position") }
         assertEquals(10, positions.toSet().size)
+        assertEquals(33, frames.size)
+        val expectedSampleTimes = frames.indices.map { it * 32L }
+        val expectedElapsed = expectedSampleTimes.map { sampleTime ->
+            (sampleTime / SessionRowMarker.frameIntervalMillis) *
+                SessionRowMarker.frameIntervalMillis
+        }
+        assertEquals(expectedElapsed, frames.map { field(it, "elapsed").toLong() })
+        val expectedGlyphs = expectedSampleTimes.map { sampleTime ->
+            SessionRowMarker.spinnerFrames[
+                ((sampleTime / SessionRowMarker.frameIntervalMillis) %
+                    SessionRowMarker.spinnerFrames.size).toInt()
+            ]
+        }
+        val actualGlyphs = frames.map { it.substringAfter("glyph=").substringBefore(":") }
         assertEquals(
-            listOf("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", "⠋"),
-            frames.map { it.substringAfter("glyph=").substringBefore(":") },
+            expectedGlyphs,
+            actualGlyphs,
+        )
+        val runs = actualGlyphs.zipWithNext().fold(mutableListOf(mutableListOf(actualGlyphs.first()))) { acc, (before, after) ->
+            if (before == after) acc.last().add(after) else acc.add(mutableListOf(after))
+            acc
+        }
+        val expectedRunSizes = SessionRowMarker.spinnerFrames.mapIndexed { position, _ ->
+            expectedSampleTimes.count { sampleTime ->
+                ((sampleTime / SessionRowMarker.frameIntervalMillis) %
+                    SessionRowMarker.spinnerFrames.size).toInt() == position
+            }
+        } + listOf(1)
+        assertEquals(expectedRunSizes, runs.map { it.size })
+        assertEquals(
+            SessionRowMarker.spinnerFrames + SessionRowMarker.spinnerFrames.first(),
+            runs.map { it.first() },
         )
 
         assertEquals("idle:static", motion("pi-i"))
