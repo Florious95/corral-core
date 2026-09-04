@@ -50,4 +50,11 @@ The status-core and session ranges are already patch-id/product-tree equivalent 
 - Left marker is a fixed 20dp Canvas 2x3 dot matrix with ten frames, 100ms/frame, 1000ms period; only normal-health working activity animates. Idle/unknown/abnormal retain the slot but draw no dots.
 - Pi display projection prefers real `session_name` over generic `node`; Pi working state maps to the left `busyDot` slot.
 
+## Immutable draft prerelease
+
+- Release: `pr72-status-icons-20260905-dda78a97`
+- URL: https://github.com/Florious95/corral-core/releases/tag/untagged-1f45a6b274b3bdabd82b
+- State: draft + prerelease; release target and remote PR72 head at publication: `dda78a97c9700df521c0855e8588f74849feeebf`
+- Assets are the three Grok-built APKs listed above; no APK was committed to product history.
+
 No local compile, device run, Downloads write, SCP/rsync/tar transfer, merge, or production/service change was performed.
