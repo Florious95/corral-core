@@ -18,8 +18,11 @@ package dev.agentmirror.app.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -27,13 +30,16 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.agentmirror.app.ui.theme.LocalAppPalette
 
-private val MarkSize = 18.dp
+private val MarkSlotSize = 28.dp
+private val OpticalMarkSize = 22.dp
 
 /**
- * Right-side official Provider mark. HTML-extracted glyphs draw via Canvas;
- * prior-app PNG blobs use painterResource. No question-mark, no status overlay,
- * no runtime SVG parser. The mark is not clickable; the session row owns gestures.
+ * Right-side official Provider mark. HTML BRAND paths draw via Canvas; accepted
+ * prior-app PNG blobs use painterResource with the same monochrome tint. No
+ * question-mark, no status overlay, no runtime SVG parser. The mark is not
+ * clickable; the session row owns gestures.
  *
  * @contract
  * @pre [canonicalId] is the DTO provider field, already fail-closed to unknown
@@ -50,17 +56,25 @@ fun ProviderMark(
     val spec = CanonicalProviderMarks.of(canonicalId) ?: return
     val res = CanonicalProviderMarks.drawableRes(canonicalId) ?: return
     val tagged = if (testTag != null) modifier.testTag(testTag) else modifier
-    val marked = tagged.size(MarkSize).semantics { contentDescription = spec.displayName }
+    val palette = LocalAppPalette.current
+    val marked = tagged
+        .size(MarkSlotSize)
+        .semantics { contentDescription = spec.displayName }
     if (ExtractedProviderIcon.draws(canonicalId)) {
-        Canvas(modifier = marked) {
-            ExtractedProviderIcon.draw(this, canonicalId)
+        Box(modifier = marked, contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(OpticalMarkSize)) {
+                ExtractedProviderIcon.draw(this, canonicalId, palette.providerMarkColor)
+            }
         }
     } else {
-        Image(
-            painter = painterResource(res),
-            contentDescription = spec.displayName,
-            contentScale = ContentScale.Fit,
-            modifier = marked,
-        )
+        Box(modifier = marked, contentAlignment = Alignment.Center) {
+            Image(
+                painter = painterResource(res),
+                contentDescription = spec.displayName,
+                contentScale = ContentScale.Fit,
+                colorFilter = ColorFilter.tint(palette.providerMarkColor),
+                modifier = Modifier.size(OpticalMarkSize),
+            )
+        }
     }
 }

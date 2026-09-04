@@ -63,14 +63,14 @@ class PiGrokLampAndroidTest {
                 .joinToString()
         }
         val w0 = motion("codex-w")
-        assertEquals("working:glyph=⠋:elapsed=0:position=0", w0)
+        assertEquals("working:glyph=⠋:elapsed=0:position=0:mask=11", w0)
         assertEquals("idle:static", motion("pi-i"))
         assertTrue(motion("pi-u").isEmpty())
         assertTrue(motion("pi-a").isEmpty())
         listOf("claude", "codex", "codex-w", "copilot", "grok", "cursor", "pi-w").forEach { id ->
             rule.onNodeWithTag("l2-provider-$id", useUnmergedTree = true).assertExists()
         }
-        assertEquals(R.drawable.provider_codex_color, CanonicalProviderMarks.drawableRes("codex"))
+        assertEquals(R.raw.provider_icon_codex, CanonicalProviderMarks.drawableRes("codex"))
         rule.onNodeWithText("Codex").assertExists()
         rule.onNodeWithText("pi-real-session").assertExists()
 
