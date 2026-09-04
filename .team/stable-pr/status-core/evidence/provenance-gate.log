@@ -1,0 +1,1 @@
+{"accepted_commit": "863c316ff66add549f8fa6dd215cedeedd037f8b", "accepted_tree": "ce667e3c464d0efb2ac9483862ff84a38008e674", "canonical_corpora": ["tools/nodeprobe/fixtures/titles.tsv", "tools/nodeprobe/fixtures/providers.tsv"], "changed_paths": 64, "status": "passed", "synchronized_files": 16}

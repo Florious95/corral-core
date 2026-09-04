@@ -37,7 +37,7 @@ enum class L2Status(val wire: String, val label: String) {
 }
 
 /**
- * 二级菜单一行。身份来自结构字段，状态来自 [Session.status]。
+ * 二级菜单一行。身份来自结构字段，状态来自 [Session.effectiveActivity]。
  * [title] 不参与身份/过滤/判活；076 §3a 只允许 claude_code 用它当**显示名**。
  */
 data class L2Entry(
@@ -47,6 +47,9 @@ data class L2Entry(
     val rows: Int,
     val cols: Int,
     val status: L2Status,
+    val provider: String = "unknown",
+    val activity: L2Status = status,
+    val health: String = "unknown",
     val cwd: String = "",
     val sessionName: String = "",
     val windowIndex: String = "",
@@ -58,6 +61,7 @@ data class L2Entry(
             sessionName = sessionName,
             name = name,
             title = title,
+            provider = provider,
         )
 
     val navigationName: String
@@ -65,7 +69,8 @@ data class L2Entry(
 }
 
 /**
- * 076 §3a 显示名。claude_code 取 pane_title 并剥 062 前导状态符号；其余 CLI 取 window_name。
+ * 076 §3a 显示名。claude_code 取 pane_title 并剥 062 前导状态符号；Pi 优先取真实
+ * session_name；其余 CLI 取 window_name。
  * 只用于显示，不参与身份。
  *
  * 符号表与 server/internal/api/l2detect_claudecode.go Match 同一套，禁止另写一份。
@@ -75,7 +80,9 @@ internal fun sessionDisplayName(
     sessionName: String = "",
     name: String = "",
     title: String = "",
+    provider: String = "",
 ): String {
+    if (provider == "pi" && sessionName.isNotEmpty()) return sessionName
     val structural = windowName.ifEmpty { sessionName }.ifEmpty { name }
     if (isClaudeCodeWindow(windowName, name)) {
         val fromTitle = stripClaudeCodeStatusPrefix(title)
@@ -151,14 +158,18 @@ internal fun Session.toL2Entry(): L2Entry {
     // 线上 Session 只有 name（window_name fallback session_name），三元组常缺省。
     // 收藏键必须落结构字段：空三元组回填 name，永不回填 title。
     val resolvedWindow = windowName.ifEmpty { name }
-    val resolvedSession = sessionName.ifEmpty { name }
+    val resolvedSession = sessionName.orEmpty().ifEmpty { name }
+    val effective = L2Status.fromWire(effectiveActivity)
     return L2Entry(
         ref = ref,
         name = resolvedWindow.ifEmpty { resolvedSession },
         title = title,
         rows = rows,
         cols = cols,
-        status = L2Status.fromWire(status),
+        status = effective,
+        provider = provider.ifEmpty { "unknown" },
+        activity = effective,
+        health = health.takeIf { it == "normal" || it == "abnormal" || it == "unknown" } ?: "unknown",
         cwd = cwd,
         sessionName = resolvedSession,
         windowIndex = windowIndex,

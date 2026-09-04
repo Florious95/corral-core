@@ -25,8 +25,8 @@ import dev.agentmirror.app.ui.screens.FavoritesScreen
 import dev.agentmirror.app.ui.theme.AppTheme
 
 /**
- * 收藏列表：按加入时间倒序。失联行置灰标「不在线」，不可点进，可取消收藏。
- * 076 §3：星在行首、标题、目录副标题、右侧状态标（与会话列表同构）。
+ * 收藏列表：按加入时间倒序。失联行置灰标「不在线」，短按不可点进，长按取消收藏。
+ * 与普通会话列表同一行：CLI 工作灯、标题+路径、右侧官方 Provider 图标。
  */
 @Composable
 fun FavoriteList(

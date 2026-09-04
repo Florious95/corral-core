@@ -1,7 +1,7 @@
 //! Walk pane_pid plus descendants using one `ps -axo pid=,ppid=,comm=` snapshot.
 //! Never reads process argument vectors. Narrow ps fields only.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::Command;
 
 #[derive(Debug, Default)]
@@ -46,21 +46,37 @@ pub fn parse_table(text: &str) -> Snap {
     s
 }
 
+/// Hard cap for hostile/synthetic process graphs. Normal pane trees are tiny.
+pub const MAX_WALK_NODES: usize = 4096;
+
 /// Root-to-descendant comms (raw ps comm, basename applied at lookup).
-pub fn walk_comms(s: &Snap, root: i32) -> Vec<String> {
+pub fn walk_processes(s: &Snap, root: i32) -> Vec<(i32, String)> {
     let mut out = Vec::new();
-    fn walk(s: &Snap, pid: i32, out: &mut Vec<String>) {
+    let mut stack = vec![root];
+    let mut seen = HashSet::new();
+    while let Some(pid) = stack.pop() {
+        if !seen.insert(pid) {
+            continue;
+        }
+        if seen.len() > MAX_WALK_NODES {
+            break;
+        }
         if let Some(c) = s.comm.get(&pid) {
-            out.push(c.clone());
+            out.push((pid, c.clone()));
         }
         if let Some(kids) = s.kids.get(&pid) {
-            for kid in kids {
-                walk(s, *kid, out);
-            }
+            // Reverse push preserves the original ps child order in the DFS.
+            stack.extend(kids.iter().rev().copied());
         }
     }
-    walk(s, root, &mut out);
     out
+}
+
+pub fn walk_comms(s: &Snap, root: i32) -> Vec<String> {
+    walk_processes(s, root)
+        .into_iter()
+        .map(|(_, comm)| comm)
+        .collect()
 }
 
 #[cfg(test)]
@@ -81,11 +97,41 @@ mod tests {
         let comms = walk_comms(&snap, 10);
         assert_eq!(
             comms,
-            vec!["/bin/bash".to_string(), "/opt/homebrew/bin/codex".to_string()]
+            vec![
+                "/bin/bash".to_string(),
+                "/opt/homebrew/bin/codex".to_string()
+            ]
         );
         let e = providers::match_comms(&comms).expect("codex behind bash");
         assert_eq!(e.id, "codex");
         assert!(providers::match_comms(&walk_comms(&snap, 12)).is_none());
+    }
+
+    #[test]
+    fn walk_terminates_on_cycles_and_preserves_first_visit_order() {
+        let snap = parse_table(
+            "\
+10 11 /bin/root
+11 10 /bin/child
+12 10 /bin/leaf
+",
+        );
+        assert_eq!(
+            walk_comms(&snap, 10),
+            vec!["/bin/root", "/bin/child", "/bin/leaf"]
+        );
+    }
+
+    #[test]
+    fn walk_is_bounded_for_deep_process_graphs() {
+        let mut text = String::new();
+        for pid in 1..=(MAX_WALK_NODES as i32 + 10) {
+            let ppid = if pid == 1 { 0 } else { pid - 1 };
+            text.push_str(&format!("{pid} {ppid} /bin/p{pid}\n"));
+        }
+        let snap = parse_table(&text);
+        let comms = walk_comms(&snap, 1);
+        assert_eq!(comms.len(), MAX_WALK_NODES);
     }
 
     #[test]
