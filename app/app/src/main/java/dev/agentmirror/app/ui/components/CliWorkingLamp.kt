@@ -16,22 +16,17 @@
 
 package dev.agentmirror.app.ui.components
 
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -41,14 +36,15 @@ import dev.agentmirror.app.ui.theme.SessionRowMarker
 
 /**
  * Ordinary session-list marker, sourced from Codex CLI 0.149.0's native
- * conversation-leading spinner. Working uses the exact ten Braille glyphs at
- * the upstream 100ms cadence; idle is a static `◦`; None is an empty slot.
+ * conversation-leading spinner. Unicode Braille is used only as the frozen
+ * source frame identity; final pixels are six Canvas circles so font metrics
+ * cannot clip the top or bottom row.
  *
  * @contract
- * @pre motion is already fail-closed (unknown/abnormal/offline → None)
- * @post Working spins with the frozen upstream sequence; Idle is static; None is empty
+ * @pre motion is already fail-closed (unknown/abnormal/offline -> None)
+ * @post Working paints a complete 2x3 mask in a 20dp slot; Idle/None paint no dots
  * @err none
- * @inv never renders a question mark or the word 未知
+ * @inv working is the exact ten-frame 100ms/1000ms sequence; no text glyph draw
  */
 @Composable
 fun CliWorkingLamp(
@@ -58,14 +54,11 @@ fun CliWorkingLamp(
     val slot = modifier.size(SessionRowMarker.size)
     when (motion) {
         SessionRowMotion.None -> Box(slot)
-        SessionRowMotion.Idle -> MarkerText(
-            glyph = SessionRowMarker.idleGlyph,
-            color = LocalAppPalette.current.metaText,
-            description = "idle:static",
-            modifier = slot,
+        SessionRowMotion.Idle -> Box(
+            slot.semantics { contentDescription = "idle:static" },
         )
         SessionRowMotion.Working -> {
-            val p = LocalAppPalette.current
+            val palette = LocalAppPalette.current
             val transition = rememberInfiniteTransition(label = "sessionRowSpinner")
             val elapsed by transition.animateFloat(
                 initialValue = 0f,
@@ -78,36 +71,39 @@ fun CliWorkingLamp(
             val sourceElapsed = elapsed.toLong() / SessionRowMarker.frameIntervalMillis *
                 SessionRowMarker.frameIntervalMillis
             val frame = SessionRowMarker.frameAt(sourceElapsed)
-            MarkerText(
-                glyph = frame.glyph,
-                color = p.rowTitleText,
-                description = "working:glyph=${frame.glyph}:elapsed=${frame.sourceMillis}:position=${frame.position}",
-                modifier = slot,
-            )
+            Canvas(
+                modifier = slot.semantics {
+                    contentDescription =
+                        "working:glyph=${frame.glyph}:elapsed=${frame.sourceMillis}:" +
+                            "position=${frame.position}:mask=${frame.mask}"
+                },
+            ) {
+                val radius = SessionRowMarker.dotRadius.toPx()
+                val left = SessionRowMarker.dotColumnInset.toPx()
+                val right = size.width - left
+                val firstRow = SessionRowMarker.dotTopInset.toPx()
+                val rowStep = SessionRowMarker.dotRowStep.toPx()
+                val points = listOf(
+                    left to firstRow,
+                    left to firstRow + rowStep,
+                    left to firstRow + rowStep * 2,
+                    right to firstRow,
+                    right to firstRow + rowStep,
+                    right to firstRow + rowStep * 2,
+                )
+                points.forEachIndexed { dot, (x, y) ->
+                    drawCircle(
+                        color = if (frame.mask and (1 shl dot) != 0) {
+                            palette.workingLampActive
+                        } else {
+                            palette.workingLampInactive
+                        },
+                        radius = radius,
+                        center = androidx.compose.ui.geometry.Offset(x, y),
+                    )
+                }
+            }
         }
-    }
-}
-
-@Composable
-private fun MarkerText(
-    glyph: String,
-    color: Color,
-    description: String,
-    modifier: Modifier,
-) {
-    Box(
-        modifier = modifier.semantics { contentDescription = description },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = glyph,
-            color = color,
-            fontSize = SessionRowMarker.fontSize,
-            fontWeight = FontWeight.Bold,
-            lineHeight = SessionRowMarker.fontSize,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxSize(),
-        )
     }
 }
 

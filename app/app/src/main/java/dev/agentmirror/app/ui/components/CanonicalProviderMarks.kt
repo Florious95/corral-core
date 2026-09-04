@@ -61,14 +61,14 @@ object CanonicalProviderMarks {
     fun of(canonicalId: String): CanonicalProviderMark? = byId[canonicalId]
 
     /**
-     * HTML `icon()` extracts for Claude Code and Cursor; the prior-app Codex,
+     * HTML BRAND extracts for Claude Code, Codex, and Cursor; the prior-app
      * Grok, Pi and Copilot PNG blobs
      * from owning commit 1b12e92d8efb1c0eec41e14a264f9d80ee833ad9
      * (drawable resources provider_pi and provider_copilot_color).
      */
     fun drawableRes(canonicalId: String): Int? = when (canonicalId) {
         "claude_code" -> R.raw.provider_icon_claude_code
-        "codex" -> R.drawable.provider_codex_color
+        "codex" -> R.raw.provider_icon_codex
         "grok" -> R.drawable.provider_grok
         "cursor" -> R.raw.provider_icon_cursor
         "copilot" -> R.drawable.provider_copilot_color

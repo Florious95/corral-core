@@ -222,17 +222,22 @@ object SessionRowMarker {
     const val sourceCommit = "758ef40f50c1a458425c7cfbf1eb12cbc07af0b0"
     const val sourceCoordinate = "codex-rs/tui/src/chatwidget/status_surfaces.rs:28-33"
     const val sourceSha256 = "b745ca9bc1717590c23f7c390d26a7933911e0ad48b34d4bed248b347b02c433"
-    val size: Dp = 8.dp
-    val fontSize = 12.sp
+    val size: Dp = 20.dp
+    val dotRadius: Dp = 2.2.dp
+    val dotColumnInset: Dp = 5.dp
+    val dotTopInset: Dp = 4.dp
+    val dotRowStep: Dp = 6.dp
     const val frameIntervalMillis = 100
     const val periodMillis = 1000
     val spinnerFrames = listOf("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+    val spinnerMasks = listOf(0x0B, 0x19, 0x39, 0x38, 0x3C, 0x34, 0x36, 0x27, 0x07, 0x0F)
     const val idleGlyph = "◦"
 
     data class Frame(
         val glyph: String,
         val sourceMillis: Long,
         val position: Int,
+        val mask: Int,
     )
 
     /** One exact source spinner frame at the quantized source time. */
@@ -243,6 +248,7 @@ object SessionRowMarker {
             glyph = spinnerFrames[position],
             sourceMillis = sourceMillis,
             position = position,
+            mask = spinnerMasks[position],
         )
     }
 }
@@ -267,6 +273,9 @@ data class AppPalette(
     val pathText: Color,               // 目录副标题（等宽）
     val metaText: Color,               // 页头计数 / 脚注
     val bodyText: Color,               // 设置卡片正文
+    val providerMarkColor: Color,      // six canonical marks, one theme tint
+    val workingLampActive: Color,
+    val workingLampInactive: Color,
 
     // 主色 / 强调
     val accent: Color,                 // 可点文字、选中态、指示轨
@@ -360,6 +369,9 @@ val LightPalette = AppPalette(
     pathText = Color(0xFF6B7486),
     metaText = Color(0xFF6B7486),
     bodyText = Color(0xFF6B7486),
+    providerMarkColor = Color(0xFF667085),
+    workingLampActive = Color(0xFF34C759),
+    workingLampInactive = Color(0xFFD0D5DD),
 
     accent = Color(0xFF0B57D0),
     accentContainer = Color(0x170B57D0),
@@ -445,6 +457,9 @@ val DarkPalette = AppPalette(
     pathText = Color(0xFF6E82A4),
     metaText = Color(0xFF7286A8),
     bodyText = Color(0xFF8497B8),
+    providerMarkColor = Color(0xFFF0F2F5),
+    workingLampActive = Color(0xFF34C759),
+    workingLampInactive = Color(0xFF293244),
 
     accent = Color(0xFF77A6FF),
     accentContainer = Color(0x2477A6FF),
