@@ -39,7 +39,7 @@ class ProviderAssetProvenanceTest {
             R.raw.provider_icon_claude_code,
             CanonicalProviderMarks.drawableRes("claude_code"),
         )
-        assertEquals(R.drawable.provider_codex_color, CanonicalProviderMarks.drawableRes("codex"))
+        assertEquals(R.raw.provider_icon_codex, CanonicalProviderMarks.drawableRes("codex"))
         assertEquals(R.drawable.provider_grok, CanonicalProviderMarks.drawableRes("grok"))
         assertEquals(R.raw.provider_icon_cursor, CanonicalProviderMarks.drawableRes("cursor"))
         assertEquals(R.drawable.provider_copilot_color, CanonicalProviderMarks.drawableRes("copilot"))
@@ -48,14 +48,15 @@ class ProviderAssetProvenanceTest {
 
         val ctx = RuntimeEnvironment.getApplication()
         val expectedSvg = mapOf(
-            R.raw.provider_icon_claude_code to "5d2a03146e55387d8d58cfc44cc1c0fb90c47b559648dbe52f0420f0d9757626",
-            R.raw.provider_icon_cursor to "66d07e0c2cc8f227d55fedafbdfcb98825905cbb8b1d071b9a8b68abeb901684",
+            R.raw.provider_icon_claude_code to ("907175cc3a05492c941144633eedc8def950e345f41705a571ec087b5e6b9183" to ExtractedProviderIcon.CLAUDE_BRAND_PATH),
+            R.raw.provider_icon_codex to ("6fe42dc2de268e438b2f3cc32eaa07a4b34f17eafc9320bc3381a5e475c3dfe0" to ExtractedProviderIcon.CODEX_BRAND_PATH),
+            R.raw.provider_icon_cursor to ("64c552bfae500e7b1d80cb3a7186553817c188504537fea7faa096c161ca200e" to ExtractedProviderIcon.CURSOR_BRAND_PATH),
         )
-        expectedSvg.forEach { (res, sha) ->
+        expectedSvg.forEach { (res, expected) ->
             val bytes = ctx.resources.openRawResource(res).use { it.readBytes() }
-            assertEquals(sha, sha256(bytes))
+            assertEquals(expected.first, sha256(bytes))
             val text = bytes.decodeToString()
-            assertTrue(text.contains(ExtractedProviderIcon.BLOB_PATH))
+            assertTrue(text.contains(expected.second))
             assertTrue(!text.contains("unpkg.com"))
             assertTrue(!text.contains("lobehub"))
         }
@@ -79,7 +80,8 @@ class ProviderAssetProvenanceTest {
         assertNull(javaClass.classLoader.getResource("com/caverock/androidsvg/SVG.class"))
         assertNotNull(CanonicalProviderMarks.drawableRes("pi"))
         assertTrue(ExtractedProviderIcon.draws("claude_code"))
-        assertTrue(!ExtractedProviderIcon.draws("codex"))
+        assertTrue(ExtractedProviderIcon.draws("codex"))
+        assertTrue(ExtractedProviderIcon.draws("cursor"))
         assertTrue(!ExtractedProviderIcon.draws("pi"))
         assertTrue(!ExtractedProviderIcon.draws("copilot"))
         assertTrue(!ExtractedProviderIcon.draws("grok"))

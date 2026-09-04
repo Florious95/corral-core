@@ -85,14 +85,21 @@ class ExternalSessionStatusUiTest {
 
     @Test
     fun workingMarkerMatchesCodexNativeConversationSpinnerFramesAndCadence() {
-        assertEquals(8f, SessionRowMarker.size.value, 0f)
-        assertEquals(12f, SessionRowMarker.fontSize.value, 0f)
+        assertEquals(20f, SessionRowMarker.size.value, 0f)
+        assertEquals(2.2f, SessionRowMarker.dotRadius.value, 0f)
+        assertEquals(5f, SessionRowMarker.dotColumnInset.value, 0f)
+        assertEquals(4f, SessionRowMarker.dotTopInset.value, 0f)
+        assertEquals(6f, SessionRowMarker.dotRowStep.value, 0f)
         assertEquals("0.149.0", SessionRowMarker.sourceCliVersion)
         assertEquals(100, SessionRowMarker.frameIntervalMillis)
         assertEquals(1000, SessionRowMarker.periodMillis)
         assertEquals(
             listOf("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"),
             SessionRowMarker.spinnerFrames,
+        )
+        assertEquals(
+            listOf(0x0B, 0x19, 0x39, 0x38, 0x3C, 0x34, 0x36, 0x27, 0x07, 0x0F),
+            SessionRowMarker.spinnerMasks,
         )
         val frames = (0..900 step SessionRowMarker.frameIntervalMillis)
             .map { SessionRowMarker.frameAt(it.toLong()) }
@@ -199,7 +206,7 @@ class ExternalSessionStatusUiTest {
         compose.mainClock.advanceTimeByFrame()
         val w0 = desc("l2-motion-pi-w")
         assertTrue("pi working starts as working:* got=$w0", w0.startsWith("working:"))
-        assertEquals("working:glyph=⠋:elapsed=0:position=0", w0)
+        assertEquals("working:glyph=⠋:elapsed=0:position=0:mask=11", w0)
         assertEquals("idle:static", desc("l2-motion-pi-i"))
         assertTrue(desc("l2-motion-pi-u").isEmpty())
         assertTrue(desc("l2-motion-pi-a").isEmpty())
@@ -211,6 +218,21 @@ class ExternalSessionStatusUiTest {
         assertEquals("idle:static", desc("l2-motion-pi-i"))
         assertTrue(desc("l2-motion-pi-u").isEmpty())
         assertTrue(desc("l2-motion-pi-a").isEmpty())
+    }
+
+    @Test
+    fun everyBrailleMaskPaintsSixDotsInsideTheTwentyDpSlot() {
+        val maxX = SessionRowMarker.size.value
+        val maxY = SessionRowMarker.size.value
+        val radius = SessionRowMarker.dotRadius.value
+        val xs = listOf(SessionRowMarker.dotColumnInset.value, maxX - SessionRowMarker.dotColumnInset.value)
+        val ys = (0..2).map { SessionRowMarker.dotTopInset.value + it * SessionRowMarker.dotRowStep.value }
+        xs.forEach { x -> assertTrue(x - radius >= 0f && x + radius <= maxX) }
+        ys.forEach { y -> assertTrue(y - radius >= 0f && y + radius <= maxY) }
+        assertEquals(10, SessionRowMarker.spinnerMasks.size)
+        SessionRowMarker.spinnerMasks.forEach { mask ->
+            assertTrue(mask in 1..0x3F)
+        }
     }
 
     @Test
