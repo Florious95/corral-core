@@ -243,13 +243,31 @@ class OkHttpHostHttpTransport(
         }
         return runCatching {
             client.newCall(builder.build()).execute().use { response ->
-                val body = response.body?.source()?.readByteArray((MAX_HOST_BODY_BYTES + 1).toLong())
-                    ?.toString(Charsets.UTF_8)
-                    .orEmpty()
+                val source = response.body?.source()
+                if (source == null) {
+                    DiagLog.record(
+                        "identify",
+                        "transport_http method=$method path=$path authority=${endpoint.authority} " +
+                            "http_code=${response.code} body_len=0 has_source=false",
+                    )
+                    return@use HostHttpResponse(response.code)
+                }
+                // request(N) is true iff at least N bytes are buffered. Short JSON must not
+                // use readByteArray(N), which throws EOFException when the body is smaller.
+                val oversize = source.request((MAX_HOST_BODY_BYTES + 1).toLong())
+                if (oversize) {
+                    DiagLog.record(
+                        "identify",
+                        "transport_http method=$method path=$path authority=${endpoint.authority} " +
+                            "http_code=${response.code} body_oversize=true",
+                    )
+                    return@use HostHttpResponse(response.code, "x".repeat(MAX_HOST_BODY_BYTES + 1))
+                }
+                val body = source.readByteArray().toString(Charsets.UTF_8)
                 DiagLog.record(
                     "identify",
                     "transport_http method=$method path=$path authority=${endpoint.authority} " +
-                        "http_code=${response.code} body_len=${body.toByteArray().size}",
+                        "http_code=${response.code} body_len=${body.toByteArray().size} body_oversize=false",
                 )
                 HostHttpResponse(response.code, body, response.header("Location"))
             }
