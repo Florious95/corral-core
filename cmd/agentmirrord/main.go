@@ -66,7 +66,7 @@ func main() {
 // @contract
 // @pre none — args 可为空（全部走默认值）；调用方通常传 os.Args[1:]
 // @post 干净关闭（ctx 取消 / SIGINT / SIGTERM）与 -h/--help 请求返回 0；任何启动或 serve 失败返回 1
-// @err 配置加载失败、状态目录解析失败、单实例锁被占、token 解析失败、监听器打开失败、tailnet Up/ListenTailnet 失败、引导打印失败、serve 非 ErrServerClosed 失败——均记日志并返回 1
+// @err 配置加载失败、状态目录解析失败、单实例锁被占、token/host_id 解析失败、LAN 监听器打开失败、引导打印失败、serve 非 ErrServerClosed 失败返回 1；tailnet Up/ListenTailnet 失败仅降级为 LAN 并记录安全诊断
 // @inv 单实例守卫在整个 run 生命周期持有；token 值永不落日志
 func run(args []string) int {
 	cfg, err := config.Load(args)
