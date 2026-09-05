@@ -190,16 +190,11 @@ func remoteIP(r *http.Request) string {
 // consulted.
 func (s *Server) boundAddress(r *http.Request, dest net.IP) (net.IP, int, bool) {
 	if local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && local != nil {
-		if tcp, ok := local.(*net.TCPAddr); ok && tcp.IP != nil {
-			ip := tcp.IP.To4()
-			if ip != nil && !ip.IsLoopback() && !ip.IsUnspecified() {
-				if !ip.Equal(dest) {
-					return nil, 0, false
-				}
-				if tcp.Port > 0 {
-					return ip, tcp.Port, true
-				}
+		if ip, port, parsed := localIPv4(local); parsed && !ip.IsLoopback() && !ip.IsUnspecified() {
+			if !ip.Equal(dest) {
+				return nil, 0, false
 			}
+			return ip, port, true
 		}
 	}
 	for _, candidate := range s.identityAddresses() {
@@ -213,6 +208,29 @@ func (s *Server) boundAddress(r *http.Request, dest net.IP) (net.IP, int, bool) 
 		}
 	}
 	return nil, 0, false
+}
+
+func localIPv4(addr net.Addr) (net.IP, int, bool) {
+	var ip net.IP
+	var port int
+	switch typed := addr.(type) {
+	case *net.TCPAddr:
+		ip, port = typed.IP, typed.Port
+	case *net.UDPAddr:
+		ip, port = typed.IP, typed.Port
+	default:
+		host, portText, err := net.SplitHostPort(addr.String())
+		if err != nil {
+			return nil, 0, false
+		}
+		ip = net.ParseIP(host)
+		port, err = strconv.Atoi(portText)
+		if err != nil {
+			return nil, 0, false
+		}
+	}
+	ip = ip.To4()
+	return ip, port, ip != nil && port > 0
 }
 
 func (s *Server) identityAddresses() []net.IP {
