@@ -527,13 +527,25 @@ class PairingViewModel(
             currentPort = endpoint.port
             currentTsNodeId = tsNodeId
             currentToken = token.trim()
-            attemptQueue = listOf(endpoint.wsUrl)
+            attemptQueue = proveCandidateUrls(endpoint.wsUrl, currentToken, hostId)
             attemptIndex = 0
             candidateUrls = emptyList()
             currentTsAuthKey = currentTsAuthKey.trim()
-            if (currentTsAuthKey.isNotEmpty()) tsnetStarter(currentTsAuthKey)
             startPairingSequence(attemptQueue, currentToken, resetCandidates = true)
         }
+    }
+
+    /** Prove QR candidate hints before admitting them to the bounded WS attempt queue. */
+    private fun proveCandidateUrls(primaryUrl: String, token: String, hostId: String?): List<String> {
+        val queue = LinkedHashSet<String>()
+        queue += primaryUrl
+        currentScanHints.drop(1).forEach { rawUrl ->
+            val endpoint = HostRouter.endpointFromWsUrl(rawUrl, HostEndpointSource.QR)
+                ?: return@forEach
+            val result = identifyClient.identify(endpoint, hostId, token, legacyUrl = null)
+            if (result is HostIdentifyResult.Proven) queue += endpoint.wsUrl
+        }
+        return queue.toList()
     }
 
     /**
