@@ -118,7 +118,8 @@ type Server struct {
 	overlay            overlay.Capturer
 	overlayLastHash    map[string]string
 
-	nodeprobe nodeprobe.Sampler
+	nodeprobe    nodeprobe.Sampler
+	filterAgents bool
 }
 
 type unknownNodeprobe struct{}
@@ -141,6 +142,7 @@ func NewServer(opts Options) *Server {
 		log = slog.New(slog.DiscardHandler)
 	}
 
+	filterAgents := opts.Nodeprobe != nil
 	s := &Server{
 		log:            log,
 		tokenValidator: opts.TokenValidator,
@@ -196,6 +198,7 @@ func NewServer(opts Options) *Server {
 		s.overlayInterval = defaultOverlayInterval
 	}
 	s.nodeprobe = opts.Nodeprobe
+	s.filterAgents = filterAgents
 	if s.nodeprobe == nil {
 		s.nodeprobe = unknownNodeprobe{}
 	}
@@ -303,6 +306,9 @@ func (s *Server) rebuildCatalog(ctx context.Context) error {
 	observations, err := nodeprobe.SampleModel(ctx, model, s.nodeprobe)
 	if err != nil {
 		return fmt.Errorf("api: nodeprobe: %w", err)
+	}
+	if s.filterAgents {
+		model = filterModelToIdentifiedAgents(model, observations)
 	}
 	s.catalog.rebuild(model, observations)
 	snap := buildSnapshot(s.catalog)

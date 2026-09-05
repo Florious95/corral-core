@@ -103,8 +103,9 @@ type Options struct {
 	OverlayInterval time.Duration
 
 	// Nodeprobe samples the accepted status authority once per discovered socket.
-	// Production startup always supplies the verified runner; nil is a fail-closed
-	// test/library default that emits unknown observations without inference.
+	// Production startup always supplies the verified runner, which also gates
+	// listings to identified Agent providers. Nil is a compatibility test/library
+	// default that emits unknown observations without applying an identity filter.
 	Nodeprobe nodeprobe.Sampler
 
 	// OverlayCapturer captures choose-tree via a dedicated scratch-session
