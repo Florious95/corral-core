@@ -19,6 +19,9 @@ const (
 	DNSServiceType = "_agentmirror._tcp"
 	dnsMDNSHost    = "224.0.0.251"
 	dnsMDNSPort    = 5353
+	// dnsLiveTTL is the existing live-record TTL already used by package tests.
+	// RFC 6762 treats TTL 0 as goodbye; announce and query responses must not use it.
+	dnsLiveTTL uint32 = 120
 )
 
 type DNSAdvertisement struct {
@@ -53,7 +56,7 @@ func RegisterDNSService(adv DNSAdvertisement) (*Advertiser, error) {
 	if adv.Port < 1 || adv.Port > 65535 {
 		return nil, errors.New("pairing: invalid dns-sd port")
 	}
-	conn, err := net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(dnsMDNSHost), Port: dnsMDNSPort})
+	conn, err := listenMDNS()
 	if err != nil {
 		return nil, fmt.Errorf("pairing: dns-sd listen: %w", err)
 	}
@@ -61,7 +64,7 @@ func RegisterDNSService(adv DNSAdvertisement) (*Advertiser, error) {
 	go a.serve()
 	// Announce once immediately; subsequent query responses keep discovery
 	// working on networks that suppress unsolicited multicast.
-	_ = a.send(0)
+	_ = a.send(dnsLiveTTL)
 	return a, nil
 }
 
@@ -84,7 +87,7 @@ func (a *Advertiser) serve() {
 		a.conn.SetReadDeadline(timeNow().Add(250 * time.Millisecond))
 		n, _, err := a.conn.ReadFromUDP(buf)
 		if err == nil && dnsQueryMatches(buf[:n]) {
-			_ = a.send(0)
+			_ = a.send(dnsLiveTTL)
 		}
 		select {
 		case <-a.stop:
@@ -99,8 +102,23 @@ var timeNow = now
 
 func now() time.Time { return time.Now() }
 
+// listenMDNS is a seam so package tests can drive RegisterDNSService/serve/Close
+// without binding host UDP 5353. Production keeps the multicast listener.
+var listenMDNS = defaultListenMDNS
+
+func defaultListenMDNS() (*net.UDPConn, error) {
+	return net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(dnsMDNSHost), Port: dnsMDNSPort})
+}
+
+// recordDNSPacket, when set, observes the exact bytes send() is about to
+// transmit. Production leaves it nil.
+var recordDNSPacket func([]byte)
+
 func (a *Advertiser) send(ttl uint32) error {
 	packet := dnsPacket(a.adv, ttl)
+	if recordDNSPacket != nil {
+		recordDNSPacket(packet)
+	}
 	_, err := a.conn.WriteToUDP(packet, &net.UDPAddr{IP: net.ParseIP(dnsMDNSHost), Port: dnsMDNSPort})
 	return err
 }
@@ -123,6 +141,8 @@ func dnsPacket(a DNSAdvertisement, ttl uint32) []byte {
 		}
 	}
 	b.u16(answerCount)
+	b.u16(0) // NSCOUNT
+	b.u16(0) // ARCOUNT
 	b.name(DNSServiceType + ".local.")
 	b.u16(12) // PTR
 	b.u16(1)
