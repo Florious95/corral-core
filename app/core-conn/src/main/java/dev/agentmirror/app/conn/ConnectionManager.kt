@@ -845,7 +845,15 @@ class ConnectionManager(
                 connection = null
                 val target = activeTarget
                 activeTarget = null
-                if (dialCoordinator != null && target != null) {
+                // After READY the coordinator round is already cancelled (onReady=cancel).
+                // onTargetFailed is then a no-op, which left a dead READY socket (Issue 82).
+                val afterReady = state == ConnectionState.READY
+                ConnDiag.record(
+                    "ws",
+                    "onClosed permanent=false state=$state coordinator=${dialCoordinator != null} " +
+                        "has_target=${target != null} after_ready=$afterReady",
+                )
+                if (!afterReady && dialCoordinator != null && target != null) {
                     dialCoordinator.onTargetFailed(generation, target.url, reason)
                 } else {
                     scheduleReconnect()
