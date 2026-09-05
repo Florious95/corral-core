@@ -164,7 +164,10 @@ class TestThreePane {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithTag("fav-row-ref-gone").performClick()
+        compose.onNodeWithTag("fav-row-ref-gone").assertDoesNotExist()
+        assertEquals(listOf("ref-gone"), vm.favorites.value.map { it.ref })
+        assertEquals(listOf("ref-gone"), vm.favoriteRows().map { it.ref })
+        assertEquals(false, vm.favoriteRows().single().isOnline)
         compose.runOnIdle { assertNull(nav.activeSession) }
     }
 }
