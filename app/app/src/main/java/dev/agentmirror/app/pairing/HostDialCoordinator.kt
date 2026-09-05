@@ -13,6 +13,15 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
+private fun hostIdentifyExecutor(): Executor = Executors.newCachedThreadPool { runnable ->
+    Thread(runnable, "host-identify").apply { isDaemon = true }
+}
+
+private fun hostDiscoveryScheduler(): ScheduledExecutorService =
+    Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "host-discovery").apply { isDaemon = true }
+    }
+
 /**
  * Bounded asynchronous identify scheduler. It never creates a WebSocket; only
  * [ConnectionManager] can consume its proven targets.
@@ -22,8 +31,8 @@ class HostDialCoordinator(
     private val hostId: String?,
     private val token: String,
     private val identifyClient: HostIdentifyClient,
-    private val executor: Executor = Executors.newCachedThreadPool(),
-    private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor(),
+    private val executor: Executor = hostIdentifyExecutor(),
+    private val scheduler: ScheduledExecutorService = hostDiscoveryScheduler(),
     private val clock: () -> Long = System::currentTimeMillis,
     private val legacyUrl: String? = null,
 ) : AsyncDialCoordinator {
