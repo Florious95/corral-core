@@ -29,6 +29,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.util.concurrent.Executor
 
 /**
  * 配对页时钟泵红测（fix-pairing-timeout-pump，红线5：配对超时永不触发）。
@@ -105,6 +106,7 @@ class PairingScreenClockPumpTest {
         val vm = PairingViewModel(
             configStore = store,
             identifyClient = identityVerifier,
+            discoveryExecutor = Executor { it.run() },
             connectionFactory = { cfg: ConnectionConfig ->
                 val t = FakeWebSocketTransport() // 拨号成功但永不回 auth → 只剩超时能收场
                 transports.add(t)

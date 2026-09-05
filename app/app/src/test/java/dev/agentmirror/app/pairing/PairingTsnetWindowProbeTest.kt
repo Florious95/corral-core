@@ -30,6 +30,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.Executor
 
 /**
  * 红测：缺陷⑤ 配对页锁死 —— tsnet 起网窗口内首次拨号失败被 RECONNECTING 误判为不可达。
@@ -101,6 +102,7 @@ class PairingTsnetWindowProbeTest {
         val vm = PairingViewModel(
             configStore = store,
             identifyClient = identityVerifier,
+            discoveryExecutor = Executor { it.run() },
             connectionFactory = { cfg ->
                 ConnectionManager(
                     config = cfg,

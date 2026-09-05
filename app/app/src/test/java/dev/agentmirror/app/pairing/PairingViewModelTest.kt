@@ -26,6 +26,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Test
+import java.util.concurrent.Executor
 
 /**
  * PairingViewModel 测试：配对状态机（扫码/手填 → 试配对 → 成功持久化/明确失败）。
@@ -87,6 +88,7 @@ class PairingViewModelTest {
             configStore = store,
             tsnetStarter = tsnetStarter,
             identifyClient = identityVerifier,
+            discoveryExecutor = Executor { it.run() },
             connectionFactory = { cfg ->
                 nextConfig = cfg
                 val t = FakeWebSocketTransport()
