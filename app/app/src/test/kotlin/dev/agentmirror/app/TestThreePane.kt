@@ -18,6 +18,7 @@ package dev.agentmirror.app
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.agentmirror.app.conn.Level2Frame
@@ -27,6 +28,7 @@ import dev.agentmirror.app.workspace.MemoryFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -125,6 +127,92 @@ class TestThreePane {
     }
 
     @Test
+    fun onlineIdleWaitingUnknownFavoritesStayVisibleAndRecoverInFavoriteOrder() {
+        val nav = MainNavState(initialShowPairing = false)
+        nav.homePane = ThreePane.Favorites
+        var now = 0L
+        val vm = WorkspaceViewModel(
+            requestList = {},
+            subscribeLevel2 = {},
+            unsubscribeLevel2 = {},
+            nowMs = { ++now },
+            favoriteStore = MemoryFavoriteStore(),
+        )
+        vm.enterLevel2("/proj/a")
+        val idle = Session(
+            ref = "ref-idle",
+            name = "idle",
+            cwd = "/proj/a",
+            rows = 24,
+            cols = 80,
+            title = "idle",
+            activity = "idle",
+            status = "idle",
+            health = "normal",
+            sessionName = "idle",
+            windowIndex = "1",
+            windowName = "idle",
+        )
+        val waiting = idle.copy(
+            ref = "ref-waiting",
+            name = "waiting",
+            title = "waiting",
+            activity = "waiting",
+            status = "waiting",
+            sessionName = "waiting",
+            windowIndex = "2",
+            windowName = "waiting",
+        )
+        val unknown = idle.copy(
+            ref = "ref-unknown",
+            name = "unknown",
+            title = "unknown",
+            activity = "unknown",
+            status = "unknown",
+            health = "unknown",
+            sessionName = "unknown",
+            windowIndex = "3",
+            windowName = "unknown",
+        )
+        val live = listOf(idle, waiting, unknown)
+        fun frame(sessions: List<Session>) = Level2Frame(
+            workspace = "/proj/a",
+            seq = sessions.size.toLong() + 1L,
+            sessions = sessions,
+        )
+        vm.onFrame(frame(live))
+        vm.level2.value.sessions.forEach { vm.toggleFavorite(it) }
+
+        compose.setContent {
+            AgentMirrorTheme {
+                ThreePaneHome(navState = nav, workspaceViewModel = vm)
+            }
+        }
+        compose.waitForIdle()
+        live.forEach { compose.onNodeWithTag("fav-row-${it.ref}").assertExists() }
+        assertEquals(
+            listOf("ref-unknown", "ref-waiting", "ref-idle"),
+            vm.favoriteRows().map { it.ref },
+        )
+        val unknownTop = compose.onNodeWithTag("fav-row-ref-unknown").getUnclippedBoundsInRoot().top
+        val waitingTop = compose.onNodeWithTag("fav-row-ref-waiting").getUnclippedBoundsInRoot().top
+        val idleTop = compose.onNodeWithTag("fav-row-ref-idle").getUnclippedBoundsInRoot().top
+        assertTrue("favorite order must stay newest first", unknownTop < waitingTop && waitingTop < idleTop)
+
+        vm.onFrame(frame(emptyList()))
+        compose.waitForIdle()
+        live.forEach { compose.onNodeWithTag("fav-row-${it.ref}").assertDoesNotExist() }
+        assertEquals(3, vm.favorites.value.size)
+        assertEquals(3, vm.favoriteRows().size)
+        assertTrue(vm.favoriteRows().none { it.isOnline })
+
+        vm.onFrame(frame(live))
+        compose.waitForIdle()
+        live.forEach { compose.onNodeWithTag("fav-row-${it.ref}").assertExists() }
+        assertTrue(vm.favoriteRows().all { it.isOnline })
+    }
+
+    @Test
     fun offlineFavoriteDoesNotOpen() {
         val nav = MainNavState(initialShowPairing = false)
         nav.homePane = ThreePane.Favorites
@@ -164,7 +252,10 @@ class TestThreePane {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithTag("fav-row-ref-gone").performClick()
+        compose.onNodeWithTag("fav-row-ref-gone").assertDoesNotExist()
+        assertEquals(listOf("ref-gone"), vm.favorites.value.map { it.ref })
+        assertEquals(listOf("ref-gone"), vm.favoriteRows().map { it.ref })
+        assertEquals(false, vm.favoriteRows().single().isOnline)
         compose.runOnIdle { assertNull(nav.activeSession) }
     }
 }
