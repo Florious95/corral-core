@@ -118,7 +118,8 @@ fun WorkspaceScreen(
     val reconnectBanner = connectionBannerText(state.connection)
     val silentHostRecovery = hostBound && state.connection != ConnectionUi.READY
     val showingDesignList = selectedWorkspaceCwd != null ||
-        (!state.isLoading && !state.isEmpty && !(state.isDisconnected && state.workspaces.isEmpty()))
+        (!state.isQuietEmpty && !state.isLoading && !state.isEmpty &&
+            !(state.isDisconnected && state.workspaces.isEmpty()))
 
     Column(
         modifier = Modifier
@@ -197,6 +198,8 @@ fun WorkspaceScreen(
                 label = "workspace-level",
             ) { workspaces ->
                 when {
+                    // 未绑定 skip：安静空工作区，不是无尽 Loading，也不是假 READY 空引导。
+                    state.isQuietEmpty -> UnboundEmptyContent()
                     // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
                     state.isLoading -> LoadingContent()
                     state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
@@ -284,17 +287,17 @@ internal fun connectionBannerText(connection: ConnectionUi): String? = when (con
     ConnectionUi.CONNECTING -> "连接中…"
     ConnectionUi.RECONNECTING -> "重连中…"
     ConnectionUi.STOPPED -> "连接已关闭"
-    ConnectionUi.READY -> null
+    ConnectionUi.READY, ConnectionUi.UNBOUND -> null
 }
 
 @Composable
 private fun ConnectionBanner(connection: ConnectionUi) {
-    AnimatedVisibility(visible = connection != ConnectionUi.READY) {
+    AnimatedVisibility(visible = connection != ConnectionUi.READY && connection != ConnectionUi.UNBOUND) {
         val (text, isError) = when (connection) {
             ConnectionUi.CONNECTING -> "连接中…" to false
             ConnectionUi.RECONNECTING -> "重连中…" to false
             ConnectionUi.STOPPED -> "连接已关闭" to true
-            ConnectionUi.READY -> "" to false // 不可达：READY 不进本分支
+            ConnectionUi.READY, ConnectionUi.UNBOUND -> "" to false
         }
         Surface(
             color = if (isError) {
@@ -331,6 +334,12 @@ private fun ConnectionBanner(connection: ConnectionUi) {
             }
         }
     }
+}
+
+/** 未绑定空工作区：无 pairing 记录时不转圈、不写连接文案、不假装 READY。 */
+@Composable
+private fun UnboundEmptyContent() {
+    Box(Modifier.fillMaxSize().testTag("workspace-unbound-empty"))
 }
 
 /** 加载态（018 §一.5 每页专门设计）：连接尚未就绪且无缓存列表时的等待画面。 */

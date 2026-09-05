@@ -183,7 +183,7 @@ fun AgentMirrorApp(
                         navState.showPairing = false
                     },
                     onSkip = {
-                        // 首启跳过：进空工作区（连接未配置 → 工作区顶栏显示连接中/重配入口）。
+                        // 首启跳过：进未绑定空工作区（无 pairing 记录，不拨号）。
                         navState.showPairing = false
                     },
                 )
