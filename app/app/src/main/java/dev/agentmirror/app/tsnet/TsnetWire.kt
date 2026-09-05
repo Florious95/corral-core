@@ -62,6 +62,9 @@ object TsnetWire {
     @Volatile
     var stateListener: ((TsnetState) -> Unit)? = null
 
+    /** 一次性 Up/Error 监听；仅无 identify 协调器的 legacy tailnet 冷启动使用。 */
+    private var settledListener: ((TsnetState) -> Unit)? = null
+
     /** 节点管理器（懒建；换 key 时重建）。 */
     private var manager: TsnetManager? = null
 
@@ -189,11 +192,35 @@ object TsnetWire {
      */
     private fun onState(next: TsnetState) {
         val uiListener: ((TsnetState) -> Unit)?
+        val oneShot: ((TsnetState) -> Unit)?
         synchronized(this) {
             state = next
             uiListener = stateListener
+            oneShot = if (next is TsnetState.Up || next is TsnetState.Error) {
+                settledListener.also { settledListener = null }
+            } else {
+                null
+            }
         }
         uiListener?.invoke(next)
+        oneShot?.invoke(next)
+    }
+
+    /**
+     * 节点到达 Up/Error 时回调一次；注册时已经终态则立即补播。
+     * 用于无 host 协调器的 tailnet 冷启动：Starting 阶段先直拨会在无时钟泵时卡在重连。
+     */
+    internal fun whenSettled(listener: (TsnetState) -> Unit) {
+        val current = synchronized(this) {
+            when (val s = state) {
+                is TsnetState.Up, is TsnetState.Error -> s
+                else -> {
+                    settledListener = listener
+                    null
+                }
+            }
+        }
+        current?.let(listener)
     }
 
 
@@ -222,6 +249,7 @@ object TsnetWire {
         backendFactory = { GomobileTsnetBackend() }
         executorForTest = null
         stateListener = null
+        settledListener = null
         state = TsnetState.Idle
     }
 }
