@@ -62,7 +62,7 @@ class PairingViewModel(
      * 测试注入记录假件。VM 不持节点生命周期（节点随进程存活，归 TsnetWire）。
      */
     private val tsnetStarter: (String) -> Unit = {},
-    private val identifyClient: HostIdentifyClient = HostIdentifyClient(OkHttpHostHttpTransport()),
+    private val identifyClient: HostIdentityVerifier = HostIdentifyClient(OkHttpHostHttpTransport()),
     private val discoveryExecutor: Executor = Executors.newCachedThreadPool(),
 ) : ConnectionManager.Listener {
 

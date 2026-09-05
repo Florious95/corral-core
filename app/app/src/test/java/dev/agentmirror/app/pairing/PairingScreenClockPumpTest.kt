@@ -89,8 +89,22 @@ class PairingScreenClockPumpTest {
             }
         }
         val transports = mutableListOf<FakeWebSocketTransport>()
+        val identityVerifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint) =
+                HostCandidate("host-1234", "test", listOf(endpoint))
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ) = HostIdentifyResult.Proven(
+                HostIdentity(hostId ?: "legacy-host", "test", endpoint, endpoint.authority),
+            )
+        }
         val vm = PairingViewModel(
             configStore = store,
+            identifyClient = identityVerifier,
             connectionFactory = { cfg: ConnectionConfig ->
                 val t = FakeWebSocketTransport() // 拨号成功但永不回 auth → 只剩超时能收场
                 transports.add(t)

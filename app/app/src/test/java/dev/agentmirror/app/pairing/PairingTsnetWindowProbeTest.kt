@@ -84,9 +84,23 @@ class PairingTsnetWindowProbeTest {
         val transports = mutableListOf<FakeWebSocketTransport>()
         /** 每次拨号脚本（按 transport 创建顺序消费；false=fail，true=ok）。默认全成功。 */
         val dialScripts = mutableListOf<List<Boolean>>()
+        private val identityVerifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint) =
+                HostCandidate("host-1234", "test", listOf(endpoint))
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ) = HostIdentifyResult.Proven(
+                HostIdentity(hostId ?: "legacy-host", "test", endpoint, endpoint.authority),
+            )
+        }
 
         val vm = PairingViewModel(
             configStore = store,
+            identifyClient = identityVerifier,
             connectionFactory = { cfg ->
                 ConnectionManager(
                     config = cfg,

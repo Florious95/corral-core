@@ -24,6 +24,17 @@ interface HostHttpTransport {
     fun identify(endpoint: HostEndpoint, request: IdentifyRequest): HostHttpResponse
 }
 
+/** Identity seam used by pairing orchestration; production defaults to [HostIdentifyClient]. */
+interface HostIdentityVerifier {
+    fun whoami(endpoint: HostEndpoint): HostCandidate?
+    fun identify(
+        endpoint: HostEndpoint,
+        hostId: String?,
+        token: String,
+        legacyUrl: String? = null,
+    ): HostIdentifyResult
+}
+
 data class HostHttpResponse(val code: Int, val body: String = "", val location: String? = null)
 
 data class IdentifyRequest(
@@ -39,8 +50,8 @@ data class IdentifyRequest(
 class HostIdentifyClient(
     private val transport: HostHttpTransport,
     private val nonceSource: () -> ByteArray = { ByteArray(16).also(SecureRandom()::nextBytes) },
-) {
-    fun whoami(endpoint: HostEndpoint): HostCandidate? {
+) : HostIdentityVerifier {
+    override fun whoami(endpoint: HostEndpoint): HostCandidate? {
         if (!HostRouter.isLiteralIpv4(endpoint.address)) return null
         val response = runCatching { transport.whoami(endpoint) }.getOrNull() ?: return null
         if (response.code != 200 || response.body.toByteArray().size > MAX_HOST_BODY_BYTES) return null
@@ -54,7 +65,7 @@ class HostIdentifyClient(
         return HostCandidate(hostId, name, listOf(enriched))
     }
 
-    fun identify(
+    override fun identify(
         endpoint: HostEndpoint,
         hostId: String?,
         token: String,

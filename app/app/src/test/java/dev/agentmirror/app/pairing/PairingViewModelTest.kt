@@ -69,9 +69,24 @@ class PairingViewModelTest {
         /** 下一次拨号脚本（默认成功）；见 [dialFails]。 */
         var nextDialScript: List<Boolean>? = null
 
+        private val identityVerifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint) =
+                HostCandidate("host-1234", "test", listOf(endpoint))
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ) = HostIdentifyResult.Proven(
+                HostIdentity(hostId ?: "legacy-host", "test", endpoint, endpoint.authority),
+            )
+        }
+
         val vm = PairingViewModel(
             configStore = store,
             tsnetStarter = tsnetStarter,
+            identifyClient = identityVerifier,
             connectionFactory = { cfg ->
                 nextConfig = cfg
                 val t = FakeWebSocketTransport()
