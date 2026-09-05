@@ -100,7 +100,7 @@ class PairingScreenClockPumpTest {
         )
 
         // 先开始配对（记录配对开始时刻 = 假时钟基准），再渲染屏幕让泵首拍驱动超时。
-        vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"T0K","ts_authkey":""}""")
+        vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"T0K","ts_authkey":""}""")
         val start = vm.pairingStatus
         assertTrue("pairing should start, got $start", start is PairingStatus.Pairing)
 

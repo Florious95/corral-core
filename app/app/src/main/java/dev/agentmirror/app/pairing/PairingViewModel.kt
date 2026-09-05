@@ -319,7 +319,7 @@ class PairingViewModel(
             name = "",
             port = null,
             tsNodeId = null,
-            legacyUrl = null,
+            legacyUrl = url,
         )
     }
 
