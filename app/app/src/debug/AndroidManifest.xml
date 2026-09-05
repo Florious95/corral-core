@@ -9,5 +9,8 @@
         <activity
             android:name=".ExternalSessionListAcceptanceActivity"
             android:exported="true" />
+        <activity
+            android:name=".FavoritesOnlineFilterAcceptanceActivity"
+            android:exported="true" />
     </application>
 </manifest>
