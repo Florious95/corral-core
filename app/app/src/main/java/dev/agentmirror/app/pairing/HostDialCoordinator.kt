@@ -25,6 +25,7 @@ class HostDialCoordinator(
     private val executor: Executor = Executors.newCachedThreadPool(),
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor(),
     private val clock: () -> Long = System::currentTimeMillis,
+    private val legacyUrl: String? = null,
 ) : AsyncDialCoordinator {
     private data class Round(
         val generation: Long,
@@ -34,11 +35,13 @@ class HostDialCoordinator(
         val pending: MutableSet<String>,
         val proved: MutableList<HostEndpoint> = mutableListOf(),
         val emitted: MutableSet<String> = mutableSetOf(),
+        val failed: MutableSet<String> = mutableSetOf(),
         var tsInFlight: Int = 0,
         var lanInFlight: Int = 0,
         var completed: Int = 0,
         var stopped: Boolean = false,
         var lanSlotOpen: Boolean = false,
+        var tsBudgetReached: Boolean = false,
         var deadlineReached: Boolean = false,
     )
 
@@ -51,7 +54,9 @@ class HostDialCoordinator(
         val ordered = HostRouter.prioritize(endpointSource()).distinctBy { it.authority }
         val cursor = cursorAuthority
         val pivot = cursor?.let { value -> ordered.indexOfFirst { it.authority == value } }
-            ?.takeIf { it >= 0 }?.plus(1)?.rem(ordered.size.coerceAtLeast(1)) ?: 0
+            ?.takeIf { it >= 0 }
+            ?.let { (it + 1) % ordered.size.coerceAtLeast(1) }
+            ?: 0
         val candidates = if (pivot == 0) ordered else ordered.drop(pivot) + ordered.take(pivot)
         val current = Round(
             generation = generation,
@@ -72,7 +77,22 @@ class HostDialCoordinator(
             offer(generation)
         }, LAN_SLOT_MS, TimeUnit.MILLISECONDS)
         scheduler.schedule({
-            synchronized(lock) { if (round?.generation == generation) round?.deadlineReached = true }
+            synchronized(lock) {
+                if (round?.generation == generation) {
+                    round?.tsBudgetReached = true
+                    round?.lanSlotOpen = true
+                }
+            }
+            startMore(generation)
+            offer(generation)
+        }, TS_BUDGET_MS, TimeUnit.MILLISECONDS)
+        scheduler.schedule({
+            synchronized(lock) {
+                if (round?.generation == generation) {
+                    round?.deadlineReached = true
+                    round?.pending?.clear()
+                }
+            }
             offer(generation)
         }, ROUND_BUDGET_MS, TimeUnit.MILLISECONDS)
         // Discovery/identify work is bounded to four simultaneous HTTP requests.
@@ -83,10 +103,26 @@ class HostDialCoordinator(
         while (true) {
             val endpoint = synchronized(lock) {
                 val r = round ?: return
-                if (r.generation != generation || r.stopped) return
+                if (r.generation != generation || r.stopped || r.deadlineReached) return
                 val inFlight = r.tsInFlight + r.lanInFlight
                 if (inFlight >= MAX_IDENTIFY_CONCURRENCY) return
-                val next = r.candidates.firstOrNull { it.authority in r.pending }
+                val pendingTs = r.pending.any { authority ->
+                    r.candidates.firstOrNull { it.authority == authority }?.path == ConnectionPath.TAILNET
+                }
+                val pendingLan = r.pending.any { authority ->
+                    r.candidates.firstOrNull { it.authority == authority }?.path != ConnectionPath.TAILNET
+                }
+                val next = r.candidates.asSequence()
+                    .filter { candidate ->
+                        candidate.authority in r.pending &&
+                            (candidate.path != ConnectionPath.TAILNET || !r.tsBudgetReached) &&
+                            (candidate.path == ConnectionPath.TAILNET || r.lanSlotOpen || !pendingTs) &&
+                            (candidate.path != ConnectionPath.TAILNET || !pendingLan || r.lanSlotOpen || r.tsInFlight < MAX_IDENTIFY_CONCURRENCY - 1)
+                    }
+                    .sortedWith(compareBy<HostEndpoint> {
+                        if (it.path == ConnectionPath.TAILNET) 0 else 1
+                    }.thenBy { it.source.ordinal }.thenBy { it.authority })
+                    .firstOrNull()
                 if (next != null) {
                     r.pending.remove(next.authority)
                     if (next.path == ConnectionPath.TAILNET) r.tsInFlight++ else r.lanInFlight++
@@ -98,13 +134,13 @@ class HostDialCoordinator(
     }
 
     private fun prove(generation: Long, endpoint: HostEndpoint) {
-        val result = identifyClient.identify(endpoint, hostId, token)
+        val result = identifyClient.identify(endpoint, hostId, token, legacyUrl)
         synchronized(lock) {
             val r = round ?: return
             if (r.generation != generation || r.stopped) return
             r.completed++
             if (endpoint.path == ConnectionPath.TAILNET) r.tsInFlight-- else r.lanInFlight--
-            if (result is HostIdentifyResult.Proven || result is HostIdentifyResult.Legacy404) {
+            if (!r.deadlineReached && (result is HostIdentifyResult.Proven || result is HostIdentifyResult.Legacy404)) {
                 r.proved += endpoint
             }
         }
@@ -115,10 +151,14 @@ class HostDialCoordinator(
     /** Emit at most one target; later candidates wait for ConnectionManager failure feedback. */
     private fun offer(generation: Long) {
         var target: DialTarget? = null
-        var exhausted = false
+        var exhaustedCallback: (() -> Unit)? = null
+        var targetCallback: ((DialTarget) -> Unit)? = null
         synchronized(lock) {
             val r = round ?: return
             if (r.generation != generation || r.stopped) return
+            // A WebSocket is the sole in-flight route. The next proven endpoint is offered only
+            // after ConnectionManager reports this one failed (or READY cancels the round).
+            if (r.emitted.any { it !in r.failed }) return
             val ordered = r.proved
                 .filter { it.authority !in r.emitted }
                 .sortedWith(compareBy<HostEndpoint> {
@@ -126,30 +166,42 @@ class HostDialCoordinator(
                 }.thenBy { it.source.ordinal }.thenBy { it.authority })
             val next = ordered.firstOrNull { endpoint ->
                 endpoint.path == ConnectionPath.TAILNET || r.lanSlotOpen ||
-                    (r.tsInFlight == 0 && r.pending.none { address ->
-                        r.candidates.firstOrNull { it.authority == address }?.path == ConnectionPath.TAILNET
+                    (r.tsInFlight == 0 && r.pending.none { authority ->
+                        r.candidates.firstOrNull { it.authority == authority }?.path == ConnectionPath.TAILNET
                     }) || r.deadlineReached
             }
             if (next != null) {
                 r.emitted += next.authority
                 cursorAuthority = next.authority
                 target = DialTarget(next.wsUrl, if (next.path == ConnectionPath.TAILNET) "TS" else "LAN")
-            } else if (r.completed == r.candidates.size &&
-                r.proved.all { it.authority in r.emitted }) {
-                r.stopped = true
-                exhausted = true
-            } else if (r.deadlineReached && r.proved.none { it.authority !in r.emitted }) {
-                r.stopped = true
-                exhausted = true
+                targetCallback = r.onTarget
+            } else {
+                val inFlight = r.tsInFlight + r.lanInFlight
+                val noMoreWork = r.pending.isEmpty() && inFlight == 0 &&
+                    r.proved.none { it.authority !in r.emitted }
+                if (noMoreWork && !r.emitted.any { it !in r.failed }) {
+                    r.stopped = true
+                    exhaustedCallback = r.onExhausted
+                }
             }
         }
-        target?.let { synchronized(lock) { round?.onTarget?.invoke(it) } }
-        if (exhausted) synchronized(lock) { round?.onExhausted?.invoke() }
+        target?.let { targetCallback?.invoke(it) }
+        exhaustedCallback?.invoke()
     }
 
     override fun onTargetFailed(generation: Long, url: String, reason: String) {
-        // The target is blacklisted for this generation; its next candidate is offered.
-        offer(generation)
+        var matched = false
+        synchronized(lock) {
+            val r = round
+            if (r == null || r.generation != generation || r.stopped) return
+            r.candidates.firstOrNull { it.wsUrl == url }?.let {
+                if (it.authority in r.emitted) {
+                    r.failed += it.authority
+                    matched = true
+                }
+            }
+        }
+        if (matched) offer(generation)
     }
 
     override fun onReady(generation: Long) = cancel(generation)

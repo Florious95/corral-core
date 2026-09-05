@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.service.TsnetBootstrap
+import dev.agentmirror.app.tsnet.TsnetState
 import dev.agentmirror.app.tsnet.TsnetWire
 
 /**

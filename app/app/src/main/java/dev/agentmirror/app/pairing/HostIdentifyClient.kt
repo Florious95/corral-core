@@ -5,7 +5,6 @@
  */
 package dev.agentmirror.app.pairing
 
-import dev.agentmirror.app.tsnet.ConnectionPath
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -44,7 +43,7 @@ class HostIdentifyClient(
     fun whoami(endpoint: HostEndpoint): HostCandidate? {
         if (!HostRouter.isLiteralIpv4(endpoint.address)) return null
         val response = runCatching { transport.whoami(endpoint) }.getOrNull() ?: return null
-        if (response.code != 200 || response.body.toByteArray().size > MAX_BODY_BYTES) return null
+        if (response.code != 200 || response.body.toByteArray().size > MAX_HOST_BODY_BYTES) return null
         val json = parse(response.body) ?: return null
         val hostId = json.string("host_id") ?: return null
         if (!HostRouter.isValidHostId(hostId)) return null
@@ -73,7 +72,7 @@ class HostIdentifyClient(
         if (response.code == 404 && legacyAllowed(endpoint, legacyUrl, hostId)) {
             return HostIdentifyResult.Legacy404(endpoint)
         }
-        if (response.code !in 200..299 || response.body.toByteArray().size > MAX_BODY_BYTES) {
+        if (response.code !in 200..299 || response.body.toByteArray().size > MAX_HOST_BODY_BYTES) {
             return HostIdentifyResult.Rejected("identify rejected")
         }
         val json = parse(response.body) ?: return HostIdentifyResult.Rejected("invalid identify response")
@@ -127,10 +126,10 @@ class HostIdentifyClient(
     }.getOrNull()
 
     private fun Map<String, kotlinx.serialization.json.JsonElement>.string(key: String): String? =
-        this[key]?.jsonPrimitive?.content
+        runCatching { this[key]?.jsonPrimitive?.content }.getOrNull()
 
     private fun Map<String, kotlinx.serialization.json.JsonElement>.int(key: String): Int? =
-        this[key]?.jsonPrimitive?.content?.toIntOrNull()
+        runCatching { this[key]?.jsonPrimitive?.content?.toIntOrNull() }.getOrNull()
 
     private fun constantTimeEquals(a: String, b: String): Boolean {
         val aa = a.toByteArray(Charsets.US_ASCII)
@@ -141,10 +140,9 @@ class HostIdentifyClient(
         return diff == 0
     }
 
-    private companion object {
-        const val MAX_BODY_BYTES = 1024
-    }
 }
+
+private const val MAX_HOST_BODY_BYTES = 1024
 
 /** Production OkHttp transport: literal IPv4 only, no redirects, no proxy/DNS fallback. */
 class OkHttpHostHttpTransport(
@@ -186,7 +184,10 @@ class OkHttpHostHttpTransport(
         }
         return runCatching {
             client.newCall(builder.build()).execute().use { response ->
-                HostHttpResponse(response.code, response.body?.string().orEmpty(), response.header("Location"))
+                val body = response.body?.source()?.readByteArray((MAX_HOST_BODY_BYTES + 1).toLong())
+                    ?.toString(Charsets.UTF_8)
+                    .orEmpty()
+                HostHttpResponse(response.code, body, response.header("Location"))
             }
         }.getOrElse { HostHttpResponse(599) }
     }

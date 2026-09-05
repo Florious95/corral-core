@@ -35,9 +35,16 @@ private object HostRouterLike {
     fun isLiteralIpv4(value: String): Boolean {
         val parts = value.split('.')
         if (parts.size != 4) return false
-        return parts.all { it.isNotEmpty() && (it.toIntOrNull() ?: -1) in 0..255 &&
-            (it.length == 1 || !it.startsWith('0')) } &&
-            value != "0.0.0.0" && value != "127.0.0.1"
+        if (!parts.all { it.isNotEmpty() && (it.toIntOrNull() ?: -1) in 0..255 &&
+                (it.length == 1 || !it.startsWith('0'))
+        }) return false
+        val octets = parts.map(String::toInt)
+        return octets.any { it != 0 } &&
+            octets[0] != 127 &&
+            !(octets[0] == 169 && octets[1] == 254) &&
+            !(octets[0] == 198 && octets[1] in 18..19) &&
+            octets[0] !in 224..239 &&
+            value != "255.255.255.255"
     }
 }
 

@@ -6,6 +6,7 @@
 package dev.agentmirror.app.pairing
 
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.tsnet.TsPeer
 import java.net.URI
 
 /**
@@ -22,11 +23,22 @@ object HostRouter {
         }
 
     fun isLiteralIpv4(value: String): Boolean {
-        val parts = value.split('.')
+        val text = value.trim()
+        if (text != value) return false
+        val parts = text.split('.')
         if (parts.size != 4) return false
-        return parts.all { it.isNotEmpty() && (it.toIntOrNull() ?: -1) in 0..255 &&
-            (it.length == 1 || !it.startsWith('0')) } &&
-            value != "0.0.0.0" && value != "127.0.0.1"
+        if (!parts.all { it.isNotEmpty() && (it.toIntOrNull() ?: -1) in 0..255 &&
+                (it.length == 1 || !it.startsWith('0'))
+        }) return false
+        val octets = parts.map(String::toInt)
+        val first = octets[0]
+        val second = octets[1]
+        return octets.any { it != 0 } &&
+            first != 127 &&
+            !(first == 169 && second == 254) &&
+            !(first == 198 && second in 18..19) &&
+            first !in 224..239 &&
+            text != "255.255.255.255"
     }
 
     fun isTailnetAddress(value: String): Boolean {

@@ -40,7 +40,7 @@ enum class ConnectionPath(val label: String) {
  * OkHttpClient，即可让 ws://<tailnet-ip> 流量全走用户态栈，零系统权限。
  * 现消费方：[OkHttpTransportFactory] 按址选路经 [socketFactoryFor] 注入，
  * [PairingViewModel] 经 [isTailnetHost] 判配对探针目标；[TsnetWire.ensureStarted]
- * 在 [startPersistentConnection] 起网，冷启动延后经 [TsnetWire.whenSettled] 就绪。
+ * 在 [startPersistentConnection] 起网，连接代次自行并行择路。
  * @contract
  * @pre none（各成员独立调用，无全局前置）
  * @post proxyFor/socketFactoryFor/isTailnetHost 计算结果仅由入参 [TsnetState]/host

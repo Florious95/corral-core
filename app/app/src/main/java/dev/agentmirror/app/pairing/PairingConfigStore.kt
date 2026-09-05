@@ -65,9 +65,13 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
 
     override fun load(): PairingConfig? {
         val url = prefs.getString(KEY_URL, "").orEmpty()
-        val token = prefs.getString(KEY_TOKEN, null) ?: return null
+        val token = prefs.getString(KEY_TOKEN, null)?.takeIf { it.isNotBlank() } ?: return null
         val hostId = prefs.getString(KEY_HOST_ID, null)?.takeIf { HostRouter.isValidHostId(it) }
-        if (url.isBlank() && hostId == null) return null
+        val storedLegacyUrl = prefs.getString(KEY_LEGACY_BOOTSTRAP_URL, null)
+        val legacyBootstrapUrl = storedLegacyUrl ?:
+            if (prefs.getInt(KEY_SCHEMA_VERSION, 0) < SCHEMA_VERSION && hostId == null) url.takeIf { it.isNotBlank() }
+            else null
+        if (url.isBlank() && hostId == null && legacyBootstrapUrl.isNullOrBlank()) return null
         val tsAuthKey = loadTsAuthKey() ?: return null
         // 凭据脱敏前置（registerSecret 坑一：注册前窗口）：token 刚从 prefs 读出的那一刻
         // 就注册，把「值在内存」到「registerSecret 生效」的窗口压到零。tsAuthKey 在
@@ -82,7 +86,7 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
             port = prefs.getInt(KEY_PORT, 0).takeIf { it in 1..65535 },
             tsNodeId = prefs.getString(KEY_TS_NODE_ID, null),
             name = prefs.getString(KEY_NAME, null),
-            legacyBootstrapUrl = prefs.getString(KEY_LEGACY_BOOTSTRAP_URL, null),
+            legacyBootstrapUrl = legacyBootstrapUrl,
             lastTsUrl = prefs.getString(KEY_LAST_TS_URL, null),
             lastLanUrl = prefs.getString(KEY_LAST_LAN_URL, null),
             scanHints = prefs.getStringSet(KEY_SCAN_HINTS, emptySet()).orEmpty().toList(),
@@ -95,6 +99,7 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
         // 不要求同步持久化——失败静默由下次读判断，语义与 apply 一致。
         val encryptedAuthKey = config.tsAuthKey.takeIf { it.isNotEmpty() }?.let(secretCipher::encrypt)
         prefs.edit {
+            putInt(KEY_SCHEMA_VERSION, SCHEMA_VERSION)
             putString(KEY_URL, config.url)
             putString(KEY_TOKEN, config.token)
             if (config.hostId == null) remove(KEY_HOST_ID) else putString(KEY_HOST_ID, config.hostId)
@@ -118,6 +123,7 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
     override fun clear() {
         // KTX edit {}（UseKtx stage3 #14）：清除路径无同步语义要求。
         prefs.edit {
+            remove(KEY_SCHEMA_VERSION)
             remove(KEY_URL)
             remove(KEY_TOKEN)
             remove(KEY_HOST_ID)
@@ -169,6 +175,7 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
         // 迁移失败的收敛动作，同步提交保证失败即清、进程死亡不残留；KTX 的 commit 参数是
         // lint 认可的在需要同步语义时保留 commit 的写法（不触发 ApplySharedPref）。
         prefs.edit(commit = true) {
+            remove(KEY_SCHEMA_VERSION)
             remove(KEY_URL)
             remove(KEY_TOKEN)
             remove(KEY_HOST_ID)
@@ -186,6 +193,8 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
 
     private companion object {
         const val PREFS_NAME = "pairing_config"
+        const val KEY_SCHEMA_VERSION = "schema_version"
+        const val SCHEMA_VERSION = 2
         const val KEY_URL = "url"
         const val KEY_TOKEN = "token"
         const val KEY_HOST_ID = "host_id"

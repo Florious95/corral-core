@@ -56,9 +56,10 @@ data class ConnectionConfig(
     val legacyBootstrapUrl: String? = null,
     val lastTsUrl: String? = null,
     val lastLanUrl: String? = null,
+    val scanHints: List<String> = emptyList(),
 ) {
     override fun toString(): String =
-        "ConnectionConfig(url=$url, token=[redacted], hostId=$hostId, port=$port, tsNodeId=$tsNodeId, name=$name, tsAuthKey=[redacted], legacyBootstrapUrl=$legacyBootstrapUrl, lastTsUrl=$lastTsUrl, lastLanUrl=$lastLanUrl)"
+        "ConnectionConfig(url=$url, token=[redacted], hostId=$hostId, port=$port, tsNodeId=$tsNodeId, name=$name, tsAuthKey=[redacted], legacyBootstrapUrl=$legacyBootstrapUrl, lastTsUrl=$lastTsUrl, lastLanUrl=$lastLanUrl, scanHints=$scanHints)"
 }
 
 /**
@@ -735,7 +736,7 @@ class ConnectionManager(
 
         override fun onReady() {
             attempt = 0 // 成功后退避重置
-            activeTarget?.let(onReadyTarget)
+            activeTarget?.let { target -> onReadyTarget?.invoke(target) }
             dialCoordinator?.onReady(generation)
             val reconnect = readyIsReconnect
             readyIsReconnect = false

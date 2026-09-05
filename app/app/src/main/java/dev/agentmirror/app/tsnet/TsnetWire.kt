@@ -62,12 +62,6 @@ object TsnetWire {
     @Volatile
     var stateListener: ((TsnetState) -> Unit)? = null
 
-    /**
-     * 冷启动 tailnet 首拨的一次性等待者。持久连接只有一个配置，后来的等待覆盖旧配置正是
-     * 重配语义；PairingRoute 的常驻 UI 监听仍走 [stateListener]，两者互不抢槽。
-     */
-    private var settledListener: ((TsnetState) -> Unit)? = null
-
     /** 节点管理器（懒建；换 key 时重建）。 */
     private var manager: TsnetManager? = null
 
@@ -90,6 +84,7 @@ object TsnetWire {
         // 空 key 是明确的禁用请求：不允许旧 manager 的 Up 状态继续作为候选。
         if (key.isEmpty()) {
             pendingKey = null
+            peerCursor = null
             manager?.stop()
             manager = null
             currentKey = null
@@ -116,6 +111,7 @@ object TsnetWire {
         }
         // 换 key 或上次失败：停旧建新。stop() 的 Idle 回调经 onState 短暂可见，随后 Starting 覆盖。
         m?.stop()
+        peerCursor = null
         currentKey = key
         val exec = executorForTest
         val created = if (exec != null) {
@@ -155,10 +151,19 @@ object TsnetWire {
     fun hasActiveNode(): Boolean = manager?.state is TsnetState.Starting || manager?.state is TsnetState.Up
 
     /** Read a typed peer snapshot; unsupported/failed is fail-closed. */
-    fun peerSnapshot(knownId: String? = null, cursor: String? = null): TsPeerSnapshot =
-        synchronized(this) { manager }
-            ?.let { runCatching { it.peerSnapshot(knownId, cursor) }.getOrElse { TsPeerSnapshot(emptyList(), null, false) } }
-            ?: TsPeerSnapshot(emptyList(), null, false)
+    @Synchronized
+    fun peerSnapshot(knownId: String? = null, cursor: String? = null): TsPeerSnapshot {
+        val requestedCursor = cursor ?: if (knownId == null) peerCursor else null
+        val snapshot = manager?.let {
+            runCatching { it.peerSnapshot(knownId, requestedCursor) }
+                .getOrElse { TsPeerSnapshot(emptyList(), null, false) }
+        } ?: TsPeerSnapshot(emptyList(), null, false)
+        if (knownId == null && cursor == null) peerCursor = snapshot.nextCursor
+        return snapshot
+    }
+
+    /** Cursor for the next bounded unknown-peer page; known IDs always bypass it. */
+    private var peerCursor: String? = null
 
     /**
      * tsnet 会在已有持久节点可运行时忽略新 authkey；按 key 的 SHA-256 指纹隔离状态，
@@ -184,36 +189,13 @@ object TsnetWire {
      */
     private fun onState(next: TsnetState) {
         val uiListener: ((TsnetState) -> Unit)?
-        val oneShot: ((TsnetState) -> Unit)?
         synchronized(this) {
             state = next
             uiListener = stateListener
-            oneShot = if (next is TsnetState.Up || next is TsnetState.Error) {
-                settledListener.also { settledListener = null }
-            } else {
-                null
-            }
         }
         uiListener?.invoke(next)
-        oneShot?.invoke(next)
     }
 
-    /**
-     * 节点到达 Up/Error 时回调一次；注册时已经终态则立即补播。用于 tailnet 冷启动避免
-     * Starting 阶段先直拨后因无时钟泵永久卡在重连态。回调不携带 authkey。
-     */
-    internal fun whenSettled(listener: (TsnetState) -> Unit) {
-        val current = synchronized(this) {
-            when (val s = state) {
-                is TsnetState.Up, is TsnetState.Error -> s
-                else -> {
-                    settledListener = listener
-                    null
-                }
-            }
-        }
-        current?.let(listener)
-    }
 
     /**
      * hostname 归一化：设备型号（Build.MODEL 常含空格/大写）→ DNS 友好节点名，
@@ -235,11 +217,11 @@ object TsnetWire {
         manager = null
         currentKey = null
         pendingKey = null
+        peerCursor = null
         environment = null
         backendFactory = { GomobileTsnetBackend() }
         executorForTest = null
         stateListener = null
-        settledListener = null
         state = TsnetState.Idle
     }
 }

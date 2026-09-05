@@ -26,14 +26,10 @@ import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.service.MirrorForegroundService
 import dev.agentmirror.app.service.ServiceWire
-import dev.agentmirror.app.tsnet.TsnetDial
-import dev.agentmirror.app.tsnet.TsnetState
 import dev.agentmirror.app.tsnet.TsnetWire
-import java.net.URI
 
 /** 串行化启动意图；代次让迟到的 tsnet 终态不能恢复已被重配取代的旧地址。 */
 private val persistentConnectionStartLock = Any()
-private var persistentConnectionStartGeneration = 0L
 
 /**
  * 启动常驻连接（配对成功与冷启动重连共用的唯一启动入口，fix-cold-start-reconnect P0）。
@@ -61,12 +57,11 @@ private var persistentConnectionStartGeneration = 0L
  * @pre none（配置即函数入参；context 可为 null，仅前台服务启动需要）
  * @post 已注入 [ServiceWire.setConfig] + [ServiceWire.uploadBaseUrl]，触发常驻连接启动，
  *       并在 context 非空时启动前台服务（幂等）
- * @err 常驻连接装配/启动失败仅落日志（[ServiceWire.manager]/[ConnectionManager.start] 调用已 runCatching），不抛给调用方；tsnet 起网经 [TsnetWire.ensureStarted] 失败走 [TsnetState.Error] 不静默
- * @inv 幂等：既有 [ServiceWire.manager] 单例复用、[ConnectionManager.start] 非 STOPPED 直接返回，不产生双连接；tailnet 目标在节点未 Up 时首拨延后到 [TsnetWire.whenSettled] 之后
+ * @err 常驻连接装配/启动失败仅落日志（[ServiceWire.manager]/[ConnectionManager.start] 调用已 runCatching），不抛给调用方；tsnet 起网失败由状态机显式承载
+ * @inv 幂等：既有 [ServiceWire.manager] 单例复用、[ConnectionManager.start] 非 STOPPED 直接返回，不产生双连接；TS Starting 不阻塞 LAN，路由代次自行择路
  */
 fun startPersistentConnection(config: PairingConfig, context: Context? = null) {
     synchronized(persistentConnectionStartLock) {
-        val generation = ++persistentConnectionStartGeneration
         // 凭据脱敏前置（registerSecret 坑一：注册前窗口）：配对配置带进装配入口的那一刻就
         // 注册 token 与 authkey——确保后续任何装配/拨号路径的 record 都已被脱敏兜住。
         DiagLog.registerSecret(config.token)
@@ -81,20 +76,9 @@ fun startPersistentConnection(config: PairingConfig, context: Context? = null) {
         } else if (config.tsAuthKey.isNotBlank()) {
             // First bind / identity change: start the node before a TS candidate is used.
             TsnetWire.ensureStarted(config.tsAuthKey)
-            val host = runCatching { URI(config.url).host }.getOrNull()
-            if (config.hostId == null && TsnetDial.isTailnetHost(host) && TsnetWire.state !is TsnetState.Up) {
-                // 冷启动没有配对页时钟泵；tailnet 目标若在 Starting 阶段先直拨，失败后可能
-                // 永久停在 RECONNECTING。等节点明确 Up/Error 再首拨；LAN 地址仍立即直连。
-                TsnetWire.whenSettled {
-                    synchronized(persistentConnectionStartLock) {
-                        if (generation == persistentConnectionStartGeneration) {
-                            startPersistentConnectionNow(config, context)
-                        }
-                    }
-                }
-                return
-            }
         }
+        // The connection generation owns route timing. It runs LAN immediately while TS is
+        // Starting instead of waiting on a global settled latch.
         startPersistentConnectionNow(config, context)
     }
 }
@@ -117,6 +101,7 @@ private fun startPersistentConnectionNow(config: PairingConfig, context: Context
         legacyBootstrapUrl = config.legacyBootstrapUrl,
         lastTsUrl = config.lastTsUrl,
         lastLanUrl = config.lastLanUrl,
+        scanHints = config.scanHints,
     )
     ServiceWire.setConfig(connectionConfig)
     ServiceWire.uploadBaseUrl = config.url.takeIf { it.isNotBlank() }?.let(::deriveUploadBase)
