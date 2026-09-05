@@ -1,7 +1,8 @@
 package api
 
-// server.go wires the WebSocket API server together: the HTTP handler set
-// (WS at /ws, image upload at /upload), the shared session catalog, the
+// server.go wires the HTTP API server together: the HTTP handler set
+// (discovery at /pair/whoami and /pair/identify, WS at /ws, image upload at
+// /upload), the shared session catalog, the
 // periodic discovery loop that pushes listing/list_delta, and the per-connection
 // frame router. The wire contract is docs/protocol.md v1; the machine-verifiable
 // codec is internal/protocol.
@@ -285,8 +286,8 @@ func (s *Server) Close() {
 	}
 }
 
-// Handler returns the full HTTP handler: /ws (WebSocket) and /upload
-// (multipart image upload) on the same port (docs/protocol.md §8).
+// Handler returns the full HTTP handler: token-free discovery/identify,
+// /ws (WebSocket), and /upload (multipart image upload) on the same port.
 // @contract
 // @pre Server 由 NewServer 构造
 // @post 返回一个 http.Handler：/ws 升级为 WebSocket，/upload 接受 POST 图片上传；两路径共用同一端口
