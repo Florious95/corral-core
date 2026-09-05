@@ -26,6 +26,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Test
+import java.util.concurrent.Executor
 
 /**
  * PairingViewModel 测试：配对状态机（扫码/手填 → 试配对 → 成功持久化/明确失败）。
@@ -69,9 +70,25 @@ class PairingViewModelTest {
         /** 下一次拨号脚本（默认成功）；见 [dialFails]。 */
         var nextDialScript: List<Boolean>? = null
 
+        private val identityVerifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint) =
+                HostCandidate("host-1234", "test", listOf(endpoint))
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ) = HostIdentifyResult.Proven(
+                HostIdentity(hostId ?: "legacy-host", "test", endpoint, endpoint.authority),
+            )
+        }
+
         val vm = PairingViewModel(
             configStore = store,
             tsnetStarter = tsnetStarter,
+            identifyClient = identityVerifier,
+            discoveryExecutor = Executor { it.run() },
             connectionFactory = { cfg ->
                 nextConfig = cfg
                 val t = FakeWebSocketTransport()
@@ -143,14 +160,14 @@ class PairingViewModelTest {
     @Test
     fun scanValidQrPairsAndPersists() {
         val h = Harness()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC123","ts_authkey":""}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC123","ts_authkey":""}""")
         // 进入试配对：配置已携带 URL+token。
-        assertEquals("ws://host:9900/ws", h.nextConfig?.url)
+        assertEquals("ws://192.168.1.5:9900/ws", h.nextConfig?.url)
         assertEquals("ABC123", h.nextConfig?.token)
         // auth 通过 → 成功 + 持久化。
         h.authOk()
         assertEquals(PairingStatus.Success, h.vm.pairingStatus)
-        assertEquals("ws://host:9900/ws", h.store.saved?.url)
+        assertEquals("ws://192.168.1.5:9900/ws", h.store.saved?.url)
         assertEquals("ABC123", h.store.saved?.token)
     }
 
@@ -168,7 +185,7 @@ class PairingViewModelTest {
     @Test
     fun scanRejectsMissingToken() {
         val h = Harness()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws"}""")
         val st = h.vm.pairingStatus
         assertTrue(st is PairingStatus.Failed)
         assertTrue((st as PairingStatus.Failed).message.contains("token"))
@@ -177,7 +194,7 @@ class PairingViewModelTest {
     @Test
     fun scanRejectsBadVersion() {
         val h = Harness()
-        h.vm.onQrText("""{"v":2,"url":"ws://host:9900/ws","token":"ABC123"}""")
+        h.vm.onQrText("""{"v":2,"url":"ws://192.168.1.5:9900/ws","token":"ABC123"}""")
         val st = h.vm.pairingStatus
         assertTrue(st is PairingStatus.Failed)
         assertTrue((st as PairingStatus.Failed).message.contains("版本"))
@@ -199,7 +216,7 @@ class PairingViewModelTest {
     fun scanWithTsAuthKeyStartsTsnetAndPersistsKey() {
         val started = mutableListOf<String>()
         val h = Harness(tsnetStarter = { started.add(it) })
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC123","ts_authkey":"tskey-qr-1"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC123","ts_authkey":"tskey-qr-1"}""")
         // 扫码携带 authkey → 立即触发起网（011 扫码即入网，先于/伴随试配对）。
         assertEquals(listOf("tskey-qr-1"), started)
         // 红线：key 不回填手填输入框（QR 是唯一分发出口，不主动上屏）。
@@ -213,7 +230,7 @@ class PairingViewModelTest {
     fun scanWithoutTsAuthKeyDoesNotStartTsnet() {
         val started = mutableListOf<String>()
         val h = Harness(tsnetStarter = { started.add(it) })
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC123","ts_authkey":""}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC123","ts_authkey":""}""")
         // 无 key 降级：绝不触发起网（验收边界：降级不回退，LAN 路径零影响）。
         assertTrue(started.isEmpty())
         h.authOk()
@@ -224,7 +241,7 @@ class PairingViewModelTest {
     fun manualTsAuthKeyStartsTsnetOnSubmit() {
         val started = mutableListOf<String>()
         val h = Harness(tsnetStarter = { started.add(it) })
-        h.vm.manualUrl = "ws://host:9900/ws"
+        h.vm.manualUrl = "ws://192.168.1.5:9900/ws"
         h.vm.manualToken = "ABC123"
         h.vm.manualTsAuthKey = "  tskey-manual-1  "
         h.vm.submitManual()
@@ -238,7 +255,7 @@ class PairingViewModelTest {
     fun manualEmptyTsAuthKeyDoesNotStartTsnet() {
         val started = mutableListOf<String>()
         val h = Harness(tsnetStarter = { started.add(it) })
-        h.vm.manualUrl = "ws://host:9900/ws"
+        h.vm.manualUrl = "ws://192.168.1.5:9900/ws"
         h.vm.manualToken = "ABC123"
         h.vm.submitManual()
         assertTrue(started.isEmpty())
@@ -355,7 +372,7 @@ class PairingViewModelTest {
     fun secureStoreFailureBecomesFixedVisibleError() {
         val h = Harness()
         h.store.failSave = true
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC123"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC123"}""")
         h.authOk()
 
         assertEquals(PairingFailCause.PROTOCOL_ERROR, h.failedCause())
@@ -381,7 +398,7 @@ class PairingViewModelTest {
     fun scanDialFailureSurfacesImmediatelyNotSilent() {
         val h = Harness()
         h.dialFails()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC"}""")
         // 缺陷 B 整改点②：拨号失败（地址不可达）必须立即显式失败，
         // 而不是静默挂起 15 秒等超时（003 静默失效最高罪）。
         val st = h.vm.pairingStatus
@@ -396,24 +413,24 @@ class PairingViewModelTest {
     fun scanImmediatelyAutoConnectsWithTargetUrlVisible() {
         val h = Harness()
         // 缺陷 B 整改点①：识别成功→立即自动发起配对并显示「连接中…」进度态（含目标地址）。
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC"}""")
         val st = h.vm.pairingStatus
         assertTrue("expected Pairing, got $st", st is PairingStatus.Pairing)
-        assertEquals("ws://host:9900/ws", (st as PairingStatus.Pairing).targetUrl)
+        assertEquals("ws://192.168.1.5:9900/ws", (st as PairingStatus.Pairing).targetUrl)
     }
 
     @Test
     fun failThenRetryReconnectsWithSameConfig() {
         val h = Harness()
         h.dialFails()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"ABC"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"ABC"}""")
         assertEquals(PairingFailCause.UNREACHABLE, h.failedCause())
         // 失败态可重试（非解析失败）：以失败时配置重拨（不重新解析 QR）。
         assertTrue(h.vm.canRetry)
         h.vm.retry()
         val st = h.vm.pairingStatus
         assertTrue("expected Pairing, got $st", st is PairingStatus.Pairing)
-        assertEquals("ws://host:9900/ws", h.nextConfig?.url)
+        assertEquals("ws://192.168.1.5:9900/ws", h.nextConfig?.url)
         assertEquals("ABC", h.nextConfig?.token)
     }
 
@@ -462,7 +479,7 @@ class PairingViewModelTest {
     @Test
     fun manualRejectsBlankToken() {
         val h = Harness()
-        h.vm.manualUrl = "ws://host:1/ws"
+        h.vm.manualUrl = "ws://192.168.1.5:1/ws"
         h.vm.manualToken = "   "
         h.vm.submitManual()
         assertTrue(h.vm.formError!!.contains("token"))
@@ -474,7 +491,7 @@ class PairingViewModelTest {
     @Test
     fun authFailureSurfacesExplicitRejection() {
         val h = Harness()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"WRONG"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"WRONG"}""")
         h.authReject("token_mismatch")
         // 拒绝须分类明确（003 失败可见 + 区分原因供 UI 指引）。
         assertEquals(PairingFailCause.REJECTED, h.failedCause())
@@ -486,7 +503,7 @@ class PairingViewModelTest {
     @Test
     fun pairTimeoutSurfacesExplicitFailure() {
         val h = Harness()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"SLOW"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"SLOW"}""")
         h.tickPastPairTimeout()
         assertEquals(PairingFailCause.TIMEOUT, h.failedCause())
         assertNull(h.store.saved)
@@ -495,12 +512,12 @@ class PairingViewModelTest {
     @Test
     fun resetReturnsToIdleWithoutReject() {
         val h = Harness()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"X"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"X"}""")
         // 配对中 reset：不得误报"拒绝"（旧探针 stop 的 STOPPED 回调被短路）。
         h.vm.reset()
         assertEquals(PairingStatus.Idle, h.vm.pairingStatus)
         // 可立即重新配对。
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"Y"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"Y"}""")
         h.authOk()
         assertEquals(PairingStatus.Success, h.vm.pairingStatus)
         assertEquals("Y", h.store.saved?.token)
@@ -513,7 +530,7 @@ class PairingViewModelTest {
         val h = Harness()
         // 用含特殊字符的 token 触发解析失败/拒绝，断言错误文案不含 token 原值。
         val secret = "S3CRET_T0K3N_!@#"
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"$secret"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"$secret"}""")
         h.authReject("token_mismatch")
         val msg = (h.vm.pairingStatus as PairingStatus.Failed).message
         assertFalse(msg.contains(secret))
@@ -537,16 +554,16 @@ class PairingViewModelTest {
         // 永久关闭/拒绝（authSent=true → permanent），而非地址不可达推进候选。
         h.dialFails()
         h.vm.onQrText(
-            """{"v":1,"url":"ws://bad:1/ws","token":"T","ts_authkey":"","candidates":["ws://bad:1/ws","ws://good:1/ws"]}""",
+            """{"v":1,"url":"ws://192.168.1.6:1/ws","token":"T","ts_authkey":"","candidates":["ws://192.168.1.6:1/ws","ws://192.168.1.7:1/ws"]}""",
         )
         // 拨号失败→推进逐试全在 onQrText 内同步完成：返回时已自动推进到第二候选 good 且拨号成功。
         assertEquals(2, h.transports.size)
-        assertEquals("ws://good:1/ws", h.nextConfig?.url)
+        assertEquals("ws://192.168.1.7:1/ws", h.nextConfig?.url)
         assertEquals("T", h.nextConfig?.token)
         // 候选 good：拨号成功 → auth_ack ok → 配对成功（FIELD.md 模拟器走查：错误主选+正确候选）。
         h.authOk()
         assertEquals(PairingStatus.Success, h.vm.pairingStatus)
-        assertEquals("ws://good:1/ws", h.store.saved?.url)
+        assertEquals("ws://192.168.1.7:1/ws", h.store.saved?.url)
         assertEquals("T", h.store.saved?.token)
     }
 
@@ -554,25 +571,25 @@ class PairingViewModelTest {
     fun scanFailsPrimaryTimeoutAdvancesToNextCandidate() {
         val h = Harness()
         h.vm.onQrText(
-            """{"v":1,"url":"ws://slow:1/ws","token":"T","candidates":["ws://slow:1/ws","ws://ok:1/ws"]}""",
+            """{"v":1,"url":"ws://192.168.1.8:1/ws","token":"T","candidates":["ws://192.168.1.8:1/ws","ws://192.168.1.9:1/ws"]}""",
         )
         // 主选拨号成功但不回 auth → 超时（候选预算 3s）→ 自动推进逐试。
         h.clock.advance(3_001L)
         h.vm.onTick(h.clock.nowMs())
         assertEquals(2, h.transports.size)
-        assertEquals("ws://ok:1/ws", h.nextConfig?.url)
+        assertEquals("ws://192.168.1.9:1/ws", h.nextConfig?.url)
     }
 
     @Test
     fun allCandidatesFailShowsFullCandidateListAndCanRetryCandidate() {
         val h = Harness()
         h.alwaysDialFails()
-        val candidates = """["ws://a:1/ws","ws://b:1/ws"]"""
+        val candidates = """["ws://192.168.1.10:1/ws","ws://192.168.1.11:1/ws"]"""
         h.vm.onQrText(
-            """{"v":1,"url":"ws://a:1/ws","token":"T","ts_authkey":"","candidates":$candidates}""",
+            """{"v":1,"url":"ws://192.168.1.10:1/ws","token":"T","ts_authkey":"","candidates":$candidates}""",
         )
         // 逐试完两个候选（主选 a + 候选 b）全败 → 落最终失败态 + 候选列表可见。
-        assertEquals(listOf("ws://a:1/ws", "ws://b:1/ws"), h.vm.candidateUrls)
+        assertEquals(listOf("ws://192.168.1.10:1/ws", "ws://192.168.1.11:1/ws"), h.vm.candidateUrls)
         val st = h.vm.pairingStatus
         assertTrue("expected Failed, got $st", st is PairingStatus.Failed)
         assertTrue((st as PairingStatus.Failed).message.contains("候选"))
@@ -581,10 +598,10 @@ class PairingViewModelTest {
         // 失败后候选列表一键重试：点 b 单次试配（不复逐试序列）。先关掉全败拨号脚本，
         // 让候选 b 这次能拨通进入 Pairing；候选列表在单候选重试时保留可见。
         h.failingDial = false
-        h.vm.retryCandidate("ws://b:1/ws")
+        h.vm.retryCandidate("ws://192.168.1.11:1/ws")
         assertTrue(h.vm.pairingStatus is PairingStatus.Pairing)
-        assertEquals("ws://b:1/ws", h.nextConfig?.url)
-        assertEquals(listOf("ws://a:1/ws", "ws://b:1/ws"), h.vm.candidateUrls)
+        assertEquals("ws://192.168.1.11:1/ws", h.nextConfig?.url)
+        assertEquals(listOf("ws://192.168.1.10:1/ws", "ws://192.168.1.11:1/ws"), h.vm.candidateUrls)
     }
 
     @Test
@@ -592,7 +609,7 @@ class PairingViewModelTest {
         // leader 追加范围：失败态不得残留「正在连接」进行中文案。
         val h = Harness()
         h.dialFails()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"T"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"T"}""")
         assertTrue(h.vm.pairingStatus is PairingStatus.Failed)
         assertNull(h.vm.recognizedUrl)
     }
@@ -602,7 +619,7 @@ class PairingViewModelTest {
         // 无 candidates 的旧 QR：单次试配 + 15s 超时，失败即落失败态（前向兼容，契约 §2.1）。
         val h = Harness()
         h.alwaysDialFails()
-        h.vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"T"}""")
+        h.vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"T"}""")
         assertEquals(1, h.transports.size)
         assertEquals(PairingFailCause.UNREACHABLE, h.failedCause())
         assertTrue(h.vm.candidateUrls.isEmpty())
@@ -614,9 +631,9 @@ class PairingViewModelTest {
         val h = Harness()
         h.alwaysDialFails()
         h.vm.onQrText(
-            """{"v":1,"url":"ws://a:1/ws","token":"T","candidates":["ws://a:1/ws","ws://b:1/ws","ws://a:1/ws"]}""",
+            """{"v":1,"url":"ws://192.168.1.10:1/ws","token":"T","candidates":["ws://192.168.1.10:1/ws","ws://192.168.1.11:1/ws","ws://192.168.1.10:1/ws"]}""",
         )
         assertEquals(2, h.transports.size)
-        assertEquals(listOf("ws://a:1/ws", "ws://b:1/ws"), h.vm.candidateUrls)
+        assertEquals(listOf("ws://192.168.1.10:1/ws", "ws://192.168.1.11:1/ws"), h.vm.candidateUrls)
     }
 }

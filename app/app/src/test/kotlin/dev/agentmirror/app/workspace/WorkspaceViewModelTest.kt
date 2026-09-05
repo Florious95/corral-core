@@ -23,6 +23,7 @@ import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.conn.Workspace
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -150,6 +151,45 @@ class WorkspaceViewModelTest {
 
         // listing 尚未到达时必须给中间反馈，不能提前宣告主机没有工作区。
         assertTrue(s.isLoading)
+        assertFalse(s.isEmpty)
+        assertFalse(s.isQuietEmpty)
+    }
+
+    @Test
+    fun unboundWithNoWorkspaces_isQuietEmpty_notLoadingOrReadyGuide() {
+        val vm = WorkspaceViewModel(initialConnection = ConnectionUi.UNBOUND)
+        val s = vm.uiState.value
+
+        assertEquals(ConnectionUi.UNBOUND, s.connection)
+        assertTrue(s.isQuietEmpty)
+        assertFalse("未绑定不得显示正在连接主机", s.isLoading)
+        assertFalse("未绑定不得假装 READY 空引导", s.isEmpty)
+        assertFalse(s.isDisconnected)
+        assertNull(connectionBannerText(s.connection))
+    }
+
+    @Test
+    fun unboundEnterLevel1_doesNotHangRefreshing() {
+        var lists = 0
+        val vm = WorkspaceViewModel(
+            initialConnection = ConnectionUi.UNBOUND,
+            requestList = { lists++ },
+        )
+        vm.enterLevel1()
+        vm.refresh()
+        assertEquals(0, lists)
+        assertFalse(vm.refreshing.value)
+        assertTrue(vm.uiState.value.isQuietEmpty)
+    }
+
+    @Test
+    fun unboundThenConnecting_becomesLoading_notFakeReady() {
+        val vm = WorkspaceViewModel(initialConnection = ConnectionUi.UNBOUND)
+        vm.onConnectionStateChanged(ConnectionState.CONNECTING)
+        val s = vm.uiState.value
+        assertEquals(ConnectionUi.CONNECTING, s.connection)
+        assertTrue(s.isLoading)
+        assertFalse(s.isQuietEmpty)
         assertFalse(s.isEmpty)
     }
 

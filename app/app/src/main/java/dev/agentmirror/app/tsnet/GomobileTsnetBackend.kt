@@ -31,6 +31,23 @@ import java.net.NetworkInterface
  * 2. Start 语义为「阻塞至真正入网」（tsnetbind 内部 tsnet.Up），key 无效在这里
  *    显式抛错，不再出现"看似成功实未入网"的假 Up（018 状态可视失实）。
  */
+private object HostRouterLike {
+    fun isLiteralIpv4(value: String): Boolean {
+        val parts = value.split('.')
+        if (parts.size != 4) return false
+        if (!parts.all { it.isNotEmpty() && (it.toIntOrNull() ?: -1) in 0..255 &&
+                (it.length == 1 || !it.startsWith('0'))
+        }) return false
+        val octets = parts.map(String::toInt)
+        return octets.any { it != 0 } &&
+            octets[0] != 127 &&
+            !(octets[0] == 169 && octets[1] == 254) &&
+            !(octets[0] == 198 && octets[1] in 18..19) &&
+            octets[0] !in 224..239 &&
+            value != "255.255.255.255"
+    }
+}
+
 class GomobileTsnetBackend : TsnetBackend {
     /** 运行中的 tsnet 节点句柄；生命周期与 start/close 对齐。 */
     private var node: tsnetbind.Node? = null
@@ -52,6 +69,24 @@ class GomobileTsnetBackend : TsnetBackend {
         val n = tsnetbind.Tsnetbind.start(stateDir, hostname, authKey, controlUrl)
         node = n
         return TsnetProxy.parse(n.proxyAddr(), n.proxyCred())
+    }
+
+    @Synchronized
+    override fun peerSnapshot(knownId: String?, cursor: String?): TsPeerSnapshot {
+        val n = node ?: return TsPeerSnapshot(emptyList(), null, supported = false)
+        val result = n.peerSnapshot(knownId.orEmpty(), cursor.orEmpty())
+        val peers = result.getLines().lineSequence().mapNotNull { line ->
+            val fields = line.split('\t', limit = 4)
+            if (fields.size != 4) return@mapNotNull null
+            val ips = fields[2].split(',').filter { HostRouterLike.isLiteralIpv4(it) }
+            TsPeer(
+                stableId = fields[0],
+                online = fields[1] == "1",
+                ipv4 = ips,
+                hostname = fields[3],
+            )
+        }.toList()
+        return TsPeerSnapshot(peers, result.getNextCursor().takeIf { it.isNotEmpty() })
     }
 
     @Synchronized

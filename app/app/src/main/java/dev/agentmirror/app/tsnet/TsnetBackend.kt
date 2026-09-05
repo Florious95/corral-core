@@ -61,6 +61,26 @@ interface TsnetBackend {
      */
     fun start(stateDir: String, hostname: String, authKey: String): TsnetProxy
 
+    /**
+     * Read the complete peer table through the typed gomobile seam. The default is fail-closed
+     * for test doubles and old backends; production GomobileTsnetBackend overrides it.
+     */
+    fun peerSnapshot(knownId: String?, cursor: String?): TsPeerSnapshot =
+        TsPeerSnapshot(emptyList(), null, supported = false)
+
     /** 停节点并释放资源；未启动时调用应无害。 */
     fun close()
 }
+
+data class TsPeerSnapshot(
+    val peers: List<TsPeer>,
+    val nextCursor: String?,
+    val supported: Boolean = true,
+)
+
+data class TsPeer(
+    val stableId: String,
+    val online: Boolean,
+    val ipv4: List<String>,
+    val hostname: String,
+)

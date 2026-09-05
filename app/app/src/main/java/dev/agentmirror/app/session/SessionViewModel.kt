@@ -87,6 +87,8 @@ class SessionViewModel(
     initialCols: Int,
     /** 上传认证与持久连接共用配对 token；只下传给 uploader，不记录、不回显。 */
     internal val uploadToken: String? = null,
+    /** READY 原子发布后读取当前 endpoint；构造期 [baseUrl] 仅保留旧测试/诊断快照。 */
+    private val liveBaseUrl: () -> String? = { baseUrl },
 ) : ConnectionManager.Listener {
 
     /** 终端内核：snapshot 重放 + delta 追加 + 本地 scrollback（006 本地化滚动）。 */
@@ -490,7 +492,7 @@ class SessionViewModel(
      */
     fun uploadAttachment(attachment: Attachment) {
         if (uploadStatus is UploadStatus.Uploading) return
-        val base = baseUrl
+        val base = liveBaseUrl()
         if (base == null) {
             // 接线层未注入上传地址（配对/配置未落地）：明确报错而非静默（halt 纪律）。
             uploadStatus = UploadStatus.Failed("未配置上传地址")

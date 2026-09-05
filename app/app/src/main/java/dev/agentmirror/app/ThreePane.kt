@@ -43,6 +43,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.testTag
 import kotlin.math.abs
 import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.pairing.HostRouter
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppBottomNav
 import dev.agentmirror.app.ui.model.NavTab
@@ -151,6 +152,7 @@ internal fun ThreePaneHome(
                     viewModel = workspaceViewModel,
                     selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
                     connectionPath = ServiceWire.connectionPath(),
+                    hostBound = ServiceWire.currentConfig()?.hostId?.let(HostRouter::isValidHostId) == true,
                     retainLevel2OnDispose = { navState.activeSession != null },
                     onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
                     onBackToList = { navState.selectedWorkspaceCwd = null },

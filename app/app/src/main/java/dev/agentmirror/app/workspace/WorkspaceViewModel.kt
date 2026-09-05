@@ -33,9 +33,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * 连接状态的 UI 映射（展示层只用这四态渲染顶栏/引导）。
+ * 连接状态的 UI 映射（展示层只用这些态渲染顶栏/引导）。
  *
  * CONNECTING 合并 conn 层的 CONNECTING 与 AUTHENTICATING（对用户同为"连接中"）。
+ * UNBOUND 是无 pairing 记录、未启动常驻连接的入口态，不是 READY、也不是 STOPPED。
  * 断连态由 conn 层管理：RECONNECTING 自动退避重连；STOPPED 是永久关闭（auth 被拒 /
  * 显式 stop），不再自动重连。UI 只反映状态，不决策（004 无状态免疫）。
  */
@@ -51,6 +52,9 @@ enum class ConnectionUi {
 
     /** 永久关闭（auth 被拒 / 显式 stop）。 */
     STOPPED,
+
+    /** 未绑定：无 pairing 记录，不拨号。 */
+    UNBOUND,
 }
 
 /**
@@ -74,6 +78,9 @@ data class WorkspaceUiState(
 
     /** 就绪且无工作区 = 空态，给引导文案（无工作区 ≠ 错误）。 */
     val isEmpty: Boolean get() = connection == ConnectionUi.READY && workspaces.isEmpty()
+
+    /** 未绑定且无列表 = 安静空工作区，不是加载、也不是 READY 空引导。 */
+    val isQuietEmpty: Boolean get() = connection == ConnectionUi.UNBOUND && workspaces.isEmpty()
 
     /** 断连（重连中/已关闭）：顶栏提示，列表保留最后一次已知状态。 */
     val isDisconnected: Boolean
@@ -193,6 +200,14 @@ class WorkspaceViewModel(
      * @inv 本方法不写空列表
      */
     fun enterLevel1() {
+        if (_uiState.value.connection == ConnectionUi.UNBOUND) {
+            DiagLog.record(
+                "refresh",
+                "enterLevel1 skipped unbound=true cached=${_uiState.value.workspaces.size} " +
+                    "refreshing_prev=${_refreshing.value} refreshing_next=${_refreshing.value}",
+            )
+            return
+        }
         val cached = _uiState.value.workspaces.size
         val prevRefreshing = _refreshing.value
         if (suppressEnterRefresh) {
@@ -334,6 +349,14 @@ class WorkspaceViewModel(
      * @inv 本方法只发请求，不改列表；列表只在 [applyListing] 时整体替换
      */
     fun refresh() {
+        if (_uiState.value.connection == ConnectionUi.UNBOUND) {
+            DiagLog.record(
+                "refresh",
+                "refresh() skipped unbound=true refreshing_prev=${_refreshing.value} " +
+                    "cached=${_uiState.value.workspaces.size}",
+            )
+            return
+        }
         val prev = _refreshing.value
         _refreshing.value = true
         DiagLog.record(

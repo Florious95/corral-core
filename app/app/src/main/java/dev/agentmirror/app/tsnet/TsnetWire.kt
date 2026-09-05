@@ -62,10 +62,7 @@ object TsnetWire {
     @Volatile
     var stateListener: ((TsnetState) -> Unit)? = null
 
-    /**
-     * 冷启动 tailnet 首拨的一次性等待者。持久连接只有一个配置，后来的等待覆盖旧配置正是
-     * 重配语义；PairingRoute 的常驻 UI 监听仍走 [stateListener]，两者互不抢槽。
-     */
+    /** 一次性 Up/Error 监听；仅无 identify 协调器的 legacy tailnet 冷启动使用。 */
     private var settledListener: ((TsnetState) -> Unit)? = null
 
     /** 节点管理器（懒建；换 key 时重建）。 */
@@ -73,6 +70,10 @@ object TsnetWire {
 
     /** 当前节点使用的 key（trim 后）；幂等判定与换 key 重启的依据。 */
     private var currentKey: String? = null
+
+    /** READY 期间只持久化最新待用值；下一连接代次开始前才消费。 */
+    @Volatile
+    private var pendingKey: String? = null
 
     /**
      * 确保节点以 [authKey] 起网（扫码/手填/冷启动三入口共用）：
@@ -83,6 +84,16 @@ object TsnetWire {
     @Synchronized
     fun ensureStarted(authKey: String) {
         val key = authKey.trim()
+        // 空 key 是明确的禁用请求：不允许旧 manager 的 Up 状态继续作为候选。
+        if (key.isEmpty()) {
+            pendingKey = null
+            peerCursor = null
+            manager?.stop()
+            manager = null
+            currentKey = null
+            onState(TsnetState.Idle)
+            return
+        }
         // 凭据脱敏前置（registerSecret 坑一：注册前窗口）：值刚进本方法就注册，把
         // 「值在内存」到「registerSecret 生效」的窗口压到零——本方法内任何 record 都已被
         // 脱敏兜住。注册表本身绝不进缓冲/导出（private，无 toString 暴露面）。
@@ -103,6 +114,7 @@ object TsnetWire {
         }
         // 换 key 或上次失败：停旧建新。stop() 的 Idle 回调经 onState 短暂可见，随后 Starting 覆盖。
         m?.stop()
+        peerCursor = null
         currentKey = key
         val exec = executorForTest
         val created = if (exec != null) {
@@ -113,6 +125,48 @@ object TsnetWire {
         manager = created
         created.start(stateDirForKey(env.stateDir, key), env.hostname, key)
     }
+
+    /**
+     * READY 期间更新配置只写待用值，不 stop/close 当前节点；下一代连接开始时调用
+     * [applyPendingKey] 才会启用它。这是 R2 的关键边界。
+     */
+    @Synchronized
+    fun stagePendingKey(authKey: String) {
+        val key = authKey.trim()
+        if (key.isNotEmpty()) DiagLog.registerSecret(key)
+        pendingKey = key
+    }
+
+    /** Consume the latest staged key exactly at a new connection generation. */
+    @Synchronized
+    fun applyPendingKey() {
+        val staged = pendingKey ?: return
+        pendingKey = null
+        if (staged.isEmpty()) {
+            ensureStarted("")
+        } else if (staged != currentKey || manager == null) {
+            ensureStarted(staged)
+        }
+    }
+
+    /** True only while the current manager is actually Starting/Up. */
+    @Synchronized
+    fun hasActiveNode(): Boolean = manager?.state is TsnetState.Starting || manager?.state is TsnetState.Up
+
+    /** Read a typed peer snapshot; unsupported/failed is fail-closed. */
+    @Synchronized
+    fun peerSnapshot(knownId: String? = null, cursor: String? = null): TsPeerSnapshot {
+        val requestedCursor = cursor ?: if (knownId == null) peerCursor else null
+        val snapshot = manager?.let {
+            runCatching { it.peerSnapshot(knownId, requestedCursor) }
+                .getOrElse { TsPeerSnapshot(emptyList(), null, false) }
+        } ?: TsPeerSnapshot(emptyList(), null, false)
+        if (knownId == null && cursor == null) peerCursor = snapshot.nextCursor
+        return snapshot
+    }
+
+    /** Cursor for the next bounded unknown-peer page; known IDs always bypass it. */
+    private var peerCursor: String? = null
 
     /**
      * tsnet 会在已有持久节点可运行时忽略新 authkey；按 key 的 SHA-256 指纹隔离状态，
@@ -153,8 +207,8 @@ object TsnetWire {
     }
 
     /**
-     * 节点到达 Up/Error 时回调一次；注册时已经终态则立即补播。用于 tailnet 冷启动避免
-     * Starting 阶段先直拨后因无时钟泵永久卡在重连态。回调不携带 authkey。
+     * 节点到达 Up/Error 时回调一次；注册时已经终态则立即补播。
+     * 用于无 host 协调器的 tailnet 冷启动：Starting 阶段先直拨会在无时钟泵时卡在重连。
      */
     internal fun whenSettled(listener: (TsnetState) -> Unit) {
         val current = synchronized(this) {
@@ -168,6 +222,7 @@ object TsnetWire {
         }
         current?.let(listener)
     }
+
 
     /**
      * hostname 归一化：设备型号（Build.MODEL 常含空格/大写）→ DNS 友好节点名，
@@ -188,6 +243,8 @@ object TsnetWire {
         manager?.stop()
         manager = null
         currentKey = null
+        pendingKey = null
+        peerCursor = null
         environment = null
         backendFactory = { GomobileTsnetBackend() }
         executorForTest = null

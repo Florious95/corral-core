@@ -51,18 +51,27 @@ object QrPayloadParser {
         if (dto.version != PAYLOAD_VERSION) {
             throw QrParseException("不支持的配对信息版本：${dto.version}")
         }
-        if (!isValidWsUrl(dto.url)) {
-            throw QrParseException("配对信息中的服务端地址不合法")
+        val url = dto.url.trim()
+        val hostId = dto.hostId?.trim()?.takeIf { it.isNotEmpty() }
+        // v1 QR remains backward compatible: old payloads require a URL; upgraded payloads
+        // may be URL-less because the host record/TS+NSD discovery supplies endpoints.
+        if (!isValidWsUrl(url) && !HostRouter.isValidHostId(hostId)) {
+            throw QrParseException("配对信息中的服务端地址或主机身份不合法")
         }
         if (dto.token.isBlank()) {
             throw QrParseException("配对信息缺少 token")
         }
+        val port = dto.port?.takeIf { it in 1..65535 }
         return QrPayload(
             version = dto.version,
-            url = dto.url.trim(),
+            url = url,
             token = dto.token.trim(),
             tsAuthKey = dto.tsAuthKey.orEmpty(),
             candidates = normalizeCandidates(dto.candidates),
+            hostId = hostId,
+            port = port,
+            tsNodeId = dto.tsNodeId?.trim()?.takeIf { it.isNotEmpty() },
+            name = dto.name?.trim()?.takeIf { it.isNotEmpty() },
         )
     }
 
@@ -88,5 +97,9 @@ object QrPayloadParser {
         @SerialName("token") val token: String = "",
         @SerialName("ts_authkey") val tsAuthKey: String? = null,
         @SerialName("candidates") val candidates: List<String>? = null,
+        @SerialName("host_id") val hostId: String? = null,
+        @SerialName("port") val port: Int? = null,
+        @SerialName("ts_node_id") val tsNodeId: String? = null,
+        @SerialName("name") val name: String? = null,
     )
 }

@@ -39,6 +39,7 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -140,11 +141,17 @@ class ColdStartReconnectTest {
         }
     }
 
-    /** 预置配对配置（键与 SharedPreferencesPairingConfigStore 对齐）。 */
+    /** 预置当前配对配置（键与 SharedPreferencesPairingConfigStore 对齐）。
+     *  必须写 schema_version=2：缺省 0 会被 load() 当成 v1 并合成 legacyBootstrapUrl，
+     *  从而走 identify 协调器而非「已配对 url+token」的生产冷启动路径。 */
     private fun seedConfig(url: String, token: String) {
         RuntimeEnvironment.getApplication()
             .getSharedPreferences("pairing_config", Context.MODE_PRIVATE)
-            .edit().putString("url", url).putString("token", token).commit()
+            .edit()
+            .putInt("schema_version", 2)
+            .putString("url", url)
+            .putString("token", token)
+            .commit()
     }
 
     // ---- 红测一：有配置冷启动必须启动连接（缺陷：无任何路径 start）----
@@ -163,8 +170,12 @@ class ColdStartReconnectTest {
         assertEquals("连接必须发起拨号（transport.start 被调用）", 1, transport.dialIndex)
         // 序列与 onPaired 同构：上传基地址必须一并注入（勿只抄 start()）。
         assertEquals("http://10.0.2.2:9900", ServiceWire.uploadBaseUrl)
-        // 有配置直进工作区（不落配对页）。
+        // 有配置直进工作区（不落配对页），且必须进入真实连接而非未绑定空态。
         assertFalse("有配置冷启动不得停配对页", activity.navState.showPairing)
+        assertEquals(ConnectionUi.CONNECTING, activity.workspaceViewModel.uiState.value.connection)
+        assertTrue(activity.workspaceViewModel.uiState.value.isLoading)
+        assertFalse(activity.workspaceViewModel.uiState.value.isQuietEmpty)
+        assertNotNull(ServiceWire.managerOrNull())
     }
 
     @Test
@@ -382,5 +393,33 @@ class ColdStartReconnectTest {
         assertTrue("无配置冷启动必须停配对页（首启语义）", activity.navState.showPairing)
         assertTrue("无配置不得启动任何连接", factory.created.isEmpty())
         assertNull("无配置不得注入上传基地址", ServiceWire.uploadBaseUrl)
+        assertEquals(
+            "无 pairing 记录不得默认 CONNECTING（skip 后会永远加载）",
+            ConnectionUi.UNBOUND,
+            activity.workspaceViewModel.uiState.value.connection,
+        )
+    }
+
+    @Test
+    fun skipPairing_withoutConfig_isQuietEmpty_andDoesNotStartConnection() {
+        val factory = RecordingTransportFactory()
+        ServiceWire.transportFactory = factory
+
+        val activity = buildMainActivity()
+        assertTrue(activity.navState.showPairing)
+
+        // 以后再说：只关配对页，不写 pairing、不 start 常驻连接。
+        activity.navState.showPairing = false
+        val s = activity.workspaceViewModel.uiState.value
+
+        assertFalse(activity.navState.showPairing)
+        assertEquals(ConnectionUi.UNBOUND, s.connection)
+        assertTrue(s.isQuietEmpty)
+        assertFalse("skip 后不得停在加载态", s.isLoading)
+        assertFalse("skip 后不得假装 READY 空引导", s.isEmpty)
+        assertTrue("skip 不得启动任何连接", factory.created.isEmpty())
+        assertNull(ServiceWire.managerOrNull())
+        assertNull(ServiceWire.uploadBaseUrl)
+        assertNull(ServiceWire.currentConfig())
     }
 }

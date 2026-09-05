@@ -29,6 +29,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.util.concurrent.Executor
 
 /**
  * 配对页时钟泵红测（fix-pairing-timeout-pump，红线5：配对超时永不触发）。
@@ -89,8 +90,23 @@ class PairingScreenClockPumpTest {
             }
         }
         val transports = mutableListOf<FakeWebSocketTransport>()
+        val identityVerifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint) =
+                HostCandidate("host-1234", "test", listOf(endpoint))
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ) = HostIdentifyResult.Proven(
+                HostIdentity(hostId ?: "legacy-host", "test", endpoint, endpoint.authority),
+            )
+        }
         val vm = PairingViewModel(
             configStore = store,
+            identifyClient = identityVerifier,
+            discoveryExecutor = Executor { it.run() },
             connectionFactory = { cfg: ConnectionConfig ->
                 val t = FakeWebSocketTransport() // 拨号成功但永不回 auth → 只剩超时能收场
                 transports.add(t)
@@ -100,7 +116,7 @@ class PairingScreenClockPumpTest {
         )
 
         // 先开始配对（记录配对开始时刻 = 假时钟基准），再渲染屏幕让泵首拍驱动超时。
-        vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"T0K","ts_authkey":""}""")
+        vm.onQrText("""{"v":1,"url":"ws://192.168.1.5:9900/ws","token":"T0K","ts_authkey":""}""")
         val start = vm.pairingStatus
         assertTrue("pairing should start, got $start", start is PairingStatus.Pairing)
 

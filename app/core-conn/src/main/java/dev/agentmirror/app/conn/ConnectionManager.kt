@@ -48,8 +48,18 @@ enum class ConnectionState {
 data class ConnectionConfig(
     val url: String,
     val token: String,
+    val hostId: String? = null,
+    val port: Int? = null,
+    val tsNodeId: String? = null,
+    val name: String? = null,
+    val tsAuthKey: String? = null,
+    val legacyBootstrapUrl: String? = null,
+    val lastTsUrl: String? = null,
+    val lastLanUrl: String? = null,
+    val scanHints: List<String> = emptyList(),
 ) {
-    override fun toString(): String = "ConnectionConfig(url=$url, token=[redacted])"
+    override fun toString(): String =
+        "ConnectionConfig(url=$url, token=[redacted], hostId=$hostId, port=$port, tsNodeId=$tsNodeId, name=$name, tsAuthKey=[redacted], legacyBootstrapUrl=$legacyBootstrapUrl, lastTsUrl=$lastTsUrl, lastLanUrl=$lastLanUrl, scanHints=$scanHints)"
 }
 
 /**
@@ -66,12 +76,29 @@ data class ConnectionConfig(
  * 上层只见 [Listener] 回调。调度由宿主驱动：生产用定时器周期调用 [pump]，
  * 单测用假时钟推进（conn 知识基底 §1）。
  */
+/** Candidate emitted only after an app-layer identity proof. */
+data class DialTarget(val url: String, val path: String)
+
+/**
+ * Async route seam. ConnectionManager remains the only caller of TransportFactory.create;
+ * coordinators only prove and emit one target at a time.
+ */
+interface AsyncDialCoordinator {
+    fun begin(generation: Long, onTarget: (DialTarget) -> Unit, onExhausted: () -> Unit)
+    fun onTargetFailed(generation: Long, url: String, reason: String)
+    fun onReady(generation: Long)
+    fun cancel(generation: Long)
+}
+
 class ConnectionManager(
     private val config: ConnectionConfig,
     private val transportFactory: TransportFactory,
     private val clock: Clock = Clock.Real,
     private val policy: ReconnectPolicy = ReconnectPolicy(),
     private val inputTimeoutMs: Long = 10_000,
+    private val dialCoordinator: AsyncDialCoordinator? = null,
+    private val beforeGeneration: (() -> Unit)? = null,
+    private val onReadyTarget: ((DialTarget) -> Unit)? = null,
 ) {
     /** 上层监听（单收件线程串行回调）。 */
     interface Listener {
@@ -124,6 +151,10 @@ class ConnectionManager(
 
     /** 下一次重连触发时刻（毫秒）；null = 无待执行重连。 */
     private var pendingReconnectAt: Long? = null
+
+    /** Route generation drops all late identify/WS callbacks. */
+    private var generation: Long = 0
+    private var activeTarget: DialTarget? = null
 
     /** 主动刷新请求尚未收到对应快照；重复前台边沿在途时合并。 */
     private var listRefreshInFlight: Boolean = false
@@ -182,7 +213,7 @@ class ConnectionManager(
      * 时期，此值能直接暴露"重连正拨旧址"（改配置后仍拨旧地址）；配合 onReconnect 的
      * 已试次数一并展示，用户不再面对无声的重连循环。
      */
-    fun dialUrl(): String = config.url
+    fun dialUrl(): String = activeTarget?.url ?: config.url
 
     /** 活跃订阅 ref 集合（测试断言重放依据）。 */
     fun activeRefs(): Set<String> = activeSubscriptions.keys.toSet()
@@ -215,6 +246,8 @@ class ConnectionManager(
      */
     fun stop() {
         pendingReconnectAt = null
+        dialCoordinator?.cancel(generation)
+        generation++
         listRefreshInFlight = false
         level2RefreshInFlight.clear()
         connection?.close()
@@ -665,10 +698,49 @@ class ConnectionManager(
     // ---- 内部 ----
 
     private fun attemptConnect() {
-        // 唯一入口是 start()（gate 在 start 里）或调度/网络钩子（此时 state 必非 STOPPED），
-        // 因此这里直接进入 CONNECTING，无需再判 STOPPED。
+        // 唯一入口是 start()（gate 在 start 里）或调度/网络钩子（此时 state 必非 STOPPED）。
+        // A host coordinator performs async discovery/identify; this method never blocks the pump.
+        beforeGeneration?.invoke()
+        val nextGeneration = ++generation
+        activeTarget = null
+        connection = null
         setState(ConnectionState.CONNECTING)
-        val conn = Connection(transportFactory.create(config.url), config.token, connListener)
+        val coordinator = dialCoordinator
+        ConnDiag.record(
+            "ws",
+            "attemptConnect gen=$nextGeneration coordinator=${coordinator != null} url=${config.url}",
+        )
+        if (coordinator == null) {
+            connectTarget(nextGeneration, DialTarget(config.url, "legacy"))
+        } else {
+            coordinator.begin(
+                nextGeneration,
+                onTarget = { target -> connectTarget(nextGeneration, target) },
+                onExhausted = {
+                    if (nextGeneration == generation && state != ConnectionState.STOPPED) {
+                        scheduleReconnect()
+                    }
+                },
+            )
+        }
+    }
+
+    private fun connectTarget(targetGeneration: Long, target: DialTarget) {
+        val skip = when {
+            targetGeneration != generation -> "gen_mismatch"
+            state == ConnectionState.STOPPED -> "stopped"
+            connection != null -> "conn_exists"
+            else -> null
+        }
+        ConnDiag.record(
+            "ws",
+            "connectTarget gen=$targetGeneration cur=$generation state=$state " +
+                "has_conn=${connection != null} url=${target.url} path=${target.path} " +
+                "create=${skip == null} skip=${skip ?: ""}",
+        )
+        if (skip != null) return
+        activeTarget = target
+        val conn = Connection(transportFactory.create(target.url), config.token, connListener)
         connection = conn
         conn.start()
     }
@@ -680,6 +752,8 @@ class ConnectionManager(
 
         override fun onReady() {
             attempt = 0 // 成功后退避重置
+            activeTarget?.let { target -> onReadyTarget?.invoke(target) }
+            dialCoordinator?.onReady(generation)
             val reconnect = readyIsReconnect
             readyIsReconnect = false
             setState(ConnectionState.READY)
@@ -762,13 +836,28 @@ class ConnectionManager(
 
         override fun onClosed(permanent: Boolean, reason: String) {
             if (permanent) {
+                dialCoordinator?.cancel(generation)
                 failAllPending("connection rejected/closed: $reason")
                 connection = null
                 setState(ConnectionState.STOPPED)
             } else {
                 failAllPending("connection lost: $reason")
                 connection = null
-                scheduleReconnect()
+                val target = activeTarget
+                activeTarget = null
+                // After READY the coordinator round is already cancelled (onReady=cancel).
+                // onTargetFailed is then a no-op, which left a dead READY socket (Issue 82).
+                val afterReady = state == ConnectionState.READY
+                ConnDiag.record(
+                    "ws",
+                    "onClosed permanent=false state=$state coordinator=${dialCoordinator != null} " +
+                        "has_target=${target != null} after_ready=$afterReady",
+                )
+                if (!afterReady && dialCoordinator != null && target != null) {
+                    dialCoordinator.onTargetFailed(generation, target.url, reason)
+                } else {
+                    scheduleReconnect()
+                }
             }
         }
     }
