@@ -147,7 +147,7 @@ func dnsPacket(a DNSAdvertisement, ttl uint32) []byte {
 	b.u32(ttl)
 	b.u16(4)
 	b.appendBytes([]byte{0, 0, 0, 0})
-	return b.bytes()
+	return b.data()
 }
 
 type dnsBuilder struct{ b []byte }
@@ -171,7 +171,7 @@ func (d *dnsBuilder) name(name string) {
 			return
 		}
 		d.u8(byte(len(label)))
-		d.bytes([]byte(label))
+		d.appendBytes([]byte(label))
 	}
 	d.u8(0)
 }
