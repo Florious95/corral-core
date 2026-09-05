@@ -30,6 +30,9 @@ limitations under the License.
     <!-- fix-reconnect-stale-config 扩权（leader 裁定）：网络可达性回调（registerDefaultNetworkCallback）
          前置权限。锁屏断连后网络恢复必须打断退避立即重拨（E2 缺口收口）；普通权限，安装时授予。 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- LAN DNS-SD discovery; the multicast lock is held only during bounded NSD windows. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!-- 前台服务 + 通知：状态沿变化发系统通知、常驻通知栏（fg-service）。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

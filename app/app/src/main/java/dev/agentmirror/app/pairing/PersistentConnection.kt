@@ -71,13 +71,18 @@ fun startPersistentConnection(config: PairingConfig, context: Context? = null) {
         // 注册 token 与 authkey——确保后续任何装配/拨号路径的 record 都已被脱敏兜住。
         DiagLog.registerSecret(config.token)
         config.tsAuthKey.takeIf { it.isNotEmpty() }?.let(DiagLog::registerSecret)
-        // feat-ts-wire：配置携带 authkey（配对时扫码/手填带入并持久化）→ 先确保 tsnet
-        // 节点起网（幂等）。tailnet 地址的拨号依赖节点 Up 后的 SOCKS 通道，因此首拨等节点
-        // 明确 Up/Error；LAN 地址仍立即直连（transport 工厂拨号时刻现查状态）。key 值不落日志。
-        if (config.tsAuthKey.isNotBlank()) {
+        // R2: changing only the TS key while the identity/READY socket is alive is a staged
+        // update. It must not stop the existing node or socket; the next generation consumes it.
+        val old = ServiceWire.currentConfig()
+        val sameIdentity = old?.token == config.token && old?.hostId == config.hostId
+        val keyChanged = old?.tsAuthKey != config.tsAuthKey
+        if (sameIdentity && keyChanged && old != null) {
+            TsnetWire.stagePendingKey(config.tsAuthKey)
+        } else if (config.tsAuthKey.isNotBlank()) {
+            // First bind / identity change: start the node before a TS candidate is used.
             TsnetWire.ensureStarted(config.tsAuthKey)
             val host = runCatching { URI(config.url).host }.getOrNull()
-            if (TsnetDial.isTailnetHost(host) && TsnetWire.state !is TsnetState.Up) {
+            if (config.hostId == null && TsnetDial.isTailnetHost(host) && TsnetWire.state !is TsnetState.Up) {
                 // 冷启动没有配对页时钟泵；tailnet 目标若在 Starting 阶段先直拨，失败后可能
                 // 永久停在 RECONNECTING。等节点明确 Up/Error 再首拨；LAN 地址仍立即直连。
                 TsnetWire.whenSettled {
@@ -101,8 +106,20 @@ fun startPersistentConnection(config: PairingConfig, context: Context? = null) {
  * context 为 null（纯 JVM 测试）时跳过服务启动，连接已装配——产品功能仍完整。
  */
 private fun startPersistentConnectionNow(config: PairingConfig, context: Context?) {
-    ServiceWire.setConfig(ConnectionConfig(config.url, config.token))
-    ServiceWire.uploadBaseUrl = deriveUploadBase(config.url)
+    val connectionConfig = ConnectionConfig(
+        url = config.url,
+        token = config.token,
+        hostId = config.hostId,
+        port = config.port,
+        tsNodeId = config.tsNodeId,
+        name = config.name,
+        tsAuthKey = config.tsAuthKey,
+        legacyBootstrapUrl = config.legacyBootstrapUrl,
+        lastTsUrl = config.lastTsUrl,
+        lastLanUrl = config.lastLanUrl,
+    )
+    ServiceWire.setConfig(connectionConfig)
+    ServiceWire.uploadBaseUrl = config.url.takeIf { it.isNotBlank() }?.let(::deriveUploadBase)
     runCatching { ServiceWire.manager(NoopConnListener).start() }
         .onFailure {
             android.util.Log.w("PersistentConnection", "start persistent connection: ${it.message}")

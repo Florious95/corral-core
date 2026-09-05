@@ -74,6 +74,25 @@
 - 解析宽容：`candidates` 中非 ws URL / 空项**跳过不报错**；`candidates` 类型错误（非数组）
   视为无候选——坏候选不拖垮整个 QR，主选 `url` 仍可配对。
 
+**Host discovery extension (v1, additive fields)**:
+
+A new QR may carry `host_id`, `port`, `ts_node_id`, and display-only `name`; `url` may be
+empty when the host is to be found on TS/LAN. `host_id` identifies the daemon, not a path,
+and `name` is never an identity check. An unbound client first performs public discovery:
+`GET /pair/whoami` contains no token and is only a candidate listing. It then proves a
+literal IPv4 endpoint with `POST /pair/identify` before creating a WebSocket. The identify
+body is `{"v":1,"host_id":...,"nonce":...,"dest_ip":...}` and the response is bound to the
+same literal `dest_ip`; redirects, DNS names, IPv6, and `100.64/10` scans are rejected.
+Only after a valid HMAC proof may the existing `auth` frame carry the host token. The
+first TS-only probe uses port `9900`; a non-default port comes only from a host record, QR,
+NSD resolution, or last-good hint. `whoami` and identify never persist credentials.
+The server computes `HMAC-SHA256(pairing_token,
+"agentmirror-identify-v1" || 0x1f || host_id || 0x1f || nonce_hex || 0x1f || dest_ip ||
+0x1f || bound_port)` and returns lowercase hex `mac` plus `bound="ip:port"`. Clients
+verify `host_id`, `bound`, and the MAC before writing a host record. A `404` legacy fallback
+is allowed only for the exact scanned primary/persisted legacy URL, with no local `host_id`,
+and never for discovered, NSD, last-good, or QR candidate hints.
+
 **`ts_authkey` 语义（task feat-ts-wire，requirement 011 预授权分发裁定）**：
 
 - 服务端通过环境变量 `TS_AUTHKEY` 配置 TS authkey 时，daemon 内嵌

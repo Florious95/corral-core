@@ -3,6 +3,10 @@
 `agentmirror.dev/tsnetbind` 是 tsnet 用户态节点的 gomobile 绑定最小包装，产物为
 `app/app/libs/tsnetbind.aar`（Go → `jni/arm64-v8a/libgojni.so` + Java 绑定类）。
 
+`Node.PeerSnapshot(knownID, cursor)` 是主机发现的 typed seam：它读取完整
+`Status.Peer`，先按 StableID 全表命中，再返回确定性的最多 256 行 literal IPv4
+窗口和续扫 cursor。调用失败必须 fail-closed；客户端绝不退化为扫描 `100.64.0.0/10`。
+
 ## 重建（一条命令，可复现）
 
 ```sh

@@ -18,6 +18,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +32,20 @@ type Node struct {
 	srv       *tsnet.Server
 	proxyAddr string
 	proxyCred string
+}
+
+type peerSnapshotRow struct {
+	id       string
+	online   bool
+	ipv4     []string
+	hostname string
+}
+
+// PeerSnapshotResult is intentionally flat for gomobile. Lines is bounded by the
+// caller-independent 256-row window and NextCursor is empty when the table is exhausted.
+type PeerSnapshotResult struct {
+	Lines      string
+	NextCursor string
 }
 
 // upTimeout 界定控制面握手：超时即显式失败（工程红线5 失败可见，
@@ -85,6 +100,85 @@ func (n *Node) ProxyAddr() string { return n.proxyAddr }
 
 // ProxyCred 返回代理认证凭证（SOCKS5 用户名口令均为它）。
 func (n *Node) ProxyCred() string { return n.proxyCred }
+
+// PeerSnapshot returns a bounded, deterministic snapshot of Status.Peer.
+// The known ID is matched against the complete table before the 256-line window;
+// cursor is the last emitted StableID and allows later generations to continue.
+// Lines are: stableID<TAB>online(0|1)<TAB>ipv4 comma-list<TAB>hostname.
+func (n *Node) PeerSnapshot(knownID, cursor string) (*PeerSnapshotResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	lc, err := n.srv.LocalClient()
+	if err != nil {
+		return nil, err
+	}
+	status, err := lc.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]peerSnapshotRow, 0, len(status.Peer))
+	for _, peer := range status.Peer {
+		id := fmt.Sprint(peer.StableID)
+		ips := make([]string, 0, len(peer.TailscaleIPs))
+		for _, ip := range peer.TailscaleIPs {
+			if ip.Is4() {
+				ips = append(ips, ip.String())
+			}
+		}
+		sort.Strings(ips)
+		rows = append(rows, peerSnapshotRow{id: id, online: peer.Online, ipv4: ips, hostname: cleanPeerText(peer.HostName)})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].id < rows[j].id })
+	if knownID != "" {
+		for _, row := range rows {
+			if row.id == knownID {
+				return &PeerSnapshotResult{Lines: formatPeerRows([]peerSnapshotRow{row})}, nil
+			}
+		}
+	}
+	if len(rows) == 0 {
+		return &PeerSnapshotResult{}, nil
+	}
+	start := 0
+	if cursor != "" {
+		for i, row := range rows {
+			if row.id == cursor {
+				start = (i + 1) % len(rows)
+				break
+			}
+		}
+	}
+	window := make([]peerSnapshotRow, 0, 256)
+	for i := 0; i < len(rows) && i < 256; i++ {
+		window = append(window, rows[(start+i)%len(rows)])
+	}
+	if len(rows) > len(window) {
+		nextCursor = window[len(window)-1].id
+	}
+	return &PeerSnapshotResult{Lines: formatPeerRows(window), NextCursor: nextCursor}, nil
+}
+
+func cleanPeerText(s string) string {
+	return strings.NewReplacer("\\t", " ", "\\n", " ", "\\r", " ").Replace(s)
+}
+
+func formatPeerRows(rows []peerSnapshotRow) string {
+	var b strings.Builder
+	for i, row := range rows {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "%s\t%d\t%s\t%s", row.id, boolInt(row.online), strings.Join(row.ipv4, ","), row.hostname)
+	}
+	return b.String()
+}
+
+func boolInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
 
 // Close 停节点并释放资源。
 func (n *Node) Close() error { return n.srv.Close() }

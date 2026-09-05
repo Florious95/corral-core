@@ -74,6 +74,10 @@ object TsnetWire {
     /** 当前节点使用的 key（trim 后）；幂等判定与换 key 重启的依据。 */
     private var currentKey: String? = null
 
+    /** READY 期间只持久化最新待用值；下一连接代次开始前才消费。 */
+    @Volatile
+    private var pendingKey: String? = null
+
     /**
      * 确保节点以 [authKey] 起网（扫码/手填/冷启动三入口共用）：
      * - 同 key 且已在 Starting/Up：幂等 no-op（重复扫码/冷启动不重复起网）；
@@ -83,6 +87,15 @@ object TsnetWire {
     @Synchronized
     fun ensureStarted(authKey: String) {
         val key = authKey.trim()
+        // 空 key 是明确的禁用请求：不允许旧 manager 的 Up 状态继续作为候选。
+        if (key.isEmpty()) {
+            pendingKey = null
+            manager?.stop()
+            manager = null
+            currentKey = null
+            onState(TsnetState.Idle)
+            return
+        }
         // 凭据脱敏前置（registerSecret 坑一：注册前窗口）：值刚进本方法就注册，把
         // 「值在内存」到「registerSecret 生效」的窗口压到零——本方法内任何 record 都已被
         // 脱敏兜住。注册表本身绝不进缓冲/导出（private，无 toString 暴露面）。
@@ -113,6 +126,39 @@ object TsnetWire {
         manager = created
         created.start(stateDirForKey(env.stateDir, key), env.hostname, key)
     }
+
+    /**
+     * READY 期间更新配置只写待用值，不 stop/close 当前节点；下一代连接开始时调用
+     * [applyPendingKey] 才会启用它。这是 R2 的关键边界。
+     */
+    @Synchronized
+    fun stagePendingKey(authKey: String) {
+        val key = authKey.trim()
+        if (key.isNotEmpty()) DiagLog.registerSecret(key)
+        pendingKey = key
+    }
+
+    /** Consume the latest staged key exactly at a new connection generation. */
+    @Synchronized
+    fun applyPendingKey() {
+        val staged = pendingKey ?: return
+        pendingKey = null
+        if (staged.isEmpty()) {
+            ensureStarted("")
+        } else if (staged != currentKey || manager == null) {
+            ensureStarted(staged)
+        }
+    }
+
+    /** True only while the current manager is actually Starting/Up. */
+    @Synchronized
+    fun hasActiveNode(): Boolean = manager?.state is TsnetState.Starting || manager?.state is TsnetState.Up
+
+    /** Read a typed peer snapshot; unsupported/failed is fail-closed. */
+    fun peerSnapshot(knownId: String? = null, cursor: String? = null): TsPeerSnapshot =
+        synchronized(this) { manager }
+            ?.let { runCatching { it.peerSnapshot(knownId, cursor) }.getOrElse { TsPeerSnapshot(emptyList(), null, false) } }
+            ?: TsPeerSnapshot(emptyList(), null, false)
 
     /**
      * tsnet 会在已有持久节点可运行时忽略新 authkey；按 key 的 SHA-256 指纹隔离状态，
@@ -188,6 +234,7 @@ object TsnetWire {
         manager?.stop()
         manager = null
         currentKey = null
+        pendingKey = null
         environment = null
         backendFactory = { GomobileTsnetBackend() }
         executorForTest = null
