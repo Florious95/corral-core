@@ -7,6 +7,7 @@ package dev.agentmirror.app.pairing
 
 import dev.agentmirror.app.conn.AsyncDialCoordinator
 import dev.agentmirror.app.conn.DialTarget
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.tsnet.ConnectionPath
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
@@ -75,33 +76,50 @@ class HostDialCoordinator(
             pending = candidates.mapTo(LinkedHashSet()) { it.authority },
         )
         synchronized(lock) { round = current }
+        DiagLog.record(
+            "identify",
+            "begin gen=$generation candidates=${candidates.size} " +
+                "authorities=${candidates.joinToString(",") { it.authority }}",
+        )
         if (candidates.isEmpty()) {
             onExhausted()
             return
         }
         scheduler.schedule({
-            synchronized(lock) {
-                if (round?.generation == generation) round?.lanSlotOpen = true
+            val match = synchronized(lock) {
+                val hit = round?.generation == generation
+                if (hit) round?.lanSlotOpen = true
+                hit
             }
+            DiagLog.record("identify", "lan_slot gen=$generation match=$match lan_slot_ms=$LAN_SLOT_MS")
             offer(generation)
         }, LAN_SLOT_MS, TimeUnit.MILLISECONDS)
         scheduler.schedule({
-            synchronized(lock) {
-                if (round?.generation == generation) {
+            val match = synchronized(lock) {
+                val hit = round?.generation == generation
+                if (hit) {
                     round?.tsBudgetReached = true
                     round?.lanSlotOpen = true
                 }
+                hit
             }
+            DiagLog.record("identify", "ts_budget gen=$generation match=$match ts_budget_ms=$TS_BUDGET_MS")
             startMore(generation)
             offer(generation)
         }, TS_BUDGET_MS, TimeUnit.MILLISECONDS)
         scheduler.schedule({
-            synchronized(lock) {
-                if (round?.generation == generation) {
+            val match = synchronized(lock) {
+                val hit = round?.generation == generation
+                if (hit) {
                     round?.deadlineReached = true
                     round?.pending?.clear()
                 }
+                hit
             }
+            DiagLog.record(
+                "identify",
+                "deadline gen=$generation match=$match round_budget_ms=$ROUND_BUDGET_MS pending_cleared=$match",
+            )
             offer(generation)
         }, ROUND_BUDGET_MS, TimeUnit.MILLISECONDS)
         // Discovery/identify work is bounded to four simultaneous HTTP requests.
@@ -144,15 +162,37 @@ class HostDialCoordinator(
 
     private fun prove(generation: Long, endpoint: HostEndpoint) {
         val result = identifyClient.identify(endpoint, hostId, token, legacyUrl)
+        val verdict = when (result) {
+            is HostIdentifyResult.Proven -> "Proven"
+            is HostIdentifyResult.Legacy404 -> "Legacy404"
+            is HostIdentifyResult.Rejected -> "Rejected"
+        }
+        val reason = (result as? HostIdentifyResult.Rejected)?.reason.orEmpty()
+        var dropped = false
+        var deadline = false
+        var completed = 0
+        var proved = 0
         synchronized(lock) {
-            val r = round ?: return
-            if (r.generation != generation || r.stopped) return
-            r.completed++
-            if (endpoint.path == ConnectionPath.TAILNET) r.tsInFlight-- else r.lanInFlight--
-            if (!r.deadlineReached && (result is HostIdentifyResult.Proven || result is HostIdentifyResult.Legacy404)) {
-                r.proved += endpoint
+            val r = round
+            if (r == null || r.generation != generation || r.stopped) {
+                dropped = true
+            } else {
+                r.completed++
+                completed = r.completed
+                if (endpoint.path == ConnectionPath.TAILNET) r.tsInFlight-- else r.lanInFlight--
+                deadline = r.deadlineReached
+                if (!r.deadlineReached && (result is HostIdentifyResult.Proven || result is HostIdentifyResult.Legacy404)) {
+                    r.proved += endpoint
+                }
+                proved = r.proved.size
             }
         }
+        DiagLog.record(
+            "identify",
+            "prove gen=$generation authority=${endpoint.authority} path=${endpoint.path} " +
+                "verdict=$verdict reason=$reason dropped=$dropped deadline=$deadline " +
+                "completed=$completed proved=$proved",
+        )
         startMore(generation)
         offer(generation)
     }
@@ -162,12 +202,27 @@ class HostDialCoordinator(
         var target: DialTarget? = null
         var exhaustedCallback: (() -> Unit)? = null
         var targetCallback: ((DialTarget) -> Unit)? = null
+        var skip = ""
+        var snapshot = ""
         synchronized(lock) {
-            val r = round ?: return
-            if (r.generation != generation || r.stopped) return
+            val r = round
+            if (r == null) {
+                skip = "no_round"
+                return@synchronized
+            }
+            if (r.generation != generation || r.stopped) {
+                skip = "stale_or_stopped gen_match=${r.generation == generation} stopped=${r.stopped}"
+                return@synchronized
+            }
+            snapshot = "proved=${r.proved.size} emitted=${r.emitted.size} failed=${r.failed.size} " +
+                "pending=${r.pending.size} in_flight=${r.tsInFlight + r.lanInFlight} " +
+                "lan_slot=${r.lanSlotOpen} deadline=${r.deadlineReached} ts_budget=${r.tsBudgetReached}"
             // A WebSocket is the sole in-flight route. The next proven endpoint is offered only
             // after ConnectionManager reports this one failed (or READY cancels the round).
-            if (r.emitted.any { it !in r.failed }) return
+            if (r.emitted.any { it !in r.failed }) {
+                skip = "in_flight_ws $snapshot"
+                return@synchronized
+            }
             val ordered = r.proved
                 .filter { it.authority !in r.emitted }
                 .sortedWith(compareBy<HostEndpoint> {
@@ -191,10 +246,24 @@ class HostDialCoordinator(
                 if (noMoreWork && !r.emitted.any { it !in r.failed }) {
                     r.stopped = true
                     exhaustedCallback = r.onExhausted
+                } else {
+                    skip = "wait $snapshot"
                 }
             }
         }
-        target?.let { targetCallback?.invoke(it) }
+        if (skip.isNotEmpty()) {
+            DiagLog.record("identify", "offer gen=$generation emit=false $skip")
+        }
+        target?.let {
+            DiagLog.record(
+                "identify",
+                "offer gen=$generation emit=true url=${it.url} path=${it.path} $snapshot",
+            )
+            targetCallback?.invoke(it)
+        }
+        if (exhaustedCallback != null) {
+            DiagLog.record("identify", "exhausted gen=$generation $snapshot")
+        }
         exhaustedCallback?.invoke()
     }
 
@@ -202,7 +271,7 @@ class HostDialCoordinator(
         var matched = false
         synchronized(lock) {
             val r = round
-            if (r == null || r.generation != generation || r.stopped) return
+            if (r == null || r.generation != generation || r.stopped) return@synchronized
             r.candidates.firstOrNull { it.wsUrl == url }?.let {
                 if (it.authority in r.emitted) {
                     r.failed += it.authority
@@ -210,16 +279,25 @@ class HostDialCoordinator(
                 }
             }
         }
+        DiagLog.record(
+            "identify",
+            "target_failed gen=$generation matched=$matched url=$url reason_len=${reason.length}",
+        )
         if (matched) offer(generation)
     }
 
     override fun onReady(generation: Long) = cancel(generation)
 
     override fun cancel(generation: Long) {
-        synchronized(lock) {
-            if (round?.generation == generation) round?.stopped = true
-            if (round?.generation == generation) round = null
+        val match = synchronized(lock) {
+            val hit = round?.generation == generation
+            if (hit) {
+                round?.stopped = true
+                round = null
+            }
+            hit
         }
+        DiagLog.record("identify", "cancel gen=$generation match=$match")
     }
 
     private fun cancelAll() {

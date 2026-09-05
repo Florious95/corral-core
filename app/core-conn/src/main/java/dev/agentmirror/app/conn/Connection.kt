@@ -139,6 +139,7 @@ class Connection(
         } catch (e: FrameEncodeException) {
             false
         }
+        ConnDiag.record("ws", "auth_frame sent=$ok")
         if (!ok) {
             // auth 发送失败视为本次连接失败（可重连），而非认证拒绝。
             explicitPermanent = false
@@ -159,8 +160,10 @@ class Connection(
             if (frame.ok) {
                 authAcked = true
                 isReady = true
+                ConnDiag.record("ws", "auth_ack ok=true ready=true")
                 listener.onReady()
             } else {
+                ConnDiag.record("ws", "auth_ack ok=false reason_len=${frame.reason.length}")
                 // 拒绝：S 随后立即关闭连接。
                 explicitPermanent = true
                 listener.onFrame(frame)

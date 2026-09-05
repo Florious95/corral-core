@@ -706,6 +706,10 @@ class ConnectionManager(
         connection = null
         setState(ConnectionState.CONNECTING)
         val coordinator = dialCoordinator
+        ConnDiag.record(
+            "ws",
+            "attemptConnect gen=$nextGeneration coordinator=${coordinator != null} url=${config.url}",
+        )
         if (coordinator == null) {
             connectTarget(nextGeneration, DialTarget(config.url, "legacy"))
         } else {
@@ -722,7 +726,19 @@ class ConnectionManager(
     }
 
     private fun connectTarget(targetGeneration: Long, target: DialTarget) {
-        if (targetGeneration != generation || state == ConnectionState.STOPPED || connection != null) return
+        val skip = when {
+            targetGeneration != generation -> "gen_mismatch"
+            state == ConnectionState.STOPPED -> "stopped"
+            connection != null -> "conn_exists"
+            else -> null
+        }
+        ConnDiag.record(
+            "ws",
+            "connectTarget gen=$targetGeneration cur=$generation state=$state " +
+                "has_conn=${connection != null} url=${target.url} path=${target.path} " +
+                "create=${skip == null} skip=${skip ?: ""}",
+        )
+        if (skip != null) return
         activeTarget = target
         val conn = Connection(transportFactory.create(target.url), config.token, connListener)
         connection = conn

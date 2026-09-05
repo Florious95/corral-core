@@ -5,6 +5,7 @@
  */
 package dev.agentmirror.app.pairing
 
+import dev.agentmirror.app.diag.DiagLog
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -71,37 +72,66 @@ class HostIdentifyClient(
         token: String,
         legacyUrl: String?,
     ): HostIdentifyResult {
-        if (token.isEmpty()) return HostIdentifyResult.Rejected("empty token")
+        val authority = endpoint.authority
+        fun reject(reason: String, extra: String = ""): HostIdentifyResult {
+            DiagLog.record(
+                "identify",
+                "verdict=Rejected reason=$reason authority=$authority dest_ip=${endpoint.address} " +
+                    "port=${endpoint.port} $extra".trim(),
+            )
+            return HostIdentifyResult.Rejected(reason)
+        }
+        if (token.isEmpty()) return reject("empty token", "token_len=0")
         if (!HostRouter.isLiteralIpv4(endpoint.address)) {
-            return HostIdentifyResult.Rejected("non-literal address")
+            return reject("non-literal address")
         }
         val nonceHex = nonceSource().takeIf { it.size == 16 }?.toHex()
-            ?: return HostIdentifyResult.Rejected("invalid nonce")
+            ?: return reject("invalid nonce")
         val request = IdentifyRequest(hostId, nonceHex, endpoint.address)
         val response = runCatching { transport.identify(endpoint, request) }.getOrNull()
-            ?: return HostIdentifyResult.Rejected("identify unavailable")
+            ?: return reject("identify unavailable")
+        val bodyLen = response.body.toByteArray().size
+        val httpExtra = "http_code=${response.code} body_len=$bodyLen nonce_len=${nonceHex.length}"
         if (response.code == 404 && legacyAllowed(endpoint, legacyUrl, hostId)) {
+            DiagLog.record("identify", "verdict=Legacy404 authority=$authority $httpExtra")
             return HostIdentifyResult.Legacy404(endpoint)
         }
-        if (response.code !in 200..299 || response.body.toByteArray().size > MAX_HOST_BODY_BYTES) {
-            return HostIdentifyResult.Rejected("identify rejected")
+        if (response.code !in 200..299 || bodyLen > MAX_HOST_BODY_BYTES) {
+            return reject("identify rejected", httpExtra)
         }
-        val json = parse(response.body) ?: return HostIdentifyResult.Rejected("invalid identify response")
+        val json = parse(response.body)
+            ?: return reject("invalid identify response", "$httpExtra parsed=false")
         val responseHostId = json.string("host_id")
-            ?: return HostIdentifyResult.Rejected("missing host id")
-        if (!HostRouter.isValidHostId(responseHostId)) {
-            return HostIdentifyResult.Rejected("invalid host id")
+            ?: return reject("missing host id", "$httpExtra parsed=true")
+        val hostIdValid = HostRouter.isValidHostId(responseHostId)
+        val hostIdMatch = hostId == null || responseHostId == hostId
+        if (!hostIdValid) {
+            return reject(
+                "invalid host id",
+                "$httpExtra parsed=true host_id_len=${responseHostId.length} host_id_valid=false",
+            )
         }
-        if (hostId != null && responseHostId != hostId) {
-            return HostIdentifyResult.Rejected("host id mismatch")
+        if (!hostIdMatch) {
+            return reject(
+                "host id mismatch",
+                "$httpExtra parsed=true host_id_len=${responseHostId.length} host_id_valid=true host_id_match=false",
+            )
         }
-        val bound = json.string("bound") ?: return HostIdentifyResult.Rejected("missing bound")
-        if (bound != endpoint.authority) {
-            return HostIdentifyResult.Rejected("bound address mismatch")
+        val bound = json.string("bound") ?: return reject("missing bound", "$httpExtra parsed=true host_id_match=true")
+        val boundEq = bound == authority
+        if (!boundEq) {
+            return reject(
+                "bound address mismatch",
+                "$httpExtra parsed=true host_id_match=true bound=$bound bound_eq=false",
+            )
         }
-        val wireMac = json.string("mac")?.lowercase() ?: return HostIdentifyResult.Rejected("missing mac")
-        if (!wireMac.matches(Regex("[0-9a-f]{64}"))) {
-            return HostIdentifyResult.Rejected("invalid mac")
+        val wireMac = json.string("mac")?.lowercase() ?: return reject("missing mac", "$httpExtra parsed=true bound_eq=true")
+        val macHex64 = wireMac.matches(Regex("[0-9a-f]{64}"))
+        if (!macHex64) {
+            return reject(
+                "invalid mac",
+                "$httpExtra parsed=true bound_eq=true mac_len=${wireMac.length} mac_hex64=false",
+            )
         }
         val expected = mac(
             token = token,
@@ -110,9 +140,21 @@ class HostIdentifyClient(
             boundIp = endpoint.address,
             boundPort = endpoint.port,
         )
-        if (!constantTimeEquals(wireMac, expected)) {
-            return HostIdentifyResult.Rejected("mac mismatch")
+        val macMatch = constantTimeEquals(wireMac, expected)
+        if (!macMatch) {
+            return reject(
+                "mac mismatch",
+                "$httpExtra parsed=true host_id_match=true bound=$bound bound_eq=true " +
+                    "mac_len=${wireMac.length} mac_hex64=true mac_match=false",
+            )
         }
+        DiagLog.record(
+            "identify",
+            "verdict=Proven authority=$authority dest_ip=${endpoint.address} port=${endpoint.port} " +
+                "$httpExtra parsed=true host_id_len=${responseHostId.length} host_id_valid=true " +
+                "host_id_match=true bound=$bound bound_eq=true mac_len=${wireMac.length} " +
+                "mac_hex64=true mac_match=true",
+        )
         return HostIdentifyResult.Proven(
             HostIdentity(responseHostId, json.string("name").orEmpty(), endpoint, bound),
         )
@@ -204,9 +246,21 @@ class OkHttpHostHttpTransport(
                 val body = response.body?.source()?.readByteArray((MAX_HOST_BODY_BYTES + 1).toLong())
                     ?.toString(Charsets.UTF_8)
                     .orEmpty()
+                DiagLog.record(
+                    "identify",
+                    "transport_http method=$method path=$path authority=${endpoint.authority} " +
+                        "http_code=${response.code} body_len=${body.toByteArray().size}",
+                )
                 HostHttpResponse(response.code, body, response.header("Location"))
             }
-        }.getOrElse { HostHttpResponse(599) }
+        }.getOrElse { error ->
+            DiagLog.record(
+                "identify",
+                "transport_fail method=$method path=$path authority=${endpoint.authority} " +
+                    "kind=${error.javaClass.simpleName} http_code=599",
+            )
+            HostHttpResponse(599)
+        }
     }
 
     private fun quote(value: String): String =
