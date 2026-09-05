@@ -151,11 +151,13 @@ class OkHttpHostHttpTransport(
         .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
         .writeTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
         .callTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
-        .dns { host ->
-            if (!HostRouter.isLiteralIpv4(host)) throw UnknownHostException(host)
-            val bytes = host.split('.').map(String::toInt).map { it.toByte() }.toByteArray()
-            listOf(InetAddress.getByAddress(host, bytes))
-        }
+        .dns(object : okhttp3.Dns {
+            override fun lookup(hostname: String): List<InetAddress> {
+                if (!HostRouter.isLiteralIpv4(hostname)) throw UnknownHostException(hostname)
+                val bytes = hostname.split('.').map(String::toInt).map { it.toByte() }.toByteArray()
+                return listOf(InetAddress.getByAddress(hostname, bytes))
+            }
+        })
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(false)
