@@ -31,7 +31,7 @@ interface HostIdentityVerifier {
         endpoint: HostEndpoint,
         hostId: String?,
         token: String,
-        legacyUrl: String? = null,
+        legacyUrl: String?,
     ): HostIdentifyResult
 }
 
@@ -69,7 +69,7 @@ class HostIdentifyClient(
         endpoint: HostEndpoint,
         hostId: String?,
         token: String,
-        legacyUrl: String? = null,
+        legacyUrl: String?,
     ): HostIdentifyResult {
         if (token.isEmpty()) return HostIdentifyResult.Rejected("empty token")
         if (!HostRouter.isLiteralIpv4(endpoint.address)) {
@@ -117,6 +117,10 @@ class HostIdentifyClient(
             HostIdentity(responseHostId, json.string("name").orEmpty(), endpoint, bound),
         )
     }
+
+    /** Compatibility overload for callers that do not have a legacy URL hint. */
+    fun identify(endpoint: HostEndpoint, hostId: String?, token: String): HostIdentifyResult =
+        identify(endpoint, hostId, token, null)
 
     private fun legacyAllowed(endpoint: HostEndpoint, legacyUrl: String?, hostId: String?): Boolean {
         if (hostId != null || legacyUrl.isNullOrBlank()) return false
