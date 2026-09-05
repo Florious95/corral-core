@@ -160,7 +160,7 @@ func (n *Node) PeerSnapshot(knownID, cursor string) (*PeerSnapshotResult, error)
 }
 
 func cleanPeerText(s string) string {
-	return strings.NewReplacer("\\t", " ", "\\n", " ", "\\r", " ").Replace(s)
+	return strings.NewReplacer("\t", " ", "\n", " ", "\r", " ").Replace(s)
 }
 
 func formatPeerRows(rows []peerSnapshotRow) string {

@@ -68,8 +68,8 @@ class GomobileTsnetBackend : TsnetBackend {
     override fun peerSnapshot(knownId: String?, cursor: String?): TsPeerSnapshot {
         val n = node ?: return TsPeerSnapshot(emptyList(), null, supported = false)
         val result = n.peerSnapshot(knownId.orEmpty(), cursor.orEmpty())
-        val peers = result.lines().lineSequence().mapNotNull { line ->
-            val fields = line.split('\\t', limit = 4)
+        val peers = result.getLines().lineSequence().mapNotNull { line ->
+            val fields = line.split('\t', limit = 4)
             if (fields.size != 4) return@mapNotNull null
             val ips = fields[2].split(',').filter { HostRouterLike.isLiteralIpv4(it) }
             TsPeer(
@@ -79,7 +79,7 @@ class GomobileTsnetBackend : TsnetBackend {
                 hostname = fields[3],
             )
         }.toList()
-        return TsPeerSnapshot(peers, result.nextCursor().takeIf { it.isNotEmpty() })
+        return TsPeerSnapshot(peers, result.getNextCursor().takeIf { it.isNotEmpty() })
     }
 
     @Synchronized
