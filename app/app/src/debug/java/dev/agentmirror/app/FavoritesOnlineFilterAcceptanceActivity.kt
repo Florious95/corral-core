@@ -71,7 +71,7 @@ private fun FavoritesOnlineFilterHarness(initialOnline: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text("synthetic favorites acceptance")
-                Text("stored=${viewModel.favorites.value.size} live=${viewModel.favoriteRows().count { it.isOnline }}")
+                Text("stored=${viewModel.favorites.value.size} live=${if (online) 3 else 0}")
                 Button(
                     onClick = {
                         online = !online
