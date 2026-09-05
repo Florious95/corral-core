@@ -72,7 +72,7 @@ func (a *Advertiser) Close() error {
 	var err error
 	a.once.Do(func() {
 		close(a.stop)
-		_ = a.send(0x8000) // TTL 0 goodbye; failure must not delay shutdown.
+		_ = a.send(0) // TTL 0 goodbye; failure must not delay shutdown.
 		err = a.conn.Close()
 	})
 	return err
