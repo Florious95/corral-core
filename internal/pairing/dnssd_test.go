@@ -37,7 +37,7 @@ func TestProductionAnnounceAndQueryUseLiveTTL(t *testing.T) {
 		t.Fatal(err)
 	}
 	prevListen := listenMDNS
-	listenMDNS = func() (*net.UDPConn, error) { return ln, nil }
+	listenMDNS = func([]net.IP) (*net.UDPConn, error) { return ln, nil }
 	t.Cleanup(func() { listenMDNS = prevListen })
 
 	var mu sync.Mutex

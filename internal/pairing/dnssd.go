@@ -12,6 +12,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -56,7 +57,7 @@ func RegisterDNSService(adv DNSAdvertisement) (*Advertiser, error) {
 	if adv.Port < 1 || adv.Port > 65535 {
 		return nil, errors.New("pairing: invalid dns-sd port")
 	}
-	conn, err := listenMDNS()
+	conn, err := listenMDNS(adv.Addresses)
 	if err != nil {
 		return nil, fmt.Errorf("pairing: dns-sd listen: %w", err)
 	}
@@ -103,11 +104,81 @@ var timeNow = now
 func now() time.Time { return time.Now() }
 
 // listenMDNS is a seam so package tests can drive RegisterDNSService/serve/Close
-// without binding host UDP 5353. Production keeps the multicast listener.
+// without binding host UDP 5353. Production joins the LAN multicast interface.
 var listenMDNS = defaultListenMDNS
 
-func defaultListenMDNS() (*net.UDPConn, error) {
-	return net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(dnsMDNSHost), Port: dnsMDNSPort})
+func defaultListenMDNS(addrs []net.IP) (*net.UDPConn, error) {
+	ifi := multicastInterface(addrs)
+	conn, err := net.ListenMulticastUDP("udp4", ifi, &net.UDPAddr{IP: net.ParseIP(dnsMDNSHost), Port: dnsMDNSPort})
+	if err != nil {
+		return nil, err
+	}
+	if err := setMDNSSendOptions(conn); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return conn, nil
+}
+
+func multicastInterface(addrs []net.IP) *net.Interface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	want := map[string]struct{}{}
+	for _, ip := range addrs {
+		ip4 := ip.To4()
+		if ip4 == nil || ip4.IsLoopback() {
+			continue
+		}
+		want[ip4.String()] = struct{}{}
+	}
+	if len(want) == 0 {
+		return nil
+	}
+	for i := range ifaces {
+		ifi := &ifaces[i]
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagMulticast == 0 {
+			continue
+		}
+		got, err := ifi.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range got {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip4 := ip.To4(); ip4 != nil {
+				if _, ok := want[ip4.String()]; ok {
+					return ifi
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func setMDNSSendOptions(conn *net.UDPConn) error {
+	rc, err := conn.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var opErr error
+	if err := rc.Control(func(fd uintptr) {
+		opErr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 1)
+		if opErr != nil {
+			return
+		}
+		opErr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_TTL, 255)
+	}); err != nil {
+		return err
+	}
+	return opErr
 }
 
 // recordDNSPacket, when set, observes the exact bytes send() is about to
