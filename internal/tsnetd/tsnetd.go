@@ -267,7 +267,11 @@ func (g *Group) UpWithInfo(ctx context.Context) (net.IP, string, error) {
 			break
 		}
 	}
-	return ip, string(st.Self.ID), nil
+	var stableID string
+	if st.Self != nil {
+		stableID = string(st.Self.ID)
+	}
+	return ip, stableID, nil
 }
 
 // Close releases the LAN listener and, if an embedded node was started,

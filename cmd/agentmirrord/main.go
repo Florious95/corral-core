@@ -118,7 +118,7 @@ func run(args []string) int {
 	// is fatal — booting with an empty token would accept an empty-token auth,
 	// which is the anonymous-bypass red line (§9). The value is never logged;
 	// only its source and store path are.
-	token, err := resolveToken(cfg, logger)
+	token, err := resolveTokenDir(cfg, logger, stateDir)
 	if err != nil {
 		logger.Error("failed to resolve pairing token", "err", err)
 		return 1
@@ -173,7 +173,14 @@ func run(args []string) int {
 
 	// DNS-SD is an optional LAN discovery aid. Socket/join failure is safe to
 	// degrade: the API listener remains alive and whoami/QR still work.
-	mdns, mdnsErr := pairing.RegisterDNSService(pairing.DNSAdvertisement{HostID: hostID, Port: portNumber(port)})
+	mdnsAddrs := pairing.DetectAddresses()
+	mdnsIPs := make([]net.IP, 0, len(mdnsAddrs))
+	for _, address := range mdnsAddrs {
+		if address.Kind == pairing.KindLAN {
+			mdnsIPs = append(mdnsIPs, address.IP)
+		}
+	}
+	mdns, mdnsErr := pairing.RegisterDNSService(pairing.DNSAdvertisement{HostID: hostID, Port: portNumber(port), Addresses: mdnsIPs})
 	if mdnsErr != nil {
 		logger.Warn("dns-sd registration unavailable", "code", "dns_sd_unavailable")
 	} else {

@@ -9,7 +9,7 @@ import (
 
 func TestDNSAdvertisementContainsOnlyPublicIdentity(t *testing.T) {
 	id := "AAAAAAAAAAAAAAAAAAAAAAAAAA"
-	adv := DNSAdvertisement{HostID: id, Port: 9900}
+	adv := DNSAdvertisement{HostID: id, Port: 9900, Addresses: []net.IP{net.ParseIP("192.0.2.7")}}
 	if got := adv.TXT(); len(got) != 1 || got[0] != "id="+id {
 		t.Fatalf("TXT = %v", got)
 	}

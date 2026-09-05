@@ -169,6 +169,9 @@ func NewServer(opts Options) *Server {
 	if hostName == "" {
 		hostName, _ = os.Hostname()
 	}
+	if hostName == "" {
+		hostName = "agentmirror"
+	}
 	s := &Server{
 		log:             log,
 		hostID:          opts.HostID,

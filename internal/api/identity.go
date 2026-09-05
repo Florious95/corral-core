@@ -26,6 +26,7 @@ const (
 	identityBodyMax = 1 << 10
 	identityRate    = 5
 	identityWindow  = time.Second
+	identityMaxKeys = 4096
 )
 
 type whoamiResponse struct {
@@ -79,6 +80,13 @@ func (l *identityRateLimiter) allow(key string, now time.Time) bool {
 		return false
 	}
 	l.seen[key] = append(keep, now)
+	if len(l.seen) > identityMaxKeys {
+		for k, times := range l.seen {
+			if len(times) == 0 {
+				delete(l.seen, k)
+			}
+		}
+	}
 	return true
 }
 

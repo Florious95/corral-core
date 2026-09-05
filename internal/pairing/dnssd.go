@@ -22,8 +22,9 @@ const (
 )
 
 type DNSAdvertisement struct {
-	HostID string
-	Port   int
+	HostID    string
+	Port      int
+	Addresses []net.IP
 }
 
 func (a DNSAdvertisement) serviceName() string {
@@ -115,7 +116,13 @@ func dnsPacket(a DNSAdvertisement, ttl uint32) []byte {
 	b.u16(0)
 	b.u16(0x8400)
 	b.u16(0)
-	b.u16(4)
+	answerCount := uint16(3)
+	for _, address := range a.Addresses {
+		if ip := address.To4(); ip != nil && !ip.IsLoopback() {
+			answerCount++
+		}
+	}
+	b.u16(answerCount)
 	b.name(DNSServiceType + ".local.")
 	b.u16(12) // PTR
 	b.u16(1)
@@ -141,12 +148,18 @@ func dnsPacket(a DNSAdvertisement, ttl uint32) []byte {
 	b.u16(uint16(len(txt) + 1))
 	b.u8(byte(len(txt)))
 	b.appendBytes(txt)
-	b.name(target)
-	b.u16(1) // A; 0.0.0.0 avoids claiming an interface not selected by probe.
-	b.u16(1)
-	b.u32(ttl)
-	b.u16(4)
-	b.appendBytes([]byte{0, 0, 0, 0})
+	for _, address := range a.Addresses {
+		ip := address.To4()
+		if ip == nil || ip.IsLoopback() {
+			continue
+		}
+		b.name(target)
+		b.u16(1) // A
+		b.u16(1)
+		b.u32(ttl)
+		b.u16(4)
+		b.appendBytes(ip)
+	}
 	return b.data()
 }
 
