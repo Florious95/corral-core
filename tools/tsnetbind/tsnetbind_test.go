@@ -10,6 +10,7 @@ package tsnetbind
 // （Kotlin 侧 TsnetInterfaceCodec 生成，两端同一格式）。
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -69,6 +70,50 @@ func TestParseInterfacesLoopbackAndDown(t *testing.T) {
 
 // TestParseInterfacesSkipsMalformedLines：坏行跳过不拖垮整表（半行/字段数错/坏数字/
 // 坏 CIDR 项内跳过），全表无一有效行才报错——netmon 拿到空表会误判"无网络"。
+func TestPeerSnapshotKnownIDSearchesCompleteTable(t *testing.T) {
+	rows := snapshotRows(300)
+	window, next := pagePeerRows(rows, "peer-299")
+	if len(window) != 1 || window[0].id != "peer-299" {
+		t.Fatalf("known peer lookup window = %v, want peer-299", window)
+	}
+	if next != "" {
+		t.Fatalf("known peer lookup must not expose a pagination cursor: %q", next)
+	}
+}
+
+func TestPeerSnapshotPagesAllRowsWithoutBudgetSkips(t *testing.T) {
+	rows := snapshotRows(300)
+	seen := make([]string, 0, len(rows))
+	cursor := ""
+	for {
+		window, next := pagePeerRows(rows, cursor)
+		for _, row := range window {
+			seen = append(seen, row.id)
+		}
+		if next == "" {
+			break
+		}
+		cursor = next
+	}
+	if len(seen) != len(rows) {
+		t.Fatalf("paged row count = %d, want %d", len(seen), len(rows))
+	}
+	for i, id := range seen {
+		want := fmt.Sprintf("peer-%03d", i)
+		if id != want {
+			t.Fatalf("row %d = %q, want %q (9/33/>256 fairness)", i, id, want)
+		}
+	}
+}
+
+func snapshotRows(count int) []peerSnapshotRow {
+	rows := make([]peerSnapshotRow, count)
+	for i := range rows {
+		rows[i] = peerSnapshotRow{id: fmt.Sprintf("peer-%03d", i), hostname: fmt.Sprintf("host-%03d", i)}
+	}
+	return rows
+}
+
 func TestParseInterfacesSkipsMalformedLines(t *testing.T) {
 	got, err := parseInterfaces("garbage\nwlan0|3|1500|1|0|1|0|192.168.1.5/24,notacidr\n|x|y|1|0|0|0|")
 	if err != nil {

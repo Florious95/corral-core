@@ -48,6 +48,8 @@ type PeerSnapshotResult struct {
 	NextCursor string
 }
 
+const peerSnapshotPageSize = 256
+
 // upTimeout 界定控制面握手：超时即显式失败（工程红线5 失败可见，
 // 与服务端 cmd/agentmirrord 的 tailnetUpTimeout 同语义同值）。
 const upTimeout = 60 * time.Second
@@ -136,27 +138,38 @@ func (n *Node) PeerSnapshot(knownID, cursor string) (*PeerSnapshotResult, error)
 			}
 		}
 	}
+	window, nextCursor := pagePeerRows(rows, cursor)
+	return &PeerSnapshotResult{Lines: formatPeerRows(window), NextCursor: nextCursor}, nil
+}
+
+// pagePeerRows emits one non-overlapping bounded window. A cursor always advances
+// in sorted-table order; it never wraps around and repeats earlier peers before a
+// caller has observed the tail of a large table.
+func pagePeerRows(rows []peerSnapshotRow, cursor string) ([]peerSnapshotRow, string) {
 	if len(rows) == 0 {
-		return &PeerSnapshotResult{}, nil
+		return nil, ""
 	}
 	start := 0
 	if cursor != "" {
 		for i, row := range rows {
 			if row.id == cursor {
-				start = (i + 1) % len(rows)
+				start = i + 1
 				break
 			}
 		}
 	}
-	window := make([]peerSnapshotRow, 0, 256)
-	nextCursor := ""
-	for i := 0; i < len(rows) && i < 256; i++ {
-		window = append(window, rows[(start+i)%len(rows)])
+	if start >= len(rows) {
+		return nil, ""
 	}
-	if len(rows) > len(window) {
-		nextCursor = window[len(window)-1].id
+	end := start + peerSnapshotPageSize
+	if end > len(rows) {
+		end = len(rows)
 	}
-	return &PeerSnapshotResult{Lines: formatPeerRows(window), NextCursor: nextCursor}, nil
+	window := rows[start:end]
+	if end == len(rows) {
+		return window, ""
+	}
+	return window, window[len(window)-1].id
 }
 
 func cleanPeerText(s string) string {
