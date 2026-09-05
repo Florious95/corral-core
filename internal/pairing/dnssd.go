@@ -122,7 +122,7 @@ func dnsPacket(a DNSAdvertisement, ttl uint32) []byte {
 	b.u32(ttl)
 	var ptr dnsBuilder
 	ptr.name(service)
-	b.bytesWithLen(ptr.bytes())
+	b.bytesWithLen(ptr.data())
 	b.name(service)
 	b.u16(33) // SRV
 	b.u16(1)
@@ -132,7 +132,7 @@ func dnsPacket(a DNSAdvertisement, ttl uint32) []byte {
 	srv.u16(0)
 	srv.u16(uint16(a.Port))
 	srv.name(target)
-	b.bytesWithLen(srv.bytes())
+	b.bytesWithLen(srv.data())
 	b.name(service)
 	b.u16(16) // TXT
 	b.u16(1)
@@ -140,13 +140,13 @@ func dnsPacket(a DNSAdvertisement, ttl uint32) []byte {
 	txt := []byte("id=" + a.HostID)
 	b.u16(uint16(len(txt) + 1))
 	b.u8(byte(len(txt)))
-	b.bytes(txt)
+	b.appendBytes(txt)
 	b.name(target)
 	b.u16(1) // A; 0.0.0.0 avoids claiming an interface not selected by probe.
 	b.u16(1)
 	b.u32(ttl)
 	b.u16(4)
-	b.bytes([]byte{0, 0, 0, 0})
+	b.appendBytes([]byte{0, 0, 0, 0})
 	return b.bytes()
 }
 
@@ -163,8 +163,8 @@ func (d *dnsBuilder) u32(v uint32) {
 	binary.BigEndian.PutUint32(x[:], v)
 	d.b = append(d.b, x[:]...)
 }
-func (d *dnsBuilder) bytes(v []byte)        { d.b = append(d.b, v...) }
-func (d *dnsBuilder) bytesWithLen(v []byte) { d.u16(uint16(len(v))); d.bytes(v) }
+func (d *dnsBuilder) appendBytes(v []byte)  { d.b = append(d.b, v...) }
+func (d *dnsBuilder) bytesWithLen(v []byte) { d.u16(uint16(len(v))); d.appendBytes(v) }
 func (d *dnsBuilder) name(name string) {
 	for _, label := range strings.Split(strings.TrimSuffix(name, "."), ".") {
 		if label == "" || len(label) > 63 {
@@ -175,4 +175,4 @@ func (d *dnsBuilder) name(name string) {
 	}
 	d.u8(0)
 }
-func (d *dnsBuilder) bytes() []byte { return d.b }
+func (d *dnsBuilder) data() []byte { return d.b }
