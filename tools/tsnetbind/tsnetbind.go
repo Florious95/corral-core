@@ -118,7 +118,7 @@ func (n *Node) PeerSnapshot(knownID, cursor string) (*PeerSnapshotResult, error)
 	}
 	rows := make([]peerSnapshotRow, 0, len(status.Peer))
 	for _, peer := range status.Peer {
-		id := fmt.Sprint(peer.StableID)
+		id := fmt.Sprint(peer.ID)
 		ips := make([]string, 0, len(peer.TailscaleIPs))
 		for _, ip := range peer.TailscaleIPs {
 			if ip.Is4() {
@@ -149,6 +149,7 @@ func (n *Node) PeerSnapshot(knownID, cursor string) (*PeerSnapshotResult, error)
 		}
 	}
 	window := make([]peerSnapshotRow, 0, 256)
+	nextCursor := ""
 	for i := 0; i < len(rows) && i < 256; i++ {
 		window = append(window, rows[(start+i)%len(rows)])
 	}
