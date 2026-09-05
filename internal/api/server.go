@@ -9,7 +9,9 @@ package api
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +32,17 @@ type Server struct {
 	// Test boundary initialized under trackersMu before reader/writer startup.
 	connInit func(*wsConn)
 	log      *slog.Logger
+
+	// Discovery identity is public metadata only. pairingToken remains private
+	// and is used solely to compute identify HMAC responses.
+	hostID          string
+	hostName        string
+	listenPort      int
+	pairingToken    string
+	identityMu      sync.RWMutex
+	tailnetIPs      []net.IP
+	addresses       func() []net.IP
+	identityLimiter *identityRateLimiter
 
 	tokenValidator TokenValidator
 	discoverer     Discoverer
@@ -148,19 +161,34 @@ func NewServer(opts Options) *Server {
 	}
 
 	filterAgents := opts.Nodeprobe != nil
+	port := opts.ListenPort
+	if port <= 0 {
+		port = 9900
+	}
+	hostName := opts.HostName
+	if hostName == "" {
+		hostName, _ = os.Hostname()
+	}
 	s := &Server{
-		log:            log,
-		tokenValidator: opts.TokenValidator,
-		discoverer:     opts.Discoverer,
-		listInterval:   opts.ListInterval,
-		uploadDir:      opts.UploadDir,
-		maxUpload:      opts.MaxUploadBytes,
-		maxUploadDir:   defaultMaxUploadDirBytes,
-		maxInput:       opts.MaxInputBytes,
-		catalog:        newSessionCatalog(),
-		paneGeoms:      make(map[string]*paneGeometry),
-		trackers:       make(map[*wsConn]struct{}),
-		attachPreviews: make(map[string]attachPreviewEntry),
+		log:             log,
+		hostID:          opts.HostID,
+		hostName:        hostName,
+		listenPort:      port,
+		pairingToken:    opts.Token,
+		tailnetIPs:      append([]net.IP(nil), opts.TailnetIPs...),
+		addresses:       opts.AddressProvider,
+		identityLimiter: newIdentityRateLimiter(),
+		tokenValidator:  opts.TokenValidator,
+		discoverer:      opts.Discoverer,
+		listInterval:    opts.ListInterval,
+		uploadDir:       opts.UploadDir,
+		maxUpload:       opts.MaxUploadBytes,
+		maxUploadDir:    defaultMaxUploadDirBytes,
+		maxInput:        opts.MaxInputBytes,
+		catalog:         newSessionCatalog(),
+		paneGeoms:       make(map[string]*paneGeometry),
+		trackers:        make(map[*wsConn]struct{}),
+		attachPreviews:  make(map[string]attachPreviewEntry),
 	}
 	if s.tokenValidator == nil {
 		s.tokenValidator = staticToken{token: opts.Token}
@@ -265,7 +293,18 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.HandleFunc("/upload", s.handleUpload)
+	mux.HandleFunc("/pair/whoami", s.serveWhoami)
+	mux.HandleFunc("/pair/identify", s.serveIdentify)
 	return mux
+}
+
+// SetTailnetIPs updates userspace-tsnet addresses after asynchronous Up. It
+// does not alter listeners or trigger a reconnect; it only completes the
+// fallback address set used by identify.
+func (s *Server) SetTailnetIPs(ips []net.IP) {
+	s.identityMu.Lock()
+	s.tailnetIPs = append([]net.IP(nil), ips...)
+	s.identityMu.Unlock()
 }
 
 // --- listing sequence & snapshot ------------------------------------------

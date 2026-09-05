@@ -10,6 +10,7 @@ package api
 
 import (
 	"log/slog"
+	"net"
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/nodeprobe"
@@ -62,6 +63,23 @@ const (
 // Options configures the API server. Zero values mean "use the documented
 // default" so callers only set what they care about.
 type Options struct {
+	// HostID is the daemon's stable public identity used by whoami/identify.
+	// It is never a substitute for the pairing token.
+	HostID string
+
+	// HostName is display-only metadata returned by discovery.
+	HostName string
+
+	// ListenPort is the actual LAN listen port advertised by whoami. Zero uses
+	// the protocol default 9900; identify's direct path uses LocalAddr instead.
+	ListenPort int
+
+	// TailnetIPs are userspace-tsnet IPv4 addresses not visible to NIC probing.
+	// AddressProvider, when set, is the complete dynamic set used by fallback
+	// identify binding checks.
+	TailnetIPs      []net.IP
+	AddressProvider func() []net.IP
+
 	// Token is the static pairing token every connection must present in its
 	// auth frame. It is compared constant-time and never logged or echoed
 	// (docs/protocol.md §9). Ignored when TokenValidator is set.

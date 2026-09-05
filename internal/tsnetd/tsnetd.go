@@ -241,24 +241,33 @@ func (g *Group) ListenTailnet() (net.Listener, error) {
 // @err degraded 模式返回 ErrTailnetDisabled；tsnet.Up 失败返回包装错误（authkey 已脱敏）；ctx 超时/取消同样返回错误
 // @inv 调用后 started 恒为 true（即使失败）；返回的 IP 是 pairing 侧注入候选集的唯一来源（WithTailnet）
 func (g *Group) Up(ctx context.Context) (net.IP, error) {
+	ip, _, err := g.UpWithInfo(ctx)
+	return ip, err
+}
+
+// UpWithInfo is Up plus the optional stable node identity used in the current
+// QR payload. The identity comes only from Status.Self after a successful
+// local tsnet Up; it is omitted on failure or when the control plane reports
+// no stable ID.
+func (g *Group) UpWithInfo(ctx context.Context) (net.IP, string, error) {
 	if g.ts == nil {
-		return nil, ErrTailnetDisabled
+		return nil, "", ErrTailnetDisabled
 	}
 	st, err := g.ts.Up(ctx)
 	// Up calls LocalClient -> Start before it can return any error. Mark the
 	// attempted node as closeable so timeout/bad-key paths do not leak it.
 	g.started = true
 	if err != nil {
-		return nil, fmt.Errorf("tsnetd: tailnet up: %s", redactAuthKey(err.Error(), g.authKey))
+		return nil, "", fmt.Errorf("tsnetd: tailnet up: %s", redactAuthKey(err.Error(), g.authKey))
 	}
+	var ip net.IP
 	for _, a := range st.TailscaleIPs {
 		if a.Is4() {
-			return a.AsSlice(), nil
+			ip = a.AsSlice()
+			break
 		}
 	}
-	// Running but no IPv4 (v6-only tailnet): not an error — the caller just
-	// has no v4 address to advertise (pairing skips IPv6 for now).
-	return nil, nil
+	return ip, string(st.Self.ID), nil
 }
 
 // Close releases the LAN listener and, if an embedded node was started,
