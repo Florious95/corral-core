@@ -131,15 +131,23 @@ func (n *Node) PeerSnapshot(knownID, cursor string) (*PeerSnapshotResult, error)
 		rows = append(rows, peerSnapshotRow{id: id, online: peer.Online, ipv4: ips, hostname: cleanPeerText(peer.HostName)})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].id < rows[j].id })
-	if knownID != "" {
-		for _, row := range rows {
-			if row.id == knownID {
-				return &PeerSnapshotResult{Lines: formatPeerRows([]peerSnapshotRow{row})}, nil
-			}
-		}
+	if row, ok := findPeerRow(rows, knownID); ok {
+		return &PeerSnapshotResult{Lines: formatPeerRows([]peerSnapshotRow{row})}, nil
 	}
 	window, nextCursor := pagePeerRows(rows, cursor)
 	return &PeerSnapshotResult{Lines: formatPeerRows(window), NextCursor: nextCursor}, nil
+}
+
+func findPeerRow(rows []peerSnapshotRow, knownID string) (peerSnapshotRow, bool) {
+	if knownID == "" {
+		return peerSnapshotRow{}, false
+	}
+	for _, row := range rows {
+		if row.id == knownID {
+			return row, true
+		}
+	}
+	return peerSnapshotRow{}, false
 }
 
 // pagePeerRows emits one non-overlapping bounded window. A cursor always advances

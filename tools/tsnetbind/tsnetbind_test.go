@@ -72,12 +72,9 @@ func TestParseInterfacesLoopbackAndDown(t *testing.T) {
 // 坏 CIDR 项内跳过），全表无一有效行才报错——netmon 拿到空表会误判"无网络"。
 func TestPeerSnapshotKnownIDSearchesCompleteTable(t *testing.T) {
 	rows := snapshotRows(300)
-	window, next := pagePeerRows(rows, "peer-299")
-	if len(window) != 1 || window[0].id != "peer-299" {
-		t.Fatalf("known peer lookup window = %v, want peer-299", window)
-	}
-	if next != "" {
-		t.Fatalf("known peer lookup must not expose a pagination cursor: %q", next)
+	row, ok := findPeerRow(rows, "peer-299")
+	if !ok || row.id != "peer-299" {
+		t.Fatalf("known peer lookup = %+v, want peer-299", row)
 	}
 }
 
