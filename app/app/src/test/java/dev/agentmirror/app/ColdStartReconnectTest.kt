@@ -140,11 +140,17 @@ class ColdStartReconnectTest {
         }
     }
 
-    /** 预置配对配置（键与 SharedPreferencesPairingConfigStore 对齐）。 */
+    /** 预置当前配对配置（键与 SharedPreferencesPairingConfigStore 对齐）。
+     *  必须写 schema_version=2：缺省 0 会被 load() 当成 v1 并合成 legacyBootstrapUrl，
+     *  从而走 identify 协调器而非「已配对 url+token」的生产冷启动路径。 */
     private fun seedConfig(url: String, token: String) {
         RuntimeEnvironment.getApplication()
             .getSharedPreferences("pairing_config", Context.MODE_PRIVATE)
-            .edit().putString("url", url).putString("token", token).commit()
+            .edit()
+            .putInt("schema_version", 2)
+            .putString("url", url)
+            .putString("token", token)
+            .commit()
     }
 
     // ---- 红测一：有配置冷启动必须启动连接（缺陷：无任何路径 start）----
