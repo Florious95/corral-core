@@ -203,7 +203,12 @@ class TestThreePane {
 
         vm.onFrame(frame(emptyList()))
         compose.waitForIdle()
-        live.forEach { compose.onNodeWithTag("fav-row-${it.ref}").assertDoesNotExist() }
+        live.forEach { compose.onNodeWithTag("fav-row-${it.ref}").assertExists() }
+        live.forEach {
+            compose.onNodeWithTag("fav-offline-${it.ref}", useUnmergedTree = true).assertExists()
+        }
+        compose.onNodeWithTag("fav-row-ref-idle").performClick()
+        compose.runOnIdle { assertNull(nav.activeSession) }
         assertEquals(3, vm.favorites.value.size)
         assertEquals(3, vm.favoriteRows().size)
         assertTrue(vm.favoriteRows().none { it.isOnline })
@@ -254,15 +259,18 @@ class TestThreePane {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithTag("fav-row-ref-gone").assertDoesNotExist()
+        compose.onNodeWithTag("fav-row-ref-gone").assertExists()
+        compose.onNodeWithTag("fav-offline-ref-gone", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("不在线", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("fav-row-ref-gone").performClick()
+        compose.runOnIdle { assertNull(nav.activeSession) }
         assertEquals(listOf("ref-gone"), vm.favorites.value.map { it.ref })
         assertEquals(listOf("ref-gone"), vm.favoriteRows().map { it.ref })
         assertEquals(false, vm.favoriteRows().single().isOnline)
-        compose.runOnIdle { assertNull(nav.activeSession) }
     }
 
     @Test
-    fun favoriteRowDisappearsWithoutRestartWhenEmptyLiveArrivesAfterLeaveLevel2() {
+    fun favoriteRowGoesOfflineWithoutRestartWhenEmptyLiveArrivesAfterLeaveLevel2() {
         val nav = MainNavState(initialShowPairing = false)
         nav.homePane = ThreePane.Favorites
         val vm = WorkspaceViewModel(
@@ -306,15 +314,16 @@ class TestThreePane {
 
         vm.onFrame(Level2Frame(workspace = "/proj/a", seq = 2, sessions = emptyList()))
         compose.waitForIdle()
-        compose.onNodeWithTag("fav-row-ref-gone").assertDoesNotExist()
-        compose.onNodeWithText("不在线").assertDoesNotExist()
+        compose.onNodeWithTag("fav-row-ref-gone").assertExists()
+        compose.onNodeWithTag("fav-offline-ref-gone", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("fav-row-ref-gone").performClick()
+        compose.runOnIdle { assertNull(nav.activeSession) }
         assertEquals(listOf("ref-gone"), vm.favorites.value.map { it.ref })
         assertEquals(false, vm.favoriteRows().single().isOnline)
-        compose.runOnIdle { assertNull(nav.activeSession) }
     }
 
     @Test
-    fun sessionListKeepsOfflineUnopenableWhileFavoritesHideTheSameDrop() {
+    fun workspaceListDropsGoneRowWhileFavoritesStayOfflineUnopenable() {
         var opened: Pair<String, String>? = null
         val vm = WorkspaceViewModel(
             requestList = {},
@@ -364,17 +373,12 @@ class TestThreePane {
 
         vm.onFrame(Level2Frame(workspace = "/proj/a", seq = 2, sessions = emptyList()))
         compose.waitForIdle()
-        compose.onNodeWithTag("l2-row-ref-cli").assertExists()
-        compose.onNodeWithTag("l2-offline-ref-cli", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("不在线", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("l2-row-ref-cli").performClick()
-        compose.runOnIdle { assertNull(opened) }
+        compose.onNodeWithTag("l2-row-ref-cli").assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-cli", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("不在线", useUnmergedTree = true).assertDoesNotExist()
         assertTrue(vm.level2.value.sessions.isEmpty())
         assertFalse(vm.favoriteRows().single().isOnline)
         assertEquals(listOf("ref-cli"), vm.favorites.value.map { it.ref })
-        assertTrue(
-            "收藏面过滤失联，会话列表仍保留该行",
-            vm.sessionListItems("/proj/a").any { it.id == "ref-cli" && !it.isOnline },
-        )
+        compose.runOnIdle { assertNull(opened) }
     }
 }

@@ -16,6 +16,9 @@
 
 package dev.agentmirror.app.session
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -141,6 +144,32 @@ class ViewMenuSourceTest {
         compose.onNodeWithText("sess-b").performClick()
         compose.waitForIdle()
         assertEquals(REF_B to "sess-b", selected)
+    }
+
+    @Test
+    fun sessionDockHidesOfflineFavoriteInsteadOfMarkingOffline() {
+        val wvm = seededAbFavoritesLastB()
+        val h = OverlayTestHarness(REF_A)
+        compose.setContent {
+            AgentMirrorTheme {
+                val liveGen by wvm.favoriteLiveGen.collectAsState()
+                SessionScreen(
+                    viewModel = h.vm,
+                    name = "sess-a",
+                    onBack = {},
+                    favoriteRows = remember(liveGen) { wvm.favoriteRows() },
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-chip-$REF_B").assertIsDisplayed()
+
+        wvm.onFrame(level2(CWD_B, REF_B, "sess-b", SOCK_B).copy(seq = 2, sessions = emptyList()))
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-chip-$REF_B").assertDoesNotExist()
+        compose.onNodeWithText("不在线", useUnmergedTree = true).assertDoesNotExist()
+        assertEquals(false, wvm.favoriteRows().single { it.ref == REF_B }.isOnline)
+        assertEquals(2, wvm.favorites.value.size)
     }
 
     private fun seededAbFavoritesLastB(): WorkspaceViewModel {

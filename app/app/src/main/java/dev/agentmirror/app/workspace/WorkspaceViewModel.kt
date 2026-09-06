@@ -27,7 +27,6 @@ import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.service.ServiceWire
-import dev.agentmirror.app.ui.model.SessionItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -157,11 +156,6 @@ class WorkspaceViewModel(
      * [level2Cache]（空表仍跳过缓存以免再进先空白）。
      */
     private val lastLiveByWorkspace = LinkedHashMap<String, List<L2Entry>>()
-
-    /**
-     * 会话列表见过的行（含已从 live 消失的）。与收藏投影分开：这里失联仍保留。
-     */
-    private val sessionSeenByWorkspace = LinkedHashMap<String, LinkedHashMap<String, L2Entry>>()
 
     private var subscribedWorkspace: String? = null
     private var lastLevel2AtMs: Long = 0L
@@ -600,28 +594,6 @@ class WorkspaceViewModel(
     fun favoriteRows(live: List<L2Entry> = liveForFavorites()): List<FavoriteRow> =
         favoriteBook.rows(live)
 
-    /**
-     * 对话首页会话列表投影：见过的行都在；[lastLiveByWorkspace] 未命中则 isOnline=false。
-     * 与收藏页 [favoriteRows] 过滤不是同一套。
-     */
-    fun sessionListItems(cwd: String, starred: Set<FavoriteKey> = emptySet()): List<SessionItem> {
-        val liveRefs = lastLiveByWorkspace[cwd]?.map { it.ref }?.toSet()
-        val seen = sessionSeenByWorkspace[cwd]
-        if (seen.isNullOrEmpty()) {
-            return _level2.value.sessions.map {
-                it.toSessionItem(starred.contains(it.favoriteKey()), isOnline = true)
-            }
-        }
-        return seen.values.map { entry ->
-            val online = liveRefs == null || entry.ref in liveRefs
-            entry.toSessionItem(starred.contains(entry.favoriteKey()), isOnline = online)
-        }
-    }
-
-    fun sessionListEntry(cwd: String, ref: String): L2Entry? =
-        sessionSeenByWorkspace[cwd]?.get(ref)
-            ?: _level2.value.sessions.firstOrNull { it.ref == ref }
-
     private fun liveForFavorites(): List<L2Entry> {
         val byKey = LinkedHashMap<FavoriteKey, L2Entry>()
         for (state in level2Cache.values) {
@@ -725,8 +697,6 @@ class WorkspaceViewModel(
         val prevByRef = (level2Cache[frame.workspace]?.sessions ?: emptyList())
             .associate { it.ref to it.status }
         lastLiveByWorkspace[frame.workspace] = incoming
-        val seen = sessionSeenByWorkspace.getOrPut(frame.workspace) { LinkedHashMap() }
-        for (entry in incoming) seen[entry.ref] = entry
         rememberLevel2(frame.workspace, next)
         bumpFavoriteLive()
         onFavoriteWorkspaceFetched(frame.workspace)

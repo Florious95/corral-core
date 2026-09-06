@@ -165,7 +165,8 @@ fun AgentMirrorApp(
                         connectionPath = ServiceWire.connectionPath(),
                         onBack = { navState.activeSession = null },
                         favoriteRows = remember(overlayFavorites, overlayLiveGen) {
-                            workspaceViewModel.favoriteRows()
+                            // 会话页收藏列表/dock：失联项不存在，不是标「不在线」。
+                            workspaceViewModel.favoriteRows().filter { it.isOnline }
                         },
                         overlaySessions = remember(r.ref, overlayLevel2, overlayFavorites, overlayLiveGen) {
                             workspaceViewModel.viewMenuSource(r.ref).sessions
