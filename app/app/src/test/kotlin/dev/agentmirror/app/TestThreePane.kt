@@ -26,7 +26,9 @@ import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.workspace.MemoryFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
+import dev.agentmirror.app.workspace.WorkspaceScreen
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -257,5 +259,129 @@ class TestThreePane {
         assertEquals(listOf("ref-gone"), vm.favoriteRows().map { it.ref })
         assertEquals(false, vm.favoriteRows().single().isOnline)
         compose.runOnIdle { assertNull(nav.activeSession) }
+    }
+
+    @Test
+    fun favoriteRowDisappearsWithoutRestartWhenEmptyLiveArrivesAfterLeaveLevel2() {
+        val nav = MainNavState(initialShowPairing = false)
+        nav.homePane = ThreePane.Favorites
+        val vm = WorkspaceViewModel(
+            requestList = {},
+            subscribeLevel2 = {},
+            unsubscribeLevel2 = {},
+            favoriteStore = MemoryFavoriteStore(),
+        )
+        vm.enterLevel2("/proj/a")
+        vm.onFrame(
+            Level2Frame(
+                workspace = "/proj/a",
+                seq = 1,
+                sessions = listOf(
+                    Session(
+                        ref = "ref-gone",
+                        name = "ignored",
+                        cwd = "/proj/a",
+                        rows = 24,
+                        cols = 80,
+                        title = "t",
+                        status = "idle",
+                        sessionName = "sess-gone",
+                        windowIndex = "8",
+                        windowName = "win-gone",
+                    ),
+                ),
+            ),
+        )
+        vm.toggleFavorite(vm.level2.value.sessions.single())
+        vm.leaveLevel2()
+        assertEquals(true, vm.favoriteRows().single().isOnline)
+
+        compose.setContent {
+            AgentMirrorTheme {
+                ThreePaneHome(navState = nav, workspaceViewModel = vm)
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("fav-row-ref-gone").assertExists()
+
+        vm.onFrame(Level2Frame(workspace = "/proj/a", seq = 2, sessions = emptyList()))
+        compose.waitForIdle()
+        compose.onNodeWithTag("fav-row-ref-gone").assertDoesNotExist()
+        compose.onNodeWithText("不在线").assertDoesNotExist()
+        assertEquals(listOf("ref-gone"), vm.favorites.value.map { it.ref })
+        assertEquals(false, vm.favoriteRows().single().isOnline)
+        compose.runOnIdle { assertNull(nav.activeSession) }
+    }
+
+    @Test
+    fun sessionListKeepsOfflineUnopenableWhileFavoritesHideTheSameDrop() {
+        val nav = MainNavState(initialShowPairing = false)
+        var opened: Pair<String, String>? = null
+        val vm = WorkspaceViewModel(
+            requestList = {},
+            subscribeLevel2 = {},
+            unsubscribeLevel2 = {},
+            favoriteStore = MemoryFavoriteStore(),
+        )
+        vm.enterLevel2("/proj/a")
+        vm.onFrame(
+            Level2Frame(
+                workspace = "/proj/a",
+                seq = 1,
+                sessions = listOf(
+                    Session(
+                        ref = "ref-cli",
+                        name = "cli",
+                        cwd = "/proj/a",
+                        rows = 24,
+                        cols = 80,
+                        title = "cli",
+                        activity = "idle",
+                        status = "idle",
+                        sessionName = "cli",
+                        windowIndex = "1",
+                        windowName = "cli",
+                    ),
+                ),
+            ),
+        )
+        vm.toggleFavorite(vm.level2.value.sessions.single())
+
+        compose.setContent {
+            AgentMirrorTheme {
+                WorkspaceScreen(
+                    viewModel = vm,
+                    selectedWorkspaceCwd = "/proj/a",
+                    onSelectWorkspace = {},
+                    onBackToList = {},
+                    onOpenSettings = {},
+                    onOpenSession = { ref, name -> opened = ref to name },
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("l2-row-ref-cli").assertExists()
+        compose.onNodeWithTag("l2-offline-ref-cli").assertDoesNotExist()
+
+        vm.onFrame(Level2Frame(workspace = "/proj/a", seq = 2, sessions = emptyList()))
+        compose.waitForIdle()
+        compose.onNodeWithTag("l2-row-ref-cli").assertExists()
+        compose.onNodeWithTag("l2-offline-ref-cli").assertExists()
+        compose.onNodeWithText("不在线").assertExists()
+        compose.onNodeWithTag("l2-row-ref-cli").performClick()
+        compose.runOnIdle { assertNull(opened) }
+        assertTrue(vm.level2.value.sessions.isEmpty())
+        assertFalse(vm.favoriteRows().single().isOnline)
+
+        nav.homePane = ThreePane.Favorites
+        compose.setContent {
+            AgentMirrorTheme {
+                ThreePaneHome(navState = nav, workspaceViewModel = vm)
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("fav-row-ref-cli").assertDoesNotExist()
+        compose.onNodeWithText("不在线").assertDoesNotExist()
+        assertEquals(listOf("ref-cli"), vm.favorites.value.map { it.ref })
     }
 }
