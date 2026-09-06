@@ -167,7 +167,7 @@ pub fn list_panes(spec: &SocketSpec) -> Result<Vec<RawPane>, String> {
     cmd.arg("list-panes")
         .arg("-a")
         .arg("-F")
-        .arg("#{session_name}\u{1f}#{window_index}\u{1f}#{window_name}\u{1f}#{pane_id}\u{1f}#{pane_pid}\u{1f}#{pane_title}");
+        .arg("#{session_name}\u{1f}#{window_index}\u{1f}#{window_name}\u{1f}#{pane_id}\u{1f}#{pane_pid}\u{1f}#{pane_current_command}\u{1f}#{pane_title}");
     let out = cmd
         .output()
         .map_err(|e| format!("tmux list-panes spawn: {e}"))?;
@@ -183,12 +183,13 @@ pub fn list_panes(spec: &SocketSpec) -> Result<Vec<RawPane>, String> {
         if line.is_empty() {
             continue;
         }
-        let mut it = line.splitn(6, '\u{1f}');
+        let mut it = line.splitn(7, '\u{1f}');
         let session = it.next().unwrap_or("").to_string();
         let window_index = it.next().unwrap_or("0").parse().unwrap_or(0);
         let window_name = it.next().unwrap_or("").to_string();
         let pane_id = it.next().unwrap_or("").to_string();
         let pane_pid = it.next().unwrap_or("0").parse().unwrap_or(0);
+        let current_command = it.next().unwrap_or("").to_string();
         let title = it.next().unwrap_or("").to_string();
         panes.push(RawPane {
             session,
@@ -196,6 +197,7 @@ pub fn list_panes(spec: &SocketSpec) -> Result<Vec<RawPane>, String> {
             window_name,
             pane_id,
             pane_pid,
+            current_command,
             title,
         });
     }
@@ -208,6 +210,7 @@ pub struct RawPane {
     pub window_name: String,
     pub pane_id: String,
     pub pane_pid: i32,
+    pub current_command: String,
     pub title: String,
 }
 
@@ -233,7 +236,9 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
     let mut nodes = Vec::with_capacity(panes.len());
     for p in panes {
         let comms = match snap.as_ref() {
-            Some(s) if p.pane_pid > 0 => proctree::walk_identity_comms(s, p.pane_pid),
+            Some(s) if p.pane_pid > 0 => {
+                proctree::walk_identity_comms(s, p.pane_pid, &p.current_command)
+            }
             _ => Vec::new(),
         };
         let ident = providers::match_comms(&comms);
