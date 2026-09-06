@@ -165,8 +165,7 @@ fun AgentMirrorApp(
                         connectionPath = ServiceWire.connectionPath(),
                         onBack = { navState.activeSession = null },
                         favoriteRows = remember(overlayFavorites, overlayLiveGen) {
-                            // 账本仍留失联行；会话界面与收藏页同一投影，只展示 live ref 命中的行。
-                            workspaceViewModel.favoriteRows().filter { it.isOnline }
+                            workspaceViewModel.favoriteRows()
                         },
                         overlaySessions = remember(r.ref, overlayLevel2, overlayFavorites, overlayLiveGen) {
                             workspaceViewModel.viewMenuSource(r.ref).sessions

@@ -302,16 +302,15 @@ fun SessionScreen(
     AppTheme {
         val darkTheme = LocalAppPalette.current === DarkPalette
         val themeToken = TermPalette.token(darkTheme)
-        val visibleFavoriteRows = favoriteRows.filter { it.isOnline }
-        val favoriteByRef = visibleFavoriteRows.associateBy { it.ref }
+        val favoriteByRef = favoriteRows.associateBy { it.ref }
         val favoriteOrder = remember {
             mutableStateListOf<String>().apply {
-                addAll(visibleFavoriteRows.map { it.ref }.filterNot { it == viewModel.ref })
+                addAll(favoriteRows.map { it.ref }.filterNot { it == viewModel.ref })
             }
         }
         var favoriteOrderCurrent by remember { mutableStateOf(viewModel.ref) }
-        LaunchedEffect(visibleFavoriteRows.map { it.ref }, viewModel.ref) {
-            val desired = visibleFavoriteRows.map { it.ref }.filterNot { it == viewModel.ref }
+        LaunchedEffect(favoriteRows.map { it.ref }, viewModel.ref) {
+            val desired = favoriteRows.map { it.ref }.filterNot { it == viewModel.ref }
             if (favoriteOrderCurrent != viewModel.ref) {
                 val replacementIndex = favoriteOrder.indexOf(viewModel.ref)
                 if (replacementIndex >= 0) {

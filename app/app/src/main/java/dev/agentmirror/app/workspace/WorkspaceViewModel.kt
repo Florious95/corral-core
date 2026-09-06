@@ -27,6 +27,7 @@ import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.ui.model.SessionItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -150,6 +151,17 @@ class WorkspaceViewModel(
      * 离开不清这项；再进同一 cwd 立即画它，不先发空列表。
      */
     private val level2Cache = LinkedHashMap<String, L2UiState>()
+
+    /**
+     * 每个工作区最近一次 level2 快照（含空表）。收藏对账用它，不靠重启、不写进
+     * [level2Cache]（空表仍跳过缓存以免再进先空白）。
+     */
+    private val lastLiveByWorkspace = LinkedHashMap<String, List<L2Entry>>()
+
+    /**
+     * 会话列表见过的行（含已从 live 消失的）。与收藏投影分开：这里失联仍保留。
+     */
+    private val sessionSeenByWorkspace = LinkedHashMap<String, LinkedHashMap<String, L2Entry>>()
 
     private var subscribedWorkspace: String? = null
     private var lastLevel2AtMs: Long = 0L
@@ -374,17 +386,15 @@ class WorkspaceViewModel(
     }
 
     /**
-     * 「查看」浮层的数据源：按**当前会话**解析工作区。
-     * 已订该工作区且已收到快照时读 live [_level2]（含空表）；否则读该工作区缓存。
-     * 不把 [_level2] 单例当成「别的工作区」的回落——它会被最后一次 [enterLevel2] / 收藏改写。
+     * 「查看」浮层的数据源：按**当前会话**解析工作区，再取该工作区缓存。
+     * 不读 [_level2] 单例——它会被最后一次 [enterLevel2] / 收藏写成别的工作区。
      *
      * @contract
      * @pre [sessionRef] 为当前三级会话的结构 ref（可空串；空则空表）
      * @post [ViewMenuSource.overlayWorkspace] == [ViewMenuSource.currentWorkspace]；
-     *       sessions 全属该工作区；已订且已收到快照时用 live [_level2]（含空表）；
-     *       [lastPublishedWorkspace] 是对照用的单例键
+     *       sessions 全属该工作区；[lastPublishedWorkspace] 是对照用的单例键
      * @err 解析不到工作区时 sessions 为空，overlay 键为空，**不回落单例**
-     * @inv 不改身份键、不改 [_level2]、不改收藏簿、不把空表写入缓存
+     * @inv 不改身份键、不改 [_level2]、不改收藏簿
      */
     fun viewMenuSource(sessionRef: String): ViewMenuSource {
         val currentWs = resolveWorkspaceForSession(sessionRef)
@@ -394,10 +404,6 @@ class WorkspaceViewModel(
         }
         val sessions = if (currentWs.isEmpty()) {
             emptyList()
-        } else if (subscribedWorkspace == currentWs && lastLevel2AtMs != 0L) {
-            // 已订工作区以当前 live 快照为准（含空表）。缓存仍跳过空表以免一级/二级
-            // 再进先空白；叠层不得把缓存里多出来的失联行当成还在。
-            _level2.value.sessions
         } else {
             level2Cache[currentWs]?.sessions
                 ?: if (subscribedWorkspace == currentWs) _level2.value.sessions else emptyList()
@@ -594,6 +600,28 @@ class WorkspaceViewModel(
     fun favoriteRows(live: List<L2Entry> = liveForFavorites()): List<FavoriteRow> =
         favoriteBook.rows(live)
 
+    /**
+     * 对话首页会话列表投影：见过的行都在；[lastLiveByWorkspace] 未命中则 isOnline=false。
+     * 与收藏页 [favoriteRows] 过滤不是同一套。
+     */
+    fun sessionListItems(cwd: String, starred: Set<FavoriteKey> = emptySet()): List<SessionItem> {
+        val liveRefs = lastLiveByWorkspace[cwd]?.map { it.ref }?.toSet()
+        val seen = sessionSeenByWorkspace[cwd]
+        if (seen.isNullOrEmpty()) {
+            return _level2.value.sessions.map {
+                it.toSessionItem(starred.contains(it.favoriteKey()), isOnline = true)
+            }
+        }
+        return seen.values.map { entry ->
+            val online = liveRefs == null || entry.ref in liveRefs
+            entry.toSessionItem(starred.contains(entry.favoriteKey()), isOnline = online)
+        }
+    }
+
+    fun sessionListEntry(cwd: String, ref: String): L2Entry? =
+        sessionSeenByWorkspace[cwd]?.get(ref)
+            ?: _level2.value.sessions.firstOrNull { it.ref == ref }
+
     private fun liveForFavorites(): List<L2Entry> {
         val byKey = LinkedHashMap<FavoriteKey, L2Entry>()
         for (state in level2Cache.values) {
@@ -604,15 +632,15 @@ class WorkspaceViewModel(
         for (entry in _level2.value.sessions) {
             byKey[entry.favoriteKey()] = entry
         }
-        val subscribed = subscribedWorkspace
-        // 已订工作区若已收到快照，以当前表为准：缓存里多出来的键视为失联。
-        if (subscribed != null && lastLevel2AtMs != 0L) {
-            val liveNow = HashSet<FavoriteKey>()
-            for (entry in _level2.value.sessions) liveNow.add(entry.favoriteKey())
-            val cached = level2Cache[subscribed]?.sessions.orEmpty()
-            for (entry in cached) {
-                if (entry.favoriteKey() !in liveNow) byKey.remove(entry.favoriteKey())
+        for ((cwd, sessions) in lastLiveByWorkspace) {
+            val liveNow = HashSet<FavoriteKey>(sessions.size)
+            for (entry in sessions) liveNow.add(entry.favoriteKey())
+            val stale = ArrayList<FavoriteKey>()
+            for ((key, entry) in byKey) {
+                if (entry.cwd == cwd && key !in liveNow) stale.add(key)
             }
+            for (key in stale) byKey.remove(key)
+            for (entry in sessions) byKey[entry.favoriteKey()] = entry
         }
         return ArrayList(byKey.values)
     }
@@ -696,6 +724,9 @@ class WorkspaceViewModel(
         val next = L2UiState(sessions = incoming, seq = frame.seq, banner = null)
         val prevByRef = (level2Cache[frame.workspace]?.sessions ?: emptyList())
             .associate { it.ref to it.status }
+        lastLiveByWorkspace[frame.workspace] = incoming
+        val seen = sessionSeenByWorkspace.getOrPut(frame.workspace) { LinkedHashMap() }
+        for (entry in incoming) seen[entry.ref] = entry
         rememberLevel2(frame.workspace, next)
         bumpFavoriteLive()
         onFavoriteWorkspaceFetched(frame.workspace)

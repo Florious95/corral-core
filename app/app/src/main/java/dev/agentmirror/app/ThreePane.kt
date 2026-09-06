@@ -188,8 +188,8 @@ private fun FavoritesPane(
     val favorites by viewModel.favorites.collectAsState()
     val liveGen by viewModel.favoriteLiveGen.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
-    // 收藏账本仍保留失联行；对话首页只展示当前 live ref 命中的行。
-    // 状态（idle/unknown/等待中的未知）不参与此投影，只有 isOnline 决定可见性。
+    // 收藏面：失联项不存在（不是标「不在线」）。账本仍留失联行。
+    // 会话列表用另一套投影，禁止与这里共用同一 filter。
     val rows = remember(favorites, liveGen) {
         viewModel.favoriteRows().filter { it.isOnline }
     }
