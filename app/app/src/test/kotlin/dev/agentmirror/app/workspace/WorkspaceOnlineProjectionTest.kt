@@ -18,10 +18,13 @@ package dev.agentmirror.app.workspace
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import dev.agentmirror.app.conn.Level2Frame
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -31,8 +34,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 工作区二级会话列表读 live [_level2]，不渲染已从快照消失的行。
- * idle / waiting / unknown 只要仍在 live 快照里就必须显示。
+ * 对话首页会话列表：失联行仍在，标「不在线」，短按不打开。
+ * idle / waiting / unknown 只要仍在 live 快照里就必须当在线。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -43,13 +46,14 @@ class WorkspaceOnlineProjectionTest {
     val compose = createComposeRule()
 
     @Test
-    fun workspaceListHidesDroppedSessionAndKeepsOnlineIdleWaitingUnknown() {
+    fun sessionListKeepsDroppedRowOfflineAndKeepsOnlineIdleWaitingUnknown() {
         val vm = WorkspaceViewModel(
             requestList = {},
             subscribeLevel2 = {},
             unsubscribeLevel2 = {},
             favoriteStore = MemoryFavoriteStore(),
         )
+        var opened: Pair<String, String>? = null
         val idle = sample("ref-idle", "idle", "idle", "idle", "1")
         val waiting = sample("ref-waiting", "waiting", "waiting", "waiting", "2")
         val unknown = sample("ref-unknown", "unknown", "unknown", "unknown", "3", health = "unknown")
@@ -64,6 +68,7 @@ class WorkspaceOnlineProjectionTest {
                     onSelectWorkspace = {},
                     onBackToList = {},
                     onOpenSettings = {},
+                    onOpenSession = { ref, name -> opened = ref to name },
                 )
             }
         }
@@ -71,20 +76,38 @@ class WorkspaceOnlineProjectionTest {
         compose.onNodeWithTag("l2-row-ref-idle").assertExists()
         compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
         compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
+        compose.onNodeWithText("不在线").assertDoesNotExist()
 
         vm.onFrame(frame(2, idle, waiting))
         compose.waitForIdle()
         compose.onNodeWithTag("l2-row-ref-idle").assertExists()
         compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
-        compose.onNodeWithTag("l2-row-ref-unknown").assertDoesNotExist()
-        compose.onNodeWithTag("l2-offline-ref-unknown").assertDoesNotExist()
+        compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
+        compose.onNodeWithTag("l2-offline-ref-unknown").assertExists()
+        compose.onNodeWithTag("l2-offline-ref-idle").assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-waiting").assertDoesNotExist()
+        compose.onNodeWithTag("l2-row-ref-unknown").performClick()
+        compose.runOnIdle { assertNull(opened) }
         assertEquals(listOf("ref-idle", "ref-waiting"), vm.level2.value.sessions.map { it.ref })
 
         vm.onFrame(Level2Frame(workspace = CWD, seq = 3, sessions = emptyList()))
         compose.waitForIdle()
-        compose.onNodeWithTag("l2-row-ref-idle").assertDoesNotExist()
-        compose.onNodeWithTag("l2-row-ref-waiting").assertDoesNotExist()
+        compose.onNodeWithTag("l2-row-ref-idle").assertExists()
+        compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
+        compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
+        compose.onNodeWithTag("l2-offline-ref-idle").assertExists()
+        compose.onNodeWithText("不在线").assertExists()
+        compose.onNodeWithTag("l2-row-ref-idle").performClick()
+        compose.runOnIdle { assertNull(opened) }
         assertTrue(vm.level2.value.sessions.isEmpty())
+
+        vm.onFrame(frame(4, idle, waiting, unknown))
+        compose.waitForIdle()
+        compose.onNodeWithTag("l2-offline-ref-idle").assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-waiting").assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-unknown").assertDoesNotExist()
+        compose.onNodeWithTag("l2-row-ref-idle").performClick()
+        compose.runOnIdle { assertEquals("ref-idle" to "idle", opened) }
     }
 
     private fun frame(seq: Long, vararg sessions: Session) = Level2Frame(
