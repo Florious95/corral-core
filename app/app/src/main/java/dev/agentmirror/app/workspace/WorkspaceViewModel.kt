@@ -374,15 +374,17 @@ class WorkspaceViewModel(
     }
 
     /**
-     * 「查看」浮层的数据源：按**当前会话**解析工作区，再取该工作区缓存。
-     * 不读 [_level2] 单例——它会被最后一次 [enterLevel2] / 收藏写成别的工作区。
+     * 「查看」浮层的数据源：按**当前会话**解析工作区。
+     * 已订该工作区且已收到快照时读 live [_level2]（含空表）；否则读该工作区缓存。
+     * 不把 [_level2] 单例当成「别的工作区」的回落——它会被最后一次 [enterLevel2] / 收藏改写。
      *
      * @contract
      * @pre [sessionRef] 为当前三级会话的结构 ref（可空串；空则空表）
      * @post [ViewMenuSource.overlayWorkspace] == [ViewMenuSource.currentWorkspace]；
-     *       sessions 全属该工作区；[lastPublishedWorkspace] 是对照用的单例键
+     *       sessions 全属该工作区；已订且已收到快照时用 live [_level2]（含空表）；
+     *       [lastPublishedWorkspace] 是对照用的单例键
      * @err 解析不到工作区时 sessions 为空，overlay 键为空，**不回落单例**
-     * @inv 不改身份键、不改 [_level2]、不改收藏簿
+     * @inv 不改身份键、不改 [_level2]、不改收藏簿、不把空表写入缓存
      */
     fun viewMenuSource(sessionRef: String): ViewMenuSource {
         val currentWs = resolveWorkspaceForSession(sessionRef)
@@ -392,6 +394,10 @@ class WorkspaceViewModel(
         }
         val sessions = if (currentWs.isEmpty()) {
             emptyList()
+        } else if (subscribedWorkspace == currentWs && lastLevel2AtMs != 0L) {
+            // 已订工作区以当前 live 快照为准（含空表）。缓存仍跳过空表以免一级/二级
+            // 再进先空白；叠层不得把缓存里多出来的失联行当成还在。
+            _level2.value.sessions
         } else {
             level2Cache[currentWs]?.sessions
                 ?: if (subscribedWorkspace == currentWs) _level2.value.sessions else emptyList()
