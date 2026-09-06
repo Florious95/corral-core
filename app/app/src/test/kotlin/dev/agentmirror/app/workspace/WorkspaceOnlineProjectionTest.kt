@@ -76,16 +76,16 @@ class WorkspaceOnlineProjectionTest {
         compose.onNodeWithTag("l2-row-ref-idle").assertExists()
         compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
         compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
-        compose.onNodeWithText("不在线").assertDoesNotExist()
+        compose.onNodeWithText("不在线", useUnmergedTree = true).assertDoesNotExist()
 
         vm.onFrame(frame(2, idle, waiting))
         compose.waitForIdle()
         compose.onNodeWithTag("l2-row-ref-idle").assertExists()
         compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
         compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
-        compose.onNodeWithTag("l2-offline-ref-unknown").assertExists()
-        compose.onNodeWithTag("l2-offline-ref-idle").assertDoesNotExist()
-        compose.onNodeWithTag("l2-offline-ref-waiting").assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-unknown", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("l2-offline-ref-idle", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-waiting", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("l2-row-ref-unknown").performClick()
         compose.runOnIdle { assertNull(opened) }
         assertEquals(listOf("ref-idle", "ref-waiting"), vm.level2.value.sessions.map { it.ref })
@@ -95,17 +95,17 @@ class WorkspaceOnlineProjectionTest {
         compose.onNodeWithTag("l2-row-ref-idle").assertExists()
         compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
         compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
-        compose.onNodeWithTag("l2-offline-ref-idle").assertExists()
-        compose.onNodeWithText("不在线").assertExists()
+        compose.onNodeWithTag("l2-offline-ref-idle", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("不在线", useUnmergedTree = true).assertExists()
         compose.onNodeWithTag("l2-row-ref-idle").performClick()
         compose.runOnIdle { assertNull(opened) }
         assertTrue(vm.level2.value.sessions.isEmpty())
 
         vm.onFrame(frame(4, idle, waiting, unknown))
         compose.waitForIdle()
-        compose.onNodeWithTag("l2-offline-ref-idle").assertDoesNotExist()
-        compose.onNodeWithTag("l2-offline-ref-waiting").assertDoesNotExist()
-        compose.onNodeWithTag("l2-offline-ref-unknown").assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-idle", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-waiting", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-unknown", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("l2-row-ref-idle").performClick()
         compose.runOnIdle { assertEquals("ref-idle" to "idle", opened) }
     }
