@@ -83,13 +83,14 @@ fn is_foreground(stat: &str) -> bool {
     stat.contains('+')
 }
 
-/// Identity walk: prefer processes in the tty foreground group (`stat` contains
-/// `+`). A leftover Agent child after Ctrl+C/back-to-shell is typically `SN`
-/// while zsh holds `+`; matching it would keep listing an Agent icon on a
-/// shell row. Nested wrappers (bash waiting, Agent with `+`) still match.
-/// If the snapshot has no foreground bit (legacy tables without `stat`),
-/// fall open to the full descendant walk so identity does not go blank.
-pub fn walk_identity_comms(s: &Snap, root: i32) -> Vec<String> {
+fn is_shell_basename(cmd: &str) -> bool {
+    matches!(
+        crate::providers::basename(cmd),
+        "zsh" | "bash" | "sh" | "fish" | "dash" | "ksh" | "csh" | "tcsh"
+    )
+}
+
+fn walk_fg_comms(s: &Snap, root: i32) -> Vec<String> {
     let mut fg = Vec::new();
     fn walk(s: &Snap, pid: i32, fg: &mut Vec<String>) {
         let stat = s.stat.get(&pid).map(String::as_str).unwrap_or("");
@@ -105,10 +106,30 @@ pub fn walk_identity_comms(s: &Snap, root: i32) -> Vec<String> {
         }
     }
     walk(s, root, &mut fg);
+    fg
+}
+
+/// Identity comms for one pane.
+///
+/// - Agent in the tty foreground group (`stat` contains `+`) wins.
+/// - If the shell still holds `+` but tmux `pane_current_command` is the Agent
+///   (or another non-shell such as `node`), keep the full descendant walk so a
+///   still-running CLI that left the job-control group is not dropped.
+/// - If the current command is a shell, do not promote background leftovers.
+/// - No `+` bits at all (legacy tables): fail open to the full walk.
+pub fn walk_identity_comms(s: &Snap, root: i32, current_command: &str) -> Vec<String> {
+    let full = walk_comms(s, root);
+    let fg = walk_fg_comms(s, root);
+    if crate::providers::match_comms(&fg).is_some() {
+        return fg;
+    }
     if fg.is_empty() {
-        walk_comms(s, root)
-    } else {
+        return full;
+    }
+    if is_shell_basename(current_command) {
         fg
+    } else {
+        full
     }
 }
 
@@ -163,12 +184,28 @@ mod tests {
             providers::match_comms(&full).is_some(),
             "full descendant walk still sees leftover grok (old bug)"
         );
-        let ident = walk_identity_comms(&snap, 10);
+        let ident = walk_identity_comms(&snap, 10, "zsh");
         assert_eq!(ident, vec!["/bin/zsh".to_string()]);
         assert!(
             providers::match_comms(&ident).is_none(),
             "background grok must not keep the pane identified as Agent"
         );
+    }
+
+    #[test]
+    fn running_agent_still_identified_when_shell_holds_plus() {
+        // Production miss: parent zsh keeps Ss+ while the Agent TUI is the
+        // current command but not in the job-control foreground group.
+        let snap = parse_table(
+            "\
+1 0 Ss /sbin/launchd
+10 1 Ss+ /bin/zsh
+11 10 S /opt/homebrew/bin/grok
+",
+        );
+        let ident = walk_identity_comms(&snap, 10, "grok");
+        let e = providers::match_comms(&ident).expect("still-running grok");
+        assert_eq!(e.id, "grok");
     }
 
     #[test]
@@ -180,7 +217,7 @@ mod tests {
 11 10 S+ /opt/homebrew/bin/codex
 ",
         );
-        let ident = walk_identity_comms(&snap, 10);
+        let ident = walk_identity_comms(&snap, 10, "codex");
         let e = providers::match_comms(&ident).expect("codex in foreground group");
         assert_eq!(e.id, "codex");
     }

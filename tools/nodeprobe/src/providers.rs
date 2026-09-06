@@ -13,18 +13,29 @@ pub struct Entry {
 
 static TABLE: OnceLock<Vec<Entry>> = OnceLock::new();
 
+const EMBEDDED_PROVIDERS_TSV: &str = include_str!("../fixtures/providers.tsv");
+
 pub fn default_providers_tsv() -> PathBuf {
+    if let Ok(p) = std::env::var("NODEPROBE_PROVIDERS") {
+        if !p.is_empty() {
+            return PathBuf::from(p);
+        }
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/providers.tsv")
 }
 
 pub fn load() -> &'static [Entry] {
-    TABLE.get_or_init(|| load_path(&default_providers_tsv()))
+    TABLE.get_or_init(|| {
+        let path = default_providers_tsv();
+        let from_path = load_path(&path);
+        if !from_path.is_empty() {
+            return from_path;
+        }
+        parse_tsv(EMBEDDED_PROVIDERS_TSV)
+    })
 }
 
-fn load_path(path: &Path) -> Vec<Entry> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
+fn parse_tsv(text: &str) -> Vec<Entry> {
     let mut out = Vec::new();
     for line in text.lines() {
         let line = line.trim();
@@ -47,6 +58,13 @@ fn load_path(path: &Path) -> Vec<Entry> {
         });
     }
     out
+}
+
+fn load_path(path: &Path) -> Vec<Entry> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    parse_tsv(&text)
 }
 
 pub fn basename(comm: &str) -> &str {
