@@ -51,7 +51,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -165,20 +164,18 @@ fun WorkspaceScreen(
                     }
                 }
                 val starred = favorites.map { it.key }.toSet()
-                val liveGen by viewModel.favoriteLiveGen.collectAsState()
-                val sessionItems = remember(liveGen, level2, starred, level2Cwd) {
-                    viewModel.sessionListItems(level2Cwd, starred)
-                }
                 Column(Modifier.fillMaxSize()) {
                     AppTheme {
                         SessionListScreen(
                             workspaceName = cwdDisplayName(level2Cwd),
                             workspacePath = level2Cwd,
-                            sessions = sessionItems,
+                            sessions = level2.sessions.map {
+                                it.toSessionItem(starred.contains(it.favoriteKey()))
+                            },
                             onBack = onBackToList,
                             onSessionClick = { item -> onOpenSession(item.id, item.displayName) },
                             onToggleStar = { item ->
-                                viewModel.sessionListEntry(level2Cwd, item.id)?.let(viewModel::toggleFavorite)
+                                level2.sessions.firstOrNull { it.ref == item.id }?.let(viewModel::toggleFavorite)
                             },
                             modifier = Modifier
                                 .weight(1f)

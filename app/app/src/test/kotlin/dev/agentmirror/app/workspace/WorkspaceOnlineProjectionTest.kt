@@ -16,17 +16,13 @@
 
 package dev.agentmirror.app.workspace
 
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import dev.agentmirror.app.conn.Level2Frame
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -36,8 +32,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 对话首页会话列表：失联行仍在，标「不在线」，短按不打开。
- * idle / waiting / unknown 只要仍在 live 快照里就必须当在线。
+ * 底栏「会话」工作区二级列表：live 快照里没有的行消失，不标「不在线」。
+ * idle / waiting / unknown 只要仍在 live 快照里就必须显示。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -48,14 +44,13 @@ class WorkspaceOnlineProjectionTest {
     val compose = createComposeRule()
 
     @Test
-    fun sessionListKeepsDroppedRowOfflineAndKeepsOnlineIdleWaitingUnknown() {
+    fun workspaceListDropsGoneSessionAndKeepsOnlineIdleWaitingUnknown() {
         val vm = WorkspaceViewModel(
             requestList = {},
             subscribeLevel2 = {},
             unsubscribeLevel2 = {},
             favoriteStore = MemoryFavoriteStore(),
         )
-        var opened: Pair<String, String>? = null
         val idle = sample("ref-idle", "idle", "idle", "idle", "1")
         val waiting = sample("ref-waiting", "waiting", "waiting", "waiting", "2")
         val unknown = sample("ref-unknown", "unknown", "unknown", "unknown", "3", health = "unknown")
@@ -70,7 +65,6 @@ class WorkspaceOnlineProjectionTest {
                     onSelectWorkspace = {},
                     onBackToList = {},
                     onOpenSettings = {},
-                    onOpenSession = { ref, name -> opened = ref to name },
                 )
             }
         }
@@ -84,32 +78,16 @@ class WorkspaceOnlineProjectionTest {
         compose.waitForIdle()
         compose.onNodeWithTag("l2-row-ref-idle").assertExists()
         compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
-        compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
-        compose.onNodeWithTag("l2-offline-ref-unknown", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("l2-offline-ref-idle", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithTag("l2-offline-ref-waiting", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithTag("l2-row-ref-unknown").performClick()
-        compose.runOnIdle { assertNull(opened) }
+        compose.onNodeWithTag("l2-row-ref-unknown").assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-unknown", useUnmergedTree = true).assertDoesNotExist()
         assertEquals(listOf("ref-idle", "ref-waiting"), vm.level2.value.sessions.map { it.ref })
 
         vm.onFrame(Level2Frame(workspace = CWD, seq = 3, sessions = emptyList()))
         compose.waitForIdle()
-        compose.onNodeWithTag("l2-row-ref-idle").assertExists()
-        compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
-        compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
-        compose.onNodeWithTag("l2-offline-ref-idle", useUnmergedTree = true).assertExists()
-        compose.onAllNodesWithText("不在线", useUnmergedTree = true).assertCountEquals(3)
-        compose.onNodeWithTag("l2-row-ref-idle").performClick()
-        compose.runOnIdle { assertNull(opened) }
+        compose.onNodeWithTag("l2-row-ref-idle").assertDoesNotExist()
+        compose.onNodeWithTag("l2-row-ref-waiting").assertDoesNotExist()
+        compose.onNodeWithText("不在线", useUnmergedTree = true).assertDoesNotExist()
         assertTrue(vm.level2.value.sessions.isEmpty())
-
-        vm.onFrame(frame(4, idle, waiting, unknown))
-        compose.waitForIdle()
-        compose.onNodeWithTag("l2-offline-ref-idle", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithTag("l2-offline-ref-waiting", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithTag("l2-offline-ref-unknown", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithTag("l2-row-ref-idle").performClick()
-        compose.runOnIdle { assertEquals("ref-idle" to "idle", opened) }
     }
 
     private fun frame(seq: Long, vararg sessions: Session) = Level2Frame(
