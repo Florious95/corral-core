@@ -55,7 +55,7 @@ class ExternalSessionStatusUiTest {
     val compose = createComposeRule()
 
     @Test
-    fun fourAxisProjectionNeverTreatsUnknownAsIdleOrWorking() {
+    fun fourAxisProjectionKeepsUnknownActivityQuietWithoutVetoingKnownActivity() {
         assertEquals(
             SessionRowMotion.Working,
             sessionRowMotion(SessionStatus.Busy, "normal", true),
@@ -64,14 +64,25 @@ class ExternalSessionStatusUiTest {
             SessionRowMotion.Idle,
             sessionRowMotion(SessionStatus.Idle, "normal", true),
         )
+        // Unknown health is an independent lack of health evidence, not abnormal.
+        assertEquals(
+            SessionRowMotion.Working,
+            sessionRowMotion(SessionStatus.Busy, "unknown", true),
+        )
+        assertEquals(
+            SessionRowMotion.Idle,
+            sessionRowMotion(SessionStatus.Idle, "unknown", true),
+        )
         val none = listOf(
             Triple(SessionStatus.Busy, "abnormal", true),
             Triple(SessionStatus.Idle, "abnormal", true),
             Triple(SessionStatus.Unknown, "normal", true),
-            Triple(SessionStatus.Busy, "unknown", true),
-            Triple(SessionStatus.Idle, "unknown", true),
             Triple(SessionStatus.Unknown, "unknown", true),
             Triple(SessionStatus.Busy, "normal", false),
+            Triple(SessionStatus.Busy, "unknown", false),
+            Triple(SessionStatus.Idle, "unknown", false),
+            Triple(SessionStatus.Busy, "garbage", true),
+            Triple(SessionStatus.Busy, "", true),
             Triple(SessionStatus.Idle, "garbage", true),
         )
         none.forEach { (activity, health, online) ->
@@ -186,6 +197,32 @@ class ExternalSessionStatusUiTest {
         assertNotEquals("working lamp must change frames", working0, working1)
         assertEquals("idle lamp must stay static", idle0, idle1)
         assertTrue(working1.startsWith("working:"))
+    }
+
+    @Test
+    fun grokWorkingUnknownHealthAdvancesLampFrames() {
+        assertKnownActivityUnknownHealthAnimates("grok")
+    }
+
+    @Test
+    fun codexWorkingUnknownHealthAdvancesLampFrames() {
+        assertKnownActivityUnknownHealthAnimates("codex")
+    }
+
+    private fun assertKnownActivityUnknownHealthAnimates(provider: String) {
+        val row = item("$provider-working-unknown-health", SessionStatus.Busy, provider, "unknown")
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppTheme { SessionRow(row, "l2", {}, {}, false) }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val before = desc("l2-motion-${row.id}")
+        assertTrue("$provider authoritative working must animate", before.startsWith("working:"))
+        compose.mainClock.advanceTimeBy(950)
+        compose.mainClock.advanceTimeByFrame()
+        val after = desc("l2-motion-${row.id}")
+        assertTrue(after.startsWith("working:"))
+        assertNotEquals("$provider working lamp must advance frames", before, after)
     }
 
     @Test
