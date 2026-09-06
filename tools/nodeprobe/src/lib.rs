@@ -233,7 +233,7 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
     let mut nodes = Vec::with_capacity(panes.len());
     for p in panes {
         let comms = match snap.as_ref() {
-            Some(s) if p.pane_pid > 0 => proctree::walk_comms(s, p.pane_pid),
+            Some(s) if p.pane_pid > 0 => proctree::walk_identity_comms(s, p.pane_pid),
             _ => Vec::new(),
         };
         let ident = providers::match_comms(&comms);
