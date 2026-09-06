@@ -1,8 +1,8 @@
 {
   "binary": {
     "path": "/Users/alauda/.local/bin/nodeprobe",
-    "sha256": "8ef9c5fe89ae76f2c8eb6aeb16bf5fb9060a79bcf81aa4d790df3f4614c2fb5f",
-    "size": 770432
+    "sha256": "d60cacc86f5ec432ddf8562782b7eb483e46c8b17e45a43d6c48f7f69ec7497f",
+    "size": 600112
   },
   "corpora": [
     {
@@ -22,24 +22,15 @@
     "size": 3538
   },
   "platform": "darwin/arm64",
-  "source_commit": "863c316ff66add549f8fa6dd215cedeedd037f8b",
-  "source_tree": "ce667e3c464d0efb2ac9483862ff84a38008e674",
+  "source_commit": "f629d775357aba17124000ae090b11937c6be53c",
+  "source_tree": "1d330ccb9a3bc859a05fe6022c61d0cdca8ea440",
   "sources": {
     "Cargo.toml": "7fef1cb5ac3173215d94b3c450fde0a928cd5af2ac304b4cc7111f5beb9bc08f",
     "Cargo.lock": "297185c9c0683bdaeadaf4d57a0688c6b91bcfe43a2495a86a9181a479749696",
-    "README.md": "59d48e9375d6334ac4c80372f6206c5b0ad041e51a2528de05194f16ad1de47c",
-    "docs/api-architecture.md": "88e2ac8f8bbfe81a230cee9de82866ff3f3f25d04c31888f02fcdbcce62f557f",
-    "docs/consumer-migration-map.md": "40fc2cbfa14fee2af6f7044af33a95643e0015f4cd88d4e32f2cce2f3d849849",
-    "pi/nodeprobe-pi-activity.js": "ee8b088ef78428e7e74b905d8e770d4271562f2778a083da489612713f43533c",
-    "src/classify.rs": "8e04ba11aa1ebc91c869a55ec887f66b6a0df5ae23cf04347726da6087e5736f",
-    "src/lib.rs": "6e5448a1b201e28824abd3d03498635b561af758a8492a85e89e1849b1ec4b25",
-    "src/main.rs": "767698d753987ecc06858f178819f377f0fecf17487de1fcc4ae89805bd953a9",
-    "src/pi_activity.rs": "1760bb7be905788285953c43eb2f5ea2e3fc52310b82adfe676f0a4ce08ce8e5",
-    "src/proctree.rs": "a2552446bb8d66e0058cb14ccb8408fa8cdf2ca77c40350f68fbd33793f70d54",
-    "src/providers.rs": "5fa17fce92d0ca1b5525475526bc88e8ae3a8f6a44d981f45d7d1a9ec91a3a57",
-    "src/web.rs": "27a518f9a9e9ab2c1714f1ad5811f96499b2fea34302fcade22926faec98b192",
-    "tests/fake_tmux.rs": "432ab8f312662c796014f2b1462fa6d371598fd3b510424616a78be2d311ade0",
-    "tests/pi-deterministic.js": "cab70f837f19b6fc6a5791f8a8993aa234a8a3d0812111a0e2a1772a797965b1",
-    "tests/pi_extension.mjs": "2ca01c45862458477c691d100cbdd20b3938f37ea9f98a9bf0af71e0107e0ed9"
+    "src/classify.rs": "444b8b120a8135417ce2f6c4616184372b8abd18a21ba8e037570ba6e53495b3",
+    "src/lib.rs": "038dbbde3c34d955227534e5502cc7d7b05f727decd8e19df0d7701fa4256161",
+    "src/main.rs": "5deef1d9914945c6096e701cf669900da4728f67431bc64a4d1cdcf2c21f57c6",
+    "src/proctree.rs": "b774b6ded02fd6c7fca99a1a7610c386bed5131af77af91eb3c0913f3d42efdd",
+    "src/providers.rs": "dc5066d4c877984f21ac5553a00d0d60848c2ba83ecbedcc363444fc4a4e7f28"
   }
 }
