@@ -54,7 +54,7 @@ data class SessionItem(
     val path: String,
     val status: SessionStatus,
     val starred: Boolean,
-    /** 收藏页失联行：false 时标「不在线」，不得当成 Idle。默认在线（二级列表）。 */
+    /** 会话列表失联行：false 时标「不在线」，不得当成 Idle。收藏页不走这一面。 */
     val isOnline: Boolean = true,
     /** Canonical provider id from the status-core DTO. APP must not guess. */
     val provider: String = "unknown",
