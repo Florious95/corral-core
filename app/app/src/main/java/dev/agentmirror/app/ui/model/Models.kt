@@ -65,15 +65,15 @@ data class SessionItem(
 /**
  * Left-slot motion for the unified external list row.
  *
- * Working animation plays only when the row is online, health is normal, and
- * activity is working. Idle is the same lamp, static. Unknown/abnormal play
- * nothing and must not be labeled as idle or as repeated「未知」.
+ * Working animation follows known activity on an online row. Unknown health
+ * means health was not observed; it does not erase known working/idle activity.
+ * Abnormal or malformed health and unknown activity remain quiet.
  *
  * @contract
  * @pre [activity] is already fail-closed (unknown on divergence/garbage)
- * @post Working only for online+normal+Busy; Idle only for online+normal+Idle; else None
+ * @post Online+known activity renders for normal/unknown health; abnormal stays quiet
  * @err none
- * @inv unknown/abnormal/offline never become Idle or Working
+ * @inv unknown activity, abnormal/malformed health, and offline never animate
  * @consumes dev.agentmirror.app.workspace
  */
 enum class SessionRowMotion { Working, Idle, None }
@@ -83,9 +83,9 @@ enum class SessionRowMotion { Working, Idle, None }
  *
  * @contract
  * @pre activity is already fail-closed; health is the DTO health string
- * @post Working iff online+normal+Busy; Idle iff online+normal+Idle; else None
+ * @post Known activity survives unknown health; abnormal/malformed/offline yield None
  * @err none
- * @inv does not invent Idle from unknown
+ * @inv does not invent activity or health; health unknown is not health abnormal
  */
 fun sessionRowMotion(
     activity: SessionStatus,
@@ -93,7 +93,7 @@ fun sessionRowMotion(
     isOnline: Boolean,
 ): SessionRowMotion {
     if (!isOnline) return SessionRowMotion.None
-    if (health != "normal") return SessionRowMotion.None
+    if (health != "normal" && health != "unknown") return SessionRowMotion.None
     return when (activity) {
         SessionStatus.Busy -> SessionRowMotion.Working
         SessionStatus.Idle -> SessionRowMotion.Idle
