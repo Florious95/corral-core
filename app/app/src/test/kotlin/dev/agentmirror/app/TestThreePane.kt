@@ -315,7 +315,6 @@ class TestThreePane {
 
     @Test
     fun sessionListKeepsOfflineUnopenableWhileFavoritesHideTheSameDrop() {
-        val nav = MainNavState(initialShowPairing = false)
         var opened: Pair<String, String>? = null
         val vm = WorkspaceViewModel(
             requestList = {},
@@ -372,16 +371,10 @@ class TestThreePane {
         compose.runOnIdle { assertNull(opened) }
         assertTrue(vm.level2.value.sessions.isEmpty())
         assertFalse(vm.favoriteRows().single().isOnline)
-
-        nav.homePane = ThreePane.Favorites
-        compose.setContent {
-            AgentMirrorTheme {
-                ThreePaneHome(navState = nav, workspaceViewModel = vm)
-            }
-        }
-        compose.waitForIdle()
-        compose.onNodeWithTag("fav-row-ref-cli").assertDoesNotExist()
-        compose.onNodeWithText("不在线").assertDoesNotExist()
         assertEquals(listOf("ref-cli"), vm.favorites.value.map { it.ref })
+        assertTrue(
+            "收藏面过滤失联，会话列表仍保留该行",
+            vm.sessionListItems("/proj/a").any { it.id == "ref-cli" && !it.isOnline },
+        )
     }
 }

@@ -16,7 +16,9 @@
 
 package dev.agentmirror.app.workspace
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -96,7 +98,7 @@ class WorkspaceOnlineProjectionTest {
         compose.onNodeWithTag("l2-row-ref-waiting").assertExists()
         compose.onNodeWithTag("l2-row-ref-unknown").assertExists()
         compose.onNodeWithTag("l2-offline-ref-idle", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("不在线", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithText("不在线", useUnmergedTree = true).assertCountEquals(3)
         compose.onNodeWithTag("l2-row-ref-idle").performClick()
         compose.runOnIdle { assertNull(opened) }
         assertTrue(vm.level2.value.sessions.isEmpty())
