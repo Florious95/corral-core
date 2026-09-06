@@ -361,13 +361,13 @@ class TestThreePane {
         }
         compose.waitForIdle()
         compose.onNodeWithTag("l2-row-ref-cli").assertExists()
-        compose.onNodeWithTag("l2-offline-ref-cli").assertDoesNotExist()
+        compose.onNodeWithTag("l2-offline-ref-cli", useUnmergedTree = true).assertDoesNotExist()
 
         vm.onFrame(Level2Frame(workspace = "/proj/a", seq = 2, sessions = emptyList()))
         compose.waitForIdle()
         compose.onNodeWithTag("l2-row-ref-cli").assertExists()
-        compose.onNodeWithTag("l2-offline-ref-cli").assertExists()
-        compose.onNodeWithText("不在线").assertExists()
+        compose.onNodeWithTag("l2-offline-ref-cli", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("不在线", useUnmergedTree = true).assertExists()
         compose.onNodeWithTag("l2-row-ref-cli").performClick()
         compose.runOnIdle { assertNull(opened) }
         assertTrue(vm.level2.value.sessions.isEmpty())
