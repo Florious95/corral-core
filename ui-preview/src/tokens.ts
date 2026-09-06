@@ -132,7 +132,7 @@ export const DarkPalette: AppPalette = {
   inputText: '#E4EBF7',
   inputPlaceholder: '#7286A8',
   promptGlyph: '#4FD1C0',
-  sendEnabledBg: '#3B7BF6',
+  sendEnabledBg: '#77A6FF', // same as accent — one filled primary only
   sendEnabledFg: '#FFFFFF',
   sendDisabledBg: 'rgba(120, 160, 255, 0.09)',
   sendDisabledFg: 'rgba(196, 208, 230, 0.30)',
@@ -152,7 +152,7 @@ export const DarkPalette: AppPalette = {
   chipBg: 'rgba(120, 160, 255, 0.09)',
   chipText: '#95A8C8',
   chipPressed: 'rgba(120, 160, 255, 0.20)',
-  chipSelectedBg: '#3B7BF6',
+  chipSelectedBg: '#77A6FF',
   chipSelectedText: '#FFFFFF',
   outlineButtonBorder: 'rgba(120, 160, 255, 0.20)',
   outlineButtonText: '#AEBFDA',
