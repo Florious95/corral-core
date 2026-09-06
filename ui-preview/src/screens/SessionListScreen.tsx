@@ -20,7 +20,17 @@ export function SessionListScreen({
     <div className="screen push-in">
       <div className="topbar">
         <button type="button" className="back-affordance" onClick={onBack}>
-          ‹ 工作区
+          <svg width="16" height="16" viewBox="0 0 22 22" aria-hidden>
+            <path
+              d="M14.1 4.8L7.5 11l6.6 6.2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          工作区
         </button>
         <div style={{ flex: 1 }} />
         <span className="lan-pill">LAN</span>

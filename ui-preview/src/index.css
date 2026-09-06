@@ -387,7 +387,7 @@ button {
   height: 2px;
   border-radius: 0 0 2px 2px;
   background: var(--nav-rail);
-  transition: transform 320ms var(--ease);
+  transition: left 320ms var(--ease);
 }
 
 .topbar {
@@ -517,9 +517,11 @@ button {
   color: var(--term-fg);
 }
 
-.term-line.in::before,
-.term-prompt {
+.term-prompt,
+.prompt-glyph {
   color: var(--prompt);
+  font-family: var(--font-mono);
+  font-weight: 700;
 }
 
 .term-line.key {

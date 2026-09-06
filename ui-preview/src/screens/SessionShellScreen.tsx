@@ -26,7 +26,7 @@ function TermLines({ lines, fontSize }: { lines: TermLine[]; fontSize: number })
           </div>
         ) : (
           <div key={ln.id} className={`term-line ${ln.kind}`}>
-            {ln.kind === 'in' ? <span className="term-prompt">❯ </span> : null}
+            {ln.kind === 'in' ? <span className="term-prompt">› </span> : null}
             {ln.text}
           </div>
         ),
@@ -63,7 +63,16 @@ export function SessionShellScreen({
     <div className="screen push-in">
       <div className="topbar">
         <button type="button" className="icon-btn" onClick={onBack} aria-label="返回">
-          ‹
+          <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden>
+            <path
+              d="M14.1 4.8L7.5 11l6.6 6.2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
         <div className="shell-title">
           <i className={`lamp ${session.status}`} />
@@ -106,7 +115,9 @@ export function SessionShellScreen({
               onSend()
             }}
           >
-            <span aria-hidden>❯</span>
+            <span className="prompt-glyph" aria-hidden>
+              ›
+            </span>
             <input
               value={draft}
               onChange={(e) => onDraft(e.target.value)}

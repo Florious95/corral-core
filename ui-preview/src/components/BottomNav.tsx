@@ -24,6 +24,7 @@ export function BottomNav({
           key={tab.id}
           type="button"
           className={`nav-cell${selected === tab.id ? ' active' : ''}`}
+          data-tab={tab.id}
           onClick={() => onSelect(tab.id)}
           aria-current={selected === tab.id ? 'page' : undefined}
         >
@@ -33,7 +34,7 @@ export function BottomNav({
           <span className="nav-label">{tab.label}</span>
         </button>
       ))}
-      <div className="nav-rail" style={{ transform: `translateX(${offset})` }} />
+      <div className="nav-rail" style={{ left: offset }} />
     </nav>
   )
 }

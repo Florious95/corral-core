@@ -72,7 +72,7 @@ export function SettingsScreen({
             ))}
           </div>
           <div className="preview-line" style={{ fontSize }}>
-            <span className="prompt">❯</span>
+            <span className="prompt">›</span>
             <span>claim-leader --team wiki-team</span>
           </div>
         </section>

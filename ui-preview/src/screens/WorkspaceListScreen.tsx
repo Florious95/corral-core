@@ -29,7 +29,7 @@ export function WorkspaceListScreen({
           return (
             <button key={ws.id} type="button" className="row" onClick={() => onOpen(ws.id)}>
               <div className="glyph" aria-hidden>
-                ❯
+                ›
               </div>
               <div className="row-body">
                 <div className="row-title">{ws.name}</div>
