@@ -52,14 +52,14 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
  * Unified ordinary/favorite session row (title + cwd path, 66dp).
- * Left: existing CLI working lamp (animated iff working+normal) or「不在线」.
+ * Left: existing CLI working lamp (animated iff online+working) or「不在线」.
  * Middle: display name and path. Right: official Provider mark only.
  * The row is the sole gesture owner: short-press opens when online; long-press
  * shows exactly one favorite action. Icons and the lamp are not clickable.
  *
  * @contract
- * @pre item.provider/health/status are fail-closed DTO fields
- * @post 66dp title+path; lamp motion from sessionRowMotion; mark has no gestures
+ * @pre item.provider/status are fail-closed DTO fields; health remains metadata only
+ * @post 66dp title+path; lamp motion from activity+online; mark has no gestures
  * @err none
  * @inv short-press opens only when online; long-press is the single favorite action
  * @consumes dev.agentmirror.app
@@ -80,7 +80,7 @@ fun SessionRow(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     var menu by remember { mutableStateOf(false) }
-    val motion = sessionRowMotion(item.status, item.health, item.isOnline)
+    val motion = sessionRowMotion(item.status, item.isOnline)
     val rowHeight = Dims.rowHeightWithSubtitle
     val actionLabel = if (unfavoriteOnly || item.starred) "取消收藏" else "收藏"
     Box {

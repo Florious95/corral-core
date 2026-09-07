@@ -83,7 +83,7 @@ class ExternalSessionStatusUiTest {
                     assertEquals(
                         "activity=$activity health=$health online=$online",
                         expected,
-                        sessionRowMotion(row.status, row.health, row.isOnline),
+                        sessionRowMotion(row.status, row.isOnline),
                     )
                     assertEquals(health, row.health)
                 }
@@ -110,7 +110,7 @@ class ExternalSessionStatusUiTest {
         assertEquals("unknown", item.health)
         assertEquals(
             SessionRowMotion.Working,
-            sessionRowMotion(item.status, item.health, item.isOnline),
+            sessionRowMotion(item.status, item.isOnline),
         )
     }
 
@@ -200,7 +200,7 @@ class ExternalSessionStatusUiTest {
     fun piWorkingDtoProjectsToWorkingMotionIndependentOfHealthAndProvider() {
         assertEquals(
             SessionRowMotion.Working,
-            sessionRowMotion(SessionStatus.Busy, "normal", true),
+            sessionRowMotion(SessionStatus.Busy, true),
         )
         val piWorking = item("pi-w", SessionStatus.Busy, "pi", "normal")
         val piIdle = item("pi-i", SessionStatus.Idle, "pi", "normal")
@@ -208,19 +208,19 @@ class ExternalSessionStatusUiTest {
         val piAbnormal = item("pi-a", SessionStatus.Busy, "pi", "abnormal")
         assertEquals(
             SessionRowMotion.Working,
-            sessionRowMotion(piWorking.status, piWorking.health, piWorking.isOnline),
+            sessionRowMotion(piWorking.status, piWorking.isOnline),
         )
         assertEquals(
             SessionRowMotion.Idle,
-            sessionRowMotion(piIdle.status, piIdle.health, piIdle.isOnline),
+            sessionRowMotion(piIdle.status, piIdle.isOnline),
         )
         assertEquals(
             SessionRowMotion.None,
-            sessionRowMotion(piUnknown.status, piUnknown.health, piUnknown.isOnline),
+            sessionRowMotion(piUnknown.status, piUnknown.isOnline),
         )
         assertEquals(
             SessionRowMotion.Working,
-            sessionRowMotion(piAbnormal.status, piAbnormal.health, piAbnormal.isOnline),
+            sessionRowMotion(piAbnormal.status, piAbnormal.isOnline),
         )
         assertEquals("pi", piWorking.provider)
     }

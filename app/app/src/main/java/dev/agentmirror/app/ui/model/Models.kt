@@ -65,35 +65,33 @@ data class SessionItem(
 /**
  * Left-slot motion for the unified external list row.
  *
- * Working animation follows known activity on an online row. Unknown health
- * means health was not observed; it does not erase known working/idle activity.
- * Abnormal or malformed health and unknown activity remain quiet.
+ * Working or idle motion follows already-resolved activity on an online row.
+ * Health remains an independent metadata axis and never changes this motion.
+ * Unknown activity and offline rows remain quiet.
  *
  * @contract
  * @pre [activity] is already fail-closed (unknown on divergence/garbage)
- * @post Online+known activity renders for normal/unknown health; abnormal stays quiet
+ * @post Online+known activity renders; offline or unknown activity yields None
  * @err none
- * @inv unknown activity, abnormal/malformed health, and offline never animate
+ * @inv health never changes motion; unknown activity and offline never animate
  * @consumes dev.agentmirror.app.workspace
  */
 enum class SessionRowMotion { Working, Idle, None }
 
 /**
- * Fail-closed left-slot motion from the four-axis DTO.
+ * Fail-closed left-slot motion from the resolved activity and online state.
  *
  * @contract
- * @pre activity is already fail-closed; health is the DTO health string
- * @post Known activity survives unknown health; abnormal/malformed/offline yield None
+ * @pre activity is already fail-closed (unknown on divergence/garbage)
+ * @post Online+Busy yields Working; online+Idle yields Idle; otherwise None
  * @err none
- * @inv does not invent activity or health; health unknown is not health abnormal
+ * @inv health metadata is not consulted; no motion is invented for unknown/offline rows
  */
 fun sessionRowMotion(
     activity: SessionStatus,
-    health: String,
     isOnline: Boolean,
 ): SessionRowMotion {
     if (!isOnline) return SessionRowMotion.None
-    if (health != "normal" && health != "unknown") return SessionRowMotion.None
     return when (activity) {
         SessionStatus.Busy -> SessionRowMotion.Working
         SessionStatus.Idle -> SessionRowMotion.Idle
