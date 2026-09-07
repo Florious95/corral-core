@@ -184,7 +184,6 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	go c.relay(subCtx, sub, ch)
 
 	var snap []byte
-	var err error
 	if c.snapshotFn != nil {
 		snap, err = c.snapshotFn(c.ctx, br)
 	} else {
