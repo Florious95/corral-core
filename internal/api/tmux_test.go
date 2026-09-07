@@ -112,6 +112,18 @@ func (te *tmuxEnv) readBinaryFrame() protocol.BinaryPayload {
 	return payload
 }
 
+// mirrorContains matches the wire bytes while treating CR and LF as
+// equivalent line boundaries. A PTY-backed bash pane can emit CR before an
+// output line; tests must not confuse that real terminal framing with missing
+// mirror output.
+func mirrorContains(data []byte, want string) bool {
+	if bytes.Contains(data, []byte(want)) {
+		return true
+	}
+	normalized := bytes.ReplaceAll(data, []byte{'\r'}, []byte{'\n'})
+	return bytes.Contains(normalized, []byte(want))
+}
+
 // waitForMirror drains frames until a binary mirror frame's data contains want
 // as a substring. Control frames (list_delta, input_ack, …) that interleave on
 // the same connection are skipped; the positive control is that the mirror
@@ -138,10 +150,49 @@ func (te *tmuxEnv) waitForMirror(want string) {
 			te.t.Fatalf("decode mirror frame: %v", err)
 		}
 		got.Write(payload.Data)
-		if bytes.Contains(got.Bytes(), []byte(want)) {
+		if mirrorContains(got.Bytes(), want) {
 			return
 		}
 	}
+}
+
+// waitForMirrorAndInputAck drains both channels because the server may enqueue
+// input_ack before the corresponding mirror delta. The old NoEnter assertion
+// waited for the mirror first and then lost an already-consumed ack.
+func (te *tmuxEnv) waitForMirrorAndInputAck(want string, reqID uint32) protocol.InputAck {
+	te.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	var got bytes.Buffer
+	var ack *protocol.InputAck
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		typ, data, err := te.wsEnv.conn.Read(ctx)
+		cancel()
+		if err != nil {
+			te.t.Fatalf("mirror/ack read: %v", err)
+		}
+		if typ == websocket.MessageBinary {
+			payload, err := protocol.DecodeBinary(data)
+			if err != nil {
+				te.t.Fatalf("decode mirror/ack binary: %v", err)
+			}
+			got.Write(payload.Data)
+		} else {
+			typed, err := protocol.UnmarshalFrame(data)
+			if err != nil {
+				te.t.Fatalf("decode mirror/ack control: %v", err)
+			}
+			if candidate, ok := typed.(protocol.InputAck); ok && candidate.ReqID == reqID {
+				copy := candidate
+				ack = &copy
+			}
+		}
+		if ack != nil && mirrorContains(got.Bytes(), want) {
+			return *ack
+		}
+	}
+	te.t.Fatalf("mirror/ack timeout: want=%q req_id=%d ack_seen=%t", want, reqID, ack != nil)
+	return protocol.InputAck{}
 }
 
 // runTmuxCmd runs tmux -S sock <args> with the scrubbed env.
