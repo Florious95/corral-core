@@ -135,6 +135,10 @@ jobs:
           run_named_test ./internal/api TestWSQueueOverflowAbortsOnceAndDiscardsQueue
           run_named_test ./internal/api TestRelayLossAbortsConnectionAndDropsQueuedDeltas
           run_named_test ./internal/api TestAbortDoesNotFlushDequeuedWriterFrame
+          run_named_test ./internal/api TestInitialSubscribeLossCancelsCapture
+          run_named_test ./internal/api TestInitialSubscribeLossCancelsFirstFrameQueue
+          run_named_test ./internal/api TestInitialSubscribeCaptureErrorReleasesGeometry
+          run_named_test ./internal/api TestOverflowDisconnectReplayStaticOracle
       - name: Preserve authentication, displaced-pipe, geometry, and fanout controls
         shell: bash
         run: |
