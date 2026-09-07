@@ -128,7 +128,7 @@ jobs:
           PYCODE
           test "$(uname -m)" = arm64
           test -z "$(git status --porcelain --untracked-files=all)"
-          file "$AGENTMIRROR_NODEPROBE_BIN" > "$root/nodeprobe-platform.txt"
+          file "$GITHUB_WORKSPACE/../nodeprobe-source/tools/nodeprobe/artifacts/nodeprobe-darwin-arm64" > "$root/nodeprobe-platform.txt"
           go build -o "$root/agentmirrord" ./cmd/agentmirrord
           shasum -a 256 "$root/agentmirrord" > "$root/daemon-sha256.txt"
           go version -m "$root/agentmirrord" > "$root/daemon-build.txt"
