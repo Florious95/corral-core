@@ -43,6 +43,10 @@ func TestCandidateDaemonNodeprobeGSAFE(t *testing.T) {
 		_ = os.Remove(socket)
 	})
 
+	if out, err := exec.Command(realTmux, "-S", socket, "list-sessions", "-F", "#{socket_path}").Output(); err != nil || strings.TrimSpace(string(out)) != socket {
+		t.Fatalf("private socket self-check failed: %v", err)
+	}
+
 	child := exec.Command(bin, "-listen", addr, "-token", token, "-state-dir", state, "-upload-dir", uploads)
 	child.Stdout = nilWriter{}
 	child.Stderr = nilWriter{}
@@ -53,7 +57,8 @@ func TestCandidateDaemonNodeprobeGSAFE(t *testing.T) {
 	stopped := false
 	t.Cleanup(func() {
 		if !stopped && child.Process != nil {
-			_ = child.Process.Interrupt()
+			_ = child.Process.Signal(os.Interrupt)
+			_ = child.Process.Kill()
 			_ = child.Wait()
 		}
 	})
@@ -95,7 +100,7 @@ func TestCandidateDaemonNodeprobeGSAFE(t *testing.T) {
 	}
 	t.Logf("daemon_listing workspace_count=%d session_count=%d ref_present=%t provider=%s activity=%s", len(listing.Workspaces), len(listing.Workspaces[0].Sessions), sess.Ref != "", sess.Provider, sess.Activity)
 	if child.Process != nil {
-		_ = child.Process.Interrupt()
+		_ = child.Process.Signal(os.Interrupt)
 	}
 	wait := make(chan error, 1)
 	go func() { wait <- child.Wait() }()

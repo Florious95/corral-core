@@ -19,11 +19,17 @@ jobs:
   s6-red:
     name: Frozen S6 manifest red
     runs-on: macos-14
+    timeout-minutes: 15
     steps:
       - name: Checkout full history
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
       - name: Run named S6 red boundary
         shell: bash
         run: |
@@ -56,149 +62,175 @@ jobs:
             ${{ runner.temp }}/s6-red-receipt.txt
 
   candidate:
-    name: Go binding and daemon G-SAFE
+    name: Go binding and Darwin daemon safety
     needs: s6-red
     runs-on: macos-14
+    timeout-minutes: 25
     steps:
-      - name: Checkout serve source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Checkout exact N source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: Florious95/corral-core
-          ref: 6e47021a7e3502843d490a2eeb0342c78c0231f3
+          ref: 4619b561ddbb8e931fbf17b280cd69edad52f58d
           path: nodeprobe-source
-          fetch-depth: 1
-      - name: Install toolchains
-        uses: dtolnay/rust-toolchain@stable
-      - name: Select tmux
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify Git N inputs and build daemon only
         shell: bash
         run: |
           set -euo pipefail
+          root="$RUNNER_TEMP/sg"
+          mkdir -p "$root"
           if ! command -v tmux >/dev/null 2>&1; then brew install tmux; fi
           echo "TMUX_REAL=$(command -v tmux)" >> "$GITHUB_ENV"
-      - name: Build exact N binary and candidate daemon
-        shell: bash
-        run: |
-          set -euo pipefail
-          export CARGO_INCREMENTAL=0
-          cargo build --manifest-path nodeprobe-source/tools/nodeprobe/Cargo.toml --locked --release
-          go build -o "$RUNNER_TEMP/agentmirrord" ./cmd/agentmirrord
-          file nodeprobe-source/tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-platform.txt"
-          shasum -a 256 nodeprobe-source/tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-sha256.txt"
-          wc -c nodeprobe-source/tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-size.txt"
-          shasum -a 256 "$RUNNER_TEMP/agentmirrord" | tee "$RUNNER_TEMP/daemon-sha256.txt"
-      - name: Prepare private G-SAFE wrappers
-        shell: bash
-        run: |
-          set -euo pipefail
-          root="$RUNNER_TEMP/nodeprobe-gsafe"
-          mkdir -p "$root/bin" "$root/tmux/tmux-$(id -u)"
           echo "AGENTMIRROR_GSAFE_ROOT=$root" >> "$GITHUB_ENV"
-          echo "AGENTMIRROR_GSAFE_SOCKET=$root/tmux/tmux-$(id -u)/default" >> "$GITHUB_ENV"
-          echo "AGENTMIRROR_GSAFE_TRACE=$root/candidate-trace.log" >> "$GITHUB_ENV"
-          echo "AGENTMIRROR_GSAFE_CONTROL_TRACE=$root/control-trace.log" >> "$GITHUB_ENV"
-          cat > "$root/bin/tmux" <<'SH'
-          #!/bin/sh
-          set -eu
-          trace="${NODEPROBE_TRACE:-${TMPDIR:?}/candidate-trace.log}"
-          sock=""
-          category=other
-          prev=""
-          for arg in "$@"; do
-            if [ "$prev" = 1 ]; then sock="$arg"; prev=""; continue; fi
-            if [ "$arg" = "-S" ]; then prev=1; continue; fi
-            case "$arg" in
-              list-panes) category=list-panes;;
-              capture-pane) category=capture-pane;;
-              attach-session|attach|send-keys|pipe-pane|display-message) category=forbidden;;
-            esac
-          done
-          bound=0
-          [ "$sock" = "${AGENTMIRROR_GSAFE_SOCKET:?}" ] && bound=1
-          case "$category" in
-            capture-pane|forbidden)
-              printf 'tool=tmux category=%s socket_bound=%s\nblocked=%s\n' "$category" "$bound" "$category" >> "$trace"
-              exit 97
-              ;;
-            list-panes)
-              [ "$bound" = 1 ] || exit 98
-              printf 'tool=tmux category=list-panes socket_bound=1\n' >> "$trace"
-              out="$(${TMUX_REAL:?} "$@")"
-              printf '%s\n' "$out" | awk -F '\037' 'NR == 1 { print $5 }' > "${AGENTMIRROR_GSAFE_PID_FILE:?}"
-              printf '%s\n' "$out"
-              ;;
-            *)
-              exec "${TMUX_REAL:?}" "$@"
-              ;;
-          esac
-          SH
-          cat > "$root/bin/ps" <<'SH'
-          #!/bin/sh
-          set -eu
-          trace="${NODEPROBE_TRACE:-${TMPDIR:?}/candidate-trace.log}"
-          safe=0
-          for arg in "$@"; do [ "$arg" = "pid=,ppid=,stat=,comm=" ] && safe=1; done
-          if [ "$safe" = 1 ]; then
-            printf 'tool=ps category=ps-narrow socket_bound=not-applicable\n' >> "$trace"
-            printf '%s 1 S+ /usr/bin/codex\n' "$(cat "${AGENTMIRROR_GSAFE_PID_FILE:?}")"
-            exit 0
-          fi
-          printf 'tool=ps category=ps-dangerous socket_bound=not-applicable\nblocked=ps-dangerous\n' >> "$trace"
-          exit 97
-          SH
-          chmod +x "$root/bin/tmux" "$root/bin/ps"
-          : > "$root/candidate-trace.log"
-          : > "$root/control-trace.log"
-          echo "AGENTMIRROR_GSAFE_PID_FILE=$root/pane.pid" >> "$GITHUB_ENV"
-          echo "PATH=$root/bin:$PATH" >> "$GITHUB_ENV"
-      - name: Run uncached Go binding and real daemon G-SAFE
+          python3 - <<'PYCODE'
+          import hashlib, json, os, pathlib, subprocess
+          source=pathlib.Path('nodeprobe-source').resolve()
+          manifest=json.loads(pathlib.Path('internal/nodeprobe/accepted-source.json').read_text())
+          actual=subprocess.check_output(['git','-C',str(source),'rev-parse',manifest['source_commit']+'^{tree}'],text=True).strip()
+          assert actual==manifest['source_tree']
+          inputs=[('AGENTMIRROR_NODEPROBE_BIN','tools/nodeprobe/artifacts/nodeprobe-darwin-arm64',manifest['binary']),
+                  ('AGENTMIRROR_NODEPROBE_PI_EXTENSION','tools/nodeprobe/pi/nodeprobe-pi-activity.js',manifest['pi_extension']),
+                  ('NODEPROBE_FIXTURES',manifest['corpora'][0]['path'],manifest['corpora'][0]),
+                  ('NODEPROBE_PROVIDERS',manifest['corpora'][1]['path'],manifest['corpora'][1])]
+          records=[]
+          for env,path,coord in inputs:
+              p=source/path; data=p.read_bytes()
+              assert hashlib.sha256(data).hexdigest()==coord['sha256'],path
+              if 'size' in coord: assert len(data)==coord['size']
+              blob=subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD:'+path],text=True).strip()
+              if env=='AGENTMIRROR_NODEPROBE_BIN': assert blob=='19a33813679337252984a4b20fcf51a39c6e382e'
+              records.append(dict(path=str(p),sha256=coord['sha256'],bytes=len(data),blob=blob))
+              with open(os.environ['GITHUB_ENV'],'a') as f: f.write(env+'='+str(p)+'\n')
+          receipt=dict(serve_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),serve_tree=subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),n_actual_build_checkout=manifest['source_commit'],n_source_tree=actual,n_artifact_checkout=subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip(),run_id=os.environ['GITHUB_RUN_ID'],run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],inputs=records)
+          pathlib.Path(os.environ['RUNNER_TEMP'],'sg','identity.json').write_text(json.dumps(receipt,indent=2))
+          PYCODE
+          test "$(uname -m)" = arm64
+          file nodeprobe-source/tools/nodeprobe/artifacts/nodeprobe-darwin-arm64 > "$root/nodeprobe-platform.txt"
+          go build -o "$root/agentmirrord" ./cmd/agentmirrord
+          shasum -a 256 "$root/agentmirrord" > "$root/daemon-sha256.txt"
+          go version -m "$root/agentmirrord" > "$root/daemon-build.txt"
+          echo "AGENTMIRROR_DAEMON_BIN=$root/agentmirrord" >> "$GITHUB_ENV"
+      - name: Uncached compatibility with real tmux and isolated fixtures
+        id: compatibility
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          export AGENTMIRROR_GSAFE_DAEMON=1
-          export AGENTMIRROR_GSAFE_ADDR=127.0.0.1:19086
-          export AGENTMIRROR_GSAFE_URL=ws://127.0.0.1:19086/ws
-          export AGENTMIRROR_GSAFE_TOKEN=serve-gsafe-token
+          go test -count=1 -json -timeout=8m ./internal/nodeprobe ./internal/api ./internal/discovery ./cmd/agentmirrord > "$AGENTMIRROR_GSAFE_ROOT/go-test.jsonl"
+      - name: Prepare fail-closed observation wrappers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          import os,pathlib,textwrap
+          root=pathlib.Path(os.environ['AGENTMIRROR_GSAFE_ROOT'])
+          sock=root/'tmux'/('tmux-'+str(os.getuid()))/'default'
+          sock.parent.mkdir(parents=True)
+          assert len(str(sock).encode())<100
+          (root/'bin').mkdir()
+          prefix='#!/usr/bin/env python3\nimport os,sys,pathlib,subprocess,json\nROOT=pathlib.Path('+repr(str(root))+')\nSOCKET='+repr(str(sock))+'\nREAL='+repr(os.environ['TMUX_REAL'])+'\n'
+          code=r'''
+          args=sys.argv[1:]
+          tool=pathlib.Path(sys.argv[0]).name
+          phase=(ROOT/'phase').read_text().strip()
+          trace=ROOT/(phase+'-trace.jsonl')
+          def record(category,allowed,scope='probe'):
+              with trace.open('a') as f: f.write(json.dumps(dict(tool=tool,category=category,allowed=allowed,scope=scope))+'\n')
+          nfmt='#{session_name}\x1f#{window_index}\x1f#{window_name}\x1f#{pane_id}\x1f#{pane_pid}\x1f#{pane_current_command}\x1f#{pane_title}\x1f#{pane_current_path}'
+          dfmt='#{session_name}|#{window_index}|#{pane_id}|#{pane_current_path}|#{pane_current_command}|#{pane_pid}|#{pane_title}|#{pane_width}x#{pane_height}|#{window_name}'
+          if tool=='tmux':
+              if len(args)!=6 or args[:5]!=['-S',SOCKET,'list-panes','-a','-F'] or args[5] not in (nfmt,dfmt):
+                  record('tmux-rejected',False); sys.exit(97)
+              scope='probe' if args[5]==nfmt else 'discovery'
+              record('list-panes',True,scope)
+              out=subprocess.check_output([REAL]+args)
+              if scope=='probe':
+                  pid=out.decode().splitlines()[0].split('\x1f')[4]
+                  assert pid.isdecimal()
+                  (ROOT/'pane.pid').write_text(pid)
+              sys.stdout.buffer.write(out)
+          elif tool=='ps':
+              if args!=['-axo','pid=,ppid=,stat=,comm=']:
+                  record('ps-rejected',False); sys.exit(97)
+              record('ps-narrow-synthetic',True)
+              pid=(ROOT/'pane.pid').read_text().strip(); assert pid.isdecimal()
+              print(pid+' 1 S+ /usr/bin/codex')
+          else:
+              record('unknown-tool',False); sys.exit(97)
+          '''
+          for tool in ('tmux','ps'):
+              p=root/'bin'/tool; p.write_text(prefix+textwrap.dedent(code)); p.chmod(0o700)
+          (root/'phase').write_text('controls')
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('AGENTMIRROR_GSAFE_SOCKET='+str(sock)+'\n')
+          PYCODE
+      - name: Prove wrappers reject forbidden and mixed requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          import os,pathlib,subprocess,json
+          root=pathlib.Path(os.environ['AGENTMIRROR_GSAFE_ROOT']); socket=os.environ['AGENTMIRROR_GSAFE_SOCKET']
+          requests=[('tmux',['-S',socket,'capture-pane','-p']),('tmux',['-S',socket,'unknown-command']),('ps',['ax']),('ps',['-axo','pid=,ppid=,stat=,comm=','-o','args='])]
+          for tool,args in requests:
+              assert subprocess.run([str(root/'bin'/tool)]+args,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5).returncode==97
+          rows=[json.loads(x) for x in (root/'controls-trace.jsonl').read_text().splitlines()]
+          assert len(rows)==4 and all(not x['allowed'] for x in rows)
+          PYCODE
+      - name: Direct Darwin artifact and actual daemon subprocess safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$AGENTMIRROR_GSAFE_ROOT"
+          export PATH="$root/bin:$PATH"
+          export TMUX_TMPDIR="$root/tmux" TMPDIR="$root"
+          export NODEPROBE_PI_ACTIVITY_DIR="$root/pi"
+          mkdir -p "$NODEPROBE_PI_ACTIVITY_DIR"
+          unset TMUX
+          cleanup() {
+            "$TMUX_REAL" -S "$AGENTMIRROR_GSAFE_SOCKET" kill-server >/dev/null 2>&1 || true
+            rm -f "$AGENTMIRROR_GSAFE_SOCKET"
+            test ! -e "$AGENTMIRROR_GSAFE_SOCKET"
+            echo 'socket_absent=true' > "$root/cleanup.txt"
+          }
+          trap cleanup EXIT
+          "$TMUX_REAL" -S "$AGENTMIRROR_GSAFE_SOCKET" -f /dev/null new-session -d -s direct -c "$root" 'sleep 60'
+          test "$("$TMUX_REAL" -S "$AGENTMIRROR_GSAFE_SOCKET" list-sessions -F '#{socket_path}')" = "$AGENTMIRROR_GSAFE_SOCKET"
+          echo direct > "$root/phase"
+          "$AGENTMIRROR_NODEPROBE_BIN" -S "$AGENTMIRROR_GSAFE_SOCKET" > "$root/direct.json"
+          "$TMUX_REAL" -S "$AGENTMIRROR_GSAFE_SOCKET" kill-server
+          rm -f "$AGENTMIRROR_GSAFE_SOCKET"
+          echo daemon > "$root/phase"
+          export AGENTMIRROR_GSAFE_DAEMON=1 AGENTMIRROR_GSAFE_ADDR=127.0.0.1:19086
+          export AGENTMIRROR_GSAFE_URL=ws://127.0.0.1:19086/ws AGENTMIRROR_GSAFE_TOKEN=serve-gsafe-token
           export AGENTMIRROR_GSAFE_TMUX_REAL="$TMUX_REAL"
-          export AGENTMIRROR_NODEPROBE_BIN="$GITHUB_WORKSPACE/nodeprobe-source/tools/nodeprobe/target/release/nodeprobe"
-          export NODEPROBE_FIXTURES="$GITHUB_WORKSPACE/nodeprobe-source/tools/nodeprobe/fixtures/titles.tsv"
-          export NODEPROBE_PROVIDERS="$GITHUB_WORKSPACE/nodeprobe-source/tools/nodeprobe/fixtures/providers.tsv"
-          export AGENTMIRROR_NODEPROBE_PI_EXTENSION="$GITHUB_WORKSPACE/nodeprobe-source/tools/nodeprobe/pi/nodeprobe-pi-activity.js"
-          export TMUX_TMPDIR="$AGENTMIRROR_GSAFE_ROOT/tmux"
-          export TMPDIR="$AGENTMIRROR_GSAFE_ROOT"
-          export NODEPROBE_TRACE="$AGENTMIRROR_GSAFE_TRACE"
-          export NODEPROBE_GSAFE_PID_FILE="$AGENTMIRROR_GSAFE_PID_FILE"
-          go test -count=1 ./internal/nodeprobe ./internal/api ./cmd/agentmirrord | tee "$AGENTMIRROR_GSAFE_ROOT/go-test.log"
-      - name: Inject and verify forbidden controls
-        shell: bash
-        run: |
-          set -euo pipefail
-          set +e
-          NODEPROBE_TRACE="$AGENTMIRROR_GSAFE_CONTROL_TRACE" "$AGENTMIRROR_GSAFE_ROOT/bin/tmux" -S "$AGENTMIRROR_GSAFE_SOCKET" capture-pane -p -t gsafe:0.0 >/dev/null 2>&1
-          capture_rc=$?
-          NODEPROBE_TRACE="$AGENTMIRROR_GSAFE_CONTROL_TRACE" "$AGENTMIRROR_GSAFE_ROOT/bin/ps" ax >/dev/null 2>&1
-          ps_rc=$?
-          set -e
-          printf 'capture_rc=%s\nps_dangerous_rc=%s\n' "$capture_rc" "$ps_rc" | tee "$AGENTMIRROR_GSAFE_ROOT/control-result.txt"
-          test "$capture_rc" = 97
-          test "$ps_rc" = 97
-          test -s "$AGENTMIRROR_GSAFE_TRACE"
-          grep -q 'category=list-panes socket_bound=1' "$AGENTMIRROR_GSAFE_TRACE"
-          grep -q 'category=ps-narrow' "$AGENTMIRROR_GSAFE_TRACE"
-          test "$(grep -c 'blocked=' "$AGENTMIRROR_GSAFE_TRACE" || true)" = 0
-          test "$(grep -c 'blocked=' "$AGENTMIRROR_GSAFE_CONTROL_TRACE" || true)" = 2
-          printf '{"positive_trace_lines":%s,"forbidden_rejections":%s}\n' "$(wc -l < "$AGENTMIRROR_GSAFE_TRACE" | tr -d ' ')" "$(grep -c 'blocked=' "$AGENTMIRROR_GSAFE_CONTROL_TRACE")" | tee "$AGENTMIRROR_GSAFE_ROOT/gsafe-receipt.json"
-      - name: Upload binding and G-SAFE evidence
+          go test -count=1 -json -timeout=45s ./cmd/agentmirrord -run '^TestCandidateDaemonNodeprobeGSAFE$' > "$root/daemon-test.jsonl"
+          python3 - <<'PYCODE'
+          import os,pathlib,json
+          root=pathlib.Path(os.environ['AGENTMIRROR_GSAFE_ROOT'])
+          report=json.loads((root/'direct.json').read_text())
+          assert report['schema_version']==1 and len(report['nodes'])==1
+          assert report['nodes'][0]['provider']=='codex'
+          for phase in ('direct','daemon'):
+              rows=[json.loads(x) for x in (root/(phase+'-trace.jsonl')).read_text().splitlines()]
+              assert rows and all(x['allowed'] for x in rows)
+              assert any(x['category']=='list-panes' and x['scope']=='probe' for x in rows)
+              assert any(x['category']=='ps-narrow-synthetic' for x in rows)
+          PYCODE
+      - name: Require compatibility success
         if: always()
-        uses: actions/upload-artifact@v4
+        shell: bash
+        run: test '${{ steps.compatibility.outcome }}' = success
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pr6-nodeprobe-serve-evidence
-          path: |
-            ${{ runner.temp }}/nodeprobe-gsafe
-            ${{ runner.temp }}/nodeprobe-platform.txt
-            ${{ runner.temp }}/nodeprobe-sha256.txt
-            ${{ runner.temp }}/nodeprobe-size.txt
-            ${{ runner.temp }}/daemon-sha256.txt
+          path: ${{ runner.temp }}/sg
