@@ -13,8 +13,10 @@
   "source": {
     "head": "dae7a69e61194aadd18b9db368b1dcf157d5be0d",
     "tree": "5314c23563a06eb97a1d76e42729701659136850",
-    "parents": [
-      "cf97d545672689b80fb80460bd3b295f88a50a64",
+    "parent": "4e49a0391becb76aef130d198555fa39ee4d17e4",
+    "merge_commit": "cf97d545672689b80fb80460bd3b295f88a50a64",
+    "merge_parents": [
+      "81790368e41900a9085c722e89147924f0806dfe",
       "23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5"
     ],
     "c86": "81790368e41900a9085c722e89147924f0806dfe",
@@ -22,14 +24,16 @@
     "owning_branch": "pr/nodeprobe-fg-comms",
     "pr_url": "https://github.com/Florious95/corral-core/pull/86",
     "pr_base": "pr/status-core-nodeprobe-863c",
-    "scope_check": "tools/nodeprobe only"
+    "author_diff_relative_c70": "tools/nodeprobe/** only",
+    "delivery_only_paths": ["DELIVERY.md", "N-RECEIPT.json"],
+    "scope_check": "no server/App author diff"
   },
   "source_artifacts": {
     "extension": {
       "path": "tools/nodeprobe/pi/nodeprobe-pi-activity.js",
       "git_blob": "67c1916ade725f73646f062fbf03d0cc22d6823d",
       "sha256": "51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27",
-      "bytes": 3571
+      "bytes": 3572
     },
     "titles_corpus": {
       "path": "tools/nodeprobe/fixtures/titles.tsv",
@@ -110,6 +114,10 @@
       "remote_free_kib": 9227512,
       "required_free_gib": 20,
       "authoritative_exit": null
+    },
+    "github_ci": {
+      "status": "unavailable",
+      "checks": "gh pr checks: no checks reported; gh workflow list: empty"
     },
     "candidate_remote": {
       "status": "blocked",
