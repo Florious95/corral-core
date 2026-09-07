@@ -75,10 +75,19 @@ jobs:
         with:
           repository: Florious95/corral-core
           ref: 4619b561ddbb8e931fbf17b280cd69edad52f58d
-          # Keep N outside S so the nested checkout cannot make S dirty and
-          # cannot flip the final daemon's Go VCS modified bit.
-          path: ../nodeprobe-source
+          # Checkout action confines path under GITHUB_WORKSPACE; relocate N
+          # beside S immediately so the build tree remains physically clean.
+          path: nodeprobe-source-transfer
           fetch-depth: 0
+      - name: Relocate N checkout beside S
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$GITHUB_WORKSPACE/nodeprobe-source-transfer/.git"
+          test ! -e "$GITHUB_WORKSPACE/../nodeprobe-source"
+          mv "$GITHUB_WORKSPACE/nodeprobe-source-transfer" "$GITHUB_WORKSPACE/../nodeprobe-source"
+          test -d "$GITHUB_WORKSPACE/../nodeprobe-source/.git"
+          test ! -e "$GITHUB_WORKSPACE/nodeprobe-source-transfer"
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
