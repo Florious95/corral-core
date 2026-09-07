@@ -1,6 +1,6 @@
 # NAME-A App 消费交付
 
-状态：`ci_verified_unaccepted`；作者未做最终组合/真机验收，等待独立验收席复核。未 merge、关闭 Issue、部署或产最终 APK。
+状态：`ci_verified_unaccepted`；作者仅冻结并构建供独立验收的 APK 候选，未做最终组合/真机验收。未 merge、关闭 Issue、部署。
 
 ## 冻结坐标与 PR
 
@@ -54,5 +54,15 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 
 - `python3 tools/basegen.py session-ui --pkgs dev.agentmirror.app` 已执行：`cards=2 fwd=5 rev=1 refs=[] field=no librarian=no`。
 - 修改后 ArchWiki 目标 UI 包 `dev.agentmirror.app.ui` strict-T3 exit `0`；workspace 包已有基线违规（L2UiState 缺 KDoc、6 条 T3-3、4 条 T3-4），A0 对照与最终相同违规，未扩大写界。原始输出在 `tmp-archwiki-*`。
-- 本机未执行 Gradle/Go/Rust；未启动 Grok Bot；未启动 AVD；未执行真实 Codex/Pi CLI 或最终组合链；未构建最终 APK。GitHub hosted JVM/Robolectric/Compose 绿不冒充最终真机/全链验收。
+- 本机未执行 Gradle/Go/Rust；未启动 Grok Bot；未启动 AVD；未执行真实 Codex/Pi CLI 或最终组合链。GitHub hosted JVM/Robolectric/Compose 绿及下述 hosted assemble 不冒充最终真机/全链验收。
 - 未读取凭据/profile、进程 argv、pane 正文、真实 socket/9900；无新增 Issue。完整红绿/矩阵/UI/架构/清理证据见本目录对应文件与 `tmp/`。
+
+## hosted APK 候选（供独立验收）
+
+- 冻结产品输入：PR89 `pr/name-app` head `04bfde8d161c244c9dfced3b5ab90d22d1460d86`，tree `6121f88087b80ba1014d843fcba13a3528598002`；base 仍为 `base/status-name-a0` @ `e42619b31803c28fec940f085d6897241ca7b9b5`。该 head 只增加本构建 CI 差量，产品树未再改动。
+- hosted run [34098991746](https://github.com/Florious95/corral-core/actions/runs/34098991746) 实际 checkout 上述 head；测试仍 `75/0/0/0`、41 tasks executed。assemble 命令：`cd app && ./gradlew --no-daemon --rerun-tasks -Pkotlin.compiler.execution.strategy=in-process :app:assembleRelease`，退出 `0`，`BUILD SUCCESSFUL in 2m 12s`，`57 actionable tasks: 57 executed`。远端日志 `assemble-release.log` SHA256 `dfc28af2ca2811d8fcb42ea8f2faceb036572eea0f2f2f289ee9f29e0845302e`。
+- hosted 原始 release APK：`35615021` bytes，SHA256 `ce64e1112c6f2e34e5c0d6a1a6bde7901805a29e97caa262f3b54a7f2f298cc2`；托管 runner 临时签名 SHA256 `26ac95b45086a91154c5d27edbdf621aa89bb2349b604cb4c014579e7bd50d08`，不是 accepted signer。
+- 为复用 accepted 签名流程，候选从上述 hosted APK 取得后在本席使用既有 Android debug keystore 重新签名（未读取或输出密钥/profile 原文）：绝对路径 `/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/name-app/tmp/name-a-release-download/AgentMirror-Three-Surface-NAME-A-04bfde8-signed.apk`，`35610017` bytes，SHA256 `bd4ababfcec3301c19ced02350ff2193f183311f9ec0bdd455145deab3b3e861`。
+- 参考 APK `/Users/alauda/Downloads/AgentMirror-Three-Surface-596fe6517-signed.apk`（`35655272` bytes，SHA256 `0c9aa3285689d9f4004fb2570f3e5af65bbab6e67437343a78496b15c6d2cf30`）与候选均为 package `dev.agentmirror.app`、versionCode `1`、versionName `0.1.0`、minSdk `26`、targetSdk `35`；均通过 APK v2/v3，candidate signer certificate SHA256 与参考同为 `ea427eb4e14f95654a66802b6558fbbf6f93f1ca69d8117795fb7cef376cb13b`，public-key SHA256 同为 `d06b9c686688af558cc1131b0eb384a6d5127b3cf85710066857d216078d4559`。静态 package/version/signer 核验通过；未做覆盖安装。
+- Git 载体：draft prerelease `name-a-04bfde8d-api35`，release id `383926908`，target `04bfde8d161c244c9dfced3b5ab90d22d1460d86`，资产 `AgentMirror-Three-Surface-NAME-A-04bfde8-signed.apk` 及 `.sha256`；release 下载回传与本地候选逐字节一致。Release URL：`https://github.com/Florious95/corral-core/releases/tag/untagged-4f0d7532db6432907935`。
+- 未闭门：独立验收仍需真实 CLI、AVD/Compose 组合验收及覆盖安装实测；本候选不宣称最终 APK 通过。
