@@ -1,0 +1,134 @@
+{
+  "schema_version": "nodeprobe-n-receipt-v1",
+  "status": "blocked_remote_build",
+  "seat": "status-probe-fix",
+  "role_identity": {
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "reasoning": "xhigh",
+    "whitelist_match": true
+  },
+  "repository": "Florious95/corral-core",
+  "worktree": ".team/nodes/status-probe-fix",
+  "source": {
+    "head": "bc50e11d4459660643274e8669f4b56f082ad55e",
+    "tree": "72082d98a39bdf375b3b50d9169f213e7daf5217",
+    "parents": [
+      "cf97d545672689b80fb80460bd3b295f88a50a64",
+      "23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5"
+    ],
+    "c86": "81790368e41900a9085c722e89147924f0806dfe",
+    "c70": "23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5",
+    "owning_branch": "pr/nodeprobe-fg-comms",
+    "pr_url": "https://github.com/Florious95/corral-core/pull/86",
+    "pr_base": "pr/status-core-nodeprobe-863c",
+    "scope_check": "tools/nodeprobe only"
+  },
+  "source_artifacts": {
+    "extension": {
+      "path": "tools/nodeprobe/pi/nodeprobe-pi-activity.js",
+      "git_blob": "67c1916ade725f73646f062fbf03d0cc22d6823d",
+      "sha256": "51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27",
+      "bytes": 3571
+    },
+    "titles_corpus": {
+      "path": "tools/nodeprobe/fixtures/titles.tsv",
+      "git_blob": "690e651f445793a36ed1cb6e6f6143e6ce5c989e",
+      "sha256": "cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58",
+      "bytes": 1332
+    },
+    "providers_corpus": {
+      "path": "tools/nodeprobe/fixtures/providers.tsv",
+      "git_blob": "e93afa54e473e90099f03cb932d9a54798c0dfe4",
+      "sha256": "c68f50115b33ae6a6806b463cc27c71d8bbfc92273435a533502e9bb84b8b522",
+      "bytes": 481
+    },
+    "binary": null
+  },
+  "red_before_fix": {
+    "old_binary_sha256": "d60cacc86f5ec432ddf8562782b7eb483e46c8b17e45a43d6c48f7f69ec7497f",
+    "old_binary_path": "/Users/alauda/.local/bin/nodeprobe",
+    "socket_scope": "private synthetic socket only",
+    "codex_frames": {
+      "frames": 10,
+      "all_exit_code": 1,
+      "result": "unknown/codex",
+      "evidence": "tmp/pre-red/codex-10-results.tsv"
+    },
+    "anti_control": {
+      "capture_injected_exit": 97,
+      "dangerous_ps_injected_exit": 97,
+      "old_probe_exit": 0,
+      "old_trace": "tmp/pre-red/trace/old-gsafe.log",
+      "old_sample_success_nodes": 0,
+      "note": "exit 0 plus JSON is not accepted as safety proof; injected forbidden calls were rejected"
+    },
+    "c70_boundary_harness": {
+      "source_commit": "e50a6e93bfb691977b4313fa9d2d465402a89d45",
+      "test_names": [
+        "t_n_missing_channel_must_not_be_normal",
+        "t_n_title_only_name_must_survive"
+      ],
+      "execution": "not executed: remote preflight blocked"
+    }
+  },
+  "required_semantics": {
+    "four_axes": "implemented in source, candidate unverified",
+    "pi_channel_schema": 2,
+    "report_schema": 1,
+    "identity_selected_pid_set": "implemented via walk_identity_processes",
+    "bounded_traversal": 4096,
+    "codex_frames": 10,
+    "strict_name_merge": "implemented; single-authority names retained, conflicts unknown",
+    "cross_compile_corpus": "explicit NODEPROBE_FIXTURES/NODEPROBE_PROVIDERS, no embedded fallback",
+    "extension_git_identity": "source SHA matches installed 51ffcad3..."
+  },
+  "validation": {
+    "basegen": {
+      "command": "python3 tools/basegen.py T-N",
+      "exit": 0,
+      "result": "temporary task envelope compiled; cards=0 because Rust nodeprobe has no wiki card"
+    },
+    "archwiki": {
+      "command": "archwiki check tools/nodeprobe",
+      "exit": 3,
+      "status": "partial",
+      "evidence": "tmp/archwiki-final.json"
+    },
+    "remote_red_a1": {
+      "unit": "gb-e50a6e93bfb691977b4313fa9d2d465402a89d45-t-n-red-a1",
+      "command": "cargo test -p nodeprobe --locked --lib t_n_",
+      "execution": "not started; sync timed out after 1200s",
+      "status": "missing",
+      "authoritative_exit": null
+    },
+    "remote_red_a2": {
+      "unit": "gb-e50a6e93bfb691977b4313fa9d2d465402a89d45-t-n-red-a2",
+      "command": "cargo test -p nodeprobe --locked --lib t_n_",
+      "execution": "not started; preflight exit 7",
+      "remote_free_kib": 9227512,
+      "required_free_gib": 20,
+      "authoritative_exit": null
+    },
+    "candidate_remote": {
+      "status": "blocked",
+      "artifact_sha256": null,
+      "platform": null,
+      "execution_count": 0,
+      "failed_tests": null
+    },
+    "g_safe_candidate": {
+      "status": "blocked",
+      "trace": null,
+      "successful_samples": 0,
+      "rejected_forbidden_calls": null
+    }
+  },
+  "cleanup": {
+    "local_tmp": "retained under .team/nodes/status-probe-fix/tmp until receipt completion",
+    "a1_remote_stage": "not manually deleted; receipt-bound cleanup unavailable because status=missing",
+    "production_socket": "not touched",
+    "9900": "not touched",
+    "global_binary_or_extension": "not modified"
+  }
+}
