@@ -103,6 +103,10 @@ type wsConn struct {
 	mirrorAborted    atomic.Bool
 	mirrorLossReason atomic.Value  // string, published before mirrorAborted
 	mirrorAbortDone  chan struct{} // closed after queue discard + CloseNow
+	// sendMu serializes enqueue with the abort drain. abort cancels first, then
+	// waits for any blocked sender to leave this critical section before it
+	// discards the queue, so no sender can refill stale data after the drain.
+	sendMu sync.Mutex
 
 	// writerGate/writerTaken are nil in production. Tests use them to hold a
 	// dequeued frame at the writer boundary and prove an abort cannot flush it.
@@ -387,11 +391,18 @@ func (c *wsConn) sendMirror(data []byte) {
 	if c.mirrorAborted.Load() {
 		return
 	}
+	c.sendMu.Lock()
+	if c.mirrorAborted.Load() {
+		c.sendMu.Unlock()
+		return
+	}
 	select {
 	case c.sendCh <- wsMsg{typ: wsBinary, data: data}:
+		c.sendMu.Unlock()
 		c.s.sendQueue.recordQueued(len(c.sendCh))
 		c.connMetrics.recordFramesSent()
 	default:
+		c.sendMu.Unlock()
 		c.s.log.Debug("ws: mirror queue overflow; aborting connection", "conn", c.id)
 		c.s.sendQueue.recordDrop()
 		c.connMetrics.recordDrop()
@@ -417,6 +428,11 @@ func (c *wsConn) abortMirrorLoss(ref string, cause error) {
 		c.mirrorLossReason.Store(reason)
 		c.mirrorAborted.Store(true)
 		c.cancel()
+		// A sender may already be blocked on a full queue. Cancellation above
+		// makes it leave sendMsg; sendMu then closes the race where it could
+		// otherwise enqueue after this drain.
+		c.sendMu.Lock()
+		defer c.sendMu.Unlock()
 		for {
 			select {
 			case <-c.sendCh:
@@ -430,6 +446,11 @@ func (c *wsConn) abortMirrorLoss(ref string, cause error) {
 
 // sendMsg enqueues one message, unblocking early when the connection closes.
 func (c *wsConn) sendMsg(m wsMsg) {
+	if c.mirrorAborted.Load() {
+		return
+	}
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
 	if c.mirrorAborted.Load() {
 		return
 	}
@@ -447,6 +468,11 @@ func (c *wsConn) sendMsg(m wsMsg) {
 // sendClose enqueues a close marker: the writer sends any queued message, then
 // a WebSocket close frame and exits.
 func (c *wsConn) sendClose(code websocket.StatusCode, reason string) {
+	if c.mirrorAborted.Load() {
+		return
+	}
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
 	if c.mirrorAborted.Load() {
 		return
 	}
