@@ -11,6 +11,7 @@ package api
 
 import (
 	"sort"
+	"strconv"
 
 	"github.com/agentmirror/agentmirror/internal/discovery"
 	"github.com/agentmirror/agentmirror/internal/nodeprobe"
@@ -47,7 +48,7 @@ func sessionFromPane(p discovery.Pane, observation nodeprobe.Observation) protoc
 		Ref:         sessionRef(p),
 		Name:        displayName(p, observation),
 		WindowName:  p.WindowName,
-		WindowIndex: p.WindowIndex,
+		WindowIndex: strconv.Itoa(p.WindowIndex),
 		Cwd:         p.CWD,
 		Title:       p.PaneTitle,
 		Provider:    observation.Provider,

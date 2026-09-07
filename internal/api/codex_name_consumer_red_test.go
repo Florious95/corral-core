@@ -59,8 +59,8 @@ func assertCodexListingDisplayNames(t *testing.T, sessions []protocol.Session) {
 		if s.Name != want[s.Ref] {
 			t.Errorf("ref=%q name=%q want complete Codex title %q: old consumer uses window_name=node", s.Ref, s.Name, want[s.Ref])
 		}
-		if s.WindowName != "node" || s.WindowIndex != 0 {
-			t.Errorf("ref=%q structural fields=%q/%d want window_name=node/window_index=0", s.Ref, s.WindowName, s.WindowIndex)
+		if s.WindowName != "node" || s.WindowIndex != "0" {
+			t.Errorf("ref=%q structural fields=%q/%q want window_name=node/window_index=0", s.Ref, s.WindowName, s.WindowIndex)
 		}
 	}
 }
@@ -74,8 +74,8 @@ func assertCodexLevel2DisplayNames(t *testing.T, sessions []protocol.Session) {
 		if s.Name != s.Title {
 			t.Errorf("ref=%q name=%q title=%q: display name must preserve complete Codex title", s.Ref, s.Name, s.Title)
 		}
-		if s.WindowName != "node" || s.WindowIndex != 0 {
-			t.Errorf("ref=%q structural fields=%q/%d want window_name=node/window_index=0", s.Ref, s.WindowName, s.WindowIndex)
+		if s.WindowName != "node" || s.WindowIndex != "0" {
+			t.Errorf("ref=%q structural fields=%q/%q want window_name=node/window_index=0", s.Ref, s.WindowName, s.WindowIndex)
 		}
 	}
 }

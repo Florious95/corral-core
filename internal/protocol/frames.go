@@ -77,7 +77,8 @@ type Workspace struct {
 // client uses to address subscribe / input / scrollback / resize; it is
 // distinct from the display-only Name. WindowName and WindowIndex are the
 // structural tmux fields kept separately so a display projection can never
-// overwrite identity metadata. Rows/Cols are the pane's current dimensions.
+// overwrite identity metadata. WindowIndex is encoded as a string to match
+// the existing App DTO contract. Rows/Cols are the pane's current dimensions.
 //
 // Name is the display projection: provider-aware code may select the complete
 // Codex PaneTitle or the authoritative Pi session_name, while other providers
@@ -95,8 +96,8 @@ type Workspace struct {
 type Session struct {
 	Ref         string  `json:"ref"`
 	Name        string  `json:"name"`
-	WindowName  string  `json:"window_name"`
-	WindowIndex int     `json:"window_index"`
+	WindowName  string `json:"window_name"`
+	WindowIndex string `json:"window_index"`
 	Cwd         string  `json:"cwd"`
 	Title       string  `json:"title"`
 	Provider    string  `json:"provider"`

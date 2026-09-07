@@ -114,7 +114,7 @@ func level2SnapKey(sessions []protocol.Session) string {
 		if sess.SessionName != nil {
 			sessionName = *sess.SessionName
 		}
-		fmt.Fprintf(&b, "%s\x1e%s\x1e%s\x1e%d\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%d\x1e%d\x1f",
+		fmt.Fprintf(&b, "%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%d\x1e%d\x1f",
 			sess.Ref, sess.Name, sess.WindowName, sess.WindowIndex, sess.Cwd, sess.Title, sess.Provider, sess.Activity, sessionName, sess.Health, sess.Status, sess.Rows, sess.Cols)
 	}
 	return b.String()

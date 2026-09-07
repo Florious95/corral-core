@@ -46,8 +46,8 @@ func TestProviderAwareDisplayNamesAndStructuralFields(t *testing.T) {
 			if got.Ref != pane.Socket+"\x1f"+pane.PaneID {
 				t.Fatalf("ref=%q changed with display projection", got.Ref)
 			}
-			if got.WindowName != pane.WindowName || got.WindowIndex != pane.WindowIndex {
-				t.Fatalf("structural fields=%q/%d want=%q/%d", got.WindowName, got.WindowIndex, pane.WindowName, pane.WindowIndex)
+			if got.WindowName != pane.WindowName || got.WindowIndex != "3" {
+				t.Fatalf("structural fields=%q/%q want=%q/3", got.WindowName, got.WindowIndex, pane.WindowName)
 			}
 			if got.Title != pane.PaneTitle {
 				t.Fatalf("title=%q want verbatim=%q", got.Title, pane.PaneTitle)
@@ -96,7 +96,7 @@ func TestNameOnlyChangeKeepsRefAndProducesDelta(t *testing.T) {
 	if changed.Ref != sessionRef(oldPane) || changed.Name != newTitle {
 		t.Fatalf("changed=%+v want stable ref=%q and name=%q", changed, sessionRef(oldPane), newTitle)
 	}
-	if changed.WindowName != "node" || changed.WindowIndex != 0 {
+	if changed.WindowName != "node" || changed.WindowIndex != "0" {
 		t.Fatalf("structural fields were overwritten: %+v", changed)
 	}
 	if len(delta.ChangedWorkspaces) != 0 {
