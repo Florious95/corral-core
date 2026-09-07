@@ -2,7 +2,7 @@ name: PR6 nodeprobe serve binding
 
 on:
   pull_request:
-    branches: [main]
+    branches: [base/status-binding-7e55502]
     paths:
       - "internal/nodeprobe/**"
       - "cmd/agentmirrord/**"
