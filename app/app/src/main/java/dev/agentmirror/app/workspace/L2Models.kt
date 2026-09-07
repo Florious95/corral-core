@@ -38,7 +38,8 @@ enum class L2Status(val wire: String, val label: String) {
 
 /**
  * 二级菜单一行。身份来自结构字段，状态来自 [Session.effectiveActivity]。
- * [title] 不参与身份/过滤/判活；076 §3a 只允许 claude_code 用它当**显示名**。
+ * [name] 是 server 显示投影，不能回填结构字段；[title] 不参与身份/过滤/判活，
+ * 076 §3a 只允许 claude_code 用它当**显示名**。
  */
 data class L2Entry(
     val ref: String,
@@ -64,31 +65,39 @@ data class L2Entry(
             provider = provider,
         )
 
+    /** Navigation structure only; [name] is a display projection and never a fallback. */
     val navigationName: String
-        get() = windowName.ifEmpty { sessionName }.ifEmpty { name }
+        get() = windowName.ifEmpty { sessionName }
 }
 
 /**
- * 076 §3a 显示名。claude_code 取 pane_title 并剥 062 前导状态符号；Pi 优先取真实
- * session_name；其余 CLI 取 window_name。
+ * 076 §3a 显示名。Codex 直接取 server name（完整 PaneTitle）；Pi 只取真实
+ * session_name；claude_code 取 pane_title 并剥 062 前导状态符号；其余 CLI 取
+ * window_name，空时 fallback tmux session。缺失/冲突统一显示「名称未知」。
  * 只用于显示，不参与身份。
  *
  * 符号表与 server/internal/api/l2detect_claudecode.go Match 同一套，禁止另写一份。
  */
+internal const val UNKNOWN_SESSION_DISPLAY_NAME = "名称未知"
+
 internal fun sessionDisplayName(
     windowName: String,
     sessionName: String = "",
     name: String = "",
     title: String = "",
     provider: String = "",
-): String {
-    if (provider == "pi" && sessionName.isNotEmpty()) return sessionName
-    val structural = windowName.ifEmpty { sessionName }.ifEmpty { name }
-    if (isClaudeCodeWindow(windowName, name)) {
-        val fromTitle = stripClaudeCodeStatusPrefix(title)
-        if (fromTitle.isNotEmpty()) return fromTitle
+): String = when (provider) {
+    "codex" -> name.ifEmpty { UNKNOWN_SESSION_DISPLAY_NAME }
+    "pi" -> sessionName.ifEmpty { UNKNOWN_SESSION_DISPLAY_NAME }
+    else -> {
+        if (isClaudeCodeWindow(windowName, name)) {
+            val fromTitle = stripClaudeCodeStatusPrefix(title)
+            if (fromTitle.isNotEmpty()) fromTitle
+            else windowName.ifEmpty { sessionName }.ifEmpty { UNKNOWN_SESSION_DISPLAY_NAME }
+        } else {
+            windowName.ifEmpty { sessionName }.ifEmpty { UNKNOWN_SESSION_DISPLAY_NAME }
+        }
     }
-    return structural
 }
 
 internal fun isClaudeCodeWindow(windowName: String, name: String): Boolean =
@@ -155,14 +164,12 @@ internal fun socketPrefixFromRef(ref: String): String {
 }
 
 internal fun Session.toL2Entry(): L2Entry {
-    // 线上 Session 只有 name（window_name fallback session_name），三元组常缺省。
-    // 收藏键必须落结构字段：空三元组回填 name，永不回填 title。
-    val resolvedWindow = windowName.ifEmpty { name }
-    val resolvedSession = sessionName.orEmpty().ifEmpty { name }
+    // name is a server display projection; structure fields stay independent.
+    // Favorite keys must use ref and never recover structure from display text.
     val effective = L2Status.fromWire(effectiveActivity)
     return L2Entry(
         ref = ref,
-        name = resolvedWindow.ifEmpty { resolvedSession },
+        name = name,
         title = title,
         rows = rows,
         cols = cols,
@@ -171,8 +178,8 @@ internal fun Session.toL2Entry(): L2Entry {
         activity = effective,
         health = health.takeIf { it == "normal" || it == "abnormal" || it == "unknown" } ?: "unknown",
         cwd = cwd,
-        sessionName = resolvedSession,
+        sessionName = sessionName.orEmpty(),
         windowIndex = windowIndex,
-        windowName = resolvedWindow,
+        windowName = windowName,
     )
 }
