@@ -13,7 +13,8 @@ import (
 // level2.go implements the second-level menu stream (requirement 061/062).
 // Identity/routing comes from tmux structural fields. Status identity and the
 // independent four axes come only from one accepted nodeprobe sample per
-// allowed socket; unknown-provider rows remain visible and titles stay opaque.
+// allowed socket; production keeps only rows with a known provider while
+// activity and health remain independent axes.
 //
 // The loop scans only while ≥1 subscriber exists (zero subscribers ⇒ zero
 // tmux calls). It pushes a Level2Frame only when that connection's snapshot
@@ -135,6 +136,9 @@ func (s *Server) publishLevel2(ctx context.Context) {
 	if err != nil {
 		s.log.Warn("level2: nodeprobe failed", "err", err, "had_subscribers", s.countLevel2())
 		return
+	}
+	if s.filterAgents {
+		model = filterModelToIdentifiedAgents(model, observations)
 	}
 
 	byCWD := make(map[string][]protocol.Session)

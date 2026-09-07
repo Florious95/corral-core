@@ -25,6 +25,31 @@ func sessionRef(p discovery.Pane) string {
 	return p.Socket + "\x1f" + p.PaneID
 }
 
+// filterModelToIdentifiedAgents keeps the existing discovery surface but
+// removes panes whose structurally joined nodeprobe provider is unknown. The
+// provider axis is the identity decision; activity and health stay independent
+// so an identified Agent with either axis unknown remains discoverable.
+func filterModelToIdentifiedAgents(model *discovery.Model, observations map[string]nodeprobe.Observation) *discovery.Model {
+	if model == nil {
+		return &discovery.Model{}
+	}
+	out := &discovery.Model{}
+	for _, ws := range model.Workspaces {
+		panes := make([]discovery.Pane, 0, len(ws.Panes))
+		for _, p := range ws.Panes {
+			obs := observations[sessionRef(p)]
+			if obs.Provider == "" || obs.Provider == "unknown" {
+				continue
+			}
+			panes = append(panes, p)
+		}
+		if len(panes) > 0 {
+			out.Workspaces = append(out.Workspaces, discovery.Workspace{CWD: ws.CWD, Panes: panes})
+		}
+	}
+	return out
+}
+
 // sessionEntry is one mirrorable pane known to the catalog: its stable ref
 // and the bridge bound to the pane's bare id on its socket. A Pane bound to a
 // bare id is the only tmux addressing form that passes the exact existence
@@ -36,11 +61,12 @@ type sessionEntry struct {
 	bridge      *bridge.Pane
 }
 
-// sessionCatalog holds every pane currently discovered on the host, keyed by
-// stable ref. It is the service's in-memory index from client-facing ref to
-// the tmux instance behind it; nothing here is persisted and nothing here
-// depends on connection state (requirement 004: the server keeps no client
-// session state, only the host tmux is the source of truth).
+// sessionCatalog holds every pane in the current mirrorable discovery
+// snapshot, keyed by stable ref. Production supplies the snapshot after the
+// shared nodeprobe provider-identity filter. It is the service's in-memory
+// index from client-facing ref to the tmux instance behind it; nothing here is
+// persisted and nothing here depends on connection state (requirement 004:
+// the server keeps no client session state, only host tmux is the source of truth).
 type sessionCatalog struct {
 	mu    sync.RWMutex
 	byRef map[string]*sessionEntry

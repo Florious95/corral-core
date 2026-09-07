@@ -92,7 +92,10 @@ func classifySocket(path string) socketClass {
 	if base == "default" {
 		return socketClass{allowed: true, name: "default_socket"}
 	}
-	return socketClass{name: "unknown_socket_name"}
+	// The parent directory is already restricted to this uid's tmux directory;
+	// a user-created server may use any socket basename, not only "default" or
+	// the socket selected by TMUX. Keep isolated fixture names excluded above.
+	return socketClass{allowed: true, name: "user_socket"}
 }
 
 func logSocketDecision(logger *slog.Logger, path string, decision socketClass) {
