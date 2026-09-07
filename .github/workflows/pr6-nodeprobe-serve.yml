@@ -127,6 +127,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Upload fixtures deliberately strip AGENTMIRROR_* from child env.
+          # Expose the same hash-verified Git binary through their retained PATH.
+          mkdir -p "$AGENTMIRROR_GSAFE_ROOT/compat-bin"
+          ln -s "$AGENTMIRROR_NODEPROBE_BIN" "$AGENTMIRROR_GSAFE_ROOT/compat-bin/nodeprobe"
+          export PATH="$AGENTMIRROR_GSAFE_ROOT/compat-bin:$PATH"
           go test -count=1 -json -timeout=8m ./internal/nodeprobe ./internal/api ./internal/discovery ./cmd/agentmirrord > "$AGENTMIRROR_GSAFE_ROOT/go-test.jsonl"
       - name: Prepare fail-closed observation wrappers
         shell: bash
