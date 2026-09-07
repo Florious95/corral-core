@@ -154,6 +154,14 @@ pub fn classify(title: &str) -> Class {
 /// Classify a pane without a whitelisted process identity. Live probing must
 /// use this entry point so a stale π title cannot resurrect a provider.
 pub fn classify_unidentified(title: &str) -> Class {
+    if crate::pi_activity::title_name(title).is_some() {
+        return Class {
+            state: STATE_UNKNOWN,
+            provider: PROVIDER_UNKNOWN,
+            first: first_non_space(title),
+            known: false,
+        };
+    }
     fallback(title)
 }
 
