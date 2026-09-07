@@ -39,13 +39,7 @@ case "$category" in
     ;;
 esac
 [ "$bound" = 1 ] || exit 98
-if [ "$category" = list-panes ]; then
-  # Replace only the structure-only pane_current_command field so the
-  # synthetic row exercises the real provider/identity path.
-  "$TMUX_REAL" "$@" | awk -F '\037' -v OFS='\037' '{ $6="codex"; print }'
-else
-  exec "$TMUX_REAL" "$@"
-fi
+exec "$TMUX_REAL" "$@"
 SH
 cat >"$WRAP/ps" <<'SH'
 #!/bin/sh
@@ -57,7 +51,7 @@ for arg in "$@"; do
 done
 if [ "$safe" = 1 ]; then
   printf 'tool=ps category=ps-narrow socket_bound=not-applicable\n' >>"$trace"
-  printf '%s 1 S+ /bin/bash\n%s %s S /usr/bin/codex\n' "${GSAFE_PANE_PID:?}" "${GSAFE_FAKE_PID:?}" "${GSAFE_PANE_PID:?}"
+  printf '%s 1 S+ /usr/bin/codex\n' "${GSAFE_PANE_PID:?}"
   exit 0
 fi
 printf 'tool=ps category=ps-dangerous socket_bound=not-applicable\nblocked=ps-dangerous\n' >>"$trace"
