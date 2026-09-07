@@ -52,7 +52,7 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 
 ## Working 一致性复核（本轮 codex-grok-app-working-consistency）
 
-本轮未改产品码、未改名称/服务端/Pi/收藏 ref/key/布局；精确当前源码快照为 PR89 `pr/name-app` head `02915145cc8d5f1836c3b04bdd5ad72d5304adeb`，tree `af3225e4d6937a3663383569ee86240c715fa532`，base 仍为 `base/status-name-a0` @ `e42619b31803c28fec940f085d6897241ca7b9b5`。`gh pr view 89` 实时核得 PR OPEN、head/base 与上述一致。现有候选 APK 仍绑定产品源 `04bfde8d161c244c9dfced3b5ab90d22d1460d86`（tree `6121f88087b80ba1014d843fcba13a3528598002`），无新产品差量可构建。
+本轮未改产品码、未改名称/服务端/Pi/收藏 ref/key/布局；精确本轮施工产品源码快照为 PR89 `pr/name-app` @ `02915145cc8d5f1836c3b04bdd5ad72d5304adeb`，tree `af3225e4d6937a3663383569ee86240c715fa532`，base 仍为 `base/status-name-a0` @ `e42619b31803c28fec940f085d6897241ca7b9b5`。其后仅追加本报告 delivery-only 提交，PR head 以 GitHub 实时坐标为准，产品树与候选未变。现有候选 APK 仍绑定产品源 `04bfde8d161c244c9dfced3b5ab90d22d1460d86`（tree `6121f88087b80ba1014d843fcba13a3528598002`），无新产品差量可构建。
 
 为避免猜修，在本席自有 AVD `app_fix_working_api35` / `emulator-5580` 上以受控输入复核同一 ref `/controlled/app-fix/tmux` + U+001F + `%1`。受控 WS 仅绑定 `127.0.0.1:9902`，App 经 AVD `10.0.2.2:9902` 接入；帧明确发送 `activity=status=idle → working → idle → working`、`health=normal`，分别使用 `provider=grok` 与 `provider=codex`。这不是生产服务/真实 CLI 证据，仅用于精确候选的三面投影复核。
 
