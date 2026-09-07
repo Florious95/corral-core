@@ -23,6 +23,7 @@
 - 恢复精确 Codex 10 帧、普通标题 idle、未收录 braille unknown；Pi 静态标题不判活。
 - 修 Pi channel 缺失/目录不可用/损坏/TTL/未来时间/challenge/PID reuse/零或多进程的 fail-closed 语义；名称矩阵保留同名、单边，冲突/歧义 unknown。
 - live probe 仅调用 `tmux list-panes` 与窄 `ps pid,ppid,stat,comm`；不读取 pane body/footer/argv。
+- `tools/nodeprobe/tests/g-safe.sh` 是候选实际 binary 的 G-SAFE 调用夹具：私有 socket、结构字段变换、正控 trace 与 capture-pane/危险 ps 反控分离。
 - 收入 Git 的 Pi extension 含当前已核 `socket.on("error", () => {})`，保留 lazy lifecycle、heartbeat、settled 结算与 shutdown 清理。
 - fixtures 与 footer 共享显式 `NODEPROBE_FIXTURES`；providers 共享显式 `NODEPROBE_PROVIDERS`，坏路径不回退内嵌旧表。
 
