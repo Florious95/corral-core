@@ -1,4 +1,4 @@
-//! Walk pane_pid plus descendants using one `ps -axo pid=,ppid=,comm=` snapshot.
+//! Walk pane_pid plus descendants using one `ps -axo pid=,ppid=,stat=,comm=` snapshot.
 //! Never reads process argument vectors. Narrow ps fields only.
 
 use std::collections::{HashMap, HashSet};
@@ -8,18 +8,27 @@ use std::process::Command;
 pub struct Snap {
     pub comm: HashMap<i32, String>,
     pub kids: HashMap<i32, Vec<i32>>,
+    pub stat: HashMap<i32, String>,
 }
 
 pub fn read_table() -> Option<Snap> {
     let out = Command::new("ps")
         .arg("-axo")
-        .arg("pid=,ppid=,comm=")
+        .arg("pid=,ppid=,stat=,comm=")
         .output()
         .ok()?;
     if !out.status.success() {
         return None;
     }
     Some(parse_table(&String::from_utf8_lossy(&out.stdout)))
+}
+
+fn looks_like_stat(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 8
+        && !s.contains('/')
+        && s.chars()
+            .all(|c| c.is_ascii_alphabetic() || c == '+' || c == '<' || c == '>' || c == '?')
 }
 
 pub fn parse_table(text: &str) -> Snap {
@@ -39,8 +48,15 @@ pub fn parse_table(text: &str) -> Snap {
         let Ok(ppid) = fields[1].parse::<i32>() else {
             continue;
         };
-        let comm = fields[2..].join(" ");
+        let (stat, comm) = if fields.len() >= 4 && looks_like_stat(fields[2]) {
+            (fields[2].to_string(), fields[3..].join(" "))
+        } else {
+            (String::new(), fields[2..].join(" "))
+        };
         s.comm.insert(pid, comm);
+        if !stat.is_empty() {
+            s.stat.insert(pid, stat);
+        }
         s.kids.entry(ppid).or_default().push(pid);
     }
     s
@@ -72,11 +88,51 @@ pub fn walk_processes(s: &Snap, root: i32) -> Vec<(i32, String)> {
     out
 }
 
+fn is_shell_basename(cmd: &str) -> bool {
+    matches!(
+        crate::providers::basename(cmd),
+        "zsh" | "bash" | "sh" | "fish" | "dash" | "ksh" | "csh" | "tcsh"
+    )
+}
+
+fn comms_of(processes: &[(i32, String)]) -> Vec<String> {
+    processes.iter().map(|(_, comm)| comm.clone()).collect()
+}
+
+/// Select one bounded identity set for both provider and Pi PID matching.
+/// Foreground Agent identity wins; a shell-held `+` with a non-shell pane
+/// command retains a still-running descendant, while a shell pane suppresses
+/// Ctrl+C leftovers. No second unbounded traversal is permitted.
+pub fn walk_identity_processes(
+    s: &Snap,
+    root: i32,
+    current_command: &str,
+) -> Vec<(i32, String)> {
+    let full = walk_processes(s, root);
+    let fg: Vec<(i32, String)> = full
+        .iter()
+        .filter(|(pid, _)| s.stat.get(pid).is_some_and(|stat| stat.contains('+')))
+        .cloned()
+        .collect();
+    if crate::providers::match_comms(&comms_of(&fg)).is_some() {
+        return fg;
+    }
+    if fg.is_empty() {
+        return full;
+    }
+    if is_shell_basename(current_command) {
+        fg
+    } else {
+        full
+    }
+}
+
+pub fn walk_identity_comms(s: &Snap, root: i32, current_command: &str) -> Vec<String> {
+    comms_of(&walk_identity_processes(s, root, current_command))
+}
+
 pub fn walk_comms(s: &Snap, root: i32) -> Vec<String> {
-    walk_processes(s, root)
-        .into_iter()
-        .map(|(_, comm)| comm)
-        .collect()
+    comms_of(&walk_processes(s, root))
 }
 
 #[cfg(test)]
@@ -140,9 +196,84 @@ mod tests {
             .split("#[cfg(test)]")
             .next()
             .unwrap();
-        assert!(prod.contains("pid=,ppid=,comm="));
+        assert!(prod.contains("pid=,ppid=,stat=,comm="));
         assert!(!prod.contains("args="));
         assert!(!prod.contains("command="));
         assert!(!prod.contains("arg(\"-f\")"));
+    }
+
+    #[test]
+    fn leftover_background_agent_is_not_identity() {
+        let snap = parse_table(
+            "\
+1 0 Ss /sbin/launchd
+10 1 Ss+ /bin/zsh
+11 10 SN /opt/homebrew/bin/grok
+",
+        );
+        let full = walk_comms(&snap, 10);
+        assert!(providers::match_comms(&full).is_some());
+        let ident = walk_identity_comms(&snap, 10, "zsh");
+        assert_eq!(ident, vec!["/bin/zsh".to_string()]);
+        assert!(providers::match_comms(&ident).is_none());
+    }
+
+    #[test]
+    fn running_agent_still_identified_when_shell_holds_plus() {
+        let snap = parse_table(
+            "\
+1 0 Ss /sbin/launchd
+10 1 Ss+ /bin/zsh
+11 10 S /opt/homebrew/bin/grok
+",
+        );
+        let ident = walk_identity_comms(&snap, 10, "grok");
+        assert_eq!(providers::match_comms(&ident).map(|e| e.id.as_str()), Some("grok"));
+    }
+
+    #[test]
+    fn nested_foreground_codex_still_identified() {
+        let snap = parse_table(
+            "\
+1 0 Ss /sbin/launchd
+10 1 Ss /bin/bash
+11 10 S+ /opt/homebrew/bin/codex
+"
+        );
+        let ident = walk_identity_comms(&snap, 10, "codex");
+        assert_eq!(providers::match_comms(&ident).map(|e| e.id.as_str()), Some("codex"));
+    }
+
+    #[test]
+    fn identity_processes_drive_provider_and_pid_selection_together() {
+        let snap = parse_table(
+            "\
+1 0 Ss /sbin/launchd
+10 1 Ss+ /bin/zsh
+11 10 SN /opt/homebrew/bin/pi
+"
+        );
+        let shell_identity = walk_identity_processes(&snap, 10, "zsh");
+        assert_eq!(shell_identity, vec![(10, "/bin/zsh".to_string())]);
+        assert!(providers::match_comms(
+            &comms_of(&shell_identity)
+        ).is_none());
+        let agent_identity = walk_identity_processes(&snap, 10, "pi");
+        assert_eq!(
+            agent_identity,
+            vec![(10, "/bin/zsh".to_string()), (11, "/opt/homebrew/bin/pi".to_string())]
+        );
+        assert_eq!(
+            providers::match_comms(&comms_of(&agent_identity)).map(|e| e.id.as_str()),
+            Some("pi")
+        );
+        assert_eq!(
+            agent_identity
+                .iter()
+                .filter(|(_, comm)| providers::lookup(comm).is_some_and(|e| e.id == "pi"))
+                .map(|(pid, _)| *pid)
+                .collect::<Vec<_>>(),
+            vec![11]
+        );
     }
 }
