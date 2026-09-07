@@ -139,7 +139,7 @@ class L2UnknownStatusTest {
         assertEquals("unknown", entry.health)
         assertEquals(SessionStatus.Busy, item.status)
         assertEquals("unknown", item.health)
-        assertEquals(SessionRowMotion.Working, sessionRowMotion(item.status, item.health, item.isOnline))
+        assertEquals(SessionRowMotion.Working, sessionRowMotion(item.status, item.isOnline))
     }
 
     @Test

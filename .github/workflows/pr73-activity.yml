@@ -44,7 +44,7 @@ jobs:
               -validity 10000
           fi
 
-      - name: Run exact C73 red test
+      - name: Run T-A matrix and Compose tests
         shell: bash
         run: |
           set +e
@@ -52,7 +52,9 @@ jobs:
           ./gradlew --no-daemon --rerun-tasks \
             -Pkotlin.compiler.execution.strategy=in-process \
             :app:testDebugUnitTest \
-            --tests 'dev.agentmirror.app.ui.ExternalSessionStatusUiTest.fourAxisProjectionUsesOnlyOnlineAndActivity' \
+            --tests 'dev.agentmirror.app.ui.ExternalSessionStatusUiTest' \
+            --tests 'dev.agentmirror.app.workspace.L2UnknownStatusTest' \
+            --tests 'dev.agentmirror.app.workspace.PiWorkingDtoProjectionTest' \
             2>&1 | tee "$GITHUB_WORKSPACE/gradle.log"
           rc=${PIPESTATUS[0]}
           executed=$(grep -cE '^> Task ' "$GITHUB_WORKSPACE/gradle.log" || true)
