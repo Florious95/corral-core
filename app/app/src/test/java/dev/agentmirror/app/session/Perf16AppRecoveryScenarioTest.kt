@@ -38,6 +38,11 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.android.controller.ServiceController
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -53,6 +58,8 @@ import java.util.concurrent.atomic.AtomicInteger
  * -> SessionViewModel -> TerminalEmulator chain must recover through the
  * service pump, replay list/subscribe, and clear the old screen completely.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class Perf16AppRecoveryScenarioTest {
 
     private companion object {
@@ -74,6 +81,7 @@ class Perf16AppRecoveryScenarioTest {
     private lateinit var server: MockWebServer
     private lateinit var client: OkHttpClient
     private var vm: SessionViewModel? = null
+    private var serviceController: ServiceController<MirrorForegroundService>? = null
 
     @Before
     fun setUp() {
@@ -99,6 +107,8 @@ class Perf16AppRecoveryScenarioTest {
     fun tearDown() {
         vm?.dispose()
         vm = null
+        serviceController?.destroy()
+        serviceController = null
         ServiceWire.uiConnector = null
         ServiceWire.listConnector = null
         ServiceWire.serviceListener = null
@@ -219,9 +229,12 @@ class Perf16AppRecoveryScenarioTest {
             visible(vm!!.emulator.snapshot().lines[7]) == "OLD_LATE_FRAME"
         })
 
-        // This is the production service pump entry point; no direct manager.pump
-        // or VM callback substitutes for the runtime recovery path.
-        MirrorForegroundService().pumpOnce(System.currentTimeMillis() + 2_000)
+        // This is the production service pump entry point under Robolectric's
+        // Android runtime; no direct manager.pump or VM callback substitutes for
+        // the recovery path.
+        serviceController = Robolectric.buildService(MirrorForegroundService::class.java).create()
+        val service = serviceController!!.startCommand(0, 1).get()
+        service.pumpOnce(System.currentTimeMillis() + 2_000)
 
         waitUntil("second connection snapshot", condition = { secondSnapshotSent.get() })
         waitUntil("manager READY after reauth/list/subscribe", condition = { manager!!.state() == ConnectionState.READY })
