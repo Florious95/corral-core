@@ -50,11 +50,24 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 
 覆盖包含：T-A 20 门、三面离线收藏显隐、名称仅变化 ref/key 不变、在线 Pi 缺失名不回填旧记录、重订阅、回前台、push-only 活动态与 C76 UI 兼容测试。
 
+## Working 一致性复核（本轮 codex-grok-app-working-consistency）
+
+本轮未改产品码、未改名称/服务端/Pi/收藏 ref/key/布局；精确当前源码快照为 PR89 `pr/name-app` head `02915145cc8d5f1836c3b04bdd5ad72d5304adeb`，tree `af3225e4d6937a3663383569ee86240c715fa532`，base 仍为 `base/status-name-a0` @ `e42619b31803c28fec940f085d6897241ca7b9b5`。`gh pr view 89` 实时核得 PR OPEN、head/base 与上述一致。现有候选 APK 仍绑定产品源 `04bfde8d161c244c9dfced3b5ab90d22d1460d86`（tree `6121f88087b80ba1014d843fcba13a3528598002`），无新产品差量可构建。
+
+为避免猜修，在本席自有 AVD `app_fix_working_api35` / `emulator-5580` 上以受控输入复核同一 ref `/controlled/app-fix/tmux` + U+001F + `%1`。受控 WS 仅绑定 `127.0.0.1:9902`，App 经 AVD `10.0.2.2:9902` 接入；帧明确发送 `activity=status=idle → working → idle → working`、`health=normal`，分别使用 `provider=grok` 与 `provider=codex`。这不是生产服务/真实 CLI 证据，仅用于精确候选的三面投影复核。
+
+| provider | 外会话列表 | 外收藏列表 | 对话内收藏/查看抽屉 | 证据 |
+|---|---|---|---|---|
+| Grok | idle→working→idle→working，动态灯出现 | idle→working→idle→working，动态灯出现 | idle→working→idle→working，`空闲`/`进行中` 随帧切换 | `tmp/avd-app-fix/grok-session-poll.tsv`, `grok-fav-poll.tsv`, `grok-overlay-poll.tsv`; working XML `grok-working-l2.xml`, `grok-overlay-working.xml` |
+| Codex | idle→working→idle→working，动态灯出现 | idle→working→idle→working，动态灯出现 | idle→working→idle→working，`空闲`/`进行中` 随帧切换 | `tmp/avd-app-fix/codex-session-poll.tsv`, `codex-fav-poll.tsv`, `codex-overlay-poll.tsv`; working XML `codex-overlay.xml` |
+
+因此用户描述的“候选 App 外两表不动、对话内收藏动”在精确候选 + 同 ref 受控 AVD 上**未复现**：三处均消费同一 live 投影并随 working/idle 同步。按任务约束不凭猜测改产品；现有候选保留给用户真机手验。作者不将该受控 AVD 复核冒充最终真机/真实 CLI 验收。
+
 ## 基底与未执行项
 
 - `python3 tools/basegen.py session-ui --pkgs dev.agentmirror.app` 已执行：`cards=2 fwd=5 rev=1 refs=[] field=no librarian=no`。
 - 修改后 ArchWiki 目标 UI 包 `dev.agentmirror.app.ui` strict-T3 exit `0`；workspace 包已有基线违规（L2UiState 缺 KDoc、6 条 T3-3、4 条 T3-4），A0 对照与最终相同违规，未扩大写界。原始输出在 `tmp-archwiki-*`。
-- 本机未执行 Gradle/Go/Rust；未启动 Grok Bot；未启动 AVD；未执行真实 Codex/Pi CLI 或最终组合链。GitHub hosted JVM/Robolectric/Compose 绿及下述 hosted assemble 不冒充最终真机/全链验收。
+- 本机未执行 Gradle/Go/Rust；未启动 Grok Bot；本轮仅启动自有 AVD + 本地受控 WS 复核，未执行真实 Codex/Grok/Pi CLI 或最终组合链。GitHub hosted JVM/Robolectric/Compose 绿及上述受控 AVD 不冒充最终真机/全链验收。
 - 未读取凭据/profile、进程 argv、pane 正文、真实 socket/9900；无新增 Issue。完整红绿/矩阵/UI/架构/清理证据见本目录对应文件与 `tmp/`。
 
 ## hosted APK 候选（供独立验收）
