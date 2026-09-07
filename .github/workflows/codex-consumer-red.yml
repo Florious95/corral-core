@@ -1,0 +1,22 @@
+name: codex-consumer-red
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consumer-red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact test branch
+        uses: actions/checkout@v4
+      - name: Set up Go from module
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Run named consumer red test
+        run: go test -count=1 ./internal/api -run '^TestCodexOfficialTitlePreservedInListingAndLevel2$' -v
