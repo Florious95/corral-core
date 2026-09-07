@@ -11,9 +11,8 @@
   "repository": "Florious95/corral-core",
   "worktree": ".team/nodes/status-probe-fix",
   "source": {
-    "head": "b88930295b40a4e40f8203a93ac928642ab1fe37",
-    "tree": "6438d841c502b0f7b253ea6621136f128d2f2246",
-    "nodeprobe_code_commit": "bc50e11d4459660643274e8669f4b56f082ad55e",
+    "head": "1cc086246e6973da1c570320072f606d7607acf1",
+    "tree": "a98793724a5e63a626a240ba40bddd30fa4e4b07",
     "parents": [
       "cf97d545672689b80fb80460bd3b295f88a50a64",
       "23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5"
