@@ -75,7 +75,9 @@ jobs:
         with:
           repository: Florious95/corral-core
           ref: 4619b561ddbb8e931fbf17b280cd69edad52f58d
-          path: nodeprobe-source
+          # Keep N outside S so the nested checkout cannot make S dirty and
+          # cannot flip the final daemon's Go VCS modified bit.
+          path: ../nodeprobe-source
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
@@ -92,7 +94,7 @@ jobs:
           echo "AGENTMIRROR_GSAFE_ROOT=$root" >> "$GITHUB_ENV"
           python3 - <<'PYCODE'
           import hashlib, json, os, pathlib, subprocess
-          source=pathlib.Path('nodeprobe-source').resolve()
+          source=pathlib.Path('../nodeprobe-source').resolve()
           manifest=json.loads(pathlib.Path('internal/nodeprobe/accepted-source.json').read_text())
           # N CI built the historical PR merge ref; its public same-tree source is reachable.
           assert manifest['source_commit']=='6e47021a7e3502843d490a2eeb0342c78c0231f3'
@@ -116,7 +118,8 @@ jobs:
           pathlib.Path(os.environ['RUNNER_TEMP'],'sg','identity.json').write_text(json.dumps(receipt,indent=2))
           PYCODE
           test "$(uname -m)" = arm64
-          file nodeprobe-source/tools/nodeprobe/artifacts/nodeprobe-darwin-arm64 > "$root/nodeprobe-platform.txt"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          file "$AGENTMIRROR_NODEPROBE_BIN" > "$root/nodeprobe-platform.txt"
           go build -o "$root/agentmirrord" ./cmd/agentmirrord
           shasum -a 256 "$root/agentmirrord" > "$root/daemon-sha256.txt"
           go version -m "$root/agentmirrord" > "$root/daemon-build.txt"
