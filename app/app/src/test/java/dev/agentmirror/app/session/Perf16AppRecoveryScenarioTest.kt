@@ -68,7 +68,7 @@ class Perf16AppRecoveryScenarioTest {
                 "            RECOVERY_DONE"
         private val STATIC_SNAPSHOT = (STATIC_SCREEN + "\u001b[7;26H").toByteArray()
         private val OLD_SNAPSHOT = "\u001b[2J\u001b[HOLD_RESIDUAL".toByteArray()
-        private val OLD_DELTA = "\u001b[8;1mOLD_LATE_FRAME".toByteArray()
+        private val OLD_DELTA = "\u001b[8;1HOLD_LATE_FRAME".toByteArray()
     }
 
     private lateinit var server: MockWebServer
