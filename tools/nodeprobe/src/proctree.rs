@@ -1,7 +1,7 @@
 //! Walk pane_pid plus descendants using one `ps -axo pid=,ppid=,stat=,comm=` snapshot.
 //! Never reads process argument vectors. Narrow ps fields only.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::Command;
 
 #[derive(Debug, Default)]
@@ -62,25 +62,30 @@ pub fn parse_table(text: &str) -> Snap {
     s
 }
 
+/// Hard cap for hostile/synthetic process graphs. Normal pane trees are tiny.
+pub const MAX_WALK_NODES: usize = 4096;
+
 /// Root-to-descendant comms (raw ps comm, basename applied at lookup).
-pub fn walk_comms(s: &Snap, root: i32) -> Vec<String> {
+pub fn walk_processes(s: &Snap, root: i32) -> Vec<(i32, String)> {
     let mut out = Vec::new();
-    fn walk(s: &Snap, pid: i32, out: &mut Vec<String>) {
+    let mut stack = vec![root];
+    let mut seen = HashSet::new();
+    while let Some(pid) = stack.pop() {
+        if !seen.insert(pid) {
+            continue;
+        }
+        if seen.len() > MAX_WALK_NODES {
+            break;
+        }
         if let Some(c) = s.comm.get(&pid) {
-            out.push(c.clone());
+            out.push((pid, c.clone()));
         }
         if let Some(kids) = s.kids.get(&pid) {
-            for kid in kids {
-                walk(s, *kid, out);
-            }
+            // Reverse push preserves the original ps child order in the DFS.
+            stack.extend(kids.iter().rev().copied());
         }
     }
-    walk(s, root, &mut out);
     out
-}
-
-fn is_foreground(stat: &str) -> bool {
-    stat.contains('+')
 }
 
 fn is_shell_basename(cmd: &str) -> bool {
@@ -90,37 +95,26 @@ fn is_shell_basename(cmd: &str) -> bool {
     )
 }
 
-fn walk_fg_comms(s: &Snap, root: i32) -> Vec<String> {
-    let mut fg = Vec::new();
-    fn walk(s: &Snap, pid: i32, fg: &mut Vec<String>) {
-        let stat = s.stat.get(&pid).map(String::as_str).unwrap_or("");
-        if is_foreground(stat) {
-            if let Some(c) = s.comm.get(&pid) {
-                fg.push(c.clone());
-            }
-        }
-        if let Some(kids) = s.kids.get(&pid) {
-            for kid in kids {
-                walk(s, *kid, fg);
-            }
-        }
-    }
-    walk(s, root, &mut fg);
-    fg
+fn comms_of(processes: &[(i32, String)]) -> Vec<String> {
+    processes.iter().map(|(_, comm)| comm.clone()).collect()
 }
 
-/// Identity comms for one pane.
-///
-/// - Agent in the tty foreground group (`stat` contains `+`) wins.
-/// - If the shell still holds `+` but tmux `pane_current_command` is the Agent
-///   (or another non-shell such as `node`), keep the full descendant walk so a
-///   still-running CLI that left the job-control group is not dropped.
-/// - If the current command is a shell, do not promote background leftovers.
-/// - No `+` bits at all (legacy tables): fail open to the full walk.
-pub fn walk_identity_comms(s: &Snap, root: i32, current_command: &str) -> Vec<String> {
-    let full = walk_comms(s, root);
-    let fg = walk_fg_comms(s, root);
-    if crate::providers::match_comms(&fg).is_some() {
+/// Select one bounded identity set for both provider and Pi PID matching.
+/// Foreground Agent identity wins; a shell-held `+` with a non-shell pane
+/// command retains a still-running descendant, while a shell pane suppresses
+/// Ctrl+C leftovers. No second unbounded traversal is permitted.
+pub fn walk_identity_processes(
+    s: &Snap,
+    root: i32,
+    current_command: &str,
+) -> Vec<(i32, String)> {
+    let full = walk_processes(s, root);
+    let fg: Vec<(i32, String)> = full
+        .iter()
+        .filter(|(pid, _)| s.stat.get(pid).is_some_and(|stat| stat.contains('+')))
+        .cloned()
+        .collect();
+    if crate::providers::match_comms(&comms_of(&fg)).is_some() {
         return fg;
     }
     if fg.is_empty() {
@@ -131,6 +125,14 @@ pub fn walk_identity_comms(s: &Snap, root: i32, current_command: &str) -> Vec<St
     } else {
         full
     }
+}
+
+pub fn walk_identity_comms(s: &Snap, root: i32, current_command: &str) -> Vec<String> {
+    comms_of(&walk_identity_processes(s, root, current_command))
+}
+
+pub fn walk_comms(s: &Snap, root: i32) -> Vec<String> {
+    comms_of(&walk_processes(s, root))
 }
 
 #[cfg(test)]
@@ -151,11 +153,41 @@ mod tests {
         let comms = walk_comms(&snap, 10);
         assert_eq!(
             comms,
-            vec!["/bin/bash".to_string(), "/opt/homebrew/bin/codex".to_string()]
+            vec![
+                "/bin/bash".to_string(),
+                "/opt/homebrew/bin/codex".to_string()
+            ]
         );
         let e = providers::match_comms(&comms).expect("codex behind bash");
         assert_eq!(e.id, "codex");
         assert!(providers::match_comms(&walk_comms(&snap, 12)).is_none());
+    }
+
+    #[test]
+    fn walk_terminates_on_cycles_and_preserves_first_visit_order() {
+        let snap = parse_table(
+            "\
+10 11 /bin/root
+11 10 /bin/child
+12 10 /bin/leaf
+",
+        );
+        assert_eq!(
+            walk_comms(&snap, 10),
+            vec!["/bin/root", "/bin/child", "/bin/leaf"]
+        );
+    }
+
+    #[test]
+    fn walk_is_bounded_for_deep_process_graphs() {
+        let mut text = String::new();
+        for pid in 1..=(MAX_WALK_NODES as i32 + 10) {
+            let ppid = if pid == 1 { 0 } else { pid - 1 };
+            text.push_str(&format!("{pid} {ppid} /bin/p{pid}\n"));
+        }
+        let snap = parse_table(&text);
+        let comms = walk_comms(&snap, 1);
+        assert_eq!(comms.len(), MAX_WALK_NODES);
     }
 
     #[test]
@@ -180,22 +212,14 @@ mod tests {
 ",
         );
         let full = walk_comms(&snap, 10);
-        assert!(
-            providers::match_comms(&full).is_some(),
-            "full descendant walk still sees leftover grok (old bug)"
-        );
+        assert!(providers::match_comms(&full).is_some());
         let ident = walk_identity_comms(&snap, 10, "zsh");
         assert_eq!(ident, vec!["/bin/zsh".to_string()]);
-        assert!(
-            providers::match_comms(&ident).is_none(),
-            "background grok must not keep the pane identified as Agent"
-        );
+        assert!(providers::match_comms(&ident).is_none());
     }
 
     #[test]
     fn running_agent_still_identified_when_shell_holds_plus() {
-        // Production miss: parent zsh keeps Ss+ while the Agent TUI is the
-        // current command but not in the job-control foreground group.
         let snap = parse_table(
             "\
 1 0 Ss /sbin/launchd
@@ -204,8 +228,7 @@ mod tests {
 ",
         );
         let ident = walk_identity_comms(&snap, 10, "grok");
-        let e = providers::match_comms(&ident).expect("still-running grok");
-        assert_eq!(e.id, "grok");
+        assert_eq!(providers::match_comms(&ident).map(|e| e.id.as_str()), Some("grok"));
     }
 
     #[test]
@@ -215,10 +238,9 @@ mod tests {
 1 0 Ss /sbin/launchd
 10 1 Ss /bin/bash
 11 10 S+ /opt/homebrew/bin/codex
-",
+"
         );
         let ident = walk_identity_comms(&snap, 10, "codex");
-        let e = providers::match_comms(&ident).expect("codex in foreground group");
-        assert_eq!(e.id, "codex");
+        assert_eq!(providers::match_comms(&ident).map(|e| e.id.as_str()), Some("codex"));
     }
 }
