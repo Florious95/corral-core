@@ -40,41 +40,39 @@ func TestRelayLossAbortsConnectionAndDropsQueuedDeltas(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c := &wsConn{
-		s:      srv,
-		id:     1,
-		conn:   serverConn,
-		ctx:    ctx,
-		cancel: cancel,
-		subs:   make(map[string]*subscription),
-		sendCh: make(chan wsMsg, 2),
+		s:               srv,
+		id:              1,
+		conn:            serverConn,
+		ctx:             ctx,
+		cancel:          cancel,
+		subs:            make(map[string]*subscription),
+		sendCh:          make(chan wsMsg, 2),
+		mirrorAbortDone: make(chan struct{}),
 	}
 
 	relayCtx, relayCancel := context.WithCancel(ctx)
 	defer relayCancel()
 	data := make(chan []byte, 1)
 	loss := make(chan error, 1)
+	ready := make(chan struct{})
 	sub := &subscription{
 		ref:    "alpha",
 		cancel: relayCancel,
 		detach: func() {},
 		loss:   loss,
+		ready:  ready,
 	}
+	// This queued frame stands in for a stale pre-snapshot delta. The relay is
+	// gated until snapshot queueing completes, but loss must still be consumed.
+	c.sendCh <- wsMsg{typ: wsBinary, data: []byte("stale-delta")}
 	go c.relay(relayCtx, sub, data)
-	data <- []byte("stale-delta")
-	deadline := time.Now().Add(2 * time.Second)
-	for len(c.sendCh) == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if len(c.sendCh) == 0 {
-		t.Fatal("relay did not enqueue the pre-loss delta")
-	}
 
 	loss <- bridge.ErrSubscriberOverflow
 	close(loss)
 	select {
-	case <-ctx.Done():
+	case <-c.mirrorAbortDone:
 	case <-time.After(2 * time.Second):
-		t.Fatal("relay loss signal did not abort the connection")
+		t.Fatal("relay loss signal did not complete the connection abort")
 	}
 	if got := len(c.sendCh); got != 0 {
 		t.Fatalf("relay loss retained %d stale queue entries", got)

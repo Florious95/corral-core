@@ -29,15 +29,32 @@ func TestSubscriberOverflowStopsOnlySlowSubscriber(t *testing.T) {
 
 	// Read copies are capped at streamBufferBytes. This payload therefore
 	// necessarily takes at least two reads and overflows the withheld one-slot
-	// subscriber, while the healthy subscriber has room for every read.
+	// subscriber, while the healthy subscriber is consumed concurrently.
 	want := bytes.Repeat([]byte("overflow-proof\n"), streamBufferBytes/len("overflow-proof\n")*2+1)
-	written := make(chan struct{})
+	fastResult := make(chan []byte, 1)
 	go func() {
-		_, _ = writer.Write(want)
-		close(written)
+		var got []byte
+		for chunk := range fast {
+			got = append(got, chunk...)
+		}
+		fastResult <- got
+	}()
+	writeResult := make(chan struct {
+		n   int
+		err error
+	}, 1)
+	go func() {
+		n, err := writer.Write(want)
+		writeResult <- struct {
+			n   int
+			err error
+		}{n: n, err: err}
 	}()
 	select {
-	case <-written:
+	case result := <-writeResult:
+		if result.err != nil || result.n != len(want) {
+			t.Fatalf("controlled writer n=%d err=%v, want n=%d err=nil", result.n, result.err, len(want))
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("controlled reader did not receive the overflow payload")
 	}
@@ -60,23 +77,20 @@ func TestSubscriberOverflowStopsOnlySlowSubscriber(t *testing.T) {
 slowStopped:
 	_ = writer.Close()
 
-	var got []byte
-	deadline := time.After(5 * time.Second)
-	for {
-		select {
-		case chunk, ok := <-fast:
-			if !ok {
-				if !bytes.Equal(got, want) {
-					t.Fatalf("healthy stream mismatch: got %d bytes, want %d", len(got), len(want))
-				}
-				if s.gen != gen {
-					t.Fatalf("shared pipe generation changed: got %d, want %d", s.gen, gen)
-				}
-				return
-			}
-			got = append(got, chunk...)
-		case <-deadline:
-			t.Fatalf("healthy subscriber did not finish: got %d/%d bytes", len(got), len(want))
+	select {
+	case got := <-fastResult:
+		if !bytes.Equal(got, want) {
+			t.Fatalf("healthy stream mismatch: got %d bytes, want %d", len(got), len(want))
 		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("healthy subscriber did not finish")
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("fanout did not finish after writer close")
+	}
+	if s.gen != gen {
+		t.Fatalf("shared pipe generation changed: got %d, want %d", s.gen, gen)
 	}
 }

@@ -101,7 +101,13 @@ type wsConn struct {
 	// checked by enqueue and writer paths so stale deltas cannot be flushed.
 	mirrorAbortOnce  sync.Once
 	mirrorAborted    atomic.Bool
-	mirrorLossReason atomic.Value // string, published before mirrorAborted
+	mirrorLossReason atomic.Value  // string, published before mirrorAborted
+	mirrorAbortDone  chan struct{} // closed after queue discard + CloseNow
+
+	// writerGate/writerTaken are nil in production. Tests use them to hold a
+	// dequeued frame at the writer boundary and prove an abort cannot flush it.
+	writerGate  <-chan struct{}
+	writerTaken chan struct{}
 }
 
 // subscription is one live mirror on this connection: the relay goroutine's
@@ -113,6 +119,11 @@ type subscription struct {
 	// loss is independent from raw bytes so overflow remains observable even
 	// when the data channel already contains stale chunks or has closed.
 	loss <-chan error
+	// ready gates forwarding until the initial snapshot has been queued. The
+	// relay nevertheless starts immediately, so it owns loss cancellation while
+	// capture/encoding/queueing are still in flight.
+	ready     chan struct{}
+	readyOnce sync.Once
 	// restoreSize returns the pane to the geometry captured before this
 	// subscription reshaped it. Nil when the original geometry could not be read.
 	// restoreOnce guards it against double teardown (explicit unsubscribe racing
@@ -134,15 +145,16 @@ func (s *Server) serveConn(conn *websocket.Conn) {
 	// WS 连接计数（重连线索：慢网下连接数暴增 = 超时断开→重连）。
 	s.sendQueue.recordConnection()
 	c := &wsConn{
-		s:         s,
-		id:        connSeq.Add(1),
-		conn:      conn,
-		ctx:       ctx,
-		cancel:    cancel,
-		writeCtx:  writeCtx,
-		writeStop: writeStop,
-		subs:      make(map[string]*subscription),
-		sendCh:    make(chan wsMsg, 256),
+		s:               s,
+		id:              connSeq.Add(1),
+		conn:            conn,
+		ctx:             ctx,
+		cancel:          cancel,
+		writeCtx:        writeCtx,
+		writeStop:       writeStop,
+		subs:            make(map[string]*subscription),
+		sendCh:          make(chan wsMsg, 256),
+		mirrorAbortDone: make(chan struct{}),
 	}
 	s.registerTracker(c)
 	go c.writeLoop()
@@ -201,6 +213,13 @@ func (c *wsConn) writeLoop() {
 	for {
 		select {
 		case m := <-c.sendCh:
+			if c.writerTaken != nil {
+				close(c.writerTaken)
+				c.writerTaken = nil
+			}
+			if c.writerGate != nil {
+				<-c.writerGate
+			}
 			if c.mirrorAborted.Load() {
 				_ = c.conn.CloseNow()
 				return
@@ -368,7 +387,7 @@ func (c *wsConn) sendMirror(data []byte) {
 		c.s.log.Debug("ws: mirror queue overflow; aborting connection", "conn", c.id)
 		c.s.sendQueue.recordDrop()
 		c.connMetrics.recordDrop()
-		c.abortMirrorLoss("ws send queue overflow", errWSQueueOverflow)
+		c.abortMirrorLoss("", errWSQueueOverflow)
 	}
 }
 
@@ -380,7 +399,13 @@ var errWSQueueOverflow = errors.New("ws: mirror send queue overflow")
 // unrecoverable. The once guard also bounds repeated overflow callbacks.
 func (c *wsConn) abortMirrorLoss(ref string, cause error) {
 	c.mirrorAbortOnce.Do(func() {
-		reason := fmt.Sprintf("mirror_loss: ref=%s: %v", ref, cause)
+		if c.mirrorAbortDone != nil {
+			defer close(c.mirrorAbortDone)
+		}
+		reason := fmt.Sprintf("mirror_loss: cause=%v", cause)
+		if ref != "" {
+			reason = fmt.Sprintf("mirror_loss: ref=%s: %v", ref, cause)
+		}
 		c.mirrorLossReason.Store(reason)
 		c.mirrorAborted.Store(true)
 		c.cancel()
@@ -580,9 +605,22 @@ func (c *wsConn) closeSubscriptions() {
 // (closeSubscriptions), and relay stream end — so the pane restore runs on all
 // of them alike (fix-host-pane-geometry-accounting 契约 2). restoreOnce makes
 // it idempotent if two routes race on the same subscription.
+func (sub *subscription) releaseRelayGate() {
+	if sub.ready != nil {
+		sub.readyOnce.Do(func() { close(sub.ready) })
+	}
+}
+
 func teardownSubscription(sub *subscription) {
-	sub.cancel()
-	sub.detach()
+	if sub.cancel != nil {
+		sub.cancel()
+	}
+	// Unblock a relay that is waiting for the initial snapshot; its context
+	// is already canceled so it cannot forward queued bytes on this path.
+	sub.releaseRelayGate()
+	if sub.detach != nil {
+		sub.detach()
+	}
 	sub.restoreOnce.Do(func() {
 		if sub.restoreSize != nil {
 			sub.restoreSize()
@@ -615,6 +653,7 @@ func (c *wsConn) subscribeCancel(ref string) bool {
 // Voluntary unsubscribe cancels ctx first and stays silent (docs/protocol.md §4.2).
 func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte) {
 	loss := sub.loss
+	ready := sub.ready
 	defer func() {
 		// Single teardown path (fix-host-pane-geometry-accounting 契约 2): the
 		// pane restore runs on relay stream end too, exactly like the explicit
@@ -630,6 +669,24 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 		c.subsMu.Unlock()
 	}()
 	for {
+		if ready != nil {
+			select {
+			case <-ready:
+				if ctx.Err() != nil {
+					return
+				}
+				ready = nil
+			case cause, ok := <-loss:
+				if ok && ctx.Err() == nil {
+					c.abortMirrorLoss(sub.ref, cause)
+					return
+				}
+				loss = nil
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
 		// Prefer a loss that raced with a data notification. This check plus
 		// the post-receive check below prevents already-buffered stale chunks
 		// from being actively drained after the loss boundary.

@@ -53,7 +53,7 @@ func TestSubscriberOverflowEmitsOneLossSignal(t *testing.T) {
 		if ok {
 			t.Fatalf("second loss signal=%v", got)
 		}
-	default:
+	case <-time.After(2 * time.Second):
 		t.Fatal("loss channel remained open after one-shot signal")
 	}
 	if got := len(slow); got != 0 {

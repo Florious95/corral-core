@@ -72,10 +72,15 @@ func TestWSQueueOverflowAbortsOnceAndDiscardsQueue(t *testing.T) {
 	c.sendCh <- wsMsg{typ: wsBinary, data: stale}
 	c.sendMirror([]byte("new-delta-that-overflows"))
 
-	select {
-	case <-c.ctx.Done():
-	case <-time.After(2 * time.Second):
-		t.Fatal("WS queue overflow did not abort the connection")
+	readCtx, readCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	start := time.Now()
+	_, _, err = client.Read(readCtx)
+	readCancel()
+	if err == nil {
+		t.Fatal("client read succeeded after overflow; transport was not aborted")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("overflow transport close was not observable promptly: %v", elapsed)
 	}
 	if got := len(c.sendCh); got != 0 {
 		t.Fatalf("overflow abort retained %d stale queue entries", got)
@@ -88,10 +93,4 @@ func TestWSQueueOverflowAbortsOnceAndDiscardsQueue(t *testing.T) {
 		t.Fatalf("second overflow enqueued data after abort: len=%d", got)
 	}
 
-	readCtx, readCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	_, _, err = client.Read(readCtx)
-	readCancel()
-	if err == nil {
-		t.Fatal("client read succeeded after overflow; transport was not aborted")
-	}
 }

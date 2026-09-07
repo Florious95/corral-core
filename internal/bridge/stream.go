@@ -40,6 +40,13 @@ const streamBufferBytes = 65536
 // client can replay a fresh snapshot.
 var ErrSubscriberOverflow = errors.New("bridge: subscriber queue overflow")
 
+// ErrAttachUnstable means a pane pipe repeatedly died before a subscriber
+// could register. The bound prevents a live context from creating an
+// unbounded attach storm.
+var ErrAttachUnstable = errors.New("bridge: subscriber attach unstable")
+
+const maxSubscribeAttachAttempts = 2
+
 // fifoOpenTimeout bounds the relay's wait for a writer to connect to its FIFO.
 // A healthy pipe-pane writer connects within milliseconds of pipe-pane -o; the
 // bound exists so a subscribe whose pipe never gets a writer (a crashed-pipe
@@ -108,6 +115,13 @@ type sharedPipe struct {
 	refs       int
 	dead       bool
 	fanoutDone chan struct{}
+
+	// attachFn is nil in production; tests may replace the tmux attach seam
+	// with a deterministic generation script.
+	attachFn func(context.Context) error
+	// beforeDataClose is nil in production; tests use it to pause the exact
+	// terminal transition and assert cause publication ordering.
+	beforeDataClose func(uint64)
 }
 
 // newBufferName returns a unique tmux buffer name for one injection.
@@ -209,16 +223,55 @@ func subscribeWithLoss(ctx context.Context, socket, target string, timeout time.
 	return getSharedPipe(socket, target, timeout).add(ctx)
 }
 
+func (s *sharedPipe) attachForSubscribe(ctx context.Context) error {
+	if s.attachFn != nil {
+		return s.attachFn(ctx)
+	}
+	return s.attach(ctx)
+}
+
+func (s *sharedPipe) clearDeadGeneration() {
+	s.mu.Lock()
+	if !s.dead {
+		s.mu.Unlock()
+		return
+	}
+	reader, fifo, done := s.reader, s.fifo, s.fanoutDone
+	s.reader = nil
+	s.fifo = ""
+	s.fanoutDone = nil
+	s.mu.Unlock()
+	if reader != nil {
+		_ = reader.Close()
+	}
+	if fifo != "" {
+		_ = os.Remove(fifo)
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(fifoOpenTimeout + time.Second):
+		}
+	}
+}
+
 func (s *sharedPipe) add(ctx context.Context) (<-chan []byte, <-chan error, func(), error) {
 	s.attachMu.Lock()
 	defer s.attachMu.Unlock()
 
+	attempts := 0
 	for {
 		s.mu.Lock()
 		needAttach := s.fifo == "" || s.dead
 		s.mu.Unlock()
 		if needAttach {
-			if err := s.attach(ctx); err != nil {
+			if attempts >= maxSubscribeAttachAttempts {
+				s.clearDeadGeneration()
+				return nil, nil, nil, fmt.Errorf("%w: attempts=%d", ErrAttachUnstable, attempts)
+			}
+			attempts++
+			if err := s.attachForSubscribe(ctx); err != nil {
+				s.clearDeadGeneration()
 				return nil, nil, nil, err
 			}
 		}
@@ -229,6 +282,10 @@ func (s *sharedPipe) add(ctx context.Context) (<-chan []byte, <-chan error, func
 		// retry the attach while attachMu still serializes ownership.
 		if s.fifo == "" || s.dead {
 			s.mu.Unlock()
+			if attempts >= maxSubscribeAttachAttempts {
+				s.clearDeadGeneration()
+				return nil, nil, nil, fmt.Errorf("%w: attempts=%d", ErrAttachUnstable, attempts)
+			}
 			continue
 		}
 		if s.losses == nil {
@@ -369,7 +426,9 @@ func (s *sharedPipe) fanout(reader *os.File, done chan struct{}, gen uint64) {
 						}
 					}
 				drained:
-					close(ch)
+					// Publish the terminal cause before closing data. Relay EOF
+					// therefore has a happens-before cause and cannot misclassify
+					// overflow as an ordinary displaced pipe.
 					if loss := s.losses[id]; loss != nil {
 						select {
 						case loss <- ErrSubscriberOverflow:
@@ -380,6 +439,10 @@ func (s *sharedPipe) fanout(reader *os.File, done chan struct{}, gen uint64) {
 							s.lossClosed[id] = true
 						}
 					}
+					if s.beforeDataClose != nil {
+						s.beforeDataClose(id)
+					}
+					close(ch)
 				}
 			}
 			s.mu.Unlock()
@@ -398,6 +461,12 @@ func (s *sharedPipe) fanout(reader *os.File, done chan struct{}, gen uint64) {
 						close(loss)
 						s.lossClosed[id] = true
 					}
+					// The old generation owns these auxiliary entries even after
+					// membership is removed; clear them now so a later generation
+					// cannot retain stale channels or failed flags.
+					delete(s.losses, id)
+					delete(s.lossClosed, id)
+					delete(s.failed, id)
 				}
 			}
 			s.mu.Unlock()

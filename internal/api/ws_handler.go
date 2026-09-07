@@ -118,10 +118,11 @@ func errString(err error) string {
 }
 
 // handleSubscribe starts mirroring a session: resize the pane to the client's
-// dims, attach the pipe (bridge.Subscribe), send a full snapshot, then relay
-// deltas. Re-subscribing the same ref is idempotent: the previous subscription
-// is torn down and a fresh snapshot is replayed (requirement 004 reconnect
-// replay). A failure to subscribe is an error frame.
+// dims, attach the pipe (bridge.SubscribeWithLoss), queue a full snapshot, then
+// open the relay gate. The relay owns loss cancellation while capture and first
+// frame queueing are still in flight. Re-subscribing the same ref is idempotent:
+// the previous subscription is torn down and a fresh snapshot is replayed
+// (requirement 004 reconnect replay). A failure to subscribe is an error frame.
 //
 // Subscribe-frame timestamps (recv/start/done/queue_ms) are logged at the
 // handleFrame call site so every return path is covered once.
@@ -149,6 +150,17 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// the same geometry regardless of how many clients came and went in between.
 	geom := c.s.geometryFor(s.Ref)
 	_, _, _ = geom.acquire(c.ctx, br)
+	subCtx, cancel := context.WithCancel(c.ctx)
+	sub := &subscription{
+		ref:    s.Ref,
+		cancel: cancel,
+		ready:  make(chan struct{}),
+	}
+	// Install the release hook before any fallible operation after acquire. All
+	// exits (including capture/encode failure) then use the same idempotent owner.
+	sub.restoreSize = func() {
+		geom.release(c.ctx, br, c.s.log, s.Ref)
+	}
 
 	// Initial client dims reshape the pane so the CLI redraws for the phone
 	// (requirement 005). A resize failure is not fatal: the mirror continues at
@@ -158,16 +170,22 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	}
 
 	// Attach the pipe before the snapshot so no output between the two is lost
-	// (term-bridge knowledge base: pipe first, then capture).
+	// (term-bridge knowledge base: pipe first, then capture). Start the relay
+	// before capture, but keep its data gate closed until the snapshot is queued;
+	// this gives loss handling ownership to the whole initial-subscribe window.
 	ch, loss, detach, err := br.SubscribeWithLoss(c.ctx)
 	if err != nil {
+		teardownSubscription(sub)
 		c.sendError(protocol.ErrCodeInternal, "cannot attach mirror")
 		return
 	}
+	sub.detach = detach
+	sub.loss = loss
+	go c.relay(subCtx, sub, ch)
 
 	snap, err := snapshotWithCursor(c.ctx, br)
 	if err != nil {
-		detach()
+		teardownSubscription(sub)
 		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		return
 	}
@@ -177,25 +195,17 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		Data: snap,
 	})
 	if err != nil {
-		detach()
+		teardownSubscription(sub)
 		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
 		return
 	}
 	c.sendBinary(frame)
-
-	subCtx, cancel := context.WithCancel(c.ctx)
-	sub := &subscription{ref: s.Ref, cancel: cancel, detach: detach, loss: loss}
-	// Release hook: the pane-level geometry tracker is released when this
-	// subscription ends. When it is the last subscriber the tracker restores the
-	// pane to the shared original baseline (契约 2: teardown/closeSubscriptions/
-	// relay exit all call restoreSize, so every exit path hits the same release →
-	// last-leaver restores). geomOK==false means no baseline was captured (Size
-	// failed); release is then a no-op rather than restoring a guessed size.
-	sub.restoreSize = func() {
-		geom.release(c.ctx, br, c.s.log, s.Ref)
+	if subCtx.Err() != nil || c.mirrorAborted.Load() {
+		teardownSubscription(sub)
+		return
 	}
 	c.subscribeAdd(sub)
-	go c.relay(subCtx, sub, ch)
+	sub.releaseRelayGate()
 }
 
 // handleUnsubscribe stops mirroring a session. Idempotent: unsubscribing a
