@@ -230,15 +230,30 @@ data class Session(
     @SerialName("cols") val cols: Int,
     /** pane_title 原样。App 禁止从本字段抠状态或身份。一级 listing 可缺省。 */
     @SerialName("title") val title: String = "",
-    /** 只许 working / idle / unknown。缺省或乱值一律当 unknown，不得回落 idle。 */
+    /** nodeprobe provider id；缺省为 unknown。 */
+    @SerialName("provider") val provider: String = "unknown",
+    /** nodeprobe activity；新服务端必须与 legacy status 相等。 */
+    @SerialName("activity") val activity: String = "",
+    /** legacy alias；仅老服务端缺 activity 时可单独作为有效活动。 */
     @SerialName("status") val status: String = "",
-    /** tmux session_name 结构字段；缺省空。跳转身份只用结构字段。 */
-    @SerialName("session_name") val sessionName: String = "",
+    /** nodeprobe session name；JSON null/缺省均保留为未知。 */
+    @SerialName("session_name") val sessionName: String? = null,
+    /** nodeprobe health closed axis. */
+    @SerialName("health") val health: String = "unknown",
     /** tmux window_index 结构字段（字符串）；缺省空。 */
     @SerialName("window_index") val windowIndex: String = "",
     /** tmux window_name 结构字段；缺省空。展示名优先于 [name]。 */
     @SerialName("window_name") val windowName: String = "",
-)
+) {
+    val effectiveActivity: String
+        get() = when {
+            activity in SESSION_ACTIVITIES && status == activity -> activity
+            activity.isEmpty() && status in SESSION_ACTIVITIES -> status
+            else -> "unknown"
+        }
+}
+
+private val SESSION_ACTIVITIES = setOf("working", "idle", "unknown")
 
 /**
  * 全量列表回复 S→C（req_id 对应 list；seq 单调递增）。

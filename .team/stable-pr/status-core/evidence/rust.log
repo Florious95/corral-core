@@ -1,0 +1,81 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling syn v3.0.3
+   Compiling serde_derive v1.0.229
+   Compiling nodeprobe v0.1.0 (/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-status-core-863c/tools/nodeprobe)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.43s
+     Running unittests src/lib.rs (/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-status-core-863c/.team/stable-pr/status-core/evidence/tmp/cargo-target/debug/deps/nodeprobe-9fc16c2382662042)
+
+running 41 tests
+test classify::tests::pi_observed_title_is_unknown_not_idle ... ok
+test classify::tests::pi_identical_active_and_idle_labels_have_no_title_signal ... ok
+test classify::tests::pi_unrecognized_glyph_remains_unknown ... ok
+test classify::tests::codex_unknown_braille_is_unknown ... ok
+test classify::tests::codex_plain_title_is_idle ... ok
+test classify::tests::codex_spinner_frames_are_working ... ok
+test classify::tests::footer_grok_vacuum_is_zero_not_constant_one ... ok
+test classify::tests::pi_official_title_is_provider_fallback_but_activity_unknown ... ok
+test classify::tests::unknown_title_state_is_not_idle ... ok
+test pi_activity::tests::default_channel_dir_is_private_per_user_runtime_path ... ok
+test pi_activity::tests::missing_and_multi_seat_are_fail_closed ... ok
+test classify::tests::footer_grok_running_is_count_state_stays_idle ... ok
+test classify::tests::footer_provider_without_rule_is_unknown_not_zero ... ok
+test pi_activity::tests::title_name_accepts_official_forms ... ok
+test pi_activity::tests::title_name_rejects_spaced_hyphen_ambiguity ... ok
+test proctree::tests::ps_invocation_is_narrow_fields_only ... ok
+test proctree::tests::walk_hits_nested_codex_via_basename ... ok
+test providers::tests::empty_provider_corpus_is_unavailable ... ok
+test proctree::tests::walk_terminates_on_cycles_and_preserves_first_visit_order ... ok
+test providers::tests::malformed_provider_rows_fail_closed ... ok
+test providers::tests::six_rows_and_basename ... ok
+test providers::tests::provider_corpus_parity_with_go ... ok
+test tests::corpus_rejects_missing_kind ... ok
+test pi_activity::tests::old_and_unknown_channel_versions_fail_closed ... ok
+test providers::tests::provider_corpus_load_failures_are_structured ... ok
+fixtures_corpus title=12 footer=3 ok
+test tests::fixture_runs_are_repeatable_and_provider_is_separate ... ok
+test tests::pi_channel_evidence_matches_authoritative_activity_and_health ... ok
+test tests::fixtures_corpus ... ok
+test tests::pi_missing_channel_with_process_is_normal_health ... ok
+test tests::pi_session_name_merge_requires_agreement_or_single_authority ... ok
+test tests::malformed_corpus_kind_is_not_ignored ... ok
+test tests::pi_unsupported_activity_is_explicit_in_evidence ... ok
+test web::tests::html_escape_handles_untrusted_text ... ok
+test pi_activity::tests::valid_working_and_idle_channel_records_are_normal ... ok
+test web::tests::route_responses_expose_api_healthz_and_refresh_page ... ok
+test web::tests::overrides_are_deduplicated ... ok
+test pi_activity::tests::stale_or_invalid_channel_never_becomes_idle ... ok
+test tests::error_report_is_versioned_and_explicit ... ok
+test web::tests::injected_multi_socket_snapshot_deduplicates_and_keeps_failures ... ok
+test tests::missing_socket_is_not_empty_success ... ok
+test proctree::tests::walk_is_bounded_for_deep_process_graphs ... ok
+
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/main.rs (/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-status-core-863c/.team/stable-pr/status-core/evidence/tmp/cargo-target/debug/deps/nodeprobe-1f093f487b9ef972)
+
+running 1 test
+test tests::web_bind_is_localhost_and_flags_parse ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fake_tmux.rs (/Volumes/nvme/Projects/远程Agent安卓/.worktrees/wt-status-core-863c/.team/stable-pr/status-core/evidence/tmp/cargo-target/debug/deps/fake_tmux-d6d6daf03c1e8238)
+
+running 1 test
+test fake_tmux_inventory_is_read_only_and_unknown_is_explicit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+   Doc-tests nodeprobe
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

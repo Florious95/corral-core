@@ -1,0 +1,21 @@
+{
+  "accepted_commit": "863c316ff66add549f8fa6dd215cedeedd037f8b",
+  "accepted_tree": "ce667e3c464d0efb2ac9483862ff84a38008e674",
+  "parent": "76fdf428eed2e58e2f9d6c79a10e48fbc45db366",
+  "product_baseline": "4605951e427f9ba6627375498dcb3c757c05bf36",
+  "observer_sha256": "ee8b088ef78428e7e74b905d8e770d4271562f2778a083da489612713f43533c",
+  "binary_sha256": "8ef9c5fe89ae76f2c8eb6aeb16bf5fb9060a79bcf81aa4d790df3f4614c2fb5f",
+  "binary_size": 770432,
+  "extension_path": "/Users/alauda/.pi/agent/extensions/nodeprobe-pi-activity.js",
+  "tests": {
+    "provenance_gate": "passed",
+    "cargo": "41+1+1 passed including pi_missing_channel_with_process_is_normal_health",
+    "go_count1": "nodeprobe/protocol/api/agentmirrord ok",
+    "node_extension": "pi extension lifecycle protocol ok",
+    "app_core_protocol": "ConnCodecTest BUILD SUCCESSFUL",
+    "app_l2": "L2UnknownStatusTest BUILD SUCCESSFUL",
+    "install_hash": "passed",
+    "isolated_failclosed": "missing→normal; working→idle; stale/future/disconnect/pid/instance/json/schema→abnormal",
+    "web_api_status": "schema=1 nodes=123 sockets=31 errors=0 wall=2.875s port=18497 cleaned"
+  }
+}
