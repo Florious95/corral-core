@@ -83,26 +83,32 @@ type Workspace struct {
 // come from tmux structural fields, and the client must never derive any
 // addressing from Title.
 //
-// Status is the server-classified badge (requirement 061). It is only one of
-// SessionStatusWorking / SessionStatusIdle / SessionStatusUnknown. The client
-// must not re-derive status from Title.
+// Provider, Activity, SessionName, and Health are independent nodeprobe axes.
+// Status is the legacy alias and always equals Activity on current output. The
+// client must not re-derive any axis from Title.
 type Session struct {
-	Ref      string `json:"ref"`
-	Name     string `json:"name"`
-	Cwd      string `json:"cwd"`
-	Title    string `json:"title"`
-	Status   string `json:"status,omitempty"`
-	Provider string `json:"provider,omitempty"`
-	Rows     uint16 `json:"rows"`
-	Cols     uint16 `json:"cols"`
+	Ref         string  `json:"ref"`
+	Name        string  `json:"name"`
+	Cwd         string  `json:"cwd"`
+	Title       string  `json:"title"`
+	Provider    string  `json:"provider"`
+	Activity    string  `json:"activity"`
+	SessionName *string `json:"session_name"`
+	Health      string  `json:"health"`
+	Status      string  `json:"status"`
+	Rows        uint16  `json:"rows"`
+	Cols        uint16  `json:"cols"`
 }
 
 // Closed set for Session.Status (requirement 061). Unknown glyphs stay
 // unknown — never fall back to idle.
 const (
-	SessionStatusWorking = "working"
-	SessionStatusIdle    = "idle"
-	SessionStatusUnknown = "unknown"
+	SessionStatusWorking  = "working"
+	SessionStatusIdle     = "idle"
+	SessionStatusUnknown  = "unknown"
+	SessionHealthNormal   = "normal"
+	SessionHealthAbnormal = "abnormal"
+	SessionHealthUnknown  = "unknown"
 )
 
 // Listing is the full two-level workspace/session model (S→C, reply to List).
@@ -381,13 +387,13 @@ type Level2Unsubscribe struct {
 // Level2Frame is the server-pushed second-level snapshot (S→C; requirement 061).
 // It carries one workspace's sessions as a full replace, pushed only when the
 // snapshot changed. Sessions carry structural identity, verbatim Title, and
-// Status classified from the title prefix glyph.
+// the accepted nodeprobe four-axis observation.
 //
 // @contract
 // @pre Workspace 非空、Seq >= 1
 // @post 客户端以 Sessions 整体替换该工作区的二级视图
 // @err none
-// @inv Title 逐字节原样透传；Status 只来自服务端符号表
+// @inv Title 逐字节原样透传；Status 始终等于 Activity
 type Level2Frame struct {
 	Workspace string    `json:"workspace"`
 	Seq       uint64    `json:"seq"`

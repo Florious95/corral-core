@@ -1,13 +1,10 @@
 package api
 
 import (
-	"bytes"
 	"context"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -19,23 +16,6 @@ import (
 // level2_test.go pins requirement 061: structural identity, unknown glyphs
 // stay unknown (and log codepoint + full title), zero-subscriber idle gate,
 // push-on-change, and low-frequency heartbeat.
-
-type syncBuf struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-}
-
-func (s *syncBuf) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.b.Write(p)
-}
-
-func (s *syncBuf) String() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.b.String()
-}
 
 func waitTyped(t *testing.T, e *wsEnv, deadline time.Time, want func(protocol.Typed) bool) protocol.Typed {
 	t.Helper()
@@ -99,8 +79,8 @@ func TestL2StructuralFields(t *testing.T) {
 	}}
 	e := startWS(t, Options{
 		Token:           "test-token",
-		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
+		Nodeprobe:       &testNodeprobe{provider: "pi", activity: "working", health: "normal"},
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
 		Level2Heartbeat: time.Hour,
@@ -144,7 +124,6 @@ func TestL2UnknownGlyphStaysUnknown(t *testing.T) {
 	}}
 	e := startWS(t, Options{
 		Token:           "test-token",
-		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
@@ -165,76 +144,99 @@ func TestL2UnknownGlyphStaysUnknown(t *testing.T) {
 	}
 }
 
-func TestL2UnknownGlyphLogsCodepoint(t *testing.T) {
-	title := "?l2-unknown-glyph-probe"
-	// '?' is U+003F — the log must carry this codepoint and the full title.
-	var buf syncBuf
-	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	md := &mutableDiscoverer{model: &discovery.Model{
-		Workspaces: []discovery.Workspace{
-			{CWD: "/ws/a", Panes: []discovery.Pane{
-				l2Pane(title, "alpha", "claude", "/ws/a", "/tmp/sock1", "%0", 80, 24),
-			}},
-		},
-	}}
-	e := startWS(t, Options{
-		Token:           "test-token",
-		ProviderFinder:  staticProvider("claude_code"),
-		Discoverer:      md,
-		ListInterval:    time.Hour,
-		Level2Interval:  30 * time.Millisecond,
-		Level2Heartbeat: time.Hour,
-		Log:             log,
-	})
+func TestL2UnknownProviderIsRetainedWithoutTitleInference(t *testing.T) {
+	title := "?l2-unknown-provider"
+	md := &mutableDiscoverer{model: &discovery.Model{Workspaces: []discovery.Workspace{{CWD: "/ws/a", Panes: []discovery.Pane{
+		l2Pane(title, "alpha", "claude", "/ws/a", "/tmp/sock1", "%0", 80, 24),
+	}}}}}
+	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour})
 	e.auth()
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
-	_ = waitLevel2Frame(t, e, 5*time.Second)
-	// Wait a tick so the scan goroutine has flushed the log line.
-	deadline := time.Now().Add(2 * time.Second)
-	var logs string
-	for time.Now().Before(deadline) {
-		logs = buf.String()
-		if strings.Contains(logs, "U+003F") && strings.Contains(logs, title) && strings.Contains(logs, "claude_code") {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
+	got := waitLevel2Frame(t, e, 5*time.Second)
+	if len(got.Sessions) != 1 || got.Sessions[0].Provider != "unknown" || got.Sessions[0].Activity != "unknown" {
+		t.Fatalf("accepted unknown row was filtered or inferred: %+v", got.Sessions)
 	}
-	t.Fatalf("unknown-glyph log missing operands: want provider=claude_code codepoint=U+003F title=%q; got %q", title, logs)
+	if got.Sessions[0].Title != title {
+		t.Fatalf("title changed: %q", got.Sessions[0].Title)
+	}
 }
 
 func TestL2NoPollWithoutSubscriber(t *testing.T) {
 	cd := &countingDiscoverer{model: testModel()}
+	np := &testNodeprobe{}
 	e := startWS(t, Options{
 		Token:           "test-token",
-		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      cd,
+		Nodeprobe:       np,
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
 		Level2Heartbeat: time.Hour,
 	})
 	e.auth()
 
-	baseline := cd.scans.Load()
-	time.Sleep(150 * time.Millisecond)
-	if got := cd.scans.Load(); got > baseline {
-		t.Fatalf("level2 scan ran with zero subscribers: scans %d > baseline %d (idle gate broken)", got, baseline)
+	waitFor := func(what string, condition func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for !condition() && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+		if !condition() {
+			t.Fatalf("timed out waiting for %s: level2=%d scans=%d nodeprobe=%d", what, e.srv.countLevel2(), cd.scans.Load(), np.count())
+		}
+	}
+	stableCounters := func() (int64, int) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		lastScans, lastProbe := cd.scans.Load(), np.count()
+		stable := 0
+		for time.Now().Before(deadline) {
+			time.Sleep(e.srv.level2Interval)
+			scans, probes := cd.scans.Load(), np.count()
+			if scans == lastScans && probes == lastProbe {
+				stable++
+				if stable == 2 {
+					return scans, probes
+				}
+			} else {
+				stable = 0
+				lastScans, lastProbe = scans, probes
+			}
+		}
+		t.Fatalf("counters did not settle after unsubscribe: scans=%d nodeprobe=%d", lastScans, lastProbe)
+		return 0, 0
+	}
+
+	if got := e.srv.countLevel2(); got != 0 {
+		t.Fatalf("level2 subscribers after auth = %d, want 0", got)
+	}
+	// Auth ack is not a listing completion barrier. Settle the mandatory
+	// auth-triggered listing sample before attributing later work to level2.
+	waitFor("auth listing sample", func() bool { return cd.scans.Load() >= 1 && np.count() >= 1 })
+	baseline, baselineProbe := cd.scans.Load(), np.count()
+	time.Sleep(5 * e.srv.level2Interval)
+	if got := cd.scans.Load(); got != baseline {
+		t.Fatalf("level2 scan ran with zero subscribers: scans %d != baseline %d (idle gate broken)", got, baseline)
+	}
+	if got := np.count(); got != baselineProbe {
+		t.Fatalf("nodeprobe ran with zero level2 subscribers: %d -> %d", baselineProbe, got)
 	}
 
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) && cd.scans.Load() == baseline {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if cd.scans.Load() == baseline {
-		t.Fatal("no level2 scan after subscribing (gate did not wake)")
-	}
+	waitFor("level2 subscribe state and positive-control sample", func() bool {
+		return e.srv.countLevel2() == 1 && cd.scans.Load() > baseline && np.count() > baselineProbe
+	})
 
 	e.sendFrame(&protocol.Level2Unsubscribe{Workspace: "/ws/a"})
-	time.Sleep(80 * time.Millisecond)
-	after := cd.scans.Load()
-	time.Sleep(200 * time.Millisecond)
+	waitFor("level2 unsubscribe state", func() bool { return e.srv.countLevel2() == 0 })
+	after, afterProbe := stableCounters()
+	// Frozen counterexample tooth: removing either zero-subscriber production
+	// guard makes both counters grow in this post-barrier observation window.
+	time.Sleep(5 * e.srv.level2Interval)
 	if got := cd.scans.Load(); got != after {
 		t.Fatalf("level2 scan continued after unsubscribe: %d -> %d (idle gate broken)", after, got)
+	}
+	if got := np.count(); got != afterProbe {
+		t.Fatalf("nodeprobe continued after unsubscribe: %d -> %d", afterProbe, got)
 	}
 }
 
@@ -246,10 +248,11 @@ func TestL2PushOnChangeOnly(t *testing.T) {
 			}},
 		},
 	}}
+	np := &testNodeprobe{provider: "pi", activity: "working", health: "normal"}
 	e := startWS(t, Options{
 		Token:           "test-token",
-		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
+		Nodeprobe:       np,
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
 		Level2Heartbeat: time.Hour,
@@ -266,6 +269,7 @@ func TestL2PushOnChangeOnly(t *testing.T) {
 	// and the next read is still "◐ before" instead of the changed row.
 	time.Sleep(150 * time.Millisecond)
 
+	np.setActivity("idle")
 	md.set(&discovery.Model{
 		Workspaces: []discovery.Workspace{
 			{CWD: "/ws/a", Panes: []discovery.Pane{
@@ -292,7 +296,6 @@ func TestL2Heartbeat(t *testing.T) {
 	}}
 	e := startWS(t, Options{
 		Token:           "test-token",
-		ProviderFinder:  staticProvider("claude_code"),
 		Discoverer:      md,
 		ListInterval:    time.Hour,
 		Level2Interval:  20 * time.Millisecond,
@@ -328,7 +331,7 @@ func TestLevel2TitleVerbatim(t *testing.T) {
 			}},
 		},
 	}}
-	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour})
 	e.auth()
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
 	got := waitLevel2Frame(t, e, 5*time.Second)
@@ -356,7 +359,7 @@ func TestLevel2IdentityStructural(t *testing.T) {
 			}},
 		},
 	}}
-	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour})
 	e.auth()
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
 	got := waitLevel2Frame(t, e, 5*time.Second)

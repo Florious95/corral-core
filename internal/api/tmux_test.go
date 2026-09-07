@@ -82,7 +82,7 @@ func startTmuxEnv(t *testing.T, cmd string) *tmuxEnv {
 		},
 	}
 	md := &mutableDiscoverer{model: model}
-	e := startWS(t, Options{Token: "test-token", Discoverer: md, ProviderFinder: staticProvider("claude_code")})
+	e := startWS(t, Options{Token: "test-token", Discoverer: md})
 	e.auth()
 
 	return &tmuxEnv{t: t, sock: sock, paneID: paneID, env: env, wsEnv: e}

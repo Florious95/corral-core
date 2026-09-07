@@ -90,8 +90,25 @@ func (s Session) Validate() error {
 	if s.Rows == 0 || s.Cols == 0 {
 		return fmt.Errorf("%w: session rows/cols must be >= 1", ErrInvalidField)
 	}
-	if s.Status != "" && s.Status != SessionStatusWorking && s.Status != SessionStatusIdle && s.Status != SessionStatusUnknown {
-		return fmt.Errorf("%w: session status %q is not working/idle/unknown", ErrInvalidField, s.Status)
+	// Pre-four-axis fixtures/peers may omit every additive field together.
+	// Candidate output never takes this branch; partial/new values are strict.
+	if s.Provider == "" && s.Activity == "" && s.Health == "" {
+		if s.Status != "" && s.Status != SessionStatusWorking && s.Status != SessionStatusIdle && s.Status != SessionStatusUnknown {
+			return fmt.Errorf("%w: legacy session status %q is not working/idle/unknown", ErrInvalidField, s.Status)
+		}
+		return nil
+	}
+	if s.Provider == "" {
+		return fmt.Errorf("%w: session provider must be non-empty", ErrInvalidField)
+	}
+	if s.Activity != SessionStatusWorking && s.Activity != SessionStatusIdle && s.Activity != SessionStatusUnknown {
+		return fmt.Errorf("%w: session activity %q is not working/idle/unknown", ErrInvalidField, s.Activity)
+	}
+	if s.Status != "" && s.Status != s.Activity {
+		return fmt.Errorf("%w: session status %q diverges from activity %q", ErrInvalidField, s.Status, s.Activity)
+	}
+	if s.Health != SessionHealthNormal && s.Health != SessionHealthAbnormal && s.Health != SessionHealthUnknown {
+		return fmt.Errorf("%w: session health %q is not normal/abnormal/unknown", ErrInvalidField, s.Health)
 	}
 	return nil
 }

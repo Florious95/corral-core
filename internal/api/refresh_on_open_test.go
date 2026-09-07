@@ -19,10 +19,9 @@ func TestRefreshOnOpenListRescans(t *testing.T) {
 		},
 	}}
 	e := startWS(t, Options{
-		Token:          "test-token",
-		Discoverer:     md,
-		ListInterval:   time.Hour,
-		ProviderFinder: staticProvider("claude_code"),
+		Token:        "test-token",
+		Discoverer:   md,
+		ListInterval: time.Hour,
 	})
 	e.auth()
 	e.sendFrame(&protocol.List{ReqID: 1})
@@ -52,10 +51,9 @@ func TestRefreshOnOpenListRescans(t *testing.T) {
 func TestRefreshOnOpenListFailureKeepsCache(t *testing.T) {
 	fd := &flipDiscoverer{model: testModel()}
 	e := startWS(t, Options{
-		Token:          "test-token",
-		Discoverer:     fd,
-		ListInterval:   time.Hour,
-		ProviderFinder: staticProvider("claude_code"),
+		Token:        "test-token",
+		Discoverer:   fd,
+		ListInterval: time.Hour,
 	})
 	e.auth()
 	e.sendFrame(&protocol.List{ReqID: 1})
@@ -83,13 +81,14 @@ func TestRefreshOnOpenLevel2Resubscribe(t *testing.T) {
 			}},
 		},
 	}}
+	np := &testNodeprobe{provider: "grok", activity: "idle", health: "normal", session: "s"}
 	e := startWS(t, Options{
 		Token:           "test-token",
 		Discoverer:      md,
+		Nodeprobe:       np,
 		ListInterval:    time.Hour,
 		Level2Interval:  10 * time.Second,
 		Level2Heartbeat: time.Hour,
-		ProviderFinder:  staticProvider("grok"),
 	})
 	e.auth()
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
@@ -105,6 +104,7 @@ func TestRefreshOnOpenLevel2Resubscribe(t *testing.T) {
 			}},
 		},
 	})
+	np.setActivity("working")
 	t0 := time.Now()
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
 	second := waitLevel2Frame(t, e, 1500*time.Millisecond)
@@ -128,7 +128,6 @@ func TestRefreshOnOpenLevel2ZeroSubscribersNoPoll(t *testing.T) {
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
 		Level2Heartbeat: time.Hour,
-		ProviderFinder:  staticProvider("claude_code"),
 	})
 	e.auth()
 	base := cd.scans.Load()

@@ -52,7 +52,7 @@ go vet ./...
 | `-qr-listen` | `AGENTMIRROR_QR_LISTEN` | 空（禁用） | 配对 QR 页监听地址 |
 | `-log-level` | `AGENTMIRROR_LOG_LEVEL` | `info` | 日志级别 `debug\|info\|warn\|error` |
 | `-token` | `AGENTMIRROR_TOKEN` | 自动生成并持久化 | 显式配对 token；凭据会出现在 argv，优先使用环境变量 |
-| `-upload-dir` | `AGENTMIRROR_UPLOAD_DIR` | `~/Downloads/agentmirror-uploads` | 图片上传落盘目录 |
+| `-upload-dir` | `AGENTMIRROR_UPLOAD_DIR` | `~/Downloads/agentmirror-uploads` | 图片上传落盘目录（与 last-good 相同） |
 | `-max-upload-bytes` | `AGENTMIRROR_MAX_UPLOAD_BYTES` | `20971520` | 单次上传文件上限（20 MiB） |
 | —（禁止 argv） | `TS_AUTHKEY` | 空（LAN-only） | 内嵌 tsnet 节点凭据；非空启用 LAN + tailnet 双栈 |
 | — | `TS_CONTROL_URL` | 官方控制面 | 可选自托管控制面（如 headscale）URL |
@@ -64,6 +64,11 @@ go vet ./...
 `POST /upload` 必须携带 `Authorization: Bearer <pairing-token>`，与 WebSocket 握手复用同一
 凭据。上传目录内常规文件总量硬上限为 1 GiB；将越过上限的请求会以 HTTP 507 明确拒绝，
 daemon 不会擅自删除自定义目录中的文件。达到上限后请删除不再需要的旧上传文件再重试。
+默认目录仍是 last-good 的 `~/Downloads/agentmirror-uploads`。若该目录可写但列举被拒绝
+（macOS TCC 等），用量测量失败不再变成 HTTP 500，写入仍按 last-good 落盘。路径不是目录、
+不可创建或不可写时，在有限时间内返回 JSON `upload_dir_invalid` /
+`upload_dir_unavailable` / `upload_write_failed`（HTTP 400 或 507），响应不含路径或
+token。过长文件名截断到单个文件名分量上限，避免 `ENAMETOOLONG` 变成 500。
 
 ## 配对 token 吊销与轮换
 

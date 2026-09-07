@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/overlay"
 )
 
@@ -35,9 +36,22 @@ const (
 	// rejected with input_ack reason too_large.
 	defaultMaxInputBytes = 1 << 20 // 1 MiB
 
-	// defaultUploadSubdir is the default directory (under ~/Downloads) where
-	// uploaded images are written.
+	// defaultUploadSubdir is the last-good directory name under ~/Downloads
+	// where uploaded images are written when UploadDir is empty.
 	defaultUploadSubdir = "agentmirror-uploads"
+
+	// maxUploadFileNameBytes is the POSIX filename component cap. The stored
+	// name is uniqueness-prefix + stem + short ext, clipped to this length.
+	maxUploadFileNameBytes = 255
+
+	// maxSanitizedExtLetters is the max alnum length after the final '.' that
+	// is kept as an extension when clipping (".jpg" is 3).
+	maxSanitizedExtLetters = 8
+
+	// uploadDirMeasureBatch / maxUploadDirEntries bound uploadDirSize so a
+	// hostile directory cannot hang POST /upload.
+	uploadDirMeasureBatch = 256
+	maxUploadDirEntries   = 65536
 
 	// uploadHeaderSlack is the extra body budget allowed for multipart
 	// framing on top of the file itself, so a file exactly at the byte limit
@@ -88,9 +102,11 @@ type Options struct {
 	// client while subscribers exist (requirement 064). Zero defaults to 100ms.
 	OverlayInterval time.Duration
 
-	// ProviderFinder maps pane_pid → whitelist provider id (requirement 068).
-	// Nil builds the production process-tree walker (comm basename only).
-	ProviderFinder ProviderFinder
+	// Nodeprobe samples the accepted status authority once per discovered socket.
+	// Production startup always supplies the verified runner, which also gates
+	// listings to identified Agent providers. Nil is a compatibility test/library
+	// default that emits unknown observations without applying an identity filter.
+	Nodeprobe nodeprobe.Sampler
 
 	// OverlayCapturer captures choose-tree via a dedicated scratch-session
 	// client. Nil builds the production tmux capturer scoped to the same
@@ -98,7 +114,7 @@ type Options struct {
 	OverlayCapturer overlay.Capturer
 
 	// UploadDir is where POST /upload files are written. Zero defaults to
-	// $HOME/Downloads/agentmirror-uploads (created on demand).
+	// $HOME/Downloads/agentmirror-uploads (created on demand; last-good).
 	UploadDir string
 
 	// MaxUploadBytes caps a single uploaded file. Zero defaults to 20 MiB.

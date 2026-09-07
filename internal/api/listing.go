@@ -26,11 +26,16 @@ func toSession(e *sessionEntry) protocol.Session {
 		name = e.pane.Session
 	}
 	return protocol.Session{
-		Ref:  e.ref,
-		Name: name,
-		Cwd:  e.pane.CWD,
-		Rows: uint16(e.pane.Height),
-		Cols: uint16(e.pane.Width),
+		Ref:         e.ref,
+		Name:        name,
+		Cwd:         e.pane.CWD,
+		Provider:    e.observation.Provider,
+		Activity:    e.observation.Activity,
+		SessionName: e.observation.SessionName,
+		Health:      e.observation.Health,
+		Status:      e.observation.Activity,
+		Rows:        uint16(e.pane.Height),
+		Cols:        uint16(e.pane.Width),
 	}
 }
 

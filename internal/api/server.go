@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/overlay"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
@@ -117,7 +118,14 @@ type Server struct {
 	overlay            overlay.Capturer
 	overlayLastHash    map[string]string
 
-	providerFinder ProviderFinder
+	nodeprobe    nodeprobe.Sampler
+	filterAgents bool
+}
+
+type unknownNodeprobe struct{}
+
+func (unknownNodeprobe) Sample(_ context.Context, socket string) (nodeprobe.Report, error) {
+	return nodeprobe.Report{SchemaVersion: 1, Socket: socket}, nil
 }
 
 // NewServer constructs the API server from Options. Zero values use the
@@ -134,6 +142,7 @@ func NewServer(opts Options) *Server {
 		log = slog.New(slog.DiscardHandler)
 	}
 
+	filterAgents := opts.Nodeprobe != nil
 	s := &Server{
 		log:            log,
 		tokenValidator: opts.TokenValidator,
@@ -188,9 +197,10 @@ func NewServer(opts Options) *Server {
 	if s.overlayInterval <= 0 {
 		s.overlayInterval = defaultOverlayInterval
 	}
-	s.providerFinder = opts.ProviderFinder
-	if s.providerFinder == nil {
-		s.providerFinder = newProcFinder()
+	s.nodeprobe = opts.Nodeprobe
+	s.filterAgents = filterAgents
+	if s.nodeprobe == nil {
+		s.nodeprobe = unknownNodeprobe{}
 	}
 	// 072 / 2026-08-19：抓屏 overlay 已归档，主流程不再构造 scratch 客户端、
 	// 不再启动 overlayLoop。opts.OverlayCapturer 若注入也只保留字段，不被调用。
@@ -293,7 +303,14 @@ func (s *Server) rebuildCatalog(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("api: discover: %w", err)
 	}
-	s.catalog.rebuild(filterModel(s, model))
+	observations, err := nodeprobe.SampleModel(ctx, model, s.nodeprobe)
+	if err != nil {
+		return fmt.Errorf("api: nodeprobe: %w", err)
+	}
+	if s.filterAgents {
+		model = filterModelToIdentifiedAgents(model, observations)
+	}
+	s.catalog.rebuild(model, observations)
 	snap := buildSnapshot(s.catalog)
 	s.setSnapshot(snap)
 	return nil
