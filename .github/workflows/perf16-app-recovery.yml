@@ -1,0 +1,60 @@
+name: perf16-app-recovery
+
+on:
+  push:
+    branches:
+      - test/perf16-app-recovery
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  app-recovery:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact App test branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Prepare ephemeral Android debug keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
+      - name: Run uncached real OkHttp recovery chain
+        shell: bash
+        run: |
+          set -o pipefail
+          cd app
+          ./gradlew --no-daemon --rerun-tasks \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :app:testDebugUnitTest \
+            --tests 'dev.agentmirror.app.session.Perf16AppRecoveryScenarioTest' \
+            2>&1 | tee "$GITHUB_WORKSPACE/perf16-app-recovery.log"
+      - name: Upload App scenario evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf16-app-recovery-${{ github.run_id }}
+          path: |
+            ${{ github.workspace }}/perf16-app-recovery.log
+            ${{ github.workspace }}/app/app/build/test-results/testDebugUnitTest
+            ${{ github.workspace }}/app/app/build/reports/tests/testDebugUnitTest
