@@ -74,6 +74,7 @@ jobs:
           print(*values)
           PY
           )"
+          echo "PR73_RESULT command_exit=$rc executed_task_lines=$executed up_to_date_task_lines=$up_to_date junit_tests=${tests:-0} junit_failures=${failures:-0} junit_errors=${errors:-0} junit_skipped=${skipped:-0}"
           {
             echo "### PR73 activity test"
             echo "- command_exit: $rc"
