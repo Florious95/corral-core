@@ -63,6 +63,24 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 
 因此用户描述的“候选 App 外两表不动、对话内收藏动”在精确候选 + 同 ref 受控 AVD 上**未复现**：三处均消费同一 live 投影并随 working/idle 同步。按任务约束不凭猜测改产品；现有候选保留给用户真机手验。作者不将该受控 AVD 复核冒充最终真机/真实 CLI 验收。
 
+## Working return 扩展核验（health/activity/status）
+
+本轮返工先核了候选与源码关系：候选 release asset digest 为 `sha256:bd4ababfcec3301c19ced02350ff2193f183311f9ec0bdd455145deab3b3e861`，其 hosted assemble run `34098991746` checkout `04bfde8d161c244c9dfced3b5ab90d22d1460d86`；精确产品树为 `6121f88087b80ba1014d843fcba13a3528598002`。候选源码中 `sessionRowMotion(activity, isOnline)` 无 health 形参，`SessionRow` caller 只传 `item.status/item.isOnline`；`L2Models.toL2Entry()` 仅把 health 规范化为独立元数据，activity/status 仍由 `Session.effectiveActivity` 解析。因此 health 不再参与工作灯否决。
+
+两路具体投影操作数（源代码静态路径）为：`WorkspaceViewModel.applyLevel2` 每帧 `sessions.map { it.toL2Entry() }`、写 `lastLiveByWorkspace`/`level2Cache`、递增 `favoriteLiveGen`，订阅工作区时发布 `_level2`；外会话入口 `WorkspaceScreen` 消费 `level2.sessions → L2Entry.toSessionItem → SessionRow`；外收藏入口 `ThreePane.FavoritesPane` 消费 `favoriteRows()`，该函数由同一 `liveForFavorites()` 对账；对话页第三按钮“收藏”展开的 favorite chips 消费同一 `favoriteRows`，`SessionScreen` 仅以 `isOnline && status == WORKING` 计算 `Running`。未发现首个分叉。
+
+| provider | health 输入 | 合法 activity/status | 三个入口 working 结果 | 证据 |
+|---|---|---|---|---|
+| Grok | `unknown` / `abnormal` / 缺失 | `working/working` | 外会话动态灯、外收藏动态灯、第三按钮 `Running` 均出现 | `tmp/avd-app-fix/grok-unknown-*.xml`, `grok-abnormal20-*.xml`, `grok-missing-*.xml` |
+| Codex | `unknown` / `abnormal` / 缺失 | `working/working` | 外会话动态灯、外收藏动态灯、第三按钮 `Running` 均出现 | `tmp/avd-app-fix/codex-unknown-*.xml`, `codex-abnormal-*.xml`, `codex-missing-*.xml` |
+| Grok/Codex | `unknown` | activity 缺失、`status=working`（旧合法形） | 两 provider 的外会话/外收藏动态灯与第三按钮 `Running` 均出现 | `tmp/avd-app-fix/grok-activity_empty20-*.xml`, `codex-activity_empty20-*.xml` |
+| Grok/Codex | `unknown` | `activity=working,status=` | 外部不出现 working；第三按钮无 `Running`（不伪造 working） | `tmp/avd-app-fix/{grok,codex}-status_empty-*.xml` |
+| Grok/Codex | `unknown` | `activity=working,status=idle` 冲突 | 外部不出现 working；第三按钮无 `Running`（不伪造 working） | `tmp/avd-app-fix/{grok,codex}-conflict-*.xml` |
+
+每个 health case 的受控 WS 都发送同一 ref、同两条 session、四帧 `seq1 idle → seq2 working → seq3 idle → seq4 working`；六组 `*-idle.xml`/`*-working.xml` 分别核到 idle 与 working 的外会话灯，三入口的 working 快照也逐组保留。`fake-ws-multi.log` 保留逐帧字段与发送时间，`working-return-evidence.json` 记录输入/入口/文件映射，`working-evidence.sha256` 固定证据摘要。之前 normal-only 的 idle→working→idle→working 三表轮询仍在 `grok-session-poll.tsv`、`grok-fav-poll.tsv`、`grok-overlay-poll.tsv` 及 Codex 对应文件；本轮 health unknown/abnormal/missing 已补齐三入口 working 快照。第三按钮核验使用 `dock-open-favorites`（实际切换 favorite chips），未用“查看”抽屉代替。
+
+结论：扩展到真实来源报告中的 health unknown/abnormal/缺失后，精确候选仍未复现“内收藏工作、外两表不动”，且没有 health veto 红。未做产品修复、未新增 PR/构建；候选仍交用户真机最终手验。最小剩余证据需求是：用户手机候选 APK 身份 + 同一 ref 同刻 raw DTO（activity/status/health/ref/online）及外会话、外收藏、对话第三按钮三处截图/语义导出，以定位是否为交付身份或候选未覆盖的输入时序。
+
 ## 基底与未执行项
 
 - `python3 tools/basegen.py session-ui --pkgs dev.agentmirror.app` 已执行：`cards=2 fwd=5 rev=1 refs=[] field=no librarian=no`。
