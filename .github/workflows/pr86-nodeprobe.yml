@@ -28,41 +28,7 @@ jobs:
           set -euo pipefail
           old="$RUNNER_TEMP/c70"
           git worktree add --detach "$old" 23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5
-          python3 - "$old/tools/nodeprobe/src/lib.rs" <<'PY'
-          from pathlib import Path
-          p = Path(__import__("sys").argv[1])
-          text = p.read_text()
-          marker = "\n}\n"
-          pos = text.rfind(marker)
-          assert pos > 0
-          tests = r'''
-
-              #[test]
-              fn t_n_c70_missing_channel_must_not_be_normal() {
-                  let observation = pi_activity::Observation {
-                      activity: pi_activity::ACTIVITY_UNKNOWN,
-                      session_name: None,
-                      channel_available: false,
-                      health: pi_activity::HEALTH_UNKNOWN,
-                      detail: "pi activity channel missing: no record".into(),
-                  };
-                  assert_eq!(
-                      pi_process_health(&[42], Some(Path::new("/tmp/pi")), &observation),
-                      pi_activity::HEALTH_UNKNOWN
-                  );
-              }
-
-              #[test]
-              fn t_n_c70_title_only_name_must_survive() {
-                  use pi_activity::TitleName;
-                  let title = TitleName::Parsed(Some("build-main".into()));
-                  assert_eq!(
-                      merge_pi_session_name(Some(&title), None),
-                      Ok(Some("build-main".into()))
-                  );
-              }
-          '''
-          p.write_text(text[:pos] + tests + text[pos:])
+          python3 -c 'from pathlib import Path; import base64; import sys; p=Path(sys.argv[1]); text=p.read_text(); marker="\n}\n"; pos=text.rfind(marker); assert pos > 0; tests=base64.b64decode("CiAgICAjW3Rlc3RdCiAgICBmbiB0X25fYzcwX21pc3NpbmdfY2hhbm5lbF9tdXN0X25vdF9iZV9ub3JtYWwoKSB7CiAgICAgICAgbGV0IG9ic2VydmF0aW9uID0gcGlfYWN0aXZpdHk6Ok9ic2VydmF0aW9uIHsKICAgICAgICAgICAgYWN0aXZpdHk6IHBpX2FjdGl2aXR5OjpBQ1RJVklUWV9VTktOT1dOLAogICAgICAgICAgICBzZXNzaW9uX25hbWU6IE5vbmUsCiAgICAgICAgICAgIGNoYW5uZWxfYXZhaWxhYmxlOiBmYWxzZSwKICAgICAgICAgICAgaGVhbHRoOiBwaV9hY3Rpdml0eTo6SEVBTFRIX1VOS05PV04sCiAgICAgICAgICAgIGRldGFpbDogInBpIGFjdGl2aXR5IGNoYW5uZWwgbWlzc2luZzogbm8gcmVjb3JkIi5pbnRvKCksCiAgICAgICAgfTsKICAgICAgICBhc3NlcnRfZXEhKAogICAgICAgICAgICBwaV9wcm9jZXNzX2hlYWx0aCgmWzQyXSwgU29tZShQYXRoOjpuZXcoIi90bXAvcGkiKSksICZvYnNlcnZhdGlvbiksCiAgICAgICAgICAgIHBpX2FjdGl2aXR5OjpIRUFMVEhfVU5LTk9XTgogICAgICAgICk7CiAgICB9CgogICAgI1t0ZXN0XQogICAgZm4gdF9uX2M3MF90aXRsZV9vbmx5X25hbWVfbXVzdF9zdXJ2aXZlKCkgewogICAgICAgIHVzZSBwaV9hY3Rpdml0eTo6VGl0bGVOYW1lOwogICAgICAgIGxldCB0aXRsZSA9IFRpdGxlTmFtZTo6UGFyc2VkKFNvbWUoImJ1aWxkLW1haW4iLmludG8oKSkpOwogICAgICAgIGFzc2VydF9lcSEoCiAgICAgICAgICAgIG1lcmdlX3BpX3Nlc3Npb25fbmFtZShTb21lKCZ0aXRsZSksIE5vbmUpLAogICAgICAgICAgICBPayhTb21lKCJidWlsZC1tYWluIi5pbnRvKCkpKQogICAgICAgICk7CiAgICB9Cg=="); p.write_text(text[:pos]+tests.decode()+text[pos:])' "$old/tools/nodeprobe/src/lib.rs"
           set +e
           cargo test --manifest-path "$old/tools/nodeprobe/Cargo.toml" --locked --lib t_n_c70 2>&1 | tee "$RUNNER_TEMP/c70-red.log"
           rc=${PIPESTATUS[0]}
