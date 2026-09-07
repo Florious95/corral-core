@@ -1,0 +1,52 @@
+name: perf16-overflow-resync
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-overflow-red:
+    name: PERF-16 deterministic overflow red boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pushed test revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Set up Go from module
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Run bridge overflow red test (must fail before fix)
+        shell: bash
+        run: |
+          set +e
+          go test -count=1 ./internal/bridge -run '^TestSubscriberOverflowStopsOnlySlowSubscriber$' -v 2>&1 | tee "$RUNNER_TEMP/bridge-red.log"
+          rc=${PIPESTATUS[0]}
+          printf 'sha=%s\ncommand=go test -count=1 ./internal/bridge -run TestSubscriberOverflowStopsOnlySlowSubscriber -v\nexit=%s\n' "$(git rev-parse HEAD)" "$rc" | tee "$RUNNER_TEMP/bridge-red-receipt.txt"
+          test "$rc" -ne 0 && grep -F -- '--- FAIL: TestSubscriberOverflowStopsOnlySlowSubscriber' "$RUNNER_TEMP/bridge-red.log"
+      - name: Run WS overflow red test (must fail before fix)
+        shell: bash
+        run: |
+          set +e
+          go test -count=1 ./internal/api -run '^TestWSQueueOverflowAbortsOnceAndDiscardsQueue$' -v 2>&1 | tee "$RUNNER_TEMP/ws-red.log"
+          rc=${PIPESTATUS[0]}
+          printf 'sha=%s\ncommand=go test -count=1 ./internal/api -run TestWSQueueOverflowAbortsOnceAndDiscardsQueue -v\nexit=%s\n' "$(git rev-parse HEAD)" "$rc" | tee "$RUNNER_TEMP/ws-red-receipt.txt"
+          test "$rc" -ne 0 && grep -F -- '--- FAIL: TestWSQueueOverflowAbortsOnceAndDiscardsQueue' "$RUNNER_TEMP/ws-red.log"
+      - name: Upload red evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf16-overflow-red-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/bridge-red.log
+            ${{ runner.temp }}/bridge-red-receipt.txt
+            ${{ runner.temp }}/ws-red.log
+            ${{ runner.temp }}/ws-red-receipt.txt
