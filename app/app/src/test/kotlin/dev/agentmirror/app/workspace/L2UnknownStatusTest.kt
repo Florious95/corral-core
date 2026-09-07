@@ -107,7 +107,7 @@ class L2UnknownStatusTest {
         assertEquals("pi", good.provider)
         assertEquals(L2Status.WORKING, good.activity)
         assertEquals(L2Status.WORKING, good.status)
-        assertEquals("n", good.sessionName)
+        assertEquals("", good.sessionName)
         assertEquals("normal", good.health)
 
         val divergent = Session(
