@@ -1,0 +1,102 @@
+{
+  "task": "T-A",
+  "status": "ci_verified_unaccepted",
+  "acceptance": "pending_independent_leader_review",
+  "role_identity": {
+    "provider": "pi",
+    "model": "openai-codex/gpt-5.6-luna",
+    "effort": "xhigh",
+    "source": "safe runtime metadata only; no performance claim"
+  },
+  "scope": "health-independent activity motion in app SessionRow",
+  "source_sha": "cfb8d32a11cd3a97d2a096d57b09d7bc184924d9",
+  "source_tree": "05fe74dc4996298c5292e49c8a9fda1712b32d1a",
+  "initial_exact_c73": {
+    "sha": "1642902e7b9fe002f72a0a16a6963be2ef865141",
+    "tree": "650f7ddeca62d2a826dfa5f993691f35a9fc1f35"
+  },
+  "pr": {
+    "number": 73,
+    "url": "https://github.com/Florious95/corral-core/pull/73",
+    "head_ref": "pr/external-session-status-ui",
+    "head_oid": "cfb8d32a11cd3a97d2a096d57b09d7bc184924d9",
+    "base_ref": "pr/status-core-nodeprobe-863c",
+    "base_oid": "23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5",
+    "state": "OPEN"
+  },
+  "changed_files": [
+    "app/app/src/main/java/dev/agentmirror/app/ui/model/Models.kt",
+    "app/app/src/main/java/dev/agentmirror/app/ui/components/SessionRow.kt",
+    "app/app/src/test/kotlin/dev/agentmirror/app/ui/ExternalSessionStatusUiTest.kt",
+    "app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2UnknownStatusTest.kt",
+    "app/app/src/test/kotlin/dev/agentmirror/app/workspace/PiWorkingDtoProjectionTest.kt",
+    ".github/workflows/pr73-activity.yml"
+  ],
+  "product_change": {
+    "commit": "c33317d7846b6fafc73718b5397780de3e7185c1",
+    "motion_signature": "sessionRowMotion(activity, isOnline)",
+    "health_axis": "retained as independent SessionItem metadata",
+    "activity_rules": {
+      "online_working": "Working",
+      "online_idle": "Idle",
+      "online_unknown": "None",
+      "offline_any_activity": "None"
+    }
+  },
+  "red": {
+    "product_unchanged_commit": "95d28308824272b8c9e07a5d57704b7fefab349b",
+    "run_id": 34089083105,
+    "url": "https://github.com/Florious95/corral-core/actions/runs/34089083105",
+    "command": "cd app && ./gradlew --no-daemon --rerun-tasks -Pkotlin.compiler.execution.strategy=in-process :app:testDebugUnitTest --tests 'dev.agentmirror.app.ui.ExternalSessionStatusUiTest.fourAxisProjectionUsesOnlyOnlineAndActivity'",
+    "exit": 1,
+    "gradle": "BUILD FAILED in 3m 1s",
+    "actionable_tasks": "41 actionable tasks: 41 executed",
+    "tests": 1,
+    "failures": 1,
+    "failure_set": ["ExternalSessionStatusUiTest > fourAxisProjectionUsesOnlyOnlineAndActivity"],
+    "log_sha256": "c38fcb27e63c5e8829e6d6a4f4e433e03c7dce4d0b2810d674e75995d036b0ec",
+    "run_json_sha256": "f5b18403effb33348e933a3ae1df25e9cce49653e602893a0ad4034cf9a00d98"
+  },
+  "green": {
+    "tested_commit": "cfb8d32a11cd3a97d2a096d57b09d7bc184924d9",
+    "run_id": 34090682711,
+    "url": "https://github.com/Florious95/corral-core/actions/runs/34090682711",
+    "command": "cd app && ./gradlew --no-daemon --rerun-tasks -Pkotlin.compiler.execution.strategy=in-process :app:testDebugUnitTest --tests 'dev.agentmirror.app.ui.ExternalSessionStatusUiTest' --tests 'dev.agentmirror.app.workspace.L2UnknownStatusTest' --tests 'dev.agentmirror.app.workspace.PiWorkingDtoProjectionTest'",
+    "exit": 0,
+    "gradle": "BUILD SUCCESSFUL in 2m 55s",
+    "actionable_tasks": "41 actionable tasks: 41 executed",
+    "executed_task_lines": 67,
+    "up_to_date_task_lines": 9,
+    "junit_tests": 20,
+    "junit_failures": 0,
+    "junit_errors": 0,
+    "junit_skipped": 0,
+    "log_sha256": "ec59dc72d8ad08e4d44e558561eafe8a88b0e4d751dcd83531e7b58f3336faa5",
+    "run_json_sha256": "ad423433fba4f60e30413c72d91941fe0a65d4ebb9b44e1a2d953ffa67d3ceee"
+  },
+  "architecture": {
+    "basegen": {
+      "command": "python3 tools/basegen.py session-ui --pkgs dev.agentmirror.app",
+      "result": "cards=2 fwd=5 rev=1 refs=[] field=no librarian=no"
+    },
+    "target_package_checks": {
+      "dev.agentmirror.app.ui.model": 0,
+      "dev.agentmirror.app.ui": 0
+    },
+    "exact_c73_root_check": 1,
+    "root_check_boundary": "five pre-existing T3-4 undeclared-consumes violations; not expanded in T-A"
+  },
+  "execution_boundary": {
+    "local_gradle_go_rust": false,
+    "grok_sync_or_build": false,
+    "avd_or_final_apk": false,
+    "independent_final_acceptance": "not claimed; final Grok loop/combination APK remains independent acceptance"
+  },
+  "remote_safety": {
+    "force_push": false,
+    "merge_or_deploy": false,
+    "new_pr": false,
+    "base_preserved": true,
+    "accidental_temp_branch_deleted": true
+  }
+}

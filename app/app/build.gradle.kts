@@ -64,6 +64,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         release {
@@ -162,4 +163,6 @@ dependencies {
     // createComposeRule/ActivityScenario 显式 launch 使用），对本应用主流程零影响；
     // debug 变体本就经 debugImplementation 带同一宿主，双变体行为自此对称。
     releaseImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }
