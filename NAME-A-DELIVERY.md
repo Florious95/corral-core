@@ -105,3 +105,10 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 - 通过产品正常设置→「重新配对」打开手动连接页，未读 profile/token、生产日志、argv 或会话正文。AVD 现存配对数据是此前受控 synthetic fake pairing，不含可用生产 token；安全边界下不能代取或猜 token。当前未建立生产连接，因此没有真实会话总数、分页、workspace 范围或三入口结果可报告；不以受控 WS 样本替代真实列表。
 - UI 证据：`tmp/avd-app-fix/prod-url3.png`、`prod-pair.xml`、`real-avd-gui.pid`。截图显示正常配对页，URL 输入曾被 adb 文字注入污染为 `ws%3`，token 字段为空；最小恢复动作是用户在当前 GUI 手动校正 URL 为 `ws://10.0.2.2:9900/ws`、输入生产 token 并点击「连接」。恢复后本席只核外会话列表、外收藏列表及对话页第三收藏按钮，保持不打开真实会话正文、不发送输入。
 - 本次未改产品代码、未改服务端/probe/配置、未执行本机 Gradle/Go/Rust 或新 hosted 构建；当前交付结论是**生产配对阻塞，真实列表加载未执行**，不宣称真实 AVD/CLI 最终验收。
+
+## 配对入口核查与 URL 修正（finish-real-avd-pairing-entry）
+
+- 仅对当前配对页的 URL 输入框执行了正常 UI 点击、清空旧 URL、键盘录入 `ws://10.0.2.2:9900/ws`；未聚焦、覆盖、读取或截图/导出 token 输入框。GUI 仍停在配对页，未点击「连接」。
+- 已有入口事实：根 `README.md`「快速开始」第 1–2 步写明服务端 stdout 打印 ANSI half-block 配对二维码，Android App 扫描该二维码；`docs/protocol.md` §2.1 定义二维码为含 `url`、`token` 的单行 JSON，§9 明确 QR 是 token 的合法分发出口。`PairingScreen.kt` 的现有 UI 是 CameraX+ZXing 扫描卡，未授权相机时明确提示改用下方手填 URL+token。
+- 有界检索未发现独立的网页、HTTP 配对页或一次性配对码展示入口；当前公开 App/协议资料只提供「在运行 daemon 的主机终端查看 stdout 二维码，再用 App 扫描」这一正常入口。当前净化 App worktree 不含 `server/` 源码/README，不能安全执行 daemon/help；未启动、重启或改变任何服务进程/配对密钥。`docs/wiki/README.md` 仅列出服务端 `PrintOnboarding*`/`RenderQR` 导出面，未给出桌面 URL 或码页。
+- 因此若用户桌面当前没有生产 daemon 的 stdout 二维码可见面，现有受控范围内不存在可直接打开的安全展示页；服务端 URL 本身不能推导 token。最小正常恢复动作是：在运行生产 daemon 的主机终端找到其 stdout ANSI QR，用 AVD 配对页「授予相机权限」后扫描；否则只能由用户通过既有安全渠道取得 token 后手填，不能要求用户凭空猜 token。真实列表仍未加载，三入口核查未执行；AVD/GUI 保持开启。
