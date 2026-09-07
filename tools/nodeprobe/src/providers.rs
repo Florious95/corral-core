@@ -11,42 +11,96 @@ pub struct Entry {
     pub path_segment: bool,
 }
 
-static TABLE: OnceLock<Vec<Entry>> = OnceLock::new();
+pub const CORPUS_UNAVAILABLE_KIND: &str = "provider_corpus_unavailable";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CorpusError {
+    pub kind: &'static str,
+    pub message: String,
+}
+
+static TABLE: OnceLock<Result<Vec<Entry>, CorpusError>> = OnceLock::new();
 
 pub fn default_providers_tsv() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/providers.tsv")
+    std::env::var_os("NODEPROBE_PROVIDERS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/providers.tsv"))
 }
 
 pub fn load() -> &'static [Entry] {
-    TABLE.get_or_init(|| load_path(&default_providers_tsv()))
+    match TABLE.get_or_init(|| load_path(&default_providers_tsv())) {
+        Ok(entries) => entries,
+        Err(_) => &[],
+    }
 }
 
-fn load_path(path: &Path) -> Vec<Entry> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
+/// Return the corpus load failure, if the configured provider corpus was not
+/// available. `load()` remains a compatibility API but callers needing an
+/// honest capability must inspect this status.
+pub fn corpus_error() -> Option<&'static CorpusError> {
+    match TABLE.get_or_init(|| load_path(&default_providers_tsv())) {
+        Ok(_) => None,
+        Err(err) => Some(err),
+    }
+}
+
+pub fn load_from_path(path: &Path) -> Result<Vec<Entry>, CorpusError> {
+    let text = std::fs::read_to_string(path).map_err(|e| CorpusError {
+        kind: CORPUS_UNAVAILABLE_KIND,
+        message: format!("read {}: {e}", path.display()),
+    })?;
+    load_from_text(&text).map_err(|e| CorpusError {
+        kind: CORPUS_UNAVAILABLE_KIND,
+        message: format!("parse {}: {e}", path.display()),
+    })
+}
+
+pub fn load_from_text(text: &str) -> Result<Vec<Entry>, String> {
+    let entries = parse_tsv(text)?;
+    if entries.is_empty() {
+        return Err("provider corpus has no entries".into());
+    }
+    Ok(entries)
+}
+
+fn load_path(path: &Path) -> Result<Vec<Entry>, CorpusError> {
+    load_from_path(path)
+}
+
+/// Parse provider rows without touching the filesystem. Invalid rows fail
+/// closed so callers cannot silently lose a provider rule.
+pub fn parse_tsv(text: &str) -> Result<Vec<Entry>, String> {
     let mut out = Vec::new();
-    for line in text.lines() {
-        let line = line.trim();
+    for (line_no, raw) in text.lines().enumerate() {
+        let line = raw.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let mut parts = line.split('\t');
-        let comm = parts.next().unwrap_or("").to_string();
-        let id = parts.next().unwrap_or("").to_string();
-        let display = parts.next().unwrap_or("").to_string();
-        let path_segment = parts.next().unwrap_or("") == "path-segment";
-        if comm.is_empty() || id.is_empty() {
-            continue;
+        let parts: Vec<&str> = line.split('\t').collect();
+        if !(3..=4).contains(&parts.len()) {
+            return Err(format!("line {}: need 3 or 4 fields", line_no + 1));
+        }
+        if parts[0].is_empty() || parts[1].is_empty() {
+            return Err(format!(
+                "line {}: comm and provider id are required",
+                line_no + 1
+            ));
+        }
+        if parts.len() == 4 && !parts[3].is_empty() && parts[3] != "path-segment" {
+            return Err(format!(
+                "line {}: unknown match {:?}",
+                line_no + 1,
+                parts[3]
+            ));
         }
         out.push(Entry {
-            comm,
-            id,
-            display,
-            path_segment,
+            comm: parts[0].to_string(),
+            id: parts[1].to_string(),
+            display: parts[2].to_string(),
+            path_segment: parts.get(3).copied() == Some("path-segment"),
         });
     }
-    out
+    Ok(out)
 }
 
 pub fn basename(comm: &str) -> &str {
@@ -62,9 +116,9 @@ pub fn lookup(comm: &str) -> Option<&'static Entry> {
         return Some(e);
     }
     let slash = comm.replace('\\', "/");
-    load().iter().find(|e| {
-        e.path_segment && !e.comm.is_empty() && slash.contains(&format!("/{}/", e.comm))
-    })
+    load()
+        .iter()
+        .find(|e| e.path_segment && !e.comm.is_empty() && slash.contains(&format!("/{}/", e.comm)))
 }
 
 pub fn match_comms(comms: &[String]) -> Option<&'static Entry> {
@@ -74,6 +128,30 @@ pub fn match_comms(comms: &[String]) -> Option<&'static Entry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn provider_corpus_load_failures_are_structured() {
+        let missing =
+            std::env::temp_dir().join(format!("nodeprobe-provider-missing-{}", std::process::id()));
+        let err = load_from_path(&missing).unwrap_err();
+        assert_eq!(err.kind, CORPUS_UNAVAILABLE_KIND);
+        assert!(err.message.contains("read"), "{}", err.message);
+
+        let malformed = std::env::temp_dir().join(format!(
+            "nodeprobe-provider-malformed-{}",
+            std::process::id()
+        ));
+        std::fs::write(&malformed, "codex\tcodex\tCodex\textra\n").unwrap();
+        let err = load_from_path(&malformed).unwrap_err();
+        assert_eq!(err.kind, CORPUS_UNAVAILABLE_KIND);
+        assert!(err.message.contains("parse"), "{}", err.message);
+        let _ = std::fs::remove_file(malformed);
+    }
+
+    #[test]
+    fn empty_provider_corpus_is_unavailable() {
+        assert!(load_from_text("# comments only\n").is_err());
+    }
 
     #[test]
     fn six_rows_and_basename() {
@@ -87,6 +165,13 @@ mod tests {
     }
 
     /// Same comm→id table as server/internal/provider/table_test.go, same TSV.
+    #[test]
+    fn malformed_provider_rows_fail_closed() {
+        assert!(parse_tsv("codex\tcodex\tCodex\textra").is_err());
+        assert!(parse_tsv("\tcodex\tCodex").is_err());
+        assert!(parse_tsv("codex\tcodex").is_err());
+    }
+
     #[test]
     fn provider_corpus_parity_with_go() {
         let want = [
@@ -115,12 +200,10 @@ mod tests {
             load().iter().all(|e| e.comm != "node"),
             "TSV must not whitelist basename node"
         );
-        let cursor_node = "/Users/alauda/.local/share/cursor-agent/versions/2026.08.11-e8db854/node";
+        let cursor_node =
+            "/Users/alauda/.local/share/cursor-agent/versions/2026.08.11-e8db854/node";
         assert_eq!(basename(cursor_node), "node");
-        assert_eq!(
-            lookup(cursor_node).map(|e| e.id.as_str()),
-            Some("cursor")
-        );
+        assert_eq!(lookup(cursor_node).map(|e| e.id.as_str()), Some("cursor"));
         assert!(lookup("/Users/alauda/.nvm/versions/node/v20.0.0/bin/node").is_none());
     }
 }

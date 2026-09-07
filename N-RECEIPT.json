@@ -1,0 +1,205 @@
+{
+  "schema_version": "nodeprobe-n-receipt-v1",
+  "status": "ci_verified_unaccepted",
+  "acceptance": "pending_independent_leader_review",
+  "seat": "status-probe-fix",
+  "role_identity": {
+    "provider": "pi",
+    "model": "openai-codex/gpt-5.6-luna",
+    "reasoning": "xhigh",
+    "whitelist_match": true
+  },
+  "repository": "Florious95/corral-core",
+  "worktree": ".team/nodes/status-probe-fix",
+  "source": {
+    "head": "4f77e3bdc2df08c81b5f50c13050cbddc7053b62",
+    "tree": "047bfb0539047f592ef64d4d8bf9dfaba4278e20",
+    "parent": "5e2cbb2b5fd3a1a832a7d63cf0ac81eb4d4d1cc0",
+    "merge_commit": "cf97d545672689b80fb80460bd3b295f88a50a64",
+    "merge_parents": [
+      "81790368e41900a9085c722e89147924f0806dfe",
+      "23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5"
+    ],
+    "c86": "81790368e41900a9085c722e89147924f0806dfe",
+    "c70": "23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5",
+    "owning_branch": "pr/nodeprobe-fg-comms",
+    "pr_url": "https://github.com/Florious95/corral-core/pull/86",
+    "pr_base": "pr/status-core-nodeprobe-863c",
+    "product_author_diff_relative_c70": "tools/nodeprobe/** only",
+    "test_only_paths": [".github/workflows/pr86-nodeprobe.yml"],
+    "delivery_only_paths": ["DELIVERY.md", "N-RECEIPT.json"],
+    "scope_check": "no server/App author diff"
+  },
+  "source_artifacts": {
+    "extension": {
+      "path": "tools/nodeprobe/pi/nodeprobe-pi-activity.js",
+      "git_blob": "67c1916ade725f73646f062fbf03d0cc22d6823d",
+      "sha256": "51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27",
+      "bytes": 3572
+    },
+    "titles_corpus": {
+      "path": "tools/nodeprobe/fixtures/titles.tsv",
+      "git_blob": "690e651f445793a36ed1cb6e6f6143e6ce5c989e",
+      "sha256": "cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58",
+      "bytes": 1332
+    },
+    "providers_corpus": {
+      "path": "tools/nodeprobe/fixtures/providers.tsv",
+      "git_blob": "e93afa54e473e90099f03cb932d9a54798c0dfe4",
+      "sha256": "c68f50115b33ae6a6806b463cc27c71d8bbfc92273435a533502e9bb84b8b522",
+      "bytes": 481
+    },
+    "darwin_binary": {
+      "path": "tools/nodeprobe/artifacts/nodeprobe-darwin-arm64",
+      "git_blob": "19a33813679337252984a4b20fcf51a39c6e382e",
+      "sha256": "e5667b9ebe931de7805a87538e03b9a6ee1fb9cb9250c25282f8b054268226b5",
+      "bytes": 885504,
+      "platform": "Mach-O 64-bit executable arm64",
+      "built_from": "4f77e3bdc2df08c81b5f50c13050cbddc7053b62",
+      "local_check": "downloaded CI artifact hash/file/help only; no local compile"
+    }
+  },
+  "red_before_fix": {
+    "old_binary_sha256": "d60cacc86f5ec432ddf8562782b7eb483e46c8b17e45a43d6c48f7f69ec7497f",
+    "old_binary_path": "/Users/alauda/.local/bin/nodeprobe",
+    "socket_scope": "private synthetic socket only",
+    "codex_frames": {
+      "frames": 10,
+      "all_exit_code": 1,
+      "result": "unknown/codex",
+      "evidence": "tmp/pre-red/codex-10-results.tsv"
+    },
+    "anti_control": {
+      "capture_injected_exit": 97,
+      "dangerous_ps_injected_exit": 97,
+      "old_probe_exit": 0,
+      "old_trace": "tmp/pre-red/trace/old-gsafe.log",
+      "old_sample_success_nodes": 0,
+      "note": "exit 0 plus JSON is not accepted as safety proof; injected forbidden calls were rejected"
+    },
+    "c70_boundary_harness": {
+      "source_commit": "e50a6e93bfb691977b4313fa9d2d465402a89d45",
+      "evidence": "tmp/gh-artifacts-34089915825/pr86-c70-red/c70-red.log",
+      "test_names": [
+        "t_n_c70_missing_channel_must_not_be_normal",
+        "t_n_c70_title_only_name_must_survive"
+      ],
+      "execution": "GitHub hosted runner run 34089915825",
+      "exit": 101,
+      "tests": 2,
+      "passed": 0,
+      "failed": 2,
+      "failure_names": [
+        "t_n_c70_missing_channel_must_not_be_normal",
+        "t_n_c70_title_only_name_must_survive"
+      ]
+    }
+  },
+  "required_semantics": {
+    "four_axes": "implemented; candidate CI exercised",
+    "pi_channel_schema": 2,
+    "report_schema": 1,
+    "identity_selected_pid_set": "implemented via walk_identity_processes; candidate CI exercised",
+    "bounded_traversal": 4096,
+    "codex_frames": 10,
+    "strict_name_merge": "implemented; single-authority names retained, conflicts unknown",
+    "cross_compile_corpus": "explicit NODEPROBE_FIXTURES/NODEPROBE_PROVIDERS, no embedded fallback",
+    "extension_git_identity": "source SHA matches installed 51ffcad3..."
+  },
+  "validation": {
+    "basegen": {
+      "command": "python3 tools/basegen.py T-N",
+      "exit": 0,
+      "result": "temporary task envelope compiled; cards=0 because Rust nodeprobe has no wiki card"
+    },
+    "archwiki": {
+      "command": "archwiki check tools/nodeprobe",
+      "exit": 3,
+      "status": "partial",
+      "evidence": "tmp/archwiki-final.json"
+    },
+    "github_ci": {
+      "status": "success",
+      "workflow": "PR86 nodeprobe safety",
+      "run_id": 34089915825,
+      "run_url": "https://github.com/Florious95/corral-core/actions/runs/34089915825",
+      "head_sha": "4f77e3bdc2df08c81b5f50c13050cbddc7053b62",
+      "jobs": {
+        "c70_red": {
+          "job_id": 101641132510,
+          "status": "success",
+          "command": "cargo test --manifest-path /home/runner/work/_temp/c70/tools/nodeprobe/Cargo.toml --locked --lib t_n_c70",
+          "exit": 101,
+          "execution_count": 2,
+          "failed_names": [
+            "t_n_c70_missing_channel_must_not_be_normal",
+            "t_n_c70_title_only_name_must_survive"
+          ]
+        },
+        "candidate": {
+          "job_id": 101641132677,
+          "status": "success",
+          "cargo_test_command": "cargo test --manifest-path tools/nodeprobe/Cargo.toml --locked -- --test-threads=$(nproc)",
+          "cargo_test_counts": "46 lib + 1 main + 1 fake_tmux + 0 doctests; all passed",
+          "corpus_command": "cargo run --manifest-path tools/nodeprobe/Cargo.toml --locked -- fixtures tools/nodeprobe/fixtures/titles.tsv",
+          "corpus_execution_count": 1,
+          "failed_tests": [],
+          "linux_binary_sha256": "c1b60011a4e5a98f8aad7f12293240ac2c92aa960f4955d4534144ed04cdd30a",
+          "linux_binary_bytes": 987344
+        },
+        "darwin_artifact": {
+          "job_id": 101641132622,
+          "status": "success",
+          "platform": "Mach-O 64-bit executable arm64",
+          "sha256": "e5667b9ebe931de7805a87538e03b9a6ee1fb9cb9250c25282f8b054268226b5",
+          "bytes": 885504
+        }
+      }
+    },
+    "remote_red_a1": {
+      "unit": "gb-e50a6e93bfb691977b4313fa9d2d465402a89d45-t-n-red-a1",
+      "status": "superseded_by_github_ci",
+      "execution": "sync timed out before Cargo; not reused or manually deleted"
+    },
+    "remote_red_a2": {
+      "unit": "gb-e50a6e93bfb691977b4313fa9d2d465402a89d45-t-n-red-a2",
+      "status": "superseded_by_github_ci",
+      "execution": "preflight exit 7 before Cargo; not reused; min free space was not lowered"
+    },
+    "candidate_remote": {
+      "status": "ci_verified_unaccepted",
+      "artifact_sha256": "c1b60011a4e5a98f8aad7f12293240ac2c92aa960f4955d4534144ed04cdd30a",
+      "artifact_bytes": 987344,
+      "platform": "Linux hosted runner",
+      "execution_count": 46,
+      "failed_tests": [],
+      "evidence": "tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence"
+    },
+    "g_safe_candidate": {
+      "status": "ci_verified_unaccepted",
+      "trace": "tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence/nodeprobe-gsafe/candidate-trace.log",
+      "control_trace": "tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence/nodeprobe-gsafe/control-trace.log",
+      "sample_json": "tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence/nodeprobe-gsafe/candidate.json",
+      "socket": "/home/runner/work/_temp/nodeprobe-gsafe/gsafe.sock",
+      "successful_samples": 1,
+      "positive_trace_lines": 2,
+      "rejected_forbidden_calls": 0,
+      "capture_pane_reject_exit": 97,
+      "dangerous_ps_reject_exit": 97,
+      "candidate_trace_categories": ["list-panes", "ps-narrow"],
+      "note": "actual hosted-runner binary invocation on a private synthetic socket; no capture-pane or dangerous ps"
+    },
+    "independent_acceptance": {
+      "status": "pending_leader_review",
+      "not_claimed": "full-chain PASS or accepted release"
+    }
+  },
+  "cleanup": {
+    "local_tmp": "retained under .team/nodes/status-probe-fix/tmp for receipt evidence",
+    "remote_runner": "GitHub hosted jobs completed and runner cleanup succeeded",
+    "a1_remote_stage": "not manually deleted; superseded missing unit was not reused",
+    "production_socket": "not touched",
+    "9900": "not touched",
+    "global_binary_or_extension": "not modified"
+  }
+}
