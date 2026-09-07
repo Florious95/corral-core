@@ -56,6 +56,21 @@ jobs:
             --tests 'dev.agentmirror.app.ui.NameProjectionUiTest' \
             --tests 'dev.agentmirror.app.workspace.L2UnknownStatusTest' \
             --tests 'dev.agentmirror.app.workspace.PiWorkingDtoProjectionTest' \
+            --tests 'dev.agentmirror.app.workspace.FavRowParityTest' \
+            --tests 'dev.agentmirror.app.workspace.FavoriteIdentityTest' \
+            --tests 'dev.agentmirror.app.workspace.L2NavigationIdentityTest' \
+            --tests 'dev.agentmirror.app.workspace.SessionTitleTest' \
+            --tests 'dev.agentmirror.app.workspace.ListRouteParityTest' \
+            --tests 'dev.agentmirror.app.workspace.WorkspaceOnlineProjectionTest' \
+            --tests 'dev.agentmirror.app.workspace.ForegroundResumeUiTest' \
+            --tests 'dev.agentmirror.app.workspace.L2PushOnlyNoPollTest' \
+            --tests 'dev.agentmirror.app.workspace.SessionLiveSubscribeTest' \
+            --tests 'dev.agentmirror.app.workspace.WorkspaceRefreshTest' \
+            --tests 'dev.agentmirror.app.workspace.TestRefreshOnOpen' \
+            --tests 'dev.agentmirror.app.session.SessionDockSourceTest' \
+            --tests 'dev.agentmirror.app.session.OverlaySubscribeCarriesCurrentSocketTest' \
+            --tests 'dev.agentmirror.app.TestThreePane' \
+            --tests 'dev.agentmirror.app.ui.LandListTest' \
             2>&1 | tee "$GITHUB_WORKSPACE/gradle.log"
           rc=${PIPESTATUS[0]}
           executed=$(grep -cE '^> Task ' "$GITHUB_WORKSPACE/gradle.log" || true)

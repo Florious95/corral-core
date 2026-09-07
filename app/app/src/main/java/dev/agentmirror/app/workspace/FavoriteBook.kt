@@ -90,6 +90,7 @@ class FavoriteBook(
 
     /**
      * 用 live 的 ref 对账。未命中 → isOnline=false（不在线 / gray），仍输出该行。
+     * 在线行的显示字段只取当前 live；不能用旧收藏名补当前缺失的 Pi session_name。
      * 082：live 必须覆盖**每个收藏项自己的工作区**，不能只拿最近进过的那一个。
      * 本函数不负责去取数；取数由 [WorkspaceViewModel.enterFavorites] 按工作区串行订阅。
      */
@@ -115,9 +116,10 @@ class FavoriteBook(
             )
             out.add(
                 FavoriteRow(
-                    sessionName = hit?.sessionName?.takeIf { it.isNotEmpty() } ?: rec.sessionName,
-                    windowIndex = hit?.windowIndex?.takeIf { it.isNotEmpty() } ?: rec.windowIndex,
-                    windowName = hit?.windowName?.takeIf { it.isNotEmpty() } ?: rec.windowName,
+                    name = hit?.name.orEmpty(),
+                    sessionName = if (hit != null) hit.sessionName else rec.sessionName,
+                    windowIndex = if (hit != null) hit.windowIndex else rec.windowIndex,
+                    windowName = if (hit != null) hit.windowName else rec.windowName,
                     addedAt = rec.addedAt,
                     isOnline = isOnline,
                     ref = rec.ref,
