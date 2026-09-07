@@ -1,6 +1,9 @@
 name: codex-consumer-red
 
 on:
+  push:
+    branches:
+      - pr/codex-pi-display-name
   workflow_dispatch:
 
 permissions:
