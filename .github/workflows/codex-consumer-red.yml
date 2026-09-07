@@ -21,5 +21,5 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Run named consumer red test
-        run: go test -count=1 ./internal/api -run '^TestCodexOfficialTitlePreservedInListingAndLevel2$' -v
+      - name: Run API and protocol tests
+        run: go test -count=1 ./internal/api ./internal/protocol -v
