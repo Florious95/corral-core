@@ -1,0 +1,123 @@
+name: PR86 nodeprobe safety
+
+on:
+  pull_request:
+    branches: [pr/status-core-nodeprobe-863c]
+    paths:
+      - "tools/nodeprobe/**"
+      - ".github/workflows/pr86-nodeprobe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c70-red:
+    name: Frozen C70 red boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run named C70 red tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="$RUNNER_TEMP/c70"
+          git worktree add --detach "$old" 23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5
+          python3 -c 'from pathlib import Path; import base64; import sys; p=Path(sys.argv[1]); text=p.read_text(); marker="\n}\n"; pos=text.rfind(marker); assert pos > 0; tests=base64.b64decode("CiAgICAjW3Rlc3RdCiAgICBmbiB0X25fYzcwX21pc3NpbmdfY2hhbm5lbF9tdXN0X25vdF9iZV9ub3JtYWwoKSB7CiAgICAgICAgbGV0IG9ic2VydmF0aW9uID0gcGlfYWN0aXZpdHk6Ok9ic2VydmF0aW9uIHsKICAgICAgICAgICAgYWN0aXZpdHk6IHBpX2FjdGl2aXR5OjpBQ1RJVklUWV9VTktOT1dOLAogICAgICAgICAgICBzZXNzaW9uX25hbWU6IE5vbmUsCiAgICAgICAgICAgIGNoYW5uZWxfYXZhaWxhYmxlOiBmYWxzZSwKICAgICAgICAgICAgaGVhbHRoOiBwaV9hY3Rpdml0eTo6SEVBTFRIX1VOS05PV04sCiAgICAgICAgICAgIGRldGFpbDogInBpIGFjdGl2aXR5IGNoYW5uZWwgbWlzc2luZzogbm8gcmVjb3JkIi5pbnRvKCksCiAgICAgICAgfTsKICAgICAgICBhc3NlcnRfZXEhKAogICAgICAgICAgICBwaV9wcm9jZXNzX2hlYWx0aCgmWzQyXSwgU29tZShQYXRoOjpuZXcoIi90bXAvcGkiKSksICZvYnNlcnZhdGlvbiksCiAgICAgICAgICAgIHBpX2FjdGl2aXR5OjpIRUFMVEhfVU5LTk9XTgogICAgICAgICk7CiAgICB9CgogICAgI1t0ZXN0XQogICAgZm4gdF9uX2M3MF90aXRsZV9vbmx5X25hbWVfbXVzdF9zdXJ2aXZlKCkgewogICAgICAgIHVzZSBwaV9hY3Rpdml0eTo6VGl0bGVOYW1lOwogICAgICAgIGxldCB0aXRsZSA9IFRpdGxlTmFtZTo6UGFyc2VkKFNvbWUoImJ1aWxkLW1haW4iLmludG8oKSkpOwogICAgICAgIGFzc2VydF9lcSEoCiAgICAgICAgICAgIG1lcmdlX3BpX3Nlc3Npb25fbmFtZShTb21lKCZ0aXRsZSksIE5vbmUpLAogICAgICAgICAgICBPayhTb21lKCJidWlsZC1tYWluIi5pbnRvKCkpKQogICAgICAgICk7CiAgICB9Cg=="); p.write_text(text[:pos]+tests.decode()+text[pos:])' "$old/tools/nodeprobe/src/lib.rs"
+          set +e
+          cargo test --manifest-path "$old/tools/nodeprobe/Cargo.toml" --locked --lib t_n_c70 2>&1 | tee "$RUNNER_TEMP/c70-red.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf 'command=cargo test --manifest-path %s --locked --lib t_n_c70\nexit=%s\n' "$old/tools/nodeprobe/Cargo.toml" "$rc" | tee "$RUNNER_TEMP/c70-red-receipt.txt"
+          grep -q 't_n_c70_missing_channel_must_not_be_normal' "$RUNNER_TEMP/c70-red.log"
+          grep -q 't_n_c70_title_only_name_must_survive' "$RUNNER_TEMP/c70-red.log"
+          grep -Eq 'test result: FAILED|failures:' "$RUNNER_TEMP/c70-red.log"
+          test "$rc" -ne 0
+      - name: Upload C70 red evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr86-c70-red
+          path: |
+            ${{ runner.temp }}/c70-red.log
+            ${{ runner.temp }}/c70-red-receipt.txt
+
+  candidate:
+    name: Candidate Rust corpus and G-SAFE
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install tmux for isolated harness
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tmux
+      - name: Cargo test and explicit corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CARGO_INCREMENTAL=0
+          cargo test --manifest-path tools/nodeprobe/Cargo.toml --locked -- --test-threads="$(nproc)"
+          NODEPROBE_FIXTURES="$GITHUB_WORKSPACE/tools/nodeprobe/fixtures/titles.tsv" \
+          NODEPROBE_PROVIDERS="$GITHUB_WORKSPACE/tools/nodeprobe/fixtures/providers.tsv" \
+          cargo run --manifest-path tools/nodeprobe/Cargo.toml --locked -- fixtures "$GITHUB_WORKSPACE/tools/nodeprobe/fixtures/titles.tsv"
+      - name: Build candidate and run G-SAFE
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CARGO_INCREMENTAL=0
+          cargo build --manifest-path tools/nodeprobe/Cargo.toml --locked --release
+          mkdir -p "$RUNNER_TEMP/nodeprobe-gsafe"
+          GSAFE_ROOT="$RUNNER_TEMP/nodeprobe-gsafe" \
+          NODEPROBE_BIN="$GITHUB_WORKSPACE/tools/nodeprobe/target/release/nodeprobe" \
+          TMUX_REAL="$(command -v tmux)" \
+          bash tools/nodeprobe/tests/g-safe.sh
+          shasum -a 256 tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-binary-sha256.txt"
+          wc -c tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-binary-size.txt"
+      - name: Upload candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr86-nodeprobe-linux-evidence
+          path: |
+            ${{ runner.temp }}/nodeprobe-gsafe
+            ${{ runner.temp }}/nodeprobe-binary-sha256.txt
+            ${{ runner.temp }}/nodeprobe-binary-size.txt
+
+  darwin-artifact:
+    name: Darwin candidate artifact
+    runs-on: macos-14
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build Darwin artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CARGO_INCREMENTAL=0
+          cargo build --manifest-path tools/nodeprobe/Cargo.toml --locked --release
+          file tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-darwin-platform.txt"
+          shasum -a 256 tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-darwin-sha256.txt"
+          wc -c tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-darwin-size.txt"
+      - name: Upload Darwin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr86-nodeprobe-darwin
+          path: |
+            tools/nodeprobe/target/release/nodeprobe
+            ${{ runner.temp }}/nodeprobe-darwin-platform.txt
+            ${{ runner.temp }}/nodeprobe-darwin-sha256.txt
+            ${{ runner.temp }}/nodeprobe-darwin-size.txt

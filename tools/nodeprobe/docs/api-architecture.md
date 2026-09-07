@@ -2,11 +2,13 @@
 
 ## Boundaries
 
-`providers` performs identity from the pane root PID's process tree. The only
-process fields requested are `pid`, `ppid`, and `comm`; argv/args/command are
-never requested, parsed, or emitted. `classify` receives a provider id and
-pane title and returns activity independently. A provider miss is represented
-as `provider=unknown`, not by dropping the pane.
+`providers` performs identity from one bounded, pane-root PID process tree.
+The only process fields requested are `pid`, `ppid`, `stat`, and `comm`;
+argv/args/command are never requested, parsed, or emitted. Foreground selection
+and the shell-held-plus exception produce one identity-selected process set;
+provider matching and Pi PID selection consume that same set. `classify`
+receives a provider id and pane title and returns activity independently. A
+provider miss is represented as `provider=unknown`, not by dropping the pane.
 
 `lib::probe` performs one tmux `list-panes -a` inventory and one narrow `ps`
 snapshot. It never captures pane bodies, attaches, sends keys, or mutates panes.
@@ -26,14 +28,12 @@ must branch on `error` before interpreting nodes.
 
 ## Corpus arrangement
 
-The external checkout contains one development symlink, `fixtures`, to the
-canonical files at `/Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe/fixtures`.
-Git therefore stores no duplicated `titles.tsv` or `providers.tsv`. Library and
-CLI users outside that checkout provide a corpus directory/files explicitly via
-`NODEPROBE_FIXTURES` and `NODEPROBE_PROVIDERS`. Moving the canonical files or
-making the Go consumer fetch this external checkout is a follow-up migration,
-not done here, because it would otherwise create two authorities or break the
-existing Go lookup.
+The crate owns one canonical `fixtures/titles.tsv` and
+`fixtures/providers.tsv`; there is no second embedded provider table. Library
+and CLI users outside that checkout provide corpus files explicitly via
+`NODEPROBE_FIXTURES` and `NODEPROBE_PROVIDERS`. Both title/footer and provider
+lookups use the same explicit paths; unreadable or malformed explicit paths
+fail closed instead of silently falling back to stale embedded data.
 
 ## Pi lifecycle channel
 

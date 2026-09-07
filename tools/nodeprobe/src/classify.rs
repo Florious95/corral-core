@@ -136,8 +136,7 @@ fn fallback(title: &str) -> Class {
 /// Title-only classify (fixture corpus). Live nodes use classify_for after
 /// comm identity so detectors never compete on one title.
 pub fn classify(title: &str) -> Class {
-    // After a Pi process exits, its strict official title is the only safe
-    // provider fallback. Ambiguous/malformed π titles remain unclaimed.
+    // Fixture/title-only callers may use Pi's strict official title form.
     if matches!(
         crate::pi_activity::title_name(title),
         Some(crate::pi_activity::TitleName::Parsed(_))
@@ -145,6 +144,20 @@ pub fn classify(title: &str) -> Class {
         return Class {
             state: STATE_UNKNOWN,
             provider: PROVIDER_PI,
+            first: first_non_space(title),
+            known: false,
+        };
+    }
+    fallback(title)
+}
+
+/// Classify a pane without a whitelisted process identity. Live probing must
+/// use this entry point so a stale π title cannot resurrect a provider.
+pub fn classify_unidentified(title: &str) -> Class {
+    if crate::pi_activity::title_name(title).is_some() {
+        return Class {
+            state: STATE_UNKNOWN,
+            provider: PROVIDER_UNKNOWN,
             first: first_non_space(title),
             known: false,
         };
@@ -434,6 +447,13 @@ mod tests {
             classify("π - build - main - repo").provider,
             PROVIDER_UNKNOWN
         );
+    }
+
+    #[test]
+    fn unidentified_pi_title_never_selects_provider() {
+        let class = classify_unidentified("π - build-main - repo");
+        assert_eq!(class.provider, PROVIDER_UNKNOWN);
+        assert_eq!(class.state, STATE_UNKNOWN);
     }
 
     #[test]

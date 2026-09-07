@@ -41,6 +41,7 @@ to override it. v1 and unknown channel schemas are unsupported. Optionally set
 `NODEPROBE_PI_SEAT`. Missing, stale, malformed, crashed, disconnected,
 PID-reused, or multi-process channel observations never become idle.
 The Pi title parser accepts only `π - <cwd>` and `π - <session> - <cwd>` and
-returns no name for spaced-hyphen ambiguity. Channel/title names must agree;
+returns no name for spaced-hyphen ambiguity. When both channel and title names
+are present they must agree; a single authoritative name is retained, while
 conflicts produce null name and unknown health/activity. No process argv is read
 or serialized.
