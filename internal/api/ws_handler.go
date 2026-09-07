@@ -159,7 +159,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 
 	// Attach the pipe before the snapshot so no output between the two is lost
 	// (term-bridge knowledge base: pipe first, then capture).
-	ch, detach, err := br.Subscribe(c.ctx)
+	ch, loss, detach, err := br.SubscribeWithLoss(c.ctx)
 	if err != nil {
 		c.sendError(protocol.ErrCodeInternal, "cannot attach mirror")
 		return
@@ -184,7 +184,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	c.sendBinary(frame)
 
 	subCtx, cancel := context.WithCancel(c.ctx)
-	sub := &subscription{ref: s.Ref, cancel: cancel, detach: detach}
+	sub := &subscription{ref: s.Ref, cancel: cancel, detach: detach, loss: loss}
 	// Release hook: the pane-level geometry tracker is released when this
 	// subscription ends. When it is the last subscriber the tracker restores the
 	// pane to the shared original baseline (契约 2: teardown/closeSubscriptions/

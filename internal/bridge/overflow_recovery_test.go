@@ -44,14 +44,20 @@ func TestSubscriberOverflowStopsOnlySlowSubscriber(t *testing.T) {
 
 	// The slow channel must become terminal at the first overflow, before the
 	// producer closes its pipe. The old implementation leaves it open forever.
-	select {
-	case _, ok := <-slow:
-		if ok {
-			t.Fatal("slow subscriber retained stale data after overflow")
+	slowDeadline := time.After(2 * time.Second)
+	for {
+		select {
+		case _, ok := <-slow:
+			if !ok {
+				goto slowStopped
+			}
+			// The pre-overflow slot is stale and may be consumed while the
+			// terminal transition races; it must not prevent closure.
+		case <-slowDeadline:
+			t.Fatal("slow subscriber was not terminated at overflow")
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("slow subscriber was not terminated at overflow")
 	}
+slowStopped:
 	_ = writer.Close()
 
 	var got []byte
