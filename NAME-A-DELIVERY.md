@@ -112,3 +112,9 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 - 已有入口事实：根 `README.md`「快速开始」第 1–2 步写明服务端 stdout 打印 ANSI half-block 配对二维码，Android App 扫描该二维码；`docs/protocol.md` §2.1 定义二维码为含 `url`、`token` 的单行 JSON，§9 明确 QR 是 token 的合法分发出口。`PairingScreen.kt` 的现有 UI 是 CameraX+ZXing 扫描卡，未授权相机时明确提示改用下方手填 URL+token。
 - 有界检索未发现独立的网页、HTTP 配对页或一次性配对码展示入口；当前公开 App/协议资料只提供「在运行 daemon 的主机终端查看 stdout 二维码，再用 App 扫描」这一正常入口。当前净化 App worktree 不含 `server/` 源码/README，不能安全执行 daemon/help；未启动、重启或改变任何服务进程/配对密钥。`docs/wiki/README.md` 仅列出服务端 `PrintOnboarding*`/`RenderQR` 导出面，未给出桌面 URL 或码页。
 - 因此若用户桌面当前没有生产 daemon 的 stdout 二维码可见面，现有受控范围内不存在可直接打开的安全展示页；服务端 URL 本身不能推导 token。最小正常恢复动作是：在运行生产 daemon 的主机终端找到其 stdout ANSI QR，用 AVD 配对页「授予相机权限」后扫描；否则只能由用户通过既有安全渠道取得 token 后手填，不能要求用户凭空猜 token。真实列表仍未加载，三入口核查未执行；AVD/GUI 保持开启。
+
+## 生产 token 现行 PID 核验（complete-real-avd-pairing-now）
+
+- 按本次限定授权复核 PID `92596`：仍监听 TCP `:9900`；可执行文件映射仍为 `.team/nodes/_driver/deploy-status-20260907-183711/inputs/agentmirrord`。核验输出只保留监听/映射身份，不输出完整 argv。
+- 在子进程管道中解析该 PID 的 argv 形状，得到 `agentmirrord -listen <value> -log-level <value>`，未发现 `-token` 参数；因此既有「从 argv 取 token」授权路径不具备事实输入。管道只返回字段形状，token 值未输出、未落盘、未进入日志/截图/工具回传；未执行 swap/kill/restart，也未改生产配置。
+- 未向 AVD 提交 token，未点击连接，未加载真实 workspace/session；外会话、外收藏、对话第三收藏按钮以及总数/分页/范围均没有真实结果可报。自有可见 AVD 与 GUI 继续保持在配对页；本次无产品改动、无本机编译/测试/新构建。
