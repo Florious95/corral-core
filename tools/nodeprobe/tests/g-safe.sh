@@ -82,7 +82,6 @@ capture_rc=$?
 ps_rc=$?
 set -e
 [ "$capture_rc" = 97 ] && [ "$ps_rc" = 97 ]
-cp "$CONTROL_TRACE" "$CONTROL_TRACE"
 : >"$TRACE"
 export NODEPROBE_TRACE="$TRACE" GSAFE_PANE_PID="$PANE_PID" GSAFE_FAKE_PID=424242
 NODEPROBE_FIXTURES="$PWD/tools/nodeprobe/fixtures/titles.tsv" \
