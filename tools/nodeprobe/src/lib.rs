@@ -22,8 +22,8 @@ pub mod providers;
 pub mod web;
 
 use classify::{
-    classify, format_codepoint, parse_corpus_line, BackgroundTasks, Class, CorpusRow, PROVIDER_PI,
-    STATE_UNKNOWN,
+    classify, format_codepoint, parse_corpus_line, BackgroundTasks, Class, CorpusRow,
+    PROVIDER_PI, STATE_UNKNOWN,
 };
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -190,33 +190,17 @@ fn merge_pi_session_name(
     title: Option<&pi_activity::TitleName>,
     channel: Option<String>,
 ) -> Result<Option<String>, ()> {
-    match title {
-        Some(pi_activity::TitleName::Parsed(Some(title))) => match channel {
-            Some(channel) if channel == *title => Ok(Some(channel)),
-            Some(_) | None => Err(()),
-        },
-        Some(pi_activity::TitleName::Parsed(None)) => match channel {
-            None => Ok(None),
-            Some(_) => Err(()),
-        },
-        Some(pi_activity::TitleName::Ambiguous) | None => Ok(channel),
-    }
-}
-
-fn pi_process_health(
-    pi_pids: &[i32],
-    channel_dir: Option<&Path>,
-    observation: &pi_activity::Observation,
-) -> &'static str {
-    if pi_pids.is_empty() {
-        pi_activity::HEALTH_ABNORMAL
-    } else if pi_pids.len() == 1
-        && !observation.channel_available
-        && (channel_dir.is_none() || observation.detail.contains("channel missing"))
-    {
-        pi_activity::HEALTH_NORMAL
-    } else {
-        observation.health
+    let title_name = match title {
+        Some(pi_activity::TitleName::Parsed(name)) => name.clone(),
+        Some(pi_activity::TitleName::Ambiguous) => return Err(()),
+        None => None,
+    };
+    match (title_name, channel) {
+        (Some(title), Some(channel)) if title == channel => Ok(Some(title)),
+        (Some(_), Some(_)) => Err(()),
+        (Some(title), None) => Ok(Some(title)),
+        (None, Some(channel)) => Ok(Some(channel)),
+        (None, None) => Ok(None),
     }
 }
 
@@ -274,7 +258,7 @@ pub fn list_panes(spec: &SocketSpec) -> Result<Vec<RawPane>, String> {
     cmd.arg("list-panes")
         .arg("-a")
         .arg("-F")
-        .arg("#{session_name}\u{1f}#{window_index}\u{1f}#{window_name}\u{1f}#{pane_id}\u{1f}#{pane_pid}\u{1f}#{pane_title}\u{1f}#{pane_current_path}");
+        .arg("#{session_name}\u{1f}#{window_index}\u{1f}#{window_name}\u{1f}#{pane_id}\u{1f}#{pane_pid}\u{1f}#{pane_current_command}\u{1f}#{pane_title}\u{1f}#{pane_current_path}");
     let out = cmd
         .output()
         .map_err(|e| format!("tmux list-panes spawn: {e}"))?;
@@ -293,13 +277,13 @@ pub fn list_panes(spec: &SocketSpec) -> Result<Vec<RawPane>, String> {
         // tmux on Linux renders a control separator in a format string as
         // the printable escape `\\037`; macOS emits the control byte.
         let fields: Vec<&str> = if line.contains('\u{1f}') {
-            line.splitn(7, '\u{1f}').collect()
+            line.splitn(8, '\u{1f}').collect()
         } else {
-            line.splitn(7, "\\037").collect()
+            line.splitn(8, "\\037").collect()
         };
-        if fields.len() != 7 {
+        if fields.len() != 8 {
             return Err(format!(
-                "tmux list-panes malformed row: expected 7 fields, got {}",
+                "tmux list-panes malformed row: expected 8 fields, got {}",
                 fields.len()
             ));
         }
@@ -312,14 +296,16 @@ pub fn list_panes(spec: &SocketSpec) -> Result<Vec<RawPane>, String> {
         let pane_pid = fields[4]
             .parse()
             .map_err(|_| format!("tmux list-panes malformed pane pid {:?}", fields[4]))?;
-        let title = fields[5].to_string();
-        let workspace_path = fields[6].to_string();
+        let current_command = fields[5].to_string();
+        let title = fields[6].to_string();
+        let workspace_path = fields[7].to_string();
         panes.push(RawPane {
             session,
             window_index,
             window_name,
             pane_id,
             pane_pid,
+            current_command,
             title,
             workspace_path,
         });
@@ -334,6 +320,7 @@ pub struct RawPane {
     pub window_name: String,
     pub pane_id: String,
     pub pane_pid: i32,
+    pub current_command: String,
     pub title: String,
     pub workspace_path: String,
 }
@@ -349,8 +336,12 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
     let snap = proctree::read_table();
     let mut nodes = Vec::with_capacity(panes.len());
     for p in panes {
+        // Provider identity and Pi PID selection share this one bounded walk;
+        // a second descendant traversal could reintroduce stale identity.
         let processes = match snap.as_ref() {
-            Some(s) if p.pane_pid > 0 => proctree::walk_processes(s, p.pane_pid),
+            Some(s) if p.pane_pid > 0 => {
+                proctree::walk_identity_processes(s, p.pane_pid, &p.current_command)
+            }
             _ => Vec::new(),
         };
         let comms: Vec<String> = processes.iter().map(|(_, comm)| comm.clone()).collect();
@@ -358,8 +349,8 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
         let class = if let Some(e) = provider_entry {
             classify::classify_for(&e.id, &p.title)
         } else {
-            // Unknown identity is an honest node row, not a silently dropped pane.
-            classify::classify(&p.title)
+            // A stale π title cannot create a live provider identity.
+            classify::classify_unidentified(&p.title)
         };
         let pi_pids: Vec<i32> = processes
             .iter()
@@ -392,13 +383,11 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
         };
         let (activity, session_name, health, activity_detail) = match pi_observation {
             Some(observation) => {
-                let process_health =
-                    pi_process_health(&pi_pids, pi_channel_dir.as_deref(), &observation);
                 if !observation.channel_available {
                     (
                         observation.activity,
                         title_session_name,
-                        process_health,
+                        observation.health,
                         observation.detail,
                     )
                 } else {
@@ -409,7 +398,7 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
                         Ok(session_name) => (
                             observation.activity,
                             session_name,
-                            process_health,
+                            observation.health,
                             observation.detail,
                         ),
                         Err(()) => (
@@ -665,12 +654,16 @@ mod tests {
         );
         assert_eq!(
             merge_pi_session_name(Some(&two), Some("named".into())),
+            Ok(Some("named".into()))
+        );
+        assert_eq!(
+            merge_pi_session_name(Some(&pi_activity::TitleName::Ambiguous), None),
             Err(())
         );
     }
 
     #[test]
-    fn pi_missing_channel_with_process_is_normal_health() {
+    fn missing_pi_channel_keeps_unknown_health() {
         let observation = pi_activity::Observation {
             activity: pi_activity::ACTIVITY_UNKNOWN,
             session_name: None,
@@ -678,14 +671,8 @@ mod tests {
             health: pi_activity::HEALTH_UNKNOWN,
             detail: "pi activity channel missing: no record".into(),
         };
-        assert_eq!(
-            pi_process_health(&[42], Some(Path::new("/tmp/pi")), &observation),
-            pi_activity::HEALTH_NORMAL
-        );
-        assert_eq!(
-            pi_process_health(&[42, 43], Some(Path::new("/tmp/pi")), &observation),
-            pi_activity::HEALTH_UNKNOWN
-        );
+        assert_eq!(observation.activity, pi_activity::ACTIVITY_UNKNOWN);
+        assert_eq!(observation.health, pi_activity::HEALTH_UNKNOWN);
     }
 
     #[test]

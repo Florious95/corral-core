@@ -14,7 +14,7 @@ fn fake_tmux_inventory_is_read_only_and_unknown_is_explicit() {
         r##"#!/bin/sh
 if [ "$1" = "-S" ] || [ "$1" = "-L" ]; then shift 2; fi
 case "$1" in
-  list-panes) printf 'sess\0372\037mystery\037%%7\0370\037※ unknown\037/tmp/project\n' ;;
+  list-panes) printf 'sess\0372\037mystery\037%%7\0370\037zsh\037※ unknown\037/tmp/project\n' ;;
   *) exit 2 ;;
 esac
 "##,

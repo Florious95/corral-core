@@ -52,6 +52,7 @@ function startChannel() {
     if (error.code !== "ENOENT") throw error;
   }
   server = createServer((socket) => {
+    socket.on("error", () => {});
     let input = "";
     socket.on("data", (chunk) => {
       input += chunk.toString();
