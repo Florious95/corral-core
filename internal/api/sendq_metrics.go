@@ -10,6 +10,7 @@ package api
 // 常驻健康指标（「丢了多少数据」本该是这个产品的健康指标），不随取证移除。
 
 import (
+	"sync"
 	"sync/atomic"
 )
 
@@ -57,8 +58,11 @@ func (m *SendQueueMetrics) recordConnection() {
 }
 
 // ConnMetrics 单条连接自己的计数（P0 修复：teardown 行报本连接的数，字段前缀 conn.*）。
-// 单线程使用（连接自身的事件都在自己的读/写/relay goroutine 内），无需原子。
+// Relay、writer 与 teardown 可并发访问同一连接的指标；锁只保护这组低频
+// 诊断计数，避免 race detector 把真实溢出归因误报为日志竞态。
 type ConnMetrics struct {
+	mu sync.Mutex
+
 	DeltasDropped          int64
 	SnapshotsPushed        int64
 	SnapshotsFromResize    int64
@@ -67,21 +71,51 @@ type ConnMetrics struct {
 }
 
 // recordDrop 记录本连接因队列满丢弃的 delta。
-func (m *ConnMetrics) recordDrop() { m.DeltasDropped++ }
+func (m *ConnMetrics) recordDrop() {
+	m.mu.Lock()
+	m.DeltasDropped++
+	m.mu.Unlock()
+}
 
 // recordSnapshot 记录本连接发出的快照帧（含首帧订阅）。
-func (m *ConnMetrics) recordSnapshot() { m.SnapshotsPushed++ }
+func (m *ConnMetrics) recordSnapshot() {
+	m.mu.Lock()
+	m.SnapshotsPushed++
+	m.mu.Unlock()
+}
 
 // recordResizeSnapshot 记录本连接由 resize 补发的快照。
-func (m *ConnMetrics) recordResizeSnapshot() { m.SnapshotsFromResize++ }
+func (m *ConnMetrics) recordResizeSnapshot() {
+	m.mu.Lock()
+	m.SnapshotsFromResize++
+	m.mu.Unlock()
+}
 
 // recordSubscribe 记录本连接的订阅次数（含重复订阅）。
 func (m *ConnMetrics) recordSubscribe() {
+	m.mu.Lock()
 	m.SnapshotsFromSubscribe++
+	m.mu.Unlock()
 }
 
 // recordFramesSent 记录本连接发出的总帧数。
-func (m *ConnMetrics) recordFramesSent() { m.FramesSent++ }
+func (m *ConnMetrics) recordFramesSent() {
+	m.mu.Lock()
+	m.FramesSent++
+	m.mu.Unlock()
+}
+
+func (m *ConnMetrics) snapshot() ConnMetricsSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return ConnMetricsSnapshot{
+		DeltasDropped:          m.DeltasDropped,
+		SnapshotsPushed:        m.SnapshotsPushed,
+		SnapshotsFromResize:    m.SnapshotsFromResize,
+		SnapshotsFromSubscribe: m.SnapshotsFromSubscribe,
+		FramesSent:             m.FramesSent,
+	}
+}
 
 // recordDrop 递增丢弃计数。
 func (m *SendQueueMetrics) recordDrop() {

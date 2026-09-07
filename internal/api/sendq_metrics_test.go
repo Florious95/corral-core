@@ -8,7 +8,7 @@ import (
 )
 
 // TestConnMetricsIsolation: 两条连接各自产生不同的计数，断言互不污染。
-// 直接测 ConnMetrics（纯值类型，不依赖 wsConn/websocket/Server 构造）。
+// 直接测 ConnMetrics（不依赖 wsConn/websocket/Server 构造）。
 func TestConnMetricsIsolation(t *testing.T) {
 	var c1 ConnMetrics
 	var c2 ConnMetrics

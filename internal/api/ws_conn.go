@@ -31,6 +31,18 @@ func perfNowMS() int64 {
 	return time.Since(perfOrigin).Milliseconds()
 }
 
+func (c *wsConn) setCloseReason(reason string) {
+	c.closeReasonMu.Lock()
+	c.closeReason = reason
+	c.closeReasonMu.Unlock()
+}
+
+func (c *wsConn) getCloseReason() string {
+	c.closeReasonMu.Lock()
+	defer c.closeReasonMu.Unlock()
+	return c.closeReason
+}
+
 // connSeq assigns each connection a monotonically increasing id for logging.
 var connSeq atomic.Uint64
 
@@ -89,7 +101,8 @@ type wsConn struct {
 	// closeReason 连接关闭原因（可观测健康记录，leader msg_1f0c3455fac0）：
 	// readLoop 读错误 / 客户端主动关 / 写超时 / 正常 EOF。teardown 日志带出，
 	// 用于「连接为什么断」溯源（重连假说 / 慢链路健康）。
-	closeReason string
+	closeReasonMu sync.Mutex
+	closeReason   string
 
 	// connMetrics 这条连接自己的计数（P0 修复：teardown 行必须报本连接的数，
 	// 不是进程累计——此前进程级累计被打在 per-conn 行上误导数轮）。
@@ -182,7 +195,7 @@ func (c *wsConn) readLoop() {
 		typ, data, err := c.conn.Read(c.ctx)
 		if err != nil {
 			// 记录读侧关闭原因（客户端关 / 网络错误 / 上下文取消），teardown 日志带出。
-			c.closeReason = "read_error: " + err.Error()
+			c.setCloseReason("read_error: " + err.Error())
 			return
 		}
 		// Stamp recv before parse/dispatch. Integer only — no string format
@@ -237,13 +250,13 @@ func (c *wsConn) writeLoop() {
 				return
 			}
 			if m.close {
-				c.closeReason = "client_close: " + m.reason
+				c.setCloseReason("client_close: " + m.reason)
 				_ = c.conn.Close(m.code, m.reason)
 				return
 			}
 			if err := c.writeFrame(m); err != nil {
 				// 写超时/写错误 → 强制关闭：记录原因（重连假说：慢链路 30s 写超时是候选）。
-				c.closeReason = "write_error: " + err.Error()
+				c.setCloseReason("write_error: " + err.Error())
 				_ = c.conn.CloseNow()
 				return
 			}
@@ -298,13 +311,13 @@ func (c *wsConn) flushQueued() {
 func (c *wsConn) teardown() {
 	c.cancel()
 	if reason := c.mirrorLossReason.Load(); reason != nil {
-		c.closeReason = reason.(string)
+		c.setCloseReason(reason.(string))
 	}
 	// 发送队列健康记录（常驻产品指标，非取证临时物）：会话结束时打一行，空闲零开销。
 	// 内容只含计数，绝无 token/凭据（daemon 日志有明文 token 历史问题，纪律）。
 	// 慢链路丢 delta → 客户端不一致 → 补发快照 → 整屏重建（D-36「发消息整屏刷」假说第 12 条）。
 	// per-conn 与 process-level 分开报，字段前缀一眼可辨（P0：此前进程累计被打在 per-conn 行）。
-	cm := c.connMetrics
+	cm := c.connMetrics.snapshot()
 	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 || m.ConnectionsTotal > 0 || cm.FramesSent > 0 || c.mirrorAborted.Load() {
 		c.s.log.Info("ws: sendq health",
 			"conn", c.id,
@@ -323,7 +336,7 @@ func (c *wsConn) teardown() {
 			"total.connections", m.ConnectionsTotal,
 			"total.queue_peak", m.QueuePeak,
 			"total.frames_sent", m.FramesSent,
-			"close_reason", c.closeReason,
+			"close_reason", c.getCloseReason(),
 		)
 	}
 	// The connection is no longer a live client: un-count it so the listing
