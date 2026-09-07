@@ -1,0 +1,157 @@
+name: PR86 nodeprobe safety
+
+on:
+  pull_request:
+    branches: [pr/status-core-nodeprobe-863c]
+    paths:
+      - "tools/nodeprobe/**"
+      - ".github/workflows/pr86-nodeprobe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c70-red:
+    name: Frozen C70 red boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run named C70 red tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="$RUNNER_TEMP/c70"
+          git worktree add --detach "$old" 23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5
+          python3 - "$old/tools/nodeprobe/src/lib.rs" <<'PY'
+          from pathlib import Path
+          p = Path(__import__("sys").argv[1])
+          text = p.read_text()
+          marker = "\n}\n"
+          pos = text.rfind(marker)
+          assert pos > 0
+          tests = r'''
+
+              #[test]
+              fn t_n_c70_missing_channel_must_not_be_normal() {
+                  let observation = pi_activity::Observation {
+                      activity: pi_activity::ACTIVITY_UNKNOWN,
+                      session_name: None,
+                      channel_available: false,
+                      health: pi_activity::HEALTH_UNKNOWN,
+                      detail: "pi activity channel missing: no record".into(),
+                  };
+                  assert_eq!(
+                      pi_process_health(&[42], Some(Path::new("/tmp/pi")), &observation),
+                      pi_activity::HEALTH_UNKNOWN
+                  );
+              }
+
+              #[test]
+              fn t_n_c70_title_only_name_must_survive() {
+                  use pi_activity::TitleName;
+                  let title = TitleName::Parsed(Some("build-main".into()));
+                  assert_eq!(
+                      merge_pi_session_name(Some(&title), None),
+                      Ok(Some("build-main".into()))
+                  );
+              }
+          '''
+          p.write_text(text[:pos] + tests + text[pos:])
+          set +e
+          cargo test --manifest-path "$old/tools/nodeprobe/Cargo.toml" --locked --lib t_n_c70 2>&1 | tee "$RUNNER_TEMP/c70-red.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf 'command=cargo test --manifest-path %s --locked --lib t_n_c70\nexit=%s\n' "$old/tools/nodeprobe/Cargo.toml" "$rc" | tee "$RUNNER_TEMP/c70-red-receipt.txt"
+          grep -q 't_n_c70_missing_channel_must_not_be_normal' "$RUNNER_TEMP/c70-red.log"
+          grep -q 't_n_c70_title_only_name_must_survive' "$RUNNER_TEMP/c70-red.log"
+          grep -Eq 'test result: FAILED|failures:' "$RUNNER_TEMP/c70-red.log"
+          test "$rc" -ne 0
+      - name: Upload C70 red evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr86-c70-red
+          path: |
+            ${{ runner.temp }}/c70-red.log
+            ${{ runner.temp }}/c70-red-receipt.txt
+
+  candidate:
+    name: Candidate Rust corpus and G-SAFE
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install tmux for isolated harness
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tmux
+      - name: Cargo test and explicit corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CARGO_INCREMENTAL=0
+          cargo test --manifest-path tools/nodeprobe/Cargo.toml --locked -- --test-threads="$(nproc)"
+          NODEPROBE_FIXTURES="$GITHUB_WORKSPACE/tools/nodeprobe/fixtures/titles.tsv" \
+          NODEPROBE_PROVIDERS="$GITHUB_WORKSPACE/tools/nodeprobe/fixtures/providers.tsv" \
+          cargo run --manifest-path tools/nodeprobe/Cargo.toml --locked -- fixtures "$GITHUB_WORKSPACE/tools/nodeprobe/fixtures/titles.tsv"
+      - name: Build candidate and run G-SAFE
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CARGO_INCREMENTAL=0
+          cargo build --manifest-path tools/nodeprobe/Cargo.toml --locked --release
+          mkdir -p "$RUNNER_TEMP/nodeprobe-gsafe"
+          GSAFE_ROOT="$RUNNER_TEMP/nodeprobe-gsafe" \
+          NODEPROBE_BIN="$GITHUB_WORKSPACE/tools/nodeprobe/target/release/nodeprobe" \
+          TMUX_REAL="$(command -v tmux)" \
+          bash tools/nodeprobe/tests/g-safe.sh
+          shasum -a 256 tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-binary-sha256.txt"
+          wc -c tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-binary-size.txt"
+      - name: Upload candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr86-nodeprobe-linux-evidence
+          path: |
+            ${{ runner.temp }}/nodeprobe-gsafe
+            ${{ runner.temp }}/nodeprobe-binary-sha256.txt
+            ${{ runner.temp }}/nodeprobe-binary-size.txt
+
+  darwin-artifact:
+    name: Darwin candidate artifact
+    runs-on: macos-14
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build Darwin artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CARGO_INCREMENTAL=0
+          cargo build --manifest-path tools/nodeprobe/Cargo.toml --locked --release
+          file tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-darwin-platform.txt"
+          shasum -a 256 tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-darwin-sha256.txt"
+          wc -c tools/nodeprobe/target/release/nodeprobe | tee "$RUNNER_TEMP/nodeprobe-darwin-size.txt"
+      - name: Upload Darwin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr86-nodeprobe-darwin
+          path: |
+            tools/nodeprobe/target/release/nodeprobe
+            ${{ runner.temp }}/nodeprobe-darwin-platform.txt
+            ${{ runner.temp }}/nodeprobe-darwin-sha256.txt
+            ${{ runner.temp }}/nodeprobe-darwin-size.txt
