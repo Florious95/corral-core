@@ -15,8 +15,9 @@ import (
 type cliIdentityProbe struct{}
 
 func (cliIdentityProbe) Sample(_ context.Context, socket string) (nodeprobe.Report, error) {
+	piName := "agent-idle"
 	return nodeprobe.Report{SchemaVersion: 1, Socket: socket, Nodes: []nodeprobe.Node{
-		{Session: "agent-idle", PaneID: "%0", Provider: "pi", State: "idle", Activity: "idle", Health: "unknown"},
+		{Session: "agent-idle", PaneID: "%0", Provider: "pi", State: "idle", Activity: "idle", SessionName: &piName, Health: "unknown"},
 		{Session: "agent-working", PaneID: "%1", Provider: "grok", State: "working", Activity: "working", Health: "normal"},
 		{Session: "agent-unknown", PaneID: "%2", Provider: "codex", State: "unknown", Activity: "unknown", Health: "unknown"},
 		{Session: "shell", PaneID: "%3", Provider: "unknown", State: "unknown", Activity: "unknown", Health: "unknown"},
@@ -27,7 +28,7 @@ func cliIdentityModel() *discovery.Model {
 	return &discovery.Model{Workspaces: []discovery.Workspace{{CWD: "/fixture", Panes: []discovery.Pane{
 		{Socket: "/fixture/socket", Session: "agent-idle", PaneID: "%0", CWD: "/fixture", WindowName: "agent-idle", Width: 80, Height: 24},
 		{Socket: "/fixture/socket", Session: "agent-working", PaneID: "%1", CWD: "/fixture", WindowName: "agent-working", Width: 80, Height: 24},
-		{Socket: "/fixture/socket", Session: "agent-unknown", PaneID: "%2", CWD: "/fixture", WindowName: "agent-unknown", Width: 80, Height: 24},
+		{Socket: "/fixture/socket", Session: "agent-unknown", PaneID: "%2", CWD: "/fixture", WindowName: "agent-unknown", PaneTitle: "agent-unknown", Width: 80, Height: 24},
 		{Socket: "/fixture/socket", Session: "shell", PaneID: "%3", CWD: "/fixture", WindowName: "shell", Command: "bash", Width: 80, Height: 24},
 	}}}}
 }
