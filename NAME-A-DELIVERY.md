@@ -10,9 +10,9 @@
 - A0 公开冻结分支：`base/status-name-a0`，远端 SHA `e42619b31803c28fec940f085d6897241ca7b9b5`。
 - NAME-A PR：[corral-core#89](https://github.com/Florious95/corral-core/pull/89)
 - PR base：`base/status-name-a0` @ `e42619b31803c28fec940f085d6897241ca7b9b5`
-- PR head：`pr/name-app` @ `3644d53b15ca871a0f78153a12d420c115ae3a72`
-- head tree：`a24f854550ff7a880145c4552b506201b4f53914`
-- 远端 head 与 worktree SHA 一致；base 未漂移。
+- 已验证的产品/测试源 head：`pr/name-app` @ `3644d53b15ca871a0f78153a12d420c115ae3a72`
+- 已验证源 tree：`a24f854550ff7a880145c4552b506201b4f53914`
+- 交付文档随后作为 delivery-only commit 追加在同一 PR 分支；base 未漂移。报告时 PR head 以 GitHub 实时坐标为准。
 
 A0 中只有 5 个精确 A73 活动文件差量；NAME-A 产品差量集中在 `L2Models.kt`、`FavoriteRecord.kt`、`FavoriteBook.kt`，测试/CI 为必要消费门。未将本地含 server 的历史树直接推送；源自公开 corral-core C76 commit。
 
@@ -38,7 +38,7 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 
 ## 绿与回归门
 
-产品修复提交 `6fd463979ad67f2eeaee25880d6743153dd1528a`，随后仅修测试 fixture 的 `3644d53b15ca871a0f78153a12d420c115ae3a72`。最终 hosted run：
+产品修复提交 `6fd463979ad67f2eeaee25880d6743153dd1528a`，随后仅修测试 fixture 的 `3644d53b15ca871a0f78153a12d420c115ae3a72`。源代码验证 hosted run：
 
 - CI run [34095323887](https://github.com/Florious95/corral-core/actions/runs/34095323887)，实际 checkout final head `3644d53b15ca871a0f78153a12d420c115ae3a72`。
 - 命令固定使用 `./gradlew --no-daemon --rerun-tasks -Pkotlin.compiler.execution.strategy=in-process :app:testDebugUnitTest`，并具名选择：
@@ -46,6 +46,7 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 - 退出码 `0`；`BUILD SUCCESSFUL in 3m 14s`；`41 actionable tasks: 41 executed`；日志 `NAME_A_RESULT command_exit=0 executed_task_lines=67 up_to_date_task_lines=9 junit_tests=75 junit_failures=0 junit_errors=0 junit_skipped=0`。
 - 绿日志 SHA256：`e9be970ba4961e590bae316e6ae96b8148c18e6697a6e8669559bb86a67c4461`
 - 绿 run JSON SHA256：`8929cc98b1f63530bfa3bbd3e7eb12ab54a4a800650c3914ce3c2642fc5abb89`
+- delivery-only 文档追加后的 PR head 检查：run `34096093704`，同一命名/活动测试命令，exit `0`，`BUILD SUCCESSFUL in 3m 10s`，`41 actionable tasks: 41 executed`，JUnit `75/0/0/0`；日志 SHA256 `8e90397d703271e8b311650e6bbdda2bfc329dc1068ffe0a099d35961ff824da`，JSON SHA256 `e39275dd30259c18dd2060fd38e0722d08704ed4164f3827270f1bfcf63a86c8`。
 
 覆盖包含：T-A 20 门、三面离线收藏显隐、名称仅变化 ref/key 不变、在线 Pi 缺失名不回填旧记录、重订阅、回前台、push-only 活动态与 C76 UI 兼容测试。
 
