@@ -1,4 +1,4 @@
-name: perf16-overflow-resync
+name: perf16-overflow-resync-rework
 
 on:
   pull_request:
@@ -8,11 +8,66 @@ on:
 permissions:
   contents: read
 
+env:
+  PERF16_BASE_SHA: b98504e742ed1e7c7475767c512934b07eac592b
+
 jobs:
-  overflow-resync:
-    name: PERF-16 overflow loss and abort
+  frozen-base-red:
+    name: PERF-16 frozen-base red boundary
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Set up Go from module
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Run bridge red against frozen base
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/perf16-base"
+          git worktree add --detach "$base" "$PERF16_BASE_SHA"
+          cp internal/bridge/overflow_recovery_test.go "$base/internal/bridge/overflow_recovery_test.go"
+          mkdir -p "$RUNNER_TEMP/perf16-red"
+          set +e
+          (cd "$base" && go test -race -count=1 ./internal/bridge -run '^TestSubscriberOverflowStopsOnlySlowSubscriber$' -v) 2>&1 | tee "$RUNNER_TEMP/perf16-red/bridge.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf 'tested_from=%s\ncommand=go test -race -count=1 ./internal/bridge -run TestSubscriberOverflowStopsOnlySlowSubscriber -v\nexit=%s\n' "$PERF16_BASE_SHA" "$rc" | tee "$RUNNER_TEMP/perf16-red/bridge.receipt"
+          test "$rc" -ne 0
+          grep -F -- '--- FAIL: TestSubscriberOverflowStopsOnlySlowSubscriber' "$RUNNER_TEMP/perf16-red/bridge.log"
+      - name: Run WS red against frozen base
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/perf16-base"
+          test -e "$base/.git"
+          cp internal/api/overflow_recovery_test.go "$base/internal/api/overflow_recovery_test.go"
+          set +e
+          (cd "$base" && go test -race -count=1 ./internal/api -run '^TestWSQueueOverflowAbortsOnceAndDiscardsQueue$' -v) 2>&1 | tee "$RUNNER_TEMP/perf16-red/ws.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf 'tested_from=%s\ncommand=go test -race -count=1 ./internal/api -run TestWSQueueOverflowAbortsOnceAndDiscardsQueue -v\nexit=%s\n' "$PERF16_BASE_SHA" "$rc" | tee "$RUNNER_TEMP/perf16-red/ws.receipt"
+          test "$rc" -ne 0
+          grep -F -- '--- FAIL: TestWSQueueOverflowAbortsOnceAndDiscardsQueue' "$RUNNER_TEMP/perf16-red/ws.log"
+      - name: Upload frozen-base red evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf16-rework-red-${{ github.sha }}
+          path: ${{ runner.temp }}/perf16-red
+
+  candidate-green:
+    name: PERF-16 rework candidate green
+    needs: frozen-base-red
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@v4
@@ -38,19 +93,19 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           test -z "$(git status --porcelain --untracked-files=all)"
-          mkdir -p "$RUNNER_TEMP/perf16-evidence"
-          printf 'sha=%s\n' "$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/perf16-evidence/checkout.txt"
-      - name: Bridge overflow recovery (each test must RUN/PASS)
+          mkdir -p "$RUNNER_TEMP/perf16-green"
+          printf 'tested_from=%s\n' "$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/perf16-green/checkout.receipt"
+      - name: Run bridge rework tests individually with race
         shell: bash
         run: |
           set -euo pipefail
           run_named_test() {
-            local pkg="$1" name="$2" log="$RUNNER_TEMP/perf16-evidence/${2}.log" rc
+            local pkg="$1" name="$2" log="$RUNNER_TEMP/perf16-green/${2}.log" rc
             set +e
             go test -race -count=1 "$pkg" -run "^${name}$" -v 2>&1 | tee "$log"
             rc=${PIPESTATUS[0]}
             set -e
-            printf 'sha=%s\npackage=%s\ntest=%s\ncommand=go test -race -count=1 %s -run ^%s$ -v\nexit=%s\n' "$(git rev-parse HEAD)" "$pkg" "$name" "$pkg" "$name" "$rc" | tee -a "$RUNNER_TEMP/perf16-evidence/receipt.txt"
+            printf 'tested_from=%s\npackage=%s\ntest=%s\ncommand=go test -race -count=1 %s -run ^%s$ -v\nexit=%s\n' "$(git rev-parse HEAD)" "$pkg" "$name" "$pkg" "$name" "$rc" | tee -a "$RUNNER_TEMP/perf16-green/receipt"
             test "$rc" -eq 0
             grep -F -- "--- PASS: ${name}" "$log"
             test "$(grep -F -- "--- PASS: ${name}" "$log" | wc -l | tr -d ' ')" -eq 1
@@ -58,17 +113,20 @@ jobs:
           }
           run_named_test ./internal/bridge TestSubscriberOverflowStopsOnlySlowSubscriber
           run_named_test ./internal/bridge TestSubscriberOverflowEmitsOneLossSignal
-      - name: WS overflow recovery (each test must RUN/PASS)
+          run_named_test ./internal/bridge TestOverflowPublishesCauseBeforeDataEOF
+          run_named_test ./internal/bridge TestOldGenerationDetachCannotTouchNewGeneration
+          run_named_test ./internal/bridge TestSubscribeAttachRetriesAreBounded
+      - name: Run API rework tests individually with race
         shell: bash
         run: |
           set -euo pipefail
           run_named_test() {
-            local pkg="$1" name="$2" log="$RUNNER_TEMP/perf16-evidence/${2}.log" rc
+            local pkg="$1" name="$2" log="$RUNNER_TEMP/perf16-green/${2}.log" rc
             set +e
             go test -race -count=1 "$pkg" -run "^${name}$" -v 2>&1 | tee "$log"
             rc=${PIPESTATUS[0]}
             set -e
-            printf 'sha=%s\npackage=%s\ntest=%s\ncommand=go test -race -count=1 %s -run ^%s$ -v\nexit=%s\n' "$(git rev-parse HEAD)" "$pkg" "$name" "$pkg" "$name" "$rc" | tee -a "$RUNNER_TEMP/perf16-evidence/receipt.txt"
+            printf 'tested_from=%s\npackage=%s\ntest=%s\ncommand=go test -race -count=1 %s -run ^%s$ -v\nexit=%s\n' "$(git rev-parse HEAD)" "$pkg" "$name" "$pkg" "$name" "$rc" | tee -a "$RUNNER_TEMP/perf16-green/receipt"
             test "$rc" -eq 0
             grep -F -- "--- PASS: ${name}" "$log"
             test "$(grep -F -- "--- PASS: ${name}" "$log" | wc -l | tr -d ' ')" -eq 1
@@ -76,17 +134,18 @@ jobs:
           }
           run_named_test ./internal/api TestWSQueueOverflowAbortsOnceAndDiscardsQueue
           run_named_test ./internal/api TestRelayLossAbortsConnectionAndDropsQueuedDeltas
+          run_named_test ./internal/api TestAbortDoesNotFlushDequeuedWriterFrame
       - name: Preserve authentication, displaced-pipe, geometry, and fanout controls
         shell: bash
         run: |
           set -euo pipefail
           run_named_test() {
-            local pkg="$1" name="$2" log="$RUNNER_TEMP/perf16-evidence/${2}.log" rc
+            local pkg="$1" name="$2" log="$RUNNER_TEMP/perf16-green/${2}.log" rc
             set +e
             go test -race -count=1 "$pkg" -run "^${name}$" -v 2>&1 | tee "$log"
             rc=${PIPESTATUS[0]}
             set -e
-            printf 'sha=%s\npackage=%s\ntest=%s\ncommand=go test -race -count=1 %s -run ^%s$ -v\nexit=%s\n' "$(git rev-parse HEAD)" "$pkg" "$name" "$pkg" "$name" "$rc" | tee -a "$RUNNER_TEMP/perf16-evidence/receipt.txt"
+            printf 'tested_from=%s\npackage=%s\ntest=%s\ncommand=go test -race -count=1 %s -run ^%s$ -v\nexit=%s\n' "$(git rev-parse HEAD)" "$pkg" "$name" "$pkg" "$name" "$rc" | tee -a "$RUNNER_TEMP/perf16-green/receipt"
             test "$rc" -eq 0
             grep -F -- "--- PASS: ${name}" "$log"
             test "$(grep -F -- "--- PASS: ${name}" "$log" | wc -l | tr -d ' ')" -eq 1
@@ -98,11 +157,12 @@ jobs:
           run_named_test ./internal/api TestFanoutFirstDisconnectDoesNotKickSecondAPI
           run_named_test ./internal/api TestAbnormalTeardownRestoresPaneGeometry
           run_named_test ./internal/api TestSecondSubscriberDoesNotRebase
+          run_named_test ./internal/api TestUnsubscribeRestoresOriginalPaneSize
           run_named_test ./internal/bridge TestFanoutTwoSubscribersStillReceive
           run_named_test ./internal/bridge TestFanoutFirstDetachDoesNotKickSecond
-      - name: Upload hosted receipts and logs
+      - name: Upload candidate green evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf16-overflow-green-${{ github.sha }}
-          path: ${{ runner.temp }}/perf16-evidence
+          name: perf16-rework-green-${{ github.sha }}
+          path: ${{ runner.temp }}/perf16-green
