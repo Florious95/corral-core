@@ -243,4 +243,37 @@ mod tests {
         let ident = walk_identity_comms(&snap, 10, "codex");
         assert_eq!(providers::match_comms(&ident).map(|e| e.id.as_str()), Some("codex"));
     }
+
+    #[test]
+    fn identity_processes_drive_provider_and_pid_selection_together() {
+        let snap = parse_table(
+            "\
+1 0 Ss /sbin/launchd
+10 1 Ss+ /bin/zsh
+11 10 SN /opt/homebrew/bin/pi
+"
+        );
+        let shell_identity = walk_identity_processes(&snap, 10, "zsh");
+        assert_eq!(shell_identity, vec![(10, "/bin/zsh".to_string())]);
+        assert!(providers::match_comms(
+            &comms_of(&shell_identity)
+        ).is_none());
+        let agent_identity = walk_identity_processes(&snap, 10, "pi");
+        assert_eq!(
+            agent_identity,
+            vec![(10, "/bin/zsh".to_string()), (11, "/opt/homebrew/bin/pi".to_string())]
+        );
+        assert_eq!(
+            providers::match_comms(&comms_of(&agent_identity)).map(|e| e.id.as_str()),
+            Some("pi")
+        );
+        assert_eq!(
+            agent_identity
+                .iter()
+                .filter(|(_, comm)| providers::lookup(comm).is_some_and(|e| e.id == "pi"))
+                .map(|(pid, _)| *pid)
+                .collect::<Vec<_>>(),
+            vec![11]
+        );
+    }
 }
