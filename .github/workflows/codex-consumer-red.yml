@@ -1,0 +1,25 @@
+name: codex-consumer-red
+
+on:
+  push:
+    branches:
+      - pr/codex-pi-display-name
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consumer-red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact test branch
+        uses: actions/checkout@v4
+      - name: Set up Go from module
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Run API and protocol tests
+        run: go test -count=1 ./internal/api ./internal/protocol -v
