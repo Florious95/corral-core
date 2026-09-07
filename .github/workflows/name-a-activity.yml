@@ -102,3 +102,31 @@ jobs:
             echo "- junit_skipped: ${skipped:-0}"
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
+
+      - name: Assemble release candidate
+        shell: bash
+        run: |
+          set +e
+          cd app
+          ./gradlew --no-daemon --rerun-tasks \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :app:assembleRelease \
+            2>&1 | tee "$GITHUB_WORKSPACE/assemble-release.log"
+          rc=${PIPESTATUS[0]}
+          apk="$GITHUB_WORKSPACE/app/app/build/outputs/apk/release/app-release.apk"
+          if [ "$rc" -eq 0 ] && [ -f "$apk" ]; then
+            sha256sum "$apk"
+            stat -c 'release_apk_bytes=%s path=%n' "$apk"
+          fi
+          echo "NAME_A_RELEASE_RESULT command_exit=$rc apk_present=$([ -f "$apk" ] && echo yes || echo no)"
+          exit "$rc"
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: name-a-${{ github.sha }}-release
+          path: |
+            app/app/build/outputs/apk/release/app-release.apk
+            assemble-release.log
+          if-no-files-found: error
+          retention-days: 7
