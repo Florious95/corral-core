@@ -43,6 +43,8 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.android.controller.ServiceController
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -82,6 +84,8 @@ class Perf16AppRecoveryScenarioTest {
     private lateinit var client: OkHttpClient
     private var vm: SessionViewModel? = null
     private var serviceController: ServiceController<MirrorForegroundService>? = null
+    private val serverSockets = CopyOnWriteArrayList<WebSocket>()
+    private var serverClosed = CountDownLatch(0)
 
     @Before
     fun setUp() {
@@ -115,7 +119,13 @@ class Perf16AppRecoveryScenarioTest {
         ServiceWire.transportFactory = dev.agentmirror.app.service.OkHttpTransportFactory
         ServiceWire.releaseManager()
         ServiceWire.resetConfigForTest()
-        server.shutdown()
+        serverSockets.forEach { it.close(1000, "test teardown") }
+        val closed = serverClosed.await(3, TimeUnit.SECONDS)
+        try {
+            server.shutdown()
+        } finally {
+            assertTrue("all fixture WebSockets must close before MockWebServer shutdown", closed)
+        }
     }
 
     private fun wsUrl(): String = server.url("/ws").toString().replaceFirst("http", "ws")
@@ -185,11 +195,34 @@ class Perf16AppRecoveryScenarioTest {
 
     @Test
     fun realOkHttpAbruptClose_servicePump_reauthListSubscribeClearsStaticScreen() {
+        serverClosed = CountDownLatch(2)
         val firstSnapshotSent = AtomicBoolean(false)
         val secondSnapshotSent = AtomicBoolean(false)
 
         fun upgrade(connectionNo: Int): MockResponse = MockResponse().withWebSocketUpgrade(
             object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+                    serverSockets += webSocket
+                }
+
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    webSocket.close(code, reason)
+                }
+
+                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    serverSockets.remove(webSocket)
+                    serverClosed.countDown()
+                }
+
+                override fun onFailure(
+                    webSocket: WebSocket,
+                    t: Throwable,
+                    response: okhttp3.Response?,
+                ) {
+                    serverSockets.remove(webSocket)
+                    serverClosed.countDown()
+                }
+
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     when {
                         text.contains("\"type\":\"auth\"") -> webSocket.send(authAck())
@@ -247,10 +280,33 @@ class Perf16AppRecoveryScenarioTest {
 
     @Test
     fun realOkHttpAuthReject_stopsWithoutReconnect() {
+        serverClosed = CountDownLatch(1)
         val authRequests = AtomicInteger(0)
         server.enqueue(
             MockResponse().withWebSocketUpgrade(
                 object : WebSocketListener() {
+                    override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+                        serverSockets += webSocket
+                    }
+
+                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                        webSocket.close(code, reason)
+                    }
+
+                    override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                        serverSockets.remove(webSocket)
+                        serverClosed.countDown()
+                    }
+
+                    override fun onFailure(
+                        webSocket: WebSocket,
+                        t: Throwable,
+                        response: okhttp3.Response?,
+                    ) {
+                        serverSockets.remove(webSocket)
+                        serverClosed.countDown()
+                    }
+
                     override fun onMessage(webSocket: WebSocket, text: String) {
                         if (text.contains("\"type\":\"auth\"")) {
                             authRequests.incrementAndGet()
