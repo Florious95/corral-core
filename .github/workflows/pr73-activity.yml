@@ -1,0 +1,50 @@
+name: PR73 activity projection
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activity-projection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Run exact C73 red test
+        shell: bash
+        run: |
+          set +e
+          cd app
+          ./gradlew --no-daemon --rerun-tasks \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :app:testDebugUnitTest \
+            --tests 'dev.agentmirror.app.ui.ExternalSessionStatusUiTest.fourAxisProjectionUsesOnlyOnlineAndActivity' \
+            2>&1 | tee "$GITHUB_WORKSPACE/gradle.log"
+          rc=${PIPESTATUS[0]}
+          executed=$(grep -cE '^> Task ' "$GITHUB_WORKSPACE/gradle.log" || true)
+          up_to_date=$(grep -c 'UP-TO-DATE' "$GITHUB_WORKSPACE/gradle.log" || true)
+          {
+            echo "### PR73 activity test"
+            echo "- command_exit: $rc"
+            echo "- executed_task_lines: $executed"
+            echo "- up_to_date_task_lines: $up_to_date"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
