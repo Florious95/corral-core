@@ -69,3 +69,69 @@ func TestDiscoverIncludesEveryCurrentUserSocket(t *testing.T) {
 		t.Fatalf("fixture must clear TMUX, got %q", got)
 	}
 }
+
+// TestDiscoverIncludesTeamSocketWithSamePaneIdentity is the causal regression
+// for Issue10: a current-user ta-* Team socket is a product socket, not an
+// isolation fixture. Three servers intentionally reuse the session, pane id,
+// and CWD so the model must preserve the socket in every distinct ref.
+func TestDiscoverIncludesTeamSocketWithSamePaneIdentity(t *testing.T) {
+	root := testSocketRoot(t)
+	tmp := t.TempDir()
+	cwd := mkdirTmp(t, tmp, "ws-team-same-pane")
+	cwdWant, err := filepath.EvalSymlinks(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := testSocketDir(t, root)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	start := func(socketName string) string {
+		t.Helper()
+		socket := filepath.Join(dir, socketName)
+		runTMUX(t, root, "-S", socket, "new-session", "-d", "-c", cwd, "-s", "same-session")
+		t.Cleanup(func() {
+			cmd := exec.Command("tmux", "-S", socket, "kill-server")
+			cmd.Env = append(envWithout(os.Environ(), "TMUX"), "TMUX_TMPDIR="+root)
+			_ = cmd.Run()
+		})
+		return socket
+	}
+	defaultSocket := start("default")
+	namedSocket := start("ordinary")
+	teamSocket := start("ta-team")
+	t.Setenv("TMUX", "")
+
+	model, err := DiscoverWithDirs(context.Background(), discardLogger(), []string{dir})
+	if err != nil {
+		t.Fatalf("DiscoverWithDirs: %v", err)
+	}
+	if len(model.Workspaces) != 1 || model.Workspaces[0].CWD != cwdWant {
+		t.Fatalf("model workspaces = %+v, want one workspace at %q", model.Workspaces, cwdWant)
+	}
+	ws := model.Workspaces[0]
+	if ws.Count() != 3 {
+		t.Fatalf("workspace count = %d, want 3 panes across default/ordinary/ta sockets", ws.Count())
+	}
+	seenSockets := make(map[string]bool, ws.Count())
+	seenRefs := make(map[string]bool, ws.Count())
+	for _, pane := range ws.Panes {
+		if pane.CWD != cwdWant || pane.Session != "same-session" || pane.PaneID != "%0" {
+			t.Fatalf("same-pane identity changed: %+v", pane)
+		}
+		seenSockets[pane.Socket] = true
+		ref := pane.Socket + "\x1f" + pane.PaneID
+		if seenRefs[ref] {
+			t.Fatalf("duplicate pane ref %q: %+v", ref, ws.Panes)
+		}
+		seenRefs[ref] = true
+	}
+	for _, socket := range []string{defaultSocket, namedSocket, teamSocket} {
+		if !seenSockets[socket] {
+			t.Fatalf("socket %q missing from model: %v", socket, seenSockets)
+		}
+	}
+	if len(seenRefs) != 3 {
+		t.Fatalf("refs = %d, want 3 distinct socket-qualified refs: %v", len(seenRefs), seenRefs)
+	}
+}
