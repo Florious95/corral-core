@@ -66,6 +66,7 @@
     },
     "c70_boundary_harness": {
       "source_commit": "e50a6e93bfb691977b4313fa9d2d465402a89d45",
+      "evidence": "tmp/pre-red/c70-boundary-harness.md",
       "test_names": [
         "t_n_missing_channel_must_not_be_normal",
         "t_n_title_only_name_must_survive"

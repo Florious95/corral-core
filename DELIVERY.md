@@ -35,7 +35,7 @@
 - Codex 10 帧逐帧 `exit=1`、`unknown/codex`：`tmp/pre-red/codex-10-results.tsv`。
 - 注入 `capture-pane` 和危险 `ps` 均被反控 wrapper 以 97 拒绝：`tmp/pre-red/trace/old-gsafe.log`。
 - old probe 合成 shell sample `exit=0` 但 node 数 0；不把 exit0/JSON 当安全证明。
-- C70 边界红 harness 已在 `tmp/c70-red` 具名：`t_n_missing_channel_must_not_be_normal`、`t_n_title_only_name_must_survive`。远端红测待空间恢复后执行，a1 sync 超时仅 status=missing，a2 preflight 因空间 exit=7，均未执行 Cargo。
+- C70 边界红 harness 已在 `tmp/pre-red/c70-boundary-harness.md` 具名：`t_n_missing_channel_must_not_be_normal`、`t_n_title_only_name_must_survive`。远端红测待空间恢复后执行，a1 sync 超时仅 status=missing，a2 preflight 因空间 exit=7，均未执行 Cargo。
 
 ## 哈希
 
