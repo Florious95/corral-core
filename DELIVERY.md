@@ -8,8 +8,8 @@
 - PR：<https://github.com/Florious95/corral-core/pull/86>
 - owning branch：`pr/nodeprobe-fg-comms`
 - PR base：`pr/status-core-nodeprobe-863c`（C70）
-- source checkout HEAD：`1cc086246e6973da1c570320072f606d7607acf1`
-- source checkout tree：`a98793724a5e63a626a240ba40bddd30fa4e4b07`
+- source checkout HEAD：`dae7a69e61194aadd18b9db368b1dcf157d5be0d`
+- source checkout tree：`5314c23563a06eb97a1d76e42729701659136850`
 - delivery docs commit：`016ab1a86bb9b1c5797622637ffa4f36e13dba13`
 - merge parents：C86 `81790368e41900a9085c722e89147924f0806dfe`；C70 `23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5`
 - scope：相对 C86 仅 `tools/nodeprobe` crate、Pi extension、fixture corpus、同源 tests/docs；无 server/App 写界。
