@@ -97,3 +97,11 @@ Test-only head `2e473cddabf1b8768ced45a6769daa603f0ffa24` 在 A0 上执行，未
 - 参考 APK `/Users/alauda/Downloads/AgentMirror-Three-Surface-596fe6517-signed.apk`（`35655272` bytes，SHA256 `0c9aa3285689d9f4004fb2570f3e5af65bbab6e67437343a78496b15c6d2cf30`）与候选均为 package `dev.agentmirror.app`、versionCode `1`、versionName `0.1.0`、minSdk `26`、targetSdk `35`；均通过 APK v2/v3，candidate signer certificate SHA256 与参考同为 `ea427eb4e14f95654a66802b6558fbbf6f93f1ca69d8117795fb7cef376cb13b`，public-key SHA256 同为 `d06b9c686688af558cc1131b0eb384a6d5127b3cf85710066857d216078d4559`。静态 package/version/signer 核验通过；未做覆盖安装。
 - Git 载体：draft prerelease `name-a-04bfde8d-api35`，release id `383926908`，target `04bfde8d161c244c9dfced3b5ab90d22d1460d86`，资产 `AgentMirror-Three-Surface-NAME-A-04bfde8-signed.apk` 及 `.sha256`；release 下载回传与本地候选逐字节一致。Release URL：`https://github.com/Florious95/corral-core/releases/tag/untagged-4f0d7532db6432907935`。
 - 未闭门：独立验收仍需真实 CLI、AVD/Compose 组合验收及覆盖安装实测；本候选不宣称最终 APK 通过。
+
+## 真实会话 AVD 连接尝试（real-session-avd-user-comparison）
+
+- 依据本机内存/load 预检后，启动自有可见 API35 AVD `app_fix_working_api35`，设备 `emulator-5580`，独立 adb 端口 `5038`；`sys.boot_completed=1`。候选 APK 以 `pm install -r` 安装，保留已有应用数据；未启动其他 AVD、未启动 fake WS（`9902` 无监听）。GUI 与 AVD 按用户要求保持开启，未自动清理。
+- 候选身份：`AgentMirror-Three-Surface-NAME-A-04bfde8-signed.apk`，SHA256 `bd4ababfcec3301c19ced02350ff2193f183311f9ec0bdd455145deab3b3e861`，`35610017` bytes，package/version/signer 与参考 APK 已核对；目标生产连接为用户授权的本机服务 `ws://10.0.2.2:9900/ws`。
+- 通过产品正常设置→「重新配对」打开手动连接页，未读 profile/token、生产日志、argv 或会话正文。AVD 现存配对数据是此前受控 synthetic fake pairing，不含可用生产 token；安全边界下不能代取或猜 token。当前未建立生产连接，因此没有真实会话总数、分页、workspace 范围或三入口结果可报告；不以受控 WS 样本替代真实列表。
+- UI 证据：`tmp/avd-app-fix/prod-url3.png`、`prod-pair.xml`、`real-avd-gui.pid`。截图显示正常配对页，URL 输入曾被 adb 文字注入污染为 `ws%3`，token 字段为空；最小恢复动作是用户在当前 GUI 手动校正 URL 为 `ws://10.0.2.2:9900/ws`、输入生产 token 并点击「连接」。恢复后本席只核外会话列表、外收藏列表及对话页第三收藏按钮，保持不打开真实会话正文、不发送输入。
+- 本次未改产品代码、未改服务端/probe/配置、未执行本机 Gradle/Go/Rust 或新 hosted 构建；当前交付结论是**生产配对阻塞，真实列表加载未执行**，不宣称真实 AVD/CLI 最终验收。
