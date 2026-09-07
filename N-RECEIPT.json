@@ -1,19 +1,20 @@
 {
   "schema_version": "nodeprobe-n-receipt-v1",
-  "status": "blocked_remote_build",
+  "status": "ci_verified_unaccepted",
+  "acceptance": "pending_independent_leader_review",
   "seat": "status-probe-fix",
   "role_identity": {
-    "provider": "openai-codex",
-    "model": "gpt-5.6-luna",
+    "provider": "pi",
+    "model": "openai-codex/gpt-5.6-luna",
     "reasoning": "xhigh",
     "whitelist_match": true
   },
   "repository": "Florious95/corral-core",
   "worktree": ".team/nodes/status-probe-fix",
   "source": {
-    "head": "dae7a69e61194aadd18b9db368b1dcf157d5be0d",
-    "tree": "5314c23563a06eb97a1d76e42729701659136850",
-    "parent": "4e49a0391becb76aef130d198555fa39ee4d17e4",
+    "head": "4f77e3bdc2df08c81b5f50c13050cbddc7053b62",
+    "tree": "047bfb0539047f592ef64d4d8bf9dfaba4278e20",
+    "parent": "5e2cbb2b5fd3a1a832a7d63cf0ac81eb4d4d1cc0",
     "merge_commit": "cf97d545672689b80fb80460bd3b295f88a50a64",
     "merge_parents": [
       "81790368e41900a9085c722e89147924f0806dfe",
@@ -24,7 +25,8 @@
     "owning_branch": "pr/nodeprobe-fg-comms",
     "pr_url": "https://github.com/Florious95/corral-core/pull/86",
     "pr_base": "pr/status-core-nodeprobe-863c",
-    "author_diff_relative_c70": "tools/nodeprobe/** only",
+    "product_author_diff_relative_c70": "tools/nodeprobe/** only",
+    "test_only_paths": [".github/workflows/pr86-nodeprobe.yml"],
     "delivery_only_paths": ["DELIVERY.md", "N-RECEIPT.json"],
     "scope_check": "no server/App author diff"
   },
@@ -47,7 +49,15 @@
       "sha256": "c68f50115b33ae6a6806b463cc27c71d8bbfc92273435a533502e9bb84b8b522",
       "bytes": 481
     },
-    "binary": null
+    "darwin_binary": {
+      "path": "tools/nodeprobe/artifacts/nodeprobe-darwin-arm64",
+      "git_blob": "19a33813679337252984a4b20fcf51a39c6e382e",
+      "sha256": "e5667b9ebe931de7805a87538e03b9a6ee1fb9cb9250c25282f8b054268226b5",
+      "bytes": 885504,
+      "platform": "Mach-O 64-bit executable arm64",
+      "built_from": "4f77e3bdc2df08c81b5f50c13050cbddc7053b62",
+      "local_check": "downloaded CI artifact hash/file/help only; no local compile"
+    }
   },
   "red_before_fix": {
     "old_binary_sha256": "d60cacc86f5ec432ddf8562782b7eb483e46c8b17e45a43d6c48f7f69ec7497f",
@@ -69,19 +79,27 @@
     },
     "c70_boundary_harness": {
       "source_commit": "e50a6e93bfb691977b4313fa9d2d465402a89d45",
-      "evidence": "tmp/pre-red/c70-boundary-harness.md",
+      "evidence": "tmp/gh-artifacts-34089915825/pr86-c70-red/c70-red.log",
       "test_names": [
-        "t_n_missing_channel_must_not_be_normal",
-        "t_n_title_only_name_must_survive"
+        "t_n_c70_missing_channel_must_not_be_normal",
+        "t_n_c70_title_only_name_must_survive"
       ],
-      "execution": "not executed: remote preflight blocked"
+      "execution": "GitHub hosted runner run 34089915825",
+      "exit": 101,
+      "tests": 2,
+      "passed": 0,
+      "failed": 2,
+      "failure_names": [
+        "t_n_c70_missing_channel_must_not_be_normal",
+        "t_n_c70_title_only_name_must_survive"
+      ]
     }
   },
   "required_semantics": {
-    "four_axes": "implemented in source, candidate unverified",
+    "four_axes": "implemented; candidate CI exercised",
     "pi_channel_schema": 2,
     "report_schema": 1,
-    "identity_selected_pid_set": "implemented via walk_identity_processes",
+    "identity_selected_pid_set": "implemented via walk_identity_processes; candidate CI exercised",
     "bounded_traversal": 4096,
     "codex_frames": 10,
     "strict_name_merge": "implemented; single-authority names retained, conflicts unknown",
@@ -100,42 +118,86 @@
       "status": "partial",
       "evidence": "tmp/archwiki-final.json"
     },
+    "github_ci": {
+      "status": "success",
+      "workflow": "PR86 nodeprobe safety",
+      "run_id": 34089915825,
+      "run_url": "https://github.com/Florious95/corral-core/actions/runs/34089915825",
+      "head_sha": "4f77e3bdc2df08c81b5f50c13050cbddc7053b62",
+      "jobs": {
+        "c70_red": {
+          "job_id": 101641132510,
+          "status": "success",
+          "command": "cargo test --manifest-path /home/runner/work/_temp/c70/tools/nodeprobe/Cargo.toml --locked --lib t_n_c70",
+          "exit": 101,
+          "execution_count": 2,
+          "failed_names": [
+            "t_n_c70_missing_channel_must_not_be_normal",
+            "t_n_c70_title_only_name_must_survive"
+          ]
+        },
+        "candidate": {
+          "job_id": 101641132677,
+          "status": "success",
+          "cargo_test_command": "cargo test --manifest-path tools/nodeprobe/Cargo.toml --locked -- --test-threads=$(nproc)",
+          "cargo_test_counts": "46 lib + 1 main + 1 fake_tmux + 0 doctests; all passed",
+          "corpus_command": "cargo run --manifest-path tools/nodeprobe/Cargo.toml --locked -- fixtures tools/nodeprobe/fixtures/titles.tsv",
+          "corpus_execution_count": 1,
+          "failed_tests": [],
+          "linux_binary_sha256": "c1b60011a4e5a98f8aad7f12293240ac2c92aa960f4955d4534144ed04cdd30a",
+          "linux_binary_bytes": 987344
+        },
+        "darwin_artifact": {
+          "job_id": 101641132622,
+          "status": "success",
+          "platform": "Mach-O 64-bit executable arm64",
+          "sha256": "e5667b9ebe931de7805a87538e03b9a6ee1fb9cb9250c25282f8b054268226b5",
+          "bytes": 885504
+        }
+      }
+    },
     "remote_red_a1": {
       "unit": "gb-e50a6e93bfb691977b4313fa9d2d465402a89d45-t-n-red-a1",
-      "command": "cargo test -p nodeprobe --locked --lib t_n_",
-      "execution": "not started; sync timed out after 1200s",
-      "status": "missing",
-      "authoritative_exit": null
+      "status": "superseded_by_github_ci",
+      "execution": "sync timed out before Cargo; not reused or manually deleted"
     },
     "remote_red_a2": {
       "unit": "gb-e50a6e93bfb691977b4313fa9d2d465402a89d45-t-n-red-a2",
-      "command": "cargo test -p nodeprobe --locked --lib t_n_",
-      "execution": "not started; preflight exit 7",
-      "remote_free_kib": 9227512,
-      "required_free_gib": 20,
-      "authoritative_exit": null
-    },
-    "github_ci": {
-      "status": "unavailable",
-      "checks": "gh pr checks: no checks reported; gh workflow list: empty"
+      "status": "superseded_by_github_ci",
+      "execution": "preflight exit 7 before Cargo; not reused; min free space was not lowered"
     },
     "candidate_remote": {
-      "status": "blocked",
-      "artifact_sha256": null,
-      "platform": null,
-      "execution_count": 0,
-      "failed_tests": null
+      "status": "ci_verified_unaccepted",
+      "artifact_sha256": "c1b60011a4e5a98f8aad7f12293240ac2c92aa960f4955d4534144ed04cdd30a",
+      "artifact_bytes": 987344,
+      "platform": "Linux hosted runner",
+      "execution_count": 46,
+      "failed_tests": [],
+      "evidence": "tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence"
     },
     "g_safe_candidate": {
-      "status": "blocked",
-      "trace": null,
-      "successful_samples": 0,
-      "rejected_forbidden_calls": null
+      "status": "ci_verified_unaccepted",
+      "trace": "tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence/nodeprobe-gsafe/candidate-trace.log",
+      "control_trace": "tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence/nodeprobe-gsafe/control-trace.log",
+      "sample_json": "tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence/nodeprobe-gsafe/candidate.json",
+      "socket": "/home/runner/work/_temp/nodeprobe-gsafe/gsafe.sock",
+      "successful_samples": 1,
+      "positive_trace_lines": 2,
+      "rejected_forbidden_calls": 0,
+      "capture_pane_reject_exit": 97,
+      "dangerous_ps_reject_exit": 97,
+      "candidate_trace_categories": ["list-panes", "ps-narrow"],
+      "note": "actual hosted-runner binary invocation on a private synthetic socket; no capture-pane or dangerous ps"
+    },
+    "independent_acceptance": {
+      "status": "pending_leader_review",
+      "not_claimed": "full-chain PASS or accepted release"
     }
   },
   "cleanup": {
-    "local_tmp": "retained under .team/nodes/status-probe-fix/tmp until receipt completion",
-    "a1_remote_stage": "not manually deleted; receipt-bound cleanup unavailable because status=missing",
+    "local_tmp": "retained under .team/nodes/status-probe-fix/tmp for receipt evidence",
+    "remote_runner": "GitHub hosted jobs completed and runner cleanup succeeded",
+    "a1_remote_stage": "not manually deleted; superseded missing unit was not reused",
     "production_socket": "not touched",
     "9900": "not touched",
     "global_binary_or_extension": "not modified"

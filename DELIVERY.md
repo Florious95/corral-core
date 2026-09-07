@@ -1,6 +1,6 @@
-# T-N 交付收据（持续施工）
+# T-N 交付收据
 
-状态：源码与 PR86 写界已提交/推送；候选远端 Cargo 构建与最终 G-SAFE 尚待 Grok Bot 空间回收后执行，当前不宣称全链 PASS。
+状态：GitHub hosted runner 已完成冻结 C70 红、候选 Cargo/corpus、Linux G-SAFE 与 Darwin 交叉平台构建；本收据仍标记 `ci_verified_unaccepted`，不代替 leader 独立验收，不宣称 full-chain PASS。
 
 ## 精确坐标
 
@@ -8,12 +8,12 @@
 - PR：<https://github.com/Florious95/corral-core/pull/86>
 - owning branch：`pr/nodeprobe-fg-comms`
 - PR base：`pr/status-core-nodeprobe-863c`（C70）
-- source checkout HEAD：`dae7a69e61194aadd18b9db368b1dcf157d5be0d`
-- source checkout tree：`5314c23563a06eb97a1d76e42729701659136850`
-- source parent：`4e49a0391becb76aef130d198555fa39ee4d17e4`
+- source checkout HEAD：`4f77e3bdc2df08c81b5f50c13050cbddc7053b62`
+- source checkout tree：`047bfb0539047f592ef64d4d8bf9dfaba4278e20`
+- source parent：`5e2cbb2b5fd3a1a832a7d63cf0ac81eb4d4d1cc0`
 - merge commit：`cf97d545672689b80fb80460bd3b295f88a50a64`（parents=C86 `81790368e41900a9085c722e89147924f0806dfe` + C70 `23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5`）
-- delivery docs commit：`9f112fc04903769f04d0ac20f8e04d891eae0a9a`
-- author diff relative C70：仅 `tools/nodeprobe/**`；delivery-only 为 `DELIVERY.md`、`N-RECEIPT.json`；无 server/App 写界。
+- CI run：<https://github.com/Florious95/corral-core/actions/runs/34089915825>（head=`4f77e3bdc2df08c81b5f50c13050cbddc7053b62`，三 jobs success）
+- 产品 author diff relative C70：仅 `tools/nodeprobe/**`；测试入口为必要的 `.github/workflows/pr86-nodeprobe.yml`；delivery-only 为 `DELIVERY.md`、`N-RECEIPT.json`；无 server/App 写界。
 
 ## 已施工能力
 
@@ -45,15 +45,20 @@
 | `tools/nodeprobe/pi/nodeprobe-pi-activity.js` | `67c1916ade725f73646f062fbf03d0cc22d6823d` | `51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27` | 3572 |
 | `tools/nodeprobe/fixtures/titles.tsv` | `690e651f445793a36ed1cb6e6f6143e6ce5c989e` | `cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58` | 1332 |
 | `tools/nodeprobe/fixtures/providers.tsv` | `e93afa54e473e90099f03cb932d9a54798c0dfe4` | `c68f50115b33ae6a6806b463cc27c71d8bbfc92273435a533502e9bb84b8b522` | 481 |
-| candidate binary | — | **待远端构建** | — |
+| Darwin candidate binary | `19a33813679337252984a4b20fcf51a39c6e382e` | `e5667b9ebe931de7805a87538e03b9a6ee1fb9cb9250c25282f8b054268226b5` | 885504 |
+| Linux CI candidate binary | GitHub artifact（未入 Git） | `c1b60011a4e5a98f8aad7f12293240ac2c92aa960f4955d4534144ed04cdd30a` | 987344 |
 
-Git extension SHA 与当前已安装 extension SHA 一致；本席未修改全局文件。
+Darwin 二进制已从 run 34089915825 下载并收入 `tools/nodeprobe/artifacts/nodeprobe-darwin-arm64`；本席只做 `file`/SHA/`--help` 验证，未本机编译。Git extension SHA 与当前已安装 extension SHA 一致；本席未修改全局文件。
 
 ## 判定与风险
 
 - basegen：临时 T-N envelope 编译 exit 0；Rust 无 wiki card，cards=0，原始输出留 `tmp/basegen-T-N*`。
 - archwiki：`archwiki check tools/nodeprobe` exit 3 / `partial`，无 blocking finding；报告 `tmp/archwiki-final.json`，未将 partial 说成 PASS。
-- GitHub CI：PR86 `gh pr checks` 无 checks，仓库无可用 workflow；无法替代候选 Cargo/G-SAFE。
-- 远端构建：受 Grok Bot 远端空间闸阻塞（a2 preflight 记录 9,227,512 KiB，可执行候选要求 ≥20 GiB）；不降 `--min-gib`，不重用 a1，不扩大同步占用。最小替代是恢复 ≥20 GiB 后按既有 grok-bot-tests 单元执行一次冻结旧 C70 红 + 候选 Cargo/G-SAFE。
+- 冻结 C70 红：run 34089915825 的 `cargo test ... --lib t_n_c70`，exit 101；2 tests 均失败且具名为 `t_n_c70_missing_channel_must_not_be_normal`、`t_n_c70_title_only_name_must_survive`。
+- 候选 Cargo/corpus：46 lib + 1 main + 1 fake_tmux + 0 doctests 全绿；显式 titles corpus command 执行 1 次、无失败。
+- G-SAFE：真实 hosted-runner candidate binary 在 `/home/runner/work/_temp/nodeprobe-gsafe/gsafe.sock` 自有合成 socket 调用；正控 trace 2 行（`list-panes`、`ps-narrow`），candidate sample 1，forbidden rejection 0；control 的 `capture-pane` 与危险 `ps` 均 exit 97。证据见 `tmp/gh-artifacts-34089915825/pr86-nodeprobe-linux-evidence/nodeprobe-gsafe/`。
+- Darwin：`macos-14` 产出 Mach-O arm64，SHA/size 已入 Git；Linux artifact 仅作 CI 证据。
+- GitHub workflow：`.github/workflows/pr86-nodeprobe.yml` 使用 `contents: read`、无 `pull_request_target`/凭据；三 jobs 均 success。旧 Grok Bot a1/a2 空间阻塞保留在 N 收据中，不重用 unit、不降低 20 GiB 门。
+- archwiki 仍为 partial（exit 3），未说成 PASS；accepted/full-chain PASS 留待 leader 独立验收。
 - 生产/默认/共享/他队 socket、9900、server/App、全局 binary/extension 均未触碰。
-- 完整 N-RECEIPT：`N-RECEIPT.json`；状态与所有未执行项如实记录。
+- 完整 N-RECEIPT：`N-RECEIPT.json`；状态与未宣称项如实记录。
