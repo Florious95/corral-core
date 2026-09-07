@@ -108,6 +108,14 @@ type wsConn struct {
 	// dequeued frame at the writer boundary and prove an abort cannot flush it.
 	writerGate  <-chan struct{}
 	writerTaken chan struct{}
+
+	// snapshotFn is nil in production. Tests use it to hold or fail the initial
+	// capture after the loss-owning relay has started, without changing the
+	// bridge or snapshot implementation.
+	snapshotFn func(context.Context, *bridge.Pane) ([]byte, error)
+	// sendBinaryFn is nil in production. Tests use it to place a barrier at the
+	// initial snapshot queue boundary while retaining the real sendBinary path.
+	sendBinaryFn func([]byte)
 }
 
 // subscription is one live mirror on this connection: the relay goroutine's
