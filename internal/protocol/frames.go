@@ -75,12 +75,18 @@ type Workspace struct {
 // Session is one second-level entry of the model (requirement 002): a single
 // mirrored agent CLI pane. Ref is a server-assigned opaque string that the
 // client uses to address subscribe / input / scrollback / resize; it is
-// distinct from the display-only Name. Rows/Cols are the pane's current
-// dimensions.
+// distinct from the display-only Name. WindowName and WindowIndex are the
+// structural tmux fields kept separately so a display projection can never
+// overwrite identity metadata. Rows/Cols are the pane's current dimensions.
+//
+// Name is the display projection: provider-aware code may select the complete
+// Codex PaneTitle or the authoritative Pi session_name, while other providers
+// retain the existing window-name/session fallback. An empty Name is explicit
+// unknown; clients must not infer a name from WindowName, Cwd, or Ref.
 //
 // Title is the pane's OSC title, transmitted VERBATIM (requirement 061:
-// 不 trim、不剥前缀). It is display-only: never used for identity — Ref/Name
-// come from tmux structural fields, and the client must never derive any
+// 不 trim、不剥前缀). It is display-only: never used for identity — Ref and
+// the structural fields come from tmux, and the client must never derive any
 // addressing from Title.
 //
 // Provider, Activity, SessionName, and Health are independent nodeprobe axes.
@@ -89,6 +95,8 @@ type Workspace struct {
 type Session struct {
 	Ref         string  `json:"ref"`
 	Name        string  `json:"name"`
+	WindowName  string  `json:"window_name"`
+	WindowIndex int     `json:"window_index"`
 	Cwd         string  `json:"cwd"`
 	Title       string  `json:"title"`
 	Provider    string  `json:"provider"`

@@ -342,11 +342,32 @@ func TestPaneModeChangedMarshal(t *testing.T) {
 
 func TestSessionFourAxisJSONAndValidation(t *testing.T) {
 	name := "seat"
-	s := protocol.Session{Ref: "r", Name: "n", Cwd: "/w", Rows: 24, Cols: 80, Provider: "pi", Activity: "working", SessionName: &name, Health: "normal", Status: "working"}
+	s := protocol.Session{Ref: "r", Name: "n", WindowName: "node", WindowIndex: 3, Cwd: "/w", Rows: 24, Cols: 80, Provider: "pi", Activity: "working", SessionName: &name, Health: "normal", Status: "working"}
 	frame := protocol.Level2Frame{Workspace: "/w", Seq: 1, Sessions: []protocol.Session{s}}
 	got := roundTrip(t, frame).(protocol.Level2Frame).Sessions[0]
-	if got.Provider != "pi" || got.Activity != "working" || got.Status != got.Activity || got.SessionName == nil || *got.SessionName != "seat" || got.Health != "normal" {
+	if got.Provider != "pi" || got.Activity != "working" || got.Status != got.Activity || got.SessionName == nil || *got.SessionName != "seat" || got.Health != "normal" || got.WindowName != "node" || got.WindowIndex != 3 {
 		t.Fatalf("round trip=%+v", got)
+	}
+	wire, err := protocol.MarshalFrame(frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct{ Payload json.RawMessage `json:"payload"` }
+	if err := json.Unmarshal(wire, &envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	var payload struct{ Sessions []struct {
+		WindowName  string `json:"window_name"`
+		WindowIndex any    `json:"window_index"`
+	} `json:"sessions"` }
+	if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if len(payload.Sessions) != 1 || payload.Sessions[0].WindowName != "node" {
+		t.Fatalf("structural JSON fields missing: %s", envelope.Payload)
+	}
+	if index, ok := payload.Sessions[0].WindowIndex.(float64); !ok || index != 3 {
+		t.Fatalf("window_index JSON type/value = %#v, want number 3", payload.Sessions[0].WindowIndex)
 	}
 	s.SessionName = nil
 	data, err := protocol.MarshalFrame(protocol.Level2Frame{Workspace: "/w", Seq: 1, Sessions: []protocol.Session{s}})

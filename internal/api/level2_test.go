@@ -80,7 +80,7 @@ func TestL2StructuralFields(t *testing.T) {
 	e := startWS(t, Options{
 		Token:           "test-token",
 		Discoverer:      md,
-		Nodeprobe:       &testNodeprobe{provider: "pi", activity: "working", health: "normal"},
+		Nodeprobe:       &testNodeprobe{provider: "claude", activity: "working", health: "normal"},
 		ListInterval:    time.Hour,
 		Level2Interval:  30 * time.Millisecond,
 		Level2Heartbeat: time.Hour,
@@ -101,6 +101,9 @@ func TestL2StructuralFields(t *testing.T) {
 	}
 	if s.Cwd != "/ws/a" {
 		t.Fatalf("cwd = %q, want pane_current_path /ws/a", s.Cwd)
+	}
+	if s.WindowName != "claude" || s.WindowIndex != 0 {
+		t.Fatalf("structural window fields = %q/%d, want claude/0", s.WindowName, s.WindowIndex)
 	}
 	if s.Title != title {
 		t.Fatalf("title = %q, want verbatim %q", s.Title, title)

@@ -12,31 +12,59 @@ package api
 import (
 	"sort"
 
+	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
-// toSession converts one catalog entry into the protocol Session the client
-// renders. The display name is the tmux window name when one is known (task
-// fix-session-alias: window names carry the meaningful per-window labels the
-// fleet is organized by), falling back to the session name when the scan
-// produced none. Dims come from the pane as discovered.
-func toSession(e *sessionEntry) protocol.Session {
-	name := e.pane.WindowName
-	if name == "" {
-		name = e.pane.Session
+// displayName projects one pane into the client-facing display label. The
+// provider axis is already established by nodeprobe; only then may Codex use
+// its complete OSC PaneTitle or Pi use its authoritative session_name. An
+// absent authoritative value stays empty (explicit unknown), while existing
+// Claude/Grok and unknown-provider window-name behavior remains unchanged.
+func displayName(p discovery.Pane, observation nodeprobe.Observation) string {
+	switch observation.Provider {
+	case "codex":
+		return p.PaneTitle
+	case "pi":
+		if observation.SessionName != nil && *observation.SessionName != "" {
+			return *observation.SessionName
+		}
+		return ""
+	default:
+		if p.WindowName != "" {
+			return p.WindowName
+		}
+		return p.Session
 	}
+}
+
+// sessionFromPane is the single discovery-to-protocol projection shared by
+// listing and Level2. Display-only Name never replaces structural WindowName
+// or WindowIndex, and Ref remains the socket/pane identity.
+func sessionFromPane(p discovery.Pane, observation nodeprobe.Observation) protocol.Session {
 	return protocol.Session{
-		Ref:         e.ref,
-		Name:        name,
-		Cwd:         e.pane.CWD,
-		Provider:    e.observation.Provider,
-		Activity:    e.observation.Activity,
-		SessionName: e.observation.SessionName,
-		Health:      e.observation.Health,
-		Status:      e.observation.Activity,
-		Rows:        uint16(e.pane.Height),
-		Cols:        uint16(e.pane.Width),
+		Ref:         sessionRef(p),
+		Name:        displayName(p, observation),
+		WindowName:  p.WindowName,
+		WindowIndex: p.WindowIndex,
+		Cwd:         p.CWD,
+		Title:       p.PaneTitle,
+		Provider:    observation.Provider,
+		Activity:    observation.Activity,
+		SessionName: observation.SessionName,
+		Health:      observation.Health,
+		Status:      observation.Activity,
+		Rows:        uint16(p.Height),
+		Cols:        uint16(p.Width),
 	}
+}
+
+// toSession converts one catalog entry into the protocol Session the client
+// renders using the same projection as Level2. Dims and structural fields
+// come from the pane as discovered.
+func toSession(e *sessionEntry) protocol.Session {
+	return sessionFromPane(e.pane, e.observation)
 }
 
 // modelSnapshot is one version of the two-level model the server has
