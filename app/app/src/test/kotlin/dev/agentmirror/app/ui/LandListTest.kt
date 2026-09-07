@@ -98,9 +98,9 @@ class LandListTest {
         compose.onNodeWithText("远控 leader").assertExists()
         compose.onNodeWithText("team-leader-2").assertExists()
         compose.onNodeWithText("远控 leader 未探测").assertExists()
-        compose.onNodeWithText("进行中").assertExists()
-        compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("未知").assertExists()
+        compose.onNodeWithText("进行中").assertDoesNotExist()
+        compose.onNodeWithText("空闲").assertDoesNotExist()
+        compose.onNodeWithText("未知").assertDoesNotExist()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
     }
 
@@ -125,18 +125,23 @@ class LandListTest {
         }
         compose.waitForIdle()
         val ref = live[0].ref
-        val star = compose.onNodeWithTag("fav-star-$ref").getUnclippedBoundsInRoot()
+        compose.onNodeWithTag("fav-star-$ref").assertDoesNotExist()
+        val mark = compose.onNodeWithTag("fav-provider-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val lamp = compose.onNodeWithTag("fav-motion-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val badge = compose.onNodeWithTag("fav-status-$ref").getUnclippedBoundsInRoot()
-        assertTrue("星在行首 star.left=${star.left} id.left=${id.left}", star.left < id.left)
-        assertTrue("状态标在右侧 id.right=${id.right} badge.left=${badge.left}", id.right <= badge.left)
+        val path = compose.onNodeWithTag("fav-path-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val row = compose.onNodeWithTag("fav-row-$ref").getUnclippedBoundsInRoot()
+        assertTrue("灯在行首 lamp.left=${lamp.left} id.left=${id.left}", lamp.left < id.left)
+        assertTrue("provider mark right of title mark.left=${mark.left} id.right=${id.right}", mark.left > id.right)
+        assertTrue("cwd path slot present", path.bottom.value - path.top.value > 0f)
+        assertEquals(66.0, (row.bottom.value - row.top.value).toDouble(), 1.0)
         compose.onNodeWithText("远控 leader").assertExists()
         compose.onNodeWithText("team-leader-2").assertExists()
         compose.onNodeWithText("讨论 team-agent").assertExists()
         compose.onNodeWithText("/ws/甲").assertExists()
-        compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("进行中").assertExists()
-        compose.onNodeWithText("未知").assertExists()
+        compose.onNodeWithText("空闲").assertDoesNotExist()
+        compose.onNodeWithText("进行中").assertDoesNotExist()
+        compose.onNodeWithText("未知").assertDoesNotExist()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
     }
 
@@ -221,7 +226,10 @@ class LandListTest {
         rows = 24,
         cols = 80,
         title = title,
+        provider = "claude_code",
+        activity = status,
         status = status,
+        health = if (status == "unknown") "unknown" else "normal",
         sessionName = "team",
         windowIndex = "0",
         windowName = "claude_code",

@@ -43,8 +43,8 @@ import dev.agentmirror.app.ui.theme.Spacing
 internal const val L2_STAR_RIPPLE_BOUNDED = false
 
 /**
- * 二级菜单列表（061/067/072）：每行星标在会话名之前，右侧状态标。
- * 点行用结构 ref + 结构名，title 不参与。点星只切换收藏。
+ * 二级菜单列表：统一外部会话行。短按打开；长按唯一收藏/取消收藏。
+ * 点行用结构 ref + 结构名，title 不参与。
  */
 @Composable
 internal fun L2SessionList(
@@ -91,7 +91,6 @@ internal fun L2SessionList(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                showPath = true,
             )
         }
     }

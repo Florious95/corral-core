@@ -18,12 +18,15 @@ package dev.agentmirror.app.workspace
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import dev.agentmirror.app.conn.Level2Frame
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -79,22 +82,29 @@ class L2StaleStatusReplacedTest {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithText("空闲").assertExists()
         compose.onNodeWithText("进行中").assertDoesNotExist()
+        compose.onNodeWithText("空闲").assertDoesNotExist()
+        assertEquals("idle:static", motionDesc(ref))
 
-        // 订着时同一身份再从 idle 推 working 又推 idle，徽章必须跟着换。
+        // 订着时同一身份再从 idle 推 working 又推 idle，灯必须跟着换。
         vm.onFrame(snap("/proj", 3, ref, identity, "working"))
         compose.waitForIdle()
         assertEquals(L2Status.WORKING, statusOf(vm, ref))
-        compose.onNodeWithText("进行中").assertExists()
+        assertTrue(motionDesc(ref).startsWith("working:"))
         vm.onFrame(
             snap("/proj", 4, ref, identity, "idle", title = "对照席定点变异验红绿判据 - grok"),
         )
         compose.waitForIdle()
         assertEquals(L2Status.IDLE, statusOf(vm, ref))
-        compose.onNodeWithText("空闲").assertExists()
+        assertEquals("idle:static", motionDesc(ref))
         compose.onNodeWithText("进行中").assertDoesNotExist()
     }
+
+    private fun motionDesc(ref: String): String =
+        compose.onNodeWithTag("l2-motion-$ref", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }
+            .joinToString()
 
     private fun statusOf(vm: WorkspaceViewModel, ref: String): L2Status =
         vm.level2.value.sessions.single { it.ref == ref }.status
@@ -117,7 +127,9 @@ class L2StaleStatusReplacedTest {
                 rows = 24,
                 cols = 80,
                 title = title,
+                activity = status,
                 status = status,
+                health = if (status == "unknown") "unknown" else "normal",
                 sessionName = identity.first,
                 windowIndex = identity.second,
                 windowName = identity.third,

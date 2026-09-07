@@ -1,0 +1,21 @@
+Provenance for the two reused Android PNG blobs only.
+No LobeHub runtime, no AndroidSVG, no regenerated icons.
+
+Owning commit: 1b12e92d8efb1c0eec41e14a264f9d80ee833ad9
+Also identical git blobs on GitHub PR #67 head and PR #68 head.
+
+LICENSE (exact prior-app file):
+  git blob 1dd53d2a9d99e5f91113831a850276ef530cb9d2
+  SHA-256 add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a
+
+NOTICE (exact prior-app file):
+  git blob 28bb8f4ebf056e6233b015cf61a106c6335185a5
+  SHA-256 92418dde8a6ea4eff4be9bf02a5a9e5581124fe935f0b41b42726d214dc09e14
+
+RESOURCE-MAP lines from that commit (the two blobs only):
+copilot copilot-color.svg 04f15d0556fbac10a4e0f82d1560610db8b33cd04780a4f24ad3b91c4abd278d drawable-nodpi/provider_copilot_color.png 49faef29cb14fa7aaa73672ef126acee65ff504c2463a6672d9a9364fa75c54a
+pi pi.svg d82978781b824273c55473822c1f243a6ed34fc6e8c2dbfe1a90dfc66ae43ee8 drawable-nodpi/provider_pi.png 9d59066fac0cb0361fb7cf663e87d0f29beb654e49780baa55aab74aa4757b2f
+
+Current tree git blobs (must stay identical):
+  app/app/src/main/res/drawable-nodpi/provider_pi.png d8fcf42cdaa5d18e6063637270365a20481ece86
+  app/app/src/main/res/drawable-nodpi/provider_copilot_color.png 90c8b385064a918ab2b01d93f19ab95ef64dc2e3

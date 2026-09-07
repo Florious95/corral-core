@@ -93,7 +93,7 @@ class FavoriteToggleClickTest {
             }
         }
 
-        compose.onNodeWithTag("l2-star-sock\u001f%2").performClick()
+        compose.longPressFavorite("l2-row-sock\u001f%2", "收藏")
         compose.runOnIdle {
             assertEquals("点星不得进会话", 0, opened)
             val written = store.load()

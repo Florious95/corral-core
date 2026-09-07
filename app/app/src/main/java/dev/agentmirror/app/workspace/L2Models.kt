@@ -61,6 +61,7 @@ data class L2Entry(
             sessionName = sessionName,
             name = name,
             title = title,
+            provider = provider,
         )
 
     val navigationName: String
@@ -68,7 +69,8 @@ data class L2Entry(
 }
 
 /**
- * 076 §3a 显示名。claude_code 取 pane_title 并剥 062 前导状态符号；其余 CLI 取 window_name。
+ * 076 §3a 显示名。claude_code 取 pane_title 并剥 062 前导状态符号；Pi 优先取真实
+ * session_name；其余 CLI 取 window_name。
  * 只用于显示，不参与身份。
  *
  * 符号表与 server/internal/api/l2detect_claudecode.go Match 同一套，禁止另写一份。
@@ -78,7 +80,9 @@ internal fun sessionDisplayName(
     sessionName: String = "",
     name: String = "",
     title: String = "",
+    provider: String = "",
 ): String {
+    if (provider == "pi" && sessionName.isNotEmpty()) return sessionName
     val structural = windowName.ifEmpty { sessionName }.ifEmpty { name }
     if (isClaudeCodeWindow(windowName, name)) {
         val fromTitle = stripClaudeCodeStatusPrefix(title)
