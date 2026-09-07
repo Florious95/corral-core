@@ -64,7 +64,7 @@ func pathHasIsolatedAncestor(path string) bool {
 	clean := filepath.Clean(path)
 	parts := strings.Split(clean, string(os.PathSeparator))
 	for i := 0; i < len(parts); i++ {
-		if base := parts[i]; strings.HasPrefix(base, "ta-") || strings.HasPrefix(base, "e2e-") || strings.HasPrefix(base, "agentmirror-tmux-test-") {
+		if base := parts[i]; strings.HasPrefix(base, "e2e-") || strings.HasPrefix(base, "agentmirror-tmux-test-") {
 			return true
 		}
 		if i+3 < len(parts) && parts[i] == ".team" && parts[i+1] == "nodes" && parts[i+3] == "tmp" {
@@ -80,9 +80,6 @@ func pathHasIsolatedAncestor(path string) bool {
 func classifySocket(path string) socketClass {
 	clean := filepath.Clean(path)
 	base := filepath.Base(clean)
-	if strings.HasPrefix(base, "ta-") {
-		return socketClass{name: "ta_private"}
-	}
 	if strings.HasPrefix(base, "test-") || strings.HasPrefix(base, "e2e-") || pathHasIsolatedAncestor(clean) {
 		return socketClass{name: "isolated_path"}
 	}
