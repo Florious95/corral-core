@@ -567,7 +567,6 @@ func TestRealResizeStillRepushesSnapshot(t *testing.T) {
 	t.Fatal("real resize did not re-push a snapshot (convergence would be lost)")
 }
 
-
 // TestPassthroughNoEnter is the wire-level red test for requirement 059
 // passthrough: a non-empty Input.Text is TYPED into the pane WITHOUT appending
 // an Enter (TypeKeys), so the CLI input box keeps the text as a live draft
@@ -577,13 +576,13 @@ func TestRealResizeStillRepushesSnapshot(t *testing.T) {
 // EXECUTE immediately, producing its output before any separate submit.
 //
 // Proof in two phases against a `bash` pane:
-//   1. Send Text="echo NOENTER_MARK_059" (the keystroke). With passthrough the
-//      command lands on the prompt line as a draft; the `echo` output must NOT
-//      appear yet (a bare Enter from the old Inject path would run it and the
-//      marker would show).
-//   2. Send Text="" (bare-Enter submit). Now the command executes and the
-//      marker appears — proving the submit is what triggered it, not the
-//      keystroke frame.
+//  1. Send Text="echo NOENTER_MARK_059" (the keystroke). With passthrough the
+//     command lands on the prompt line as a draft; the `echo` output must NOT
+//     appear yet (a bare Enter from the old Inject path would run it and the
+//     marker would show).
+//  2. Send Text="" (bare-Enter submit). Now the command executes and the
+//     marker appears — proving the submit is what triggered it, not the
+//     keystroke frame.
 func TestPassthroughNoEnter(t *testing.T) {
 	te := startTmuxEnv(t, "bash")
 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
@@ -625,7 +624,7 @@ func TestPassthroughNoEnter(t *testing.T) {
 			t.Fatalf("decode mirror frame: %v", err)
 		}
 		acc.Write(p.Data)
-		if bytes.Contains(acc.Bytes(), []byte("\n"+marker)) {
+		if mirrorContains(acc.Bytes(), "\n"+marker) {
 			ran = true // executed output present
 			break
 		}
@@ -641,10 +640,11 @@ func TestPassthroughNoEnter(t *testing.T) {
 	}
 
 	// Phase 2: submit (bare Enter). The command runs and the output line appears.
+	// PTY output may frame the line with CR, and input_ack may be queued before
+	// the mirror delta; the helper preserves both original assertions without
+	// assuming either wire ordering.
 	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
-	te.waitForMirror("\n" + marker)
-	ack := te.wsEnv.readControlDraining()
-	ia := ack.(protocol.InputAck)
+	ia := te.waitForMirrorAndInputAck("\n"+marker, 2)
 	if !ia.OK {
 		t.Fatalf("submit input_ack not ok: %s", ia.Reason)
 	}

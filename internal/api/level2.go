@@ -114,8 +114,8 @@ func level2SnapKey(sessions []protocol.Session) string {
 		if sess.SessionName != nil {
 			sessionName = *sess.SessionName
 		}
-		fmt.Fprintf(&b, "%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%d\x1e%d\x1f",
-			sess.Ref, sess.Name, sess.Cwd, sess.Title, sess.Provider, sess.Activity, sessionName, sess.Health, sess.Status, sess.Rows, sess.Cols)
+		fmt.Fprintf(&b, "%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%s\x1e%d\x1e%d\x1f",
+			sess.Ref, sess.Name, sess.WindowName, sess.WindowIndex, sess.Cwd, sess.Title, sess.Provider, sess.Activity, sessionName, sess.Health, sess.Status, sess.Rows, sess.Cols)
 	}
 	return b.String()
 }
@@ -144,20 +144,11 @@ func (s *Server) publishLevel2(ctx context.Context) {
 	byCWD := make(map[string][]protocol.Session)
 	for _, ws := range model.Workspaces {
 		for _, p := range ws.Panes {
-			name := p.WindowName
-			if name == "" {
-				name = p.Session
-			}
 			obs, ok := observations[sessionRef(p)]
 			if !ok {
 				obs = nodeprobe.Unknown()
 			}
-			byCWD[ws.CWD] = append(byCWD[ws.CWD], protocol.Session{
-				Ref: sessionRef(p), Name: name, Cwd: p.CWD, Title: p.PaneTitle,
-				Provider: obs.Provider, Activity: obs.Activity, SessionName: obs.SessionName,
-				Health: obs.Health, Status: obs.Activity,
-				Rows: uint16(p.Height), Cols: uint16(p.Width),
-			})
+			byCWD[ws.CWD] = append(byCWD[ws.CWD], sessionFromPane(p, obs))
 		}
 	}
 
