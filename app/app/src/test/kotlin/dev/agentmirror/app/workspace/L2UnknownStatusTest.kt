@@ -22,6 +22,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import dev.agentmirror.app.conn.Level2Frame
 import dev.agentmirror.app.conn.Session
+import dev.agentmirror.app.ui.model.SessionRowMotion
+import dev.agentmirror.app.ui.model.SessionStatus
+import dev.agentmirror.app.ui.model.sessionRowMotion
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -115,6 +118,28 @@ class L2UnknownStatusTest {
         assertEquals(L2Status.UNKNOWN, divergent.activity)
         assertEquals(L2Status.UNKNOWN, divergent.status)
         assertEquals("unknown", divergent.health)
+    }
+
+    @Test
+    fun malformedHealthNormalizesToUnknownWithoutChangingLegalActivity() {
+        val entry = Session(
+            ref = "r-working-malformed-health",
+            name = "n",
+            cwd = "/w",
+            rows = 24,
+            cols = 80,
+            activity = "working",
+            status = "working",
+            health = "broken",
+        ).toL2Entry()
+        val item = entry.toSessionItem(starred = false)
+
+        assertEquals(L2Status.WORKING, entry.activity)
+        assertEquals(L2Status.WORKING, entry.status)
+        assertEquals("unknown", entry.health)
+        assertEquals(SessionStatus.Busy, item.status)
+        assertEquals("unknown", item.health)
+        assertEquals(SessionRowMotion.Working, sessionRowMotion(item.status, item.isOnline))
     }
 
     @Test
