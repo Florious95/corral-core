@@ -47,7 +47,7 @@ class PiWorkingDtoProjectionTest {
         assertEquals(true, item.isOnline)
         assertEquals(
             SessionRowMotion.Working,
-            sessionRowMotion(item.status, item.health, item.isOnline),
+            sessionRowMotion(item.status, item.isOnline),
         )
     }
 

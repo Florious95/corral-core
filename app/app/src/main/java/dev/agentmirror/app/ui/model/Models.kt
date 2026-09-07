@@ -65,35 +65,33 @@ data class SessionItem(
 /**
  * Left-slot motion for the unified external list row.
  *
- * Working animation plays only when the row is online, health is normal, and
- * activity is working. Idle is the same lamp, static. Unknown/abnormal play
- * nothing and must not be labeled as idle or as repeated「未知」.
+ * Working or idle motion follows already-resolved activity on an online row.
+ * Health remains an independent metadata axis and never changes this motion.
+ * Unknown activity and offline rows remain quiet.
  *
  * @contract
  * @pre [activity] is already fail-closed (unknown on divergence/garbage)
- * @post Working only for online+normal+Busy; Idle only for online+normal+Idle; else None
+ * @post Online+known activity renders; offline or unknown activity yields None
  * @err none
- * @inv unknown/abnormal/offline never become Idle or Working
+ * @inv health never changes motion; unknown activity and offline never animate
  * @consumes dev.agentmirror.app.workspace
  */
 enum class SessionRowMotion { Working, Idle, None }
 
 /**
- * Fail-closed left-slot motion from the four-axis DTO.
+ * Fail-closed left-slot motion from the resolved activity and online state.
  *
  * @contract
- * @pre activity is already fail-closed; health is the DTO health string
- * @post Working iff online+normal+Busy; Idle iff online+normal+Idle; else None
+ * @pre activity is already fail-closed (unknown on divergence/garbage)
+ * @post Online+Busy yields Working; online+Idle yields Idle; otherwise None
  * @err none
- * @inv does not invent Idle from unknown
+ * @inv health metadata is not consulted; no motion is invented for unknown/offline rows
  */
 fun sessionRowMotion(
     activity: SessionStatus,
-    health: String,
     isOnline: Boolean,
 ): SessionRowMotion {
     if (!isOnline) return SessionRowMotion.None
-    if (health != "normal") return SessionRowMotion.None
     return when (activity) {
         SessionStatus.Busy -> SessionRowMotion.Working
         SessionStatus.Idle -> SessionRowMotion.Idle
