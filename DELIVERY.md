@@ -10,9 +10,10 @@
 - PR base：`pr/status-core-nodeprobe-863c`（C70）
 - source checkout HEAD：`dae7a69e61194aadd18b9db368b1dcf157d5be0d`
 - source checkout tree：`5314c23563a06eb97a1d76e42729701659136850`
-- delivery docs commit：`016ab1a86bb9b1c5797622637ffa4f36e13dba13`
-- merge parents：C86 `81790368e41900a9085c722e89147924f0806dfe`；C70 `23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5`
-- scope：相对 C86 仅 `tools/nodeprobe` crate、Pi extension、fixture corpus、同源 tests/docs；无 server/App 写界。
+- source parent：`4e49a0391becb76aef130d198555fa39ee4d17e4`
+- merge commit：`cf97d545672689b80fb80460bd3b295f88a50a64`（parents=C86 `81790368e41900a9085c722e89147924f0806dfe` + C70 `23e0c4f1529b7b51192d6e65ecc62b3b517e2cf5`）
+- delivery docs commit：`9f112fc04903769f04d0ac20f8e04d891eae0a9a`
+- author diff relative C70：仅 `tools/nodeprobe/**`；delivery-only 为 `DELIVERY.md`、`N-RECEIPT.json`；无 server/App 写界。
 
 ## 已施工能力
 
@@ -41,7 +42,7 @@
 
 | 产物 | Git blob | SHA256 | 字节 |
 |---|---|---|---:|
-| `tools/nodeprobe/pi/nodeprobe-pi-activity.js` | `67c1916ade725f73646f062fbf03d0cc22d6823d` | `51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27` | 3571 |
+| `tools/nodeprobe/pi/nodeprobe-pi-activity.js` | `67c1916ade725f73646f062fbf03d0cc22d6823d` | `51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27` | 3572 |
 | `tools/nodeprobe/fixtures/titles.tsv` | `690e651f445793a36ed1cb6e6f6143e6ce5c989e` | `cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58` | 1332 |
 | `tools/nodeprobe/fixtures/providers.tsv` | `e93afa54e473e90099f03cb932d9a54798c0dfe4` | `c68f50115b33ae6a6806b463cc27c71d8bbfc92273435a533502e9bb84b8b522` | 481 |
 | candidate binary | — | **待远端构建** | — |
@@ -52,6 +53,7 @@ Git extension SHA 与当前已安装 extension SHA 一致；本席未修改全�
 
 - basegen：临时 T-N envelope 编译 exit 0；Rust 无 wiki card，cards=0，原始输出留 `tmp/basegen-T-N*`。
 - archwiki：`archwiki check tools/nodeprobe` exit 3 / `partial`，无 blocking finding；报告 `tmp/archwiki-final.json`，未将 partial 说成 PASS。
-- 远端构建：受 Grok Bot 远端空间闸阻塞（a2 preflight 记录约 9 GiB，可执行候选要求 ≥20 GiB）；不降 `--min-gib`，不重用 a1，不扩大同步占用。
+- GitHub CI：PR86 `gh pr checks` 无 checks，仓库无可用 workflow；无法替代候选 Cargo/G-SAFE。
+- 远端构建：受 Grok Bot 远端空间闸阻塞（a2 preflight 记录 9,227,512 KiB，可执行候选要求 ≥20 GiB）；不降 `--min-gib`，不重用 a1，不扩大同步占用。最小替代是恢复 ≥20 GiB 后按既有 grok-bot-tests 单元执行一次冻结旧 C70 红 + 候选 Cargo/G-SAFE。
 - 生产/默认/共享/他队 socket、9900、server/App、全局 binary/extension 均未触碰。
 - 完整 N-RECEIPT：`N-RECEIPT.json`；状态与所有未执行项如实记录。
