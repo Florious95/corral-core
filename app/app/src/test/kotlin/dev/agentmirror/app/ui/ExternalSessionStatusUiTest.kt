@@ -25,6 +25,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.SessionRow
 import dev.agentmirror.app.ui.theme.SessionRowMarker
@@ -34,6 +35,8 @@ import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.model.sessionRowMotion
 import dev.agentmirror.app.ui.screens.FavoritesScreen
 import dev.agentmirror.app.ui.screens.SessionListScreen
+import dev.agentmirror.app.workspace.toL2Entry
+import dev.agentmirror.app.workspace.toSessionItem
 import dev.agentmirror.app.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -55,43 +58,91 @@ class ExternalSessionStatusUiTest {
     val compose = createComposeRule()
 
     @Test
-    fun fourAxisProjectionKeepsUnknownActivityQuietWithoutVetoingKnownActivity() {
-        assertEquals(
-            SessionRowMotion.Working,
-            sessionRowMotion(SessionStatus.Busy, "normal", true),
-        )
-        assertEquals(
-            SessionRowMotion.Idle,
-            sessionRowMotion(SessionStatus.Idle, "normal", true),
-        )
-        // Unknown health is an independent lack of health evidence, not abnormal.
-        assertEquals(
-            SessionRowMotion.Working,
-            sessionRowMotion(SessionStatus.Busy, "unknown", true),
-        )
-        assertEquals(
-            SessionRowMotion.Idle,
-            sessionRowMotion(SessionStatus.Idle, "unknown", true),
-        )
-        val none = listOf(
-            Triple(SessionStatus.Busy, "abnormal", true),
-            Triple(SessionStatus.Idle, "abnormal", true),
-            Triple(SessionStatus.Unknown, "normal", true),
-            Triple(SessionStatus.Unknown, "unknown", true),
-            Triple(SessionStatus.Busy, "normal", false),
-            Triple(SessionStatus.Busy, "unknown", false),
-            Triple(SessionStatus.Idle, "unknown", false),
-            Triple(SessionStatus.Busy, "garbage", true),
-            Triple(SessionStatus.Busy, "", true),
-            Triple(SessionStatus.Idle, "garbage", true),
-        )
-        none.forEach { (activity, health, online) ->
-            assertEquals(
-                "activity=$activity health=$health online=$online",
-                SessionRowMotion.None,
-                sessionRowMotion(activity, health, online),
-            )
+    fun fourAxisProjectionUsesOnlyOnlineAndActivity() {
+        val healths = listOf("normal", "unknown", "abnormal")
+        val activities = listOf(SessionStatus.Busy, SessionStatus.Idle, SessionStatus.Unknown)
+        listOf(true, false).forEach { online ->
+            activities.forEach { activity ->
+                healths.forEach { health ->
+                    val row = item(
+                        id = "matrix-$activity-$health-$online",
+                        status = activity,
+                        provider = "matrix",
+                        health = health,
+                        online = online,
+                    )
+                    val expected = if (!online) {
+                        SessionRowMotion.None
+                    } else {
+                        when (activity) {
+                            SessionStatus.Busy -> SessionRowMotion.Working
+                            SessionStatus.Idle -> SessionRowMotion.Idle
+                            SessionStatus.Unknown -> SessionRowMotion.None
+                        }
+                    }
+                    assertEquals(
+                        "activity=$activity health=$health online=$online",
+                        expected,
+                        sessionRowMotion(row.status, row.health, row.isOnline),
+                    )
+                    assertEquals(health, row.health)
+                }
+            }
         }
+    }
+
+    @Test
+    fun dtoToL2EntryToSessionItemNormalizesMalformedHealthWithoutChangingActivity() {
+        val session = Session(
+            ref = "dto-malformed-health",
+            name = "session",
+            cwd = "/workspace",
+            rows = 24,
+            cols = 80,
+            activity = "working",
+            status = "working",
+            health = "broken",
+        )
+        val item = session.toL2Entry().toSessionItem(starred = false)
+
+        assertEquals("dto-malformed-health", item.id)
+        assertEquals(SessionStatus.Busy, item.status)
+        assertEquals("unknown", item.health)
+        assertEquals(
+            SessionRowMotion.Working,
+            sessionRowMotion(item.status, item.health, item.isOnline),
+        )
+    }
+
+    @Test
+    fun dtoPipelineRendersAbnormalHealthWorkingRowWithSameRefAndAdvances() {
+        val session = Session(
+            ref = "dto-abnormal-health",
+            name = "session",
+            cwd = "/workspace",
+            rows = 24,
+            cols = 80,
+            activity = "working",
+            status = "working",
+            health = "abnormal",
+        )
+        val item = session.toL2Entry().toSessionItem(starred = false)
+        assertEquals("dto-abnormal-health", item.id)
+        assertEquals(SessionStatus.Busy, item.status)
+        assertEquals("abnormal", item.health)
+
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppTheme { SessionRow(item, "l2", {}, {}, false) }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val before = desc("l2-motion-dto-abnormal-health")
+        assertTrue(before.startsWith("working:"))
+        compose.mainClock.advanceTimeBy(950)
+        compose.mainClock.advanceTimeByFrame()
+        val after = desc("l2-motion-dto-abnormal-health")
+        assertTrue(after.startsWith("working:"))
+        assertNotEquals(before, after)
     }
 
     @Test
@@ -146,7 +197,7 @@ class ExternalSessionStatusUiTest {
     }
 
     @Test
-    fun piWorkingNormalDtoProjectsToWorkingMotionIndependentOfProvider() {
+    fun piWorkingDtoProjectsToWorkingMotionIndependentOfHealthAndProvider() {
         assertEquals(
             SessionRowMotion.Working,
             sessionRowMotion(SessionStatus.Busy, "normal", true),
@@ -168,7 +219,7 @@ class ExternalSessionStatusUiTest {
             sessionRowMotion(piUnknown.status, piUnknown.health, piUnknown.isOnline),
         )
         assertEquals(
-            SessionRowMotion.None,
+            SessionRowMotion.Working,
             sessionRowMotion(piAbnormal.status, piAbnormal.health, piAbnormal.isOnline),
         )
         assertEquals("pi", piWorking.provider)
@@ -226,7 +277,7 @@ class ExternalSessionStatusUiTest {
     }
 
     @Test
-    fun workingLampUsesSpinnerIdleStaticUnknownAbnormalHaveNoWorkingAnim() {
+    fun workingLampUsesSpinnerIdleStaticAndUnknownOnlyQuiet() {
         val working = item("pi-w", SessionStatus.Busy, "pi", "normal")
         val idle = item("pi-i", SessionStatus.Idle, "pi", "normal")
         val unknown = item("pi-u", SessionStatus.Unknown, "pi", "unknown")
@@ -242,19 +293,22 @@ class ExternalSessionStatusUiTest {
         }
         compose.mainClock.advanceTimeByFrame()
         val w0 = desc("l2-motion-pi-w")
+        val a0 = desc("l2-motion-pi-a")
         assertTrue("pi working starts as working:* got=$w0", w0.startsWith("working:"))
         assertEquals("working:glyph=⠋:elapsed=0:position=0:mask=11", w0)
         assertEquals("idle:static", desc("l2-motion-pi-i"))
         assertTrue(desc("l2-motion-pi-u").isEmpty())
-        assertTrue(desc("l2-motion-pi-a").isEmpty())
+        assertTrue(a0.startsWith("working:"))
         compose.mainClock.advanceTimeBy(950)
         compose.mainClock.advanceTimeByFrame()
         val w1 = desc("l2-motion-pi-w")
+        val a1 = desc("l2-motion-pi-a")
         assertNotEquals("working lamp must change spinner frames", w0, w1)
         assertTrue(w1.startsWith("working:"))
         assertEquals("idle:static", desc("l2-motion-pi-i"))
         assertTrue(desc("l2-motion-pi-u").isEmpty())
-        assertTrue(desc("l2-motion-pi-a").isEmpty())
+        assertTrue(a1.startsWith("working:"))
+        assertNotEquals("abnormal-health working lamp must change frames", a0, a1)
     }
 
     @Test
@@ -319,7 +373,7 @@ class ExternalSessionStatusUiTest {
         assertTrue(desc("l2-motion-claude-w").startsWith("working:"))
         assertEquals("idle:static", desc("l2-motion-codex-i"))
         assertTrue(desc("l2-motion-copilot-u").isEmpty())
-        assertTrue(desc("l2-motion-grok-a").isEmpty())
+        assertTrue(desc("l2-motion-grok-a").startsWith("working:"))
         assertTrue(desc("l2-motion-pi-w").startsWith("working:"))
     }
 
