@@ -1,3 +1,9 @@
+# Successor of the connector-submitted workflow in
+# .github/workflows/multisocket-discovery.yml at 160009828ca044b4ef5afa6644e99ab0818c7928.
+# Target PR branch: fix/multisocket-discovery; product head: 0252ea54116cf4dded866b0bd70be5b9b6b1244a.
+# The connector should replace the existing workflow with this single UTF-8 file;
+# do not add a second workflow or a push trigger.
+
 name: multisocket-discovery
 
 on:
@@ -73,9 +79,127 @@ jobs:
             ! grep -F -- "--- SKIP: $name" "$log"
           done
           printf 'sha=%s\ncommand=go test -race -count=1 -timeout=8m ./internal/discovery -v\nexit=0\n' "$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/multisocket-discovery/green-receipt.txt"
-      - name: Upload red and green evidence
+      - name: Upload discovery red and green evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: multisocket-discovery-${{ github.run_id }}
           path: ${{ runner.temp }}/multisocket-discovery
+
+  build-daemon:
+    name: Hosted Darwin arm64 agentmirrord artifact
+    needs: discovery
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact PR revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Set up Go from module
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify candidate ancestry, platform, and clean tree
+        shell: bash
+        env:
+          PRODUCT_HEAD: 0252ea54116cf4dded866b0bd70be5b9b6b1244a
+          DISCOVERY_WORKFLOW_HEAD: 160009828ca044b4ef5afa6644e99ab0818c7928
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor "$PRODUCT_HEAD" HEAD
+          git merge-base --is-ancestor "$DISCOVERY_WORKFLOW_HEAD" HEAD
+          test "$(uname -m)" = arm64
+          test -z "$(git status --porcelain --untracked-files=all)"
+          root="$RUNNER_TEMP/multisocket-daemon"
+          mkdir -p "$root"
+          printf 'serve_head=%s\nserve_tree=%s\nproduct_head=%s\ndiscovery_workflow_head=%s\nrunner_uname_m=%s\n' \
+            "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" "$PRODUCT_HEAD" "$DISCOVERY_WORKFLOW_HEAD" "$(uname -m)" \
+            | tee "$root/source-receipt.txt"
+      - name: Verify embedded capability manifest without bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/multisocket-daemon"
+          export MULTISOCKET_BUILD_ROOT="$root"
+          python3 - <<'PYCODE'
+          import hashlib, json, os, pathlib
+          p = pathlib.Path('internal/nodeprobe/accepted-source.json')
+          m = json.loads(p.read_text())
+          assert m['platform'] == 'darwin/arm64'
+          assert len(m['corpora']) == 2
+          assert all(c.get('sha256') and c.get('path') for c in m['corpora'])
+          assert m['pi_extension'].get('sha256')
+          receipt = {
+              'manifest_path': str(p),
+              'manifest_sha256': hashlib.sha256(p.read_bytes()).hexdigest(),
+              'manifest_platform': m['platform'],
+              'manifest_source_commit': m['source_commit'],
+              'manifest_source_tree': m['source_tree'],
+              'manifest_corpora': [c['path'] for c in m['corpora']],
+              'capability_gate': 'embedded accepted-source.json unchanged; no bypass',
+          }
+          root = pathlib.Path(os.environ['MULTISOCKET_BUILD_ROOT'])
+          root.mkdir(parents=True, exist_ok=True)
+          (root / 'manifest-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PYCODE
+      - name: Build real Darwin arm64 agentmirrord from repository entrypoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/multisocket-daemon"
+          export GOOS=darwin GOARCH=arm64
+          go build -trimpath -o "$root/agentmirrord" ./cmd/agentmirrord
+          test -x "$root/agentmirrord"
+          file "$root/agentmirrord" | tee "$root/file.txt"
+          grep -E 'Mach-O.*arm64' "$root/file.txt"
+          go version -m "$root/agentmirrord" | tee "$root/go-version-m.txt"
+          python3 - "$root/go-version-m.txt" "$(git rev-parse HEAD)" <<'PYCODE'
+          import pathlib, sys
+          settings = {}
+          for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+              fields = line.split()
+              if len(fields) == 2 and fields[0] == 'build' and '=' in fields[1]:
+                  key, value = fields[1].split('=', 1)
+                  settings[key] = value
+          expected = {'GOOS': 'darwin', 'GOARCH': 'arm64', 'vcs.revision': sys.argv[2], 'vcs.modified': 'false'}
+          for key, value in expected.items():
+              assert settings.get(key) == value, (key, settings.get(key), value)
+          PYCODE
+          sha256=$(shasum -a 256 "$root/agentmirrord" | awk '{print $1}')
+          bytes=$(wc -c < "$root/agentmirrord" | tr -d ' ')
+          printf 'sha256=%s\nbytes=%s\n' "$sha256" "$bytes" | tee "$root/artifact-receipt.txt"
+          python3 - <<'PYCODE'
+          import json, os, pathlib, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'multisocket-daemon'
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          sha256 = subprocess.check_output(['shasum', '-a', '256', str(root / 'agentmirrord')], text=True).split()[0]
+          bytes_count = (root / 'agentmirrord').stat().st_size
+          receipt = {
+              'serve_head': head,
+              'serve_tree': tree,
+              'goos': 'darwin',
+              'goarch': 'arm64',
+              'runner_uname_m': subprocess.check_output(['uname', '-m'], text=True).strip(),
+              'binary': 'agentmirrord',
+              'sha256': sha256,
+              'bytes': bytes_count,
+              'go_version_m': (root / 'go-version-m.txt').read_text(),
+              'vcs_revision_expected': head,
+              'vcs_modified_expected': False,
+              'build_entrypoint': './cmd/agentmirrord',
+              'capability_gate': 'accepted-source.json unchanged; runtime nodeprobe inputs not overridden',
+          }
+          (root / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PYCODE
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Upload candidate daemon and build receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multisocket-discovery-daemon-${{ github.run_id }}
+          path: ${{ runner.temp }}/multisocket-daemon
