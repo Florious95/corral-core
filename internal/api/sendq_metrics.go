@@ -70,6 +70,15 @@ type ConnMetrics struct {
 	FramesSent             int64
 }
 
+// ConnMetricsSnapshot is a value copy; it never copies the live metrics mutex.
+type ConnMetricsSnapshot struct {
+	DeltasDropped          int64
+	SnapshotsPushed        int64
+	SnapshotsFromResize    int64
+	SnapshotsFromSubscribe int64
+	FramesSent             int64
+}
+
 // recordDrop 记录本连接因队列满丢弃的 delta。
 func (m *ConnMetrics) recordDrop() {
 	m.mu.Lock()
