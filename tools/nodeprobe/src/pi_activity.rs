@@ -328,6 +328,11 @@ mod tests {
         let stale = observe(Some(&dir), &[42], 7_000, DEFAULT_MAX_AGE_MS);
         assert_eq!(stale.activity, ACTIVITY_UNKNOWN);
         assert_eq!(stale.health, HEALTH_ABNORMAL);
+        record(&dir, 43, ACTIVITY_IDLE, 10_000);
+        let future = observe(Some(&dir), &[43], 1_000, DEFAULT_MAX_AGE_MS);
+        assert_eq!(future.activity, ACTIVITY_UNKNOWN);
+        assert_eq!(future.health, HEALTH_ABNORMAL);
+        assert!(future.detail.contains("future"));
         fs::write(channel_path(&dir, 42), b"not-json").unwrap();
         let invalid = observe(Some(&dir), &[42], 1_001, DEFAULT_MAX_AGE_MS);
         assert_eq!(invalid.activity, ACTIVITY_UNKNOWN);
