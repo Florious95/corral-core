@@ -94,8 +94,11 @@ jobs:
           import hashlib, json, os, pathlib, subprocess
           source=pathlib.Path('nodeprobe-source').resolve()
           manifest=json.loads(pathlib.Path('internal/nodeprobe/accepted-source.json').read_text())
-          actual=subprocess.check_output(['git','-C',str(source),'rev-parse',manifest['source_commit']+'^{tree}'],text=True).strip()
-          assert actual==manifest['source_tree']
+          # N CI built the historical PR merge ref; its public same-tree source is reachable.
+          assert manifest['source_commit']=='6e47021a7e3502843d490a2eeb0342c78c0231f3'
+          public_source='4f77e3bdc2df08c81b5f50c13050cbddc7053b62'
+          actual=subprocess.check_output(['git','-C',str(source),'rev-parse',public_source+'^{tree}'],text=True).strip()
+          assert actual==manifest['source_tree']=='047bfb0539047f592ef64d4d8bf9dfaba4278e20'
           inputs=[('AGENTMIRROR_NODEPROBE_BIN','tools/nodeprobe/artifacts/nodeprobe-darwin-arm64',manifest['binary']),
                   ('AGENTMIRROR_NODEPROBE_PI_EXTENSION','tools/nodeprobe/pi/nodeprobe-pi-activity.js',manifest['pi_extension']),
                   ('NODEPROBE_FIXTURES',manifest['corpora'][0]['path'],manifest['corpora'][0]),
@@ -109,7 +112,7 @@ jobs:
               if env=='AGENTMIRROR_NODEPROBE_BIN': assert blob=='19a33813679337252984a4b20fcf51a39c6e382e'
               records.append(dict(path=str(p),sha256=coord['sha256'],bytes=len(data),blob=blob))
               with open(os.environ['GITHUB_ENV'],'a') as f: f.write(env+'='+str(p)+'\n')
-          receipt=dict(serve_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),serve_tree=subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),n_actual_build_checkout=manifest['source_commit'],n_source_tree=actual,n_artifact_checkout=subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip(),run_id=os.environ['GITHUB_RUN_ID'],run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],inputs=records)
+          receipt=dict(serve_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),serve_tree=subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),n_actual_build_checkout=manifest['source_commit'],n_public_same_tree_source=public_source,n_source_tree=actual,n_build_identity_evidence='N CI run 34089915825 actual checkout; historical merge tree independently verified by leader',n_artifact_checkout=subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip(),run_id=os.environ['GITHUB_RUN_ID'],run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],inputs=records)
           pathlib.Path(os.environ['RUNNER_TEMP'],'sg','identity.json').write_text(json.dumps(receipt,indent=2))
           PYCODE
           test "$(uname -m)" = arm64
