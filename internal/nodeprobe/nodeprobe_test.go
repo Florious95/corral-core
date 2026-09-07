@@ -222,10 +222,10 @@ func withoutEnv(env []string, keys ...string) []string {
 	return out
 }
 
-func TestAcceptedUniquePiMissingChannelHealthIsNormal(t *testing.T) {
-	// 863c pi_process_health: unique Pi + missing/unset channel => health=normal.
-	// Consumers must not remap this to unknown.
-	n := node("a", "%0", 0, "pi", "unknown", "normal")
+func TestAcceptedUniquePiMissingChannelHealthIsUnknown(t *testing.T) {
+	// Current Pi channel contract: missing/unset channel is not evidence of
+	// health and must remain unknown rather than being promoted to normal.
+	n := node("a", "%0", 0, "pi", "unknown", "unknown")
 	if err := validateNode(n); err != nil {
 		t.Fatal(err)
 	}

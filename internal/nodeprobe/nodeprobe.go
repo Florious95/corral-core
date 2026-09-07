@@ -77,26 +77,32 @@ func ResolveCapability() (Capability, error) {
 	if err != nil {
 		return Capability{}, fmt.Errorf("nodeprobe binary: %w", err)
 	}
-	root, err := repositoryRoot()
-	if err != nil {
-		return Capability{}, err
+	if len(m.Corpora) != 2 {
+		return Capability{}, fmt.Errorf("nodeprobe manifest: want exactly two canonical corpora, got %d", len(m.Corpora))
 	}
-	paths := make(map[string]string, 2)
+	root, rootErr := repositoryRoot()
+	paths := make(map[string]string, len(m.Corpora))
 	for _, c := range m.Corpora {
-		p := filepath.Join(root, filepath.FromSlash(c.Path))
-		if env := corpusEnv(c.Path); env != "" {
-			if configured, ok := os.LookupEnv(env); ok {
-				p = configured
+		if c.Path != "tools/nodeprobe/fixtures/titles.tsv" && c.Path != "tools/nodeprobe/fixtures/providers.tsv" {
+			return Capability{}, fmt.Errorf("nodeprobe manifest: unexpected corpus path %q", c.Path)
+		}
+		env := corpusEnv(c.Path)
+		configured, explicit := os.LookupEnv(env)
+		if explicit && configured != "" {
+			abs, err := filepath.Abs(configured)
+			if err != nil {
+				return Capability{}, fmt.Errorf("nodeprobe corpus %s: %w", c.Path, err)
 			}
+			if _, err := verifyAbsoluteRegular(abs, -1, c.SHA256); err != nil {
+				return Capability{}, fmt.Errorf("nodeprobe corpus %s: %w", c.Path, err)
+			}
+			paths[c.Path] = abs
+			continue
 		}
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			return Capability{}, fmt.Errorf("nodeprobe corpus %s: %w", c.Path, err)
+		if rootErr != nil {
+			return Capability{}, fmt.Errorf("nodeprobe corpus %s: %w (set %s to the exact canonical file)", c.Path, rootErr, env)
 		}
-		want := filepath.Join(root, filepath.FromSlash(c.Path))
-		if abs != want {
-			return Capability{}, fmt.Errorf("nodeprobe corpus %s resolved outside canonical path: %s", c.Path, abs)
-		}
+		abs := filepath.Join(root, filepath.FromSlash(c.Path))
 		if _, err := verifyAbsoluteRegular(abs, -1, c.SHA256); err != nil {
 			return Capability{}, fmt.Errorf("nodeprobe corpus %s: %w", c.Path, err)
 		}
@@ -111,7 +117,12 @@ func ResolveCapability() (Capability, error) {
 		ext = filepath.Join(home, ".pi", "agent", "extensions", "nodeprobe-pi-activity.js")
 	}
 	ext, extErr := verifyAbsoluteRegular(ext, m.PiExtension.Size, m.PiExtension.SHA256)
-	return Capability{Binary: binary, PiExtension: ext, Titles: paths[m.Corpora[0].Path], Providers: paths[m.Corpora[1].Path], PiExtensionFault: extErr}, nil
+	titles, titlesOK := paths["tools/nodeprobe/fixtures/titles.tsv"]
+	providers, providersOK := paths["tools/nodeprobe/fixtures/providers.tsv"]
+	if !titlesOK || !providersOK {
+		return Capability{}, errors.New("nodeprobe manifest: canonical titles/providers corpus missing")
+	}
+	return Capability{Binary: binary, PiExtension: ext, Titles: titles, Providers: providers, PiExtensionFault: extErr}, nil
 }
 
 func corpusEnv(path string) string {
@@ -179,11 +190,13 @@ type Report struct {
 	Nodes         []Node      `json:"nodes"`
 	Error         *ProbeError `json:"error,omitempty"`
 }
+
 // ProbeError is the accepted report's visible whole-socket failure.
 type ProbeError struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 }
+
 // Node is one typed schema-v1 node observation from the accepted binary.
 type Node struct {
 	Socket          string          `json:"socket"`

@@ -19,7 +19,7 @@ func TestAcceptedInstalledBinaryOnIsolatedFakeSocket(t *testing.T) {
 	}
 	// Accepted source invokes only `tmux -S <socket> list-panes -a -F ...`.
 	// The fake emits one structurally valid row without touching a host socket.
-	fake := "#!/bin/sh\nprintf 'accepted-host\\0370\\037win\\037%%0\\037999999\\037plain-title\\037/tmp/project\\n'\n"
+	fake := "#!/bin/sh\nprintf 'accepted-host\\0370\\037win\\037%%0\\037999999\\037sh\\037plain-title\\037/tmp/project\\n'\n"
 	if err := os.WriteFile(filepath.Join(binDir, "tmux"), []byte(fake), 0o700); err != nil {
 		t.Fatal(err)
 	}
