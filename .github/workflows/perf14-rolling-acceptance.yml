@@ -81,6 +81,10 @@ jobs:
           tmux -S "$fixture/socket" capture-pane -p -t %0 | tee "$root/tmux-fixture-capture.txt"
           grep -Fx 'PERF14_REAL_TMUX_FIXTURE' "$root/tmux-fixture-capture.txt"
           tmux -S "$fixture/socket" kill-server
+          for _ in $(seq 1 40); do
+            test ! -e "$fixture/socket" && break
+            sleep 0.05
+          done
           test ! -e "$fixture/socket"
           printf 'fixture=PASS\n' | tee "$root/tmux-fixture.status"
 
