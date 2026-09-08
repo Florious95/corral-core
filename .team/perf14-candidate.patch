@@ -1,0 +1,860 @@
+diff --git a/internal/api/perf14_independent_oracle_test.go b/internal/api/perf14_independent_oracle_test.go
+new file mode 100644
+index 0000000..d3aa9ba
+--- /dev/null
++++ b/internal/api/perf14_independent_oracle_test.go
+@@ -0,0 +1,410 @@
++package api
++
++// Independent #14 oracle. This drives the production JSON dispatch/handler and
++// bridge exec seam; only the tmux executable is replaced. The executable records
++// actual argv and stdout byte counts. It cannot forward to a real tmux server.
++// Run only on hosted CI, without cache. No t.Parallel: PATH is test-local state.
++import (
++	"bytes"
++	"context"
++	"encoding/binary"
++	"encoding/json"
++	"fmt"
++	"math"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/agentmirror/agentmirror/internal/bridge"
++	"github.com/agentmirror/agentmirror/internal/discovery"
++	"github.com/agentmirror/agentmirror/internal/protocol"
++)
++
++type perf14Fixture struct {
++	History         int64   `json:"history"`
++	Height          int     `json:"height"`
++	MetadataFailure bool    `json:"metadata_failure"`
++	MetadataRaw     *string `json:"metadata_raw"`
++	BlankRows       []int   `json:"blank_rows"`
++	NoFinalLF       bool    `json:"no_final_lf"`
++}
++
++type perf14Command struct {
++	Op    string   `json:"op"`
++	Args  []string `json:"args"`
++	Bytes int      `json:"bytes"`
++	Start int64    `json:"start"`
++	End   int64    `json:"end"`
++	Error string   `json:"error"`
++}
++
++const perf14Socket = "/perf14-synthetic-only"
++const perf14Pane = "%14"
++
++// The stub accepts format delimiter choices, not different metadata semantics.
++// No range oracle is implemented here: capture is a coordinate-addressed source.
++const perf14TmuxPython = `import json, os, sys
++c=json.load(open(os.environ['PERF14_CONFIG']))
++a=sys.argv[1:]
++out=b''
++event={'args':a,'op':'invalid','bytes':0,'start':0,'end':0,'error':''}
++try:
++ if len(a)<3 or a[:2]!=['-S','/perf14-synthetic-only']:
++  raise ValueError('non-fixture socket rejected')
++ op=a[2]; event['op']=op; a=a[3:]
++ if '-t' not in a or a[a.index('-t')+1]!='%14':
++  raise ValueError('non-fixture target rejected')
++ if op=='display-message':
++  if c['metadata_failure']:
++   raise ValueError("can't find pane: %14")
++  if c['metadata_raw'] is not None:
++   out=c['metadata_raw'].encode()
++  else:
++   f=a[-1]
++   if f.count('#{history_size}')!=1 or f.count('#{pane_height}')!=1:
++    raise ValueError('metadata must query history_size and pane_height together')
++   f=f.replace('#{history_size}',str(c['history'])).replace('#{pane_height}',str(c['height']))
++   if '#{' in f: raise ValueError('unexpected metadata field')
++   out=(f+'\n').encode()
++ elif op=='capture-pane':
++  if '-p' not in a or '-e' not in a or '-S' not in a or '-E' not in a:
++   raise ValueError('capture must specify ANSI and exact start/end')
++  start=int(a[a.index('-S')+1]); end=int(a[a.index('-E')+1])
++  event['start']=start; event['end']=end
++  lo=max(start,-c['history']); hi=min(end,c['height']-1)
++  if hi-lo+1>100001: raise ValueError('unbounded extreme capture rejected by fixture safety cap')
++  if start==0 and end==-1:
++   out=b'VISIBLE_SCREEN_MUST_NOT_LEAK\n'
++  else:
++   blank=set(c['blank_rows'] or [])
++   out=''.join(('' if i in blank else 'R%+011d'%i)+'\n' for i in range(lo,hi+1)).encode()
++   if c['no_final_lf'] and out.endswith(b'\n'): out=out[:-1]
++ else:
++  raise ValueError('unexpected tmux operation '+op)
++except Exception as e:
++ event['error']=str(e)
++event['bytes']=len(out)
++with open(os.environ['PERF14_TRACE'],'a') as f:
++ f.write(json.dumps(event)+'\n')
++if event['error']:
++ sys.stderr.write(event['error']); sys.exit(1)
++sys.stdout.buffer.write(out)
++`
++
++func perf14InstallFixture(t *testing.T, f perf14Fixture) string {
++	t.Helper()
++	python, err := exec.LookPath("python3")
++	if err != nil {
++		t.Fatalf("required fixture dependency python3: %v (not a skip)", err)
++	}
++	dir := t.TempDir()
++	config, err := json.Marshal(f)
++	if err != nil {
++		t.Fatal(err)
++	}
++	write := func(name string, data []byte, mode os.FileMode) {
++		t.Helper()
++		if err := os.WriteFile(filepath.Join(dir, name), data, mode); err != nil {
++			t.Fatal(err)
++		}
++	}
++	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
++	write("config.json", config, 0600)
++	write("fixture.py", []byte(perf14TmuxPython), 0600)
++	write("tmux", []byte("#!/bin/sh\nexec "+quote(python)+" "+quote(filepath.Join(dir, "fixture.py"))+" \"$@\"\n"), 0700)
++	trace := filepath.Join(dir, "trace.jsonl")
++	write("trace.jsonl", nil, 0600)
++	t.Setenv("PERF14_CONFIG", filepath.Join(dir, "config.json"))
++	t.Setenv("PERF14_TRACE", trace)
++	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
++	return trace
++}
++
++func perf14ReadCommands(t *testing.T, trace string) []perf14Command {
++	t.Helper()
++	data, err := os.ReadFile(trace)
++	if err != nil {
++		t.Fatal(err)
++	}
++	var result []perf14Command
++	for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
++		if len(line) == 0 {
++			continue
++		}
++		var c perf14Command
++		if err := json.Unmarshal(line, &c); err != nil {
++			t.Fatal(err)
++		}
++		result = append(result, c)
++		t.Logf("tmux op=%s argv=%q stdout_bytes=%d range=[%d,%d] error=%q", c.Op, c.Args, c.Bytes, c.Start, c.End, c.Error)
++	}
++	return result
++}
++
++// Seed only the already-discovered catalog. Discovery/nodeprobe are outside #14
++// and must not execute against a real pane just to prepare this paging oracle.
++func perf14Request(t *testing.T, catalogHeight int, from int32, count uint32) wsMsg {
++	t.Helper()
++	pane := discovery.Pane{Socket: perf14Socket, PaneID: perf14Pane, Height: catalogHeight, Width: 80}
++	return perf14PaneRequest(t, pane, from, count)
++}
++
++func perf14PaneRequest(t *testing.T, pane discovery.Pane, from int32, count uint32) wsMsg {
++	t.Helper()
++	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
++	defer cancel()
++	ref := sessionRef(pane)
++	s := &Server{log: discardLogger(), catalog: newSessionCatalog(), snapshot: &modelSnapshot{}}
++	s.catalog.byRef[ref] = &sessionEntry{ref: ref, pane: pane, bridge: bridge.NewPane(pane.Socket, pane.PaneID)}
++	c := &wsConn{s: s, ctx: ctx, cancel: cancel, sendCh: make(chan wsMsg, 4)}
++	c.authed.Store(true)
++	req := protocol.Scrollback{Ref: ref, ReqID: 0x10203040, FromLine: from, Count: count}
++	wire, err := json.Marshal(map[string]any{"v": 1, "type": "scrollback", "payload": req})
++	if err != nil {
++		t.Fatal(err)
++	}
++	c.handleFrame(wire, 0)
++	select {
++	case msg := <-c.sendCh:
++		if len(c.sendCh) != 0 {
++			t.Fatal("more than one reply for one scrollback request")
++		}
++		return msg
++	case <-ctx.Done():
++		t.Fatal("scrollback handler did not produce bounded reply")
++		return wsMsg{}
++	}
++}
++
++func perf14AssertReply(t *testing.T, msg wsMsg, start int32, rows []string) {
++	t.Helper()
++	perf14AssertRefReply(t, msg, perf14Socket+"\x1f"+perf14Pane, start, rows)
++}
++
++func perf14AssertRefReply(t *testing.T, msg wsMsg, ref string, start int32, rows []string) {
++	t.Helper()
++	if msg.typ != wsBinary {
++		t.Fatalf("wanted binary page, got type=%v data=%s", msg.typ, msg.data)
++	}
++	p, err := protocol.DecodeBinary(msg.data)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if p.Kind != protocol.KindScrollback || p.Ref != ref || p.ReqID != 0x10203040 || p.FromLine != start || p.LineCount != uint32(len(rows)) {
++		t.Fatalf("header got kind=%v ref=%q req=%x from=%d lines=%d; want from=%d lines=%d", p.Kind, p.Ref, p.ReqID, p.FromLine, p.LineCount, start, len(rows))
++	}
++	want := strings.Join(rows, "\n")
++	// Preserve the existing protocol's nonzero one-empty-line representation.
++	if len(rows) == 1 && rows[0] == "" {
++		want = "\n"
++	}
++	if string(p.Data) != want {
++		t.Errorf("page body=%q want=%q", p.Data, want)
++	}
++	// Independent raw header layout oracle; DecodeBinary alone is insufficient.
++	off := 5 + len(ref)
++	if len(msg.data) < off+12 || !bytes.Equal(msg.data[:4], []byte{'R', 'A', 1, 3}) || int(msg.data[4]) != len(ref) {
++		t.Fatal("binary outer header mismatch")
++	}
++	if binary.BigEndian.Uint32(msg.data[off:]) != 0x10203040 || int32(binary.BigEndian.Uint32(msg.data[off+4:])) != start || binary.BigEndian.Uint32(msg.data[off+8:]) != uint32(len(rows)) {
++		t.Fatal("raw 12-byte range header mismatch")
++	}
++}
++
++func perf14Rows(start, end int64) []string {
++	var out []string
++	for i := start; i <= end; i++ {
++		out = append(out, fmt.Sprintf("R%+011d", i))
++	}
++	return out
++}
++
++func TestPerf14HandlerBoundedCaptureWork(t *testing.T) {
++	// Fixed width/ANSI density: total captured bytes must be exactly P*13,
++	// independent of H. Metadata can grow only by its decimal digit count.
++	for _, history := range []int64{400, 10000, 100000} {
++		t.Run(fmt.Sprintf("H%d_P400", history), func(t *testing.T) {
++			trace := perf14InstallFixture(t, perf14Fixture{History: history, Height: 24})
++			msg := perf14Request(t, 24, -400, 400)
++			commands := perf14ReadCommands(t, trace)
++			meta, captures, captured := 0, 0, 0
++			for _, c := range commands {
++				switch c.Op {
++				case "display-message":
++					meta++
++					if c.Bytes > 96 {
++						t.Errorf("metadata is not constant-size: %d", c.Bytes)
++					}
++				case "capture-pane":
++					captures++
++					captured += c.Bytes
++					if c.Start != -400 || c.End != -1 {
++						t.Errorf("unbounded/non-page capture [%d,%d], want [-400,-1]", c.Start, c.End)
++					}
++				default:
++					t.Errorf("unrelated request-stage tmux operation: %s", c.Op)
++				}
++				if c.Error != "" {
++					t.Errorf("fixture rejected command: %s", c.Error)
++				}
++			}
++			if meta != 1 || captures != 1 || captured != 400*13 {
++				t.Errorf("H=%d P=400 metadata=%d captures=%d captured_bytes=%d; want1/1/5200", history, meta, captures, captured)
++			}
++			perf14AssertReply(t, msg, -400, perf14Rows(-400, -1))
++		})
++	}
++}
++
++func TestPerf14HandlerRangeTable(t *testing.T) {
++	cases := []struct {
++		name       string
++		h          int64
++		g, catalog int
++		from       int32
++		count      uint32
++		start, end int64
++	}{
++		{"above_top", 26, 10, 10, -40, 5, -26, -22},
++		{"ends_at_oldest_keeps_page_shift", 26, 10, 10, -30, 5, -26, -22},
++		{"crosses_oldest", 26, 10, 10, -28, 5, -26, -24},
++		{"history_to_screen", 26, 10, 10, -2, 5, -2, 2},
++		{"history_only", 26, 10, 10, -4, 4, -4, -1},
++		{"screen_top", 26, 10, 10, 0, 3, 0, 2},
++		{"crosses_bottom", 26, 10, 10, 7, 8, 7, 9},
++		{"below_bottom", 26, 10, 10, 20, 3, 7, 9},
++		{"below_bottom_huge_page", 26, 10, 10, 20, 100, -26, 9},
++		{"actual_smaller_than_catalog", 26, 3, 40, 20, 4, -1, 2},
++		{"actual_larger_than_catalog", 26, 40, 3, 35, 8, 35, 39},
++		{"zero_history_screen", 0, 10, 10, 0, 3, 0, 2},
++		{"zero_history_cross_zero", 0, 10, 10, -2, 4, 0, 1},
++		{"int32_min_uint32_max", 26, 10, 10, math.MinInt32, math.MaxUint32, -26, 9},
++		{"int32_max_uint32_max", 26, 10, 10, math.MaxInt32, math.MaxUint32, -26, 9},
++		{"one_oldest_row", 26, 10, 10, math.MinInt32, 1, -26, -26},
++		{"one_screen_row", 26, 10, 10, 0, 1, 0, 0},
++		{"oldest_int32_wire_boundary", 2147483648, 10, 10, math.MinInt32, 1, math.MinInt32, math.MinInt32},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			trace := perf14InstallFixture(t, perf14Fixture{History: tc.h, Height: tc.g})
++			msg := perf14Request(t, tc.catalog, tc.from, tc.count)
++			metadata, captures := 0, 0
++			for _, command := range perf14ReadCommands(t, trace) {
++				if command.Op == "display-message" {
++					metadata++
++				}
++				if command.Op == "capture-pane" {
++					captures++
++					if command.Start != tc.start || command.End != tc.end {
++						t.Errorf("capture interval=[%d,%d], want[%d,%d]", command.Start, command.End, tc.start, tc.end)
++					}
++				}
++			}
++			if metadata != 1 || captures != 1 {
++				t.Errorf("metadata=%d captures=%d want1/1", metadata, captures)
++			}
++			perf14AssertReply(t, msg, int32(tc.start), perf14Rows(tc.start, tc.end))
++		})
++	}
++}
++
++func TestPerf14EmptyHistoryDoesNotCaptureScreen(t *testing.T) {
++	trace := perf14InstallFixture(t, perf14Fixture{History: 0, Height: 10})
++	msg := perf14Request(t, 10, -400, 400)
++	for _, c := range perf14ReadCommands(t, trace) {
++		if c.Op == "capture-pane" {
++			t.Errorf("empty history must not capture screen: argv=%q", c.Args)
++		}
++	}
++	perf14AssertReply(t, msg, 0, []string{""})
++}
++
++// Leader's explicit #14 contract: remove one capture delimiter LF, preserve
++// actual blank rows, and count a nonempty unterminated single row as one.
++func TestPerf14PageLineContentOracle(t *testing.T) {
++	cases := []struct {
++		name  string
++		from  int32
++		count uint32
++		blank []int
++		noLF  bool
++		rows  []string
++	}{
++		{"one_nonempty_terminated", -1, 1, nil, false, perf14Rows(-1, -1)},
++		{"one_nonempty_unterminated", -1, 1, nil, true, perf14Rows(-1, -1)},
++		{"two_nonempty_unterminated", -2, 2, nil, true, perf14Rows(-2, -1)},
++		{"one_actual_blank", -1, 1, []int{-1}, false, []string{""}},
++		{"three_actual_blanks", -3, 3, []int{-3, -2, -1}, false, []string{"", "", ""}},
++		{"three_trailing_blank_rows", -4, 4, []int{-3, -2, -1}, false, []string{fmt.Sprintf("R%+011d", -4), "", "", ""}},
++		{"interior_blank_row", -3, 3, []int{-2}, false, []string{fmt.Sprintf("R%+011d", -3), "", fmt.Sprintf("R%+011d", -1)}},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			trace := perf14InstallFixture(t, perf14Fixture{History: 26, Height: 10, BlankRows: tc.blank, NoFinalLF: tc.noLF})
++			msg := perf14Request(t, 10, tc.from, tc.count)
++			perf14ReadCommands(t, trace)
++			perf14AssertReply(t, msg, tc.from, tc.rows)
++		})
++	}
++}
++
++func TestPerf14ZeroCountRejectedBeforeTmux(t *testing.T) {
++	trace := perf14InstallFixture(t, perf14Fixture{History: 26, Height: 10})
++	msg := perf14Request(t, 10, -1, 0)
++	if len(perf14ReadCommands(t, trace)) != 0 {
++		t.Fatal("invalid count contacted tmux")
++	}
++	if msg.typ == wsBinary || !bytes.Contains(msg.data, []byte(`"type":"error"`)) {
++		t.Fatalf("count=0 not rejected: %s", msg.data)
++	}
++}
++
++func TestPerf14MetadataFailureDoesNotCapture(t *testing.T) {
++	for _, name := range []string{"pane_missing", "malformed", "negative_history", "zero_height"} {
++		t.Run(name, func(t *testing.T) {
++			f := perf14Fixture{History: 26, Height: 10}
++			switch name {
++			case "pane_missing":
++				f.MetadataFailure = true
++			case "malformed":
++				raw := "not-integers\n"
++				f.MetadataRaw = &raw
++			case "negative_history":
++				f.History = -1
++			case "zero_height":
++				f.Height = 0
++			}
++			trace := perf14InstallFixture(t, f)
++			msg := perf14Request(t, 10, -4, 4)
++			commands := perf14ReadCommands(t, trace)
++			meta := 0
++			for _, c := range commands {
++				if c.Op == "capture-pane" {
++					t.Errorf("capture after invalid metadata: %q", c.Args)
++				}
++				if c.Op == "display-message" {
++					meta++
++				}
++			}
++			if meta != 1 {
++				t.Errorf("metadata calls=%d want1", meta)
++			}
++			var reply struct {
++				Type    string              `json:"type"`
++				Payload protocol.ErrorFrame `json:"payload"`
++			}
++			if err := json.Unmarshal(msg.data, &reply); err != nil {
++				t.Fatalf("expected visible error: %v bytes=%q", err, msg.data)
++			}
++			if reply.Type != "error" || reply.Payload.Code == "" {
++				t.Fatalf("missing protocol error: %s", msg.data)
++			}
++			if name == "pane_missing" && reply.Payload.Code != protocol.ErrCodeSessionNotFound {
++				t.Errorf("pane missing code=%s", reply.Payload.Code)
++			}
++		})
++	}
++}
+diff --git a/internal/api/perf14_real_page_oracle_test.go b/internal/api/perf14_real_page_oracle_test.go
+new file mode 100644
+index 0000000..9ff536b
+--- /dev/null
++++ b/internal/api/perf14_real_page_oracle_test.go
+@@ -0,0 +1,143 @@
++package api
++
++import (
++	"context"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/agentmirror/agentmirror/internal/discovery"
++)
++
++// Real tmux is an additional oracle, never a substitute for the request argv /
++// byte-count test. The caller supplies a short hosted-only scratch root; missing
++// tmux/root is a failure, not a skip. No user shell or discovered pane is used.
++func TestPerf14RealStaticPagesAndActualGeometry(t *testing.T) {
++	root := os.Getenv("PERF14_REAL_ROOT")
++	if root == "" || !filepath.IsAbs(root) {
++		t.Fatal("PERF14_REAL_ROOT must name an absolute isolated hosted scratch root")
++	}
++	if err := os.MkdirAll(root, 0700); err != nil {
++		t.Fatal(err)
++	}
++	dir, err := os.MkdirTemp(root, "r")
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = os.RemoveAll(dir) })
++	socket := filepath.Join(dir, "s")
++	if len(socket) > 95 {
++		t.Fatalf("private socket too long: %d (no fallback permitted)", len(socket))
++	}
++	tmux, err := exec.LookPath("tmux")
++	if err != nil {
++		t.Fatalf("required real tmux unavailable, not skip: %v", err)
++	}
++	python, err := exec.LookPath("python3")
++	if err != nil {
++		t.Fatal(err)
++	}
++	env := make([]string, 0)
++	for _, item := range os.Environ() {
++		if strings.HasPrefix(item, "TMUX=") || strings.HasPrefix(item, "TMUX_TMPDIR=") {
++			continue
++		}
++		env = append(env, item)
++	}
++	run := func(args ...string) (string, error) {
++		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
++		defer cancel()
++		cmd := exec.CommandContext(ctx, tmux, append([]string{"-S", socket, "-f", "/dev/null"}, args...)...)
++		cmd.Env = env
++		out, err := cmd.CombinedOutput()
++		return strings.TrimSpace(string(out)), err
++	}
++	source := filepath.Join(dir, "source.py")
++	if err := os.WriteFile(source, []byte(`import pathlib,sys,time
++for i in range(60):
++ sys.stdout.write('ROW%03d\n'%i)
++sys.stdout.flush()
++while not pathlib.Path(__file__).with_name('alternate').exists():
++ time.sleep(0.05)
++sys.stdout.write('\033[?1049h\033[2J\033[HALT000\nALT001\n')
++sys.stdout.flush()
++time.sleep(120)
++`), 0600); err != nil {
++		t.Fatal(err)
++	}
++	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
++	if out, err := run("new-session", "-d", "-x", "40", "-y", "10", "-s", "perf14", "-c", dir, "exec "+quote(python)+" -u "+quote(source)); err != nil {
++		t.Fatalf("private fixture start: %v %s", err, out)
++	}
++	actual, err := run("list-sessions", "-F", "#{socket_path}")
++	if err != nil || actual != socket {
++		t.Fatalf("private socket identity not established: %q err=%v", actual, err)
++	}
++	t.Cleanup(func() {
++		if out, err := run("kill-server"); err != nil {
++			t.Errorf("private fixture cleanup: %v %s", err, out)
++		}
++		if out, err := run("list-sessions"); err == nil {
++			t.Errorf("private server survived cleanup: %s", out)
++		}
++	})
++	paneID, err := run("display-message", "-p", "-t", "perf14:0.0", "#{pane_id}")
++	if err != nil {
++		t.Fatal(err)
++	}
++	// 60 newline-terminated lines on 10 rows => 51 history lines, nine text
++	// screen rows and one blank cursor row. No capture-derived expected content.
++	ready := false
++	deadline := time.Now().Add(5 * time.Second)
++	for time.Now().Before(deadline) {
++		out, err := run("display-message", "-p", "-t", paneID, "#{history_size},#{pane_height},#{cursor_y}")
++		if err != nil {
++			t.Fatal(err)
++		}
++		if out == "51,10,9" {
++			ready = true
++			break
++		}
++		time.Sleep(20 * time.Millisecond)
++	}
++	if !ready {
++		t.Fatal("static source geometry/history boundary not reached; apparatus failure")
++	}
++	pane := discovery.Pane{Socket: socket, PaneID: paneID, Height: 40, Width: 40} // deliberately stale catalog
++	ref := sessionRef(pane)
++	oldest := []string{"ROW000", "ROW001", "ROW002", "ROW003"}
++	perf14AssertRefReply(t, perf14PaneRequest(t, pane, -100, 4), ref, -51, oldest)
++	perf14AssertRefReply(t, perf14PaneRequest(t, pane, -3, 3), ref, -3, []string{"ROW048", "ROW049", "ROW050"})
++	perf14AssertRefReply(t, perf14PaneRequest(t, pane, -1, 3), ref, -1, []string{"ROW050", "ROW051", "ROW052"})
++	perf14AssertRefReply(t, perf14PaneRequest(t, pane, 8, 2), ref, 8, []string{"ROW059", ""})
++	perf14AssertRefReply(t, perf14PaneRequest(t, pane, 30, 3), ref, 7, []string{"ROW058", "ROW059", ""})
++	for i := 0; i < 3; i++ { // repeat one immutable page without output/resize mutations
++		perf14AssertRefReply(t, perf14PaneRequest(t, pane, -3, 3), ref, -3, []string{"ROW048", "ROW049", "ROW050"})
++	}
++	t.Logf("real static oracle history=51 actual_height=10 catalog_height=40 ref=%q", ref)
++	// Switch only this synthetic source to the alternate screen. This regression
++	// checks visible-row paging; it does not invent an alternate-history policy.
++	if err := os.WriteFile(filepath.Join(dir, "alternate"), []byte("go"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	ready = false
++	deadline = time.Now().Add(5 * time.Second)
++	for time.Now().Before(deadline) {
++		out, err := run("display-message", "-p", "-t", paneID, "#{alternate_on},#{cursor_y}")
++		if err != nil {
++			t.Fatal(err)
++		}
++		if out == "1,2" {
++			ready = true
++			break
++		}
++		time.Sleep(20 * time.Millisecond)
++	}
++	if !ready {
++		t.Fatal("alternate-screen static boundary not reached; apparatus failure")
++	}
++	perf14AssertRefReply(t, perf14PaneRequest(t, pane, 0, 2), ref, 0, []string{"ALT000", "ALT001"})
++}
+diff --git a/internal/api/scrollback_range_test.go b/internal/api/scrollback_range_test.go
+new file mode 100644
+index 0000000..bd3eb70
+--- /dev/null
++++ b/internal/api/scrollback_range_test.go
+@@ -0,0 +1,72 @@
++package api
++
++import "testing"
++
++func TestScrollbackRangeForBoundaries(t *testing.T) {
++	minInt32 := -1 << 31
++	maxInt32 := 1<<31 - 1
++	maxUint32 := int(^uint32(0))
++	tests := []struct {
++		name               string
++		history, height    int
++		from, count        int
++		wantStart, wantEnd int
++		wantErr            bool
++	}{
++		{name: "above history", history: 26, height: 10, from: -500, count: 100, wantStart: -26, wantEnd: -1},
++		{name: "oldest page", history: 26, height: 10, from: -30, count: 5, wantStart: -26, wantEnd: -22},
++		{name: "crosses screen top", history: 26, height: 10, from: -2, count: 5, wantStart: -2, wantEnd: 2},
++		{name: "screen bottom clamp", history: 26, height: 10, from: 8, count: 5, wantStart: 8, wantEnd: 9},
++		{name: "below screen", history: 26, height: 10, from: 100, count: 5, wantStart: 5, wantEnd: 9},
++		{name: "empty history request", history: 0, height: 10, from: -20, count: 10, wantStart: 0, wantEnd: -1},
++		{name: "empty history screen", history: 0, height: 10, from: 0, count: 10, wantStart: 0, wantEnd: 9},
++		{name: "minimum from line", history: 26, height: 10, from: minInt32, count: 1, wantStart: -26, wantEnd: -26},
++		{name: "maximum from line", history: 26, height: 10, from: maxInt32, count: 1, wantStart: 5, wantEnd: 9},
++		{name: "maximum count spans all", history: 26, height: 10, from: minInt32, count: maxUint32, wantStart: -26, wantEnd: 9},
++		{name: "negative history", history: -1, height: 10, from: 0, count: 1, wantErr: true},
++		{name: "zero height", history: 0, height: 0, from: 0, count: 1, wantErr: true},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			start, end, err := scrollbackRangeFor(tt.history, tt.height, tt.from, tt.count)
++			if tt.wantErr {
++				if err == nil {
++					t.Fatalf("scrollbackRangeFor(%d,%d,%d,%d) error = nil, want error", tt.history, tt.height, tt.from, tt.count)
++				}
++				return
++			}
++			if err != nil {
++				t.Fatalf("scrollbackRangeFor(%d,%d,%d,%d) error: %v", tt.history, tt.height, tt.from, tt.count, err)
++			}
++			if start != tt.wantStart || end != tt.wantEnd {
++				t.Fatalf("scrollbackRangeFor(%d,%d,%d,%d) = (%d,%d), want (%d,%d)", tt.history, tt.height, tt.from, tt.count, start, end, tt.wantStart, tt.wantEnd)
++			}
++		})
++	}
++}
++
++func TestScrollbackTrimPreservesTrailingBlankRows(t *testing.T) {
++	tests := []struct {
++		name  string
++		in    string
++		want  string
++		lines int
++	}{
++		{name: "separator only", in: "BODY\n", want: "BODY", lines: 1},
++		{name: "one real blank row", in: "BODY\n\n", want: "BODY\n", lines: 2},
++		{name: "missing separator", in: "BODY", want: "BODY", lines: 1},
++		{name: "empty capture", in: "", want: "", lines: 0},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			got := trimScrollbackTerminator([]byte(tt.in))
++			if string(got) != tt.want {
++				t.Fatalf("trimScrollbackTerminator(%q) = %q, want %q", tt.in, got, tt.want)
++			}
++			if lines := countLines(got); lines != tt.lines {
++				t.Fatalf("countLines(trim(%q)) = %d, want %d", tt.in, lines, tt.lines)
++			}
++		})
++	}
++}
+diff --git a/internal/api/ws_handler.go b/internal/api/ws_handler.go
+index 581d9f1..3cef5d3 100644
+--- a/internal/api/ws_handler.go
++++ b/internal/api/ws_handler.go
+@@ -11,7 +11,6 @@ import (
+ 	"context"
+ 	"errors"
+ 	"fmt"
+-	"math"
+ 
+ 	"github.com/agentmirror/agentmirror/internal/bridge"
+ 	"github.com/agentmirror/agentmirror/internal/discovery"
+@@ -427,21 +426,27 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
+ 	// through (D-36): the old `- pane.Height` translation assumed bottom-relative
+ 	// tmux semantics and shifted every page into history (current-screen requests
+ 	// returned stale history, history pages reported wrong anchors).
+-	data, err := br.Scrollback(c.ctx, start, end)
+-	if err != nil {
+-		if errors.Is(err, bridge.ErrPaneNotFound) {
+-			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+-		} else {
+-			c.sendError(protocol.ErrCodeInternal, "scrollback failed")
++	var data []byte
++	if start == 0 && end == -1 {
++		// H=0 has no history to capture. Preserve the existing one-empty-line
++		// protocol placeholder without accidentally capturing visible screen rows.
++		data = []byte("\n")
++	} else {
++		data, err = br.Scrollback(c.ctx, start, end)
++		if err != nil {
++			if errors.Is(err, bridge.ErrPaneNotFound) {
++				c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
++			} else {
++				c.sendError(protocol.ErrCodeInternal, "scrollback failed")
++			}
++			return
+ 		}
+-		return
+ 	}
+ 
+-	// Trim trailing blank rows (consistent with snapshotWithCursor): capture-pane
+-	// emits a pane's blank bottom rows as bare LFs past the content. Trimming keeps
+-	// the reported line_count (§6.3 实际区间) equal to the actual non-blank lines,
+-	// which the client uses to anchor its scrollback buffer.
+-	data = bytes.TrimRight(data, "\n")
++	// capture-pane appends one separator LF after the requested range. Remove
++	// only that terminator: additional trailing LFs are real blank rows and are
++	// part of the page's content/anchor semantics.
++	data = trimScrollbackTerminator(data)
+ 	lineCount := uint32(countLines(data))
+ 	if lineCount == 0 {
+ 		// Degenerate fully-blank page: report one empty line (EncodeBinary requires
+@@ -553,51 +558,44 @@ func (c *wsConn) handleResize(r protocol.Resize) {
+ // clamp to the available range; a request entirely above the history (or
+ // entirely below the screen) is shifted to the nearest available edge so the
+ // client receives a useful page instead of a single degenerate line.
+-func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, pane discovery.Pane, fromLine, count int) (int, int, error) {
+-	// historySize = how many lines of history tmux retains above the screen.
+-	// Measured by capturing from the oldest possible line to the line just above
+-	// the screen top (-1) — top-relative semantics, so the capture is exactly the
+-	// history, no screen rows, no height subtraction needed (D-36: the old
+-	// `- pane.Height` double-counted the screen against tmux's top-relative coords
+-	// and under-reported history).
+-	oldestToBottom, err := br.Scrollback(ctx, math.MinInt32, -1)
++func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, _ discovery.Pane, fromLine, count int) (int, int, error) {
++	metadata, err := br.ScrollbackMetadata(ctx)
+ 	if err != nil {
+ 		return 0, 0, err
+ 	}
+-	historySize := countLines(oldestToBottom)
+-	if historySize < 0 {
+-		historySize = 0
+-	}
++	return scrollbackRangeFor(metadata.HistorySize, metadata.PaneHeight, fromLine, count)
++}
+ 
+-	// Available range in protocol coordinates (0 = screen top, negative = history).
+-	oldest := -historySize
+-	bottom := pane.Height - 1
++// scrollbackRangeFor clamps a protocol request against actual tmux metadata.
++// int64 intermediates keep extreme int32/uint32 request values from wrapping.
++func scrollbackRangeFor(historySize, paneHeight, fromLine, count int) (int, int, error) {
++	if historySize < 0 || paneHeight <= 0 {
++		return 0, 0, fmt.Errorf("invalid scrollback metadata history=%d height=%d", historySize, paneHeight)
++	}
++	oldest := -int64(historySize)
++	bottom := int64(paneHeight) - 1
++	requestEnd := int64(fromLine) + int64(count) - 1
+ 
+-	requestEnd := fromLine + count - 1
+ 	switch {
+ 	case requestEnd <= oldest:
+-		// Entirely above the history (or ending exactly at the oldest line): shift
+-		// so the page starts at the oldest available line and grab count lines —
+-		// a useful full page, not a degenerate sliver. Cap at the last history line
+-		// (-1 = line above screen top), never onto the visible screen: an above-history
+-		// request asks for history, so the reply must not leak on-screen rows
+-		// (TestScrollbackConvergedRange: scrollback(-500,100) must return only history).
+-		// D-36: scrollback(-30,5) with 26 history lines → (-26,-22) = the 5 oldest.
+-		start, end := oldest, oldest+count-1
++		// Entirely above history: keep the page in history and move it to the
++		// oldest available edge. With H=0 this returns (0,-1), a no-capture
++		// empty-history sentinel handled by handleScrollback.
++		start := oldest
++		end := oldest + int64(count) - 1
+ 		if end > -1 {
+ 			end = -1
+ 		}
+-		return start, end, nil
+-	case fromLine > bottom:
+-		// Entirely below the screen: shift so the page ends at the bottom row.
+-		start, end := bottom-count+1, bottom
++		return int(start), int(end), nil
++	case int64(fromLine) > bottom:
++		// Entirely below the screen: shift so the page ends at the actual bottom.
++		start := bottom - int64(count) + 1
+ 		if start < oldest {
+ 			start = oldest
+ 		}
+-		return start, end, nil
++		return int(start), int(bottom), nil
+ 	default:
+-		// Overlap: clamp both edges.
+-		start := fromLine
++		start := int64(fromLine)
+ 		if start < oldest {
+ 			start = oldest
+ 		}
+@@ -606,24 +604,32 @@ func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, pane disc
+ 			end = bottom
+ 		}
+ 		if start > end {
+-			// Degenerate single row at the boundary.
+ 			end = start
+ 		}
+-		return start, end, nil
++		return int(start), int(end), nil
+ 	}
+ }
+ 
+-// countLines counts the newline-delimited lines in a capture-pane result,
+-// tolerating a missing trailing newline.
++func trimScrollbackTerminator(data []byte) []byte {
++	if len(data) > 0 && data[len(data)-1] == '\n' {
++		return data[:len(data)-1]
++	}
++	return data
++}
++
++// countLines counts the rows in a capture-pane result after exactly one
++// separator LF has been removed. A remaining LF terminates a real row, so a
++// nonempty body always has one more row than its newline count; this preserves
++// trailing blank rows as well as unterminated single-line bodies.
+ func countLines(data []byte) int {
+-	n := 0
++	if len(data) == 0 {
++		return 0
++	}
++	n := 1
+ 	for _, b := range data {
+ 		if b == '\n' {
+ 			n++
+ 		}
+ 	}
+-	if n > 0 && data[len(data)-1] != '\n' {
+-		n++
+-	}
+ 	return n
+ }
+diff --git a/internal/bridge/bridge.go b/internal/bridge/bridge.go
+index 8d7fded..f458bc6 100644
+--- a/internal/bridge/bridge.go
++++ b/internal/bridge/bridge.go
+@@ -85,6 +85,43 @@ func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
+ 	return x, y, nil
+ }
+ 
++// ScrollbackMetadata reports the current history depth and pane height in one
++// bounded tmux query. history_size excludes the visible screen; pane_height is
++// the actual current height, not discovery's stale catalog geometry.
++type ScrollbackMetadata struct {
++	HistorySize int
++	PaneHeight  int
++}
++
++// ScrollbackMetadata reads tmux's current pagination metadata without moving
++// or capturing the pane. The query is deliberately one display-message call:
++// pagination must not transfer the full history merely to count it.
++// @contract
++// @pre none — pane 存在性由 tmux 在调用时惰性判定
++// @post 返回非负 history_size 与正 pane_height
++// @err tmux 失败或元数据不是两个合法整数→对应 tmux 错误或 parse error
++// @inv none — 只读操作
++func (p *Pane) ScrollbackMetadata(ctx context.Context) (ScrollbackMetadata, error) {
++	out, err := runTmux(ctx, p.socket, p.timeout,
++		"display-message", "-p", "-t", p.target, "#{history_size} #{pane_height}")
++	if err != nil {
++		return ScrollbackMetadata{}, err
++	}
++	fields := strings.Fields(string(out))
++	if len(fields) != 2 {
++		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse scrollback metadata %q: want history_size pane_height", strings.TrimSpace(string(out)))
++	}
++	historySize, err := strconv.Atoi(fields[0])
++	if err != nil || historySize < 0 {
++		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse history_size %q: want non-negative integer", fields[0])
++	}
++	paneHeight, err := strconv.Atoi(fields[1])
++	if err != nil || paneHeight <= 0 {
++		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse pane_height %q: want positive integer", fields[1])
++	}
++	return ScrollbackMetadata{HistorySize: historySize, PaneHeight: paneHeight}, nil
++}
++
+ // Scrollback fetches one line range of the pane (capture-pane -S/-E).
+ // start/end use tmux top-relative coordinates: 0 = visible screen top,
+ // negative = history above it — identical to the protocol (§6.3), so callers
