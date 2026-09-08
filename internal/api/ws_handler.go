@@ -494,21 +494,17 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 	if err != nil {
 		c.logErr("resize read before", err)
 		// A size read failure should not silently abort: fall through and let
-		// the resize attempt itself decide (Resize re-reads below).
+		// the resize attempt's actual readback decide.
 		beforeW, beforeH = -1, -1
 	}
-	if _, _, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows)); err != nil {
+	afterW, afterH, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows))
+	if err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		} else {
 			c.sendError(protocol.ErrCodeInternal, "resize failed")
 		}
 		return
-	}
-	afterW, afterH, err := br.Size(c.ctx)
-	if err != nil {
-		c.logErr("resize read after", err)
-		afterW, afterH = -1, -1
 	}
 	if beforeW >= 0 && beforeW == afterW && beforeH == afterH {
 		// Pane dims unchanged by the resize: no reflow happened, so there is

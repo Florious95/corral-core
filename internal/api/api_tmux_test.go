@@ -406,6 +406,8 @@ func TestResizeChangesPane(t *testing.T) {
 	if strings.TrimSpace(out) != "120x30" {
 		t.Errorf("pane size = %q, want 120x30 (resize applied to subscribed pane)", out)
 	}
+	markPerf17Stage(t, "done")
+	finishPerf17Error(t, te, 1709)
 }
 
 // TestResizeRepushesSnapshot is the fix-term-residuals red test: after a
@@ -454,6 +456,11 @@ func TestResizeRepushesSnapshot(t *testing.T) {
 			t.Errorf("re-pushed snapshot misses on-screen marker; got %q", p.Data)
 		}
 		assertSnapshotCursorSuffix(t, te, p.Data)
+		// This test injected a marker, so its relay may have just updated
+		// ConnMetrics. Establish the same deterministic relay-deletion barrier
+		// as the controlled error paths before the harness closes the connection.
+		markPerf17Stage(t, "done")
+		finishPerf17Error(t, te, 1708)
 		return
 	}
 	t.Fatal("resize did not re-push a snapshot (client residuals would survive)")
@@ -561,6 +568,8 @@ func TestRealResizeStillRepushesSnapshot(t *testing.T) {
 		}
 		if p.Kind == protocol.KindSnapshot {
 			assertSnapshotCursorSuffix(t, te, p.Data)
+			markPerf17Stage(t, "done")
+			finishPerf17Error(t, te, 1710)
 			return // snapshot arrived: positive control green
 		}
 	}
