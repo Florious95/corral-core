@@ -114,8 +114,17 @@ for label,path in [('b985',fixed),('stack-1fa3',old)]:
             name=parent+'/'+stage
             run('base-red-'+label+'-'+menu+'-'+stage,path,'./internal/api','^'+parent+'$/^'+stage+'$',[name],red='catalog gate blocked known-ref SNAPSHOT')
 
+# The two old scrollback readers hid text/error frames. The identical repaired
+# observation is run against fixed base and stack to distinguish inherited
+# behavior from a catalog-refresh regression; neither red is waived.
+for label,path in [('b985',fixed),('stack-1fa3',old)]:
+    relative=Path('internal/api/api_tmux_test.go')
+    (path/relative).write_bytes((candidate/relative).read_bytes())
+    for name in ('TestScrollbackConvergedRange','TestScrollbackExactHeaderBytes'):
+        run('baseline-compat-'+label+'-'+name,path,'./internal/api','^'+name+'$',[name])
+
 parents=['TestListScanBlockedKnownSubscribeGetsSnapshot','TestLevel2ScanBlockedKnownSubscribeGetsSnapshot','TestScanSingleFlightAndOnePendingGeneration','TestCatalogSnapshotSequenceAtomicCommit','TestListReplyDeltaWatermarkContinuity','TestLevel2WorkspaceEpochRejectsOldCompletion','TestScanWaiterDeadlineCancelAndOverload','TestScanCoordinatorShutdownAndIdle']
-children={parents[0]:['Discover','Sample'], parents[1]:['Discover','Sample'], parents[4]:['slow-peer'], parents[5]:['before-new-completion','after-new-completion'], parents[6]:['queued-deadline','timely-duplicate-writes','per-connection','global','deadline','scan-deadline','cancel-one-preserves-other'], parents[7]:['Discover','Sample','pending-List-gets-real-close','zero-auth-zero-L2']}
+children={parents[0]:['Discover','Sample'], parents[1]:['Discover','Sample'], parents[4]:['slow-peer'], parents[5]:['before-new-completion','after-new-completion'], parents[6]:['zero-wire-rejected','zero-internal-cancel','queued-deadline','timely-duplicate-writes','per-connection','global','deadline','scan-deadline','cancel-one-preserves-other'], parents[7]:['Discover','Sample','pending-List-gets-real-close','zero-auth-zero-L2']}
 for name in parents:
     run('candidate-'+name,candidate,'./internal/api','^'+name+'$',[name]+[name+'/'+child for child in children.get(name,[])])
 

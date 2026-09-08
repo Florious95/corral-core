@@ -1,5 +1,5 @@
 diff --git a/internal/api/api_test.go b/internal/api/api_test.go
-index 4e1a6f931baed55aab9f3f679988359710463373..c4465ea265fbd7bba377e4fd0910280b9334b2d4 100644
+index 4e1a6f9..c4465ea 100644
 --- a/internal/api/api_test.go
 +++ b/internal/api/api_test.go
 @@ -113,6 +113,9 @@ func TestListDeltaSeqMonotonic(t *testing.T) {
@@ -12,8 +12,72 @@ index 4e1a6f931baed55aab9f3f679988359710463373..c4465ea265fbd7bba377e4fd0910280b
  
  	// Let the baseline scan run with the original model (several ticks of the
  	// 50ms loop emit nothing since the model is unchanged), so the diff below
+diff --git a/internal/api/api_tmux_test.go b/internal/api/api_tmux_test.go
+index be66d07..3dff8ff 100644
+--- a/internal/api/api_tmux_test.go
++++ b/internal/api/api_tmux_test.go
+@@ -285,12 +285,28 @@ func TestScrollbackConvergedRange(t *testing.T) {
+ 	var payload protocol.BinaryPayload
+ 	found := false
+ 	for i := 0; i < 50 && !found; i++ {
+-		typ, data, err := te.wsEnv.conn.Read(context.Background())
++		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
++		typ, data, err := te.wsEnv.conn.Read(ctx)
++		cancel()
+ 		if err != nil {
+ 			t.Fatalf("read scrollback: %v", err)
+ 		}
+ 		if typ != websocket.MessageBinary {
+-			t.Fatalf("scrollback reply must be binary, got %v", typ)
++			control, err := protocol.UnmarshalFrame(data)
++			if err != nil {
++				t.Fatalf("scrollback control decode: %v", err)
++			}
++			switch value := control.(type) {
++			case protocol.InputAck:
++				if !value.OK || (value.ReqID != 1 && value.ReqID != 2) {
++					t.Fatalf("scrollback setup input_ack: %+v", value)
++				}
++			case protocol.ListDelta:
++				// A catalog update may precede this connection's requested page.
++			default:
++				t.Fatalf("scrollback received control %T: %+v", control, control)
++			}
++			continue
+ 		}
+ 		p, err := protocol.DecodeBinary(data)
+ 		if err != nil {
+@@ -346,11 +362,27 @@ func TestScrollbackExactHeaderBytes(t *testing.T) {
+ 	var frame []byte
+ 	found := false
+ 	for i := 0; i < 50 && !found; i++ {
+-		typ, data, err := te.wsEnv.conn.Read(context.Background())
++		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
++		typ, data, err := te.wsEnv.conn.Read(ctx)
++		cancel()
+ 		if err != nil {
+ 			t.Fatalf("read: %v", err)
+ 		}
+ 		if typ != websocket.MessageBinary {
++			control, err := protocol.UnmarshalFrame(data)
++			if err != nil {
++				t.Fatalf("scrollback control decode: %v", err)
++			}
++			switch value := control.(type) {
++			case protocol.InputAck:
++				if !value.OK || (value.ReqID != 1 && value.ReqID != 2) {
++					t.Fatalf("scrollback setup input_ack: %+v", value)
++				}
++			case protocol.ListDelta:
++				// A catalog update may precede this connection's requested page.
++			default:
++				t.Fatalf("scrollback received control %T: %+v", control, control)
++			}
+ 			continue
+ 		}
+ 		p, err := protocol.DecodeBinary(data)
 diff --git a/internal/api/discovery_failure_test.go b/internal/api/discovery_failure_test.go
-index a3e603e20171da900f86da09c758093a77ef8608..7bfa875a1d250626884f1b277d39411120293e8a 100644
+index a3e603e..7bfa875 100644
 --- a/internal/api/discovery_failure_test.go
 +++ b/internal/api/discovery_failure_test.go
 @@ -132,6 +132,9 @@ func TestDiscoveryRecoveryResumesDelta(t *testing.T) {
@@ -27,7 +91,7 @@ index a3e603e20171da900f86da09c758093a77ef8608..7bfa875a1d250626884f1b277d394111
  	// Baseline with the original model, then fail a couple of scans.
  	time.Sleep(150 * time.Millisecond)
 diff --git a/internal/api/level2.go b/internal/api/level2.go
-index 067744bad9839b8578065539650f9366658ed1ae..b642df57980e925b44f6cde40b177001b578c486 100644
+index 067744b..b642df5 100644
 --- a/internal/api/level2.go
 +++ b/internal/api/level2.go
 @@ -1,12 +1,10 @@
@@ -308,7 +372,7 @@ index 067744bad9839b8578065539650f9366658ed1ae..b642df57980e925b44f6cde40b177001
 +	return c.level2Epoch
  }
 diff --git a/internal/api/refresh_on_open_test.go b/internal/api/refresh_on_open_test.go
-index 0d6ffd2a2514a6648777c4070d427a0a1dcb05d9..988e0262c49100f4fd63f79a3ff4918786aa621e 100644
+index 0d6ffd2..988e026 100644
 --- a/internal/api/refresh_on_open_test.go
 +++ b/internal/api/refresh_on_open_test.go
 @@ -130,6 +130,9 @@ func TestRefreshOnOpenLevel2ZeroSubscribersNoPoll(t *testing.T) {
@@ -323,7 +387,7 @@ index 0d6ffd2a2514a6648777c4070d427a0a1dcb05d9..988e0262c49100f4fd63f79a3ff49187
  	if got := cd.scans.Load(); got > base {
 diff --git a/internal/api/scan_coordinator.go b/internal/api/scan_coordinator.go
 new file mode 100644
-index 0000000000000000000000000000000000000000..75c1d19b3e73c6bde275cbdf9e17ba836df295bd
+index 0000000..75c1d19
 --- /dev/null
 +++ b/internal/api/scan_coordinator.go
 @@ -0,0 +1,600 @@
@@ -929,10 +993,10 @@ index 0000000000000000000000000000000000000000..75c1d19b3e73c6bde275cbdf9e17ba83
 +}
 diff --git a/internal/api/scan_coordinator_test.go b/internal/api/scan_coordinator_test.go
 new file mode 100644
-index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba49461d301a0d
+index 0000000..c30f1f2
 --- /dev/null
 +++ b/internal/api/scan_coordinator_test.go
-@@ -0,0 +1,734 @@
+@@ -0,0 +1,800 @@
 +package api
 +
 +import (
@@ -1044,6 +1108,12 @@ index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba4946
 +	e, c, g := catalogServer(t)
 +	q := e.srv.scans
 +	catalogIdle(t, e.srv)
++	// A second arrival while bootstrap Discover was gated proves parallelism.
++	select {
++	case <-g.entered:
++		t.Fatal("parallel scan worker: duplicate bootstrap gate arrival")
++	default:
++	}
 +	g.mu.Lock()
 +	before, beforeSample := g.calls["Discover"], g.calls["Sample"]
 +	g.mu.Unlock()
@@ -1052,14 +1122,18 @@ index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba4946
 +	q.list(c, 10)
 +	catalogGateEntered(t, g, "Discover")
 +	q.mu.Lock()
++	if q.active == nil {
++		q.mu.Unlock()
++		t.Fatal("parallel scan worker: gate arrived outside active generation")
++	}
 +	active := q.active.id
 +	q.mu.Unlock()
 +	for i := 0; i < 5; i++ {
-+		q.list(c, 0)
-+	} // duplicate/zero wire req_id are separate intents
++		q.list(c, 7)
++	} // duplicate legal wire req_id are separate intents
 +	c.handleLevel2Subscribe(protocol.Level2Subscribe{Workspace: "/ws/a"})
 +	q.mu.Lock()
-+	if q.active.id != active || q.pending == nil || q.pending.id != active+1 || len(q.pending.lists) != 5 {
++	if q.active == nil || q.active.id != active || q.pending == nil || q.pending.id != active+1 || len(q.pending.lists) != 5 {
 +		t.Errorf("not one active/one pending: active=%+v pending=%+v", q.active, q.pending)
 +	}
 +	ids := map[uint64]bool{}
@@ -1078,13 +1152,13 @@ index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba4946
 +	}
 +	g.open()
 +	counts := map[uint32]int{}
-+	for counts[10] < 1 || counts[0] < 5 {
++	for counts[10] < 1 || counts[7] < 5 {
 +		f := e.readControl()
 +		if l, ok := f.(protocol.Listing); ok {
 +			counts[l.ReqID]++
 +		}
 +	}
-+	if counts[0] != 5 || counts[10] != 1 {
++	if counts[7] != 5 || counts[10] != 1 {
 +		t.Fatal(counts)
 +	}
 +	catalogIdle(t, e.srv)
@@ -1400,6 +1474,62 @@ index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba4946
 +}
 +
 +func TestScanWaiterDeadlineCancelAndOverload(t *testing.T) {
++	t.Run("zero-wire-rejected", func(t *testing.T) {
++		e, _, _ := catalogServer(t)
++		if _, err := protocol.MarshalFrame(&protocol.List{ReqID: 0}); !errors.Is(err, protocol.ErrInvalidField) {
++			t.Fatalf("zero List codec verdict=%v", err)
++		}
++		if _, err := protocol.MarshalFrame(&protocol.Listing{ReqID: 0, Seq: 1}); !errors.Is(err, protocol.ErrInvalidField) {
++			t.Fatalf("zero Listing codec verdict=%v", err)
++		}
++		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
++		defer cancel()
++		if err := e.conn.Write(ctx, websocket.MessageText, []byte(`{"v":1,"type":"list","payload":{"req_id":0}}`)); err != nil {
++			t.Fatal(err)
++		}
++		if failure, ok := e.readControl().(protocol.ErrorFrame); !ok || failure.Code != protocol.ErrCodeInvalidField || !strings.Contains(failure.Reason, "req_id") {
++			t.Fatalf("zero wire List rejection=%+v", failure)
++		}
++		e.sendFrame(&protocol.List{ReqID: 7})
++		mustListing(t, e, 7)
++	})
++	t.Run("zero-internal-cancel", func(t *testing.T) {
++		e, _, g := catalogServer(t)
++		peer, c := catalogPeer(t, e, nil)
++		q := e.srv.scans
++		g.arm("Discover")
++		defer g.open()
++		q.list(c, 0)
++		catalogGateEntered(t, g, "Discover")
++		q.list(c, 0)
++		q.mu.Lock()
++		count := 0
++		ids := map[uint64]bool{}
++		for _, w := range q.outstanding {
++			if w.c == c && w.req == 0 {
++				count++
++				ids[w.id] = true
++			}
++		}
++		q.mu.Unlock()
++		if count != 2 || len(ids) != 2 {
++			t.Fatalf("internal zero admissions collapsed: count=%d ids=%d", count, len(ids))
++		}
++		_ = peer.conn.CloseNow()
++		catalogEventually(t, "internal zero admissions survived cancel", func() bool {
++			q.mu.Lock()
++			defer q.mu.Unlock()
++			for _, w := range q.outstanding {
++				if w.c == c {
++					return false
++				}
++			}
++			return true
++		})
++		g.open()
++		e.sendFrame(&protocol.List{ReqID: 7})
++		mustListing(t, e, 7)
++	})
 +	t.Run("queued-deadline", func(t *testing.T) {
 +		e, _, _ := catalogServer(t)
 +		q := e.srv.scans
@@ -1413,7 +1543,7 @@ index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba4946
 +			}
 +		})
 +		for i := 0; i < 3; i++ {
-+			slow.sendFrame(&protocol.List{ReqID: 0})
++			slow.sendFrame(&protocol.List{ReqID: 7})
 +		}
 +		var held *catalogWaiter
 +		select {
@@ -1460,7 +1590,7 @@ index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba4946
 +			}
 +		})
 +		for i := 0; i < 3; i++ {
-+			peer.sendFrame(&protocol.List{ReqID: 0})
++			peer.sendFrame(&protocol.List{ReqID: 7})
 +		}
 +		peer.sendFrame(&protocol.List{ReqID: 99})
 +		count := 0
@@ -1473,7 +1603,7 @@ index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba4946
 +			if l.ReqID == 99 {
 +				break
 +			}
-+			if l.ReqID != 0 {
++			if l.ReqID != 7 {
 +				t.Fatal(l.ReqID)
 +			}
 +			count++
@@ -1669,7 +1799,7 @@ index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba4946
 +}
 diff --git a/internal/api/scan_reader_boundary_test.go b/internal/api/scan_reader_boundary_test.go
 new file mode 100644
-index 0000000000000000000000000000000000000000..9418900b8c954acf49e07ad777bd0f82f7ee3be9
+index 0000000..9418900
 --- /dev/null
 +++ b/internal/api/scan_reader_boundary_test.go
 @@ -0,0 +1,253 @@
@@ -1927,7 +2057,7 @@ index 0000000000000000000000000000000000000000..9418900b8c954acf49e07ad777bd0f82
 +	}
 +}
 diff --git a/internal/api/server.go b/internal/api/server.go
-index 73f4985df9184cbcb5ada12d2089053aa77caac0..3b545c5932625c6bdac59bf914c32f317db03c7d 100644
+index 73f4985..3b545c5 100644
 --- a/internal/api/server.go
 +++ b/internal/api/server.go
 @@ -8,7 +8,6 @@ package api
@@ -2240,7 +2370,7 @@ index 73f4985df9184cbcb5ada12d2089053aa77caac0..3b545c5932625c6bdac59bf914c32f31
 +	return s.catalog.entry(ref)
 +}
 diff --git a/internal/api/ws.go b/internal/api/ws.go
-index 834f6ca6034f019220e255805dbfbc8600ca9c1d..df54c9d53610690d82f258ca6a1fc33d65a80cc4 100644
+index 834f6ca..df54c9d 100644
 --- a/internal/api/ws.go
 +++ b/internal/api/ws.go
 @@ -31,6 +31,11 @@ type wsMsg struct {
@@ -2256,7 +2386,7 @@ index 834f6ca6034f019220e255805dbfbc8600ca9c1d..df54c9d53610690d82f258ca6a1fc33d
  	// the given code/reason after any already-queued message (used for auth
  	// rejection and unsupported-version: send the error/ack, then close).
 diff --git a/internal/api/ws_conn.go b/internal/api/ws_conn.go
-index a8551277f363f9e8ee344bdceffbb23b0956479c..4a46493e4cbfc815fb96d98e46da571323392d8e 100644
+index a855127..4a46493 100644
 --- a/internal/api/ws_conn.go
 +++ b/internal/api/ws_conn.go
 @@ -81,6 +81,7 @@ type wsConn struct {
@@ -2507,7 +2637,7 @@ index a8551277f363f9e8ee344bdceffbb23b0956479c..4a46493e4cbfc815fb96d98e46da5713
  		return nil, discovery.Pane{}, false
  	}
 diff --git a/internal/api/ws_handler.go b/internal/api/ws_handler.go
-index 8bff73c2fb7578afdb145a0325b70375e12f0381..65e75468e094b320da7255562eb6caef13920b30 100644
+index 8bff73c..65e7546 100644
 --- a/internal/api/ws_handler.go
 +++ b/internal/api/ws_handler.go
 @@ -69,38 +69,10 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
