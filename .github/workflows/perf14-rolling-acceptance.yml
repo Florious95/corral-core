@@ -125,8 +125,12 @@ jobs:
               "TestPerf14PageLineContentOracle",
               "TestPerf14ZeroCountRejectedBeforeTmux",
               "TestPerf14MetadataFailureDoesNotCapture",
+              "TestScrollbackConvergedRange",
+              "TestScrollbackExactHeaderBytes",
+              "TestScrollbackPagingRange",
           ]
           text = "\n".join(p.read_text() for p in (root / "internal/api").glob("*_test.go"))
+          text += "\n".join(p.read_text() for p in (root / "internal/bridge").glob("*_test.go"))
           missing = [n for n in names if not re.search(r"^func " + re.escape(n) + r"\s*\(", text, re.M)]
           if missing:
               raise SystemExit("missing required roots: " + ", ".join(missing))
@@ -196,26 +200,31 @@ jobs:
         run: |
           set -euo pipefail
           root="$RUNNER_TEMP/perf14-r1"
-          names=(
-            TestScrollbackPageUsesBoundedMetadataAndOneCapture
-            TestCountLinesTreatsNonEmptyBodyWithoutLFAsOne
-            TestScrollbackRangeForBoundaries
-            TestScrollbackTrimPreservesTrailingBlankRows
-            TestPerf14RealStaticPagesAndActualGeometry
-            TestPerf14HandlerBoundedCaptureWork
-            TestPerf14HandlerRangeTable
-            TestPerf14EmptyHistoryDoesNotCaptureScreen
-            TestPerf14PageLineContentOracle
-            TestPerf14ZeroCountRejectedBeforeTmux
-            TestPerf14MetadataFailureDoesNotCapture
+          cases=(
+            'TestScrollbackPageUsesBoundedMetadataAndOneCapture|./internal/api'
+            'TestCountLinesTreatsNonEmptyBodyWithoutLFAsOne|./internal/api'
+            'TestScrollbackRangeForBoundaries|./internal/api'
+            'TestScrollbackTrimPreservesTrailingBlankRows|./internal/api'
+            'TestPerf14RealStaticPagesAndActualGeometry|./internal/api'
+            'TestPerf14HandlerBoundedCaptureWork|./internal/api'
+            'TestPerf14HandlerRangeTable|./internal/api'
+            'TestPerf14EmptyHistoryDoesNotCaptureScreen|./internal/api'
+            'TestPerf14PageLineContentOracle|./internal/api'
+            'TestPerf14ZeroCountRejectedBeforeTmux|./internal/api'
+            'TestPerf14MetadataFailureDoesNotCapture|./internal/api'
+            'TestScrollbackConvergedRange|./internal/api'
+            'TestScrollbackExactHeaderBytes|./internal/api'
+            'TestScrollbackPagingRange|./internal/bridge'
           )
           : > "$root/candidate-oracle.status"
-          for name in "${names[@]}"; do
+          for entry in "${cases[@]}"; do
+            name="${entry%%|*}"
+            package="${entry##*|}"
             json="$root/candidate-$name.jsonl"
             set +e
             (
               cd "$root/candidate"
-              GOTOOLCHAIN=auto go test -json -race -count=1 ./internal/api -run "^${name}$"
+              GOTOOLCHAIN=auto go test -json -race -count=1 "$package" -run "^${name}$"
             ) > "$json" 2>&1
             rc=$?
             set -e
@@ -320,7 +329,7 @@ jobs:
               "task_id": "perf14-scrollback-page-metadata",
               "checkout": {"head": git(candidate, "rev-parse", "HEAD"), "tree": git(candidate, "rev-parse", "HEAD^{tree}")},
               "base": {"commit": git(base, "rev-parse", "HEAD"), "tree": git(base, "rev-parse", "HEAD^{tree}"), "artifact_sha256": sha(base_bin), "artifact_bytes": base_bin.stat().st_size, "behavior": "BASELINE_BEHAVIOR_RED; compatibility/full-suite status preserved separately"},
-              "candidate": {"commit": git(candidate, "rev-parse", "HEAD"), "tree": git(candidate, "rev-parse", "HEAD^{tree}"), "artifact_sha256": sha(candidate_bin), "artifact_bytes": candidate_bin.stat().st_size, "oracle": "11 named roots RUN/PASS exactly once, no SKIP", "compatibility": "2 named roots RUN/PASS exactly once, no SKIP"},
+              "candidate": {"commit": git(candidate, "rev-parse", "HEAD"), "tree": git(candidate, "rev-parse", "HEAD^{tree}"), "artifact_sha256": sha(candidate_bin), "artifact_bytes": candidate_bin.stat().st_size, "oracle": "14 named roots RUN/PASS exactly once, no SKIP", "compatibility": "2 named roots RUN/PASS exactly once, no SKIP"},
               "app_apk_sha256": "bd4ababfcec3301c19ced02350ff2193f183311f9ec0bdd455145deab3b3e861",
               "nodeprobe_sha256": "e5667b9ebe931de7805a87538e03b9a6ee1fb9cb9250c25282f8b054268226b5",
               "tmux_fixture": "tmux-fixture.status",
