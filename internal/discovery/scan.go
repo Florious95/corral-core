@@ -16,16 +16,16 @@ import (
 )
 
 // paneFormat is the tmux format string used to enumerate every pane of a
-// server in one query. Fields are "|"-separated; the penultimate field is
-// "<width>x<height>" and the last is #{window_name}. The chosen fields are the
-// two-level model inputs: session name (label only), window index, pane id,
-// cwd (grouping key), foreground command, pane pid (state-wiring additive
-// input, task fix-state-wiring), pane title (OSC-title state signal, task
-// fix-state-detection), dimensions, and window name (display label task
-// fix-session-alias: tmux window names carry the meaningful per-window labels
-// — e.g. "wiki-r5-acceptance-tester" — where the session name is a whole-team
-// name like "team-refactor-maintainability").
-const paneFormat = "#{session_name}|#{window_index}|#{pane_id}|#{pane_current_path}|#{pane_current_command}|#{pane_pid}|#{pane_title}|#{pane_width}x#{pane_height}|#{window_name}"
+// server in one query. Fields use the unit-separator byte so values containing
+// "|" remain opaque; the penultimate field is "<width>x<height>" and the last
+// is #{window_name}. The chosen fields are the two-level model inputs: session
+// name (label only), window index, pane id, cwd (grouping key), foreground
+// command, pane pid (state-wiring additive input, task fix-state-wiring), pane
+// title (OSC-title state signal, task fix-state-detection), dimensions, and
+// window name (display label task fix-session-alias: tmux window names carry
+// the meaningful per-window labels — e.g. "wiki-r5-acceptance-tester" — where
+// the session name is a whole-team name like "team-refactor-maintainability").
+const paneFormat = "#{session_name}\x1f#{window_index}\x1f#{pane_id}\x1f#{pane_current_path}\x1f#{pane_current_command}\x1f#{pane_pid}\x1f#{pane_title}\x1f#{pane_width}x#{pane_height}\x1f#{window_name}"
 
 // socketTimeout bounds a single tmux query against a single socket so a hung
 // server cannot stall the whole scan. A server that does not answer within
@@ -287,11 +287,17 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 	return panes, nil
 }
 
-// parsePaneLine parses one line of paneFormat output into a Pane. It returns
-// ok=false for malformed lines (wrong field count or a non-integer dimension)
-// so the caller can skip the offending pane without failing the whole scan.
+// parsePaneLine parses one line of paneFormat output into a Pane. Production
+// framing uses the unit-separator byte; the pipe fallback preserves old test
+// and fixture output while callers transition to paneFormat. Empty fields are
+// retained by strings.Split. It returns ok=false for malformed lines (wrong
+// field count or a non-integer dimension) so the caller can skip the offending
+// pane without failing the whole scan.
 func parsePaneLine(line string) (Pane, bool) {
-	parts := strings.Split(line, "|")
+	parts := strings.Split(line, "\x1f")
+	if !strings.Contains(line, "\x1f") {
+		parts = strings.Split(line, "|")
+	}
 	if len(parts) != 9 {
 		return Pane{}, false
 	}
