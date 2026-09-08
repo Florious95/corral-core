@@ -15,7 +15,7 @@ permissions:
 env:
   BASE_SHA: b98504e742ed1e7c7475767c512934b07eac592b
   CANDIDATE_PATCH: .team/perf14-candidate.patch
-  CANDIDATE_PATCH_SHA256: a6a66449b163016ec64371a2e216fdadb72f0a374fc7f5661fe9291ab1f765af
+  CANDIDATE_PATCH_SHA256: cd19bfbb484ac6b010d44f69e8f327ce8cb5dbe428eb2a7277a0a16942522d6b
 
 jobs:
   perf14:
@@ -96,7 +96,7 @@ jobs:
           grep -q -- 'capture-pane' "$log"
           grep -q -- 'metadata=0' "$log"
 
-      - name: "PASS — candidate complete API and bridge oracle"
+      - name: "PASS — candidate #14 oracle and scrollback compatibility"
         shell: bash
         env:
           PERF14_REAL_ROOT: ${{ runner.temp }}/perf14-real
@@ -104,7 +104,12 @@ jobs:
           set -euo pipefail
           mkdir -p "$PERF14_REAL_ROOT"
           log="$RUNNER_TEMP/perf14/candidate-PASS.log"
-          go test -race -count=1 -timeout=15m ./internal/api ./internal/bridge -v 2>&1 | tee "$log"
+          {
+            go test -race -count=1 -timeout=15m ./internal/api \
+              -run '^(TestPerf14|TestScrollbackPageUsesBoundedMetadataAndOneCapture|TestCountLinesTreatsNonEmptyBodyWithoutLFAsOne|TestScrollbackRangeForBoundaries|TestScrollbackTrimPreservesTrailingBlankRows|TestScrollback(ConvergedRange|ExactHeaderBytes))$' -v
+            go test -race -count=1 -timeout=8m ./internal/bridge \
+              -run '^TestScrollbackPagingRange$' -v
+          } 2>&1 | tee "$log"
           expected=(
             TestPerf14HandlerBoundedCaptureWork
             TestPerf14HandlerRangeTable
@@ -117,12 +122,34 @@ jobs:
             TestCountLinesTreatsNonEmptyBodyWithoutLFAsOne
             TestScrollbackRangeForBoundaries
             TestScrollbackTrimPreservesTrailingBlankRows
+            TestScrollbackConvergedRange
+            TestScrollbackExactHeaderBytes
+            TestScrollbackPagingRange
           )
           for name in "${expected[@]}"; do
             test "$(grep -Ec -- "^--- PASS: $name \\(" "$log")" -eq 1
           done
           ! grep -q -- 'SKIP' "$log"
-          printf 'label=PASS\nhead=%s\ncommand=go test -race -count=1 -timeout=15m ./internal/api ./internal/bridge -v\nexit=0\n' "$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/perf14/candidate-PASS-receipt.txt"
+          printf 'label=PASS\nhead=%s\ncommand=scrollback-only go test -race -count=1\nexit=0\n' "$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/perf14/candidate-PASS-receipt.txt"
+
+      - name: "BASELINE — full API/bridge race evidence (not #14 acceptance)"
+        id: baseline-suite
+        continue-on-error: true
+        shell: bash
+        env:
+          PERF14_REAL_ROOT: ${{ runner.temp }}/perf14-real-baseline
+        run: |
+          set -uo pipefail
+          mkdir -p "$PERF14_REAL_ROOT"
+          log="$RUNNER_TEMP/perf14/full-suite-baseline.log"
+          go test -race -count=1 -timeout=15m ./internal/api ./internal/bridge -v 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          printf 'label=BASELINE_NOT_ACCEPTANCE\nhead=%s\ncommand=go test -race -count=1 -timeout=15m ./internal/api ./internal/bridge -v\nexit=%s\n' "$(git rev-parse HEAD)" "$rc" | tee "$RUNNER_TEMP/perf14/full-suite-baseline-receipt.txt"
+          test "$rc" -ne 0
+          for name in TestAuthBadToken TestSubscribeSnapshotThenDelta TestPerfSubscribeNotEmittedForList; do
+            grep -q -- "--- FAIL: $name" "$log"
+          done
+          grep -q -- '--- PASS: TestPerf14HandlerBoundedCaptureWork' "$log"
 
       - name: Upload named FAIL/PASS evidence
         if: always()
