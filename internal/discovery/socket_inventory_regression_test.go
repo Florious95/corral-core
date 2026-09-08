@@ -2,11 +2,13 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -176,11 +178,24 @@ func TestIssue10ScopedLifecycle(t *testing.T) {
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "tmux", "-S", socket, "kill-server")
 			cmd.Env = envWithout(os.Environ(), "TMUX")
-			_ = cmd.Run()
-			conn, err := net.DialTimeout("unix", socket, time.Second)
-			if err == nil {
-				conn.Close()
-				t.Errorf("owned listener remains: %s", socket)
+			killErr := cmd.Run()
+			// kill-server acknowledges the command before its listener necessarily
+			// closes. Keep the existing five-second teardown budget as a barrier.
+			for {
+				conn, err := (&net.Dialer{Timeout: 100 * time.Millisecond}).DialContext(ctx, "unix", socket)
+				if errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ECONNREFUSED) {
+					t.Logf("owned listener closed: %s; kill-server=%v", socket, killErr)
+					break
+				}
+				if conn != nil {
+					conn.Close()
+				}
+				select {
+				case <-ctx.Done():
+					t.Errorf("owned listener did not close within teardown deadline: %s; kill-server=%v; probe=%v", socket, killErr, err)
+					return
+				case <-time.After(10 * time.Millisecond):
+				}
 			}
 		})
 	}
