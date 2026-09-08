@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run one real A6 stage; own every process and gate success after cleanup."""
+import hashlib
 import argparse
 import json
 import os
@@ -14,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--stage', choices=('bridge', 'ws'), required=True)
 parser.add_argument('--root', type=Path, required=True)
 parser.add_argument('--binary', type=Path, required=True)
-parser.add_argument('--control', choices=('candidate', 'no-abort'), default='candidate')
+parser.add_argument('--control', choices=('candidate', 'no-abort', 'shutdown-race', 'screen-corruption'), default='candidate')
 args = parser.parse_args()
 repo = Path.cwd()
 root = args.root.resolve()
@@ -88,10 +89,12 @@ def terminate(name, grace):
     exits[name]=code
     # A group can outlive its leader (Gradle/JVM children). Do not equate the
     # direct child's exit with cleanup; terminate only this owned group.
-    try:
-        os.killpg(proc.pid,0)
-    except ProcessLookupError:
-        return
+    group_deadline=time.monotonic()+2
+    while True:
+        try: os.killpg(proc.pid,0)
+        except ProcessLookupError: return
+        if time.monotonic()>=group_deadline: break
+        time.sleep(.02)
     cleanup_errors.append(name+' left process-group descendants')
     os.killpg(proc.pid,signal.SIGKILL)
     deadline=time.monotonic()+2
@@ -134,7 +137,9 @@ try:
         env['PERF16_A6_PROXY_WS_URL']=direct
     method={'bridge':'realGoServerTmuxBridgeOverflow_servicePumpReauthListSubscribeClearsStaticScreen',
             'ws':'realGoServerTmuxWsQueueOverflow_servicePumpReauthListSubscribeClearsStaticScreen'}[args.stage]
-    gradle=spawn('gradle',['./gradlew','--no-daemon','--rerun-tasks','-Pkotlin.compiler.execution.strategy=in-process',':app:testDebugUnitTest','--tests','dev.agentmirror.app.session.Perf16AppRecoveryA6ScenarioTest.'+method],repo/'app')
+    xml=repo/'app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.session.Perf16AppRecoveryA6ScenarioTest.xml'
+    xml.unlink(missing_ok=True)  # prior stage is already archived; never accept stale JUnit XML
+    gradle=spawn('gradle',['./gradlew','--no-daemon','--rerun-tasks','-Pkotlin.compiler.execution.strategy=in-process','-x',':app:compileDebugKotlin','-x',':app:compileDebugUnitTestKotlin',':app:testDebugUnitTest','--tests','dev.agentmirror.app.session.Perf16AppRecoveryA6ScenarioTest.'+method],repo/'app')
     deadline=time.monotonic()+180
     receipt=None
     while gradle.poll() is None:
@@ -149,7 +154,6 @@ try:
         if time.monotonic()>deadline: raise AssertionError('JUnit process deadline')
         time.sleep(.02)
     exits['gradle']=gradle.returncode
-    xml=repo/'app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.session.Perf16AppRecoveryA6ScenarioTest.xml'
     content=xml.read_bytes(); (root/'junit.xml').write_bytes(content)
     suite=ET.fromstring(content)
     tests=suite.findall('testcase')
@@ -159,6 +163,34 @@ try:
     if args.control=='no-abort':
         assert gradle.returncode!=0 and failures, 'abort-disabled control was not red'
         assert any('no RECONNECTING event' in (f.get('message','')+(f.text or '')) for f in failures), 'negative did not reach App loss oracle'
+        healthy=json.loads((root/'healthy-burst.json').read_text())
+        assert healthy=={'bytes':16*1024*1024,'contiguous':True,'closed':False}, healthy
+        gate=json.loads((root/'bridge-ready').read_text())
+        assert gate['stage']==args.stage and gate['ref']==env['PERF16_A6_REF']
+        if args.stage=='bridge':
+            boundary=json.loads((root/'queue-boundary').read_text())
+            assert boundary['conn']==gate['conn'] and boundary['ref']==gate['ref'] and boundary['buffered_loss']==1
+            cause='bridge: subscriber queue overflow'
+            cause_source='buffered subscriber loss boundary mapped to fixed ErrSubscriberOverflow; abort reason suppressed'
+        else:
+            boundary=json.loads((root/'writer-ready').read_text())
+            assert boundary['conn']==gate['conn'] and boundary['ref']==gate['ref']
+            records=[json.loads(line) for line in (root/'fixture.log').read_text().splitlines() if line.startswith('{')]
+            assert any(r.get('conn')==gate['conn'] and r.get('msg')=='ws: mirror queue overflow; aborting connection' for r in records), 'target WS queue did not overflow'
+            cause='ws: mirror send queue overflow'
+            cause_source='target queue-overflow log mapped to fixed errWSQueueOverflow; abort reason suppressed'
+        assert not (root/'loss.json').exists(), 'abort-disabled target published normal abort completion'
+        helper=repo/'tools/perf16-a6/perf16_a6_fixture_process_test.go'
+        recipe='accepted_number=2; PERF16_A6_CONTROL=no-abort; c.mirrorAbortOnce.Do(func(){})'
+        (root/'mutation.json').write_text(json.dumps({'mode':'no-abort','recipe':recipe,'recipe_sha256':hashlib.sha256(recipe.encode()).hexdigest(),'helper_sha256':hashlib.sha256(helper.read_bytes()).hexdigest(),'target_conn':gate['conn'],'target_ref':gate['ref'],'cause_mapping':cause,'cause_source':cause_source,'actual_abort_reason':None,'healthy':healthy,'expected_junit_failure':'no RECONNECTING event'},indent=2))
+    elif args.control=='screen-corruption':
+        assert gradle.returncode!=0 and failures, 'corrupt real screen escaped the Cell oracle'
+        assert any('cell [20,0]' in (f.get('message','')+(f.text or '')) for f in failures), 'negative did not reach the full Cell oracle'
+        assert receipt is not None, 'screen negative lacked real stage loss'
+        healthy=json.loads((root/'healthy-burst.json').read_text())
+        assert healthy=={'bytes':16*1024*1024,'contiguous':True,'closed':False}, healthy
+        recipe='PERF16_A6_CONTROL=screen-corruption; source emits ESC[21;1HX ESC[7;26H after unchanged final screen'
+        (root/'mutation.json').write_text(json.dumps({'mode':args.control,'recipe':recipe,'recipe_sha256':hashlib.sha256(recipe.encode()).hexdigest(),'source_sha256':hashlib.sha256((repo/'tools/perf16-a6/source.py').read_bytes()).hexdigest(),'target_conn':receipt['conn'],'target_ref':receipt['ref'],'actual_cause':receipt['cause'],'expected_junit_failure':'cell [20,0]','healthy':healthy},indent=2))
     else:
         assert gradle.returncode==0 and not failures, 'JUnit failed'
         assert receipt is not None, 'stage loss receipt absent'
@@ -201,7 +233,8 @@ finally:
 # Scan complete logs only AFTER fixture shutdown; exit-time race is fatal.
 fixture_log=(root/'fixture.log').read_text(errors='replace') if (root/'fixture.log').exists() else ''
 if 'DATA RACE' in fixture_log: result_error='fixture race, including shutdown phase'
-if args.control == 'candidate' and result_error is None:
+elif args.control=='shutdown-race': result_error='shutdown race control did not produce its expected race report'
+if args.control in ('candidate','screen-corruption') and result_error is None:
     try:
         loss=json.loads((root/'loss.json').read_text())
         records=[]
@@ -217,4 +250,4 @@ if exits.get('fixture')!=0 or '--- PASS: TestPerf16A6FixtureProcess' not in fixt
 if cleanup_errors: result_error=result_error or 'cleanup failed'
 (root/'result.json').write_text(json.dumps({'stage':args.stage,'control':args.control,'error':result_error,'behavior_pass':args.control=='candidate' and result_error is None},indent=2))
 if result_error: raise SystemExit(result_error)
-print('A6 candidate PASS' if args.control=='candidate' else 'A6 no-abort App oracle RED as expected')
+print('A6 candidate PASS' if args.control=='candidate' else 'A6 '+args.control+' App oracle RED as expected')

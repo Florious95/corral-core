@@ -9,6 +9,8 @@ on:
       - 'tools/perf16-a6/proxy.py'
       - 'tools/perf16-a6/run.py'
       - 'tools/perf16-a6/source.py'
+      - 'tools/perf16-a6/fault_controls.py'
+      - 'tools/perf16-a6/exit_race_control.py'
   workflow_dispatch:
     inputs:
       server_ref:
@@ -116,6 +118,24 @@ jobs:
               python3 tools/perf16-a6/run.py --stage "$stage" --control "$control" --root "$RUNNER_TEMP/perf16-a6/$control-$stage" --binary "$RUNNER_TEMP/perf16-a6/api.test"
             done
           done
+          python3 tools/perf16-a6/run.py --stage bridge --control screen-corruption --root "$RUNNER_TEMP/perf16-a6/screen-corruption" --binary "$RUNNER_TEMP/perf16-a6/api.test"
+          for fault in fixture-start proxy-start junit-assert fixture-stop; do
+            python3 tools/perf16-a6/fault_controls.py --runner tools/perf16-a6/run.py --binary "$RUNNER_TEMP/perf16-a6/api.test" --root "$RUNNER_TEMP/perf16-a6/fault-$fault" --fault "$fault"
+          done
+          python3 tools/perf16-a6/exit_race_control.py --runner tools/perf16-a6/run.py --binary "$RUNNER_TEMP/perf16-a6/api.test" --root "$RUNNER_TEMP/perf16-a6/shutdown-race"
+      - name: Existing narrow terminal reset contracts (separate from A6 screen convergence)
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'runtime'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          ./gradlew --no-daemon --rerun-tasks -Pkotlin.compiler.execution.strategy=in-process :core-terminal:test --tests dev.agentmirror.terminal.SnapshotReplayTest.replayResetsAltScreenAndStyle --tests dev.agentmirror.terminal.SnapshotReplayTest.replayDropsHalfParsedEscapeSequence 2>&1 | tee "$RUNNER_TEMP/perf16-a6/terminal-reset.log"
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse('core-terminal/build/test-results/test/TEST-dev.agentmirror.terminal.SnapshotReplayTest.xml').getroot()
+          assert suite.get('tests') == '2' and suite.get('failures') == '0' and suite.get('errors') == '0' and suite.get('skipped', '0') == '0', suite.attrib
+          assert {t.get('name') for t in suite.findall('testcase')} == {'replayResetsAltScreenAndStyle', 'replayDropsHalfParsedEscapeSequence'}
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -124,3 +144,4 @@ jobs:
             ${{ runner.temp }}/perf16-a6
             app/app/build/test-results/testDebugUnitTest
             app/app/build/reports/tests/testDebugUnitTest
+            app/core-terminal/build/test-results/test

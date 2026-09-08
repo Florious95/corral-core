@@ -47,6 +47,10 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 	}
 	model := &discovery.Model{Workspaces: []discovery.Workspace{{CWD: "/perf16", Panes: []discovery.Pane{{Socket: socket, Session: session, PaneID: pane, CWD: "/perf16", Command: "python3", Width: 120, Height: 40}}}}}
 	srv := NewServer(Options{Token: "perf16-a6-token", Discoverer: perf16A6Discoverer{model}, ListInterval: 100 * time.Millisecond, Log: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))})
+	var ownedMu sync.Mutex
+	var owned []*wsConn
+	var subscriptions []*subscription
+	var healthyFrames, targetFrames atomic.Int64
 	var accepted atomic.Int32
 	target := make(chan *wsConn, 1)
 	healthy := make(chan *wsConn, 1)
@@ -56,8 +60,35 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 	var releaseOnce sync.Once
 	unblock := func() { releaseOnce.Do(func() { close(release) }) }
 	srv.connInit = func(c *wsConn) {
+		ownedMu.Lock()
+		owned = append(owned, c)
+		ownedMu.Unlock()
 		number := accepted.Add(1)
+		c.beforeRelay = func(sub *subscription) {
+			ownedMu.Lock()
+			subscriptions = append(subscriptions, sub)
+			ownedMu.Unlock()
+			if number == 2 {
+				relay <- sub
+				if stage == "bridge" {
+					<-release
+				}
+			}
+		}
 		if number == 1 {
+			c.beforeWriterFrame = func(m wsMsg) {
+				if m.typ != wsBinary {
+					return
+				}
+				frame, err := protocol.DecodeBinary(m.data)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if frame.Kind == protocol.KindDelta {
+					healthyFrames.Add(1)
+				}
+			}
 			healthy <- c
 		}
 		if number != 2 {
@@ -69,12 +100,7 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 		if noAbort {
 			c.mirrorAbortOnce.Do(func() {})
 		}
-		c.beforeRelay = func(sub *subscription) {
-			relay <- sub
-			if stage == "bridge" {
-				<-release
-			}
-		}
+		c.mirrorForwarded = func() { targetFrames.Add(1) }
 		if stage == "ws" {
 			var first sync.Once
 			c.beforeWriterFrame = func(m wsMsg) {
@@ -97,12 +123,75 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 	stop := make(chan struct{})
 	var workers sync.WaitGroup
 	defer func() {
+		defer srv.Close()
 		close(stop)
 		unblock()
 		workers.Wait() // workers select stop at every wait; no unbounded fixture polling
-		httpServer.CloseClientConnections()
-		srv.Close()
+		// Stop acceptance, then explicitly close every owned hijacked WS.
+		// httptest.CloseClientConnections alone does not own hijacked sockets.
 		httpServer.Close()
+		ownedMu.Lock()
+		connections := append([]*wsConn(nil), owned...)
+		ownedMu.Unlock()
+		for _, c := range connections {
+			c.cancel()
+			_ = c.conn.CloseNow()
+		}
+		deadline := time.NewTimer(3 * time.Second)
+		defer deadline.Stop()
+		for _, c := range connections {
+			select {
+			case <-c.writeCtx.Done():
+			case <-deadline.C:
+				t.Error("writer exit boundary timed out")
+				return
+			}
+		}
+		ticker := time.NewTicker(time.Millisecond)
+		defer ticker.Stop()
+		for {
+			srv.trackersMu.Lock()
+			remaining := len(srv.trackers)
+			srv.trackersMu.Unlock()
+			if remaining == 0 {
+				break
+			}
+			select {
+			case <-ticker.C:
+			case <-deadline.C:
+				t.Errorf("reader/teardown still tracked: %d", remaining)
+				return
+			}
+		}
+		ownedMu.Lock()
+		subs := append([]*subscription(nil), subscriptions...)
+		ownedMu.Unlock()
+		for _, sub := range subs {
+			if sub.relayDone == nil {
+				t.Error("missing relay exit boundary")
+				continue
+			}
+			select {
+			case <-sub.relayDone:
+			case <-deadline.C:
+				t.Error("relay exit boundary timed out")
+				return
+			}
+		}
+		if os.Getenv("PERF16_A6_CONTROL") == "shutdown-race" {
+			// Deliberate test-only negative: conflict occurs in deferred
+			// shutdown, after App PASS. The final gate must still reject it.
+			var value int
+			var conflicting sync.WaitGroup
+			start := make(chan struct{})
+			conflicting.Add(2)
+			for i := 0; i < 2; i++ {
+				go func() { defer conflicting.Done(); <-start; value++ }()
+			}
+			close(start)
+			conflicting.Wait()
+			t.Logf("A6 deliberate shutdown race completed: %d", value)
+		}
 	}()
 	if err := os.WriteFile(filepath.Join(root, "endpoint"), []byte(httpServer.URL+"\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -154,6 +243,26 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 			t.Errorf("wrong target ref %q", sub.ref)
 			return
 		}
+		// Both subscriptions observe the same raw bridge chunks, starting
+		// before the source is released. A nonzero baseline is apparatus red.
+		if healthyFrames.Load() != 0 || targetFrames.Load() != 0 {
+			t.Errorf("nonzero pre-source frame baseline: healthy=%d target=%d", healthyFrames.Load(), targetFrames.Load())
+			return
+		}
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			tick := time.NewTicker(2 * time.Millisecond)
+			defer tick.Stop()
+			for {
+				write("progress.json", map[string]any{"healthy_frames": healthyFrames.Load(), "target_frames": targetFrames.Load(), "aborted": c.mirrorAborted.Load()})
+				select {
+				case <-tick.C:
+				case <-stop:
+					return
+				}
+			}
+		}()
 		write("bridge-ready", map[string]any{"stage": stage, "ref": ref, "conn": c.id})
 		// Do not charge compilation or initial App setup to the loss deadline.
 		if !awaitFile("source-go") {

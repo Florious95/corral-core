@@ -345,8 +345,8 @@ class Perf16AppRecoveryA6ScenarioTest {
             visible(vm!!.emulator.snapshot().lines[0]).contains(OLD_MARKER)
         }
         waitUntil("App READY before source loss") { manager.state() == ConnectionState.READY }
-        if (stage == "bridge") {
-            waitUntil("bridge relay gate installed") { File(required(BRIDGE_READY_ENV)).exists() }
+        waitUntil("both real relays installed with zero source baseline") {
+            File(required(BRIDGE_READY_ENV)).exists()
         }
 
         // The source's first line is deliberately held until this production
@@ -356,12 +356,20 @@ class Perf16AppRecoveryA6ScenarioTest {
         sendTmuxLine("go")
         // Fixture releases its relay/writer only at the actual stage loss
         // boundary. Source flush and proxy release are not loss evidence.
-        observer.awaitLoss(30, TimeUnit.SECONDS)
+        val observedLoss = observer.awaitLoss(30, TimeUnit.SECONDS)
         healthy!!.awaitMarker(BEGIN_MARKER, 30, TimeUnit.SECONDS)
         healthy!!.awaitMarker(END_MARKER, 30, TimeUnit.SECONDS)
         // Negative control: the independently drained healthy peer must stay
         // live while only the gated target transport is reconnecting.
         assertTrue("healthy peer must stay open while target is lost", !healthy!!.closed.get())
+        // Also run the unchanged full-byte positive oracle in the no-abort
+        // control BEFORE its expected recovery-condition assertion fails.
+        healthy!!.assertBurstContiguous(BURST_BYTES)
+        File(required("PERF16_A6_FIXTURE_DIR"), "healthy-burst.json").writeText(
+            JSONObject().put("bytes", BURST_BYTES).put("contiguous", true)
+                .put("closed", healthy!!.closed.get()).toString(),
+        )
+        assertTrue("no RECONNECTING event", observedLoss)
 
         // Advance the actual MirrorForegroundService Handler runnable.  The
         // test does not fabricate a future clock or call manager.pump/start/
@@ -398,7 +406,7 @@ class Perf16AppRecoveryA6ScenarioTest {
         // direct healthy peer must remain live and observe output afterward.
         sendTmuxLine("release")
         healthy!!.awaitMarker(AFTER_MARKER, 10, TimeUnit.SECONDS)
-        healthy!!.assertBurstContiguous(BURST_BYTES)
+        // Full contiguous bytes were verified above, before any expected red.
         assertTrue("healthy peer must not close before teardown", !healthy!!.closed.get())
         val service = serviceController!!.get()
         val handler = ReflectionHelpers.getField<android.os.Handler>(service, "handler")
@@ -463,9 +471,7 @@ class Perf16AppRecoveryA6ScenarioTest {
             reconnects.incrementAndGet()
         }
 
-        fun awaitLoss(timeout: Long, unit: TimeUnit) {
-            assertTrue("no RECONNECTING event", loss.await(timeout, unit))
-        }
+        fun awaitLoss(timeout: Long, unit: TimeUnit): Boolean = loss.await(timeout, unit)
 
         fun assertGenerations() {
             assertEquals("snapshots must cross two real dials", listOf(1, 2), snapshots.toList())
@@ -506,6 +512,7 @@ class Perf16AppRecoveryA6ScenarioTest {
         private val stream = ByteArrayOutputStream()
         private var suffix = ByteArray(0)
         private var burstStartOffset: Int? = null
+        private var deltaFrames = 0
         private var socket: WebSocket? = null
 
         fun start() {
@@ -577,6 +584,7 @@ class Perf16AppRecoveryA6ScenarioTest {
                     }
 
                     private fun recordDelta(chunk: ByteArray) {
+                        deltaFrames++
                         synchronized(stream) {
                             stream.write(chunk)
                         }
@@ -593,7 +601,8 @@ class Perf16AppRecoveryA6ScenarioTest {
                             val ack = File(System.getenv("PERF16_A6_FIXTURE_DIR"), "healthy-ack")
                             val next = File(ack.path + ".next")
                             try {
-                                next.writeText((stream.size() - start).toString())
+                                next.writeText(JSONObject().put("bytes", stream.size() - start)
+                                    .put("frames", deltaFrames).toString())
                                 check(next.renameTo(ack)) { "healthy ack atomic rename failed" }
                             } catch (error: Exception) {
                                 failure.compareAndSet(null, error)
