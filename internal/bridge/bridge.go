@@ -85,6 +85,43 @@ func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
 	return x, y, nil
 }
 
+// ScrollbackMetadata reports the current history depth and pane height in one
+// bounded tmux query. history_size excludes the visible screen; pane_height is
+// the actual current height, not discovery's stale catalog geometry.
+type ScrollbackMetadata struct {
+	HistorySize int
+	PaneHeight  int
+}
+
+// ScrollbackMetadata reads tmux's current pagination metadata without moving
+// or capturing the pane. The query is deliberately one display-message call:
+// pagination must not transfer the full history merely to count it.
+// @contract
+// @pre none — pane 存在性由 tmux 在调用时惰性判定
+// @post 返回非负 history_size 与正 pane_height
+// @err tmux 失败或元数据不是两个合法整数→对应 tmux 错误或 parse error
+// @inv none — 只读操作
+func (p *Pane) ScrollbackMetadata(ctx context.Context) (ScrollbackMetadata, error) {
+	out, err := runTmux(ctx, p.socket, p.timeout,
+		"display-message", "-p", "-t", p.target, "#{history_size} #{pane_height}")
+	if err != nil {
+		return ScrollbackMetadata{}, err
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) != 2 {
+		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse scrollback metadata %q: want history_size pane_height", strings.TrimSpace(string(out)))
+	}
+	historySize, err := strconv.Atoi(fields[0])
+	if err != nil || historySize < 0 {
+		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse history_size %q: want non-negative integer", fields[0])
+	}
+	paneHeight, err := strconv.Atoi(fields[1])
+	if err != nil || paneHeight <= 0 {
+		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse pane_height %q: want positive integer", fields[1])
+	}
+	return ScrollbackMetadata{HistorySize: historySize, PaneHeight: paneHeight}, nil
+}
+
 // Scrollback fetches one line range of the pane (capture-pane -S/-E).
 // start/end use tmux top-relative coordinates: 0 = visible screen top,
 // negative = history above it — identical to the protocol (§6.3), so callers

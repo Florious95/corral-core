@@ -165,4 +165,3 @@ func captureBytes(t *testing.T, line string) int {
 	}
 	return bytes
 }
-
