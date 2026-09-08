@@ -74,6 +74,125 @@ jobs:
           exec sleep 30
           EOF
           chmod 700 "$fixture/emit.sh"
+          cat > "$fixture/cleanup_oracle.py" <<'PY'
+          import argparse
+          import errno
+          import json
+          import os
+          import pathlib
+          import socket
+          import stat
+          import tempfile
+
+          STALE_ERRNOS = {errno.ECONNREFUSED, errno.ENOENT}
+
+          class CleanupOracleError(RuntimeError):
+              pass
+
+          def identity(path):
+              st = os.lstat(path)
+              return {"dev": st.st_dev, "ino": st.st_ino, "mode": st.st_mode,
+                      "is_socket": stat.S_ISSOCK(st.st_mode)}
+
+          def classify_errno(err):
+              if err is None:
+                  return "live"
+              if err in STALE_ERRNOS:
+                  return "stale"
+              raise CleanupOracleError(f"unexpected connect errno={err} ({os.strerror(err)})")
+
+          def connect_state(path):
+              try:
+                  before = identity(path)
+              except FileNotFoundError:
+                  return "stale", errno.ENOENT, None
+              if not before["is_socket"]:
+                  raise CleanupOracleError(f"fixture path is not a socket lstat={before}")
+              sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+              sock.settimeout(0.2)
+              try:
+                  sock.connect(path)
+              except socket.timeout as exc:
+                  raise CleanupOracleError(f"connect timeout path={path}") from exc
+              except OSError as exc:
+                  return classify_errno(exc.errno), exc.errno, before
+              else:
+                  return classify_errno(None), None, before
+              finally:
+                  sock.close()
+
+          def cleanup(path, expected, receipt):
+              path = os.path.abspath(path)
+              expected = os.path.abspath(expected)
+              if path != expected or pathlib.Path(path).parent != pathlib.Path(expected).parent:
+                  raise CleanupOracleError(f"path identity mismatch path={path} expected={expected}")
+              state, err, before = connect_state(path)
+              out = {"path": path, "expected": expected, "connect_errno": err,
+                     "connect_state": state, "lstat_before": before}
+              if state == "live":
+                  raise CleanupOracleError(json.dumps(out, sort_keys=True))
+              if before is not None:
+                  after = identity(path)
+                  out["lstat_before_delete"] = after
+                  if after != before:
+                      raise CleanupOracleError(f"fixture socket identity changed before delete: {out}")
+                  os.unlink(path)
+                  out["deleted"] = True
+              else:
+                  out["deleted"] = False
+              out["exists_after"] = os.path.lexists(path)
+              if out["exists_after"]:
+                  raise CleanupOracleError(f"fixture socket remains after cleanup: {out}")
+              pathlib.Path(receipt).write_text(json.dumps(out, sort_keys=True) + "\n")
+
+          def self_test(receipt):
+              with tempfile.TemporaryDirectory() as d:
+                  d = pathlib.Path(d)
+                  live = d / "live"
+                  listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  listener.bind(str(live)); listener.listen(1)
+                  state, err, _ = connect_state(str(live))
+                  assert (state, err) == ("live", None)
+                  listener.close(); live.unlink()
+                  stale = d / "stale"
+                  closed = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  closed.bind(str(stale)); closed.close()
+                  state, err, before = connect_state(str(stale))
+                  assert state == "stale" and err == errno.ECONNREFUSED and before["is_socket"]
+                  stale.unlink()
+                  state, err, before = connect_state(str(d / "missing"))
+                  assert state == "stale" and err == errno.ENOENT and before is None
+                  regular = d / "regular"; regular.write_text("not a socket")
+                  try:
+                      connect_state(str(regular))
+                  except CleanupOracleError:
+                      pass
+                  else:
+                      raise AssertionError("regular file was accepted")
+                  for bad in (errno.ETIMEDOUT, errno.EACCES):
+                      try:
+                          classify_errno(bad)
+                      except CleanupOracleError:
+                          pass
+                      else:
+                          raise AssertionError(f"errno {bad} was accepted")
+              pathlib.Path(receipt).write_text(json.dumps({"live": "PASS", "closed_refused": "PASS", "missing": "PASS", "regular_rejected": "PASS", "timeout_and_other_errno_rejected": "PASS"}) + "\n")
+
+          parser = argparse.ArgumentParser()
+          parser.add_argument("--self-test", action="store_true")
+          parser.add_argument("--socket")
+          parser.add_argument("--expected")
+          parser.add_argument("--receipt", required=True)
+          args = parser.parse_args()
+          if args.self_test:
+              self_test(args.receipt)
+          elif args.socket and args.expected:
+              cleanup(args.socket, args.expected, args.receipt)
+          else:
+              raise SystemExit("cleanup_oracle: --self-test or --socket/--expected required")
+          PY
+          chmod 700 "$fixture/cleanup_oracle.py"
+          python3 "$fixture/cleanup_oracle.py" --self-test --receipt "$root/cleanup-oracle-self-test.json"
           env -u TMUX TMUX_TMPDIR=. tmux -S "$fixture/socket" -f /dev/null \
             new-session -d -x 40 -y 10 -s perf14-proof "$fixture/emit.sh"
           tmux -S "$fixture/socket" list-panes -a -F '#{session_name}|#{pane_id}|#{pane_width}x#{pane_height}' \
@@ -85,6 +204,7 @@ jobs:
             test ! -e "$fixture/socket" && break
             sleep 0.05
           done
+          python3 "$fixture/cleanup_oracle.py" --socket "$fixture/socket" --expected "$fixture/socket" --receipt "$root/cleanup-oracle.json"
           test ! -e "$fixture/socket"
           printf 'fixture=PASS\n' | tee "$root/tmux-fixture.status"
 
@@ -357,6 +477,9 @@ jobs:
             ${{ runner.temp }}/perf14-r1/tmux-fixture.status
             ${{ runner.temp }}/perf14-r1/tmux-fixture-list.txt
             ${{ runner.temp }}/perf14-r1/tmux-fixture-capture.txt
+            ${{ runner.temp }}/perf14-r1/cleanup-oracle-self-test.json
+            ${{ runner.temp }}/perf14-r1/cleanup-oracle.json
+            ${{ runner.temp }}/perf14-r1/real-tmux-fixture/cleanup_oracle.py
             ${{ runner.temp }}/perf14-r1/base-file.txt
             ${{ runner.temp }}/perf14-r1/base-build-info.txt
             ${{ runner.temp }}/perf14-r1/base-sha256.txt
