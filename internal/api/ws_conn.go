@@ -193,8 +193,11 @@ func (s *Server) serveConn(conn *websocket.Conn) {
 		sendCh:          make(chan wsMsg, 256),
 		mirrorAbortDone: make(chan struct{}),
 	}
-	if s.connInit != nil {
-		s.connInit(c)
+	s.trackersMu.Lock()
+	init := s.connInit
+	s.trackersMu.Unlock()
+	if init != nil {
+		init(c)
 	}
 	s.registerTracker(c)
 	go c.writeLoop()

@@ -28,6 +28,7 @@ import (
 // loop is a single heartbeat that fans list_delta out to every live client.
 type Server struct {
 	// connInit is a test-only boundary before reader/writer goroutines start.
+	// Publish/read under trackersMu; invoke the copied callback outside the lock.
 	connInit func(*wsConn)
 
 	log *slog.Logger

@@ -165,6 +165,7 @@ for line in sys.stdin:
 			var releaseOnce, writerOnce sync.Once
 			unblock := func() { releaseOnce.Do(func() { close(release) }) }
 			var accepted atomic.Int64
+			te.wsEnv.srv.trackersMu.Lock()
 			te.wsEnv.srv.connInit = func(c *wsConn) {
 				if accepted.Add(1) != 1 {
 					return
@@ -186,6 +187,7 @@ for line in sys.stdin:
 				}
 				slowConn <- c
 			}
+			te.wsEnv.srv.trackersMu.Unlock()
 			slow := dialSameServer(t, te.wsEnv)
 			var target *wsConn
 			select {
