@@ -32,11 +32,26 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: Florious95/corral-serve
-          ref: ${{ inputs.server_ref || '1fa3b651c613f7b973b5187429d8e9e50d9d3d45' }}
-          path: serve
+      - name: Import exact private serve source without cross-repository credentials
+        env:
+          SERVER_REF: ${{ inputs.server_ref || '1fa3b651c613f7b973b5187429d8e9e50d9d3d45' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, os, pathlib, subprocess
+          source = '1fa3b651c613f7b973b5187429d8e9e50d9d3d45'
+          assert os.environ['SERVER_REF'] == source
+          pack = pathlib.Path('tools/perf16-a6/serve-source-1fa3b651.pack').read_bytes()
+          assert hashlib.sha256(pack).hexdigest() == '6f58879bab496e8bfd36523e79fa95eb9ee23a3bc6d29095e6ef67c5015be559'
+          subprocess.run(['git', 'init', 'serve'], check=True)
+          subprocess.run(['git', '-C', 'serve', 'index-pack', '--stdin'], input=pack, check=True)
+          pathlib.Path('serve/.git/shallow').write_text(source + '\n')
+          subprocess.run(['git', '-C', 'serve', 'checkout', '--detach', source], check=True)
+          assert subprocess.check_output(['git','-C','serve','rev-parse','HEAD^{tree}'], text=True).strip() == 'a0c17d659665c5a2caf823fcf69dcd89f71337ea'
+          assert not subprocess.check_output(['git','-C','serve','status','--porcelain'])
+          subprocess.run(['git','-C','serve','fsck','--connectivity-only'], check=True)
+          PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
