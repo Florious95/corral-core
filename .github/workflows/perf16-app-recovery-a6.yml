@@ -1,0 +1,111 @@
+name: perf16-app-recovery-a6
+on:
+  push:
+    branches: [test/perf16-app-recovery]
+    paths:
+      - 'app/app/src/test/java/dev/agentmirror/app/session/Perf16AppRecoveryA6ScenarioTest.kt'
+      - '.github/workflows/perf16-app-recovery-a6.yml'
+      - 'tools/perf16-a6/perf16_a6_fixture_process_test.go'
+      - 'tools/perf16-a6/proxy.py'
+      - 'tools/perf16-a6/run.py'
+      - 'tools/perf16-a6/source.py'
+  workflow_dispatch:
+    inputs:
+      server_ref:
+        description: Exact 40-character serve commit (compile may use provisional N7)
+        required: true
+        type: string
+      mode:
+        description: Compile-only is not behavioral acceptance
+        type: choice
+        options: [compile-only, runtime]
+        default: compile-only
+      final_server_identity:
+        description: Runtime only; repeat the approved final N7 exact commit
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  a6:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: Florious95/corral-serve
+          ref: ${{ inputs.server_ref || '1fa3b651c613f7b973b5187429d8e9e50d9d3d45' }}
+          path: serve
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: serve/go.mod
+          cache: false
+      - name: Freeze exact identities and stage test helper
+        env:
+          SERVER_REF: ${{ inputs.server_ref || '1fa3b651c613f7b973b5187429d8e9e50d9d3d45' }}
+          FINAL_SERVER_IDENTITY: ${{ inputs.final_server_identity }}
+          A6_MODE: ${{ inputs.mode || 'compile-only' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SERVER_REF" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git -C serve rev-parse HEAD)" = "$SERVER_REF"
+          if [ "$A6_MODE" = runtime ]; then test "$FINAL_SERVER_IDENTITY" = "$SERVER_REF"; fi
+          mkdir -p "$RUNNER_TEMP/perf16-a6"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          def git(*args): return subprocess.check_output(['git',*args], text=True).strip()
+          files = list(pathlib.Path('tools/perf16-a6').glob('*'))
+          files += [pathlib.Path('app/app/src/test/java/dev/agentmirror/app/session/Perf16AppRecoveryA6ScenarioTest.kt'), pathlib.Path('.github/workflows/perf16-app-recovery-a6.yml')]
+          receipt = {'core':git('rev-parse','HEAD'),'core_tree':git('rev-parse','HEAD^{tree}'), 'serve':git('-C','serve','rev-parse','HEAD'), 'serve_tree':git('-C','serve','rev-parse','HEAD^{tree}'),'files':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in files if p.is_file()},'mode':os.environ['A6_MODE']}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'perf16-a6','identity.json').write_text(json.dumps(receipt,indent=2))
+          PY
+          cp tools/perf16-a6/perf16_a6_fixture_process_test.go serve/internal/api/
+      - name: Prepare ephemeral debug signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
+          fi
+      - name: Compile Go test fixture only (zero tests)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd serve
+          go test -race -count=1 -c -o "$RUNNER_TEMP/perf16-a6/api.test" ./internal/api 2>&1 | tee "$RUNNER_TEMP/perf16-a6/go-compile.log"
+          test -x "$RUNNER_TEMP/perf16-a6/api.test"
+      - name: Compile Android unit-test source only (zero tests)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          ./gradlew --no-daemon --rerun-tasks -Pkotlin.compiler.execution.strategy=in-process :app:compileDebugUnitTestKotlin 2>&1 | tee "$RUNNER_TEMP/perf16-a6/kotlin-compile.log"
+          printf '%s\n' '{"compile_only":true,"behavior_pass":false,"executed_tests":0}' > "$RUNNER_TEMP/perf16-a6/compile.json"
+      - name: Real Go and App stages plus abort-disabled negative controls
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'runtime'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v tmux >/dev/null; then brew install tmux; fi
+          tmux -V
+          for control in candidate no-abort; do
+            for stage in bridge ws; do
+              python3 tools/perf16-a6/run.py --stage "$stage" --control "$control" --root "$RUNNER_TEMP/perf16-a6/$control-$stage" --binary "$RUNNER_TEMP/perf16-a6/api.test"
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf16-app-recovery-a6-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/perf16-a6
+            app/app/build/test-results/testDebugUnitTest
+            app/app/build/reports/tests/testDebugUnitTest
