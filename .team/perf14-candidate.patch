@@ -565,7 +565,7 @@ index 0000000..9ff536b
 +}
 diff --git a/internal/api/scrollback_range_test.go b/internal/api/scrollback_range_test.go
 new file mode 100644
-index 0000000..bd3eb70
+index 0000000..95792d1
 --- /dev/null
 +++ b/internal/api/scrollback_range_test.go
 @@ -0,0 +1,72 @@
@@ -592,7 +592,7 @@ index 0000000..bd3eb70
 +		{name: "empty history request", history: 0, height: 10, from: -20, count: 10, wantStart: 0, wantEnd: -1},
 +		{name: "empty history screen", history: 0, height: 10, from: 0, count: 10, wantStart: 0, wantEnd: 9},
 +		{name: "minimum from line", history: 26, height: 10, from: minInt32, count: 1, wantStart: -26, wantEnd: -26},
-+		{name: "maximum from line", history: 26, height: 10, from: maxInt32, count: 1, wantStart: 5, wantEnd: 9},
++		{name: "maximum from line", history: 26, height: 10, from: maxInt32, count: 1, wantStart: 9, wantEnd: 9},
 +		{name: "maximum count spans all", history: 26, height: 10, from: minInt32, count: maxUint32, wantStart: -26, wantEnd: 9},
 +		{name: "negative history", history: -1, height: 10, from: 0, count: 1, wantErr: true},
 +		{name: "zero height", history: 0, height: 0, from: 0, count: 1, wantErr: true},
