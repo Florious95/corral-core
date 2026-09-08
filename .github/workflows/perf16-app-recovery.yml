@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - test/perf16-app-recovery
+    paths-ignore:
+      - 'app/app/src/test/java/dev/agentmirror/app/session/Perf16AppRecoveryA6ScenarioTest.kt'
+      - '.github/workflows/perf16-app-recovery-a6.yml'
+      - 'tools/perf16-a6/perf16_a6_fixture_process_test.go'
+      - 'tools/perf16-a6/proxy.py'
+      - 'tools/perf16-a6/run.py'
+      - 'tools/perf16-a6/source.py'
   workflow_dispatch:
 
 permissions:
