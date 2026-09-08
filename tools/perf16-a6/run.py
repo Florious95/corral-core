@@ -182,7 +182,10 @@ try:
             'ws':'realGoServerTmuxWsQueueOverflow_servicePumpReauthListSubscribeClearsStaticScreen'}[args.stage]
     xml=repo/'app/app/build/test-results/testDebugUnitTest/TEST-dev.agentmirror.app.session.Perf16AppRecoveryA6ScenarioTest.xml'
     xml.unlink(missing_ok=True)  # prior stage is already archived; never accept stale JUnit XML
-    gradle=spawn('gradle',['./gradlew','--no-daemon','--rerun-tasks','-Pkotlin.compiler.execution.strategy=in-process','-x',':app:compileDebugKotlin','-x',':app:compileDebugUnitTestKotlin',':app:testDebugUnitTest','--tests','dev.agentmirror.app.session.Perf16AppRecoveryA6ScenarioTest.'+method],repo/'app')
+    # Keep producer tasks in this invocation's graph: AGP resource providers
+    # cannot resolve Kotlin outputs when their producer is excluded with -x.
+    # All original fixture/JUnit/source deadlines remain unchanged.
+    gradle=spawn('gradle',['./gradlew','--no-daemon','--rerun-tasks','-Pkotlin.compiler.execution.strategy=in-process',':app:testDebugUnitTest','--tests','dev.agentmirror.app.session.Perf16AppRecoveryA6ScenarioTest.'+method],repo/'app')
     deadline=time.monotonic()+180
     receipt=None
     while gradle.poll() is None:
@@ -197,6 +200,7 @@ try:
         if time.monotonic()>deadline: raise AssertionError('JUnit process deadline')
         time.sleep(.02)
     exits['gradle']=gradle.returncode
+    assert xml.is_file(), f'Gradle exited {gradle.returncode} without named JUnit XML; see gradle.log (pre-JUnit execution failure)'
     content=xml.read_bytes(); (root/'junit.xml').write_bytes(content)
     validate_a6_junit(content, method, args.control if args.control in ('no-abort', 'screen-corruption') else None)
     if args.control=='no-abort':
