@@ -1,0 +1,105 @@
+name: perf16-n7-publication
+on:
+  pull_request:
+    paths:
+      - .github/workflows/perf16-n7-publication.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  n7:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4769dbfae7b976de5a74650b1aeb96ed23260814
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Apply exact N7 patch to frozen delivery base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/perf16-n7"
+          python3 - <<'PYTHON'
+          import base64,gzip,hashlib,os,subprocess
+          from pathlib import Path
+          patch=gzip.decompress(base64.b64decode('H4sIAAAAAAAC/6VYW2/buBJ+jn8F18AeyLFMx6njJG4LNE27pwGybdFmt48BLVG2TmRSS1JxgsD//cwMKVl2LnsLWkUihzOc2zczSfMsY4PBPHdMDHPlpFGiGIoyH+pbabJCr66NTPD9/rqsZkWeCJdrde2kdXyu2ewfHOoouWJZXki21Klko4ODyXjcyVUq79iB/+F88krIdCw7g8GADVN5O1RVUXT6/f4/E/nuHRscxAesP4pHByfs3btOvxTJjZhLBkw6/U4/X5baOBZ1+nvdRIOEO9fFdyXdcOFcufVBD+RNq9aZXM2tf79XSfMyFE4vc/+N1EDl3/Ol7KLQvS5YflHNeKKXwwSsYYYrObM6uZHIuoc0wyG7Wkj26erqK1sIlRbSMCNFspCWOdiAyyqZoLYszW0pXLJgqwWad6H1DWtZg+WW2MFFioIVKCXl7EMuCthhWhX3zBmhLBnCSleVU1wAMmN/rTwn24gVRTGDPeII12K5s7BYusrIFEQIJzldvCaES0t0HB4XjsTTuTlQ1tIXkthlubGupdhrJlgBZIaJCmiUQ4VASkv1ZQUnSqMTCesYS6WEh3LFPe/0s0ol7AoccA4HLlTuvm6McqbS83DDC6sLWosc2w/+4lc99gCOsuaWTd+yz3L1XRoIs+hLiZT24UrfSDVl5N+Bw49uzC71fIreSIRJ4X0O9L01eHNPJIks8erAayluZJSAS8Fapkrcwzpmh0i0CMLqIOMbqbjEP/ko+AW0ilC1aEWk/JsE1ykrf5gcbBUzw/bD+h8VsPGK7KHRYiaNQRFNtPEzulm0gmMx+8/ueq3tBbBPwMPfb/Lyd2ny7B5DpJKk3F6eEd+f3jKVF17anoE4Mgpf1/hoDPBm0Kj9QDugNLeoJTopwlsiz3UPn0YWUlj5tNWQ4FYYiqgvpWWYefyHyN1/ja7KsBk4fFGJ9AT4BnuVmlEkAmcyJRipTcs/6KhZTwptZRR2e2wN/3xk8E2W8EvgFuGVfH4hYzQQLDh+DidVVTYcg80CpbfXDrvfVFEz9AYMF/YrSHxOt6LPxc73/3Sunos1IgAEb7QL5iPLRb3XQVvPAjT1HMUKdt/rSqXC3EcuZn4/Zt02zpBFdSmN/0y82l3vT3ikCDkbi++v7Ed16/V3/JMsSswXilV3FwOAgCOIPuAy/wGgeQUYqisX1WvvwWRzgzeLejE72keM5d+hJqiUWKUyA/zwvAJzSoTrJ3IBITEi2d2V7fYDvvMrky+/GpnldxFZ+rdvl0BBxQFEQsg/mwSO/yIc8ISNjScfxwO7ZqSk8k78rFcRhhkS+zSCxERTPTjIupjBHab4iNmCXhf0juen9EQp+N/DKWiIdifdH7mxTkvQZ6vQNOk6k5k2j0sK+ZT4f0RsRwaWbB4+n4m9+IU0xnphma+c/EK5yRg2msIC/A5C0iUBzFkIpAQDCcEjZBYUkouMNZACVeEW4Hm7ejWVskjBxa1qFwNZjgVNKe0CNyjSZSGxrn3WENQ5lJeBzaGFgbZgpQ2EvIEKjnwS1KuaQQVxlZMMTBfYLWRyw5HdrSgq+U2KHQtBaxOzEXm8zsezNI1Gu9lKUeVDuqb7oFVI+2chKYilVAoG/TPMaV0UEJs+KIAD/gAWJi7UFQTohv+bQXNwSnwgLfwmJMZoEjSAHPhojDZZ1G083AYSOvH2Z4iqlVBuNIHSSkv+autG7JtBQGUvC3x1xjKRF8CwRp8a1Xf8L28lWD1jZPtEG+giXc0DrTBYyCKl0AlXKg0egV4H+50doMuMXtZRgr3DUwXQrnLs0CjKg29b9ht5BTz2tvPKa9zo2Rw4bB/YSr0a9URVuGlAITI22rppybCPTFH7Ssm7EpTfaqu6DVqt20mIHnxc+VphEyoaJKYo6LKPAGcbM7qh49tpFYHFhj/dxWv4MpZtWQF4hzMN89l9KawF3rttJrWiLTEcu02SAQHiHXapBdQXjOHDul4RsmctoyZwF9cE7WE33jrbC8Zs13G6SCNt3Un/xlRmE6mEyfVfH8l2T4TRazw+nZxmI86T2eE4PZ7VgxlOYH/7Fn9tUnt0Cse00eQonsCgBr+OYVAj8CygyYAkhM7NcusAqqcdRti01diBwanz3WnykPLftnm1tKYe7tQnCATJqTbzp8GX7ZK8WL2QGoOuFlcDBWJnvV0DC9nsZEI2Ozn+U5vteWX2LHiCyiLAekJL6xf1aLKbhcN1En4XSxmmE0i++nivMZkTZi5drZ0/XpeN5wOdyrZ5Ip6bjRC2r06PD0fjU86PX2Xj05OjF8J2c/SJ6NxsokEPT9Ce8CRzNn8bYFQVdInzsmAWMB6bBymMm0mYaWmwzWCCBuNbd53KwgkGTSpzGguNuYf1WxlaB95h7r6UzNsutEHkXGo1QnSQIJotaUKeBZyr+zEAcPqjAcU9m2togKHyQJGDAdw4LEDA7Ksf3IdIDDgPB1qw+jr0ReFvCWUuW1AJ3KjBwT10P9x5r7kahW0dtB0GW4Wes32IjTn3Q+8L/l3Za2p0Hzt4sxM8fHwgxuOjhHNxcnQ0Ojx+wcOts0+4uLVLSXP6Kj6BpIFfoxFlDf6ZILJs37ukx7bHUQjhZkJoJaqVKj1fTFnzs+nmVvZXO4eh/mjSi5F0mWP9PZtBMGG3Nn2yNQbCdWeA2W83INFMEwMQ2CxHCRWrJ3u9HI9Bim6od0lb9RqE5VticI4JAhghhuVGziGopbnyHPwWuC/hFH2XkBbA6/+a5sstURQAAA=='))
+          assert hashlib.sha256(patch).hexdigest()=='69393d2ece28c34f47e5da56fd0074f8b6621be9303312b480d411af7bc3db55'
+          out=Path(os.environ['RUNNER_TEMP'])/'perf16-n7'
+          (out/'n7.patch').write_bytes(patch)
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()=='4769dbfae7b976de5a74650b1aeb96ed23260814'
+          subprocess.run(['git','apply','--index',str(out/'n7.patch')],check=True)
+          expected={'internal/api/server.go': '73f4985df9184cbcb5ada12d2089053aa77caac0', 'internal/api/ws_conn.go': 'a8551277f363f9e8ee344bdceffbb23b0956479c', 'internal/api/overflow_recovery_scenario_test.go': 'cb24d7bddb5c7c34298ee691a6ba03b9f2168d48', 'internal/api/overflow_recovery_publication_test.go': '63aed4e46927208ad752f1a8f3de715cc05102c4'}
+          for path,blob in expected.items():
+              assert subprocess.check_output(['git','rev-parse',':'+path],text=True).strip()==blob
+          (out/'identity.txt').write_text('source_sha='+subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()+'\ntested_tree='+subprocess.check_output(['git','write-tree'],text=True).strip()+'\npatch_sha256='+hashlib.sha256(patch).hexdigest()+'\n')
+          PYTHON
+      - name: Compile only
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          go test -race -count=1 -run '^$' ./internal/api > "$RUNNER_TEMP/perf16-n7/compile.log" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/perf16-n7/compile.log"
+          printf 'mode=compile_only_zero_tests\nexit=%s\n' "$rc" > "$RUNNER_TEMP/perf16-n7/compile.receipt"
+          exit "$rc"
+      - name: Install hosted tmux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+          tmux -V
+      - name: Run N7 publication and unchanged two stage scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          while read -r label pattern parent; do
+            log="$RUNNER_TEMP/perf16-n7/$label.log"
+            set +e
+            go test -race -count=1 -timeout 120s ./internal/api -run "$pattern" -v > "$log" 2>&1
+            rc=$?
+            set -e
+            cat "$log"
+            printf 'label=%s pattern=%s exit=%s\n' "$label" "$pattern" "$rc" >> "$RUNNER_TEMP/perf16-n7/tests.receipt"
+            if [ "$rc" -ne 0 ] || [ "$(grep -c "^--- PASS: $parent " "$log")" -ne 1 ] || grep -q -- '--- SKIP:' "$log"; then failed=1; fi
+            if [ "$label" != publication ] && ! grep -q -- "--- PASS: $parent/$label " "$log"; then failed=1; fi
+          done <<'TESTS'
+          publication ^TestConnInitPublicationAndCallbackIsolation$ TestConnInitPublicationAndCallbackIsolation
+          bridge ^TestOverflowDisconnectReplayStaticOracle$/^bridge$ TestOverflowDisconnectReplayStaticOracle
+          ws ^TestOverflowDisconnectReplayStaticOracle$/^ws$ TestOverflowDisconnectReplayStaticOracle
+          TESTS
+          exit "$failed"
+      - name: Reject callback invocation under publication lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          p=Path('internal/api/ws_conn.go')
+          s=p.read_text()
+          old='\ts.trackersMu.Unlock()\n\tif init != nil {\n\t\tinit(c)\n\t}'
+          new='\tif init != nil {\n\t\tinit(c)\n\t}\n\ts.trackersMu.Unlock()'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new,1))
+          PYTHON
+          git diff > "$RUNNER_TEMP/perf16-n7/lock-held.diff"
+          set +e
+          go test -race -count=1 -timeout 60s ./internal/api -run '^TestConnInitPublicationAndCallbackIsolation$' -v > "$RUNNER_TEMP/perf16-n7/lock-held.log" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/perf16-n7/lock-held.log"
+          printf 'mutation=callback_lock_held exit=%s\n' "$rc" > "$RUNNER_TEMP/perf16-n7/mutation.receipt"
+          test "$rc" -ne 0
+          grep -q '^--- FAIL: TestConnInitPublicationAndCallbackIsolation ' "$RUNNER_TEMP/perf16-n7/lock-held.log"
+          git restore --worktree -- internal/api/ws_conn.go
+          git diff --exit-code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf16-n7-${{ github.run_id }}
+          path: ${{ runner.temp }}/perf16-n7
