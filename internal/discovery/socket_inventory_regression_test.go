@@ -2,10 +2,13 @@ package discovery
 
 import (
 	"context"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 // TestDiscoverIncludesEveryCurrentUserSocket is a credential-free fixture for
@@ -134,4 +137,89 @@ func TestDiscoverIncludesTeamSocketWithSamePaneIdentity(t *testing.T) {
 	if len(seenRefs) != 3 {
 		t.Fatalf("refs = %d, want 3 distinct socket-qualified refs: %v", len(seenRefs), seenRefs)
 	}
+}
+
+// TestIssue10ScopedLifecycle follows one real, isolated directory across a
+// server exit and recreation. It checks socket identity rather than counts
+// alone and records the fixture's actual socket path before discovery.
+func TestIssue10ScopedLifecycle(t *testing.T) {
+	root := testSocketRoot(t)
+	dir := testSocketDir(t, root)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cwd := t.TempDir()
+	names := []string{"default", "ordinary", "ta-owned-fixture"}
+	sockets := make([]string, 0, len(names))
+	tmux := func(socket string, args ...string) string {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "tmux", append([]string{"-S", socket}, args...)...)
+		cmd.Env = append(envWithout(os.Environ(), "TMUX"), "TMUX_TMPDIR="+root)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("owned tmux %v: %v: %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	for _, name := range names {
+		socket := filepath.Join(dir, name)
+		sockets = append(sockets, socket)
+		tmux(socket, "new-session", "-d", "-s", "same-session", "-c", cwd)
+		actual := tmux(socket, "display-message", "-p", "#{socket_path}")
+		if actual != socket {
+			t.Fatalf("socket escaped: got %q want %q", actual, socket)
+		}
+		t.Cleanup(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "tmux", "-S", socket, "kill-server")
+			cmd.Env = envWithout(os.Environ(), "TMUX")
+			_ = cmd.Run()
+			conn, err := net.DialTimeout("unix", socket, time.Second)
+			if err == nil {
+				conn.Close()
+				t.Errorf("owned listener remains: %s", socket)
+			}
+		})
+	}
+	t.Setenv("TMUX", "")
+	createStaleSocket(t, filepath.Join(dir, "stale"))
+	check := func(want []string) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		model, err := DiscoverWithDirs(ctx, discardLogger(), []string{dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]bool{}
+		for _, ws := range model.Workspaces {
+			for _, pane := range ws.Panes {
+				if pane.PaneID != "%0" || pane.Session != "same-session" {
+					t.Fatalf("unexpected pane: %+v", pane)
+				}
+				ref := pane.Socket + "\x1f" + pane.PaneID
+				if got[ref] {
+					t.Fatalf("duplicate ref %q", ref)
+				}
+				got[ref] = true
+			}
+		}
+		if len(got) != len(want) {
+			t.Fatalf("refs=%v want=%v", got, want)
+		}
+		for _, socket := range want {
+			if !got[socket+"\x1f%0"] {
+				t.Fatalf("missing owned socket %s: %v", socket, got)
+			}
+		}
+		t.Logf("exact refs=%v", got)
+	}
+	check(sockets)
+	tmux(sockets[1], "kill-server")
+	check([]string{sockets[0], sockets[2]})
+	tmux(sockets[1], "new-session", "-d", "-s", "same-session", "-c", cwd)
+	check(sockets)
 }
