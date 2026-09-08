@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import re
 import sys
+from ownership import execute, adopted_negative_control
 
 assert os.environ.get('GITHUB_ACTIONS') == 'true', 'hosted execution only'
 carrier = Path.cwd()
@@ -37,16 +38,16 @@ candidate = checkout('candidate')
 apply_candidate(candidate)
 (root/'identity.json').write_text(json.dumps({'carrier':cmd(['git','rev-parse','HEAD']), 'base':base,'tested_tree':expected_tree,'patch_sha256':hashlib.sha256(patch.read_bytes()).hexdigest(),'status':'unverified_before_execution'},indent=2))
 # The compile-only gate proves no behavior. Never use zero matching tests as green.
-with (root/'compile.log').open('wb') as log:
-    code = subprocess.run(['go','test','-race','-count=1','-run','^$','./internal/api','./internal/bridge','./internal/protocol'],cwd=candidate,stdout=log,stderr=subprocess.STDOUT,timeout=300).returncode
+compiled = execute(['go','test','-race','-count=1','-run','^$','./internal/api','./internal/bridge','./internal/protocol'],candidate,root/'compile.log',root/'compile-cleanup.json',300)
+code = compiled['exit']
 (root/'compile.json').write_text(json.dumps({'exit':code,'executed_tests':0,'behavior_pass':False}))
 assert code == 0, 'candidate compile failed; no behavior classification'
 
 def run(label, path, package, pattern, names, red=None):
     log = root/(label+'.jsonl')
     command = ['go','test','-race','-count=1','-timeout','120s','-json',package,'-run',pattern]
-    with log.open('wb') as output:
-        code = subprocess.run(command,cwd=path,stdout=output,stderr=subprocess.STDOUT,timeout=150).returncode
+    lifecycle = execute(command,path,log,root/(label+'-cleanup.json'),150)
+    code = lifecycle['exit']
     records=[]
     for line in log.read_text().splitlines():
         try: records.append(json.loads(line))
@@ -56,7 +57,7 @@ def run(label, path, package, pattern, names, red=None):
     failures={r.get('Test') for r in records if r.get('Action')=='fail' and r.get('Test')}
     skips={r.get('Test') for r in records if r.get('Action')=='skip'}
     output=''.join(r.get('Output','') for r in records)
-    accepted = not skips and set(names)<=ran and 'DATA RACE' not in output and 'panic:' not in output
+    accepted = not lifecycle['external_timeout'] and code is not None and not skips and set(names)<=ran and 'DATA RACE' not in output and 'panic:' not in output
     if red:
         # Only the declared assertion leaf and its ancestors may fail.
         allowed=set()
@@ -67,11 +68,27 @@ def run(label, path, package, pattern, names, red=None):
         accepted &= code != 0 and bool(failures) and failures<=allowed and set(names)<=failures and len(diagnostics)==1 and red in diagnostics[0]
     else:
         accepted &= code == 0 and not failures and set(names)<=passed
-    receipt={'label':label,'command':command,'exit':code,'ran':sorted(n for n in ran if n),'passed':sorted(n for n in passed if n),'failed':sorted(failures),'skipped':sorted(n for n in skips if n),'expected_red':red,'accepted_scoped_result':bool(accepted),'tree':cmd(['git','write-tree'],path)}
+    receipt={'label':label,'cleanup':label+'-cleanup.json','command':command,'exit':code,'ran':sorted(n for n in ran if n),'passed':sorted(n for n in passed if n),'failed':sorted(failures),'skipped':sorted(n for n in skips if n),'expected_red':red,'accepted_scoped_result':bool(accepted),'tree':cmd(['git','write-tree'],path)}
     # Mutations are unstaged and have their exact diff archived independently.
     receipts.append(receipt)
     (root/'receipts.json').write_text(json.dumps(receipts,indent=2))
     if not accepted:failed.append(label)
+
+# Real fixture failures are apparatus controls, never product negative controls.
+for fault in ('go-timeout','outer-timeout','fixture-start','handoff-intent','handoff-post'):
+    label='apparatus-'+fault
+    log=root/(label+'.jsonl')
+    command=['go','test','-race','-count=1','-timeout','2s' if fault=='go-timeout' else '120s','-json','./internal/api','-run','^TestListScanBlockedKnownSubscribeGetsSnapshot$/^Discover$']
+    outcome=execute(command,candidate,log,root/(label+'-cleanup.json'),150,fault)
+    raw=log.read_text()
+    expected = ('panic: test timed out after 2s' in raw and outcome['exit'] not in (None,0)) if fault=='go-timeout' else outcome['external_timeout'] if fault=='outer-timeout' else ('intentional fixture-start failure' in raw and outcome['exit'] not in (None,0))
+    if fault.startswith('handoff-'):
+        expected=outcome['external_timeout'] and outcome['enrollment_sealed'] and any(p['group'] != outcome['owner']['group'] for x in outcome['fixtures'] for p in x.get('processes',[])) and any(x.get('handoff')==fault.removeprefix('handoff-') and x.get('cleanup_started') for x in outcome['fixtures'])
+    accepted=expected and outcome['fixture_registered'] and outcome['cleanup_proven']
+    (root/(label+'.json')).write_text(json.dumps({'apparatus_control':True,'behavior_pass':False,'expected_fault_observed':expected,'cleanup_proven':outcome['cleanup_proven'],'accepted':accepted},indent=2))
+    assert accepted, 'apparatus fault control failed; stop wave: '+fault
+
+adopted_negative_control(candidate,root)
 
 old = checkout('old-base')
 relative='internal/api/scan_reader_boundary_test.go'
@@ -82,7 +99,7 @@ for menu,parent in [('list','TestListScanBlockedKnownSubscribeGetsSnapshot'),('l
         run('base-red-'+menu+'-'+stage,old,'./internal/api','^'+parent+'$/^'+stage+'$',[name],red='catalog gate blocked known-ref SNAPSHOT')
 
 parents=['TestListScanBlockedKnownSubscribeGetsSnapshot','TestLevel2ScanBlockedKnownSubscribeGetsSnapshot','TestScanSingleFlightAndOnePendingGeneration','TestCatalogSnapshotSequenceAtomicCommit','TestListReplyDeltaWatermarkContinuity','TestLevel2WorkspaceEpochRejectsOldCompletion','TestScanWaiterDeadlineCancelAndOverload','TestScanCoordinatorShutdownAndIdle']
-children={parents[0]:['Discover','Sample'], parents[1]:['Discover','Sample'], parents[4]:['slow-peer'], parents[6]:['per-connection','global','deadline','scan-deadline','cancel-one-preserves-other'], parents[7]:['Discover','Sample','pending-List-gets-real-close','zero-auth-zero-L2']}
+children={parents[0]:['Discover','Sample'], parents[1]:['Discover','Sample'], parents[4]:['slow-peer'], parents[5]:['before-new-completion','after-new-completion'], parents[6]:['queued-deadline','timely-duplicate-writes','per-connection','global','deadline','scan-deadline','cancel-one-preserves-other'], parents[7]:['Discover','Sample','pending-List-gets-real-close','zero-auth-zero-L2']}
 for name in parents:
     run('candidate-'+name,candidate,'./internal/api','^'+name+'$',[name]+[name+'/'+child for child in children.get(name,[])])
 
@@ -118,8 +135,10 @@ for mutation,name,assertion in mutants:
     diff=subprocess.check_output(['git','diff'],cwd=mutant)
     (root/('mutation-'+mutation+'.diff')).write_bytes(diff)
     (root/('mutation-'+mutation+'.sha256')).write_text(hashlib.sha256(diff).hexdigest()+'\n')
-    pattern='/'.join('^'+part+'$' for part in name.split('/'))
-    run('mutation-'+mutation,mutant,'./internal/api',pattern,[name],red=assertion)
+    selected = [name+'/'+order for order in ('before-new-completion','after-new-completion')] if mutation in ('writer-epoch','completion-epoch') else [name]
+    for leaf in selected:
+        pattern='/'.join('^'+part+'$' for part in leaf.split('/'))
+        run('mutation-'+mutation+'-'+leaf.split('/')[-1],mutant,'./internal/api',pattern,[leaf],red=assertion)
 
 (root/'result.json').write_text(json.dumps({'failed_gates':failed,'all_scoped_gates_accepted':not failed,'final_product_acceptance':False,'fixed_performance_baseline':'b98504e742ed1e7c7475767c512934b07eac592b'},indent=2))
 if failed:raise SystemExit('failed gates: '+', '.join(failed))
