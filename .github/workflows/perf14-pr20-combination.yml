@@ -1,0 +1,197 @@
+name: perf14-pr20-source-combination
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "internal/api/**"
+      - "internal/bridge/**"
+      - ".team/perf14-candidate.patch"
+      - ".team/perf14-author-tests.patch"
+      - ".github/workflows/perf14-pr20-combination.yml"
+
+permissions:
+  contents: read
+
+env:
+  BASE_SHA: b98504e742ed1e7c7475767c512934b07eac592b
+  PR20_SOURCE_SHA: 1fa3b651c613f7b973b5187429d8e9e50d9d3d45
+  CANDIDATE_PATCH: .team/perf14-candidate.patch
+  CANDIDATE_PATCH_SHA256: cd19bfbb484ac6b010d44f69e8f327ce8cb5dbe428eb2a7277a0a16942522d6b
+  AUTHOR_TEST_PATCH: .team/perf14-author-tests.patch
+  AUTHOR_TEST_PATCH_SHA256: 29a74876424cd086693ca43a3b60967f6690d97f6f23506dc1eba7c3154d616a
+  EXPECTED_COMBO_TREE: 4049519ea481d6245f6a6de77f17d8f90a968b65
+  EXPECTED_FINAL_TEST_TREE: c4f516769e4d07bffc359f980ff2fa9b5c2114ca
+  EXPECTED_WS_HANDLER_BLOB: 4c09f523e85c63643effeecb48246f6da20856a3
+  EXPECTED_BRIDGE_BLOB: f458bc6e30d6918fd8c2e9c30eceb3af9a9ec19d
+
+jobs:
+  perf14-pr20:
+    name: PERF14 on exact PR20 source combination
+    runs-on: macos-14
+    timeout-minutes: 35
+    steps:
+      - name: Checkout PR24 carrier head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Go from module
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Ensure hosted tmux
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v tmux >/dev/null 2>&1; then brew install tmux; fi
+          command -v tmux
+          tmux -V
+          command -v python3
+
+      - name: Verify carrier and source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          test -f "$CANDIDATE_PATCH"
+          test "$(shasum -a 256 "$CANDIDATE_PATCH" | awk '{print $1}')" = "$CANDIDATE_PATCH_SHA256"
+          test -f "$AUTHOR_TEST_PATCH"
+          test "$(shasum -a 256 "$AUTHOR_TEST_PATCH" | awk '{print $1}')" = "$AUTHOR_TEST_PATCH_SHA256"
+          git fetch origin "$PR20_SOURCE_SHA"
+          mkdir -p "$RUNNER_TEMP/perf14-combo"
+          printf 'carrier_head=%s\nsource=%s\npatch=%s\npatch_sha256=%s\n' \
+            "$(git rev-parse HEAD)" "$PR20_SOURCE_SHA" "$CANDIDATE_PATCH" "$CANDIDATE_PATCH_SHA256" \
+            | tee "$RUNNER_TEMP/perf14-combo/checkout.txt"
+
+      - name: Build exact PR20 plus PERF14 synthetic tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          combo="$RUNNER_TEMP/perf14-combo-tree"
+          git worktree add --detach "$combo" "$PR20_SOURCE_SHA"
+          git -C "$combo" apply --check "$GITHUB_WORKSPACE/$CANDIDATE_PATCH"
+          git -C "$combo" apply "$GITHUB_WORKSPACE/$CANDIDATE_PATCH"
+          git -C "$combo" add -- internal/api internal/bridge
+          git -C "$combo" diff --cached --check
+          product_tree=$(git -C "$combo" write-tree)
+          test "$product_tree" = "$EXPECTED_COMBO_TREE"
+          test "$(git -C "$combo" hash-object internal/api/ws_handler.go)" = "$EXPECTED_WS_HANDLER_BLOB"
+          test "$(git -C "$combo" hash-object internal/bridge/bridge.go)" = "$EXPECTED_BRIDGE_BLOB"
+          test -f "$combo/internal/api/perf14_independent_oracle_test.go"
+          test -f "$combo/internal/api/perf14_real_page_oracle_test.go"
+          test -f "$combo/internal/api/scrollback_range_test.go"
+          git -C "$combo" apply --check "$GITHUB_WORKSPACE/$AUTHOR_TEST_PATCH"
+          git -C "$combo" apply "$GITHUB_WORKSPACE/$AUTHOR_TEST_PATCH"
+          git -C "$combo" add -- internal/api/scrollback_page_metadata_test.go
+          git -C "$combo" diff --cached --check
+          final_tree=$(git -C "$combo" write-tree)
+          test "$final_tree" = "$EXPECTED_FINAL_TEST_TREE"
+          test -f "$combo/internal/api/scrollback_page_metadata_test.go"
+          printf 'source_sha=%s\nproduct_patch_sha=%s\nauthor_test_patch_sha=%s\nproduct_combo_tree=%s\nfinal_tested_tree=%s\nws_handler_blob=%s\nbridge_blob=%s\n' \
+            "$PR20_SOURCE_SHA" "$CANDIDATE_PATCH_SHA256" "$AUTHOR_TEST_PATCH_SHA256" \
+            "$product_tree" "$final_tree" \
+            "$(git -C "$combo" hash-object internal/api/ws_handler.go)" \
+            "$(git -C "$combo" hash-object internal/bridge/bridge.go)" \
+            | tee "$RUNNER_TEMP/perf14-combo/tree-receipt.txt"
+
+      - name: "FAIL — frozen b985 independent PERF14 red"
+        shell: bash
+        run: |
+          set -euo pipefail
+          combo="$RUNNER_TEMP/perf14-combo-tree"
+          old="$RUNNER_TEMP/perf14-base"
+          git worktree add --detach "$old" "$BASE_SHA"
+          cp "$combo/internal/api/perf14_independent_oracle_test.go" "$old/internal/api/perf14_independent_oracle_test.go"
+          cp "$combo/internal/api/perf14_real_page_oracle_test.go" "$old/internal/api/perf14_real_page_oracle_test.go"
+          log="$RUNNER_TEMP/perf14-combo/frozen-base-FAIL.log"
+          set +e
+          (
+            cd "$old"
+            go test -race -count=1 -timeout=12m ./internal/api \
+              -run '^TestPerf14(HandlerBoundedCaptureWork|HandlerRangeTable|EmptyHistoryDoesNotCaptureScreen|PageLineContentOracle|MetadataFailureDoesNotCapture)$' -v
+          ) 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf 'label=FAIL\nbase=%s\nexit=%s\n' "$BASE_SHA" "$rc" | tee "$RUNNER_TEMP/perf14-combo/frozen-base-FAIL-receipt.txt"
+          test "$rc" -ne 0
+          for name in TestPerf14HandlerBoundedCaptureWork TestPerf14HandlerRangeTable TestPerf14EmptyHistoryDoesNotCaptureScreen TestPerf14PageLineContentOracle TestPerf14MetadataFailureDoesNotCapture; do
+            test "$(grep -Ec -- "^--- FAIL: $name \\(" "$log")" -eq 1
+          done
+          grep -q -- 'capture-pane' "$log"
+          grep -q -- 'metadata=0' "$log"
+
+      - name: "PASS — exact PR20 plus PERF14 named roots"
+        shell: bash
+        env:
+          PERF14_REAL_ROOT: ${{ runner.temp }}/perf14-real
+        run: |
+          set -euo pipefail
+          combo="$RUNNER_TEMP/perf14-combo-tree"
+          mkdir -p "$PERF14_REAL_ROOT"
+          log="$RUNNER_TEMP/perf14-combo/candidate-PASS.log"
+          {
+            cd "$combo"
+            go test -race -count=1 -timeout=15m ./internal/api \
+              -run '^(TestPerf14HandlerBoundedCaptureWork|TestPerf14HandlerRangeTable|TestPerf14EmptyHistoryDoesNotCaptureScreen|TestPerf14PageLineContentOracle|TestPerf14ZeroCountRejectedBeforeTmux|TestPerf14MetadataFailureDoesNotCapture|TestPerf14RealStaticPagesAndActualGeometry|TestScrollbackPageUsesBoundedMetadataAndOneCapture|TestCountLinesTreatsNonEmptyBodyWithoutLFAsOne|TestScrollbackRangeForBoundaries|TestScrollbackTrimPreservesTrailingBlankRows|TestScrollbackConvergedRange|TestScrollbackExactHeaderBytes)$' -v
+            go test -race -count=1 -timeout=8m ./internal/bridge \
+              -run '^TestScrollbackPagingRange$' -v
+          } 2>&1 | tee "$log"
+          expected=(
+            TestPerf14HandlerBoundedCaptureWork
+            TestPerf14HandlerRangeTable
+            TestPerf14EmptyHistoryDoesNotCaptureScreen
+            TestPerf14PageLineContentOracle
+            TestPerf14ZeroCountRejectedBeforeTmux
+            TestPerf14MetadataFailureDoesNotCapture
+            TestPerf14RealStaticPagesAndActualGeometry
+            TestScrollbackPageUsesBoundedMetadataAndOneCapture
+            TestCountLinesTreatsNonEmptyBodyWithoutLFAsOne
+            TestScrollbackRangeForBoundaries
+            TestScrollbackTrimPreservesTrailingBlankRows
+            TestScrollbackConvergedRange
+            TestScrollbackExactHeaderBytes
+            TestScrollbackPagingRange
+          )
+          for name in "${expected[@]}"; do
+            test "$(grep -Ec -- "^--- PASS: $name \\(" "$log")" -eq 1
+          done
+          ! grep -q -- 'SKIP' "$log"
+          printf 'label=PASS\nsource=%s\nproduct_combo_tree=%s\nfinal_tested_tree=%s\nexit=0\n' "$PR20_SOURCE_SHA" "$EXPECTED_COMBO_TREE" "$EXPECTED_FINAL_TEST_TREE" | tee "$RUNNER_TEMP/perf14-combo/candidate-PASS-receipt.txt"
+
+      - name: "BASELINE — complete API/bridge evidence (not acceptance)"
+        continue-on-error: true
+        shell: bash
+        env:
+          PERF14_REAL_ROOT: ${{ runner.temp }}/perf14-real-baseline
+        run: |
+          set -uo pipefail
+          combo="$RUNNER_TEMP/perf14-combo-tree"
+          mkdir -p "$PERF14_REAL_ROOT"
+          log="$RUNNER_TEMP/perf14-combo/full-suite-baseline.log"
+          (
+            cd "$combo"
+            go test -race -count=1 -timeout=15m ./internal/api ./internal/bridge -v
+          ) 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          grep -- '^--- FAIL:' "$log" > "$RUNNER_TEMP/perf14-combo/full-suite-failures.txt" || true
+          printf 'label=BASELINE_NOT_ACCEPTANCE\nsource=%s\ntree=%s\nexit=%s\n' "$PR20_SOURCE_SHA" "$EXPECTED_FINAL_TEST_TREE" "$rc" | tee "$RUNNER_TEMP/perf14-combo/full-suite-baseline-receipt.txt"
+          exit 0
+
+      - name: Upload combination evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf14-pr20-combination-${{ github.run_id }}
+          path: ${{ runner.temp }}/perf14-combo
+
+      - name: Cleanup combination worktrees
+        if: always()
+        shell: bash
+        run: |
+          git worktree remove --force "$RUNNER_TEMP/perf14-combo-tree" || true
+          git worktree remove --force "$RUNNER_TEMP/perf14-base" || true

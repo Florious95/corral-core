@@ -1,13 +1,7 @@
 name: perf14-scrollback-page-metadata
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "internal/api/**"
-      - "internal/bridge/**"
-      - ".team/perf14-candidate.patch"
-      - ".github/workflows/perf14-scrollback-page-metadata.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
