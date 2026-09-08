@@ -13,6 +13,7 @@ assert os.environ.get('GITHUB_ACTIONS') == 'true', 'hosted execution only'
 carrier = Path.cwd()
 root = Path(os.environ['RUNNER_TEMP'])/'perf15'
 root.mkdir(exist_ok=False)
+fixed_base = 'b98504e742ed1e7c7475767c512934b07eac592b'
 base = '1fa3b651c613f7b973b5187429d8e9e50d9d3d45'
 expected_tree = os.environ['PERF15_EXPECTED_TREE']
 patch = carrier/'tools/perf15/catalog-refresh.patch'
@@ -23,10 +24,10 @@ failed = []
 def cmd(args, cwd=carrier):
     return subprocess.check_output(args, cwd=cwd, text=True).strip()
 
-def checkout(name):
+def checkout(name, ref=base):
     path = root/name
     subprocess.run(['git','clone','--no-hardlinks','--no-checkout',str(carrier),str(path)], check=True)
-    subprocess.run(['git','checkout','--detach',base], cwd=path, check=True)
+    subprocess.run(['git','checkout','--detach',ref], cwd=path, check=True)
     return path
 
 def apply_candidate(path):
@@ -42,6 +43,20 @@ compiled = execute(['go','test','-race','-count=1','-run','^$','./internal/api',
 code = compiled['exit']
 (root/'compile.json').write_text(json.dumps({'exit':code,'executed_tests':0,'behavior_pass':False}))
 assert code == 0, 'candidate compile failed; no behavior classification'
+# Artifacts are execution inputs for this owner's real App A/B; producing them
+# is separate from accepting any behavioral or performance gate.
+fixed = checkout('fixed-base',fixed_base)
+binaries=root/'binaries';binaries.mkdir()
+built=[]
+for label,path in [('candidate',candidate),('b985',fixed)]:
+    binary=binaries/(label+'-darwin-arm64-agentmirrord')
+    command=['env','GOOS=darwin','GOARCH=arm64','CGO_ENABLED=0','go','build','-trimpath','-buildvcs=true','-o',str(binary),'./cmd/agentmirrord']
+    outcome=execute(command,path,root/('build-'+label+'.log'),root/('build-'+label+'-cleanup.json'),300)
+    assert outcome['exit']==0 and not outcome['external_timeout'],'binary build failed: '+label
+    data=binary.read_bytes()
+    built.append(dict(label=label,tree=cmd(['git','write-tree'],path),checkout_head=cmd(['git','rev-parse','HEAD'],path),sha256=hashlib.sha256(data).hexdigest(),bytes=len(data),command=command,behavior_pass=False))
+    (root/'BINARY-MANIFEST.json').write_text(json.dumps(built,indent=2))
+
 
 def run(label, path, package, pattern, names, red=None):
     log = root/(label+'.jsonl')
@@ -90,13 +105,14 @@ for fault in ('go-timeout','outer-timeout','fixture-start','handoff-intent','han
 
 adopted_negative_control(candidate,root)
 
-old = checkout('old-base')
+old = checkout('stack-base')
 relative='internal/api/scan_reader_boundary_test.go'
-(old/relative).write_bytes((candidate/relative).read_bytes())
-for menu,parent in [('list','TestListScanBlockedKnownSubscribeGetsSnapshot'),('level2','TestLevel2ScanBlockedKnownSubscribeGetsSnapshot')]:
-    for stage in ('Discover','Sample'):
-        name=parent+'/'+stage
-        run('base-red-'+menu+'-'+stage,old,'./internal/api','^'+parent+'$/^'+stage+'$',[name],red='catalog gate blocked known-ref SNAPSHOT')
+for label,path in [('b985',fixed),('stack-1fa3',old)]:
+    (path/relative).write_bytes((candidate/relative).read_bytes())
+    for menu,parent in [('list','TestListScanBlockedKnownSubscribeGetsSnapshot'),('level2','TestLevel2ScanBlockedKnownSubscribeGetsSnapshot')]:
+        for stage in ('Discover','Sample'):
+            name=parent+'/'+stage
+            run('base-red-'+label+'-'+menu+'-'+stage,path,'./internal/api','^'+parent+'$/^'+stage+'$',[name],red='catalog gate blocked known-ref SNAPSHOT')
 
 parents=['TestListScanBlockedKnownSubscribeGetsSnapshot','TestLevel2ScanBlockedKnownSubscribeGetsSnapshot','TestScanSingleFlightAndOnePendingGeneration','TestCatalogSnapshotSequenceAtomicCommit','TestListReplyDeltaWatermarkContinuity','TestLevel2WorkspaceEpochRejectsOldCompletion','TestScanWaiterDeadlineCancelAndOverload','TestScanCoordinatorShutdownAndIdle']
 children={parents[0]:['Discover','Sample'], parents[1]:['Discover','Sample'], parents[4]:['slow-peer'], parents[5]:['before-new-completion','after-new-completion'], parents[6]:['queued-deadline','timely-duplicate-writes','per-connection','global','deadline','scan-deadline','cancel-one-preserves-other'], parents[7]:['Discover','Sample','pending-List-gets-real-close','zero-auth-zero-L2']}

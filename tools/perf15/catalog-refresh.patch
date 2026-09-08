@@ -929,10 +929,10 @@ index 0000000000000000000000000000000000000000..75c1d19b3e73c6bde275cbdf9e17ba83
 +}
 diff --git a/internal/api/scan_coordinator_test.go b/internal/api/scan_coordinator_test.go
 new file mode 100644
-index 0000000000000000000000000000000000000000..1572f4881f98b6d9cdd75f3fdd7a628d8c2856d0
+index 0000000000000000000000000000000000000000..9d72ab2ac284e8da3c4c59f062ba49461d301a0d
 --- /dev/null
 +++ b/internal/api/scan_coordinator_test.go
-@@ -0,0 +1,732 @@
+@@ -0,0 +1,734 @@
 +package api
 +
 +import (
@@ -945,6 +945,7 @@ index 0000000000000000000000000000000000000000..1572f4881f98b6d9cdd75f3fdd7a628d
 +	"testing"
 +	"time"
 +
++	"github.com/agentmirror/agentmirror/internal/discovery"
 +	"github.com/agentmirror/agentmirror/internal/protocol"
 +	"github.com/coder/websocket"
 +)
@@ -1299,11 +1300,21 @@ index 0000000000000000000000000000000000000000..1572f4881f98b6d9cdd75f3fdd7a628d
 +					close(release)
 +				}
 +			}()
-+			oldModel := testModel()
-+			oldModel.Workspaces[1].CWD = "/ws/b"
-+			for i := range oldModel.Workspaces[1].Panes {
-+				oldModel.Workspaces[1].Panes[i].CWD = "/ws/b"
++			// testModel has ONE workspace. Build a distinct W2 ref explicitly;
++			// indexing Workspaces[1] would panic before either epoch oracle.
++			epochModel := func(windowName string) *discovery.Model {
++				model := testModel()
++				second := testModel().Workspaces[0]
++				second.CWD = "/ws/b"
++				second.Panes = second.Panes[:1]
++				second.Panes[0].CWD = "/ws/b"
++				second.Panes[0].PaneID = "%2"
++				second.Panes[0].Session = "epoch-b"
++				second.Panes[0].WindowName = windowName
++				model.Workspaces = append(model.Workspaces, second)
++				return model
 +			}
++			oldModel := epochModel("old-epoch")
 +			g.mu.Lock()
 +			g.model = oldModel
 +			g.mu.Unlock()
@@ -1322,16 +1333,7 @@ index 0000000000000000000000000000000000000000..1572f4881f98b6d9cdd75f3fdd7a628d
 +			if len(projection["/ws/b"]) == 0 {
 +				t.Fatal("old W2 projection absent")
 +			}
-+			m := testModel()
-+			m.Workspaces[1].CWD = "/ws/b"
-+			for i := range m.Workspaces[1].Panes {
-+				m.Workspaces[1].Panes[i].CWD = "/ws/b"
-+			}
-+			for wi := range m.Workspaces {
-+				if m.Workspaces[wi].CWD == "/ws/b" {
-+					m.Workspaces[wi].Panes[0].WindowName = "new-epoch-only"
-+				}
-+			}
++			m := epochModel("new-epoch-only")
 +			g.mu.Lock()
 +			g.model = m
 +			g.mu.Unlock()
