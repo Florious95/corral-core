@@ -929,10 +929,10 @@ index 0000000000000000000000000000000000000000..75c1d19b3e73c6bde275cbdf9e17ba83
 +}
 diff --git a/internal/api/scan_coordinator_test.go b/internal/api/scan_coordinator_test.go
 new file mode 100644
-index 0000000000000000000000000000000000000000..3f9c66baea0f03184f308b492ab26d08773457a5
+index 0000000000000000000000000000000000000000..1572f4881f98b6d9cdd75f3fdd7a628d8c2856d0
 --- /dev/null
 +++ b/internal/api/scan_coordinator_test.go
-@@ -0,0 +1,733 @@
+@@ -0,0 +1,732 @@
 +package api
 +
 +import (
@@ -945,7 +945,6 @@ index 0000000000000000000000000000000000000000..3f9c66baea0f03184f308b492ab26d08
 +	"testing"
 +	"time"
 +
-+	"github.com/agentmirror/agentmirror/internal/discovery"
 +	"github.com/agentmirror/agentmirror/internal/protocol"
 +	"github.com/coder/websocket"
 +)
