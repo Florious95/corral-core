@@ -19,6 +19,8 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -35,6 +37,7 @@ public final class Observer extends Instrumentation {
     private final JSONArray records = new JSONArray();
     @Override public void onCreate(Bundle args) { super.onCreate(args); this.args=args; start(); }
     @Override public void callActivityOnResume(Activity a) { super.callActivityOnResume(a); activity=a; }
+    static void writeText(Path path,String text) throws Exception { Files.write(path,text.getBytes(StandardCharsets.UTF_8)); }
     static String hex(byte[] data) { StringBuilder b=new StringBuilder(); for(byte x:data)b.append(String.format("%02x",x&255));return b.toString(); }
     static Object field(Object o, String name) throws Exception {
         for (Class<?> c=o.getClass();c!=null;c=c.getSuperclass()) {
@@ -127,7 +130,7 @@ public final class Observer extends Instrumentation {
         Bundle result=new Bundle();
         try {
             root=new File(getTargetContext().getExternalFilesDir(null),"perf15-observer");
-            JSONObject plan=new JSONObject(Files.readString(new File(root,args.getString("plan","plan.json")).toPath()));
+            JSONObject plan=new JSONObject(new String(Files.readAllBytes(new File(root,args.getString("plan","plan.json")).toPath()),StandardCharsets.UTF_8));
             if(!plan.getString("apkSha256").equals("bd4ababfcec3301c19ced02350ff2193f183311f9ec0bdd455145deab3b3e861")) throw new IllegalStateException("fixed APK contract missing");
             String actualHash=hex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(getTargetContext().getApplicationInfo().sourceDir).toPath())));
             if(!actualHash.equals(plan.getString("apkSha256"))) throw new IllegalStateException("installed product APK changed");
@@ -138,11 +141,11 @@ public final class Observer extends Instrumentation {
             if(trials.length()<1||trials.length()>20)throw new IllegalArgumentException("one bounded block requires 1..20 trials");
             for(int i=0;i<trials.length();i++) trial(trials.getJSONObject(i));
             result.putString("status","observed");
-            Files.writeString(new File(root,"result.json").toPath(),new JSONObject().put("records",records).put("performance_pass",false).toString(2));
+            writeText(new File(root,"result.json").toPath(),new JSONObject().put("records",records).put("performance_pass",false).toString(2));
             finish(Activity.RESULT_OK,result);
         } catch(Throwable e) {
             result.putString("failure",e.getClass().getName()+": "+e.getMessage());
-            try { if(root!=null)Files.writeString(new File(root,"result.json").toPath(),new JSONObject().put("records",records).put("failure",result.getString("failure")).put("performance_pass",false).toString(2)); }
+            try { if(root!=null)writeText(new File(root,"result.json").toPath(),new JSONObject().put("records",records).put("failure",result.getString("failure")).put("performance_pass",false).toString(2)); }
             catch(Exception writeError) { result.putString("evidenceWriteFailure",writeError.toString()); }
             finish(Activity.RESULT_CANCELED,result);
         }
@@ -154,7 +157,7 @@ public final class Observer extends Instrumentation {
         // External coordinator prepares only owned real fixtures/navigation outside timing.
         String id=spec.getString("id"); if(!id.matches("[A-Za-z0-9_-]+"))throw new IllegalArgumentException("unsafe trial id");
         File go=new File(root,id+".go"); if(go.exists())throw new IllegalStateException("stale trial trigger");
-        Files.writeString(new File(root,"ready.json").toPath(),new JSONObject().put("id",id).put("phase","prepare").toString());
+        writeText(new File(root,"ready.json").toPath(),new JSONObject().put("id",id).put("phase","prepare").toString());
         Bundle ready=new Bundle();ready.putString("readyId",id);sendStatus(10,ready);
         long prepareEnd=SystemClock.elapsedRealtime()+120000;
         while(!go.exists()&&SystemClock.elapsedRealtime()<prepareEnd)SystemClock.sleep(50);
@@ -205,7 +208,7 @@ public final class Observer extends Instrumentation {
             if(!done.await(spec.getLong("deadlineMs"),TimeUnit.MILLISECONDS)) throw new IllegalStateException("correct committed current grid/history endpoint absent");
             if(failure[0]!=null) throw new IllegalStateException("observer failed",failure[0]);
             record.put("completed",true);
-            Files.writeString(new File(root,id+".result.json").toPath(),record.toString(2));
+            writeText(new File(root,id+".result.json").toPath(),record.toString(2));
         } finally {done.countDown();runOnMainSync(()->decor.getViewTreeObserver().removeOnDrawListener(listener));records.put(record);}
     }
 }
