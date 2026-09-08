@@ -106,7 +106,7 @@ jobs:
           log="$RUNNER_TEMP/perf14/candidate-PASS.log"
           {
             go test -race -count=1 -timeout=15m ./internal/api \
-              -run '^(TestPerf14|TestScrollbackPageUsesBoundedMetadataAndOneCapture|TestCountLinesTreatsNonEmptyBodyWithoutLFAsOne|TestScrollbackRangeForBoundaries|TestScrollbackTrimPreservesTrailingBlankRows|TestScrollback(ConvergedRange|ExactHeaderBytes))$' -v
+              -run '^(TestPerf14(HandlerBoundedCaptureWork|HandlerRangeTable|EmptyHistoryDoesNotCaptureScreen|PageLineContentOracle|ZeroCountRejectedBeforeTmux|MetadataFailureDoesNotCapture|RealStaticPagesAndActualGeometry)|TestScrollbackPageUsesBoundedMetadataAndOneCapture|TestCountLinesTreatsNonEmptyBodyWithoutLFAsOne|TestScrollbackRangeForBoundaries|TestScrollbackTrimPreservesTrailingBlankRows|TestScrollback(ConvergedRange|ExactHeaderBytes))$' -v
             go test -race -count=1 -timeout=8m ./internal/bridge \
               -run '^TestScrollbackPagingRange$' -v
           } 2>&1 | tee "$log"
@@ -145,11 +145,8 @@ jobs:
           go test -race -count=1 -timeout=15m ./internal/api ./internal/bridge -v 2>&1 | tee "$log"
           rc=${PIPESTATUS[0]}
           printf 'label=BASELINE_NOT_ACCEPTANCE\nhead=%s\ncommand=go test -race -count=1 -timeout=15m ./internal/api ./internal/bridge -v\nexit=%s\n' "$(git rev-parse HEAD)" "$rc" | tee "$RUNNER_TEMP/perf14/full-suite-baseline-receipt.txt"
-          test "$rc" -ne 0
-          for name in TestAuthBadToken TestSubscribeSnapshotThenDelta TestPerfSubscribeNotEmittedForList; do
-            grep -q -- "--- FAIL: $name" "$log"
-          done
-          grep -q -- '--- PASS: TestPerf14HandlerBoundedCaptureWork' "$log"
+          grep -E -- '^--- (PASS|FAIL|SKIP):' "$log" > "$RUNNER_TEMP/perf14/full-suite-named-results.txt" || true
+          exit "$rc"
 
       - name: Upload named FAIL/PASS evidence
         if: always()
