@@ -125,6 +125,10 @@ class ConnectionManager(
     /** 下一次重连触发时刻（毫秒）；null = 无待执行重连。 */
     private var pendingReconnectAt: Long? = null
 
+    /** 主动刷新请求尚未收到对应快照；重复前台边沿在途时合并。 */
+    private var listRefreshInFlight: Boolean = false
+    private val level2RefreshInFlight = LinkedHashSet<String>()
+
     /** 退避尝试计数；成功连接后重置。 */
     private var attempt = 0
 
@@ -211,6 +215,8 @@ class ConnectionManager(
      */
     fun stop() {
         pendingReconnectAt = null
+        listRefreshInFlight = false
+        level2RefreshInFlight.clear()
         connection?.close()
         connection = null
         failAllPending("connection stopped")
@@ -265,6 +271,49 @@ class ConnectionManager(
         if (state == ConnectionState.RECONNECTING && pendingReconnectAt != null) {
             pendingReconnectAt = null
             attemptConnect()
+        }
+    }
+
+    /**
+     * Foreground edge recovery for the persistent connection.
+     *
+     * READY keeps its healthy socket and refreshes the full listing plus each active level-2
+     * subscription. RECONNECTING crosses the old backoff immediately. CONNECTING,
+     * AUTHENTICATING, and STOPPED are deliberately no-ops, so repeated lifecycle edges cannot
+     * create parallel dials or turn an explicit stop into an auto-start.
+     *
+     * @contract
+     * @pre none
+     * @post one READY refresh or one immediate RECONNECTING dial; in-flight requests are merged
+     * @err none
+     * @inv no socket is rebuilt while READY; active subscription intent is unchanged
+     */
+    fun onForegroundResume() {
+        ConnDiag.record(
+            "ws",
+            "foreground_resume state=$state list_in_flight=$listRefreshInFlight " +
+                "level2_in_flight=${level2RefreshInFlight.size} pending_reconnect=${pendingReconnectAt != null}",
+        )
+        when (state) {
+            ConnectionState.RECONNECTING -> {
+                // A second call sees CONNECTING after this synchronous transition and is bounded.
+                pendingReconnectAt = null
+                attemptConnect()
+            }
+            ConnectionState.READY -> {
+                if (!listRefreshInFlight) sendList()
+                val conn = connection ?: return
+                for (workspace in activeLevel2) {
+                    if (workspace in level2RefreshInFlight) continue
+                    if (conn.send(Level2SubscribeFrame(workspace = workspace))) {
+                        level2RefreshInFlight.add(workspace)
+                    }
+                }
+            }
+            ConnectionState.CONNECTING,
+            ConnectionState.AUTHENTICATING,
+            ConnectionState.STOPPED,
+            -> Unit
         }
     }
 
@@ -438,12 +487,15 @@ class ConnectionManager(
         activeLevel2.add(workspace)
         val conn = connection ?: return true
         if (!conn.isReady) return true
-        return conn.send(Level2SubscribeFrame(workspace = workspace))
+        val ok = conn.send(Level2SubscribeFrame(workspace = workspace))
+        if (ok) level2RefreshInFlight.add(workspace)
+        return ok
     }
 
     /** 二级退订：离开二级时发 [Level2UnsubscribeFrame]，并移出重放簿记。幂等。 */
     fun unsubscribeLevel2(workspace: String): Boolean {
         activeLevel2.remove(workspace)
+        level2RefreshInFlight.remove(workspace)
         val conn = connection ?: return true
         if (!conn.isReady) return true
         return conn.send(Level2UnsubscribeFrame(workspace = workspace))
@@ -492,7 +544,9 @@ class ConnectionManager(
     fun list(): Boolean {
         val conn = connection ?: return false
         if (!conn.isReady) return false
-        return conn.send(ListFrame(reqId = nextReqId++))
+        val ok = conn.send(ListFrame(reqId = nextReqId++))
+        if (ok) listRefreshInFlight = true
+        return ok
     }
 
     /**
@@ -638,6 +692,7 @@ class ConnectionManager(
             when (frame) {
                 is ListingFrame -> {
                     lastSeenSeq = frame.seq
+                    listRefreshInFlight = false
                     listener?.onFrame(frame)
                 }
                 is ListDeltaFrame -> {
@@ -662,6 +717,14 @@ class ConnectionManager(
                             sendList()
                         }
                     }
+                }
+                is Level2Frame -> {
+                    level2RefreshInFlight.remove(frame.workspace)
+                    listener?.onFrame(frame)
+                }
+                is Level2HeartbeatFrame -> {
+                    level2RefreshInFlight.remove(frame.workspace)
+                    listener?.onFrame(frame)
                 }
                 is InputAckFrame -> resolveInput(frame)
                 else -> listener?.onFrame(frame)
@@ -710,8 +773,11 @@ class ConnectionManager(
         }
     }
 
-    private fun sendList() {
-        connection?.send(ListFrame(reqId = nextReqId++))
+    private fun sendList(): Boolean {
+        val conn = connection ?: return false
+        val ok = conn.send(ListFrame(reqId = nextReqId++))
+        if (ok) listRefreshInFlight = true
+        return ok
     }
 
     private fun replaySubscriptions(reconnect: Boolean = false) {
@@ -746,7 +812,9 @@ class ConnectionManager(
             )
         }
         for (workspace in activeLevel2) {
-            conn.send(Level2SubscribeFrame(workspace = workspace))
+            if (conn.send(Level2SubscribeFrame(workspace = workspace))) {
+                level2RefreshInFlight.add(workspace)
+            }
         }
         overlayWantedSocket?.let {
             conn.send(

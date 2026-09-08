@@ -5,8 +5,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import dev.agentmirror.app.session.SessionDockMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,15 +17,18 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,11 +78,11 @@ fun SessionSwitchSheet(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
-    Box(modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(tween(Motion.scrimFade, easing = Motion.linear)),
-            exit = fadeOut(tween(Motion.scrimFade, easing = Motion.linear)),
+            enter = fadeIn(tween(SessionDockMotion.PopInMillis, easing = SessionDockMotion.Ease)),
+            exit = fadeOut(tween(SessionDockMotion.PopInMillis, easing = SessionDockMotion.Ease)),
         ) {
             Box(
                 Modifier
@@ -90,22 +96,30 @@ fun SessionSwitchSheet(
                     )
             )
         }
+        val risePx = with(LocalDensity.current) { 10.dp.roundToPx() }
         AnimatedVisibility(
             visible = visible,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(
-                animationSpec = tween(Motion.sheetSlideIn, easing = Motion.sheetEnter),
-                initialOffsetY = { it },
+            enter = fadeIn(
+                tween(SessionDockMotion.PopInMillis, easing = SessionDockMotion.Ease),
+            ) + slideInVertically(
+                tween(SessionDockMotion.PopInMillis, easing = SessionDockMotion.Ease),
+                initialOffsetY = { risePx },
+            ) + scaleIn(
+                tween(SessionDockMotion.PopInMillis, easing = SessionDockMotion.Ease),
+                initialScale = 0.97f,
             ),
-            exit = slideOutVertically(
-                animationSpec = tween(Motion.sheetSlideOut, easing = Motion.emphasized),
-                targetOffsetY = { it },
+            exit = fadeOut(
+                tween(SessionDockMotion.PopInMillis, easing = SessionDockMotion.Ease),
+            ) + scaleOut(
+                tween(SessionDockMotion.PopInMillis, easing = SessionDockMotion.Ease),
+                targetScale = 0.97f,
             ),
         ) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .wrapContentHeight()
+                    .heightIn(max = maxHeight * 0.8f)
                     .clip(RoundedCornerShape(topStart = Radii.sheetTop, topEnd = Radii.sheetTop))
                     .background(p.sheetBackground)
                     .testTag("session-overlay")
@@ -160,13 +174,20 @@ fun SessionSwitchSheet(
                         )
                     }
                 }
-                Column(
-                    Modifier
+                LazyColumn(
+                    modifier = Modifier
                         .fillMaxWidth()
+                        .weight(1f, fill = false)
                         .background(p.sheetSurface)
+                        .testTag("session-overlay-list"),
                 ) {
-                    Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
-                    sessions.forEachIndexed { index, item ->
+                    item {
+                        Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
+                    }
+                    itemsIndexed(
+                        items = sessions,
+                        key = { _, item -> item.id },
+                    ) { index, item ->
                         StaggeredRow(index = index, replayKey = visible) {
                             SheetRow(
                                 item = item,

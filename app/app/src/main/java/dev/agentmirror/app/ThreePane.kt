@@ -188,7 +188,11 @@ private fun FavoritesPane(
     val favorites by viewModel.favorites.collectAsState()
     val liveGen by viewModel.favoriteLiveGen.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
-    val rows = remember(favorites, liveGen) { viewModel.favoriteRows() }
+    // 底栏收藏页：全量 favoriteRows()。失联行仍在，标「不在线」，短按不打开。
+    // 不要在这里 filter isOnline。会话列表 / 会话页收藏入口各走自己的投影。
+    val rows = remember(favorites, liveGen) {
+        viewModel.favoriteRows()
+    }
     DisposableEffect(Unit) {
         viewModel.enterFavorites()
         onDispose { viewModel.leaveFavorites() }

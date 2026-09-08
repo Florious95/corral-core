@@ -29,13 +29,13 @@ internal fun WorkspaceUi.toWorkspaceItem(): WorkspaceItem = WorkspaceItem(
 )
 
 /** 二级行 → 设计包 [SessionItem]。displayName 走 076 §3a，不预截断。 */
-internal fun L2Entry.toSessionItem(starred: Boolean): SessionItem = SessionItem(
+internal fun L2Entry.toSessionItem(starred: Boolean, isOnline: Boolean = true): SessionItem = SessionItem(
     id = ref,
     displayName = identityLabel,
     path = cwd,
     status = sessionStatusFromL2(activity),
     starred = starred,
-    isOnline = true,
+    isOnline = isOnline,
     provider = provider,
     health = health,
 )

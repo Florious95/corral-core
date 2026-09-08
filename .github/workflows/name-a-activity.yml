@@ -1,0 +1,132 @@
+name: NAME-A activity projection
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activity-projection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Prepare ephemeral Android debug keystore
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000
+          fi
+
+      - name: Run T-A name and activity tests
+        shell: bash
+        run: |
+          set +e
+          cd app
+          ./gradlew --no-daemon --rerun-tasks \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :app:testDebugUnitTest \
+            --tests 'dev.agentmirror.app.ui.ExternalSessionStatusUiTest' \
+            --tests 'dev.agentmirror.app.ui.NameProjectionUiTest' \
+            --tests 'dev.agentmirror.app.workspace.L2UnknownStatusTest' \
+            --tests 'dev.agentmirror.app.workspace.PiWorkingDtoProjectionTest' \
+            --tests 'dev.agentmirror.app.workspace.FavRowParityTest' \
+            --tests 'dev.agentmirror.app.workspace.FavoriteIdentityTest' \
+            --tests 'dev.agentmirror.app.workspace.L2NavigationIdentityTest' \
+            --tests 'dev.agentmirror.app.workspace.SessionTitleTest' \
+            --tests 'dev.agentmirror.app.workspace.ListRouteParityTest' \
+            --tests 'dev.agentmirror.app.workspace.WorkspaceOnlineProjectionTest' \
+            --tests 'dev.agentmirror.app.workspace.ForegroundResumeUiTest' \
+            --tests 'dev.agentmirror.app.workspace.L2PushOnlyNoPollTest' \
+            --tests 'dev.agentmirror.app.workspace.SessionLiveSubscribeTest' \
+            --tests 'dev.agentmirror.app.workspace.WorkspaceRefreshTest' \
+            --tests 'dev.agentmirror.app.workspace.TestRefreshOnOpen' \
+            --tests 'dev.agentmirror.app.session.SessionDockSourceTest' \
+            --tests 'dev.agentmirror.app.session.OverlaySubscribeCarriesCurrentSocketTest' \
+            --tests 'dev.agentmirror.app.TestThreePane' \
+            --tests 'dev.agentmirror.app.ui.LandListTest' \
+            2>&1 | tee "$GITHUB_WORKSPACE/gradle.log"
+          rc=${PIPESTATUS[0]}
+          executed=$(grep -cE '^> Task ' "$GITHUB_WORKSPACE/gradle.log" || true)
+          up_to_date=$(grep -c 'UP-TO-DATE' "$GITHUB_WORKSPACE/gradle.log" || true)
+          result_dir="$GITHUB_WORKSPACE/app/app/build/test-results/testDebugUnitTest"
+          read -r tests failures errors skipped <<< "$(python3 - "$result_dir" <<'PY'
+          import glob
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          values = [0, 0, 0, 0]
+          for path in glob.glob(os.path.join(sys.argv[1], "*.xml")):
+              root = ET.parse(path).getroot()
+              for index, name in enumerate(("tests", "failures", "errors", "skipped")):
+                  values[index] += int(root.attrib.get(name, "0"))
+          print(*values)
+          PY
+          )"
+          echo "NAME_A_RESULT command_exit=$rc executed_task_lines=$executed up_to_date_task_lines=$up_to_date junit_tests=${tests:-0} junit_failures=${failures:-0} junit_errors=${errors:-0} junit_skipped=${skipped:-0}"
+          {
+            echo "### NAME-A activity test"
+            echo "- command_exit: $rc"
+            echo "- executed_task_lines: $executed"
+            echo "- up_to_date_task_lines: $up_to_date"
+            echo "- junit_tests: ${tests:-0}"
+            echo "- junit_failures: ${failures:-0}"
+            echo "- junit_errors: ${errors:-0}"
+            echo "- junit_skipped: ${skipped:-0}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: Assemble release candidate
+        shell: bash
+        run: |
+          set +e
+          cd app
+          ./gradlew --no-daemon --rerun-tasks \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :app:assembleRelease \
+            2>&1 | tee "$GITHUB_WORKSPACE/assemble-release.log"
+          rc=${PIPESTATUS[0]}
+          apk="$GITHUB_WORKSPACE/app/app/build/outputs/apk/release/app-release.apk"
+          if [ "$rc" -eq 0 ] && [ -f "$apk" ]; then
+            sha256sum "$apk"
+            stat -c 'release_apk_bytes=%s path=%n' "$apk"
+          fi
+          echo "NAME_A_RELEASE_RESULT command_exit=$rc apk_present=$([ -f "$apk" ] && echo yes || echo no)"
+          exit "$rc"
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: name-a-${{ github.sha }}-release
+          path: |
+            app/app/build/outputs/apk/release/app-release.apk
+            assemble-release.log
+          if-no-files-found: error
+          retention-days: 7

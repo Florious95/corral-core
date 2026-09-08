@@ -139,7 +139,7 @@ class HttpUrlConnectionUploaderTest {
         val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
 
         assertTrue(result is UploadOutcome.Failure)
-        assertEquals("上传失败（HTTP 413）", (result as UploadOutcome.Failure).reason)
+        assertEquals("上传失败（HTTP 413 · too_large）", (result as UploadOutcome.Failure).reason)
     }
 
     @Test
@@ -149,7 +149,57 @@ class HttpUrlConnectionUploaderTest {
         val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
 
         assertTrue(result is UploadOutcome.Failure)
-        assertEquals("上传失败（HTTP 500）", (result as UploadOutcome.Failure).reason)
+        assertEquals("上传失败（HTTP 500 · server_internal）", (result as UploadOutcome.Failure).reason)
+    }
+
+    @Test
+    fun upload_http500_jsonBodyClassifiesServerInternalWithoutLeakingToken() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"code":"internal","reason":"internal error"}"""),
+        )
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
+
+        assertEquals("上传失败（HTTP 500 · server_internal）", (result as UploadOutcome.Failure).reason)
+        val recorded = server.takeRequest()
+        assertEquals("Bearer $FAKE_UPLOAD_TOKEN", recorded.getHeader("Authorization"))
+    }
+
+    @Test
+    fun upload_http500_jsonBranchClassifiesResolveDirOperand() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"code":"server_internal","reason":"resolve_dir:not a directory"}"""),
+        )
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
+
+        assertEquals("上传失败（HTTP 500 · resolve_dir）", (result as UploadOutcome.Failure).reason)
+    }
+
+    @Test
+    fun upload_http500_jsonBranchClassifiesMeasureDirOperand() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"code":"server_internal","reason":"measure_dir:permission denied"}"""),
+        )
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
+
+        assertEquals("上传失败（HTTP 500 · measure_dir）", (result as UploadOutcome.Failure).reason)
+    }
+
+    @Test
+    fun upload_http500_jsonBranchClassifiesWriteFileOperand() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"code":"server_internal","reason":"write_file:permission denied"}"""),
+        )
+        val result = HttpUrlConnectionUploader().upload(baseUrl(), FAKE_UPLOAD_TOKEN, attachment())
+
+        assertEquals("上传失败（HTTP 500 · write_file）", (result as UploadOutcome.Failure).reason)
     }
 
     @Test

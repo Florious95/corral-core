@@ -165,29 +165,13 @@ fun WorkspaceScreen(
                 }
                 val starred = favorites.map { it.key }.toSet()
                 Column(Modifier.fillMaxSize()) {
-                    val banner = level2.banner
-                    if (banner != null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            shape = MaterialTheme.shapes.small,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = Spacing.pageH, vertical = Spacing.xs)
-                                .testTag("l2-stale-banner"),
-                        ) {
-                            Text(
-                                text = banner,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                            )
-                        }
-                    }
                     AppTheme {
                         SessionListScreen(
                             workspaceName = cwdDisplayName(level2Cwd),
                             workspacePath = level2Cwd,
-                            sessions = level2.sessions.map { it.toSessionItem(starred.contains(it.favoriteKey())) },
+                            sessions = level2.sessions.map {
+                                it.toSessionItem(starred.contains(it.favoriteKey()))
+                            },
                             onBack = onBackToList,
                             onSessionClick = { item -> onOpenSession(item.id, item.displayName) },
                             onToggleStar = { item ->
@@ -483,4 +467,3 @@ private fun WorkspaceList(
         }
     }
 }
-
