@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -79,7 +80,11 @@ func TestRelayLossAbortsConnectionAndDropsQueuedDeltas(t *testing.T) {
 	}
 	readCtx, readCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	_, _, err = client.Read(readCtx)
+	readContextErr := readCtx.Err()
 	readCancel()
+	if readContextErr != nil || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		t.Fatalf("read deadline/cancellation is not transport termination: %v (context %v)", err, readContextErr)
+	}
 	if err == nil {
 		t.Fatal("client read succeeded after relay loss abort")
 	}

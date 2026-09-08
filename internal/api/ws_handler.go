@@ -152,9 +152,11 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	_, _, _ = geom.acquire(c.ctx, br)
 	subCtx, cancel := context.WithCancel(c.ctx)
 	sub := &subscription{
-		ref:    s.Ref,
-		cancel: cancel,
-		ready:  make(chan struct{}),
+		ref:           s.Ref,
+		cancel:        cancel,
+		ready:         make(chan struct{}),
+		initialFailed: make(chan struct{}),
+		relayDone:     make(chan struct{}),
 	}
 	// Install the release hook before any fallible operation after acquire. All
 	// exits (including capture/encode failure) then use the same idempotent owner.
@@ -190,7 +192,8 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		snap, err = snapshotWithCursor(c.ctx, br)
 	}
 	if err != nil {
-		teardownSubscription(sub)
+		close(sub.initialFailed)
+		<-sub.relayDone
 		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		return
 	}
@@ -200,7 +203,8 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		Data: snap,
 	})
 	if err != nil {
-		teardownSubscription(sub)
+		close(sub.initialFailed)
+		<-sub.relayDone
 		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
 		return
 	}
@@ -209,11 +213,14 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	} else {
 		c.sendBinary(frame)
 	}
+	c.subsMu.Lock()
 	if subCtx.Err() != nil || c.mirrorAborted.Load() {
+		c.subsMu.Unlock()
 		teardownSubscription(sub)
 		return
 	}
-	c.subscribeAdd(sub)
+	c.subs[sub.ref] = sub
+	c.subsMu.Unlock()
 	sub.releaseRelayGate()
 }
 

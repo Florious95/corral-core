@@ -24,6 +24,12 @@ import (
 // fixture so handleSubscribe can be held at an exact boundary.
 func newDirectWSConn(t *testing.T, srv *Server, queueSize int) *wsConn {
 	t.Helper()
+	c, _ := newDirectWSPair(t, srv, queueSize)
+	return c
+}
+
+func newDirectWSPair(t *testing.T, srv *Server, queueSize int) (*wsConn, *websocket.Conn) {
+	t.Helper()
 	accepted := make(chan *websocket.Conn, 1)
 	hsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
@@ -66,7 +72,7 @@ func newDirectWSConn(t *testing.T, srv *Server, queueSize int) *wsConn {
 		_ = serverConn.CloseNow()
 		hsrv.Close()
 	})
-	return c
+	return c, client
 }
 
 func assertNoLiveSubscription(t *testing.T, c *wsConn) {
@@ -190,6 +196,21 @@ func TestInitialSubscribeCaptureErrorReleasesGeometry(t *testing.T) {
 	}
 	waitSubscribeDone(t, done)
 	assertNoLiveSubscription(t, c)
+	if c.mirrorAborted.Load() || c.ctx.Err() != nil {
+		t.Fatal("ordinary capture failure aborted a healthy connection")
+	}
+	select {
+	case m := <-c.sendCh:
+		frame, err := protocol.UnmarshalFrame(m.data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := frame.(protocol.ErrorFrame); !ok {
+			t.Fatalf("capture error reply=%T", frame)
+		}
+	default:
+		t.Fatal("ordinary capture failure omitted ErrorFrame")
+	}
 	if got := waitPaneSize(te, "80x24"); got != "80x24" {
 		t.Fatalf("capture-error teardown left pane at %s, want 80x24", got)
 	}

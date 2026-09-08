@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,6 +46,9 @@ func TestAbortDoesNotFlushDequeuedWriterFrame(t *testing.T) {
 	writeCtx, writeStop := context.WithCancel(context.Background())
 	defer writeStop()
 	gate := make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(gate) }) }
+	var attempts atomic.Int64
 	taken := make(chan struct{})
 	writerDone := make(chan struct{})
 	c := &wsConn{
@@ -58,6 +64,7 @@ func TestAbortDoesNotFlushDequeuedWriterFrame(t *testing.T) {
 		mirrorAbortDone: make(chan struct{}),
 		writerGate:      gate,
 		writerTaken:     taken,
+		writeAttempt:    func(wsMsg) { attempts.Add(1) },
 	}
 	stale1, err := protocol.EncodeBinary(protocol.BinaryPayload{Kind: protocol.KindDelta, Ref: "alpha", Data: []byte("stale-1")})
 	if err != nil {
@@ -73,6 +80,16 @@ func TestAbortDoesNotFlushDequeuedWriterFrame(t *testing.T) {
 		c.writeLoop()
 		close(writerDone)
 	}()
+	t.Cleanup(func() {
+		cancel()
+		unblock()
+		_ = serverConn.CloseNow()
+		select {
+		case <-writerDone:
+		case <-time.After(2 * time.Second):
+			t.Error("writer cleanup did not finish")
+		}
+	})
 	select {
 	case <-taken:
 	case <-time.After(2 * time.Second):
@@ -91,21 +108,25 @@ func TestAbortDoesNotFlushDequeuedWriterFrame(t *testing.T) {
 	if len(c.sendCh) != 0 {
 		t.Fatalf("abort left %d stale queued frames", len(c.sendCh))
 	}
-	close(gate)
+	unblock()
 	select {
 	case <-writerDone:
 	case <-time.After(2 * time.Second):
 		t.Fatal("writer did not terminate after abort release")
 	}
 
+	if got := attempts.Load(); got != 0 {
+		t.Fatalf("writer attempted %d stale writes after abort", got)
+	}
+
 	readCtx, readCancel := context.WithTimeout(context.Background(), time.Second)
-	start := time.Now()
 	_, _, err = client.Read(readCtx)
+	readContextErr := readCtx.Err()
 	readCancel()
+	if readContextErr != nil || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		t.Fatalf("read deadline/cancellation is not transport termination: %v (context %v)", err, readContextErr)
+	}
 	if err == nil {
 		t.Fatal("client received a frame after mirror-loss abort")
-	}
-	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
-		t.Fatalf("transport close was not observable promptly: %v", elapsed)
 	}
 }

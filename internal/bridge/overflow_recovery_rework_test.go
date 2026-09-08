@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -15,12 +16,13 @@ func TestOverflowPublishesCauseBeforeDataEOF(t *testing.T) {
 	if err != nil {
 		t.Fatalf("os.Pipe: %v", err)
 	}
-	defer writer.Close()
 
 	slow := make(chan []byte, 1)
 	loss := make(chan error, 1)
 	entered := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
 	s := &sharedPipe{
 		gen:        1,
 		subs:       map[uint64]chan []byte{1: slow},
@@ -37,15 +39,27 @@ func TestOverflowPublishesCauseBeforeDataEOF(t *testing.T) {
 	go s.fanout(reader, done, 1)
 	payload := bytes.Repeat([]byte("cause-order\n"), streamBufferBytes/len("cause-order\n")*2+1)
 	written := make(chan struct{})
+	var writeN int
+	var writeErr error
 	go func() {
-		_, _ = writer.Write(payload)
+		writeN, writeErr = writer.Write(payload)
 		close(written)
 	}()
-	select {
-	case <-written:
-	case <-time.After(5 * time.Second):
-		t.Fatal("controlled reader did not receive payload")
-	}
+	t.Cleanup(func() {
+		unblock()
+		_ = writer.Close()
+		_ = reader.Close()
+		select {
+		case <-written:
+		case <-time.After(2 * time.Second):
+			t.Error("writer cleanup did not finish")
+		}
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Error("fanout cleanup did not finish")
+		}
+	})
 	select {
 	case <-entered:
 	case <-time.After(2 * time.Second):
@@ -59,7 +73,20 @@ func TestOverflowPublishesCauseBeforeDataEOF(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("data-close barrier was reached before loss publication")
 	}
-	close(release)
+	select {
+	case _, ok := <-slow:
+		t.Fatalf("data became readable before close release: open=%v", ok)
+	default:
+	}
+	unblock()
+	select {
+	case <-written:
+		if writeErr != nil || writeN != len(payload) {
+			t.Fatalf("writer n=%d err=%v, want %d", writeN, writeErr, len(payload))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("writer did not finish after releasing fanout")
+	}
 	_ = writer.Close()
 	select {
 	case _, ok := <-slow:

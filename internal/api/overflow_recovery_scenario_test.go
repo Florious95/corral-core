@@ -12,9 +12,11 @@ package api
 import (
 	"bytes"
 	"context"
-	"errors"
+	"crypto/sha256"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,10 +31,8 @@ const (
 	recoveryReadyToken = "P16_RECOVERY_READY"
 	recoveryAfterToken = "P16_RECOVERY_AFTER"
 
-	// A 16 MiB source burst crosses both bounded relay stages on a peer that is
-	// not read: bridge subscriber buffering and the per-connection send queue.
-	// The test never treats this byte count as evidence of overflow; the
-	// post-burst OSC barrier and the observed dead socket are the evidence.
+	// Legacy capture-window tests use this burst to provoke production loss.
+	// The scenario below instead controls each queue stage independently.
 	recoveryBurstBytes = 16 << 20
 )
 
@@ -62,75 +62,6 @@ func sendTmuxLine(t *tmuxEnv, line string) error {
 	}
 	_, err := runTmuxCmd(t.env, t.sock, "send-keys", "-t", t.paneID, "Enter")
 	return err
-}
-
-type mirrorNotice struct {
-	marker string
-	err    error
-}
-
-// observeMirror continuously drains the healthy peer.  It keeps only a small
-// suffix because the source burst is deliberately large; marker matching is
-// chunk-boundary safe and uses observed bytes, never a guessed read count.
-func observeMirror(ctx context.Context, e *wsEnv, ref string, markers []string, notices chan<- mirrorNotice) {
-	seen := make(map[string]bool, len(markers))
-	tail := make([]byte, 0, 256)
-	for {
-		readCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
-		typ, data, err := e.conn.Read(readCtx)
-		cancel()
-		if err != nil {
-			if ctx.Err() != nil {
-				return
-			}
-			if errors.Is(err, context.DeadlineExceeded) {
-				continue
-			}
-			notices <- mirrorNotice{err: err}
-			return
-		}
-		if typ != websocket.MessageBinary {
-			continue
-		}
-		payload, err := protocol.DecodeBinary(data)
-		if err != nil {
-			notices <- mirrorNotice{err: fmt.Errorf("decode healthy mirror: %w", err)}
-			return
-		}
-		if payload.Ref != ref {
-			notices <- mirrorNotice{err: fmt.Errorf("healthy mirror ref=%q, want %q", payload.Ref, ref)}
-			return
-		}
-		tail = append(tail, payload.Data...)
-		if len(tail) > 256 {
-			tail = tail[len(tail)-256:]
-		}
-		for _, marker := range markers {
-			if !seen[marker] && bytes.Contains(tail, []byte(marker)) {
-				seen[marker] = true
-				notices <- mirrorNotice{marker: marker}
-			}
-		}
-	}
-}
-
-func waitMirrorMarker(t *testing.T, notices <-chan mirrorNotice, marker string, timeout time.Duration) {
-	t.Helper()
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	for {
-		select {
-		case notice := <-notices:
-			if notice.err != nil {
-				t.Fatalf("healthy client failed before %s: %v", marker, notice.err)
-			}
-			if notice.marker == marker {
-				return
-			}
-		case <-timer.C:
-			t.Fatalf("healthy client never observed %s", marker)
-		}
-	}
 }
 
 // waitSlowDisconnect starts reading only after the source barrier has arrived.
@@ -205,92 +136,219 @@ func readSnapshotFor(t *testing.T, e *wsEnv, ref string) protocol.BinaryPayload 
 	return protocol.BinaryPayload{}
 }
 
-// TestOverflowDisconnectReplayStaticOracle exercises the server-only half of
-// S+A6 against real tmux and real WebSocket clients:
-//
-//  1. A slow subscribed peer receives no reads while one source burst crosses
-//     both bounded fanout stages; a healthy peer drains continuously.
-//  2. The slow peer must be forcibly terminated rather than silently frozen.
-//  3. A fresh peer performs auth, List, and Subscribe and receives exactly the
-//     complete static screen/cursor oracle, with no pre-snapshot stale delta.
-//  4. The healthy peer remains live and receives output after recovery.
-//
-// This test deliberately does not claim Android recovery: the production App
-// chain and A6 composition remain a separate acceptance obligation.
+// TestOverflowDisconnectReplayStaticOracle runs each queue stage separately.
+// Every controlled payload byte is compared and hashed on the healthy peer;
+// a frozen relay or writer forces the target stage, and its exact loss reason
+// must be observed before transport termination and static snapshot replay.
+// This is still a server protocol peer, not App A6 acceptance.
 func TestOverflowDisconnectReplayStaticOracle(t *testing.T) {
-	te := startTmuxEnv(t, "bash")
-	ref := te.ref()
-
-	// Slow peer: consume only the initial snapshot.  It becomes the controlled
-	// backpressure endpoint once the source barrier is triggered.
-	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: ref, Rows: 24, Cols: 80})
-	initial := te.readBinaryFrame()
-	if initial.Kind != protocol.KindSnapshot {
-		t.Fatalf("slow peer initial kind=%d, want snapshot", initial.Kind)
-	}
-
-	// Healthy peer shares the production bridge fanout but drains every frame.
-	healthy := dialSameServer(t, te.wsEnv)
-	healthy.sendFrame(&protocol.Subscribe{Ref: ref, Rows: 24, Cols: 80})
-	healthyInitial := readBinaryOn(t, healthy)
-	if healthyInitial.Kind != protocol.KindSnapshot {
-		t.Fatalf("healthy peer initial kind=%d, want snapshot", healthyInitial.Kind)
-	}
-
-	observeCtx, stopObserve := context.WithCancel(context.Background())
-	t.Cleanup(stopObserve)
-	notices := make(chan mirrorNotice, 8)
-	go observeMirror(observeCtx, healthy, ref, []string{recoveryReadyToken, recoveryAfterToken}, notices)
-
-	// The source completion barrier is an observed terminal byte after the
-	// burst and final redraw, not a fixed number of pipe reads or WebSocket
-	// writes.  The command stays alive so the static screen cannot disappear.
-	if err := sendTmuxLine(te, recoveryBurstCommand()); err != nil {
-		t.Fatalf("trigger controlled source burst: %v", err)
-	}
-	waitMirrorMarker(t, notices, recoveryReadyToken, 30*time.Second)
-
-	metrics := te.wsEnv.srv.sendQueue.Snapshot()
-	t.Logf("overflow source barrier observed: queue_peak=%d deltas_dropped=%d frames_sent=%d", metrics.QueuePeak, metrics.DeltasDropped, metrics.FramesSent)
-
-	if err := waitSlowDisconnect(te.wsEnv.conn, 20*time.Second); err != nil {
-		t.Fatal(err)
-	}
-
-	// Reconnect from a fresh protocol peer.  Explicitly require the sequence
-	// auth -> list -> subscribe instead of asserting a future server helper.
-	url := "ws" + strings.TrimPrefix(te.wsEnv.hsrv.URL, "http") + "/ws"
-	conn, _, err := websocket.Dial(context.Background(), url, nil)
-	if err != nil {
-		t.Fatalf("dial recovery peer: %v", err)
-	}
-	recovered := &wsEnv{t: t, srv: te.wsEnv.srv, hsrv: te.wsEnv.hsrv, conn: conn}
-	t.Cleanup(func() { _ = conn.CloseNow() })
-	recovered.auth()
-	recovered.sendFrame(&protocol.List{ReqID: 416})
-	listing := readListingFor(t, recovered, 416)
-	found := false
-	for _, ws := range listing.Workspaces {
-		for _, session := range ws.Sessions {
-			if session.Ref == ref {
-				found = true
+	for _, stage := range []string{"bridge", "ws"} {
+		t.Run(stage, func(t *testing.T) {
+			// FINAL redraws a known screen without output afterward. Numbered records
+			// are OSC-only and cannot alter that static screen or its cursor.
+			command := `stty -echo -onlcr; python3 -u -c 'import sys
+for line in sys.stdin:
+ if line.strip()=="FINAL":
+  sys.stdout.write("\033[2J\033[H\033[1;34mRECOVERED TITLE\033[0m\r\n\033[3;5m日本語 ✓\033[0m\r\n\033[5;1mCURSOR_ORACLE\033[0m\033[7;13HRECOVERY_DONE")
+ else:
+  sys.stdout.write("\033]0;P16_%04d_"%int(line)+"abcdefgh"*64+"\007")
+ sys.stdout.flush()'`
+			te := startTmuxEnv(t, command)
+			ref := te.ref()
+			// The first connection is already authenticated. All hooks are installed
+			// before the additional slow connection starts its reader/writer goroutines.
+			slowConn := make(chan *wsConn, 1)
+			relayEntered := make(chan *subscription, 1)
+			writerEntered := make(chan struct{})
+			forwarded := make(chan struct{}, 1)
+			release := make(chan struct{})
+			var releaseOnce, writerOnce sync.Once
+			unblock := func() { releaseOnce.Do(func() { close(release) }) }
+			var accepted atomic.Int64
+			te.wsEnv.srv.connInit = func(c *wsConn) {
+				if accepted.Add(1) != 1 {
+					return
+				}
+				if stage == "bridge" {
+					c.beforeRelay = func(sub *subscription) { relayEntered <- sub; <-release }
+				}
+				if stage == "ws" {
+					c.mirrorForwarded = func() { forwarded <- struct{}{} }
+					c.beforeWriterFrame = func(m wsMsg) {
+						if m.typ != wsBinary {
+							return
+						}
+						p, err := protocol.DecodeBinary(m.data)
+						if err == nil && p.Kind == protocol.KindDelta {
+							writerOnce.Do(func() { close(writerEntered); <-release })
+						}
+					}
+				}
+				slowConn <- c
 			}
-		}
-	}
-	if !found {
-		t.Fatalf("reconnect listing omitted current ref %q", ref)
-	}
-	recovered.sendFrame(&protocol.Subscribe{Ref: ref, Rows: 24, Cols: 80})
-	snapshot := readSnapshotFor(t, recovered, ref)
-	if want := recoverySnapshotOracle(); !bytes.Equal(snapshot.Data, want) {
-		t.Fatalf("reconnect snapshot differs from complete static oracle:\n got  %q\n want %q", snapshot.Data, want)
-	}
+			slow := dialSameServer(t, te.wsEnv)
+			var target *wsConn
+			select {
+			case target = <-slowConn:
+			case <-time.After(5 * time.Second):
+				t.Fatal("slow connection missing")
+			}
+			t.Cleanup(func() { target.cancel(); unblock(); _ = target.conn.CloseNow() })
+			slow.sendFrame(&protocol.Subscribe{Ref: ref, Rows: 24, Cols: 80})
+			readSnapshotFor(t, slow, ref)
+			var heldSub *subscription
+			if stage == "bridge" {
+				select {
+				case heldSub = <-relayEntered:
+				case <-time.After(5 * time.Second):
+					t.Fatal("relay gate missing")
+				}
+			}
+			healthy := te.wsEnv
+			healthy.sendFrame(&protocol.Subscribe{Ref: ref, Rows: 24, Cols: 80})
+			readSnapshotFor(t, healthy, ref)
 
-	// Release the still-live source process only after replay has been checked;
-	// the OSC marker leaves the visible grid untouched and proves the healthy
-	// subscription survived the other client's forced termination.
-	if err := sendTmuxLine(te, "release"); err != nil {
-		t.Fatalf("release source after replay: %v", err)
+			// One continuous Read context for the whole observation. Stage waits live
+			// outside Read; no timed-out websocket is ever reused as a polling device.
+			observeCtx, stopObserve := context.WithCancel(context.Background())
+			chunks := make(chan []byte, 4)
+			readErrors := make(chan error, 1)
+			observerDone := make(chan struct{})
+			go func() {
+				defer close(observerDone)
+				for {
+					typ, wire, err := healthy.conn.Read(observeCtx)
+					if err != nil {
+						if observeCtx.Err() == nil {
+							readErrors <- err
+						}
+						return
+					}
+					if typ != wsBinary {
+						frame, err := protocol.UnmarshalFrame(wire)
+						if err != nil {
+							readErrors <- err
+							return
+						}
+						if _, ok := frame.(protocol.ErrorFrame); ok {
+							readErrors <- fmt.Errorf("healthy subscription ended: %v", frame)
+							return
+						}
+						continue
+					}
+					p, err := protocol.DecodeBinary(wire)
+					if err != nil {
+						readErrors <- err
+						return
+					}
+					if p.Ref != ref || p.Kind != protocol.KindDelta {
+						readErrors <- fmt.Errorf("unexpected healthy frame ref=%q kind=%d", p.Ref, p.Kind)
+						return
+					}
+					select {
+					case chunks <- p.Data:
+					case <-observeCtx.Done():
+						return
+					}
+				}
+			}()
+			t.Cleanup(func() { stopObserve(); awaitBoundary(t, observerDone, "healthy observer cleanup") })
+			gotHash, wantHash := sha256.New(), sha256.New()
+			total := 0
+			expect := func(want []byte) {
+				t.Helper()
+				var got []byte
+				timer := time.NewTimer(5 * time.Second)
+				defer timer.Stop()
+				for len(got) < len(want) {
+					select {
+					case b := <-chunks:
+						got = append(got, b...)
+					case err := <-readErrors:
+						t.Fatalf("healthy observer: %v", err)
+					case <-timer.C:
+						t.Fatalf("healthy stream incomplete: got %d want %d", len(got), len(want))
+					}
+				}
+				if !bytes.Equal(got, want) {
+					t.Fatalf("healthy stream mismatch at byte %d: got=%d want=%d", total, len(got), len(want))
+				}
+				gotHash.Write(got)
+				wantHash.Write(want)
+				total += len(got)
+			}
+			n := 32
+			if stage == "ws" {
+				n = 270
+			}
+			for i := 0; i < n; i++ {
+				if err := sendTmuxLine(te, fmt.Sprint(i)); err != nil {
+					t.Fatal(err)
+				}
+				expect(pacedRecord(i))
+				if stage == "ws" {
+					select {
+					case <-forwarded:
+					case <-target.mirrorAbortDone:
+					case <-time.After(5 * time.Second):
+						t.Fatal("slow relay did not acknowledge enqueue")
+					}
+				}
+				if stage == "ws" && i == 0 {
+					awaitBoundary(t, writerEntered, "writer holds first delta")
+				}
+			}
+			cause := "ws: mirror send queue overflow"
+			if stage == "bridge" {
+				if len(heldSub.loss) != 1 {
+					t.Fatalf("bridge loss not committed: buffered=%d", len(heldSub.loss))
+				}
+				cause = "bridge: subscriber queue overflow"
+				unblock()
+			}
+			awaitBoundary(t, target.mirrorAbortDone, "stage-specific abort")
+			if reason := fmt.Sprint(target.mirrorLossReason.Load()); !strings.Contains(reason, cause) {
+				t.Fatalf("wrong stage attribution: got %s want %s", reason, cause)
+			}
+			if err := waitSlowDisconnect(slow.conn, 5*time.Second); err != nil {
+				t.Fatal(err)
+			}
+			unblock()
+			final := []byte("\x1b[2J\x1b[H\x1b[1;34mRECOVERED TITLE\x1b[0m\r\n\x1b[3;5m日本語 ✓\x1b[0m\r\n\x1b[5;1mCURSOR_ORACLE\x1b[0m\x1b[7;13HRECOVERY_DONE")
+			if err := sendTmuxLine(te, "FINAL"); err != nil {
+				t.Fatal(err)
+			}
+			expect(final)
+
+			recovered := dialSameServer(t, healthy)
+			recovered.sendFrame(&protocol.List{ReqID: 416})
+			listing := readListingFor(t, recovered, 416)
+			found := false
+			for _, workspace := range listing.Workspaces {
+				for _, session := range workspace.Sessions {
+					if session.Ref == ref {
+						found = true
+					}
+				}
+			}
+			if !found {
+				t.Fatal("reconnect listing omitted current ref")
+			}
+			recovered.sendFrame(&protocol.Subscribe{Ref: ref, Rows: 24, Cols: 80})
+			snapshot := readSnapshotFor(t, recovered, ref)
+			if want := recoverySnapshotOracle(); !bytes.Equal(snapshot.Data, want) {
+				t.Fatalf("static screen/cursor differs: got %q want %q", snapshot.Data, want)
+			}
+			// The healthy original subscription must still receive the entire next
+			// record without auth, re-subscribe or a replacement snapshot.
+			if err := sendTmuxLine(te, "999"); err != nil {
+				t.Fatal(err)
+			}
+			expect(pacedRecord(999))
+			if !bytes.Equal(gotHash.Sum(nil), wantHash.Sum(nil)) {
+				t.Fatal("healthy hash differs")
+			}
+			t.Logf("stage=%s cause=%s healthy_bytes=%d healthy_sha256=%x", stage, cause, total, gotHash.Sum(nil))
+		})
 	}
-	waitMirrorMarker(t, notices, recoveryAfterToken, 10*time.Second)
 }

@@ -1,13 +1,12 @@
 package bridge
 
-// overflow_recovery_test.go locks the bridge-level loss contract. The reader
-// is the production fanout goroutine; an OS pipe supplies more bytes than one
-// read can hold, while a one-slot subscriber queue is deliberately withheld.
-// This is deterministic backpressure, not a fixed write-count proxy for read
-// chunks.
-
+// Each source byte is acknowledged by the healthy subscriber before the next
+// write. This forces distinct production fanout reads without depending on OS
+// pipe capacity or scheduler speed; the withheld subscriber must overflow.
+// This revised oracle is also copied verbatim to frozen b98504e for base red.
 import (
 	"bytes"
+	"crypto/sha256"
 	"os"
 	"testing"
 	"time"
@@ -16,81 +15,57 @@ import (
 func TestSubscriberOverflowStopsOnlySlowSubscriber(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
+		t.Fatal(err)
 	}
-	defer writer.Close()
-
 	const gen = uint64(1)
 	slow := make(chan []byte, 1)
-	fast := make(chan []byte, 16)
+	fast := make(chan []byte, 1)
 	s := &sharedPipe{gen: gen, subs: map[uint64]chan []byte{1: slow, 2: fast}, refs: 2}
 	done := make(chan struct{})
 	go s.fanout(reader, done, gen)
-
-	// Read copies are capped at streamBufferBytes. This payload therefore
-	// necessarily takes at least two reads and overflows the withheld one-slot
-	// subscriber, while the healthy subscriber is consumed concurrently.
-	want := bytes.Repeat([]byte("overflow-proof\n"), streamBufferBytes/len("overflow-proof\n")*2+1)
-	fastResult := make(chan []byte, 1)
-	go func() {
-		var got []byte
-		for chunk := range fast {
-			got = append(got, chunk...)
-		}
-		fastResult <- got
-	}()
-	writeResult := make(chan struct {
-		n   int
-		err error
-	}, 1)
-	go func() {
-		n, err := writer.Write(want)
-		writeResult <- struct {
-			n   int
-			err error
-		}{n: n, err: err}
-	}()
-	select {
-	case result := <-writeResult:
-		if result.err != nil || result.n != len(want) {
-			t.Fatalf("controlled writer n=%d err=%v, want n=%d err=nil", result.n, result.err, len(want))
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("controlled reader did not receive the overflow payload")
-	}
-
-	// The slow channel must become terminal at the first overflow, before the
-	// producer closes its pipe. The old implementation leaves it open forever.
-	slowDeadline := time.After(2 * time.Second)
-	for {
+	t.Cleanup(func() {
+		_ = writer.Close()
+		_ = reader.Close()
 		select {
-		case _, ok := <-slow:
-			if !ok {
-				goto slowStopped
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Error("fanout cleanup did not finish")
+		}
+	})
+	want := []byte("0123456789abcdefghijklmnopqrstuvwxyz")
+	var got []byte
+	for _, b := range want {
+		if n, err := writer.Write([]byte{b}); n != 1 || err != nil {
+			t.Fatalf("source write n=%d err=%v", n, err)
+		}
+		select {
+		case chunk, ok := <-fast:
+			if !ok || len(chunk) != 1 {
+				t.Fatalf("healthy byte acknowledgement: open=%v bytes=%d", ok, len(chunk))
 			}
-			// The pre-overflow slot is stale and may be consumed while the
-			// terminal transition races; it must not prevent closure.
-		case <-slowDeadline:
-			t.Fatal("slow subscriber was not terminated at overflow")
+			got = append(got, chunk...)
+		case <-time.After(2 * time.Second):
+			t.Fatal("healthy subscriber did not acknowledge source byte")
 		}
 	}
-slowStopped:
-	_ = writer.Close()
-
+	// The lock joins the final fanout iteration, including either map order.
+	// No new input follows, so the slow terminal state is now stable.
+	s.mu.Lock()
+	actualGen, refs := s.gen, s.refs
+	s.mu.Unlock()
 	select {
-	case got := <-fastResult:
-		if !bytes.Equal(got, want) {
-			t.Fatalf("healthy stream mismatch: got %d bytes, want %d", len(got), len(want))
+	case chunk, ok := <-slow:
+		if ok {
+			t.Fatalf("overflow retained stale data: %d bytes", len(chunk))
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("healthy subscriber did not finish")
-	}
-	select {
-	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("fanout did not finish after writer close")
+		t.Fatal("slow subscriber was not terminated at overflow")
 	}
-	if s.gen != gen {
-		t.Fatalf("shared pipe generation changed: got %d, want %d", s.gen, gen)
+	if !bytes.Equal(got, want) || sha256.Sum256(got) != sha256.Sum256(want) {
+		t.Fatalf("healthy stream mismatch: bytes=%d want=%d", len(got), len(want))
 	}
+	if actualGen != gen || refs != 2 {
+		t.Fatalf("overflow changed shared pipe: gen=%d refs=%d", actualGen, refs)
+	}
+	t.Logf("healthy bytes=%d sha256=%x generation=%d", len(got), sha256.Sum256(got), actualGen)
 }

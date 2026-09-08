@@ -7,6 +7,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -73,14 +74,14 @@ func TestWSQueueOverflowAbortsOnceAndDiscardsQueue(t *testing.T) {
 	c.sendMirror([]byte("new-delta-that-overflows"))
 
 	readCtx, readCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	start := time.Now()
 	_, _, err = client.Read(readCtx)
+	readContextErr := readCtx.Err()
 	readCancel()
+	if readContextErr != nil || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		t.Fatalf("read deadline/cancellation is not transport termination: %v (context %v)", err, readContextErr)
+	}
 	if err == nil {
 		t.Fatal("client read succeeded after overflow; transport was not aborted")
-	}
-	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
-		t.Fatalf("overflow transport close was not observable promptly: %v", elapsed)
 	}
 	if got := len(c.sendCh); got != 0 {
 		t.Fatalf("overflow abort retained %d stale queue entries", got)

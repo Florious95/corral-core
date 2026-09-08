@@ -27,6 +27,9 @@ import (
 // table (never shared, so one client cannot see another's), and the discovery
 // loop is a single heartbeat that fans list_delta out to every live client.
 type Server struct {
+	// connInit is a test-only boundary before reader/writer goroutines start.
+	connInit func(*wsConn)
+
 	log *slog.Logger
 
 	tokenValidator TokenValidator
