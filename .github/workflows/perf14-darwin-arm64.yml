@@ -59,7 +59,19 @@ jobs:
           root="$RUNNER_TEMP/perf14"
           source_tree="$root/source-1fa3b651"
           artifact="$root/$PERF14_ARTIFACT_NAME"
-          git worktree add --detach "$source_tree" "$PERF14_SOURCE"
+          # Use a normal clone: Go must inspect a real .git directory while the
+          # source remains the exact PERF14_SOURCE commit and both patch trees.
+          git clone --no-local --no-tags "$GITHUB_WORKSPACE" "$source_tree"
+          git -C "$source_tree" fetch --no-tags origin "$PERF14_SOURCE:refs/remotes/origin/perf14-source"
+          git -C "$source_tree" switch --detach "$PERF14_SOURCE"
+          test -d "$source_tree/.git"
+          test "$(git -C "$source_tree" rev-parse --show-toplevel)" = "$source_tree"
+          test "$(git -C "$source_tree" rev-parse --git-dir)" = ".git"
+          test "$(git -C "$source_tree" rev-parse --git-common-dir)" = ".git"
+          test "$(git -C "$source_tree" rev-parse HEAD)" = "$PERF14_SOURCE"
+          test "$(git -C "$source_tree" rev-parse HEAD^{tree})" = "$PERF14_SOURCE_TREE"
+          test "$(sed -n 's/^module //p' "$source_tree/go.mod" | head -1)" = github.com/agentmirror/agentmirror
+          test "$(sed -n 's/^package //p' "$source_tree/cmd/agentmirrord/main.go" | head -1)" = main
           git -C "$source_tree" apply --check "$GITHUB_WORKSPACE/$PERF14_CANDIDATE_PATCH"
           git -C "$source_tree" apply "$GITHUB_WORKSPACE/$PERF14_CANDIDATE_PATCH"
           git -C "$source_tree" add -A
@@ -72,6 +84,18 @@ jobs:
           test "$final_tested_tree" = "$PERF14_FINAL_TESTED_TREE"
           git -C "$source_tree" status --porcelain > "$root/vcs-status.txt"
           test -s "$root/vcs-status.txt"
+          go_mod="$(cd "$source_tree" && GOTOOLCHAIN=auto go env GOMOD)"
+          test "$go_mod" = "$source_tree/go.mod"
+          {
+            printf 'source_dir=%s\n' "$source_tree"
+            printf 'git_toplevel=%s\n' "$(git -C "$source_tree" rev-parse --show-toplevel)"
+            printf 'git_dir=%s\n' "$(git -C "$source_tree" rev-parse --git-dir)"
+            printf 'git_common_dir=%s\n' "$(git -C "$source_tree" rev-parse --git-common-dir)"
+            printf 'source_commit=%s\nsource_tree=%s\n' "$(git -C "$source_tree" rev-parse HEAD)" "$(git -C "$source_tree" rev-parse HEAD^{tree})"
+            printf 'product_combo_tree=%s\nfinal_tested_tree=%s\n' "$product_combo_tree" "$final_tested_tree"
+            printf 'module=github.com/agentmirror/agentmirror\npackage=main\nmodule_file=%s\n' "$go_mod"
+            printf 'go_version=%s\n' "$(cd "$source_tree" && GOTOOLCHAIN=auto go version)"
+          } | tee "$root/build-input.txt"
           (
             cd "$source_tree"
             GOTOOLCHAIN=auto CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
@@ -81,7 +105,9 @@ jobs:
           file -b "$artifact" | tee "$root/file.txt"
           grep -Eq 'Mach-O 64-bit arm64' "$root/file.txt"
           go version -m "$artifact" | tee "$root/build-info.txt"
-          grep -Eq 'vcs\.modified[=[:space:]]+true' "$root/build-info.txt"
+          grep -Eq '^[[:space:]]+build[[:space:]]+vcs=git$' "$root/build-info.txt"
+          grep -Eq "^[[:space:]]+build[[:space:]]+vcs\\.revision=${PERF14_SOURCE}$" "$root/build-info.txt"
+          grep -Eq '^[[:space:]]+build[[:space:]]+vcs\.modified=true$' "$root/build-info.txt"
           bytes="$(wc -c < "$artifact" | tr -d ' ')"
           sha256="$(sha256sum "$artifact" | awk '{print $1}')"
           export PERF14_ROOT="$root"
@@ -93,6 +119,7 @@ jobs:
           export PERF14_ARTIFACT_SHA256="$sha256"
           export PERF14_FILE_ID="$(cat "$root/file.txt")"
           export PERF14_BUILD_INFO_FILE="$root/build-info.txt"
+          export PERF14_BUILD_INPUT_FILE="$root/build-input.txt"
           export PERF14_VCS_STATUS_FILE="$root/vcs-status.txt"
           python3 - <<'PY'
           import hashlib
@@ -102,10 +129,8 @@ jobs:
           artifact = Path(os.environ["PERF14_ARTIFACT"])
           status = Path(os.environ["PERF14_VCS_STATUS_FILE"]).read_text()
           build_info = Path(os.environ["PERF14_BUILD_INFO_FILE"]).read_text()
+          build_input = Path(os.environ["PERF14_BUILD_INPUT_FILE"]).read_text()
           embedded = next((line.rsplit("=", 1)[-1].strip() for line in build_info.splitlines() if "vcs.modified" in line), "")
-          revision = next((line.split("vcs.revision=", 1)[1].strip() for line in build_info.splitlines() if "vcs.revision=" in line), "")
-          if revision != os.environ["PERF14_SOURCE"]:
-              raise SystemExit("embedded VCS revision mismatch")
           vcs_modified = bool(status.strip())
           if embedded not in {"true", "false"} or (embedded == "true") != vcs_modified:
               raise SystemExit(f"VCS modified mismatch: status={vcs_modified} embedded={embedded!r}")
@@ -149,6 +174,7 @@ jobs:
                   "status": status,
                   "build_info": build_info,
               },
+              "build_input": build_input,
           }
           if hashlib.sha256(artifact.read_bytes()).hexdigest() != manifest["artifact"]["sha256"]:
               raise SystemExit("artifact hash changed while writing manifest")
@@ -178,4 +204,5 @@ jobs:
             ${{ runner.temp }}/perf14/build-info.txt
             ${{ runner.temp }}/perf14/file.txt
             ${{ runner.temp }}/perf14/vcs-status.txt
+            ${{ runner.temp }}/perf14/build-input.txt
             ${{ runner.temp }}/perf14/identity-receipt.txt
