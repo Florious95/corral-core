@@ -6,10 +6,53 @@ import json
 import os
 from pathlib import Path
 import signal
+import re
 import socket
 import subprocess
 import time
 import xml.etree.ElementTree as ET
+
+def validate_a6_junit(content, method, expected=None,
+                      classname='dev.agentmirror.app.session.Perf16AppRecoveryA6ScenarioTest'):
+    """Accept only the named test and a single direct, expected assertion root.
+
+    Gradle serializes Throwable.toString() as message; a bare getMessage() is
+    also unambiguous when type and the first stack line agree. Stack text is
+    never positive evidence for reaching an oracle.
+    """
+    suite = ET.fromstring(content)
+    assert suite.tag == 'testsuite' and suite.get('name') == classname, 'wrong JUnit suite'
+    tests = suite.findall('testcase')
+    assert len(tests) == 1 and len(list(suite.iter('testcase'))) == 1, 'named JUnit not unique'
+    test = tests[0]
+    assert test.get('name') == method and test.get('classname') == classname, 'named JUnit absent'
+    assert not list(suite.iter('skipped')), 'JUnit skipped'
+    failures, errors = list(suite.iter('failure')), list(suite.iter('error'))
+    assert suite.get('tests') == '1' and suite.get('skipped') == '0', 'JUnit count mismatch'
+    assert suite.get('failures') == str(len(failures)) and suite.get('errors') == str(len(errors)), 'JUnit failure count mismatch'
+    if expected is None:
+        assert not failures and not errors, 'JUnit failed'
+        return
+    assert not errors and len(failures) == 1 and test.findall('failure') == failures, 'mixed or indirect JUnit failure'
+    failure = failures[0]
+    assert failure.get('type') == 'java.lang.AssertionError', 'unexpected root exception type'
+    message = failure.get('message', '')
+    prefix = 'java.lang.AssertionError: '
+    if message.startswith(prefix):
+        message = message[len(prefix):]
+    if expected == 'no-abort':
+        assert message == 'no RECONNECTING event', 'wrong reconnect assertion root'
+    elif expected == 'screen-corruption':
+        assert re.fullmatch(r'cell \[20,0\] expected:<Cell\([^\r\n]+\)> but was:<Cell\([^\r\n]+\)>', message), 'wrong Cell assertion root'
+    else:
+        raise AssertionError('unknown expected failure mode')
+    trace = failure.text or ''
+    lines = trace.splitlines()
+    assert lines and lines[0] == prefix + message, 'JUnit root/trace mismatch'
+    assert 'MultipleFailureException' not in trace, 'aggregated JUnit exception'
+    assert not re.search(r'(?m)^\s*(?:Caused by:|Suppressed:)', trace), 'additional JUnit exception'
+    # A direct AssertionError has only Java stack frames after its root.
+    assert all(not line.strip() or re.fullmatch(r'\s+at .+', line) for line in lines[1:]), 'additional JUnit trace root'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--stage', choices=('bridge', 'ws'), required=True)
@@ -155,14 +198,9 @@ try:
         time.sleep(.02)
     exits['gradle']=gradle.returncode
     content=xml.read_bytes(); (root/'junit.xml').write_bytes(content)
-    suite=ET.fromstring(content)
-    tests=suite.findall('testcase')
-    assert len(tests)==1 and tests[0].get('name')==method, 'named JUnit absent'
-    assert suite.get('tests')=='1' and suite.get('skipped','0')=='0'
-    failures=tests[0].findall('failure')+tests[0].findall('error')
+    validate_a6_junit(content, method, args.control if args.control in ('no-abort', 'screen-corruption') else None)
     if args.control=='no-abort':
-        assert gradle.returncode!=0 and failures, 'abort-disabled control was not red'
-        assert any('no RECONNECTING event' in (f.get('message','')+(f.text or '')) for f in failures), 'negative did not reach App loss oracle'
+        assert gradle.returncode!=0, 'abort-disabled control was not red'
         healthy=json.loads((root/'healthy-burst.json').read_text())
         assert healthy=={'bytes':16*1024*1024,'contiguous':True,'closed':False}, healthy
         gate=json.loads((root/'bridge-ready').read_text())
@@ -184,15 +222,14 @@ try:
         recipe='accepted_number=2; PERF16_A6_CONTROL=no-abort; c.mirrorAbortOnce.Do(func(){})'
         (root/'mutation.json').write_text(json.dumps({'mode':'no-abort','recipe':recipe,'recipe_sha256':hashlib.sha256(recipe.encode()).hexdigest(),'helper_sha256':hashlib.sha256(helper.read_bytes()).hexdigest(),'target_conn':gate['conn'],'target_ref':gate['ref'],'cause_mapping':cause,'cause_source':cause_source,'actual_abort_reason':None,'healthy':healthy,'expected_junit_failure':'no RECONNECTING event'},indent=2))
     elif args.control=='screen-corruption':
-        assert gradle.returncode!=0 and failures, 'corrupt real screen escaped the Cell oracle'
-        assert any('cell [20,0]' in (f.get('message','')+(f.text or '')) for f in failures), 'negative did not reach the full Cell oracle'
+        assert gradle.returncode!=0, 'corrupt real screen escaped the Cell oracle'
         assert receipt is not None, 'screen negative lacked real stage loss'
         healthy=json.loads((root/'healthy-burst.json').read_text())
         assert healthy=={'bytes':16*1024*1024,'contiguous':True,'closed':False}, healthy
         recipe='PERF16_A6_CONTROL=screen-corruption; source emits ESC[21;1HX ESC[7;26H after unchanged final screen'
         (root/'mutation.json').write_text(json.dumps({'mode':args.control,'recipe':recipe,'recipe_sha256':hashlib.sha256(recipe.encode()).hexdigest(),'source_sha256':hashlib.sha256((repo/'tools/perf16-a6/source.py').read_bytes()).hexdigest(),'target_conn':receipt['conn'],'target_ref':receipt['ref'],'actual_cause':receipt['cause'],'expected_junit_failure':'cell [20,0]','healthy':healthy},indent=2))
     else:
-        assert gradle.returncode==0 and not failures, 'JUnit failed'
+        assert gradle.returncode==0, 'JUnit process failed'
         assert receipt is not None, 'stage loss receipt absent'
         if args.stage=='ws':
             proxy_log=(root/'proxy.log').read_text()

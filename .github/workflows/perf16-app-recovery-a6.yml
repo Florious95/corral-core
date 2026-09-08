@@ -11,6 +11,7 @@ on:
       - 'tools/perf16-a6/source.py'
       - 'tools/perf16-a6/fault_controls.py'
       - 'tools/perf16-a6/exit_race_control.py'
+      - 'tools/perf16-a6/junit_controls.py'
   workflow_dispatch:
     inputs:
       server_ref:
@@ -106,6 +107,12 @@ jobs:
           cd app
           ./gradlew --no-daemon --rerun-tasks -Pkotlin.compiler.execution.strategy=in-process :app:compileDebugUnitTestKotlin 2>&1 | tee "$RUNNER_TEMP/perf16-a6/kotlin-compile.log"
           printf '%s\n' '{"compile_only":true,"behavior_pass":false,"executed_tests":0}' > "$RUNNER_TEMP/perf16-a6/compile.json"
+      - name: B1 structured failure classifier controls
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'runtime'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/perf16-a6/junit_controls.py --hosted --root "$RUNNER_TEMP/perf16-a6/junit-classifier"
       - name: Real Go and App stages plus abort-disabled negative controls
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'runtime'
         shell: bash
