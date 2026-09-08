@@ -11,6 +11,8 @@ on:
       - 'tools/perf16-a6/proxy.py'
       - 'tools/perf16-a6/run.py'
       - 'tools/perf16-a6/source.py'
+      - 'tools/perf16-a6/fault_controls.py'
+      - 'tools/perf16-a6/exit_race_control.py'
   workflow_dispatch:
 
 permissions:
