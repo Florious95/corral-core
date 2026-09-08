@@ -1,0 +1,2303 @@
+diff --git a/internal/api/api_test.go b/internal/api/api_test.go
+index 4e1a6f9..c4465ea 100644
+--- a/internal/api/api_test.go
++++ b/internal/api/api_test.go
+@@ -113,6 +113,9 @@ func TestListDeltaSeqMonotonic(t *testing.T) {
+ 	md := &mutableDiscoverer{model: testModel()}
+ 	e := startWS(t, Options{Token: "test-token", Discoverer: md})
+ 	e.auth()
++	// A server-side scan is not this connection's wire baseline.
++	e.sendFrame(&protocol.List{ReqID: 1})
++	mustListing(t, e, 1)
+ 
+ 	// Let the baseline scan run with the original model (several ticks of the
+ 	// 50ms loop emit nothing since the model is unchanged), so the diff below
+diff --git a/internal/api/discovery_failure_test.go b/internal/api/discovery_failure_test.go
+index a3e603e..7bfa875 100644
+--- a/internal/api/discovery_failure_test.go
++++ b/internal/api/discovery_failure_test.go
+@@ -132,6 +132,9 @@ func TestDiscoveryRecoveryResumesDelta(t *testing.T) {
+ 	fd := &flipDiscoverer{model: testModel()}
+ 	e := startWS(t, Options{Token: "test-token", Discoverer: fd})
+ 	e.auth()
++	// A server-side scan is not this connection's wire baseline.
++	e.sendFrame(&protocol.List{ReqID: 1})
++	mustListing(t, e, 1)
+ 
+ 	// Baseline with the original model, then fail a couple of scans.
+ 	time.Sleep(150 * time.Millisecond)
+diff --git a/internal/api/level2.go b/internal/api/level2.go
+index 067744b..b642df5 100644
+--- a/internal/api/level2.go
++++ b/internal/api/level2.go
+@@ -1,12 +1,10 @@
+ package api
+ 
+ import (
+-	"context"
+ 	"fmt"
+ 	"strings"
+ 	"time"
+ 
+-	"github.com/agentmirror/agentmirror/internal/nodeprobe"
+ 	"github.com/agentmirror/agentmirror/internal/protocol"
+ )
+ 
+@@ -43,69 +41,14 @@ type level2Entry struct {
+ 	cols     uint16
+ }
+ 
+-// level2Loop is the idle-gated scan for the second-level stream. While ≥1
+-// subscriber exists it scans on the 2s cadence; at zero it parks (idle CPU ≈ 0).
+-// The 0→1 wake (markLevel2) breaks the park immediately.
+-func (s *Server) level2Loop(ctx context.Context) {
+-	s.log.Debug("level2 loop started",
+-		"interval", s.level2Interval,
+-		"heartbeat", s.level2Heartbeat,
+-	)
+-	for {
+-		if s.countLevel2() == 0 {
+-			select {
+-			case <-ctx.Done():
+-				s.log.Debug("level2 loop stopped")
+-				return
+-			case <-s.level2WakeCh:
+-			}
+-		} else {
+-			select {
+-			case <-ctx.Done():
+-				s.log.Debug("level2 loop stopped")
+-				return
+-			case <-s.level2WakeCh:
+-			case <-time.After(s.level2Interval):
+-			}
+-		}
+-		// Re-check after the wait: unsubscribe during the interval must not
+-		// produce a tmux call (requirement 061: zero subscribers ⇒ zero poll).
+-		if s.countLevel2() == 0 {
+-			continue
+-		}
+-		s.publishLevel2(ctx)
+-	}
+-}
+-
+-// markLevel2 is called when a connection subscribes to the level-2 stream: it
+-// bumps the subscriber count and wakes the loop (0→1) so the first subscriber's
+-// stream is fresh immediately.
+-func (s *Server) markLevel2() {
+-	if s.level2Subscribers.Add(1) == 1 {
+-		s.wakeLevel2()
+-	}
+-}
+-
+-// wakeLevel2 is the 069 enter-menu signal. It must fire on every subscribe
+-// (including re-subscribe on an already-active connection), not only 0→1.
+-func (s *Server) wakeLevel2() {
+-	select {
+-	case s.level2WakeCh <- struct{}{}:
+-	default:
+-	}
+-}
+-
+-// unmarkLevel2 is called when a connection unsubscribes or tears down: it drops
+-// the subscriber count. At zero the loop parks after the in-flight scan.
+ func (s *Server) unmarkLevel2() {
+ 	if s.level2Subscribers.Add(-1) <= 0 {
+ 		s.level2Subscribers.Store(0)
+ 	}
++	s.scans.wake()
+ }
+ 
+-func (s *Server) countLevel2() int64 {
+-	return s.level2Subscribers.Load()
+-}
++func (s *Server) countLevel2() int64 { return s.level2Subscribers.Load() }
+ 
+ func level2SnapKey(sessions []protocol.Session) string {
+ 	var b strings.Builder
+@@ -120,101 +63,36 @@ func level2SnapKey(sessions []protocol.Session) string {
+ 	return b.String()
+ }
+ 
+-// publishLevel2 performs one scan-and-push cycle. It is the loop's only scan
+-// point. Each subscribed connection gets a Level2Frame on snapshot change, or
+-// a Level2Heartbeat when the snapshot is unchanged past the heartbeat interval.
+-func (s *Server) publishLevel2(ctx context.Context) {
+-	if s.countLevel2() == 0 {
+-		return
+-	}
+-	model, err := s.discoverer.Discover(ctx)
+-	if err != nil {
+-		s.log.Warn("level2: discover failed", "err", err)
+-		return
+-	}
+-	observations, err := nodeprobe.SampleModel(ctx, model, s.nodeprobe)
+-	if err != nil {
+-		s.log.Warn("level2: nodeprobe failed", "err", err, "had_subscribers", s.countLevel2())
+-		return
+-	}
+-	if s.filterAgents {
+-		model = filterModelToIdentifiedAgents(model, observations)
+-	}
+-
+-	byCWD := make(map[string][]protocol.Session)
+-	for _, ws := range model.Workspaces {
+-		for _, p := range ws.Panes {
+-			obs, ok := observations[sessionRef(p)]
+-			if !ok {
+-				obs = nodeprobe.Unknown()
+-			}
+-			byCWD[ws.CWD] = append(byCWD[ws.CWD], sessionFromPane(p, obs))
+-		}
+-	}
+-
+-	s.trackersMu.Lock()
+-	conns := make([]*wsConn, 0, len(s.trackers))
+-	for c := range s.trackers {
+-		if c.level2Active() {
+-			conns = append(conns, c)
+-		}
+-	}
+-	s.trackersMu.Unlock()
+-
+-	now := time.Now()
+-	for _, c := range conns {
+-		ws := c.level2Workspace()
+-		sessions := byCWD[ws] // missing cwd ⇒ honest empty list
+-		key := level2SnapKey(sessions)
+-		kind := c.noteLevel2Push(key, now, s.level2Heartbeat)
+-		if kind == "" {
+-			continue
+-		}
+-		seq := s.nextLevel2Seq()
+-		if kind == "heartbeat" {
+-			c.send(protocol.Level2Heartbeat{Workspace: ws, Seq: seq})
+-			continue
+-		}
+-		c.send(protocol.Level2Frame{
+-			Workspace: ws,
+-			Seq:       seq,
+-			Sessions:  sessions,
+-		})
+-	}
+-}
+-
+-// handleLevel2Subscribe starts this connection's second-level stream.
+-//
+-// @contract
+-// @pre 连接已认证
+-// @post 连接计入 level2 订阅者并绑定 workspace；服务端开始按 cadence 推 Level2Frame
+-// @err none
++// handleLevel2Subscribe changes the epoch before admission. A repeat subscribe
++// is a new refresh intent even when its workspace string is unchanged.
+ func (c *wsConn) handleLevel2Subscribe(f protocol.Level2Subscribe) {
+-	already := c.level2Active()
+-	c.setLevel2(true, f.Workspace)
+-	c.resetLevel2PushState()
+-	if already {
+-		c.s.wakeLevel2()
+-	} else {
+-		c.s.markLevel2()
++	c.level2Mu.Lock()
++	if !c.level2On {
++		c.s.level2Subscribers.Add(1)
+ 	}
+-	// Event-driven one-shot (069): do not wait for the 2s cadence.
+-	// publishLevel2 no-ops on discover failure and does not send an empty wipe.
+-	c.s.publishLevel2(c.ctx)
++	c.level2On = true
++	c.level2WS = f.Workspace
++	c.level2Epoch++
++	epoch := c.level2Epoch
++	c.level2Snap = ""
++	c.level2PushedAt = time.Time{}
++	c.level2Mu.Unlock()
++	c.s.scans.level2(c, epoch)
+ }
+ 
+-// handleLevel2Unsubscribe stops this connection's second-level stream.
+-//
+-// @contract
+-// @pre 连接已认证
+-// @post 连接移出 level2 订阅者；最后一名订阅者退出后 level2Loop park
+-// @err none
+ func (c *wsConn) handleLevel2Unsubscribe(protocol.Level2Unsubscribe) {
+-	if c.level2Active() {
+-		c.setLevel2(false, "")
+-		c.resetLevel2PushState()
++	c.level2Mu.Lock()
++	wasOn := c.level2On
++	c.level2On = false
++	c.level2Epoch++
++	c.level2WS = ""
++	c.level2Snap = ""
++	c.level2PushedAt = time.Time{}
++	c.level2Mu.Unlock()
++	if wasOn {
+ 		c.s.unmarkLevel2()
+ 	}
++	c.s.scans.removeLevel2(c)
+ }
+ 
+ func (c *wsConn) level2Active() bool {
+@@ -223,42 +101,36 @@ func (c *wsConn) level2Active() bool {
+ 	return c.level2On
+ }
+ 
+-func (c *wsConn) level2Workspace() string {
+-	c.level2Mu.Lock()
+-	defer c.level2Mu.Unlock()
+-	return c.level2WS
+-}
+-
+-func (c *wsConn) setLevel2(on bool, workspace string) {
+-	c.level2Mu.Lock()
+-	defer c.level2Mu.Unlock()
+-	c.level2On = on
+-	c.level2WS = workspace
+-}
+-
+-func (c *wsConn) resetLevel2PushState() {
++// level2Output checks workspace, epoch and last-push state in one critical
++// section. No network or queue operation occurs while level2Mu is held.
++func (c *wsConn) level2Output(epoch uint64, projection map[string][]protocol.Session, scanErr error) (protocol.Typed, uint64) {
+ 	c.level2Mu.Lock()
+ 	defer c.level2Mu.Unlock()
+-	c.level2Snap = ""
+-	c.level2PushedAt = time.Time{}
++	if !c.level2On || c.level2Epoch != epoch {
++		return nil, 0
++	}
++	if scanErr != nil {
++		return &protocol.ErrorFrame{Code: protocol.ErrCodeInternal, Reason: "catalog refresh failed"}, epoch
++	}
++	sessions := projection[c.level2WS]
++	key := level2SnapKey(sessions)
++	now := time.Now()
++	if c.level2PushedAt.IsZero() || c.level2Snap != key {
++		c.level2Snap, c.level2PushedAt = key, now
++		return protocol.Level2Frame{Workspace: c.level2WS, Seq: c.s.nextLevel2Seq(), Sessions: sessions}, epoch
++	}
++	if now.Sub(c.level2PushedAt) >= c.s.level2Heartbeat {
++		c.level2PushedAt = now
++		return protocol.Level2Heartbeat{Workspace: c.level2WS, Seq: c.s.nextLevel2Seq()}, epoch
++	}
++	return nil, 0
+ }
+ 
+-// noteLevel2Push records the latest snapshot and returns "frame", "heartbeat",
+-// or "" (skip). First snapshot after subscribe always yields "frame".
+-func (c *wsConn) noteLevel2Push(key string, now time.Time, hb time.Duration) string {
++func (c *wsConn) currentLevel2Epoch() uint64 {
+ 	c.level2Mu.Lock()
+ 	defer c.level2Mu.Unlock()
+ 	if !c.level2On {
+-		return ""
+-	}
+-	if c.level2PushedAt.IsZero() || c.level2Snap != key {
+-		c.level2Snap = key
+-		c.level2PushedAt = now
+-		return "frame"
+-	}
+-	if hb > 0 && now.Sub(c.level2PushedAt) >= hb {
+-		c.level2PushedAt = now
+-		return "heartbeat"
++		return 0
+ 	}
+-	return ""
++	return c.level2Epoch
+ }
+diff --git a/internal/api/refresh_on_open_test.go b/internal/api/refresh_on_open_test.go
+index 0d6ffd2..988e026 100644
+--- a/internal/api/refresh_on_open_test.go
++++ b/internal/api/refresh_on_open_test.go
+@@ -130,6 +130,9 @@ func TestRefreshOnOpenLevel2ZeroSubscribersNoPoll(t *testing.T) {
+ 		Level2Heartbeat: time.Hour,
+ 	})
+ 	e.auth()
++	// Auth ACK is not completion of the mandatory initial scan.
++	e.sendFrame(&protocol.List{ReqID: 1})
++	mustListing(t, e, 1)
+ 	base := cd.scans.Load()
+ 	time.Sleep(120 * time.Millisecond)
+ 	if got := cd.scans.Load(); got > base {
+diff --git a/internal/api/scan_coordinator.go b/internal/api/scan_coordinator.go
+new file mode 100644
+index 0000000..28879f6
+--- /dev/null
++++ b/internal/api/scan_coordinator.go
+@@ -0,0 +1,567 @@
++package api
++
++// scan_coordinator.go owns catalog admission, freshness cutoffs and publication.
++// @contract
++// @pre NewServer initializes this coordinator before exposing the handler
++// @post at most one Discover+Sample worker and one coalesced pending generation
++// @err scan failures retain last-good; deadline/queue overload terminates the affected transport
++// @inv no per-request goroutines; immutable catalog/snapshot/seq publish together; sends outside locks
++
++import (
++	"context"
++	"fmt"
++	"sync"
++	"time"
++
++	"github.com/agentmirror/agentmirror/internal/nodeprobe"
++	"github.com/agentmirror/agentmirror/internal/protocol"
++)
++
++const (
++	catalogPerConnLimit = 16
++	catalogGlobalLimit  = 1024
++	catalogScanTimeout  = 30 * time.Second
++	catalogListTimeout  = 35 * time.Second
++)
++
++type catalogWaiter struct {
++	c        *wsConn
++	id       uint64 // admission identity, never the reusable wire req_id
++	req      uint32
++	deadline time.Time
++}
++
++type catalogGeneration struct {
++	id         uint64
++	lists      []*catalogWaiter
++	l2         map[*wsConn]uint64
++	cold       int
++	background bool
++	done       chan struct{}
++	err        error // read only after done closes
++	cancel     context.CancelFunc
++}
++
++type catalogResult struct {
++	generation *catalogGeneration
++	catalog    *sessionCatalog
++	snapshot   *modelSnapshot
++	level2     map[string][]protocol.Session // original L2 model order, same observations
++	err        error
++}
++
++type catalogClient struct {
++	waiting   int
++	watermark uint64
++}
++type catalogOutput struct {
++	c     *wsConn
++	frame protocol.Typed
++	epoch uint64
++}
++
++type scanCoordinator struct {
++	s                     *Server
++	mu                    sync.Mutex // admission only; never held over discovery, sampling or enqueue
++	closed                bool
++	generation, admission uint64
++	active, pending       *catalogGeneration
++	clients               map[*wsConn]*catalogClient
++	waiting               int
++	wakeCh                chan struct{}
++	jobs                  chan *catalogGeneration
++	results               chan catalogResult
++	done, workerDone      chan struct{}
++}
++
++func newScanCoordinator(s *Server) *scanCoordinator {
++	q := &scanCoordinator{s: s, clients: make(map[*wsConn]*catalogClient), wakeCh: make(chan struct{}, 1), jobs: make(chan *catalogGeneration, 1), results: make(chan catalogResult, 1), done: make(chan struct{}), workerDone: make(chan struct{})}
++	go q.worker()
++	go q.loop()
++	return q
++}
++
++func (q *scanCoordinator) wake() {
++	select {
++	case q.wakeCh <- struct{}{}:
++	default:
++	}
++}
++func (q *scanCoordinator) pendingLocked() *catalogGeneration {
++	if q.pending == nil {
++		q.generation++
++		q.pending = &catalogGeneration{id: q.generation, l2: make(map[*wsConn]uint64), done: make(chan struct{})}
++	}
++	return q.pending
++}
++
++func (q *scanCoordinator) list(c *wsConn, req uint32) {
++	q.mu.Lock()
++	if q.closed {
++		q.mu.Unlock()
++		c.abortCatalog("catalog_closed")
++		return
++	}
++	if c.ctx.Err() != nil {
++		q.mu.Unlock()
++		return
++	}
++	state := q.clients[c]
++	if state == nil {
++		state = &catalogClient{}
++		q.clients[c] = state
++	}
++	if state.waiting >= catalogPerConnLimit || q.waiting >= catalogGlobalLimit {
++		perConn, total := state.waiting, q.waiting
++		q.mu.Unlock()
++		q.s.log.Warn("catalog: admission rejected", "conn", c.id, "req_id", req, "conn_waiters", perConn, "conn_limit", catalogPerConnLimit, "total_waiters", total, "total_limit", catalogGlobalLimit)
++		c.abortCatalog("catalog_backpressure")
++		return
++	}
++	q.admission++
++	g := q.pendingLocked()
++	g.lists = append(g.lists, &catalogWaiter{c: c, id: q.admission, req: req, deadline: time.Now().Add(catalogListTimeout)})
++	state.waiting++
++	q.waiting++
++	q.mu.Unlock()
++	q.wake()
++}
++
++func (q *scanCoordinator) level2(c *wsConn, epoch uint64) {
++	q.mu.Lock()
++	if !q.closed && c.ctx.Err() == nil {
++		if q.active != nil {
++			delete(q.active.l2, c)
++		}
++		if q.pending != nil {
++			delete(q.pending.l2, c)
++		}
++		q.pendingLocked().l2[c] = epoch
++	}
++	q.mu.Unlock()
++	q.wake()
++}
++
++func (q *scanCoordinator) removeLevel2(c *wsConn) {
++	q.mu.Lock()
++	if q.active != nil {
++		delete(q.active.l2, c)
++	}
++	if q.pending != nil {
++		delete(q.pending.l2, c)
++	}
++	q.mu.Unlock()
++	q.wake()
++}
++
++func (q *scanCoordinator) removeLocked(c *wsConn) {
++	for _, g := range []*catalogGeneration{q.active, q.pending} {
++		if g == nil {
++			continue
++		}
++		kept := g.lists[:0]
++		for _, w := range g.lists {
++			if w.c != c {
++				kept = append(kept, w)
++			} else {
++				q.waiting--
++			}
++		}
++		// Clear removed pointers; backing arrays are bounded but must not retain peers.
++		clear(g.lists[len(kept):])
++		g.lists = kept
++		delete(g.l2, c)
++	}
++	delete(q.clients, c)
++}
++func (q *scanCoordinator) remove(c *wsConn) {
++	q.mu.Lock()
++	q.removeLocked(c)
++	q.mu.Unlock()
++	q.wake()
++}
++
++func (q *scanCoordinator) cadence() {
++	q.mu.Lock()
++	if !q.closed && q.s.countAuthed() > 0 {
++		q.pendingLocked().background = true
++	}
++	q.mu.Unlock()
++	q.wake()
++}
++
++// wait is used only by cold Subscribe (reader-ordered) and the synchronous
++// rebuild seam. Cold callers share active initialization; explicit refreshes
++// enter pending and therefore never reuse a pre-admission sample.
++func (q *scanCoordinator) wait(ctx context.Context, initial bool) error {
++	ctx, cancel := context.WithTimeout(ctx, catalogScanTimeout)
++	defer cancel()
++	q.mu.Lock()
++	if q.closed {
++		q.mu.Unlock()
++		return context.Canceled
++	}
++	if snap, _ := q.s.currentSnapshot(); initial && snap != nil {
++		q.mu.Unlock()
++		return nil
++	}
++	g := q.active
++	if !initial || g == nil {
++		g = q.pendingLocked()
++	}
++	g.cold++
++	q.mu.Unlock()
++	q.wake()
++	defer func() { q.mu.Lock(); g.cold--; q.mu.Unlock(); q.wake() }()
++	select {
++	case <-g.done:
++		return g.err
++	case <-ctx.Done():
++		return ctx.Err()
++	}
++}
++
++func (q *scanCoordinator) neededLocked(g *catalogGeneration) bool {
++	return len(g.lists) > 0 || len(g.l2) > 0 || g.cold > 0 || (g.background && q.s.countAuthed() > 0)
++}
++
++func (q *scanCoordinator) worker() {
++	defer close(q.workerDone)
++	for {
++		select {
++		case <-q.s.loopCtx.Done():
++			return
++		case g := <-q.jobs:
++			ctx, cancel := context.WithTimeout(q.s.loopCtx, catalogScanTimeout)
++			q.mu.Lock()
++			g.cancel = cancel
++			if !q.neededLocked(g) {
++				cancel()
++			}
++			q.mu.Unlock()
++			result := q.scan(ctx, g)
++			// A dependency returning a partial result after cancellation cannot publish.
++			if ctx.Err() != nil {
++				result.err = ctx.Err()
++			}
++			cancel()
++			select {
++			case q.results <- result:
++			case <-q.s.loopCtx.Done():
++				return
++			}
++		}
++	}
++}
++
++func (q *scanCoordinator) scan(ctx context.Context, g *catalogGeneration) catalogResult {
++	result := catalogResult{generation: g}
++	model, err := q.s.discoverer.Discover(ctx)
++	if err != nil {
++		result.err = fmt.Errorf("api: discover: %w", err)
++		return result
++	}
++	observations, err := nodeprobe.SampleModel(ctx, model, q.s.nodeprobe)
++	if err != nil {
++		result.err = fmt.Errorf("api: nodeprobe: %w", err)
++		return result
++	}
++	if q.s.filterAgents {
++		model = filterModelToIdentifiedAgents(model, observations)
++	}
++	result.catalog = newSessionCatalog()
++	result.catalog.rebuild(model, observations)
++	result.snapshot = buildSnapshot(result.catalog)
++	result.level2 = make(map[string][]protocol.Session)
++	for _, ws := range model.Workspaces {
++		for _, pane := range ws.Panes {
++			observation, ok := observations[sessionRef(pane)]
++			if !ok {
++				observation = nodeprobe.Unknown()
++			}
++			result.level2[ws.CWD] = append(result.level2[ws.CWD], sessionFromPane(pane, observation))
++		}
++	}
++	return result
++}
++
++// finish is the single publication/output sequencer. Admission may continue
++// during enqueue, but a later generation cannot overtake these outputs.
++func (q *scanCoordinator) finish(result catalogResult) {
++	s := q.s
++	prev, prevSeq := s.currentSnapshot()
++	var delta *protocol.ListDelta
++	if result.err == nil && (prev != nil || prevSeq != 0) {
++		previous := prev
++		if previous == nil {
++			previous = &modelSnapshot{}
++		}
++		delta = result.snapshot.diff(previous)
++		if len(delta.AddedSessions)+len(delta.RemovedRefs)+len(delta.ChangedSessions)+len(delta.ChangedWorkspaces) == 0 {
++			delta = nil
++		}
++	}
++	q.mu.Lock()
++	g := result.generation
++	if q.closed {
++		q.mu.Unlock()
++		return
++	}
++	if !q.neededLocked(g) {
++		result.err = context.Canceled
++		delta = nil
++	}
++	s.snapMu.Lock()
++	if result.err == nil {
++		if s.seq == 0 {
++			s.seq = 1
++		} else if delta != nil {
++			s.seq++
++		}
++		s.catalog, s.snapshot, s.scanGeneration = result.catalog, result.snapshot, g.id
++		s.level2Projection = result.level2
++	} else if s.seq == 0 && len(g.lists) > 0 {
++		// Empty compatibility Listing(1) establishes a wire baseline only.
++		// A subsequent successful catalog must delta from that empty baseline.
++		s.seq = 1
++	}
++	snap, seq, projection := s.snapshot, s.seq, s.level2Projection
++	if seq == 0 {
++		seq = 1
++	}
++	s.snapMu.Unlock()
++	outputs := []catalogOutput{}
++	aborts := map[*wsConn]string{}
++	now := time.Now()
++	for _, w := range g.lists {
++		state := q.clients[w.c]
++		if state == nil {
++			continue
++		}
++		state.waiting--
++		q.waiting--
++		if !now.Before(w.deadline) || result.err == context.DeadlineExceeded {
++			aborts[w.c] = "catalog_timeout"
++			continue
++		}
++		frame := &protocol.Listing{ReqID: w.req, Seq: seq}
++		if snap != nil {
++			frame.Workspaces = snap.listing()
++		}
++		outputs = append(outputs, catalogOutput{c: w.c, frame: frame})
++		state.watermark = seq
++
++	}
++	// Listings(S) precede all deltas; a connection answered above skips Delta(S).
++	if delta != nil {
++		delta.Seq = seq
++		for c, state := range q.clients {
++			if state.watermark > 0 && state.watermark < seq {
++				outputs = append(outputs, catalogOutput{c: c, frame: delta})
++				state.watermark = seq
++			}
++		}
++	}
++	for c, epoch := range g.l2 {
++		frame, tag := c.level2Output(epoch, projection, result.err)
++		if frame != nil {
++			outputs = append(outputs, catalogOutput{c: c, frame: frame, epoch: tag})
++		}
++	}
++	completed := append([]*catalogWaiter(nil), g.lists...)
++	clear(g.lists)
++	g.lists = nil
++	clear(g.l2)
++	g.err = result.err
++	q.active = nil
++	close(g.done)
++	q.mu.Unlock()
++	if result.err != nil {
++		s.log.Warn("catalog: scan failed", "generation", g.id, "err", result.err, "had_cache", prev != nil, "seq", seq)
++	}
++	for _, w := range completed {
++		s.log.Info("listing: refresh on open", "conn", w.c.id, "admission", w.id, "req_id", w.req, "scan_generation", g.id, "had_cache", prev != nil, "prev_seq", prevSeq, "cur_seq", seq, "cur_sessions", snapshotSessionCount(snap), "refresh_err", errString(result.err))
++	}
++	for c, reason := range aborts {
++		c.abortCatalog(reason)
++	}
++	for _, out := range outputs {
++		if _, bad := aborts[out.c]; !bad {
++			out.c.sendCatalog(out.frame, out.epoch)
++		}
++	}
++}
++
++// maintain expires bounded waiters, prunes vanished demand and hands exactly
++// one generation to the worker. The handoff is the freshness cutoff.
++func (q *scanCoordinator) maintain(now time.Time) time.Time {
++	q.mu.Lock()
++	expired := map[*wsConn]bool{}
++	var deadline time.Time
++	for _, g := range []*catalogGeneration{q.active, q.pending} {
++		if g == nil {
++			continue
++		}
++		for _, w := range g.lists {
++			if !now.Before(w.deadline) {
++				expired[w.c] = true
++			}
++			if deadline.IsZero() || w.deadline.Before(deadline) {
++				deadline = w.deadline
++			}
++		}
++	}
++	for c := range expired {
++		q.removeLocked(c)
++	}
++	if q.active != nil && !q.neededLocked(q.active) && q.active.cancel != nil {
++		q.active.cancel()
++	}
++	if q.pending != nil && !q.neededLocked(q.pending) {
++		q.pending.err = context.Canceled
++		close(q.pending.done)
++		q.pending = nil
++	}
++	if !q.closed && q.active == nil && q.pending != nil {
++		g := q.pending
++		q.pending = nil
++		q.active = g
++		// Capture current L2 epochs at this scan's cutoff, never at completion.
++		q.s.trackersMu.Lock()
++		for c := range q.s.trackers {
++			if epoch := c.currentLevel2Epoch(); epoch != 0 {
++				g.l2[c] = epoch
++			}
++		}
++		q.s.trackersMu.Unlock()
++		q.jobs <- g // capacity 1, only when the preceding worker result was consumed
++	}
++	q.mu.Unlock()
++	for c := range expired {
++		c.abortCatalog("catalog_timeout")
++	}
++	return deadline
++}
++
++func (q *scanCoordinator) loop() {
++	defer close(q.done)
++	defer func() {
++		<-q.workerDone
++		q.mu.Lock()
++		for _, g := range []*catalogGeneration{q.active, q.pending} {
++			if g != nil {
++				g.err = context.Canceled
++				close(g.done)
++				clear(g.lists)
++				g.lists = nil
++				clear(g.l2)
++			}
++		}
++		q.active, q.pending = nil, nil
++		q.waiting = 0
++		clear(q.clients)
++		q.mu.Unlock()
++	}()
++	timer := time.NewTimer(time.Hour)
++	timer.Stop()
++	defer timer.Stop()
++	var nextList, nextL2 time.Time
++	for {
++		if q.s.loopCtx.Err() != nil {
++			return
++		}
++		now := time.Now()
++		if q.s.countAuthed() == 0 {
++			nextList = time.Time{}
++		} else if nextList.IsZero() {
++			nextList = now.Add(q.s.listInterval)
++		}
++		if q.s.countLevel2() == 0 {
++			nextL2 = time.Time{}
++		} else if nextL2.IsZero() {
++			nextL2 = now.Add(q.s.level2Interval)
++		}
++		dueList := !nextList.IsZero() && !now.Before(nextList)
++		dueL2 := !nextL2.IsZero() && !now.Before(nextL2)
++		if dueList || dueL2 {
++			q.mu.Lock()
++			if !q.closed && q.active == nil && q.pending == nil {
++				g := q.pendingLocked()
++				g.background = dueList
++				if dueL2 {
++					q.s.trackersMu.Lock()
++					for c := range q.s.trackers {
++						if epoch := c.currentLevel2Epoch(); epoch != 0 {
++							g.l2[c] = epoch
++						}
++					}
++					q.s.trackersMu.Unlock()
++				}
++			}
++			q.mu.Unlock()
++			if dueList {
++				nextList = now.Add(q.s.listInterval)
++			}
++			if dueL2 {
++				nextL2 = now.Add(q.s.level2Interval)
++			}
++		}
++		deadline := q.maintain(now)
++		for _, d := range []time.Time{nextList, nextL2} {
++			if !d.IsZero() && (deadline.IsZero() || d.Before(deadline)) {
++				deadline = d
++			}
++		}
++		var tick <-chan time.Time
++		if !timer.Stop() {
++			select {
++			case <-timer.C:
++			default:
++			}
++		}
++		if !deadline.IsZero() {
++			timer.Reset(time.Until(deadline))
++			tick = timer.C
++		}
++		select {
++		case <-q.s.loopCtx.Done():
++			return
++		case <-q.wakeCh:
++		case <-tick:
++		case result := <-q.results:
++			q.finish(result)
++			// Same cadence as the old scan-then-wait loops, with both projections
++			// satisfied by this one scan instead of two independent subprocess chains.
++			if !nextList.IsZero() {
++				nextList = time.Now().Add(q.s.listInterval)
++			}
++			if !nextL2.IsZero() {
++				nextL2 = time.Now().Add(q.s.level2Interval)
++			}
++		}
++	}
++}
++
++func (q *scanCoordinator) close() {
++	q.mu.Lock()
++	q.closed = true
++	affected := make(map[*wsConn]bool)
++	for _, g := range []*catalogGeneration{q.active, q.pending} {
++		if g == nil {
++			continue
++		}
++		for _, w := range g.lists {
++			affected[w.c] = true
++		}
++		for c := range g.l2 {
++			affected[c] = true
++		}
++	}
++	q.s.loopStop()
++	q.mu.Unlock()
++	// Pending accepted requests get a real terminal result, not silent removal.
++	for c := range affected {
++		c.abortCatalog("catalog_closed")
++	}
++	<-q.done // dependencies must honor context; never start a replacement worker
++}
+diff --git a/internal/api/scan_coordinator_test.go b/internal/api/scan_coordinator_test.go
+new file mode 100644
+index 0000000..465e141
+--- /dev/null
++++ b/internal/api/scan_coordinator_test.go
+@@ -0,0 +1,559 @@
++package api
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"strings"
++	"sync"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/agentmirror/agentmirror/internal/discovery"
++	"github.com/agentmirror/agentmirror/internal/protocol"
++	"github.com/coder/websocket"
++)
++
++func catalogEventually(t *testing.T, description string, f func() bool) {
++	t.Helper()
++	deadline := time.Now().Add(5 * time.Second)
++	for !f() {
++		if time.Now().After(deadline) {
++			t.Fatal(description)
++		}
++		time.Sleep(time.Millisecond)
++	}
++}
++func catalogServer(t *testing.T) (*wsEnv, *wsConn, *catalogGate) {
++	g := newCatalogGate(testModel())
++	g.arm("Discover")
++	e := startWS(t, Options{Token: "test-token", Discoverer: g, Nodeprobe: catalogGateSampler{g}, ListInterval: time.Hour, Level2Interval: time.Hour})
++	e.auth()
++	catalogGateEntered(t, g, "Discover")
++	g.open()
++	e.sendFrame(&protocol.List{ReqID: 1})
++	mustListing(t, e, 1)
++	var c *wsConn
++	e.srv.trackersMu.Lock()
++	for peer := range e.srv.trackers {
++		c = peer
++	}
++	e.srv.trackersMu.Unlock()
++	if c == nil {
++		t.Fatal("real connection not tracked")
++	}
++	return e, c, g
++}
++func catalogPeer(t *testing.T, e *wsEnv, init func(*wsConn)) (*wsEnv, *wsConn) {
++	t.Helper()
++	captured := make(chan *wsConn, 1)
++	e.srv.trackersMu.Lock()
++	e.srv.connInit = func(c *wsConn) {
++		if init != nil {
++			init(c)
++		}
++		captured <- c
++	}
++	e.srv.trackersMu.Unlock()
++	conn, _, err := websocket.Dial(context.Background(), "ws"+strings.TrimPrefix(e.hsrv.URL, "http")+"/ws", nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = conn.CloseNow() })
++	other := &wsEnv{t: t, srv: e.srv, hsrv: e.hsrv, conn: conn}
++	other.auth()
++	// auth_ack synchronizes startup, and the trackers lock restores the seam.
++	e.srv.trackersMu.Lock()
++	e.srv.connInit = nil
++	e.srv.trackersMu.Unlock()
++	select {
++	case c := <-captured:
++		return other, c
++	case <-time.After(3 * time.Second):
++		t.Fatal("connection init not reached")
++	}
++	return nil, nil
++}
++func catalogClosed(t *testing.T, e *wsEnv, c *wsConn, reason string) {
++	t.Helper()
++	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
++	defer cancel()
++	for {
++		_, _, err := e.conn.Read(ctx)
++		if err != nil {
++			if ctx.Err() != nil {
++				t.Fatal("client deadline is not transport termination")
++			}
++			break
++		}
++	}
++	if got := c.catalogCloseReason.Load(); got != reason {
++		t.Fatalf("close reason=%v want=%s", got, reason)
++	}
++	if c.mirrorLossReason.Load() != nil || c.mirrorAborted.Load() {
++		t.Fatal("catalog cause masquerades as mirror loss")
++	}
++	catalogEventually(t, "waiters not removed", func() bool { q := e.srv.scans; q.mu.Lock(); defer q.mu.Unlock(); _, ok := q.clients[c]; return !ok })
++}
++func catalogIdle(t *testing.T, s *Server) {
++	catalogEventually(t, "scan worker did not finish", func() bool {
++		s.scans.mu.Lock()
++		defer s.scans.mu.Unlock()
++		return s.scans.active == nil && s.scans.pending == nil
++	})
++}
++
++func TestScanSingleFlightAndOnePendingGeneration(t *testing.T) {
++	e, c, g := catalogServer(t)
++	q := e.srv.scans
++	catalogIdle(t, e.srv)
++	g.mu.Lock()
++	before, beforeSample := g.calls["Discover"], g.calls["Sample"]
++	g.mu.Unlock()
++	g.arm("Discover")
++	defer g.open()
++	q.list(c, 10)
++	catalogGateEntered(t, g, "Discover")
++	q.mu.Lock()
++	active := q.active.id
++	q.mu.Unlock()
++	for i := 0; i < 5; i++ {
++		q.list(c, 0)
++	} // duplicate/zero wire req_id are separate intents
++	c.handleLevel2Subscribe(protocol.Level2Subscribe{Workspace: "/ws/a"})
++	q.mu.Lock()
++	if q.active.id != active || q.pending == nil || q.pending.id != active+1 || len(q.pending.lists) != 5 {
++		t.Errorf("not one active/one pending: active=%+v pending=%+v", q.active, q.pending)
++	}
++	ids := map[uint64]bool{}
++	for _, w := range q.pending.lists {
++		if ids[w.id] {
++			t.Error("admission identity collapsed")
++		}
++		ids[w.id] = true
++	}
++	q.mu.Unlock()
++	// No second Discover may reach the blocked worker boundary.
++	select {
++	case <-g.entered:
++		t.Fatal("parallel scan worker")
++	case <-time.After(50 * time.Millisecond):
++	}
++	g.open()
++	counts := map[uint32]int{}
++	for counts[10] < 1 || counts[0] < 5 {
++		f := e.readControl()
++		if l, ok := f.(protocol.Listing); ok {
++			counts[l.ReqID]++
++		}
++	}
++	if counts[0] != 5 || counts[10] != 1 {
++		t.Fatal(counts)
++	}
++	catalogIdle(t, e.srv)
++	g.mu.Lock()
++	after, afterSample := g.calls["Discover"], g.calls["Sample"]
++	g.mu.Unlock()
++	if afterSample-beforeSample != 2 {
++		t.Fatalf("samples=%d want one per socket per generation", afterSample-beforeSample)
++	}
++	if after-before != 2 {
++		t.Fatalf("scans=%d want 2 generations", after-before)
++	}
++	q.mu.Lock()
++	defer q.mu.Unlock()
++	if q.waiting != 0 {
++		t.Fatalf("remaining waiters=%d", q.waiting)
++	}
++}
++
++func TestCatalogSnapshotSequenceAtomicCommit(t *testing.T) {
++	md := &mutableDiscoverer{model: testModel()}
++	s := NewServer(Options{Discoverer: md, ListInterval: time.Hour})
++	defer s.Close()
++	if err := s.rebuildCatalog(context.Background()); err != nil {
++		t.Fatal(err)
++	}
++	first, seq := s.currentSnapshot()
++	if first == nil || seq != 1 {
++		t.Fatal("initial publication missing")
++	}
++	if err := s.rebuildCatalog(context.Background()); err != nil {
++		t.Fatal(err)
++	}
++	if s.currentSeq() != seq {
++		t.Fatal("unchanged scan advanced listing seq")
++	}
++	stop := make(chan struct{})
++	joined := make(chan struct{})
++	bad := make(chan string, 1)
++	go func() {
++		defer close(joined)
++		for {
++			select {
++			case <-stop:
++				return
++			default:
++			}
++			s.snapMu.RLock()
++			snap, n, generation := s.snapshot, s.seq, s.scanGeneration
++			entries := s.catalog.list()
++			if snap == nil || n == 0 || generation == 0 {
++				select {
++				case bad <- "missing publication component":
++				default:
++				}
++			}
++			for _, entry := range entries {
++				if got, ok := snap.byRef[entry.ref]; !ok || got != toSession(entry) {
++					select {
++					case bad <- "mixed catalog/snapshot generation":
++					default:
++					}
++				}
++			}
++			for _, sessions := range s.level2Projection {
++				for _, sess := range sessions {
++					if got, ok := snap.byRef[sess.Ref]; !ok || got != sess {
++						select {
++						case bad <- "mixed L2 publication generation":
++						default:
++						}
++					}
++				}
++			}
++			if len(entries) != len(snap.byRef) {
++				select {
++				case bad <- "mixed ref set":
++				default:
++				}
++			}
++			s.snapMu.RUnlock()
++		}
++	}()
++	for i := 0; i < 20; i++ {
++		m := testModel()
++		m.Workspaces[0].Panes[0].WindowName = fmt.Sprintf("generation-%d", i)
++		md.set(m)
++		if err := s.rebuildCatalog(context.Background()); err != nil {
++			t.Error(err)
++			break
++		}
++	}
++	close(stop)
++	<-joined
++	select {
++	case why := <-bad:
++		t.Fatal(why)
++	default:
++	}
++	// Natural errors retain both catalog and seq; no synthetic unknown escalation.
++	catalogIdle(t, s)
++	s.discoverer = scriptedDiscoverer{err: errors.New("natural scan failure")}
++	prev, prevSeq := s.currentSnapshot()
++	if err := s.rebuildCatalog(context.Background()); err == nil {
++		t.Fatal("missing failure")
++	}
++	after, afterSeq := s.currentSnapshot()
++	if after != prev || afterSeq != prevSeq {
++		t.Fatal("failure changed publication")
++	}
++}
++
++func TestListReplyDeltaWatermarkContinuity(t *testing.T) {
++	e, c, g := catalogServer(t)
++	other, peer := catalogPeer(t, e, nil)
++	other.sendFrame(&protocol.List{ReqID: 2})
++	base := mustListing(t, other, 2)
++	catalogIdle(t, e.srv)
++	// Gate the new generation, then change its immutable input before Discover returns.
++	g.arm("Discover")
++	defer g.open()
++	e.srv.scans.list(c, 7)
++	catalogGateEntered(t, g, "Discover")
++	m := testModel()
++	m.Workspaces[0].Panes[0].WindowName = "changed"
++	g.mu.Lock()
++	g.model = m
++	g.mu.Unlock()
++	g.open()
++	listing := mustListing(t, e, 7)
++	f := other.readControl()
++	d, ok := f.(protocol.ListDelta)
++	if !ok || d.Seq != base.Seq+1 || listing.Seq != d.Seq {
++		t.Fatalf("baseline=%d listing=%d delta=%+v", base.Seq, listing.Seq, f)
++	}
++	// An unchanged followup must not be preceded by duplicated Delta(S).
++	e.sendFrame(&protocol.List{ReqID: 7})
++	f = e.readControl()
++	l, ok := f.(protocol.Listing)
++	if !ok || l.ReqID != 7 || l.Seq != listing.Seq {
++		t.Fatalf("same-connection stale/duplicate delta: %+v", f)
++	}
++	e.srv.scans.mu.Lock()
++	water := e.srv.scans.clients[peer].watermark
++	e.srv.scans.mu.Unlock()
++	if water != d.Seq {
++		t.Fatal("delta watermark not advanced")
++	}
++	t.Run("slow-peer", func(t *testing.T) {
++		entered, release := make(chan struct{}), make(chan struct{})
++		var hold atomic.Bool
++		var once sync.Once
++		slow, sc := catalogPeer(t, e, func(c *wsConn) {
++			c.beforeWriterFrame = func(m wsMsg) {
++				if hold.Load() {
++					once.Do(func() {
++						close(entered)
++						select {
++						case <-release:
++						case <-c.ctx.Done():
++						}
++					})
++				}
++			}
++		})
++		defer close(release)
++		hold.Store(true)
++		sc.sendCatalog(&protocol.Listing{ReqID: 1, Seq: 1}, 0)
++		select {
++		case <-entered:
++		case <-time.After(3 * time.Second):
++			t.Fatal("writer gate not entered")
++		}
++		for i := 0; i < 257; i++ {
++			sc.sendCatalog(&protocol.Listing{ReqID: uint32(i), Seq: 1}, 0)
++		}
++		catalogClosed(t, slow, sc, "catalog_backpressure")
++		e.sendFrame(&protocol.List{ReqID: 9})
++		mustListing(t, e, 9)
++	})
++}
++
++func TestLevel2WorkspaceEpochRejectsOldCompletion(t *testing.T) {
++	e, _, _ := catalogServer(t)
++	entered, release := make(chan struct{}), make(chan struct{})
++	var once sync.Once
++	writes := make(chan uint64, 8)
++	other, c := catalogPeer(t, e, func(c *wsConn) {
++		c.beforeWriterFrame = func(m wsMsg) {
++			if m.level2Epoch != 0 {
++				once.Do(func() {
++					close(entered)
++					select {
++					case <-release:
++					case <-c.ctx.Done():
++					}
++				})
++			}
++		}
++		c.writeAttempt = func(m wsMsg) {
++			if m.level2Epoch != 0 {
++				writes <- m.level2Epoch
++			}
++		}
++	})
++	defer func() {
++		select {
++		case <-release:
++		default:
++			close(release)
++		}
++	}()
++	other.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
++	select {
++	case <-entered:
++	case <-time.After(3 * time.Second):
++		t.Fatal("L2 writer gate absent")
++	}
++	old := c.currentLevel2Epoch()
++	other.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/b"})
++	other.sendFrame(&protocol.Level2Unsubscribe{})
++	other.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/b"})
++	catalogEventually(t, "reader did not reach final epoch", func() bool { return c.currentLevel2Epoch() == old+3 })
++	e.srv.snapMu.RLock()
++	projection := e.srv.level2Projection
++	e.srv.snapMu.RUnlock()
++	if frame, _ := c.level2Output(old, projection, nil); frame != nil {
++		t.Fatal("stale completion admitted")
++	}
++	close(release)
++	frame := waitLevel2Frame(t, other, 3*time.Second)
++	if frame.Workspace != "/ws/b" {
++		t.Fatalf("queued old workspace leaked: %s", frame.Workspace)
++	}
++	select {
++	case epoch := <-writes:
++		if epoch != old+3 {
++			t.Fatalf("old epoch wrote: %d current=%d", epoch, old+3)
++		}
++	case <-time.After(3 * time.Second):
++		t.Fatal("final epoch never wrote")
++	}
++}
++
++func TestScanWaiterDeadlineCancelAndOverload(t *testing.T) {
++	t.Run("per-connection", func(t *testing.T) {
++		e, c, g := catalogServer(t)
++		g.arm("Discover")
++		defer g.open()
++		e.srv.scans.list(c, 0)
++		catalogGateEntered(t, g, "Discover")
++		for i := 1; i < catalogPerConnLimit; i++ {
++			e.srv.scans.list(c, 0)
++		}
++		if c.ctx.Err() != nil {
++			t.Fatal("16 accepted requests closed prematurely")
++		}
++		e.srv.scans.list(c, 0)
++		catalogClosed(t, e, c, "catalog_backpressure")
++	})
++	t.Run("global", func(t *testing.T) {
++		e, c, g := catalogServer(t)
++		g.arm("Discover")
++		defer g.open()
++		q := e.srv.scans
++		q.list(c, 0)
++		catalogGateEntered(t, g, "Discover")
++		for i := 1; i < catalogPerConnLimit; i++ {
++			q.list(c, 0)
++		}
++		for i := 1; i < catalogGlobalLimit/catalogPerConnLimit; i++ {
++			_, peer := catalogPeer(t, e, nil)
++			for j := 0; j < catalogPerConnLimit; j++ {
++				q.list(peer, 0)
++			}
++		}
++		q.mu.Lock()
++		n := q.waiting
++		q.mu.Unlock()
++		if n != 1024 {
++			t.Fatalf("global boundary not reached: %d", n)
++		}
++		overflow, peer := catalogPeer(t, e, nil)
++		q.list(peer, 0)
++		catalogClosed(t, overflow, peer, "catalog_backpressure")
++		if c.ctx.Err() != nil {
++			t.Fatal("global rejection canceled a different peer")
++		}
++	})
++	t.Run("deadline", func(t *testing.T) {
++		e, c, g := catalogServer(t)
++		g.arm("Discover")
++		defer g.open()
++		q := e.srv.scans
++		q.list(c, 0)
++		catalogGateEntered(t, g, "Discover")
++		q.mu.Lock()
++		w := q.active.lists[0]
++		remaining := time.Until(w.deadline)
++		q.mu.Unlock()
++		if remaining < 34*time.Second || remaining > 35*time.Second {
++			t.Fatalf("admission deadline=%s", remaining)
++		}
++		if c.ctx.Err() != nil {
++			t.Fatal("deadline closed before expiry")
++		}
++		// Deterministic clock boundary: retain the production one-shot timer and
++		// expiration path, changing only the test waiter's absolute deadline.
++		q.mu.Lock()
++		w.deadline = time.Now().Add(-time.Millisecond)
++		q.mu.Unlock()
++		q.wake()
++		catalogClosed(t, e, c, "catalog_timeout")
++	})
++	t.Run("scan-deadline", func(t *testing.T) {
++		e, c, g := catalogServer(t)
++		g.arm("Sample")
++		defer g.open()
++		e.srv.scans.list(c, 11)
++		catalogGateEntered(t, g, "Sample")
++		select {
++		case <-c.ctx.Done():
++		case <-time.After(32 * time.Second):
++			t.Fatal("30s scan deadline did not terminate waiting List")
++		}
++		catalogClosed(t, e, c, "catalog_timeout")
++	})
++	t.Run("cancel-one-preserves-other", func(t *testing.T) {
++		e, c, g := catalogServer(t)
++		other, peer := catalogPeer(t, e, nil)
++		g.arm("Discover")
++		defer g.open()
++		q := e.srv.scans
++		q.list(c, 1)
++		catalogGateEntered(t, g, "Discover")
++		q.list(peer, 2)
++		_ = e.conn.CloseNow()
++		catalogEventually(t, "peer cancellation not observed", func() bool { return c.ctx.Err() != nil })
++		g.open()
++		mustListing(t, other, 2)
++		if peer.ctx.Err() != nil {
++			t.Fatal("one cancellation killed other peer")
++		}
++	})
++}
++
++func TestScanCoordinatorShutdownAndIdle(t *testing.T) {
++	for _, stage := range []string{"Discover", "Sample"} {
++		t.Run(stage, func(t *testing.T) {
++			g := newCatalogGate(testModel())
++			s := NewServer(Options{Discoverer: g, Nodeprobe: catalogGateSampler{g}, ListInterval: 10 * time.Millisecond, Level2Interval: 10 * time.Millisecond})
++			defer s.Close()
++			g.arm(stage)
++			defer g.open()
++			// Two cold demands, one actual scanner, cancellation during the chosen dependency.
++			errs := make(chan error, 2)
++			go func() { errs <- s.scans.wait(context.Background(), true) }()
++			catalogGateEntered(t, g, stage)
++			go func() { errs <- s.scans.wait(context.Background(), false) }()
++			catalogEventually(t, "pending cold generation not registered", func() bool { s.scans.mu.Lock(); defer s.scans.mu.Unlock(); return s.scans.pending != nil })
++			s.Close()
++			for i := 0; i < 2; i++ {
++				select {
++				case err := <-errs:
++					if err == nil {
++						t.Error("closed cold wait succeeded")
++					}
++				case <-time.After(time.Second):
++					t.Fatal("cold waiter survived Close")
++				}
++			}
++			q := s.scans
++			q.mu.Lock()
++			if q.active != nil || q.pending != nil || q.waiting != 0 || len(q.clients) != 0 {
++				t.Error("state survives Close")
++			}
++			q.mu.Unlock()
++			select {
++			case <-q.workerDone:
++			default:
++				t.Fatal("worker survives Close")
++			}
++			if snap, _ := s.currentSnapshot(); snap != nil {
++				t.Fatal("published after cancellation")
++			}
++		})
++	}
++	t.Run("pending-List-gets-real-close", func(t *testing.T) {
++		e, c, g := catalogServer(t)
++		g.arm("Discover")
++		defer g.open()
++		e.srv.scans.list(c, 12)
++		catalogGateEntered(t, g, "Discover")
++		e.srv.Close()
++		catalogClosed(t, e, c, "catalog_closed")
++	})
++	t.Run("zero-auth-zero-L2", func(t *testing.T) {
++		g := newCatalogGate(testModel())
++		s := NewServer(Options{Discoverer: g, ListInterval: 5 * time.Millisecond, Level2Interval: 5 * time.Millisecond})
++		defer s.Close()
++		time.Sleep(40 * time.Millisecond)
++		g.mu.Lock()
++		defer g.mu.Unlock()
++		if len(g.calls) != 0 {
++			t.Fatal("idle scan calls", g.calls)
++		}
++	})
++}
+diff --git a/internal/api/scan_reader_boundary_test.go b/internal/api/scan_reader_boundary_test.go
+new file mode 100644
+index 0000000..7191f6d
+--- /dev/null
++++ b/internal/api/scan_reader_boundary_test.go
+@@ -0,0 +1,245 @@
++package api
++
++// These four reader-boundary cases intentionally compile on unmodified 1fa3.
++// They require a real isolated tmux pane and a real authenticated WebSocket.
++// A scan gate is never released until the known-ref full SNAPSHOT is judged.
++import (
++	"bytes"
++	"context"
++	"os"
++	"path/filepath"
++	"regexp"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/agentmirror/agentmirror/internal/discovery"
++	"github.com/agentmirror/agentmirror/internal/nodeprobe"
++	"github.com/agentmirror/agentmirror/internal/protocol"
++	"github.com/coder/websocket"
++)
++
++type catalogGate struct {
++	mu      sync.Mutex
++	stage   string
++	release chan struct{}
++	entered chan string
++	calls   map[string]int
++	model   *discovery.Model
++}
++
++func newCatalogGate(model *discovery.Model) *catalogGate {
++	return &catalogGate{model: model, calls: make(map[string]int), entered: make(chan string, 64)}
++}
++func (g *catalogGate) arm(stage string) {
++	g.mu.Lock()
++	defer g.mu.Unlock()
++	g.stage = stage
++	g.release = make(chan struct{})
++}
++func (g *catalogGate) open() {
++	g.mu.Lock()
++	defer g.mu.Unlock()
++	if g.release != nil {
++		close(g.release)
++		g.release = nil
++		g.stage = ""
++	}
++}
++func (g *catalogGate) hit(ctx context.Context, stage string) error {
++	g.mu.Lock()
++	g.calls[stage]++
++	release := g.release
++	armed := g.stage == stage
++	g.mu.Unlock()
++	if !armed {
++		return nil
++	}
++	select {
++	case g.entered <- stage:
++	case <-ctx.Done():
++		return ctx.Err()
++	}
++	select {
++	case <-release:
++		return nil
++	case <-ctx.Done():
++		return ctx.Err()
++	}
++}
++func (g *catalogGate) Discover(ctx context.Context) (*discovery.Model, error) {
++	if err := g.hit(ctx, "Discover"); err != nil {
++		return nil, err
++	}
++	g.mu.Lock()
++	model := g.model
++	g.mu.Unlock()
++	return model, nil
++}
++
++type catalogGateSampler struct{ g *catalogGate }
++
++func (s catalogGateSampler) Sample(ctx context.Context, socket string) (nodeprobe.Report, error) {
++	if err := s.g.hit(ctx, "Sample"); err != nil {
++		return nodeprobe.Report{}, err
++	}
++	report := nodeprobe.Report{SchemaVersion: 1, Socket: socket}
++	s.g.mu.Lock()
++	model := s.g.model
++	s.g.mu.Unlock()
++	for _, w := range model.Workspaces {
++		for _, p := range w.Panes {
++			if p.Socket == socket {
++				report.Nodes = append(report.Nodes, nodeprobe.Node{Session: p.Session, WindowIndex: p.WindowIndex, PaneID: p.PaneID, Provider: "codex", Activity: "idle", Health: "unknown"})
++			}
++		}
++	}
++	return report, nil
++}
++func catalogGateEntered(t *testing.T, g *catalogGate, stage string) {
++	t.Helper()
++	select {
++	case got := <-g.entered:
++		if got != stage {
++			t.Fatalf("gate=%s want=%s", got, stage)
++		}
++	case <-time.After(5 * time.Second):
++		t.Fatal("scan did not enter named gate")
++	}
++}
++
++func catalogReadSnapshot(t *testing.T, e *wsEnv, ref string, blocked bool) []byte {
++	t.Helper()
++	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
++	defer cancel()
++	for {
++		typ, data, err := e.conn.Read(ctx)
++		if err != nil {
++			if blocked {
++				t.Fatalf("catalog gate blocked known-ref SNAPSHOT: %v", err)
++			}
++			t.Fatalf("initial fixture SNAPSHOT unavailable: %v", err)
++		}
++		if typ == websocket.MessageText {
++			f, err := protocol.UnmarshalFrame(data)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if f.FrameType() == protocol.TypeError {
++				t.Fatalf("error instead of SNAPSHOT: %+v", f)
++			}
++			continue
++		}
++		frame, err := protocol.DecodeBinary(data)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if frame.Kind == protocol.KindSnapshot && frame.Ref == ref {
++			return frame.Data
++		}
++	}
++}
++
++func catalogReaderBoundary(t *testing.T, level2 bool, stage string) {
++	// Hosted only execution: TMPDIR is isolated by the workflow. Byte length,
++	// precreation and socket_path self-proof precede any pane operation.
++	dir, err := os.MkdirTemp("", "p15-")
++	if err != nil {
++		t.Fatal(err)
++	}
++	sock := filepath.Join(dir, "s")
++	if len([]byte(sock)) >= 104 {
++		_ = os.Remove(dir)
++		t.Fatal("private socket path exceeds bound")
++	}
++	env := scrubbedEnv()
++	out, err := runTmuxCmd(env, sock, "-f", "/dev/null", "new-session", "-d", "-x", "80", "-y", "24", "-s", "p15", "printf '\033[2J\033[H\033[1;34mPERF15_MARK\033[0m\033[3;5HSTATIC\033[7;10H'; exec sleep 300")
++	if err != nil {
++		t.Fatalf("private fixture creation: %v %s", err, out)
++	}
++	actual, err := runTmuxCmd(env, sock, "list-sessions", "-F", "#{socket_path}")
++	if err != nil || strings.TrimSpace(actual) != sock {
++		t.Fatal("private fixture socket self-proof failed; no fallback permitted")
++	}
++	t.Cleanup(func() {
++		actual, err := runTmuxCmd(env, sock, "list-sessions", "-F", "#{socket_path}")
++		if err != nil || strings.TrimSpace(actual) != sock {
++			t.Error("cleanup socket proof failed")
++			return
++		}
++		if out, err := runTmuxCmd(env, sock, "kill-server"); err != nil {
++			t.Errorf("fixture cleanup: %v %s", err, out)
++		}
++		// Remove only this fixture's entries, never a shared socket root.
++		_ = os.Remove(sock)
++		_ = os.Remove(dir)
++	})
++	pane, err := runTmuxCmd(env, sock, "list-panes", "-t", "p15", "-F", "#{pane_id}")
++	if err != nil {
++		t.Fatal(err)
++	}
++	ref := sock + "\x1f" + strings.TrimSpace(pane)
++	m := &discovery.Model{Workspaces: []discovery.Workspace{{CWD: "/p15", Panes: []discovery.Pane{{Socket: sock, Session: "p15", PaneID: strings.TrimSpace(pane), CWD: "/p15", PaneTitle: "p15", Width: 80, Height: 24}}}}}
++	g := newCatalogGate(m)
++	e := startWS(t, Options{Token: "test-token", Discoverer: g, Nodeprobe: catalogGateSampler{g}, ListInterval: time.Hour, Level2Interval: time.Hour})
++	// Consume auth's initial scan before admitting the test List; neither auth
++	// initialization nor cold Subscribe is the gate under test.
++	g.arm("Discover")
++	e.auth()
++	catalogGateEntered(t, g, "Discover")
++	g.open()
++	e.sendFrame(&protocol.List{ReqID: 1})
++	mustListing(t, e, 1)
++	// The source is static. Read actual pane metadata/body only in this owned
++	// fixture, until its complete marker reaches tmux; this is not product input.
++	deadline := time.Now().Add(3 * time.Second)
++	for {
++		text, err := runTmuxCmd(env, sock, "capture-pane", "-p", "-e", "-t", strings.TrimSpace(pane))
++		if err != nil {
++			t.Fatal(err)
++		}
++		if strings.Contains(text, "PERF15_MARK") && strings.Contains(text, "STATIC") {
++			break
++		}
++		if time.Now().After(deadline) {
++			t.Fatal("static fixture source not ready")
++		}
++		time.Sleep(10 * time.Millisecond)
++	}
++	e.sendFrame(&protocol.Subscribe{Ref: ref, Cols: 80, Rows: 24})
++	baseline := catalogReadSnapshot(t, e, ref, false)
++	if !bytes.Contains(baseline, []byte("PERF15_MARK")) || !regexp.MustCompile(`\x1b\[[0-9;]*34[0-9;]*m`).Match(baseline) || !bytes.HasSuffix(baseline, []byte("\x1b[7;10H")) {
++		t.Fatalf("static full marker/style/cursor oracle absent: %q", baseline)
++	}
++	g.arm(stage)
++	defer g.open()
++	if level2 {
++		e.sendFrame(&protocol.Level2Subscribe{Workspace: "/p15"})
++	} else {
++		e.sendFrame(&protocol.List{ReqID: 2})
++	}
++	catalogGateEntered(t, g, stage)
++	e.sendFrame(&protocol.Subscribe{Ref: ref, Cols: 80, Rows: 24})
++	got := catalogReadSnapshot(t, e, ref, true)
++	if !bytes.Equal(got, baseline) {
++		t.Fatalf("full snapshot/style/cursor changed under %s gate: got=%q want=%q", stage, got, baseline)
++	}
++	g.mu.Lock()
++	held := g.release != nil
++	g.mu.Unlock()
++	if !held {
++		t.Fatal("scan released before full SNAPSHOT")
++	}
++	t.Logf("same-connection ref=%q stage=%s full_snapshot_bytes=%d gate_still_held=true", ref, stage, len(got))
++}
++func TestListScanBlockedKnownSubscribeGetsSnapshot(t *testing.T) {
++	for _, stage := range []string{"Discover", "Sample"} {
++		t.Run(stage, func(t *testing.T) { catalogReaderBoundary(t, false, stage) })
++	}
++}
++func TestLevel2ScanBlockedKnownSubscribeGetsSnapshot(t *testing.T) {
++	for _, stage := range []string{"Discover", "Sample"} {
++		t.Run(stage, func(t *testing.T) { catalogReaderBoundary(t, true, stage) })
++	}
++}
+diff --git a/internal/api/server.go b/internal/api/server.go
+index 73f4985..3b545c5 100644
+--- a/internal/api/server.go
++++ b/internal/api/server.go
+@@ -8,7 +8,6 @@ package api
+ 
+ import (
+ 	"context"
+-	"fmt"
+ 	"log/slog"
+ 	"net/http"
+ 	"sync"
+@@ -51,11 +50,15 @@ type Server struct {
+ 	// They are connection-independent: a reconnecting client lists and
+ 	// continues from the same sequence the previous connection saw
+ 	// (requirement 004 stateless replay).
+-	snapMu   sync.RWMutex
+-	snapshot *modelSnapshot
+-	seq      uint64
++	snapMu           sync.RWMutex
++	snapshot         *modelSnapshot
++	seq              uint64
++	scanGeneration   uint64
++	level2Projection map[string][]protocol.Session
+ 
++	// catalog and snapshot are one immutable publication under snapMu.
+ 	catalog *sessionCatalog
++	scans   *scanCoordinator
+ 
+ 	// paneGeoms holds the pane-level original-geometry singleton per ref
+ 	// (fix-host-pane-geometry-accounting). The original geometry is recorded by
+@@ -89,18 +92,10 @@ type Server struct {
+ 	// by teardown). The listing loop polls only while authed > 0; with zero
+ 	// clients it parks and spawns no scan subprocesses (taskbook
+ 	// #fix-daemon-idle-cpu: unconditional ticks burned 17.5% CPU per orphan).
+-	// wakeCh is a capacity-1 signal that the count just went 0→1, so the loop
+-	// runs a fresh full scan immediately instead of waiting for the next tick.
+ 	authed atomic.Int64
+-	wakeCh chan struct{}
+ 
+-	// level2Subscribers counts connections currently viewing the second-level
+-	// menu (requirement 061). The level2Loop polls only while this is > 0; at
+-	// zero it parks and spawns no scan subprocesses (idle CPU ≈ 0). level2WakeCh
+-	// is a capacity-1 signal that the count just went 0→1, so the first
+-	// subscriber's stream is fresh immediately.
++	// The coordinator owns both existing cadences and parks with no demand.
+ 	level2Subscribers atomic.Int64
+-	level2WakeCh      chan struct{}
+ 
+ 	// level2Interval is how often the level2 loop scans while subscribers exist.
+ 	// level2Heartbeat is how long an unchanged snapshot may sit before a
+@@ -180,13 +175,6 @@ func NewServer(opts Options) *Server {
+ 		s.maxInput = defaultMaxInputBytes
+ 	}
+ 
+-	// wakeCh is created before the loop so a 0→1 auth can never send on a nil
+-	// channel. Capacity 1: a wake that finds the slot occupied is dropped —
+-	// the loop is already about to run, so one scan covers both clients.
+-	s.wakeCh = make(chan struct{}, 1)
+-	// Same reasoning for the level2 live stream: the 0→1 subscriber wake must
+-	// never send on a nil channel, and a dropped wake is fine (a scan is coming).
+-	s.level2WakeCh = make(chan struct{}, 1)
+ 	s.level2Interval = opts.Level2Interval
+ 	if s.level2Interval <= 0 {
+ 		s.level2Interval = defaultLevel2Interval
+@@ -210,8 +198,7 @@ func NewServer(opts Options) *Server {
+ 	// 不再启动 overlayLoop。opts.OverlayCapturer 若注入也只保留字段，不被调用。
+ 	s.overlay = opts.OverlayCapturer
+ 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
+-	go s.listingLoop(s.loopCtx)
+-	go s.level2Loop(s.loopCtx)
++	s.scans = newScanCoordinator(s)
+ 	return s
+ }
+ 
+@@ -219,16 +206,16 @@ func NewServer(opts Options) *Server {
+ // tracked connection so no pipe-pane cat is left attached to a pane when the
+ // daemon exits (the graceful-shutdown half of the crash-residue fix, root-cause
+ // chain step 2; a SIGKILL path still relies on bridge subscribe's detach-first
+-// self-healing — graceful close is never the only line of defense). It does not
+-// close live connections; the daemon calls it on shutdown after its listeners
+-// stop accepting.
++// self-healing — graceful close is never the only line of defense). Connections with outstanding catalog requests are terminated;
++// other live connections retain the existing subscription-drain behavior. The
++// daemon calls Close after its listeners stop accepting.
+ // @contract
+ // @pre Server 由 NewServer 构造
+-// @post discovery loop 已停止；每个 tracked 连接的订阅被排空（relay 已取消、pipe 已 detach）；连接本身保持开放
++// @post discovery loop 已停止；每个 tracked 连接的订阅被排空（relay 已取消、pipe 已 detach）；有目录等待者的连接真实终结，其他连接保持开放
+ // @err none
+-// @inv 幂等：重复调用安全；不 close 任何 WebSocket 连接
++// @inv 幂等：重复调用安全；只终结仍等待目录结果的连接
+ func (s *Server) Close() {
+-	s.loopStop()
++	s.scans.close()
+ 	if s.overlay != nil {
+ 		s.overlay.Stop()
+ 	}
+@@ -292,69 +279,10 @@ func (s *Server) currentSnapshot() (*modelSnapshot, uint64) {
+ 	return s.snapshot, s.seq
+ }
+ 
+-// setSnapshot publishes a new model version under lock.
+-func (s *Server) setSnapshot(snap *modelSnapshot) {
+-	s.snapMu.Lock()
+-	s.snapshot = snap
+-	s.snapMu.Unlock()
+-}
+-
+-// rebuildCatalog scans tmux once, swaps the catalog to the fresh snapshot,
+-// and publishes the new model. On discovery failure the previous model is
+-// retained unchanged and an error is returned for the caller to log.
++// rebuildCatalog is the synchronous initialization/test seam. The same worker
++// owns this refresh; callers cannot create a concurrent discovery pass.
+ func (s *Server) rebuildCatalog(ctx context.Context) error {
+-	model, err := s.discoverer.Discover(ctx)
+-	if err != nil {
+-		return fmt.Errorf("api: discover: %w", err)
+-	}
+-	observations, err := nodeprobe.SampleModel(ctx, model, s.nodeprobe)
+-	if err != nil {
+-		return fmt.Errorf("api: nodeprobe: %w", err)
+-	}
+-	if s.filterAgents {
+-		model = filterModelToIdentifiedAgents(model, observations)
+-	}
+-	s.catalog.rebuild(model, observations)
+-	snap := buildSnapshot(s.catalog)
+-	s.setSnapshot(snap)
+-	return nil
+-}
+-
+-// listingLoop is the idle-gated periodic scan heartbeat (taskbook
+-// #fix-daemon-idle-cpu). Every ListInterval while at least one connection is
+-// authenticated it scans tmux and pushes a list_delta to every live client;
+-// with zero authenticated connections it parks and spawns no scan subprocesses
+-// (the fix for the 17.5%-per-orphan idle burn). The 0→1 transition wakes the
+-// loop immediately so the first client's listing is fresh, not up to one
+-// interval old. The first scan establishes the baseline (seq 1); later scans
+-// diff and emit only real changes. A discovery error is logged and skipped —
+-// the last good snapshot stays current and the loop keeps going (a dead tmux
+-// must never take the API down).
+-func (s *Server) listingLoop(ctx context.Context) {
+-	s.log.Debug("listing loop started", "interval", s.listInterval)
+-	for {
+-		if s.countAuthed() == 0 {
+-			// Zero clients: park and spawn no scan subprocesses (the idle-burn
+-			// red line). A 0→1 wake breaks the park and scans immediately below.
+-			select {
+-			case <-ctx.Done():
+-				s.log.Debug("listing loop stopped")
+-				return
+-			case <-s.wakeCh:
+-			}
+-		} else {
+-			// Clients connected: scan on the regular cadence, or sooner when a
+-			// wake arrives (a re-auth while already active gets a fresh scan).
+-			select {
+-			case <-ctx.Done():
+-				s.log.Debug("listing loop stopped")
+-				return
+-			case <-s.wakeCh:
+-			case <-time.After(s.listInterval):
+-			}
+-		}
+-		s.publishListing(ctx)
+-	}
++	return s.scans.wait(ctx, false)
+ }
+ 
+ // --- idle-gate accounting (taskbook #fix-daemon-idle-cpu) -------------------
+@@ -364,10 +292,7 @@ func (s *Server) listingLoop(ctx context.Context) {
+ // is fresh immediately instead of after one interval.
+ func (s *Server) markAuthed() {
+ 	if s.authed.Add(1) == 1 {
+-		select {
+-		case s.wakeCh <- struct{}{}:
+-		default:
+-		}
++		s.scans.cadence()
+ 	}
+ }
+ 
+@@ -377,6 +302,7 @@ func (s *Server) markAuthed() {
+ func (s *Server) unmarkAuthed() {
+ 	if s.authed.Add(-1) <= 0 {
+ 		s.authed.Store(0) // never negative: teardown is idempotent-guarded by wsConn
++		s.scans.wake()
+ 	}
+ }
+ 
+@@ -385,71 +311,15 @@ func (s *Server) countAuthed() int64 {
+ 	return s.authed.Load()
+ }
+ 
+-// publishListing performs one scan-and-diff cycle. The first scan (no previous
+-// model or sequence) just establishes the baseline at seq 1; each later scan
+-// with changes bumps the seq and fans out one list_delta.
+-func (s *Server) publishListing(ctx context.Context) {
+-	_ = s.refreshListing(ctx)
+-}
+-
+-// refreshListing runs one real discovery pass and updates the shared snapshot.
+-// On failure the previous snapshot is left untouched (069: never wipe the
+-// list because a refresh failed). Callers that must answer the client (list)
+-// send that retained snapshot.
+-func (s *Server) refreshListing(ctx context.Context) error {
+-	prev, prevSeq := s.currentSnapshot()
+-	if err := s.rebuildCatalog(ctx); err != nil {
+-		s.log.Warn("listing: discovery failed",
+-			"err", err,
+-			"had_cache", prev != nil,
+-			"prev_seq", prevSeq,
+-			"prev_sessions", snapshotSessionCount(prev),
+-		)
+-		return err
+-	}
+-	cur, _ := s.currentSnapshot()
+-
+-	if prev == nil && prevSeq == 0 {
+-		s.snapMu.Lock()
+-		if s.seq == 0 {
+-			s.seq = 1
+-		}
+-		s.snapMu.Unlock()
+-		s.log.Debug("listing: first snapshot", "seq", s.currentSeq())
+-		return nil
+-	}
+-	if prev == nil {
+-		prev = &modelSnapshot{}
+-	}
+-
+-	d := cur.diff(prev)
+-	if len(d.AddedSessions)+len(d.RemovedRefs)+len(d.ChangedSessions)+len(d.ChangedWorkspaces) == 0 {
+-		s.log.Debug("listing: no changes")
+-		return nil
+-	}
+-	d.Seq = s.nextSeq()
+-	s.fanout(d)
+-	return nil
+-}
+-
+-// ensureInitialScan forces the first scan synchronously so a client that lists
+-// before the loop's first tick still gets a seq >= 1. It is a no-op once a
+-// snapshot exists.
++// ensureInitialScan shares the first active generation and has a 30s bound.
++// An already published catalog never waits for an in-flight refresh.
+ func (s *Server) ensureInitialScan(ctx context.Context) {
+-	s.snapMu.RLock()
+-	done := s.snapshot != nil
+-	s.snapMu.RUnlock()
+-	if done {
++	if snap, _ := s.currentSnapshot(); snap != nil {
+ 		return
+ 	}
+-	if err := s.rebuildCatalog(ctx); err != nil {
++	if err := s.scans.wait(ctx, true); err != nil {
+ 		s.log.Warn("listing: initial scan failed", "err", err)
+ 	}
+-	s.snapMu.Lock()
+-	if s.seq == 0 {
+-		s.seq = 1
+-	}
+-	s.snapMu.Unlock()
+ }
+ 
+ // --- tracker fan-out --------------------------------------------------------
+@@ -468,33 +338,12 @@ func (s *Server) unregisterTracker(c *wsConn) {
+ 	s.trackersMu.Unlock()
+ }
+ 
+-// fanout sends one list_delta to every live client. A slow client whose send
+-// channel is full drops the delta; the client re-lists on seq discontinuity
+-// (docs/protocol.md §4.2), so a slow client heals itself without stalling the
+-// heartbeat.
+-func (s *Server) fanout(d *protocol.ListDelta) {
+-	body, err := protocol.MarshalFrame(d)
+-	if err != nil {
+-		s.log.Error("listing: marshal delta", "err", err)
+-		return
+-	}
+-	s.trackersMu.Lock()
+-	defer s.trackersMu.Unlock()
+-	for c := range s.trackers {
+-		select {
+-		case c.sendCh <- wsMsg{typ: wsText, data: body}:
+-		default:
+-			s.log.Debug("listing: dropping delta for slow connection")
+-		}
+-	}
+-}
+-
+ // --- server-level seams -----------------------------------------------------
+ 
+ // resolveBridge looks up the bridge bound to a client-facing ref. ok=false
+ // means the ref is unknown (the caller replies session_not_found).
+ func (s *Server) resolveBridge(ref string) (*bridge.Pane, bool) {
+-	e := s.catalog.entry(ref)
++	e := s.catalogEntry(ref)
+ 	if e == nil {
+ 		return nil, false
+ 	}
+@@ -521,3 +370,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
+ 	s.serveUpload(w, r)
+ }
++
++// catalogEntry reads the same published generation as currentSnapshot.
++func (s *Server) catalogEntry(ref string) *sessionEntry {
++	s.snapMu.RLock()
++	defer s.snapMu.RUnlock()
++	return s.catalog.entry(ref)
++}
+diff --git a/internal/api/ws.go b/internal/api/ws.go
+index 834f6ca..cedaf62 100644
+--- a/internal/api/ws.go
++++ b/internal/api/ws.go
+@@ -31,6 +31,9 @@ type wsMsg struct {
+ 	typ  websocket.MessageType
+ 	data []byte
+ 
++	// Internal only: zero is not L2; stale epochs are dropped before write.
++	level2Epoch uint64
++
+ 	// close, when set, tells the writer to send a WebSocket close frame with
+ 	// the given code/reason after any already-queued message (used for auth
+ 	// rejection and unsupported-version: send the error/ack, then close).
+diff --git a/internal/api/ws_conn.go b/internal/api/ws_conn.go
+index a855127..061bf7d 100644
+--- a/internal/api/ws_conn.go
++++ b/internal/api/ws_conn.go
+@@ -81,6 +81,7 @@ type wsConn struct {
+ 	// pushed snapshot so we send frames only on change and heartbeats when
+ 	// the snapshot is still the same.
+ 	level2Mu       sync.Mutex
++	level2Epoch    uint64
+ 	level2On       bool
+ 	level2WS       string
+ 	level2Snap     string
+@@ -119,7 +120,10 @@ type wsConn struct {
+ 	// Enqueuers share the read lock: a blocked control reply must not prevent
+ 	// the relay from detecting overflow. Abort cancels them before taking the
+ 	// exclusive lock, then drains after every in-flight enqueue has left.
+-	sendMu sync.RWMutex
++	sendMu             sync.RWMutex
++	catalogAbortOnce   sync.Once
++	catalogAborted     atomic.Bool
++	catalogCloseReason atomic.Value // string; independent from mirror_loss
+ 
+ 	// writerGate/writerTaken are nil in production. Tests use them to hold a
+ 	// dequeued frame at the writer boundary and prove an abort cannot flush it.
+@@ -239,6 +243,10 @@ const writeTimeout = 30 * time.Second
+ // is the canonical case), and a bounded timeout so a dead peer cannot wedge the
+ // writer. It returns the underlying write error, if any.
+ func (c *wsConn) writeFrame(m wsMsg) error {
++	// A write already begun cannot be withdrawn; queued old epochs can.
++	if m.level2Epoch != 0 && m.level2Epoch != c.currentLevel2Epoch() {
++		return nil
++	}
+ 	if c.writeAttempt != nil {
+ 		c.writeAttempt(m)
+ 	}
+@@ -269,7 +277,7 @@ func (c *wsConn) writeLoop() {
+ 			if c.writerGate != nil {
+ 				<-c.writerGate
+ 			}
+-			if c.mirrorAborted.Load() {
++			if c.transportAborted() {
+ 				_ = c.conn.CloseNow()
+ 				return
+ 			}
+@@ -285,7 +293,7 @@ func (c *wsConn) writeLoop() {
+ 				return
+ 			}
+ 		case <-c.ctx.Done():
+-			if c.mirrorAborted.Load() {
++			if c.transportAborted() {
+ 				_ = c.conn.CloseNow()
+ 				return
+ 			}
+@@ -300,7 +308,7 @@ func (c *wsConn) writeLoop() {
+ // auth_ack+close is the canonical case) before closing. Mirror-loss callers
+ // bypass this function so stale deltas cannot reach the peer.
+ func (c *wsConn) flushQueued() {
+-	if c.mirrorAborted.Load() {
++	if c.transportAborted() {
+ 		_ = c.conn.CloseNow()
+ 		return
+ 	}
+@@ -310,7 +318,7 @@ func (c *wsConn) flushQueued() {
+ 			if c.beforeFlushFrame != nil {
+ 				c.beforeFlushFrame()
+ 			}
+-			if c.mirrorAborted.Load() {
++			if c.transportAborted() {
+ 				_ = c.conn.CloseNow()
+ 				return
+ 			}
+@@ -337,9 +345,12 @@ func (c *wsConn) flushQueued() {
+ // fail before the reply reached the wire.
+ func (c *wsConn) teardown() {
+ 	c.cancel()
++	c.s.scans.remove(c)
+ 	closeReason := c.getCloseReason()
+ 	if reason := c.mirrorLossReason.Load(); reason != nil {
+ 		closeReason = reason.(string)
++	} else if reason := c.catalogCloseReason.Load(); reason != nil {
++		closeReason = reason.(string)
+ 	}
+ 	if c.beforeHealthLog != nil {
+ 		c.beforeHealthLog()
+@@ -378,10 +389,7 @@ func (c *wsConn) teardown() {
+ 	}
+ 	// If this connection was viewing the level-2 menu, un-count it so the
+ 	// level2 loop parks once zero subscribers remain (061 idle gate).
+-	if c.level2Active() {
+-		c.setLevel2(false, "")
+-		c.s.unmarkLevel2()
+-	}
++	c.handleLevel2Unsubscribe(protocol.Level2Unsubscribe{})
+ 	if c.overlayActive() {
+ 		c.setOverlay(false, "", 0, 0)
+ 		c.s.unmarkOverlay()
+@@ -432,11 +440,11 @@ func (c *wsConn) sendBinary(data []byte) {
+ // queued deltas are never flushed after this boundary.
+ // 丢失次数与队列峰值计入 c.s.sendQueue（常驻健康指标，「丢了多少数据」本就是健康度量）。
+ func (c *wsConn) sendMirror(data []byte) {
+-	if c.mirrorAborted.Load() {
++	if c.transportAborted() {
+ 		return
+ 	}
+ 	c.sendMu.RLock()
+-	if c.mirrorAborted.Load() {
++	if c.transportAborted() {
+ 		c.sendMu.RUnlock()
+ 		return
+ 	}
+@@ -472,30 +480,75 @@ func (c *wsConn) abortMirrorLoss(ref string, cause error) {
+ 		c.mirrorLossReason.Store(reason)
+ 		c.mirrorAborted.Store(true)
+ 		c.cancel()
+-		// A sender may already be blocked on a full queue. Cancellation above
+-		// makes it leave sendMsg; sendMu then closes the race where it could
+-		// otherwise enqueue after this drain.
+-		c.sendMu.Lock()
+-		defer c.sendMu.Unlock()
+-		for {
+-			select {
+-			case <-c.sendCh:
+-			default:
+-				_ = c.conn.CloseNow()
+-				return
+-			}
++		c.discardQueuedAndClose()
++	})
++}
++
++// discardQueuedAndClose preserves PR20's cancel-before-sendMu lock order.
++// Both terminal causes use this primitive; their reason/once guards stay separate.
++func (c *wsConn) discardQueuedAndClose() {
++	// A sender may already be blocked on a full queue. Cancellation above
++	// makes it leave sendMsg; sendMu then closes the race where it could
++	// otherwise enqueue after this drain.
++	c.sendMu.Lock()
++	defer c.sendMu.Unlock()
++	for {
++		select {
++		case <-c.sendCh:
++		default:
++			_ = c.conn.CloseNow()
++			return
+ 		}
++	}
++}
++
++func (c *wsConn) transportAborted() bool {
++	return c.mirrorAborted.Load() || c.catalogAborted.Load()
++}
++
++// abortCatalog terminates outstanding catalog requests visibly, without
++// claiming raw mirror loss. Cancellation releases existing blocked senders.
++func (c *wsConn) abortCatalog(reason string) {
++	c.catalogAbortOnce.Do(func() {
++		c.catalogCloseReason.Store(reason)
++		c.catalogAborted.Store(true)
++		c.cancel()
++		c.s.scans.remove(c)
++		c.s.log.Warn("catalog: terminating connection", "conn", c.id, "reason", reason)
++		c.discardQueuedAndClose()
+ 	})
+ }
+ 
++// sendCatalog is bounded and never stalls the shared publication sequencer.
++func (c *wsConn) sendCatalog(frame protocol.Typed, epoch uint64) {
++	body, err := protocol.MarshalFrame(frame)
++	if err != nil {
++		c.s.log.Error("catalog: marshal failed", "conn", c.id, "err", err)
++		c.abortCatalog("catalog_backpressure")
++		return
++	}
++	c.sendMu.RLock()
++	if c.transportAborted() || c.ctx.Err() != nil {
++		c.sendMu.RUnlock()
++		return
++	}
++	select {
++	case c.sendCh <- wsMsg{typ: wsText, data: body, level2Epoch: epoch}:
++		c.sendMu.RUnlock()
++	default:
++		c.sendMu.RUnlock()
++		c.abortCatalog("catalog_backpressure")
++	}
++}
++
+ // sendMsg enqueues one message, unblocking early when the connection closes.
+ func (c *wsConn) sendMsg(m wsMsg) {
+-	if c.mirrorAborted.Load() {
++	if c.transportAborted() {
+ 		return
+ 	}
+ 	c.sendMu.RLock()
+ 	defer c.sendMu.RUnlock()
+-	if c.mirrorAborted.Load() || c.ctx.Err() != nil {
++	if c.transportAborted() || c.ctx.Err() != nil {
+ 		return
+ 	}
+ 	if c.controlEnqueue != nil {
+@@ -823,7 +876,7 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
+ 				default:
+ 				}
+ 			}
+-			if c.mirrorAborted.Load() {
++			if c.transportAborted() {
+ 				return
+ 			}
+ 			frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+@@ -853,7 +906,7 @@ func (c *wsConn) resolveBridge(ref string) (*bridge.Pane, bool) {
+ // resolvePane resolves the bridge and the discovery pane for a ref (the pane
+ // carries the geometry needed for scrollback convergence).
+ func (c *wsConn) resolvePane(ref string) (*bridge.Pane, discovery.Pane, bool) {
+-	e := c.s.catalog.entry(ref)
++	e := c.s.catalogEntry(ref)
+ 	if e == nil {
+ 		return nil, discovery.Pane{}, false
+ 	}
+diff --git a/internal/api/ws_handler.go b/internal/api/ws_handler.go
+index 8bff73c..65e7546 100644
+--- a/internal/api/ws_handler.go
++++ b/internal/api/ws_handler.go
+@@ -69,38 +69,10 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
+ 	return false
+ }
+ 
+-// handleList answers a full listing (docs/protocol.md §5.1, requirement 069).
+-// It always triggers one real rescan — not ensureInitialScan, which no-ops
+-// once a snapshot exists. On scan failure the last snapshot is kept so the
+-// reply is never an empty wipe of a known world.
++// handleList admits a bounded, independently numbered refresh intent. Only
++// catalog work leaves the reader: subsequent known-ref Subscribe can proceed.
+ func (c *wsConn) handleList(l protocol.List) {
+-	prev, prevSeq := c.s.currentSnapshot()
+-	prevN := snapshotSessionCount(prev)
+-	err := c.s.refreshListing(c.ctx)
+-	snap, seq := c.s.currentSnapshot()
+-	curN := snapshotSessionCount(snap)
+-	c.s.log.Info("listing: refresh on open",
+-		"req_id", l.ReqID,
+-		"had_cache", prev != nil,
+-		"prev_seq", prevSeq,
+-		"prev_sessions", prevN,
+-		"cur_sessions", curN,
+-		"cur_seq", seq,
+-		"refresh_err", errString(err),
+-	)
+-	if seq == 0 {
+-		c.s.snapMu.Lock()
+-		if c.s.seq == 0 {
+-			c.s.seq = 1
+-		}
+-		seq = c.s.seq
+-		c.s.snapMu.Unlock()
+-	}
+-	listing := &protocol.Listing{ReqID: l.ReqID, Seq: seq}
+-	if snap != nil {
+-		listing.Workspaces = snap.listing()
+-	}
+-	c.send(listing)
++	c.s.scans.list(c, l.ReqID)
+ }
+ 
+ func snapshotSessionCount(snap *modelSnapshot) int {

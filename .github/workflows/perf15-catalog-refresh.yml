@@ -1,0 +1,35 @@
+name: perf15-catalog-refresh-coordinator
+on:
+  push:
+    branches: [fix/catalog-refresh-coordinator]
+    paths: ['.github/workflows/perf15-catalog-refresh.yml', 'tools/perf15/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bounded:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install isolated fixture dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+          tmux -V
+      - name: Exact source, compile, named base red and candidate wave
+        env:
+          PERF15_EXPECTED_TREE: 80cbcee84641828abed9f55c0db35826f2417b0e
+          PERF15_PATCH_SHA256: fcd9c1779b52dbb492c48aa827d7161d7672e4462e764999cfdeb12afedf267e
+        run: python3 tools/perf15/hosted.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf15-catalog-refresh-${{ github.run_id }}
+          path: ${{ runner.temp }}/perf15
