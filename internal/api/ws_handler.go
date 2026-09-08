@@ -11,7 +11,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
 	"github.com/agentmirror/agentmirror/internal/discovery"
@@ -427,23 +426,29 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 	// through (D-36): the old `- pane.Height` translation assumed bottom-relative
 	// tmux semantics and shifted every page into history (current-screen requests
 	// returned stale history, history pages reported wrong anchors).
-	data, err := br.Scrollback(c.ctx, start, end)
-	if err != nil {
-		if errors.Is(err, bridge.ErrPaneNotFound) {
-			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
-		} else {
-			c.sendError(protocol.ErrCodeInternal, "scrollback failed")
+	var data []byte
+	if start == 0 && end == -1 {
+		// H=0 has no history to capture. Preserve the existing one-empty-line
+		// protocol placeholder without accidentally capturing visible screen rows.
+		data = []byte("\n")
+	} else {
+		data, err = br.Scrollback(c.ctx, start, end)
+		if err != nil {
+			if errors.Is(err, bridge.ErrPaneNotFound) {
+				c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+			} else {
+				c.sendError(protocol.ErrCodeInternal, "scrollback failed")
+			}
+			return
 		}
-		return
 	}
 
-	// Trim trailing blank rows (consistent with snapshotWithCursor): capture-pane
-	// emits a pane's blank bottom rows as bare LFs past the content. Trimming keeps
-	// the reported line_count (§6.3 实际区间) equal to the actual non-blank lines,
-	// which the client uses to anchor its scrollback buffer.
-	data = bytes.TrimRight(data, "\n")
-	lineCount := uint32(countLines(data))
-	if lineCount == 0 {
+	// capture-pane appends one separator LF after the requested range. Remove
+	// only that terminator: additional trailing LFs are real blank rows and are
+	// part of the page's content/anchor semantics.
+	data = trimScrollbackTerminator(data)
+	lineCount := uint32(bytes.Count(data, []byte("\n")) + 1)
+	if len(data) == 0 {
 		// Degenerate fully-blank page: report one empty line (EncodeBinary requires
 		// LineCount >= 1); a blank page carries no content either way.
 		lineCount = 1
@@ -549,51 +554,44 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 // clamp to the available range; a request entirely above the history (or
 // entirely below the screen) is shifted to the nearest available edge so the
 // client receives a useful page instead of a single degenerate line.
-func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, pane discovery.Pane, fromLine, count int) (int, int, error) {
-	// historySize = how many lines of history tmux retains above the screen.
-	// Measured by capturing from the oldest possible line to the line just above
-	// the screen top (-1) — top-relative semantics, so the capture is exactly the
-	// history, no screen rows, no height subtraction needed (D-36: the old
-	// `- pane.Height` double-counted the screen against tmux's top-relative coords
-	// and under-reported history).
-	oldestToBottom, err := br.Scrollback(ctx, math.MinInt32, -1)
+func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, _ discovery.Pane, fromLine, count int) (int, int, error) {
+	metadata, err := br.ScrollbackMetadata(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
-	historySize := countLines(oldestToBottom)
-	if historySize < 0 {
-		historySize = 0
+	return scrollbackRangeFor(metadata.HistorySize, metadata.PaneHeight, fromLine, count)
+}
+
+// scrollbackRangeFor clamps a protocol request against actual tmux metadata.
+// int64 intermediates keep extreme int32/uint32 request values from wrapping.
+func scrollbackRangeFor(historySize, paneHeight, fromLine, count int) (int, int, error) {
+	if historySize < 0 || paneHeight <= 0 {
+		return 0, 0, fmt.Errorf("invalid scrollback metadata history=%d height=%d", historySize, paneHeight)
 	}
+	oldest := -int64(historySize)
+	bottom := int64(paneHeight) - 1
+	requestEnd := int64(fromLine) + int64(count) - 1
 
-	// Available range in protocol coordinates (0 = screen top, negative = history).
-	oldest := -historySize
-	bottom := pane.Height - 1
-
-	requestEnd := fromLine + count - 1
 	switch {
 	case requestEnd <= oldest:
-		// Entirely above the history (or ending exactly at the oldest line): shift
-		// so the page starts at the oldest available line and grab count lines —
-		// a useful full page, not a degenerate sliver. Cap at the last history line
-		// (-1 = line above screen top), never onto the visible screen: an above-history
-		// request asks for history, so the reply must not leak on-screen rows
-		// (TestScrollbackConvergedRange: scrollback(-500,100) must return only history).
-		// D-36: scrollback(-30,5) with 26 history lines → (-26,-22) = the 5 oldest.
-		start, end := oldest, oldest+count-1
+		// Entirely above history: keep the page in history and move it to the
+		// oldest available edge. With H=0 this returns (0,-1), a no-capture
+		// empty-history sentinel handled by handleScrollback.
+		start := oldest
+		end := oldest + int64(count) - 1
 		if end > -1 {
 			end = -1
 		}
-		return start, end, nil
-	case fromLine > bottom:
-		// Entirely below the screen: shift so the page ends at the bottom row.
-		start, end := bottom-count+1, bottom
+		return int(start), int(end), nil
+	case int64(fromLine) > bottom:
+		// Entirely below the screen: shift so the page ends at the actual bottom.
+		start := bottom - int64(count) + 1
 		if start < oldest {
 			start = oldest
 		}
-		return start, end, nil
+		return int(start), int(bottom), nil
 	default:
-		// Overlap: clamp both edges.
-		start := fromLine
+		start := int64(fromLine)
 		if start < oldest {
 			start = oldest
 		}
@@ -602,11 +600,17 @@ func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, pane disc
 			end = bottom
 		}
 		if start > end {
-			// Degenerate single row at the boundary.
 			end = start
 		}
-		return start, end, nil
+		return int(start), int(end), nil
 	}
+}
+
+func trimScrollbackTerminator(data []byte) []byte {
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		return data[:len(data)-1]
+	}
+	return data
 }
 
 // countLines counts the newline-delimited lines in a capture-pane result,
