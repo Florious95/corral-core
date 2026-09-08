@@ -222,6 +222,15 @@ object ServiceWire {
     }
 
     /**
+     * Forward one real Activity background-to-foreground edge to the persistent connection.
+     * The manager owns state/in-flight coalescing; a missing manager is a safe no-op during
+     * early process startup before the persistent connection has been assembled.
+     */
+    fun onForegroundResume() {
+        manager?.onForegroundResume()
+    }
+
+    /**
      * 获取当前持久 [ConnectionManager] 单例；不存在（未创建）返回 null。
      *
      * 调用方是 [MirrorForegroundService]（时钟泵 [MirrorForegroundService.pumpOnce]、通知文案、

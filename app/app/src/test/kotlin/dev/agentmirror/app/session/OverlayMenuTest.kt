@@ -19,20 +19,19 @@ package dev.agentmirror.app.session
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.percentOffset
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import dev.agentmirror.app.conn.Level2Frame
 import dev.agentmirror.app.conn.OverlaySubscribeFrame
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
-import dev.agentmirror.app.workspace.L2Status
-import dev.agentmirror.app.workspace.WorkspaceViewModel
+import dev.agentmirror.app.workspace.L2Entry
+import dev.agentmirror.app.workspace.toL2Entry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -41,11 +40,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/**
- * 072：右上角「查看」是可点的二级菜单列表，复用 [WorkspaceViewModel.level2]。
- */
+/** 「查看」必须复用真实会话列表，不得渲染 HTML 占位卡。 */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "w390dp-h844dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class OverlayMenuTest {
 
@@ -53,133 +50,112 @@ class OverlayMenuTest {
     val compose = createComposeRule()
 
     @Test
-    fun overlayMenuOpensLevel2ListWithoutSubscribe() {
-        val wvm = seededWorkspace()
+    fun viewOpensRealSessionListWithoutStartingAnotherSubscription() {
         val h = OverlayTestHarness()
+        val selected = mutableListOf<String>()
         compose.setContent {
             AgentMirrorTheme {
                 SessionScreen(
                     viewModel = h.vm,
                     name = "current",
                     onBack = {},
-                    overlaySessions = wvm.level2.value.sessions,
+                    overlaySessions = sampleSessions(),
+                    onOpenOverlaySession = { ref, _ -> selected += ref },
                 )
             }
         }
-        compose.onNodeWithTag("session-overlay").assertDoesNotExist()
-        compose.onNodeWithTag("session-overlay-open").assertIsDisplayed()
-        compose.onNodeWithTag("session-overlay-open").performClick()
-        compose.waitForIdle()
+        openView()
 
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
+        compose.onNodeWithText("切换会话").assertIsDisplayed()
+        compose.onNodeWithText("会话甲").assertIsDisplayed()
+        compose.onNodeWithText("会话乙").assertIsDisplayed()
+        compose.onNodeWithText("查看弹出菜单（原生实现，此处仅占位）").assertDoesNotExist()
+        compose.onNodeWithText("点任意处关闭").assertDoesNotExist()
         assertTrue(h.vm.overlayOpen)
-        assertTrue(
-            "主路径不得再发 overlay_subscribe",
-            h.sent().none { it is OverlaySubscribeFrame },
-        )
-        compose.onNodeWithText("advisor").assertIsDisplayed()
-        compose.onNodeWithText("developer").assertIsDisplayed()
-        compose.onNodeWithText("进行中").assertIsDisplayed()
-        compose.onNodeWithText("空闲").assertIsDisplayed()
-        assertEquals(
-            listOf(L2Status.WORKING, L2Status.IDLE),
-            wvm.level2.value.sessions.map { it.status },
-        )
+        assertTrue(h.sent().none { it is OverlaySubscribeFrame })
     }
 
     @Test
-    fun overlayMenuClickRowJumpsToThatSession() {
-        val wvm = seededWorkspace()
+    fun selectingOverlaySessionUsesRealListCallback() {
         val h = OverlayTestHarness()
-        var jumped: Pair<String, String>? = null
+        val selected = mutableListOf<String>()
         compose.setContent {
             AgentMirrorTheme {
                 SessionScreen(
                     viewModel = h.vm,
                     name = "current",
                     onBack = {},
-                    overlaySessions = wvm.level2.value.sessions,
-                    onOpenOverlaySession = { ref, name -> jumped = ref to name },
+                    overlaySessions = sampleSessions(),
+                    onOpenOverlaySession = { ref, _ -> selected += ref },
                 )
             }
         }
-        compose.onNodeWithTag("session-overlay-open").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("l2-row-ref-dev").performClick()
+        openView()
+        compose.onNodeWithText("会话乙").performClick()
         compose.waitForIdle()
 
-        assertEquals("ref-dev" to "developer", jumped)
+        assertEquals(listOf("ref-b"), selected)
         assertFalse(h.vm.overlayOpen)
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
     }
 
     @Test
-    fun overlayMenuTapOutsideDismissesWithoutJump() {
-        val wvm = seededWorkspace()
+    fun tappingScrimDismissesRealList() {
         val h = OverlayTestHarness()
-        var jumped: Pair<String, String>? = null
         compose.setContent {
             AgentMirrorTheme {
                 SessionScreen(
                     viewModel = h.vm,
                     name = "current",
                     onBack = {},
-                    overlaySessions = wvm.level2.value.sessions,
-                    onOpenOverlaySession = { ref, name -> jumped = ref to name },
+                    overlaySessions = sampleSessions(),
                 )
             }
         }
-        compose.onNodeWithTag("session-overlay-open").performClick()
-        compose.waitForIdle()
+        openView()
         compose.onNodeWithTag("session-overlay-scrim").performTouchInput {
-            // 设计 sheet 贴底，点遮罩上方才是窗外。
             click(percentOffset(0.5f, 0.08f))
         }
         compose.waitForIdle()
+
         assertFalse(h.vm.overlayOpen)
-        assertNull(jumped)
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
     }
 
-    private fun seededWorkspace(): WorkspaceViewModel {
-        val wvm = WorkspaceViewModel(
-            requestList = {},
-            subscribeLevel2 = {},
-            unsubscribeLevel2 = {},
-        )
-        wvm.enterLevel2("/proj/a")
-        wvm.onFrame(
-            Level2Frame(
-                workspace = "/proj/a",
-                seq = 1,
-                sessions = listOf(
-                    Session(
-                        ref = "ref-adv",
-                        name = "advisor",
-                        title = "t",
-                        rows = 24,
-                        cols = 80,
-                        status = "working",
-                        cwd = "/proj/a",
-                        sessionName = "advisor",
-                        windowIndex = "1",
-                        windowName = "advisor",
-                    ),
-                    Session(
-                        ref = "ref-dev",
-                        name = "developer",
-                        title = "t",
-                        rows = 24,
-                        cols = 80,
-                        status = "idle",
-                        cwd = "/proj/a",
-                        sessionName = "developer",
-                        windowIndex = "2",
-                        windowName = "developer",
-                    ),
-                ),
-            ),
-        )
-        return wvm
+    private fun openView() {
+        compose.onNodeWithContentDescription("返回菜单").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-overlay-open").performClick()
+        compose.waitForIdle()
     }
+
+    private fun sampleSessions(): List<L2Entry> = protocolSessions().map { it.toL2Entry() }
+
+    private fun protocolSessions() = listOf(
+        Session(
+            ref = "ref-a",
+            name = "会话甲",
+            cwd = "/ws",
+            rows = 24,
+            cols = 80,
+            title = "会话甲",
+            status = "working",
+            sessionName = "s",
+            windowIndex = "0",
+            windowName = "会话甲",
+        ),
+        Session(
+            ref = "ref-b",
+            name = "会话乙",
+            cwd = "/ws",
+            rows = 24,
+            cols = 80,
+            title = "会话乙",
+            status = "idle",
+            sessionName = "s",
+            windowIndex = "1",
+            windowName = "会话乙",
+        ),
+    )
 }

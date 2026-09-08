@@ -28,6 +28,7 @@ import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.pairing.startPersistentConnection
 import dev.agentmirror.app.service.NetworkConnectivityWatcher
 import dev.agentmirror.app.service.NotificationHelper
+import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.workspace.SharedPreferencesFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
@@ -53,6 +54,9 @@ class MainActivity : ComponentActivity() {
      *  Activity，与 navState 同模式——接线层在 Compose 把 [ServiceWire.uiConnector] 挂到它
      *  上（见 AgentMirrorApp 工作区分支），Robolectric 测试可直接断言其状态。 */
     internal lateinit var workspaceViewModel: WorkspaceViewModel
+
+    /** True only after this Activity has crossed a real visible-stop boundary. */
+    private var stoppedForResume = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -130,12 +134,16 @@ class MainActivity : ComponentActivity() {
      *  被幂等守卫拦下、且 SOCKS 持续失败，日志里两个信号对撞即定位根因）。 */
     override fun onStart() {
         super.onStart()
-        DiagLog.record("lifecycle", "ON_START")
+        val resumeEdge = stoppedForResume
+        stoppedForResume = false
+        DiagLog.record("lifecycle", "ON_START resume_edge=$resumeEdge")
+        if (resumeEdge) ServiceWire.onForegroundResume()
     }
 
     /** 缺陷⑤观测点：切后台（系统可能冻结进程/挂起连接，回前台时状态错位的起点）。 */
     override fun onStop() {
-        DiagLog.record("lifecycle", "ON_STOP")
+        stoppedForResume = true
+        DiagLog.record("lifecycle", "ON_STOP resume_edge_pending=true")
         super.onStop()
     }
 

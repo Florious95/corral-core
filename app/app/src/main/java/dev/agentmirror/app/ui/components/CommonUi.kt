@@ -244,6 +244,7 @@ fun MicroPill(
  * @pre path 为本次拨号记录的通道
  * @post 显示 path.label
  * @err none
+ * @inv does not infer or mutate the connection path
  */
 @Composable
 fun LanPill(path: ConnectionPath, modifier: Modifier = Modifier) {
@@ -271,6 +272,7 @@ internal object BackChevronGeometry {
     fun inkCenterY(h: Float): Float = h * 0.50f
 }
 
+/** Geometrically centered back chevron with an accessibility label. */
 @Composable
 fun BackChevron(
     tint: Color,

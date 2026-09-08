@@ -151,8 +151,15 @@ class WorkspaceViewModel(
      */
     private val level2Cache = LinkedHashMap<String, L2UiState>()
 
+    /**
+     * 每个工作区最近一次 level2 快照（含空表）。收藏对账用它，不靠重启、不写进
+     * [level2Cache]（空表仍跳过缓存以免再进先空白）。
+     */
+    private val lastLiveByWorkspace = LinkedHashMap<String, List<L2Entry>>()
+
     private var subscribedWorkspace: String? = null
     private var lastLevel2AtMs: Long = 0L
+    private var lastQuietDiagnosticStale: Boolean? = null
 
     /**
      * 旋转/配置变更重建时置位：下一次 [enterLevel1] / [enterLevel2] 不得再发 list
@@ -299,7 +306,16 @@ class WorkspaceViewModel(
         val ws = subscribedWorkspace ?: return
         if (lastLevel2AtMs == 0L) return
         val quietFor = now - lastLevel2AtMs
-        val banner = if (quietFor >= quietTimeoutMs) {
+        val stale = quietFor >= quietTimeoutMs
+        if (lastQuietDiagnosticStale != stale) {
+            DiagLog.record(
+                "level2",
+                "quiet_check workspace=$ws last_at=$lastLevel2AtMs now=$now quiet_for=$quietFor " +
+                    "timeout=$quietTimeoutMs stale=$stale",
+            )
+            lastQuietDiagnosticStale = stale
+        }
+        val banner = if (stale) {
             "二级状态已停更 ${quietFor}ms（last_at=$lastLevel2AtMs now=$now workspace=$ws）"
         } else {
             null
@@ -588,15 +604,15 @@ class WorkspaceViewModel(
         for (entry in _level2.value.sessions) {
             byKey[entry.favoriteKey()] = entry
         }
-        val subscribed = subscribedWorkspace
-        // 已订工作区若已收到快照，以当前表为准：缓存里多出来的键视为失联。
-        if (subscribed != null && lastLevel2AtMs != 0L) {
-            val liveNow = HashSet<FavoriteKey>()
-            for (entry in _level2.value.sessions) liveNow.add(entry.favoriteKey())
-            val cached = level2Cache[subscribed]?.sessions.orEmpty()
-            for (entry in cached) {
-                if (entry.favoriteKey() !in liveNow) byKey.remove(entry.favoriteKey())
+        for ((cwd, sessions) in lastLiveByWorkspace) {
+            val liveNow = HashSet<FavoriteKey>(sessions.size)
+            for (entry in sessions) liveNow.add(entry.favoriteKey())
+            val stale = ArrayList<FavoriteKey>()
+            for ((key, entry) in byKey) {
+                if (entry.cwd == cwd && key !in liveNow) stale.add(key)
             }
+            for (key in stale) byKey.remove(key)
+            for (entry in sessions) byKey[entry.favoriteKey()] = entry
         }
         return ArrayList(byKey.values)
     }
@@ -680,6 +696,7 @@ class WorkspaceViewModel(
         val next = L2UiState(sessions = incoming, seq = frame.seq, banner = null)
         val prevByRef = (level2Cache[frame.workspace]?.sessions ?: emptyList())
             .associate { it.ref to it.status }
+        lastLiveByWorkspace[frame.workspace] = incoming
         rememberLevel2(frame.workspace, next)
         bumpFavoriteLive()
         onFavoriteWorkspaceFetched(frame.workspace)

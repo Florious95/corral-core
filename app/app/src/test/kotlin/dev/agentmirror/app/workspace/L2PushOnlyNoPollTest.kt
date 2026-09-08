@@ -117,7 +117,15 @@ class L2PushOnlyNoPollTest {
                 workspace = "/proj/a",
                 seq = 1,
                 sessions = listOf(
-                    Session(ref = "r1", name = "keep-me", cwd = "/proj/a", rows = 24, cols = 80, status = "idle"),
+                    Session(
+                        ref = "r1",
+                        name = "keep-me",
+                        cwd = "/proj/a",
+                        rows = 24,
+                        cols = 80,
+                        status = "idle",
+                        windowName = "keep-me",
+                    ),
                 ),
             ),
         )

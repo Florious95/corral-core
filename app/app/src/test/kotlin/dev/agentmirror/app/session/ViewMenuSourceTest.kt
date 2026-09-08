@@ -16,10 +16,11 @@
 
 package dev.agentmirror.app.session
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -28,6 +29,7 @@ import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.workspace.MemoryFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
+import dev.agentmirror.app.workspace.toL2Entry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -80,29 +82,94 @@ class ViewMenuSourceTest {
     }
 
     @Test
-    fun viewMenuSourceOverlayFromAShowsANotLastFavoriteB() {
-        val wvm = seededAbFavoritesLastB()
+    fun viewMenuSourceMatchesProtocolLevel2ListUsedByDockAndTopRightView() {
+        val wvm = WorkspaceViewModel(
+            requestList = {},
+            subscribeLevel2 = {},
+            unsubscribeLevel2 = {},
+            favoriteStore = MemoryFavoriteStore(),
+        )
+        val protocol = listOf(
+            Session(
+                ref = REF_A,
+                name = "sess-a",
+                cwd = CWD_A,
+                rows = 24,
+                cols = 80,
+                title = "sess-a",
+                status = "idle",
+                sessionName = "sess-a",
+                windowIndex = "1",
+                windowName = "sess-a",
+            ),
+            Session(
+                ref = "$SOCK_A\u001f%9",
+                name = "sess-a-peer",
+                cwd = CWD_A,
+                rows = 24,
+                cols = 80,
+                title = "sess-a-peer",
+                status = "working",
+                sessionName = "sess-a-peer",
+                windowIndex = "2",
+                windowName = "sess-a-peer",
+            ),
+        )
+        wvm.enterLevel2(CWD_A)
+        wvm.onFrame(Level2Frame(workspace = CWD_A, seq = 1, sessions = protocol))
         val src = wvm.viewMenuSource(REF_A)
-        val h = OverlayTestHarness()
+        assertEquals(protocol.map { it.toL2Entry() }, src.sessions)
+        assertEquals(protocol.map { it.windowName }, src.sessions.map { it.identityLabel })
+    }
+
+    @Test
+    fun sessionChipsUseGlobalFavoritesAndExcludeCurrentSession() {
+        val wvm = seededAbFavoritesLastB()
+        val h = OverlayTestHarness(REF_A)
+        var selected: Pair<String, String>? = null
         compose.setContent {
             AgentMirrorTheme {
                 SessionScreen(
                     viewModel = h.vm,
                     name = "sess-a",
                     onBack = {},
-                    overlaySessions = src.sessions,
+                    favoriteRows = wvm.favoriteRows(),
+                    onOpenOverlaySession = { ref, name -> selected = ref to name },
                 )
             }
         }
-        compose.onNodeWithTag("session-overlay-open").performClick()
+        compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
+        compose.onNodeWithText("sess-a").assertDoesNotExist()
+        compose.onNodeWithText("sess-b").assertIsDisplayed()
+        compose.onNodeWithText("sess-b").performClick()
         compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay").assertIsDisplayed()
-        compose.onNodeWithTag("l2-row-$REF_A").assertExists()
-        compose.onNodeWithTag("l2-row-$REF_B").assertDoesNotExist()
-        compose.onNodeWithText("sess-b").assertDoesNotExist()
-        compose.onAllNodesWithText("sess-a").assertCountEquals(2)
-        compose.onNodeWithText("多agent协作", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("远程Agent安卓").assertDoesNotExist()
+        assertEquals(REF_B to "sess-b", selected)
+    }
+
+    @Test
+    fun sessionDockHidesOfflineFavoriteInsteadOfMarkingOffline() {
+        val wvm = seededAbFavoritesLastB()
+        val h = OverlayTestHarness(REF_A)
+        compose.setContent {
+            AgentMirrorTheme {
+                val liveGen by wvm.favoriteLiveGen.collectAsState()
+                SessionScreen(
+                    viewModel = h.vm,
+                    name = "sess-a",
+                    onBack = {},
+                    favoriteRows = remember(liveGen) { wvm.favoriteRows() },
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-chip-$REF_B").assertIsDisplayed()
+
+        wvm.onFrame(level2(CWD_B, REF_B, "sess-b", SOCK_B).copy(seq = 2, sessions = emptyList()))
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-chip-$REF_B").assertDoesNotExist()
+        compose.onNodeWithText("不在线", useUnmergedTree = true).assertDoesNotExist()
+        assertEquals(false, wvm.favoriteRows().single { it.ref == REF_B }.isOnline)
+        assertEquals(2, wvm.favorites.value.size)
     }
 
     private fun seededAbFavoritesLastB(): WorkspaceViewModel {
