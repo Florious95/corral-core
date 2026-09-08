@@ -25,8 +25,8 @@ jobs:
           tmux -V
       - name: Exact source, compile, named base red and candidate wave
         env:
-          PERF15_EXPECTED_TREE: f790f18f218f39d7e19a97979441c75e4932d864
-          PERF15_PATCH_SHA256: 82bdfff87e387085555ebd043e8c6d12509e59b03cf623cf53ace525c95d3898
+          PERF15_EXPECTED_TREE: 98e294185c30b94052ba6bb80d792d3a898bf3c5
+          PERF15_PATCH_SHA256: 63e97c4a09376cbb7c617d57f4648f9e447f8b956be2c41371615d7a336ee1b7
         run: python3 tools/perf15/hosted.py
       - uses: actions/upload-artifact@v4
         if: always()
