@@ -11,7 +11,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
 	"github.com/agentmirror/agentmirror/internal/discovery"
@@ -69,38 +68,10 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 	return false
 }
 
-// handleList answers a full listing (docs/protocol.md §5.1, requirement 069).
-// It always triggers one real rescan — not ensureInitialScan, which no-ops
-// once a snapshot exists. On scan failure the last snapshot is kept so the
-// reply is never an empty wipe of a known world.
+// handleList admits a bounded, independently numbered refresh intent. Only
+// catalog work leaves the reader: subsequent known-ref Subscribe can proceed.
 func (c *wsConn) handleList(l protocol.List) {
-	prev, prevSeq := c.s.currentSnapshot()
-	prevN := snapshotSessionCount(prev)
-	err := c.s.refreshListing(c.ctx)
-	snap, seq := c.s.currentSnapshot()
-	curN := snapshotSessionCount(snap)
-	c.s.log.Info("listing: refresh on open",
-		"req_id", l.ReqID,
-		"had_cache", prev != nil,
-		"prev_seq", prevSeq,
-		"prev_sessions", prevN,
-		"cur_sessions", curN,
-		"cur_seq", seq,
-		"refresh_err", errString(err),
-	)
-	if seq == 0 {
-		c.s.snapMu.Lock()
-		if c.s.seq == 0 {
-			c.s.seq = 1
-		}
-		seq = c.s.seq
-		c.s.snapMu.Unlock()
-	}
-	listing := &protocol.Listing{ReqID: l.ReqID, Seq: seq}
-	if snap != nil {
-		listing.Workspaces = snap.listing()
-	}
-	c.send(listing)
+	c.s.scans.list(c, l.ReqID)
 }
 
 func snapshotSessionCount(snap *modelSnapshot) int {
@@ -118,11 +89,10 @@ func errString(err error) string {
 }
 
 // handleSubscribe starts mirroring a session: resize the pane to the client's
-// dims, attach the pipe (bridge.SubscribeWithLoss), queue a full snapshot, then
-// open the relay gate. The relay owns loss cancellation while capture and first
-// frame queueing are still in flight. Re-subscribing the same ref is idempotent:
-// the previous subscription is torn down and a fresh snapshot is replayed
-// (requirement 004 reconnect replay). A failure to subscribe is an error frame.
+// dims, attach the pipe (bridge.Subscribe), send a full snapshot, then relay
+// deltas. Re-subscribing the same ref is idempotent: the previous subscription
+// is torn down and a fresh snapshot is replayed (requirement 004 reconnect
+// replay). A failure to subscribe is an error frame.
 //
 // Subscribe-frame timestamps (recv/start/done/queue_ms) are logged at the
 // handleFrame call site so every return path is covered once.
@@ -150,19 +120,6 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// the same geometry regardless of how many clients came and went in between.
 	geom := c.s.geometryFor(s.Ref)
 	_, _, _ = geom.acquire(c.ctx, br)
-	subCtx, cancel := context.WithCancel(c.ctx)
-	sub := &subscription{
-		ref:           s.Ref,
-		cancel:        cancel,
-		ready:         make(chan struct{}),
-		initialFailed: make(chan struct{}),
-		relayDone:     make(chan struct{}),
-	}
-	// Install the release hook before any fallible operation after acquire. All
-	// exits (including capture/encode failure) then use the same idempotent owner.
-	sub.restoreSize = func() {
-		geom.release(c.ctx, br, c.s.log, s.Ref)
-	}
 
 	// Initial client dims reshape the pane so the CLI redraws for the phone
 	// (requirement 005). A resize failure is not fatal: the mirror continues at
@@ -172,28 +129,16 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	}
 
 	// Attach the pipe before the snapshot so no output between the two is lost
-	// (term-bridge knowledge base: pipe first, then capture). Start the relay
-	// before capture, but keep its data gate closed until the snapshot is queued;
-	// this gives loss handling ownership to the whole initial-subscribe window.
-	ch, loss, detach, err := br.SubscribeWithLoss(c.ctx)
+	// (term-bridge knowledge base: pipe first, then capture).
+	ch, detach, err := br.Subscribe(c.ctx)
 	if err != nil {
-		teardownSubscription(sub)
 		c.sendError(protocol.ErrCodeInternal, "cannot attach mirror")
 		return
 	}
-	sub.detach = detach
-	sub.loss = loss
-	go c.relay(subCtx, sub, ch)
 
-	var snap []byte
-	if c.snapshotFn != nil {
-		snap, err = c.snapshotFn(c.ctx, br)
-	} else {
-		snap, err = snapshotWithCursor(c.ctx, br)
-	}
+	snap, err := snapshotWithCursor(c.ctx, br)
 	if err != nil {
-		close(sub.initialFailed)
-		<-sub.relayDone
+		detach()
 		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		return
 	}
@@ -203,25 +148,25 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		Data: snap,
 	})
 	if err != nil {
-		close(sub.initialFailed)
-		<-sub.relayDone
+		detach()
 		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
 		return
 	}
-	if c.sendBinaryFn != nil {
-		c.sendBinaryFn(frame)
-	} else {
-		c.sendBinary(frame)
+	c.sendBinary(frame)
+
+	subCtx, cancel := context.WithCancel(c.ctx)
+	sub := &subscription{ref: s.Ref, cancel: cancel, detach: detach}
+	// Release hook: the pane-level geometry tracker is released when this
+	// subscription ends. When it is the last subscriber the tracker restores the
+	// pane to the shared original baseline (契约 2: teardown/closeSubscriptions/
+	// relay exit all call restoreSize, so every exit path hits the same release →
+	// last-leaver restores). geomOK==false means no baseline was captured (Size
+	// failed); release is then a no-op rather than restoring a guessed size.
+	sub.restoreSize = func() {
+		geom.release(c.ctx, br, c.s.log, s.Ref)
 	}
-	c.subsMu.Lock()
-	if subCtx.Err() != nil || c.mirrorAborted.Load() {
-		c.subsMu.Unlock()
-		teardownSubscription(sub)
-		return
-	}
-	c.subs[sub.ref] = sub
-	c.subsMu.Unlock()
-	sub.releaseRelayGate()
+	c.subscribeAdd(sub)
+	go c.relay(subCtx, sub, ch)
 }
 
 // handleUnsubscribe stops mirroring a session. Idempotent: unsubscribing a
@@ -287,6 +232,7 @@ func (c *wsConn) handleInput(i protocol.Input) {
 	if inMode, modeErr := br.PaneInMode(c.ctx); modeErr == nil && inMode {
 		if exitErr := br.ExitCopyMode(c.ctx); exitErr == nil {
 			c.send(&protocol.PaneModeChanged{Ref: i.Ref, InCopyMode: false})
+			c.sendScrollSnapshot(i.Ref, br)
 		}
 	}
 
@@ -426,6 +372,30 @@ func (c *wsConn) handleScrollWheel(sw protocol.ScrollWheel) {
 	if enteredCopyMode {
 		c.send(&protocol.PaneModeChanged{Ref: sw.Ref, InCopyMode: true})
 	}
+	c.sendScrollSnapshot(sw.Ref, br)
+}
+
+// Copy-mode scrolls tmux's view without writing to the pane's PTY. Publish the
+// resulting screen using the existing snapshot protocol instead of waiting for
+// pipe-pane output that will never arrive.
+func (c *wsConn) sendScrollSnapshot(ref string, br *bridge.Pane) {
+	snap, inMode, err := br.SnapshotAfterScroll(c.ctx)
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot capture scroll viewport")
+		return
+	}
+	if snap == nil {
+		return
+	}
+	if !inMode {
+		c.send(&protocol.PaneModeChanged{Ref: ref, InCopyMode: false})
+	}
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{Kind: protocol.KindSnapshot, Ref: ref, Data: snap})
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot encode scroll viewport")
+		return
+	}
+	c.sendBinary(frame)
 }
 
 // handleScrollback fetches one line range of history (docs/protocol.md §4.2,
@@ -453,23 +423,29 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 	// through (D-36): the old `- pane.Height` translation assumed bottom-relative
 	// tmux semantics and shifted every page into history (current-screen requests
 	// returned stale history, history pages reported wrong anchors).
-	data, err := br.Scrollback(c.ctx, start, end)
-	if err != nil {
-		if errors.Is(err, bridge.ErrPaneNotFound) {
-			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
-		} else {
-			c.sendError(protocol.ErrCodeInternal, "scrollback failed")
+	var data []byte
+	if start == 0 && end == -1 {
+		// H=0 has no history to capture. Preserve the existing one-empty-line
+		// protocol placeholder without accidentally capturing visible screen rows.
+		data = []byte("\n")
+	} else {
+		data, err = br.Scrollback(c.ctx, start, end)
+		if err != nil {
+			if errors.Is(err, bridge.ErrPaneNotFound) {
+				c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+			} else {
+				c.sendError(protocol.ErrCodeInternal, "scrollback failed")
+			}
+			return
 		}
-		return
 	}
 
-	// Trim trailing blank rows (consistent with snapshotWithCursor): capture-pane
-	// emits a pane's blank bottom rows as bare LFs past the content. Trimming keeps
-	// the reported line_count (§6.3 实际区间) equal to the actual non-blank lines,
-	// which the client uses to anchor its scrollback buffer.
-	data = bytes.TrimRight(data, "\n")
-	lineCount := uint32(countLines(data))
-	if lineCount == 0 {
+	// capture-pane appends one separator LF after the requested range. Remove
+	// only that terminator: additional trailing LFs are real blank rows and are
+	// part of the page's content/anchor semantics.
+	data = trimScrollbackTerminator(data)
+	lineCount := uint32(bytes.Count(data, []byte("\n")) + 1)
+	if len(data) == 0 {
 		// Degenerate fully-blank page: report one empty line (EncodeBinary requires
 		// LineCount >= 1); a blank page carries no content either way.
 		lineCount = 1
@@ -520,21 +496,17 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 	if err != nil {
 		c.logErr("resize read before", err)
 		// A size read failure should not silently abort: fall through and let
-		// the resize attempt itself decide (Resize re-reads below).
+		// the resize attempt's actual readback decide.
 		beforeW, beforeH = -1, -1
 	}
-	if _, _, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows)); err != nil {
+	afterW, afterH, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows))
+	if err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		} else {
 			c.sendError(protocol.ErrCodeInternal, "resize failed")
 		}
 		return
-	}
-	afterW, afterH, err := br.Size(c.ctx)
-	if err != nil {
-		c.logErr("resize read after", err)
-		afterW, afterH = -1, -1
 	}
 	if beforeW >= 0 && beforeW == afterW && beforeH == afterH {
 		// Pane dims unchanged by the resize: no reflow happened, so there is
@@ -579,51 +551,44 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 // clamp to the available range; a request entirely above the history (or
 // entirely below the screen) is shifted to the nearest available edge so the
 // client receives a useful page instead of a single degenerate line.
-func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, pane discovery.Pane, fromLine, count int) (int, int, error) {
-	// historySize = how many lines of history tmux retains above the screen.
-	// Measured by capturing from the oldest possible line to the line just above
-	// the screen top (-1) — top-relative semantics, so the capture is exactly the
-	// history, no screen rows, no height subtraction needed (D-36: the old
-	// `- pane.Height` double-counted the screen against tmux's top-relative coords
-	// and under-reported history).
-	oldestToBottom, err := br.Scrollback(ctx, math.MinInt32, -1)
+func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, _ discovery.Pane, fromLine, count int) (int, int, error) {
+	metadata, err := br.ScrollbackMetadata(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
-	historySize := countLines(oldestToBottom)
-	if historySize < 0 {
-		historySize = 0
+	return scrollbackRangeFor(metadata.HistorySize, metadata.PaneHeight, fromLine, count)
+}
+
+// scrollbackRangeFor clamps a protocol request against actual tmux metadata.
+// int64 intermediates keep extreme int32/uint32 request values from wrapping.
+func scrollbackRangeFor(historySize, paneHeight, fromLine, count int) (int, int, error) {
+	if historySize < 0 || paneHeight <= 0 {
+		return 0, 0, fmt.Errorf("invalid scrollback metadata history=%d height=%d", historySize, paneHeight)
 	}
+	oldest := -int64(historySize)
+	bottom := int64(paneHeight) - 1
+	requestEnd := int64(fromLine) + int64(count) - 1
 
-	// Available range in protocol coordinates (0 = screen top, negative = history).
-	oldest := -historySize
-	bottom := pane.Height - 1
-
-	requestEnd := fromLine + count - 1
 	switch {
 	case requestEnd <= oldest:
-		// Entirely above the history (or ending exactly at the oldest line): shift
-		// so the page starts at the oldest available line and grab count lines —
-		// a useful full page, not a degenerate sliver. Cap at the last history line
-		// (-1 = line above screen top), never onto the visible screen: an above-history
-		// request asks for history, so the reply must not leak on-screen rows
-		// (TestScrollbackConvergedRange: scrollback(-500,100) must return only history).
-		// D-36: scrollback(-30,5) with 26 history lines → (-26,-22) = the 5 oldest.
-		start, end := oldest, oldest+count-1
+		// Entirely above history: keep the page in history and move it to the
+		// oldest available edge. With H=0 this returns (0,-1), a no-capture
+		// empty-history sentinel handled by handleScrollback.
+		start := oldest
+		end := oldest + int64(count) - 1
 		if end > -1 {
 			end = -1
 		}
-		return start, end, nil
-	case fromLine > bottom:
-		// Entirely below the screen: shift so the page ends at the bottom row.
-		start, end := bottom-count+1, bottom
+		return int(start), int(end), nil
+	case int64(fromLine) > bottom:
+		// Entirely below the screen: shift so the page ends at the actual bottom.
+		start := bottom - int64(count) + 1
 		if start < oldest {
 			start = oldest
 		}
-		return start, end, nil
+		return int(start), int(bottom), nil
 	default:
-		// Overlap: clamp both edges.
-		start := fromLine
+		start := int64(fromLine)
 		if start < oldest {
 			start = oldest
 		}
@@ -632,11 +597,17 @@ func (c *wsConn) scrollbackRange(ctx context.Context, br *bridge.Pane, pane disc
 			end = bottom
 		}
 		if start > end {
-			// Degenerate single row at the boundary.
 			end = start
 		}
-		return start, end, nil
+		return int(start), int(end), nil
 	}
+}
+
+func trimScrollbackTerminator(data []byte) []byte {
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		return data[:len(data)-1]
+	}
+	return data
 }
 
 // countLines counts the newline-delimited lines in a capture-pane result,

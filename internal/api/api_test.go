@@ -113,6 +113,9 @@ func TestListDeltaSeqMonotonic(t *testing.T) {
 	md := &mutableDiscoverer{model: testModel()}
 	e := startWS(t, Options{Token: "test-token", Discoverer: md})
 	e.auth()
+	// A server-side scan is not this connection's wire baseline.
+	e.sendFrame(&protocol.List{ReqID: 1})
+	mustListing(t, e, 1)
 
 	// Let the baseline scan run with the original model (several ticks of the
 	// 50ms loop emit nothing since the model is unchanged), so the diff below
