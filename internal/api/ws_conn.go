@@ -68,6 +68,7 @@ type wsConn struct {
 	// pushed snapshot so we send frames only on change and heartbeats when
 	// the snapshot is still the same.
 	level2Mu       sync.Mutex
+	level2Epoch    uint64
 	level2On       bool
 	level2WS       string
 	level2Snap     string
@@ -87,7 +88,15 @@ type wsConn struct {
 	// closeReason 连接关闭原因（可观测健康记录，leader msg_1f0c3455fac0）：
 	// readLoop 读错误 / 客户端主动关 / 写超时 / 正常 EOF。teardown 日志带出，
 	// 用于「连接为什么断」溯源（重连假说 / 慢链路健康）。
-	closeReason string
+	closeReason        string
+	closeReasonMu      sync.Mutex
+	sendMu             sync.RWMutex
+	catalogAbortOnce   sync.Once
+	catalogAborted     atomic.Bool
+	catalogCloseReason atomic.Value
+	// Test-only writer boundaries; nil in production, set before startup.
+	beforeWriterFrame func(wsMsg)
+	writeAttempt      func(wsMsg)
 
 	// connMetrics 这条连接自己的计数（P0 修复：teardown 行必须报本连接的数，
 	// 不是进程累计——此前进程级累计被打在 per-conn 行上误导数轮）。
@@ -132,6 +141,12 @@ func (s *Server) serveConn(conn *websocket.Conn) {
 		subs:      make(map[string]*subscription),
 		sendCh:    make(chan wsMsg, 256),
 	}
+	s.trackersMu.Lock()
+	init := s.connInit
+	s.trackersMu.Unlock()
+	if init != nil {
+		init(c)
+	}
 	s.registerTracker(c)
 	go c.writeLoop()
 	c.readLoop()
@@ -146,7 +161,7 @@ func (c *wsConn) readLoop() {
 		typ, data, err := c.conn.Read(c.ctx)
 		if err != nil {
 			// 记录读侧关闭原因（客户端关 / 网络错误 / 上下文取消），teardown 日志带出。
-			c.closeReason = "read_error: " + err.Error()
+			c.setCloseReason("read_error: " + err.Error())
 			return
 		}
 		// Stamp recv before parse/dispatch. Integer only — no string format
@@ -172,9 +187,41 @@ const writeTimeout = 30 * time.Second
 // is the canonical case), and a bounded timeout so a dead peer cannot wedge the
 // writer. It returns the underlying write error, if any.
 func (c *wsConn) writeFrame(m wsMsg) error {
-	wctx, cancel := context.WithTimeout(c.writeCtx, writeTimeout)
+	// A write already begun cannot be withdrawn; queued old epochs can.
+	if m.level2Epoch != 0 && m.level2Epoch != c.currentLevel2Epoch() {
+		return nil
+	}
+	deadline := time.Now().Add(writeTimeout)
+	if m.catalog != nil {
+		admissionDeadline, live := c.s.scans.writeDeadline(m.catalog)
+		if !live {
+			return context.Canceled
+		}
+		if !time.Now().Before(admissionDeadline) {
+			c.abortCatalog("catalog_timeout")
+			return context.DeadlineExceeded
+		}
+		if admissionDeadline.Before(deadline) {
+			deadline = admissionDeadline
+		}
+	}
+	if c.writeAttempt != nil {
+		c.writeAttempt(m)
+	}
+	wctx, cancel := context.WithDeadline(c.writeCtx, deadline)
 	defer cancel()
-	return c.conn.Write(wctx, m.typ, m.data)
+	err := c.conn.Write(wctx, m.typ, m.data)
+	if m.catalog != nil {
+		if err == nil {
+			c.s.scans.written(m.catalog, time.Now())
+		} else {
+			admissionDeadline, live := c.s.scans.writeDeadline(m.catalog)
+			if live && !time.Now().Before(admissionDeadline) {
+				c.abortCatalog("catalog_timeout")
+			}
+		}
+	}
+	return err
 }
 
 // writeLoop drains the send queue and writes each message. On a close message
@@ -189,14 +236,21 @@ func (c *wsConn) writeLoop() {
 	for {
 		select {
 		case m := <-c.sendCh:
+			if c.beforeWriterFrame != nil {
+				c.beforeWriterFrame(m)
+			}
+			if c.catalogAborted.Load() {
+				_ = c.conn.CloseNow()
+				return
+			}
 			if m.close {
-				c.closeReason = "client_close: " + m.reason
+				c.setCloseReason("client_close: " + m.reason)
 				_ = c.conn.Close(m.code, m.reason)
 				return
 			}
 			if err := c.writeFrame(m); err != nil {
 				// 写超时/写错误 → 强制关闭：记录原因（重连假说：慢链路 30s 写超时是候选）。
-				c.closeReason = "write_error: " + err.Error()
+				c.setCloseReason("write_error: " + err.Error())
 				_ = c.conn.CloseNow()
 				return
 			}
@@ -215,6 +269,13 @@ func (c *wsConn) flushQueued() {
 	for {
 		select {
 		case m := <-c.sendCh:
+			if c.beforeWriterFrame != nil {
+				c.beforeWriterFrame(m)
+			}
+			if c.catalogAborted.Load() {
+				_ = c.conn.CloseNow()
+				return
+			}
 			if m.close {
 				_ = c.conn.Close(m.code, m.reason)
 				return
@@ -238,6 +299,11 @@ func (c *wsConn) flushQueued() {
 // fail before the reply reached the wire.
 func (c *wsConn) teardown() {
 	c.cancel()
+	c.s.scans.remove(c)
+	closeReason := c.getCloseReason()
+	if reason := c.catalogCloseReason.Load(); reason != nil {
+		closeReason = reason.(string)
+	}
 	// 发送队列健康记录（常驻产品指标，非取证临时物）：会话结束时打一行，空闲零开销。
 	// 内容只含计数，绝无 token/凭据（daemon 日志有明文 token 历史问题，纪律）。
 	// 慢链路丢 delta → 客户端不一致 → 补发快照 → 整屏重建（D-36「发消息整屏刷」假说第 12 条）。
@@ -261,7 +327,7 @@ func (c *wsConn) teardown() {
 			"total.connections", m.ConnectionsTotal,
 			"total.queue_peak", m.QueuePeak,
 			"total.frames_sent", m.FramesSent,
-			"close_reason", c.closeReason,
+			"close_reason", closeReason,
 		)
 	}
 	// The connection is no longer a live client: un-count it so the listing
@@ -272,10 +338,7 @@ func (c *wsConn) teardown() {
 	}
 	// If this connection was viewing the level-2 menu, un-count it so the
 	// level2 loop parks once zero subscribers remain (061 idle gate).
-	if c.level2Active() {
-		c.setLevel2(false, "")
-		c.s.unmarkLevel2()
-	}
+	c.handleLevel2Unsubscribe(protocol.Level2Unsubscribe{})
 	if c.overlayActive() {
 		c.setOverlay(false, "", 0, 0)
 		c.s.unmarkOverlay()
@@ -325,6 +388,11 @@ func (c *wsConn) sendBinary(data []byte) {
 // (requirement 004 — the tmux pane is the source of truth, not this queue).
 // 丢弃次数与队列峰值计入 c.s.sendQueue（常驻健康指标，「丢了多少数据」本就是健康度量）。
 func (c *wsConn) sendMirror(data []byte) {
+	c.sendMu.RLock()
+	defer c.sendMu.RUnlock()
+	if c.catalogAborted.Load() || c.ctx.Err() != nil {
+		return
+	}
 	select {
 	case c.sendCh <- wsMsg{typ: wsBinary, data: data}:
 		c.s.sendQueue.recordQueued(len(c.sendCh))
@@ -338,6 +406,11 @@ func (c *wsConn) sendMirror(data []byte) {
 
 // sendMsg enqueues one message, unblocking early when the connection closes.
 func (c *wsConn) sendMsg(m wsMsg) {
+	c.sendMu.RLock()
+	defer c.sendMu.RUnlock()
+	if c.catalogAborted.Load() || c.ctx.Err() != nil {
+		return
+	}
 	select {
 	case c.sendCh <- m:
 	case <-c.ctx.Done():
@@ -347,10 +420,7 @@ func (c *wsConn) sendMsg(m wsMsg) {
 // sendClose enqueues a close marker: the writer sends any queued message, then
 // a WebSocket close frame and exits.
 func (c *wsConn) sendClose(code websocket.StatusCode, reason string) {
-	select {
-	case c.sendCh <- wsMsg{close: true, code: code, reason: reason}:
-	case <-c.ctx.Done():
-	}
+	c.sendMsg(wsMsg{close: true, code: code, reason: reason})
 }
 
 // --- frame routing ----------------------------------------------------------
@@ -590,7 +660,7 @@ func (c *wsConn) resolveBridge(ref string) (*bridge.Pane, bool) {
 // resolvePane resolves the bridge and the discovery pane for a ref (the pane
 // carries the geometry needed for scrollback convergence).
 func (c *wsConn) resolvePane(ref string) (*bridge.Pane, discovery.Pane, bool) {
-	e := c.s.catalog.entry(ref)
+	e := c.s.catalogEntry(ref)
 	if e == nil {
 		return nil, discovery.Pane{}, false
 	}
@@ -603,4 +673,64 @@ func (c *wsConn) logErr(verb string, err error) {
 		return
 	}
 	c.s.log.Debug("ws: "+verb, "conn", c.id, "err", err)
+}
+
+func (c *wsConn) discardQueuedAndClose() {
+	// A sender may already be blocked on a full queue. Cancellation above
+	// makes it leave sendMsg; sendMu then closes the race where it could
+	// otherwise enqueue after this drain.
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+	for {
+		select {
+		case <-c.sendCh:
+		default:
+			_ = c.conn.CloseNow()
+			return
+		}
+	}
+}
+
+func (c *wsConn) abortCatalog(reason string) {
+	c.catalogAbortOnce.Do(func() {
+		c.catalogCloseReason.Store(reason)
+		c.catalogAborted.Store(true)
+		c.cancel()
+		c.s.scans.remove(c)
+		c.s.log.Warn("catalog: terminating connection", "conn", c.id, "reason", reason)
+		c.discardQueuedAndClose()
+	})
+}
+
+func (c *wsConn) sendCatalog(frame protocol.Typed, epoch uint64, waiter *catalogWaiter) {
+	body, err := protocol.MarshalFrame(frame)
+	if err != nil {
+		c.s.log.Error("catalog: marshal failed", "conn", c.id, "err", err)
+		c.abortCatalog("catalog_backpressure")
+		return
+	}
+	c.sendMu.RLock()
+	if c.catalogAborted.Load() || c.ctx.Err() != nil {
+		c.sendMu.RUnlock()
+		return
+	}
+	select {
+	case c.sendCh <- wsMsg{typ: wsText, data: body, level2Epoch: epoch, catalog: waiter}:
+		c.sendMu.RUnlock()
+	default:
+		c.sendMu.RUnlock()
+		c.abortCatalog("catalog_backpressure")
+	}
+}
+
+// Reader and writer can finish concurrently; keep the health reason race-free.
+func (c *wsConn) setCloseReason(reason string) {
+	c.closeReasonMu.Lock()
+	c.closeReason = reason
+	c.closeReasonMu.Unlock()
+}
+func (c *wsConn) getCloseReason() string {
+	c.closeReasonMu.Lock()
+	defer c.closeReasonMu.Unlock()
+	return c.closeReason
 }

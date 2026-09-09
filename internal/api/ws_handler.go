@@ -68,38 +68,10 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 	return false
 }
 
-// handleList answers a full listing (docs/protocol.md §5.1, requirement 069).
-// It always triggers one real rescan — not ensureInitialScan, which no-ops
-// once a snapshot exists. On scan failure the last snapshot is kept so the
-// reply is never an empty wipe of a known world.
+// handleList admits a bounded, independently numbered refresh intent. Only
+// catalog work leaves the reader: subsequent known-ref Subscribe can proceed.
 func (c *wsConn) handleList(l protocol.List) {
-	prev, prevSeq := c.s.currentSnapshot()
-	prevN := snapshotSessionCount(prev)
-	err := c.s.refreshListing(c.ctx)
-	snap, seq := c.s.currentSnapshot()
-	curN := snapshotSessionCount(snap)
-	c.s.log.Info("listing: refresh on open",
-		"req_id", l.ReqID,
-		"had_cache", prev != nil,
-		"prev_seq", prevSeq,
-		"prev_sessions", prevN,
-		"cur_sessions", curN,
-		"cur_seq", seq,
-		"refresh_err", errString(err),
-	)
-	if seq == 0 {
-		c.s.snapMu.Lock()
-		if c.s.seq == 0 {
-			c.s.seq = 1
-		}
-		seq = c.s.seq
-		c.s.snapMu.Unlock()
-	}
-	listing := &protocol.Listing{ReqID: l.ReqID, Seq: seq}
-	if snap != nil {
-		listing.Workspaces = snap.listing()
-	}
-	c.send(listing)
+	c.s.scans.list(c, l.ReqID)
 }
 
 func snapshotSessionCount(snap *modelSnapshot) int {
