@@ -10,7 +10,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"strings"
 	"testing"
@@ -260,133 +259,14 @@ func TestUnsubscribeRestoresOriginalPaneSize(t *testing.T) {
 // header (docs/protocol.md §6.3). The protocol addresses 0 = screen top,
 // negative = history; tmux semantics match this directly.
 func TestScrollbackConvergedRange(t *testing.T) {
-	// A 10-row screen with plenty of history.
-	te := startTmuxEnv(t, "bash")
-	// Make the window small so history accumulates quickly.
-	runTmuxCmd(te.env, te.sock, "resize-window", "-t", "0", "-x", "40", "-y", "10")
-	time.Sleep(200 * time.Millisecond)
-
-	// Mirroring paths require an active subscription (input applies to a
-	// subscribed session). Subscribe first, then inject to build history.
-	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
-	_ = te.readBinaryFrame() // snapshot
-	// 直通（059）：文本先键入（不回车），再裸 Enter 提交执行。
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "for i in $(seq 1 60); do echo SCBK_$i; done"})
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
-	// Wait for the tail on screen.
-	te.waitForMirror("SCBK_60")
-
-	// Request far more history than exists: from_line=-500, count=100.
-	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 9, Ref: te.ref(), FromLine: -500, Count: 100})
-
-	// Read the scrollback binary reply, draining any mirror deltas that arrive
-	// first (the injected loop's echo is still streaming). The scrollback reply
-	// is the frame whose kind is KindScrollback.
-	var payload protocol.BinaryPayload
-	found := false
-	for i := 0; i < 50 && !found; i++ {
-		typ, data, err := te.wsEnv.conn.Read(context.Background())
-		if err != nil {
-			t.Fatalf("read scrollback: %v", err)
-		}
-		if typ != websocket.MessageBinary {
-			t.Fatalf("scrollback reply must be binary, got %v", typ)
-		}
-		p, err := protocol.DecodeBinary(data)
-		if err != nil {
-			t.Fatalf("decode binary: %v", err)
-		}
-		if p.Kind == protocol.KindScrollback {
-			payload = p
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("scrollback reply never arrived")
-	}
-	if payload.ReqID != 9 {
-		t.Errorf("scrollback req_id = %d, want 9", payload.ReqID)
-	}
-	if payload.LineCount == 0 {
-		t.Error("scrollback line_count must be >= 1")
-	}
-	// The server must report the ACTUAL range it returned: with -500 requested
-	// and only a bounded history, from_line must be clamped to the oldest
-	// available (not left at -500).
-	if payload.FromLine < -1000 {
-		t.Errorf("from_line = %d, not clamped to available history", payload.FromLine)
-	}
-	if payload.LineCount > 100 {
-		t.Errorf("line_count = %d, exceeds requested count 100", payload.LineCount)
-	}
-	// The payload must contain the oldest history lines, not the newest.
-	if bytes.Contains(payload.Data, []byte("SCBK_60")) {
-		t.Error("scrollback page must not contain on-screen tail SCBK_60")
-	}
+	testScrollbackConvergedRangeStrong(t)
 }
 
 // TestScrollbackExactHeaderBytes verifies the raw 12-byte header layout on the
 // wire: req_id (4 BE), from_line (4 BE signed), line_count (4 BE unsigned),
 // then the ANSI bytes (docs/protocol.md §6.3).
 func TestScrollbackExactHeaderBytes(t *testing.T) {
-	te := startTmuxEnv(t, "bash")
-	runTmuxCmd(te.env, te.sock, "resize-window", "-t", "0", "-x", "40", "-y", "10")
-	time.Sleep(200 * time.Millisecond)
-	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
-	_ = te.readBinaryFrame() // snapshot
-	// 直通（059）：文本先键入（不回车），再裸 Enter 提交执行。
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 1, Ref: te.ref(), Text: "for i in $(seq 1 30); do echo SCBKX_$i; done"})
-	te.wsEnv.sendFrame(&protocol.Input{ReqID: 2, Ref: te.ref(), Text: ""})
-	te.waitForMirror("SCBKX_30")
-
-	te.wsEnv.sendFrame(&protocol.Scrollback{ReqID: 5, Ref: te.ref(), FromLine: -20, Count: 10})
-
-	// Drain mirror deltas until the scrollback reply arrives.
-	var payload protocol.BinaryPayload
-	var frame []byte
-	found := false
-	for i := 0; i < 50 && !found; i++ {
-		typ, data, err := te.wsEnv.conn.Read(context.Background())
-		if err != nil {
-			t.Fatalf("read: %v", err)
-		}
-		if typ != websocket.MessageBinary {
-			continue
-		}
-		p, err := protocol.DecodeBinary(data)
-		if err != nil {
-			t.Fatalf("decode: %v", err)
-		}
-		if p.Kind == protocol.KindScrollback {
-			payload = p
-			frame = data
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("scrollback reply never arrived")
-	}
-	// Reconstruct the 12-byte header from the frame layout:
-	// magic(2) version(1) kind(1) reflen(1) ref(reflen) [12-byte header] data.
-	off := 5 + len(payload.Ref)
-	if len(frame) < off+12 {
-		t.Fatalf("frame too short for 12-byte header: %d bytes", len(frame))
-	}
-	reqID := binary.BigEndian.Uint32(frame[off : off+4])
-	fromLine := int32(binary.BigEndian.Uint32(frame[off+4 : off+8]))
-	lineCount := binary.BigEndian.Uint32(frame[off+8 : off+12])
-	if reqID != 5 {
-		t.Errorf("header req_id = %d, want 5", reqID)
-	}
-	if fromLine != payload.FromLine {
-		t.Errorf("header from_line = %d, payload %d", fromLine, payload.FromLine)
-	}
-	if lineCount != payload.LineCount {
-		t.Errorf("header line_count = %d, payload %d", lineCount, payload.LineCount)
-	}
-	if lineCount == 0 {
-		t.Error("header line_count must be >= 1")
-	}
+	testScrollbackExactHeaderBytesStrong(t)
 }
 
 // TestResizeChangesPane verifies a resize frame changes the underlying pane's
