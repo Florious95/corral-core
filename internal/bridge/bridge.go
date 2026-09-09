@@ -11,6 +11,7 @@ package bridge
 // requests. That is the hard red line of this task.
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -538,6 +539,33 @@ func (p *Pane) InjectScroll(ctx context.Context, delta int32) (enteredCopyMode b
 	_, err = runTmux(ctx, p.socket, p.timeout,
 		"send-keys", "-X", "-N", strconv.Itoa(int(count)), "-t", p.target, direction)
 	return enteredCopyMode, err
+}
+
+// SnapshotAfterScroll mirrors tmux's copy-mode viewport, which is not emitted
+// through pipe-pane. Mouse-tracking applications redraw through their own PTY
+// output and need no extra snapshot. At the bottom, capture the normal screen
+// again so leaving copy-mode also restores the mirror.
+func (p *Pane) SnapshotAfterScroll(ctx context.Context) ([]byte, bool, error) {
+	out, err := runTmux(ctx, p.socket, p.timeout, "display-message", "-p", "-t", p.target,
+		"#{mouse_any_flag} #{pane_in_mode} #{?pane_in_mode,#{scroll_position},0} #{pane_height} #{?pane_in_mode,#{copy_cursor_x},#{cursor_x}} #{?pane_in_mode,#{copy_cursor_y},#{cursor_y}}")
+	if err != nil {
+		return nil, false, err
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) > 0 && fields[0] == "1" {
+		return nil, false, nil
+	}
+	var mouse, mode, offset, height, x, y int
+	if n, err := fmt.Sscanf(strings.TrimSpace(string(out)), "%d %d %d %d %d %d", &mouse, &mode, &offset, &height, &x, &y); err != nil || n != 6 || len(fields) != 6 || mouse != 0 || (mode != 0 && mode != 1) || offset < 0 || height < 1 || x < 0 || y < 0 || y >= height {
+		return nil, false, fmt.Errorf("tmux: invalid scroll viewport %q", strings.TrimSpace(string(out)))
+	}
+	snap, err := runTmux(ctx, p.socket, p.timeout, "capture-pane", "-e", "-p", "-t", p.target,
+		"-S", strconv.Itoa(-offset), "-E", strconv.Itoa(height-1-offset))
+	if err != nil {
+		return nil, false, err
+	}
+	snap = bytes.TrimRight(snap, "\n")
+	return append(snap, []byte(fmt.Sprintf("\x1b[%d;%dH", y+1, x+1))...), mode == 1, nil
 }
 
 // injectWheelBytes sends count SGR-1006 mouse-wheel events (button 64 = up,

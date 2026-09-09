@@ -260,6 +260,7 @@ func (c *wsConn) handleInput(i protocol.Input) {
 	if inMode, modeErr := br.PaneInMode(c.ctx); modeErr == nil && inMode {
 		if exitErr := br.ExitCopyMode(c.ctx); exitErr == nil {
 			c.send(&protocol.PaneModeChanged{Ref: i.Ref, InCopyMode: false})
+			c.sendScrollSnapshot(i.Ref, br)
 		}
 	}
 
@@ -399,6 +400,30 @@ func (c *wsConn) handleScrollWheel(sw protocol.ScrollWheel) {
 	if enteredCopyMode {
 		c.send(&protocol.PaneModeChanged{Ref: sw.Ref, InCopyMode: true})
 	}
+	c.sendScrollSnapshot(sw.Ref, br)
+}
+
+// Copy-mode scrolls tmux's view without writing to the pane's PTY. Publish the
+// resulting screen using the existing snapshot protocol instead of waiting for
+// pipe-pane output that will never arrive.
+func (c *wsConn) sendScrollSnapshot(ref string, br *bridge.Pane) {
+	snap, inMode, err := br.SnapshotAfterScroll(c.ctx)
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot capture scroll viewport")
+		return
+	}
+	if snap == nil {
+		return
+	}
+	if !inMode {
+		c.send(&protocol.PaneModeChanged{Ref: ref, InCopyMode: false})
+	}
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{Kind: protocol.KindSnapshot, Ref: ref, Data: snap})
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot encode scroll viewport")
+		return
+	}
+	c.sendBinary(frame)
 }
 
 // handleScrollback fetches one line range of history (docs/protocol.md §4.2,
