@@ -168,6 +168,11 @@ func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []str
 			}
 			ps, err := scanServer(ctx, sock, logger)
 			if err != nil {
+				// A canceled caller says nothing about socket health. Do not
+				// poison later scans or return a partially discovered model.
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
 				// Probe succeeded but tmux still failed (raced to death, or
 				// hung past socketTimeout). Remember it so the next tick does
 				// not pay another fork.
