@@ -260,6 +260,7 @@ func (c *wsConn) handleInput(i protocol.Input) {
 	if inMode, modeErr := br.PaneInMode(c.ctx); modeErr == nil && inMode {
 		if exitErr := br.ExitCopyMode(c.ctx); exitErr == nil {
 			c.send(&protocol.PaneModeChanged{Ref: i.Ref, InCopyMode: false})
+			c.sendScrollSnapshot(i.Ref, br)
 		}
 	}
 
@@ -399,6 +400,30 @@ func (c *wsConn) handleScrollWheel(sw protocol.ScrollWheel) {
 	if enteredCopyMode {
 		c.send(&protocol.PaneModeChanged{Ref: sw.Ref, InCopyMode: true})
 	}
+	c.sendScrollSnapshot(sw.Ref, br)
+}
+
+// Copy-mode scrolls tmux's view without writing to the pane's PTY. Publish the
+// resulting screen using the existing snapshot protocol instead of waiting for
+// pipe-pane output that will never arrive.
+func (c *wsConn) sendScrollSnapshot(ref string, br *bridge.Pane) {
+	snap, inMode, err := br.SnapshotAfterScroll(c.ctx)
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot capture scroll viewport")
+		return
+	}
+	if snap == nil {
+		return
+	}
+	if !inMode {
+		c.send(&protocol.PaneModeChanged{Ref: ref, InCopyMode: false})
+	}
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{Kind: protocol.KindSnapshot, Ref: ref, Data: snap})
+	if err != nil {
+		c.sendError(protocol.ErrCodeInternal, "cannot encode scroll viewport")
+		return
+	}
+	c.sendBinary(frame)
 }
 
 // handleScrollback fetches one line range of history (docs/protocol.md §4.2,
@@ -447,8 +472,8 @@ func (c *wsConn) handleScrollback(sc protocol.Scrollback) {
 	// only that terminator: additional trailing LFs are real blank rows and are
 	// part of the page's content/anchor semantics.
 	data = trimScrollbackTerminator(data)
-	lineCount := uint32(countLines(data))
-	if lineCount == 0 {
+	lineCount := uint32(bytes.Count(data, []byte("\n")) + 1)
+	if len(data) == 0 {
 		// Degenerate fully-blank page: report one empty line (EncodeBinary requires
 		// LineCount >= 1); a blank page carries no content either way.
 		lineCount = 1
@@ -499,21 +524,17 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 	if err != nil {
 		c.logErr("resize read before", err)
 		// A size read failure should not silently abort: fall through and let
-		// the resize attempt itself decide (Resize re-reads below).
+		// the resize attempt's actual readback decide.
 		beforeW, beforeH = -1, -1
 	}
-	if _, _, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows)); err != nil {
+	afterW, afterH, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows))
+	if err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		} else {
 			c.sendError(protocol.ErrCodeInternal, "resize failed")
 		}
 		return
-	}
-	afterW, afterH, err := br.Size(c.ctx)
-	if err != nil {
-		c.logErr("resize read after", err)
-		afterW, afterH = -1, -1
 	}
 	if beforeW >= 0 && beforeW == afterW && beforeH == afterH {
 		// Pane dims unchanged by the resize: no reflow happened, so there is
@@ -617,19 +638,17 @@ func trimScrollbackTerminator(data []byte) []byte {
 	return data
 }
 
-// countLines counts the rows in a capture-pane result after exactly one
-// separator LF has been removed. A remaining LF terminates a real row, so a
-// nonempty body always has one more row than its newline count; this preserves
-// trailing blank rows as well as unterminated single-line bodies.
+// countLines counts the newline-delimited lines in a capture-pane result,
+// tolerating a missing trailing newline.
 func countLines(data []byte) int {
-	if len(data) == 0 {
-		return 0
-	}
-	n := 1
+	n := 0
 	for _, b := range data {
 		if b == '\n' {
 			n++
 		}
+	}
+	if n > 0 && data[len(data)-1] != '\n' {
+		n++
 	}
 	return n
 }

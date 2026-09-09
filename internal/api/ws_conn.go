@@ -242,7 +242,7 @@ func (c *wsConn) teardown() {
 	// 内容只含计数，绝无 token/凭据（daemon 日志有明文 token 历史问题，纪律）。
 	// 慢链路丢 delta → 客户端不一致 → 补发快照 → 整屏重建（D-36「发消息整屏刷」假说第 12 条）。
 	// per-conn 与 process-level 分开报，字段前缀一眼可辨（P0：此前进程累计被打在 per-conn 行）。
-	cm := c.connMetrics
+	cm := c.connMetrics.snapshot()
 	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 || m.ConnectionsTotal > 0 || cm.FramesSent > 0 {
 		c.s.log.Info("ws: sendq health",
 			"conn", c.id,

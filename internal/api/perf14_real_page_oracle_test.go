@@ -55,16 +55,22 @@ func TestPerf14RealStaticPagesAndActualGeometry(t *testing.T) {
 		out, err := cmd.CombinedOutput()
 		return strings.TrimSpace(string(out)), err
 	}
+	readyPath := filepath.Join(dir, "ready")
+	stopPath := filepath.Join(dir, "stop")
 	source := filepath.Join(dir, "source.py")
 	if err := os.WriteFile(source, []byte(`import pathlib,sys,time
+root=pathlib.Path(__file__).parent
+while not (root/'ready').exists():
+ time.sleep(0.05)
 for i in range(60):
  sys.stdout.write('ROW%03d\n'%i)
 sys.stdout.flush()
-while not pathlib.Path(__file__).with_name('alternate').exists():
+while not (root/'alternate').exists():
  time.sleep(0.05)
 sys.stdout.write('\033[?1049h\033[2J\033[HALT000\nALT001\n')
 sys.stdout.flush()
-time.sleep(120)
+while not (root/'stop').exists():
+ time.sleep(0.05)
 `), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -88,9 +94,18 @@ time.sleep(120)
 	if err != nil {
 		t.Fatal(err)
 	}
+	geometry, err := run("display-message", "-p", "-t", paneID, "#{pane_width},#{pane_height}")
+	if err != nil || geometry != "40,10" {
+		t.Fatalf("initial fixture geometry=%q err=%v, want 40,10", geometry, err)
+	}
+	// Owner signal starts emission only after the real 40x10 geometry is established.
+	if err := os.WriteFile(readyPath, []byte("go\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.WriteFile(stopPath, []byte("stop\n"), 0600) })
 	// 60 newline-terminated lines on 10 rows => 51 history lines, nine text
 	// screen rows and one blank cursor row. No capture-derived expected content.
-	ready := false
+	historyReady := false
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		out, err := run("display-message", "-p", "-t", paneID, "#{history_size},#{pane_height},#{cursor_y}")
@@ -98,12 +113,12 @@ time.sleep(120)
 			t.Fatal(err)
 		}
 		if out == "51,10,9" {
-			ready = true
+			historyReady = true
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if !ready {
+	if !historyReady {
 		t.Fatal("static source geometry/history boundary not reached; apparatus failure")
 	}
 	pane := discovery.Pane{Socket: socket, PaneID: paneID, Height: 40, Width: 40} // deliberately stale catalog
@@ -123,7 +138,7 @@ time.sleep(120)
 	if err := os.WriteFile(filepath.Join(dir, "alternate"), []byte("go"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	ready = false
+	altReady := false
 	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		out, err := run("display-message", "-p", "-t", paneID, "#{alternate_on},#{cursor_y}")
@@ -131,12 +146,12 @@ time.sleep(120)
 			t.Fatal(err)
 		}
 		if out == "1,2" {
-			ready = true
+			altReady = true
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if !ready {
+	if !altReady {
 		t.Fatal("alternate-screen static boundary not reached; apparatus failure")
 	}
 	perf14AssertRefReply(t, perf14PaneRequest(t, pane, 0, 2), ref, 0, []string{"ALT000", "ALT001"})
