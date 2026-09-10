@@ -31,8 +31,10 @@ func TestCodexRenameFlowsFromSampleToListingDeltaAndLevel2(t *testing.T) {
 	pane := discovery.Pane{Socket: "/synthetic/rename.sock", Session: "team", WindowIndex: 2, WindowName: "node", PaneID: "%4", PanePID: 100, CWD: "/work/project", PaneTitle: "project", Command: "codex", Width: 80, Height: 24}
 	sampler := &renameProjectionSampler{pane: pane}
 	model := &discovery.Model{Workspaces: []discovery.Workspace{{CWD: pane.CWD, Panes: []discovery.Pane{pane}}}}
-	conn := &wsConn{}
-	conn.setLevel2(true, pane.CWD)
+	conn := &wsConn{
+		s:        &Server{level2Heartbeat: 8 * time.Second},
+		level2On: true, level2WS: pane.CWD, level2Epoch: 1,
+	}
 	var prev protocol.Session
 	for i, name := range []string{"最初名称", "最新名称 | review", "第三次名称"} {
 		sampler.name = name
@@ -55,13 +57,14 @@ func TestCodexRenameFlowsFromSampleToListingDeltaAndLevel2(t *testing.T) {
 				t.Fatalf("bad name-only delta: %#v", delta)
 			}
 		}
-		key := level2SnapKey([]protocol.Session{session})
-		now := time.Now()
-		if kind := conn.noteLevel2Push(key, now, 8*time.Second); kind != "frame" {
-			t.Fatalf("rename suppressed: %q", kind)
+		projection := map[string][]protocol.Session{pane.CWD: {session}}
+		output, epoch := conn.level2Output(1, projection, nil)
+		frame, ok := output.(protocol.Level2Frame)
+		if !ok || epoch != 1 || frame.Workspace != pane.CWD || len(frame.Sessions) != 1 || frame.Sessions[0] != session {
+			t.Fatalf("rename missing from Level2 output: %#v epoch=%d", output, epoch)
 		}
-		if kind := conn.noteLevel2Push(key, now, 8*time.Second); kind != "" {
-			t.Fatalf("unchanged name causes noisy frame: %q", kind)
+		if output, _ := conn.level2Output(1, projection, nil); output != nil {
+			t.Fatalf("unchanged name causes noisy frame: %#v", output)
 		}
 		if delta := renameSnapshot(session).diff(renameSnapshot(session)); len(delta.ChangedSessions) != 0 {
 			t.Fatal("unchanged name creates list delta")
