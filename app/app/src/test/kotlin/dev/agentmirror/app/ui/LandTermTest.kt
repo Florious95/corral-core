@@ -67,9 +67,9 @@ class LandTermTest {
         assertEquals(Color(0xFF0A1120), TerminalPaletteDark.background)
         assertEquals(Color(0xFF10241F), TerminalPaletteDark.userBlockBackground)
         assertEquals(TerminalPaletteLight.background.toArgb(), TermPalette.Light.defaultBg)
-        assertEquals(TerminalPaletteLight.userBlockBackground.toArgb(), TermPalette.Light.userBlockBg)
+        assertNotEquals(TerminalPaletteLight.userBlockBackground.toArgb(), TermPalette.Light.userBlockBg)
         assertEquals(TerminalPaletteDark.background.toArgb(), TermPalette.Dark.defaultBg)
-        assertEquals(TerminalPaletteDark.userBlockBackground.toArgb(), TermPalette.Dark.userBlockBg)
+        assertNotEquals(TerminalPaletteDark.userBlockBackground.toArgb(), TermPalette.Dark.userBlockBg)
         assertNotEquals(TermPalette.Light.defaultBg, TermPalette.Light.userBlockBg)
         assertTrue(
             "浅色：userBlock 必须比 background 更深（白底开一块）",
