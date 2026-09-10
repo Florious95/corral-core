@@ -384,16 +384,23 @@ class TermSurfaceView @JvmOverloads constructor(
             "viewport",
             "source=windowVisibility visibility=$visibility width=$width height=$height",
         )
-        renderVisible = visibility == VISIBLE
-        if (!renderVisible) {
+        if (visibility != VISIBLE) {
+            if (!renderVisible) return
+            renderVisible = false
             if (framePending) {
                 Choreographer.getInstance().removeFrameCallback(frameCallback)
                 framePending = false
             }
             mainHandler.removeCallbacks(wakeRunnable)
             wakeQueued.set(false)
+            if (PerfTrace.isEnabled()) PerfTrace.app7Snapshot("hidden_end")
             return
         }
+        // 读取恢复前精确边界，随后才重新开放 wake/frame 与 presenter 恢复工作。
+        if (!renderVisible && PerfTrace.isEnabled()) {
+            PerfTrace.app7Snapshot("resume_pre_activate")
+        }
+        renderVisible = true
         if (width > 0 && height > 0) {
             refreshDrawOpt()
             presenter?.onRealViewportChanged(usableWidthPx(width), height)

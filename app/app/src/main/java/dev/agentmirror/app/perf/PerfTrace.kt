@@ -110,6 +110,16 @@ object PerfTrace {
 
     private const val APP7_TAG = "App7"
     private const val APP7_SAMPLE_EVERY = 32L
+    private val APP7_EVENTS = listOf(
+        "feed",
+        "ui_sync",
+        "wake_enqueue",
+        "wake_execute",
+        "frame_enqueue",
+        "frame_execute",
+        "damage_pending",
+        "damage_consume",
+    )
 
     /**
      * 假出口（去 Android Log / 真机 DiagLog）。测试注入；生产接到双出口。
@@ -209,6 +219,24 @@ object PerfTrace {
         if (count != 1L && count % APP7_SAMPLE_EVERY != 0L) return
         val suffix = detail.takeIf { it.isNotEmpty() }?.let { " $it" } ?: ""
         val line = "event=$event count=$count$suffix"
+        try {
+            Log.d(APP7_TAG, line)
+        } catch (_: Throwable) {
+            // 纯 JVM 单测没有 mock android.util.Log；DiagLog 仍落。
+        }
+        DiagLog.record(APP7_TAG, line)
+    }
+
+    /**
+     * 可见性边界的精确计数快照。仅由 hide/resume 真实生命周期事件调用，
+     * 不引入定时器或新诊断端点；平时仍由 [app7Trace] 首条/每32条采样。
+     */
+    fun app7Snapshot(phase: String) {
+        if (!isEnabled()) return
+        val counts = APP7_EVENTS.joinToString(",") { event ->
+            "$event=${app7Counters[event]?.get() ?: 0L}"
+        }
+        val line = "phase=$phase counts=$counts"
         try {
             Log.d(APP7_TAG, line)
         } catch (_: Throwable) {
