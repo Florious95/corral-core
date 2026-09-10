@@ -20,12 +20,15 @@ import (
 
 // displayName projects one pane into the client-facing display label. The
 // provider axis is already established by nodeprobe; only then may Codex use
-// its complete OSC PaneTitle or Pi use its authoritative session_name. An
-// absent authoritative value stays empty (explicit unknown), while existing
-// Claude/Grok and unknown-provider window-name behavior remains unchanged.
+// its live /rename metadata (with complete OSC PaneTitle as compatibility
+// fallback), or Pi use its authoritative session_name. Structural names and
+// Claude/Grok/unknown-provider behavior remain unchanged.
 func displayName(p discovery.Pane, observation nodeprobe.Observation) string {
 	switch observation.Provider {
 	case "codex":
+		if observation.DisplayName != "" {
+			return observation.DisplayName
+		}
 		return p.PaneTitle
 	case "pi":
 		if observation.SessionName != nil && *observation.SessionName != "" {
