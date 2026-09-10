@@ -62,7 +62,7 @@ class NotificationHelper(context: Context) {
     fun persistent(text: String): Notification =
         Notification.Builder(appContext, CHANNEL_PERSISTENT)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Agent Mirror 后台连接")
+            .setContentTitle("${appContext.getString(R.string.app_name)} 后台连接")
             .setContentText(text)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
