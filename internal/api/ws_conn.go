@@ -95,7 +95,8 @@ type wsConn struct {
 	catalogAbortOnce   sync.Once
 	catalogAborted     atomic.Bool
 	catalogCloseReason atomic.Value
-	// Test-only writer boundaries; nil in production, set before startup.
+	// Test-only relay/writer boundaries; nil in production, set before startup.
+	beforeRelay       func(*subscription)
 	beforeWriterFrame func(wsMsg)
 	writeAttempt      func(wsMsg)
 
@@ -656,6 +657,9 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 		}
 		c.subsMu.Unlock()
 	}()
+	if c.beforeRelay != nil {
+		c.beforeRelay(sub)
+	}
 	for {
 		if ready != nil {
 			select {
