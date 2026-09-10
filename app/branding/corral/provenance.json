@@ -1,0 +1,27 @@
+{
+  "tool": "built-in imagegen",
+  "backend_model": "unspecified",
+  "authorization": "User authorized built-in generation without knowing backend model; leader msg_d3028349a9d8",
+  "generation_calls": 2,
+  "selected_generation": "generated-refined.png",
+  "packaging": "prepare_launcher.py thresholds alpha at 128, median filter 3, retains two substantial generated connected components, scales inside adaptive safe circle and applies flat mint color; original assets preserved",
+  "dimensions": [
+    432,
+    432
+  ],
+  "alpha_bbox": [
+    109,
+    107,
+    323,
+    325
+  ],
+  "max_nonzero_alpha_radius_px": 127.02755606560333,
+  "android_safe_circle_radius_px": 132,
+  "files": {
+    "app/branding/corral/generated-original.png": "809b77c00502db0a4299b849cd2ec3c8a432198d9776f1e72e95f222ddb5afdf",
+    "app/branding/corral/generated-refined.png": "4ef3c6b9d58d31c4cdd7cc11df7d8c76426d1758eb1d59c8585611e8b16f3e9b",
+    "app/branding/corral/prompts.txt": "91847f663fe3eec02b9d6ca6c2db3f8f05f1d261d45a0c12bb6c17210ed0efdf",
+    "app/branding/corral/prepare_launcher.py": "63a3757c6b75b173b791d5ae377e96ed699299214c71fa497b995aab53d6dddb",
+    "app/app/src/main/res/drawable-nodpi/corral_launcher_foreground.png": "3905afd3534848d1a7a5af533e3a7c33a8b4cd7eaf7e5f1e3850cd3278dcd6ed"
+  }
+}
