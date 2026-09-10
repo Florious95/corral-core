@@ -23,7 +23,7 @@ import kotlin.math.min
  * 框线 U+2500–257F 与块元素 U+2580–259F 的几何，不用字形。
  *
  * 根因：SYSTEM_FALLBACK 走 [TermSurfaceView] 的 drawCentered，依赖字形自然宽度
- * 再亚像素取整，非整数密度上相邻格接不上。本对象按**整数像素格边界**吐矩形。
+ * 再亚像素取整，非整数密度上相邻格接不上。本对象按整数格边界生成矩形与圆角。
  */
 internal object BoxBlockGeometry {
 
@@ -44,7 +44,39 @@ internal object BoxBlockGeometry {
      */
     data class Fill(val rect: IRect, val alpha: Int = 255)
 
+    data class RoundedCorner(
+        val centerX: Float,
+        val centerY: Float,
+        val horizontalEndX: Float,
+        val verticalEndY: Float,
+        val right: Boolean,
+        val down: Boolean,
+        val radius: Float,
+        val strokeWidth: Float,
+    )
+
+    fun roundedCorner(cp: Int, originX: Int, originY: Int, cellW: Int, cellH: Int): RoundedCorner? {
+        if (cp !in 0x256D..0x2570) return null
+        val right = cp == 0x256D || cp == 0x2570 // ╭ ╰
+        val down = cp == 0x256D || cp == 0x256E // ╭ ╮
+        val light = max(1, min(cellW, cellH) / 8)
+        // Match the centers of the existing integer light-line pixel bands.
+        val cx = cellW / 2 - light / 2 + light / 2f
+        val cy = cellH / 2 - light / 2 + light / 2f
+        val horizontalEnd = if (right) cellW.toFloat() else 0f
+        val verticalEnd = if (down) cellH.toFloat() else 0f
+        // Keep at least one straight pixel at each cell seam and the stroke in bounds.
+        val roomX = if (right) cellW - cx else cx
+        val roomY = if (down) cellH - cy else cy
+        val radius = (min(roomX, roomY) - max(1f, light / 2f)).coerceAtLeast(0f)
+        return RoundedCorner(
+            originX + cx, originY + cy, originX + horizontalEnd, originY + verticalEnd,
+            right, down, radius, light.toFloat(),
+        )
+    }
+
     fun fills(cp: Int, originX: Int, originY: Int, cellW: Int, cellH: Int): List<Fill> {
+        if (cp in 0x256D..0x2570) return emptyList() // Separate stroked arc, including tiny cells.
         val local = localFills(cp, cellW, cellH)
         return local.map { (r, a) ->
             Fill(
@@ -173,13 +205,13 @@ internal object BoxBlockGeometry {
             0x2501, 0x2505, 0x2509, 0x254D -> ia(2, 2, 0, 0)
             0x2502, 0x2506, 0x250A, 0x254E -> ia(0, 0, 1, 1)
             0x2503, 0x2507, 0x250B, 0x254F -> ia(0, 0, 2, 2)
-            0x250C, 0x250D, 0x250E, 0x256D -> ia(0, 1, 0, 1)
+            0x250C, 0x250D, 0x250E -> ia(0, 1, 0, 1)
             0x250F -> ia(0, 2, 0, 2)
-            0x2510, 0x2511, 0x2512, 0x256E -> ia(1, 0, 0, 1)
+            0x2510, 0x2511, 0x2512 -> ia(1, 0, 0, 1)
             0x2513 -> ia(2, 0, 0, 2)
-            0x2514, 0x2515, 0x2516, 0x256F -> ia(0, 1, 1, 0)
+            0x2514, 0x2515, 0x2516 -> ia(0, 1, 1, 0)
             0x2517 -> ia(0, 2, 2, 0)
-            0x2518, 0x2519, 0x251A, 0x2570 -> ia(1, 0, 1, 0)
+            0x2518, 0x2519, 0x251A -> ia(1, 0, 1, 0)
             0x251B -> ia(2, 0, 2, 0)
             0x251C, 0x251D, 0x251E, 0x251F, 0x2522 -> ia(0, 1, 1, 1)
             0x2520, 0x2521, 0x2523 -> ia(0, 2, 2, 2)
