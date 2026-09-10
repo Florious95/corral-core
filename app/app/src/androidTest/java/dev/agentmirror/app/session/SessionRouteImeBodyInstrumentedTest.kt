@@ -17,7 +17,6 @@
 package dev.agentmirror.app.session
 
 import android.accessibilityservice.AccessibilityService
-import android.graphics.Bitmap
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -41,7 +40,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import java.io.File
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -49,51 +47,6 @@ class SessionRouteImeBodyInstrumentedTest {
 
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
-
-    /** One real production-view fixture; screenshots are judged by the App tester. */
-    @Test
-    fun roundedGlyphFixtureAtNormalAndSmallFont() {
-        val previousFactory = ServiceWire.transportFactory
-        compose.runOnUiThread {
-            ServiceWire.releaseManager()
-            ServiceWire.resetConfigForTest()
-            ServiceWire.transportFactory = NoopTransportFactory
-            ServiceWire.setConfig(ConnectionConfig("ws://127.0.0.1:9/ws", "rounded-fixture"))
-        }
-        try {
-            compose.setContent { SessionRoute(ref = "rounded-fixture", name = "Rounded glyphs", onBack = {}) }
-            compose.waitForIdle()
-            val fixture = "\u001b[2J\u001b[H\u001b[38;2;255;165;0m" +
-                "╭─────────────╮\r\n│ round glyph │\r\n╰─────────────╯\r\n\r\n" +
-                "╭─╮\r\n│R│\r\n╰─╯\u001b[0m"
-            for (size in listOf(14f, 8f)) {
-                compose.runOnUiThread {
-                    val surface = termSurface()
-                    surface.nightOverride = true
-                    surface.fontSizeSp = size
-                    (ServiceWire.uiConnector as SessionViewModel).emulator.feed(fixture)
-                    surface.invalidate()
-                }
-                compose.waitUntil(timeoutMillis = 5_000) { bodyIsVisible() }
-                compose.waitForIdle()
-                val instrumentation = InstrumentationRegistry.getInstrumentation()
-                instrumentation.waitForIdleSync()
-                val screenshot = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
-                val output = File(instrumentation.context.getExternalFilesDir(null), "rounded-${size.toInt()}sp.png")
-                output.outputStream().use { assertTrue(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-                screenshot.recycle()
-                println("Rounded glyph fixture screenshot: ${output.absolutePath}")
-            }
-        } finally {
-            compose.runOnUiThread {
-                MirrorForegroundService.stop(compose.activity)
-                ServiceWire.uiConnector = null
-                ServiceWire.releaseManager()
-                ServiceWire.resetConfigForTest()
-                ServiceWire.transportFactory = previousFactory
-            }
-        }
-    }
 
     @Test
     fun productionSessionRouteKeepsSameTerminalBodyThroughImeFocusAndBack() {
