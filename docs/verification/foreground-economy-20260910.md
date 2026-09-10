@@ -34,7 +34,7 @@ setter 使用引用/值相等守卫，防止无关 AndroidView 更新重测字�
 
 执行环境：Kotlin 1.9.0、OpenJDK 21；没有 Android SDK/Gradle，容器 DNS 不可用。未编译 APK、未调用生产服务或读取真实会话。
 
-1. `BoxBlockGeometryCacheTest` 4 项与 `TermDrawControlSessionTest` 7 项：**11 个实际测试方法全部通过**。使用注解兼容声明和反射运行真实 check() 断言，不是 JUnit/Robolectric runtime。仓库内 `tools/verify-foreground-economy.sh` 可重复运行；两种仓库路径布局均实跑通过。
+1. `BoxBlockGeometryCacheTest` 4 项与 `TermDrawControlSessionTest` 8 项：**12 个实际测试方法已编写**。使用注解兼容声明和反射运行真实 check() 断言，不是 JUnit/Robolectric runtime。新增 teardown 屏障覆盖 burst 已领取但尚未交付时的异步退休；本次修复后需由可用 kotlinc/独立测试席执行脚本确认。
 2. 纯几何 50,240 组合：所有支持码点、多种小/正常字格、正负坐标，缓存平移后与原实现完全相同。157,000 次稳态命中不再建立几何计划。
 3. 隔离录制 Canvas：编译两仓库实际原版/候选 View 源码，仅为 Android/其他协作者提供最小适配器，比较 **52,752 组绘制命令、坐标、颜色、画笔参数，全部一致**。这不是 Android 像素/GPU/真实显示验证。重复绑定及逐帧诊断文件消费的原版负对照均命中，候选通过。
 4. 独立 JVM 几何构造微基准，预热后 ABBA，各 314,000 次，同 checksum `8728524470000`：
@@ -68,7 +68,7 @@ bash gradlew :app:testDebugUnitTest :app:testReleaseUnitTest \
   --no-daemon
 ```
 
-**`TermForegroundEconomyTest` 的 7 项 Robolectric/native-graphics 测试仅已编写，当前未执行。** 覆盖重复绑定/字号变化、新 presenter 播种、回调所有权、实际 doFrame/draw 不读文件、共享偏好 A→B→A、缓存开关的像素一致性。不能把隔离适配器结果当作这些 Android 测试已绿。保留并执行仓库已有 rounded-corner、CJK、fallback、滚动、重连与几何测试，不能通过降低断言或跳过失败来过关。
+**`TermForegroundEconomyTest` 的 7 项 Robolectric/native-graphics 测试仅已编写，当前未执行。** 覆盖重复绑定/字号变化、新 presenter 播种、回调所有权、实际 doFrame/draw 不读文件、共享偏好 A→B→A、缓存开关的像素一致性。新增 teardown 屏障测试仍是纯 JVM 文件读取/队列测试，不能替代真实 Android FileObserver 转场验证。不能把隔离适配器结果当作这些 Android 测试已绿。保留并执行仓库已有 rounded-corner、CJK、fallback、滚动、重连与几何测试，不能通过降低断言或跳过失败来过关。
 
 ## 合并前设备门禁
 

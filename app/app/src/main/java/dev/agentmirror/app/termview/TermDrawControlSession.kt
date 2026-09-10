@@ -69,7 +69,8 @@ internal class TermDrawControlFiles(private val directory: File) {
 /**
  * Coalesces file events with at most one read/delivery in flight. close() and
  * delivery run on the owner/UI thread; request() may run on FileObserver's thread.
- * A closed session cannot apply a late result to a replacement View/session.
+ * Retirement waits asynchronously for an in-flight delivery, while close() still
+ * prevents a late result from reaching a replacement View/session.
  */
 internal class TermDrawControlSession(
     private val read: () -> TermDrawControlUpdate,
@@ -81,6 +82,7 @@ internal class TermDrawControlSession(
     private var closed = false
     private var pending = false
     private var inFlight = false
+    private var closeWhenIdleCallback: (() -> Unit)? = null
 
     fun request() {
         val start = synchronized(lock) {
@@ -109,21 +111,50 @@ internal class TermDrawControlSession(
             try {
                 if (synchronized(lock) { !closed }) consume(update)
             } finally {
-                val again = synchronized(lock) {
+                var again = false
+                var idle: (() -> Unit)? = null
+                synchronized(lock) {
                     if (closed || !pending) {
                         inFlight = false
-                        false
-                    } else true
+                        if (!closed) {
+                            idle = closeWhenIdleCallback
+                            closeWhenIdleCallback = null
+                        }
+                    } else {
+                        again = true
+                    }
                 }
+                idle?.invoke()
                 if (again) execute(readTask)
             }
         })
+    }
+
+    /** Retire without dropping a read that already claimed a command. Never waits. */
+    fun closeWhenIdle(onIdle: () -> Unit) {
+        val now = synchronized(lock) {
+            if (closed) {
+                true
+            } else if (!inFlight && !pending) {
+                true
+            } else {
+                closeWhenIdleCallback = onIdle
+                false
+            }
+        }
+        if (now) onIdle()
+    }
+
+    /** A replacement listener keeps this session alive if retirement is still pending. */
+    fun cancelCloseWhenIdle() {
+        synchronized(lock) { closeWhenIdleCallback = null }
     }
 
     override fun close() {
         synchronized(lock) {
             closed = true
             pending = false
+            closeWhenIdleCallback = null
         }
     }
 }

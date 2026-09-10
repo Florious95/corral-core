@@ -3,6 +3,9 @@ package dev.agentmirror.app.termview
 
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Test
 
 class TermDrawControlSessionTest {
@@ -59,6 +62,39 @@ class TermDrawControlSessionTest {
         val new = TermDrawControlSession({ TermDrawControlUpdate(burst = 2) }, io::post, main::post, { seen.add(it.burst) })
         new.request(); io.next(); main.next(); main.next()
         check(seen == listOf(2))
+    }
+
+    @Test
+    fun retireAfterClaimedReadDeliversBurstBeforeClosing() = inDirectory { dir ->
+        File(dir, TermDrawControlFiles.BURST).writeText("120")
+        val readStarted = CountDownLatch(1)
+        val releaseRead = CountDownLatch(1)
+        val dispatched = CountDownLatch(1)
+        val retired = CountDownLatch(1)
+        val main = ConcurrentLinkedQueue<Runnable>()
+        val seen = mutableListOf<Int>()
+        val reader = TermDrawControlFiles(dir)
+        val session = TermDrawControlSession(
+            read = {
+                val update = reader.read() // Real move-to-reading + delete path.
+                readStarted.countDown()
+                check(releaseRead.await(2, TimeUnit.SECONDS))
+                update
+            },
+            execute = { task -> Thread(task, "term-draw-test").start() },
+            dispatch = { task -> main.add(task); dispatched.countDown() },
+            consume = { seen += it.burst },
+        )
+        session.request()
+        check(readStarted.await(2, TimeUnit.SECONDS))
+        session.closeWhenIdle { retired.countDown() }
+        check(!retired.await(50, TimeUnit.MILLISECONDS)) // close must not block for I/O.
+        releaseRead.countDown()
+        check(dispatched.await(2, TimeUnit.SECONDS))
+        checkNotNull(main.poll()).run()
+        check(retired.await(2, TimeUnit.SECONDS))
+        check(seen == listOf(120))
+        session.close()
     }
 
     @Test
