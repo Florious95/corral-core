@@ -1,3 +1,5 @@
+//go:build perf16fixture
+
 package api
 
 import (
