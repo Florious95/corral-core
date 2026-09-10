@@ -1,0 +1,32 @@
+name: multisocket-discovery
+on:
+  pull_request:
+    branches: [main]
+    paths: ['internal/discovery/**', 'tools/issue10/**', '.github/workflows/multisocket-discovery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  issue10:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Real tmux prerequisite
+        run: |
+          command -v tmux || brew install tmux
+          tmux -V
+      - name: Exact base red, candidate green, Darwin binary
+        run: python3 tools/issue10/hosted.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue10-${{ github.run_id }}
+          path: ${{ runner.temp }}/issue10-evidence

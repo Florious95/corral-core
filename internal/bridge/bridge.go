@@ -11,6 +11,7 @@ package bridge
 // requests. That is the hard red line of this task.
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -83,6 +84,43 @@ func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
 		return 0, 0, fmt.Errorf("tmux: parse cursor pos %q: %w", strings.TrimSpace(string(out)), err)
 	}
 	return x, y, nil
+}
+
+// ScrollbackMetadata reports the current history depth and pane height in one
+// bounded tmux query. history_size excludes the visible screen; pane_height is
+// the actual current height, not discovery's stale catalog geometry.
+type ScrollbackMetadata struct {
+	HistorySize int
+	PaneHeight  int
+}
+
+// ScrollbackMetadata reads tmux's current pagination metadata without moving
+// or capturing the pane. The query is deliberately one display-message call:
+// pagination must not transfer the full history merely to count it.
+// @contract
+// @pre none — pane 存在性由 tmux 在调用时惰性判定
+// @post 返回非负 history_size 与正 pane_height
+// @err tmux 失败或元数据不是两个合法整数→对应 tmux 错误或 parse error
+// @inv none — 只读操作
+func (p *Pane) ScrollbackMetadata(ctx context.Context) (ScrollbackMetadata, error) {
+	out, err := runTmux(ctx, p.socket, p.timeout,
+		"display-message", "-p", "-t", p.target, "#{history_size} #{pane_height}")
+	if err != nil {
+		return ScrollbackMetadata{}, err
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) != 2 {
+		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse scrollback metadata %q: want history_size pane_height", strings.TrimSpace(string(out)))
+	}
+	historySize, err := strconv.Atoi(fields[0])
+	if err != nil || historySize < 0 {
+		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse history_size %q: want non-negative integer", fields[0])
+	}
+	paneHeight, err := strconv.Atoi(fields[1])
+	if err != nil || paneHeight <= 0 {
+		return ScrollbackMetadata{}, fmt.Errorf("tmux: parse pane_height %q: want positive integer", fields[1])
+	}
+	return ScrollbackMetadata{HistorySize: historySize, PaneHeight: paneHeight}, nil
 }
 
 // Scrollback fetches one line range of the pane (capture-pane -S/-E).
@@ -501,6 +539,33 @@ func (p *Pane) InjectScroll(ctx context.Context, delta int32) (enteredCopyMode b
 	_, err = runTmux(ctx, p.socket, p.timeout,
 		"send-keys", "-X", "-N", strconv.Itoa(int(count)), "-t", p.target, direction)
 	return enteredCopyMode, err
+}
+
+// SnapshotAfterScroll mirrors tmux's copy-mode viewport, which is not emitted
+// through pipe-pane. Mouse-tracking applications redraw through their own PTY
+// output and need no extra snapshot. At the bottom, capture the normal screen
+// again so leaving copy-mode also restores the mirror.
+func (p *Pane) SnapshotAfterScroll(ctx context.Context) ([]byte, bool, error) {
+	out, err := runTmux(ctx, p.socket, p.timeout, "display-message", "-p", "-t", p.target,
+		"#{mouse_any_flag} #{pane_in_mode} #{?pane_in_mode,#{scroll_position},0} #{pane_height} #{?pane_in_mode,#{copy_cursor_x},#{cursor_x}} #{?pane_in_mode,#{copy_cursor_y},#{cursor_y}}")
+	if err != nil {
+		return nil, false, err
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) > 0 && fields[0] == "1" {
+		return nil, false, nil
+	}
+	var mouse, mode, offset, height, x, y int
+	if n, err := fmt.Sscanf(strings.TrimSpace(string(out)), "%d %d %d %d %d %d", &mouse, &mode, &offset, &height, &x, &y); err != nil || n != 6 || len(fields) != 6 || mouse != 0 || (mode != 0 && mode != 1) || offset < 0 || height < 1 || x < 0 || y < 0 || y >= height {
+		return nil, false, fmt.Errorf("tmux: invalid scroll viewport %q", strings.TrimSpace(string(out)))
+	}
+	snap, err := runTmux(ctx, p.socket, p.timeout, "capture-pane", "-e", "-p", "-t", p.target,
+		"-S", strconv.Itoa(-offset), "-E", strconv.Itoa(height-1-offset))
+	if err != nil {
+		return nil, false, err
+	}
+	snap = bytes.TrimRight(snap, "\n")
+	return append(snap, []byte(fmt.Sprintf("\x1b[%d;%dH", y+1, x+1))...), mode == 1, nil
 }
 
 // injectWheelBytes sends count SGR-1006 mouse-wheel events (button 64 = up,

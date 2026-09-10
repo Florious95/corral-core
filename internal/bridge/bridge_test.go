@@ -277,44 +277,7 @@ func TestResizeChangesActualSize(t *testing.T) {
 }
 
 func TestScrollbackPagingRange(t *testing.T) {
-	tt := newTestTMUX(t)
-	name := fmt.Sprintf("tbscbk%d", atomic.AddUint64(&testSeq, 1))
-	if _, err := tt.run("new-session", "-d", "-x", "40", "-y", "10", "-s", name, "-c", t.TempDir(), "bash"); err != nil {
-		t.Fatalf("new-session: %v", err)
-	}
-	out, err := tt.run("list-panes", "-t", name, "-F", "#{pane_id}")
-	if err != nil {
-		t.Fatalf("resolve pane: %v", err)
-	}
-	p := NewPane(tt.sock, strings.TrimSpace(out))
-
-	// Push 60 lines so history far exceeds the 10-row screen.
-	if err := p.Inject(context.Background(), `for i in $(seq 1 60); do echo "SCBK_$i"; done`); err != nil {
-		t.Fatalf("Inject loop: %v", err)
-	}
-	// Wait until the tail line is on screen before paging history.
-	deadline := time.Now().Add(5 * time.Second)
-	for !bytes.Contains(mustSnapshot(t, p), []byte("SCBK_60")) {
-		if time.Now().After(deadline) {
-			t.Fatal("loop output never reached the screen")
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	page, err := p.Scrollback(context.Background(), -30, -21)
-	if err != nil {
-		t.Fatalf("Scrollback: %v", err)
-	}
-	lines := strings.Split(strings.TrimRight(string(page), "\n"), "\n")
-	if len(lines) != 10 {
-		t.Errorf("page -30..-21 should be exactly 10 lines, got %d: %q", len(lines), page)
-	}
-	if !bytes.Contains(page, []byte("SCBK_22")) {
-		t.Errorf("page should contain SCBK_22 (older history), got %q", page)
-	}
-	if bytes.Contains(page, []byte("SCBK_60")) {
-		t.Errorf("page should NOT contain on-screen tail SCBK_60, got %q", page)
-	}
+	testScrollbackPagingRangeStrong(t)
 }
 
 // mustSnapshot snapshots a pane and fails the test on error (helper for

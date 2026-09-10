@@ -3,13 +3,14 @@
 // (requirements 001 and 002).
 //
 // It considers entries only after a local, fork-free classification: the
-// current uid's `default` socket and the first socket path from TMUX are
-// allowed; other uid directories, `ta-*`, test/e2e trees, repo-local node tmp
-// trees, and unknown names are skipped fail-closed with path, classification,
-// and action operands in debug logs. Dead or stale allowed sockets are skipped
+// current uid's `default` socket, user-named sockets, and the first socket
+// path from TMUX are allowed; this includes current-user Team-agent `ta-*`
+// sockets. Other uid directories, explicit test/e2e trees, and repo-local node
+// tmp trees are skipped fail-closed with path, classification, and action
+// operands in debug logs. Explicitly isolated fixtures remain outside
+// the product discovery object. Dead or stale allowed sockets are skipped
 // with a debug log: one unreachable socket never aborts the overall scan (red
-// line). Team-agent private sockets are therefore outside the product
-// discovery object.
+// line).
 //
 // The package returns a pure data structure for the API layer to consume. The
 // workspace model is never cached: every call re-lists the socket directories

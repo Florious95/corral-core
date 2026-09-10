@@ -130,6 +130,9 @@ func TestRefreshOnOpenLevel2ZeroSubscribersNoPoll(t *testing.T) {
 		Level2Heartbeat: time.Hour,
 	})
 	e.auth()
+	// Auth ACK is not completion of the mandatory initial scan.
+	e.sendFrame(&protocol.List{ReqID: 1})
+	mustListing(t, e, 1)
 	base := cd.scans.Load()
 	time.Sleep(120 * time.Millisecond)
 	if got := cd.scans.Load(); got > base {
