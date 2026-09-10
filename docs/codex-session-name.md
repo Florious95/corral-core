@@ -14,6 +14,16 @@ CWD grouping, socket/pane refs, protocol schemas and favorite identities do not
 change. No App/core duplication, CLI configuration edits, command interception,
 production deployment or process restart is needed in this PR.
 
+## Discovery compatibility
+
+Codex 0.154.0 can emit titles containing a literal pipe. The affected real
+pane was positively identified as Codex by the pinned nodeprobe, but the
+server split its tmux inventory line on that same character: ten fields were
+rejected where nine were required. Discovery now uses the existing unit
+separator framing from the delimiter fix, preserving titles as opaque data.
+Provider identity still comes only from nodeprobe; ordinary shells are not
+admitted by their title. No nodeprobe source or binary replacement is needed.
+
 ## Identity and freshness
 
 1. Complete the existing allowed-socket discovery and unique nodeprobe join.
@@ -86,5 +96,10 @@ unchanged-name suppression, stable refs/geometry/status and legacy providers.
 
 The PR workflow runs these on Linux and Darwin using the repository's Go
 version. A workflow definition is not a claim that it passed. Real Codex
-`/rename` plus Android sessions/favorites/drawer validation and on-host timing
-remain separate acceptance checks; synthetic tests are not phone E2E evidence.
+`/rename` and direct listing/Level2 validation remain separate acceptance
+checks; synthetic tests are not phone E2E evidence.
+
+The App consumes the remote server's `Session.name`; it does not bundle this
+server or nodeprobe. Rebuilding the current App therefore does not deploy
+this fix. Manual verification must connect to a server built from this PR.
+The production service is not switched automatically by APK delivery.
