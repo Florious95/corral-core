@@ -33,7 +33,7 @@ fun main() {
             count++
         }
     }
-    check(count == 11) { "Unexpected discovered test count: $count" }
+    check(count == 12) { "Unexpected discovered test count: $count" }
     println("RESULT $count passed (standalone JVM; not Android/JUnit runtime)")
 }
 KOTLIN
