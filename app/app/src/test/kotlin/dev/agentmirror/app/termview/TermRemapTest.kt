@@ -19,6 +19,7 @@ package dev.agentmirror.app.termview
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import androidx.compose.ui.graphics.toArgb
 import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.ui.theme.TermSchemeCatalog
 import dev.agentmirror.terminal.TerminalColor
@@ -160,25 +161,13 @@ class TermRemapTest {
     }
 
     @Test
-    fun lightFamiliesKeepUserBlockDarkerThanPaper() {
-        val failed = mutableListOf<String>()
+    fun lightFamiliesExportTheirResolvedThemeBlock() {
         for (family in TermSchemeCatalog.families) {
             TermPalette.bindSelectionForTest(family.id, family.id)
             val pal = TermPalette.of(false)
-            val paperY = TermPalette.luma(pal.defaultBg)
-            val blockY = TermPalette.luma(pal.userBlockBg)
-            if (paperY >= 128 && blockY >= paperY) {
-                failed += family.id
-            }
+            // 契约 089 §1：Compose 与 Canvas 必须消费同一主题派生块底；不强加明暗方向。
+            assertEquals(family.id, pal.userBlockBg, TermPalette.asTerminalPalette(false).userBlockBackground.toArgb())
         }
-        // 方案 §3.3：浅纸 vs APP userBlock 翻了就 halt，不准改 userBlock 去凑。
-        assertEquals(
-            listOf(
-                "catppuccin", "tokyo-night", "gruvbox", "nord",
-                "kanagawa", "everforest", "iceberg", "zenbones",
-            ).sorted(),
-            failed.sorted(),
-        )
     }
 
     @Test

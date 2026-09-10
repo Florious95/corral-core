@@ -63,8 +63,8 @@ class TermThemeStoreTest {
         TermPalette.bindSelectionForTest("vesper", "vesper")
         val pal = TermPalette.asTerminalPalette(dark = true)
         assertEquals(0xFF101010.toInt(), pal.background.toArgb())
-        assertEquals(TerminalPaletteDark.userBlockBackground, pal.userBlockBackground)
-        assertEquals(TerminalPaletteDark.userBlockForeground, pal.userBlockForeground)
+        assertEquals(TermPalette.of(true).userBlockBg, pal.userBlockBackground.toArgb())
+        assertEquals(TermPalette.of(true).defaultFg, pal.userBlockForeground.toArgb())
         assertNotEquals(TerminalPaletteDark.cursor, pal.cursor)
     }
 }
