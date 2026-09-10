@@ -132,6 +132,9 @@ func TestDiscoveryRecoveryResumesDelta(t *testing.T) {
 	fd := &flipDiscoverer{model: testModel()}
 	e := startWS(t, Options{Token: "test-token", Discoverer: fd})
 	e.auth()
+	// A server-side scan is not this connection's wire baseline.
+	e.sendFrame(&protocol.List{ReqID: 1})
+	mustListing(t, e, 1)
 
 	// Baseline with the original model, then fail a couple of scans.
 	time.Sleep(150 * time.Millisecond)
