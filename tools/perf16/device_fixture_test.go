@@ -70,7 +70,7 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 	var owned []*wsConn
 	var subscriptions []*subscription
 	writers := make(map[*wsConn]chan struct{})
-	var accepted atomic.Int32
+	var accepted, armedSubscriptions, baselineAccepted atomic.Int32
 	var healthyFrames atomic.Int64
 	var healthy *wsConn
 	selected := make(chan *p16DeviceRound, rounds)
@@ -89,25 +89,39 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 			healthy = c
 		}
 		mu.Unlock()
-		var r *p16DeviceRound
-		if number >= 2 && number <= rounds+1 {
-			r = allRounds[number-2]
-			r.conn = c
-			r.writerDone = writerDone
-		}
+		var target atomic.Pointer[p16DeviceRound]
+		var joined atomic.Bool
 		c.beforeRelay = func(sub *subscription) {
 			mu.Lock()
 			subscriptions = append(subscriptions, sub)
 			mu.Unlock()
-			if r != nil {
-				select {
-				case r.sub <- sub:
-				default:
-					t.Error("selected connection subscribed twice")
-				}
-				if stage == "bridge" {
-					<-r.release
-				}
+			if number == 1 {
+				return
+			}
+			// Pairing and instrumentation startup may create auth/list-only
+			// connections. Only the armed real subscription owns a trial.
+			if _, err := os.Stat(filepath.Join(root, "round-01", "app-start")); err != nil {
+				return
+			}
+			if sub.ref != ref || !joined.CompareAndSwap(false, true) {
+				t.Error("wrong ref or duplicate armed subscription on connection")
+				return
+			}
+			index := int(armedSubscriptions.Add(1)) - 1
+			if index == 0 {
+				baselineAccepted.Store(accepted.Load())
+				write(root, "connection-baseline.json", map[string]any{"conn": c.id, "ref": ref, "accepted_total": baselineAccepted.Load()})
+			}
+			if index >= rounds {
+				return
+			} // final recovery is not another loss target
+			r := allRounds[index]
+			r.conn, r.writerDone = c, writerDone
+			target.Store(r)
+			r.sub <- sub
+			selected <- r
+			if stage == "bridge" {
+				<-r.release
 			}
 		}
 		if number == 1 {
@@ -124,13 +138,15 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 					healthyFrames.Add(1)
 				}
 			}
-		}
-		if r == nil {
 			return
 		}
 		if stage == "ws" {
 			var first sync.Once
 			c.beforeWriterFrame = func(m wsMsg) {
+				r := target.Load()
+				if r == nil {
+					return
+				}
 				if m.typ != wsBinary {
 					return
 				}
@@ -144,7 +160,6 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 				}
 			}
 		}
-		selected <- r
 	}
 	httpServer := httptest.NewServer(srv.Handler())
 	stop := make(chan struct{})
@@ -397,7 +412,10 @@ func TestPerf16A6FixtureProcess(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "stage-rounds-complete")); err != nil {
 		t.Error("planned rounds incomplete")
 	}
-	if got := accepted.Load(); int(got) != rounds+2 {
-		t.Errorf("connections got %d want %d", got, rounds+2)
+	if got := armedSubscriptions.Load(); int(got) != rounds+1 {
+		t.Errorf("armed subscriptions got %d want %d", got, rounds+1)
+	}
+	if got := accepted.Load() - baselineAccepted.Load(); int(got) != rounds {
+		t.Errorf("post-baseline new connections got %d want %d", got, rounds)
 	}
 }
