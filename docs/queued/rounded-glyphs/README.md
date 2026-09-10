@@ -14,6 +14,14 @@ is built from the corresponding corral-core renderer on accepted branding source
 `2ee62e5299f3ad135a56589748bcca01da356dde`; that narrow companion retains branding
 and Issue16 fixes without importing either repository's whole tree.
 
-Current validation is in progress: independent direction/arc reproduction,
-executed geometry and production Canvas tests, and one real App character fixture
-at normal and small sizes. No service changes, performance matrix, or remote merge.
+Validation: independent `RoundedGlyphAcceptanceTest` executed on Grok against the
+corresponding production renderer: 3 tests passed (exit 0), covering four-corner
+geometry/direction, integer straight-line bands and the production Canvas Path
+route with resolved color and endpoint directions. The same test source is included
+here. Run `./gradlew :app:testDebugUnitTest --tests
+'dev.agentmirror.app.termview.RoundedGlyphAcceptanceTest'` from the Android project.
+
+Per the user's narrowed scope, no device, size/theme matrix, unrelated regression
+or performance gate. Release APK is built from exact core source `f6151fc2f` and
+signed with the existing ea427 certificate; the later direct-test import does not
+change product source. No service changes or remote merge.
