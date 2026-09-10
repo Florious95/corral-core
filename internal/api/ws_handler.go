@@ -155,7 +155,12 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	sub.loss = loss
 	go c.relay(subCtx, sub, ch)
 
-	snap, err := snapshotWithCursor(c.ctx, br)
+	var snap []byte
+	if c.snapshotFn != nil {
+		snap, err = c.snapshotFn(c.ctx, br)
+	} else {
+		snap, err = snapshotWithCursor(c.ctx, br)
+	}
 	if err != nil {
 		close(sub.initialFailed)
 		<-sub.relayDone
@@ -173,7 +178,11 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
 		return
 	}
-	c.sendBinary(frame)
+	if c.sendBinaryFn != nil {
+		c.sendBinaryFn(frame)
+	} else {
+		c.sendBinary(frame)
+	}
 	c.subsMu.Lock()
 	if subCtx.Err() != nil || c.catalogAborted.Load() {
 		c.subsMu.Unlock()

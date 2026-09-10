@@ -97,6 +97,9 @@ type wsConn struct {
 	catalogCloseReason atomic.Value
 	// Test-only relay/writer boundaries; nil in production, set before startup.
 	beforeRelay       func(*subscription)
+	snapshotFn        func(context.Context, *bridge.Pane) ([]byte, error)
+	sendBinaryFn      func([]byte)
+	controlEnqueue    func()
 	beforeWriterFrame func(wsMsg)
 	writeAttempt      func(wsMsg)
 
@@ -424,6 +427,9 @@ func (c *wsConn) sendMsg(m wsMsg) {
 	defer c.sendMu.RUnlock()
 	if c.catalogAborted.Load() || c.ctx.Err() != nil {
 		return
+	}
+	if c.controlEnqueue != nil {
+		c.controlEnqueue()
 	}
 	select {
 	case c.sendCh <- m:
