@@ -180,10 +180,14 @@ class SessionViewModel(
 
     /** 当前连接首帧 snapshot 是否已预取过历史。 */
     private var hasPrefetchedHistory = false
+    /** 当前连接代次已经应用 snapshot；READY 事件不能在快照前抢发分页。 */
+    private var snapshotReady = false
     private var awaitingReconnectSnapshot = false
     private var lastFrameColsKey: String? = null
 
     init {
+        // 视口滚动/回底/恢复由 Presenter 真实事件驱动 UI 与分页，不保留屏幕定时轮询。
+        presenter.onViewportStateChanged = ::syncFromPresenter
         // 不 setListener(self)：那会顶掉 ServiceWire 包装。按 ref 登记二进制接收，
         // 必须在 subscribe 之前，否则订阅快照会落到仍占全局槽的列表页 VM。
         connectionState = manager.state()
@@ -201,6 +205,7 @@ class SessionViewModel(
 
     override fun onStateChanged(state: ConnectionState) {
         connectionState = state
+        if (state != ConnectionState.READY) snapshotReady = false
         connectionBanner = when (state) {
             ConnectionState.CONNECTING -> "连接中…"
             ConnectionState.AUTHENTICATING -> "认证中…"
@@ -213,6 +218,8 @@ class SessionViewModel(
             ConnectionState.STOPPED -> "连接已断开"
             ConnectionState.READY -> null
         }
+        // READY/重连是状态投影事件；真正的分页请求仍等该代次 snapshot 应用。
+        if (state == ConnectionState.READY) syncFromPresenter()
     }
 
     override fun onFrame(frame: FramePayload) {
@@ -276,6 +283,9 @@ class SessionViewModel(
                 BinaryKind.DELTA -> "delta"
                 BinaryKind.SCROLLBACK -> "scrollback"
             }
+            if (frame.kind == BinaryKind.DELTA) {
+                PerfTrace.app7Trace("feed", "kind=delta bytes=${frame.data.size}")
+            }
             PerfTrace.emitFirstFrameIfFirst(ref, kind, frame.data.size) // first_frame_recv
         }
         when (frame.kind) {
@@ -308,6 +318,7 @@ class SessionViewModel(
                     )
                 }
                 emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                snapshotReady = true
                 if (PerfTrace.isEnabled()) {
                     val alt = if (emulator.historyAvailable) 0 else 1
                     PerfTrace.emitSnapshotIfFirst(ref, alt, emulator.rows, emulator.cols) // snapshot_applied
@@ -330,6 +341,8 @@ class SessionViewModel(
                 }
             }
         }
+        // SNAPSHOT 首帧预取，SCROLLBACK/DELTA 的后续 UI 收敛由真实 View 帧/恢复事件触发；
+        // 不从收件线程直接改 Compose 状态，也不依赖后台 UI 定时器轮询。
     }
 
     override fun onLocalDecodeError(code: FrameError, message: String) {
@@ -527,10 +540,11 @@ class SessionViewModel(
 
     /** 视口信号收敛（会话屏时钟泵周期调用 / 测试显式调用）：滚动到顶即补页。 */
     fun syncFromPresenter() {
+        if (PerfTrace.isEnabled()) PerfTrace.app7Trace("ui_sync")
         val locked = presenter.showBackToBottom
         showBackToBottom = locked
         atHistoryTop = locked && presenter.window.first == 0
-        if (atHistoryTop && hasMoreHistory) {
+        if (snapshotReady && atHistoryTop && hasMoreHistory) {
             requestOlderHistoryPage()
         }
     }
@@ -595,19 +609,27 @@ class SessionViewModel(
         if (connectionState != ConnectionState.READY || awaitingReconnectSnapshot) {
             // 首帧未到或非 READY 时走本地缓冲，保证用户仍可看离线历史。
             presenter.onScrollBy(deltaLines)
+            syncFromPresenter()
             return
         }
         pendingScrollDelta += deltaLines
         val nowMs = System.currentTimeMillis()
-        if (nowMs - lastScrollSentMs < SCROLL_THROTTLE_MS) return
+        if (nowMs - lastScrollSentMs < SCROLL_THROTTLE_MS) {
+            syncFromPresenter()
+            return
+        }
         lastScrollSentMs = nowMs
         val toSend = pendingScrollDelta
         pendingScrollDelta = 0
-        if (toSend == 0) return
+        if (toSend == 0) {
+            syncFromPresenter()
+            return
+        }
         // 协议约定：delta<0=向上看历史（scroll-up）。
         // 手势约定：deltaLines>0=presenter 向更早历史滚（正值=看旧内容），
         // 因此 delta=-toSend 使两端符号语义对齐。
         manager.sendScrollWheel(ref, -toSend)
+        syncFromPresenter()
     }
 
     /** 离开会话页时释放：退订镜像（conn 层幂等），停用连接由服务/接线层决定。 */

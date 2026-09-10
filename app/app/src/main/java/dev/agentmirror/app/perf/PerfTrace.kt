@@ -108,6 +108,9 @@ object PerfTrace {
     /** `layout_settled` 静默窗口（ms）：最后一次重排后再无重排才结算。 */
     const val LAYOUT_SETTLED_QUIET_MS = 500
 
+    private const val APP7_TAG = "App7"
+    private const val APP7_SAMPLE_EVERY = 32L
+
     /**
      * 假出口（去 Android Log / 真机 DiagLog）。测试注入；生产接到双出口。
      * @contract
@@ -157,6 +160,8 @@ object PerfTrace {
     private val noOpenSnapshotLogged = ConcurrentHashMap.newKeySet<String>()
     private val wsBinaryRecvLogged = ConcurrentHashMap.newKeySet<String>()
     private val noListenerLogged = ConcurrentHashMap.newKeySet<String>()
+    /** Issue 7 采样计数：仅 debug.agentmirror.perftrace 开启时，每 32 次采样一次。 */
+    private val app7Counters = ConcurrentHashMap<String, AtomicLong>()
     @Volatile
     private var settleHandler: Handler? = null
 
@@ -193,6 +198,24 @@ object PerfTrace {
      * @inv 不读系统属性、不 I/O
      */
     fun isEnabled(): Boolean = enabled
+
+    /**
+     * Issue 7 后台观测的低频生产入口计数。调用方在真实 feed/sync/wake/frame/damage
+     * 入口触发；不记录正文，只记录事件名、采样计数和必要状态，避免热路径刷屏。
+     */
+    fun app7Trace(event: String, detail: String = "") {
+        if (!isEnabled()) return
+        val count = app7Counters.getOrPut(event) { AtomicLong() }.incrementAndGet()
+        if (count != 1L && count % APP7_SAMPLE_EVERY != 0L) return
+        val suffix = detail.takeIf { it.isNotEmpty() }?.let { " $it" } ?: ""
+        val line = "event=$event count=$count$suffix"
+        try {
+            Log.d(APP7_TAG, line)
+        } catch (_: Throwable) {
+            // 纯 JVM 单测没有 mock android.util.Log；DiagLog 仍落。
+        }
+        DiagLog.record(APP7_TAG, line)
+    }
 
     /**
      * 按键回显挂钩开关（调用点与 [isEnabled] 合取）。默认关。

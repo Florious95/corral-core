@@ -24,6 +24,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
+import android.os.Looper
 import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.GestureDetector
@@ -111,6 +112,9 @@ class TermSurfaceView @JvmOverloads constructor(
         meta: Boolean,
         ctrl: Boolean,
     ) -> Boolean)? = null
+
+    /** 真实视口事件（尺寸/窗口恢复）通知会话层，替代 UI 定时轮询做状态收敛。 */
+    var onViewportChanged: (() -> Unit)? = null
 
     /**
      * 当前会话 ref（[SessionScreen] 注入）。first_draw 按 ref 查 open_id。
@@ -238,6 +242,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             framePending = false
+            if (!renderVisible) return
+            if (PerfTrace.isEnabled()) PerfTrace.app7Trace("frame_execute")
             lastFrameTimeNanos = frameTimeNanos
             val p = presenter ?: return
             // 排空脏区缓冲（防无界增长）后整帧重绘。不再自续下一帧：帧循环是纯数据
@@ -251,6 +257,9 @@ class TermSurfaceView @JvmOverloads constructor(
             }
             lastDirtyRowsIn = dirtyRows
             p.beginFrame()
+            // 镜像帧已在收件线程应用；在主线程完成一次真实展示工作后，通知会话层
+            // 更新分页/回底按钮，避免后台线程直接写 Compose 状态。
+            onViewportChanged?.invoke()
             refreshBurst()
             invalidate()
             // 只经 Choreographer 请下一帧（跟 vsync），禁止在 onDraw 里 postFrame
@@ -277,10 +286,16 @@ class TermSurfaceView @JvmOverloads constructor(
     /** 帧是否已排入 Choreographer（防重复排队；doFrame 时复位；仅主线程触碰）。 */
     private var framePending = false
 
+    /** 窗口可见性门：后台仍解析镜像，但不排 UI Handler/Choreographer 工作。 */
+    @Volatile
+    private var renderVisible = true
+
     /** 请求一帧：脏数据或状态变化驱动（Choreographer 垂直同步对齐；重复请求被合并为一帧）。 */
     private fun postFrame() {
+        if (!renderVisible) return
         if (framePending) return
         framePending = true
+        if (PerfTrace.isEnabled()) PerfTrace.app7Trace("frame_enqueue")
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
 
@@ -295,7 +310,8 @@ class TermSurfaceView @JvmOverloads constructor(
     /** 缓存的唤醒任务（避免每次增量到达都分配 Runnable——热路径纪律）。 */
     private val wakeRunnable = Runnable {
         wakeQueued.set(false)
-        postFrame()
+        if (PerfTrace.isEnabled()) PerfTrace.app7Trace("wake_execute")
+        if (renderVisible) postFrame()
     }
 
     /**
@@ -303,11 +319,13 @@ class TermSurfaceView @JvmOverloads constructor(
      * 跳到主线程，[wakeQueued] 保证同一时刻至多一个在途唤醒（背靠背增量合并为一帧）。
      */
     private fun requestFrameFromAnyThread() {
-        if (android.os.Looper.myLooper() === android.os.Looper.getMainLooper()) {
+        if (!renderVisible) return
+        if (android.os.Looper.myLooper() === Looper.getMainLooper()) {
             postFrame()
             return
         }
         if (wakeQueued.compareAndSet(false, true)) {
+            if (PerfTrace.isEnabled()) PerfTrace.app7Trace("wake_enqueue")
             mainHandler.post(wakeRunnable)
         }
     }
@@ -320,6 +338,7 @@ class TermSurfaceView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         presenter?.onViewportSizeChanged(usableWidthPx(w), h)
+        onViewportChanged?.invoke()
         persistViewportGeom()
     }
 
@@ -365,17 +384,22 @@ class TermSurfaceView @JvmOverloads constructor(
             "viewport",
             "source=windowVisibility visibility=$visibility width=$width height=$height",
         )
-        if (visibility != VISIBLE) {
+        renderVisible = visibility == VISIBLE
+        if (!renderVisible) {
             if (framePending) {
                 Choreographer.getInstance().removeFrameCallback(frameCallback)
                 framePending = false
             }
+            mainHandler.removeCallbacks(wakeRunnable)
+            wakeQueued.set(false)
             return
         }
-        if (width <= 0 || height <= 0) return
-        refreshDrawOpt()
-        presenter?.onRealViewportChanged(usableWidthPx(width), height)
-        persistViewportGeom()
+        if (width > 0 && height > 0) {
+            refreshDrawOpt()
+            presenter?.onRealViewportChanged(usableWidthPx(width), height)
+            persistViewportGeom()
+        }
+        onViewportChanged?.invoke()
         postFrame()
     }
 

@@ -17,6 +17,7 @@
 package dev.agentmirror.app.termview
 
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.DamageListener
@@ -62,6 +63,9 @@ class TermViewPresenter(
      * 空闲必须零帧循环）。可能在任意线程被调（WS 收件线程/主线程），接收方自行跳线程。
      */
     var onFrameRequested: (() -> Unit)? = null
+
+    /** 视口状态事件（滚动/回底/真实 viewport），供会话层替代周期轮询收敛 UI 状态。 */
+    var onViewportStateChanged: (() -> Unit)? = null
 
     /** 当前等宽字格像素尺寸（View 层实测字形度量后经 [seedCellMetrics] 写入）。 */
     var cellWidth: Int = DEFAULT_CELL_WIDTH
@@ -119,9 +123,10 @@ class TermViewPresenter(
      */
     private var visibleRowsOverride: Int? = null
 
-    /** 内核脏区换算来的逻辑行区间缓冲（"画面已变化"信号载体，非局部重绘清单——渲染层
-     *  整帧全窗口重绘，View 帧回调取走即弃）。写侧在 WS 收件线程（feed→damageListener）、
-     *  取侧在主线程帧回调，经 [damageLock] 互斥。 */
+    /** 内核脏区换算来的逻辑行区间并集（"画面已变化"信号载体，非局部重绘清单——
+     *  渲染层整帧全窗口重绘，View 帧回调取走即弃）。只保留当前窗口内的非连续区间
+     *  并集；因区间均裁在已有行空间内，最多 [window] 行个区间，不会随后台输出无界增长。
+     *  写侧在 WS 收件线程（feed→damageListener）、取侧在主线程帧回调，经 [damageLock] 互斥。 */
     private var pendingDamage: MutableList<IntRange>? = null
 
     /** [pendingDamage] 的跨线程互斥锁（增量流唤醒后写/取真正并发，缺陷①修复连带）。 */
@@ -191,6 +196,7 @@ class TermViewPresenter(
         topLine = if (next >= maxTop) null else next
         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
         onFrameRequested?.invoke()
+        onViewportStateChanged?.invoke()
     }
 
     /**
@@ -205,6 +211,7 @@ class TermViewPresenter(
     fun onScrollToBottom() {
         topLine = null
         onFrameRequested?.invoke()
+        onViewportStateChanged?.invoke()
     }
 
     // ---- 字号 → 行列数换算（feat-font-size-setting-drop-pinch：让 CLI 自己重画）----
@@ -271,6 +278,7 @@ class TermViewPresenter(
         // 让「该重算而没重算」（candidate != emulator 但 outgrewGuard=false）与「重算了但算
         // 错了」（resized=true 但 emulatorRows/Cols 仍不对）能光看日志区分开。
         recordViewportResult(source = "onViewportSizeChanged", resized = resized, outgrewGuard = outgrew)
+        onViewportStateChanged?.invoke()
     }
 
     /**
@@ -323,6 +331,7 @@ class TermViewPresenter(
             updateVisibleRows()
             onFrameRequested?.invoke()
             recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = true)
+            onViewportStateChanged?.invoke()
             return
         }
         val rowsBefore = visibleRows
@@ -335,6 +344,7 @@ class TermViewPresenter(
             onFrameRequested?.invoke()
         }
         recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = outgrew)
+        onViewportStateChanged?.invoke()
     }
 
     /**
@@ -487,7 +497,11 @@ class TermViewPresenter(
             val hi = minOf(r.last, win.last)
             if (lo <= hi) lo..hi else null
         }
-        return mergeRanges(clipped)
+        val merged = mergeRanges(clipped)
+        if (PerfTrace.isEnabled()) {
+            PerfTrace.app7Trace("damage_consume", "ranges=${merged.size}")
+        }
+        return merged
     }
 
     /** 帧开始：抓一次内核快照缓存，供本帧 [lineCells] 复用（屏幕行零重复拷贝）。 */
@@ -527,13 +541,53 @@ class TermViewPresenter(
         visibleRowsOverride = viewportHeightPx / cellHeight
     }
 
-    /** 内核屏幕脏行 [range] → 逻辑行区间缓存；锁定态窗口外损伤由 [takeDamage] 裁剪吸收。
-     *  缓存后触发帧请求（缺陷①：增量流到达的唯一唤醒点，回调在锁外调避免持锁跳线程）。 */
+    /** 内核屏幕脏行 [range] → 逻辑行区间并集；锁定态窗口外损伤当场裁剪吸收。
+     * 只合并相邻/重叠区间，不把非连续行粗化成一个大区间；当前窗口变化后，旧窗口外的
+     * 待绘损伤也会被丢弃，因为滚动/回前台事件本身会请求整帧。
+     * 缓存后触发帧请求（缺陷①：增量流到达的唯一唤醒点，回调在锁外调避免持锁跳线程）。 */
     private fun markScreenRowsDirty(range: IntRange) {
         val sb = emulator.scrollback.size
         val logical = (sb + range.first)..(sb + range.last)
+        val currentWindow = window
+        val clippedFirst = maxOf(logical.first, currentWindow.first)
+        val clippedLast = minOf(logical.last, currentWindow.last)
+        if (clippedFirst > clippedLast) return
+        var pendingCount = 0
         synchronized(damageLock) {
-            (pendingDamage ?: mutableListOf<IntRange>().also { pendingDamage = it }).add(logical)
+            val damage = pendingDamage ?: mutableListOf<IntRange>().also { pendingDamage = it }
+            // following 窗口随输出前移后，旧窗口外损伤不再占住内存。
+            var index = 0
+            while (index < damage.size) {
+                val existing = damage[index]
+                val first = maxOf(existing.first, currentWindow.first)
+                val last = minOf(existing.last, currentWindow.last)
+                if (first > last) {
+                    damage.removeAt(index)
+                } else {
+                    damage[index] = first..last
+                    index++
+                }
+            }
+            // 插入当前区间并只与相邻/重叠区间合并，保留非连续并集语义。
+            var first = clippedFirst
+            var last = clippedLast
+            index = 0
+            while (index < damage.size) {
+                val existing = damage[index]
+                if (existing.last + 1 < first) {
+                    index++
+                    continue
+                }
+                if (last + 1 < existing.first) break
+                first = minOf(first, existing.first)
+                last = maxOf(last, existing.last)
+                damage.removeAt(index)
+            }
+            damage.add(index, first..last)
+            pendingCount = damage.size
+        }
+        if (PerfTrace.isEnabled()) {
+            PerfTrace.app7Trace("damage_pending", "ranges=$pendingCount")
         }
         onFrameRequested?.invoke()
     }

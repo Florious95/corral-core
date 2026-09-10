@@ -246,14 +246,8 @@ fun SessionScreen(
     // 连接时钟泵归属（feat-fg-service-wiring + fix-app-runtime-sa）：重连调度 + 输入超时
     // 裁决由前台服务驱动（MirrorForegroundService.pumpOnce，2s 一拍），本屏不再调用 vm.onTick
     // （连接时钟不在屏组合持有）。服务被杀时根组合的 OnScreenFallbackPump 兜底接管（前台
-    // 界面仍推进），服务恢复即让出。剩余本地拍只做视口信号收敛（syncFromPresenter：滚动到顶时
-    // 按页补更老历史，006）——纯 UI 本地逻辑、零连接状态零网络，不违背"连接由服务承接"。
-    LaunchedEffect(viewModel) {
-        while (true) {
-            viewModel.syncFromPresenter()
-            delay(TICK_MS)
-        }
-    }
+    // 界面仍推进），服务恢复即让出。视口同步由真实事件（镜像帧、滚动、回前台）接线，
+    // 不在后台保留 100ms UI 轮询。
 
     // 回执/错误瞬时态自动收起（「已发送」/「已注入」短暂可见；错误多停留一会儿）。
     LaunchedEffect(viewModel.inputStatus, viewModel.uploadStatus, viewModel.transientError) {
@@ -359,6 +353,7 @@ fun SessionScreen(
                                         it.presenter = viewModel.presenter
                                         it.onRemoteScrollBy = viewModel::onScrollWheel
                                         it.onTermMouse = viewModel::onTermMouse
+                                        it.onViewportChanged = viewModel::syncFromPresenter
                                         it.sessionRef = viewModel.ref
                                         it.nightOverride = darkTheme
                                     }
@@ -368,6 +363,7 @@ fun SessionScreen(
                                     view.presenter = viewModel.presenter
                                     view.onRemoteScrollBy = viewModel::onScrollWheel
                                     view.onTermMouse = viewModel::onTermMouse
+                                    view.onViewportChanged = viewModel::syncFromPresenter
                                     view.sessionRef = viewModel.ref
                                 },
                                 modifier = Modifier
@@ -714,5 +710,4 @@ private fun uploadCapturedPreview(
     }
 }
 
-private const val TICK_MS = 100L
 private const val TRANSIENT_MS = 1_200L
