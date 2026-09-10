@@ -35,6 +35,7 @@ internal object TermDrawControlWatch {
     fun subscribe(context: Context, onChanged: () -> Unit): Closeable {
         check(Looper.myLooper() === Looper.getMainLooper())
         val group = monitor ?: Monitor(context.applicationContext.filesDir).also { monitor = it }
+        group.cancelRetirement()
         val token = Any()
         group.listeners[token] = onChanged
         if (group.listeners.size == 1) group.start()
@@ -42,8 +43,7 @@ internal object TermDrawControlWatch {
             check(Looper.myLooper() === Looper.getMainLooper())
             group.listeners.remove(token)
             if (group.listeners.isEmpty() && monitor === group) {
-                monitor = null
-                group.close()
+                group.retire()
             }
         }
     }
@@ -72,6 +72,19 @@ internal object TermDrawControlWatch {
             override fun onEvent(event: Int, path: String?) {
                 if (event and (FileObserver.CLOSE_WRITE or FileObserver.MOVED_TO) != 0 && TermDrawControlFiles.accepts(path)) {
                     session.request()
+                }
+            }
+        }
+
+        fun cancelRetirement() {
+            session.cancelCloseWhenIdle()
+        }
+
+        fun retire() {
+            session.closeWhenIdle {
+                if (listeners.isEmpty() && monitor === this) {
+                    monitor = null
+                    close()
                 }
             }
         }
