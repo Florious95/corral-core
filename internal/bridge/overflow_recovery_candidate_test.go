@@ -2,67 +2,89 @@ package bridge
 
 import (
 	"bytes"
-	"errors"
+	"crypto/sha256"
 	"os"
 	"testing"
 	"time"
 )
 
-func TestSubscriberOverflowEmitsOneLossSignal(t *testing.T) {
+// TestSubscriberOverflowStopsOnlySlowSubscriber drives the production fanout
+// loop with a controlled pipe and a per-byte fast-consumer barrier. The
+// barrier makes each source write observable without assuming one write is one
+// reader chunk; the slow subscriber's bounded queue must be closed and
+// cleared, while the healthy subscriber receives every byte in order.
+func TestSubscriberOverflowStopsOnlySlowSubscriber(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
+		t.Fatal(err)
 	}
-	defer writer.Close()
-
+	const gen = uint64(1)
 	slow := make(chan []byte, 1)
-	loss := make(chan error, 1)
-	s := &sharedPipe{
-		gen:        1,
-		subs:       map[uint64]chan []byte{1: slow},
-		losses:     map[uint64]chan error{1: loss},
-		lossClosed: map[uint64]bool{1: false},
-		failed:     map[uint64]bool{1: false},
-		refs:       1,
-	}
+	fast := make(chan []byte, 1)
+	s := &sharedPipe{gen: gen, subs: map[uint64]*streamSubscriber{1: {data: slow, loss: make(chan error, 1)}, 2: {data: fast, loss: make(chan error, 1)}}, refs: 2}
 	done := make(chan struct{})
-	go s.fanout(reader, done, 1)
-
-	payload := bytes.Repeat([]byte("loss-once\n"), streamBufferBytes/len("loss-once\n")*2+1)
-	written := make(chan struct{})
-	go func() {
-		_, _ = writer.Write(payload)
-		close(written)
-	}()
-	select {
-	case <-written:
-	case <-time.After(5 * time.Second):
-		t.Fatal("controlled reader did not receive the overflow payload")
-	}
-
-	select {
-	case got, ok := <-loss:
-		if !ok || !errors.Is(got, ErrSubscriberOverflow) {
-			t.Fatalf("loss signal=(%v,%v), want one ErrSubscriberOverflow", got, ok)
+	go s.fanout(reader, done, gen)
+	t.Cleanup(func() {
+		_ = writer.Close()
+		_ = reader.Close()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Error("fanout cleanup did not finish")
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("overflow did not emit loss signal")
+	})
+
+	want := []byte("0123456789abcdefghijklmnopqrstuvwxyz")
+	var got []byte
+	for _, b := range want {
+		if n, err := writer.Write([]byte{b}); n != 1 || err != nil {
+			t.Fatalf("source write n=%d err=%v", n, err)
+		}
+		select {
+		case chunk, ok := <-fast:
+			if !ok || len(chunk) != 1 {
+				t.Fatalf("healthy byte acknowledgement: open=%v bytes=%d", ok, len(chunk))
+			}
+			got = append(got, chunk...)
+		case <-time.After(2 * time.Second):
+			t.Fatal("healthy subscriber did not acknowledge source byte")
+		}
 	}
+
 	select {
-	case got, ok := <-loss:
+	case chunk, ok := <-slow:
 		if ok {
-			t.Fatalf("second loss signal=%v", got)
+			t.Fatalf("overflow retained stale data: %d bytes", len(chunk))
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("loss channel remained open after one-shot signal")
+		t.Fatal("slow subscriber was not terminated at overflow")
 	}
-	if got := len(slow); got != 0 {
-		t.Fatalf("slow queue retained %d stale chunks", got)
+	if !bytes.Equal(got, want) || sha256.Sum256(got) != sha256.Sum256(want) {
+		t.Fatalf("healthy stream mismatch: bytes=%d want=%d", len(got), len(want))
 	}
-	_ = writer.Close()
+
+	// Repeated detach of the affected subscriber must not decrement refs twice.
+	s.drop(1)
+	s.drop(1)
+	s.mu.Lock()
+	actualGen, refs, members := s.gen, s.refs, len(s.subs)
+	s.mu.Unlock()
+	if actualGen != gen || refs != 1 || members != 1 {
+		t.Fatalf("overflow/detach changed shared pipe: gen=%d refs=%d members=%d", actualGen, refs, members)
+	}
+
+	// The shared pipe and healthy subscriber remain live after the slow one is
+	// removed; no pane-level pipe rebuild is allowed.
+	if n, err := writer.Write([]byte("!")); n != 1 || err != nil {
+		t.Fatalf("post-detach source write n=%d err=%v", n, err)
+	}
 	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("fanout did not stop after writer close")
+	case chunk, ok := <-fast:
+		if !ok || !bytes.Equal(chunk, []byte("!")) {
+			t.Fatalf("healthy subscriber stopped after slow detach: open=%v chunk=%q", ok, chunk)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("healthy subscriber did not survive slow detach")
 	}
+	t.Logf("healthy bytes=%d sha256=%x generation=%d", len(got), sha256.Sum256(got), actualGen)
 }

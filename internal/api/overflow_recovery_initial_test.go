@@ -8,6 +8,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -54,16 +55,15 @@ func newDirectWSPair(t *testing.T, srv *Server, queueSize int) (*wsConn, *websoc
 	ctx, cancel := context.WithCancel(context.Background())
 	writeCtx, writeStop := context.WithCancel(context.Background())
 	c := &wsConn{
-		s:               srv,
-		id:              1,
-		conn:            serverConn,
-		ctx:             ctx,
-		cancel:          cancel,
-		writeCtx:        writeCtx,
-		writeStop:       writeStop,
-		subs:            make(map[string]*subscription),
-		sendCh:          make(chan wsMsg, queueSize),
-		mirrorAbortDone: make(chan struct{}),
+		s:         srv,
+		id:        1,
+		conn:      serverConn,
+		ctx:       ctx,
+		cancel:    cancel,
+		writeCtx:  writeCtx,
+		writeStop: writeStop,
+		subs:      make(map[string]*subscription),
+		sendCh:    make(chan wsMsg, queueSize),
 	}
 	t.Cleanup(func() {
 		cancel()
@@ -111,6 +111,7 @@ func TestInitialSubscribeLossCancelsCapture(t *testing.T) {
 		c.handleSubscribe(protocol.Subscribe{Ref: te.ref(), Rows: 96, Cols: 108})
 		close(done)
 	}()
+	t.Cleanup(func() { c.cancel(); waitSubscribeDone(t, done) })
 	select {
 	case <-captureStarted:
 	case <-time.After(5 * time.Second):
@@ -120,10 +121,11 @@ func TestInitialSubscribeLossCancelsCapture(t *testing.T) {
 		t.Fatalf("trigger capture-window overflow: %v", err)
 	}
 	select {
-	case <-c.mirrorAbortDone:
+	case <-c.ctx.Done():
 	case <-time.After(10 * time.Second):
 		t.Fatal("loss did not abort while capture was blocked")
 	}
+	awaitMirrorAbort(t, c)
 	waitSubscribeDone(t, done)
 	assertNoLiveSubscription(t, c)
 	if got := waitPaneSize(te, "80x24"); got != "80x24" {
@@ -150,6 +152,7 @@ func TestInitialSubscribeLossCancelsFirstFrameQueue(t *testing.T) {
 		c.handleSubscribe(protocol.Subscribe{Ref: te.ref(), Rows: 96, Cols: 108})
 		close(done)
 	}()
+	t.Cleanup(func() { c.cancel(); waitSubscribeDone(t, done) })
 	select {
 	case <-sendStarted:
 	case <-time.After(5 * time.Second):
@@ -159,10 +162,11 @@ func TestInitialSubscribeLossCancelsFirstFrameQueue(t *testing.T) {
 		t.Fatalf("trigger first-frame-window overflow: %v", err)
 	}
 	select {
-	case <-c.mirrorAbortDone:
+	case <-c.ctx.Done():
 	case <-time.After(10 * time.Second):
 		t.Fatal("loss did not abort while first snapshot send was blocked")
 	}
+	awaitMirrorAbort(t, c)
 	waitSubscribeDone(t, done)
 	if got := len(c.sendCh); got != 0 {
 		t.Fatalf("first-frame loss retained %d stale queue entries", got)
@@ -189,6 +193,7 @@ func TestInitialSubscribeCaptureErrorReleasesGeometry(t *testing.T) {
 		c.handleSubscribe(protocol.Subscribe{Ref: te.ref(), Rows: 96, Cols: 108})
 		close(done)
 	}()
+	t.Cleanup(func() { c.cancel(); waitSubscribeDone(t, done) })
 	select {
 	case <-started:
 	case <-time.After(5 * time.Second):
@@ -196,7 +201,7 @@ func TestInitialSubscribeCaptureErrorReleasesGeometry(t *testing.T) {
 	}
 	waitSubscribeDone(t, done)
 	assertNoLiveSubscription(t, c)
-	if c.mirrorAborted.Load() || c.ctx.Err() != nil {
+	if c.catalogAborted.Load() || c.ctx.Err() != nil {
 		t.Fatal("ordinary capture failure aborted a healthy connection")
 	}
 	select {
@@ -214,4 +219,41 @@ func TestInitialSubscribeCaptureErrorReleasesGeometry(t *testing.T) {
 	if got := waitPaneSize(te, "80x24"); got != "80x24" {
 		t.Fatalf("capture-error teardown left pane at %s, want 80x24", got)
 	}
+}
+
+func awaitMirrorAbort(t *testing.T, c *wsConn) {
+	t.Helper()
+	awaitBoundary(t, c.ctx.Done(), "connection cancelled by overflow")
+	c.catalogAbortOnce.Do(func() { t.Error("cancellation did not run abort") })
+	if !c.catalogAborted.Load() {
+		t.Fatal("missing abort state")
+	}
+}
+
+const (
+	// These tokens are emitted as OSC title updates.  They are observable on
+	// the raw pipe stream but do not change the visible pane grid, so the final
+	// screen oracle remains static and complete.
+	recoveryReadyToken = "P16_RECOVERY_READY"
+	recoveryAfterToken = "P16_RECOVERY_AFTER"
+
+	// Legacy capture-window tests use this burst to provoke production loss.
+	// The scenario below instead controls each queue stage independently.
+	recoveryBurstBytes = 16 << 20
+)
+
+// recoveryBurstCommand writes one source burst, then the static screen and an
+// out-of-band completion barrier.  It stays alive waiting for the test's
+// post-reconnect release line, preventing a shell prompt or process exit from
+// changing the snapshot oracle before replay is exercised.
+func recoveryBurstCommand() string {
+	return fmt.Sprintf(`python3 -c 'import sys,time;sys.stdout.write("X"*%d);sys.stdout.flush();sys.stdout.write("\033[2J\033[H\033[1;34mRECOVERED TITLE\033[0m\n\033[3;5m日本語 ✓\033[0m\n\033[5;1mCURSOR_ORACLE\033[0m\033[7;13HRECOVERY_DONE");sys.stdout.write("\033]0;%s\007");sys.stdout.flush();sys.stdin.readline();sys.stdout.write("\033]0;%s\007");sys.stdout.flush();time.sleep(120)'`, recoveryBurstBytes, recoveryReadyToken, recoveryAfterToken)
+}
+
+func sendTmuxLine(t *tmuxEnv, line string) error {
+	if _, err := runTmuxCmd(t.env, t.sock, "send-keys", "-t", t.paneID, "-l", "--", line); err != nil {
+		return err
+	}
+	_, err := runTmuxCmd(t.env, t.sock, "send-keys", "-t", t.paneID, "Enter")
+	return err
 }
