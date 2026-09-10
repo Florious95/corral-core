@@ -144,6 +144,12 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         stoppedForResume = true
         DiagLog.record("lifecycle", "ON_STOP resume_edge_pending=true")
+        // A real host stop leaves the session route, so its existing DisposableEffect disposes
+        // the VM and removes the binary listener/subscription. Configuration recreation keeps
+        // the route for onSaveInstanceState/restore; ordinary pause never reaches this branch.
+        if (!isChangingConfigurations) {
+            navState.activeSession = null
+        }
         super.onStop()
     }
 
