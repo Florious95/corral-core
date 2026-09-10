@@ -1,0 +1,10 @@
+Generation — built-in imagegen, backend unspecified
+Use case: logo-brand
+Asset type: Android adaptive launcher foreground for corral, a remote Agent terminal app.
+Primary request: a distinctive minimal enclosure-shaped C cradling a compact terminal chevron, one unified bold symbol, recognizable at 48dp.
+Style: flat crisp geometric silhouette, luminous mint green on transparency, no gradients or shadows. Confident substantial strokes and generous negative space, precise polished geometry.
+Composition: square 1024 by 1024 canvas, transparent background, entire symbol centered within the central 60 percent safe area, generous empty margins. One single icon only.
+Constraints: no words, letters as typography, screenshots, device mockups, watermark, rounded-square tile, or baked-in mask. Background transparency is required so the alpha silhouette can serve Android themed icons.
+
+Refinement — built-in imagegen, backend unspecified
+Clean up this exact corral launcher icon. Preserve the centered enclosure C and inner terminal chevron geometry and mint green color. Remove ALL stray pixels, speckles, edge grunge, glow, texture and ghost alpha outside and inside the symbol. Perfectly clean flat solid-color shapes with smooth antialiased edges only. Genuine fully transparent background, including the generous outer margin and internal negative spaces. Keep the entire symbol centered within the central 54 percent of the square canvas. No background tile, no shadow, no words. This is a production Android adaptive foreground and its alpha silhouette must be pristine for themed monochrome use.
