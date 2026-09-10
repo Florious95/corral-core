@@ -31,6 +31,11 @@ type wsMsg struct {
 	typ  websocket.MessageType
 	data []byte
 
+	// Internal only: zero is not L2; stale epochs are dropped before write.
+	level2Epoch uint64
+	// List admission stays live through queueing and the actual network write.
+	catalog *catalogWaiter
+
 	// close, when set, tells the writer to send a WebSocket close frame with
 	// the given code/reason after any already-queued message (used for auth
 	// rejection and unsupported-version: send the error/ack, then close).
