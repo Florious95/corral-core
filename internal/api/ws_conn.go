@@ -81,16 +81,17 @@ type wsConn struct {
 	overlayRows uint16
 
 	// send is the writer queue. Control frames use a blocking send (a reply
-	// must never be dropped); mirror deltas use a non-blocking send that drops
-	// on overflow (the next snapshot reconciles, requirement 004).
+	// must never be dropped); mirror deltas use a non-blocking send. Overflow
+	// aborts this connection so reconnect can restore a complete snapshot.
 	sendCh chan wsMsg
 
 	// closeReason 连接关闭原因（可观测健康记录，leader msg_1f0c3455fac0）：
 	// readLoop 读错误 / 客户端主动关 / 写超时 / 正常 EOF。teardown 日志带出，
 	// 用于「连接为什么断」溯源（重连假说 / 慢链路健康）。
-	closeReason        string
-	closeReasonMu      sync.Mutex
-	sendMu             sync.RWMutex
+	closeReason   string
+	closeReasonMu sync.Mutex
+	sendMu        sync.RWMutex
+	// Mirror loss reuses the catalog transport barrier, including writer checks.
 	catalogAbortOnce   sync.Once
 	catalogAborted     atomic.Bool
 	catalogCloseReason atomic.Value
@@ -110,6 +111,18 @@ type subscription struct {
 	ref    string
 	cancel context.CancelFunc
 	detach func()
+	// loss is independent from raw bytes so overflow remains observable even
+	// when the data channel already contains stale chunks or has closed.
+	loss <-chan error
+	// ready gates forwarding until the initial snapshot has been queued. The
+	// relay nevertheless starts immediately, so it owns loss cancellation while
+	// capture/encoding/queueing are still in flight.
+	ready     chan struct{}
+	readyOnce sync.Once
+	// Only the relay consumes loss. Initial capture/encode failures hand
+	// termination to it and wait for resource release before sending Error.
+	initialFailed chan struct{}
+	relayDone     chan struct{}
 	// restoreSize returns the pane to the geometry captured before this
 	// subscription reshaped it. Nil when the original geometry could not be read.
 	// restoreOnce guards it against double teardown (explicit unsubscribe racing
@@ -384,23 +397,23 @@ func (c *wsConn) sendBinary(data []byte) {
 }
 
 // sendMirror enqueues a binary mirror frame without blocking: a slow client
-// whose queue is full drops the delta, and the next snapshot reconciles
-// (requirement 004 — the tmux pane is the source of truth, not this queue).
+// whose queue is full must reconnect and replay a snapshot. Raw ANSI bytes
+// lost here cannot be reconstructed by later deltas.
 // 丢弃次数与队列峰值计入 c.s.sendQueue（常驻健康指标，「丢了多少数据」本就是健康度量）。
 func (c *wsConn) sendMirror(data []byte) {
 	c.sendMu.RLock()
-	defer c.sendMu.RUnlock()
 	if c.catalogAborted.Load() || c.ctx.Err() != nil {
+		c.sendMu.RUnlock()
 		return
 	}
 	select {
 	case c.sendCh <- wsMsg{typ: wsBinary, data: data}:
 		c.s.sendQueue.recordQueued(len(c.sendCh))
 		c.connMetrics.recordFramesSent()
+		c.sendMu.RUnlock()
 	default:
-		c.s.log.Debug("ws: dropping mirror delta for slow connection", "conn", c.id)
-		c.s.sendQueue.recordDrop()
-		c.connMetrics.recordDrop()
+		c.sendMu.RUnlock()
+		c.abortConnection("mirror_loss: ws_send_queue_overflow")
 	}
 }
 
@@ -568,6 +581,13 @@ func (c *wsConn) closeSubscriptions() {
 	}
 }
 
+// releaseRelayGate allows delta forwarding after the initial snapshot.
+func (sub *subscription) releaseRelayGate() {
+	if sub.ready != nil {
+		sub.readyOnce.Do(func() { close(sub.ready) })
+	}
+}
+
 // teardownSubscription releases one subscription's resources in a fixed order:
 // cancel the relay context, detach the pipe, then release the pane geometry.
 // It is the single teardown path shared by every exit route — explicit
@@ -576,8 +596,15 @@ func (c *wsConn) closeSubscriptions() {
 // of them alike (fix-host-pane-geometry-accounting 契约 2). restoreOnce makes
 // it idempotent if two routes race on the same subscription.
 func teardownSubscription(sub *subscription) {
-	sub.cancel()
-	sub.detach()
+	if sub.cancel != nil {
+		sub.cancel()
+	}
+	// Unblock a relay that is waiting for the initial snapshot; its context
+	// is already canceled so it cannot forward queued bytes on this path.
+	sub.releaseRelayGate()
+	if sub.detach != nil {
+		sub.detach()
+	}
 	sub.restoreOnce.Do(func() {
 		if sub.restoreSize != nil {
 			sub.restoreSize()
@@ -601,15 +628,21 @@ func (c *wsConn) subscribeCancel(ref string) bool {
 	return sub != nil
 }
 
-// relay drains a bridge delta stream and forwards each chunk as a binary
-// delta frame. On unexpected stream close (pane died or pipe displaced) it
+// relay watches loss even while the initial snapshot is pending, then forwards
+// deltas. Overflow aborts the connection without flushing old frames.
+// On unexpected stream close (pane died or pipe displaced) it
 // sendError so the client is not left frozen on the last frame, then tears
 // down the subscription so a later input on the same ref gets not_subscribed
 // instead of a silent no-op. Voluntary unsubscribe cancels ctx first and
 // stays silent (docs/protocol.md §4.2). The context is the subscription's
 // own; teardown cancels it when the connection closes.
 func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte) {
+	loss := sub.loss
+	ready := sub.ready
 	defer func() {
+		if sub.relayDone != nil {
+			defer close(sub.relayDone)
+		}
 		// Single teardown path (fix-host-pane-geometry-accounting 契约 2): the
 		// pane restore runs on relay stream end too, exactly like the explicit
 		// unsubscribe / connection close / server close routes. restoreOnce keeps
@@ -624,16 +657,96 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 		c.subsMu.Unlock()
 	}()
 	for {
+		if ready != nil {
+			select {
+			case <-ready:
+				if ctx.Err() != nil {
+					return
+				}
+				ready = nil
+			case cause, ok := <-loss:
+				if ok && ctx.Err() == nil {
+					c.abortConnection("mirror_loss: " + cause.Error())
+					return
+				}
+				loss = nil
+			case <-sub.initialFailed:
+				// Detach synchronizes with fanout publication and prevents new
+				// loss. Cancellation belongs to deferred teardown, after this
+				// sole consumer has accounted for the committed cause.
+				if sub.detach != nil {
+					sub.detach()
+				}
+				select {
+				case cause, ok := <-loss:
+					if ok && ctx.Err() == nil {
+						c.abortConnection("mirror_loss: " + cause.Error())
+					}
+				default:
+				}
+				return
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+		// Prefer a loss that raced with a data notification. This check plus
+		// the post-receive check below prevents already-buffered stale chunks
+		// from being actively drained after the loss boundary.
+		if loss != nil {
+			select {
+			case cause, ok := <-loss:
+				if ok && ctx.Err() == nil {
+					c.abortConnection("mirror_loss: " + cause.Error())
+					return
+				}
+				loss = nil
+			default:
+			}
+		}
 		select {
+		case cause, ok := <-loss:
+			if ok && ctx.Err() == nil {
+				c.abortConnection("mirror_loss: " + cause.Error())
+				return
+			}
+			loss = nil
 		case chunk, ok := <-ch:
 			if !ok {
+				// A loss closes the data channel too; consume its independent
+				// signal before preserving the displaced-pipe ErrorFrame path.
+				if loss != nil {
+					select {
+					case cause, lossOK := <-loss:
+						if lossOK && ctx.Err() == nil {
+							c.abortConnection("mirror_loss: " + cause.Error())
+							return
+						}
+						loss = nil
+					default:
+					}
+				}
 				// Unexpected close (pane gone, or the pipe was stolen): the
-				// client must see a control frame, not a frozen last snapshot.
+				// client must see a control frame, not a frozen last frame.
 				// Voluntary unsubscribe/teardown cancels ctx first, so that
 				// path stays silent as protocol §4.2 requires.
-				if ctx.Err() == nil {
+				if ctx.Err() == nil && !c.catalogAborted.Load() {
 					c.sendError(protocol.ErrCodeSessionNotFound, "mirror closed: pipe displaced or pane gone")
 				}
+				return
+			}
+			if loss != nil {
+				select {
+				case cause, lossOK := <-loss:
+					if lossOK && ctx.Err() == nil {
+						c.abortConnection("mirror_loss: " + cause.Error())
+						return
+					}
+					loss = nil
+				default:
+				}
+			}
+			if c.catalogAborted.Load() {
 				return
 			}
 			frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
@@ -692,12 +805,23 @@ func (c *wsConn) discardQueuedAndClose() {
 }
 
 func (c *wsConn) abortCatalog(reason string) {
+	c.abortConnection(reason)
+}
+
+// Both catalog failure and mirror loss invalidate the same transport. Cancel
+// blocked enqueuers before taking sendMu exclusively; ordinary close still flushes.
+func (c *wsConn) abortConnection(reason string) {
 	c.catalogAbortOnce.Do(func() {
 		c.catalogCloseReason.Store(reason)
 		c.catalogAborted.Store(true)
+		if reason == "mirror_loss: ws_send_queue_overflow" {
+			c.s.sendQueue.recordDrop()
+			c.connMetrics.recordDrop()
+		}
 		c.cancel()
+		c.writeStop()
 		c.s.scans.remove(c)
-		c.s.log.Warn("catalog: terminating connection", "conn", c.id, "reason", reason)
+		c.s.log.Warn("ws: terminating connection", "conn", c.id, "reason", reason)
 		c.discardQueuedAndClose()
 	})
 }
