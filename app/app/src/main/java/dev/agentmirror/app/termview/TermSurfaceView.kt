@@ -22,6 +22,7 @@ import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.Choreographer
@@ -160,6 +161,11 @@ class TermSurfaceView @JvmOverloads constructor(
     private val geomPaint = Paint().apply {
         isAntiAlias = false
         style = Paint.Style.FILL
+    }
+    private val roundedPath = Path()
+    private val roundedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.DEFAULT_BOLD
@@ -707,6 +713,31 @@ class TermSurfaceView @JvmOverloads constructor(
         cellH: Int,
         color: Int,
     ) {
+        val corner = BoxBlockGeometry.roundedCorner(cp, originX, originY, cellPx, cellH)
+        if (corner != null) {
+            val cx = corner.centerX
+            val cy = corner.centerY
+            val r = corner.radius
+            val arcX = cx + if (corner.right) r else -r
+            val arcY = cy + if (corner.down) r else -r
+            roundedPath.rewind()
+            roundedPath.moveTo(corner.horizontalEndX, cy)
+            roundedPath.lineTo(arcX, cy)
+            if (r > 0f) {
+                roundedPath.arcTo(
+                    arcX - r, arcY - r, arcX + r, arcY + r,
+                    if (corner.down) 270f else 90f,
+                    if (corner.right == corner.down) -90f else 90f,
+                    false,
+                )
+            }
+            // A zero-radius tiny cell still draws the correctly directed two arms.
+            roundedPath.lineTo(cx, corner.verticalEndY)
+            roundedPaint.strokeWidth = corner.strokeWidth
+            roundedPaint.color = color
+            canvas.drawPath(roundedPath, roundedPaint)
+            return
+        }
         for (fill in BoxBlockGeometry.fills(cp, originX, originY, cellPx, cellH)) {
             val a = fill.alpha
             geomPaint.color = if (a >= 255) color else (color and 0x00FFFFFF) or (a shl 24)
