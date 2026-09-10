@@ -29,7 +29,7 @@ import kotlin.math.pow
 /**
  * 终端自绘色板的取色入口（078 §2 / 080 / 083 §2 / 085 §1.5）。
  *
- * Scheme 的 16+fg/bg 来自当前槽的上游主题；[userBlockBg] 仍按外壳深浅取 APP 值。
+ * Scheme 的 16+fg/bg 与用户块配色均来自当前槽的上游主题，不取外壳的固定绿色。
  * [Light]/[Dark] 保留为目录损坏时的缺省回退，不是用户可选的「原厂绿」。
  *
  * 083 §2 触发保留：索引 0/16 背景→纸色、254/近白→userBlock、真彩背景亮度守卫。
@@ -213,15 +213,13 @@ object TermPalette {
     fun asTerminalPalette(dark: Boolean): TerminalPalette {
         val pal = of(dark)
         val app = if (dark) TerminalPaletteDark else TerminalPaletteLight
-        val colors = TermSchemeCatalog.colorsBySourceFile[pal.source]
-        if (colors == null) return if (dark) TerminalPaletteDark else TerminalPaletteLight
         return TerminalPalette(
             background = argbColor(pal.defaultBg),
             foreground = argbColor(pal.defaultFg),
-            userBlockBackground = app.userBlockBackground,
-            userBlockForeground = app.userBlockForeground,
-            cursor = argbColor(colors.cursor),
-            selection = colors.selection?.let { argbColor(it) } ?: app.selection,
+            userBlockBackground = argbColor(pal.userBlockBg),
+            userBlockForeground = argbColor(pal.defaultFg),
+            cursor = argbColor(pal.cursor ?: app.cursor.toArgb()),
+            selection = pal.selection?.let { argbColor(it) } ?: app.selection,
             ansi = (0..15).map { i -> argbColor(pal.ansi16[i] ?: pack(128, 128, 128)) },
         )
     }
@@ -407,11 +405,45 @@ object TermPalette {
         return slots.filter { it.ansiIndex in targets }
     }
 
+    /**
+     * 用户块是终端主题的语义表面，不是外壳的品牌色。只在 Scheme 装配时计算，
+     * 之后由既有的索引表/真彩缓存复用；不在逐格绘制中混色或计算对比度。
+     *
+     * 优先复用上游 selection（透明色先铺到主题纸色上）。selection 可能假定另一种
+     * 选中文字色，因此不能无条件当正文底：默认前景至少保留 4.5:1；若主题本身
+     * 不足 4.5:1，则不比原纸色更差，不擅改主题字色或 ANSI 调色板。
+     * 缺失、等于纸色或不可读时，从纸色朝字色混入最多 12%，逐步收窄到可读。
+     * 最后退回纸色而非固定绿。判据只读主题原色，深色主题放在浅槽也得到相同结果。
+     */
+    internal fun userBlockBackground(background: Int, foreground: Int, selection: Int?): Int {
+        val requiredContrast = min(4.5, contrast(foreground, background))
+        if (selection != null) {
+            val candidate = mixRgb(background, selection, selection ushr 24, 255)
+            if (candidate != background && contrast(foreground, candidate) >= requiredContrast) {
+                return candidate
+            }
+        }
+        for (percent in 12 downTo 1) {
+            val candidate = mixRgb(background, foreground, percent, 100)
+            if (candidate != background && contrast(foreground, candidate) >= requiredContrast) {
+                return candidate
+            }
+        }
+        return background
+    }
+
+    /** 不透明 sRGB 表面；整数舍入使装配、缓存与 Compose 导出得到完全相同的 ARGB。 */
+    private fun mixRgb(base: Int, tint: Int, amount: Int, scale: Int): Int {
+        fun channel(shift: Int): Int =
+            (((base ushr shift) and 0xFF) * (scale - amount) +
+                ((tint ushr shift) and 0xFF) * amount + scale / 2) / scale
+        return pack(channel(16), channel(8), channel(0))
+    }
+
     private fun assembleSlot(dark: Boolean, familyId: String, slot: String): Scheme {
         val family = resolveFamily(familyId, slot)
         val sourceFile = if (dark) family.darkSource else family.lightSource
         val colors = TermSchemeCatalog.colorsBySourceFile[sourceFile]
-        val app = if (dark) TerminalPaletteDark else TerminalPaletteLight
         if (colors == null || colors.ansi.size != 16) {
             DiagLog.record(
                 "term-theme",
@@ -422,7 +454,7 @@ object TermPalette {
         return Scheme(
             defaultBg = colors.background,
             defaultFg = colors.foreground,
-            userBlockBg = app.userBlockBackground.toArgb(),
+            userBlockBg = userBlockBackground(colors.background, colors.foreground, colors.selection),
             ansi16 = colors.ansi.mapIndexed { i, c -> i to c }.toMap(),
             source = colors.sourceFile,
             cursor = colors.cursor,
@@ -450,7 +482,7 @@ object TermPalette {
     private fun schemeFrom(p: TerminalPalette): Scheme = Scheme(
         defaultBg = p.background.toArgb(),
         defaultFg = p.foreground.toArgb(),
-        userBlockBg = p.userBlockBackground.toArgb(),
+        userBlockBg = userBlockBackground(p.background.toArgb(), p.foreground.toArgb(), p.selection.toArgb()),
         ansi16 = p.ansi.mapIndexed { i, c -> i to c.toArgb() }.toMap(),
         cursor = p.cursor.toArgb(),
         selection = p.selection.toArgb(),
