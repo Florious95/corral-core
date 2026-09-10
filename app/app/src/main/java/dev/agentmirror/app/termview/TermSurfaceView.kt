@@ -39,7 +39,7 @@ import dev.agentmirror.terminal.CharWidth
 import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
 import dev.agentmirror.terminal.TextStyle
-import java.io.File
+import java.io.Closeable
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -61,6 +61,8 @@ class TermSurfaceView @JvmOverloads constructor(
     defStyleAttr: Int = 0,
 ) : View(context, attrs, defStyleAttr) {
 
+    private val frameRequestCallback: () -> Unit = { requestFrameFromAnyThread() }
+
     /** 视口状态机；由上层注入（与内核同构，渲染/手势全部委托给它）。
      *  注入即接管其帧请求回调（缺陷①：增量流/滚动变化经 presenter 唤醒本 View），并立即
      *  用当前 [fontSizeSp] 实测一次字格尺寸（[applyFontMetrics]，供本 View 自己绘制用）。
@@ -68,10 +70,14 @@ class TermSurfaceView @JvmOverloads constructor(
      *  内部对 [TermViewPresenter.cellMetricsSeeded] 的判断：显式 seed 优先于 View 默认字号。 */
     var presenter: TermViewPresenter? = null
         set(value) {
-            field?.onFrameRequested = null // 换 presenter 时摘旧钩，避免旧实例继续唤醒
+            if (field === value) return
+            // An old View must not clear a callback already owned by its replacement.
+            field?.let { old ->
+                if (old.onFrameRequested === frameRequestCallback) old.onFrameRequested = null
+            }
             field = value
             if (value != null) {
-                value.onFrameRequested = { requestFrameFromAnyThread() }
+                value.onFrameRequested = frameRequestCallback
                 applyFontMetrics()
                 postFrame()
             }
@@ -84,6 +90,7 @@ class TermSurfaceView @JvmOverloads constructor(
      */
     var fontSizeSp: Float = SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP.toFloat()
         set(value) {
+            if (field == value) return
             field = value
             applyFontMetrics()
         }
@@ -251,7 +258,6 @@ class TermSurfaceView @JvmOverloads constructor(
             }
             lastDirtyRowsIn = dirtyRows
             p.beginFrame()
-            refreshBurst()
             invalidate()
             // 只经 Choreographer 请下一帧（跟 vsync），禁止在 onDraw 里 postFrame
             // 同步打满主线程——否则 WS 快照到不了，采集全是空屏。
@@ -312,9 +318,26 @@ class TermSurfaceView @JvmOverloads constructor(
         }
     }
 
+    private var drawControlSubscription: Closeable? = null
+    private val boxGeometryCache = BoxBlockGeometryCache()
+    private val viewportGeomStore by lazy { SharedPreferencesViewportGeomStore(context) }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        refreshDrawOpt()
+        watchDrawControls()
+    }
+
+    override fun onDetachedFromWindow() {
+        drawControlSubscription?.close()
+        drawControlSubscription = null
+        boxGeometryCache.clear()
+        super.onDetachedFromWindow()
+    }
+
+    private fun watchDrawControls() {
+        if (isAttachedToWindow && windowVisibility == VISIBLE && drawControlSubscription == null) {
+            drawControlSubscription = TermDrawControlWatch.subscribe(context) { postFrame() }
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -366,14 +389,16 @@ class TermSurfaceView @JvmOverloads constructor(
             "source=windowVisibility visibility=$visibility width=$width height=$height",
         )
         if (visibility != VISIBLE) {
+            drawControlSubscription?.close()
+            drawControlSubscription = null
             if (framePending) {
                 Choreographer.getInstance().removeFrameCallback(frameCallback)
                 framePending = false
             }
             return
         }
+        watchDrawControls()
         if (width <= 0 || height <= 0) return
-        refreshDrawOpt()
         presenter?.onRealViewportChanged(usableWidthPx(width), height)
         persistViewportGeom()
         postFrame()
@@ -382,7 +407,6 @@ class TermSurfaceView @JvmOverloads constructor(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val p = presenter ?: return super.onTouchEvent(event)
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) refreshBurst()
         val wasHeld = mouseHeld
         dispatchTermMouse(p, event)
         if (!wasHeld && !mouseHeld) {
@@ -432,7 +456,6 @@ class TermSurfaceView @JvmOverloads constructor(
     /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
     override fun onDraw(canvas: Canvas) {
         // 计时边界：本方法入口→出口。View 不是 SurfaceView，没有 lockCanvas/post。
-        refreshBurst()
         val t0 = System.nanoTime()
         super.onDraw(canvas)
         val tSuper = System.nanoTime()
@@ -713,15 +736,18 @@ class TermSurfaceView @JvmOverloads constructor(
         cellH: Int,
         color: Int,
     ) {
-        val corner = BoxBlockGeometry.roundedCorner(cp, originX, originY, cellPx, cellH)
+        // Cache geometry only; colour, antialiasing, position and frame cadence stay live.
+        val plan = if (TermDrawMeter.optEnabled) boxGeometryCache.get(cp, cellPx, cellH) else null
+        val corner = if (plan != null) plan.corner
+            else BoxBlockGeometry.roundedCorner(cp, 0, 0, cellPx, cellH)
         if (corner != null) {
-            val cx = corner.centerX
-            val cy = corner.centerY
+            val cx = originX + corner.centerX
+            val cy = originY + corner.centerY
             val r = corner.radius
             val arcX = cx + if (corner.right) r else -r
             val arcY = cy + if (corner.down) r else -r
             roundedPath.rewind()
-            roundedPath.moveTo(corner.horizontalEndX, cy)
+            roundedPath.moveTo(originX + corner.horizontalEndX, cy)
             roundedPath.lineTo(arcX, cy)
             if (r > 0f) {
                 roundedPath.arcTo(
@@ -732,21 +758,22 @@ class TermSurfaceView @JvmOverloads constructor(
                 )
             }
             // A zero-radius tiny cell still draws the correctly directed two arms.
-            roundedPath.lineTo(cx, corner.verticalEndY)
+            roundedPath.lineTo(cx, originY + corner.verticalEndY)
             roundedPaint.strokeWidth = corner.strokeWidth
             roundedPaint.color = color
             canvas.drawPath(roundedPath, roundedPaint)
             return
         }
-        for (fill in BoxBlockGeometry.fills(cp, originX, originY, cellPx, cellH)) {
+        val fills = plan?.fills ?: BoxBlockGeometry.fills(cp, 0, 0, cellPx, cellH)
+        for (fill in fills) {
             val a = fill.alpha
             geomPaint.color = if (a >= 255) color else (color and 0x00FFFFFF) or (a shl 24)
             val r = fill.rect
             canvas.drawRect(
-                r.left.toFloat(),
-                r.top.toFloat(),
-                r.right.toFloat(),
-                r.bottom.toFloat(),
+                (originX + r.left).toFloat(),
+                (originY + r.top).toFloat(),
+                (originX + r.right).toFloat(),
+                (originY + r.bottom).toFloat(),
                 geomPaint,
             )
             geomRectCount++
@@ -813,32 +840,6 @@ class TermSurfaceView @JvmOverloads constructor(
         )
     }
 
-    private fun refreshDrawOpt() {
-        val f = File(context.filesDir, TermDrawMeter.OPT_FILE)
-        if (!f.exists()) return
-        TermDrawMeter.optEnabled = try {
-            f.readText().trim() != "0"
-        } catch (_: Exception) {
-            TermDrawMeter.optEnabled
-        }
-    }
-
-    private fun refreshBurst() {
-        refreshDrawOpt()
-        val f = File(context.filesDir, TermDrawMeter.BURST_FILE)
-        if (!f.exists()) return
-        val n = try {
-            f.readText().trim().toIntOrNull() ?: 0
-        } catch (_: Exception) {
-            0
-        }
-        f.delete()
-        if (n > 0) {
-            TermDrawMeter.armBurst(n)
-            postFrame()
-        }
-    }
-
     private fun persistViewportGeom() {
         if (cellW <= 0 || cellH <= 0 || width <= 0 || height <= 0) return
         val rows = (height / cellH).coerceAtLeast(1)
@@ -853,7 +854,8 @@ class TermSurfaceView @JvmOverloads constructor(
             viewH = height,
             densityDpi = resources.displayMetrics.densityDpi,
         )
-        SharedPreferencesViewportGeomStore(context).save(geom)
+        // Compare the shared value, not a per-View lastSaved value (A -> B -> A).
+        if (viewportGeomStore.load() != geom) viewportGeomStore.save(geom)
         DiagLog.record(
             "term-geom",
             "source=persist rows=${geom.rows} cols=${geom.cols} cellW=${geom.cellW} " +
