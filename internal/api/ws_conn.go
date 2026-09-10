@@ -102,6 +102,7 @@ type wsConn struct {
 	controlEnqueue    func()
 	beforeWriterFrame func(wsMsg)
 	writeAttempt      func(wsMsg)
+	afterWriter       func()
 
 	// connMetrics 这条连接自己的计数（P0 修复：teardown 行必须报本连接的数，
 	// 不是进程累计——此前进程级累计被打在 per-conn 行上误导数轮）。
@@ -249,6 +250,11 @@ func (c *wsConn) writeFrame(m wsMsg) error {
 // also close the underlying connection: without that the peer's Read would
 // block forever on a dead writer (the read side alone cannot detect it).
 func (c *wsConn) writeLoop() {
+	defer func() {
+		if c.afterWriter != nil {
+			c.afterWriter()
+		}
+	}()
 	defer c.writeStop()
 	for {
 		select {
