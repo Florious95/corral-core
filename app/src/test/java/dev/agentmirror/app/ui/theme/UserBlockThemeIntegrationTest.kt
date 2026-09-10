@@ -35,7 +35,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class, manifest = Config.NONE)
 class UserBlockThemeIntegrationTest {
-    private val context: Context get() = RuntimeEnvironment.getApplication<Application>()
+    private val context: Context get() = RuntimeEnvironment.getApplication()
 
     @Before fun setUp() {
         TermPalette.resetBindingForTest()
@@ -73,9 +73,9 @@ class UserBlockThemeIntegrationTest {
     @Test fun existingSgrCellsRecolorWithoutFeedingOrRecreatingTheTerminal() {
         val terminal = TerminalEmulator(20, 4)
         terminal.feed("\u001B[48;5;254m \u001B[0m \u001B[48;2;228;228;228m \u001B[0m \u001B[42m ")
-        val indexed = terminal.cellAt(0, 0).style.bg
-        val rgb = terminal.cellAt(2, 0).style.bg
-        val green = terminal.cellAt(4, 0).style.bg
+        val indexed = terminal.snapshot().lines[0][0].style.bg
+        val rgb = terminal.snapshot().lines[0][2].style.bg
+        val green = terminal.snapshot().lines[0][4].style.bg
         assertEquals(TerminalColor.Indexed(254), indexed)
         assertEquals(TerminalColor.Rgb(228, 228, 228), rgb)
         assertEquals(TerminalColor.Indexed(2), green)
@@ -83,13 +83,13 @@ class UserBlockThemeIntegrationTest {
         val before = TermPalette.colorFor(indexed, true, true)
         assertEquals(before, TermPalette.colorFor(rgb, true, true))
         TermPalette.bindSelectionForTest("vesper", "vesper")
-        val after = TermPalette.colorFor(terminal.cellAt(0, 0).style.bg, true, true)
+        val after = TermPalette.colorFor(terminal.snapshot().lines[0][0].style.bg, true, true)
         assertNotEquals(before, after)
-        assertEquals(after, TermPalette.colorFor(terminal.cellAt(2, 0).style.bg, true, true))
+        assertEquals(after, TermPalette.colorFor(terminal.snapshot().lines[0][2].style.bg, true, true))
         assertEquals(TermPalette.of(true).ansi16[2], TermPalette.colorFor(green, true, true))
-        assertEquals(indexed, terminal.cellAt(0, 0).style.bg)
-        assertEquals(rgb, terminal.cellAt(2, 0).style.bg)
-        assertEquals(green, terminal.cellAt(4, 0).style.bg)
+        assertEquals(indexed, terminal.snapshot().lines[0][0].style.bg)
+        assertEquals(rgb, terminal.snapshot().lines[0][2].style.bg)
+        assertEquals(green, terminal.snapshot().lines[0][4].style.bg)
     }
 
     private fun clearPreferences() {
