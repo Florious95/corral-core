@@ -53,7 +53,9 @@ class ConnLevel2RecoveryTest {
     @Test fun heartbeatIsNotAFullSnapshotAcknowledgement() {
         val h = Harness()
         h.manager.subscribeLevel2("/a")
-        h.transport.deliverText(FrameCodec.encode(Level2HeartbeatFrame(workspace = "/a", seq = 1)))
+        h.transport.deliverText(
+            """{"v":1,"type":"level2_heartbeat","payload":{"workspace":"/a","seq":1}}""",
+        )
         h.clear()
         h.manager.onForegroundResume()
         assertTrue(h.frames().isEmpty())
@@ -61,7 +63,9 @@ class ConnLevel2RecoveryTest {
     @Test fun realSnapshotReleasesForegroundRefreshCoalescing() {
         val h = Harness()
         h.manager.subscribeLevel2("/a")
-        h.transport.deliverText(FrameCodec.encode(Level2Frame(workspace = "/a", seq = 1, sessions = emptyList())))
+        h.transport.deliverText(
+            """{"v":1,"type":"level2_frame","payload":{"workspace":"/a","seq":1,"sessions":[]}}""",
+        )
         h.clear()
         h.manager.onForegroundResume()
         assertEquals(1, h.frames().filterIsInstance<Level2SubscribeFrame>().size)
