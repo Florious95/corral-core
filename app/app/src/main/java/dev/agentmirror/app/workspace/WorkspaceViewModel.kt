@@ -146,29 +146,65 @@ class WorkspaceViewModel(
     val level2: StateFlow<L2UiState> = _level2.asStateFlow()
 
     /**
-     * 按工作区 cwd 记住上一次非空/已到达的二级快照（062 §四）。
+     * 按工作区 cwd 记住上一次完整二级快照（含服务端确认的空表）。
      * 离开不清这项；再进同一 cwd 立即画它，不先发空列表。
      */
     private val level2Cache = LinkedHashMap<String, L2UiState>()
 
     /**
-     * 每个工作区最近一次 level2 快照（含空表）。收藏对账用它，不靠重启、不写进
-     * [level2Cache]（空表仍跳过缓存以免再进先空白）。
+     * 每个工作区最近一次 level2 快照（含空表）。只由完整帧更新：既供收藏对账，
+     * 也区分“已经收到空表”与“导航占位、尚未收到首帧”。
      */
     private val lastLiveByWorkspace = LinkedHashMap<String, List<L2Entry>>()
+
+    // The server has ONE level-2 slot per connection. All owners use these helpers.
+    private var wireWorkspace: String? = null
+    private var level2Generation = 0L
+    private var favoriteGeneration = 0L
+    private var level2RequestedAtMs: Long? = null
+    private var level2RetryUsed = false
+    private var level2RefreshVisible = false
+    private var level2RefreshFailed = false
+
+    private fun requestWorkspace(cwd: String) {
+        wireWorkspace?.takeIf { it != cwd }?.let(::releaseWorkspace)
+        wireWorkspace = cwd
+        subscribeLevel2(cwd)
+    }
+
+    private fun releaseWorkspace(cwd: String) {
+        if (wireWorkspace != cwd) return
+        wireWorkspace = null
+        unsubscribeLevel2(cwd)
+    }
+
+    private fun requestVisibleLevel2(cwd: String, showRefresh: Boolean = false) {
+        level2RequestedAtMs = nowMs()
+        level2RefreshFailed = false
+        lastQuietDiagnosticStale = null
+        level2RefreshVisible = showRefresh || !lastLiveByWorkspace.containsKey(cwd)
+        _refreshing.value = level2RefreshVisible
+        if (_level2.value.banner != null) _level2.update { it.copy(banner = null) }
+        requestWorkspace(cwd)
+    }
+
+    private fun restoreVisibleLevel2() {
+        val cwd = subscribedWorkspace ?: return
+        if (wireWorkspace != cwd) requestVisibleLevel2(cwd)
+    }
 
     private var subscribedWorkspace: String? = null
     private var lastLevel2AtMs: Long = 0L
     private var lastQuietDiagnosticStale: Boolean? = null
 
     /**
-     * 旋转/配置变更重建时置位：下一次 [enterLevel1] / [enterLevel2] 不得再发 list
-     * 或重订阅（069：进入不含旋转，否则退化成高频扫描）。
+     * 旋转/配置变更的去重提示；只对仍持有快照和订阅的二级模型生效。
+     * 新建空模型不能用此提示跳过首帧恢复。
      */
     private var suppressEnterRefresh: Boolean = false
 
     /**
-     * Activity 从 savedInstanceState 重建时调用。下一次进菜单入口只恢复画面，不发刷新。
+     * Activity 从 savedInstanceState 重建时调用；是否可去重由实际快照/订阅决定。
      */
     fun suppressNextEnterRefresh() {
         suppressEnterRefresh = true
@@ -229,40 +265,29 @@ class WorkspaceViewModel(
     }
 
     /**
-     * 进入二级：立刻画该 cwd 的缓存（没有才空），再发一次 level2 订阅。
-     * 同 cwd 再进也重发订阅——服务端同一连接再订会 wakeLevel2（069），
-     * 不能只靠 0→1。旋转抑制时只画缓存，不重订。
-     * 不调用 [requestList]。不先清空再画。
-     *
-     * @post [level2] 为该 cwd 缓存，或首次进入时为空；未抑制时已发订阅
-     * @inv 有缓存时本方法不会把 [level2].sessions 写成空表
+     * Paint the cached snapshot, then request one fresh snapshot. Suppression is safe only
+     * for the SAME retained subscription with an actual snapshot (including an empty one).
+     * A new Activity/VM must recover its first snapshot even with savedInstanceState.
+     * The returned lease prevents a late onDispose from releasing a newer page's intent.
      */
-    fun enterLevel2(cwd: String) {
+    fun enterLevel2(cwd: String): Long {
+        val retained = subscribedWorkspace == cwd && wireWorkspace == cwd &&
+            lastLiveByWorkspace.containsKey(cwd) && favoriteFetchInFlight == null
+        cancelFavoriteFetch(restoreVisible = false)
+        val lease = ++level2Generation
         if (subscribedWorkspace != cwd) {
             subscribedWorkspace?.let { prev ->
                 rememberLevel2(prev, _level2.value)
-                if (!suppressEnterRefresh) {
-                    unsubscribeLevel2(prev)
-                }
+                releaseWorkspace(prev)
             }
             subscribedWorkspace = cwd
             lastLevel2AtMs = 0L
-            // 有缓存就立刻画旧列表；从未进过才允许空态。禁止先写空再写缓存。
             publishLevel2(level2Cache[cwd] ?: L2UiState())
         }
-        val painted = _level2.value.sessions.size
-        if (suppressEnterRefresh) {
-            DiagLog.record(
-                "refresh",
-                "enterLevel2 skipped subscribe suppress=true cwd=$cwd painted=$painted",
-            )
-            return
-        }
-        DiagLog.record(
-            "refresh",
-            "enterLevel2 subscribe cwd=$cwd painted=$painted cached=${level2Cache[cwd]?.sessions?.size ?: 0}",
-        )
-        subscribeLevel2(cwd)
+        if (suppressEnterRefresh && retained) return lease
+        level2RetryUsed = false
+        requestVisibleLevel2(cwd)
+        return lease
     }
 
     /**
@@ -290,20 +315,44 @@ class WorkspaceViewModel(
      * 离开二级：退订，**保留**该 cwd 缓存，不清空已发布的列表。
      * 再进同一工作区时 [enterLevel2] 直接画缓存。
      */
-    fun leaveLevel2() {
+    fun leaveLevel2(lease: Long? = null) {
+        if (lease != null && lease != level2Generation) return
         val ws = subscribedWorkspace ?: return
         rememberLevel2(ws, _level2.value)
         subscribedWorkspace = null
         lastLevel2AtMs = 0L
-        unsubscribeLevel2(ws)
+        level2RequestedAtMs = null
+        level2RefreshVisible = false
+        _refreshing.value = false
+        // Favorites may still be fetching this same workspace during a tab handoff.
+        if (favoriteFetchInFlight != ws) releaseWorkspace(ws)
     }
 
     /**
      * 心跳/帧超时检查（UI 带 now 调用，本 VM 不自起定时器）。
-     * 超时只改横幅，不清列表，不向服务端发帧。
+     * Established streams only update diagnostics. A missing requested snapshot gets at
+     * most ONE retry per entry/manual refresh; no polling and no cache clearing.
      */
     fun checkLevel2Quiet(now: Long = nowMs(), quietTimeoutMs: Long = 20_000L) {
         val ws = subscribedWorkspace ?: return
+        if (level2RefreshFailed) return
+        val requestedAt = level2RequestedAtMs
+        if (requestedAt != null) {
+            // Do not count background/favorite fetch time as a failed visible request.
+            if (wireWorkspace != ws || _uiState.value.connection != ConnectionUi.READY) return
+            if (now - requestedAt < 40_000L) return
+            if (!level2RetryUsed) {
+                level2RetryUsed = true
+                requestVisibleLevel2(ws, showRefresh = level2RefreshVisible)
+            } else {
+                level2RequestedAtMs = null
+                level2RefreshFailed = true
+                level2RefreshVisible = false
+                _refreshing.value = false
+                _level2.update { it.copy(banner = "会话列表更新失败，请下拉重试") }
+            }
+            return
+        }
         if (lastLevel2AtMs == 0L) return
         val quietFor = now - lastLevel2AtMs
         val stale = quietFor >= quietTimeoutMs
@@ -347,6 +396,14 @@ class WorkspaceViewModel(
             "refresh() refreshing_prev=$prev refreshing_next=true cached=${_uiState.value.workspaces.size}",
         )
         requestList()
+    }
+
+    /** Manual refresh of the visible directory, NOT an unrelated level-1 listing. */
+    fun refreshLevel2() {
+        val cwd = subscribedWorkspace ?: return
+        cancelFavoriteFetch(restoreVisible = false)
+        level2RetryUsed = false
+        requestVisibleLevel2(cwd, showRefresh = true)
     }
 
     fun toggleFavorite(entry: L2Entry) {
@@ -442,7 +499,8 @@ class WorkspaceViewModel(
         val src = viewMenuSource(sessionRef)
         val resolved = src.currentWorkspace
         val cwd = resolved.ifEmpty { workspaceHint.orEmpty() }
-        val already = cwd.isNotEmpty() && subscribedWorkspace == cwd
+        val already = cwd.isNotEmpty() && subscribedWorkspace == cwd &&
+            wireWorkspace == cwd && favoriteFetchInFlight == null
         val willSubscribe = cwd.isNotEmpty() && !already
         DiagLog.record(
             "session-live",
@@ -453,7 +511,11 @@ class WorkspaceViewModel(
                 "subscribed=${subscribedWorkspace ?: "<none>"} already=$already " +
                 "cache_sessions=${src.sessions.size} will_subscribe=$willSubscribe",
         )
-        if (!willSubscribe) return
+        if (!willSubscribe) {
+            // Session route takes over from the departing directory, without another scan.
+            if (already) ++level2Generation
+            return
+        }
         enterLevel2(cwd)
     }
 
@@ -503,7 +565,9 @@ class WorkspaceViewModel(
      * 进入收藏页：按**每个收藏项自己的工作区**各发一次 level2 订阅（串行，
      * 服务端每连接只绑一个 workspace）。不是下拉刷新，也不是周期轮询（061）。
      */
-    fun enterFavorites() {
+    fun enterFavorites(): Long {
+        cancelFavoriteFetch(restoreVisible = false)
+        val lease = ++favoriteGeneration
         val cwds = LinkedHashSet<String>()
         for (rec in _favorites.value) {
             if (rec.cwd.isNotEmpty()) cwds.add(rec.cwd)
@@ -522,22 +586,23 @@ class WorkspaceViewModel(
         )
         bumpFavoriteLive()
         pumpFavoriteFetch()
+        return lease
     }
 
-    /** 离开收藏页：停队列；退订正在飞的那一个（当前二级工作区除外）。 */
-    fun leaveFavorites() {
+    /** A stale favorites page cannot cancel a new favorites/directory owner. */
+    fun leaveFavorites(lease: Long? = null) {
+        if (lease != null && lease != favoriteGeneration) return
+        cancelFavoriteFetch(restoreVisible = true)
+    }
+
+    private fun cancelFavoriteFetch(restoreVisible: Boolean) {
+        ++favoriteGeneration
         favoriteFetchQueue.clear()
         val inflight = favoriteFetchInFlight
         favoriteFetchInFlight = null
         favoriteFetchStartedAtMs = 0L
-        if (inflight != null && inflight != subscribedWorkspace) {
-            unsubscribeLevel2(inflight)
-        }
-        DiagLog.record(
-            "favorite",
-            "leaveFavorites favorite_workspaces=$favoriteWorkspaceCount " +
-                "fetched_workspaces=${favoriteFetched.size} inflight=${inflight ?: "<none>"}",
-        )
+        if (inflight != null && inflight != subscribedWorkspace) releaseWorkspace(inflight)
+        if (restoreVisible && inflight != null) restoreVisibleLevel2()
     }
 
     /**
@@ -545,7 +610,6 @@ class WorkspaceViewModel(
      */
     fun checkFavoriteFetch(now: Long = nowMs(), timeoutMs: Long = 8_000L) {
         val inflight = favoriteFetchInFlight ?: return
-        if (favoriteFetchStartedAtMs == 0L) return
         val waited = now - favoriteFetchStartedAtMs
         if (waited < timeoutMs) return
         DiagLog.record(
@@ -553,7 +617,7 @@ class WorkspaceViewModel(
             "favoriteFetch timeout cwd=$inflight waited_ms=$waited timeout_ms=$timeoutMs " +
                 "favorite_workspaces=$favoriteWorkspaceCount fetched_workspaces=${favoriteFetched.size}",
         )
-        if (inflight != subscribedWorkspace) unsubscribeLevel2(inflight)
+        if (inflight != subscribedWorkspace) releaseWorkspace(inflight)
         favoriteFetchInFlight = null
         favoriteFetchStartedAtMs = 0L
         pumpFavoriteFetch()
@@ -561,7 +625,11 @@ class WorkspaceViewModel(
 
     private fun pumpFavoriteFetch() {
         if (favoriteFetchInFlight != null) return
-        val next = favoriteFetchQueue.removeFirstOrNull() ?: return
+        val next = favoriteFetchQueue.removeFirstOrNull()
+        if (next == null) {
+            restoreVisibleLevel2()
+            return
+        }
         favoriteFetchInFlight = next
         favoriteFetchStartedAtMs = nowMs()
         DiagLog.record(
@@ -569,7 +637,7 @@ class WorkspaceViewModel(
             "favoriteFetch start cwd=$next favorite_workspaces=$favoriteWorkspaceCount " +
                 "fetched_workspaces=${favoriteFetched.size} queue_left=${favoriteFetchQueue.size}",
         )
-        subscribeLevel2(next)
+        requestWorkspace(next)
     }
 
     private fun onFavoriteWorkspaceFetched(cwd: String) {
@@ -580,7 +648,7 @@ class WorkspaceViewModel(
             "favoriteFetch done cwd=$cwd favorite_workspaces=$favoriteWorkspaceCount " +
                 "fetched_workspaces=${favoriteFetched.size} queue_left=${favoriteFetchQueue.size}",
         )
-        if (cwd != subscribedWorkspace) unsubscribeLevel2(cwd)
+        if (cwd != subscribedWorkspace) releaseWorkspace(cwd)
         favoriteFetchInFlight = null
         favoriteFetchStartedAtMs = 0L
         pumpFavoriteFetch()
@@ -652,9 +720,21 @@ class WorkspaceViewModel(
     override fun onReconnect(attempt: Int, delayMs: Long) = Unit
 
     fun onConnectionStateChanged(state: ConnectionState) {
+        val wasReady = _uiState.value.connection == ConnectionUi.READY
         _uiState.update { it.copy(connection = state.toUi()) }
         if (state == ConnectionState.READY) {
-            subscribedWorkspace?.let { subscribeLevel2(it) }
+            if (!wasReady) level2RetryUsed = false
+            val favorite = favoriteFetchInFlight
+            if (favorite != null) {
+                favoriteFetchStartedAtMs = nowMs()
+                requestWorkspace(favorite)
+            } else {
+                subscribedWorkspace?.let { requestVisibleLevel2(it) }
+            }
+        } else {
+            level2RequestedAtMs = null
+            level2RefreshVisible = false
+            _refreshing.value = false
         }
     }
 
@@ -663,11 +743,11 @@ class WorkspaceViewModel(
     private fun applyListing(frame: ListingFrame) {
         // 新 listing 到达 = 刷新完成：复位刷新在途标记（进入/下拉刷共用语义）。
         val prev = _refreshing.value
-        _refreshing.value = false
+        if (!level2RefreshVisible) _refreshing.value = false
         DiagLog.record(
             "refresh",
             "applyListing seq=${frame.seq} workspaces=${frame.workspaces.size} " +
-                "refreshing_prev=$prev refreshing_next=false",
+                "refreshing_prev=$prev refreshing_next=${_refreshing.value}",
         )
         workspaceCounts.clear()
         for (w in frame.workspaces) {
@@ -697,7 +777,7 @@ class WorkspaceViewModel(
         val prevByRef = (level2Cache[frame.workspace]?.sessions ?: emptyList())
             .associate { it.ref to it.status }
         lastLiveByWorkspace[frame.workspace] = incoming
-        rememberLevel2(frame.workspace, next)
+        level2Cache[frame.workspace] = next
         bumpFavoriteLive()
         onFavoriteWorkspaceFetched(frame.workspace)
         val ws = subscribedWorkspace
@@ -714,14 +794,18 @@ class WorkspaceViewModel(
         )
         if (!publish) return
         lastLevel2AtMs = nowMs()
+        level2RefreshFailed = false
+        level2RequestedAtMs = null
+        level2RefreshVisible = false
+        lastQuietDiagnosticStale = null
         publishLevel2(next)
         // 074：转圈跟的是 listing 往返；二级首帧是 level2_frame。首帧到了就必须停转。
         _refreshing.value = false
     }
 
-    /** 记下该 cwd 最近一次快照。空表不覆盖已有缓存（避免「先空白」写进记忆）。 */
+    /** Never cache a navigation placeholder; a received empty snapshot is authoritative. */
     private fun rememberLevel2(cwd: String, state: L2UiState) {
-        if (state.sessions.isEmpty()) return
+        if (!lastLiveByWorkspace.containsKey(cwd)) return
         level2Cache[cwd] = state
     }
 
@@ -738,6 +822,8 @@ class WorkspaceViewModel(
             )
             return
         }
+        // A heartbeat carries no rows and cannot complete a pending snapshot request.
+        if (level2RefreshFailed || level2RequestedAtMs != null || !lastLiveByWorkspace.containsKey(ws)) return
         lastLevel2AtMs = nowMs()
         _level2.update { it.copy(seq = frame.seq, banner = null) }
     }
