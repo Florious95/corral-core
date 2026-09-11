@@ -16,8 +16,13 @@
 
 package dev.agentmirror.app.conn
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 /**
  * 控制帧载荷的密封基类：携带 type 判别符与必填字段校验。
@@ -602,6 +607,8 @@ data class PaneModeChangedFrame(
 data class Level2Frame(
     @SerialName("workspace") val workspace: String,
     @SerialName("seq") val seq: Long,
+    /** Go's empty session slice is encoded as JSON null; null is an authoritative empty snapshot. */
+    @Serializable(with = NullAsEmptySessionListSerializer::class)
     @SerialName("sessions") val sessions: List<Session>,
 ) : FramePayload {
     override val frameType: String get() = FrameType.LEVEL2_FRAME
@@ -610,6 +617,22 @@ data class Level2Frame(
         seq <= 0 -> "level2_frame seq must be >= 1"
         else -> null
     }
+}
+
+/**
+ * Accept the Go wire representation of an empty level2 snapshot without widening the
+ * protocol to accept omitted or malformed sessions fields.
+ */
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+internal object NullAsEmptySessionListSerializer : KSerializer<List<Session>> {
+    private val delegate = ListSerializer(Session.serializer())
+
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun serialize(encoder: Encoder, value: List<Session>) = delegate.serialize(encoder, value)
+
+    override fun deserialize(decoder: Decoder): List<Session> =
+        decoder.decodeNullableSerializableValue(delegate) ?: emptyList()
 }
 
 /**
