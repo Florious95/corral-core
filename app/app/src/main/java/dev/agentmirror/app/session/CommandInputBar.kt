@@ -238,7 +238,7 @@ fun CommandInputBar(
                 label = "sendForeground",
             )
             Surface(
-                onClick = { if (hasText) onSendText(value.text) },
+                onClick = { onSendText(value.text) },
                 shape = CircleShape,
                 color = sendBackground,
                 border = BorderStroke(1.dp, source.accent),

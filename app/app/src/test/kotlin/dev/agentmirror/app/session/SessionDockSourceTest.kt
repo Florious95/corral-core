@@ -100,7 +100,7 @@ class SessionDockSourceTest {
 
     @Test
     fun inputFocusExpandsAndRealTerminalTapOrSendCollapsesWithSourceTiming() {
-        var sent = ""
+        val sent = mutableListOf<String>()
         compose.mainClock.autoAdvance = false
         compose.setContent {
             var value by remember { mutableStateOf(TextFieldValue("")) }
@@ -118,7 +118,7 @@ class SessionDockSourceTest {
                         value = value,
                         onValueChange = { value = it },
                         onSendText = {
-                            sent = it
+                            sent += it
                             value = TextFieldValue("")
                             focusManager.clearFocus()
                         },
@@ -130,6 +130,10 @@ class SessionDockSourceTest {
             }
         }
         compose.waitForIdle()
+        compose.onNodeWithContentDescription("发送").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(""), sent)
+
         val collapsed = inputFieldHeight()
         assertEquals(32f, collapsed, 0.5f)
 
@@ -151,7 +155,7 @@ class SessionDockSourceTest {
         compose.onNodeWithContentDescription("发送").performClick()
         compose.mainClock.advanceTimeBy(SessionDockMotion.InputHeightMillis.toLong() + 1)
         compose.waitForIdle()
-        assertEquals("ls", sent)
+        assertEquals(listOf("", "ls"), sent)
         assertEquals(32f, inputFieldHeight(), 0.5f)
     }
 
