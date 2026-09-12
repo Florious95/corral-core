@@ -138,9 +138,9 @@ esac
 	// not the direct Go option, so the real e2e daemon path is covered here.
 	s := NewServer(Options{})
 	defer s.Close()
-	td, ok := s.discoverer.(tmuxDiscoverer)
+	td, ok := s.discoverer.(*indexedDiscoverer)
 	if !ok {
-		t.Fatalf("default discoverer type = %T, want tmuxDiscoverer", s.discoverer)
+		t.Fatalf("default discoverer type = %T, want *indexedDiscoverer", s.discoverer)
 	}
 	if !reflect.DeepEqual(td.socketDirs, []string{socketDir}) {
 		t.Fatalf("consumer socket dirs = %v, want only %q", td.socketDirs, socketDir)

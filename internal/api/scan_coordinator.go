@@ -3,7 +3,7 @@ package api
 // scan_coordinator.go owns catalog admission, freshness cutoffs and publication.
 // @contract
 // @pre NewServer initializes this coordinator before exposing the handler
-// @post at most one Discover+Sample worker and one coalesced pending generation
+// @post at most one host Discover+Sample worker and one coalesced pending host generation
 // @err scan failures retain last-good; deadline/queue overload terminates the affected transport
 // @inv no per-request goroutines; immutable catalog/snapshot/seq publish together; sends outside locks
 
@@ -33,6 +33,7 @@ type catalogWaiter struct {
 
 type catalogGeneration struct {
 	id         uint64
+	queued     time.Time
 	lists      []*catalogWaiter
 	l2         map[*wsConn]uint64
 	cold       int
@@ -43,6 +44,7 @@ type catalogGeneration struct {
 }
 
 type catalogResult struct {
+	started    time.Time
 	generation *catalogGeneration
 	catalog    *sessionCatalog
 	snapshot   *modelSnapshot
@@ -92,7 +94,7 @@ func (q *scanCoordinator) wake() {
 func (q *scanCoordinator) pendingLocked() *catalogGeneration {
 	if q.pending == nil {
 		q.generation++
-		q.pending = &catalogGeneration{id: q.generation, l2: make(map[*wsConn]uint64), done: make(chan struct{})}
+		q.pending = &catalogGeneration{id: q.generation, queued: time.Now(), l2: make(map[*wsConn]uint64), done: make(chan struct{})}
 	}
 	return q.pending
 }
@@ -132,6 +134,10 @@ func (q *scanCoordinator) list(c *wsConn, req uint32) {
 }
 
 func (q *scanCoordinator) level2(c *wsConn, epoch uint64) {
+	if q.s.workspaceScans != nil {
+		q.s.workspaceScans.subscribe(c, epoch)
+		return
+	}
 	q.mu.Lock()
 	if !q.closed && c.ctx.Err() == nil {
 		if q.active != nil {
@@ -147,6 +153,10 @@ func (q *scanCoordinator) level2(c *wsConn, epoch uint64) {
 }
 
 func (q *scanCoordinator) removeLevel2(c *wsConn) {
+	if q.s.workspaceScans != nil {
+		q.s.workspaceScans.remove(c)
+		return
+	}
 	q.mu.Lock()
 	if q.active != nil {
 		delete(q.active.l2, c)
@@ -183,6 +193,9 @@ func (q *scanCoordinator) removeLocked(c *wsConn) {
 	delete(q.clients, c)
 }
 func (q *scanCoordinator) remove(c *wsConn) {
+	if q.s.workspaceScans != nil {
+		q.s.workspaceScans.remove(c)
+	}
 	q.mu.Lock()
 	q.removeLocked(c)
 	q.mu.Unlock()
@@ -263,13 +276,25 @@ func (q *scanCoordinator) worker() {
 }
 
 func (q *scanCoordinator) scan(ctx context.Context, g *catalogGeneration) catalogResult {
-	result := catalogResult{generation: g}
+	result := catalogResult{generation: g, started: time.Now()}
+	var discoverTime, sampleTime time.Duration
+	defer func() {
+		q.s.log.Debug("catalog: refresh phases", "queue_ms", result.started.Sub(g.queued).Milliseconds(), "discover_ms", discoverTime.Milliseconds(), "sample_ms", sampleTime.Milliseconds(), "total_ms", time.Since(result.started).Milliseconds())
+	}()
 	model, err := q.s.discoverer.Discover(ctx)
+	discoverTime = time.Since(result.started)
 	if err != nil {
 		result.err = fmt.Errorf("api: discover: %w", err)
 		return result
 	}
-	observations, err := nodeprobe.SampleModel(ctx, model, q.s.nodeprobe)
+	var observations map[string]nodeprobe.Observation
+	sampleStarted := time.Now()
+	if q.s.inventorySamples != nil {
+		observations, err = q.s.inventorySamples.sample(ctx, model)
+	} else {
+		observations, err = nodeprobe.SampleModel(ctx, model, q.s.nodeprobe)
+	}
+	sampleTime = time.Since(sampleStarted)
 	if err != nil {
 		result.err = fmt.Errorf("api: nodeprobe: %w", err)
 		return result
@@ -328,6 +353,7 @@ func (q *scanCoordinator) finish(result catalogResult) {
 		}
 		s.catalog, s.snapshot, s.scanGeneration = result.catalog, result.snapshot, g.id
 		s.level2Projection = result.level2
+		s.pruneWorkspaceCatalogsLocked(result.started)
 	} else if s.seq == 0 && len(g.lists) > 0 {
 		// Empty compatibility Listing(1) establishes a wire baseline only.
 		// A subsequent successful catalog must delta from that empty baseline.
@@ -427,14 +453,17 @@ func (q *scanCoordinator) maintain(now time.Time) time.Time {
 		g := q.pending
 		q.pending = nil
 		q.active = g
-		// Capture current L2 epochs at this scan's cutoff, never at completion.
-		q.s.trackersMu.Lock()
-		for c := range q.s.trackers {
-			if epoch := c.currentLevel2Epoch(); epoch != 0 {
-				g.l2[c] = epoch
+		// Scoped L2 has an independent freshness cutoff and publisher. An old
+		// global result must never overwrite a newer workspace result.
+		if q.s.workspaceScans == nil {
+			q.s.trackersMu.Lock()
+			for c := range q.s.trackers {
+				if epoch := c.currentLevel2Epoch(); epoch != 0 {
+					g.l2[c] = epoch
+				}
 			}
+			q.s.trackersMu.Unlock()
 		}
-		q.s.trackersMu.Unlock()
 		q.jobs <- g // capacity 1, only when the preceding worker result was consumed
 	}
 	q.mu.Unlock()
@@ -478,7 +507,7 @@ func (q *scanCoordinator) loop() {
 		} else if nextList.IsZero() {
 			nextList = now.Add(q.s.listInterval)
 		}
-		if q.s.countLevel2() == 0 {
+		if q.s.workspaceScans != nil || q.s.countLevel2() == 0 {
 			nextL2 = time.Time{}
 		} else if nextL2.IsZero() {
 			nextL2 = now.Add(q.s.level2Interval)
@@ -559,6 +588,11 @@ func (q *scanCoordinator) close() {
 			affected[w.c] = true
 		}
 		for c := range g.l2 {
+			affected[c] = true
+		}
+	}
+	if q.s.workspaceScans != nil {
+		for _, c := range q.s.workspaceScans.waitingConnections() {
 			affected[c] = true
 		}
 	}

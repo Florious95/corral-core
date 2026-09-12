@@ -1,0 +1,56 @@
+name: Workspace refresh verification
+
+on:
+  push:
+    branches: ['perf/workspace-refresh-20260912']
+  pull_request:
+    paths:
+      - 'internal/api/**'
+      - 'internal/discovery/**'
+      - 'internal/nodeprobe/**'
+      - 'scripts/workspace-refresh/**'
+      - '.github/workflows/workspace-refresh.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-verification-kit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Prepare real dependencies (no deployment or host access)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verification-kit/runtime
+          sudo apt-get update
+          sudo apt-get install -y tmux
+          go mod download
+          git rev-parse HEAD > verification-kit/source-commit.txt
+          git archive --format=tar HEAD | gzip > verification-kit/source.tar.gz
+          go version > verification-kit/go-version.txt
+          tmux -V > verification-kit/tmux-version.txt
+          tar -czf verification-kit/go-toolchain.tar.gz -C "$(go env GOROOT)" .
+          tar -czf verification-kit/go-modules.tar.gz -C "$(go env GOPATH)/pkg/mod" .
+          cp "$(command -v tmux)" verification-kit/runtime/tmux
+          ldd "$(command -v tmux)" > verification-kit/tmux-libraries.txt
+          for path in /usr/lib/x86_64-linux-gnu/libutempter.so.0 /lib/x86_64-linux-gnu/libutempter.so.0; do
+            if [ -e "$path" ]; then cp -L "$path" verification-kit/runtime/; break; fi
+          done
+          (cd verification-kit && sha256sum source.tar.gz go-toolchain.tar.gz go-modules.tar.gz runtime/tmux > SHA256SUMS)
+      - name: Preserve verification inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-refresh-kit-${{ github.sha }}
+          path: verification-kit/
+          retention-days: 90
+          if-no-files-found: error

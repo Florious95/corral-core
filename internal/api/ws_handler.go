@@ -103,7 +103,9 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// Ensure the catalog is populated before resolving the ref, so a client
 	// that subscribes immediately after auth (before the listing loop's first
 	// tick) can still address the pane it was just shown.
-	c.s.ensureInitialScan(c.ctx)
+	if c.s.catalogEntry(s.Ref) == nil {
+		c.s.ensureInitialScan(c.ctx)
+	}
 
 	br, _, ok := c.resolvePane(s.Ref)
 	if !ok {
