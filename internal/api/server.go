@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/discovery"
 	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/overlay"
 	"github.com/agentmirror/agentmirror/internal/protocol"
@@ -57,6 +58,12 @@ type Server struct {
 	// catalog and snapshot are one immutable publication under snapMu.
 	catalog *sessionCatalog
 	scans   *scanCoordinator
+
+	// Scoped subscriptions have their own bounded queue. Routing overlays are
+	// guarded by snapMu and never advance the global listing sequence.
+	workspaceScans    *workspaceCoordinator
+	catalogStarted    time.Time
+	workspaceCatalogs map[string]workspaceCatalog
 
 	// paneGeoms holds the pane-level original-geometry singleton per ref
 	// (fix-host-pane-geometry-accounting). The original geometry is recorded by
@@ -161,7 +168,10 @@ func NewServer(opts Options) *Server {
 		// Copy the explicit scope (or the e2e-only env bridge) so a later
 		// mutation cannot widen a running server's isolation boundary.
 		socketDirs := resolvedDiscoverySocketDirs(opts.DiscoverySocketDirs)
-		s.discoverer = tmuxDiscoverer{logger: log, socketDirs: socketDirs}
+		s.discoverer = &indexedDiscoverer{
+			tmuxDiscoverer: tmuxDiscoverer{logger: log, socketDirs: socketDirs},
+			index:          discovery.NewWorkspaceIndex(),
+		}
 	}
 	if s.listInterval <= 0 {
 		s.listInterval = defaultListInterval
@@ -196,6 +206,9 @@ func NewServer(opts Options) *Server {
 	// 不再启动 overlayLoop。opts.OverlayCapturer 若注入也只保留字段，不被调用。
 	s.overlay = opts.OverlayCapturer
 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
+	if scoped, ok := s.discoverer.(WorkspaceDiscoverer); ok {
+		s.workspaceScans = newWorkspaceCoordinator(s, scoped)
+	}
 	s.scans = newScanCoordinator(s)
 	return s
 }
@@ -214,6 +227,9 @@ func NewServer(opts Options) *Server {
 // @inv 幂等：重复调用安全；只终结仍等待目录结果的连接
 func (s *Server) Close() {
 	s.scans.close()
+	if s.workspaceScans != nil {
+		<-s.workspaceScans.done
+	}
 	if s.overlay != nil {
 		s.overlay.Stop()
 	}
@@ -369,9 +385,12 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	s.serveUpload(w, r)
 }
 
-// catalogEntry reads the same published generation as currentSnapshot.
+// catalogEntry resolves fresh scoped refs before falling back to the host catalog.
 func (s *Server) catalogEntry(ref string) *sessionEntry {
 	s.snapMu.RLock()
 	defer s.snapMu.RUnlock()
+	if entry, authoritative := s.scopedCatalogEntryLocked(ref); authoritative {
+		return entry
+	}
 	return s.catalog.entry(ref)
 }

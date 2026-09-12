@@ -1,0 +1,12 @@
+=== RUN   TestWorkspaceIndexManyToManyAndDetachedRoutes
+--- PASS: TestWorkspaceIndexManyToManyAndDetachedRoutes (0.00s)
+=== RUN   TestWorkspaceIndexOmittedSlowSocketIsNotDeletion
+--- PASS: TestWorkspaceIndexOmittedSlowSocketIsNotDeletion (0.00s)
+=== RUN   TestWorkspaceIndexMoveAndNewWorkspaceReplaceSocketRoutes
+--- PASS: TestWorkspaceIndexMoveAndNewWorkspaceReplaceSocketRoutes (0.00s)
+=== RUN   TestWorkspaceIndexReadyRequiresActualInventory
+--- PASS: TestWorkspaceIndexReadyRequiresActualInventory (0.00s)
+=== RUN   TestWorkspaceIndexConcurrentReadersAndPublisher
+--- PASS: TestWorkspaceIndexConcurrentReadersAndPublisher (0.01s)
+PASS
+ok  	command-line-arguments	1.019s
