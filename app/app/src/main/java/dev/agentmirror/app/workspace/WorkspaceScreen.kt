@@ -94,6 +94,7 @@ fun WorkspaceScreen(
     onBackToList: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onOpenSettings: () -> Unit,
     onOpenSession: (ref: String, name: String) -> Unit = { _, _ -> },
+    isActive: Boolean = true,
 ) {
     val state by viewModel.uiState.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
@@ -103,7 +104,8 @@ fun WorkspaceScreen(
 
     // 进入即刷（069）：一级发 list，二级由 enterLevel2 重订。键是菜单身份，不是滚动。
     // 旋转重建走 suppressNextEnterRefresh，本拍不发 list。下拉见 onRefresh。
-    LaunchedEffect(selectedWorkspaceCwd) {
+    LaunchedEffect(selectedWorkspaceCwd, isActive) {
+        if (!isActive) return@LaunchedEffect
         if (selectedWorkspaceCwd == null) {
             viewModel.enterLevel1()
         } else if (!viewModel.shouldSuppressEnterRefresh()) {
@@ -140,24 +142,30 @@ fun WorkspaceScreen(
         // ViewModel 复位。两级的公共容器（一级/二级都允许下拉刷）。
         PullToRefreshBox(
             isRefreshing = refreshing,
-            onRefresh = { viewModel.refresh() },
+            onRefresh = {
+                if (isActive) {
+                    if (selectedWorkspaceCwd == null) viewModel.refresh()
+                    else viewModel.refreshLevel2()
+                }
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("workspace-pull-refresh"),
         ) {
             val level2Cwd = selectedWorkspaceCwd
             if (level2Cwd != null) {
-                DisposableEffect(level2Cwd) {
-                    viewModel.enterLevel2(level2Cwd)
+                DisposableEffect(viewModel, level2Cwd, isActive) {
+                    val lease = if (isActive) viewModel.enterLevel2(level2Cwd) else null
                     onDispose {
                         // 旋转销毁组合不是离开菜单：退订会逼新组合再订，撞 069 经济红线。
                         // 进会话页时 ThreePane 离屏，但二级订阅必须留下给顶栏灯（083 §10）。
-                        if (activity?.isChangingConfigurations != true && !retainLevel2OnDispose()) {
-                            viewModel.leaveLevel2()
+                        if (lease != null && activity?.isChangingConfigurations != true && !retainLevel2OnDispose()) {
+                            viewModel.leaveLevel2(lease)
                         }
                     }
                 }
-                LaunchedEffect(level2Cwd) {
+                LaunchedEffect(viewModel, level2Cwd, isActive) {
+                    if (!isActive) return@LaunchedEffect
                     while (true) {
                         kotlinx.coroutines.delay(1_000)
                         viewModel.checkLevel2Quiet()
@@ -182,7 +190,9 @@ fun WorkspaceScreen(
                                 .fillMaxWidth()
                                 .statusBarsPadding(),
                             connectionPath = readyPath,
-                            connectionBanner = reconnectBanner,
+                            connectionBanner = reconnectBanner ?: level2.banner?.takeIf {
+                                it == "会话列表更新失败，请下拉重试"
+                            },
                         )
                     }
                 }

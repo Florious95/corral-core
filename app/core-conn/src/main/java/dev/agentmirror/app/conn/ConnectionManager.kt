@@ -111,7 +111,7 @@ class ConnectionManager(
     /** 活跃订阅簿记：ref → (rows, cols)，重连后重放。 */
     private val activeSubscriptions = LinkedHashMap<String, Pair<Int, Int>>()
 
-    /** 二级订阅簿记：workspace cwd；READY / 重连后重发 level2_subscribe。 */
+    /** Single server slot: at most the latest workspace is replayed on READY/resume. */
     private val activeLevel2 = LinkedHashSet<String>()
 
     /** 悬浮窗抓屏流应订的 socket；null = 未订。READY / 重连后重放。 */
@@ -128,6 +128,25 @@ class ConnectionManager(
     /** 主动刷新请求尚未收到对应快照；重复前台边沿在途时合并。 */
     private var listRefreshInFlight: Boolean = false
     private val level2RefreshInFlight = LinkedHashSet<String>()
+    private var listRefreshDeadlineMs = 0L
+    private var level2RefreshDeadlineMs = 0L
+
+    private fun markListRefresh() {
+        listRefreshInFlight = true
+        listRefreshDeadlineMs = clock.nowMs() + 40_000L
+    }
+
+    private fun markLevel2Refresh(workspace: String) {
+        level2RefreshInFlight.add(workspace)
+        level2RefreshDeadlineMs = clock.nowMs() + 40_000L
+    }
+
+    private fun expireRefreshes() {
+        // Edge-triggered expiry only: this never polls or rebuilds a healthy socket.
+        val now = clock.nowMs()
+        if (now >= listRefreshDeadlineMs) listRefreshInFlight = false
+        if (now >= level2RefreshDeadlineMs) level2RefreshInFlight.clear()
+    }
 
     /** 退避尝试计数；成功连接后重置。 */
     private var attempt = 0
@@ -289,6 +308,7 @@ class ConnectionManager(
      * @inv no socket is rebuilt while READY; active subscription intent is unchanged
      */
     fun onForegroundResume() {
+        expireRefreshes()
         ConnDiag.record(
             "ws",
             "foreground_resume state=$state list_in_flight=$listRefreshInFlight " +
@@ -306,7 +326,7 @@ class ConnectionManager(
                 for (workspace in activeLevel2) {
                     if (workspace in level2RefreshInFlight) continue
                     if (conn.send(Level2SubscribeFrame(workspace = workspace))) {
-                        level2RefreshInFlight.add(workspace)
+                        markLevel2Refresh(workspace)
                     }
                 }
             }
@@ -484,17 +504,21 @@ class ConnectionManager(
      */
     fun subscribeLevel2(workspace: String): Boolean {
         if (state == ConnectionState.STOPPED) return false
+        // A later subscribe replaces the old slot, it does not add another server stream.
+        activeLevel2.clear()
+        level2RefreshInFlight.clear()
         activeLevel2.add(workspace)
         val conn = connection ?: return true
         if (!conn.isReady) return true
         val ok = conn.send(Level2SubscribeFrame(workspace = workspace))
-        if (ok) level2RefreshInFlight.add(workspace)
+        if (ok) markLevel2Refresh(workspace)
         return ok
     }
 
     /** 二级退订：离开二级时发 [Level2UnsubscribeFrame]，并移出重放簿记。幂等。 */
     fun unsubscribeLevel2(workspace: String): Boolean {
-        activeLevel2.remove(workspace)
+        // Server unsubscribe closes the entire slot; never send a stale owner's cleanup.
+        if (!activeLevel2.remove(workspace)) return true
         level2RefreshInFlight.remove(workspace)
         val conn = connection ?: return true
         if (!conn.isReady) return true
@@ -545,7 +569,7 @@ class ConnectionManager(
         val conn = connection ?: return false
         if (!conn.isReady) return false
         val ok = conn.send(ListFrame(reqId = nextReqId++))
-        if (ok) listRefreshInFlight = true
+        if (ok) markListRefresh()
         return ok
     }
 
@@ -723,7 +747,7 @@ class ConnectionManager(
                     listener?.onFrame(frame)
                 }
                 is Level2HeartbeatFrame -> {
-                    level2RefreshInFlight.remove(frame.workspace)
+                    // A heartbeat contains no snapshot; it cannot acknowledge a refresh.
                     listener?.onFrame(frame)
                 }
                 is InputAckFrame -> resolveInput(frame)
@@ -761,6 +785,9 @@ class ConnectionManager(
         }
 
         override fun onClosed(permanent: Boolean, reason: String) {
+            listRefreshInFlight = false
+            level2RefreshInFlight.clear()
+            lastSeenSeq = null
             if (permanent) {
                 failAllPending("connection rejected/closed: $reason")
                 connection = null
@@ -776,7 +803,7 @@ class ConnectionManager(
     private fun sendList(): Boolean {
         val conn = connection ?: return false
         val ok = conn.send(ListFrame(reqId = nextReqId++))
-        if (ok) listRefreshInFlight = true
+        if (ok) markListRefresh()
         return ok
     }
 
@@ -813,7 +840,7 @@ class ConnectionManager(
         }
         for (workspace in activeLevel2) {
             if (conn.send(Level2SubscribeFrame(workspace = workspace))) {
-                level2RefreshInFlight.add(workspace)
+                markLevel2Refresh(workspace)
             }
         }
         overlayWantedSocket?.let {
