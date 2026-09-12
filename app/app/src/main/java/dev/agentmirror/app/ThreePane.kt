@@ -144,11 +144,13 @@ internal fun ThreePaneHome(
             when (ThreePane.entries[page]) {
                 ThreePane.Favorites -> FavoritesPane(
                     viewModel = workspaceViewModel,
+                    isActive = navState.homePane == ThreePane.Favorites && navState.activeSession == null,
                     connectionPath = ServiceWire.connectionPath(),
                     onOpenSession = { ref, name -> navState.openSession(ref, name) },
                 )
                 ThreePane.Sessions -> WorkspaceScreen(
                     viewModel = workspaceViewModel,
+                    isActive = navState.homePane == ThreePane.Sessions && navState.activeSession == null,
                     selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
                     connectionPath = ServiceWire.connectionPath(),
                     retainLevel2OnDispose = { navState.activeSession != null },
@@ -182,6 +184,7 @@ internal fun ThreePaneHome(
 @Composable
 private fun FavoritesPane(
     viewModel: WorkspaceViewModel,
+    isActive: Boolean,
     connectionPath: ConnectionPath?,
     onOpenSession: (ref: String, name: String) -> Unit,
 ) {
@@ -193,11 +196,12 @@ private fun FavoritesPane(
     val rows = remember(favorites, liveGen) {
         viewModel.favoriteRows()
     }
-    DisposableEffect(Unit) {
-        viewModel.enterFavorites()
-        onDispose { viewModel.leaveFavorites() }
+    DisposableEffect(viewModel, isActive) {
+        val lease = if (isActive) viewModel.enterFavorites() else null
+        onDispose { if (lease != null) viewModel.leaveFavorites(lease) }
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(viewModel, isActive) {
+        if (!isActive) return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(1_000)
             viewModel.checkFavoriteFetch()
