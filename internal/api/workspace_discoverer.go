@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"time"
 
 	"github.com/agentmirror/agentmirror/internal/discovery"
 )
@@ -23,7 +24,7 @@ type indexedDiscoverer struct {
 }
 
 func (d *indexedDiscoverer) Discover(ctx context.Context) (*discovery.Model, error) {
-	model, err := d.tmuxDiscoverer.Discover(ctx)
+	model, err := discovery.DiscoverIndexed(ctx, d.logger, d.socketDirs, d.index)
 	if err != nil {
 		return nil, err
 	}
@@ -38,20 +39,23 @@ func (d *indexedDiscoverer) Discover(ctx context.Context) (*discovery.Model, err
 	}
 	// Publish routing before the caller starts the expensive global status
 	// sampling. Unrelated sampler failures cannot hide a healthy workspace.
-	d.index.Observe(model, removed)
+	d.index.Observe(&discovery.Model{}, removed)
 	return model, nil
 }
 
 func (d *indexedDiscoverer) DiscoverWorkspace(ctx context.Context, cwd string) (*discovery.Model, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-d.index.Ready():
-	}
-	model, err := discovery.DiscoverSockets(ctx, d.logger, d.index.Sockets(cwd))
+	sockets, err := d.index.WaitSockets(ctx, cwd)
 	if err != nil {
 		return nil, err
 	}
+	started := time.Now()
+	model, err := discovery.DiscoverSockets(ctx, d.logger, sockets)
+	if err != nil {
+		return nil, err
+	}
+	// Enumeration sees all workspaces on these shared sockets. Publish their
+	// fresh routes too, so discovering B during an A refresh is not discarded.
+	d.index.ObservePartial(model, started)
 	out := &discovery.Model{}
 	if ws := model.Workspace(cwd); ws != nil {
 		out.Workspaces = []discovery.Workspace{*ws}

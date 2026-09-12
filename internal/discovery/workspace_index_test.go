@@ -1,9 +1,11 @@
 package discovery
 
 import (
+	"context"
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 func indexedModel(panes ...Pane) *Model { return buildModel(panes) }
@@ -84,4 +86,37 @@ func TestWorkspaceIndexConcurrentReadersAndPublisher(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestWorkspaceIndexPartialRouteDoesNotClaimUnknownWorkspaceEmpty(t *testing.T) {
+	x := NewWorkspaceIndex()
+	x.ObservePartial(indexedModel(Pane{Socket: "/s/1", CWD: "/A"}), time.Now())
+	routes, err := x.WaitSockets(context.Background(), "/A")
+	if err != nil || len(routes) != 1 {
+		t.Fatal(routes, err)
+	}
+	select {
+	case <-x.Ready():
+		t.Fatal("partial enumeration marked whole host ready")
+	default:
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := x.WaitSockets(ctx, "/B"); err == nil {
+		t.Fatal("unknown route became authoritative empty before inventory completed")
+	}
+}
+func TestWorkspaceIndexOldEnumerationCannotRevokeScopedRoutesOrResurrectDeletedSocket(t *testing.T) {
+	x := NewWorkspaceIndex()
+	old := time.Now().Add(-time.Second)
+	x.ObservePartial(indexedModel(Pane{Socket: "/s/1", CWD: "/B"}), time.Now())
+	x.ObservePartial(indexedModel(Pane{Socket: "/s/1", CWD: "/A"}), old)
+	if len(x.Sockets("/B")) != 1 || len(x.Sockets("/A")) != 0 {
+		t.Fatal("older enumeration replaced fresh route")
+	}
+	x.Observe(&Model{}, []string{"/s/1"})
+	x.ObservePartial(indexedModel(Pane{Socket: "/s/1", CWD: "/A"}), old)
+	if len(x.KnownSockets()) != 0 {
+		t.Fatal("older enumeration resurrected removed socket")
+	}
 }

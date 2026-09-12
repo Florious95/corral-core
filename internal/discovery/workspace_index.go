@@ -1,8 +1,10 @@
 package discovery
 
 import (
+	"context"
 	"sort"
 	"sync"
+	"time"
 )
 
 // WorkspaceIndex caches routing, never session rows or observations. A socket
@@ -11,11 +13,14 @@ import (
 // unreachable servers keep their routes until a fresh query or filesystem
 // inventory can establish absence. Callers must still query the routed sockets.
 type WorkspaceIndex struct {
-	mu        sync.RWMutex
-	bySocket  map[string]map[string]struct{}
-	byCWD     map[string]map[string]struct{}
-	ready     chan struct{}
-	readyOnce sync.Once
+	mu          sync.RWMutex
+	bySocket    map[string]map[string]struct{}
+	byCWD       map[string]map[string]struct{}
+	ready       chan struct{}
+	readyOnce   sync.Once
+	changed     chan struct{}
+	initialized bool
+	observed    map[string]time.Time
 }
 
 func NewWorkspaceIndex() *WorkspaceIndex {
@@ -23,6 +28,8 @@ func NewWorkspaceIndex() *WorkspaceIndex {
 		bySocket: make(map[string]map[string]struct{}),
 		byCWD:    make(map[string]map[string]struct{}),
 		ready:    make(chan struct{}),
+		changed:  make(chan struct{}),
+		observed: make(map[string]time.Time),
 	}
 }
 
@@ -34,6 +41,16 @@ func (x *WorkspaceIndex) Ready() <-chan struct{} { return x.ready }
 // contain sockets proven absent, not sockets that timed out or failed sampling.
 // A failed discovery must not call Observe at all.
 func (x *WorkspaceIndex) Observe(model *Model, removed []string) {
+	x.observe(model, removed, true, time.Now())
+}
+
+// ObservePartial releases a newly known route while unrelated socket queries
+// are still running. It does not establish an authoritative empty host index.
+func (x *WorkspaceIndex) ObservePartial(model *Model, started time.Time) {
+	x.observe(model, nil, false, started)
+}
+
+func (x *WorkspaceIndex) observe(model *Model, removed []string, complete bool, started time.Time) {
 	if model == nil {
 		return
 	}
@@ -58,9 +75,17 @@ func (x *WorkspaceIndex) Observe(model *Model, removed []string) {
 		delete(x.bySocket, socket)
 	}
 	for _, socket := range removed {
+		if x.observed[socket].After(started) {
+			continue
+		}
+		x.observed[socket] = started
 		forget(socket)
 	}
 	for socket, cwds := range next {
+		if x.observed[socket].After(started) {
+			continue
+		}
+		x.observed[socket] = started
 		forget(socket)
 		x.bySocket[socket] = cwds
 		for cwd := range cwds {
@@ -70,7 +95,36 @@ func (x *WorkspaceIndex) Observe(model *Model, removed []string) {
 			x.byCWD[cwd][socket] = struct{}{}
 		}
 	}
-	x.readyOnce.Do(func() { close(x.ready) })
+	for socket, when := range x.observed {
+		if x.bySocket[socket] == nil && time.Since(when) > time.Minute {
+			delete(x.observed, socket)
+		}
+	}
+	close(x.changed)
+	x.changed = make(chan struct{})
+	if complete {
+		x.initialized = true
+		x.readyOnce.Do(func() { close(x.ready) })
+	}
+}
+
+// WaitSockets waits only until this workspace is routed or initial discovery
+// has actually completed. Healthy cold workspaces need not await slow peers.
+func (x *WorkspaceIndex) WaitSockets(ctx context.Context, cwd string) ([]string, error) {
+	for {
+		x.mu.RLock()
+		ready := len(x.byCWD[cwd]) > 0 || x.initialized
+		changed := x.changed
+		x.mu.RUnlock()
+		if ready {
+			return x.Sockets(cwd), nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-changed:
+		}
+	}
 }
 
 // Sockets is a detached, deterministic list. It is never widened to all host

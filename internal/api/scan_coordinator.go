@@ -33,6 +33,7 @@ type catalogWaiter struct {
 
 type catalogGeneration struct {
 	id         uint64
+	queued     time.Time
 	lists      []*catalogWaiter
 	l2         map[*wsConn]uint64
 	cold       int
@@ -93,7 +94,7 @@ func (q *scanCoordinator) wake() {
 func (q *scanCoordinator) pendingLocked() *catalogGeneration {
 	if q.pending == nil {
 		q.generation++
-		q.pending = &catalogGeneration{id: q.generation, l2: make(map[*wsConn]uint64), done: make(chan struct{})}
+		q.pending = &catalogGeneration{id: q.generation, queued: time.Now(), l2: make(map[*wsConn]uint64), done: make(chan struct{})}
 	}
 	return q.pending
 }
@@ -276,12 +277,24 @@ func (q *scanCoordinator) worker() {
 
 func (q *scanCoordinator) scan(ctx context.Context, g *catalogGeneration) catalogResult {
 	result := catalogResult{generation: g, started: time.Now()}
+	var discoverTime, sampleTime time.Duration
+	defer func() {
+		q.s.log.Debug("catalog: refresh phases", "queue_ms", result.started.Sub(g.queued).Milliseconds(), "discover_ms", discoverTime.Milliseconds(), "sample_ms", sampleTime.Milliseconds(), "total_ms", time.Since(result.started).Milliseconds())
+	}()
 	model, err := q.s.discoverer.Discover(ctx)
+	discoverTime = time.Since(result.started)
 	if err != nil {
 		result.err = fmt.Errorf("api: discover: %w", err)
 		return result
 	}
-	observations, err := nodeprobe.SampleModel(ctx, model, q.s.nodeprobe)
+	var observations map[string]nodeprobe.Observation
+	sampleStarted := time.Now()
+	if q.s.inventorySamples != nil {
+		observations, err = q.s.inventorySamples.sample(ctx, model)
+	} else {
+		observations, err = nodeprobe.SampleModel(ctx, model, q.s.nodeprobe)
+	}
+	sampleTime = time.Since(sampleStarted)
 	if err != nil {
 		result.err = fmt.Errorf("api: nodeprobe: %w", err)
 		return result

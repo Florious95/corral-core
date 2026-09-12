@@ -2,10 +2,13 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // DiscoverSockets freshly enumerates an already-discovered set of sockets. It
@@ -50,6 +53,16 @@ func DiscoverSockets(ctx context.Context, logger *slog.Logger, sockets []string)
 			// A server may exit between Lstat and list-panes. Only a proven
 			// removed socket permits an authoritative empty result.
 			if _, statErr := os.Lstat(socket); os.IsNotExist(statErr) {
+				continue
+			}
+			// tmux can leave its filesystem socket after its last session exits.
+			// Refused/absent listeners prove no server; a timeout or other failure
+			// does not. Preserve the socket file and never turn a slow server empty.
+			conn, dialErr := net.DialTimeout("unix", socket, probeTO)
+			if conn != nil {
+				_ = conn.Close()
+			}
+			if errors.Is(dialErr, syscall.ECONNREFUSED) || errors.Is(dialErr, syscall.ENOENT) {
 				continue
 			}
 			return nil, fmt.Errorf("discovery: scoped server query failed: %w", err)

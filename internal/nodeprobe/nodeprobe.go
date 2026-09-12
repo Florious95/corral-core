@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -240,18 +241,34 @@ type Sampler interface {
 type Runner struct {
 	capability Capability
 	timeout    time.Duration
+	log        *slog.Logger
 }
 
 // NewRunner binds a verified capability to the typed sampler.
-func NewRunner(c Capability) *Runner { return &Runner{capability: c, timeout: 5 * time.Second} }
+func NewRunner(c Capability, logs ...*slog.Logger) *Runner {
+	r := &Runner{capability: c, timeout: 5 * time.Second}
+	if len(logs) > 0 {
+		r.log = logs[0]
+	}
+	return r
+}
 
 func (r *Runner) Sample(ctx context.Context, socket string) (Report, error) {
+	started := time.Now()
+	rows := 0
+	succeeded := false
+	defer func() {
+		if r.log != nil {
+			r.log.Debug("nodeprobe: sample phases", "sample_ms", time.Since(started).Milliseconds(), "processed_panes", rows, "success", succeeded)
+		}
+	}()
 	if !filepath.IsAbs(socket) {
 		return Report{}, fmt.Errorf("nodeprobe: socket is not absolute: %q", socket)
 	}
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, r.capability.Binary, "-S", socket)
+	cmd.WaitDelay = 250 * time.Millisecond
 	cmd.Env = acceptedEnv(r.capability)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -279,6 +296,8 @@ func (r *Runner) Sample(ctx context.Context, socket string) (Report, error) {
 			return Report{}, fmt.Errorf("nodeprobe socket=%s node=%d: %w", socket, i, err)
 		}
 	}
+	rows = len(report.Nodes)
+	succeeded = true
 	return report, nil
 }
 

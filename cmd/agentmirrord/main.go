@@ -141,7 +141,7 @@ func run(args []string) int {
 		MaxUploadBytes: cfg.MaxUploadBytes,
 		MaxInputBytes:  int(cfg.MaxInputBytes),
 		ListInterval:   cfg.ListInterval,
-		Nodeprobe:      nodeprobe.NewRunner(capability),
+		Nodeprobe:      nodeprobe.NewRunner(capability, logger),
 		Log:            logger,
 	})
 	defer apiServer.Close()

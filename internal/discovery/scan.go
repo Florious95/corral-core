@@ -257,6 +257,9 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 	logger.Debug("discovery: invoking tmux", "socket", socketPath, "path", socketPath,
 		"classification", "allowed", "action", "list-panes", "argv", argv)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	// tmux passes output descriptors to its server. Killing a client does not
+	// close copies retained by a stopped server; bound os/exec's pipe drain too.
+	cmd.WaitDelay = 250 * time.Millisecond
 	// Strip TMUX so tmux never trips the nested-session guard and refuses to
 	// run (this daemon legitimately runs attached to tmux itself).
 	cmd.Env = envWithout(os.Environ(), "TMUX")
