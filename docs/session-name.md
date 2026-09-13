@@ -6,7 +6,7 @@ field and do not re-select a name by Provider.
 The algorithm lives only in `internal/sessionname`. `listing.go` `displayName`
 delegates to it; listing, `list_delta`, and Level2 share `sessionFromPane`.
 
-**Effective non-project window name > effective non-project title segment > project basename > `未命名会话`.**
+**Effective non-project title segment > effective non-project window name > project basename > `未命名会话`.**
 
 - Left: `#{window_name}` as one candidate. Never split on `-` or `|`.
 - Right: clean `#{pane_title}`, then split on `|` (always) and on `-` only when both sides are whitespace.

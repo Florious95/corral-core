@@ -24,7 +24,7 @@ tmux server（含 team-agent 私有 socket），存量 Agent CLI 自动纳管，
 `listing` 与 `level2_frame` 的 `sessions` 共用同一服务端投影：`ref` 是稳定的
 `socket + pane` 身份键，`window_name` 与字符串形式的 `window_index` 是独立的 tmux
 结构元数据，而 `name` 只用于显示。所有 Provider 走同一算法（`internal/sessionname`）：
-有效非工程窗口名优先，其次标题按 `|` / 空白包围的 `-` 分段，工程名（cwd 末段）最低，
+有效非工程标题分段优先，其次有效非工程窗口名，标题按 `|` / 空白包围的 `-` 分段，工程名（cwd 末段）最低，
 再否则 `未命名会话`。函数不读取 Provider、活动/健康或原生 `session_name`；原生字段
 仍按协议透传，但不得覆盖 `name`。App 只渲染服务端 `Session.name`，不再按 Provider
 二次取名。`title` 始终逐字透传，名称变化不改变 `ref` 或收藏键。
