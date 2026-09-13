@@ -388,11 +388,11 @@ internal fun NoPermissionCard(
         Text(
             text = when (state) {
                 CameraPermissionUiState.Requestable ->
-                    "扫码需要相机权限。未授权时请改用下方手填连接。"
+                    "扫码需要相机权限。未授权时请使用下方主机绑定。"
                 CameraPermissionUiState.Denied ->
-                    "相机权限已被拒绝，可再次授权；也可改用下方手填连接。"
+                    "相机权限已被拒绝，可再次授权；也可使用下方主机绑定。"
                 CameraPermissionUiState.PermanentlyDenied ->
-                    "相机权限已被永久拒绝，请到系统设置中开启；也可改用下方手填连接。"
+                    "相机权限已被永久拒绝，请到系统设置中开启；也可使用下方主机绑定。"
                 CameraPermissionUiState.Granted -> return@SectionCard
             },
             style = MaterialTheme.typography.bodyMedium,
@@ -605,10 +605,11 @@ private fun TsTokenCard(viewModel: PairingViewModel) {
  * Error.reason 来自 TsnetManager/后端，其契约保证不含 authkey 值（红线）。
  */
 private fun tsStateLine(state: TsnetState): Pair<String, Boolean> = when (state) {
-    TsnetState.Idle -> "填入 auth key 后点「连接」，或直接扫携带 key 的二维码，自动加入 tailnet。" to false
+    TsnetState.Idle -> "填入 auth key 后点「加入 Tailnet」，或直接扫携带 key 的二维码，自动加入 tailnet。" to false
     TsnetState.Starting -> "tailnet 入网中…" to false
     is TsnetState.Up -> "已入网：节点已连接，数据通道需要几秒建立。" to false
-    is TsnetState.Error -> "入网失败：${state.reason}" to true
+    // TS failure is intentionally silent; LAN discovery remains available.
+    is TsnetState.Error -> "继续自动发现局域网主机。" to false
 }
 
 /**
