@@ -32,3 +32,5 @@ package api
 // @consumes internal/nodeprobe
 
 // @consumes internal/protocol
+
+// @consumes internal/sessionname

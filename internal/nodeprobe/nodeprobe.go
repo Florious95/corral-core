@@ -219,12 +219,12 @@ type Node struct {
 }
 
 // Observation is the independent four-axis status carried into protocol DTOs.
+// Display names are not resolved here; Session.name is projected later from
+// tmux fields by internal/sessionname.
 type Observation struct {
 	Provider, Activity string
 	SessionName        *string
 	Health             string
-	// DisplayName is optional display-only metadata, never provider/status identity.
-	DisplayName string
 }
 
 // Unknown returns the honest four-axis result for a zero/duplicate join.
@@ -372,6 +372,5 @@ func SampleModel(ctx context.Context, model *discovery.Model, sampler Sampler) (
 			out[p.Socket+"\x1f"+p.PaneID] = obs
 		}
 	}
-	enrichCodexNames(ctx, model, sampler, out)
 	return out, nil
 }

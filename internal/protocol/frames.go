@@ -80,10 +80,11 @@ type Workspace struct {
 // overwrite identity metadata. WindowIndex is encoded as a string to match
 // the existing App DTO contract. Rows/Cols are the pane's current dimensions.
 //
-// Name is the display projection: provider-aware code may select the complete
-// Codex PaneTitle or the authoritative Pi session_name, while other providers
-// retain the existing window-name/session fallback. An empty Name is explicit
-// unknown; clients must not infer a name from WindowName, Cwd, or Ref.
+// Name is the server-computed display label. One Provider-agnostic algorithm
+// in the serve process writes it from tmux window_name, pane_title, cwd and
+// the optional foreground command. Clients must render Name and must not
+// rebuild it from Provider, Title, WindowName, native session_name, Cwd, or
+// Ref. Title stays the verbatim OSC pane title (requirement 061).
 //
 // Title is the pane's OSC title, transmitted VERBATIM (requirement 061:
 // 不 trim、不剥前缀). It is display-only: never used for identity — Ref and
@@ -96,8 +97,8 @@ type Workspace struct {
 type Session struct {
 	Ref         string  `json:"ref"`
 	Name        string  `json:"name"`
-	WindowName  string `json:"window_name"`
-	WindowIndex string `json:"window_index"`
+	WindowName  string  `json:"window_name"`
+	WindowIndex string  `json:"window_index"`
 	Cwd         string  `json:"cwd"`
 	Title       string  `json:"title"`
 	Provider    string  `json:"provider"`

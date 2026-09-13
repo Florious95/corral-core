@@ -16,31 +16,14 @@ import (
 	"github.com/agentmirror/agentmirror/internal/discovery"
 	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/protocol"
+	"github.com/agentmirror/agentmirror/internal/sessionname"
 )
 
-// displayName projects one pane into the client-facing display label. The
-// provider axis is already established by nodeprobe; only then may Codex use
-// its live /rename metadata (with complete OSC PaneTitle as compatibility
-// fallback), or Pi use its authoritative session_name. Structural names and
-// Claude/Grok/unknown-provider behavior remain unchanged.
-func displayName(p discovery.Pane, observation nodeprobe.Observation) string {
-	switch observation.Provider {
-	case "codex":
-		if observation.DisplayName != "" {
-			return observation.DisplayName
-		}
-		return p.PaneTitle
-	case "pi":
-		if observation.SessionName != nil && *observation.SessionName != "" {
-			return *observation.SessionName
-		}
-		return ""
-	default:
-		if p.WindowName != "" {
-			return p.WindowName
-		}
-		return p.Session
-	}
+// displayName is the single Provider-agnostic path from discovered tmux
+// fields to protocol Session.name. It does not read Provider, status, or
+// native session_name; listing, list_delta, and Level2 all go through here.
+func displayName(p discovery.Pane) string {
+	return sessionname.Resolve(p.WindowName, p.PaneTitle, p.CWD, p.Command).Value
 }
 
 // sessionFromPane is the single discovery-to-protocol projection shared by
@@ -49,7 +32,7 @@ func displayName(p discovery.Pane, observation nodeprobe.Observation) string {
 func sessionFromPane(p discovery.Pane, observation nodeprobe.Observation) protocol.Session {
 	return protocol.Session{
 		Ref:         sessionRef(p),
-		Name:        displayName(p, observation),
+		Name:        displayName(p),
 		WindowName:  p.WindowName,
 		WindowIndex: strconv.Itoa(p.WindowIndex),
 		Cwd:         p.CWD,

@@ -1,0 +1,31 @@
+name: Unified session naming
+
+on:
+  pull_request:
+    paths:
+      - 'internal/sessionname/**'
+      - 'internal/api/listing.go'
+      - 'internal/api/session_name_test.go'
+      - 'internal/api/name_projection_test.go'
+      - 'internal/api/unified_name_test.go'
+      - 'internal/api/codex_name_consumer_red_test.go'
+      - '.github/workflows/session-name.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  naming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Pure naming algorithm
+        run: go test -race -count=1 -v ./internal/sessionname
+      - name: Listing delta and Level2 name projection
+        run: go test -race -count=1 -v ./internal/api -run '^(TestUnified|TestToSessionPrefers|TestToSessionDoesNotFallBack|TestDisplayNameDoesNotRead|TestLevel2NameChange|TestNameOnlyChange|TestSameTmuxFields)'
