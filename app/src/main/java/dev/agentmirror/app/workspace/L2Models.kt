@@ -37,8 +37,9 @@ enum class L2Status(val wire: String, val label: String) {
 }
 
 /**
- * 二级菜单一行。身份来自结构字段 / ref，状态来自 [Session.status]。
- * [title] 不参与身份/过滤/判活/显示名；列表与顶栏只消费服务端 [Session.name]。
+ * 二级菜单一行。身份来自结构字段 / ref，状态来自 [Session.effectiveActivity]。
+ * [name] 是服务端唯一解析后的显示投影；客户端不得按 Provider、标题或原生
+ * session_name 再算一遍。
  */
 data class L2Entry(
     val ref: String,
@@ -47,6 +48,9 @@ data class L2Entry(
     val rows: Int,
     val cols: Int,
     val status: L2Status,
+    val provider: String = "unknown",
+    val activity: L2Status = status,
+    val health: String = "unknown",
     val cwd: String = "",
     val sessionName: String = "",
     val windowIndex: String = "",
@@ -55,34 +59,20 @@ data class L2Entry(
     val identityLabel: String
         get() = sessionDisplayName(name)
 
-    /** 结构导航标签；空时不回填显示 [name]。 */
+    /** Navigation structure only; [name] is a display projection and never a fallback. */
     val navigationName: String
         get() = windowName.ifEmpty { sessionName }
 }
 
-/** 服务端未给出可用 Session.name 时的统一空值占位。 */
+/** 服务端未给出可用 Session.name 时的统一占位；不回填窗口/标题/Provider。 */
 internal const val UNNAMED_SESSION = "未命名会话"
 
 /**
- * 列表 / 收藏 / 查看菜单 / 顶栏显示名。
- *
- * 只转交服务端已解析的 [Session.name] 与统一空值占位。
- * 禁止按 Provider、window_name、pane_title 或原生 session_name 再猜一遍。
+ * 列表、收藏、查看菜单和会话页统一消费服务端 [Session.name]。
+ * 服务端负责 window/title/cwd/命令清理与优先级；客户端只做空值占位。
  */
 internal fun sessionDisplayName(name: String): String =
     name.trim().ifEmpty { UNNAMED_SESSION }
-
-/**
- * 顶栏跟当前 ref 的 live [Session.name]。overlay 尚未含该行时才用导航带来的 fallback。
- */
-internal fun liveSessionDisplayName(
-    sessionRef: String,
-    overlaySessions: List<L2Entry>,
-    fallback: String,
-): String {
-    val live = overlaySessions.firstOrNull { it.ref == sessionRef }?.name
-    return sessionDisplayName(live ?: fallback)
-}
 
 data class L2UiState(
     val sessions: List<L2Entry> = emptyList(),
@@ -124,16 +114,21 @@ internal fun socketPrefixFromRef(ref: String): String {
 }
 
 internal fun Session.toL2Entry(): L2Entry {
-    // name 是服务端显示投影；结构字段原样保留，禁止用显示名回填 window/session。
+    // name is a server display projection; structure fields stay independent.
+    // Favorite keys must use ref and never recover structure from display text.
+    val effective = L2Status.fromWire(effectiveActivity)
     return L2Entry(
         ref = ref,
         name = name,
         title = title,
         rows = rows,
         cols = cols,
-        status = L2Status.fromWire(status),
+        status = effective,
+        provider = provider.ifEmpty { "unknown" },
+        activity = effective,
+        health = health.takeIf { it == "normal" || it == "abnormal" || it == "unknown" } ?: "unknown",
         cwd = cwd,
-        sessionName = sessionName,
+        sessionName = sessionName.orEmpty(),
         windowIndex = windowIndex,
         windowName = windowName,
     )

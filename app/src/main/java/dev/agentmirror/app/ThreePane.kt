@@ -144,11 +144,13 @@ internal fun ThreePaneHome(
             when (ThreePane.entries[page]) {
                 ThreePane.Favorites -> FavoritesPane(
                     viewModel = workspaceViewModel,
+                    isActive = navState.homePane == ThreePane.Favorites && navState.activeSession == null,
                     connectionPath = ServiceWire.connectionPath(),
                     onOpenSession = { ref, name -> navState.openSession(ref, name) },
                 )
                 ThreePane.Sessions -> WorkspaceScreen(
                     viewModel = workspaceViewModel,
+                    isActive = navState.homePane == ThreePane.Sessions && navState.activeSession == null,
                     selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
                     connectionPath = ServiceWire.connectionPath(),
                     retainLevel2OnDispose = { navState.activeSession != null },
@@ -182,18 +184,24 @@ internal fun ThreePaneHome(
 @Composable
 private fun FavoritesPane(
     viewModel: WorkspaceViewModel,
+    isActive: Boolean,
     connectionPath: ConnectionPath?,
     onOpenSession: (ref: String, name: String) -> Unit,
 ) {
     val favorites by viewModel.favorites.collectAsState()
     val liveGen by viewModel.favoriteLiveGen.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
-    val rows = remember(favorites, liveGen) { viewModel.favoriteRows() }
-    DisposableEffect(Unit) {
-        viewModel.enterFavorites()
-        onDispose { viewModel.leaveFavorites() }
+    // 底栏收藏页：全量 favoriteRows()。失联行仍在，标「不在线」，短按不打开。
+    // 不要在这里 filter isOnline。会话列表 / 会话页收藏入口各走自己的投影。
+    val rows = remember(favorites, liveGen) {
+        viewModel.favoriteRows()
     }
-    LaunchedEffect(Unit) {
+    DisposableEffect(viewModel, isActive) {
+        val lease = if (isActive) viewModel.enterFavorites() else null
+        onDispose { if (lease != null) viewModel.leaveFavorites(lease) }
+    }
+    LaunchedEffect(viewModel, isActive) {
+        if (!isActive) return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(1_000)
             viewModel.checkFavoriteFetch()

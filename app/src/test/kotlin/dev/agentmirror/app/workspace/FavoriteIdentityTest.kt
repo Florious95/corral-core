@@ -66,8 +66,8 @@ class FavoriteIdentityTest {
             ref = "/tmp/tmux-501/ident-b\u001f%1",
             cwd = "/tmp/e2e-ident/ws-乙",
         )
-        assertEquals("claude_code", a.identityLabel)
-        assertEquals("claude_code", b.identityLabel)
+        assertEquals("PROBE_TITLE_MUST_NOT_BE_KEY", a.identityLabel)
+        assertEquals("PROBE_TITLE_MUST_NOT_BE_KEY", b.identityLabel)
         assertEquals("claude_code", a.navigationName)
         assertEquals("claude_code", b.navigationName)
         assertNotEquals(a.ref, b.ref)
@@ -122,7 +122,7 @@ class FavoriteIdentityTest {
             rows[1].cwd,
         )
         assertEquals(setOf(a.cwd, b.cwd), rows.map { it.cwd }.toSet())
-        assertTrue(rows.all { it.identityLabel == "claude_code" })
+        assertTrue(rows.all { it.identityLabel == "PROBE_TITLE_MUST_NOT_BE_KEY" })
         assertTrue(rows.all { it.windowName == "claude_code" })
 
         val opened = ArrayList<String>()
@@ -240,7 +240,8 @@ class FavoriteIdentityTest {
 
     private fun leader(ref: String, cwd: String): L2Entry = Session(
         ref = ref,
-        name = "claude_code",
+        // Fixture models the server-resolved Session.name; raw title is not parsed client-side.
+        name = "PROBE_TITLE_MUST_NOT_BE_KEY",
         cwd = cwd,
         rows = 24,
         cols = 80,

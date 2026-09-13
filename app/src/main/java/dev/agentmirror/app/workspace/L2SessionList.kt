@@ -23,10 +23,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -37,20 +35,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.ui.screens.SessionListRows
 import dev.agentmirror.app.ui.theme.AppTheme
-import dev.agentmirror.app.ui.theme.Spacing
 
 /** 072 §3：星星点击指示必须无界/圆形，禁止 Material 默认方形 bounded ripple。 */
 internal const val L2_STAR_RIPPLE_BOUNDED = false
 
 /**
- * 二级菜单列表（061/067/072）：每行星标在会话名之前，右侧状态标。
- * 点行用结构 ref + 服务端 Session.name，title 不参与。点星只切换收藏。
+ * 二级菜单列表：统一外部会话行。短按打开；长按唯一收藏/取消收藏。
+ * 点行用结构 ref + 结构名，title 不参与。
  */
 @Composable
 internal fun L2SessionList(
     sessions: List<L2Entry>,
     onOpenSession: (ref: String, name: String) -> Unit,
-    banner: String? = null,
     favorited: Set<FavoriteKey> = emptySet(),
     onToggleFavorite: (L2Entry) -> Unit = {},
 ) {
@@ -62,23 +58,6 @@ internal fun L2SessionList(
                 .fillMaxSize()
                 .navigationBarsPadding(),
         ) {
-            if (banner != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Spacing.pageH, vertical = Spacing.xs)
-                        .testTag("l2-stale-banner"),
-                ) {
-                    Text(
-                        text = banner,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                    )
-                }
-            }
             SessionListRows(
                 sessions = items,
                 onSessionClick = { item ->
@@ -91,7 +70,6 @@ internal fun L2SessionList(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                showPath = true,
             )
         }
     }

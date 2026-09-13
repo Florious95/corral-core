@@ -32,11 +32,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 077 §1 / 101：会话页顶栏与列表交出同一份服务端 Session.name，
+ * 077 §1：会话页顶栏必须复用 076 §3a 的 [sessionDisplayName]，
  * 不得把 navigationName（window_name=claude_code）再送进顶栏。
  *
- * 旧规则：复用客户端 sessionDisplayName 的 Claude 剥标题逻辑。
- * 新规则：显示名就是 Session.name；身份仍走 ref。
+ * 身份仍走 ref；本用例只断言打开会话时交出的**显示名**。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -47,11 +46,11 @@ class SessionTitleTest {
     val compose = createComposeRule()
 
     @Test
-    fun openingClaudeCodeRowPassesSessionNameNotWindowName() {
+    fun openingClaudeCodeRowPassesSessionDisplayNameNotWindowName() {
         val entry = claude(
             ref = "/tmp/sock-a\u001f%1",
             cwd = "/Volumes/nvme/Projects/远程Agent安卓",
-            name = "远控 leader",
+            title = "✳ 远控 leader",
         )
         val want = sessionDisplayName(entry.name)
         assertEquals("远控 leader", want)
@@ -77,7 +76,7 @@ class SessionTitleTest {
         compose.runOnIdle {
             assertEquals(entry.ref, openedRef)
             assertEquals(
-                "点进会话必须交出 Session.name，不能再交 window_name=claude_code",
+                "点进会话必须交出 sessionDisplayName，不能再交 window_name=claude_code",
                 want,
                 openedName,
             )
@@ -86,7 +85,7 @@ class SessionTitleTest {
     }
 
     @Test
-    fun openingFavoriteClaudeCodeRowPassesSessionNameNotWindowName() {
+    fun openingFavoriteClaudeCodeRowPassesSessionDisplayNameNotWindowName() {
         val row = FavoriteRow(
             sessionName = "team",
             windowIndex = "0",
@@ -121,7 +120,7 @@ class SessionTitleTest {
         compose.runOnIdle {
             assertEquals(row.ref, openedRef)
             assertEquals(
-                "收藏行点进会话必须交出 Session.name，不能再交 window_name=claude_code",
+                "收藏行点进会话必须交出 sessionDisplayName，不能再交 window_name=claude_code",
                 want,
                 openedName,
             )
@@ -129,13 +128,13 @@ class SessionTitleTest {
         }
     }
 
-    private fun claude(ref: String, cwd: String, name: String) = Session(
+    private fun claude(ref: String, cwd: String, title: String) = Session(
         ref = ref,
-        name = name,
+        name = "远控 leader",
         cwd = cwd,
         rows = 24,
         cols = 80,
-        title = "✳ $name",
+        title = title,
         status = "working",
         sessionName = "team",
         windowIndex = "0",

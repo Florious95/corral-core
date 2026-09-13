@@ -37,8 +37,8 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * 076 §3 FavRowParity：收藏行与会话列表同构。
  *
- * 3a 显示名消费服务端 Session.name（101 替代 076 §3a 的 Claude 剥标题）。
- *    grok 仍显示 Session.name=advisor，不得改用会变的任务摘要。
+ * 3a claude_code 显示名取 pane_title 剥 062 前导符号，互不相同且可辨识；
+ *    grok 仍取 window_name，不得改用会变的任务摘要。
  * 3b 状态标与会话列表同一套 [L2Status]，禁止收藏页从 title 再算一遍。
  * 3c 星在行首、标题、目录副标题、右侧状态标。
  */
@@ -55,19 +55,19 @@ class FavRowParityTest {
         val a = claude(
             ref = "/tmp/sock-a\u001f%1",
             cwd = "/Volumes/nvme/Projects/远程Agent安卓",
-            name = "远控 leader",
+            title = "✳ 远控 leader",
             status = "idle",
         )
         val b = claude(
             ref = "/tmp/sock-b\u001f%1",
             cwd = "/Volumes/nvme/Projects/讨论team-agent",
-            name = "讨论 team-agent",
+            title = "✳ 讨论 team-agent",
             status = "working",
         )
         val c = claude(
             ref = "/tmp/sock-c\u001f%1",
             cwd = "/Users/alauda/Documents/code/agent前沿探索/多agent协作",
-            name = "多agent协作",
+            title = "◐ 多agent协作",
             status = "unknown",
         )
         val grok = grokAdvisor()
@@ -96,7 +96,7 @@ class FavRowParityTest {
         val live = claude(
             ref = "/tmp/sock-w\u001f%2",
             cwd = "/ws/a",
-            name = "looks-idle-glyph-must-not-override-wire-status",
+            title = "✳ looks-idle-glyph-must-not-override-wire-status",
             status = "working",
         )
         val vm = WorkspaceViewModel(
@@ -117,8 +117,8 @@ class FavRowParityTest {
     @Test
     fun favoriteListStarLeadsTitleAndStatusBadgeSitsOnTheRight() {
         val live = listOf(
-            claude("/tmp/sock-a\u001f%1", "/ws/甲", "远控 leader", "idle"),
-            claude("/tmp/sock-b\u001f%1", "/ws/乙", "多agent协作", "working"),
+            claude("/tmp/sock-a\u001f%1", "/ws/甲", "✳ 远控 leader", "idle"),
+            claude("/tmp/sock-b\u001f%1", "/ws/乙", "◐ 多agent协作", "working"),
         )
         val vm = WorkspaceViewModel(
             requestList = {},
@@ -143,36 +143,40 @@ class FavRowParityTest {
 
         compose.onNodeWithText("远控 leader").assertExists()
         compose.onNodeWithText("多agent协作").assertExists()
-        compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("进行中").assertExists()
+        compose.onNodeWithText("空闲").assertDoesNotExist()
+        compose.onNodeWithText("进行中").assertDoesNotExist()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
 
         val refA = live[0].ref
-        val star = compose.onNodeWithTag("fav-star-$refA").getUnclippedBoundsInRoot()
+        compose.onNodeWithTag("fav-star-$refA").assertDoesNotExist()
+        val mark = compose.onNodeWithTag("fav-provider-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val lamp = compose.onNodeWithTag("fav-motion-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val badge = compose.onNodeWithTag("fav-status-$refA").getUnclippedBoundsInRoot()
+        val path = compose.onNodeWithTag("fav-path-$refA", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val row = compose.onNodeWithTag("fav-row-$refA").getUnclippedBoundsInRoot()
+        assertTrue("provider mark right of title mark.left=${mark.left} id.right=${id.right}", mark.left > id.right)
         assertTrue(
-            "076 §3c：星必须在标题之前 star.left=${star.left} id.left=${id.left}",
-            star.left < id.left,
+            "灯在标题之前 lamp.left=${lamp.left} id.left=${id.left}",
+            lamp.left < id.left,
         )
-        assertTrue(
-            "076 §3c：状态标必须在标题之后 id.right=${id.right} badge.left=${badge.left}",
-            id.right <= badge.left,
-        )
-        val delta = kotlin.math.abs(centerY(star).value - centerY(badge).value)
-        assertTrue("星与状态标垂直中心应对齐 delta=$delta", delta < 1f)
+        assertTrue("cwd path slot present", path.bottom.value - path.top.value > 0f)
+        assertEquals(66.0, (row.bottom.value - row.top.value).toDouble(), 1.0)
     }
 
     private fun centerY(rect: DpRect) = (rect.top + rect.bottom) / 2
 
-    private fun claude(ref: String, cwd: String, name: String, status: String): L2Entry = Session(
+    private fun claude(ref: String, cwd: String, title: String, status: String): L2Entry = Session(
         ref = ref,
-        name = name,
+        // Fixture models PR31 output: the client receives the resolved name, not raw title.
+        name = title.removePrefix("✳ ").removePrefix("◐ "),
         cwd = cwd,
         rows = 24,
         cols = 80,
-        title = "✳ $name",
+        title = title,
+        provider = "claude_code",
+        activity = status,
         status = status,
+        health = if (status == "unknown") "unknown" else "normal",
         sessionName = "team",
         windowIndex = "0",
         windowName = "claude_code",
@@ -185,7 +189,10 @@ class FavRowParityTest {
         rows = 24,
         cols = 80,
         title = "Team Agent message from leader: … - grok",
+        provider = "grok",
+        activity = "working",
         status = "working",
+        health = "normal",
         sessionName = "team-grok-l2",
         windowIndex = "3",
         windowName = "advisor",

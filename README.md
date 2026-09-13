@@ -1,60 +1,25 @@
 # corral-app
 
-**下一代 UI 的安卓客户端。** 代码尚未开工。
+`corral-app` 是 corral 的唯一 Android App 日常开发入口，默认 `main` 包含已接受的完整 App UI、输入、恢复、branding 和资源。产品需求与共享核心实现仍以 [`corral-core`](https://github.com/Florious95/corral-core) 为准；服务端 daemon 在 [`corral-serve`](https://github.com/Florious95/corral-serve)。
 
-## 先读这个
+## 从 main 构建
 
-**[`docs/需求索引.md`](docs/需求索引.md)** —— App 侧全部相关需求的索引，
-以及需求真相源在哪、怎么查。**开工前必读。**
+需要 JDK 17 和 Android SDK。源码入口为 `app/src/main/`，核心依赖由远端 Maven 发布物提供，不依赖本机 `.team` 目录：
 
-主线是 **`029 左中右三页架构`**（左收藏 / 中会话 / 右设置）——
-这条 2026-08-12 就裁定了，标着「只入库不施工」，一直没人做。**它就是本仓要建的骨架。**
+```bash
+./gradlew :app:assembleDebug
+# app/build/outputs/apk/debug/app-debug.apk
+```
 
-## 需求真相源在哪
+`settings.gradle.kts` 将 Maven 源固定到发布提交 `7bdd02c1e1914a99df77ab8f1d8c2aab1652fbd5`；`app/build.gradle.kts` 固定三核版本 `20260913.52fc4bd`，对应接受的 corral-core commit `52fc4bd72e5d60fcf24cfa1ae43811ad23e4cfb7`。不要改回 `20260822.0`，也不要在本仓复制核心算法。
 
-**不在本仓。** 在 [`corral-core`](https://github.com/Florious95/corral-core)：
+## 已接受跨仓基线
 
-| 位置 | 是什么 |
-|---|---|
-| `requirement-base/` | **原始文档真相源**，56 条编号条目，**只增不删**。入口 `requirement-base/INDEX.md` |
-| `requirement-wiki/` | LLM Wiki 概念网络，活库可改可删。入口 `requirement-wiki/wiki/index.md` |
-| `CLAUDE.md` | 工程红线与纪律 |
-| `taskbook.yaml` + `.team/evidence/*.json` | 任务状态的权威：前者说「做了什么」，后者说「凭什么算做完」 |
+- core：`52fc4bd72e5d60fcf24cfa1ae43811ad23e4cfb7`
+- serve：`ca2bef1f47049760fd0748802a42decb29690646`
+- App 图标：`@mipmap/ic_launcher`、`@mipmap/ic_launcher_round`，实际 adaptive 资源在 `app/src/main/res/`；应用 label 为 `corral`。
 
-**查需求的顺序是既定纪律：先撞库，再问用户。** 先翻 wiki，撞不到再翻 base，还没有才去问。
-
-**不要把需求原文复制进本仓。** 复制出来的那份必然漂移，而真相源只应有一份。
-
-## 三个仓库的关系
-
-| 仓库 | 装什么 |
-|---|---|
-| [`corral-core`](https://github.com/Florious95/corral-core) | 当前 App 的全部代码 + 需求维基 + 任务书 + 证据链。**决定「对话体验」的那一层。** |
-| [`corral-serve`](https://github.com/Florious95/corral-serve) | 服务端 daemon（Go），跑在宿主机上桥接 tmux |
-| `corral-app`（本仓） | 新 UI 的壳 |
-
-## 唯一的硬约束
-
-**本仓不得修改 core 的代码。**
-
-新 UI 引用 core 提供的能力，但**没有改它的权限**。撞到必须改 core 的情况时：
-**停下开单，不要在壳里复制一份 core 的逻辑改改用。**
-
-理由是这个项目付过学费的：外壳每改一轮，就有一次把已经修好的对话体验弄回归的风险
-（v5 五个修复 QA 全 PASS 却引入输入框闪烁回归；v6 三条倒退被全量回退）。
-把 core 放在另一个仓库、只按版本依赖，是为了让「改不了」成为物理事实而不是纪律。
-
-**绕过这条约束的代价不是 core 被改坏，是 core 被架空** —— 逻辑在壳里被复制一份，
-回归照样发生，而且查不出来。
-
-### 边界怎么划
-
-近似判据：**`@Composable` 是壳，其余是核。**
-
-参考数据：当前 App 里 `termview/`（终端仿真与渲染，1532 行）**零个 `@Composable`** ——
-「你看到的那个画面」天生就已经是 core 的形状。
-反过来，`session/`、`pairing/`、`diag/` 三个包各有一两个 Screen/Route 骑在线上，
-拆的时候是**切开**，不是搬。
+需求索引见 [`docs/需求索引.md`](docs/需求索引.md)。
 
 ## License
 

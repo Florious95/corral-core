@@ -16,12 +16,15 @@
 
 package dev.agentmirror.app.workspace
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import dev.agentmirror.app.conn.Level2Frame
 import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -77,9 +80,24 @@ class L2ListRendersStatusTest {
         compose.onNodeWithText("sess-work").assertExists("必须显示结构字段会话标识")
         compose.onNodeWithText("sess-idle").assertExists()
         compose.onNodeWithText("sess-unk").assertExists()
-        compose.onNodeWithText("进行中").assertExists("working → 进行中")
-        compose.onNodeWithText("空闲").assertExists("idle → 空闲")
-        compose.onNodeWithText("未知").assertExists("unknown → 未知")
+        compose.onNodeWithText("进行中").assertDoesNotExist()
+        compose.onNodeWithText("空闲").assertDoesNotExist()
+        compose.onNodeWithText("未知").assertDoesNotExist()
+        val workingDesc = compose.onNodeWithTag("l2-motion-ref-w", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }
+            .joinToString()
+        val idleDesc = compose.onNodeWithTag("l2-motion-ref-i", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }
+            .joinToString()
+        val unknownDesc = compose.onNodeWithTag("l2-motion-ref-u", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() }
+            .joinToString()
+        assertTrue("working lamp", workingDesc.startsWith("working:"))
+        assertEquals("idle:static", idleDesc)
+        assertEquals("", unknownDesc)
     }
 
     private fun session(ref: String, name: String, status: String) = Session(
@@ -89,7 +107,9 @@ class L2ListRendersStatusTest {
         rows = 24,
         cols = 80,
         title = "◐  decoy-title-must-not-be-identity",
+        activity = status,
         status = status,
+        health = if (status == "unknown") "unknown" else "normal",
         sessionName = name,
         windowIndex = "1",
         windowName = name,

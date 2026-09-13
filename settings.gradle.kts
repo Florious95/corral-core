@@ -25,9 +25,8 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
-        // ① 远端 maven 分支（推上去之后走这里）；② 本地兜底 .team/staging/maven-repo
-        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/maven/") }
-        maven { url = uri(rootDir.resolve("../maven-repo")) }
+        // Accepted core 52fc artifacts, pinned to the immutable maven publication commit.
+        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/7bdd02c1e1914a99df77ab8f1d8c2aab1652fbd5/") }
         google()
         mavenCentral()
     }

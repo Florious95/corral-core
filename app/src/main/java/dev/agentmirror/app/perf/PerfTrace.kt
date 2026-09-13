@@ -34,6 +34,8 @@ import java.util.concurrent.atomic.AtomicLong
  * 双出口：`Log.d("PerfTrace", line)` + `DiagLog.record("PerfTrace", line)`。
  *
  * 关：`adb shell setprop debug.agentmirror.perftrace 0`，进程启动读一次。
+ * 按键回显另有独立开关 `debug.agentmirror.keyecho`（默认关；`1` = 开）。
+ * 即使 PerfTrace 开着，未开按键开关时 `onAsciiPrint` 必须保持 null。
  * 调用方须在最外层 `if (PerfTrace.isEnabled())` 短路——参数不求值、不拼串、不分配 lambda。
  *
  * 八事件名即契约：`tap` `route_enter` `subscribe_sent` `geom_seed`
@@ -71,6 +73,8 @@ object PerfTrace {
                 bytes: Int,
                 listenerRef: String,
             ) = this@PerfTrace.emitNoListener(frameRef, listenerNull, kind, bytes, listenerRef)
+            override fun onKeySend(ref: String, char: String) =
+                this@PerfTrace.keySend(ref, char)
         }
     }
 
@@ -78,6 +82,12 @@ object PerfTrace {
 
     /** 进程启动读取的系统属性：`0` = 关。默认开（未设或非 0）。 */
     const val PROP_ENABLED = "debug.agentmirror.perftrace"
+
+    /**
+     * 按键回显量具独立开关。`1` = 开；缺省/其它 = **关**。
+     * 与 [PROP_ENABLED] 分开：开会话测量必须开 PerfTrace，但不得因此挂钩逐字符回调。
+     */
+    const val PROP_KEY_ECHO = "debug.agentmirror.keyecho"
 
     const val EV_TAP = "tap"
     const val EV_ROUTE_ENTER = "route_enter"
@@ -87,6 +97,10 @@ object PerfTrace {
     const val EV_SNAPSHOT_APPLIED = "snapshot_applied"
     const val EV_FIRST_DRAW = "first_draw"
     const val EV_LAYOUT_SETTLED = "layout_settled"
+    /** 按键回显量具：交给传输层。配对键 seq+char。 */
+    const val EV_KEY_SEND = "key_send"
+    /** 按键回显量具：仿真器消费到该字符且本帧绘制完成。 */
+    const val EV_KEY_ECHO = "key_echo"
 
     /** WS 二进制读入口留痕（t.instr3，非八事件契约；emitted=0 不进基线）。 */
     const val EV_WS_BINARY_RECV = "ws_binary_recv"
@@ -118,6 +132,9 @@ object PerfTrace {
     @Volatile
     private var enabled: Boolean = readProcessProp()
 
+    @Volatile
+    private var keyEchoEnabled: Boolean = readKeyEchoProp()
+
     /** 单调时钟；测试注入。生产读 [SystemClock.elapsedRealtime]。 */
     @Volatile
     private var clock: DiagLog.Clock = DiagLog.Clock {
@@ -142,6 +159,13 @@ object PerfTrace {
     private val noListenerLogged = ConcurrentHashMap.newKeySet<String>()
     @Volatile
     private var settleHandler: Handler? = null
+
+    private val keySeq = AtomicLong(1L)
+    private val keyLock = Any()
+    private val pendingKeys = ArrayDeque<PendingKey>()
+    private val consumedSinceDraw = ArrayDeque<Char>()
+
+    private data class PendingKey(val seq: Long, val char: Char)
 
     private class Open(val openId: String) {
         @Volatile var routeEntered: Boolean = false
@@ -169,6 +193,30 @@ object PerfTrace {
      * @inv 不读系统属性、不 I/O
      */
     fun isEnabled(): Boolean = enabled
+
+    /**
+     * 按键回显挂钩开关（调用点与 [isEnabled] 合取）。默认关。
+     *
+     * @contract
+     * @pre none
+     * @post 返回当前缓存；未设 prop / 非 `1` / [setKeyEchoEnabledForTest](false) 均为关
+     * @err none
+     * @inv 不读系统属性、不 I/O
+     */
+    fun isKeyEchoEnabled(): Boolean = keyEchoEnabled
+
+    /**
+     * 测试注入按键回显开关（替代 `adb shell setprop debug.agentmirror.keyecho 1`）。
+     *
+     * @contract
+     * @pre none
+     * @post [isKeyEchoEnabled] 等于 [value]
+     * @err none
+     * @inv 不发日志
+     */
+    fun setKeyEchoEnabledForTest(value: Boolean) {
+        keyEchoEnabled = value
+    }
 
     /**
      * 测试注入开关（替代 `adb shell setprop debug.agentmirror.perftrace 0`）。
@@ -226,7 +274,13 @@ object PerfTrace {
         noOpenSnapshotLogged.clear()
         wsBinaryRecvLogged.clear()
         noListenerLogged.clear()
+        synchronized(keyLock) {
+            pendingKeys.clear()
+            consumedSinceDraw.clear()
+        }
+        keySeq.set(1L)
         enabled = true
+        keyEchoEnabled = false
         clock = DiagLog.Clock { 0L }
         sink = Sink { _, _ -> }
         nextSeq.set(1L)
@@ -403,6 +457,61 @@ object PerfTrace {
             EV_LAYOUT_SETTLED,
             "quiet_ms=$quietMs last_reflow_src=$lastReflowSrc rows=$rows cols=$cols",
         )
+    }
+
+    /**
+     * `key_send`：把一次 a–z 单字符交给传输层。带 seq+char 供与 [flushKeyEchoAfterDraw] 配对。
+     * 非单字符 a–z（IME 整词等）不发事件，避免配不上对。
+     */
+    fun keySend(ref: String, char: String) {
+        if (!enabled) return
+        if (char.length != 1) return
+        val c = char[0]
+        if (c !in 'a'..'z') return
+        val seq: Long
+        synchronized(keyLock) {
+            seq = keySeq.getAndIncrement()
+            pendingKeys.addLast(PendingKey(seq, c))
+        }
+        val openId = idFor(ref) ?: "-"
+        emit(openId, EV_KEY_SEND, "seq=$seq char=$c")
+    }
+
+    /** 仿真器把 a–z 写入网格。关路径：调用方不挂钩，本方法也不会被走到。 */
+    fun notePrintableEcho(char: Char) {
+        if (!enabled) return
+        if (char !in 'a'..'z') return
+        synchronized(keyLock) { consumedSinceDraw.addLast(char) }
+    }
+
+    /**
+     * 本帧绘制完成后：把本帧消费到的字符与未配对的 key_send 按 FIFO 同字符配对，发 `key_echo`。
+     * 配不上的消费（快照里的字母）丢掉，不发事件。
+     */
+    fun flushKeyEchoAfterDraw(ref: String) {
+        if (!enabled) return
+        val matched = ArrayList<PendingKey>(4)
+        synchronized(keyLock) {
+            while (consumedSinceDraw.isNotEmpty()) {
+                val c = consumedSinceDraw.removeFirst()
+                val it = pendingKeys.iterator()
+                var hit: PendingKey? = null
+                while (it.hasNext()) {
+                    val p = it.next()
+                    if (p.char == c) {
+                        it.remove()
+                        hit = p
+                        break
+                    }
+                }
+                if (hit != null) matched.add(hit)
+            }
+        }
+        if (matched.isEmpty()) return
+        val openId = idFor(ref) ?: "-"
+        for (p in matched) {
+            emit(openId, EV_KEY_ECHO, "seq=${p.seq} char=${p.char}")
+        }
     }
 
     /** 产品链：本打开是否尚未发过 subscribe_sent。 */
@@ -751,5 +860,20 @@ object PerfTrace {
             null
         }
         return v != "0"
+    }
+
+    /**
+     * 进程启动读一次 `debug.agentmirror.keyecho`。`1` = 开；缺省/其它 = 关。
+     * @contract @pre none @post 不抛；读不到当关 @err none @inv 只在对象初始化调用一次
+     */
+    private fun readKeyEchoProp(): Boolean {
+        val v = try {
+            val clz = Class.forName("android.os.SystemProperties")
+            val m = clz.getMethod("get", String::class.java, String::class.java)
+            m.invoke(null, PROP_KEY_ECHO, "") as? String
+        } catch (_: Throwable) {
+            null
+        }
+        return v == "1"
     }
 }

@@ -41,12 +41,13 @@ android {
     // compileSdk 36：BOM 2025.12.01 依赖链（androidx.core 1.18.0）要求 API 36+，本机已装 platforms 36。
     // targetSdk 保持 35，不改变运行时行为。
     compileSdk = 36
-    // 仅供本地性能对比，不可分发。口令是 Android SDK 公开的 debug keystore 固定值。
+    // 仅供本地 debug vs release 性能对比，⛔ 不可用于分发。
+    // 口令是 Android SDK 公开的 debug keystore 固定值（storePassword/keyAlias/keyPassword），不是秘密。
     val debugKeystore = file(System.getProperty("user.home") + "/.android/debug.keystore")
     signingConfigs {
         create("releasePerfCompare") {
             require(debugKeystore.isFile) {
-                "release 签名失败：未找到 Android debug keystore（${debugKeystore.absolutePath}）。"
+                "release 签名失败：未找到 Android debug keystore（${debugKeystore.absolutePath}）。请先用 SDK 生成该文件，或跑一次 debug 构建；⛔ 不许静默跳过签名。"
             }
             storeFile = debugKeystore
             storePassword = "android"
@@ -63,6 +64,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         release {
@@ -115,10 +117,11 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     // conn 层：协议控制帧 JSON 编解码（kotlinx-serialization-json，Apache-2.0）。
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    // 三核以发布产物引用（group=dev.agentmirror.core，version 钉死基线 tag）。
-    implementation("dev.agentmirror.core:core-protocol:20260822.0")
-    implementation("dev.agentmirror.core:core-terminal:20260822.0")
-    implementation("dev.agentmirror.core:core-conn:20260822.0")
+    // Exact accepted core implementation from 52fc4bd72e5d60fcf24cfa1ae43811ad23e4cfb7.
+    // The immutable version and pinned Maven repository are declared in settings.gradle.kts.
+    implementation("dev.agentmirror.core:core-terminal:20260913.52fc4bd")
+    implementation("dev.agentmirror.core:core-protocol:20260913.52fc4bd")
+    implementation("dev.agentmirror.core:core-conn:20260913.52fc4bd")
     // 配对：OkHttp WebSocket 真实传输（conn 层 WebSocketTransport 接口的 service 实现，
     // 清偿传输欠账①，leader 裁定 A）+ MockWebServer 单测（均 Apache-2.0）。
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -147,6 +150,10 @@ dependencies {
     // releaseImplementation 进 release 主 manifest，见下方 fix-release-test-host 注释）。
     testImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     // release 单测变体的 Compose 测试宿主（fix-release-test-host 清偿门债：testReleaseUnitTest
     // 原 13 红，统一 Unable to resolve ComponentActivity）。
@@ -160,4 +167,6 @@ dependencies {
     // createComposeRule/ActivityScenario 显式 launch 使用），对本应用主流程零影响；
     // debug 变体本就经 debugImplementation 带同一宿主，双变体行为自此对称。
     releaseImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }

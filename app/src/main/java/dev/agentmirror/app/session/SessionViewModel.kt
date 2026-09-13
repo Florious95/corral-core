@@ -178,8 +178,9 @@ class SessionViewModel(
     /** 有分页请求在途（防滚动驻顶时叠发）。 */
     private var historyRequestInFlight = false
 
-    /** 首帧 snapshot 是否已预取过历史（重连重放不重复预取）。 */
+    /** 当前连接首帧 snapshot 是否已预取过历史。 */
     private var hasPrefetchedHistory = false
+    private var awaitingReconnectSnapshot = false
     private var lastFrameColsKey: String? = null
 
     init {
@@ -188,6 +189,10 @@ class SessionViewModel(
         connectionState = manager.state()
         onStateChanged(manager.state())
         manager.addBinaryListener(ref, this)
+        // 按键回显量具：必须 PerfTrace 开 **且** 按键开关开。开会话测量只开前者，挂钩保持 null。
+        if (PerfTrace.isEnabled() && PerfTrace.isKeyEchoEnabled()) {
+            emulator.onAsciiPrint = { ch -> PerfTrace.notePrintableEcho(ch) }
+        }
         // 进入即订阅：conn 层记簿，READY 立发，重连自动重放（004 无状态）。
         manager.subscribe(ref, initialRows, initialCols)
     }
@@ -202,6 +207,7 @@ class SessionViewModel(
             ConnectionState.RECONNECTING -> {
                 // 掉线分页意图作废：重连后快照重放，视口重锚，避免陈旧补页。
                 historyRequestInFlight = false
+                awaitingReconnectSnapshot = true
                 "连接断开，正在重连…"
             }
             ConnectionState.STOPPED -> "连接已断开"
@@ -263,6 +269,7 @@ class SessionViewModel(
             }
             return
         }
+        if (awaitingReconnectSnapshot && frame.kind != BinaryKind.SNAPSHOT) return
         if (PerfTrace.isEnabled()) {
             val kind = when (frame.kind) {
                 BinaryKind.SNAPSHOT -> "snapshot"
@@ -274,6 +281,20 @@ class SessionViewModel(
         when (frame.kind) {
             // 首帧快照：清屏重建（replaySnapshot 而非 feed，经验基）。
             BinaryKind.SNAPSHOT -> {
+                if (awaitingReconnectSnapshot) {
+                    // 断线时仍可浏览旧历史；新代首帧到达才一起替换历史与视口。
+                    emulator.scrollback.clear()
+                    historyNextFromLine = -HISTORY_PAGE
+                    historyRequestedFromLine = 0
+                    historyRequestInFlight = false
+                    hasPrefetchedHistory = false
+                    hasMoreHistory = true
+                    pendingScrollDelta = 0
+                    presenter.onScrollToBottom()
+                    showBackToBottom = false
+                    atHistoryTop = false
+                    awaitingReconnectSnapshot = false
+                }
                 val bookkept = manager.subscriptionSize(ref)
                 val frameCols = bookkept?.second ?: -1
                 val renderCols = emulator.cols
@@ -521,6 +542,37 @@ class SessionViewModel(
     }
 
     /**
+     * 壳采集的一次鼠标/触点：行列已是 1-based。编码只问核层 [TerminalEmulator.encodeMouse]，
+     * 返回 null 则不发帧（对面没开跟踪）。非空才走 [ConnectionManager.sendRawBytes]。
+     *
+     * 不走 sendDraft 发送闸，避免一次点击把键盘路径卡在 Sending。
+     *
+     * @return true 当且仅当发出了带 bytes 的 input 帧
+     */
+    fun onTermMouse(
+        column: Int,
+        row: Int,
+        press: Boolean,
+        motion: Boolean = false,
+        shift: Boolean = false,
+        meta: Boolean = false,
+        ctrl: Boolean = false,
+    ): Boolean {
+        val bytes = emulator.encodeMouse(
+            button = 0,
+            column = column,
+            row = row,
+            press = press,
+            motion = motion,
+            shift = shift,
+            meta = meta,
+            ctrl = ctrl,
+        ) ?: return false
+        if (bytes.isEmpty()) return false
+        return manager.sendRawBytes(ref, bytes)
+    }
+
+    /**
      * 处理手势滚动（缺陷④ 远端滚动投送，由 TermSurfaceView 经 onRemoteScrollBy 回调触发）。
      *
      * READY 状态：以 50ms 节流发 ScrollWheelFrame 到服务端；delta = -deltaLines（协议约定
@@ -540,8 +592,8 @@ class SessionViewModel(
      * @inv lastScrollSentMs 单调递增；pendingScrollDelta 发出后归零；connectionState 不被本方法改变
      */
     fun onScrollWheel(deltaLines: Int) {
-        if (connectionState != ConnectionState.READY) {
-            // 降级：非 READY（掉线/重连/停止）时走本地缓冲，保证用户仍可看历史。
+        if (connectionState != ConnectionState.READY || awaitingReconnectSnapshot) {
+            // 首帧未到或非 READY 时走本地缓冲，保证用户仍可看离线历史。
             presenter.onScrollBy(deltaLines)
             return
         }
@@ -576,7 +628,7 @@ class SessionViewModel(
 
     /** 拉一页更老历史；在途或已到顶不叠发（同模块测试直接驱动）。 */
     internal fun requestOlderHistoryPage() {
-        if (!hasMoreHistory || historyRequestInFlight) return
+        if (awaitingReconnectSnapshot || !hasMoreHistory || historyRequestInFlight) return
         historyRequestedFromLine = historyNextFromLine
         if (manager.scrollback(ref, historyRequestedFromLine, HISTORY_PAGE.toLong())) {
             historyRequestInFlight = true

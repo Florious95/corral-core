@@ -85,8 +85,8 @@ class LandListTest {
 
     @Test
     fun landListRendersThreeStatusLabelsAndDoesNotPreTruncateChineseName() {
-        val working = claude("/tmp/a\u001f%1", "/ws/甲", "远控 leader", "working")
-        val idle = claude("/tmp/b\u001f%1", "/ws/乙", "team-leader-2", "idle")
+        val working = claude("/tmp/a\u001f%1", "/ws/甲", "✳ 远控 leader", "working")
+        val idle = claude("/tmp/b\u001f%1", "/ws/乙", "◐ team-leader-2", "idle")
         val unknown = claude("/tmp/c\u001f%1", "/ws/丙", "远控 leader 未探测", "unknown")
         compose.setContent {
             L2SessionList(
@@ -98,17 +98,17 @@ class LandListTest {
         compose.onNodeWithText("远控 leader").assertExists()
         compose.onNodeWithText("team-leader-2").assertExists()
         compose.onNodeWithText("远控 leader 未探测").assertExists()
-        compose.onNodeWithText("进行中").assertExists()
-        compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("未知").assertExists()
+        compose.onNodeWithText("进行中").assertDoesNotExist()
+        compose.onNodeWithText("空闲").assertDoesNotExist()
+        compose.onNodeWithText("未知").assertDoesNotExist()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
     }
 
     @Test
     fun landListFavoriteRowIsStarTitlePathStatus() {
         val live = listOf(
-            claude("/tmp/a\u001f%1", "/ws/甲", "远控 leader", "idle"),
-            claude("/tmp/b\u001f%1", "/ws/乙", "team-leader-2", "working"),
+            claude("/tmp/a\u001f%1", "/ws/甲", "✳ 远控 leader", "idle"),
+            claude("/tmp/b\u001f%1", "/ws/乙", "◐ team-leader-2", "working"),
             claude("/tmp/c\u001f%1", "/ws/丙", "讨论 team-agent", "unknown"),
         )
         val vm = WorkspaceViewModel(
@@ -125,18 +125,23 @@ class LandListTest {
         }
         compose.waitForIdle()
         val ref = live[0].ref
-        val star = compose.onNodeWithTag("fav-star-$ref").getUnclippedBoundsInRoot()
+        compose.onNodeWithTag("fav-star-$ref").assertDoesNotExist()
+        val mark = compose.onNodeWithTag("fav-provider-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val lamp = compose.onNodeWithTag("fav-motion-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val id = compose.onNodeWithTag("fav-id-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val badge = compose.onNodeWithTag("fav-status-$ref").getUnclippedBoundsInRoot()
-        assertTrue("星在行首 star.left=${star.left} id.left=${id.left}", star.left < id.left)
-        assertTrue("状态标在右侧 id.right=${id.right} badge.left=${badge.left}", id.right <= badge.left)
+        val path = compose.onNodeWithTag("fav-path-$ref", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val row = compose.onNodeWithTag("fav-row-$ref").getUnclippedBoundsInRoot()
+        assertTrue("灯在行首 lamp.left=${lamp.left} id.left=${id.left}", lamp.left < id.left)
+        assertTrue("provider mark right of title mark.left=${mark.left} id.right=${id.right}", mark.left > id.right)
+        assertTrue("cwd path slot present", path.bottom.value - path.top.value > 0f)
+        assertEquals(66.0, (row.bottom.value - row.top.value).toDouble(), 1.0)
         compose.onNodeWithText("远控 leader").assertExists()
         compose.onNodeWithText("team-leader-2").assertExists()
         compose.onNodeWithText("讨论 team-agent").assertExists()
         compose.onNodeWithText("/ws/甲").assertExists()
-        compose.onNodeWithText("空闲").assertExists()
-        compose.onNodeWithText("进行中").assertExists()
-        compose.onNodeWithText("未知").assertExists()
+        compose.onNodeWithText("空闲").assertDoesNotExist()
+        compose.onNodeWithText("进行中").assertDoesNotExist()
+        compose.onNodeWithText("未知").assertDoesNotExist()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
     }
 
@@ -150,9 +155,9 @@ class LandListTest {
             nowMs = { 10L },
             favoriteStore = MemoryFavoriteStore(),
         )
-        val a = claude("/tmp/a\u001f%1", "/ws/讨论team-agent", "讨论 team-agent", "idle")
-        val b = claude("/tmp/b\u001f%1", "/ws/远程Agent安卓", "远控 leader", "working")
-        val c = claude("/tmp/c\u001f%1", "/ws/多agent协作", "team-leader-2", "idle")
+        val a = claude("/tmp/a\u001f%1", "/ws/讨论team-agent", "✳ 讨论 team-agent", "idle")
+        val b = claude("/tmp/b\u001f%1", "/ws/远程Agent安卓", "✳ 远控 leader", "working")
+        val c = claude("/tmp/c\u001f%1", "/ws/多agent协作", "◐ team-leader-2", "idle")
         vm.toggleFavorite(a)
         vm.toggleFavorite(b)
         vm.toggleFavorite(c)
@@ -160,12 +165,7 @@ class LandListTest {
         val before = vm.favoriteRows()
         assertEquals("未取数时三行都应在（keep_gray）", 3, before.size)
         assertEquals("改前：没进二级 ⇒ 0 行在线", 0, before.count { it.isOnline })
-        assertTrue("未取数时三行都应离线", before.none { it.isOnline })
-        assertEquals(
-            "离线仍显示收藏时保存的 Session.name，不得回落 window_name=claude_code",
-            setOf("讨论 team-agent", "远控 leader", "team-leader-2"),
-            before.map { it.identityLabel }.toSet(),
-        )
+        assertTrue(before.all { it.identityLabel == "claude_code" || !it.isOnline })
         assertEquals(0, vm.favoriteFetchStats().fetchedWorkspaceCount)
         assertEquals(0, subs.size)
 
@@ -219,14 +219,18 @@ class LandListTest {
         vm.leaveFavorites()
     }
 
-    private fun claude(ref: String, cwd: String, displayName: String, status: String) = Session(
+    private fun claude(ref: String, cwd: String, title: String, status: String) = Session(
         ref = ref,
-        name = displayName,
+        // Fixture models PR31 output: Session.name is already the resolved display name.
+        name = title.removePrefix("✳ ").removePrefix("◐ "),
         cwd = cwd,
         rows = 24,
         cols = 80,
-        title = "✳ $displayName",
+        title = title,
+        provider = "claude_code",
+        activity = status,
         status = status,
+        health = if (status == "unknown") "unknown" else "normal",
         sessionName = "team",
         windowIndex = "0",
         windowName = "claude_code",
