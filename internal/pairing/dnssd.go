@@ -195,7 +195,76 @@ func (a *Advertiser) send(ttl uint32) error {
 }
 
 func dnsQueryMatches(p []byte) bool {
+	// Keep accepting the tiny text seam used by package tests, but parse real
+	// DNS-SD packets by labels: a wire question stores each label with a length
+	// byte, so `_agentmirror._tcp` never appears as one contiguous substring.
+	if len(p) < 12 {
+		return strings.Contains(string(p), DNSServiceType) || strings.Contains(string(p), "_services._dns-sd._udp")
+	}
+	questions := int(binary.BigEndian.Uint16(p[4:6]))
+	if questions > 0 {
+		off := 12
+		for i := 0; i < questions; i++ {
+			name, next, ok := readDNSQuestionName(p, off)
+			if !ok || next+4 > len(p) {
+				break
+			}
+			if name == DNSServiceType+".local" || name == "_services._dns-sd._udp.local" {
+				return true
+			}
+			off = next + 4 // QTYPE + QCLASS
+		}
+	}
+	// Compatibility seam for the package's pre-wire tests and callers that
+	// provide only the textual service name rather than a DNS packet.
 	return strings.Contains(string(p), DNSServiceType) || strings.Contains(string(p), "_services._dns-sd._udp")
+}
+
+// readDNSQuestionName decodes one DNS name and returns the offset immediately
+// after its question-name encoding. mDNS questions normally use labels, but
+// handling compression pointers makes the matcher safe for valid DNS packets
+// emitted by generic discovery libraries as well.
+func readDNSQuestionName(p []byte, off int) (string, int, bool) {
+	labels := make([]string, 0, 4)
+	pos := off
+	next := off
+	jumped := false
+	visited := make(map[int]struct{})
+	for {
+		if pos >= len(p) {
+			return "", 0, false
+		}
+		n := int(p[pos])
+		switch {
+		case n == 0:
+			if !jumped {
+				next = pos + 1
+			}
+			return strings.Join(labels, "."), next, true
+		case n&0xc0 == 0xc0:
+			if pos+1 >= len(p) {
+				return "", 0, false
+			}
+			ptr := (n&0x3f)<<8 | int(p[pos+1])
+			if ptr >= len(p) {
+				return "", 0, false
+			}
+			if _, seen := visited[ptr]; seen {
+				return "", 0, false
+			}
+			visited[ptr] = struct{}{}
+			if !jumped {
+				next = pos + 2
+				jumped = true
+			}
+			pos = ptr
+		case n&0xc0 != 0 || n > 63 || pos+1+n > len(p):
+			return "", 0, false
+		default:
+			labels = append(labels, string(p[pos+1:pos+1+n]))
+			pos += 1 + n
+		}
+	}
 }
 
 func dnsPacket(a DNSAdvertisement, ttl uint32) []byte {

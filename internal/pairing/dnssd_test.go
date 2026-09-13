@@ -78,6 +78,24 @@ func TestProductionAnnounceAndQueryUseLiveTTL(t *testing.T) {
 	assertLiveDNSPacket(t, all[len(all)-1], adv, 0)
 }
 
+func TestDNSQueryMatchesWireLabels(t *testing.T) {
+	packet := make([]byte, 12)
+	binary.BigEndian.PutUint16(packet[4:6], 1) // QDCOUNT
+	packet = append(packet, 12, '_', 'a', 'g', 'e', 'n', 't', 'm', 'i', 'r', 'r', 'o', 'r', 4, '_', 't', 'c', 'p', 5, 'l', 'o', 'c', 'a', 'l', 0)
+	packet = append(packet, 0, 12, 0, 1) // PTR, IN
+	if !dnsQueryMatches(packet) {
+		t.Fatal("wire DNS-SD question was not recognized")
+	}
+
+	services := make([]byte, 12)
+	binary.BigEndian.PutUint16(services[4:6], 1)
+	services = append(services, 9, '_', 's', 'e', 'r', 'v', 'i', 'c', 'e', 's', 7, '_', 'd', 'n', 's', '-', 's', 'd', 4, '_', 'u', 'd', 'p', 5, 'l', 'o', 'c', 'a', 'l', 0)
+	services = append(services, 0, 12, 0, 1)
+	if !dnsQueryMatches(services) {
+		t.Fatal("wire service-enumeration question was not recognized")
+	}
+}
+
 func TestDNSRegistrationValidatesIdentityAndPort(t *testing.T) {
 	for _, adv := range []DNSAdvertisement{{HostID: "bad", Port: 9900}, {HostID: "AAAAAAAAAAAAAAAAAAAAAAAAAA", Port: 0}, {HostID: "AAAAAAAAAAAAAAAAAAAAAAAAAA", Port: 65536}} {
 		if got, err := RegisterDNSService(adv); err == nil || got != nil {
