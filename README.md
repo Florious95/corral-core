@@ -1,8 +1,10 @@
-# server — 服务端（Go）
+# corral-serve — corral 服务端（Go）
 
-AgentMirror（产品名，module `github.com/agentmirror/agentmirror`）的服务端 sidecar 守护进程。
+> **产品品牌：corral**。本仓库为 `Florious95/corral-serve`，默认从远端 `main` 开始；当前服务端命名实现位于 `internal/sessionname/`，守护进程入口为 `cmd/agentmirrord/`，二进制名为 `agentmirrord`。
+>
+> 三仓职责：`Florious95/corral-core` 维护 Android 核心与已接受参考 App，`Florious95/corral-app` 是日常 Android App，`Florious95/corral-serve` 维护本服务端。当前接受服务端基线为 `ca2bef1f47049760fd0748802a42decb29690646`；从本仓库 `main` 构建。
 
-> 产品定名 **agentmirror**（naming 任务裁定，2026-08-09）。服务端二进制名 `agentmirrord`。
+corral 的服务端 sidecar 守护进程。
 
 ## 定位
 
