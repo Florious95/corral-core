@@ -96,8 +96,11 @@ func TestL2StructuralFields(t *testing.T) {
 	if s.Ref != wantRef {
 		t.Fatalf("ref = %q, want structural %q", s.Ref, wantRef)
 	}
-	if s.Name != "claude" {
-		t.Fatalf("name = %q, want window_name %q", s.Name, "claude")
+	// Old 023: Name was the window_name even when it duplicated the
+	// foreground command. Requirement 101 filters that as noise and uses
+	// the cleaned title segment instead. WindowName stays structural.
+	if s.Name != "w-librarian" {
+		t.Fatalf("name = %q, want title segment %q (old rule: window_name claude)", s.Name, "w-librarian")
 	}
 	if s.Cwd != "/ws/a" {
 		t.Fatalf("cwd = %q, want pane_current_path /ws/a", s.Cwd)

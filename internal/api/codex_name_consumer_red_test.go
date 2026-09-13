@@ -1,11 +1,11 @@
 package api
 
-// This is a red-only consumer contract test bound to S-RUN 33b4c48. It calls
-// the existing listing/toSession and Level2 conversion paths; it does not
-// reimplement either conversion. The expected display name is the complete
-// Codex pane title observed from the controlled OSC samples. S-RUN currently
-// emits window_name ("node") as Name, so this test is intentionally NOT RUN
-// in this task because local Go compilation is prohibited.
+// This consumer contract test calls the existing listing/toSession and Level2
+// conversion paths; it does not reimplement either conversion.
+//
+// Old Codex-complete-title rule → requirement 101: window_name=node is noise,
+// so name is the first non-project title segment. Title stays the full OSC
+// string. Structural window fields are unchanged.
 
 import (
 	"context"
@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	codexTitleA = "编码甲 | 远程Agent安卓"
-	codexTitleB = "审查乙 | 远程Agent安卓"
+	codexTitleA    = "编码甲 | 远程Agent安卓"
+	codexTitleB    = "审查乙 | 远程Agent安卓"
+	codexNameA     = "编码甲"
+	codexNameB     = "审查乙"
 	codexRedSocket = "/synthetic/codex-name-red.sock"
 )
 
@@ -46,18 +48,18 @@ func codexNameRedModel() discovery.Model {
 	}}}
 }
 
-func assertCodexListingDisplayNames(t *testing.T, sessions []protocol.Session) {
+func assertUnifiedListingDisplayNames(t *testing.T, sessions []protocol.Session) {
 	t.Helper()
 	want := map[string]string{
-		codexRedSocket + "\x1f%0": codexTitleA,
-		codexRedSocket + "\x1f%1": codexTitleB,
+		codexRedSocket + "\x1f%0": codexNameA,
+		codexRedSocket + "\x1f%1": codexNameB,
 	}
 	if len(sessions) != len(want) {
 		t.Fatalf("sessions = %d, want %d", len(sessions), len(want))
 	}
 	for _, s := range sessions {
 		if s.Name != want[s.Ref] {
-			t.Errorf("ref=%q name=%q want complete Codex title %q: old consumer uses window_name=node", s.Ref, s.Name, want[s.Ref])
+			t.Errorf("ref=%q name=%q want title segment %q", s.Ref, s.Name, want[s.Ref])
 		}
 		if s.WindowName != "node" || s.WindowIndex != "0" {
 			t.Errorf("ref=%q structural fields=%q/%q want window_name=node/window_index=0", s.Ref, s.WindowName, s.WindowIndex)
@@ -65,14 +67,14 @@ func assertCodexListingDisplayNames(t *testing.T, sessions []protocol.Session) {
 	}
 }
 
-func assertCodexLevel2DisplayNames(t *testing.T, sessions []protocol.Session) {
+func assertUnifiedLevel2DisplayNames(t *testing.T, sessions []protocol.Session) {
 	t.Helper()
 	if len(sessions) != 2 {
 		t.Fatalf("sessions = %d, want 2", len(sessions))
 	}
 	for _, s := range sessions {
-		if s.Name != s.Title {
-			t.Errorf("ref=%q name=%q title=%q: display name must preserve complete Codex title", s.Ref, s.Name, s.Title)
+		if s.Name == s.Title {
+			t.Errorf("ref=%q name unexpectedly equals complete title %q", s.Ref, s.Title)
 		}
 		if s.WindowName != "node" || s.WindowIndex != "0" {
 			t.Errorf("ref=%q structural fields=%q/%q want window_name=node/window_index=0", s.Ref, s.WindowName, s.WindowIndex)
@@ -80,10 +82,7 @@ func assertCodexLevel2DisplayNames(t *testing.T, sessions []protocol.Session) {
 	}
 }
 
-// TestCodexOfficialTitlePreservedInListingAndLevel2 executes both existing
-// conversion paths. On S-RUN it is expected to fail with name="node" and the
-// two complete titles in Title; that failure is the named consumer red.
-func TestCodexOfficialTitlePreservedInListingAndLevel2(t *testing.T) {
+func TestUnifiedTitleSegmentInListingAndLevel2(t *testing.T) {
 	model := codexNameRedModel()
 	observations := map[string]nodeprobe.Observation{
 		codexRedSocket + "\x1f%0": {Provider: "codex", Activity: "idle", Health: "normal"},
@@ -95,7 +94,7 @@ func TestCodexOfficialTitlePreservedInListingAndLevel2(t *testing.T) {
 	if len(listing) != 1 {
 		t.Fatalf("listing workspaces = %d, want 1", len(listing))
 	}
-	assertCodexListingDisplayNames(t, listing[0].Sessions)
+	assertUnifiedListingDisplayNames(t, listing[0].Sessions)
 
 	discoverer := &mutableDiscoverer{model: &model}
 	e := startWS(t, Options{
@@ -109,5 +108,9 @@ func TestCodexOfficialTitlePreservedInListingAndLevel2(t *testing.T) {
 	e.auth()
 	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/Volumes/nvme/Projects/远程Agent安卓"})
 	frame := waitLevel2Frame(t, e, 5*time.Second)
-	assertCodexLevel2DisplayNames(t, frame.Sessions)
+	assertUnifiedLevel2DisplayNames(t, frame.Sessions)
+	assertUnifiedListingDisplayNames(t, frame.Sessions)
+	if frame.Sessions[0].Title != codexTitleA && frame.Sessions[1].Title != codexTitleA {
+		t.Fatalf("verbatim titles lost: %+v", frame.Sessions)
+	}
 }

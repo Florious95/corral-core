@@ -1,19 +1,17 @@
 package api
 
-// session_name_test.go pins the display-name resolution of toSession (task
-// fix-session-alias): the client renders the tmux window name when the pane
-// carries one, and falls back to the tmux session name when it does not.
-// Pure logic tests: no tmux, no WebSocket.
+// session_name_test.go pins display-name resolution of toSession.
+// Requirement 023's unconditional window_name (then tmux session fallback) is
+// replaced by requirement 101: meaningful non-project window names still win;
+// the tmux session team name is never a fallback.
 
 import (
 	"testing"
 
 	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/sessionname"
 )
 
-// TestToSessionPrefersWindowName pins the primary rule: a pane whose window
-// name was discovered must render that name (e.g. "wiki-r5-acceptance-tester"),
-// not the whole-team session name it lives under.
 func TestToSessionPrefersWindowName(t *testing.T) {
 	pane := discovery.Pane{
 		Socket:      "/sock",
@@ -33,9 +31,7 @@ func TestToSessionPrefersWindowName(t *testing.T) {
 	}
 }
 
-// TestToSessionFallsBackToSessionName pins the fallback rule: a pane without a
-// window name (scan could not produce one) renders the tmux session name.
-func TestToSessionFallsBackToSessionName(t *testing.T) {
+func TestToSessionDoesNotFallBackToTmuxSessionName(t *testing.T) {
 	pane := discovery.Pane{
 		Socket:      "/sock",
 		Session:     "team-refactor-maintainability",
@@ -48,7 +44,13 @@ func TestToSessionFallsBackToSessionName(t *testing.T) {
 	}
 	e := &sessionEntry{ref: sessionRef(pane), pane: pane}
 	s := toSession(e)
-	if s.Name != "team-refactor-maintainability" {
-		t.Fatalf("toSession name = %q, want the session fallback %q", s.Name, "team-refactor-maintainability")
+	if s.Name == pane.Session {
+		t.Fatalf("toSession used tmux session %q", s.Name)
+	}
+	if s.Name != "a" {
+		t.Fatalf("toSession name = %q, want project basename from cwd (old rule: tmux session)", s.Name)
+	}
+	if sessionname.Resolve(pane.WindowName, pane.PaneTitle, pane.CWD, pane.Command).Value != s.Name {
+		t.Fatal("toSession diverged from sessionname.Resolve")
 	}
 }

@@ -374,8 +374,17 @@ func TestSessionFourAxisJSONAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(data, []byte(`"session_name":null`)) {
-		t.Fatalf("nullable name not JSON null: %s", data)
+	if bytes.Contains(data, []byte(`"session_name"`)) {
+		t.Fatalf("nil session_name must be omitted (20260822 kotlinx non-null String): %s", data)
+	}
+	nullWire := []byte(`{"v":1,"type":"level2_frame","payload":{"workspace":"/w","seq":1,"sessions":[{"ref":"r","name":"n","window_name":"node","window_index":"3","cwd":"/w","title":"","provider":"pi","activity":"working","session_name":null,"health":"normal","status":"working","rows":24,"cols":80}]}}`)
+	decoded, err := protocol.UnmarshalFrame(nullWire)
+	if err != nil {
+		t.Fatalf("historical session_name JSON null must still decode: %v", err)
+	}
+	gotNull := decoded.(protocol.Level2Frame).Sessions[0]
+	if gotNull.SessionName != nil {
+		t.Fatalf("JSON null session_name should decode to nil pointer, got %#v", gotNull.SessionName)
 	}
 	for _, bad := range []protocol.Session{
 		{Ref: "r", Cwd: "/w", Rows: 1, Cols: 1, Provider: "pi", Activity: "busy", Health: "normal", Status: "busy"},

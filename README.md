@@ -21,11 +21,11 @@ tmux server（含 team-agent 私有 socket），存量 Agent CLI 自动纳管，
 
 `listing` 与 `level2_frame` 的 `sessions` 共用同一服务端投影：`ref` 是稳定的
 `socket + pane` 身份键，`window_name` 与字符串形式的 `window_index` 是独立的 tmux
-结构元数据，而 `name` 只用于显示。确认 `provider=codex` 时，`name` 原样保留完整 OSC
-`title`；确认 `provider=pi` 时，`name` 仅取非空且无冲突的 `session_name`。权威名
-缺失时 `name` 为空，客户端显示“名称未知”，不退回 `node`、cwd、编号或旧缓存。
-其他 provider 继续使用既有 `window_name` → tmux session fallback。`title` 始终逐字
-透传，名称变化不改变 `ref` 或收藏键。
+结构元数据，而 `name` 只用于显示。所有 Provider 走同一算法（`internal/sessionname`）：
+有效非工程窗口名优先，其次标题按 `|` / 空白包围的 `-` 分段，工程名（cwd 末段）最低，
+再否则 `未命名会话`。函数不读取 Provider、活动/健康或原生 `session_name`；原生字段
+仍按协议透传，但不得覆盖 `name`。App 只渲染服务端 `Session.name`，不再按 Provider
+二次取名。`title` 始终逐字透传，名称变化不改变 `ref` 或收藏键。
 
 ## 目录结构
 
@@ -39,6 +39,7 @@ server/
     ├── protocol/         # WS 帧类型（任务 protocol-spec）
     ├── api/              # WS 服务 + 图片上传（任务 ws-api）
     ├── pairing/          # token + QR 配对（任务 pairing-security）
+    ├── sessionname/      # Provider-agnostic Session.name（需求 101）
     └── tsnetd/           # tsnet 内嵌监听（任务 tsnet-embed）
 ```
 
