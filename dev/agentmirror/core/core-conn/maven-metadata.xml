@@ -3,11 +3,12 @@
   <groupId>dev.agentmirror.core</groupId>
   <artifactId>core-conn</artifactId>
   <versioning>
-    <latest>20260822.0</latest>
-    <release>20260822.0</release>
+    <latest>20260913.52fc4bd</latest>
+    <release>20260913.52fc4bd</release>
     <versions>
       <version>20260822.0</version>
+      <version>20260913.52fc4bd</version>
     </versions>
-    <lastUpdated>20260822061708</lastUpdated>
+    <lastUpdated>20260913143836</lastUpdated>
   </versioning>
 </metadata>
