@@ -1,9 +1,10 @@
-# AgentMirror — 手机上的 tmux 舰队
+# corral-core — Android 核心模块与接受参考
 
-> **产品定名 agentmirror**（naming 任务裁定，2026-08-09）。`github.com/agentmirror` org 待发布时注册。
-> 代码仓库：`github.com/agentmirror/agentmirror`（模块路径）、App `dev.agentmirror.app`（014 裁定）、服务端二进制 `agentmirrord`。
+> **产品品牌：corral**。本仓库为 `Florious95/corral-core`，默认从远端 `main` 开始，提供 `app/core-*` 核心模块与 `app/app/` 的已接受参考源码；`app/app/` 不是日常 App 入口。
+>
+> 三仓职责：`Florious95/corral-core` 维护 Android 核心；`Florious95/corral-app` 是日常 Android App（默认从 `main` 构建，固定使用 `dev.agentmirror.core` 的 `20260913.52fc4bd` 发布依赖，发布源为本仓库 `maven` 提交 `7bdd02c1e1914a99df77ab8f1d8c2aab1652fbd5`）；`Florious95/corral-serve` 维护服务端当前实现与构建入口。接受核心/App基线为 `52fc4bd72e5d60fcf24cfa1ae43811ad23e4cfb7`，服务端基线为 `ca2bef1f47049760fd0748802a42decb29690646`。
 
-**AgentMirror 是一面手机镜子，映出你主机上所有 tmux 里的 Agent 舰队。**
+**corral 是一面手机镜子，映出你主机上所有 tmux 里的 Agent 舰队。**
 
 主机是唯一运行时，手机只是显示器 + 键盘。服务端是一个 **sidecar**——attach 到用户**已经在跑**的
 tmux 会话上，不要求任何东西为它重启：启动那一刻扫描主机上所有 tmux server（含 team-agent 私有
@@ -47,20 +48,26 @@ socket），存量 Agent CLI 自动纳管，零迁移成本（需求 001）。
 
 ## 快速开始
 
-### 服务端：一条命令起
+### 服务端：入口在 corral-serve
+
+服务端不在本仓库；从 `Florious95/corral-serve` 的 `main` 开始，构建与运行入口为：
 
 ```bash
-cd server
+cd corral-serve
+go build ./...
 go run ./cmd/agentmirrord -listen 0.0.0.0:9900
 ```
 
-可选联网 flag（tailnet 直达，免局域网发现）：`-ts-authkey <key>`（见 `server/README.md` 配置表）。
+### App：日常入口在 corral-app
 
-### App：扫码即连
+日常 Android App 不从本仓库的 `app/app/` 构建；从 `Florious95/corral-app` 的 `main` 开始，固定依赖 `20260913.52fc4bd`：
 
-1. 服务端 stdout 打印配对二维码（ANSI half-block，无图片管线）。
-2. Android 端装 App，扫码——二维码载服务端地址 + 配对 token。
-3. 已配对连接直接进舰队视图：按工程导航、状态一屏尽收、点 pane 进终端。
+```bash
+cd corral-app
+./gradlew --no-daemon --console=plain :app:assembleDebug
+```
+
+App 首次连接流程：服务端 stdout 打印配对二维码，Android 端扫码后进入舰队视图。
 
 > 服务端无配置文件：全部配置来自 flag + 环境变量（sidecar 单二进制哲学）。
 
