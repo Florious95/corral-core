@@ -75,9 +75,10 @@ class HostDiscoveryFlowTest {
         vm.onTsnetState(TsnetState.Up(TsnetProxy("127.0.0.1", 1080, "cred")))
 
         assertEquals(listOf("tskey-auth-test-key"), startedTsKeys)
-        assertEquals(1, requests.size)
-        assertEquals("host-1234", requests.single().hostId)
-        assertEquals(endpoint.address, requests.single().destIp)
+        assertEquals(2, requests.size)
+        assertEquals("host-1234", requests.first().hostId)
+        assertEquals(endpoint.address, requests.first().destIp)
+        assertEquals("192.0.2.2", requests[1].destIp)
         assertEquals("identity proof precedes exactly one WS attempt", 1, wsCreations)
         assertNotNull(vm.pairingStatus)
     }

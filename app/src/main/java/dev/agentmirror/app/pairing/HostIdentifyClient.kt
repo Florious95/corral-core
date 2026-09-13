@@ -6,6 +6,8 @@
 package dev.agentmirror.app.pairing
 
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.tsnet.TsnetDial
+import dev.agentmirror.app.tsnet.TsnetWire
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -243,7 +245,7 @@ class OkHttpHostHttpTransport(
             builder.get()
         }
         return runCatching {
-            client.newCall(builder.build()).execute().use { response ->
+            clientFor(endpoint).newCall(builder.build()).execute().use { response ->
                 val source = response.body?.source()
                 if (source == null) {
                     DiagLog.record(
@@ -279,6 +281,17 @@ class OkHttpHostHttpTransport(
                     "kind=${error.javaClass.simpleName} http_code=599",
             )
             HostHttpResponse(599)
+        }
+    }
+
+    /** Tailnet identity requests must traverse the same authenticated tsnet SOCKS seam as WS. */
+    private fun clientFor(endpoint: HostEndpoint): OkHttpClient {
+        val socketFactory = TsnetDial.socketFactoryFor(TsnetWire.state, endpoint.address)
+        return if (socketFactory == null) client else {
+            client.newBuilder()
+                .socketFactory(socketFactory)
+                .proxy(java.net.Proxy.NO_PROXY)
+                .build()
         }
     }
 
