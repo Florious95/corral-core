@@ -37,9 +37,11 @@ func (d *indexedDiscoverer) Discover(ctx context.Context) (*discovery.Model, err
 			removed = append(removed, socket)
 		}
 	}
-	// Publish routing before the caller starts the expensive global status
-	// sampling. Unrelated sampler failures cannot hide a healthy workspace.
-	d.index.Observe(&discovery.Model{}, removed)
+	// Publish the complete model so the workspace index has an authoritative
+	// cwd-to-socket route as soon as host discovery finishes. Partial routes
+	// may already have unblocked scoped refreshes while workers ran; the final
+	// model also retires sockets absent from this generation.
+	d.index.Observe(model, removed)
 	return model, nil
 }
 
