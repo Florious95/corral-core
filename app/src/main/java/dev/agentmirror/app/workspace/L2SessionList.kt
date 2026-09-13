@@ -44,7 +44,7 @@ internal const val L2_STAR_RIPPLE_BOUNDED = false
 
 /**
  * 二级菜单列表（061/067/072）：每行星标在会话名之前，右侧状态标。
- * 点行用结构 ref + 结构名，title 不参与。点星只切换收藏。
+ * 点行用结构 ref + 服务端 Session.name，title 不参与。点星只切换收藏。
  */
 @Composable
 internal fun L2SessionList(

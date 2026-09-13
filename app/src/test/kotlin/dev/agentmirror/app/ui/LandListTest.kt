@@ -85,8 +85,8 @@ class LandListTest {
 
     @Test
     fun landListRendersThreeStatusLabelsAndDoesNotPreTruncateChineseName() {
-        val working = claude("/tmp/a\u001f%1", "/ws/甲", "✳ 远控 leader", "working")
-        val idle = claude("/tmp/b\u001f%1", "/ws/乙", "◐ team-leader-2", "idle")
+        val working = claude("/tmp/a\u001f%1", "/ws/甲", "远控 leader", "working")
+        val idle = claude("/tmp/b\u001f%1", "/ws/乙", "team-leader-2", "idle")
         val unknown = claude("/tmp/c\u001f%1", "/ws/丙", "远控 leader 未探测", "unknown")
         compose.setContent {
             L2SessionList(
@@ -107,8 +107,8 @@ class LandListTest {
     @Test
     fun landListFavoriteRowIsStarTitlePathStatus() {
         val live = listOf(
-            claude("/tmp/a\u001f%1", "/ws/甲", "✳ 远控 leader", "idle"),
-            claude("/tmp/b\u001f%1", "/ws/乙", "◐ team-leader-2", "working"),
+            claude("/tmp/a\u001f%1", "/ws/甲", "远控 leader", "idle"),
+            claude("/tmp/b\u001f%1", "/ws/乙", "team-leader-2", "working"),
             claude("/tmp/c\u001f%1", "/ws/丙", "讨论 team-agent", "unknown"),
         )
         val vm = WorkspaceViewModel(
@@ -150,9 +150,9 @@ class LandListTest {
             nowMs = { 10L },
             favoriteStore = MemoryFavoriteStore(),
         )
-        val a = claude("/tmp/a\u001f%1", "/ws/讨论team-agent", "✳ 讨论 team-agent", "idle")
-        val b = claude("/tmp/b\u001f%1", "/ws/远程Agent安卓", "✳ 远控 leader", "working")
-        val c = claude("/tmp/c\u001f%1", "/ws/多agent协作", "◐ team-leader-2", "idle")
+        val a = claude("/tmp/a\u001f%1", "/ws/讨论team-agent", "讨论 team-agent", "idle")
+        val b = claude("/tmp/b\u001f%1", "/ws/远程Agent安卓", "远控 leader", "working")
+        val c = claude("/tmp/c\u001f%1", "/ws/多agent协作", "team-leader-2", "idle")
         vm.toggleFavorite(a)
         vm.toggleFavorite(b)
         vm.toggleFavorite(c)
@@ -160,7 +160,12 @@ class LandListTest {
         val before = vm.favoriteRows()
         assertEquals("未取数时三行都应在（keep_gray）", 3, before.size)
         assertEquals("改前：没进二级 ⇒ 0 行在线", 0, before.count { it.isOnline })
-        assertTrue(before.all { it.identityLabel == "claude_code" || !it.isOnline })
+        assertTrue("未取数时三行都应离线", before.none { it.isOnline })
+        assertEquals(
+            "离线仍显示收藏时保存的 Session.name，不得回落 window_name=claude_code",
+            setOf("讨论 team-agent", "远控 leader", "team-leader-2"),
+            before.map { it.identityLabel }.toSet(),
+        )
         assertEquals(0, vm.favoriteFetchStats().fetchedWorkspaceCount)
         assertEquals(0, subs.size)
 
@@ -214,13 +219,13 @@ class LandListTest {
         vm.leaveFavorites()
     }
 
-    private fun claude(ref: String, cwd: String, title: String, status: String) = Session(
+    private fun claude(ref: String, cwd: String, displayName: String, status: String) = Session(
         ref = ref,
-        name = "claude_code",
+        name = displayName,
         cwd = cwd,
         rows = 24,
         cols = 80,
-        title = title,
+        title = "✳ $displayName",
         status = status,
         sessionName = "team",
         windowIndex = "0",

@@ -342,6 +342,7 @@ class WorkspaceViewModel(
         )
         favoriteBook.toggle(
             ref = entry.ref,
+            name = entry.name,
             sessionName = entry.sessionName,
             windowIndex = entry.windowIndex,
             windowName = entry.windowName,
@@ -354,6 +355,7 @@ class WorkspaceViewModel(
     fun toggleFavorite(row: FavoriteRow) {
         favoriteBook.toggle(
             ref = row.ref,
+            name = row.name,
             sessionName = row.sessionName,
             windowIndex = row.windowIndex,
             windowName = row.windowName,
@@ -677,6 +679,8 @@ class WorkspaceViewModel(
         // 快照整表替换，status 以本帧为准（同一会话身份 working→idle 必须换徽章）。
         // 即使当前没订着这个 cwd（离开二级的缝里），也先写入缓存，避免再进去仍是旧状态。
         val incoming = frame.sessions.map { it.toL2Entry() }
+        favoriteBook.rememberLiveNames(incoming)
+        _favorites.value = favoriteBook.records()
         val next = L2UiState(sessions = incoming, seq = frame.seq, banner = null)
         val prevByRef = (level2Cache[frame.workspace]?.sessions ?: emptyList())
             .associate { it.ref to it.status }

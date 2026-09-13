@@ -256,13 +256,8 @@ class VzVerifyRoundTest {
         assertEquals(FavoriteKey(a.ref), a.favoriteKey())
         assertNotEquals(a.favoriteKey(), b.favoriteKey())
         assertTrue("身份键必须含 socket 路径", a.favoriteKey().ref.contains("/tmp/tmux-501/ident-a"))
-        val title = sessionDisplayName(
-            windowName = a.windowName,
-            sessionName = a.sessionName,
-            name = a.name,
-            title = a.title,
-        )
-        assertNotEquals("claude_code", title)
+        assertEquals("显示名只转交 Session.name", "claude_code", a.identityLabel)
+        assertEquals(sessionDisplayName(a.name), a.identityLabel)
     }
 
     @Test

@@ -32,10 +32,11 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 077 §1：会话页顶栏必须复用 076 §3a 的 [sessionDisplayName]，
+ * 077 §1 / 101：会话页顶栏与列表交出同一份服务端 Session.name，
  * 不得把 navigationName（window_name=claude_code）再送进顶栏。
  *
- * 身份仍走 ref；本用例只断言打开会话时交出的**显示名**。
+ * 旧规则：复用客户端 sessionDisplayName 的 Claude 剥标题逻辑。
+ * 新规则：显示名就是 Session.name；身份仍走 ref。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -46,18 +47,13 @@ class SessionTitleTest {
     val compose = createComposeRule()
 
     @Test
-    fun openingClaudeCodeRowPassesSessionDisplayNameNotWindowName() {
+    fun openingClaudeCodeRowPassesSessionNameNotWindowName() {
         val entry = claude(
             ref = "/tmp/sock-a\u001f%1",
             cwd = "/Volumes/nvme/Projects/远程Agent安卓",
-            title = "✳ 远控 leader",
+            name = "远控 leader",
         )
-        val want = sessionDisplayName(
-            windowName = entry.windowName,
-            sessionName = entry.sessionName,
-            name = entry.name,
-            title = entry.title,
-        )
+        val want = sessionDisplayName(entry.name)
         assertEquals("远控 leader", want)
         assertEquals(want, entry.identityLabel)
         assertEquals("claude_code", entry.navigationName)
@@ -81,7 +77,7 @@ class SessionTitleTest {
         compose.runOnIdle {
             assertEquals(entry.ref, openedRef)
             assertEquals(
-                "点进会话必须交出 sessionDisplayName，不能再交 window_name=claude_code",
+                "点进会话必须交出 Session.name，不能再交 window_name=claude_code",
                 want,
                 openedName,
             )
@@ -90,7 +86,7 @@ class SessionTitleTest {
     }
 
     @Test
-    fun openingFavoriteClaudeCodeRowPassesSessionDisplayNameNotWindowName() {
+    fun openingFavoriteClaudeCodeRowPassesSessionNameNotWindowName() {
         val row = FavoriteRow(
             sessionName = "team",
             windowIndex = "0",
@@ -101,13 +97,9 @@ class SessionTitleTest {
             cwd = "/Volumes/nvme/Projects/远程Agent安卓",
             title = "✳ 远控 leader",
             status = L2Status.WORKING,
+            name = "远控 leader",
         )
-        val want = sessionDisplayName(
-            windowName = row.windowName,
-            sessionName = row.sessionName,
-            name = row.windowName,
-            title = row.title,
-        )
+        val want = sessionDisplayName(row.name)
         assertEquals("远控 leader", want)
         assertEquals(want, row.identityLabel)
 
@@ -129,7 +121,7 @@ class SessionTitleTest {
         compose.runOnIdle {
             assertEquals(row.ref, openedRef)
             assertEquals(
-                "收藏行点进会话必须交出 sessionDisplayName，不能再交 window_name=claude_code",
+                "收藏行点进会话必须交出 Session.name，不能再交 window_name=claude_code",
                 want,
                 openedName,
             )
@@ -137,13 +129,13 @@ class SessionTitleTest {
         }
     }
 
-    private fun claude(ref: String, cwd: String, title: String) = Session(
+    private fun claude(ref: String, cwd: String, name: String) = Session(
         ref = ref,
-        name = "claude_code",
+        name = name,
         cwd = cwd,
         rows = 24,
         cols = 80,
-        title = title,
+        title = "✳ $name",
         status = "working",
         sessionName = "team",
         windowIndex = "0",

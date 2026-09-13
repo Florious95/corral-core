@@ -40,8 +40,8 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * 067 点击行为：点星星必须把结构键写入持久化。
  *
- * 生产线上 Session 只有 name（window_name fallback session_name），
- * session_name / window_index / window_name 三元组为空。本测按这个形态构造。
+ * 生产线上 Session.name 是显示投影；session_name / window_index / window_name
+ * 三元组可为空，不得用显示名回填结构字段。本测按这个形态构造。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -100,11 +100,13 @@ class FavoriteToggleClickTest {
             assertEquals("点击必须写入一条收藏", 1, written.size)
             val rec = written.single()
             assertEquals("sock\u001f%2", rec.ref)
-            assertEquals("advisor", rec.sessionName)
+            assertEquals("advisor", rec.name)
+            assertEquals("", rec.sessionName)
             assertEquals("", rec.windowIndex)
-            assertEquals("advisor", rec.windowName)
+            assertEquals("", rec.windowName)
             assertEquals("/Volumes/nvme/Projects/远程Agent安卓", rec.cwd)
             assertEquals(1_700_000_111_000L, rec.addedAt)
+            assertFalse(rec.name == changingTitle)
             assertFalse(rec.sessionName == changingTitle)
             assertFalse(rec.windowName == changingTitle)
             assertFalse(rec.ref == changingTitle)
@@ -113,8 +115,9 @@ class FavoriteToggleClickTest {
         val rebuilt = SharedPreferencesFavoriteStore(ctx).load()
         assertEquals(1, rebuilt.size)
         assertEquals("sock\u001f%2", rebuilt.single().ref)
-        assertEquals("advisor", rebuilt.single().sessionName)
-        assertEquals("advisor", rebuilt.single().windowName)
+        assertEquals("advisor", rebuilt.single().name)
+        assertEquals("", rebuilt.single().sessionName)
+        assertEquals("", rebuilt.single().windowName)
         val blob = ctx.getSharedPreferences("favorites", Context.MODE_PRIVATE)
             .getString("records", "")
             .orEmpty()

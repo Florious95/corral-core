@@ -43,8 +43,8 @@ data class WorkspaceItem(
 
 /**
  * 会话。
- * displayName 是会话的真实显示名，可能是中文（例如「远控 leader」），
- * ⛔ 不要按 ASCII 宽度排版，也不要在这里预截断。
+ * displayName 来自服务端 Session.name，可能是中文（例如「远控 leader」）。
+ * 客户端不得按 Provider / 标题再算一遍；也不要按 ASCII 宽度排版或在这里预截断。
  */
 data class SessionItem(
     val id: String,

@@ -42,6 +42,8 @@ data class FavoriteKey(
 @Serializable
 data class FavoriteRecord(
     @SerialName("ref") val ref: String = "",
+    /** 最近一次保存的已解析显示名（服务端 Session.name 副本）；缺省表示旧记录。 */
+    @SerialName("name") val name: String = "",
     @SerialName("session_name") val sessionName: String = "",
     @SerialName("window_index") val windowIndex: String = "",
     @SerialName("window_name") val windowName: String = "",
@@ -70,16 +72,13 @@ data class FavoriteRow(
     val cwd: String = "",
     val title: String = "",
     val status: L2Status = L2Status.UNKNOWN,
+    /** 在线取 live Session.name；离线取最近保存的已解析 name。 */
+    val name: String = "",
 ) {
     val gray: Boolean get() = !isOnline
 
     val identityLabel: String
-        get() = sessionDisplayName(
-            windowName = windowName,
-            sessionName = sessionName,
-            name = windowName,
-            title = title,
-        )
+        get() = sessionDisplayName(name)
 
     val key: FavoriteKey
         get() = FavoriteKey(ref)

@@ -89,6 +89,7 @@ import dev.agentmirror.app.workspace.FavoriteKey
 import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.cwdDisplayName
 import dev.agentmirror.app.workspace.favoriteKey
+import dev.agentmirror.app.workspace.liveSessionDisplayName
 import dev.agentmirror.app.workspace.toSessionItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -245,7 +246,7 @@ fun SessionScreen(
                 .imePadding(),
         ) {
             SessionShellScreen(
-                sessionDisplayName = name,
+                sessionDisplayName = liveSessionDisplayName(viewModel.ref, overlaySessions, name),
                 status = status,
                 connectionPath = connectionPath.takeIf {
                     viewModel.connectionState == ConnectionState.READY

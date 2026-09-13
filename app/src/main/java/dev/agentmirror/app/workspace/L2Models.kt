@@ -37,8 +37,8 @@ enum class L2Status(val wire: String, val label: String) {
 }
 
 /**
- * 二级菜单一行。身份来自结构字段，状态来自 [Session.status]。
- * [title] 不参与身份/过滤/判活；076 §3a 只允许 claude_code 用它当**显示名**。
+ * 二级菜单一行。身份来自结构字段 / ref，状态来自 [Session.status]。
+ * [title] 不参与身份/过滤/判活/显示名；列表与顶栏只消费服务端 [Session.name]。
  */
 data class L2Entry(
     val ref: String,
@@ -53,60 +53,36 @@ data class L2Entry(
     val windowName: String = "",
 ) {
     val identityLabel: String
-        get() = sessionDisplayName(
-            windowName = windowName,
-            sessionName = sessionName,
-            name = name,
-            title = title,
-        )
+        get() = sessionDisplayName(name)
 
+    /** 结构导航标签；空时不回填显示 [name]。 */
     val navigationName: String
-        get() = windowName.ifEmpty { sessionName }.ifEmpty { name }
+        get() = windowName.ifEmpty { sessionName }
 }
+
+/** 服务端未给出可用 Session.name 时的统一空值占位。 */
+internal const val UNNAMED_SESSION = "未命名会话"
 
 /**
- * 076 §3a 显示名。claude_code 取 pane_title 并剥 062 前导状态符号；其余 CLI 取 window_name。
- * 只用于显示，不参与身份。
+ * 列表 / 收藏 / 查看菜单 / 顶栏显示名。
  *
- * 符号表与 server/internal/api/l2detect_claudecode.go Match 同一套，禁止另写一份。
+ * 只转交服务端已解析的 [Session.name] 与统一空值占位。
+ * 禁止按 Provider、window_name、pane_title 或原生 session_name 再猜一遍。
  */
-internal fun sessionDisplayName(
-    windowName: String,
-    sessionName: String = "",
-    name: String = "",
-    title: String = "",
+internal fun sessionDisplayName(name: String): String =
+    name.trim().ifEmpty { UNNAMED_SESSION }
+
+/**
+ * 顶栏跟当前 ref 的 live [Session.name]。overlay 尚未含该行时才用导航带来的 fallback。
+ */
+internal fun liveSessionDisplayName(
+    sessionRef: String,
+    overlaySessions: List<L2Entry>,
+    fallback: String,
 ): String {
-    val structural = windowName.ifEmpty { sessionName }.ifEmpty { name }
-    if (isClaudeCodeWindow(windowName, name)) {
-        val fromTitle = stripClaudeCodeStatusPrefix(title)
-        if (fromTitle.isNotEmpty()) return fromTitle
-    }
-    return structural
+    val live = overlaySessions.firstOrNull { it.ref == sessionRef }?.name
+    return sessionDisplayName(live ?: fallback)
 }
-
-internal fun isClaudeCodeWindow(windowName: String, name: String): Boolean =
-    windowName == "claude_code" || name == "claude_code"
-
-/** 与 l2detect_claudecode.go 的 ◐◓◑◒ / ✳ 同一套，剥掉后再丢掉紧随的空白。 */
-internal fun stripClaudeCodeStatusPrefix(title: String): String {
-    val n = title.length
-    var i = 0
-    while (i < n && title[i].isWhitespace()) i++
-    if (i >= n) return ""
-    if (title[i] in CLAUDE_CODE_STATUS_PREFIXES) {
-        i++
-        while (i < n && title[i].isWhitespace()) i++
-    }
-    return title.substring(i)
-}
-
-internal val CLAUDE_CODE_STATUS_PREFIXES = setOf(
-    '\u25D0', // ◐
-    '\u25D3', // ◓
-    '\u25D1', // ◑
-    '\u25D2', // ◒
-    '\u2733', // ✳
-)
 
 data class L2UiState(
     val sessions: List<L2Entry> = emptyList(),
@@ -148,20 +124,17 @@ internal fun socketPrefixFromRef(ref: String): String {
 }
 
 internal fun Session.toL2Entry(): L2Entry {
-    // 线上 Session 只有 name（window_name fallback session_name），三元组常缺省。
-    // 收藏键必须落结构字段：空三元组回填 name，永不回填 title。
-    val resolvedWindow = windowName.ifEmpty { name }
-    val resolvedSession = sessionName.ifEmpty { name }
+    // name 是服务端显示投影；结构字段原样保留，禁止用显示名回填 window/session。
     return L2Entry(
         ref = ref,
-        name = resolvedWindow.ifEmpty { resolvedSession },
+        name = name,
         title = title,
         rows = rows,
         cols = cols,
         status = L2Status.fromWire(status),
         cwd = cwd,
-        sessionName = resolvedSession,
+        sessionName = sessionName,
         windowIndex = windowIndex,
-        windowName = resolvedWindow,
+        windowName = windowName,
     )
 }
