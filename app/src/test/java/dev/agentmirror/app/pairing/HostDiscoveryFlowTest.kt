@@ -3,6 +3,8 @@ package dev.agentmirror.app.pairing
 import dev.agentmirror.app.service.NoopTransportFactory
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.tsnet.TsPeer
+import dev.agentmirror.app.tsnet.TsnetProxy
+import dev.agentmirror.app.tsnet.TsnetState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
@@ -38,6 +40,7 @@ class HostDiscoveryFlowTest {
         }
         client = HostIdentifyClient(transport) { ByteArray(16) { it.toByte() } }
         var wsCreations = 0
+        val startedTsKeys = mutableListOf<String>()
         val vm = PairingViewModel(
             configStore = Store(),
             connectionFactory = { cfg ->
@@ -46,6 +49,7 @@ class HostDiscoveryFlowTest {
             },
             identifyClient = client,
             discoveryExecutor = Executor { it.run() },
+            tsnetStarter = { startedTsKeys += it },
         )
 
         vm.discoverHosts(listOf(TsPeer("peer-1", true, listOf("100.101.2.3"), "peer")))
@@ -55,10 +59,22 @@ class HostDiscoveryFlowTest {
         assertEquals(endpoint.authority, vm.discoveredHosts.single().endpoints.single().authority)
         assertEquals("TS discovery must only prove a row, not open a socket", 0, wsCreations)
 
+        // A merged row may expose LAN via NSD and TS via peer discovery; TS wins the
+        // first dial without exposing a path picker to the user.
+        vm.addDiscoveredHost(
+            HostCandidate(
+                "host-1234",
+                "box",
+                listOf(HostEndpoint("192.0.2.2", 9911, ConnectionPath.LAN, HostEndpointSource.NSD)),
+            ),
+        )
         vm.selectHost("host-1234")
         vm.hostToken = token
+        vm.manualTsAuthKey = "tskey-auth-test-key"
         vm.submitHostToken()
+        vm.onTsnetState(TsnetState.Up(TsnetProxy("127.0.0.1", 1080, "cred")))
 
+        assertEquals(listOf("tskey-auth-test-key"), startedTsKeys)
         assertEquals(1, requests.size)
         assertEquals("host-1234", requests.single().hostId)
         assertEquals(endpoint.address, requests.single().destIp)

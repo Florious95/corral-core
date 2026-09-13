@@ -273,13 +273,31 @@ class PairingViewModel(
         }
     }
 
+    /** Start tailnet enrollment from the dedicated auth-key field. */
+    fun startTsnet() {
+        val key = manualTsAuthKey.trim()
+        if (key.isEmpty()) {
+            formError = "Tailscale auth key 不能为空"
+            return
+        }
+        currentTsAuthKey = key
+        formError = null
+        tsnetStarter(key)
+    }
+
     /** Identify the selected host before accepting its token for WS auth. */
     fun submitHostToken() {
         val host = discoveredHosts.firstOrNull { it.hostId == selectedHostId }
         val token = hostToken.trim()
         if (host == null) { formError = "请先选择主机"; return }
         if (token.isEmpty()) { formError = "主机 token 不能为空"; return }
-        val endpoint = HostRouter.prioritize(host.endpoints).firstOrNull()
+        currentTsAuthKey = manualTsAuthKey.trim()
+        if (currentTsAuthKey.isNotEmpty()) tsnetStarter(currentTsAuthKey)
+        val ordered = HostRouter.prioritize(host.endpoints)
+        // A merged row may contain NSD/LAN and TS peer addresses. Prefer TS on the
+        // first attempt, while the identity proof still gates every endpoint.
+        val endpoint = ordered.firstOrNull { it.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET }
+            ?: ordered.firstOrNull()
         if (endpoint == null) { formError = "所选主机暂不可达"; return }
         startVerifiedPairing(
             rawUrl = endpoint.wsUrl,

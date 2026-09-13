@@ -592,6 +592,11 @@ private fun TsTokenCard(viewModel: PairingViewModel) {
             colors = manualFieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
+        Button(
+            onClick = { viewModel.startTsnet() },
+            enabled = viewModel.manualTsAuthKey.isNotBlank() && viewModel.tsState !is TsnetState.Starting,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("加入 Tailnet") }
     }
 }
 
