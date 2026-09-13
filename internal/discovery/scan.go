@@ -297,10 +297,7 @@ func scanServer(ctx context.Context, socketPath string, logger *slog.Logger) ([]
 // field count or a non-integer dimension) so the caller can skip the offending
 // pane without failing the whole scan.
 func parsePaneLine(line string) (Pane, bool) {
-	parts := strings.Split(line, "\x1f")
-	if !strings.Contains(line, "\x1f") {
-		parts = strings.Split(line, "|")
-	}
+	parts := splitPaneFields(line)
 	if len(parts) != 9 {
 		return Pane{}, false
 	}
@@ -341,6 +338,21 @@ func parsePaneLine(line string) (Pane, bool) {
 		Width:       width,
 		Height:      height,
 	}, true
+}
+
+// splitPaneFields prefers the real unit-separator byte used on macOS tmux.
+// Linux tmux 3.4/3.5 prints that control byte as a literal \037 octal escape,
+// which must be split before the pipe fallback: Codex/Pi titles contain `|`
+// and would otherwise be discarded as the wrong field count.
+func splitPaneFields(line string) []string {
+	switch {
+	case strings.Contains(line, "\x1f"):
+		return strings.Split(line, "\x1f")
+	case strings.Contains(line, `\037`):
+		return strings.Split(line, `\037`)
+	default:
+		return strings.Split(line, "|")
+	}
 }
 
 // envWithout returns the process environment with the named variable removed.
