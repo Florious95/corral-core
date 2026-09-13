@@ -62,7 +62,7 @@ class L2NavigationIdentityTest {
                 sessions = listOf(
                     Session(
                         ref = refA,
-                        name = "should-not-win-over-window-name",
+                        name = "server-name-a",
                         cwd = "/proj/a",
                         rows = 24,
                         cols = 80,
@@ -74,7 +74,7 @@ class L2NavigationIdentityTest {
                     ),
                     Session(
                         ref = refB,
-                        name = "should-not-win-over-window-name",
+                        name = "server-name-b",
                         cwd = "/proj/a",
                         rows = 24,
                         cols = 80,
@@ -89,8 +89,8 @@ class L2NavigationIdentityTest {
         )
 
         val rows = vm.level2.value.sessions
-        assertEquals("real-window-a", rows[0].identityLabel)
-        assertEquals("real-window-b", rows[1].identityLabel)
+        assertEquals("server-name-a", rows[0].identityLabel)
+        assertEquals("server-name-b", rows[1].identityLabel)
         assertEquals("2", rows[0].windowIndex)
         assertEquals("7", rows[1].windowIndex)
         assertEquals("real-session-a", rows[0].sessionName)
@@ -113,6 +113,6 @@ class L2NavigationIdentityTest {
 
         compose.onNodeWithTag("l2-row-$refB").performClick()
         assertEquals("点行必须用结构 ref 导航，不得从 title 抠", refB, openedRef)
-        assertEquals("展示名必须来自 window_name，不得来自 title", "real-window-b", openedName)
+        assertEquals("展示名必须来自服务端 Session.name，不得来自 title", "server-name-b", openedName)
     }
 }

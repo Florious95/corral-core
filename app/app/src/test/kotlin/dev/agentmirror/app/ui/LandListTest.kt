@@ -221,7 +221,8 @@ class LandListTest {
 
     private fun claude(ref: String, cwd: String, title: String, status: String) = Session(
         ref = ref,
-        name = "claude_code",
+        // Fixture models PR31 output: Session.name is already the resolved display name.
+        name = title.removePrefix("✳ ").removePrefix("◐ "),
         cwd = cwd,
         rows = 24,
         cols = 80,

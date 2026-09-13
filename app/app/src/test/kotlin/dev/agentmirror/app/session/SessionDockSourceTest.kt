@@ -520,6 +520,7 @@ class SessionDockSourceTest {
     }
 
     private fun L2Entry.toFavoriteRow() = FavoriteRow(
+        name = name,
         sessionName = sessionName,
         windowIndex = windowIndex,
         windowName = windowName,

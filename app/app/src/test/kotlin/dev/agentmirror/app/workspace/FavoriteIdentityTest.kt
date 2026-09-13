@@ -240,7 +240,8 @@ class FavoriteIdentityTest {
 
     private fun leader(ref: String, cwd: String): L2Entry = Session(
         ref = ref,
-        name = "claude_code",
+        // Fixture models the server-resolved Session.name; raw title is not parsed client-side.
+        name = "PROBE_TITLE_MUST_NOT_BE_KEY",
         cwd = cwd,
         rows = 24,
         cols = 80,

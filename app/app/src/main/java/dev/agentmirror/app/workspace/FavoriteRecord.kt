@@ -42,6 +42,8 @@ data class FavoriteKey(
 @Serializable
 data class FavoriteRecord(
     @SerialName("ref") val ref: String = "",
+    /** 最近一次保存的服务端 Session.name；缺省表示旧收藏记录。 */
+    @SerialName("name") val name: String = "",
     @SerialName("session_name") val sessionName: String = "",
     @SerialName("window_index") val windowIndex: String = "",
     @SerialName("window_name") val windowName: String = "",
@@ -62,7 +64,7 @@ data class FavoriteRecord(
  * @inv 落盘消失只能由用户取消收藏触发
  */
 data class FavoriteRow(
-    /** Live server display projection; empty on an offline persisted row. */
+    /** 在线取 live Session.name；离线取最近保存的服务端名称副本。 */
     val name: String = "",
     val sessionName: String,
     val windowIndex: String,
@@ -79,13 +81,7 @@ data class FavoriteRow(
     val gray: Boolean get() = !isOnline
 
     val identityLabel: String
-        get() = sessionDisplayName(
-            windowName = windowName,
-            sessionName = sessionName,
-            name = if (isOnline) name else windowName,
-            title = title,
-            provider = provider,
-        )
+        get() = sessionDisplayName(name)
 
     val key: FavoriteKey
         get() = FavoriteKey(ref)
