@@ -61,8 +61,8 @@ private var persistentConnectionStartGeneration = 0L
  * @pre none（配置即函数入参；context 可为 null，仅前台服务启动需要）
  * @post 已注入 [ServiceWire.setConfig] + [ServiceWire.uploadBaseUrl]，触发常驻连接启动，
  *       并在 context 非空时启动前台服务（幂等）
- * @err 常驻连接装配/启动失败仅落日志（[ServiceWire.manager]/[ConnectionManager.start] 调用已 runCatching），不抛给调用方；tsnet 起网经 [TsnetWire.ensureStarted] 失败走 [TsnetState.Error] 不静默
- * @inv 幂等：既有 [ServiceWire.manager] 单例复用、[ConnectionManager.start] 非 STOPPED 直接返回，不产生双连接；tailnet 目标在节点未 Up 时首拨延后到 [TsnetWire.whenSettled] 之后
+ * @err 常驻连接装配/启动失败仅落日志（[ServiceWire.manager]/[ConnectionManager.start] 调用已 runCatching），不抛给调用方；tsnet 起网失败由状态机显式承载
+ * @inv 幂等：既有 [ServiceWire.manager] 单例复用、[ConnectionManager.start] 非 STOPPED 直接返回，不产生双连接；host 协调器存在时 LAN 立即、TS 由代次择路；无协调器的 tailnet URL 在节点未 Up 时首拨延后到 [TsnetWire.whenSettled]
  */
 fun startPersistentConnection(config: PairingConfig, context: Context? = null) {
     synchronized(persistentConnectionStartLock) {
@@ -71,15 +71,27 @@ fun startPersistentConnection(config: PairingConfig, context: Context? = null) {
         // 注册 token 与 authkey——确保后续任何装配/拨号路径的 record 都已被脱敏兜住。
         DiagLog.registerSecret(config.token)
         config.tsAuthKey.takeIf { it.isNotEmpty() }?.let(DiagLog::registerSecret)
-        // feat-ts-wire：配置携带 authkey（配对时扫码/手填带入并持久化）→ 先确保 tsnet
-        // 节点起网（幂等）。tailnet 地址的拨号依赖节点 Up 后的 SOCKS 通道，因此首拨等节点
-        // 明确 Up/Error；LAN 地址仍立即直连（transport 工厂拨号时刻现查状态）。key 值不落日志。
+        // R2: changing only the TS key while the identity/READY socket is alive is a staged
+        // update. It must not stop the existing node or socket; the next generation consumes it.
+        val old = ServiceWire.currentConfig()
+        val sameIdentity = old?.token == config.token && old?.hostId == config.hostId
+        val keyChanged = old?.tsAuthKey != config.tsAuthKey
+        if (sameIdentity && keyChanged && old != null) {
+            TsnetWire.stagePendingKey(config.tsAuthKey)
+            startPersistentConnectionNow(config, context)
+            return
+        }
         if (config.tsAuthKey.isNotBlank()) {
             TsnetWire.ensureStarted(config.tsAuthKey)
+            val usesCoordinator = HostRouter.isValidHostId(config.hostId) ||
+                !config.legacyBootstrapUrl.isNullOrBlank()
             val host = runCatching { URI(config.url).host }.getOrNull()
-            if (TsnetDial.isTailnetHost(host) && TsnetWire.state !is TsnetState.Up) {
-                // 冷启动没有配对页时钟泵；tailnet 目标若在 Starting 阶段先直拨，失败后可能
-                // 永久停在 RECONNECTING。等节点明确 Up/Error 再首拨；LAN 地址仍立即直连。
+            // hostId 记录由 HostDialCoordinator 择路，不在此全局等待。
+            // 无协调器的 tailnet URL 若在 Starting 先直拨，失败后可能卡在 RECONNECTING。
+            if (!usesCoordinator &&
+                TsnetDial.isTailnetHost(host) &&
+                TsnetWire.state !is TsnetState.Up
+            ) {
                 TsnetWire.whenSettled {
                     synchronized(persistentConnectionStartLock) {
                         if (generation == persistentConnectionStartGeneration) {
@@ -101,8 +113,21 @@ fun startPersistentConnection(config: PairingConfig, context: Context? = null) {
  * context 为 null（纯 JVM 测试）时跳过服务启动，连接已装配——产品功能仍完整。
  */
 private fun startPersistentConnectionNow(config: PairingConfig, context: Context?) {
-    ServiceWire.setConfig(ConnectionConfig(config.url, config.token))
-    ServiceWire.uploadBaseUrl = deriveUploadBase(config.url)
+    val connectionConfig = ConnectionConfig(
+        url = config.url,
+        token = config.token,
+        hostId = config.hostId,
+        port = config.port,
+        tsNodeId = config.tsNodeId,
+        name = config.name,
+        tsAuthKey = config.tsAuthKey,
+        legacyBootstrapUrl = config.legacyBootstrapUrl,
+        lastTsUrl = config.lastTsUrl,
+        lastLanUrl = config.lastLanUrl,
+        scanHints = config.scanHints,
+    )
+    ServiceWire.setConfig(connectionConfig)
+    ServiceWire.uploadBaseUrl = config.url.takeIf { it.isNotBlank() }?.let(::deriveUploadBase)
     runCatching { ServiceWire.manager(NoopConnListener).start() }
         .onFailure {
             android.util.Log.w("PersistentConnection", "start persistent connection: ${it.message}")

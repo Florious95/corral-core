@@ -193,6 +193,7 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
         rows,
         cols,
         uploadToken = ServiceWire.currentConfig()?.token,
+        liveBaseUrl = { ServiceWire.uploadBaseUrl },
     )
 }
 

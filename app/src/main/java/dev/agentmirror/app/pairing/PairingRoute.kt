@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.service.TsnetBootstrap
+import dev.agentmirror.app.tsnet.TsnetState
 import dev.agentmirror.app.tsnet.TsnetWire
 
 /**
@@ -47,12 +48,27 @@ fun PairingRoute(
     TsnetBootstrap.install(LocalContext.current)
     val context = LocalContext.current
     val viewModel = remember { createPairingViewModel(configStore) }
+    val nsdDiscovery = remember { NsdHostDiscovery(context) }
     // TS 态可视桥（018 标准5）：TsnetWire 状态 → VM observable；离屏卸钩防泄漏，
     // 挂载即补播当前态（节点可能已 Up——重进配对页时状态不回退）。
     DisposableEffect(viewModel) {
-        viewModel.onTsnetState(TsnetWire.state)
-        TsnetWire.stateListener = viewModel::onTsnetState
-        onDispose { TsnetWire.stateListener = null }
+        fun onState(state: TsnetState) {
+            viewModel.onTsnetState(state)
+            if (state is TsnetState.Up) {
+                viewModel.discoverHosts(TsnetWire.peerSnapshot().peers)
+            }
+        }
+        onState(TsnetWire.state)
+        TsnetWire.stateListener = ::onState
+        nsdDiscovery.start(listener = object : NsdHostDiscovery.Listener {
+            override fun onHost(candidate: HostCandidate) = viewModel.addDiscoveredHost(candidate)
+            override fun onFinished() = Unit
+            override fun onFailure(reason: String) = Unit
+        })
+        onDispose {
+            TsnetWire.stateListener = null
+            nsdDiscovery.stop()
+        }
     }
     PairingScreen(
         viewModel = viewModel,

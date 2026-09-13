@@ -130,6 +130,12 @@ class TsnetManager(
         redactCauseChain(error, authKey).replace("\n", " ")
 
     /** 停节点回 Idle。Starting 期间调用依赖代次机制让迟到结果自清理。 */
+    /** Read the typed peer snapshot without exposing the backend/native handle. */
+    @Synchronized
+    fun peerSnapshot(knownId: String?, cursor: String?): TsPeerSnapshot =
+        runCatching { backend.peerSnapshot(knownId, cursor) }
+            .getOrElse { TsPeerSnapshot(emptyList(), null, supported = false) }
+
     @Synchronized
     fun stop() {
         val current = state
