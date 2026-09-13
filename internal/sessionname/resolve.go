@@ -100,8 +100,11 @@ func Resolve(windowName, paneTitle, cwd, currentCommand string) Resolved {
 		if !projectOnly && isNoise(text, executable) {
 			continue
 		}
+		// A valid title is preferred over a valid window name. Keep the
+		// original title position as the tie-breaker so title segments still
+		// win from left to right.
 		titleBit := 0
-		if in.source != SourceWindow {
+		if in.source == SourceWindow {
 			titleBit = 1
 		}
 		projectBit := 0

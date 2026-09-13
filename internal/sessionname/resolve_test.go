@@ -15,19 +15,19 @@ func TestResolveSpecExamples(t *testing.T) {
 		{"fig3 node flag title", "node!", "多 agent leader | 多agent协作", "/work/多agent协作", "node", "多 agent leader", SourceTitle},
 		{"fig4 meaningful window", "smoke-luna", "多agent协作", "/work/多agent协作", "node", "smoke-luna", SourceWindow},
 		{"left project loses to title", "project", "reviewer | project", "/work/project", "node", "reviewer", SourceTitle},
-		{"left reviewer beats title", "reviewer", "architect | project", "/work/project", "node", "reviewer", SourceWindow},
+		{"title beats left reviewer", "reviewer", "architect | project", "/work/project", "node", "architect", SourceTitle},
 		{"hyphen fields keep internals", "node", "project - reviewer", "/work/project", "node", "reviewer", SourceTitle},
 		{"first title segment wins", "node", "reviewer | architect | project", "/work/project", "node", "reviewer", SourceTitle},
 		{"fix-login not split", "node", "fix-login | my-project", "/work/my-project", "node", "fix-login", SourceTitle},
-		{"node-proxy kept", "node-proxy", "other | project", "/work/project", "node", "node-proxy", SourceWindow},
+		{"title beats node-proxy", "node-proxy", "other | project", "/work/project", "node", "other", SourceTitle},
 		{"claude_code noise", "claude_code", "✳ 远控 leader", "/work/project", "node", "远控 leader", SourceTitle},
 		{"future executable filtered", "future-cli", "审查任务 | project", "/work/project", "future-cli", "审查任务", SourceTitle},
 		{"duplicate title fields", "node", "project|reviewer|reviewer", "/work/project", "", "reviewer", SourceTitle},
-		{"substring is not project", "project-review", "other", "/work/project", "node", "project-review", SourceWindow},
+		{"substring is not project", "project-review", "", "/work/project", "node", "project-review", SourceWindow},
 		{"project named node", "node", "", "/work/node", "node", "node", SourceProject},
 		{"trailing slash cwd", "zsh", "π - project", "/work/project/", "zsh", "project", SourceProject},
-		{"review bang kept", "review!", "other", "/work/project", "node", "review!", SourceWindow},
-		{"csharp kept", "C#", "other", "/work/project", "node", "C#", SourceWindow},
+		{"review bang kept", "review!", "", "/work/project", "node", "review!", SourceWindow},
+		{"csharp kept", "C#", "", "/work/project", "node", "C#", SourceWindow},
 		{"empty placeholder", "", "", "", "", Placeholder, SourcePlaceholder},
 	}
 	for _, tt := range tests {
@@ -111,11 +111,11 @@ func TestResolveMissingSidesFallBackToProjectThenPlaceholder(t *testing.T) {
 }
 
 func TestResolveDoesNotTreatNodeSubstringAsNoise(t *testing.T) {
-	got := Resolve("node-proxy", "other", "/work/project", "node")
+	got := Resolve("node-proxy", "", "/work/project", "node")
 	if got.Value != "node-proxy" {
 		t.Fatalf("got %q", got.Value)
 	}
-	got = Resolve("my-project-review", "other", "/work/my-project", "node")
+	got = Resolve("my-project-review", "", "/work/my-project", "node")
 	if got.Value != "my-project-review" {
 		t.Fatalf("substring project demotion: %q", got.Value)
 	}
@@ -127,7 +127,7 @@ func TestResolveDoesNotUseTmuxSessionOrTruncate(t *testing.T) {
 		t.Fatal("must not invent a tmux session name")
 	}
 	name := "很长的中文任务名称仍应完整保留"
-	got = Resolve(name, "other", "/work/project", "node")
+	got = Resolve(name, "", "/work/project", "node")
 	if got.Value != name || utf8.RuneCountInString(got.Value) != utf8.RuneCountInString(name) {
 		t.Fatalf("truncated or rewritten: %q", got.Value)
 	}
@@ -151,5 +151,24 @@ func TestKeyMatchesFoldedNFC(t *testing.T) {
 	}
 	if key("NODE") != key("node") {
 		t.Fatal("ascii case fold")
+	}
+}
+
+func TestResolveDimensionOneTitleBeatsMeaningfulWindow(t *testing.T) {
+	tests := []struct {
+		name, window, title, cwd, command, want string
+	}{
+		{"meaningful title beats meaningful window", "smoke-luna", "多agent协作", "/work/other-project", "node", "多agent协作"},
+		{"first meaningful title segment beats window", "reviewer", "architect | project", "/work/project", "node", "architect"},
+		{"non-noise window still loses to title", "node-proxy", "other | project", "/work/project", "node", "other"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Resolve(tt.window, tt.title, tt.cwd, tt.command)
+			if got.Value != tt.want || got.Source != SourceTitle {
+				t.Fatalf("Resolve(%q,%q,%q,%q)=%+v want value=%q source=%q",
+					tt.window, tt.title, tt.cwd, tt.command, got, tt.want, SourceTitle)
+			}
+		})
 	}
 }

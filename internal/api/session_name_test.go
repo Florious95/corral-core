@@ -2,8 +2,9 @@ package api
 
 // session_name_test.go pins display-name resolution of toSession.
 // Requirement 023's unconditional window_name (then tmux session fallback) is
-// replaced by requirement 101: meaningful non-project window names still win;
-// the tmux session team name is never a fallback.
+// replaced by requirement 101's filtered, shared projection. With no usable
+// title, a meaningful window name remains the fallback; the tmux session team
+// name is never a fallback.
 
 import (
 	"testing"
@@ -12,7 +13,7 @@ import (
 	"github.com/agentmirror/agentmirror/internal/sessionname"
 )
 
-func TestToSessionPrefersWindowName(t *testing.T) {
+func TestToSessionUsesWindowNameWhenTitleEmpty(t *testing.T) {
 	pane := discovery.Pane{
 		Socket:      "/sock",
 		Session:     "team-refactor-maintainability",
@@ -28,6 +29,26 @@ func TestToSessionPrefersWindowName(t *testing.T) {
 	s := toSession(e)
 	if s.Name != "wiki-r5-acceptance-tester" {
 		t.Fatalf("toSession name = %q, want the window name %q", s.Name, "wiki-r5-acceptance-tester")
+	}
+}
+
+func TestToSessionPrefersTitleOverMeaningfulWindow(t *testing.T) {
+	pane := discovery.Pane{
+		Socket:      "/sock",
+		Session:     "team-refactor-maintainability",
+		WindowIndex: 0,
+		WindowName:  "window-role",
+		PaneTitle:   "current-task | project",
+		PaneID:      "%0",
+		CWD:         "/ws/project",
+		Command:     "node",
+		Width:       80,
+		Height:      24,
+	}
+	e := &sessionEntry{ref: sessionRef(pane), pane: pane}
+	s := toSession(e)
+	if s.Name != "current-task" {
+		t.Fatalf("toSession name = %q, want the title task name", s.Name)
 	}
 }
 
