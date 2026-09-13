@@ -14,4 +14,4 @@ delegates to it; listing, `list_delta`, and Level2 share `sessionFromPane`.
 - Demote (do not delete) candidates that exactly match the cwd basename or the trimmed cwd; they lose to a real task name.
 - Inputs are the already-scanned tmux fields. No Provider argument, no `/rename`, no process walk, no Provider-private index.
 
-Native `session_name` remains on the wire for compatibility and never overrides `name`.
+Native `session_name` remains on the wire for compatibility and never overrides `name`. A nil value is omitted (`omitempty`) rather than encoded as JSON null, so 20260822 clients whose `Session.sessionName` is a non-null String can still decode listing frames.

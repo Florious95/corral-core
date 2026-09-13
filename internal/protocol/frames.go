@@ -103,7 +103,10 @@ type Session struct {
 	Title       string  `json:"title"`
 	Provider    string  `json:"provider"`
 	Activity    string  `json:"activity"`
-	SessionName *string `json:"session_name"`
+	// Native nodeprobe metadata, not display Name. omitempty: JSON null here
+	// is rejected by the 20260822 kotlinx Session.sessionName (non-null String)
+	// and drops the whole listing frame. Absent and "" both decode as empty.
+	SessionName *string `json:"session_name,omitempty"`
 	Health      string  `json:"health"`
 	Status      string  `json:"status"`
 	Rows        uint16  `json:"rows"`
