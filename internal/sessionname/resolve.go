@@ -177,11 +177,19 @@ func cleanStep(s string) string {
 				break
 			}
 		}
-		if !trimmed {
-			break
+		if trimmed {
+			continue
 		}
+		withoutBraille := strings.TrimLeftFunc(s, func(r rune) bool {
+			return unicode.IsSpace(r) || (r >= '\u2800' && r <= '\u28ff')
+		})
+		if withoutBraille != s {
+			s = withoutBraille
+			continue
+		}
+		break
 	}
-	return s
+	return strings.TrimRight(s, "*")
 }
 
 func splitTitleFields(title string) []string {
