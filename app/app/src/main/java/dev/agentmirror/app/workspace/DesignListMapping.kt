@@ -28,7 +28,7 @@ internal fun WorkspaceUi.toWorkspaceItem(): WorkspaceItem = WorkspaceItem(
     sessionCount = sessionCount,
 )
 
-/** 二级行 → 设计包 [SessionItem]。displayName 走 076 §3a，不预截断。 */
+/** 二级行 → 设计包 [SessionItem]。displayName 即服务端 Session.name，不预截断。 */
 internal fun L2Entry.toSessionItem(starred: Boolean, isOnline: Boolean = true): SessionItem = SessionItem(
     id = ref,
     displayName = identityLabel,

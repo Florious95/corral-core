@@ -167,7 +167,8 @@ class FavRowParityTest {
 
     private fun claude(ref: String, cwd: String, title: String, status: String): L2Entry = Session(
         ref = ref,
-        name = "claude_code",
+        // Fixture models PR31 output: the client receives the resolved name, not raw title.
+        name = title.removePrefix("✳ ").removePrefix("◐ "),
         cwd = cwd,
         rows = 24,
         cols = 80,

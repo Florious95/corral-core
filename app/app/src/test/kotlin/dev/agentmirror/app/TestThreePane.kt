@@ -95,7 +95,7 @@ class TestThreePane {
                 sessions = listOf(
                     Session(
                         ref = "ref-fav",
-                        name = "ignored",
+                        name = "win-fav",
                         cwd = "/proj/a",
                         rows = 24,
                         cols = 80,
