@@ -1,0 +1,78 @@
+/*
+ * Copyright 2026 AgentMirror Project Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.agentmirror.app.ui.components
+
+import dev.agentmirror.app.R
+
+/**
+ * Closed canonical Provider ids the UI may name. This is not detection and
+ * is not an icon atlas: a drawable exists only from a frozen source (HTML
+ * extract or prior-app PNG blob).
+ *
+ * @contract
+ * @pre [id] is the status-core DTO canonical provider string
+ * @post lookup is exact id match only; no title/argv/alias heuristics
+ * @err none
+ * @inv table membership is the six DTO ids; unknown spellings never alias in
+ */
+data class CanonicalProviderMark(
+    val id: String,
+    val displayName: String,
+)
+
+/**
+ * Exact-id drawable table. HTML extracts for claude_code/cursor; the Codex
+ * prior-app PNG blob is retained because it is the shipped Codex brand mark.
+ * Prior-app PNG blobs are also used for grok/Pi/Copilot. Does not fetch icons
+ * or parse SVG.
+ *
+ * @contract
+ * @pre canonicalId is the DTO provider string, already fail-closed upstream
+ * @post of/drawableRes return a table hit or null; never a substitute id
+ * @err none
+ * @inv drawableRes is null for any id not in the frozen table
+ */
+object CanonicalProviderMarks {
+    val all: List<CanonicalProviderMark> = listOf(
+        CanonicalProviderMark("claude_code", "Claude Code"),
+        CanonicalProviderMark("codex", "Codex"),
+        CanonicalProviderMark("copilot", "Copilot"),
+        CanonicalProviderMark("grok", "Grok"),
+        CanonicalProviderMark("cursor", "Cursor"),
+        CanonicalProviderMark("pi", "Pi"),
+    )
+
+    private val byId = all.associateBy { it.id }
+
+    fun of(canonicalId: String): CanonicalProviderMark? = byId[canonicalId]
+
+    /**
+     * HTML BRAND extracts for Claude Code, Codex, and Cursor; the prior-app
+     * Grok, Pi and Copilot PNG blobs
+     * from owning commit 1b12e92d8efb1c0eec41e14a264f9d80ee833ad9
+     * (drawable resources provider_pi and provider_copilot_color).
+     */
+    fun drawableRes(canonicalId: String): Int? = when (canonicalId) {
+        "claude_code" -> R.raw.provider_icon_claude_code
+        "codex" -> R.raw.provider_icon_codex
+        "grok" -> R.drawable.provider_grok
+        "cursor" -> R.raw.provider_icon_cursor
+        "copilot" -> R.drawable.provider_copilot_color
+        "pi" -> R.drawable.provider_pi
+        else -> null
+    }
+}

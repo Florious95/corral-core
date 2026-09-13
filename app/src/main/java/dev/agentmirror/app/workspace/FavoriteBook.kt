@@ -48,11 +48,12 @@ class FavoriteBook(
         windowIndex: String = "",
         windowName: String = "",
         cwd: String = "",
+        name: String = "",
     ) {
         if (ref.isEmpty()) {
             DiagLog.record(
                 "favorite",
-                "toggle skipped empty ref session_name='$sessionName' " +
+                "toggle skipped empty ref name='$name' session_name='$sessionName' " +
                     "window_index='$windowIndex' window_name='$windowName' cwd='$cwd'",
             )
             return
@@ -72,6 +73,7 @@ class FavoriteBook(
             next.add(
                 FavoriteRecord(
                     ref = ref,
+                    name = name,
                     sessionName = sessionName,
                     windowIndex = windowIndex,
                     windowName = windowName,
@@ -83,13 +85,14 @@ class FavoriteBook(
         store.save(next)
         DiagLog.record(
             "favorite",
-            "toggle ref=$ref session_name=$sessionName window_index=$windowIndex " +
+            "toggle ref=$ref name=$name session_name=$sessionName window_index=$windowIndex " +
                 "window_name=$windowName cwd=$cwd favorited=${!removed} stored_n=${next.size}",
         )
     }
 
     /**
      * 用 live 的 ref 对账。未命中 → isOnline=false（不在线 / gray），仍输出该行。
+     * 在线行的显示字段只取当前 live；不能用旧收藏名补当前缺失的 Pi session_name。
      * 082：live 必须覆盖**每个收藏项自己的工作区**，不能只拿最近进过的那一个。
      * 本函数不负责去取数；取数由 [WorkspaceViewModel.enterFavorites] 按工作区串行订阅。
      */
@@ -115,15 +118,19 @@ class FavoriteBook(
             )
             out.add(
                 FavoriteRow(
-                    sessionName = hit?.sessionName?.takeIf { it.isNotEmpty() } ?: rec.sessionName,
-                    windowIndex = hit?.windowIndex?.takeIf { it.isNotEmpty() } ?: rec.windowIndex,
-                    windowName = hit?.windowName?.takeIf { it.isNotEmpty() } ?: rec.windowName,
+                    // 在线只取 live name；离线才使用最近保存的服务端名称副本。
+                    name = if (hit != null) hit.name else rec.name,
+                    sessionName = if (hit != null) hit.sessionName else rec.sessionName,
+                    windowIndex = if (hit != null) hit.windowIndex else rec.windowIndex,
+                    windowName = if (hit != null) hit.windowName else rec.windowName,
                     addedAt = rec.addedAt,
                     isOnline = isOnline,
                     ref = rec.ref,
                     cwd = cwd,
                     title = hit?.title.orEmpty(),
                     status = hit?.status ?: L2Status.UNKNOWN,
+                    provider = hit?.provider ?: "unknown",
+                    health = hit?.health ?: "unknown",
                 ),
             )
         }
@@ -133,5 +140,28 @@ class FavoriteBook(
                 "offline=${snapshot.size - onlineCount}",
         )
         return out
+    }
+
+    /** 在线回填已解析 name；这是收藏离线展示的结果副本，不是第二套取名入口。 */
+    fun rememberLiveNames(live: List<L2Entry>) {
+        if (live.isEmpty()) return
+        val byRef = HashMap<String, L2Entry>()
+        for (entry in live) {
+            if (entry.ref.isNotEmpty()) byRef[entry.ref] = entry
+        }
+        if (byRef.isEmpty()) return
+        val current = store.load()
+        var changed = false
+        val next = ArrayList<FavoriteRecord>(current.size)
+        for (rec in current) {
+            val hit = byRef[rec.ref]
+            if (hit != null && rec.name != hit.name) {
+                next.add(rec.copy(name = hit.name))
+                changed = true
+            } else {
+                next.add(rec)
+            }
+        }
+        if (changed) store.save(next)
     }
 }

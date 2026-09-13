@@ -37,8 +37,9 @@ enum class L2Status(val wire: String, val label: String) {
 }
 
 /**
- * 二级菜单一行。身份来自结构字段，状态来自 [Session.status]。
- * [title] 不参与身份/过滤/判活；076 §3a 只允许 claude_code 用它当**显示名**。
+ * 二级菜单一行。身份来自结构字段 / ref，状态来自 [Session.effectiveActivity]。
+ * [name] 是服务端唯一解析后的显示投影；客户端不得按 Provider、标题或原生
+ * session_name 再算一遍。
  */
 data class L2Entry(
     val ref: String,
@@ -47,66 +48,31 @@ data class L2Entry(
     val rows: Int,
     val cols: Int,
     val status: L2Status,
+    val provider: String = "unknown",
+    val activity: L2Status = status,
+    val health: String = "unknown",
     val cwd: String = "",
     val sessionName: String = "",
     val windowIndex: String = "",
     val windowName: String = "",
 ) {
     val identityLabel: String
-        get() = sessionDisplayName(
-            windowName = windowName,
-            sessionName = sessionName,
-            name = name,
-            title = title,
-        )
+        get() = sessionDisplayName(name)
 
+    /** Navigation structure only; [name] is a display projection and never a fallback. */
     val navigationName: String
-        get() = windowName.ifEmpty { sessionName }.ifEmpty { name }
+        get() = windowName.ifEmpty { sessionName }
 }
+
+/** 服务端未给出可用 Session.name 时的统一占位；不回填窗口/标题/Provider。 */
+internal const val UNNAMED_SESSION = "未命名会话"
 
 /**
- * 076 §3a 显示名。claude_code 取 pane_title 并剥 062 前导状态符号；其余 CLI 取 window_name。
- * 只用于显示，不参与身份。
- *
- * 符号表与 server/internal/api/l2detect_claudecode.go Match 同一套，禁止另写一份。
+ * 列表、收藏、查看菜单和会话页统一消费服务端 [Session.name]。
+ * 服务端负责 window/title/cwd/命令清理与优先级；客户端只做空值占位。
  */
-internal fun sessionDisplayName(
-    windowName: String,
-    sessionName: String = "",
-    name: String = "",
-    title: String = "",
-): String {
-    val structural = windowName.ifEmpty { sessionName }.ifEmpty { name }
-    if (isClaudeCodeWindow(windowName, name)) {
-        val fromTitle = stripClaudeCodeStatusPrefix(title)
-        if (fromTitle.isNotEmpty()) return fromTitle
-    }
-    return structural
-}
-
-internal fun isClaudeCodeWindow(windowName: String, name: String): Boolean =
-    windowName == "claude_code" || name == "claude_code"
-
-/** 与 l2detect_claudecode.go 的 ◐◓◑◒ / ✳ 同一套，剥掉后再丢掉紧随的空白。 */
-internal fun stripClaudeCodeStatusPrefix(title: String): String {
-    val n = title.length
-    var i = 0
-    while (i < n && title[i].isWhitespace()) i++
-    if (i >= n) return ""
-    if (title[i] in CLAUDE_CODE_STATUS_PREFIXES) {
-        i++
-        while (i < n && title[i].isWhitespace()) i++
-    }
-    return title.substring(i)
-}
-
-internal val CLAUDE_CODE_STATUS_PREFIXES = setOf(
-    '\u25D0', // ◐
-    '\u25D3', // ◓
-    '\u25D1', // ◑
-    '\u25D2', // ◒
-    '\u2733', // ✳
-)
+internal fun sessionDisplayName(name: String): String =
+    name.trim().ifEmpty { UNNAMED_SESSION }
 
 data class L2UiState(
     val sessions: List<L2Entry> = emptyList(),
@@ -148,20 +114,22 @@ internal fun socketPrefixFromRef(ref: String): String {
 }
 
 internal fun Session.toL2Entry(): L2Entry {
-    // 线上 Session 只有 name（window_name fallback session_name），三元组常缺省。
-    // 收藏键必须落结构字段：空三元组回填 name，永不回填 title。
-    val resolvedWindow = windowName.ifEmpty { name }
-    val resolvedSession = sessionName.ifEmpty { name }
+    // name is a server display projection; structure fields stay independent.
+    // Favorite keys must use ref and never recover structure from display text.
+    val effective = L2Status.fromWire(effectiveActivity)
     return L2Entry(
         ref = ref,
-        name = resolvedWindow.ifEmpty { resolvedSession },
+        name = name,
         title = title,
         rows = rows,
         cols = cols,
-        status = L2Status.fromWire(status),
+        status = effective,
+        provider = provider.ifEmpty { "unknown" },
+        activity = effective,
+        health = health.takeIf { it == "normal" || it == "abnormal" || it == "unknown" } ?: "unknown",
         cwd = cwd,
-        sessionName = resolvedSession,
+        sessionName = sessionName.orEmpty(),
         windowIndex = windowIndex,
-        windowName = resolvedWindow,
+        windowName = windowName,
     )
 }

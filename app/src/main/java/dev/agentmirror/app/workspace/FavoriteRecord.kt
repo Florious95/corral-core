@@ -42,6 +42,8 @@ data class FavoriteKey(
 @Serializable
 data class FavoriteRecord(
     @SerialName("ref") val ref: String = "",
+    /** 最近一次保存的服务端 Session.name；缺省表示旧收藏记录。 */
+    @SerialName("name") val name: String = "",
     @SerialName("session_name") val sessionName: String = "",
     @SerialName("window_index") val windowIndex: String = "",
     @SerialName("window_name") val windowName: String = "",
@@ -53,14 +55,17 @@ data class FavoriteRecord(
 }
 
 /**
- * 收藏行（左栏 / 对账结果）。失联行 isOnline=false、gray=true，标「不在线」。
+ * 收藏行（左栏 / 对账结果）。在线 name 只来自当前 live；失联行
+ * isOnline=false、gray=true，显示保留历史结构字段并标「不在线」。
  *
  * @contract
  * @pre isOnline 由当前 live 的 ref 是否命中决定，不改落盘
- * @post gray == !isOnline
+ * @post gray == !isOnline；在线显示名不回退旧收藏字段
  * @inv 落盘消失只能由用户取消收藏触发
  */
 data class FavoriteRow(
+    /** 在线取 live Session.name；离线取最近保存的服务端名称副本。 */
+    val name: String = "",
     val sessionName: String,
     val windowIndex: String,
     val windowName: String,
@@ -70,16 +75,13 @@ data class FavoriteRow(
     val cwd: String = "",
     val title: String = "",
     val status: L2Status = L2Status.UNKNOWN,
+    val provider: String = "unknown",
+    val health: String = "unknown",
 ) {
     val gray: Boolean get() = !isOnline
 
     val identityLabel: String
-        get() = sessionDisplayName(
-            windowName = windowName,
-            sessionName = sessionName,
-            name = windowName,
-            title = title,
-        )
+        get() = sessionDisplayName(name)
 
     val key: FavoriteKey
         get() = FavoriteKey(ref)

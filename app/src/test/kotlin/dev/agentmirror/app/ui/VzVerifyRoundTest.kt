@@ -42,6 +42,7 @@ import dev.agentmirror.app.ui.theme.TerminalMetrics
 import dev.agentmirror.app.ui.theme.appDarkScheme
 import dev.agentmirror.app.ui.theme.appLightScheme
 import dev.agentmirror.app.workspace.FavoriteKey
+import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Status
 import dev.agentmirror.app.workspace.favoriteKey
 import dev.agentmirror.app.workspace.sessionDisplayName
@@ -156,10 +157,10 @@ class VzVerifyRoundTest {
     }
 
     @Test
-    fun VzVerifyLampFollowsLiveOverlayWithoutNavigation() {
+    fun VzVerifyFavoriteChipFollowsLiveOverlayWithoutNavigation() {
         val h = OverlayTestHarness()
-        val idle = session(h.vm.ref, L2Status.IDLE)
-        val busy = session(h.vm.ref, L2Status.WORKING)
+        val idle = session("favorite-ref", L2Status.IDLE).toFavoriteRow()
+        val busy = session("favorite-ref", L2Status.WORKING).toFavoriteRow()
         var overlay by mutableStateOf(listOf(idle))
         compose.setContent {
             AppTheme(appearance = Appearance.Light) {
@@ -167,7 +168,7 @@ class VzVerifyRoundTest {
                     viewModel = h.vm,
                     name = "远控 leader",
                     onBack = {},
-                    overlaySessions = overlay,
+                    favoriteRows = overlay,
                 )
             }
         }
@@ -175,7 +176,7 @@ class VzVerifyRoundTest {
         compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
         compose.runOnIdle { overlay = listOf(busy) }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Busy").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Running").assertIsDisplayed()
     }
 
     @Test
@@ -256,13 +257,8 @@ class VzVerifyRoundTest {
         assertEquals(FavoriteKey(a.ref), a.favoriteKey())
         assertNotEquals(a.favoriteKey(), b.favoriteKey())
         assertTrue("身份键必须含 socket 路径", a.favoriteKey().ref.contains("/tmp/tmux-501/ident-a"))
-        val title = sessionDisplayName(
-            windowName = a.windowName,
-            sessionName = a.sessionName,
-            name = a.name,
-            title = a.title,
-        )
-        assertNotEquals("claude_code", title)
+        val title = sessionDisplayName(a.name)
+        assertEquals("claude_code", title)
     }
 
     @Test
@@ -273,6 +269,18 @@ class VzVerifyRoundTest {
         assertNotEquals(darkDefault.surfaceContainer, appDarkScheme.surfaceContainer)
         assertNotEquals(lightDefault.primary, appLightScheme.primary)
     }
+
+    private fun dev.agentmirror.app.workspace.L2Entry.toFavoriteRow() = FavoriteRow(
+        sessionName = sessionName,
+        windowIndex = windowIndex,
+        windowName = windowName,
+        addedAt = 0L,
+        isOnline = true,
+        ref = ref,
+        cwd = cwd,
+        title = title,
+        status = status,
+    )
 
     private fun session(ref: String, status: L2Status) = dev.agentmirror.app.workspace.L2Entry(
         ref = ref,

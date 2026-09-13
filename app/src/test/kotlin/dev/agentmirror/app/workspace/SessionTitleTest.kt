@@ -52,12 +52,7 @@ class SessionTitleTest {
             cwd = "/Volumes/nvme/Projects/远程Agent安卓",
             title = "✳ 远控 leader",
         )
-        val want = sessionDisplayName(
-            windowName = entry.windowName,
-            sessionName = entry.sessionName,
-            name = entry.name,
-            title = entry.title,
-        )
+        val want = sessionDisplayName(entry.name)
         assertEquals("远控 leader", want)
         assertEquals(want, entry.identityLabel)
         assertEquals("claude_code", entry.navigationName)
@@ -101,13 +96,9 @@ class SessionTitleTest {
             cwd = "/Volumes/nvme/Projects/远程Agent安卓",
             title = "✳ 远控 leader",
             status = L2Status.WORKING,
+            name = "远控 leader",
         )
-        val want = sessionDisplayName(
-            windowName = row.windowName,
-            sessionName = row.sessionName,
-            name = row.windowName,
-            title = row.title,
-        )
+        val want = sessionDisplayName(row.name)
         assertEquals("远控 leader", want)
         assertEquals(want, row.identityLabel)
 
@@ -139,7 +130,7 @@ class SessionTitleTest {
 
     private fun claude(ref: String, cwd: String, title: String) = Session(
         ref = ref,
-        name = "claude_code",
+        name = "远控 leader",
         cwd = cwd,
         rows = 24,
         cols = 80,

@@ -93,16 +93,17 @@ class FavoriteToggleClickTest {
             }
         }
 
-        compose.onNodeWithTag("l2-star-sock\u001f%2").performClick()
+        compose.longPressFavorite("l2-row-sock\u001f%2", "收藏")
         compose.runOnIdle {
             assertEquals("点星不得进会话", 0, opened)
             val written = store.load()
             assertEquals("点击必须写入一条收藏", 1, written.size)
             val rec = written.single()
             assertEquals("sock\u001f%2", rec.ref)
-            assertEquals("advisor", rec.sessionName)
+            assertEquals("advisor", rec.name)
+            assertEquals("", rec.sessionName)
             assertEquals("", rec.windowIndex)
-            assertEquals("advisor", rec.windowName)
+            assertEquals("", rec.windowName)
             assertEquals("/Volumes/nvme/Projects/远程Agent安卓", rec.cwd)
             assertEquals(1_700_000_111_000L, rec.addedAt)
             assertFalse(rec.sessionName == changingTitle)
@@ -113,8 +114,9 @@ class FavoriteToggleClickTest {
         val rebuilt = SharedPreferencesFavoriteStore(ctx).load()
         assertEquals(1, rebuilt.size)
         assertEquals("sock\u001f%2", rebuilt.single().ref)
-        assertEquals("advisor", rebuilt.single().sessionName)
-        assertEquals("advisor", rebuilt.single().windowName)
+        assertEquals("advisor", rebuilt.single().name)
+        assertEquals("", rebuilt.single().sessionName)
+        assertEquals("", rebuilt.single().windowName)
         val blob = ctx.getSharedPreferences("favorites", Context.MODE_PRIVATE)
             .getString("records", "")
             .orEmpty()
