@@ -206,7 +206,7 @@ class ServerSessionNameTest {
     }
 
     @Test
-    fun openingRowPassesServerNameAndTopBarFollowsLiveOverlay() {
+    fun openingRowPassesServerNameNotWindowName() {
         val entry = Session(
             ref = "/tmp/sock\u001f%1",
             name = "smoke-luna",
@@ -232,7 +232,10 @@ class ServerSessionNameTest {
         compose.runOnIdle {
             assertEquals(entry.ref to "smoke-luna", opened)
         }
+    }
 
+    @Test
+    fun topBarFollowsLiveOverlaySessionName() {
         val h = OverlayTestHarness()
         val ref = h.vm.ref
         var overlay by mutableStateOf(

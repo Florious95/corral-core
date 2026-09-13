@@ -91,7 +91,7 @@ class TestThreePane {
                 sessions = listOf(
                     Session(
                         ref = "ref-fav",
-                        name = "ignored",
+                        name = "server-fav-name",
                         cwd = "/proj/a",
                         rows = 24,
                         cols = 80,
@@ -109,6 +109,7 @@ class TestThreePane {
         assertEquals(1, pre.size)
         assertEquals(true, pre.single().isOnline)
         assertEquals("ref-fav", pre.single().ref)
+        assertEquals("server-fav-name", pre.single().identityLabel)
 
         compose.setContent {
             AgentMirrorTheme {
@@ -117,9 +118,9 @@ class TestThreePane {
         }
         compose.waitForIdle()
         compose.onNodeWithTag("three-pane-favorites").assertExists()
-        compose.onNodeWithText("win-fav").performClick()
+        compose.onNodeWithText("server-fav-name").performClick()
         compose.runOnIdle {
-            assertEquals("ref-fav" to "win-fav", nav.activeSession)
+            assertEquals("ref-fav" to "server-fav-name", nav.activeSession)
             assertEquals(ThreePane.Favorites, nav.homePane)
         }
     }

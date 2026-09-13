@@ -44,11 +44,11 @@ class FavoriteBook(
 
     fun toggle(
         ref: String,
-        name: String = "",
         sessionName: String = "",
         windowIndex: String = "",
         windowName: String = "",
         cwd: String = "",
+        name: String = "",
     ) {
         if (ref.isEmpty()) {
             DiagLog.record(
