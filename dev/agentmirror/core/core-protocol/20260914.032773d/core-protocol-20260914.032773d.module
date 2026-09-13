@@ -1,0 +1,96 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "dev.agentmirror.core",
+    "module": "core-protocol",
+    "version": "20260914.032773d",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-json",
+          "version": {
+            "requires": "1.11.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-protocol-20260914.032773d.jar",
+          "url": "core-protocol-20260914.032773d.jar",
+          "size": 200403,
+          "sha512": "15ad23d429caf63737b46472c461002781ae26b343758753b095d65d869e0afb7f77a19e1368629a5b306e02ecb138ae50f3cee62c102af5b84ecdac422eca45",
+          "sha256": "580bdedfd485fa13690454c221d76dfc5ab71772d3a80acc4577c360acfb4db7",
+          "sha1": "554667dc9336280747ecb951275f05cc9297f323",
+          "md5": "df50d9546035568f5ad5a8964a972fac"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-json",
+          "version": {
+            "requires": "1.11.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-protocol-20260914.032773d.jar",
+          "url": "core-protocol-20260914.032773d.jar",
+          "size": 200403,
+          "sha512": "15ad23d429caf63737b46472c461002781ae26b343758753b095d65d869e0afb7f77a19e1368629a5b306e02ecb138ae50f3cee62c102af5b84ecdac422eca45",
+          "sha256": "580bdedfd485fa13690454c221d76dfc5ab71772d3a80acc4577c360acfb4db7",
+          "sha1": "554667dc9336280747ecb951275f05cc9297f323",
+          "md5": "df50d9546035568f5ad5a8964a972fac"
+        }
+      ]
+    }
+  ]
+}
