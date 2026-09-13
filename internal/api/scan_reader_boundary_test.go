@@ -141,7 +141,7 @@ func catalogReadSnapshot(t *testing.T, e *wsEnv, ref string, blocked bool) []byt
 	}
 }
 
-func catalogReaderBoundary(t *testing.T, level2 bool, stage string) {
+func catalogReaderBoundary(t *testing.T, level2 bool, stage string, coldSubscribe bool) {
 	// Hosted only execution: TMPDIR is isolated by the workflow. Byte length,
 	// precreation and socket_path self-proof precede any pane operation.
 	dir, err := os.MkdirTemp("", "p15-")
@@ -196,6 +196,24 @@ func catalogReaderBoundary(t *testing.T, level2 bool, stage string) {
 	g.arm("Discover")
 	e.auth()
 	catalogGateEntered(t, g, "Discover")
+	if coldSubscribe {
+		// The ref is valid because it names the owned tmux socket and pane, but
+		// the first host catalog is deliberately still blocked. Subscribe must
+		// route directly to that pane instead of waiting for unrelated scans.
+		e.sendFrame(&protocol.Subscribe{Ref: ref, Cols: 80, Rows: 24})
+		got := catalogReadSnapshot(t, e, ref, true)
+		if len(got) == 0 {
+			t.Fatal("cold direct subscribe returned an empty snapshot")
+		}
+		g.mu.Lock()
+		held := g.release != nil
+		g.mu.Unlock()
+		if !held {
+			t.Fatal("cold subscribe unexpectedly released the catalog gate")
+		}
+		g.open()
+		return
+	}
 	g.open()
 	e.sendFrame(&protocol.List{ReqID: 1})
 	mustListing(t, e, 1)
@@ -243,11 +261,15 @@ func catalogReaderBoundary(t *testing.T, level2 bool, stage string) {
 }
 func TestListScanBlockedKnownSubscribeGetsSnapshot(t *testing.T) {
 	for _, stage := range []string{"Discover", "Sample"} {
-		t.Run(stage, func(t *testing.T) { catalogReaderBoundary(t, false, stage) })
+		t.Run(stage, func(t *testing.T) { catalogReaderBoundary(t, false, stage, false) })
 	}
 }
 func TestLevel2ScanBlockedKnownSubscribeGetsSnapshot(t *testing.T) {
 	for _, stage := range []string{"Discover", "Sample"} {
-		t.Run(stage, func(t *testing.T) { catalogReaderBoundary(t, true, stage) })
+		t.Run(stage, func(t *testing.T) { catalogReaderBoundary(t, true, stage, false) })
 	}
+}
+
+func TestColdSubscribeBypassesBlockedInitialCatalog(t *testing.T) {
+	catalogReaderBoundary(t, false, "Discover", true)
 }

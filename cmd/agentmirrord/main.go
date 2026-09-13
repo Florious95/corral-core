@@ -39,6 +39,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -65,7 +66,7 @@ func main() {
 // @contract
 // @pre none — args 可为空（全部走默认值）；调用方通常传 os.Args[1:]
 // @post 干净关闭（ctx 取消 / SIGINT / SIGTERM）与 -h/--help 请求返回 0；任何启动或 serve 失败返回 1
-// @err 配置加载失败、状态目录解析失败、单实例锁被占、token 解析失败、监听器打开失败、tailnet Up/ListenTailnet 失败、引导打印失败、serve 非 ErrServerClosed 失败——均记日志并返回 1
+// @err 配置加载失败、状态目录解析失败、单实例锁被占、token/host_id 解析失败、LAN 监听器打开失败、引导打印失败、serve 非 ErrServerClosed 失败返回 1；tailnet Up/ListenTailnet 失败仅降级为 LAN 并记录安全诊断
 // @inv 单实例守卫在整个 run 生命周期持有；token 值永不落日志
 func run(args []string) int {
 	cfg, err := config.Load(args)
@@ -117,7 +118,7 @@ func run(args []string) int {
 	// is fatal — booting with an empty token would accept an empty-token auth,
 	// which is the anonymous-bypass red line (§9). The value is never logged;
 	// only its source and store path are.
-	token, err := resolveToken(cfg, logger)
+	token, err := resolveTokenDir(cfg, logger, stateDir)
 	if err != nil {
 		logger.Error("failed to resolve pairing token", "err", err)
 		return 1
@@ -132,10 +133,34 @@ func run(args []string) int {
 		"list_interval", cfg.ListInterval,
 	)
 
-	// The API server consumes the resolved settings. The token is write-only:
-	// it is passed into the validator seam and never logged or echoed here
-	// (docs/protocol.md §9).
+	// The host identity is independent of the pairing token and persists across
+	// token rotation/restarts. It is public metadata only.
+	hostID, err := pairing.EnsureHostID(stateDir)
+	if err != nil {
+		logger.Error("failed to resolve host identity", "err", err)
+		return 1
+	}
+
+	// LAN must become available before any optional TS control-plane work. A
+	// failed TS Up is a silent degraded mode, never a reason to take LAN down.
+	group, err := newTSNetGroup(tsnetd.Options{
+		ListenAddr: cfg.ListenAddr,
+		Hostname:   hostname(),
+		AuthKey:    cfg.TSAuthKey,
+		Dir:        filepath.Join(stateDir, "tsnet"),
+		ControlURL: os.Getenv("TS_CONTROL_URL"),
+	}, logger)
+	if err != nil {
+		logger.Error("failed to open listeners", "err", err)
+		return 1
+	}
+	defer group.Close()
+
+	port := listenPort(group.LAN.Addr().String())
 	apiServer := api.NewServer(api.Options{
+		HostID:         hostID,
+		HostName:       hostname(),
+		ListenPort:     portNumber(port),
 		Token:          token,
 		UploadDir:      cfg.UploadDir,
 		MaxUploadBytes: cfg.MaxUploadBytes,
@@ -146,82 +171,59 @@ func run(args []string) int {
 	})
 	defer apiServer.Close()
 
-	// The listener group always opens the LAN listener; the tailnet listener is
-	// created lazily only when a TS authkey is configured. No authkey means a
-	// LAN-only daemon with zero control-plane contact (requirement 007 red line).
-	// The key comes from env-only TS_AUTHKEY (argv is forbidden because process
-	// lists/shell history expose it); it is a token-grade secret — never logged or echoed.
-	group, err := newTSNetGroup(tsnetd.Options{
-		ListenAddr: cfg.ListenAddr,
-		Hostname:   hostname(),
-		AuthKey:    cfg.TSAuthKey,
-		// Keep node keys beside the daemon state but in their own subtree. The
-		// degraded path does not create it because tsnetd returns before Dir use.
-		Dir: filepath.Join(stateDir, "tsnet"),
-		// 自建控制面接缝（headscale，011 部署自由）：env-only，缺省官方控制面。
-		ControlURL: os.Getenv("TS_CONTROL_URL"),
-	}, logger)
-	if err != nil {
-		logger.Error("failed to open listeners", "err", err)
-		return 1
+	// DNS-SD is an optional LAN discovery aid. Socket/join failure is safe to
+	// degrade: the API listener remains alive and whoami/QR still work.
+	mdnsAddrs := pairing.DetectAddresses()
+	mdnsIPs := make([]net.IP, 0, len(mdnsAddrs))
+	for _, address := range mdnsAddrs {
+		if address.Kind == pairing.KindLAN {
+			mdnsIPs = append(mdnsIPs, address.IP)
+		}
 	}
-	defer group.Close()
-
-	// feat-ts-wire: with an authkey the node must be UP before the guide is
-	// printed — the QR needs the tailnet 100.x address (a userspace tsnet node
-	// has no host NIC; Up is the only source) and carries the authkey itself
-	// (011 pre-authorized distribution). Up failure is fatal: the user asked
-	// for a tailnet, silently degrading to LAN-only hides the failure (config
-	// fail-fast precedent + 工程红线5 失败可见). Bounded by a timeout so a bad
-	// key cannot hang startup forever in the control-plane handshake.
-	var (
-		tailLn    net.Listener
-		tailnetIP net.IP
-	)
-	if group.TailnetEnabled() {
-		logger.Info("tailnet 入网中（等待 Tailscale 控制面握手）…")
-		upCtx, cancel := context.WithTimeout(ctx, tailnetUpTimeout)
-		tailnetIP, err = group.Up(upCtx)
-		cancel()
-		if err != nil {
-			if ctx.Err() != nil {
-				logger.Info("shutting down during tailnet startup")
-				return 0
-			}
-			logger.Error("tailnet up failed (authkey 无效/过期或控制面不可达)", "err", err)
-			return 1
-		}
-		if tailLn, err = group.ListenTailnet(); err != nil {
-			logger.Error("failed to listen on tailnet", "err", err)
-			return 1
-		}
-		defer tailLn.Close()
-		logger.Info("tailnet 已入网", "ip", ipString(tailnetIP))
+	mdns, mdnsErr := pairing.RegisterDNSService(pairing.DNSAdvertisement{HostID: hostID, Port: portNumber(port), Addresses: mdnsIPs})
+	if mdnsErr != nil {
+		logger.Warn("dns-sd registration unavailable", "code", "dns_sd_unavailable")
+	} else {
+		defer mdns.Close()
 	}
 
-	// Print the QR + plain-text guide to stdout now that we know the listener
-	// set. This is the user-facing onboarding and the token's legal exit; a
-	// failure to print it must stop the daemon, because a token the user never
-	// sees leaves them unable to pair. All detected candidate addresses are
-	// listed so the user can re-enter another host by hand (task
-	// fix-qr-host-detect: the QR carries the best host, the guide the rest).
-	// The tailnet address and authkey ride in via the tswire params (§2.1).
-	if err := printPairingGuide(os.Stdout, token, listenPort(group.LAN.Addr().String()), group.TailnetEnabled(), cfg.Host, tailnetIP, cfg.TSAuthKey); err != nil {
+	// Print a v1 QR immediately. ts_node_id is intentionally omitted when TS
+	// is not yet Up; a successful background Up does not require reprinting QR.
+	if err := printPairingGuideWithIdentity(os.Stdout, token, port, group.TailnetEnabled(), cfg.Host, nil, cfg.TSAuthKey, hostID, ""); err != nil {
 		logger.Error("failed to print pairing guide", "err", err)
 		return 1
 	}
 
-	// Serve the API handler on every listener the group provides. The LAN
-	// listener is always present; the tailnet listener was opened above when
-	// enabled (before the guide, so the QR could carry the tailnet address).
 	srv := &http.Server{Handler: apiServer.Handler()}
 	serveErr := make(chan error, 1)
-	go func() {
-		serveErr <- srv.Serve(group.LAN)
-	}()
-	if tailLn != nil {
+	go func() { serveErr <- srv.Serve(group.LAN) }()
+
+	// TS startup runs after LAN Serve. Failure only records an internal,
+	// credential-free diagnostic. Success adds a second listener with the same
+	// handler and supplies userspace addresses to identify fallback checks.
+	if group.TailnetEnabled() {
 		go func() {
-			serveErr <- srv.Serve(tailLn)
+			upCtx, cancel := context.WithTimeout(ctx, tailnetUpTimeout)
+			defer cancel()
+			tailnetIP, tsNodeID, upErr := group.UpWithInfo(upCtx)
+			if upErr != nil {
+				if ctx.Err() == nil {
+					logger.Warn("tailnet unavailable; LAN remains active", "code", "tailnet_up_failed")
+				}
+				return
+			}
+			if tailnetIP != nil {
+				apiServer.SetTailnetIPs([]net.IP{tailnetIP})
+			}
+			tailLn, listenErr := group.ListenTailnet()
+			if listenErr != nil {
+				logger.Warn("tailnet listener unavailable; LAN remains active", "code", "tailnet_listen_failed")
+				return
+			}
+			logger.Info("tailnet 已入网", "ip", ipString(tailnetIP), "node_id_present", tsNodeID != "")
+			if err := srv.Serve(tailLn); err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
+				logger.Warn("tailnet serve failed", "code", "tailnet_serve_failed")
+			}
 		}()
 	}
 
@@ -302,18 +304,18 @@ func tokenSource(explicit string) string {
 // @err 仅 QR 渲染或 payload 序列化失败返回非 nil error（透传 pairing.PrintOnboardingAll）
 // @inv token 只出现于 QR 与明文指引（两个合法出口）
 func printPairingGuide(w io.Writer, token, port string, tailnet bool, hostOverride string, tailnetIP net.IP, tsAuthKey string) error {
-	// resolve the primary host once so the guide's primary and the QR agree.
-	// The override may come from the -host flag/env (already folded into
-	// cfg.Host); pass it in so PrimaryHost can pick it up deterministically.
+	return printPairingGuideWithIdentity(w, token, port, tailnet, hostOverride, tailnetIP, tsAuthKey, "", "")
+}
+
+func printPairingGuideWithIdentity(w io.Writer, token, port string, tailnet bool, hostOverride string, tailnetIP net.IP, tsAuthKey, hostID, tsNodeID string) error {
+	// Resolve the primary host once so the guide and QR agree.
 	host := hostOverride
 	if host == "" {
 		host = automaticPairingHost(pairing.PrimaryHost(), tailnetIP)
 	}
 	return pairing.PrintOnboardingAll(pairing.Onboarding{
-		Token:          token,
-		Port:           port,
-		TailnetEnabled: tailnet,
-		TSAuthKey:      tsAuthKey,
+		Token: token, Port: port, HostID: hostID, TSNodeID: tsNodeID, Name: hostname(),
+		TailnetEnabled: tailnet, TSAuthKey: tsAuthKey,
 	}, pairing.WithTailnet(pairing.DetectAddresses(), tailnetIP), host, w)
 }
 
@@ -360,6 +362,14 @@ func listenPort(addr string) string {
 		return port
 	}
 	return "9900"
+}
+
+func portNumber(port string) int {
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return 9900
+	}
+	return n
 }
 
 // newLogger builds the structured logger used by the whole daemon. level is

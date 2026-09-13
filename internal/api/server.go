@@ -1,7 +1,8 @@
 package api
 
-// server.go wires the WebSocket API server together: the HTTP handler set
-// (WS at /ws, image upload at /upload), the shared session catalog, the
+// server.go wires the HTTP API server together: the HTTP handler set
+// (discovery at /pair/whoami and /pair/identify, WS at /ws, image upload at
+// /upload), the shared session catalog, the
 // periodic discovery loop that pushes listing/list_delta, and the per-connection
 // frame router. The wire contract is docs/protocol.md v1; the machine-verifiable
 // codec is internal/protocol.
@@ -9,7 +10,9 @@ package api
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +33,17 @@ type Server struct {
 	// Test boundary initialized under trackersMu before reader/writer startup.
 	connInit func(*wsConn)
 	log      *slog.Logger
+
+	// Discovery identity is public metadata only. pairingToken remains private
+	// and is used solely to compute identify HMAC responses.
+	hostID          string
+	hostName        string
+	listenPort      int
+	pairingToken    string
+	identityMu      sync.RWMutex
+	tailnetIPs      []net.IP
+	addresses       func() []net.IP
+	identityLimiter *identityRateLimiter
 
 	tokenValidator TokenValidator
 	discoverer     Discoverer
@@ -148,19 +162,37 @@ func NewServer(opts Options) *Server {
 	}
 
 	filterAgents := opts.Nodeprobe != nil
+	port := opts.ListenPort
+	if port <= 0 {
+		port = 9900
+	}
+	hostName := opts.HostName
+	if hostName == "" {
+		hostName, _ = os.Hostname()
+	}
+	if hostName == "" {
+		hostName = "agentmirror"
+	}
 	s := &Server{
-		log:            log,
-		tokenValidator: opts.TokenValidator,
-		discoverer:     opts.Discoverer,
-		listInterval:   opts.ListInterval,
-		uploadDir:      opts.UploadDir,
-		maxUpload:      opts.MaxUploadBytes,
-		maxUploadDir:   defaultMaxUploadDirBytes,
-		maxInput:       opts.MaxInputBytes,
-		catalog:        newSessionCatalog(),
-		paneGeoms:      make(map[string]*paneGeometry),
-		trackers:       make(map[*wsConn]struct{}),
-		attachPreviews: make(map[string]attachPreviewEntry),
+		log:             log,
+		hostID:          opts.HostID,
+		hostName:        hostName,
+		listenPort:      port,
+		pairingToken:    opts.Token,
+		tailnetIPs:      append([]net.IP(nil), opts.TailnetIPs...),
+		addresses:       opts.AddressProvider,
+		identityLimiter: newIdentityRateLimiter(),
+		tokenValidator:  opts.TokenValidator,
+		discoverer:      opts.Discoverer,
+		listInterval:    opts.ListInterval,
+		uploadDir:       opts.UploadDir,
+		maxUpload:       opts.MaxUploadBytes,
+		maxUploadDir:    defaultMaxUploadDirBytes,
+		maxInput:        opts.MaxInputBytes,
+		catalog:         newSessionCatalog(),
+		paneGeoms:       make(map[string]*paneGeometry),
+		trackers:        make(map[*wsConn]struct{}),
+		attachPreviews:  make(map[string]attachPreviewEntry),
 	}
 	if s.tokenValidator == nil {
 		s.tokenValidator = staticToken{token: opts.Token}
@@ -254,8 +286,8 @@ func (s *Server) Close() {
 	}
 }
 
-// Handler returns the full HTTP handler: /ws (WebSocket) and /upload
-// (multipart image upload) on the same port (docs/protocol.md §8).
+// Handler returns the full HTTP handler: token-free discovery/identify,
+// /ws (WebSocket), and /upload (multipart image upload) on the same port.
 // @contract
 // @pre Server 由 NewServer 构造
 // @post 返回一个 http.Handler：/ws 升级为 WebSocket，/upload 接受 POST 图片上传；两路径共用同一端口
@@ -265,7 +297,18 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.HandleFunc("/upload", s.handleUpload)
+	mux.HandleFunc("/pair/whoami", s.serveWhoami)
+	mux.HandleFunc("/pair/identify", s.serveIdentify)
 	return mux
+}
+
+// SetTailnetIPs updates userspace-tsnet addresses after asynchronous Up. It
+// does not alter listeners or trigger a reconnect; it only completes the
+// fallback address set used by identify.
+func (s *Server) SetTailnetIPs(ips []net.IP) {
+	s.identityMu.Lock()
+	s.tailnetIPs = append([]net.IP(nil), ips...)
+	s.identityMu.Unlock()
 }
 
 // --- listing sequence & snapshot ------------------------------------------

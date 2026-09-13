@@ -9,6 +9,7 @@ package pairing
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/skip2/go-qrcode"
@@ -24,7 +25,8 @@ const PayloadVersion = 1
 type Payload struct {
 	// Version is the payload schema version (PayloadVersion).
 	Version int `json:"v"`
-	// URL is the WebSocket endpoint, e.g. ws://192.168.1.5:9900/ws.
+	// URL is retained for v1 clients. New clients treat it only as the legacy
+	// bootstrap URL; discovery still binds the host identity below.
 	URL string `json:"url"`
 	// Token is the pairing token the app must present in its auth frame. It is
 	// an intentional part of the payload: the QR is a legal token exit (§9).
@@ -32,12 +34,15 @@ type Payload struct {
 	// TSAuthKey carries the credential for scan-to-join when configured. It is
 	// legal only inside the QR payload and must never enter the plain-text guide.
 	TSAuthKey string `json:"ts_authkey"`
-	// Candidates is the OPTIONAL full candidate ws URL set for THIS host (its
-	// other NICs, LAN + tailnet, never loopback). It is forward compatible:
-	// omitempty keeps a no-candidate QR byte-identical to the pre-feature
-	// contract, so no version bump. When non-empty it leads with the primary
-	// URL (docs/protocol.md §2.1).
+	// Candidates is retained for old v1 readers; the new client never directly
+	// authenticates a candidate without identify.
 	Candidates []string `json:"candidates,omitempty"`
+	// HostID and the following fields are optional in NewPayload so old helper
+	// callers remain byte-compatible, but daemon-generated QR always fills them.
+	HostID   string `json:"host_id,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	TSNodeID string `json:"ts_node_id,omitempty"`
+	Name     string `json:"name,omitempty"`
 }
 
 // NewPayload builds the QR payload for one service URL and token, with no
@@ -51,6 +56,17 @@ func NewPayload(url, token string) Payload {
 // app tries the primary URL first, then each candidate on failure.
 func NewPayloadWithCandidates(url, token string, candidates []string) Payload {
 	return Payload{Version: PayloadVersion, URL: url, Token: token, Candidates: candidates}
+}
+
+// NewPayloadWithIdentity builds the current v1 QR while preserving the
+// historical URL/token fields for old readers.
+func NewPayloadWithIdentity(url, token, hostID, port, tsNodeID, name string, candidates []string) Payload {
+	p := NewPayloadWithCandidates(url, token, candidates)
+	p.HostID = hostID
+	p.Port, _ = strconv.Atoi(port)
+	p.TSNodeID = tsNodeID
+	p.Name = name
+	return p
 }
 
 // Marshal encodes the payload as the compact JSON line that goes into the QR.

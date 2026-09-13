@@ -7,6 +7,10 @@ package api
 // transient index or the display name.
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
@@ -112,6 +116,28 @@ func (c *sessionCatalog) entry(ref string) *sessionEntry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.byRef[ref]
+}
+
+// directPaneFromRef resolves a cold subscribe ref without consulting the
+// discovery catalog. Session refs are deliberately self-contained (socket
+// path + unit separator + bare pane id), so an authenticated client can enter
+// a pane it just received while a host/workspace scan is still in flight.
+// Keep the parser narrow: only absolute socket paths and tmux's numeric pane
+// ids are accepted, and the path must still be a UNIX socket at use time.
+func directPaneFromRef(ref string) (*bridge.Pane, discovery.Pane, bool) {
+	socket, paneID, ok := strings.Cut(ref, "\x1f")
+	if !ok || socket == "" || !filepath.IsAbs(socket) || len(paneID) < 2 || paneID[0] != '%' {
+		return nil, discovery.Pane{}, false
+	}
+	if _, err := strconv.ParseUint(paneID[1:], 10, 64); err != nil {
+		return nil, discovery.Pane{}, false
+	}
+	st, err := os.Lstat(socket)
+	if err != nil || st.Mode()&os.ModeSocket == 0 {
+		return nil, discovery.Pane{}, false
+	}
+	pane := discovery.Pane{Socket: socket, PaneID: paneID}
+	return bridge.NewPane(socket, paneID), pane, true
 }
 
 // list returns all current entries in stable ref order (deterministic output

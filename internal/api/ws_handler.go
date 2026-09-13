@@ -100,14 +100,10 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// 订阅计数（含首次与重复订阅；重复订阅 = 重连或客户端重订阅 → 推完整快照 → 整屏重建）。
 	c.s.sendQueue.recordSubscribe()
 	c.connMetrics.recordSubscribe()
-	// Ensure the catalog is populated before resolving the ref, so a client
-	// that subscribes immediately after auth (before the listing loop's first
-	// tick) can still address the pane it was just shown.
-	if c.s.catalogEntry(s.Ref) == nil {
-		c.s.ensureInitialScan(c.ctx)
-	}
-
-	br, _, ok := c.resolvePane(s.Ref)
+	// A ref already carries the exact tmux socket and pane id. Resolve it
+	// directly when the catalog is cold or being refreshed; waiting for the
+	// unrelated host scan here leaves the client with a blank terminal.
+	br, _, ok := c.resolveSubscribePane(s.Ref)
 	if !ok {
 		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
 		return

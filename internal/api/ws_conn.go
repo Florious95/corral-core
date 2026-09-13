@@ -787,13 +787,27 @@ func (c *wsConn) resolveBridge(ref string) (*bridge.Pane, bool) {
 }
 
 // resolvePane resolves the bridge and the discovery pane for a ref (the pane
-// carries the geometry needed for scrollback convergence).
+// carries the geometry needed for scrollback convergence). Non-subscribe
+// operations remain catalog-backed so stale or fabricated refs cannot perform
+// input/scrollback/resize operations.
 func (c *wsConn) resolvePane(ref string) (*bridge.Pane, discovery.Pane, bool) {
 	e := c.s.catalogEntry(ref)
 	if e == nil {
 		return nil, discovery.Pane{}, false
 	}
 	return e.bridge, e.pane, true
+}
+
+// resolveSubscribePane keeps terminal entry independent from host discovery.
+// A cold or in-flight catalog may not contain a valid ref yet, but the ref
+// itself is enough to construct the read-only bridge used to establish the
+// initial snapshot. Once that snapshot succeeds, normal subscription state
+// gates all subsequent client operations.
+func (c *wsConn) resolveSubscribePane(ref string) (*bridge.Pane, discovery.Pane, bool) {
+	if e := c.s.catalogEntry(ref); e != nil {
+		return e.bridge, e.pane, true
+	}
+	return directPaneFromRef(ref)
 }
 
 // log errors at debug level (a closing connection is normal, not an incident).
