@@ -83,7 +83,7 @@ class NotificationHelperTest {
         // 常驻：标题固定、文本透传、ongoing、CATEGORY_SERVICE、落 CHANNEL_PERSISTENT。
         val n = helper.persistent("连接中…")
 
-        assertEquals("Agent Mirror 后台连接", shadowOf(n).contentTitle)
+        assertEquals("corral 后台连接", shadowOf(n).contentTitle)
         assertEquals("连接中…", shadowOf(n).contentText)
         assertTrue(shadowOf(n).isOngoing)
         assertEquals(Notification.CATEGORY_SERVICE, n.category)

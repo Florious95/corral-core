@@ -52,7 +52,7 @@ class PiWorkingDtoProjectionTest {
     }
 
     @Test
-    fun piDisplayNamePrefersRealSessionNameOverGenericNodeWindowName() {
+    fun piDisplayNameConsumesServerNameWithoutProviderFallback() {
         val entry = Session(
             ref = "r",
             name = "node",
@@ -67,8 +67,8 @@ class PiWorkingDtoProjectionTest {
             health = "normal",
         ).toL2Entry()
 
-        assertEquals("pi-real-session", entry.identityLabel)
-        assertEquals("pi-real-session", entry.toSessionItem(false).displayName)
+        assertEquals("node", entry.identityLabel)
+        assertEquals("node", entry.toSessionItem(false).displayName)
         assertEquals("node", entry.navigationName)
     }
 }

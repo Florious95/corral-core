@@ -26,7 +26,7 @@ import dev.agentmirror.app.workspace.FavoriteBook
 import dev.agentmirror.app.workspace.FavoriteList
 import dev.agentmirror.app.workspace.FavoriteRecord
 import dev.agentmirror.app.workspace.MemoryFavoriteStore
-import dev.agentmirror.app.workspace.UNKNOWN_SESSION_DISPLAY_NAME
+import dev.agentmirror.app.workspace.UNNAMED_SESSION
 import dev.agentmirror.app.workspace.favoriteKey
 import dev.agentmirror.app.workspace.toL2Entry
 import dev.agentmirror.app.workspace.toSessionItem
@@ -81,8 +81,8 @@ class NameProjectionUiTest {
 
         assertEquals("编码甲 — 官方完整标题", codexItem.displayName)
         assertNotEquals("node-codex", codexItem.displayName)
-        assertEquals("π官方甲", piItem.displayName)
-        assertNotEquals("node-pi", piItem.displayName)
+        assertEquals("node-pi", piItem.displayName)
+        assertNotEquals("π官方甲", piItem.displayName)
 
         compose.setContent {
             AppTheme {
@@ -93,7 +93,7 @@ class NameProjectionUiTest {
         compose.onNodeWithTag("l2-row-${codexItem.id}").assertExists()
         compose.onNodeWithTag("l2-row-${piItem.id}").assertExists()
         compose.onNodeWithText("编码甲 — 官方完整标题", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("π官方甲", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("node-pi", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("node-codex", useUnmergedTree = true).assertDoesNotExist()
     }
 
@@ -157,9 +157,8 @@ class NameProjectionUiTest {
                 ),
             ),
         ).rows(listOf(missingPi)).single()
-        assertEquals(UNKNOWN_SESSION_DISPLAY_NAME, missingPiRow.identityLabel)
+        assertEquals("node-pi", missingPiRow.identityLabel)
         assertNotEquals("旧 Pi 名", missingPiRow.identityLabel)
-        assertNotEquals("node-pi", missingPiRow.identityLabel)
     }
 
     @Test
@@ -176,7 +175,7 @@ class NameProjectionUiTest {
             activity = "unknown",
             status = "unknown",
         ).toL2Entry()
-        assertEquals(UNKNOWN_SESSION_DISPLAY_NAME, emptyCodex.identityLabel)
+        assertEquals(UNNAMED_SESSION, emptyCodex.identityLabel)
         assertEquals("node-codex", emptyCodex.navigationName)
 
         val before = Session(
