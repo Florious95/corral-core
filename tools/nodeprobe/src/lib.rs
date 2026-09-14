@@ -22,8 +22,8 @@ pub mod providers;
 pub mod web;
 
 use classify::{
-    classify, format_codepoint, parse_corpus_line, BackgroundTasks, Class, CorpusRow,
-    PROVIDER_PI, STATE_UNKNOWN,
+    classify, format_codepoint, parse_corpus_line, BackgroundTasks, Class, CorpusRow, PROVIDER_PI,
+    STATE_UNKNOWN,
 };
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -340,12 +340,19 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
         // a second descendant traversal could reintroduce stale identity.
         let processes = match snap.as_ref() {
             Some(s) if p.pane_pid > 0 => {
-                proctree::walk_identity_processes(s, p.pane_pid, &p.current_command)
+                proctree::walk_identity_processes_with_argv(s, p.pane_pid, &p.current_command)
             }
             _ => Vec::new(),
         };
-        let comms: Vec<String> = processes.iter().map(|(_, comm)| comm.clone()).collect();
-        let provider_entry = providers::match_comms(&comms);
+        let provider_processes: Vec<providers::Process> = processes
+            .iter()
+            .map(|(_, comm, argv)| providers::Process {
+                comm: comm.clone(),
+                argv: argv.clone(),
+            })
+            .collect();
+        let provider_entry = providers::match_processes(&provider_processes);
+        let comms: Vec<String> = processes.iter().map(|(_, comm, _)| comm.clone()).collect();
         let class = if let Some(e) = provider_entry {
             classify::classify_for(&e.id, &p.title)
         } else {
@@ -354,8 +361,10 @@ pub fn probe(spec: SocketSpec) -> Result<Report, String> {
         };
         let pi_pids: Vec<i32> = processes
             .iter()
-            .filter(|(_, comm)| providers::lookup(comm).is_some_and(|e| e.id == PROVIDER_PI))
-            .map(|(pid, _)| *pid)
+            .filter(|(_, comm, argv)| {
+                providers::lookup_process(comm, argv).is_some_and(|e| e.id == PROVIDER_PI)
+            })
+            .map(|(pid, _, _)| *pid)
             .collect();
         let pi_channel_dir = pi_activity::channel_dir();
         let pi_observation = if class.provider == PROVIDER_PI {
