@@ -112,7 +112,7 @@ func waitPaneTitle(t *testing.T, te *tmuxEnv, want string) {
 // loss. The larger handoff backlog preserves pre-snapshot bytes while the
 // connection remains usable.
 func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
-	te := startTmuxEnv(t, "stty -echo -onlcr; exec bash")
+	te := startTmuxEnv(t, initialSnapshotBurstCommand())
 	c := newDirectWSConn(t, te.wsEnv.srv, 256)
 	captureStarted := make(chan struct{})
 	releaseCapture := make(chan struct{})
@@ -144,7 +144,7 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("capture barrier was not reached")
 	}
-	if err := sendTmuxLine(te, initialSnapshotBurstCommand()); err != nil {
+	if err := sendTmuxLine(te, "go"); err != nil {
 		t.Fatalf("trigger capture-window burst: %v", err)
 	}
 	waitPaneTitle(t, te, initialSnapshotReadyToken)
@@ -158,11 +158,12 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 	if c.ctx.Err() != nil || c.catalogAborted.Load() {
 		t.Fatal("initial snapshot completed with an aborted connection")
 	}
-	wantDelta := append(bytes.Repeat([]byte("X"), initialSnapshotBurstBytes), []byte("\x1b]0;"+initialSnapshotReadyToken+"\x07")...)
+	wantRun := bytes.Repeat([]byte("X"), initialSnapshotBurstBytes)
+	wantMarker := []byte("\x1b]0;" + initialSnapshotReadyToken + "\x07")
 	var gotDelta []byte
 	deadline := time.NewTimer(10 * time.Second)
 	defer deadline.Stop()
-	for len(gotDelta) < len(wantDelta) {
+	for bytes.Index(gotDelta, wantMarker) < 0 {
 		select {
 		case msg := <-c.sendCh:
 			if msg.typ != wsBinary {
@@ -183,14 +184,18 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 				t.Fatalf("unexpected binary frame kind=%d", frame.Kind)
 			}
 		case <-deadline.C:
-			t.Fatalf("mirror backlog stalled at %d/%d bytes", len(gotDelta), len(wantDelta))
+			t.Fatalf("mirror backlog stalled at %d bytes before source marker", len(gotDelta))
 		}
 	}
-	// The PTY may contribute a prompt or command-echo fragment around the
-	// controlled source. Require the complete source run to remain contiguous;
-	// this detects dropped/reordered bytes without depending on that noise.
-	if !bytes.Contains(gotDelta, wantDelta) {
-		t.Fatalf("mirror source bytes changed across snapshot seam: got=%d want=%d", len(gotDelta), len(wantDelta))
+	// The PTY may contribute a prompt or command-echo fragment before the
+	// controlled source. Wait for the source marker rather than using total
+	// length (otherwise prefix noise can stop collection before the marker).
+	// Require the complete X run before that marker to remain contiguous; this
+	// detects dropped/reordered bytes without depending on PTY noise length.
+	markerAt := bytes.Index(gotDelta, wantMarker)
+	runAt := bytes.Index(gotDelta[:markerAt], wantRun)
+	if runAt < 0 || runAt+len(wantRun) != markerAt {
+		t.Fatalf("mirror source bytes changed across snapshot seam: got=%d source=%d run=%d marker=%d", len(gotDelta), len(wantRun), runAt, markerAt)
 	}
 	if !c.subscribed(te.ref()) {
 		t.Fatal("initial snapshot burst left no live subscription")
@@ -357,7 +362,7 @@ const (
 // post-reconnect release line, preventing a shell prompt or process exit from
 // changing the snapshot oracle before replay is exercised.
 func initialSnapshotBurstCommand() string {
-	return fmt.Sprintf(`python3 -c 'import sys,time;sys.stdout.write("X"*%d);sys.stdout.flush();sys.stdout.write("\033]0;%s\007");sys.stdout.flush();time.sleep(120)'`, initialSnapshotBurstBytes, initialSnapshotReadyToken)
+	return fmt.Sprintf(`stty -echo -onlcr; exec python3 -u -c 'import sys,time;sys.stdin.readline();sys.stdout.write("X"*%d);sys.stdout.flush();sys.stdout.write("\033]0;%s\007");sys.stdout.flush();time.sleep(120)'`, initialSnapshotBurstBytes, initialSnapshotReadyToken)
 }
 
 func recoveryBurstCommand() string {
