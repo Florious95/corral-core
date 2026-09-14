@@ -301,6 +301,60 @@ func TestResizeChangesActualSize(t *testing.T) {
 	}
 }
 
+func TestResizeSkipsWindowCommandWhenPaneAlreadyMatches(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "tmux.log")
+	script := filepath.Join(dir, "fake-tmux")
+	if err := os.WriteFile(script, []byte(`#!/bin/sh
+printf '%s\n' "$3" >> "$ARGS_LOG"
+case "$3" in
+  display-message)
+    case "$*" in
+      *"#{window_id}"*) printf '@1\n' ;;
+      *"#{pane_width}x#{pane_height}"*) printf '120x30\n' ;;
+      *) exit 1 ;;
+    esac
+    ;;
+  set-option) ;;
+  resize-window) ;;
+  *) exit 1 ;;
+esac
+`), 0o755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+	old := tmuxBin
+	tmuxBin = script
+	defer func() { tmuxBin = old }()
+	t.Setenv("ARGS_LOG", logPath)
+
+	p := NewPane("/sock/x", "%0")
+	w, h, err := p.Resize(context.Background(), 120, 30)
+	if err != nil {
+		t.Fatalf("same-size Resize: %v", err)
+	}
+	if w != 120 || h != 30 {
+		t.Fatalf("same-size Resize read-back: got %dx%d", w, h)
+	}
+	first, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read same-size tmux log: %v", err)
+	}
+	if strings.Contains(string(first), "resize-window") {
+		t.Fatalf("same-size Resize invoked resize-window: %q", first)
+	}
+
+	if _, _, err := p.Resize(context.Background(), 100, 20); err != nil {
+		t.Fatalf("changed Resize: %v", err)
+	}
+	all, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read changed tmux log: %v", err)
+	}
+	if got := strings.Count(string(all), "resize-window"); got != 1 {
+		t.Fatalf("changed Resize resize-window count = %d, want 1; log %q", got, all)
+	}
+}
+
 func TestScrollbackPagingRange(t *testing.T) {
 	testScrollbackPagingRangeStrong(t)
 }
