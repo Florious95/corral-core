@@ -30,6 +30,7 @@ import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.ui.theme.TermPalette
@@ -158,7 +159,10 @@ class TermSurfaceView @JvmOverloads constructor(
     private var pendingScrollPx: Float = 0f
 
     private val mouseCap = TermMouseCapture()
-    private var mouseHeld: Boolean = false
+    private val touchSlopPx = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+    private var touchDownX: Float = 0f
+    private var touchDownY: Float = 0f
+    private var touchMoved: Boolean = false
 
     private var backToBottomLabel: String? = null
 
@@ -416,18 +420,35 @@ class TermSurfaceView @JvmOverloads constructor(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val p = presenter ?: return super.onTouchEvent(event)
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) requestFocus()
-        val wasHeld = mouseHeld
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                requestFocus()
+                touchDownX = event.x
+                touchDownY = event.y
+                touchMoved = false
+                mouseCap.reset()
+            }
+            MotionEvent.ACTION_MOVE -> if (!touchMoved) {
+                val dx = event.x - touchDownX
+                val dy = event.y - touchDownY
+                touchMoved = dx * dx + dy * dy > touchSlopPx * touchSlopPx
+            }
+        }
+        // The detector always owns the gesture path. A tracked mouse must never suppress
+        // scrolling: terminal mouse support is tap-only, while every drag is a viewport drag.
+        gestureDetector.onTouchEvent(event)
         dispatchTermMouse(p, event)
-        if (!wasHeld && !mouseHeld) {
-            val handled = gestureDetector.onTouchEvent(event)
-            if (!handled) super.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            touchMoved = false
+            mouseCap.reset()
         }
         return true
     }
 
-    /** 按下/跨格拖动/抬起。同格 motion 不上报。跟踪未开则 [onTermMouse] 返回 false，滚轮路径照旧。 */
+    /** Tap-only mouse support. Dragging never emits motion/button-32 reports. */
     private fun dispatchTermMouse(p: TermViewPresenter, event: MotionEvent) {
+        if (event.actionMasked == MotionEvent.ACTION_CANCEL) return
+        if (event.actionMasked != MotionEvent.ACTION_UP || touchMoved) return
         val sink = onTermMouse ?: return
         val cw = p.cellWidth
         val ch = p.cellHeight
@@ -438,31 +459,8 @@ class TermSurfaceView @JvmOverloads constructor(
         val shift = event.metaState and KeyEvent.META_SHIFT_ON != 0
         val meta = event.metaState and KeyEvent.META_ALT_ON != 0
         val ctrl = event.metaState and KeyEvent.META_CTRL_ON != 0
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                mouseCap.reset()
-                mouseCap.hit(xPx, event.y, cw, ch, p.gridCols, p.gridRows)
-                if (sink(mouseCap.col, mouseCap.row, true, false, shift, meta, ctrl)) {
-                    mouseHeld = true
-                    mouseCap.markReported()
-                } else {
-                    mouseHeld = false
-                }
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if (mouseHeld && mouseCap.crossedCell()) {
-                    if (sink(mouseCap.col, mouseCap.row, true, true, shift, meta, ctrl)) {
-                        mouseCap.markReported()
-                    }
-                }
-            }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (mouseHeld) {
-                    sink(mouseCap.col, mouseCap.row, false, false, shift, meta, ctrl)
-                    mouseHeld = false
-                    mouseCap.reset()
-                }
-            }
+        if (sink(mouseCap.col, mouseCap.row, true, false, shift, meta, ctrl)) {
+            sink(mouseCap.col, mouseCap.row, false, false, shift, meta, ctrl)
         }
     }
 
