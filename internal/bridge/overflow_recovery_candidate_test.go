@@ -59,6 +59,14 @@ func TestSubscriberOverflowStopsOnlySlowSubscriber(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("slow subscriber was not terminated at overflow")
 	}
+	// Fanout owns the loss boundary, so the affected subscriber must already
+	// be absent before its relay's eventual detach callback runs.
+	s.mu.Lock()
+	refsAtOverflow, membersAtOverflow := s.refs, len(s.subs)
+	s.mu.Unlock()
+	if refsAtOverflow != 1 || membersAtOverflow != 1 {
+		t.Fatalf("overflow left subscriber registered: refs=%d members=%d", refsAtOverflow, membersAtOverflow)
+	}
 	if !bytes.Equal(got, want) || sha256.Sum256(got) != sha256.Sum256(want) {
 		t.Fatalf("healthy stream mismatch: bytes=%d want=%d", len(got), len(want))
 	}
