@@ -172,25 +172,11 @@ fun SessionScreen(
     var inputFocused by remember { mutableStateOf(false) }
     var imeHideRequested by remember { mutableStateOf(false) }
     var collapseRequest by remember { mutableStateOf(0) }
-    var dockMode by androidx.compose.runtime.saveable.rememberSaveable {
-        mutableStateOf(DockRowMode.Sessions)
-    }
-    // IME focus temporarily exposes the key bar without discarding the user's dock choice.
-    var dockModeBeforeInput by androidx.compose.runtime.saveable.rememberSaveable {
-        mutableStateOf<DockRowMode?>(null)
-    }
-    fun restoreDockModeAfterInput() {
-        dockModeBeforeInput?.let { previous ->
-            dockMode = previous
-            dockModeBeforeInput = null
-        }
-    }
     val requestDockCollapse: (String) -> Unit = remember(focusManager, keyboardController, view) {
         { source ->
             if (!imeHideRequested) {
                 val inputStartNs = System.nanoTime()
                 inputFocused = false
-                restoreDockModeAfterInput()
                 imeHideRequested = true
                 collapseRequest++
                 val imeStartNs = System.nanoTime()
@@ -283,6 +269,9 @@ fun SessionScreen(
     }
 
     var mirror by remember { mutableStateOf(TextFieldValue("")) }
+    var dockMode by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(DockRowMode.Sessions)
+    }
     SessionScreenBackHandler(
         focused = { inputFocused },
         onCollapseFocused = { requestDockCollapse("system-back") },
@@ -403,15 +392,8 @@ fun SessionScreen(
                     imeHideRequested = imeHideRequested,
                     collapseRequest = collapseRequest,
                     onDockCollapse = requestDockCollapse,
-                    onInputFocusedChanged = {
-                        inputFocused = it
-                        if (!it) restoreDockModeAfterInput()
-                    },
+                    onInputFocusedChanged = { inputFocused = it },
                     onInputExpanded = {
-                        if (dockMode != DockRowMode.Hotkeys && dockModeBeforeInput == null) {
-                            dockModeBeforeInput = dockMode
-                            dockMode = DockRowMode.Hotkeys
-                        }
                         inputFocused = true
                         imeHideRequested = false
                         collapseRequest = 0

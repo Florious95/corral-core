@@ -99,28 +99,6 @@ class SessionDockSourceTest {
     }
 
     @Test
-    fun inputFocusTemporarilyShowsHotkeysAndRestoresSessionsAfterBlur() {
-        val h = OverlayTestHarness()
-        compose.setContent {
-            AgentMirrorTheme {
-                SessionScreen(viewModel = h.vm, name = "sess", onBack = {})
-            }
-        }
-
-        compose.onNodeWithText("Esc").assertDoesNotExist()
-        compose.onNodeWithTag("session-command-editor").performClick()
-        compose.waitForIdle()
-        listOf("Esc", "Tab", "↑", "↓", "←", "→", "Ctrl-C").forEach {
-            compose.onNodeWithText(it).assertIsDisplayed()
-        }
-
-        compose.onNodeWithTag("session-terminal-canvas").performTouchInput { click() }
-        compose.waitForIdle()
-        compose.onNodeWithText("Esc").assertDoesNotExist()
-        compose.onNodeWithContentDescription("返回菜单").assertIsDisplayed()
-    }
-
-    @Test
     fun inputFocusExpandsAndRealTerminalTapOrSendCollapsesWithSourceTiming() {
         val sent = mutableListOf<String>()
         compose.mainClock.autoAdvance = false
@@ -410,11 +388,6 @@ class SessionDockSourceTest {
         compose.onNodeWithTag("session-command-editor").performClick()
         compose.waitForIdle()
         val expandedBefore = inputFieldHeight()
-        // Input focus exposes hotkeys; explicitly choose Sessions when switching favorites.
-        compose.onNodeWithText("Esc").assertIsDisplayed()
-        compose.onNodeWithContentDescription("返回菜单").performClick()
-        compose.onNodeWithText("会话").performClick()
-        compose.waitForIdle()
 
         val favoriteList = compose.onNodeWithTag("favorite-session-list")
         favoriteList.performScrollToNode(hasText("收藏-6"))
