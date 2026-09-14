@@ -323,13 +323,13 @@ const PasteSettleDelay = 2 * time.Second
 // protocol boundary; this table is the bridge's own defensive lookup, so an
 // unknown name is a hard error (ErrInvalidKey), never a silent no-op.
 var namedKeys = map[string]string{
-	"esc":      "Escape",
-	"ctrl_c":   "C-c",
-	"tab":      "Tab",
-	"up":       "Up",
-	"down":     "Down",
-	"left":     "Left",
-	"right":    "Right",
+	"esc":       "Escape",
+	"ctrl_c":    "C-c",
+	"tab":       "Tab",
+	"up":        "Up",
+	"down":      "Down",
+	"left":      "Left",
+	"right":     "Right",
 	"backspace": "BSpace",
 }
 
@@ -448,7 +448,7 @@ func (p *Pane) requirePane(ctx context.Context) error {
 // (requirement 005) belongs to the layer that owns sessions.
 // @contract
 // @pre pane 存在；cols/rows 为请求尺寸（tmux 侧再约束）
-// @post window-size latest 已设、resize-window 已执行；返回 pane 实际新尺寸（读回值，非请求值）
+// @post window-size latest 已设；仅当实际尺寸不同才执行 resize-window；返回 pane 实际尺寸（读回值，非请求值）
 // @err 解析 window id/尺寸失败→fmt.Errorf；tmux 失败→ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout
 // @inv none — 只改尺寸，不触碰 pane 其他运行态
 func (p *Pane) Resize(ctx context.Context, cols, rows int) (width, height int, err error) {
@@ -460,6 +460,12 @@ func (p *Pane) Resize(ctx context.Context, cols, rows int) (width, height int, e
 	// by an attached client's dimensions.
 	if _, err := runTmux(ctx, p.socket, p.timeout, "set-option", "-w", "-t", winID, "window-size", "latest"); err != nil {
 		return 0, 0, err
+	}
+	// Read the actual pane size after applying the window policy. A same-size
+	// request must not invoke resize-window (and needlessly signal the PTY).
+	// A read failure is not equality: continue with the original resize path.
+	if width, height, err := p.Size(ctx); err == nil && width == cols && height == rows {
+		return width, height, nil
 	}
 	if _, err := runTmux(ctx, p.socket, p.timeout,
 		"resize-window", "-t", winID, "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows)); err != nil {
