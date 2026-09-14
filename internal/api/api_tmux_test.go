@@ -19,6 +19,20 @@ import (
 	"github.com/coder/websocket"
 )
 
+// TestSubscribeSnapshotPrefixesActiveMouseMode protects the reconnect path:
+// capture-pane omits DECSET state, so a subscriber must receive the pane's
+// active tracking mode before replaying the visible bytes.
+func TestSubscribeSnapshotPrefixesActiveMouseMode(t *testing.T) {
+	te := startTmuxEnv(t, `sh -c "printf '\\033[?1002h\\033[?1006h'; sleep 300"`)
+	time.Sleep(100 * time.Millisecond)
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
+	snap := te.readBinaryFrame()
+	want := "\x1b[?1002h\x1b[?1006h"
+	if !strings.HasPrefix(string(snap.Data), want) {
+		t.Fatalf("snapshot prefix = %q, want %q", snap.Data[:min(len(snap.Data), len(want)+16)], want)
+	}
+}
+
 // TestSubscribeSnapshotThenDelta is the core mirroring red test: subscribing
 // must deliver a snapshot first, then incremental deltas of the pane's new
 // output (docs/protocol.md §4.2).

@@ -155,6 +155,31 @@ func waitForStream(t *testing.T, ch <-chan []byte, want string) bool {
 	}
 }
 
+func TestMouseModeReadsActiveTmuxFlags(t *testing.T) {
+	tt := newTestTMUX(t)
+	p := tt.newPane(t, `sh -c "printf '\\033[?1002h\\033[?1006h'; sleep 300"`)
+	time.Sleep(100 * time.Millisecond)
+	mode, err := p.MouseMode(context.Background())
+	if err != nil {
+		t.Fatalf("MouseMode: %v", err)
+	}
+	if !mode.Any || !mode.Button || !mode.SGR || mode.Standard || mode.All {
+		t.Fatalf("MouseMode = %+v, want button+SGR only", mode)
+	}
+}
+
+func TestMouseModeBareShellIsDisabled(t *testing.T) {
+	tt := newTestTMUX(t)
+	p := tt.newPane(t, "sh")
+	mode, err := p.MouseMode(context.Background())
+	if err != nil {
+		t.Fatalf("MouseMode: %v", err)
+	}
+	if mode.Any || mode.Standard || mode.Button || mode.All || mode.SGR {
+		t.Fatalf("MouseMode = %+v, want all flags disabled", mode)
+	}
+}
+
 func TestSnapshotContainsPrintedOutput(t *testing.T) {
 	tt := newTestTMUX(t)
 	p := tt.newPane(t, `printf 'SNAP_MARK_12345\n'; sleep 300`)

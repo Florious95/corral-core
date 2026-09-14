@@ -86,6 +86,45 @@ func (p *Pane) CursorPos(ctx context.Context) (x, y int, err error) {
 	return x, y, nil
 }
 
+// MouseMode is the tmux mouse protocol state observed for a pane. tmux exposes
+// these flags from the pane's active PTY application; the server never enables
+// tracking on behalf of a plain shell.
+type MouseMode struct {
+	Any      bool
+	Standard bool // DECSET 1000: button press/release
+	Button   bool // DECSET 1002: button press/release/drag
+	All      bool // DECSET 1003: all motion
+	SGR      bool // DECSET 1006: SGR encoding
+}
+
+// MouseMode reads tmux's current mouse tracking flags without changing pane
+// state. A snapshot subscriber uses it to prepend the active DECSET sequence,
+// because capture-pane does not include the application's prior mode setup.
+func (p *Pane) MouseMode(ctx context.Context) (MouseMode, error) {
+	out, err := runTmux(ctx, p.socket, p.timeout, "display-message", "-p", "-t", p.target,
+		"#{mouse_any_flag}|#{mouse_standard_flag}|#{mouse_button_flag}|#{mouse_all_flag}|#{mouse_sgr_flag}")
+	if err != nil {
+		return MouseMode{}, err
+	}
+	fields := strings.Split(strings.TrimSpace(string(out)), "|")
+	if len(fields) != 5 {
+		return MouseMode{}, fmt.Errorf("tmux: parse mouse mode %q: want five flags", strings.TrimSpace(string(out)))
+	}
+	values := make([]bool, len(fields))
+	for i, field := range fields {
+		switch field {
+		case "0":
+		case "1":
+			values[i] = true
+		default:
+			return MouseMode{}, fmt.Errorf("tmux: parse mouse mode %q: flag %q is not 0 or 1", strings.TrimSpace(string(out)), field)
+		}
+	}
+	return MouseMode{
+		Any: values[0], Standard: values[1], Button: values[2], All: values[3], SGR: values[4],
+	}, nil
+}
+
 // ScrollbackMetadata reports the current history depth and pane height in one
 // bounded tmux query. history_size excludes the visible screen; pane_height is
 // the actual current height, not discovery's stale catalog geometry.

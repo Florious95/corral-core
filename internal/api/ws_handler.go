@@ -41,12 +41,40 @@ func snapshotWithCursor(ctx context.Context, br *bridge.Pane) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	mouse, err := br.MouseMode(ctx)
+	if err != nil {
+		return nil, err
+	}
 	x, y, err := br.CursorPos(ctx)
 	if err != nil {
 		return nil, err
 	}
 	snap = bytes.TrimRight(snap, "\n")
-	return append(snap, []byte(fmt.Sprintf("\x1b[%d;%dH", y+1, x+1))...), nil
+	prefix := mouseModePrefix(mouse)
+	out := make([]byte, 0, len(prefix)+len(snap)+16)
+	out = append(out, prefix...)
+	out = append(out, snap...)
+	out = append(out, []byte(fmt.Sprintf("\x1b[%d;%dH", y+1, x+1))...)
+	return out, nil
+}
+
+func mouseModePrefix(mode bridge.MouseMode) []byte {
+	if !mode.Any {
+		return nil
+	}
+	prefix := make([]byte, 0, 24)
+	switch {
+	case mode.All:
+		prefix = append(prefix, []byte("\x1b[?1003h")...)
+	case mode.Button:
+		prefix = append(prefix, []byte("\x1b[?1002h")...)
+	case mode.Standard:
+		prefix = append(prefix, []byte("\x1b[?1000h")...)
+	}
+	if mode.SGR {
+		prefix = append(prefix, []byte("\x1b[?1006h")...)
+	}
+	return prefix
 }
 
 // handleAuth validates the pairing token and answers auth_ack. On rejection the
