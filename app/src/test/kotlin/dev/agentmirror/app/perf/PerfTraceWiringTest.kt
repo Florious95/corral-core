@@ -101,6 +101,9 @@ class PerfTraceWiringTest {
             80,
         )
         manager.setListener(vm)
+        // 首订由首次有效实测几何驱动；此处模拟连接尚未 READY 时已完成布局。
+        vm.presenter.seedCellMetrics(cellW = 10, cellH = 20)
+        vm.presenter.onViewportSizeChanged(800, 480)
 
         val linesAfterSubscribe = captured.map { it.second }
         assertTrue(
@@ -114,7 +117,7 @@ class PerfTraceWiringTest {
         transports.last().deliverText("""{"v":1,"type":"auth_ack","payload":{"ok":true}}""")
         val afterReady = captured.map { it.second }
         assertTrue(
-            "首次发出必须 subscribe_sent emitted=1 replay=0，实际=$afterReady",
+            "READY 后必须只发一次实测尺寸 subscribe_sent emitted=1，实际=$afterReady",
             afterReady.any {
                 it.contains("ev=subscribe_sent") && it.contains("emitted=1") &&
                     it.contains("replay=0") && it.contains("ok=1")
@@ -131,8 +134,8 @@ class PerfTraceWiringTest {
         view.sessionRef = ref
         view.nightOverride = false
         view.presenter = vm.presenter
-        view.layout(0, 0, 400, 160)
-        val bmp = Bitmap.createBitmap(400, 160, Bitmap.Config.ARGB_8888)
+        view.layout(0, 0, 800, 480)
+        val bmp = Bitmap.createBitmap(800, 480, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bmp))
         bmp.recycle()
 
