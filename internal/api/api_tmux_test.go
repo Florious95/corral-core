@@ -27,7 +27,7 @@ func TestSubscribeSnapshotPrefixesActiveMouseMode(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 24, Cols: 80})
 	snap := te.readBinaryFrame()
-	want := "\x1b[?1002h\x1b[?1006h"
+	want := "\x1b[?1000h\x1b[?1002h\x1b[?1006h"
 	if !strings.HasPrefix(string(snap.Data), want) {
 		t.Fatalf("snapshot prefix = %q, want %q", snap.Data[:min(len(snap.Data), len(want)+16)], want)
 	}

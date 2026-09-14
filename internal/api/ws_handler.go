@@ -63,13 +63,14 @@ func mouseModePrefix(mode bridge.MouseMode) []byte {
 		return nil
 	}
 	prefix := make([]byte, 0, 24)
-	switch {
-	case mode.All:
-		prefix = append(prefix, []byte("\x1b[?1003h")...)
-	case mode.Button:
-		prefix = append(prefix, []byte("\x1b[?1002h")...)
-	case mode.Standard:
+	// Restore the protocol's enable order. 1000 is the button baseline and
+	// 1002 is the drag extension used by Pi/Claude; tmux reports them as
+	// mutually exclusive, so the final 1002 state still has the right effect.
+	if mode.Standard || mode.Button || mode.All {
 		prefix = append(prefix, []byte("\x1b[?1000h")...)
+	}
+	if mode.Button || mode.All {
+		prefix = append(prefix, []byte("\x1b[?1002h")...)
 	}
 	if mode.SGR {
 		prefix = append(prefix, []byte("\x1b[?1006h")...)

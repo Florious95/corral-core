@@ -14,8 +14,8 @@ func TestMouseModePrefixUsesActiveTrackingAndSGR(t *testing.T) {
 	}{
 		{name: "off", want: ""},
 		{name: "standard", mode: bridge.MouseMode{Any: true, Standard: true}, want: "\x1b[?1000h"},
-		{name: "button sgr", mode: bridge.MouseMode{Any: true, Button: true, SGR: true}, want: "\x1b[?1002h\x1b[?1006h"},
-		{name: "all sgr", mode: bridge.MouseMode{Any: true, All: true, SGR: true}, want: "\x1b[?1003h\x1b[?1006h"},
+		{name: "button sgr", mode: bridge.MouseMode{Any: true, Button: true, SGR: true}, want: "\x1b[?1000h\x1b[?1002h\x1b[?1006h"},
+		{name: "all sgr", mode: bridge.MouseMode{Any: true, All: true, SGR: true}, want: "\x1b[?1000h\x1b[?1002h\x1b[?1006h"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
