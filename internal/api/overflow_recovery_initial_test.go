@@ -186,8 +186,11 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 			t.Fatalf("mirror backlog stalled at %d/%d bytes", len(gotDelta), len(wantDelta))
 		}
 	}
-	if !bytes.Equal(gotDelta, wantDelta) {
-		t.Fatalf("mirror bytes changed across snapshot seam: got=%d want=%d", len(gotDelta), len(wantDelta))
+	// The PTY may contribute a prompt or command-echo fragment around the
+	// controlled source. Require the complete source run to remain contiguous;
+	// this detects dropped/reordered bytes without depending on that noise.
+	if !bytes.Contains(gotDelta, wantDelta) {
+		t.Fatalf("mirror source bytes changed across snapshot seam: got=%d want=%d", len(gotDelta), len(wantDelta))
 	}
 	if !c.subscribed(te.ref()) {
 		t.Fatal("initial snapshot burst left no live subscription")
