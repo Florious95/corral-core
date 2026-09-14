@@ -318,7 +318,7 @@ func (c *wsConn) handleInput(i protocol.Input) {
 			ack(false, protocol.InputFailTooLarge)
 			return
 		}
-		if err := br.InjectRaw(c.ctx, i.Bytes); err != nil {
+		if err := br.InjectRawAtomic(c.ctx, i.Bytes); err != nil {
 			if errors.Is(err, bridge.ErrPaneNotFound) {
 				ack(false, protocol.InputFailSessionNotFound)
 			} else {
