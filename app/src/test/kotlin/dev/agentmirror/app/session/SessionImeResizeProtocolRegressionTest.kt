@@ -23,6 +23,7 @@ import dev.agentmirror.app.conn.FakeClock
 import dev.agentmirror.app.conn.FakeWebSocketTransport
 import dev.agentmirror.app.conn.FrameCodec
 import dev.agentmirror.app.conn.ResizeFrame
+import dev.agentmirror.app.conn.SubscribeFrame
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.termview.TermSurfaceView
 import org.junit.Assert.assertEquals
@@ -73,10 +74,12 @@ class SessionImeResizeProtocolRegressionTest {
             presenter = viewModel.presenter
         }
 
-        // 首次真实视口：唯一允许的一次 resize（具体 rows/cols 由实测字格决定，不再硬编码）。
+        // 首次真实视口：只发一次精准 Subscribe；首次进入不再发送 Resize。
         surface.layout(0, 0, 1080, 1920)
+        val firstSubscribe = subscribeFrames(transport)
+        assertEquals("首次真实视口应恰好发一次 subscribe", 1, firstSubscribe.size)
         val firstResize = resizeFrames(transport)
-        assertEquals("首次真实视口应恰好发一次 resize", 1, firstResize.size)
+        assertEquals("首次真实视口不得追加 resize", 0, firstResize.size)
 
         // IME 弹起后视口逐级收缩（FIELD 实测每级 63px），模拟输入框一行→两行→三行。
         // rows 会逐级变小，但协议不得再产生 resize 帧。
@@ -90,6 +93,11 @@ class SessionImeResizeProtocolRegressionTest {
             resizeFrames(transport),
         )
     }
+
+    private fun subscribeFrames(transport: FakeWebSocketTransport): List<Pair<Int, Int>> =
+        transport.sentText
+            .mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() as? SubscribeFrame }
+            .map { it.rows to it.cols }
 
     private fun resizeFrames(transport: FakeWebSocketTransport): List<Pair<Int, Int>> =
         transport.sentText

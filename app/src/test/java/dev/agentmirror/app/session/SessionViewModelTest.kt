@@ -32,6 +32,7 @@ import dev.agentmirror.app.conn.InputFrame
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.conn.ResizeFrame
 import dev.agentmirror.app.conn.ScrollbackFrame
+import dev.agentmirror.app.conn.SubscribeFrame
 import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.terminal.TerminalEmulator
 import org.junit.Assert.assertEquals
@@ -61,7 +62,7 @@ class SessionViewModelTest {
         }
     }
 
-    /** 测试夹具：READY 的 ConnectionManager + 已构造的 VM（订阅已发出）。 */
+    /** 测试夹具：READY 的 ConnectionManager + 已构造的 VM（首订待首次有效视口）。 */
     private class Harness(ref: String = "s1", rows: Int = 5, cols: Int = 10) {
         val clock = FakeClock()
         val transport = FakeWebSocketTransport()
@@ -91,6 +92,7 @@ class SessionViewModelTest {
         fun keyFrames(): List<InputFrame> = inputFrames().filter { it.keys.isNotEmpty() }
         fun scrollbackFrames(): List<ScrollbackFrame> = sentFrames().filterIsInstance<ScrollbackFrame>()
         fun resizeFrames(): List<ResizeFrame> = sentFrames().filterIsInstance<ResizeFrame>()
+        fun subscribeFrames(): List<SubscribeFrame> = sentFrames().filterIsInstance<SubscribeFrame>()
         fun attachPreviewFrames(): List<AttachPreviewFrame> = sentFrames().filterIsInstance<AttachPreviewFrame>()
 
         fun snap(text: String) = transport.deliverBinary(
@@ -487,10 +489,11 @@ class SessionViewModelTest {
         // feat-font-size-setting-drop-pinch：字号实测值一次性 seed，视口建立时一次算对 ⇒ 12 行 41 列。
         h.vm.presenter.seedCellMetrics(12, 24)
         h.vm.presenter.onViewportSizeChanged(500, 300)
-        val r = h.resizeFrames()
+        val r = h.subscribeFrames()
         assertEquals(1, r.size)
         assertEquals(12, r[0].rows)
         assertEquals(41, r[0].cols)
+        assertTrue("首次有效几何不得额外发 Resize", h.resizeFrames().isEmpty())
         assertEquals(12, h.emulator.rows)
         assertEquals(41, h.emulator.cols)
     }

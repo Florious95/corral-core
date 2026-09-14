@@ -78,6 +78,49 @@ class TermReflowTest {
     }
 
     @Test
+    fun firstGeometryNotifiesSubscribeEvenWhenItMatchesInitialGrid() {
+        val emulator = TerminalEmulator(80, 24)
+        val firstGeometry = mutableListOf<Pair<Int, Int>>()
+        val resizeRequests = mutableListOf<Pair<Int, Int>>()
+        val presenter = TermViewPresenter(emulator) { rows, cols, _ ->
+            resizeRequests += rows to cols
+        }.also {
+            it.onFirstGeometryReady = { rows, cols ->
+                firstGeometry += rows to cols
+                emulator.resize(cols, rows)
+            }
+        }
+        presenter.seedCellMetrics(cellW = 10, cellH = 20)
+
+        presenter.onViewportSizeChanged(800, 480)
+        presenter.onViewportSizeChanged(800, 480)
+
+        assertEquals(listOf(24 to 80), firstGeometry)
+        assertTrue("首次有效几何不得走 Resize", resizeRequests.isEmpty())
+        assertEquals(24, emulator.rows)
+        assertEquals(80, emulator.cols)
+    }
+
+    @Test
+    fun invalidFirstGeometryDoesNotConsumeFirstNotification() {
+        val emulator = TerminalEmulator(80, 24)
+        val firstGeometry = mutableListOf<Pair<Int, Int>>()
+        val presenter = TermViewPresenter(emulator) { _, _, _ -> }.also {
+            it.onFirstGeometryReady = { rows, cols ->
+                firstGeometry += rows to cols
+                emulator.resize(cols, rows)
+            }
+        }
+        presenter.seedCellMetrics(cellW = 10, cellH = 20)
+
+        presenter.onViewportSizeChanged(800, 10) // rows == 0: invalid, must remain unseeded.
+        assertTrue(firstGeometry.isEmpty())
+        presenter.onViewportSizeChanged(800, 20)
+
+        assertEquals(listOf(1 to 80), firstGeometry)
+    }
+
+    @Test
     fun termReflowResizeReasonIsResumeOnRealViewport() {
         var seenReason: String? = null
         val emu = TerminalEmulator(40, 10)
@@ -150,6 +193,34 @@ class TermReflowTest {
     }
 
     @Test
+    fun disposedViewModelIgnoresLateFirstGeometry() {
+        val transport = FakeWebSocketTransport()
+        val manager = ConnectionManager(
+            config = ConnectionConfig(url = "ws://host:0/ws", token = "tok"),
+            transportFactory = TransportFactory { transport },
+            clock = FakeClock(),
+        )
+        manager.start()
+        transport.deliverText("""{"v":1,"type":"auth_ack","payload":{"ok":true}}""")
+        val vm = SessionViewModel(
+            manager = manager,
+            uploader = AttachmentUploader { _, _ -> UploadOutcome.Failure("unused") },
+            baseUrl = null,
+            ref = "s1",
+            initialRows = 24,
+            initialCols = 80,
+        )
+        vm.dispose()
+        vm.presenter.seedCellMetrics(cellW = 10, cellH = 20)
+        vm.presenter.onViewportSizeChanged(800, 480)
+
+        val subscriptions = transport.sentText.mapNotNull {
+            runCatching { FrameCodec.decode(it) }.getOrNull() as? SubscribeFrame
+        }
+        assertTrue("dispose 后迟到布局不得复活首订", subscriptions.isEmpty())
+    }
+
+    @Test
     fun termReflowSnapshotLogsFrameColsVsRenderCols() {
         val transport = FakeWebSocketTransport()
         val manager = ConnectionManager(
@@ -168,8 +239,8 @@ class TermReflowTest {
             initialCols = 80,
         )
         manager.setListener(vm)
-        assertTrue(manager.resize("s1", 24, 72, reason = "user"))
-        vm.emulator.resize(72, 24)
+        vm.presenter.seedCellMetrics(cellW = 10, cellH = 20)
+        vm.presenter.onViewportSizeChanged(720, 480)
         DiagLog.resetForTest()
 
         transport.deliverBinary(
@@ -202,7 +273,8 @@ class TermReflowTest {
             null, "s1", 24, 80,
         )
         manager.setListener(vm)
-        manager.resize("s1", 24, 80, "resume")
+        vm.presenter.seedCellMetrics(cellW = 10, cellH = 20)
+        vm.presenter.onViewportSizeChanged(800, 480)
         transport.deliverBinary(
             BinaryFrameCodec.encode(BinaryFrame(BinaryKind.SNAPSHOT, "s1", "x".toByteArray())),
         )
