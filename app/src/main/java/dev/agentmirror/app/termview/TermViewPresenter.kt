@@ -35,10 +35,11 @@ import dev.agentmirror.terminal.TerminalEmulator
  * 后经 [seedCellMetrics] 一次性写入，早于任何视口事件——几何只算一次，不再有「名义值播种→实测值
  * 回写」两段收敛（该模式随捏合一起拆除，原注释描述的真机收敛序列不再存在）。
  *
- * resize 抑制（raw/019 裁定②，fix-ime-no-resize）：[onViewportSizeChanged] 只在**首次真实视口**
- * 建立时换算一次 rows/cols 并上抛（「仅首次进入 CLI 时 resize 一次」）；此后 IME 弹起 / 输入框
- * 变高引起的视口收缩（及复原）只更新 [visibleRows]（可见行数）——渲染窗口随之下移/上推露出底行
- * （视口上推，内容区平移，最后一行始终可见，D-20），**不再**改 rows/cols、不再上抛 resize。
+ * 几何通知与 resize 抑制（raw/019 裁定②，fix-ime-no-resize）：[onViewportSizeChanged] 只在
+ * **首次真实视口**建立时换算一次 rows/cols 并通知宿主首订（「仅首次进入 CLI 时订阅一次」）；
+ * 此后 IME 弹起 / 输入框变高引起的视口收缩（及复原）只更新 [visibleRows]（可见行数）——
+ * 渲染窗口随之下移/上推露出底行（视口上推，内容区平移，最后一行始终可见，D-20），**不再**
+ * 改 rows/cols、不再上抛 resize。
  */
 class TermViewPresenter(
     private val emulator: TerminalEmulator,
@@ -73,6 +74,9 @@ class TermViewPresenter(
     val gridCols: Int get() = emulator.cols
     val gridRows: Int get() = emulator.rows
 
+    /** 首次有效 rows/cols 通知宿主首订；null 时保留 presenter 单测的旧 resize 语义。 */
+    var onFirstGeometryReady: ((rows: Int, cols: Int) -> Unit)? = null
+
     /** 视图像素尺寸，字号→行列数换算的基准。 */
     private var viewportWidthPx: Int = 0
     private var viewportHeightPx: Int = 0
@@ -90,13 +94,16 @@ class TermViewPresenter(
         private set
 
     /**
-     * 首次真实视口是否已建立（raw/019：唯一合法的一次 resize 已上抛）。
+     * 首次真实视口是否已建立（首订/唯一首次几何通知已完成）。
      *
      * 置位后 [onViewportSizeChanged] 只更新像素基准与可见行数，不再重算 rows/cols、
-     * 不再上抛 resize——IME/输入框挤压不得再扰动服务端。首帧前的 0x0 预布局 / 非正尺寸
-     * 不算真实视口，不置位（旋转重建 VM 后重新走本门，保证旋转仍是合法 resize）。
+     * 不再上抛 resize——IME/输入框挤压不得再扰动服务端。首帧前的 0x0、非正尺寸或
+     * 换算后 rows==0 的无效视口不算真实视口，不置位。
      */
     private var viewportSeeded = false
+
+    /** 首次有效 rows/cols 已通知宿主；与尺寸是否等于本地初始值无关。 */
+    private var firstGeometryReady = false
 
     /**
      * [seedCellMetrics] 是否已调用（防静默失效守卫：区分"字号已实测落定"与"仍是构造期
@@ -212,15 +219,15 @@ class TermViewPresenter(
     /**
      * 视图像素尺寸变化（IME/输入框挤压、复原、旋转重建后的首帧）。
      *
-     * raw/019 裁定②核心：**只在首次真实视口建立一次 rows/cols 并上抛**（「仅首次进入
-     * CLI 时 resize 一次」）；此后本方法把尺寸变化一律当作「布局挤压」——只更新像素基准
+     * raw/019 裁定②核心：**只在首次真实视口建立一次 rows/cols 并通知宿主**（「仅首次进入
+     * CLI 时精准订阅一次」）；此后本方法把尺寸变化一律当作「布局挤压」——只更新像素基准
      * 与可见行数（[updateVisibleRows]，视口上推露出底行），不再重算 rows/cols、不再上抛
      * resize，服务端不被扰动（消灭 resize 协议帧本体，而非靠服务端 no-op 兜底）。
      *
      * @contract
      * @pre none
-     * @post viewportWidthPx/HeightPx 更新为入参；首次真实视口（正尺寸）行列数与内核不一致
-     *       则经 [onResizeRequest] 上抛一次并置位 [viewportSeeded]；此后仅更新可见行数
+     * @post viewportWidthPx/HeightPx 更新为入参；首次有效 rows/cols 经首订通知并置位
+     *       [viewportSeeded]（即使与内核初始尺寸相等）；此后仅更新可见行数
      * @err none
      * @inv 像素/字格任一非正时不做换算（recomputeGeometry 提前返回）
      */
@@ -247,7 +254,6 @@ class TermViewPresenter(
                     "（当前 cellWidth=$cellWidth cellHeight=$cellHeight 仍是占位值）——" +
                     "字号选定后必须先调用 seedCellMetrics 喂入实测字形度量，不许静默用占位值继续算 rows/cols"
             }
-            viewportSeeded = true
             resized = recomputeGeometry()
         }
         // 首帧之后：挤压/复原只改可见行数（视口上推），不再 emit resize。
@@ -288,8 +294,8 @@ class TermViewPresenter(
      *
      * @contract
      * @pre none
-     * @post viewportWidthPx/HeightPx 更新为入参；首帧未 seed 且尺寸为正则按首次视口 seed；
-     *       视口超出内核行列数则重算并 emit；可见行数变化即请求帧
+     * @post viewportWidthPx/HeightPx 更新为入参；首帧未 seed 且能换出有效 rows/cols 则按首次视口
+     *       通知宿主；视口超出内核行列数则重算并 emit；可见行数变化即请求帧
      * @err none
      * @inv 挤压（视口 < 内核）不产生任何重算/emit
      */
@@ -309,7 +315,7 @@ class TermViewPresenter(
         recordResumeOperands()
         var resized = false
         var outgrew = false
-        // 首帧尚未建立（onSizeChanged 未到，先来的是窗口可见事件）：按首次真实视口 seed，
+        // 首帧尚未建立（onSizeChanged 未到，先来的是窗口可见事件）：按首次有效真实视口 seed，
         // 之后 onViewportSizeChanged 因 viewportSeeded 已置位不再 emit——两种事件顺序只 seed 一次。
         if (!viewportSeeded && widthPx > 0 && heightPx > 0) {
             // 防静默失效：同 onViewportSizeChanged 的守卫，理由见其注释。
@@ -318,7 +324,6 @@ class TermViewPresenter(
                     "（当前 cellWidth=$cellWidth cellHeight=$cellHeight 仍是占位值）——" +
                     "字号选定后必须先调用 seedCellMetrics 喂入实测字形度量，不许静默用占位值继续算 rows/cols"
             }
-            viewportSeeded = true
             resized = recomputeGeometry()
             updateVisibleRows()
             onFrameRequested?.invoke()
@@ -409,15 +414,26 @@ class TermViewPresenter(
         return candidateRows > emulator.rows || candidateCols > emulator.cols
     }
 
-    /** 按视口像素与字格像素重算 rows/cols；内核尺寸已一致则跳过（避免重复 resize）。
-     *  每次重算落一条栅格快照（[recordGridSnapshot]），可观测缺陷②是否回归。
-     *  @return 是否实际上抛了 resize（供调用方仪表落记，见 [recordViewportResult]）。 */
+    /** 按视口像素与字格像素重算 rows/cols；首次有效几何通知宿主首订，后续
+     * 内核尺寸已一致则跳过（避免重复 resize）。每次重算落一条栅格快照
+     * （[recordGridSnapshot]），可观测缺陷②是否回归。
+     * @return 是否实际上请求了尺寸变化（供调用方仪表落记，见 [recordViewportResult]）。 */
     private fun recomputeGeometry(): Boolean {
         if (viewportWidthPx <= 0 || viewportHeightPx <= 0 || cellWidth <= 0 || cellHeight <= 0) return false
         val rows = viewportHeightPx / cellHeight
+        if (rows < 1) return false
         val cols = minOf(viewportWidthPx / cellWidth, TerminalMetrics.maxCols).coerceAtLeast(1)
         val changed = rows != emulator.rows || cols != emulator.cols
-        if (changed) {
+        if (!firstGeometryReady) {
+            firstGeometryReady = true
+            viewportSeeded = true
+            val firstGeometryCallback = onFirstGeometryReady
+            if (firstGeometryCallback != null) {
+                firstGeometryCallback(rows, cols)
+            } else if (changed) {
+                onResizeRequest(rows, cols, lastResizeReason)
+            }
+        } else if (changed) {
             onResizeRequest(rows, cols, lastResizeReason)
         }
         recordGridSnapshot(cellWidth)

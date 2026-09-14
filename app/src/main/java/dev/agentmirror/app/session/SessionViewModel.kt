@@ -68,7 +68,7 @@ internal fun ScreenSnapshot.plainText(): String =
  * resize 上报、连接状态映射全部收敛在本类；Compose 屏只是薄渲染壳。
  *
  * 接线（session-ui 知识基底 §1）：
- * - 进入：构造函数即 [ConnectionManager.subscribe] → 首帧 snapshot 重放 + 预取历史；
+ * - 进入：首次有效视口几何就绪后 [ConnectionManager.subscribe] → 首帧 snapshot 重放 + 预取历史；
  * - 增量：delta → [TerminalEmulator.feed]；历史页 → [TerminalEmulator.prependHistory]；
  * - 滚动到顶：[syncFromPresenter] 收敛 presenter 视口信号 → 按页拉更老历史；
  * - 差分同步（084）：本地输入框完整编辑，每次变化经 [onPassthroughInput] 发最小按键
@@ -95,13 +95,16 @@ class SessionViewModel(
     /** 终端内核：snapshot 重放 + delta 追加 + 本地 scrollback（006 本地化滚动）。 */
     val emulator = TerminalEmulator(initialCols, initialRows)
 
+    /** 视口生命周期锁：首订与 dispose 不能交叉，避免迟到布局回调复活会话。 */
+    private val lifecycleLock = Any()
+    @Volatile
+    private var disposed = false
+
     /** 视口状态机：跟随/锁定、字号→行列数换算、脏区（渲染逻辑与 View 分离）。 */
     val presenter = TermViewPresenter(emulator) { rows, cols, reason ->
-        // feat-font-size-setting-drop-pinch：字号选定后实测算出的行列数先上报协议，
-        // 再同步内核（让 CLI 自己重画）；几何只在进入会话时算一次（seedCellMetrics）。
-        if (manager.resize(ref, rows, cols, reason)) {
-            emulator.resize(cols, rows)
-        }
+        onResizeRequest(rows, cols, reason)
+    }.also {
+        it.onFirstGeometryReady = ::onFirstGeometryReady
     }
 
     // ---- 可观察 UI 状态（Compose 直接读）----
@@ -196,8 +199,8 @@ class SessionViewModel(
         if (PerfTrace.isEnabled() && PerfTrace.isKeyEchoEnabled()) {
             emulator.onAsciiPrint = { ch -> PerfTrace.notePrintableEcho(ch) }
         }
-        // 进入即订阅：conn 层记簿，READY 立发，重连自动重放（004 无状态）。
-        manager.subscribe(ref, initialRows, initialCols)
+        // 首订延后到 View 提供首次有效实测几何；连接层仍由该回调记簿，READY 立发，
+        // 重连自动重放（004 无状态）。initialRows/initialCols 仅初始化本地空内核。
     }
 
     // ---- ConnectionManager.Listener（单收件线程串行回调）----
@@ -622,11 +625,34 @@ class SessionViewModel(
         manager.sendScrollWheel(ref, -toSend)
     }
 
-    /** 离开会话页时释放：退订镜像（conn 层幂等），停用连接由服务/接线层决定。 */
+    /** 离开会话页时释放：先封闭几何回调，再退订镜像（conn 层幂等）。 */
     fun dispose() {
+        synchronized(lifecycleLock) {
+            if (disposed) return
+            disposed = true
+        }
         closeOverlay()
         manager.removeBinaryListener(ref, this)
         manager.unsubscribe(ref)
+    }
+
+    /** 首次有效几何是唯一首订入口；本地尺寸必须先于可能同步抵达的 snapshot。 */
+    private fun onFirstGeometryReady(rows: Int, cols: Int) {
+        synchronized(lifecycleLock) {
+            if (disposed) return
+            emulator.resize(cols, rows)
+            manager.subscribe(ref, rows, cols)
+        }
+    }
+
+    /** 首订后的真实尺寸变化仍沿用原 resize→本地尺寸同步顺序。 */
+    private fun onResizeRequest(rows: Int, cols: Int, reason: String) {
+        synchronized(lifecycleLock) {
+            if (disposed) return
+            if (manager.resize(ref, rows, cols, reason)) {
+                emulator.resize(cols, rows)
+            }
+        }
     }
 
     /** 收起瞬时状态（Sent / 上传 Success / 错误提示，会话屏 LaunchedEffect 延迟后自动触发）。 */

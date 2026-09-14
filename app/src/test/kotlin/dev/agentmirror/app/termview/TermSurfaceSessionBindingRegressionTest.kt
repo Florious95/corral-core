@@ -17,7 +17,19 @@
 package dev.agentmirror.app.termview
 
 import android.content.Context
+import dev.agentmirror.app.conn.ConnectionConfig
+import dev.agentmirror.app.conn.ConnectionManager
+import dev.agentmirror.app.conn.FakeClock
+import dev.agentmirror.app.conn.FakeWebSocketTransport
+import dev.agentmirror.app.conn.FrameCodec
+import dev.agentmirror.app.conn.ResizeFrame
+import dev.agentmirror.app.conn.SubscribeFrame
+import dev.agentmirror.app.conn.TransportFactory
+import dev.agentmirror.app.session.AttachmentUploader
+import dev.agentmirror.app.session.SessionViewModel
+import dev.agentmirror.app.session.UploadOutcome
 import dev.agentmirror.terminal.TerminalEmulator
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,6 +41,40 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class TermSurfaceSessionBindingRegressionTest {
+
+    @Test
+    fun rebindingLaidOutViewHandsOffViewportAndSubscribesNewSessionOnce() {
+        val context = RuntimeEnvironment.getApplication()
+        val transport = FakeWebSocketTransport()
+        val manager = ConnectionManager(
+            config = ConnectionConfig(url = "ws://host:0/ws", token = "tok"),
+            transportFactory = TransportFactory { transport },
+            clock = FakeClock(),
+        )
+        manager.start()
+        transport.deliverText("""{"v":1,"type":"auth_ack","payload":{"ok":true}}""")
+        val uploader = AttachmentUploader { _, _ -> UploadOutcome.Failure("unused") }
+        val first = SessionViewModel(manager, uploader, null, "a", 24, 80)
+        val second = SessionViewModel(manager, uploader, null, "b", 24, 80)
+        first.presenter.seedCellMetrics(cellW = 10, cellH = 20)
+        second.presenter.seedCellMetrics(cellW = 10, cellH = 20)
+
+        val surface = TermSurfaceView(context)
+        surface.presenter = first.presenter
+        surface.layout(0, 0, 800, 480)
+        surface.presenter = second.presenter
+        surface.presenter = second.presenter // identity rebind must stay deduplicated.
+
+        val frames = transport.sentText.mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() }
+        val secondSubscribes = frames.filterIsInstance<SubscribeFrame>().filter { it.ref == "b" }
+        assertEquals("换绑后的 presenter 必须获得一次首订", 1, secondSubscribes.size)
+        assertTrue(secondSubscribes.single().rows >= 1)
+        assertTrue(secondSubscribes.single().cols >= 1)
+        assertTrue(
+            "换绑首订不得再发送 Resize",
+            frames.filterIsInstance<ResizeFrame>().none { it.ref == "b" },
+        )
+    }
 
     @Test
     fun bindingPresenterDoesNotResizeSessionFromItsStaleViewport() {
