@@ -163,6 +163,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private var touchDownX: Float = 0f
     private var touchDownY: Float = 0f
     private var touchMoved: Boolean = false
+    private var edgeTouchActive: Boolean = false
+    private var edgeMouseHeld: Boolean = false
 
     private var backToBottomLabel: String? = null
 
@@ -426,7 +428,9 @@ class TermSurfaceView @JvmOverloads constructor(
                 touchDownX = event.x
                 touchDownY = event.y
                 touchMoved = false
+                edgeTouchActive = event.x >= width - dp(EDGE_MOUSE_WIDTH_DP)
                 mouseCap.reset()
+                edgeMouseHeld = edgeTouchActive && dispatchEdgeMouse(p, event)
             }
             MotionEvent.ACTION_MOVE -> if (!touchMoved) {
                 val dx = event.x - touchDownX
@@ -434,15 +438,58 @@ class TermSurfaceView @JvmOverloads constructor(
                 touchMoved = dx * dx + dy * dy > touchSlopPx * touchSlopPx
             }
         }
-        // The detector always owns the gesture path. A tracked mouse must never suppress
-        // scrolling: terminal mouse support is tap-only, while every drag is a viewport drag.
-        gestureDetector.onTouchEvent(event)
-        dispatchTermMouse(p, event)
+        if (edgeMouseHeld) {
+            if (event.actionMasked != MotionEvent.ACTION_DOWN) dispatchEdgeMouse(p, event)
+        } else {
+            // The body keeps B's normal full-screen viewport drag path. A tracked edge
+            // gesture is reserved for Pi's own scrollbar and never reaches this detector.
+            gestureDetector.onTouchEvent(event)
+            dispatchTermMouse(p, event)
+        }
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
             touchMoved = false
+            edgeTouchActive = false
+            edgeMouseHeld = false
             mouseCap.reset()
         }
         return true
+    }
+
+    /** Pi's scrollbar owns the edge drag: report press/motion/release in SGR mode. */
+    private fun dispatchEdgeMouse(p: TermViewPresenter, event: MotionEvent): Boolean {
+        val sink = onTermMouse ?: return false
+        val cw = p.cellWidth
+        val ch = p.cellHeight
+        val xPx = event.x - contentLeftPx()
+        if (!mouseCap.hit(xPx, event.y, cw, ch, p.gridCols, p.gridRows)) return false
+        val shift = event.metaState and KeyEvent.META_SHIFT_ON != 0
+        val meta = event.metaState and KeyEvent.META_ALT_ON != 0
+        val ctrl = event.metaState and KeyEvent.META_CTRL_ON != 0
+        return when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (sink(mouseCap.col, mouseCap.row, true, false, shift, meta, ctrl)) {
+                    mouseCap.markReported()
+                    true
+                } else {
+                    false
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!mouseCap.crossedCell()) {
+                    true
+                } else if (sink(mouseCap.col, mouseCap.row, true, true, shift, meta, ctrl)) {
+                    mouseCap.markReported()
+                    true
+                } else {
+                    true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                sink(mouseCap.col, mouseCap.row, false, false, shift, meta, ctrl)
+                true
+            }
+            else -> true
+        }
     }
 
     /** Tap-only mouse support. Dragging never emits motion/button-32 reports. */
@@ -988,6 +1035,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private fun dp(v: Float): Float = v * resources.displayMetrics.density
 
     private companion object {
+        /** Right edge reserved for the terminal application's native scrollbar. */
+        const val EDGE_MOUSE_WIDTH_DP = 32f
         /** 历史深色默认值别名；真实取色走 [TermPalette.of]。 */
         val DEFAULT_FG: Int get() = TermPalette.Dark.defaultFg
         val DEFAULT_BG: Int get() = TermPalette.Dark.defaultBg

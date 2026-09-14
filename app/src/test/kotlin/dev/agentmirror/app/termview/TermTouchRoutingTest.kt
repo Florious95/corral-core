@@ -85,6 +85,37 @@ class TermTouchRoutingTest {
     }
 
     @Test
+    fun edgeDragUsesTerminalMouseAndNeverScrollsViewport() {
+        val (view, _) = buildView()
+        val reports = mutableListOf<MouseReport>()
+        val scrolls = mutableListOf<Int>()
+        view.onTermMouse = { col, row, press, motion, _, _, _ ->
+            reports += MouseReport(col, row, press, motion)
+            true
+        }
+        view.onRemoteScrollBy = { scrolls += it }
+        val x = view.width - 1f
+        val down = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, x, 20f, 0)
+        val move = MotionEvent.obtain(0L, 100L, MotionEvent.ACTION_MOVE, x, 180f, 0)
+        val up = MotionEvent.obtain(0L, 120L, MotionEvent.ACTION_UP, x, 180f, 0)
+        try {
+            view.onTouchEvent(down)
+            view.onTouchEvent(move)
+            view.onTouchEvent(up)
+        } finally {
+            down.recycle()
+            move.recycle()
+            up.recycle()
+        }
+
+        assertTrue("edge drag must emit mouse reports", reports.isNotEmpty())
+        assertTrue("edge drag must emit a press", reports.first().press && !reports.first().motion)
+        assertTrue("edge drag must report a motion event to Pi", reports.any { it.motion })
+        assertTrue("edge drag must emit a release", !reports.last().press && !reports.last().motion)
+        assertTrue("edge mouse drag must not enter viewport scrolling", scrolls.isEmpty())
+    }
+
+    @Test
     fun dragNeverSendsMouseMotionAndStillScrollsViewport() {
         val (view, _) = buildView()
         val reports = mutableListOf<MouseReport>()
