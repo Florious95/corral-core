@@ -131,7 +131,9 @@ func TestInitialPublishedLossWinsCaptureFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer detach()
-	emitPacedBridge(t, te, data, 32)
+	// The production subscriber now retains a 256-chunk snapshot backlog;
+	// exceed that bound while the relay is held before the snapshot is ready.
+	emitPacedBridge(t, te, data, 512)
 	if len(sub.loss) != 1 {
 		t.Fatalf("production loss not published: buffered=%d", len(sub.loss))
 	}

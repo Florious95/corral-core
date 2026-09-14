@@ -34,6 +34,11 @@ import (
 // lines so a burst of pane output is drained in few syscalls.
 const streamBufferBytes = 65536
 
+// streamSubscriberQueueChunks bounds the per-subscriber handoff backlog while
+// the API prepares the initial snapshot. The relay is started before capture,
+// but its ready gate remains closed until that snapshot is queued.
+const streamSubscriberQueueChunks = 256
+
 // ErrSubscriberOverflow marks raw-byte loss in one subscriber's private queue.
 // The owning connection must reconnect and subscribe to a fresh snapshot.
 var ErrSubscriberOverflow = errors.New("bridge: subscriber queue overflow")
@@ -235,7 +240,7 @@ func (s *sharedPipe) addWithLoss(ctx context.Context) (<-chan []byte, <-chan err
 	s.mu.Lock()
 	id := s.nextID
 	s.nextID++
-	sub := &streamSubscriber{data: make(chan []byte, 16), loss: make(chan error, 1)}
+	sub := &streamSubscriber{data: make(chan []byte, streamSubscriberQueueChunks), loss: make(chan error, 1)}
 	s.subs[id] = sub
 	s.refs++
 	s.mu.Unlock()

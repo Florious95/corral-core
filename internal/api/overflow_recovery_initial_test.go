@@ -6,6 +6,7 @@ package api
 // then assert the connection abort and pane geometry cleanup are observable.
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -91,6 +92,107 @@ func waitSubscribeDone(t *testing.T, done <-chan struct{}) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("handleSubscribe did not finish")
 	}
+}
+
+func waitPaneTitle(t *testing.T, te *tmuxEnv, want string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		out, err := runTmuxCmd(te.env, te.sock, "display-message", "-p", "-t", te.paneID, "#{pane_title}")
+		if err == nil && strings.TrimSpace(out) == want {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("pane title did not reach %q", want)
+}
+
+// TestInitialSubscribeBurstDoesNotAbortConnection proves that high-rate pane
+// output while the initial snapshot is blocked is not treated as subscriber
+// loss. The larger handoff backlog preserves pre-snapshot bytes while the
+// connection remains usable.
+func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
+	te := startTmuxEnv(t, "stty -echo -onlcr; exec bash")
+	c := newDirectWSConn(t, te.wsEnv.srv, 256)
+	captureStarted := make(chan struct{})
+	releaseCapture := make(chan struct{})
+	c.snapshotFn = func(ctx context.Context, _ *bridge.Pane) ([]byte, error) {
+		close(captureStarted)
+		select {
+		case <-releaseCapture:
+			return []byte("controlled-snapshot"), nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	done := make(chan struct{})
+	go func() {
+		c.handleSubscribe(protocol.Subscribe{Ref: te.ref(), Rows: 96, Cols: 108})
+		close(done)
+	}()
+	t.Cleanup(func() {
+		select {
+		case <-releaseCapture:
+		default:
+			close(releaseCapture)
+		}
+		c.cancel()
+		waitSubscribeDone(t, done)
+	})
+	select {
+	case <-captureStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("capture barrier was not reached")
+	}
+	if err := sendTmuxLine(te, initialSnapshotBurstCommand()); err != nil {
+		t.Fatalf("trigger capture-window burst: %v", err)
+	}
+	waitPaneTitle(t, te, initialSnapshotReadyToken)
+	select {
+	case <-c.ctx.Done():
+		t.Fatal("normal pre-snapshot burst aborted connection")
+	default:
+	}
+	close(releaseCapture)
+	waitSubscribeDone(t, done)
+	if c.ctx.Err() != nil || c.catalogAborted.Load() {
+		t.Fatal("initial snapshot completed with an aborted connection")
+	}
+	wantDelta := append(bytes.Repeat([]byte("X"), initialSnapshotBurstBytes), []byte("\x1b]0;"+initialSnapshotReadyToken+"\x07")...)
+	var gotDelta []byte
+	deadline := time.NewTimer(10 * time.Second)
+	defer deadline.Stop()
+	for len(gotDelta) < len(wantDelta) {
+		select {
+		case msg := <-c.sendCh:
+			if msg.typ != wsBinary {
+				t.Fatalf("unexpected control frame in mirror queue: %d", msg.typ)
+			}
+			frame, err := protocol.DecodeBinary(msg.data)
+			if err != nil {
+				t.Fatalf("decode mirror frame: %v", err)
+			}
+			switch frame.Kind {
+			case protocol.KindSnapshot:
+				if !bytes.Equal(frame.Data, []byte("controlled-snapshot")) {
+					t.Fatalf("snapshot payload=%q", frame.Data)
+				}
+			case protocol.KindDelta:
+				gotDelta = append(gotDelta, frame.Data...)
+			default:
+				t.Fatalf("unexpected binary frame kind=%d", frame.Kind)
+			}
+		case <-deadline.C:
+			t.Fatalf("mirror backlog stalled at %d/%d bytes", len(gotDelta), len(wantDelta))
+		}
+	}
+	if !bytes.Equal(gotDelta, wantDelta) {
+		t.Fatalf("mirror bytes changed across snapshot seam: got=%d want=%d", len(gotDelta), len(wantDelta))
+	}
+	if !c.subscribed(te.ref()) {
+		t.Fatal("initial snapshot burst left no live subscription")
+	}
+	c.subscribeCancel(te.ref())
 }
 
 // TestInitialSubscribeLossCancelsCapture proves that a loss arriving while
@@ -231,6 +333,11 @@ func awaitMirrorAbort(t *testing.T, c *wsConn) {
 }
 
 const (
+	// initialSnapshotBurstBytes produces >16 pipe-reader chunks while remaining
+	// below the named 256-chunk subscriber backlog and send queue.
+	initialSnapshotBurstBytes = 128 << 10
+	initialSnapshotReadyToken = "INITIAL_SNAPSHOT_READY"
+
 	// These tokens are emitted as OSC title updates.  They are observable on
 	// the raw pipe stream but do not change the visible pane grid, so the final
 	// screen oracle remains static and complete.
@@ -246,6 +353,10 @@ const (
 // out-of-band completion barrier.  It stays alive waiting for the test's
 // post-reconnect release line, preventing a shell prompt or process exit from
 // changing the snapshot oracle before replay is exercised.
+func initialSnapshotBurstCommand() string {
+	return fmt.Sprintf(`python3 -c 'import sys,time;sys.stdout.write("X"*%d);sys.stdout.flush();sys.stdout.write("\033]0;%s\007");sys.stdout.flush();time.sleep(120)'`, initialSnapshotBurstBytes, initialSnapshotReadyToken)
+}
+
 func recoveryBurstCommand() string {
 	return fmt.Sprintf(`python3 -c 'import sys,time;sys.stdout.write("X"*%d);sys.stdout.flush();sys.stdout.write("\033[2J\033[H\033[1;34mRECOVERED TITLE\033[0m\n\033[3;5m日本語 ✓\033[0m\n\033[5;1mCURSOR_ORACLE\033[0m\033[7;13HRECOVERY_DONE");sys.stdout.write("\033]0;%s\007");sys.stdout.flush();sys.stdin.readline();sys.stdout.write("\033]0;%s\007");sys.stdout.flush();time.sleep(120)'`, recoveryBurstBytes, recoveryReadyToken, recoveryAfterToken)
 }
