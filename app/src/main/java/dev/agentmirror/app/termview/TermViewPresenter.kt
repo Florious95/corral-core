@@ -427,7 +427,12 @@ class TermViewPresenter(
         if (!firstGeometryReady) {
             firstGeometryReady = true
             viewportSeeded = true
-            onFirstGeometryReady?.invoke(rows, cols) ?: onResizeRequest(rows, cols, lastResizeReason)
+            val firstGeometryCallback = onFirstGeometryReady
+            if (firstGeometryCallback != null) {
+                firstGeometryCallback(rows, cols)
+            } else if (changed) {
+                onResizeRequest(rows, cols, lastResizeReason)
+            }
         } else if (changed) {
             onResizeRequest(rows, cols, lastResizeReason)
         }
