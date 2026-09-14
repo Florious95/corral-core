@@ -92,8 +92,11 @@ class SessionViewModel(
     private val liveBaseUrl: () -> String? = { baseUrl },
 ) : ConnectionManager.Listener {
 
-    /** 终端内核：snapshot 重放 + delta 追加 + 本地 scrollback（006 本地化滚动）。 */
+    /** 终端内核：live pane 的完整 snapshot/delta 状态。 */
     val emulator = TerminalEmulator(initialCols, initialRows)
+
+    /** copy-mode 独立展示内核；copy snapshot 不得改写 live emulator。 */
+    private val copyModeEmulator = TerminalEmulator(initialCols, initialRows)
 
     /** 视口生命周期锁：首订与 dispose 不能交叉，避免迟到布局回调复活会话。 */
     private val lifecycleLock = Any()
@@ -165,6 +168,9 @@ class SessionViewModel(
      */
     var inCopyMode by mutableStateOf(false)
 
+    /** copy-mode 退出后，等待服务端正常屏幕 snapshot 再切回 live 展示。 */
+    private var awaitingLiveSnapshot = false
+
     /** 刚从对端同步来的行列；与本地视口算出的相同则不再上行 resize。 */
 
     /** 节流窗口内累积的 deltaLines 总量；窗口到点时一并发出（消除"无反应"假象）。 */
@@ -214,6 +220,9 @@ class SessionViewModel(
                 // 掉线分页意图作废：重连后快照重放，视口重锚，避免陈旧补页。
                 historyRequestInFlight = false
                 awaitingReconnectSnapshot = true
+                awaitingLiveSnapshot = false
+                inCopyMode = false
+                presenter.setDisplaySnapshot(null)
                 "连接断开，正在重连…"
             }
             ConnectionState.STOPPED -> "连接已断开"
@@ -233,7 +242,18 @@ class SessionViewModel(
                 transientError = "协议错误：${frame.code.wire}${frame.reason.takeIf { it.isNotEmpty() }?.let { "（$it）" } ?: ""}"
             }
             // 缺陷④：远端 pane copy-mode 状态变更（进入/退出），驱动 UI 角标。
-            is PaneModeChangedFrame -> if (frame.ref == ref) inCopyMode = frame.inCopyMode
+            is PaneModeChangedFrame -> if (frame.ref == ref) {
+                if (frame.inCopyMode) {
+                    inCopyMode = true
+                    awaitingLiveSnapshot = false
+                } else {
+                    inCopyMode = false
+                    awaitingLiveSnapshot = true
+                    // Keep live emulator authoritative; remove the copy view while
+                    // waiting for the normal snapshot that closes the mode.
+                    presenter.setDisplaySnapshot(null)
+                }
+            }
             else -> Unit
         }
     }
@@ -285,46 +305,54 @@ class SessionViewModel(
             PerfTrace.emitFirstFrameIfFirst(ref, kind, frame.data.size) // first_frame_recv
         }
         when (frame.kind) {
-            // 首帧快照：清屏重建（replaySnapshot 而非 feed，经验基）。
+            // 首帧/恢复快照：live 与 copy-mode 展示必须分流，不能让 copy
+            // viewport 回写 live emulator。
             BinaryKind.SNAPSHOT -> {
-                if (awaitingReconnectSnapshot) {
-                    // 断线时仍可浏览旧历史；新代首帧到达才一起替换历史与视口。
-                    emulator.scrollback.clear()
-                    historyNextFromLine = -HISTORY_PAGE
-                    historyRequestedFromLine = 0
-                    historyRequestInFlight = false
-                    hasPrefetchedHistory = false
-                    hasMoreHistory = true
-                    pendingScrollDelta = 0
-                    presenter.onScrollToBottom()
-                    showBackToBottom = false
-                    atHistoryTop = false
-                    awaitingReconnectSnapshot = false
-                }
-                val bookkept = manager.subscriptionSize(ref)
-                val frameCols = bookkept?.second ?: -1
-                val renderCols = emulator.cols
-                val frameKey = "$frameCols|$renderCols|${bookkept?.first ?: -1}|${emulator.rows}"
-                if (frameKey != lastFrameColsKey) {
-                    lastFrameColsKey = frameKey
-                    DiagLog.record(
-                        "reflow",
-                        "frame cols=$frameCols render cols=$renderCols " +
-                            "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
-                    )
-                }
-                emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
-                if (PerfTrace.isEnabled()) {
-                    val alt = if (emulator.historyAvailable) 0 else 1
-                    PerfTrace.emitSnapshotIfFirst(ref, alt, emulator.rows, emulator.cols) // snapshot_applied
-                }
-                // 006 秒开：打开即预取最近一页历史，滚动边界再按需补页。
-                if (!hasPrefetchedHistory) {
-                    hasPrefetchedHistory = true
-                    requestOlderHistoryPage()
+                if (inCopyMode) {
+                    copyModeEmulator.replaySnapshot(frame.data, copyModeEmulator.cols, copyModeEmulator.rows)
+                    presenter.setDisplaySnapshot(copyModeEmulator.snapshot())
+                } else {
+                    if (awaitingReconnectSnapshot) {
+                        // 断线时仍可浏览旧历史；新代首帧到达才一起替换历史与视口。
+                        synchronized(emulator) { emulator.scrollback.clear() }
+                        historyNextFromLine = -HISTORY_PAGE
+                        historyRequestedFromLine = 0
+                        historyRequestInFlight = false
+                        hasPrefetchedHistory = false
+                        hasMoreHistory = true
+                        pendingScrollDelta = 0
+                        presenter.onScrollToBottom()
+                        showBackToBottom = false
+                        atHistoryTop = false
+                        awaitingReconnectSnapshot = false
+                    }
+                    awaitingLiveSnapshot = false
+                    presenter.setDisplaySnapshot(null)
+                    val bookkept = manager.subscriptionSize(ref)
+                    val frameCols = bookkept?.second ?: -1
+                    val renderCols = emulator.cols
+                    val frameKey = "$frameCols|$renderCols|${bookkept?.first ?: -1}|${emulator.rows}"
+                    if (frameKey != lastFrameColsKey) {
+                        lastFrameColsKey = frameKey
+                        DiagLog.record(
+                            "reflow",
+                            "frame cols=$frameCols render cols=$renderCols " +
+                                "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
+                        )
+                    }
+                    emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                    if (PerfTrace.isEnabled()) {
+                        val alt = if (emulator.historyAvailable) 0 else 1
+                        PerfTrace.emitSnapshotIfFirst(ref, alt, emulator.rows, emulator.cols) // snapshot_applied
+                    }
+                    // 006 秒开：打开即预取最近一页历史，滚动边界再按需补页。
+                    if (!hasPrefetchedHistory) {
+                        hasPrefetchedHistory = true
+                        requestOlderHistoryPage()
+                    }
                 }
             }
-            // 增量字节流：常规推进。
+            // 增量始终完整推进 live emulator；copy-mode 画面由独立 snapshot override 提供。
             BinaryKind.DELTA -> emulator.feed(frame.data)
             // 历史分页：按服务端收敛后的实际区间头插（经验基）。
             BinaryKind.SCROLLBACK -> {
@@ -641,6 +669,7 @@ class SessionViewModel(
         synchronized(lifecycleLock) {
             if (disposed) return
             emulator.resize(cols, rows)
+            copyModeEmulator.resize(cols, rows)
             manager.subscribe(ref, rows, cols)
         }
     }
@@ -651,6 +680,7 @@ class SessionViewModel(
             if (disposed) return
             if (manager.resize(ref, rows, cols, reason)) {
                 emulator.resize(cols, rows)
+                copyModeEmulator.resize(cols, rows)
             }
         }
     }

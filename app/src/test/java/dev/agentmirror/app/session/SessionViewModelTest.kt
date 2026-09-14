@@ -103,6 +103,10 @@ class SessionViewModelTest {
             BinaryFrameCodec.encode(BinaryFrame(BinaryKind.DELTA, "s1", text.toByteArray())),
         )
 
+        fun paneMode(inCopyMode: Boolean) = transport.deliverText(
+            """{"v":1,"type":"pane_mode_changed","payload":{"ref":"s1","in_copy_mode":$inCopyMode}}""",
+        )
+
         fun scrollbackReply(text: String, fromLine: Int, lineCount: Long) = transport.deliverBinary(
             BinaryFrameCodec.encode(
                 BinaryFrame(BinaryKind.SCROLLBACK, "s1", text.toByteArray(), reqId = 1, fromLine = fromLine, lineCount = lineCount),
@@ -145,6 +149,38 @@ class SessionViewModelTest {
         h.snap("ab")
         h.delta("cd")
         assertEquals("abcd", text(h.emulator.snapshot().lines[0]))
+    }
+
+    @Test
+    fun copyModeSnapshotUsesIndependentDisplayWhileLiveDeltaKeepsFlowing() {
+        val h = Harness(rows = 3, cols = 10)
+        h.snap("live")
+        h.paneMode(true)
+        h.snap("history")
+        h.delta("-live")
+
+        // The live emulator remains authoritative and complete.
+        assertEquals("live-live", text(h.emulator.snapshot().lines[0]))
+        // The copy viewport is the only rendered source while in copy-mode.
+        h.vm.presenter.beginFrame()
+        assertEquals("history", text(h.vm.presenter.lineCells(0)))
+
+        h.paneMode(false)
+        h.snap("restored")
+        assertFalse(h.vm.inCopyMode)
+        h.vm.presenter.beginFrame()
+        assertEquals("restored", text(h.vm.presenter.lineCells(0)))
+    }
+
+    @Test
+    fun copyModeDoesNotApplyLiveDeltaToDisplayedHistory() {
+        val h = Harness(rows = 3, cols = 10)
+        h.snap("history")
+        h.paneMode(true)
+        h.snap("copy")
+        h.delta("-delta")
+        h.vm.presenter.beginFrame()
+        assertEquals("copy", text(h.vm.presenter.lineCells(0)))
     }
 
     @Test

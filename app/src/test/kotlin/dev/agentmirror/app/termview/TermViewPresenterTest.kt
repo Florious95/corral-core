@@ -154,6 +154,23 @@ class TermViewPresenterTest {
     }
 
     @Test
+    fun beginFrameFreezesScrollbackBoundaryAndRows() {
+        val h = harness(rows = 2, cols = 5)
+        h.emulator.feed("a\r\nb\r\nc\r\nd")
+        h.presenter.onScrollBy(2)
+        h.presenter.beginFrame()
+        val frameWindow = h.presenter.drawWindow
+        val before = frameWindow.map { text(h.presenter.lineCells(it)) }
+
+        // A history page arriving while Canvas is iterating must not shift the
+        // already captured rows or window to the newly prepended boundary.
+        h.emulator.prependHistory("new-history\r\n")
+
+        assertEquals(frameWindow, h.presenter.drawWindow)
+        assertEquals(before, frameWindow.map { text(h.presenter.lineCells(it)) })
+    }
+
+    @Test
     fun damageOutsideViewportWhileLockedIsIgnored() {
         val h = harness(rows = 3, cols = 5)
         // scrollback=[a,b,c,d]，屏幕=[e,f,g]。

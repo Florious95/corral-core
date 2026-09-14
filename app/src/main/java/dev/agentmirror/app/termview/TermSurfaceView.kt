@@ -560,7 +560,7 @@ class TermSurfaceView @JvmOverloads constructor(
         bgRectCount++
         val tClear = System.nanoTime()
 
-        val win = p.window
+        val win = p.drawWindow
         val contentLeft = contentLeftPx()
         recordLeftEdgeOnce(contentLeft)
         var drawnRows = 0

@@ -134,8 +134,18 @@ class TermViewPresenter(
     /** [pendingDamage] 的跨线程互斥锁（增量流唤醒后写/取真正并发，缺陷①修复连带）。 */
     private val damageLock = Any()
 
-    /** 本帧内核快照缓存：beginFrame 抓一次，避免 lineCells 对屏幕行逐行深拷贝。 */
+    /**
+     * 本帧固定的显示数据。frameSbSize/frameWindow/frameHistoryLines 必须与
+     * frameSnapshot 来自同一个 emulator 临界区；lineCells 不得在一帧内再次读取动态 scrollback。
+     */
     private var frameSnapshot: ScreenSnapshot? = null
+    private var frameSbSize: Int = -1
+    private var frameWindow: IntRange? = null
+    private var frameHistoryLines: Map<Int, List<Cell>> = emptyMap()
+
+    /** copy-mode 的独立历史画面；live emulator 仍持续接收 Delta。 */
+    @Volatile
+    private var displaySnapshotOverride: ScreenSnapshot? = null
 
     init {
         // 接管内核脏区回调：把屏幕脏行换算为逻辑行区间后缓存，作"画面已变化"的数据驱动
@@ -177,6 +187,15 @@ class TermViewPresenter(
             val bottom = (top + height - 1).coerceAtMost((logicalCount - 1).coerceAtLeast(0))
             return top..bottom
         }
+
+    /** Window captured by the current render frame; falls back before the first frame. */
+    val drawWindow: IntRange get() = frameWindow ?: displaySnapshotOverride?.let { 0 until it.rows } ?: window
+
+    /** Replace only the rendered source (used for remote copy-mode snapshots). */
+    fun setDisplaySnapshot(snapshot: ScreenSnapshot?) {
+        displaySnapshotOverride = snapshot
+        onFrameRequested?.invoke()
+    }
 
     /**
      * 手指拖动改视口（正 [deltaLines] = 向上滚看更早历史，负 = 向下滚）。
@@ -506,21 +525,66 @@ class TermViewPresenter(
         return mergeRanges(clipped)
     }
 
-    /** 帧开始：抓一次内核快照缓存，供本帧 [lineCells] 复用（屏幕行零重复拷贝）。 */
+    /**
+     * 帧开始：在 emulator 临界区一次性固定屏幕、scrollback 边界、窗口及窗口内历史行。
+     * 渲染循环随后只能消费这些固定值，不能逐行重读可能被 prepend/append 的 scrollback。
+     */
     fun beginFrame() {
-        frameSnapshot = emulator.snapshot()
+        val override = displaySnapshotOverride
+        if (override != null) {
+            frameSnapshot = override
+            frameSbSize = 0
+            frameWindow = 0 until override.rows
+            frameHistoryLines = emptyMap()
+            return
+        }
+        synchronized(emulator) {
+            val snap = emulator.snapshot()
+            val sb = emulator.scrollback.size
+            val win = windowFor(sb)
+            val history = buildMap {
+                for (row in win) {
+                    if (row < sb) put(row, emulator.scrollback.line(row).toList())
+                }
+            }
+            frameSnapshot = snap
+            frameSbSize = sb
+            frameWindow = win
+            frameHistoryLines = history
+        }
     }
 
-    /** 取第 [row] 个逻辑行的单元格（scrollback 行零拷贝，屏幕行用帧缓存）。 */
+    /** 取当前帧固定窗口内第 [row] 个逻辑行，严禁跨帧读取动态 scrollback 边界。 */
     fun lineCells(row: Int): List<Cell> {
-        val sb = emulator.scrollback.size
-        if (row < sb) return emulator.scrollback.line(row)
-        val snap = frameSnapshot ?: emulator.snapshot()
-        val index = row - sb
-        return if (index in snap.lines.indices) snap.lines[index] else emptyList()
+        val win = frameWindow
+        val snap = frameSnapshot
+        if (win != null && snap != null) {
+            if (row !in win) return emptyList()
+            if (row < frameSbSize) return frameHistoryLines[row] ?: emptyList()
+            val index = row - frameSbSize
+            return snap.lines.getOrNull(index) ?: emptyList()
+        }
+        // 兼容首帧前的纯 Presenter 单测/调用方；真实 onDraw 总在 beginFrame 后进入。
+        synchronized(emulator) {
+            val sb = emulator.scrollback.size
+            if (row < sb) return emulator.scrollback.line(row)
+            val current = emulator.snapshot()
+            val index = row - sb
+            return current.lines.getOrNull(index) ?: emptyList()
+        }
     }
 
     // ---- 内部实现 ----
+
+    /** Compute a window from the boundary frozen by beginFrame. */
+    private fun windowFor(sbSize: Int): IntRange {
+        val height = visibleRows
+        val count = sbSize + emulator.rows
+        val maxTop = (count - height).coerceAtLeast(0)
+        val top = (topLine ?: maxTop).coerceIn(0, maxTop)
+        val bottom = (top + height - 1).coerceAtMost((count - 1).coerceAtLeast(0))
+        return top..bottom
+    }
 
     /**
      * 当前可见行数：未挤压时 = 内核行数；被 IME/输入框挤压时 = 视口像素高 ÷ 字格高。
