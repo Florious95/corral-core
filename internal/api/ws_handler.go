@@ -41,12 +41,41 @@ func snapshotWithCursor(ctx context.Context, br *bridge.Pane) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	mouse, err := br.MouseMode(ctx)
+	if err != nil {
+		return nil, err
+	}
 	x, y, err := br.CursorPos(ctx)
 	if err != nil {
 		return nil, err
 	}
 	snap = bytes.TrimRight(snap, "\n")
-	return append(snap, []byte(fmt.Sprintf("\x1b[%d;%dH", y+1, x+1))...), nil
+	prefix := mouseModePrefix(mouse)
+	out := make([]byte, 0, len(prefix)+len(snap)+16)
+	out = append(out, prefix...)
+	out = append(out, snap...)
+	out = append(out, []byte(fmt.Sprintf("\x1b[%d;%dH", y+1, x+1))...)
+	return out, nil
+}
+
+func mouseModePrefix(mode bridge.MouseMode) []byte {
+	if !mode.Any {
+		return nil
+	}
+	prefix := make([]byte, 0, 24)
+	// Restore the protocol's enable order. 1000 is the button baseline and
+	// 1002 is the drag extension used by Pi/Claude; tmux reports them as
+	// mutually exclusive, so the final 1002 state still has the right effect.
+	if mode.Standard || mode.Button || mode.All {
+		prefix = append(prefix, []byte("\x1b[?1000h")...)
+	}
+	if mode.Button || mode.All {
+		prefix = append(prefix, []byte("\x1b[?1002h")...)
+	}
+	if mode.SGR {
+		prefix = append(prefix, []byte("\x1b[?1006h")...)
+	}
+	return prefix
 }
 
 // handleAuth validates the pairing token and answers auth_ack. On rejection the
@@ -289,7 +318,13 @@ func (c *wsConn) handleInput(i protocol.Input) {
 			ack(false, protocol.InputFailTooLarge)
 			return
 		}
-		if err := br.InjectRaw(c.ctx, i.Bytes); err != nil {
+		injectRaw := br.InjectRaw
+		// Escape-prefixed VT/SGR packets must stay in one PTY write; otherwise
+		// an interactive CLI can consume the lone ESC as a standalone key.
+		if bytes.IndexByte(i.Bytes, 0x1b) >= 0 {
+			injectRaw = br.InjectRawAtomic
+		}
+		if err := injectRaw(c.ctx, i.Bytes); err != nil {
 			if errors.Is(err, bridge.ErrPaneNotFound) {
 				ack(false, protocol.InputFailSessionNotFound)
 			} else {
