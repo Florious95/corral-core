@@ -31,6 +31,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import androidx.core.view.doOnLayout
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.ui.theme.TermPalette
@@ -80,6 +81,11 @@ class TermSurfaceView @JvmOverloads constructor(
             if (value != null) {
                 value.onFrameRequested = frameRequestCallback
                 applyFontMetrics()
+                doOnLayout {
+                    if (presenter === value && width > 0 && height > 0) {
+                        value.onViewportSizeChanged(usableWidthPx(width), height)
+                    }
+                }
                 postFrame()
             }
         }
