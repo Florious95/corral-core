@@ -28,7 +28,10 @@ import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.tsnet.TsnetDial
 import dev.agentmirror.app.tsnet.TsnetState
+import dev.agentmirror.app.tsnet.TsPeer
 import java.net.URI
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 /**
  * 配对页状态机（纯 JVM 可测核心，验收模式 `--tests "*Pairing*"` 打在它上面）。
@@ -59,6 +62,8 @@ class PairingViewModel(
      * 测试注入记录假件。VM 不持节点生命周期（节点随进程存活，归 TsnetWire）。
      */
     private val tsnetStarter: (String) -> Unit = {},
+    private val identifyClient: HostIdentityVerifier = HostIdentifyClient(OkHttpHostHttpTransport()),
+    private val discoveryExecutor: Executor = Executors.newCachedThreadPool(),
 ) : ConnectionManager.Listener {
 
     // ---- 可观察 UI 状态（Compose 屏直接读）----
@@ -78,6 +83,15 @@ class PairingViewModel(
      */
     var manualToken by mutableStateOf("")
 
+    /** Unbound discovery rows are hosts, never addresses or path choices. */
+    var discoveredHosts by mutableStateOf<List<HostCandidate>>(emptyList())
+        private set
+    var selectedHostId by mutableStateOf<String?>(null)
+        private set
+    var hostToken by mutableStateOf("")
+    var discoveryInFlight by mutableStateOf(false)
+        private set
+
     /**
      * 手填 Tailscale auth key 草稿（feat-ts-wire 手填通道；屏上密文态渲染）。
      * 扫码带入的 key **不回填**本框——QR 是 key 唯一分发出口，不主动上屏（§2.1 红线）。
@@ -92,6 +106,17 @@ class PairingViewModel(
     fun onTsnetState(state: TsnetState) {
         tsState = state
         if (!waitingForTsnet || pairingStatus !is PairingStatus.Pairing) return
+        // An identity HTTP request may still be in flight when tsnet settles. Resume it
+        // asynchronously, but do not consume this state as a dial attempt.
+        if (attemptQueue.isEmpty()) {
+            val identity = pendingIdentity
+            if (identity != null && (state is TsnetState.Up || state is TsnetState.Error)) {
+                pendingIdentity = null
+                waitingForTsnet = false
+                identity()
+            }
+            return
+        }
         when (state) {
             is TsnetState.Up -> {
                 waitingForTsnet = false
@@ -129,6 +154,8 @@ class PairingViewModel(
 
     /** 已成功标记：成功后忽略后续 STOPPED（自身 stop 触发）不误报拒绝。 */
     private var succeeded = false
+    private var pairingGeneration = 0L
+    private var discoveryGeneration = 0L
 
     /** 候选 ws URL 列表（fix-pairing-candidates：全败后失败卡逐项展示，主选打头；无候选为空）。 */
     var candidateUrls by mutableStateOf<List<String>>(emptyList())
@@ -141,6 +168,13 @@ class PairingViewModel(
 
     /** 当前 TS authkey（扫码/手填带入，trim 后；随配对成功持久化，重试序列间保留）。 */
     private var currentTsAuthKey = ""
+    private var currentHostId: String? = null
+    private var currentHostName: String? = null
+    private var currentPort: Int? = null
+    private var currentTsNodeId: String? = null
+    private var currentLegacyUrl: String? = null
+    private var currentScanHints: List<String> = emptyList()
+    private var pendingIdentity: (() -> Unit)? = null
 
     /** 当前尝试的超时预算（有候选时每候选 3s；无候选保持旧版 15s）。 */
     private var attemptBudgetMs = PAIR_TIMEOUT_MS
@@ -171,6 +205,9 @@ class PairingViewModel(
 
     /** 扫码文本进入：解析 → 校验 → 识别值回填手填表单 → 立即自动发起试配对（含候选逐试）。 */
     fun onQrText(text: String) {
+        pairingGeneration++
+        pairingStatus = PairingStatus.Idle
+        stopProbe()
         val payload = try {
             QrPayloadParser.parse(text)
         } catch (e: QrParseException) {
@@ -179,20 +216,118 @@ class PairingViewModel(
             failPairing(PairingFailCause.PARSE_ERROR, e.message ?: "二维码内容无法解析")
             return
         }
-        recognizedUrl = payload.url
-        // 整改点③：识别值自动回填手填表单（url+token 落输入框）——用户可改地址重试，
-        // 正是绕过缺陷 A（TUN 地址不可达）的自救通路；地址上屏、token 不上屏（§9）。
+        recognizedUrl = payload.url.takeIf { it.isNotBlank() }
+        // Legacy QR keeps the old editing surface; upgraded QR only uses URL as an
+        // untrusted hint and proves it before any WS auth.
         manualUrl = payload.url
         manualToken = payload.token
+        currentHostId = payload.hostId
+        currentHostName = payload.name
+        currentPort = payload.port
+        currentTsNodeId = payload.tsNodeId
+        currentLegacyUrl = payload.url.takeIf { payload.hostId == null && it.isNotBlank() }
+        currentScanHints = buildList {
+            payload.url.takeIf { it.isNotBlank() }?.let(::add)
+            addAll(payload.candidates)
+        }.distinct()
+        selectedHostId = payload.hostId
         // feat-ts-wire（011 预授权分发）：QR 带 authkey → 立即起网（先于试配对，SOCKS
         // 通道尽早就绪供 tailnet 候选拨号）。key 不回填手填框（QR 是唯一出口，不上屏）。
         currentTsAuthKey = payload.tsAuthKey.trim()
         if (currentTsAuthKey.isNotEmpty()) tsnetStarter(currentTsAuthKey)
-        // fix-pairing-candidates：主选打头 + candidates 全候选逐试（无候选 = 单元素队列）。
-        startPairingSequence(buildAttemptQueue(payload), payload.token, resetCandidates = true)
+        // New QR records are identity-bound: identify first, then create exactly one WS.
+        if (payload.hostId != null && payload.url.isBlank()) {
+            // URL-less upgraded QR only seeds the public identity. NSD/TS discovery supplies an
+            // endpoint; the user selects that host row before entering a host token.
+            pairingStatus = PairingStatus.Idle
+            formError = null
+            return
+        }
+        if (payload.url.isNotBlank()) {
+            startVerifiedPairing(
+                payload.url,
+                payload.token,
+                payload.hostId,
+                payload.name.orEmpty(),
+                payload.port,
+                payload.tsNodeId,
+                legacyUrl = payload.url.takeIf { payload.hostId == null },
+            )
+        } else {
+            formError = "二维码缺少可验证主机身份"
+        }
     }
 
-    /** 手填提交：本地校验（非法 url / 空 token 明确报错）→ 试配对（单地址，无候选逐试）。 */
+    /** Begin TS/LAN public discovery. whoami never receives or persists host token. */
+    fun discoverHosts(peers: List<TsPeer>, port: Int? = null) {
+        val generation = ++discoveryGeneration
+        discoveryInFlight = true
+        discoveryExecutor.execute {
+            val found = HostRouter.peerTargets(peers, knownPort = port).mapNotNull { endpoint ->
+                identifyClient.whoami(endpoint)
+            }
+            if (generation != discoveryGeneration) return@execute
+            discoveredHosts = HostRouter.merge(discoveredHosts + found)
+            discoveryInFlight = false
+        }
+    }
+
+    /** A list row is a host identity, not a TS/LAN path. */
+    fun addDiscoveredHost(candidate: HostCandidate) {
+        discoveredHosts = HostRouter.merge(discoveredHosts + candidate)
+        discoveryInFlight = false
+    }
+
+    fun selectHost(hostId: String) {
+        if (discoveredHosts.any { it.hostId == hostId }) {
+            selectedHostId = hostId
+            formError = null
+        }
+    }
+
+    /** Start tailnet enrollment from the dedicated auth-key field. */
+    fun startTsnet() {
+        val key = manualTsAuthKey.trim()
+        if (key.isEmpty()) {
+            formError = "Tailscale auth key 不能为空"
+            return
+        }
+        currentTsAuthKey = key
+        formError = null
+        tsnetStarter(key)
+    }
+
+    /** Identify the selected host before accepting its token for WS auth. */
+    fun submitHostToken() {
+        val host = discoveredHosts.firstOrNull { it.hostId == selectedHostId }
+        val token = hostToken.trim()
+        if (host == null) { formError = "请先选择主机"; return }
+        if (token.isEmpty()) { formError = "主机 token 不能为空"; return }
+        currentTsAuthKey = manualTsAuthKey.trim()
+        if (currentTsAuthKey.isNotEmpty()) tsnetStarter(currentTsAuthKey)
+        val ordered = HostRouter.prioritize(host.endpoints)
+        // A merged row may contain NSD/LAN and TS peer addresses. Prefer TS on the
+        // first attempt, while the identity proof still gates every endpoint.
+        val endpoint = ordered.firstOrNull { it.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET }
+            ?: ordered.firstOrNull()
+        if (endpoint == null) { formError = "所选主机暂不可达"; return }
+        // Keep every discovered endpoint as an internal hint so a failed TS proof can
+        // continue with LAN without exposing a route choice in the UI.
+        currentScanHints = listOf(endpoint.wsUrl) + ordered
+            .filter { it.authority != endpoint.authority }
+            .map { it.wsUrl }
+        startVerifiedPairing(
+            rawUrl = endpoint.wsUrl,
+            token = token,
+            hostId = host.hostId,
+            name = host.name,
+            port = endpoint.port,
+            tsNodeId = null,
+            legacyUrl = null,
+        )
+    }
+
+    /** 手填提交：legacy compatibility only; new UI uses host selection above. */
     fun submitManual() {
         val url = manualUrl.trim()
         val token = manualToken.trim()
@@ -203,10 +338,24 @@ class PairingViewModel(
         }
         formError?.let { return }
         recognizedUrl = url
+        currentHostId = null
+        currentHostName = null
+        currentPort = null
+        currentTsNodeId = null
+        currentLegacyUrl = url
+        currentScanHints = emptyList()
         // feat-ts-wire 手填通道（FIELD 裁定：输入框接活）：填了 key 即起网。
         currentTsAuthKey = manualTsAuthKey.trim()
         if (currentTsAuthKey.isNotEmpty()) tsnetStarter(currentTsAuthKey)
-        startPairingSequence(listOf(url), token, resetCandidates = true)
+        startVerifiedPairing(
+            rawUrl = url,
+            token = token,
+            hostId = null,
+            name = "",
+            port = null,
+            tsNodeId = null,
+            legacyUrl = url,
+        )
     }
 
     /**
@@ -220,10 +369,13 @@ class PairingViewModel(
 
     /** 重试/重置：回到 Idle，可重新扫码或手填。 */
     fun reset() {
+        pairingGeneration++
+        discoveryGeneration++
         succeeded = false
         // 先置 Idle 再停旧探针：旧探针 stop 的同步 STOPPED 回调看到非 Pairing 不误报拒绝。
         pairingStatus = PairingStatus.Idle
         waitingForTsnet = false
+        pendingIdentity = null
         stopProbe()
         currentConfig = null
         pendingConfig = null
@@ -233,6 +385,15 @@ class PairingViewModel(
         attemptQueue = emptyList()
         currentToken = ""
         currentTsAuthKey = ""
+        currentHostId = null
+        currentHostName = null
+        currentPort = null
+        currentTsNodeId = null
+        currentLegacyUrl = null
+        currentScanHints = emptyList()
+        discoveredHosts = emptyList()
+        selectedHostId = null
+        hostToken = ""
     }
 
     /**
@@ -353,6 +514,103 @@ class PairingViewModel(
 
     // ---- 内部 ----
 
+    /** Prove all discovered endpoints before constructing the WS probe. */
+    private fun startVerifiedPairing(
+        rawUrl: String,
+        token: String,
+        hostId: String?,
+        name: String,
+        port: Int?,
+        tsNodeId: String?,
+        legacyUrl: String?,
+    ) {
+        val endpoint = HostRouter.endpointFromWsUrl(
+            rawUrl,
+            if (legacyUrl != null) HostEndpointSource.SCANNED_PRIMARY else HostEndpointSource.QR,
+            port ?: HostRouter.DEFAULT_PORT,
+        )
+        if (endpoint == null) {
+            failPairing(PairingFailCause.UNREACHABLE, "主机地址不可验证")
+            return
+        }
+        val candidates = buildList {
+            add(endpoint)
+            currentScanHints.drop(1).forEach { rawHint ->
+                HostRouter.endpointFromWsUrl(rawHint, HostEndpointSource.QR)?.let(::add)
+            }
+        }.distinctBy { it.authority }
+        pairingStatus = PairingStatus.Idle
+        stopProbe()
+        pendingIdentity = null
+        attemptQueue = emptyList()
+        attemptIndex = 0
+        currentConfig = null
+        pairingStatus = PairingStatus.Pairing(endpoint.wsUrl)
+        waitingForTsnet = true // identity HTTP has its own timeout; pairing pump must not race it
+        pairingStartedAt = nowMs()
+        val generation = ++pairingGeneration
+        val verify = {
+            discoveryExecutor.execute {
+                if (generation != pairingGeneration) return@execute
+                val proven = mutableListOf<Pair<HostEndpoint, HostIdentifyResult>>()
+                for (candidate in candidates) {
+                    if (generation != pairingGeneration) return@execute
+                    // A failed tailnet node cannot prove its endpoint; continue with LAN.
+                    if (candidate.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET &&
+                        tsState is TsnetState.Error
+                    ) continue
+                    val candidateLegacy = if (candidate.authority == endpoint.authority) legacyUrl else null
+                    when (val result = identifyClient.identify(candidate, hostId, token, candidateLegacy)) {
+                        is HostIdentifyResult.Proven,
+                        is HostIdentifyResult.Legacy404 -> proven += candidate to result
+                        is HostIdentifyResult.Rejected -> Unit
+                    }
+                }
+                if (generation != pairingGeneration) return@execute
+                waitingForTsnet = false
+                val ordered = proven.sortedWith(
+                    compareBy<Pair<HostEndpoint, HostIdentifyResult>> {
+                        if (it.first.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET) 0 else 1
+                    }.thenBy { it.first.source.ordinal }.thenBy { it.first.authority },
+                )
+                val selected = ordered.firstOrNull()
+                if (selected == null) {
+                    failPairing(PairingFailCause.REJECTED, "主机身份验证失败")
+                    return@execute
+                }
+                when (val result = selected.second) {
+                    is HostIdentifyResult.Proven -> {
+                        currentHostId = result.identity.hostId
+                        currentHostName = name.ifBlank { result.identity.name }
+                        currentLegacyUrl = null
+                    }
+                    is HostIdentifyResult.Legacy404 -> {
+                        currentHostId = null
+                        currentHostName = name
+                        currentLegacyUrl = legacyUrl
+                    }
+                    is HostIdentifyResult.Rejected -> return@execute
+                }
+                currentPort = selected.first.port
+                currentTsNodeId = tsNodeId
+                currentToken = token.trim()
+                attemptQueue = ordered.map { it.first.wsUrl }
+                attemptIndex = 0
+                candidateUrls = emptyList()
+                currentTsAuthKey = currentTsAuthKey.trim()
+                startPairingSequence(attemptQueue, currentToken, resetCandidates = true)
+            }
+        }
+        val shouldWaitForTs = endpoint.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET &&
+            tsState !is TsnetState.Up &&
+            (currentTsAuthKey.isNotEmpty() || tsState is TsnetState.Starting)
+        if (shouldWaitForTs) {
+            pendingIdentity = verify
+        } else {
+            verify()
+        }
+    }
+
     /**
      * 启动一个配对逐试序列（主选 + 候选）：从队列头开始逐个试。无候选时队列为单元素，
      * 即旧版单次试配行为（15s 超时不变）；有候选时每候选 3s 超时、拨号失败立即推进。
@@ -397,7 +655,17 @@ class PairingViewModel(
         val url = attemptQueue[attemptIndex]
         attemptBudgetMs = if (attemptQueue.size > 1) CANDIDATE_TRY_MS else PAIR_TIMEOUT_MS
         // authkey 随配置走（成功即持久化，冷启动重连用它重新起网，feat-ts-wire）。
-        currentConfig = PairingConfig(url, currentToken, currentTsAuthKey)
+        currentConfig = PairingConfig(
+            url = url,
+            token = currentToken,
+            tsAuthKey = currentTsAuthKey,
+            hostId = currentHostId,
+            port = currentPort,
+            tsNodeId = currentTsNodeId,
+            name = currentHostName,
+            legacyBootstrapUrl = currentLegacyUrl,
+            scanHints = currentScanHints,
+        )
         pendingConfig = null
         recognizedUrl = url
         pairingStatus = PairingStatus.Pairing(url)
@@ -476,6 +744,7 @@ class PairingViewModel(
         recognizedUrl = null
         pairingStatus = PairingStatus.Failed(cause, message)
         waitingForTsnet = false
+        pendingIdentity = null
         stopProbe()
     }
 

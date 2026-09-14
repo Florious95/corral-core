@@ -191,7 +191,7 @@ fun PairingScreen(
                     },
                 )
             }
-            ManualFormCard(viewModel)
+            HostBindingCard(viewModel)
             TsTokenCard(viewModel)
             StatusArea(
                 status = status,
@@ -336,18 +336,13 @@ private fun ScanCard(viewModel: PairingViewModel) {
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        // 识别摘要只上屏地址，绝不上屏裸 JSON（含 token）——QR 是 token 唯一合法出口（§9）。
-        // 仅在配对进行中展示「正在连接」：失败态不得残留进行中文案（leader 追加范围，
-        // 双保险：VM failPairing 已清 recognizedUrl，此处再按状态门控）。
+        // URL/IP/port are never shown as user choices; upgraded QR is represented as a host.
         if (viewModel.pairingStatus is PairingStatus.Pairing) {
-            viewModel.recognizedUrl?.let { url ->
-                Text(
-                    text = "已识别 · 正在连接 $url",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = MonoFontFamily,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = "已识别主机 · 正在验证身份",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         Text(
             text = "对准主机终端上的二维码即可自动配对。",
@@ -393,11 +388,11 @@ internal fun NoPermissionCard(
         Text(
             text = when (state) {
                 CameraPermissionUiState.Requestable ->
-                    "扫码需要相机权限。未授权时请改用下方手填连接。"
+                    "扫码需要相机权限。未授权时请使用下方主机绑定。"
                 CameraPermissionUiState.Denied ->
-                    "相机权限已被拒绝，可再次授权；也可改用下方手填连接。"
+                    "相机权限已被拒绝，可再次授权；也可使用下方主机绑定。"
                 CameraPermissionUiState.PermanentlyDenied ->
-                    "相机权限已被永久拒绝，请到系统设置中开启；也可改用下方手填连接。"
+                    "相机权限已被永久拒绝，请到系统设置中开启；也可使用下方主机绑定。"
                 CameraPermissionUiState.Granted -> return@SectionCard
             },
             style = MaterialTheme.typography.bodyMedium,
@@ -424,7 +419,57 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 private fun Context.hasCameraPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
-/** 手填兜底：地址 + token（扫码不可用/被拒时）。等宽输入（地址/token 都是机器串）。 */
+/**
+ * Host binding surface: host rows + host token. It intentionally has no URL/IP/port/path
+ * input or path picker; discovery is the only source of endpoint candidates.
+ */
+@Composable
+private fun HostBindingCard(viewModel: PairingViewModel) {
+    SectionCard {
+        Text("选择主机", style = MaterialTheme.typography.titleMedium)
+        if (viewModel.discoveredHosts.isEmpty()) {
+            Text(
+                if (viewModel.discoveryInFlight) "正在发现局域网与 tailnet 主机…"
+                else "可选填 Tailscale auth key 后自动发现主机。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            viewModel.discoveredHosts.forEach { host ->
+                Surface(
+                    onClick = { viewModel.selectHost(host.hostId) },
+                    color = if (viewModel.selectedHostId == host.hostId) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(Spacing.md)) {
+                        Text(host.name.ifBlank { "主机" }, style = MaterialTheme.typography.bodyLarge)
+                        Text(host.hostId, style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily)
+                    }
+                }
+            }
+        }
+        OutlinedTextField(
+            value = viewModel.hostToken,
+            onValueChange = { viewModel.hostToken = it },
+            label = { Text("主机 token") },
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
+            shape = MaterialTheme.shapes.small,
+            colors = manualFieldColors(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(
+            onClick = { viewModel.submitHostToken() },
+            enabled = viewModel.selectedHostId != null && viewModel.pairingStatus !is PairingStatus.Pairing,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("绑定主机") }
+    }
+}
+
+/** Legacy compatibility surface retained for old v1 ViewModel callers; not rendered by product UI. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ManualFormCard(viewModel: PairingViewModel) {
@@ -547,6 +592,11 @@ private fun TsTokenCard(viewModel: PairingViewModel) {
             colors = manualFieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
+        Button(
+            onClick = { viewModel.startTsnet() },
+            enabled = viewModel.manualTsAuthKey.isNotBlank() && viewModel.tsState !is TsnetState.Starting,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("加入 Tailnet") }
     }
 }
 
@@ -555,10 +605,11 @@ private fun TsTokenCard(viewModel: PairingViewModel) {
  * Error.reason 来自 TsnetManager/后端，其契约保证不含 authkey 值（红线）。
  */
 private fun tsStateLine(state: TsnetState): Pair<String, Boolean> = when (state) {
-    TsnetState.Idle -> "填入 auth key 后点「连接」，或直接扫携带 key 的二维码，自动加入 tailnet。" to false
+    TsnetState.Idle -> "填入 auth key 后点「加入 Tailnet」，或直接扫携带 key 的二维码，自动加入 tailnet。" to false
     TsnetState.Starting -> "tailnet 入网中…" to false
     is TsnetState.Up -> "已入网：节点已连接，数据通道需要几秒建立。" to false
-    is TsnetState.Error -> "入网失败：${state.reason}" to true
+    // TS failure is intentionally silent; LAN discovery remains available.
+    is TsnetState.Error -> "继续自动发现局域网主机。" to false
 }
 
 /**
@@ -589,9 +640,8 @@ private fun StatusArea(
                     modifier = Modifier.size(16.dp),
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
-                // 整改点①：识别成功立即自动配对并显示「连接中…」进度态，含目标地址（token 不上屏，§9）。
                 Text(
-                    text = "连接中… ${status.targetUrl}",
+                    text = "正在验证主机身份…",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
@@ -627,32 +677,8 @@ private fun StatusArea(
                     // 整改点②：失败给显式报错 + 重试按钮（解析失败无配置，重试无意义，应重扫/手填）。
                     Button(onClick = onRetry) { Text("重试") }
                 }
-                if (candidateUrls.isNotEmpty()) {
-                    // fix-pairing-candidates：全部候选失败后候选列表可见可点——一键重试单项。
-                    // 可点行沿用 errorContainer 卡语言 + Mono 等宽；labelMedium 行高接近 48dp 触控。
-                    Text(
-                        text = "候选地址（点选一项重试）",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                    candidateUrls.forEach { url ->
-                        Surface(
-                            onClick = { onRetryCandidate(url) },
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = MaterialTheme.colorScheme.errorContainer,
-                        ) {
-                            Text(
-                                text = url,
-                                fontFamily = MonoFontFamily,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                            )
-                        }
-                    }
-                }
+                // Address candidates are deliberately not exposed as a path picker. Retry
+                // restarts bounded discovery/identity instead.
             }
         }
     }

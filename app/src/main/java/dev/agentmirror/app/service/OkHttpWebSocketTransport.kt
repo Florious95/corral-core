@@ -133,9 +133,11 @@ class OkHttpWebSocketTransport(
     private companion object {
         /** 默认客户端：短读写超时 + 不自动重连（重连归 conn 层状态机，传输逐拨号）。 */
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .readTimeout(3, TimeUnit.SECONDS)
+            .writeTimeout(3, TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .retryOnConnectionFailure(false)
             .build()
     }
@@ -153,9 +155,11 @@ class OkHttpWebSocketTransport(
  */
 object OkHttpTransportFactory : TransportFactory {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .writeTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(3, TimeUnit.SECONDS)
+        .writeTimeout(3, TimeUnit.SECONDS)
+        .followRedirects(false)
+        .followSslRedirects(false)
         .retryOnConnectionFailure(false)
         .build()
 

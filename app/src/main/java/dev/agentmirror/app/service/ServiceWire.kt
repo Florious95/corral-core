@@ -28,6 +28,7 @@ import dev.agentmirror.app.conn.TransportFactory
 import dev.agentmirror.app.conn.TransportListener
 import dev.agentmirror.app.conn.WebSocketTransport
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.tsnet.TsnetWire
 
 /**
  * 前台服务的接线点（service 包之外唯一改动接口；UI/配对层注入）。
@@ -174,8 +175,16 @@ object ServiceWire {
     fun setConfig(c: ConnectionConfig) {
         val old = config
         config = c
-        if (old != c) connectionPathState.value = null
-        if (old != null && old != c) {
+        // TS auth key is a staged transport credential, not a connection identity. Updating it
+        // must not tear down a READY socket; the next generation consumes the pending value.
+        val operationallySame = old != null && old.token == c.token &&
+            if (old.hostId != null && old.hostId == c.hostId) {
+                true
+            } else {
+                old.copy(tsAuthKey = null) == c.copy(tsAuthKey = null)
+            }
+        if (old != c && !operationallySame) connectionPathState.value = null
+        if (old != null && old != c && !operationallySame) {
             // 配置变更：作废旧拨号目标（stop + 置空），下次 manager() 用新 config 重建。
             releaseManager()
         }
@@ -277,6 +286,16 @@ object ServiceWire {
             val created = ConnectionManager(
                 config = cfg,
                 transportFactory = transportFactory,
+                dialCoordinator = hostCoordinator(cfg),
+                beforeGeneration = { dev.agentmirror.app.tsnet.TsnetWire.applyPendingKey() },
+                onReadyTarget = { target ->
+                    uploadBaseUrl = dev.agentmirror.app.pairing.deriveUploadBase(target.url)
+                    config = config?.copy(
+                        url = target.url,
+                        lastTsUrl = if (target.path == "TS") target.url else config?.lastTsUrl,
+                        lastLanUrl = if (target.path == "LAN") target.url else config?.lastLanUrl,
+                    )
+                },
             )
             created.setListener(
                 object : ConnectionManager.Listener {
@@ -327,6 +346,45 @@ object ServiceWire {
             manager = created
             return created
         }
+    }
+
+    /** Build a host-proofed coordinator for upgraded records; old configs retain legacy behavior. */
+    private fun hostCoordinator(cfg: ConnectionConfig): dev.agentmirror.app.conn.AsyncDialCoordinator? {
+        val hostId = cfg.hostId?.takeIf { dev.agentmirror.app.pairing.HostRouter.isValidHostId(it) }
+        if (hostId == null && cfg.legacyBootstrapUrl.isNullOrBlank()) return null
+        val endpoints = {
+            val live = config ?: cfg
+            val hints = buildList {
+                if (hostId != null) {
+                    live.url.takeIf { it.isNotBlank() }?.let { add(it to dev.agentmirror.app.pairing.HostEndpointSource.HOST_RECORD) }
+                }
+                live.legacyBootstrapUrl?.let { add(it to dev.agentmirror.app.pairing.HostEndpointSource.PERSISTED_LEGACY) }
+                live.scanHints.forEach { add(it to dev.agentmirror.app.pairing.HostEndpointSource.QR) }
+                live.lastTsUrl?.let { add(it to dev.agentmirror.app.pairing.HostEndpointSource.LAST_GOOD) }
+                live.lastLanUrl?.let { add(it to dev.agentmirror.app.pairing.HostEndpointSource.LAST_GOOD) }
+            }
+            val hinted = hints.mapNotNull { (url, source) ->
+                dev.agentmirror.app.pairing.HostRouter.endpointFromWsUrl(
+                    url,
+                    source,
+                    live.port ?: dev.agentmirror.app.pairing.HostRouter.DEFAULT_PORT,
+                )
+            }
+            val peers = dev.agentmirror.app.pairing.HostRouter.peerTargets(
+                TsnetWire.peerSnapshot(live.tsNodeId).peers,
+                knownPort = live.port,
+            )
+            (hinted + peers).distinctBy { it.authority }
+        }
+        return dev.agentmirror.app.pairing.HostDialCoordinator(
+            endpointSource = endpoints,
+            hostId = hostId,
+            token = cfg.token,
+            legacyUrl = cfg.legacyBootstrapUrl,
+            identifyClient = dev.agentmirror.app.pairing.HostIdentifyClient(
+                dev.agentmirror.app.pairing.OkHttpHostHttpTransport(),
+            ),
+        )
     }
 
     /** 连接管理器（进程级单例；由 [MirrorForegroundService.onDestroy] 或 [setConfig]

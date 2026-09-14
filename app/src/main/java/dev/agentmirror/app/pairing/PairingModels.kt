@@ -30,38 +30,53 @@ import java.net.URI
 data class QrPayload(
     /** 载荷 schema 版本（当前固定 1；其他版本拒绝）。 */
     val version: Int,
-    /** WebSocket 端点，如 ws://192.168.1.5:9900/ws。 */
-    val url: String,
+    /** 旧 QR 的主 URL；新 QR 可省略，客户端会由主机记录/发现补出端点。 */
+    val url: String = "",
     /** 配对 token：只上行一次，不回显、不落日志（协议 §9）。 */
     val token: String,
     /** Tailscale auth key：非空时扫码同时启动 App 内嵌 tsnet；不回显、不落日志。 */
-    val tsAuthKey: String,
-    /**
-     * 全候选 ws URL（可选字段，契约 §2.1，fix-pairing-candidates）：
-     * 同一主机的多网卡/多可达地址（LAN + tailnet），主选 [url] 打头；无候选为空列表。
-     * 主选不可达时自动逐个试探（3s/个），全败后候选列表可见可点。
-     */
-    val candidates: List<String>,
+    val tsAuthKey: String = "",
+    /** 旧 QR 的候选提示；新客户端只把它当未信任发现提示，绝不直接 auth。 */
+    val candidates: List<String> = emptyList(),
+    /** 新 QR 的公开主机身份；绑定的是主机，不是 URL。 */
+    val hostId: String? = null,
+    /** 主机监听端口，来自 QR 的可信提示而非用户输入。 */
+    val port: Int? = null,
+    /** TS peer StableID，用于无窗口截断的全表命中。 */
+    val tsNodeId: String? = null,
+    /** 仅展示，不参与身份匹配。 */
+    val name: String? = null,
 ) {
     /** data class 默认 toString 会带出两项凭据；显式封口，避免崩溃/调试输出误泄漏。 */
     override fun toString(): String =
-        "QrPayload(v=$version, url=$url, token=[redacted], tsAuthKey=[redacted], candidates=$candidates)"
+        "QrPayload(v=$version, url=$url, token=[redacted], tsAuthKey=[redacted], hostId=$hostId, port=$port, tsNodeId=$tsNodeId, name=$name, candidates=$candidates)"
 }
 
 /** 配对成功后的连接配置负载（持久化：url + token + 可选 TS authkey）。 */
 data class PairingConfig(
+    /** 当前 READY 的 ws endpoint；未首次 READY 的 URL-less 绑定允许为空。 */
     val url: String,
+    /** 主机 token，只在 identify 成功后进入 WS auth。 */
     val token: String,
-    /**
-     * Tailscale auth key（feat-ts-wire）：扫码/手填带入，随配置持久化——冷启动重连
-     * 需要它重新起 tsnet 节点（tailnet 地址拨号依赖 SOCKS 通道）。空串 = 未用 TS，
-     * 行为与旧版一致。红线同 token：不落日志、不进错误文案（协议 §2.1/§9）。
-     */
+    /** 待用/当前 TS auth key，磁盘由 Keystore 加密。 */
     val tsAuthKey: String = "",
+    /** 公开主机身份；空值只表示旧 v1 配置。 */
+    val hostId: String? = null,
+    val port: Int? = null,
+    val tsNodeId: String? = null,
+    val name: String? = null,
+    /** 旧主 URL，仅用于精确 404 legacy 谓词。 */
+    val legacyBootstrapUrl: String? = null,
+    val lastTsUrl: String? = null,
+    val lastLanUrl: String? = null,
+    /** QR 原始提示，始终未信任，供重连前重新 identify。 */
+    val scanHints: List<String> = emptyList(),
 ) {
+    val isHostBound: Boolean get() = !hostId.isNullOrBlank()
+
     /** 配置对象可能进入断言/崩溃文本；token 与 authkey 永不由 toString 明文输出。 */
     override fun toString(): String =
-        "PairingConfig(url=$url, token=[redacted], tsAuthKey=[redacted])"
+        "PairingConfig(url=$url, token=[redacted], tsAuthKey=[redacted], hostId=$hostId, port=$port, tsNodeId=$tsNodeId, name=$name, legacyBootstrapUrl=$legacyBootstrapUrl, lastTsUrl=$lastTsUrl, lastLanUrl=$lastLanUrl, scanHints=$scanHints)"
 }
 
 /** 配对失败原因分类（供 UI 区分超时/拒绝/不可达/解析失败并给对应指引；003 明确报错）。 */

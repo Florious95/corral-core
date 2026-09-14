@@ -29,6 +29,7 @@ import dev.agentmirror.app.pairing.startPersistentConnection
 import dev.agentmirror.app.service.NetworkConnectivityWatcher
 import dev.agentmirror.app.service.NotificationHelper
 import dev.agentmirror.app.service.ServiceWire
+import dev.agentmirror.app.workspace.ConnectionUi
 import dev.agentmirror.app.workspace.SharedPreferencesFavoriteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
@@ -106,7 +107,13 @@ class MainActivity : ComponentActivity() {
             startPersistentConnection(storedConfig, this)
         }
         // 工作区 VM 与 Activity 同生命周期；列表状态由 conn 层 READY+全量 listing 恢复（004 无状态）。
+        // 无 pairing 记录时不得默认 CONNECTING：skip 后没有 manager 推进状态，会永远停在加载。
         workspaceViewModel = WorkspaceViewModel(
+            initialConnection = if (storedConfig != null) {
+                ConnectionUi.CONNECTING
+            } else {
+                ConnectionUi.UNBOUND
+            },
             favoriteStore = SharedPreferencesFavoriteStore(this),
         )
         // 069：旋转重建不是「进入菜单」，不得再发 list / 重订二级。

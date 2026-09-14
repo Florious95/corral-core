@@ -25,8 +25,8 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
-        // Accepted core 52fc artifacts, pinned to the immutable maven publication commit.
-        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/7bdd02c1e1914a99df77ab8f1d8c2aab1652fbd5/") }
+        // Host-routing core artifacts, pinned to the immutable Maven publication commit.
+        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/813f81c672d663f65cef280bd1bc1a350c500f18/") }
         google()
         mavenCentral()
     }
