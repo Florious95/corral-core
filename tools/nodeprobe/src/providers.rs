@@ -9,7 +9,6 @@ pub struct Entry {
     pub id: String,
     pub display: String,
     pub path_segment: bool,
-    pub argv_contains: Option<String>,
 }
 
 pub const CORPUS_UNAVAILABLE_KIND: &str = "provider_corpus_unavailable";
@@ -87,24 +86,18 @@ pub fn parse_tsv(text: &str) -> Result<Vec<Entry>, String> {
                 line_no + 1
             ));
         }
-        let match_rule = parts.get(3).copied().unwrap_or("");
-        let argv_contains = match_rule
-            .strip_prefix("argv-contains:")
-            .filter(|token| !token.is_empty())
-            .map(str::to_owned);
-        if !match_rule.is_empty() && match_rule != "path-segment" && argv_contains.is_none() {
+        if parts.len() == 4 && !parts[3].is_empty() && parts[3] != "path-segment" {
             return Err(format!(
                 "line {}: unknown match {:?}",
                 line_no + 1,
-                match_rule
+                parts[3]
             ));
         }
         out.push(Entry {
             comm: parts[0].to_string(),
             id: parts[1].to_string(),
             display: parts[2].to_string(),
-            path_segment: match_rule == "path-segment",
-            argv_contains,
+            path_segment: parts.get(3).copied() == Some("path-segment"),
         });
     }
     Ok(out)
@@ -117,7 +110,7 @@ pub fn basename(comm: &str) -> &str {
         .unwrap_or(comm)
 }
 
-fn lookup_entry(comm: &str) -> Option<&'static Entry> {
+pub fn lookup(comm: &str) -> Option<&'static Entry> {
     let base = basename(comm);
     if let Some(e) = load().iter().find(|e| e.comm == base) {
         return Some(e);
@@ -126,34 +119,6 @@ fn lookup_entry(comm: &str) -> Option<&'static Entry> {
     load()
         .iter()
         .find(|e| e.path_segment && !e.comm.is_empty() && slash.contains(&format!("/{}/", e.comm)))
-}
-
-pub fn lookup(comm: &str) -> Option<&'static Entry> {
-    lookup_entry(comm).filter(|e| e.argv_contains.is_none())
-}
-
-pub fn lookup_process(comm: &str, argv: &str) -> Option<&'static Entry> {
-    let e = lookup_entry(comm).or_else(|| {
-        // Linux may truncate ps comm to a fixed width. The first argv token
-        // is the executable identity in that case; it remains table-gated.
-        argv.split_whitespace().next().and_then(lookup_entry)
-    })?;
-    match e.argv_contains.as_deref() {
-        Some(token) if !argv.contains(token) => None,
-        _ => Some(e),
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Process {
-    pub comm: String,
-    pub argv: String,
-}
-
-pub fn match_processes(processes: &[Process]) -> Option<&'static Entry> {
-    processes
-        .iter()
-        .find_map(|p| lookup_process(&p.comm, &p.argv))
 }
 
 pub fn match_comms(comms: &[String]) -> Option<&'static Entry> {
@@ -189,31 +154,25 @@ mod tests {
     }
 
     #[test]
-    fn seven_rows_and_basename() {
+    fn six_rows_and_basename() {
         let t = load();
-        assert_eq!(t.len(), 7);
+        assert_eq!(t.len(), 6);
         assert_eq!(lookup("codex").map(|e| e.id.as_str()), Some("codex"));
-        assert!(lookup("agent").is_none(), "bare agent must stay unknown");
+        assert_eq!(lookup("agent").map(|e| e.id.as_str()), Some("cursor"));
         assert_eq!(
-            lookup_process(
-                "agent",
-                "/Users/alauda/.local/bin/agent cursor-agent/index.js"
-            )
-            .map(|e| e.id.as_str()),
+            lookup("/Users/alauda/.local/bin/agent").map(|e| e.id.as_str()),
             Some("cursor")
         );
-        assert!(lookup_process("agent", "/Users/alauda/.local/bin/agent unrelated.js").is_none());
         let full = "/opt/homebrew/bin/codex";
         assert_ne!(full, "codex");
         assert_eq!(lookup(full).map(|e| e.id.as_str()), Some("codex"));
         assert!(lookup("bash").is_none());
     }
 
-    /// Same comm→id table as server/internal/provider/table_test.go, same TSV.
+    /// Same comm→id table as the server consumer, using the shared TSV.
     #[test]
     fn malformed_provider_rows_fail_closed() {
         assert!(parse_tsv("codex\tcodex\tCodex\textra").is_err());
-        assert!(parse_tsv("agent\tcursor\tCursor\targv-contains:").is_err());
         assert!(parse_tsv("\tcodex\tCodex").is_err());
         assert!(parse_tsv("codex\tcodex").is_err());
     }
@@ -225,21 +184,12 @@ mod tests {
             ("codex", "codex"),
             ("copilot", "copilot"),
             ("grok", "grok"),
-            ("cursor-agent", "cursor"),
             ("agent", "cursor"),
             ("pi", "pi"),
         ];
         for (comm, id) in want {
-            if comm == "agent" {
-                assert!(lookup(comm).is_none());
-                assert_eq!(
-                    lookup_process(comm, "cursor-agent/index.js").map(|e| e.id.as_str()),
-                    Some(id)
-                );
-            } else {
-                let e = lookup(comm).unwrap_or_else(|| panic!("comm {comm} missing"));
-                assert_eq!(e.id, id, "comm {comm}");
-            }
+            let e = lookup(comm).unwrap_or_else(|| panic!("comm {comm} missing"));
+            assert_eq!(e.id, id, "comm {comm}");
         }
         let full = "/opt/homebrew/Cellar/node/24.1.0/bin/codex";
         assert_ne!(full, "codex");
@@ -248,17 +198,22 @@ mod tests {
             "tsv must store basename, not full path"
         );
         assert_eq!(lookup(full).map(|e| e.id.as_str()), Some("codex"));
-        for noise in ["bash", "sleep", "vim", "make", "sshd", "node", ""] {
+        for noise in [
+            "bash",
+            "sleep",
+            "vim",
+            "make",
+            "sshd",
+            "node",
+            "cursor-agent",
+            "",
+        ] {
             assert!(lookup(noise).is_none(), "noise {noise} must not be a node");
         }
         assert!(
             load().iter().all(|e| e.comm != "node"),
             "TSV must not whitelist basename node"
         );
-        let cursor_node =
-            "/Users/alauda/.local/share/cursor-agent/versions/2026.08.11-e8db854/node";
-        assert_eq!(basename(cursor_node), "node");
-        assert_eq!(lookup(cursor_node).map(|e| e.id.as_str()), Some("cursor"));
         assert!(lookup("/Users/alauda/.nvm/versions/node/v20.0.0/bin/node").is_none());
     }
 }
