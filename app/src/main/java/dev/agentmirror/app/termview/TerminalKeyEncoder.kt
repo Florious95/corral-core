@@ -86,7 +86,10 @@ internal object TerminalKeyEncoder {
         if (ctrl && codePoint in 0x40..0x7f) {
             return withAlt(byteArrayOf((codePoint and 0x1f).toByte()), alt)
         }
-        return withAlt(String(Character.toChars(codePoint)).toByteArray(Charsets.UTF_8), alt)
+        return withAlt(
+            String(Character.toChars(codePoint)).toByteArray(Charsets.UTF_8),
+            alt || event.isMetaPressed,
+        )
     }
 
     private fun csiFinal(final: Char, modifier: Int): ByteArray {
