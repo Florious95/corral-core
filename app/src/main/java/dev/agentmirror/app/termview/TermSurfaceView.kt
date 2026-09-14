@@ -119,6 +119,9 @@ class TermSurfaceView @JvmOverloads constructor(
         ctrl: Boolean,
     ) -> Boolean)? = null
 
+    /** Hardware/IME key events encoded as VT bytes by the session layer. */
+    var onTermKey: ((KeyEvent) -> Boolean)? = null
+
     /**
      * 当前会话 ref（[SessionScreen] 注入）。first_draw 按 ref 查 open_id。
      * 关路径：onDraw 只读 [PerfTrace.isEnabled]，不扫网格。
@@ -322,8 +325,14 @@ class TermSurfaceView @JvmOverloads constructor(
     private val boxGeometryCache = BoxBlockGeometryCache()
     private val viewportGeomStore by lazy { SharedPreferencesViewportGeomStore(context) }
 
+    init {
+        isFocusable = true
+        isFocusableInTouchMode = true
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        requestFocus()
         watchDrawControls()
     }
 
@@ -407,6 +416,7 @@ class TermSurfaceView @JvmOverloads constructor(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val p = presenter ?: return super.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) requestFocus()
         val wasHeld = mouseHeld
         dispatchTermMouse(p, event)
         if (!wasHeld && !mouseHeld) {
@@ -421,14 +431,17 @@ class TermSurfaceView @JvmOverloads constructor(
         val sink = onTermMouse ?: return
         val cw = p.cellWidth
         val ch = p.cellHeight
-        if (!mouseCap.hit(event.x, event.y, cw, ch, p.gridCols, p.gridRows)) return
+        // Drawing starts at the terminal content edge rather than view x=0. Keep pointer
+        // coordinates in the same grid origin so the first visible glyph is column 1.
+        val xPx = event.x - contentLeftPx()
+        if (!mouseCap.hit(xPx, event.y, cw, ch, p.gridCols, p.gridRows)) return
         val shift = event.metaState and KeyEvent.META_SHIFT_ON != 0
         val meta = event.metaState and KeyEvent.META_ALT_ON != 0
         val ctrl = event.metaState and KeyEvent.META_CTRL_ON != 0
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 mouseCap.reset()
-                mouseCap.hit(event.x, event.y, cw, ch, p.gridCols, p.gridRows)
+                mouseCap.hit(xPx, event.y, cw, ch, p.gridCols, p.gridRows)
                 if (sink(mouseCap.col, mouseCap.row, true, false, shift, meta, ctrl)) {
                     mouseHeld = true
                     mouseCap.markReported()
@@ -451,6 +464,14 @@ class TermSurfaceView @JvmOverloads constructor(
                 }
             }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val callback = onTermKey
+        if (callback != null && TerminalKeyEncoder.encode(event) != null) {
+            return callback(event)
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */

@@ -31,6 +31,7 @@ import dev.agentmirror.app.conn.PaneModeChangedFrame
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
+import dev.agentmirror.app.termview.TerminalKeyEncoder
 import dev.agentmirror.app.termview.TermViewPresenter
 import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
@@ -572,6 +573,15 @@ class SessionViewModel(
         ) ?: return false
         if (bytes.isEmpty()) return false
         return manager.sendRawBytes(ref, bytes)
+    }
+
+    /** Encode one physical key as standard VT bytes and send it unchanged. */
+    fun onTermKey(event: android.view.KeyEvent): Boolean {
+        val bytes = TerminalKeyEncoder.encode(event) ?: return false
+        manager.sendRawBytes(ref, bytes)
+        // Consume an encoded key even while reconnecting; otherwise Android may
+        // apply it to a parent/editor instead of the terminal.
+        return true
     }
 
     /**
