@@ -318,7 +318,13 @@ func (c *wsConn) handleInput(i protocol.Input) {
 			ack(false, protocol.InputFailTooLarge)
 			return
 		}
-		if err := br.InjectRawAtomic(c.ctx, i.Bytes); err != nil {
+		injectRaw := br.InjectRaw
+		// Escape-prefixed VT/SGR packets must stay in one PTY write; otherwise
+		// an interactive CLI can consume the lone ESC as a standalone key.
+		if bytes.IndexByte(i.Bytes, 0x1b) >= 0 {
+			injectRaw = br.InjectRawAtomic
+		}
+		if err := injectRaw(c.ctx, i.Bytes); err != nil {
 			if errors.Is(err, bridge.ErrPaneNotFound) {
 				ack(false, protocol.InputFailSessionNotFound)
 			} else {
