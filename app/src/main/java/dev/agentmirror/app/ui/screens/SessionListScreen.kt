@@ -1,7 +1,10 @@
 package dev.agentmirror.app.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,14 +16,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -38,7 +41,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +56,8 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.BackAffordance
+import dev.agentmirror.app.ui.components.CanonicalProviderMarks
+import dev.agentmirror.app.ui.components.ExtractedProviderIcon
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.PathText
 import dev.agentmirror.app.ui.components.RowDivider
@@ -182,12 +194,9 @@ private fun CreateAgentDialog(
 ) {
     var name by remember { mutableStateOf("") }
     var selectedProvider by remember { mutableStateOf(launchers.first().provider) }
-    var providerMenuExpanded by remember { mutableStateOf(false) }
-    var selectedAnchor by remember { mutableStateOf(sessions.firstOrNull()?.id.orEmpty()) }
-    var anchorMenuExpanded by remember { mutableStateOf(false) }
     var bypass by remember { mutableStateOf(false) }
     val launcher = launchers.firstOrNull { it.provider == selectedProvider }
-    val anchors = sessions
+    val internalAnchor = remember(sessions) { sessions.firstOrNull()?.id.orEmpty() }
     LaunchedEffect(launcher?.supportsBypass) {
         if (launcher?.supportsBypass != true) bypass = false
     }
@@ -198,132 +207,23 @@ private fun CreateAgentDialog(
         onDismissRequest = { if (!state.inFlight) onDismiss() },
         title = { androidx.compose.material3.Text("新建 Agent") },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { androidx.compose.material3.Text("名称") },
-                    placeholder = { androidx.compose.material3.Text("例如：代码助手") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        cursorColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("create-agent-name"),
-                )
-                Box(Modifier.fillMaxWidth()) {
-                    AgentSelectorField(
-                        label = "Agent 类型",
-                        value = launcher?.displayName ?: "选择 Provider",
-                        expanded = providerMenuExpanded,
-                        onClick = { providerMenuExpanded = true },
-                        showArrow = true,
-                        modifier = Modifier.testTag("create-agent-provider"),
-                    )
-                    DropdownMenu(
-                        expanded = providerMenuExpanded,
-                        onDismissRequest = { providerMenuExpanded = false },
-                    ) {
-                        launchers.forEach { option ->
-                            DropdownMenuItem(
-                                text = { androidx.compose.material3.Text(option.displayName) },
-                                onClick = {
-                                    selectedProvider = option.provider
-                                    providerMenuExpanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-                if (anchors.isNotEmpty()) {
-                    Box(Modifier.fillMaxWidth()) {
-                        val selectedSession = anchors.firstOrNull { it.id == selectedAnchor }
-                        AgentSelectorField(
-                            label = "目标会话",
-                            value = selectedSession?.displayName ?: "暂无可用会话",
-                            expanded = anchorMenuExpanded,
-                            onClick = { anchorMenuExpanded = true },
-                            showArrow = anchors.size > 1,
-                            enabled = anchors.size > 1 && !state.inFlight,
-                            modifier = Modifier.testTag("create-agent-anchor"),
-                        )
-                        if (anchors.size > 1) {
-                            DropdownMenu(
-                                expanded = anchorMenuExpanded,
-                                onDismissRequest = { anchorMenuExpanded = false },
-                            ) {
-                                anchors.forEach { item ->
-                                    DropdownMenuItem(
-                                        text = { androidx.compose.material3.Text(item.displayName) },
-                                        onClick = {
-                                            selectedAnchor = item.id
-                                            anchorMenuExpanded = false
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        androidx.compose.material3.Text(
-                            "绕过权限确认",
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        androidx.compose.material3.Text(
-                            "启用后，Agent 可跳过操作确认",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    Switch(
-                        checked = bypass,
-                        onCheckedChange = { bypass = it },
-                        enabled = launcher?.supportsBypass == true && !state.inFlight,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            uncheckedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                        modifier = Modifier.testTag("create-agent-bypass"),
-                    )
-                }
-                state.error?.let {
-                    androidx.compose.material3.Text(
-                        "创建失败：$it",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.testTag("create-agent-error"),
-                    )
-                }
-            }
+            CreateAgentFormContent(
+                name = name,
+                onNameChange = { name = it },
+                launchers = launchers,
+                selectedProvider = selectedProvider,
+                onSelectProvider = { selectedProvider = it },
+                bypass = bypass,
+                onBypassChange = { bypass = it },
+                supportsBypass = launcher?.supportsBypass == true,
+                inFlight = state.inFlight,
+                error = state.error,
+            )
         },
         confirmButton = {
             Button(
-                enabled = name.isNotBlank() && selectedAnchor.isNotBlank() && launcher != null && !state.inFlight,
-                onClick = { onCreate(selectedAnchor, launcher!!.provider, name, bypass) },
+                enabled = name.isNotBlank() && launcher != null && !state.inFlight,
+                onClick = { onCreate(internalAnchor, launcher!!.provider, name.trim(), bypass) },
                 modifier = Modifier
                     .defaultMinSize(minWidth = 84.dp)
                     .testTag("create-agent-confirm"),
@@ -344,60 +244,221 @@ private fun CreateAgentDialog(
 }
 
 @Composable
-internal fun AgentSelectorField(
-    label: String,
-    value: String,
-    expanded: Boolean,
-    onClick: () -> Unit,
-    showArrow: Boolean,
+internal fun CreateAgentFormContent(
+    name: String,
+    onNameChange: (String) -> Unit,
+    launchers: List<AgentLauncherUi>,
+    selectedProvider: String,
+    onSelectProvider: (String) -> Unit,
+    bypass: Boolean,
+    onBypassChange: (Boolean) -> Unit,
+    supportsBypass: Boolean,
+    inFlight: Boolean,
+    error: String?,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
 ) {
-    val borderColor = when {
-        expanded -> MaterialTheme.colorScheme.primary
-        enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-    }
-    val borderWidth = if (expanded) 1.5.dp else 1.dp
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        androidx.compose.material3.Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelMedium,
-        )
-        Surface(
-            modifier = modifier
-                .fillMaxWidth()
-                .height(56.dp),
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        OutlinedTextField(
+            value = name,
+            onValueChange = onNameChange,
+            label = { androidx.compose.material3.Text("名称") },
+            placeholder = { androidx.compose.material3.Text("例如：代码助手") },
+            singleLine = true,
             shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLowest,
-            border = BorderStroke(borderWidth, borderColor),
-            onClick = onClick,
-            enabled = enabled,
-        ) {
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("create-agent-name"),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.Text(
+                text = "Agent 类型",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+            )
             Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .testTag("create-agent-launcher-row"),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                androidx.compose.material3.Text(
-                    text = value,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                if (showArrow) {
-                    androidx.compose.material3.Text(
-                        text = if (expanded) "▴" else "▾",
-                        color = if (expanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 12.dp),
+                launchers.forEach { option ->
+                    AgentIconCard(
+                        launcher = option,
+                        isSelected = option.provider == selectedProvider,
+                        onClick = { onSelectProvider(option.provider) },
                     )
                 }
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                androidx.compose.material3.Text(
+                    "绕过权限确认",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Spacer(Modifier.height(2.dp))
+                androidx.compose.material3.Text(
+                    "启用后，Agent 可跳过操作确认",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Switch(
+                checked = bypass,
+                onCheckedChange = onBypassChange,
+                enabled = supportsBypass && !inFlight,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    checkedBorderColor = MaterialTheme.colorScheme.primary,
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    uncheckedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                modifier = Modifier.testTag("create-agent-bypass"),
+            )
+        }
+        error?.let {
+            androidx.compose.material3.Text(
+                "创建失败：$it",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("create-agent-error"),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun AgentIconCard(
+    launcher: AgentLauncherUi,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+    val borderWidth = if (isSelected) 2.dp else 1.dp
+    val containerColor = if (isSelected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    val contentTint = if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        modifier = modifier
+            .width(78.dp)
+            .height(82.dp)
+            .semantics { selected = isSelected }
+            .testTag("agent-card-${launcher.provider}"),
+        shape = RoundedCornerShape(12.dp),
+        color = containerColor,
+        border = BorderStroke(borderWidth, borderColor),
+        onClick = onClick,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 5.dp, end = 5.dp)
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .testTag("agent-card-check-${launcher.provider}"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Text(
+                        text = "✓",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+            ) {
+                AgentBrandIcon(
+                    canonicalId = launcher.provider,
+                    tint = contentTint,
+                    modifier = Modifier.size(28.dp),
+                )
+                Spacer(Modifier.height(6.dp))
+                androidx.compose.material3.Text(
+                    text = CanonicalProviderMarks.of(launcher.provider)?.displayName ?: launcher.displayName,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun AgentBrandIcon(
+    canonicalId: String,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    val res = CanonicalProviderMarks.drawableRes(canonicalId)
+    val spec = CanonicalProviderMarks.of(canonicalId)
+    val desc = spec?.displayName ?: canonicalId
+    when {
+        ExtractedProviderIcon.draws(canonicalId) -> {
+            Canvas(modifier = modifier) {
+                ExtractedProviderIcon.draw(this, canonicalId, tint)
+            }
+        }
+        res != null -> {
+            Image(
+                painter = painterResource(res),
+                contentDescription = desc,
+                contentScale = ContentScale.Fit,
+                colorFilter = ColorFilter.tint(tint),
+                modifier = modifier,
+            )
+        }
+        else -> {
+            Box(modifier = modifier, contentAlignment = Alignment.Center) {
+                androidx.compose.material3.Text(
+                    text = canonicalId.take(2).uppercase(),
+                    color = tint,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                )
             }
         }
     }

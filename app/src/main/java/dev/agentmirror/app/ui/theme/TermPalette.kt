@@ -145,6 +145,8 @@ object TermPalette {
     private var cachedDark: Scheme? = null
     /** Contrast repairs are a per-cell hot path; keep one diagnostic sample per palette source. */
     private val contrastLoggedSources = mutableSetOf<String>()
+    /** 对 [term-theme] 实施去重与防刷；相同 theme 消息仅记录一次，严禁 100ms 连续刷屏。 */
+    private val loggedThemeMessages = mutableSetOf<String>()
     @Volatile private var tablesLight: RemapTables? = null
     @Volatile private var tablesDark: RemapTables? = null
 
@@ -159,6 +161,11 @@ object TermPalette {
     fun bind(store: TermThemeStore) {
         synchronized(lock) {
             this.store = store
+            val currentSel = overrideSelection ?: store.load()
+            if (cachedKey == currentSel && cachedLight != null && cachedDark != null) {
+                // 主题配置未变，保留已有 Scheme 缓存与映射表，避免高频 recompose 时重复装配与刷日志
+                return
+            }
             cachedKey = null
             contrastLoggedSources.clear()
             tablesLight = null
@@ -184,6 +191,7 @@ object TermPalette {
             cachedLight = null
             cachedDark = null
             contrastLoggedSources.clear()
+            loggedThemeMessages.clear()
             tablesLight = null
             tablesDark = null
         }
@@ -192,6 +200,7 @@ object TermPalette {
     fun invalidate() {
         synchronized(lock) {
             cachedKey = null
+            loggedThemeMessages.clear()
             tablesLight = null
             tablesDark = null
         }
@@ -448,15 +457,20 @@ object TermPalette {
         return pack(channel(16), channel(8), channel(0))
     }
 
+    private fun logThemeOnce(message: String) {
+        synchronized(lock) {
+            if (loggedThemeMessages.add(message)) {
+                DiagLog.record("term-theme", message)
+            }
+        }
+    }
+
     private fun assembleSlot(dark: Boolean, familyId: String, slot: String): Scheme {
         val family = resolveFamily(familyId, slot)
         val sourceFile = if (dark) family.darkSource else family.lightSource
         val colors = TermSchemeCatalog.colorsBySourceFile[sourceFile]
         if (colors == null || colors.ansi.size != 16) {
-            DiagLog.record(
-                "term-theme",
-                "raw=$familyId catalogHit=false slot=$slot sourceFile=$sourceFile fallback=app-theme",
-            )
+            logThemeOnce("raw=$familyId catalogHit=false slot=$slot sourceFile=$sourceFile fallback=app-theme")
             return if (dark) Dark else Light
         }
         return Scheme(
@@ -472,10 +486,7 @@ object TermPalette {
 
     private fun resolveFamily(familyId: String, slot: String): TermThemeFamilyDef {
         val hit = TermSchemeCatalog.families.find { it.id == familyId }
-        DiagLog.record(
-            "term-theme",
-            "raw=$familyId catalogHit=${hit != null} slot=$slot",
-        )
+        logThemeOnce("raw=$familyId catalogHit=${hit != null} slot=$slot")
         if (hit != null) return hit
         val vesper = TermSchemeCatalog.families.find { it.id == TermThemeStore.DEFAULT_FAMILY_ID }
         if (vesper != null) return vesper

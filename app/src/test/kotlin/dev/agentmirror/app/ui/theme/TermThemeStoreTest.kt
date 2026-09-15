@@ -67,4 +67,21 @@ class TermThemeStoreTest {
         assertEquals(TermPalette.of(true).defaultFg, pal.userBlockForeground.toArgb())
         assertNotEquals(TerminalPaletteDark.cursor, pal.cursor)
     }
+
+    @Test
+    fun termThemeLoggingIsDeduplicatedAgainstFlooding() {
+        dev.agentmirror.app.diag.DiagLog.resetForTest()
+        TermPalette.resetBindingForTest()
+        val store = SharedPreferencesTermThemeStore(RuntimeEnvironment.getApplication())
+
+        // 模拟 100 次高频 recompose 或 100ms 刷新循环重复绑定和调用
+        repeat(100) {
+            TermPalette.bind(store)
+            TermPalette.of(dark = true)
+            TermPalette.of(dark = false)
+        }
+
+        val themeLogs = dev.agentmirror.app.diag.DiagLog.snapshotForTest().filter { it.contains("[term-theme]") }
+        assertEquals(2, themeLogs.size)
+    }
 }
