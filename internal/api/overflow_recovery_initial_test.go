@@ -113,7 +113,7 @@ func waitPaneTitle(t *testing.T, te *tmuxEnv, want string) {
 // connection remains usable.
 func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 	te := startTmuxEnv(t, initialSnapshotBurstCommand())
-	c := newDirectWSConn(t, te.wsEnv.srv, 256)
+	c := newDirectWSConn(t, te.wsEnv.srv, 4)
 	captureStarted := make(chan struct{})
 	releaseCapture := make(chan struct{})
 	c.snapshotFn = func(ctx context.Context, _ *bridge.Pane) ([]byte, error) {

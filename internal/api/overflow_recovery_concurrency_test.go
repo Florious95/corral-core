@@ -185,12 +185,13 @@ func TestReadyRelayOverflowWhileControlSendBlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer detach()
-	emitPacedBridge(t, te, data, 32)
-	// With the old exclusive sendMu, the relay blocks behind sendMsg and its
-	// real bridge queue overflows. The fixed path detects WS loss immediately.
+	// The relay now waits behind a full send queue. Keep the writer blocked
+	// long enough for the independent bridge queue to reach its 256-chunk
+	// bound; that loss still aborts the connection promptly.
+	emitPacedBridge(t, te, data, 320)
 	awaitMirrorAbort(t, c)
 	awaitBoundary(t, producerDone, "cancelled control producer")
-	if !strings.Contains(fmt.Sprint(c.catalogCloseReason.Load()), "ws_send_queue_overflow") {
+	if !strings.Contains(fmt.Sprint(c.catalogCloseReason.Load()), bridge.ErrSubscriberOverflow.Error()) {
 		t.Fatalf("wrong overflow cause: %v", c.catalogCloseReason.Load())
 	}
 	select {

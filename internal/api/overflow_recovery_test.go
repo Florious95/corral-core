@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/bridge"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
 )
@@ -95,6 +96,106 @@ func TestWSQueueOverflowAbortsOnceAndDiscardsQueue(t *testing.T) {
 		t.Fatalf("second overflow enqueued data after abort: len=%d", got)
 	}
 
+}
+
+// TestMirrorQueueBackpressureWaitsForWriter proves a full queue is a
+// transport backpressure boundary, not immediate mirror loss. Once the writer
+// consumes one queued frame, the waiting delta must be enqueued intact.
+func TestMirrorQueueBackpressureWaitsForWriter(t *testing.T) {
+	srv := NewServer(Options{Token: "test-token", Log: discardLogger()})
+	defer srv.Close()
+	c, _ := newDirectWSPair(t, srv, 1)
+	c.sendCh <- wsMsg{typ: wsBinary, data: []byte("stale")}
+	loss := make(chan error, 1)
+	done := make(chan bool, 1)
+	go func() { done <- c.sendMirrorWait(c.ctx, loss, []byte("queued-delta")) }()
+	select {
+	case <-done:
+		t.Fatal("full mirror queue returned before writer made progress")
+	case <-time.After(100 * time.Millisecond):
+	}
+	<-c.sendCh
+	select {
+	case ok := <-done:
+		if !ok {
+			t.Fatal("mirror enqueue was canceled despite queue progress")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("mirror enqueue did not resume after writer progress")
+	}
+	select {
+	case msg := <-c.sendCh:
+		if string(msg.data) != "queued-delta" {
+			t.Fatalf("queued mirror data=%q", msg.data)
+		}
+	default:
+		t.Fatal("waiting mirror frame was not enqueued")
+	}
+	if c.catalogAborted.Load() {
+		t.Fatal("ordinary queue backpressure aborted the connection")
+	}
+}
+
+// TestMirrorQueueBackpressureObservesSubscriberLoss proves a relay waiting
+// behind a slow websocket still aborts promptly when bridge loss is published.
+func TestMirrorQueueBackpressureObservesSubscriberLoss(t *testing.T) {
+	srv := NewServer(Options{Token: "test-token", Log: discardLogger()})
+	defer srv.Close()
+	c, _ := newDirectWSPair(t, srv, 1)
+	c.sendCh <- wsMsg{typ: wsBinary, data: []byte("stale")}
+	loss := make(chan error, 1)
+	done := make(chan bool, 1)
+	go func() { done <- c.sendMirrorWait(c.ctx, loss, []byte("must-not-send")) }()
+	select {
+	case <-done:
+		t.Fatal("full mirror queue returned before loss or cancellation")
+	case <-time.After(100 * time.Millisecond):
+	}
+	loss <- bridge.ErrSubscriberOverflow
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("loss boundary reported successful mirror enqueue")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("subscriber loss did not abort blocked mirror enqueue")
+	}
+	if !c.catalogAborted.Load() {
+		t.Fatal("subscriber loss did not abort the connection")
+	}
+	if got := len(c.sendCh); got != 0 {
+		t.Fatalf("loss abort retained %d queued frames", got)
+	}
+}
+
+// TestMirrorQueueBackpressureObservesContext proves a canceled subscription
+// leaves a relay blocked behind a full queue without aborting its connection.
+func TestMirrorQueueBackpressureObservesContext(t *testing.T) {
+	srv := NewServer(Options{Token: "test-token", Log: discardLogger()})
+	defer srv.Close()
+	c, _ := newDirectWSPair(t, srv, 1)
+	c.sendCh <- wsMsg{typ: wsBinary, data: []byte("stale")}
+	ctx, cancel := context.WithCancel(c.ctx)
+	loss := make(chan error, 1)
+	done := make(chan bool, 1)
+	go func() { done <- c.sendMirrorWait(ctx, loss, []byte("must-not-send")) }()
+	select {
+	case <-done:
+		t.Fatal("full mirror queue returned before context cancellation")
+	case <-time.After(100 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("canceled subscription reported successful mirror enqueue")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("subscription cancellation did not unblock mirror enqueue")
+	}
+	if c.catalogAborted.Load() {
+		t.Fatal("subscription cancellation aborted the connection")
+	}
 }
 
 // TestWSOverflowStopsDequeuedWriterFrame proves the loss barrier also wins

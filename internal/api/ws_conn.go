@@ -427,6 +427,62 @@ func (c *wsConn) sendMirror(data []byte) {
 	}
 }
 
+// sendMirrorWait enqueues one mirror frame with cancellable backpressure.
+// A full WS queue is not itself a loss boundary: the relay waits for the
+// writer while continuing to observe its subscription loss and context. If
+// the bridge reports loss while waiting, the connection is aborted before any
+// later delta can cross the gap. Caller must not hold sendMu.
+func (c *wsConn) sendMirrorWait(ctx context.Context, loss <-chan error, data []byte) bool {
+	c.sendMu.RLock()
+	lossCh := loss
+	for {
+		if c.catalogAborted.Load() || c.ctx.Err() != nil || ctx.Err() != nil {
+			c.sendMu.RUnlock()
+			return false
+		}
+		// Prefer an already-published loss over an available queue slot. The
+		// select below still handles a loss racing with the enqueue.
+		if lossCh != nil {
+			select {
+			case cause, ok := <-lossCh:
+				if !ok {
+					lossCh = nil
+					continue
+				}
+				c.sendMu.RUnlock()
+				if cause != nil && ctx.Err() == nil && c.ctx.Err() == nil {
+					c.abortConnection("mirror_loss: " + cause.Error())
+				}
+				return false
+			default:
+			}
+		}
+		select {
+		case c.sendCh <- wsMsg{typ: wsBinary, data: data}:
+			c.s.sendQueue.recordQueued(len(c.sendCh))
+			c.connMetrics.recordFramesSent()
+			c.sendMu.RUnlock()
+			return true
+		case cause, ok := <-lossCh:
+			if !ok {
+				lossCh = nil
+				continue
+			}
+			c.sendMu.RUnlock()
+			if cause != nil && ctx.Err() == nil && c.ctx.Err() == nil {
+				c.abortConnection("mirror_loss: " + cause.Error())
+			}
+			return false
+		case <-ctx.Done():
+			c.sendMu.RUnlock()
+			return false
+		case <-c.ctx.Done():
+			c.sendMu.RUnlock()
+			return false
+		}
+	}
+}
+
 // sendMsg enqueues one message, unblocking early when the connection closes.
 func (c *wsConn) sendMsg(m wsMsg) {
 	c.sendMu.RLock()
@@ -774,7 +830,9 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 				c.s.log.Debug("ws: encode delta", "conn", c.id, "err", err)
 				continue
 			}
-			c.sendMirror(frame)
+			if !c.sendMirrorWait(ctx, loss, frame) {
+				return
+			}
 		case <-ctx.Done():
 			return
 		}
