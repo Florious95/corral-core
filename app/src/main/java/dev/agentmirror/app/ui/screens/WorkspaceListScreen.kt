@@ -1,12 +1,14 @@
 package dev.agentmirror.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +22,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -30,12 +34,14 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.LanPill
+import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.PathText
-import dev.agentmirror.app.ui.components.RowDivider
 import dev.agentmirror.app.ui.components.ScreenHeader
+import dev.agentmirror.app.ui.components.glassCard
 import dev.agentmirror.app.ui.model.WorkspaceItem
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -67,17 +73,17 @@ fun WorkspaceListScreen(
         Box(
             Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .background(p.listBackground),
+                .fillMaxWidth(),
         ) {
             LazyColumn(
-                Modifier
+                modifier = Modifier
                     .fillMaxSize()
-                    .testTag("workspace-list-scroll")
+                    .testTag("workspace-list-scroll"),
+                contentPadding = PaddingValues(top = Dims.cardVGap, bottom = Dims.cardVGap + LocalFloatingNavInset.current),
+                verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
             ) {
                 items(workspaces, key = { it.id }) { item ->
                     WorkspaceRow(item = item, onClick = { onWorkspaceClick(item) })
-                    RowDivider()
                 }
             }
             if (connectionBanner != null) {
@@ -101,7 +107,10 @@ fun WorkspaceListScreen(
 internal val MahjongWorkingColor = Color(0xFF047857)
 internal val MahjongIdleColor = Color(0xFF6B7280)
 
-/** 一级工作区的工作状态指示牌：固定 3:4 竖向圆角矩形，不使用系统 emoji。 */
+/**
+ * 一级工作区的工作状态指示牌：固定 3:4 竖向圆角矩形（26×34），不使用系统 emoji。
+ * 工作中深翠绿 #047857 白字；无 working 节点灰底白 0。牌面加一层顶部釉光，像真麻将牌。
+ */
 @Composable
 internal fun MahjongStatusBadge(
     workingCount: Int,
@@ -119,6 +128,16 @@ internal fun MahjongStatusBadge(
             .height(34.dp)
             .clip(RoundedCornerShape(5.dp))
             .background(if (count > 0) MahjongWorkingColor else MahjongIdleColor)
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = 0.30f),
+                        0.5f to Color.Transparent,
+                    ),
+                )
+            }
+            .border(Dims.hairline, Color.White.copy(alpha = 0.22f), RoundedCornerShape(5.dp))
             .testTag("mahjong-status-badge"),
         contentAlignment = Alignment.Center,
     ) {
@@ -143,9 +162,15 @@ private fun WorkspaceRow(
     val pressed by interaction.collectIsPressedAsState()
     Row(
         modifier = Modifier
+            .padding(horizontal = Dims.cardHMargin)
             .fillMaxWidth()
             .height(Dims.rowHeightWithSubtitle)
-            .background(if (pressed) p.rowPressed else Color.Transparent)
+            .glassCard(
+                shape = RoundedCornerShape(Radii.card),
+                fill = if (pressed) p.glassCardFillPressed else p.glassCardFill,
+                stroke = p.glassStroke,
+                specular = p.glassSpecular,
+            )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(start = 14.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

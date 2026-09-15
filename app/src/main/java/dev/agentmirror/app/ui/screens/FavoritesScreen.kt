@@ -1,8 +1,10 @@
 package dev.agentmirror.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.LanPill
-import dev.agentmirror.app.ui.components.RowDivider
+import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.ScreenHeader
 import dev.agentmirror.app.ui.components.SessionRow
 import dev.agentmirror.app.ui.model.SessionItem
@@ -60,13 +62,14 @@ fun FavoritesScreen(
         Box(
             Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .background(p.listBackground),
+                .fillMaxWidth(),
         ) {
             LazyColumn(
-                Modifier
+                modifier = Modifier
                     .fillMaxSize()
-                    .testTag("favorite-list")
+                    .testTag("favorite-list"),
+                contentPadding = PaddingValues(top = Dims.cardVGap, bottom = Dims.cardVGap + LocalFloatingNavInset.current),
+                verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
             ) {
                 items(favorites, key = { it.id }) { item ->
                     SessionRow(
@@ -76,7 +79,6 @@ fun FavoritesScreen(
                         onToggleFavorite = { onToggleStar(item) },
                         unfavoriteOnly = true,
                     )
-                    RowDivider()
                 }
             }
             if (connectionBanner != null) {

@@ -16,9 +16,13 @@
 
 package dev.agentmirror.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,19 +30,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,22 +47,32 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.shapes.RoundedRectangle
 import dev.agentmirror.app.ui.model.SessionItem
+import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.Motion
+import dev.agentmirror.app.ui.theme.Radii
+import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
- * 现代长按会话底部操作弹层（ModalBottomSheet）。
- * 替代简陋小方框 DropdownMenu，提供：
- * - 头部展示会话名称与路径信息；
- * - 选项 1：收藏 / 取消收藏（星标图标，文案清晰，点击切换状态）；
- * - 选项 2：关闭会话（红色警示调，危险操作图标，文案“关闭会话”，说明“完全退出当前 Agent 并关闭该 pane”）；
- * - 底部独立“取消”按钮，支持轻触遮罩收起。
+ * 长按会话的液态玻璃底部操作弹层。
+ * 从底部滑出（[Motion.sheetSlideIn]），面板折射其下的列表页；面板内两项动作与取消按钮
+ * 再采样面板自身（玻璃上的玻璃）：
+ * - 头部：会话名称、路径、官方 Provider 图标；
+ * - 选项 1：收藏 / 取消收藏（琥珀星标）；
+ * - 选项 2：关闭会话（危险项——红色 Hue 调色 + 内发红光 + 红高光，说明「完全退出当前 Agent 并关闭该 pane」）；
+ * - 底部独立「取消」，轻触遮罩 / 返回键同样收起。
+ * 动作项先触发业务回调，再播放退场；会话行自身的关闭退场动效不在此处。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionActionBottomSheet(
     session: SessionItem,
@@ -74,22 +83,42 @@ fun SessionActionBottomSheet(
     onCloseSession: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        dragHandle = { BottomSheetDefaults.DragHandle() },
-        modifier = modifier.testTag("session-action-bottom-sheet"),
-    ) {
+    GlassModalLayer(onDismiss = onDismiss) {
+        val p = LocalAppPalette.current
+        val panelBackdrop = rememberLayerBackdrop()
+        val requestDismiss = ::dismiss
         Column(
-            modifier = Modifier
+            modifier = modifier
+                .align(Alignment.BottomCenter)
+                .animateEnterExit(
+                    enter = slideInVertically(tween(Motion.sheetSlideIn, easing = Motion.sheetEnter)) { it },
+                    exit = slideOutVertically(tween(Motion.sheetSlideOut)) { it },
+                )
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 12.dp)
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+                .pointerInput(Unit) {} // 面板内空白处的点击不落到遮罩
+                .glassPanel(
+                    backdrop = LocalGlassBackdrop.current,
+                    shape = PanelShape,
+                    surface = p.glassSurface.glassReadable(),
+                    exportedBackdrop = panelBackdrop,
+                )
+                .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)
+                .testTag("session-action-bottom-sheet"),
         ) {
-            // 头部：会话名称 + 路径
+            // 抓手
+            Box(
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(Dims.sheetGrabberWidth)
+                    .height(Dims.sheetGrabberHeight)
+                    .clip(CircleShape)
+                    .background(p.sheetGrabber),
+            )
+            Spacer(Modifier.height(14.dp))
+
+            // 头部：会话名称 + 路径 + Provider 图标
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
@@ -97,8 +126,8 @@ fun SessionActionBottomSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     AppText(
                         text = session.displayName,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 17.sp,
+                        color = p.rowTitleText,
+                        fontSize = TypeSizes.sheetTitle,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -118,91 +147,57 @@ fun SessionActionBottomSheet(
             }
 
             Spacer(Modifier.height(14.dp))
-            HorizontalDivider(
-                thickness = 0.6.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-            )
+            Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.glassStroke))
             Spacer(Modifier.height(14.dp))
 
-            // 选项 1：收藏 / 取消收藏（星标图标，文案清晰）
-            val starActionLabel = if (session.starred) "取消收藏" else "收藏"
-            val starTint = if (session.starred) Color(0xFFEAB308) else Color(0xFFF59E0B)
-
-            Surface(
-                onClick = onToggleFavorite,
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("$tagPrefix-favorite-action"),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFEF3C7)),
-                        contentAlignment = Alignment.Center,
-                    ) {
+            CompositionLocalProvider(LocalGlassBackdrop provides panelBackdrop) {
+                // 选项 1：收藏 / 取消收藏
+                val starTint = if (session.starred) Color(0xFFEAB308) else Color(0xFFF59E0B)
+                GlassActionRow(
+                    onClick = {
+                        onToggleFavorite()
+                        requestDismiss()
+                    },
+                    modifier = Modifier.testTag("$tagPrefix-favorite-action"),
+                    icon = {
                         ActionStarIcon(
                             isStarred = session.starred,
                             tint = starTint,
                             modifier = Modifier.size(20.dp),
                         )
-                    }
+                    },
+                    iconWell = Color(0xFFFEF3C7),
+                ) {
                     AppText(
-                        text = starActionLabel,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        text = if (session.starred) "取消收藏" else "收藏",
+                        color = p.rowTitleText,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-            }
 
-            if (allowClose) {
-                Spacer(Modifier.height(10.dp))
-
-                // 选项 2：关闭会话（红色危险操作）
-                val dangerColor = Color(0xFFDC2626)
-                Surface(
-                    onClick = onCloseSession,
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, dangerColor.copy(alpha = 0.3f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("session-action-close"),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFFE4E6)),
-                            contentAlignment = Alignment.Center,
-                        ) {
+                if (allowClose) {
+                    Spacer(Modifier.height(10.dp))
+                    // 选项 2：关闭会话（危险项，红光液态质感）
+                    GlassActionRow(
+                        onClick = {
+                            onCloseSession()
+                            requestDismiss()
+                        },
+                        modifier = Modifier.testTag("session-action-close"),
+                        icon = {
                             ActionDangerCloseIcon(
-                                tint = dangerColor,
+                                tint = DangerColor,
                                 modifier = Modifier.size(18.dp),
                             )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
+                        },
+                        iconWell = Color(0xFFFFE4E6),
+                        danger = true,
+                    ) {
+                        Column {
                             AppText(
                                 text = "关闭会话",
-                                color = dangerColor,
+                                color = DangerColor,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.testTag("$tagPrefix-close-action"),
@@ -210,40 +205,79 @@ fun SessionActionBottomSheet(
                             Spacer(Modifier.height(2.dp))
                             AppText(
                                 text = "完全退出当前 Agent 并关闭该 pane",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = p.metaText,
                                 fontSize = 12.sp,
                                 modifier = Modifier.testTag("session-action-close-desc"),
                             )
                         }
                     }
                 }
-            }
 
-            Spacer(Modifier.height(14.dp))
-
-            // 底部独立取消按钮
-            Surface(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .testTag("session-action-cancel"),
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppText(
-                        text = "取消",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
+                Spacer(Modifier.height(14.dp))
+                GlassButton(
+                    text = "取消",
+                    onClick = { requestDismiss() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("session-action-cancel"),
+                )
             }
         }
+    }
+}
+
+private val PanelShape = RoundedRectangle(Radii.glassPanel)
+private val ActionShape = RoundedRectangle(Radii.glassControl)
+private val DangerColor = Color(0xFFDC2626)
+
+/**
+ * 弹层里的一行玻璃动作：左侧圆形图标井 + 右侧内容。
+ * [danger] 时整行红色 Hue 调色并内发红光。
+ */
+@Composable
+private fun GlassActionRow(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit,
+    iconWell: Color,
+    danger: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    val p = LocalAppPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val press = rememberPressProgress(interaction)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .glassControl(
+                backdrop = LocalGlassBackdrop.current,
+                shape = ActionShape,
+                surface = if (danger) Color.Unspecified else p.glassSurface.copy(alpha = 0.35f),
+                tint = if (danger) DangerColor else Color.Unspecified,
+                tintAlpha = 0.14f,
+                glow = if (danger) DangerColor else Color.Unspecified,
+                pressProgress = press,
+            )
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(iconWell),
+            contentAlignment = Alignment.Center,
+        ) {
+            icon()
+        }
+        Box(Modifier.weight(1f)) { content() }
     }
 }
 

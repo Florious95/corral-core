@@ -22,13 +22,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,14 +41,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlin.math.abs
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.pairing.HostRouter
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppBottomNav
+import dev.agentmirror.app.ui.components.GlassModalHost
+import dev.agentmirror.app.ui.components.LocalFloatingNavInset
+import dev.agentmirror.app.ui.components.LocalGlassBackdrop
 import dev.agentmirror.app.ui.model.NavTab
 import dev.agentmirror.app.ui.theme.Appearance
+import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Spacing
 import dev.agentmirror.app.workspace.ConnectionUi
 import dev.agentmirror.app.workspace.FavoriteList
@@ -106,9 +115,7 @@ internal fun ThreePaneHome(
         navState.showSettings = pane == ThreePane.Settings
     }
 
-    // 子页顶栏自己吃 statusBarsPadding（edge-to-edge）。Scaffold 默认 contentWindowInsets
-    // 再垫一层 statusBars，叠出设置页「状态栏到标题约屏高 1/8」的空洞（076 §2a）。
-    // bottomBar 仍通过 innerPadding 占位，不在这里清零。
+    // 子页顶栏自己吃 statusBarsPadding（edge-to-edge），这里不再垫任何系统栏。
     val tabPagerNestedScroll = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -118,12 +125,70 @@ internal fun ThreePaneHome(
             }
         }
     }
-    Scaffold(
+    // 液态玻璃三层：分页内容被 layerBackdrop 录成背景；悬浮导航胶囊与页内模态在录制边界之外采样它。
+    // 内容延伸到胶囊下方（被折射），滚动容器经 LocalFloatingNavInset 补底部留白，末行才能滚出胶囊。
+    val screenBackground = LocalAppPalette.current.screenBackground
+    val backdrop = rememberLayerBackdrop {
+        drawRect(screenBackground)
+        drawContent()
+    }
+    val navInset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() } +
+        Dims.navBarHeight + Dims.navFloatMargin
+    GlassModalHost(
         modifier = Modifier
             .fillMaxSize()
             .testTag("three-pane"),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
+    ) {
+        CompositionLocalProvider(
+            LocalGlassBackdrop provides backdrop,
+            LocalFloatingNavInset provides navInset,
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                beyondViewportPageCount = 0,
+                pageNestedScrollConnection = tabPagerNestedScroll,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .layerBackdrop(backdrop),
+            ) { page ->
+                when (ThreePane.entries[page]) {
+                    ThreePane.Favorites -> FavoritesPane(
+                        viewModel = workspaceViewModel,
+                        isActive = navState.homePane == ThreePane.Favorites && navState.activeSession == null,
+                        connectionPath = ServiceWire.connectionPath(),
+                        onOpenSession = { ref, name -> navState.openSession(ref, name) },
+                    )
+                    ThreePane.Sessions -> WorkspaceScreen(
+                        viewModel = workspaceViewModel,
+                        isActive = navState.homePane == ThreePane.Sessions && navState.activeSession == null,
+                        selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
+                        connectionPath = ServiceWire.connectionPath(),
+                        hostBound = ServiceWire.currentConfig()?.hostId?.let(HostRouter::isValidHostId) == true,
+                        retainLevel2OnDispose = { navState.activeSession != null },
+                        onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
+                        onBackToList = { navState.selectedWorkspaceCwd = null },
+                        onOpenSettings = {
+                            navState.showSettings = true
+                            navState.homePane = ThreePane.Settings
+                        },
+                        onOpenSession = { ref, name -> navState.openSession(ref, name) },
+                    )
+                    ThreePane.Settings -> SettingsScreen(
+                        onBack = {
+                            navState.showSettings = false
+                            navState.homePane = ThreePane.Sessions
+                        },
+                        onRePair = {
+                            navState.showSettings = false
+                            navState.homePane = ThreePane.Sessions
+                            navState.showPairing = true
+                        },
+                        enableBackHandler = pagerState.currentPage == ThreePane.Settings.ordinal,
+                        appearance = appearance,
+                        onAppearanceChange = onAppearanceChange,
+                    )
+                }
+            }
             AppBottomNav(
                 selected = navState.homePane.toNavTab(),
                 onSelect = { tab ->
@@ -131,54 +196,8 @@ internal fun ThreePaneHome(
                     navState.homePane = pane
                     navState.showSettings = pane == ThreePane.Settings
                 },
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
-        },
-    ) { innerPadding ->
-        HorizontalPager(
-            state = pagerState,
-            beyondViewportPageCount = 0,
-            pageNestedScrollConnection = tabPagerNestedScroll,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) { page ->
-            when (ThreePane.entries[page]) {
-                ThreePane.Favorites -> FavoritesPane(
-                    viewModel = workspaceViewModel,
-                    isActive = navState.homePane == ThreePane.Favorites && navState.activeSession == null,
-                    connectionPath = ServiceWire.connectionPath(),
-                    onOpenSession = { ref, name -> navState.openSession(ref, name) },
-                )
-                ThreePane.Sessions -> WorkspaceScreen(
-                    viewModel = workspaceViewModel,
-                    isActive = navState.homePane == ThreePane.Sessions && navState.activeSession == null,
-                    selectedWorkspaceCwd = navState.selectedWorkspaceCwd,
-                    connectionPath = ServiceWire.connectionPath(),
-                    hostBound = ServiceWire.currentConfig()?.hostId?.let(HostRouter::isValidHostId) == true,
-                    retainLevel2OnDispose = { navState.activeSession != null },
-                    onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
-                    onBackToList = { navState.selectedWorkspaceCwd = null },
-                    onOpenSettings = {
-                        navState.showSettings = true
-                        navState.homePane = ThreePane.Settings
-                    },
-                    onOpenSession = { ref, name -> navState.openSession(ref, name) },
-                )
-                ThreePane.Settings -> SettingsScreen(
-                    onBack = {
-                        navState.showSettings = false
-                        navState.homePane = ThreePane.Sessions
-                    },
-                    onRePair = {
-                        navState.showSettings = false
-                        navState.homePane = ThreePane.Sessions
-                        navState.showPairing = true
-                    },
-                    enableBackHandler = pagerState.currentPage == ThreePane.Settings.ordinal,
-                    appearance = appearance,
-                    onAppearanceChange = onAppearanceChange,
-                )
-            }
         }
     }
 }

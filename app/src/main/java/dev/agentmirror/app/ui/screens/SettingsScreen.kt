@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.CardOutlineButton
 import dev.agentmirror.app.ui.components.CardTonalButton
+import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.MicroPill
 import dev.agentmirror.app.ui.components.ScreenHeader
 import dev.agentmirror.app.ui.components.SettingsCard
@@ -92,7 +93,8 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .testTag("settings-scroll")
-                .padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
+                // 底部多留悬浮导航压住的高度，最后一张卡才能滚出胶囊（卡底与胶囊顶留 4dp）
+                .padding(start = 14.dp, end = 14.dp, bottom = 4.dp + LocalFloatingNavInset.current),
             verticalArrangement = Arrangement.spacedBy(Dims.cardGap),
         ) {
             // ── 主机配对 ──

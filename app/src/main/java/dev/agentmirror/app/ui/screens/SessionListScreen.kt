@@ -2,39 +2,44 @@ package dev.agentmirror.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,26 +53,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.shapes.RoundedRectangle
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.BackAffordance
 import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.ExtractedProviderIcon
+import dev.agentmirror.app.ui.components.GlassButton
+import dev.agentmirror.app.ui.components.GlassModalLayer
 import dev.agentmirror.app.ui.components.LanPill
+import dev.agentmirror.app.ui.components.LocalFloatingNavInset
+import dev.agentmirror.app.ui.components.LocalGlassBackdrop
 import dev.agentmirror.app.ui.components.PathText
-import dev.agentmirror.app.ui.components.RowDivider
 import dev.agentmirror.app.ui.components.SessionRow
+import dev.agentmirror.app.ui.components.glassControl
+import dev.agentmirror.app.ui.components.glassPanel
+import dev.agentmirror.app.ui.components.glassReadable
+import dev.agentmirror.app.ui.components.rememberPressProgress
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.Motion
+import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.workspace.AgentLauncherUi
 import dev.agentmirror.app.workspace.CreateAgentUiState
 import dev.agentmirror.app.ui.theme.LocalAppPalette
@@ -163,8 +181,7 @@ fun SessionListScreen(
         Box(
             Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .background(p.listBackground),
+                .fillMaxWidth(),
         ) {
             SessionListRows(
                 sessions = sessions,
@@ -208,48 +225,88 @@ private fun CreateAgentDialog(
     LaunchedEffect(launcher?.supportsBypass) {
         if (launcher?.supportsBypass != true) bypass = false
     }
-    LaunchedEffect(state.inFlight, state.error) {
-        if (!state.inFlight && state.error == null && name.isNotEmpty()) onDismiss()
-    }
-    AlertDialog(
-        onDismissRequest = { if (!state.inFlight) onDismiss() },
-        title = { androidx.compose.material3.Text("新建 Agent") },
-        text = {
-            CreateAgentFormContent(
-                name = name,
-                onNameChange = { name = it },
-                launchers = launchers,
-                selectedProvider = selectedProvider,
-                onSelectProvider = { selectedProvider = it },
-                bypass = bypass,
-                onBypassChange = { bypass = it },
-                supportsBypass = launcher?.supportsBypass == true,
-                inFlight = state.inFlight,
-                error = state.error,
+    // 晶莹液态玻璃弹窗：居中面板折射其下的会话列表；表单控件再采样面板自身。
+    // 提交进行中锁住遮罩与返回键；创建成功（无错且已填名）播完退场再关闭。
+    GlassModalLayer(onDismiss = onDismiss, dismissible = !state.inFlight) {
+        val requestDismiss = ::dismiss
+        LaunchedEffect(state.inFlight, state.error) {
+            if (!state.inFlight && state.error == null && name.isNotEmpty()) requestDismiss()
+        }
+        val p = LocalAppPalette.current
+        val panelBackdrop = rememberLayerBackdrop()
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .animateEnterExit(
+                    enter = fadeIn(tween(Motion.scrimFade)) +
+                        scaleIn(tween(Motion.sheetSlideIn, easing = Motion.sheetEnter), initialScale = 0.92f),
+                    exit = fadeOut(tween(Motion.sheetSlideOut)) +
+                        scaleOut(tween(Motion.sheetSlideOut), targetScale = 0.96f),
+                )
+                .imePadding()
+                .padding(horizontal = 20.dp, vertical = 24.dp)
+                .widthIn(max = 420.dp)
+                .fillMaxWidth()
+                .pointerInput(Unit) {} // 面板内空白处的点击不落到遮罩
+                .glassPanel(
+                    backdrop = LocalGlassBackdrop.current,
+                    shape = DialogPanelShape,
+                    surface = p.glassSurface.glassReadable(),
+                    exportedBackdrop = panelBackdrop,
+                )
+                .padding(22.dp)
+                .testTag("create-agent-dialog"),
+        ) {
+            AppText(
+                text = "新建 Agent",
+                color = p.titleText,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeightMultiplier = 1.2f,
+                letterSpacing = (-0.3).sp,
             )
-        },
-        confirmButton = {
-            Button(
-                enabled = name.isNotBlank() && launcher != null && !state.inFlight,
-                onClick = { onCreate(internalAnchor, launcher!!.provider, name.trim(), bypass) },
-                modifier = Modifier
-                    .defaultMinSize(minWidth = 84.dp)
-                    .testTag("create-agent-confirm"),
-            ) {
-                androidx.compose.material3.Text(if (state.inFlight) "创建中…" else "创建")
+            Spacer(Modifier.height(16.dp))
+            CompositionLocalProvider(LocalGlassBackdrop provides panelBackdrop) {
+                CreateAgentFormContent(
+                    name = name,
+                    onNameChange = { name = it },
+                    launchers = launchers,
+                    selectedProvider = selectedProvider,
+                    onSelectProvider = { selectedProvider = it },
+                    bypass = bypass,
+                    onBypassChange = { bypass = it },
+                    supportsBypass = launcher?.supportsBypass == true,
+                    inFlight = state.inFlight,
+                    error = state.error,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.height(20.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                ) {
+                    GlassButton(
+                        text = "取消",
+                        onClick = { requestDismiss() },
+                        enabled = !state.inFlight,
+                    )
+                    GlassButton(
+                        text = if (state.inFlight) "创建中…" else "创建",
+                        onClick = { onCreate(internalAnchor, launcher!!.provider, name.trim(), bypass) },
+                        enabled = name.isNotBlank() && launcher != null && !state.inFlight,
+                        tint = p.accent,
+                        textColor = p.onAccent,
+                        minWidth = 84.dp,
+                        modifier = Modifier.testTag("create-agent-confirm"),
+                    )
+                }
             }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                enabled = !state.inFlight,
-                modifier = Modifier.defaultMinSize(minWidth = 64.dp),
-            ) {
-                androidx.compose.material3.Text("取消")
-            }
-        },
-    )
+        }
+    }
 }
+
+private val DialogPanelShape = RoundedRectangle(Radii.glassPanel)
+private val AgentCardShape = RoundedRectangle(Radii.glassControl)
 
 @Composable
 internal fun CreateAgentFormContent(
@@ -265,6 +322,7 @@ internal fun CreateAgentFormContent(
     error: String?,
     modifier: Modifier = Modifier,
 ) {
+    val p = LocalAppPalette.current
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -277,10 +335,11 @@ internal fun CreateAgentFormContent(
             label = { androidx.compose.material3.Text("名称") },
             placeholder = { androidx.compose.material3.Text("例如：代码助手") },
             singleLine = true,
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(Radii.glassControl),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                // 输入框坐在玻璃面板上：半透卡面透出折射背景，边框仍保持可见轮廓
+                focusedContainerColor = p.glassCardFill,
+                unfocusedContainerColor = p.glassCardFill,
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 cursorColor = MaterialTheme.colorScheme.primary,
@@ -356,6 +415,10 @@ internal fun CreateAgentFormContent(
     }
 }
 
+/**
+ * Agent 品牌图标卡（Pi / Codex / Cursor / Grok 官方图标）——玻璃面板上的玻璃卡。
+ * 选中：主色 Hue 调色 + 2dp 纯净主色描边 + 主色内光晕，右上角 16dp 主色圆底白对勾 ✓。
+ */
 @Composable
 internal fun AgentIconCard(
     launcher: AgentLauncherUi,
@@ -363,74 +426,78 @@ internal fun AgentIconCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-    val borderWidth = if (isSelected) 2.dp else 1.dp
-    val containerColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
-    val contentTint = if (isSelected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val p = LocalAppPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val press = rememberPressProgress(interaction)
+    val contentTint = if (isSelected) p.accent else p.rowTitleText
 
-    Surface(
+    Box(
         modifier = modifier
             .width(78.dp)
             .height(82.dp)
             .semantics { selected = isSelected }
-            .testTag("agent-card-${launcher.provider}"),
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        border = BorderStroke(borderWidth, borderColor),
-        onClick = onClick,
+            .testTag("agent-card-${launcher.provider}")
+            .glassControl(
+                backdrop = LocalGlassBackdrop.current,
+                shape = AgentCardShape,
+                surface = if (isSelected) Color.Unspecified else p.glassSurface.copy(alpha = 0.35f),
+                tint = if (isSelected) p.accent else Color.Unspecified,
+                tintAlpha = 0.12f,
+                glow = if (isSelected) p.accent else Color.Unspecified,
+                pressProgress = press,
+            )
+            .then(
+                if (isSelected) Modifier.border(2.dp, p.accent, RoundedCornerShape(Radii.glassControl)) else Modifier,
+            )
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.RadioButton,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 5.dp, end = 5.dp)
-                        .size(16.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .testTag("agent-card-check-${launcher.provider}"),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    androidx.compose.material3.Text(
-                        text = "✓",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 5.dp, end = 5.dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(p.accent)
+                    .testTag("agent-card-check-${launcher.provider}"),
+                contentAlignment = Alignment.Center,
             ) {
-                AgentBrandIcon(
-                    canonicalId = launcher.provider,
-                    tint = contentTint,
-                    modifier = Modifier.size(28.dp),
-                )
-                Spacer(Modifier.height(6.dp))
-                androidx.compose.material3.Text(
-                    text = CanonicalProviderMarks.of(launcher.provider)?.displayName ?: launcher.displayName,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                AppText(
+                    text = "✓",
+                    color = p.onAccent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeightMultiplier = 1f,
                 )
             }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+        ) {
+            AgentBrandIcon(
+                canonicalId = launcher.provider,
+                tint = contentTint,
+                modifier = Modifier.size(28.dp),
+            )
+            Spacer(Modifier.height(6.dp))
+            AppText(
+                text = CanonicalProviderMarks.of(launcher.provider)?.displayName ?: launcher.displayName,
+                color = if (isSelected) p.accent else p.rowTitleText,
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                lineHeightMultiplier = 1f,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -474,6 +541,7 @@ internal fun AgentBrandIcon(
 
 /**
  * 会话行列表（无页头）。二级全屏走 [SessionListScreen]；悬浮窗 / 单测走本函数。
+ * 行是微玻璃卡，卡间留 [Dims.cardVGap]；列表末尾多留 [LocalFloatingNavInset]，末卡能滚出悬浮导航。
  */
 @Composable
 fun SessionListRows(
@@ -486,24 +554,25 @@ fun SessionListRows(
     tagPrefix: String = "l2",
     listTestTag: String = "l2-session-list-scroll",
 ) {
-    LazyColumn(modifier.testTag(listTestTag)) {
+    LazyColumn(
+        modifier = modifier.testTag(listTestTag),
+        contentPadding = PaddingValues(top = Dims.cardVGap, bottom = Dims.cardVGap + LocalFloatingNavInset.current),
+        verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
+    ) {
         items(sessions, key = { it.id }) { item ->
             val isClosing = closingSessionRef == item.id
             AnimatedVisibility(
                 visible = !isClosing,
                 exit = fadeOut(animationSpec = tween(250)) + shrinkVertically(animationSpec = tween(250)),
             ) {
-                Column {
-                    SessionRow(
-                        item = item,
-                        tagPrefix = tagPrefix,
-                        onClick = { onSessionClick(item) },
-                        onToggleFavorite = { onToggleStar(item) },
-                        unfavoriteOnly = false,
-                        onCloseSession = { onCloseSession(item) },
-                    )
-                    RowDivider()
-                }
+                SessionRow(
+                    item = item,
+                    tagPrefix = tagPrefix,
+                    onClick = { onSessionClick(item) },
+                    onToggleFavorite = { onToggleStar(item) },
+                    unfavoriteOnly = false,
+                    onCloseSession = { onCloseSession(item) },
+                )
             }
         }
     }

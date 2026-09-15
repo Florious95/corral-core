@@ -33,7 +33,9 @@ object Dims {
     val actionButtonHeight: Dp = 32.dp
     val actionButtonHPadding: Dp = 11.dp
 
-    // 列表行
+    // 列表行（微玻璃卡：左右离屏边 10，卡间 8，列表首尾各 8）
+    val cardHMargin: Dp = 10.dp
+    val cardVGap: Dp = 8.dp
     val rowHeightWithSubtitle: Dp = 66.dp // 收藏页 / 工作区列表（双行）
     val rowHeightSingleLine: Dp = 60.dp   // 会话列表（单行 + 状态标）
     val rowHeightSheet: Dp = 58.dp        // 「查看」浮层内的行
@@ -49,10 +51,11 @@ object Dims {
     // 工作区行首的 ❯ 方块
     val workspaceGlyphBox: Dp = 34.dp
 
-    // 底部导航（3b 顶部指示轨）
+    // 底部导航（悬浮液态玻璃胶囊）：胶囊高 60，离屏边 16、离底 12，选中滑块内缩 4
     val navBarHeight: Dp = 60.dp
-    val navRailWidth: Dp = 44.dp
-    val navRailThickness: Dp = 2.dp
+    val navFloatHPadding: Dp = 16.dp
+    val navFloatMargin: Dp = 12.dp
+    val navIndicatorInset: Dp = 4.dp
     val navIconLabelGap: Dp = 5.dp
 
     // 会话页 · 终端卡片（083 §3：外 8→4，与内 padding 合计 10dp）
@@ -119,6 +122,10 @@ object Radii {
     val workspaceGlyphBox: Dp = 10.dp
     val sheetTop: Dp = 22.dp
     val previewBox: Dp = 10.dp
+
+    // 液态玻璃：模态面板（弹窗 / 底部操作弹层）、面板内控件（按钮 / 图标卡）
+    val glassPanel: Dp = 28.dp
+    val glassControl: Dp = 14.dp
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -190,13 +197,16 @@ object Motion {
     const val fadeThroughRiseDp = 8
     const val fadeThroughScaleFrom = 0.985f
 
-    // 底部导航指示轨
+    // 底部导航选中滑块（液态玻璃胶囊内滑动）
     const val navRail = 320
 
-    // 「查看」浮层
+    // 「查看」浮层 / 液态玻璃模态（弹窗、底部操作弹层）
     const val sheetSlideIn = 320
     const val sheetSlideOut = 220
     const val scrimFade = 180
+
+    // 玻璃控件按压回弹
+    const val glassPress = 160
     const val sheetRow = 300                // 单行上浮
     const val sheetRowStagger = 34          // 逐行间隔
     const val sheetRowDelayBase = 40
@@ -278,7 +288,7 @@ data class AppPalette(
     val workingLampInactive: Color,
 
     // 主色 / 强调
-    val accent: Color,                 // 可点文字、选中态、指示轨
+    val accent: Color,                 // 可点文字、选中态、导航选中滑块
     val accentContainer: Color,        // 轻着色底（按钮 / 胶囊）
     val accentContainerPressed: Color,
     val onAccent: Color,
@@ -301,11 +311,18 @@ data class AppPalette(
     val statusPillBg: Color,
     val statusPillText: Color,
 
-    // 底部导航（3b）
-    val navBackground: Color,
-    val navRail: Color,
+    // 底部导航（悬浮液态玻璃胶囊）
+    val navBackground: Color,          // 胶囊表面着色（半透明，叠在折射后的背景上）
+    val navRail: Color,                // 选中滑块着色
     val navActive: Color,
     val navInactive: Color,
+
+    // 液态玻璃材质
+    val glassSurface: Color,           // 模态面板 / 控件表面着色（半透明）
+    val glassStroke: Color,            // 玻璃边缘发丝描边
+    val glassSpecular: Color,          // 列表微玻璃卡顶部高光
+    val glassCardFill: Color,          // 列表微玻璃卡面
+    val glassCardFillPressed: Color,
 
     // 会话页外壳
     val consoleBackground: Color,      // 功能键排 + 输入条所在的一整块
@@ -393,10 +410,16 @@ val LightPalette = AppPalette(
     statusPillBg = Color(0x2112A594),
     statusPillText = Color(0xFF0F766E),
 
-    navBackground = Color(0xFFF4F5F8),
+    navBackground = Color(0x8CFAFBFD),
     navRail = Color(0xFF0B57D0),
     navActive = Color(0xFF0B57D0),
     navInactive = Color(0xFF5F6980),
+
+    glassSurface = Color(0xB3FFFFFF),
+    glassStroke = Color(0x2E101828),
+    glassSpecular = Color(0xB8FFFFFF),
+    glassCardFill = Color(0xC7FFFFFF),
+    glassCardFillPressed = Color(0xFFEDF0F6),
 
     consoleBackground = Color(0xFFEBEDF2),
     keycapBackground = Color(0xFFFCFCFD),
@@ -481,10 +504,16 @@ val DarkPalette = AppPalette(
     statusPillBg = Color(0x244FD1C0),
     statusPillText = Color(0xFF4FD1C0),
 
-    navBackground = Color(0xFF070B14),
+    navBackground = Color(0x8C0F1725),
     navRail = Color(0xFF77A6FF),
     navActive = Color(0xFF9CC0FF),
     navInactive = Color(0xFF8497B8),
+
+    glassSurface = Color(0xA60F1725),
+    glassStroke = Color(0x3D9CC0FF),
+    glassSpecular = Color(0x4DC4D8FF),
+    glassCardFill = Color(0x9E131C2E),
+    glassCardFillPressed = Color(0xFF1A2438),
 
     consoleBackground = Color(0xFF0E1421),
     keycapBackground = Color(0xFF1A2233),

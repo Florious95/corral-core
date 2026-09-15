@@ -38,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import dev.agentmirror.app.ui.model.SessionItem
@@ -85,10 +84,16 @@ fun SessionRow(
     Box {
         Row(
             modifier = Modifier
+                .padding(horizontal = Dims.cardHMargin)
                 .fillMaxWidth()
                 .height(rowHeight)
                 .alpha(if (item.isOnline) 1f else 0.45f)
-                .background(if (pressed) p.rowPressed else Color.Transparent)
+                .glassCard(
+                    shape = RoundedCornerShape(Radii.card),
+                    fill = if (pressed) p.glassCardFillPressed else p.glassCardFill,
+                    stroke = p.glassStroke,
+                    specular = p.glassSpecular,
+                )
                 .combinedClickable(
                     interactionSource = interaction,
                     indication = null,
@@ -140,19 +145,14 @@ fun SessionRow(
         }
 
         if (showSheet) {
+            // 动作回调即刻触发；弹层自己播完退场再回 onDismiss，这里才卸载它。
             SessionActionBottomSheet(
                 session = item,
                 tagPrefix = tagPrefix,
                 allowClose = !unfavoriteOnly && onCloseSession != null,
                 onDismiss = { showSheet = false },
-                onToggleFavorite = {
-                    showSheet = false
-                    onToggleFavorite()
-                },
-                onCloseSession = {
-                    showSheet = false
-                    onCloseSession?.invoke()
-                },
+                onToggleFavorite = onToggleFavorite,
+                onCloseSession = { onCloseSession?.invoke() },
             )
         }
     }

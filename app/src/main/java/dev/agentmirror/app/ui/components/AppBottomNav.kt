@@ -1,35 +1,41 @@
 package dev.agentmirror.app.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.shapes.Capsule
 import dev.agentmirror.app.ui.model.NavTab
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
@@ -37,12 +43,12 @@ import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
- * 底部导航栏 —— 3b「顶部指示轨」。
- * 选中态 = 顶边 44×2dp 主色轨 + 主色图标文字（SemiBold）；未选中 = 中性色。
- * 无色块、无胶囊，是全站唯一一处横向滑动的指示元素。
+ * 底部导航 —— 悬浮液态玻璃胶囊。
+ * 悬在页面内容之上（内容从它下面滚过并被折射 / 模糊），离屏边 16dp、离底 12dp。
+ * 选中态 = 一枚主色调的玻璃滑块在胶囊内滑动（[Motion.navRail]），按下时轻微放大；
+ * 滑块采样「页面 + 胶囊本体」两层背景，是玻璃上的玻璃。
  *
  * 图标用文本字形（★ ☰ ⚙），⛔ 不引入任何图标库。
- * 想换成 Material Symbols 需要外部字体资源，见文末说明，请先告诉我。
  */
 @Composable
 fun AppBottomNav(
@@ -51,44 +57,76 @@ fun AppBottomNav(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
+    val backdrop = LocalGlassBackdrop.current
     val tabs = remember { listOf(NavTab.Favorites, NavTab.Sessions, NavTab.Settings) }
+    val interactions = remember { tabs.map { MutableInteractionSource() } }
+    val anyPressed = interactions.map { it.collectIsPressedAsState().value }.any { it }
+    val pressProgress by animateFloatAsState(
+        targetValue = if (anyPressed) 1f else 0f,
+        animationSpec = tween(Motion.glassPress),
+        label = "navPress",
+    )
+    // 胶囊本体的成像导出给滑块采样（不含滑块与文字，不成环）。
+    val barBackdrop = rememberLayerBackdrop()
 
     BoxWithConstraints(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier
             .testTag("bottom-tabs")
             .navigationBarsPadding()
-            .height(Dims.navBarHeight)
-            .background(p.navBackground)
+            .padding(start = Dims.navFloatHPadding, end = Dims.navFloatHPadding, bottom = Dims.navFloatMargin)
+            .fillMaxWidth()
+            .height(Dims.navBarHeight),
     ) {
-        val cellWidth = maxWidth / tabs.size
+        val cellWidth = (maxWidth - Dims.navIndicatorInset * 2) / tabs.size
         val selectedIndex = tabs.indexOf(selected).coerceAtLeast(0)
-        val railTarget = cellWidth * selectedIndex + (cellWidth - Dims.navRailWidth) / 2
-        val railOffset by animateDpAsState(
-            targetValue = railTarget,
+        val indicatorOffset by animateDpAsState(
+            targetValue = cellWidth * selectedIndex,
             animationSpec = tween(durationMillis = Motion.navRail, easing = Motion.emphasized),
-            label = "navRail",
+            label = "navIndicator",
         )
 
-        // 顶部分割线（略重于列表发丝线，把导航栏和内容分层）
+        // 胶囊本体
         Box(
             Modifier
-                .fillMaxWidth()
-                .height(Dims.hairline)
-                .align(Alignment.TopStart)
-                .background(p.dividerStrong)
+                .matchParentSize()
+                .glassPanel(
+                    backdrop = backdrop,
+                    shape = NavCapsule,
+                    surface = p.navBackground.glassReadable(),
+                    exportedBackdrop = barBackdrop,
+                ),
+        )
+
+        // 选中滑块：主色 Hue 调色的玻璃透镜，按下时放大
+        Box(
+            Modifier
+                .padding(Dims.navIndicatorInset)
+                .offset { IntOffset(indicatorOffset.roundToPx(), 0) }
+                .width(cellWidth)
+                .fillMaxHeight()
+                .glassControl(
+                    backdrop = rememberCombinedBackdrop(backdrop, barBackdrop),
+                    shape = NavCapsule,
+                    surface = Color.Unspecified,
+                    tint = p.navRail,
+                    tintAlpha = 0.16f,
+                    pressProgress = { pressProgress },
+                    pressedScale = 1.06f,
+                ),
         )
 
         Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.Start,
+            modifier = Modifier
+                .matchParentSize()
+                .padding(Dims.navIndicatorInset),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            tabs.forEach { tab ->
+            tabs.forEachIndexed { index, tab ->
                 NavCell(
                     glyph = tab.glyph(),
                     label = tab.label(),
                     active = tab == selected,
+                    interaction = interactions[index],
                     onClick = { onSelect(tab) },
                     modifier = Modifier
                         .weight(1f)
@@ -97,39 +135,38 @@ fun AppBottomNav(
                 )
             }
         }
-
-        // 指示轨压在分割线之上
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .offset(x = railOffset)
-                .width(Dims.navRailWidth)
-                .height(Dims.navRailThickness)
-                .clip(RoundedCornerShape(bottomStart = 2.dp, bottomEnd = 2.dp))
-                .background(p.navRail)
-        )
     }
 }
+
+private val NavCapsule = Capsule()
 
 @Composable
 private fun NavCell(
     glyph: String,
     label: String,
     active: Boolean,
+    interaction: MutableInteractionSource,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
     val tint = if (active) p.navActive else p.navInactive
-    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = tween(Motion.glassPress),
+        label = "navCellScale",
+    )
     Column(
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxHeight()
             .clickable(
                 interactionSource = interaction,
-                indication = null,          // 3b 不用水波纹，整栏保持安静
+                indication = null,          // 玻璃滑块就是反馈，不叠水波纹
+                role = Role.Tab,
                 onClick = onClick,
-            ),
+            )
+            .scale(scale),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

@@ -114,6 +114,19 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    // 液态玻璃（Kyant0/AndroidLiquidGlass，Apache-2.0）：Backdrop 折射 / 模糊 / 高光的渲染基元，
+    // 底部悬浮导航、新建 Agent 弹窗、长按操作弹层共用。版本选择是三方夹逼的结果（2026-09-15 实测）：
+    // - 2.0.0-rc01 / 2.0.0 的 AAR 元数据要求 compileSdk 37（本机与 AGP 8.13 只到 36）；
+    // - 2.0.1 还要 Kotlin 2.4 元数据 + Compose 1.12（本工程 Kotlin 2.2 + BOM 1.11 读不了）；
+    // - 1.0.6 是 Java 21 字节码（class 65），Robolectric 单测跑在 JDK 17 上直接 UnsupportedClassVersionError。
+    // 2.0.0-alpha03：JVM 11 字节码、compileSdk 36、Kotlin 2.3 元数据；Android 端源码与 2.0.0 仅差
+    // 平台能力判据的内部重构，公开 API（drawBackdrop / layerBackdrop / lens / blur / vibrancy /
+    // Highlight / Shadow / InnerShadow / exportedBackdrop）完全一致。
+    // 效果按系统能力分级：API 31+ 模糊/饱和，API 33+ 透镜折射与高光；更低版本只落半透明表面。
+    implementation("io.github.kyant0:backdrop:2.0.0-alpha03")
+    // 同作者 G2 连续圆角形状（Capsule / RoundedRectangle）：backdrop 只把它当 runtime 依赖，
+    // 透镜效果要求形状实现 RoundedRectangularShape，编译期需显式引入；版本与 backdrop 传递一致。
+    implementation("io.github.kyant0:shapes:1.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     // conn 层：协议控制帧 JSON 编解码（kotlinx-serialization-json，Apache-2.0）。
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
