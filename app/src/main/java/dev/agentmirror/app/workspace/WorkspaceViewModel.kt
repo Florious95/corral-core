@@ -795,15 +795,15 @@ class WorkspaceViewModel(
 
     private fun applyDelta(frame: ListDeltaFrame) {
         // 二级会话增删（added/changed/removed sessions）是二级实时流的数据源，
-        // 不在本一级 VM 消费；一级只关心 changed_workspaces 里的 session_count 元数据。
+        // 不在本一级 VM 消费；一级只关心 changed_workspaces 里的两个聚合计数。
         for (w in frame.changedWorkspaces) {
             workspaceCounts[w.cwd] = WorkspaceCounts(
                 sessionCount = w.sessionCount,
                 workingCount = w.workingCount,
             )
         }
-        // 一级菜单的 session_count 是服务端权威值；removed 会话对一级的意义由
-        // changed_workspaces 携带（无 removed_workspaces 通道，服务端保证覆盖）。
+        // 一级菜单的 session_count 与 working_count 都是服务端权威值；removed 会话对
+        // 一级的意义由 changed_workspaces 携带（无 removed_workspaces 通道，服务端保证覆盖）。
         publish()
     }
 

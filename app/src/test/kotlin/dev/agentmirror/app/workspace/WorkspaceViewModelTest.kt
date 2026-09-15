@@ -30,8 +30,9 @@ import org.junit.Test
  * WorkspaceViewModel 纯 JVM 单测（验收 --tests "*Workspace*"）。
  *
  * 060 uproot（2026-08-15）：二级会话列表模型与聚合状态随状态判定整体拔除，本 VM 只
- * 维护一级工作区（cwd → session_count）。二级会话增删（added/changed/removed sessions）
- * 是二级实时流的数据源，不在本一级 VM 消费；一级只消费 changed_workspaces 的 session_count。
+ * 维护一级工作区（cwd → session_count + working_count）。二级会话增删
+ * （added/changed/removed sessions）是二级实时流的数据源，不在本一级 VM 消费；一级只
+ * 消费 changed_workspaces 的两个聚合计数。
  */
 class WorkspaceViewModelTest {
 
