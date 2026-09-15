@@ -4,10 +4,9 @@ package api
 // a discovery snapshot, and diffs two consecutive snapshots into a list_delta.
 //
 // 060 uproot (2026-08-15): the agent-state pipeline was removed wholesale
-// (requirement 060: 二级菜单改为实时流并取代状态判定). The 012 aggregation
-// rules and the state fields on Session/Workspace are gone with it. What
-// remains is the pure two-level model + the four-set delta mechanism, which
-// continues to serve the level-1 menu and the (future) level-2 live stream.
+// (requirement 060: 二级菜单改为实时流并取代状态判定). The level-1 model
+// remains a pure two-level projection; the accepted nodeprobe activity axis is
+// consumed only for the workspace working-count aggregate.
 
 import (
 	"sort"
@@ -60,7 +59,8 @@ func toSession(e *sessionEntry) protocol.Session {
 type modelSnapshot struct {
 	// byRef indexes every session by its stable ref.
 	byRef map[string]protocol.Session
-	// byCWD indexes every workspace by its grouping key.
+	// byCWD indexes every workspace by its grouping key, including both
+	// authoritative aggregate counts.
 	byCWD map[string]protocol.Workspace
 	// ordered lists the workspaces sorted by CWD for deterministic output.
 	ordered []protocol.Workspace
@@ -111,10 +111,8 @@ func (m *modelSnapshot) listing() []protocol.Workspace {
 
 // diff computes the list_delta transition from prev to this snapshot. The
 // four sets are pairwise disjoint by construction (a ref is added, removed,
-// or changed — never more than one). ChangedWorkspaces is re-derived for
-// every cwd touched by an add/remove/change and emitted only when the session
-// count actually changed (the aggregate-state semantics were removed with the
-// agent-state pipeline, 060 uproot).
+// or changed — never more than one). ChangedWorkspaces is re-derived for every
+// current or previous cwd and emitted whenever either aggregate count changes.
 func (m *modelSnapshot) diff(prev *modelSnapshot) *protocol.ListDelta {
 	d := &protocol.ListDelta{}
 
