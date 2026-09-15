@@ -3,13 +3,14 @@
   <groupId>dev.agentmirror.core</groupId>
   <artifactId>core-terminal</artifactId>
   <versioning>
-    <latest>20260915.mahjong</latest>
-    <release>20260915.mahjong</release>
+    <latest>20260915.agent</latest>
+    <release>20260915.agent</release>
     <versions>
       <version>20260822.0</version>
       <version>20260914.032773d</version>
       <version>20260915.mahjong</version>
+      <version>20260915.agent</version>
     </versions>
-    <lastUpdated>20260913183506</lastUpdated>
+    <lastUpdated>20260915063455</lastUpdated>
   </versioning>
 </metadata>
