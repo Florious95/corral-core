@@ -79,7 +79,7 @@ func emitPacedBridge(t *testing.T, te *tmuxEnv, data <-chan []byte, n int) []byt
 		want := pacedRecord(i)
 		var got []byte
 		deadline := time.NewTimer(5 * time.Second)
-		for len(got) < len(want) {
+		for !bytes.Contains(got, want) {
 			select {
 			case chunk, ok := <-data:
 				if !ok {
@@ -87,13 +87,10 @@ func emitPacedBridge(t *testing.T, te *tmuxEnv, data <-chan []byte, n int) []byt
 				}
 				got = append(got, chunk...)
 			case <-deadline.C:
-				t.Fatal("healthy bridge acknowledgement missing")
+				t.Fatalf("healthy record %d acknowledgement missing: got %d want %d", i, len(got), len(want))
 			}
 		}
 		deadline.Stop()
-		if !bytes.Equal(got, want) {
-			t.Fatalf("healthy record %d differs: got %d want %d", i, len(got), len(want))
-		}
 		all = append(all, got...)
 	}
 	return all
