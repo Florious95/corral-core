@@ -702,6 +702,13 @@ class SessionViewModel(
         manager.sendScrollWheel(ref, -toSend)
     }
 
+    /**
+     * 发起关闭当前会话 pane（协议 close_session 请求）。
+     */
+    fun closeSession(): Boolean {
+        return manager.sendCloseSession(ref) != null
+    }
+
     /** 离开会话页时释放：先封闭几何回调，再退订镜像（conn 层幂等）。 */
     fun dispose() {
         synchronized(lifecycleLock) {

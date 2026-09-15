@@ -19,6 +19,7 @@ package dev.agentmirror.app.workspace
 import dev.agentmirror.app.conn.AgentLauncherFrame
 import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.BinaryFrame
+import dev.agentmirror.app.conn.CloseSessionResultFrame
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.CreateAgentResultFrame
@@ -136,6 +137,10 @@ class WorkspaceViewModel(
         { workspace, anchorRef, provider, name, bypass ->
             ServiceWire.managerOrNull()?.sendCreateAgent(workspace, anchorRef, provider, name, bypass)
         },
+    private val closeSessionRequest: (String) -> Long? =
+        { ref ->
+            ServiceWire.managerOrNull()?.sendCloseSession(ref)
+        },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     favoriteStore: FavoriteStore = MemoryFavoriteStore(),
 ) : ConnectionManager.Listener {
@@ -157,6 +162,12 @@ class WorkspaceViewModel(
 
     /** 刷新在途标记（Compose 下拉指示器消费）。 */
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private var pendingCloseSessionReqId: Long? = null
+    private val _closingSessionRef = MutableStateFlow<String?>(null)
+
+    /** 正在关闭中的会话 ref（用于列表触发淡出与收缩移出动效）。 */
+    val closingSessionRef: StateFlow<String?> = _closingSessionRef.asStateFlow()
 
     private val _level2 = MutableStateFlow(L2UiState())
 
@@ -461,6 +472,26 @@ class WorkspaceViewModel(
         return true
     }
 
+    /**
+     * 发起关闭单个会话 pane（kill-pane 安全精准退出）。
+     * 成功返回 true 并触发列表移出动效。
+     */
+    fun closeSession(ref: String): Boolean {
+        if (_closingSessionRef.value != null) return false
+        val reqId = closeSessionRequest(ref)
+        if (reqId == null) {
+            DiagLog.record("level2", "closeSession send failed ref=$ref")
+            return false
+        }
+        pendingCloseSessionReqId = reqId
+        _closingSessionRef.value = ref
+        val fav = _level2.value.sessions.firstOrNull { it.ref == ref }
+        if (fav != null && favoriteBook.isFavorited(fav.ref)) {
+            toggleFavorite(fav)
+        }
+        return true
+    }
+
     fun toggleFavorite(entry: L2Entry) {
         DiagLog.record(
             "favorite",
@@ -762,6 +793,7 @@ class WorkspaceViewModel(
         when (frame) {
             is AuthAckFrame -> applyAuthAck(frame)
             is CreateAgentResultFrame -> applyCreateAgentResult(frame)
+            is CloseSessionResultFrame -> applyCloseSessionResult(frame)
             is ListingFrame -> applyListing(frame)
             is ListDeltaFrame -> applyDelta(frame)
             is Level2Frame -> applyLevel2(frame)
@@ -789,6 +821,10 @@ class WorkspaceViewModel(
         if (state != ConnectionState.READY && pendingCreateAgentReqId != null) {
             pendingCreateAgentReqId = null
             _uiState.update { it.copy(createAgent = CreateAgentUiState(error = "创建结果未确认，请刷新")) }
+        }
+        if (state != ConnectionState.READY && pendingCloseSessionReqId != null) {
+            pendingCloseSessionReqId = null
+            _closingSessionRef.value = null
         }
         if (state == ConnectionState.READY) {
             if (!wasReady) level2RetryUsed = false
@@ -820,6 +856,24 @@ class WorkspaceViewModel(
             refreshLevel2()
         } else {
             _uiState.update { it.copy(createAgent = CreateAgentUiState(error = frame.reason)) }
+        }
+    }
+
+    private fun applyCloseSessionResult(frame: CloseSessionResultFrame) {
+        if (pendingCloseSessionReqId != frame.reqId) return
+        pendingCloseSessionReqId = null
+        val closedRef = _closingSessionRef.value
+        _closingSessionRef.value = null
+        if (frame.ok) {
+            if (closedRef != null) {
+                _level2.update { current ->
+                    current.copy(sessions = current.sessions.filterNot { it.ref == closedRef })
+                }
+            }
+            refreshLevel2()
+        } else {
+            DiagLog.record("level2", "closeSession failed reason=${frame.reason}")
+            _level2.update { it.copy(banner = "关闭会话失败：${frame.reason ?: "未知原因"}") }
         }
     }
 

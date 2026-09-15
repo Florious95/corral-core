@@ -1,5 +1,9 @@
 package dev.agentmirror.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -93,6 +97,8 @@ fun SessionListScreen(
     onBack: () -> Unit,
     onSessionClick: (SessionItem) -> Unit,
     onToggleStar: (SessionItem) -> Unit,
+    onCloseSession: (SessionItem) -> Unit = {},
+    closingSessionRef: String? = null,
     modifier: Modifier = Modifier,
     connectionPath: ConnectionPath? = null,
     connectionBanner: String? = null,
@@ -164,6 +170,8 @@ fun SessionListScreen(
                 sessions = sessions,
                 onSessionClick = onSessionClick,
                 onToggleStar = onToggleStar,
+                onCloseSession = onCloseSession,
+                closingSessionRef = closingSessionRef,
                 modifier = Modifier.fillMaxSize(),
             )
             if (connectionBanner != null) {
@@ -472,20 +480,31 @@ fun SessionListRows(
     sessions: List<SessionItem>,
     onSessionClick: (SessionItem) -> Unit,
     onToggleStar: (SessionItem) -> Unit,
+    onCloseSession: (SessionItem) -> Unit = {},
+    closingSessionRef: String? = null,
     modifier: Modifier = Modifier,
     tagPrefix: String = "l2",
     listTestTag: String = "l2-session-list-scroll",
 ) {
     LazyColumn(modifier.testTag(listTestTag)) {
         items(sessions, key = { it.id }) { item ->
-            SessionRow(
-                item = item,
-                tagPrefix = tagPrefix,
-                onClick = { onSessionClick(item) },
-                onToggleFavorite = { onToggleStar(item) },
-                unfavoriteOnly = false,
-            )
-            RowDivider()
+            val isClosing = closingSessionRef == item.id
+            AnimatedVisibility(
+                visible = !isClosing,
+                exit = fadeOut(animationSpec = tween(250)) + shrinkVertically(animationSpec = tween(250)),
+            ) {
+                Column {
+                    SessionRow(
+                        item = item,
+                        tagPrefix = tagPrefix,
+                        onClick = { onSessionClick(item) },
+                        onToggleFavorite = { onToggleStar(item) },
+                        unfavoriteOnly = false,
+                        onCloseSession = { onCloseSession(item) },
+                    )
+                    RowDivider()
+                }
+            }
         }
     }
 }

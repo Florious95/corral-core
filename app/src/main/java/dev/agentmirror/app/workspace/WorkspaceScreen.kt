@@ -176,6 +176,7 @@ fun WorkspaceScreen(
                     }
                 }
                 val starred = favorites.map { it.key }.toSet()
+                val closingRef by viewModel.closingSessionRef.collectAsState()
                 Column(Modifier.fillMaxSize()) {
                     AppTheme {
                         SessionListScreen(
@@ -189,6 +190,10 @@ fun WorkspaceScreen(
                             onToggleStar = { item ->
                                 level2.sessions.firstOrNull { it.ref == item.id }?.let(viewModel::toggleFavorite)
                             },
+                            onCloseSession = { item ->
+                                viewModel.closeSession(item.id)
+                            },
+                            closingSessionRef = closingRef,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()

@@ -79,6 +79,16 @@ class CreateAgentDialogTest {
                         isSelected = false,
                         onClick = {},
                     )
+                    AgentIconCard(
+                        launcher = AgentLauncherUi("cursor", "Cursor", supportsBypass = true, naming = "cli"),
+                        isSelected = false,
+                        onClick = {},
+                    )
+                    AgentIconCard(
+                        launcher = AgentLauncherUi("grok", "Grok", supportsBypass = true, naming = "cli"),
+                        isSelected = false,
+                        onClick = {},
+                    )
                 }
             }
         }
@@ -86,8 +96,56 @@ class CreateAgentDialogTest {
         compose.onNodeWithTag("agent-card-pi").assertExists().assertIsSelected()
         compose.onNodeWithTag("agent-card-check-pi", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("✓", useUnmergedTree = true).assertExists()
+
         compose.onNodeWithTag("agent-card-codex").assertExists().assertIsNotSelected()
         compose.onNodeWithTag("agent-card-check-codex", useUnmergedTree = true).assertDoesNotExist()
+
+        compose.onNodeWithTag("agent-card-cursor").assertExists().assertIsNotSelected()
+        compose.onNodeWithTag("agent-card-check-cursor", useUnmergedTree = true).assertDoesNotExist()
+
+        // 验证 Grok 官方品牌图标卡片
+        compose.onNodeWithTag("agent-card-grok").assertExists().assertIsNotSelected()
+        compose.onNodeWithTag("agent-card-check-grok", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Grok").assertExists()
+    }
+
+    @Test
+    fun formSwitchesToGrokCardWithCheckmarkAndSelection() {
+        var selectedProvider by mutableStateOf("pi")
+        var bypass by mutableStateOf(false)
+
+        compose.setContent {
+            AppTheme {
+                CreateAgentFormContent(
+                    name = "Agent",
+                    onNameChange = {},
+                    launchers = listOf(
+                        AgentLauncherUi("pi", "Pi Coding Agent", supportsBypass = false, naming = "cli"),
+                        AgentLauncherUi("codex", "Codex", supportsBypass = true, naming = "cli"),
+                        AgentLauncherUi("cursor", "Cursor", supportsBypass = true, naming = "cli"),
+                        AgentLauncherUi("grok", "Grok", supportsBypass = true, naming = "cli"),
+                    ),
+                    selectedProvider = selectedProvider,
+                    onSelectProvider = { selectedProvider = it },
+                    bypass = bypass,
+                    onBypassChange = { bypass = it },
+                    supportsBypass = true,
+                    inFlight = false,
+                    error = null,
+                )
+            }
+        }
+
+        // 初始选中 Pi
+        compose.onNodeWithTag("agent-card-pi").assertIsSelected()
+        compose.onNodeWithTag("agent-card-grok").assertIsNotSelected()
+
+        // 点击选择 Grok
+        compose.onNodeWithTag("agent-card-grok").performClick()
+        assertEquals("grok", selectedProvider)
+        compose.onNodeWithTag("agent-card-grok").assertIsSelected()
+        compose.onNodeWithTag("agent-card-check-grok", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("agent-card-pi").assertIsNotSelected()
     }
 
     @Test
