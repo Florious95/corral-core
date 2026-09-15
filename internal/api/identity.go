@@ -190,11 +190,23 @@ func remoteIP(r *http.Request) string {
 // consulted.
 func (s *Server) boundAddress(r *http.Request, dest net.IP) (net.IP, int, bool) {
 	if local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && local != nil {
-		if ip, port, parsed := localIPv4(local); parsed && !ip.IsLoopback() && !ip.IsUnspecified() {
-			if !ip.Equal(dest) {
-				return nil, 0, false
+		if ip, port, parsed := localIPv4(local); parsed {
+			if !ip.IsLoopback() && !ip.IsUnspecified() {
+				if !ip.Equal(dest) {
+					return nil, 0, false
+				}
+				return ip, port, true
 			}
-			return ip, port, true
+			// A wildcard listener accepts connections addressed through a NAT
+			// alias that is not one of the host's enumerated interfaces (for
+			// example Android emulator 10.0.2.2). Bind the proof to the
+			// request Host, but only when its literal IPv4 and port match the
+			// listener and the requested destination exactly.
+			if ip.IsUnspecified() {
+				if hostIP, hostPort, hostOK := requestHostIPv4(r, port); hostOK && hostPort == port && hostIP.Equal(dest) {
+					return hostIP, port, true
+				}
+			}
 		}
 	}
 	for _, candidate := range s.identityAddresses() {
@@ -208,6 +220,20 @@ func (s *Server) boundAddress(r *http.Request, dest net.IP) (net.IP, int, bool) 
 		}
 	}
 	return nil, 0, false
+}
+
+func requestHostIPv4(r *http.Request, fallbackPort int) (net.IP, int, bool) {
+	host, portText, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		host = r.Host
+		portText = strconv.Itoa(fallbackPort)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil || port < 1 || port > 65535 {
+		return nil, 0, false
+	}
+	ip := net.ParseIP(host).To4()
+	return ip, port, ip != nil && !ip.IsLoopback() && !ip.IsUnspecified()
 }
 
 func localIPv4(addr net.Addr) (net.IP, int, bool) {
