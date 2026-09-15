@@ -534,6 +534,8 @@ func (c *wsConn) handleFrame(data []byte, recvMS int64) bool {
 	}
 
 	switch t := typed.(type) {
+	case protocol.CreateAgent:
+		c.handleCreateAgent(t)
 	case protocol.List:
 		c.handleList(t)
 	case protocol.Subscribe:
@@ -561,8 +563,9 @@ func (c *wsConn) handleFrame(data []byte, recvMS int64) bool {
 	case protocol.OverlayUnsubscribe:
 		c.handleOverlayUnsubscribe(t)
 	default:
-		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed,
-		// level2_frame, level2_heartbeat, overlay_frame are server-to-client only.
+		// auth_ack, create_agent_result, listing, list_delta, input_ack, error,
+		// pane_mode_changed, level2_frame, level2_heartbeat, overlay_frame are
+		// server-to-client only.
 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
 	}
 	return true

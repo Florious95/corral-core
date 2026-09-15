@@ -16,6 +16,12 @@ const (
 	// rejection.
 	TypeAuthAck FrameType = "auth_ack"
 
+	// TypeCreateAgent starts a provider agent from an existing pane (C→S).
+	TypeCreateAgent FrameType = "create_agent"
+
+	// TypeCreateAgentResult is the typed result of TypeCreateAgent (S→C).
+	TypeCreateAgentResult FrameType = "create_agent_result"
+
 	// TypeList requests a fresh full workspace/session listing (C→S).
 	TypeList FrameType = "list"
 

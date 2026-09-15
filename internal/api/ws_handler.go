@@ -89,7 +89,7 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 		// wakes for the 0→1 transition and keeps polling (idle-gate, taskbook
 		// #fix-daemon-idle-cpu). teardown un-counts it on close.
 		c.s.markAuthed()
-		c.send(&protocol.AuthAck{OK: true})
+		c.send(&protocol.AuthAck{OK: true, AgentLaunchers: c.s.agentLauncherValues()})
 		return true
 	}
 	c.send(&protocol.AuthAck{OK: false, Reason: "invalid token"})

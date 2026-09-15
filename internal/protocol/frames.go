@@ -52,7 +52,41 @@ type Auth struct {
 // reason. The server MUST close the connection after a rejection, so the
 // client can treat "connection closed right after auth" as a rejection too.
 type AuthAck struct {
+	OK             bool            `json:"ok"`
+	Reason         string          `json:"reason,omitempty"`
+	AgentLaunchers []AgentLauncher `json:"agent_launchers,omitempty"`
+}
+
+// AgentLauncher describes one provider executable the server can launch. The
+// capability list is deliberately explicit: clients may only offer providers
+// and flags that this daemon verified at startup.
+type AgentLauncher struct {
+	Provider       string `json:"provider"`
+	DisplayName    string `json:"display_name"`
+	SupportsBypass bool   `json:"supports_bypass"`
+	Naming         string `json:"naming"`
+}
+
+// CreateAgent asks the server to create a child agent from an existing pane.
+// AnchorRef is opaque to clients and resolves to the exact socket + pane;
+// Workspace is checked against that resolved pane's cwd.
+type CreateAgent struct {
+	ReqID     uint32 `json:"req_id"`
+	Workspace string `json:"workspace"`
+	AnchorRef string `json:"anchor_ref"`
+	Provider  string `json:"provider"`
+	Name      string `json:"name"`
+	Bypass    bool   `json:"bypass"`
+}
+
+// CreateAgentResult is the typed result of CreateAgent. Failed requests carry
+// only a controlled Reason; launch errors are never echoed to the client.
+type CreateAgentResult struct {
+	ReqID  uint32 `json:"req_id"`
 	OK     bool   `json:"ok"`
+	Ref    string `json:"ref,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Naming string `json:"naming,omitempty"`
 	Reason string `json:"reason,omitempty"`
 }
 

@@ -139,6 +139,11 @@ type Server struct {
 	nodeprobe        nodeprobe.Sampler
 	inventorySamples *inventorySampler
 	filterAgents     bool
+
+	// agentLaunchers is the explicit provider capability set advertised in
+	// AuthAck and used by create_agent. It is computed once so a client cannot
+	// request arbitrary executables or unverified flags.
+	agentLaunchers []agentLauncher
 }
 
 type unknownNodeprobe struct{}
@@ -232,6 +237,7 @@ func NewServer(opts Options) *Server {
 	}
 	s.nodeprobe = opts.Nodeprobe
 	s.filterAgents = filterAgents
+	s.agentLaunchers = availableAgentLaunchers()
 	if s.nodeprobe == nil {
 		s.nodeprobe = unknownNodeprobe{}
 	}
