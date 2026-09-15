@@ -37,7 +37,7 @@ class WorkspaceListScreenTest {
         val bounds = compose.onNodeWithTag("mahjong-status-badge").getUnclippedBoundsInRoot()
         assertEquals(26f, bounds.right.value - bounds.left.value, 0.5f)
         assertEquals(34f, bounds.bottom.value - bounds.top.value, 0.5f)
-        assertEquals(Color(0xFF10B981), MahjongWorkingColor)
+        assertEquals(Color(0xFF047857), MahjongWorkingColor)
     }
 
     @Test

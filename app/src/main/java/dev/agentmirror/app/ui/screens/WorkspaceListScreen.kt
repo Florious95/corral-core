@@ -98,7 +98,7 @@ fun WorkspaceListScreen(
     }
 }
 
-internal val MahjongWorkingColor = Color(0xFF10B981)
+internal val MahjongWorkingColor = Color(0xFF047857)
 internal val MahjongIdleColor = Color(0xFF6B7280)
 
 /** 一级工作区的工作状态指示牌：固定 3:4 竖向圆角矩形，不使用系统 emoji。 */

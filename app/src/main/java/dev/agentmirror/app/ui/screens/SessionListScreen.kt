@@ -1,20 +1,29 @@
 package dev.agentmirror.app.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -183,21 +192,37 @@ private fun CreateAgentDialog(
         onDismissRequest = { if (!state.inFlight) onDismiss() },
         title = { androidx.compose.material3.Text("新建 Agent") },
         text = {
-            Column {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { androidx.compose.material3.Text("名称") },
+                    placeholder = { androidx.compose.material3.Text("例如：代码助手") },
                     singleLine = true,
-                    modifier = Modifier.testTag("create-agent-name"),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("create-agent-name"),
                 )
-                Box {
-                    TextButton(
+                Box(Modifier.fillMaxWidth()) {
+                    AgentSelectorField(
+                        label = "Agent 类型",
+                        value = launcher?.displayName ?: "选择 Provider",
+                        expanded = providerMenuExpanded,
                         onClick = { providerMenuExpanded = true },
+                        showArrow = true,
                         modifier = Modifier.testTag("create-agent-provider"),
-                    ) {
-                        androidx.compose.material3.Text(launcher?.displayName ?: "选择 Provider")
-                    }
+                    )
                     DropdownMenu(
                         expanded = providerMenuExpanded,
                         onDismissRequest = { providerMenuExpanded = false },
@@ -213,45 +238,67 @@ private fun CreateAgentDialog(
                         }
                     }
                 }
-                if (anchors.size > 1) {
-                    Box {
-                        TextButton(
-                            onClick = { anchorMenuExpanded = true },
-                            modifier = Modifier.testTag("create-agent-anchor"),
-                        ) {
-                            androidx.compose.material3.Text(
-                                "目标：${anchors.firstOrNull { it.id == selectedAnchor }?.displayName ?: "选择会话"}",
-                            )
-                        }
-                        DropdownMenu(
+                if (anchors.isNotEmpty()) {
+                    Box(Modifier.fillMaxWidth()) {
+                        val selectedSession = anchors.firstOrNull { it.id == selectedAnchor }
+                        AgentSelectorField(
+                            label = "目标会话",
+                            value = selectedSession?.displayName ?: "暂无可用会话",
                             expanded = anchorMenuExpanded,
-                            onDismissRequest = { anchorMenuExpanded = false },
-                        ) {
-                            anchors.forEach { item ->
-                                DropdownMenuItem(
-                                    text = { androidx.compose.material3.Text(item.displayName) },
-                                    onClick = {
-                                        selectedAnchor = item.id
-                                        anchorMenuExpanded = false
-                                    },
-                                )
+                            onClick = { anchorMenuExpanded = true },
+                            showArrow = anchors.size > 1,
+                            enabled = anchors.size > 1 && !state.inFlight,
+                            modifier = Modifier.testTag("create-agent-anchor"),
+                        )
+                        if (anchors.size > 1) {
+                            DropdownMenu(
+                                expanded = anchorMenuExpanded,
+                                onDismissRequest = { anchorMenuExpanded = false },
+                            ) {
+                                anchors.forEach { item ->
+                                    DropdownMenuItem(
+                                        text = { androidx.compose.material3.Text(item.displayName) },
+                                        onClick = {
+                                            selectedAnchor = item.id
+                                            anchorMenuExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
                 }
-                androidx.compose.foundation.layout.Row(
+                Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
                 ) {
-                    androidx.compose.material3.Text(
-                        "Bypass 权限",
-                        modifier = Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                    Column(Modifier.weight(1f)) {
+                        androidx.compose.material3.Text(
+                            "绕过权限确认",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        androidx.compose.material3.Text(
+                            "启用后，Agent 可跳过操作确认",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     Switch(
                         checked = bypass,
                         onCheckedChange = { bypass = it },
                         enabled = launcher?.supportsBypass == true && !state.inFlight,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            uncheckedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.testTag("create-agent-bypass"),
                     )
                 }
@@ -259,6 +306,7 @@ private fun CreateAgentDialog(
                     androidx.compose.material3.Text(
                         "创建失败：$it",
                         color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.testTag("create-agent-error"),
                     )
                 }
@@ -279,6 +327,63 @@ private fun CreateAgentDialog(
             }
         },
     )
+}
+
+@Composable
+internal fun AgentSelectorField(
+    label: String,
+    value: String,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    showArrow: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val fieldModifier = modifier
+        .fillMaxWidth()
+        .height(56.dp)
+        .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        androidx.compose.material3.Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        Surface(
+            modifier = fieldModifier,
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 0.55f else 0.35f),
+            ),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.Text(
+                    text = value,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (showArrow) {
+                    androidx.compose.material3.Text(
+                        text = if (expanded) "▴" else "▾",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**

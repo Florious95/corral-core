@@ -5,6 +5,9 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.Column
+import dev.agentmirror.app.ui.screens.AgentSelectorField
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.screens.SessionListScreen
@@ -50,6 +53,39 @@ class CreateAgentDialogTest {
             }
         }
         compose.onNodeWithTag("create-agent-button").assertIsEnabled()
+    }
+
+    @Test
+    fun selectorCardsUseLabelsAndExpansionAffordance() {
+        compose.setContent {
+            AppTheme {
+                Column {
+                    AgentSelectorField(
+                        label = "Agent 类型",
+                        value = "Pi Coding Agent",
+                        expanded = false,
+                        onClick = {},
+                        showArrow = true,
+                        modifier = androidx.compose.ui.Modifier.testTag("provider-card"),
+                    )
+                    AgentSelectorField(
+                        label = "目标会话",
+                        value = "Anchor",
+                        expanded = false,
+                        onClick = {},
+                        showArrow = false,
+                        modifier = androidx.compose.ui.Modifier.testTag("anchor-card"),
+                        enabled = false,
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText("Agent 类型").assertExists()
+        compose.onNodeWithText("目标会话").assertExists()
+        compose.onNodeWithText("Pi Coding Agent").assertExists()
+        compose.onNodeWithText("Anchor").assertExists()
+        compose.onNodeWithText("▾").assertExists()
     }
 
     @Test
