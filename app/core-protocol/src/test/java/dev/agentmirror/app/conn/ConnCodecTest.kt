@@ -73,6 +73,7 @@ class ConnCodecTest {
         val w0 = f.workspaces[0]
         assertEquals("/proj/a", w0.cwd)
         assertEquals(2, w0.sessionCount)
+        assertEquals(0, w0.workingCount)
         assertEquals(2, w0.sessions.size)
         assertEquals("s1", w0.sessions[0].ref)
         assertEquals("claude", w0.sessions[0].name)
@@ -102,6 +103,19 @@ class ConnCodecTest {
         assertEquals("unknown", divergent.effectiveActivity)
         val invalid = session("""{$base,"activity":"busy","status":"busy","health":"healthy"}""")
         assertEquals("unknown", invalid.effectiveActivity)
+    }
+
+    @Test
+    fun testWorkspaceWorkingCountAndLegacyDefault() {
+        val current = FrameCodec.decode(
+            """{"v":1,"type":"listing","payload":{"req_id":1,"seq":1,"workspaces":[{"cwd":"/repo","session_count":3,"working_count":2}]}}""",
+        ) as ListingFrame
+        assertEquals(2, current.workspaces.single().workingCount)
+
+        val legacy = FrameCodec.decode(
+            """{"v":1,"type":"listing","payload":{"req_id":1,"seq":1,"workspaces":[{"cwd":"/repo","session_count":3}]}}""",
+        ) as ListingFrame
+        assertEquals(0, legacy.workspaces.single().workingCount)
     }
 
     @Test

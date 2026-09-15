@@ -223,6 +223,7 @@ data class Workspace(
     @SerialName("cwd") val cwd: String,
     @SerialName("session_count") val sessionCount: Int,
     @SerialName("sessions") val sessions: List<Session> = emptyList(),
+    @SerialName("working_count") val workingCount: Int = 0,
 )
 
 /** 单个被镜像的 Agent CLI 面板；ref 是寻址键，name 是展示标签（可重名）。 */
