@@ -65,10 +65,12 @@ type List struct {
 // Workspace is one first-level group of the two-level model (requirement
 // 002): it aggregates every session whose cwd equals Cwd. In a full Listing,
 // Sessions carries the group's members; in a ListDelta's ChangedWorkspaces it
-// is empty and only the session count is meaningful.
+// is empty and only the aggregate counts are meaningful. WorkingCount is the
+// number of identified panes currently classified as working.
 type Workspace struct {
 	Cwd          string    `json:"cwd"`
 	SessionCount int       `json:"session_count"`
+	WorkingCount int       `json:"working_count"`
 	Sessions     []Session `json:"sessions,omitempty"`
 }
 
@@ -95,14 +97,14 @@ type Workspace struct {
 // Status is the legacy alias and always equals Activity on current output. The
 // client must not re-derive any axis from Title.
 type Session struct {
-	Ref         string  `json:"ref"`
-	Name        string  `json:"name"`
-	WindowName  string  `json:"window_name"`
-	WindowIndex string  `json:"window_index"`
-	Cwd         string  `json:"cwd"`
-	Title       string  `json:"title"`
-	Provider    string  `json:"provider"`
-	Activity    string  `json:"activity"`
+	Ref         string `json:"ref"`
+	Name        string `json:"name"`
+	WindowName  string `json:"window_name"`
+	WindowIndex string `json:"window_index"`
+	Cwd         string `json:"cwd"`
+	Title       string `json:"title"`
+	Provider    string `json:"provider"`
+	Activity    string `json:"activity"`
 	// Native nodeprobe metadata, not display Name. omitempty: JSON null here
 	// is rejected by the 20260822 kotlinx Session.sessionName (non-null String)
 	// and drops the whole listing frame. Absent and "" both decode as empty.

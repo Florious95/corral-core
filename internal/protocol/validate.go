@@ -70,6 +70,9 @@ func (w Workspace) Validate() error {
 	if w.SessionCount < 0 {
 		return fmt.Errorf("%w: workspace session_count must be >= 0", ErrInvalidField)
 	}
+	if w.WorkingCount < 0 || w.WorkingCount > w.SessionCount {
+		return fmt.Errorf("%w: workspace working_count must be between 0 and session_count", ErrInvalidField)
+	}
 	for _, s := range w.Sessions {
 		if err := s.Validate(); err != nil {
 			return err

@@ -82,14 +82,18 @@ func buildSnapshot(c *sessionCatalog) *modelSnapshot {
 			ws = protocol.Workspace{Cwd: s.Cwd}
 		}
 		ws.Sessions = append(ws.Sessions, s)
+		if e.observation.Activity == protocol.SessionStatusWorking {
+			ws.WorkingCount++
+		}
 		byCWD[s.Cwd] = ws
 	}
 
 	ordered := make([]protocol.Workspace, 0, len(byCWD))
 	for cwd, ws := range byCWD {
-		// Compute the authoritative session count for the listing. This is the
-		// single place the count is derived per workspace; the changed
-		// snapshots in diff use the same source.
+		// Compute the authoritative session count for the listing. The
+		// working count was accumulated from the same accepted nodeprobe
+		// observations while grouping above; unknown and idle panes do not
+		// contribute to it.
 		ws.SessionCount = len(ws.Sessions)
 		byCWD[cwd] = ws // write back so diff reads counted values
 		ordered = append(ordered, ws)
@@ -138,50 +142,35 @@ func (m *modelSnapshot) diff(prev *modelSnapshot) *protocol.ListDelta {
 		}
 	}
 
-	// Affected cwds: any workspace that contains an added, removed, or
-	// changed session needs its session count re-derived.
-	affected := make(map[string]bool)
-	for _, s := range d.AddedSessions {
-		affected[s.Cwd] = true
-	}
-	for _, ref := range d.RemovedRefs {
-		if p, ok := prev.byRef[ref]; ok {
-			affected[p.Cwd] = true
-		}
-	}
-	for _, s := range d.ChangedSessions {
-		affected[s.Cwd] = true
-	}
-	// A changed session that moved cwd affects both its old and new workspace.
-	for ref, cur := range m.byRef {
-		old, ok := prev.byRef[ref]
-		if !ok {
-			continue
-		}
-		if old != cur && old.Cwd != cur.Cwd {
-			affected[old.Cwd] = true
-		}
-	}
-
-	for cwd := range affected {
-		cur, ok := m.byCWD[cwd]
-		if !ok {
-			// The cwd vanished entirely; count 0 is not emitted as a
-			// changed_workspace (removed sessions already told the client).
-			// Continue.
-			continue
-		}
+	// Workspace aggregates are compared directly, rather than only for
+	// session refs touched above. A pane's activity may change while its ref,
+	// cwd and dimensions stay the same; that transition must still update the
+	// level-1 badge. Compare every current cwd and emit zeroes for workspaces
+	// that disappeared so the client cannot retain a stale green count.
+	for cwd, cur := range m.byCWD {
 		prevWs, had := prev.byCWD[cwd]
-		// Emit only when the session count changed from what the client
-		// already knows, so a delta carries no noise.
-		if !had || prevWs.SessionCount != cur.SessionCount {
-			d.ChangedWorkspaces = append(d.ChangedWorkspaces, protocol.Workspace{
-				Cwd:          cur.Cwd,
-				SessionCount: cur.SessionCount,
-				// Sessions omitted: a changed_workspaces entry carries only
-				// the count semantics (docs/protocol.md §5.3).
-			})
+		if had && prevWs.SessionCount == cur.SessionCount && prevWs.WorkingCount == cur.WorkingCount {
+			continue
 		}
+		d.ChangedWorkspaces = append(d.ChangedWorkspaces, protocol.Workspace{
+			Cwd:          cur.Cwd,
+			SessionCount: cur.SessionCount,
+			WorkingCount: cur.WorkingCount,
+			// Sessions omitted: a changed_workspaces entry carries only
+			// aggregate count semantics (docs/protocol.md §5.3).
+		})
+	}
+	for cwd := range prev.byCWD {
+		if _, ok := m.byCWD[cwd]; ok {
+			continue
+		}
+		d.ChangedWorkspaces = append(d.ChangedWorkspaces, protocol.Workspace{
+			Cwd:          cwd,
+			SessionCount: 0,
+			WorkingCount: 0,
+			// The final pane disappeared; explicitly clear the client-side
+			// aggregate even though the workspace row itself may be removed.
+		})
 	}
 	sort.Slice(d.AddedSessions, func(i, j int) bool { return d.AddedSessions[i].Ref < d.AddedSessions[j].Ref })
 	sort.Strings(d.RemovedRefs)
