@@ -21,6 +21,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -30,12 +31,17 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -77,6 +83,8 @@ import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -85,6 +93,7 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import com.kyant.shapes.RoundedRectangularShape
 import dev.agentmirror.app.ui.theme.Dims
@@ -181,6 +190,8 @@ fun Modifier.glassControl(
     glow: Color = Color.Unspecified,
     pressProgress: () -> Float = NoPress,
     pressedScale: Float = 0.96f,
+    lensAmount: Dp = 24.dp,
+    crystalHighlight: Boolean = false,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
@@ -188,10 +199,16 @@ fun Modifier.glassControl(
         vibrancy()
         blur(4.dp.toPx())
         if (GlassCapability.shaders) {
-            lens(refractionHeight = 12.dp.toPx(), refractionAmount = 24.dp.toPx())
+            lens(refractionHeight = 12.dp.toPx(), refractionAmount = lensAmount.toPx())
         }
     },
-    highlight = { glassHighlight(glow) },
+    highlight = {
+        if (crystalHighlight && GlassCapability.shaders) {
+            Highlight(style = HighlightStyle.Default(color = Color.White.copy(alpha = 0.92f)))
+        } else {
+            glassHighlight(glow)
+        }
+    },
     shadow = null,
     innerShadow = if (glow.isSpecified) {
         { InnerShadow(radius = 14.dp, offset = DpOffset.Zero, color = glow.copy(alpha = 0.32f)) }
@@ -314,6 +331,80 @@ fun GlassButton(
 }
 
 private val ControlShape = RoundedRectangle(Radii.glassControl)
+private val ToggleTrackShape = Capsule()
+private val ToggleThumbShape = RoundedRectangle(15.dp)
+
+/**
+ * Kyant0 风格液态开关：通透胶囊轨道 + 带折射/高光/内阴影的水滴圆钮。
+ * 轨道导出自己的成像层，圆钮采样「页面 + 轨道」两层背景，避免把玻璃控件录回自身。
+ */
+@Composable
+fun LiquidToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val p = LocalAppPalette.current
+    val pageBackdrop = LocalGlassBackdrop.current
+    val trackBackdrop = rememberLayerBackdrop()
+    val thumbBackdrop = rememberCombinedBackdrop(pageBackdrop, trackBackdrop)
+    val interaction = remember { MutableInteractionSource() }
+    val press = rememberPressProgress(interaction)
+    BoxWithConstraints(
+        modifier = modifier
+            .width(64.dp)
+            .height(36.dp)
+            .alpha(if (enabled) 1f else 0.45f)
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .glassPanel(
+                backdrop = pageBackdrop,
+                shape = ToggleTrackShape,
+                surface = p.glassSurface.copy(alpha = 0.48f).glassReadable(),
+                exportedBackdrop = trackBackdrop,
+                shadow = null,
+            )
+            .testTag("liquid-toggle"),
+    ) {
+        val thumbSize = 30.dp
+        val inset = 3.dp
+        val travel = (maxWidth - thumbSize - inset * 2).coerceAtLeast(0.dp)
+        val thumbOffset by animateDpAsState(
+            targetValue = if (checked) travel else 0.dp,
+            animationSpec = tween(Motion.glassPress * 2, easing = Motion.sheetEnter),
+            label = "liquidToggleThumb",
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(inset),
+        ) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = thumbOffset)
+                    .size(thumbSize)
+                    .glassControl(
+                        backdrop = thumbBackdrop,
+                        shape = ToggleThumbShape,
+                        surface = Color.Unspecified,
+                        tint = if (checked) p.accent else p.glassSurface,
+                        tintAlpha = if (checked) 0.34f else 0.24f,
+                        glow = if (checked) p.accent else p.glassStroke,
+                        pressProgress = press,
+                        pressedScale = 1.08f,
+                        lensAmount = 40.dp,
+                        crystalHighlight = true,
+                    ),
+            )
+        }
+    }
+}
 
 // ─────────────────────────────────────────────────────────────
 // 页内模态：宿主 + 图层

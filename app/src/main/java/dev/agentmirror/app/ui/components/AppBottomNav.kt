@@ -1,8 +1,9 @@
 package dev.agentmirror.app.ui.components
 
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -20,9 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -33,6 +37,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
@@ -41,6 +46,9 @@ import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.TypeSizes
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
 
 /**
  * 底部导航 —— 悬浮液态玻璃胶囊。
@@ -79,11 +87,26 @@ fun AppBottomNav(
     ) {
         val cellWidth = (maxWidth - Dims.navIndicatorInset * 2) / tabs.size
         val selectedIndex = tabs.indexOf(selected).coerceAtLeast(0)
-        val indicatorOffset by animateDpAsState(
-            targetValue = cellWidth * selectedIndex,
-            animationSpec = tween(durationMillis = Motion.navRail, easing = Motion.emphasized),
-            label = "navIndicator",
-        )
+        val indicatorPosition = remember { Animatable(selectedIndex.toFloat()) }
+        var animationStart by remember { mutableFloatStateOf(selectedIndex.toFloat()) }
+        LaunchedEffect(selectedIndex) {
+            val target = selectedIndex.toFloat()
+            animationStart = indicatorPosition.value
+            indicatorPosition.animateTo(
+                targetValue = target,
+                animationSpec = tween(durationMillis = Motion.navRail, easing = Motion.emphasized),
+            )
+        }
+        // Approximate the instantaneous travel speed with a bell curve over the
+        // current leg. The lens stretches while crossing cells and settles back
+        // to its natural capsule shape exactly at the destination.
+        val delta = selectedIndex.toFloat() - animationStart
+        val progress = if (abs(delta) < 0.001f) 1f else {
+            ((indicatorPosition.value - animationStart) / delta).coerceIn(0f, 1f)
+        }
+        val travelSpeed = if (abs(delta) < 0.001f) 0f else sin(progress * PI).toFloat()
+        val lensScaleX = 1f + travelSpeed * 0.42f
+        val lensScaleY = 1f - travelSpeed * 0.14f
 
         // 胶囊本体
         Box(
@@ -97,21 +120,28 @@ fun AppBottomNav(
                 ),
         )
 
-        // 选中滑块：主色 Hue 调色的玻璃透镜，按下时放大
+        // 选中滑块：沿轨道移动时呈水滴拉伸，落位后回弹为自然胶囊；
+        // 强白高光 + 深折射让滑块区别于机械平移色块。
         Box(
             Modifier
                 .padding(Dims.navIndicatorInset)
-                .offset { IntOffset(indicatorOffset.roundToPx(), 0) }
+                .offset { IntOffset((cellWidth * indicatorPosition.value).roundToPx(), 0) }
                 .width(cellWidth)
                 .fillMaxHeight()
+                .graphicsLayer {
+                    scaleX = lensScaleX
+                    scaleY = lensScaleY
+                }
                 .glassControl(
                     backdrop = rememberCombinedBackdrop(backdrop, barBackdrop),
                     shape = NavCapsule,
                     surface = Color.Unspecified,
                     tint = p.navRail,
-                    tintAlpha = 0.16f,
+                    tintAlpha = 0.24f,
                     pressProgress = { pressProgress },
                     pressedScale = 1.06f,
+                    lensAmount = 40.dp,
+                    crystalHighlight = true,
                 ),
         )
 

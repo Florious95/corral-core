@@ -16,6 +16,12 @@
 
 package dev.agentmirror.app
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
@@ -128,9 +136,43 @@ internal fun ThreePaneHome(
     // 液态玻璃三层：分页内容被 layerBackdrop 录成背景；悬浮导航胶囊与页内模态在录制边界之外采样它。
     // 内容延伸到胶囊下方（被折射），滚动容器经 LocalFloatingNavInset 补底部留白，末行才能滚出胶囊。
     val screenBackground = LocalAppPalette.current.screenBackground
+    val ambientTransition = rememberInfiniteTransition(label = "fluidAmbient")
+    val ambientPhase by ambientTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(12_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "fluidAmbientPhase",
+    )
     val backdrop = rememberLayerBackdrop {
         drawRect(screenBackground)
         drawContent()
+        // Keep the ambient layer inside the recorded backdrop so every glass
+        // surface refracts the drifting blue/violet light, not just the page.
+        val blueCenter = Offset(
+            x = size.width * (0.84f - 0.06f * ambientPhase),
+            y = size.height * (0.14f + 0.04f * ambientPhase),
+        )
+        val violetCenter = Offset(
+            x = size.width * (0.14f + 0.05f * ambientPhase),
+            y = size.height * (0.82f - 0.05f * ambientPhase),
+        )
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFFB9D8FF).copy(alpha = 0.20f), Color.Transparent),
+                center = blueCenter,
+                radius = size.maxDimension * 0.72f,
+            ),
+        )
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFFD8C7FF).copy(alpha = 0.17f), Color.Transparent),
+                center = violetCenter,
+                radius = size.maxDimension * 0.66f,
+            ),
+        )
     }
     val navInset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() } +
         Dims.navBarHeight + Dims.navFloatMargin

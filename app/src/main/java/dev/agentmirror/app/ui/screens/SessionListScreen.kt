@@ -36,8 +36,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -74,6 +72,7 @@ import dev.agentmirror.app.ui.components.ExtractedProviderIcon
 import dev.agentmirror.app.ui.components.GlassButton
 import dev.agentmirror.app.ui.components.GlassModalLayer
 import dev.agentmirror.app.ui.components.LanPill
+import dev.agentmirror.app.ui.components.LiquidToggle
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.LocalGlassBackdrop
 import dev.agentmirror.app.ui.components.PathText
@@ -389,18 +388,10 @@ internal fun CreateAgentFormContent(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Switch(
+            LiquidToggle(
                 checked = bypass,
                 onCheckedChange = onBypassChange,
                 enabled = supportsBypass && !inFlight,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                    checkedBorderColor = MaterialTheme.colorScheme.primary,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    uncheckedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
                 modifier = Modifier.testTag("create-agent-bypass"),
             )
         }
