@@ -128,9 +128,9 @@ func TestInitialPublishedLossWinsCaptureFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer detach()
-	// The production subscriber now retains a 256-chunk snapshot backlog;
+	// The production subscriber now retains a 512-chunk snapshot backlog;
 	// exceed that bound while the relay is held before the snapshot is ready.
-	emitPacedBridge(t, te, data, 512)
+	emitPacedBridge(t, te, data, 1024)
 	if len(sub.loss) != 1 {
 		t.Fatalf("production loss not published: buffered=%d", len(sub.loss))
 	}
@@ -183,9 +183,9 @@ func TestReadyRelayOverflowWhileControlSendBlocked(t *testing.T) {
 	}
 	defer detach()
 	// The relay now waits behind a full send queue. Keep the writer blocked
-	// long enough for the independent bridge queue to reach its 256-chunk
+	// long enough for the independent bridge queue to reach its 512-chunk
 	// bound; that loss still aborts the connection promptly.
-	emitPacedBridge(t, te, data, 320)
+	emitPacedBridge(t, te, data, 640)
 	awaitMirrorAbort(t, c)
 	awaitBoundary(t, producerDone, "cancelled control producer")
 	if !strings.Contains(fmt.Sprint(c.catalogCloseReason.Load()), bridge.ErrSubscriberOverflow.Error()) {

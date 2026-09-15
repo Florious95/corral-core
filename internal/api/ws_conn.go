@@ -30,6 +30,10 @@ func perfNowMS() int64 {
 	return time.Since(perfOrigin).Milliseconds()
 }
 
+// wsSendQueueCapacity bounds queued outbound frames while relay goroutines
+// wait for the writer to make progress.
+const wsSendQueueCapacity = 512
+
 // connSeq assigns each connection a monotonically increasing id for logging.
 var connSeq atomic.Uint64
 
@@ -157,7 +161,7 @@ func (s *Server) serveConn(conn *websocket.Conn) {
 		writeCtx:  writeCtx,
 		writeStop: writeStop,
 		subs:      make(map[string]*subscription),
-		sendCh:    make(chan wsMsg, 256),
+		sendCh:    make(chan wsMsg, wsSendQueueCapacity),
 	}
 	s.trackersMu.Lock()
 	init := s.connInit

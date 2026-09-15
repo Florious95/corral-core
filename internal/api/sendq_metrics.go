@@ -31,7 +31,7 @@ type SendQueueMetrics struct {
 	SnapshotsFromSubscribe atomic.Int64
 	// ConnectionsTotal 建立的 WS 连接数（serveConn 计数；连接数本身可能是重连线索）。
 	ConnectionsTotal atomic.Int64
-	// QueuePeak 单连接 sendCh 达到过的最大长度（满=256 的近似压力信号）。
+	// QueuePeak 单连接 sendCh 达到过的最大长度（满=512 的近似压力信号）。
 	QueuePeak atomic.Int64
 	// FramesSent 发出的总帧数（发送侧活动基线）。
 	FramesSent atomic.Int64

@@ -37,7 +37,7 @@ const streamBufferBytes = 65536
 // streamSubscriberQueueChunks bounds the per-subscriber handoff backlog while
 // the API prepares the initial snapshot. The relay is started before capture,
 // but its ready gate remains closed until that snapshot is queued.
-const streamSubscriberQueueChunks = 256
+const streamSubscriberQueueChunks = 512
 
 // ErrSubscriberOverflow marks raw-byte loss in one subscriber's private queue.
 // The owning connection must reconnect and subscribe to a fresh snapshot.

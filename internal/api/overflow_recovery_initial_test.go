@@ -342,7 +342,7 @@ func awaitMirrorAbort(t *testing.T, c *wsConn) {
 
 const (
 	// initialSnapshotBurstBytes produces >16 pipe-reader chunks while remaining
-	// below the named 256-chunk subscriber backlog and send queue.
+	// below the named 512-chunk subscriber backlog and send queue.
 	initialSnapshotBurstBytes = 128 << 10
 	initialSnapshotReadyToken = "INITIAL_SNAPSHOT_READY"
 
