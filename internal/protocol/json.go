@@ -87,6 +87,10 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[CreateAgent](env)
 	case TypeCreateAgentResult:
 		return decodeTyped[CreateAgentResult](env)
+	case TypeCloseSession:
+		return decodeTyped[CloseSession](env)
+	case TypeCloseSessionResult:
+		return decodeTyped[CloseSessionResult](env)
 	case TypeList:
 		return decodeTyped[List](env)
 	case TypeListing:

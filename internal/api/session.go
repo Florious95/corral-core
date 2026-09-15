@@ -29,6 +29,21 @@ func sessionRef(p discovery.Pane) string {
 	return p.Socket + "\x1f" + p.PaneID
 }
 
+// parseSessionRef validates and splits the stable socket/pane identity carried
+// by a client-facing ref. Only absolute socket paths and numeric tmux pane ids
+// are accepted, preventing a close request from widening its target through a
+// crafted tmux target expression.
+func parseSessionRef(ref string) (socket, paneID string, ok bool) {
+	socket, paneID, ok = strings.Cut(ref, "\x1f")
+	if !ok || socket == "" || !filepath.IsAbs(socket) || len(paneID) < 2 || paneID[0] != '%' {
+		return "", "", false
+	}
+	if _, err := strconv.ParseUint(paneID[1:], 10, 64); err != nil {
+		return "", "", false
+	}
+	return socket, paneID, true
+}
+
 // filterModelToIdentifiedAgents keeps the existing discovery surface but
 // removes panes whose structurally joined nodeprobe provider is unknown. The
 // provider axis is the identity decision; activity and health stay independent
@@ -125,11 +140,8 @@ func (c *sessionCatalog) entry(ref string) *sessionEntry {
 // Keep the parser narrow: only absolute socket paths and tmux's numeric pane
 // ids are accepted, and the path must still be a UNIX socket at use time.
 func directPaneFromRef(ref string) (*bridge.Pane, discovery.Pane, bool) {
-	socket, paneID, ok := strings.Cut(ref, "\x1f")
-	if !ok || socket == "" || !filepath.IsAbs(socket) || len(paneID) < 2 || paneID[0] != '%' {
-		return nil, discovery.Pane{}, false
-	}
-	if _, err := strconv.ParseUint(paneID[1:], 10, 64); err != nil {
+	socket, paneID, ok := parseSessionRef(ref)
+	if !ok {
 		return nil, discovery.Pane{}, false
 	}
 	st, err := os.Lstat(socket)

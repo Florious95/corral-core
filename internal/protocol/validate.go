@@ -13,6 +13,8 @@ func (Auth) FrameType() FrameType               { return TypeAuth }
 func (AuthAck) FrameType() FrameType            { return TypeAuthAck }
 func (CreateAgent) FrameType() FrameType        { return TypeCreateAgent }
 func (CreateAgentResult) FrameType() FrameType  { return TypeCreateAgentResult }
+func (CloseSession) FrameType() FrameType       { return TypeCloseSession }
+func (CloseSessionResult) FrameType() FrameType { return TypeCloseSessionResult }
 func (List) FrameType() FrameType               { return TypeList }
 func (Listing) FrameType() FrameType            { return TypeListing }
 func (ListDelta) FrameType() FrameType          { return TypeListDelta }
@@ -74,6 +76,32 @@ func (a AuthAck) Validate() error {
 func (a CreateAgent) Validate() error {
 	if a.ReqID == 0 {
 		return fmt.Errorf("%w: create_agent req_id must be >= 1", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a close-session request has a usable correlation id
+// and a non-empty target ref.
+func (s CloseSession) Validate() error {
+	if s.ReqID == 0 {
+		return fmt.Errorf("%w: close_session req_id must be >= 1", ErrInvalidField)
+	}
+	if s.Ref == "" {
+		return fmt.Errorf("%w: close_session ref must be non-empty", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a close-session result is unambiguous.
+func (r CloseSessionResult) Validate() error {
+	if r.ReqID == 0 {
+		return fmt.Errorf("%w: close_session_result req_id must be >= 1", ErrInvalidField)
+	}
+	if r.OK && r.Reason != "" {
+		return fmt.Errorf("%w: accepted close_session_result must not carry a reason", ErrInvalidField)
+	}
+	if !r.OK && r.Reason == "" {
+		return fmt.Errorf("%w: failed close_session_result must carry a reason", ErrInvalidField)
 	}
 	return nil
 }

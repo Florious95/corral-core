@@ -1,7 +1,6 @@
 package api
 
 import (
-	"os/exec"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -10,9 +9,9 @@ import (
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
-// agentLauncher is an explicit, verified provider adapter. command is the
-// resolved executable path; args are provider-specific flags known to be
-// supported by that executable version.
+// agentLauncher is an explicit provider adapter. command intentionally stays
+// a bare executable name: tmux resolves it at launch through the server's PATH,
+// allowing user-provided wrappers to participate in normal lookup order.
 type agentLauncher struct {
 	protocol.AgentLauncher
 	command    string
@@ -32,20 +31,20 @@ func availableAgentLaunchers() []agentLauncher {
 			bypassArgs:    []string{"--dangerously-bypass-approvals-and-sandbox"},
 		},
 		{
-			AgentLauncher: protocol.AgentLauncher{Provider: "cursor", DisplayName: "Cursor Agent", SupportsBypass: false, Naming: "tmux"},
+			AgentLauncher: protocol.AgentLauncher{Provider: "cursor", DisplayName: "Cursor Agent", SupportsBypass: true, Naming: "tmux"},
 			command:       "agent",
+			bypassArgs:    []string{"--force"},
+		},
+		{
+			AgentLauncher: protocol.AgentLauncher{Provider: "grok", DisplayName: "Grok", SupportsBypass: true, Naming: "tmux"},
+			command:       "grok",
+			bypassArgs:    []string{"--always-approve"},
 		},
 	}
-	out := make([]agentLauncher, 0, len(candidates))
-	for _, candidate := range candidates {
-		path, err := exec.LookPath(candidate.command)
-		if err != nil {
-			continue
-		}
-		candidate.command = path
-		out = append(out, candidate)
-	}
-	return out
+	// Do not resolve these names eagerly. Keeping the bare command means each
+	// tmux-created pane follows the user's PATH and wrapper scripts exactly when
+	// it starts.
+	return candidates
 }
 
 func (l agentLauncher) protocolValue() protocol.AgentLauncher { return l.AgentLauncher }

@@ -90,6 +90,22 @@ type CreateAgentResult struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// CloseSession asks the server to terminate exactly the pane addressed by Ref.
+// Ref is the opaque socket + pane identity emitted in Session listings; the
+// server never widens this request to a window or session operation.
+type CloseSession struct {
+	ReqID uint32 `json:"req_id"`
+	Ref   string `json:"ref"`
+}
+
+// CloseSessionResult is the typed result of CloseSession. A successful result
+// has no reason; failures carry a stable, human-safe reason string.
+type CloseSessionResult struct {
+	ReqID  uint32 `json:"req_id"`
+	OK     bool   `json:"ok"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // List requests a fresh full listing (C→S). ReqID correlates the Listing
 // reply; it must be >= 1 so 0 is distinguishable from "unset".
 type List struct {

@@ -10,12 +10,12 @@ import (
 func TestPiAgentLauncherUsesTmuxNamingWithoutGuessedFlags(t *testing.T) {
 	pi := agentLauncher{
 		AgentLauncher: protocol.AgentLauncher{Provider: "pi", Naming: "tmux", SupportsBypass: false},
-		command:       "/opt/homebrew/bin/pi",
+		command:       "pi",
 	}
-	if got, want := agentCommand(pi, "修复员", true), []string{"/opt/homebrew/bin/pi"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentCommand(pi, "修复员", true), []string{"pi"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("pi args=%#v, want %#v", got, want)
 	}
-	if got, want := agentCommand(pi, "plain", false), []string{"/opt/homebrew/bin/pi"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentCommand(pi, "plain", false), []string{"pi"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("pi no-bypass args=%#v, want %#v", got, want)
 	}
 }
@@ -23,10 +23,10 @@ func TestPiAgentLauncherUsesTmuxNamingWithoutGuessedFlags(t *testing.T) {
 func TestAgentLauncherTmuxFallbackOmitsCliNameFlag(t *testing.T) {
 	codex := agentLauncher{
 		AgentLauncher: protocol.AgentLauncher{Provider: "codex", Naming: "tmux", SupportsBypass: true},
-		command:       "/opt/homebrew/bin/codex",
+		command:       "codex",
 		bypassArgs:    []string{"--dangerously-bypass-approvals-and-sandbox"},
 	}
-	if got, want := agentCommand(codex, "named-window", true), []string{"/opt/homebrew/bin/codex", "--dangerously-bypass-approvals-and-sandbox"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentCommand(codex, "named-window", true), []string{"codex", "--dangerously-bypass-approvals-and-sandbox"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("codex args=%#v, want %#v", got, want)
 	}
 }
