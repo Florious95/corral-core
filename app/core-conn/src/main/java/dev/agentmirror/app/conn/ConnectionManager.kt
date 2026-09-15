@@ -607,6 +607,33 @@ class ConnectionManager(
     }
 
     /**
+     * 请求服务端从二级列表中的精确 anchor pane 创建 Agent。
+     *
+     * @return 已发送的 req_id；当前未 READY 或编码/传输失败返回 null。请求不自动重放，
+     *         调用方必须在掉线未收到结果时刷新并由用户再次确认。
+     */
+    fun sendCreateAgent(
+        workspace: String,
+        anchorRef: String,
+        provider: String,
+        name: String,
+        bypass: Boolean = false,
+    ): Long? {
+        val conn = connection ?: return null
+        if (!conn.isReady) return null
+        val reqId = nextReqId++
+        val frame = CreateAgentFrame(
+            reqId = reqId,
+            workspace = workspace,
+            anchorRef = anchorRef,
+            provider = provider,
+            name = name,
+            bypass = bypass,
+        )
+        return if (conn.send(frame)) reqId else null
+    }
+
+    /**
      * 拉一页历史（from_line 按 tmux capture-pane 语义；count >= 1）。
      *
      * @contract

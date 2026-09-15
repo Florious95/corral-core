@@ -52,6 +52,8 @@ sealed interface FramePayload {
                 when (type) {
                     FrameType.AUTH -> json.decodeFromJsonElement(AuthFrame.serializer(), el)
                     FrameType.AUTH_ACK -> json.decodeFromJsonElement(AuthAckFrame.serializer(), el)
+                    FrameType.CREATE_AGENT -> json.decodeFromJsonElement(CreateAgentFrame.serializer(), el)
+                    FrameType.CREATE_AGENT_RESULT -> json.decodeFromJsonElement(CreateAgentResultFrame.serializer(), el)
                     FrameType.LIST -> json.decodeFromJsonElement(ListFrame.serializer(), el)
                     FrameType.LISTING -> json.decodeFromJsonElement(ListingFrame.serializer(), el)
                     FrameType.LIST_DELTA -> json.decodeFromJsonElement(ListDeltaFrame.serializer(), el)
@@ -101,6 +103,11 @@ sealed interface FramePayload {
             return when (frame) {
                 is AuthFrame -> json.encodeToJsonElement(AuthFrame.serializer(), frame)
                 is AuthAckFrame -> json.encodeToJsonElement(AuthAckFrame.serializer(), frame)
+                is CreateAgentFrame -> json.encodeToJsonElement(CreateAgentFrame.serializer(), frame)
+                is CreateAgentResultFrame -> throw FrameEncodeException(
+                    FrameError.INVALID_FIELD,
+                    "create_agent_result is server-to-client only, never sent upstream",
+                )
                 is ListFrame -> json.encodeToJsonElement(ListFrame.serializer(), frame)
                 is ListingFrame -> json.encodeToJsonElement(ListingFrame.serializer(), frame)
                 is ListDeltaFrame -> json.encodeToJsonElement(ListDeltaFrame.serializer(), frame)
@@ -186,11 +193,60 @@ data class AuthFrame(
 data class AuthAckFrame(
     @SerialName("ok") val ok: Boolean,
     @SerialName("reason") val reason: String = "",
+    @SerialName("agent_launchers") val agentLaunchers: List<AgentLauncherFrame> = emptyList(),
 ) : FramePayload {
     override val frameType: String get() = FrameType.AUTH_ACK
     override fun validate(): String? = when {
         !ok && reason.isEmpty() -> "rejected auth_ack must carry a reason"
         ok && reason.isNotEmpty() -> "accepted auth_ack must not carry a reason"
+        agentLaunchers.any { it.provider.isEmpty() || it.displayName.isEmpty() || it.naming !in setOf("cli", "tmux") } ->
+            "auth_ack agent launcher has invalid fields"
+        agentLaunchers.map { it.provider }.distinct().size != agentLaunchers.size ->
+            "auth_ack agent launcher providers must be unique"
+        else -> null
+    }
+}
+
+/** Server-verified provider capability advertised by AuthAckFrame. */
+@Serializable
+data class AgentLauncherFrame(
+    @SerialName("provider") val provider: String,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("supports_bypass") val supportsBypass: Boolean,
+    @SerialName("naming") val naming: String,
+)
+
+/** C→S request to create an Agent window from an exact existing pane anchor. */
+@Serializable
+data class CreateAgentFrame(
+    @SerialName("req_id") val reqId: Long,
+    @SerialName("workspace") val workspace: String,
+    @SerialName("anchor_ref") val anchorRef: String,
+    @SerialName("provider") val provider: String,
+    @SerialName("name") val name: String,
+    @SerialName("bypass") val bypass: Boolean = false,
+) : FramePayload {
+    override val frameType: String get() = FrameType.CREATE_AGENT
+    override fun validate(): String? = if (reqId <= 0) "create_agent req_id must be >= 1" else null
+}
+
+/** S→C typed result for CreateAgentFrame; failures carry a closed reason. */
+@Serializable
+data class CreateAgentResultFrame(
+    @SerialName("req_id") val reqId: Long,
+    @SerialName("ok") val ok: Boolean,
+    @SerialName("ref") val ref: String = "",
+    @SerialName("name") val name: String = "",
+    @SerialName("naming") val naming: String = "",
+    @SerialName("reason") val reason: String = "",
+) : FramePayload {
+    override val frameType: String get() = FrameType.CREATE_AGENT_RESULT
+    override fun validate(): String? = when {
+        reqId <= 0 -> "create_agent_result req_id must be >= 1"
+        ok && (ref.isEmpty() || name.isEmpty() || naming !in setOf("cli", "tmux") || reason.isNotEmpty()) ->
+            "successful create_agent_result has invalid fields"
+        !ok && (reason !in setOf("invalid_field", "target_not_found", "provider_unavailable", "unsupported_bypass", "launch_failed") || ref.isNotEmpty() || name.isNotEmpty() || naming.isNotEmpty()) ->
+            "failed create_agent_result has invalid fields"
         else -> null
     }
 }

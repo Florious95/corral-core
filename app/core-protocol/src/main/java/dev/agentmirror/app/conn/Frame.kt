@@ -39,6 +39,8 @@ internal data class Envelope(
 internal object FrameType {
     const val AUTH = "auth"
     const val AUTH_ACK = "auth_ack"
+    const val CREATE_AGENT = "create_agent"
+    const val CREATE_AGENT_RESULT = "create_agent_result"
     const val LIST = "list"
     const val LISTING = "listing"
     const val LIST_DELTA = "list_delta"
