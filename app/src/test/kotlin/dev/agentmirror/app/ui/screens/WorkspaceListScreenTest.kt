@@ -57,4 +57,20 @@ class WorkspaceListScreenTest {
         compose.onNodeWithText("❯", useUnmergedTree = true).assertDoesNotExist()
         assertTrue(MahjongIdleColor != Color.Transparent)
     }
+
+    @Test
+    fun multiDigitWorkingBadgeRendersWithoutError() {
+        compose.setContent {
+            AppTheme(Appearance.Light) {
+                androidx.compose.foundation.layout.Column {
+                    MahjongStatusBadge(workingCount = 12)
+                    MahjongStatusBadge(workingCount = 105)
+                }
+            }
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("12").assertExists()
+        compose.onNodeWithText("105").assertExists()
+    }
 }

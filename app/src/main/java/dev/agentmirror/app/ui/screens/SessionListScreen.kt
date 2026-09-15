@@ -7,13 +7,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -110,7 +113,10 @@ fun SessionListScreen(
             ) {
                 androidx.compose.material3.Text("+ 新建 Agent")
             }
-            if (connectionPath != null) LanPill(connectionPath)
+            if (connectionPath != null) {
+                Spacer(Modifier.width(8.dp))
+                LanPill(connectionPath)
+            }
             if (showCreateDialog && agentLaunchers.isNotEmpty()) {
                 CreateAgentDialog(
                     sessions = sessions,
@@ -193,7 +199,9 @@ private fun CreateAgentDialog(
         title = { androidx.compose.material3.Text("新建 Agent") },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 OutlinedTextField(
@@ -316,13 +324,19 @@ private fun CreateAgentDialog(
             Button(
                 enabled = name.isNotBlank() && selectedAnchor.isNotBlank() && launcher != null && !state.inFlight,
                 onClick = { onCreate(selectedAnchor, launcher!!.provider, name, bypass) },
-                modifier = Modifier.testTag("create-agent-confirm"),
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 84.dp)
+                    .testTag("create-agent-confirm"),
             ) {
                 androidx.compose.material3.Text(if (state.inFlight) "创建中…" else "创建")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !state.inFlight) {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !state.inFlight,
+                modifier = Modifier.defaultMinSize(minWidth = 64.dp),
+            ) {
                 androidx.compose.material3.Text("取消")
             }
         },
@@ -339,10 +353,12 @@ internal fun AgentSelectorField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val fieldModifier = modifier
-        .fillMaxWidth()
-        .height(56.dp)
-        .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+    val borderColor = when {
+        expanded -> MaterialTheme.colorScheme.primary
+        enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    }
+    val borderWidth = if (expanded) 1.5.dp else 1.dp
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         androidx.compose.material3.Text(
             text = label,
@@ -350,13 +366,14 @@ internal fun AgentSelectorField(
             style = MaterialTheme.typography.labelMedium,
         )
         Surface(
-            modifier = fieldModifier,
-            shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 0.55f else 0.35f),
-            ),
+            modifier = modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            border = BorderStroke(borderWidth, borderColor),
+            onClick = onClick,
+            enabled = enabled,
         ) {
             Row(
                 modifier = Modifier
@@ -375,7 +392,7 @@ internal fun AgentSelectorField(
                 if (showArrow) {
                     androidx.compose.material3.Text(
                         text = if (expanded) "▴" else "▾",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (expanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(start = 12.dp),

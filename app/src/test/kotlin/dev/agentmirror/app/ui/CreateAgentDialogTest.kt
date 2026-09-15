@@ -89,6 +89,25 @@ class CreateAgentDialogTest {
     }
 
     @Test
+    fun selectorCardShowsUpwardArrowWhenExpanded() {
+        compose.setContent {
+            AppTheme {
+                AgentSelectorField(
+                    label = "Agent 类型",
+                    value = "Pi Coding Agent",
+                    expanded = true,
+                    onClick = {},
+                    showArrow = true,
+                )
+            }
+        }
+
+        compose.onNodeWithText("Agent 类型").assertExists()
+        compose.onNodeWithText("Pi Coding Agent").assertExists()
+        compose.onNodeWithText("▴").assertExists()
+    }
+
+    @Test
     fun emptyCapabilitiesDisableCreateButton() {
         compose.setContent {
             AppTheme {

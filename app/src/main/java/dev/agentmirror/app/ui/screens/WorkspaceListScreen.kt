@@ -108,6 +108,11 @@ internal fun MahjongStatusBadge(
     modifier: Modifier = Modifier,
 ) {
     val count = workingCount.coerceAtLeast(0)
+    val fontSize = when {
+        count >= 100 -> 10.sp
+        count >= 10 -> 12.sp
+        else -> 14.sp
+    }
     Box(
         modifier
             .width(26.dp)
@@ -120,7 +125,7 @@ internal fun MahjongStatusBadge(
         AppText(
             text = count.toString(),
             color = Color.White,
-            fontSize = 14.sp,
+            fontSize = fontSize,
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.Monospace,
             lineHeightMultiplier = 1f,
