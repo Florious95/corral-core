@@ -258,6 +258,7 @@ class TermViewPresenter(
             "source=onViewportSizeChanged oldW=$viewportWidthPx oldH=$viewportHeightPx " +
                 "newW=$widthPx newH=$heightPx viewportSeeded=$viewportSeeded " +
                 "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+            coalesceKey = "size|$widthPx|$heightPx|$viewportSeeded|${emulator.rows}|${emulator.cols}",
         )
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
@@ -327,6 +328,7 @@ class TermViewPresenter(
             "source=onRealViewportChanged oldW=$viewportWidthPx oldH=$viewportHeightPx " +
                 "newW=$widthPx newH=$heightPx viewportSeeded=$viewportSeeded " +
                 "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+            coalesceKey = "real|$widthPx|$heightPx|$viewportSeeded|${emulator.rows}|${emulator.cols}",
         )
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
@@ -389,6 +391,8 @@ class TermViewPresenter(
                 "candidateRows=${if (cellHeight > 0) viewportHeightPx / cellHeight else -1} " +
                 "candidateCols=${if (cellWidth > 0) viewportWidthPx / cellWidth else -1} " +
                 "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+            coalesceKey = "$source|$resized|$outgrewGuard|$viewportWidthPx|$viewportHeightPx|" +
+                "$cellWidth|$cellHeight|${emulator.rows}|${emulator.cols}",
         )
     }
 

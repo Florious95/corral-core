@@ -94,6 +94,7 @@ fun SessionRoute(
         } else {
             val id = PerfTrace.beginRoute(ref)
             PerfTrace.routeEnter(id) // route_enter
+            DiagLog.recordCritical("session", "route_enter ref=$ref open_id=$id")
             id
         }
     }

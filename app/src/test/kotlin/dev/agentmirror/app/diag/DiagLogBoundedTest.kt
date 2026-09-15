@@ -62,6 +62,19 @@ class DiagLogBoundedTest {
         assertTrue("环形窗口应保留最后 5 条", lines.any { it.contains("msg-45") })
     }
 
+    /** 打开会话关键时间线不能被普通热路径日志驱逐。 */
+    @Test
+    fun criticalTimeline_survivesOrdinaryLogFlood() {
+        DiagLog.initialize(null, DiagLog.Config(maxEntries = 5, maxFileBytes = 10_000))
+        DiagLog.record("PerfTrace", "open_id=x ev=route_enter t=1")
+        repeat(50) { DiagLog.record("noise", "frame-$it") }
+
+        val lines = DiagLog.snapshotForTest()
+        assertEquals("关键事件仍应占一个环形槽", 1, DiagLog.criticalCountForTest())
+        assertTrue("route_enter 不得被普通日志覆盖", lines.any { it.contains("ev=route_enter") })
+        assertEquals("缓冲总条数仍受上限约束", 5, DiagLog.size())
+    }
+
     /** 重写压力：10k 条远超容量，内存占用必须恒 ≤ 上限。 */
     @Test
     fun memoryNeverExceedsMaxEntries_underHeavyWrite() {

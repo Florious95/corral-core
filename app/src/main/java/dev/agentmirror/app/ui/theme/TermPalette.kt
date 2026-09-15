@@ -143,6 +143,8 @@ object TermPalette {
     private var cachedKey: TermThemeSelection? = null
     private var cachedLight: Scheme? = null
     private var cachedDark: Scheme? = null
+    /** Contrast repairs are a per-cell hot path; keep one diagnostic sample per palette source. */
+    private val contrastLoggedSources = mutableSetOf<String>()
     @Volatile private var tablesLight: RemapTables? = null
     @Volatile private var tablesDark: RemapTables? = null
 
@@ -158,6 +160,7 @@ object TermPalette {
         synchronized(lock) {
             this.store = store
             cachedKey = null
+            contrastLoggedSources.clear()
             tablesLight = null
             tablesDark = null
         }
@@ -167,6 +170,7 @@ object TermPalette {
         synchronized(lock) {
             overrideSelection = TermThemeSelection(lightFamilyId, darkFamilyId)
             cachedKey = null
+            contrastLoggedSources.clear()
             tablesLight = null
             tablesDark = null
         }
@@ -179,6 +183,7 @@ object TermPalette {
             cachedKey = null
             cachedLight = null
             cachedDark = null
+            contrastLoggedSources.clear()
             tablesLight = null
             tablesDark = null
         }
@@ -196,6 +201,7 @@ object TermPalette {
         val sel = overrideSelection ?: store?.load() ?: TermThemeSelection.DEFAULT
         if (sel != cachedKey) {
             cachedKey = sel
+            contrastLoggedSources.clear()
             cachedLight = assembleSlot(dark = false, familyId = sel.lightFamilyId, slot = "light")
             cachedDark = assembleSlot(dark = true, familyId = sel.darkFamilyId, slot = "dark")
             tablesLight = buildTables(cachedLight!!)
@@ -385,12 +391,14 @@ object TermPalette {
         } else {
             nearest(input, readable)
         }
-        DiagLog.record(
-            "term-remap-contrast",
-            "source=${pal.source} fg_rgb=${rgbTriple(fg0.argb)} bg=0x${hex(bg)} " +
-                "contrast_before=$before contrast_after=${contrast(after.argb, bg)}",
-            coalesceKey = "contrast|${pal.source}|${fg0.argb}|$bg|${after.argb}",
-        )
+        val shouldLog = synchronized(lock) { contrastLoggedSources.add(pal.source) }
+        if (shouldLog) {
+            DiagLog.record(
+                "term-remap-contrast",
+                "source=${pal.source} fg_rgb=${rgbTriple(fg0.argb)} bg=0x${hex(bg)} " +
+                    "contrast_before=$before contrast_after=${contrast(after.argb, bg)}",
+            )
+        }
         return after
     }
 

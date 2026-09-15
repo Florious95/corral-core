@@ -212,6 +212,7 @@ class SessionViewModel(
     // ---- ConnectionManager.Listener（单收件线程串行回调）----
 
     override fun onStateChanged(state: ConnectionState) {
+        DiagLog.recordCritical("session", "connection_state ref=$ref state=$state")
         connectionState = state
         connectionBanner = when (state) {
             ConnectionState.CONNECTING -> "连接中…"
@@ -234,8 +235,8 @@ class SessionViewModel(
         when (frame) {
             // 列表帧归 workspace 渲染；本页只关心协议级错误（被动异常必须可见）。
             is ErrorFrame -> {
-                DiagLog.record(
-                    "overlay",
+                DiagLog.recordCritical(
+                    "session",
                     "error_frame code=${frame.code.wire} reason=${frame.reason} " +
                         "overlay_open=$overlayOpen ref=$ref",
                 )
@@ -309,7 +310,19 @@ class SessionViewModel(
             // viewport 回写 live emulator。
             BinaryKind.SNAPSHOT -> {
                 if (inCopyMode) {
-                    copyModeEmulator.replaySnapshot(frame.data, copyModeEmulator.cols, copyModeEmulator.rows)
+                    val failure = runCatching {
+                        copyModeEmulator.replaySnapshot(frame.data, copyModeEmulator.cols, copyModeEmulator.rows)
+                    }.exceptionOrNull()
+                    if (failure != null) {
+                        DiagLog.recordCritical(
+                            "session",
+                            "snapshot_apply_failed ref=$ref mode=copy ex=${failure.javaClass.simpleName} " +
+                                "message=${failure.message?.take(240)}",
+                        )
+                        transientError = "快照应用失败：${failure.message ?: failure.javaClass.simpleName}"
+                        return
+                    }
+                    DiagLog.recordCritical("session", "snapshot_applied ref=$ref mode=copy bytes=${frame.data.size}")
                     presenter.setDisplaySnapshot(copyModeEmulator.snapshot())
                 } else {
                     if (awaitingReconnectSnapshot) {
@@ -340,7 +353,19 @@ class SessionViewModel(
                                 "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
                         )
                     }
-                    emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                    val failure = runCatching {
+                        emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                    }.exceptionOrNull()
+                    if (failure != null) {
+                        DiagLog.recordCritical(
+                            "session",
+                            "snapshot_apply_failed ref=$ref mode=live ex=${failure.javaClass.simpleName} " +
+                                "message=${failure.message?.take(240)}",
+                        )
+                        transientError = "快照应用失败：${failure.message ?: failure.javaClass.simpleName}"
+                        return
+                    }
+                    DiagLog.recordCritical("session", "snapshot_applied ref=$ref mode=live bytes=${frame.data.size}")
                     if (PerfTrace.isEnabled()) {
                         val alt = if (emulator.historyAvailable) 0 else 1
                         PerfTrace.emitSnapshotIfFirst(ref, alt, emulator.rows, emulator.cols) // snapshot_applied
@@ -353,10 +378,29 @@ class SessionViewModel(
                 }
             }
             // 增量始终完整推进 live emulator；copy-mode 画面由独立 snapshot override 提供。
-            BinaryKind.DELTA -> emulator.feed(frame.data)
+            BinaryKind.DELTA -> {
+                val failure = runCatching { emulator.feed(frame.data) }.exceptionOrNull()
+                if (failure != null) {
+                    DiagLog.recordCritical(
+                        "session",
+                        "delta_apply_failed ref=$ref bytes=${frame.data.size} " +
+                            "ex=${failure.javaClass.simpleName} message=${failure.message?.take(240)}",
+                    )
+                    transientError = "增量应用失败：${failure.message ?: failure.javaClass.simpleName}"
+                }
+            }
             // 历史分页：按服务端收敛后的实际区间头插（经验基）。
             BinaryKind.SCROLLBACK -> {
-                emulator.prependHistory(frame.data)
+                val failure = runCatching { emulator.prependHistory(frame.data) }.exceptionOrNull()
+                if (failure != null) {
+                    DiagLog.recordCritical(
+                        "session",
+                        "scrollback_apply_failed ref=$ref bytes=${frame.data.size} " +
+                            "ex=${failure.javaClass.simpleName} message=${failure.message?.take(240)}",
+                    )
+                    transientError = "历史应用失败：${failure.message ?: failure.javaClass.simpleName}"
+                    return
+                }
                 historyRequestInFlight = false
                 // 收敛判顶：实际区间起点比请求的更近 0 ⇒ 已到历史顶。
                 if (frame.fromLine > historyRequestedFromLine) {
@@ -368,6 +412,10 @@ class SessionViewModel(
 
     override fun onLocalDecodeError(code: FrameError, message: String) {
         // 坏帧/未知 type/版本不匹配必须显式浮出，不得静默（静默失效猎杀）。
+        DiagLog.recordCritical(
+            "session",
+            "decode_error code=$code message=${message.take(240)} ref=$ref",
+        )
         transientError = "解码失败：${message ?: code.name}"
     }
 
@@ -386,6 +434,7 @@ class SessionViewModel(
     }
 
     override fun onReconnect(attempt: Int, delayMs: Long) {
+        DiagLog.recordCritical("session", "reconnect ref=$ref attempt=$attempt delay_ms=$delayMs")
         // 状态条已由 onStateChanged(RECONNECTING) 覆盖；此处无需额外动作。
     }
 
@@ -668,9 +717,11 @@ class SessionViewModel(
     private fun onFirstGeometryReady(rows: Int, cols: Int) {
         synchronized(lifecycleLock) {
             if (disposed) return
+            DiagLog.recordCritical("session", "geometry_ready ref=$ref rows=$rows cols=$cols")
             emulator.resize(cols, rows)
             copyModeEmulator.resize(cols, rows)
-            manager.subscribe(ref, rows, cols)
+            val sent = manager.subscribe(ref, rows, cols)
+            DiagLog.recordCritical("session", "subscribe ref=$ref rows=$rows cols=$cols sent=$sent")
         }
     }
 
@@ -678,6 +729,7 @@ class SessionViewModel(
     private fun onResizeRequest(rows: Int, cols: Int, reason: String) {
         synchronized(lifecycleLock) {
             if (disposed) return
+            DiagLog.recordCritical("session", "resize_request ref=$ref rows=$rows cols=$cols reason=$reason")
             if (manager.resize(ref, rows, cols, reason)) {
                 emulator.resize(cols, rows)
                 copyModeEmulator.resize(cols, rows)
