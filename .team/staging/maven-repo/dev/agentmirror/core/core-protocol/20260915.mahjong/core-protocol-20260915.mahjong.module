@@ -1,0 +1,96 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "dev.agentmirror.core",
+    "module": "core-protocol",
+    "version": "20260915.mahjong",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-json",
+          "version": {
+            "requires": "1.11.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-protocol-20260915.mahjong.jar",
+          "url": "core-protocol-20260915.mahjong.jar",
+          "size": 200655,
+          "sha512": "4425c1cf7453b9d6db8671e281fcee50e81d75cb5ed2526f7e0bd307f358dd2f56e04ea69758120e9ea39fad71834be3feb5bcbc4030c8503f2c96a339d4499e",
+          "sha256": "db35acf437614c3e2478adde8bc496491b87a34751a5d918d6ae0f0513878a12",
+          "sha1": "8d632d05bd8efe48ce8ae5af5c6098346a18504d",
+          "md5": "68c4c2971279c0928964510313d442a9"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-json",
+          "version": {
+            "requires": "1.11.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-protocol-20260915.mahjong.jar",
+          "url": "core-protocol-20260915.mahjong.jar",
+          "size": 200655,
+          "sha512": "4425c1cf7453b9d6db8671e281fcee50e81d75cb5ed2526f7e0bd307f358dd2f56e04ea69758120e9ea39fad71834be3feb5bcbc4030c8503f2c96a339d4499e",
+          "sha256": "db35acf437614c3e2478adde8bc496491b87a34751a5d918d6ae0f0513878a12",
+          "sha1": "8d632d05bd8efe48ce8ae5af5c6098346a18504d",
+          "md5": "68c4c2971279c0928964510313d442a9"
+        }
+      ]
+    }
+  ]
+}
