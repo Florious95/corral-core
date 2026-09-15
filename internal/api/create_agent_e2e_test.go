@@ -38,10 +38,11 @@ func TestCreateAgentUsesAnchorSessionAndLocksTmuxName(t *testing.T) {
 		return strings.TrimSpace(string(out))
 	}
 	t.Cleanup(func() { _ = exec.Command("tmux", "-S", socket, "kill-server").Run() })
-	run("new-session", "-d", "-s", "anchor", "-c", cwd, "sh")
-	paneID := run("list-panes", "-t", "anchor", "-F", "#{pane_id}")
+	session := "0"
+	run("new-session", "-d", "-s", session, "-c", cwd, "sh")
+	paneID := run("list-panes", "-t", session, "-F", "#{pane_id}")
 	model := &discovery.Model{Workspaces: []discovery.Workspace{{CWD: cwd, Panes: []discovery.Pane{{
-		Socket: socket, Session: "anchor", PaneID: paneID, CWD: cwd, Command: "sh", Width: 80, Height: 24,
+		Socket: socket, Session: session, PaneID: paneID, CWD: cwd, Command: "sh", Width: 80, Height: 24,
 	}}}}}
 	e := startWS(t, Options{Token: "test-token", Discoverer: scriptedDiscoverer{model: model}, ListInterval: time.Hour})
 	e.srv.agentLaunchers = []agentLauncher{{

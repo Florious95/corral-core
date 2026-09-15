@@ -7,17 +7,15 @@ import (
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
-func TestAgentLauncherCommandsUseVerifiedProviderFlags(t *testing.T) {
+func TestPiAgentLauncherUsesTmuxNamingWithoutGuessedFlags(t *testing.T) {
 	pi := agentLauncher{
-		AgentLauncher: protocol.AgentLauncher{Provider: "pi", Naming: "cli", SupportsBypass: true},
+		AgentLauncher: protocol.AgentLauncher{Provider: "pi", Naming: "tmux", SupportsBypass: false},
 		command:       "/opt/homebrew/bin/pi",
-		nameArgs:      func(name string) []string { return []string{"--name", name} },
-		bypassArgs:    []string{"--approve"},
 	}
-	if got, want := agentCommand(pi, "修复员", true), []string{"/opt/homebrew/bin/pi", "--name", "修复员", "--approve"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentCommand(pi, "修复员", true), []string{"/opt/homebrew/bin/pi"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("pi args=%#v, want %#v", got, want)
 	}
-	if got, want := agentCommand(pi, "plain", false), []string{"/opt/homebrew/bin/pi", "--name", "plain"}; !reflect.DeepEqual(got, want) {
+	if got, want := agentCommand(pi, "plain", false), []string{"/opt/homebrew/bin/pi"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("pi no-bypass args=%#v, want %#v", got, want)
 	}
 }

@@ -23,10 +23,8 @@ type agentLauncher struct {
 func availableAgentLaunchers() []agentLauncher {
 	candidates := []agentLauncher{
 		{
-			AgentLauncher: protocol.AgentLauncher{Provider: "pi", DisplayName: "Pi Coding Agent", SupportsBypass: true, Naming: "cli"},
+			AgentLauncher: protocol.AgentLauncher{Provider: "pi", DisplayName: "Pi Coding Agent", SupportsBypass: false, Naming: "tmux"},
 			command:       "pi",
-			nameArgs:      func(name string) []string { return []string{"--name", name} },
-			bypassArgs:    []string{"--approve"},
 		},
 		{
 			AgentLauncher: protocol.AgentLauncher{Provider: "codex", DisplayName: "Codex CLI", SupportsBypass: true, Naming: "tmux"},

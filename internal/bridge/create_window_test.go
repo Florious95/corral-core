@@ -8,7 +8,7 @@ import (
 
 func TestCreateWindowPinsNameAndDisablesAutomaticRename(t *testing.T) {
 	tt := newTestTMUX(t)
-	session := "create-agent-test"
+	session := "0"
 	cwd := t.TempDir()
 	if _, err := tt.run("new-session", "-d", "-s", session, "-c", cwd, "sh"); err != nil {
 		t.Fatalf("new-session: %v", err)

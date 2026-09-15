@@ -24,8 +24,12 @@ func CreateWindow(ctx context.Context, socket, session, cwd, name string, comman
 		quoted[i] = shellQuote(arg)
 	}
 	command := strings.Join(quoted, " ")
+	targetSession := session
+	if !strings.HasSuffix(targetSession, ":") {
+		targetSession += ":"
+	}
 	out, err := runTmux(ctx, socket, defaultTimeout,
-		"new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session,
+		"new-window", "-d", "-P", "-F", "#{pane_id}", "-t", targetSession,
 		"-c", cwd, "-n", name, command)
 	if err != nil {
 		return "", err
