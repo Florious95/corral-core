@@ -1,0 +1,96 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "dev.agentmirror.core",
+    "module": "core-conn",
+    "version": "20260915.close",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "dev.agentmirror.core",
+          "module": "core-protocol",
+          "version": {
+            "requires": "20260915.close"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-conn-20260915.close.jar",
+          "url": "core-conn-20260915.close.jar",
+          "size": 47761,
+          "sha512": "b64594682d86ee765ee2a721503bdda1970f27b28e533c61607ff0d6489e71061acd1426194c17584dfe8504d53a9f946921807b3f3a81f7bfd3bee1e3d86228",
+          "sha256": "042cfecad32b4491e05eaa1d4bcd7902615db5c68f7c9a6e7ae564968b8ccceb",
+          "sha1": "d3cfdc982084f1efc88f7d4368f9da8de8ced53c",
+          "md5": "20551333021fef17c85ddf3254bac2b0"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "dev.agentmirror.core",
+          "module": "core-protocol",
+          "version": {
+            "requires": "20260915.close"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-conn-20260915.close.jar",
+          "url": "core-conn-20260915.close.jar",
+          "size": 47761,
+          "sha512": "b64594682d86ee765ee2a721503bdda1970f27b28e533c61607ff0d6489e71061acd1426194c17584dfe8504d53a9f946921807b3f3a81f7bfd3bee1e3d86228",
+          "sha256": "042cfecad32b4491e05eaa1d4bcd7902615db5c68f7c9a6e7ae564968b8ccceb",
+          "sha1": "d3cfdc982084f1efc88f7d4368f9da8de8ced53c",
+          "md5": "20551333021fef17c85ddf3254bac2b0"
+        }
+      ]
+    }
+  ]
+}

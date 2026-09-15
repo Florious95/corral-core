@@ -10,10 +10,10 @@ repositories {
     maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/maven/") }
 }
 dependencies {
-    implementation("dev.agentmirror.core:core-protocol:20260822.0")
-    implementation("dev.agentmirror.core:core-terminal:20260822.0")
-    implementation("dev.agentmirror.core:core-conn:20260822.0")
+    implementation("dev.agentmirror.core:core-protocol:20260915.close")
+    implementation("dev.agentmirror.core:core-terminal:20260915.close")
+    implementation("dev.agentmirror.core:core-conn:20260915.close")
 }
 ```
 
-版本 `20260822.0` 对应 tag `baseline-20260822-release`（真机金标准已过的稳定基线）。
+版本 `20260915.close` 包含 `close_session` / `close_session_result` 协议帧；对应本任务的 corral-core 源码候选。

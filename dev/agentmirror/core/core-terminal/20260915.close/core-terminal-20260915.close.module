@@ -1,0 +1,82 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "dev.agentmirror.core",
+    "module": "core-terminal",
+    "version": "20260915.close",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-terminal-20260915.close.jar",
+          "url": "core-terminal-20260915.close.jar",
+          "size": 59036,
+          "sha512": "1f1adb38a55701264a51a1f34021f0f293b1990e86d627339a6de11e60d389703545c9c2ffb38161df36efb15e5947ec40b26da0bae7defb8dc8eadcbe2ad04b",
+          "sha256": "cac9c4759560f3ab39c571ea2488fee734873db2fa6d69bc312324b64629a8fa",
+          "sha1": "9ba320727ff2ef2bd7e34b47a8c6d0273bcf34d5",
+          "md5": "9c9f709545d5b52ffcec99b1a23a4978"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-terminal-20260915.close.jar",
+          "url": "core-terminal-20260915.close.jar",
+          "size": 59036,
+          "sha512": "1f1adb38a55701264a51a1f34021f0f293b1990e86d627339a6de11e60d389703545c9c2ffb38161df36efb15e5947ec40b26da0bae7defb8dc8eadcbe2ad04b",
+          "sha256": "cac9c4759560f3ab39c571ea2488fee734873db2fa6d69bc312324b64629a8fa",
+          "sha1": "9ba320727ff2ef2bd7e34b47a8c6d0273bcf34d5",
+          "md5": "9c9f709545d5b52ffcec99b1a23a4978"
+        }
+      ]
+    }
+  ]
+}

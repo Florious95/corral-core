@@ -3,14 +3,15 @@
   <groupId>dev.agentmirror.core</groupId>
   <artifactId>core-conn</artifactId>
   <versioning>
-    <latest>20260915.agent</latest>
-    <release>20260915.agent</release>
+    <latest>20260915.close</latest>
+    <release>20260915.close</release>
     <versions>
       <version>20260822.0</version>
       <version>20260914.032773d</version>
       <version>20260915.mahjong</version>
       <version>20260915.agent</version>
+      <version>20260915.close</version>
     </versions>
-    <lastUpdated>20260915063455</lastUpdated>
+    <lastUpdated>20260915123128</lastUpdated>
   </versioning>
 </metadata>
