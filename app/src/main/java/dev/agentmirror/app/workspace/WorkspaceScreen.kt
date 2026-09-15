@@ -476,6 +476,7 @@ private fun WorkspaceList(
                 WorkspaceRow(
                     cwd = ws.cwd,
                     sessionCount = ws.sessionCount,
+                    workingCount = ws.workingCount,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),

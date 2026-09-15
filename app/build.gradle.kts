@@ -117,11 +117,11 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     // conn 层：协议控制帧 JSON 编解码（kotlinx-serialization-json，Apache-2.0）。
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    // Exact host-routing core implementation from 032773d3a25d8d7cb4b00c860465bd9537b4db48.
+    // Exact host-routing core candidate containing the workspace working-count wire field.
     // The immutable version and pinned Maven repository are declared in settings.gradle.kts.
-    implementation("dev.agentmirror.core:core-terminal:20260914.032773d")
-    implementation("dev.agentmirror.core:core-protocol:20260914.032773d")
-    implementation("dev.agentmirror.core:core-conn:20260914.032773d")
+    implementation("dev.agentmirror.core:core-terminal:20260915.mahjong")
+    implementation("dev.agentmirror.core:core-protocol:20260915.mahjong")
+    implementation("dev.agentmirror.core:core-conn:20260915.mahjong")
     // 配对：OkHttp WebSocket 真实传输（conn 层 WebSocketTransport 接口的 service 实现，
     // 清偿传输欠账①，leader 裁定 A）+ MockWebServer 单测（均 Apache-2.0）。
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

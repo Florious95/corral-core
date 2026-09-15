@@ -61,11 +61,13 @@ enum class ConnectionUi {
  * 一级工作区条目：cwd 聚合。session_count 以服务端权威值为准，客户端只渲染不重算。
  *
  * 060 uproot（2026-08-15）：二级会话列表模型（会话条目 / sessions）与聚合状态随
- * 状态判定整体拔除；一级菜单只保留 cwd 与会话数。
+ * 状态判定整体拔除；一级菜单只保留 cwd 与会话数。工作中数量由服务端
+ * working_count 权威下发，缺字段时兼容为 0。
  */
 data class WorkspaceUi(
     val cwd: String,
     val sessionCount: Int,
+    val workingCount: Int = 0,
 )
 
 /** 工作区首页整体 UI 状态（唯一渲染源）。 */
@@ -710,8 +712,13 @@ class WorkspaceViewModel(
         return ArrayList(byKey.values)
     }
 
-    /** 内部模型：cwd → session_count（保服务端下发顺序）。 */
-    private val workspaceCounts = LinkedHashMap<String, Int>()
+    /** 一级聚合元数据：两个计数随同一条 cwd 记录整体替换。 */
+    private data class WorkspaceCounts(
+        val sessionCount: Int,
+        val workingCount: Int,
+    )
+
+    private val workspaceCounts = LinkedHashMap<String, WorkspaceCounts>()
 
     // ---- ConnectionManager.Listener（接线层经 ServiceWire.uiConnector 原样路由进来）----
     // 与 SessionViewModel 同款接线语义：VM 实现 Listener 供接线层把 uiConnector 扇出的回调
@@ -776,7 +783,10 @@ class WorkspaceViewModel(
         )
         workspaceCounts.clear()
         for (w in frame.workspaces) {
-            workspaceCounts[w.cwd] = w.sessionCount
+            workspaceCounts[w.cwd] = WorkspaceCounts(
+                sessionCount = w.sessionCount,
+                workingCount = w.workingCount,
+            )
         }
         publish()
     }
@@ -787,7 +797,10 @@ class WorkspaceViewModel(
         // 二级会话增删（added/changed/removed sessions）是二级实时流的数据源，
         // 不在本一级 VM 消费；一级只关心 changed_workspaces 里的 session_count 元数据。
         for (w in frame.changedWorkspaces) {
-            workspaceCounts[w.cwd] = w.sessionCount
+            workspaceCounts[w.cwd] = WorkspaceCounts(
+                sessionCount = w.sessionCount,
+                workingCount = w.workingCount,
+            )
         }
         // 一级菜单的 session_count 是服务端权威值；removed 会话对一级的意义由
         // changed_workspaces 携带（无 removed_workspaces 通道，服务端保证覆盖）。
@@ -859,8 +872,12 @@ class WorkspaceViewModel(
     private fun publish() {
         _uiState.update {
             it.copy(
-                workspaces = workspaceCounts.map { (cwd, count) ->
-                    WorkspaceUi(cwd = cwd, sessionCount = count)
+                workspaces = workspaceCounts.map { (cwd, counts) ->
+                    WorkspaceUi(
+                        cwd = cwd,
+                        sessionCount = counts.sessionCount,
+                        workingCount = counts.workingCount,
+                    )
                 },
             )
         }

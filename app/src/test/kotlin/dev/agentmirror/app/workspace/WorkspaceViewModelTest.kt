@@ -45,8 +45,8 @@ class WorkspaceViewModelTest {
                 reqId = 1,
                 seq = 42,
                 workspaces = listOf(
-                    Workspace(cwd = "/proj/a", sessionCount = 2),
-                    Workspace(cwd = "/proj/b", sessionCount = 1),
+                    Workspace(cwd = "/proj/a", sessionCount = 2, workingCount = 2),
+                    Workspace(cwd = "/proj/b", sessionCount = 1, workingCount = 0),
                 ),
             ),
         )
@@ -58,9 +58,19 @@ class WorkspaceViewModelTest {
         val a = s.workspaces[0]
         assertEquals("/proj/a", a.cwd)
         assertEquals(2, a.sessionCount)
+        assertEquals(2, a.workingCount)
         val b = s.workspaces[1]
         assertEquals("/proj/b", b.cwd)
         assertEquals(1, b.sessionCount)
+        assertEquals(0, b.workingCount)
+    }
+
+    @Test
+    fun listing_missingWorkingCount_defaultsToZero() {
+        val vm = WorkspaceViewModel()
+        vm.onFrame(listing(workspaceOf("/legacy", count = 2)))
+
+        assertEquals(0, vm.uiState.value.workspaces.single().workingCount)
     }
 
     @Test
@@ -78,18 +88,24 @@ class WorkspaceViewModelTest {
         assertEquals(1, s.workspaces.single().sessionCount)
     }
 
-    // ---- delta：只消费 changed_workspaces 的 session_count ----
+    // ---- delta：只消费 changed_workspaces 的 aggregate counts ----
 
     @Test
-    fun delta_changedWorkspaces_updatesSessionCount() {
+    fun delta_changedWorkspaces_updatesSessionAndWorkingCount() {
         val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 2)))
+        vm.onFrame(listing(Workspace(cwd = "/a", sessionCount = 2, workingCount = 2)))
 
-        // changed_workspaces 覆盖 session_count（服务端权威）。
-        vm.onFrame(ListDeltaFrame(seq = 43, changedWorkspaces = listOf(Workspace(cwd = "/a", sessionCount = 1))))
+        // changed_workspaces 整体替换两个服务端权威计数。
+        vm.onFrame(
+            ListDeltaFrame(
+                seq = 43,
+                changedWorkspaces = listOf(Workspace(cwd = "/a", sessionCount = 1, workingCount = 0)),
+            ),
+        )
 
         val w = vm.uiState.value.workspaces.single()
         assertEquals(1, w.sessionCount)
+        assertEquals(0, w.workingCount)
     }
 
     @Test

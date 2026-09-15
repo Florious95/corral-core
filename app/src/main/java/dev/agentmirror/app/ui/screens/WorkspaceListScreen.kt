@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -36,15 +36,14 @@ import dev.agentmirror.app.ui.components.ScreenHeader
 import dev.agentmirror.app.ui.model.WorkspaceItem
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
-import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 
 /**
  * 工作区列表（一级）。
- * 行结构：❯ 方块 → 名称 / 路径 → 会话数 → ›
- * ❯ 方块从原来的 44dp 蓝色大块缩到 34dp 扁平化，保留作品牌符号但不再抢视线。
+ * 行结构：工作状态麻将牌 → 名称 / 路径 → 会话数 → ›。
+ * 麻将牌显示当前工作中的 Agent 数量；0 表示没有已识别的 working 节点。
  */
 @Composable
 fun WorkspaceListScreen(
@@ -99,6 +98,36 @@ fun WorkspaceListScreen(
     }
 }
 
+internal val MahjongWorkingColor = Color(0xFF10B981)
+internal val MahjongIdleColor = Color(0xFF6B7280)
+
+/** 一级工作区的工作状态指示牌：固定 3:4 竖向圆角矩形，不使用系统 emoji。 */
+@Composable
+internal fun MahjongStatusBadge(
+    workingCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    val count = workingCount.coerceAtLeast(0)
+    Box(
+        modifier
+            .width(26.dp)
+            .height(34.dp)
+            .clip(RoundedCornerShape(5.dp))
+            .background(if (count > 0) MahjongWorkingColor else MahjongIdleColor)
+            .testTag("mahjong-status-badge"),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppText(
+            text = count.toString(),
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+            lineHeightMultiplier = 1f,
+        )
+    }
+}
+
 @Composable
 private fun WorkspaceRow(
     item: WorkspaceItem,
@@ -117,15 +146,7 @@ private fun WorkspaceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            Modifier
-                .size(Dims.workspaceGlyphBox)
-                .clip(RoundedCornerShape(Radii.workspaceGlyphBox))
-                .background(p.accentContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            AppText("❯", p.accent, 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
-        }
+        MahjongStatusBadge(workingCount = item.workingCount)
         Column(Modifier.weight(1f)) {
             AppText(
                 text = item.name,

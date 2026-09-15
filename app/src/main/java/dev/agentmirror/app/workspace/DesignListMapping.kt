@@ -26,6 +26,7 @@ internal fun WorkspaceUi.toWorkspaceItem(): WorkspaceItem = WorkspaceItem(
     name = cwdDisplayName(cwd),
     path = cwd,
     sessionCount = sessionCount,
+    workingCount = workingCount,
 )
 
 /** 二级行 → 设计包 [SessionItem]。displayName 即服务端 Session.name，不预截断。 */

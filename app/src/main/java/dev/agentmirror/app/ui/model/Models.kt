@@ -41,6 +41,7 @@ data class WorkspaceItem(
     val name: String,
     val path: String,
     val sessionCount: Int,
+    val workingCount: Int = 0,
 )
 
 /**
