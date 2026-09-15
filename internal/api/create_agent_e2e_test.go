@@ -54,8 +54,8 @@ func TestCreateAgentUsesAnchorSessionAndLocksTmuxName(t *testing.T) {
 	if !result.OK || result.Naming != "tmux" || result.Name != "child window" {
 		t.Fatalf("create result=%+v, want successful tmux result", result)
 	}
-	meta := run("display-message", "-p", "-t", strings.TrimPrefix(result.Ref, socket+"\x1f"), "#{window_name}|#{automatic-rename}|#{allow-rename}")
-	if meta != "child window|0|0" {
-		t.Fatalf("new pane metadata=%q, want locked name", meta)
+	meta := run("display-message", "-p", "-t", strings.TrimPrefix(result.Ref, socket+"\x1f"), "#{window_name}|#{pane_title}|#{automatic-rename}|#{allow-rename}")
+	if meta != "child window|child window|0|0" {
+		t.Fatalf("new pane metadata=%q, want locked name and title", meta)
 	}
 }

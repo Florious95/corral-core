@@ -20,11 +20,11 @@ func TestCreateWindowPinsNameAndDisablesAutomaticRename(t *testing.T) {
 	if !strings.HasPrefix(paneID, "%") {
 		t.Fatalf("pane id=%q, want tmux pane id", paneID)
 	}
-	out, err := tt.run("display-message", "-p", "-t", paneID, "#{window_name}|#{automatic-rename}|#{allow-rename}")
+	out, err := tt.run("display-message", "-p", "-t", paneID, "#{window_name}|#{pane_title}|#{automatic-rename}|#{allow-rename}")
 	if err != nil {
 		t.Fatalf("display-message: %v", err)
 	}
-	if got, want := strings.TrimSpace(out), "named child|0|0"; got != want {
+	if got, want := strings.TrimSpace(out), "named child|named child|0|0"; got != want {
 		t.Fatalf("window metadata=%q, want %q", got, want)
 	}
 }

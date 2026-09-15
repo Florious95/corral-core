@@ -40,5 +40,8 @@ func CreateWindow(ctx context.Context, socket, session, cwd, name string, comman
 	if _, err := runTmux(ctx, socket, defaultTimeout, "set-option", "-w", "-t", paneID, "allow-rename", "off"); err != nil {
 		return "", err
 	}
+	if _, err := runTmux(ctx, socket, defaultTimeout, "select-pane", "-t", paneID, "-T", name); err != nil {
+		return "", err
+	}
 	return paneID, nil
 }
