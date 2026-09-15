@@ -28,7 +28,7 @@ dependencyResolutionManagement {
         // Local candidate repository is opt-in for isolated source/artifact validation.
         providers.gradleProperty("localCoreRepo").orNull?.let { maven { url = uri(it) } }
         // Host-routing core artifacts, pinned to the immutable Maven publication commit.
-        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/671c1757149679bdf389734457ba87cd35eb81ca/") }
+        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/0f365ec019bd4cf537972536eeae0f9588aa89dc/") }
         google()
         mavenCentral()
     }

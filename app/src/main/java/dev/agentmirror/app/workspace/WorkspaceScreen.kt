@@ -197,6 +197,12 @@ fun WorkspaceScreen(
                             connectionBanner = reconnectBanner ?: level2.banner?.takeIf {
                                 it == "会话列表更新失败，请下拉重试"
                             },
+                            agentLaunchers = state.agentLaunchers,
+                            createAgentState = state.createAgent,
+                            onCreateAgent = { anchorRef, provider, name, bypass ->
+                                viewModel.createAgent(anchorRef, provider, name, bypass)
+                            },
+                            onCreateAgentErrorCleared = viewModel::clearCreateAgentError,
                         )
                     }
                 }

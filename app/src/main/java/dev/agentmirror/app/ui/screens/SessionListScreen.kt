@@ -8,6 +8,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -27,6 +40,8 @@ import dev.agentmirror.app.ui.components.RowDivider
 import dev.agentmirror.app.ui.components.SessionRow
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.workspace.AgentLauncherUi
+import dev.agentmirror.app.workspace.CreateAgentUiState
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.TypeSizes
 
@@ -40,7 +55,7 @@ import dev.agentmirror.app.ui.theme.TypeSizes
  * @pre sessions carry fail-closed DTO provider/activity/health
  * @post every row is the shared 66dp title+path SessionRow
  * @err none
- * @inv this screen does not offer close/create/config actions
+ * @inv creation is limited to server-advertised launchers and the exact selected anchor
  * @consumes dev.agentmirror.app.tsnet
  * @consumes dev.agentmirror.app.ui.components
  * @consumes dev.agentmirror.app.ui.model
@@ -58,6 +73,10 @@ fun SessionListScreen(
     connectionPath: ConnectionPath? = null,
     connectionBanner: String? = null,
     bottomBar: @Composable () -> Unit = {},
+    agentLaunchers: List<AgentLauncherUi> = emptyList(),
+    createAgentState: CreateAgentUiState = CreateAgentUiState(),
+    onCreateAgent: (anchorRef: String, provider: String, name: String, bypass: Boolean) -> Unit = { _, _, _, _ -> },
+    onCreateAgentErrorCleared: () -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground)) {
@@ -71,7 +90,27 @@ fun SessionListScreen(
         ) {
             BackAffordance(label = "工作区", onBack = onBack)
             Box(Modifier.weight(1f))
+            var showCreateDialog by remember { mutableStateOf(false) }
+            TextButton(
+                onClick = {
+                    showCreateDialog = true
+                    onCreateAgentErrorCleared()
+                },
+                enabled = agentLaunchers.isNotEmpty() && !createAgentState.inFlight,
+                modifier = Modifier.testTag("create-agent-button"),
+            ) {
+                androidx.compose.material3.Text("+ 新建 Agent")
+            }
             if (connectionPath != null) LanPill(connectionPath)
+            if (showCreateDialog && agentLaunchers.isNotEmpty()) {
+                CreateAgentDialog(
+                    sessions = sessions,
+                    launchers = agentLaunchers,
+                    state = createAgentState,
+                    onDismiss = { showCreateDialog = false },
+                    onCreate = onCreateAgent,
+                )
+            }
         }
         Column(Modifier.padding(start = Dims.screenHPadding, end = Dims.screenHPadding, top = 2.dp, bottom = 13.dp)) {
             AppText(
@@ -116,6 +155,130 @@ fun SessionListScreen(
         }
         bottomBar()
     }
+}
+
+@Composable
+private fun CreateAgentDialog(
+    sessions: List<SessionItem>,
+    launchers: List<AgentLauncherUi>,
+    state: CreateAgentUiState,
+    onDismiss: () -> Unit,
+    onCreate: (String, String, String, Boolean) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var selectedProvider by remember { mutableStateOf(launchers.first().provider) }
+    var providerMenuExpanded by remember { mutableStateOf(false) }
+    var selectedAnchor by remember { mutableStateOf(sessions.firstOrNull()?.id.orEmpty()) }
+    var anchorMenuExpanded by remember { mutableStateOf(false) }
+    var bypass by remember { mutableStateOf(false) }
+    val launcher = launchers.firstOrNull { it.provider == selectedProvider }
+    val anchors = sessions
+    LaunchedEffect(launcher?.supportsBypass) {
+        if (launcher?.supportsBypass != true) bypass = false
+    }
+    LaunchedEffect(state.inFlight, state.error) {
+        if (!state.inFlight && state.error == null && name.isNotEmpty()) onDismiss()
+    }
+    AlertDialog(
+        onDismissRequest = { if (!state.inFlight) onDismiss() },
+        title = { androidx.compose.material3.Text("新建 Agent") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { androidx.compose.material3.Text("名称") },
+                    singleLine = true,
+                    modifier = Modifier.testTag("create-agent-name"),
+                )
+                Box {
+                    TextButton(
+                        onClick = { providerMenuExpanded = true },
+                        modifier = Modifier.testTag("create-agent-provider"),
+                    ) {
+                        androidx.compose.material3.Text(launcher?.displayName ?: "选择 Provider")
+                    }
+                    DropdownMenu(
+                        expanded = providerMenuExpanded,
+                        onDismissRequest = { providerMenuExpanded = false },
+                    ) {
+                        launchers.forEach { option ->
+                            DropdownMenuItem(
+                                text = { androidx.compose.material3.Text(option.displayName) },
+                                onClick = {
+                                    selectedProvider = option.provider
+                                    providerMenuExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+                if (anchors.size > 1) {
+                    Box {
+                        TextButton(
+                            onClick = { anchorMenuExpanded = true },
+                            modifier = Modifier.testTag("create-agent-anchor"),
+                        ) {
+                            androidx.compose.material3.Text(
+                                "目标：${anchors.firstOrNull { it.id == selectedAnchor }?.displayName ?: "选择会话"}",
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = anchorMenuExpanded,
+                            onDismissRequest = { anchorMenuExpanded = false },
+                        ) {
+                            anchors.forEach { item ->
+                                DropdownMenuItem(
+                                    text = { androidx.compose.material3.Text(item.displayName) },
+                                    onClick = {
+                                        selectedAnchor = item.id
+                                        anchorMenuExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                androidx.compose.foundation.layout.Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    androidx.compose.material3.Text(
+                        "Bypass 权限",
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Switch(
+                        checked = bypass,
+                        onCheckedChange = { bypass = it },
+                        enabled = launcher?.supportsBypass == true && !state.inFlight,
+                        modifier = Modifier.testTag("create-agent-bypass"),
+                    )
+                }
+                state.error?.let {
+                    androidx.compose.material3.Text(
+                        "创建失败：$it",
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("create-agent-error"),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = name.isNotBlank() && selectedAnchor.isNotBlank() && launcher != null && !state.inFlight,
+                onClick = { onCreate(selectedAnchor, launcher!!.provider, name, bypass) },
+                modifier = Modifier.testTag("create-agent-confirm"),
+            ) {
+                androidx.compose.material3.Text(if (state.inFlight) "创建中…" else "创建")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !state.inFlight) {
+                androidx.compose.material3.Text("取消")
+            }
+        },
+    )
 }
 
 /**

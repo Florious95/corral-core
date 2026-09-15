@@ -16,8 +16,10 @@
 
 package dev.agentmirror.app.workspace
 
+import dev.agentmirror.app.conn.AgentLauncherFrame
 import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.ConnectionState
+import dev.agentmirror.app.conn.CreateAgentResultFrame
 import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.conn.Workspace
@@ -122,6 +124,60 @@ class WorkspaceViewModelTest {
     }
 
     // ---- 无关帧：忽略不崩溃 ----
+
+    @Test
+    fun authAck_exposesAgentLaunchers() {
+        val vm = WorkspaceViewModel()
+        vm.onFrame(
+            AuthAckFrame(
+                ok = true,
+                agentLaunchers = listOf(
+                    AgentLauncherFrame("pi", "Pi Coding Agent", supportsBypass = true, naming = "cli"),
+                ),
+            ),
+        )
+        assertEquals("pi", vm.uiState.value.agentLaunchers.single().provider)
+        assertTrue(vm.uiState.value.agentLaunchers.single().supportsBypass)
+    }
+
+    @Test
+    fun createAgent_correlatesResultAndRefreshesVisibleLevel2() {
+        val subscribed = mutableListOf<String>()
+        var request: List<String>? = null
+        val vm = WorkspaceViewModel(
+            initialConnection = ConnectionUi.READY,
+            subscribeLevel2 = { subscribed += it },
+            createAgentRequest = { workspace, anchor, provider, name, bypass ->
+                request = listOf(workspace, anchor, provider, name, bypass.toString())
+                77L
+            },
+        )
+        vm.enterLevel2("/repo")
+        assertTrue(vm.createAgent("/tmp/tmux.sock\u001f%0", "pi", "child", true))
+        assertEquals(listOf("/repo", "/tmp/tmux.sock\u001f%0", "pi", "child", "true"), request)
+        assertTrue(vm.uiState.value.createAgent.inFlight)
+        vm.onFrame(CreateAgentResultFrame(reqId = 77L, ok = true, ref = "/tmp/tmux.sock\u001f%1", name = "child", naming = "cli"))
+        assertTrue(!vm.uiState.value.createAgent.inFlight)
+        assertEquals(null, vm.uiState.value.createAgent.error)
+        assertTrue(subscribed.size >= 2)
+    }
+
+    @Test
+    fun createAgent_disconnectClearsPendingWithoutReplay() {
+        var requests = 0
+        val vm = WorkspaceViewModel(
+            initialConnection = ConnectionUi.READY,
+            subscribeLevel2 = {},
+            createAgentRequest = { _, _, _, _, _ -> requests++; 5L },
+        )
+        vm.enterLevel2("/repo")
+        assertTrue(vm.createAgent("anchor", "pi", "child", false))
+        vm.onConnectionStateChanged(ConnectionState.RECONNECTING)
+        assertFalse(vm.uiState.value.createAgent.inFlight)
+        assertEquals("创建结果未确认，请刷新", vm.uiState.value.createAgent.error)
+        vm.onFrame(CreateAgentResultFrame(reqId = 5L, ok = true, ref = "ref", name = "child", naming = "cli"))
+        assertEquals(1, requests)
+    }
 
     @Test
     fun onFrame_ignoresUnrelatedFrames() {

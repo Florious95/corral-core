@@ -16,9 +16,12 @@
 
 package dev.agentmirror.app.workspace
 
+import dev.agentmirror.app.conn.AgentLauncherFrame
+import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
+import dev.agentmirror.app.conn.CreateAgentResultFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.Level2Frame
@@ -74,6 +77,8 @@ data class WorkspaceUi(
 data class WorkspaceUiState(
     val connection: ConnectionUi = ConnectionUi.CONNECTING,
     val workspaces: List<WorkspaceUi> = emptyList(),
+    val agentLaunchers: List<AgentLauncherUi> = emptyList(),
+    val createAgent: CreateAgentUiState = CreateAgentUiState(),
 ) {
     /** 连接未就绪且无缓存列表 = 加载态；此时不能提前显示“暂无工作区”。 */
     val isLoading: Boolean get() = connection == ConnectionUi.CONNECTING && workspaces.isEmpty()
@@ -127,6 +132,10 @@ class WorkspaceViewModel(
         ServiceWire.managerOrNull()?.unsubscribeLevel2(cwd)
         Unit
     },
+    private val createAgentRequest: (String, String, String, String, Boolean) -> Long? =
+        { workspace, anchorRef, provider, name, bypass ->
+            ServiceWire.managerOrNull()?.sendCreateAgent(workspace, anchorRef, provider, name, bypass)
+        },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     favoriteStore: FavoriteStore = MemoryFavoriteStore(),
 ) : ConnectionManager.Listener {
@@ -203,6 +212,7 @@ class WorkspaceViewModel(
     }
 
     private var subscribedWorkspace: String? = null
+    private var pendingCreateAgentReqId: Long? = null
     private var lastLevel2AtMs: Long = 0L
     private var lastQuietDiagnosticStale: Boolean? = null
 
@@ -429,6 +439,26 @@ class WorkspaceViewModel(
         cancelFavoriteFetch(restoreVisible = false)
         level2RetryUsed = false
         requestVisibleLevel2(cwd, showRefresh = true)
+    }
+
+    fun clearCreateAgentError() {
+        if (!_uiState.value.createAgent.inFlight && _uiState.value.createAgent.error != null) {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState()) }
+        }
+    }
+
+    /** Send one create_agent request for the exact selected level-2 anchor. */
+    fun createAgent(anchorRef: String, provider: String, name: String, bypass: Boolean): Boolean {
+        if (_uiState.value.createAgent.inFlight) return false
+        val workspace = subscribedWorkspace ?: return false
+        val reqId = createAgentRequest(workspace, anchorRef, provider, name, bypass)
+        if (reqId == null) {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState(error = "创建请求发送失败")) }
+            return false
+        }
+        pendingCreateAgentReqId = reqId
+        _uiState.update { it.copy(createAgent = CreateAgentUiState(inFlight = true)) }
+        return true
     }
 
     fun toggleFavorite(entry: L2Entry) {
@@ -730,6 +760,8 @@ class WorkspaceViewModel(
 
     override fun onFrame(frame: FramePayload) {
         when (frame) {
+            is AuthAckFrame -> applyAuthAck(frame)
+            is CreateAgentResultFrame -> applyCreateAgentResult(frame)
             is ListingFrame -> applyListing(frame)
             is ListDeltaFrame -> applyDelta(frame)
             is Level2Frame -> applyLevel2(frame)
@@ -754,6 +786,10 @@ class WorkspaceViewModel(
     fun onConnectionStateChanged(state: ConnectionState) {
         val wasReady = _uiState.value.connection == ConnectionUi.READY
         _uiState.update { it.copy(connection = state.toUi()) }
+        if (state != ConnectionState.READY && pendingCreateAgentReqId != null) {
+            pendingCreateAgentReqId = null
+            _uiState.update { it.copy(createAgent = CreateAgentUiState(error = "创建结果未确认，请刷新")) }
+        }
         if (state == ConnectionState.READY) {
             if (!wasReady) level2RetryUsed = false
             val favorite = favoriteFetchInFlight
@@ -769,6 +805,30 @@ class WorkspaceViewModel(
             _refreshing.value = false
         }
     }
+
+    private fun applyAuthAck(frame: AuthAckFrame) {
+        if (!frame.ok) return
+        val launchers = frame.agentLaunchers.map(::toAgentLauncherUi)
+        _uiState.update { it.copy(agentLaunchers = launchers) }
+    }
+
+    private fun applyCreateAgentResult(frame: CreateAgentResultFrame) {
+        if (pendingCreateAgentReqId != frame.reqId) return
+        pendingCreateAgentReqId = null
+        if (frame.ok) {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState()) }
+            refreshLevel2()
+        } else {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState(error = frame.reason)) }
+        }
+    }
+
+    private fun toAgentLauncherUi(frame: AgentLauncherFrame) = AgentLauncherUi(
+        provider = frame.provider,
+        displayName = frame.displayName,
+        supportsBypass = frame.supportsBypass,
+        naming = frame.naming,
+    )
 
     // ---- listing：权威全量，整体替换 ----
 
