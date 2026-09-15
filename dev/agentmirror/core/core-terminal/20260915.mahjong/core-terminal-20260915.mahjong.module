@@ -1,0 +1,82 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "dev.agentmirror.core",
+    "module": "core-terminal",
+    "version": "20260915.mahjong",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-terminal-20260915.mahjong.jar",
+          "url": "core-terminal-20260915.mahjong.jar",
+          "size": 59036,
+          "sha512": "ec02fb1ced43769f269ab0cbcab89ddff1c3b52edd99162e281b165c89ea3dfbb095e03fe1048c43c8481efd8be96d069674c0e727f1921d93dc80eb173854cf",
+          "sha256": "b285895df58ee1b645648a8f4200dd254788fb9121039871615f753df23f2c64",
+          "sha1": "dba0bbd2388b05f77c02c8d21b04eb99ffd7c135",
+          "md5": "400935b85b16b08ac41f94ef3feb1970"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "core-terminal-20260915.mahjong.jar",
+          "url": "core-terminal-20260915.mahjong.jar",
+          "size": 59036,
+          "sha512": "ec02fb1ced43769f269ab0cbcab89ddff1c3b52edd99162e281b165c89ea3dfbb095e03fe1048c43c8481efd8be96d069674c0e727f1921d93dc80eb173854cf",
+          "sha256": "b285895df58ee1b645648a8f4200dd254788fb9121039871615f753df23f2c64",
+          "sha1": "dba0bbd2388b05f77c02c8d21b04eb99ffd7c135",
+          "md5": "400935b85b16b08ac41f94ef3feb1970"
+        }
+      ]
+    }
+  ]
+}
