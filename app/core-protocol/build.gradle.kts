@@ -25,7 +25,7 @@ plugins {
 }
 
 group = "dev.agentmirror.core"
-version = "20260915.agent"
+version = "20260915.close"
 apply(from = rootProject.file("gradle/core-maven-publish.gradle"))
 
 kotlin {

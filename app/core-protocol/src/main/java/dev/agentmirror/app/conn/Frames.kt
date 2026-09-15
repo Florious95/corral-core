@@ -54,6 +54,8 @@ sealed interface FramePayload {
                     FrameType.AUTH_ACK -> json.decodeFromJsonElement(AuthAckFrame.serializer(), el)
                     FrameType.CREATE_AGENT -> json.decodeFromJsonElement(CreateAgentFrame.serializer(), el)
                     FrameType.CREATE_AGENT_RESULT -> json.decodeFromJsonElement(CreateAgentResultFrame.serializer(), el)
+                    FrameType.CLOSE_SESSION -> json.decodeFromJsonElement(CloseSessionFrame.serializer(), el)
+                    FrameType.CLOSE_SESSION_RESULT -> json.decodeFromJsonElement(CloseSessionResultFrame.serializer(), el)
                     FrameType.LIST -> json.decodeFromJsonElement(ListFrame.serializer(), el)
                     FrameType.LISTING -> json.decodeFromJsonElement(ListingFrame.serializer(), el)
                     FrameType.LIST_DELTA -> json.decodeFromJsonElement(ListDeltaFrame.serializer(), el)
@@ -107,6 +109,11 @@ sealed interface FramePayload {
                 is CreateAgentResultFrame -> throw FrameEncodeException(
                     FrameError.INVALID_FIELD,
                     "create_agent_result is server-to-client only, never sent upstream",
+                )
+                is CloseSessionFrame -> json.encodeToJsonElement(CloseSessionFrame.serializer(), frame)
+                is CloseSessionResultFrame -> throw FrameEncodeException(
+                    FrameError.INVALID_FIELD,
+                    "close_session_result is server-to-client only, never sent upstream",
                 )
                 is ListFrame -> json.encodeToJsonElement(ListFrame.serializer(), frame)
                 is ListingFrame -> json.encodeToJsonElement(ListingFrame.serializer(), frame)
@@ -247,6 +254,36 @@ data class CreateAgentResultFrame(
             "successful create_agent_result has invalid fields"
         !ok && (reason !in setOf("invalid_field", "target_not_found", "provider_unavailable", "unsupported_bypass", "launch_failed") || ref.isNotEmpty() || name.isNotEmpty() || naming.isNotEmpty()) ->
             "failed create_agent_result has invalid fields"
+        else -> null
+    }
+}
+
+/** C→S request to terminate exactly the pane addressed by the opaque ref. */
+@Serializable
+data class CloseSessionFrame(
+    @SerialName("req_id") val reqId: Long,
+    @SerialName("ref") val ref: String,
+) : FramePayload {
+    override val frameType: String get() = FrameType.CLOSE_SESSION
+    override fun validate(): String? = when {
+        reqId <= 0 -> "close_session req_id must be >= 1"
+        ref.isEmpty() -> "close_session ref must be non-empty"
+        else -> null
+    }
+}
+
+/** S→C typed result for [CloseSessionFrame]. */
+@Serializable
+data class CloseSessionResultFrame(
+    @SerialName("req_id") val reqId: Long,
+    @SerialName("ok") val ok: Boolean,
+    @SerialName("reason") val reason: String = "",
+) : FramePayload {
+    override val frameType: String get() = FrameType.CLOSE_SESSION_RESULT
+    override fun validate(): String? = when {
+        reqId <= 0 -> "close_session_result req_id must be >= 1"
+        ok && reason.isNotEmpty() -> "accepted close_session_result must not carry a reason"
+        !ok && reason.isEmpty() -> "failed close_session_result must carry a reason"
         else -> null
     }
 }

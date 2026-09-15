@@ -41,6 +41,8 @@ internal object FrameType {
     const val AUTH_ACK = "auth_ack"
     const val CREATE_AGENT = "create_agent"
     const val CREATE_AGENT_RESULT = "create_agent_result"
+    const val CLOSE_SESSION = "close_session"
+    const val CLOSE_SESSION_RESULT = "close_session_result"
     const val LIST = "list"
     const val LISTING = "listing"
     const val LIST_DELTA = "list_delta"

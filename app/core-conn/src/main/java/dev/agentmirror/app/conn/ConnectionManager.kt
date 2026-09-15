@@ -634,6 +634,20 @@ class ConnectionManager(
     }
 
     /**
+     * 请求服务端精准关闭一个会话 pane。
+     *
+     * @return 已发送的 req_id；未 READY、ref 为空或传输失败返回 null。
+     * 结果经 Listener.onFrame 以 [CloseSessionResultFrame] 到达。
+     */
+    fun sendCloseSession(ref: String): Long? {
+        if (ref.isEmpty()) return null
+        val conn = connection ?: return null
+        if (!conn.isReady) return null
+        val reqId = nextReqId++
+        return if (conn.send(CloseSessionFrame(reqId = reqId, ref = ref))) reqId else null
+    }
+
+    /**
      * 拉一页历史（from_line 按 tmux capture-pane 语义；count >= 1）。
      *
      * @contract
