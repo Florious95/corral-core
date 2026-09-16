@@ -40,6 +40,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -58,6 +60,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -65,6 +72,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -113,6 +122,7 @@ fun CommandInputBar(
     }
     val sourceExpandedLines = expandedLines.coerceIn(2, 5)
     val editorExpanded = focused && collapseRequest == 0
+    val onSend = { onSendText(value.text) }
     val fieldHeight by animateDpAsState(
         targetValue = sourceInputFieldHeightDp(editorExpanded, sourceExpandedLines).dp,
         animationSpec = tween(
@@ -160,8 +170,25 @@ fun CommandInputBar(
             ) {
                 BasicTextField(
                     value = value,
-                    onValueChange = onValueChange,
-                    maxLines = if (editorExpanded) sourceExpandedLines else 1,
+                    onValueChange = { newValue ->
+                        if (newValue.text.contains('\n')) {
+                            val cleaned = newValue.text.replace("\n", "")
+                            onValueChange(newValue.copy(text = cleaned))
+                            if (cleaned.isNotBlank()) {
+                                onSendText(cleaned)
+                            }
+                        } else {
+                            onValueChange(newValue)
+                        }
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Send,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSend = { onSend() },
+                    ),
                     textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.5.sp,
@@ -192,6 +219,16 @@ fun CommandInputBar(
                         .height(fieldHeight)
                         .padding(vertical = 6.dp)
                         .testTag("session-command-editor")
+                        .onPreviewKeyEvent { event ->
+                            if (event.key == Key.Enter && event.type == KeyEventType.KeyUp) {
+                                onSend()
+                                true
+                            } else if (event.key == Key.Enter) {
+                                true
+                            } else {
+                                false
+                            }
+                        }
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 awaitFirstDown(
@@ -238,11 +275,13 @@ fun CommandInputBar(
                 label = "sendForeground",
             )
             Surface(
-                onClick = { onSendText(value.text) },
+                onClick = { onSend() },
                 shape = CircleShape,
                 color = sendBackground,
                 border = BorderStroke(1.dp, source.accent),
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier
+                    .size(32.dp)
+                    .testTag("session-send-button"),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(

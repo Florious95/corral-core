@@ -34,6 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -440,7 +445,15 @@ private fun DraftField(
             }
             BasicTextField(
                 value = draft,
-                onValueChange = onDraftChange,
+                onValueChange = { newValue ->
+                    if (newValue.text.contains('\n')) {
+                        val cleaned = newValue.text.replace("\n", "")
+                        onDraftChange(newValue.copy(text = cleaned))
+                        if (cleaned.isNotBlank()) onSend()
+                    } else {
+                        onDraftChange(newValue)
+                    }
+                },
                 singleLine = true,
                 textStyle = LocalTextStyle.current.merge(
                     TextStyle(
@@ -455,7 +468,17 @@ private fun DraftField(
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { onSend() }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("session-draft"),
+                    .testTag("session-draft")
+                    .onPreviewKeyEvent { event ->
+                        if (event.key == Key.Enter && event.type == KeyEventType.KeyUp) {
+                            onSend()
+                            true
+                        } else if (event.key == Key.Enter) {
+                            true
+                        } else {
+                            false
+                        }
+                    },
             )
         }
     }

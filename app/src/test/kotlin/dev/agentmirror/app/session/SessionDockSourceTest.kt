@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
@@ -38,9 +40,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -140,6 +144,91 @@ class SessionDockSourceTest {
         compose.waitForIdle()
         assertEquals(listOf("", "ls"), sent)
         assertEquals(32f, inputFieldHeight(), 0.5f)
+    }
+
+    @Test
+    fun editorHasImeActionSendAndPerformsSendOnImeAction() {
+        val sent = mutableListOf<String>()
+        compose.setContent {
+            var value by remember { mutableStateOf(TextFieldValue("")) }
+            SessionDockTheme(dark = false) {
+                CommandInputBar(
+                    value = value,
+                    onValueChange = { value = it },
+                    onSendText = {
+                        sent += it
+                        value = TextFieldValue("")
+                    },
+                    onPickAttachment = {},
+                )
+            }
+        }
+
+        // Verify IME action is Send
+        compose.onNodeWithTag("session-command-editor").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.ImeAction, ImeAction.Send),
+        )
+
+        // Type text and trigger IME action (simulating pressing Send on soft keyboard)
+        compose.onNodeWithTag("session-command-editor").performTextInput("git status")
+        compose.onNodeWithTag("session-command-editor").performImeAction()
+
+        assertEquals(listOf("git status"), sent)
+        compose.onNodeWithTag("session-command-editor").assert(hasText(""))
+    }
+
+    @Test
+    fun editorInterceptsNewlineAndSubmitsDirectlyWithoutInsertingNewline() {
+        val sent = mutableListOf<String>()
+        compose.setContent {
+            var value by remember { mutableStateOf(TextFieldValue("")) }
+            SessionDockTheme(dark = false) {
+                CommandInputBar(
+                    value = value,
+                    onValueChange = { value = it },
+                    onSendText = {
+                        sent += it
+                        value = TextFieldValue("")
+                    },
+                    onPickAttachment = {},
+                )
+            }
+        }
+
+        // Emulating an IME or physical keyboard that inputs text ending in newline
+        compose.onNodeWithTag("session-command-editor").performTextInput("pwd\n")
+
+        // Must submit immediately and not leave newline in draft
+        assertEquals(listOf("pwd"), sent)
+        compose.onNodeWithTag("session-command-editor").assert(hasText(""))
+    }
+
+    @Test
+    fun sendButtonDirectlyTriggersSendOnFirstClickWhenFocused() {
+        val sent = mutableListOf<String>()
+        compose.setContent {
+            var value by remember { mutableStateOf(TextFieldValue("")) }
+            SessionDockTheme(dark = false) {
+                CommandInputBar(
+                    value = value,
+                    onValueChange = { value = it },
+                    onSendText = {
+                        sent += it
+                        value = TextFieldValue("")
+                    },
+                    onPickAttachment = {},
+                )
+            }
+        }
+
+        // Focus and type text
+        compose.onNodeWithTag("session-command-editor").performClick()
+        compose.onNodeWithTag("session-command-editor").performTextInput("uname -a")
+
+        // First click on SendButton directly triggers send
+        compose.onNodeWithTag("session-send-button").performClick()
+        assertEquals(listOf("uname -a"), sent)
+        compose.onNodeWithTag("session-command-editor").assert(hasText(""))
     }
 
     @Test
