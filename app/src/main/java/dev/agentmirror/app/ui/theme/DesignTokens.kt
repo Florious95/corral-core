@@ -418,7 +418,8 @@ val LightPalette = AppPalette(
     glassSurface = Color(0xB3FFFFFF),
     glassStroke = Color(0x2E101828),
     glassSpecular = Color(0xB8FFFFFF),
-    glassCardFill = Color(0xC7FFFFFF),
+    // 列表卡面 78% → 68%：多放出约 10% 透光率，与底部液态胶囊不再断层
+    glassCardFill = Color(0xADFFFFFF),
     glassCardFillPressed = Color(0xFFEDF0F6),
 
     consoleBackground = Color(0xFFEBEDF2),
@@ -512,7 +513,8 @@ val DarkPalette = AppPalette(
     glassSurface = Color(0xA60F1725),
     glassStroke = Color(0x3D9CC0FF),
     glassSpecular = Color(0x4DC4D8FF),
-    glassCardFill = Color(0x9E131C2E),
+    // 列表卡面 62% → 52%：同样放出约 10% 透光率
+    glassCardFill = Color(0x85131C2E),
     glassCardFillPressed = Color(0xFF1A2438),
 
     consoleBackground = Color(0xFF0E1421),

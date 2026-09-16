@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.AppPalette
+import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Motion
@@ -439,7 +440,10 @@ fun TonalTextButton(
     }
 }
 
-/** 设置卡片里的主要按钮（轻着色，⛔ 不用满宽实心） */
+/**
+ * 设置卡片里的主要按钮：主色透光薄染（accent @ 0.35）+ 1dp 主色细边，按压叠一层变暗蒙层。
+ * 纯 background / border，⛔ 不用满宽实心，⛔ 不采样背景。
+ */
 @Composable
 fun CardTonalButton(
     text: String,
@@ -449,17 +453,27 @@ fun CardTonalButton(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val shape = RoundedCornerShape(Radii.cardButton)
     Box(
         modifier = modifier
             .height(Dims.cardButtonHeight)
-            .clip(RoundedCornerShape(Radii.cardButton))
-            .background(if (pressed) p.accentContainerPressed else p.accentContainer)
+            .clip(shape)
+            .background(p.accentContainer.copy(alpha = TonalButtonFillAlpha))
+            .background(if (pressed) FlatGlassPressDim else Color.Transparent)
+            .border(TonalButtonStrokeWidth, p.accent.copy(alpha = TonalButtonStrokeAlpha), shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         AppText(text, p.accent, TypeSizes.cardButton, fontWeight = FontWeight.SemiBold, lineHeightMultiplier = 1f)
     }
 }
+
+private const val TonalButtonFillAlpha = 0.35f
+private const val TonalButtonStrokeAlpha = 0.45f
+private val TonalButtonStrokeWidth = 1.dp
+
+/** 纯平薄片按压变暗蒙层（浅深通用：黑 12%）。 */
+private val FlatGlassPressDim = Color(0x1F000000)
 
 /** 设置卡片里的次要按钮（描边） */
 @Composable
@@ -484,23 +498,34 @@ fun CardOutlineButton(
     }
 }
 
-/** 设置页卡片外壳 */
+/**
+ * 设置页卡片外壳：纯平半透薄板（FlatGlass）。浅色 0xEEFFFFFF / 深色 0xCC1E1E20 的平面底
+ * + 0.5dp 发丝边（浅色微暗 / 深色微光）。卡片处于 ThreePane 的 layerBackdrop 录制树内，
+ * ⛔ 只能用 background / border，⛔ 不得换成 glassPanel / glassControl（自采样递归崩溃）。
+ */
 @Composable
 fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    val p = LocalAppPalette.current
+    val dark = LocalAppPalette.current === DarkPalette
+    val shape = RoundedCornerShape(Radii.card)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(Radii.card))
-            .background(p.cardBackground)
-            .border(Dims.hairline, p.cardBorder, RoundedCornerShape(Radii.card))
+            .clip(shape)
+            .background(if (dark) SettingsCardFillDark else SettingsCardFillLight)
+            .border(SettingsCardStrokeWidth, if (dark) SettingsCardStrokeDark else SettingsCardStrokeLight, shape)
             .padding(Dims.cardPadding),
         content = content,
     )
 }
+
+private val SettingsCardFillLight = Color(0xEEFFFFFF)
+private val SettingsCardFillDark = Color(0xCC1E1E20)
+private val SettingsCardStrokeLight = Color(0x33000000)
+private val SettingsCardStrokeDark = Color(0x33FFFFFF)
+private val SettingsCardStrokeWidth = 0.5.dp
 
 /** 设置页现代纯平开关（独立于 LocalGlassBackdrop 录制树，避免 RenderNode 递归循环） */
 @Composable

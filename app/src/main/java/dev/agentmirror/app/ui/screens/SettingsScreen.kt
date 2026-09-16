@@ -226,6 +226,17 @@ private fun CardBody(text: String) {
     )
 }
 
+/*
+ * 设置页控件的 FlatGlass 常量：未选中微透底板（中性灰 8%）+ 中性细边，
+ * 选中主色薄染（accent @ 0.25）+ 主色细光边；0.5dp 发丝边。
+ * 全部是 background / border（设置页在 layerBackdrop 录制树内，⛔ 不采样）。
+ */
+private val FlatChipFill = Color(0x15808080)
+private val FlatChipStroke = Color(0x26808080)
+private val FlatHairline = 0.5.dp
+private const val SelectedTintAlpha = 0.25f
+private const val SelectedStrokeAlpha = 0.55f
+
 @Composable
 private fun FontSizeChip(
     value: Int,
@@ -236,22 +247,26 @@ private fun FontSizeChip(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val shape = RoundedCornerShape(Radii.chip)
     val bg = when {
-        selected -> p.chipSelectedBg
+        selected -> p.accent.copy(alpha = SelectedTintAlpha)
         pressed -> p.chipPressed
-        else -> p.chipBg
+        else -> FlatChipFill
     }
+    val stroke = if (selected) p.accent.copy(alpha = SelectedStrokeAlpha) else FlatChipStroke
     Box(
         modifier = modifier
             .height(Dims.chipHeight)
-            .clip(RoundedCornerShape(Radii.chip))
+            .clip(shape)
             .background(bg)
+            .border(FlatHairline, stroke, shape)
             .clickable(interactionSource = interaction, indication = null, enabled = !selected, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        // 选中底只是薄染，数字改用主色实字保证清晰，不再用白字。
         AppText(
             text = value.toString(),
-            color = if (selected) p.chipSelectedText else p.chipText,
+            color = if (selected) p.accent else p.chipText,
             fontSize = TypeSizes.chip,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             fontFamily = FontFamily.Monospace,
@@ -307,11 +322,14 @@ private fun AppearanceSegmented(
 ) {
     val p = LocalAppPalette.current
     val options = remember { listOf(Appearance.Light, Appearance.Dark, Appearance.System) }
+    val trackShape = RoundedCornerShape(Radii.segmentedTrack)
+    val itemShape = RoundedCornerShape(Radii.segmentedItem)
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(Radii.segmentedTrack))
-            .background(p.segmentedTrack)
+            .clip(trackShape)
+            .background(FlatChipFill)
+            .border(FlatHairline, FlatChipStroke, trackShape)
             .padding(Dims.segmentedTrackPadding),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -323,13 +341,16 @@ private fun AppearanceSegmented(
                 Modifier
                     .weight(1f)
                     .height(Dims.segmentedItemHeight)
-                    .clip(RoundedCornerShape(Radii.segmentedItem))
+                    .clip(itemShape)
                     .background(
                         when {
-                            isOn -> p.segmentedSelectedBg
+                            isOn -> p.accent.copy(alpha = SelectedTintAlpha)
                             pressed -> p.chipPressed
                             else -> Color.Transparent
                         }
+                    )
+                    .then(
+                        if (isOn) Modifier.border(FlatHairline, p.accent.copy(alpha = SelectedStrokeAlpha), itemShape) else Modifier,
                     )
                     .clickable(interactionSource = interaction, indication = null, enabled = !isOn) { onSelect(option) },
                 contentAlignment = Alignment.Center,
