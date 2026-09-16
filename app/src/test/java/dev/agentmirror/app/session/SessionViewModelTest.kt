@@ -316,6 +316,23 @@ class SessionViewModelTest {
     }
 
     @Test
+    fun sendDraft_whenInputSyncEnabled_andComposingTextNotYetSynced_flushesDiffBeforeEnter() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = true
+        // Active IME composition: passthrough input holds keys (0 frames sent)
+        val composing = TextFieldValue(text = "git status", composition = androidx.compose.ui.text.TextRange(0, 10))
+        h.vm.onPassthroughInput(tv(""), composing)
+        assertTrue("composing text must not emit passthrough keys", h.inputFrames().isEmpty())
+
+        // User clicks send while keyboard / composition is still active
+        h.vm.sendDraft("git status")
+        val frames = h.inputFrames()
+        assertEquals("must send typing frame followed by bare enter frame", 2, frames.size)
+        assertEquals("first frame must type the unsynced draft into CLI", "git status", frames[0].text)
+        assertEquals("second frame must be bare enter to execute", "", frames[1].text)
+    }
+
+    @Test
     fun sendDraftAckFailureShowsError() {
         val h = Harness()
         h.vm.sendDraft()

@@ -475,6 +475,15 @@ class SessionViewModel(
             return
         }
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
+
+        // 核心修复：开启实时直通输入（inputSyncEnabled == true）时，
+        // 若草稿在输入法组合期（IME composition）期间尚未直通上屏到远端 CLI，
+        // 或者已同步内容滞后于本地待发送草稿，发送瞬间必须将差异补齐到远端 CLI！
+        // 坚决杜绝在远端 CLI 行空时直接发裸回车触发换行！
+        if (inputSyncEnabled && text.isNotEmpty() && syncedText != text) {
+            applyDiffSync(text)
+        }
+
         val textToSend = if (inputSyncEnabled) {
             ""
         } else {

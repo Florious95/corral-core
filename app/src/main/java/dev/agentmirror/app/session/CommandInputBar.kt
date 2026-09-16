@@ -27,8 +27,10 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -78,6 +80,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 
 /** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
 internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
@@ -171,8 +174,8 @@ fun CommandInputBar(
                 BasicTextField(
                     value = value,
                     onValueChange = { newValue ->
-                        if (newValue.text.contains('\n')) {
-                            val cleaned = newValue.text.replace("\n", "")
+                        if (newValue.text.contains('\n') || newValue.text.contains('\r')) {
+                            val cleaned = newValue.text.replace("\n", "").replace("\r", "")
                             onValueChange(newValue.copy(text = cleaned))
                             if (cleaned.isNotBlank()) {
                                 onSendText(cleaned)
@@ -274,21 +277,34 @@ fun CommandInputBar(
                 ),
                 label = "sendForeground",
             )
-            Surface(
-                onClick = { onSend() },
-                shape = CircleShape,
-                color = sendBackground,
-                border = BorderStroke(1.dp, source.accent),
+            Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .testTag("session-send-button"),
+                    .width(32.dp)
+                    .height(fieldHeight)
+                    .zIndex(2f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { onSend() },
+                    ),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        DockIconArrowUp, contentDescription = "发送",
-                        modifier = Modifier.width(16.dp),
-                        tint = sendForeground,
-                    )
+                Surface(
+                    onClick = { onSend() },
+                    shape = CircleShape,
+                    color = sendBackground,
+                    border = BorderStroke(1.dp, source.accent),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .testTag("session-send-button"),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            DockIconArrowUp, contentDescription = "发送",
+                            modifier = Modifier.width(16.dp),
+                            tint = sendForeground,
+                        )
+                    }
                 }
             }
         }

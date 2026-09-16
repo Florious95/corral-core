@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.BackChevron
@@ -446,8 +447,8 @@ private fun DraftField(
             BasicTextField(
                 value = draft,
                 onValueChange = { newValue ->
-                    if (newValue.text.contains('\n')) {
-                        val cleaned = newValue.text.replace("\n", "")
+                    if (newValue.text.contains('\n') || newValue.text.contains('\r')) {
+                        val cleaned = newValue.text.replace("\n", "").replace("\r", "")
                         onDraftChange(newValue.copy(text = cleaned))
                         if (cleaned.isNotBlank()) onSend()
                     } else {
@@ -491,6 +492,7 @@ private fun SendButton(enabled: Boolean, onSend: () -> Unit) {
     Box(
         Modifier
             .size(Dims.sendButtonSize)
+            .zIndex(2f)
             .clip(RoundedCornerShape(Radii.sendButton))
             .background(if (enabled) p.sendEnabledBg else p.sendDisabledBg)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onSend),

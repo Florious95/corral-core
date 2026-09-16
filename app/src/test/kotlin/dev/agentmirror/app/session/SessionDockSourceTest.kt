@@ -53,6 +53,7 @@ import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Entry
 import dev.agentmirror.app.workspace.L2Status
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -229,6 +230,39 @@ class SessionDockSourceTest {
         compose.onNodeWithTag("session-send-button").performClick()
         assertEquals(listOf("uname -a"), sent)
         compose.onNodeWithTag("session-command-editor").assert(hasText(""))
+    }
+
+    @Test
+    fun sendButtonTouchAreaSpansFullHeightAndNeverInsertsNewline() {
+        val sent = mutableListOf<String>()
+        var draft by mutableStateOf(TextFieldValue(""))
+        compose.setContent {
+            SessionDockTheme(dark = false) {
+                CommandInputBar(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    onSendText = {
+                        sent += it
+                        draft = TextFieldValue("")
+                    },
+                    onPickAttachment = {},
+                )
+            }
+        }
+
+        // Focus editor
+        compose.onNodeWithTag("session-command-editor").performClick()
+        compose.onNodeWithTag("session-command-editor").performTextInput("echo test")
+        compose.waitForIdle()
+
+        // Click Send Button
+        compose.onNodeWithTag("session-send-button").performClick()
+        compose.waitForIdle()
+
+        assertEquals("Must send exactly the typed command", listOf("echo test"), sent)
+        assertEquals("Draft must be cleared after sending", "", draft.text)
+        assertFalse("Draft must never contain a newline", draft.text.contains('\n'))
+        assertFalse("Draft must never contain a carriage return", draft.text.contains('\r'))
     }
 
     @Test
