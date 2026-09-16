@@ -106,8 +106,9 @@ internal val MahjongWorkingColor = Color(0xFF047857)
 internal val MahjongIdleColor = Color(0xFF6B7280)
 
 /**
- * 一级工作区的工作状态指示牌：固定 3:4 竖向圆角矩形（26×34），不使用系统 emoji。
- * 工作中深翠绿 #047857 白字；无 working 节点灰底白 0。牌面加一层顶部釉光，像真麻将牌。
+ * 一级工作区的工作状态指示牌：纯粹现代的 3:4 竖向圆角状态块（26×34，5dp圆角）。
+ * 工作节点>0 为深翠绿 #047857，无工作为灰色 #6B7280，白字等宽数字。
+ * 纯平现代设计，彻底废止任何拟物麻将釉光与弧面反光。
  */
 @Composable
 internal fun MahjongStatusBadge(
