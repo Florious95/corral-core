@@ -75,6 +75,9 @@ import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -192,7 +195,9 @@ fun Modifier.glassControl(
     glow: Color = Color.Unspecified,
     pressProgress: () -> Float = NoPress,
     pressedScale: Float = 0.96f,
+    lensHeight: Dp = 12.dp,
     lensAmount: Dp = 24.dp,
+    chromaticAberration: Boolean = false,
     crystalHighlight: Boolean = false,
     shadow: Shadow? = null,
 ): Modifier = drawBackdrop(
@@ -202,7 +207,11 @@ fun Modifier.glassControl(
         vibrancy()
         blur(4.dp.toPx())
         if (GlassCapability.shaders) {
-            lens(refractionHeight = 12.dp.toPx(), refractionAmount = lensAmount.toPx())
+            lens(
+                refractionHeight = lensHeight.toPx(),
+                refractionAmount = lensAmount.toPx(),
+                chromaticAberration = chromaticAberration,
+            )
         }
     },
     highlight = {
@@ -335,7 +344,7 @@ fun GlassButton(
 
 private val ControlShape = RoundedRectangle(Radii.glassControl)
 private val ToggleTrackShape = Capsule()
-private val ToggleThumbShape = RoundedRectangle(15.dp)
+private val ToggleThumbShape = Capsule()
 
 /**
  * Kyant0 风格液态开关：通透胶囊轨道 + 带折射/高光/内阴影的水滴圆钮。
@@ -354,38 +363,46 @@ fun LiquidToggle(
     val thumbBackdrop = rememberCombinedBackdrop(pageBackdrop, trackBackdrop)
     val interaction = remember { MutableInteractionSource() }
     val press = rememberPressProgress(interaction)
+
+    // 轨道：半透微深灰胶囊凹槽（未开）/ 清澈科技蓝（开启）
+    val trackSurface = if (checked) p.accent.copy(alpha = 0.85f) else Color(0x33000000)
+    val trackBorder = if (checked) p.accent.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.16f)
+    val trackInnerShadow = InnerShadow(
+        radius = 3.dp,
+        offset = DpOffset(0.dp, 1.dp),
+        color = if (checked) Color.White.copy(alpha = 0.28f) else Color(0x2E000000),
+    )
+
     BoxWithConstraints(
         modifier = modifier
             .width(64.dp)
             .height(36.dp)
-            .alpha(if (enabled) 1f else 0.45f)
-            .toggleable(
-                value = checked,
+            .clip(ToggleTrackShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
                 enabled = enabled,
                 role = Role.Switch,
-                onValueChange = onCheckedChange,
+                onClick = { onCheckedChange(!checked) },
             )
+            .semantics {
+                toggleableState = ToggleableState(checked)
+            }
+            .alpha(if (enabled) 1f else 0.45f)
             .glassPanel(
                 backdrop = pageBackdrop,
                 shape = ToggleTrackShape,
-                surface = if (checked) p.accent.copy(alpha = 0.85f) else Color(0x1A000000),
+                surface = trackSurface.glassReadable(),
                 exportedBackdrop = trackBackdrop,
-                // Keep the track shadow inside the capsule: drawBackdrop's shadow follows the
-                // modifier layer bounds, so an outer shadow on this BoxWithConstraints becomes a
-                // rectangular halo instead of a glass edge.
                 shadow = null,
-                innerShadow = InnerShadow(
-                    radius = 3.dp,
-                    offset = DpOffset.Zero,
-                    color = if (checked) Color.White.copy(alpha = 0.24f) else Color(0x14000000),
-                ),
+                innerShadow = trackInnerShadow,
             )
+            .clip(ToggleTrackShape)
             .border(
                 width = Dims.hairline,
-                color = if (checked) p.accent.copy(alpha = 0.60f) else Color(0x1F000000),
+                color = trackBorder,
                 shape = ToggleTrackShape,
-            )
-            .testTag("liquid-toggle"),
+            ),
     ) {
         val thumbSize = 30.dp
         val inset = 3.dp
@@ -398,6 +415,7 @@ fun LiquidToggle(
         Box(
             Modifier
                 .fillMaxSize()
+                .clip(ToggleTrackShape)
                 .padding(inset),
         ) {
             Box(
@@ -408,20 +426,21 @@ fun LiquidToggle(
                     .glassControl(
                         backdrop = thumbBackdrop,
                         shape = ToggleThumbShape,
-                        // A solid white fill hides the backdrop/lens completely. Keep only a
-                        // clear milk-glass tint so the page and track remain visible through it.
-                        surface = Color.White.copy(alpha = 0.25f),
-                        tint = Color.Unspecified,
-                        tintAlpha = 0f,
-                        glow = if (checked) p.accent else p.glassStroke,
+                        // 纯净半透微光表面，不遮挡底层透镜折射
+                        surface = Color.White.copy(alpha = 0.12f),
+                        tint = if (checked) p.accent else Color.Unspecified,
+                        tintAlpha = if (checked) 0.15f else 0f,
+                        glow = if (checked) p.accent else Color.White.copy(alpha = 0.35f),
                         pressProgress = press,
                         pressedScale = 1.08f,
-                        lensAmount = 24.dp,
+                        lensHeight = 8.dp,
+                        lensAmount = 16.dp,
+                        chromaticAberration = true,
                         crystalHighlight = true,
                         shadow = Shadow(
-                            radius = 4.dp,
-                            offset = DpOffset(0.dp, 1.5.dp),
-                            color = Color(0x38000000),
+                            radius = 3.dp,
+                            offset = DpOffset(0.dp, 1.dp),
+                            color = Color(0x40000000),
                         ),
                     ),
             )
