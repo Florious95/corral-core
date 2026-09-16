@@ -370,11 +370,10 @@ fun LiquidToggle(
                 shape = ToggleTrackShape,
                 surface = if (checked) p.accent.copy(alpha = 0.85f) else Color(0x1A000000),
                 exportedBackdrop = trackBackdrop,
-                shadow = if (checked) {
-                    Shadow(radius = 8.dp, color = p.accent.copy(alpha = 0.30f))
-                } else {
-                    null
-                },
+                // Keep the track shadow inside the capsule: drawBackdrop's shadow follows the
+                // modifier layer bounds, so an outer shadow on this BoxWithConstraints becomes a
+                // rectangular halo instead of a glass edge.
+                shadow = null,
                 innerShadow = InnerShadow(
                     radius = 3.dp,
                     offset = DpOffset.Zero,
@@ -409,13 +408,15 @@ fun LiquidToggle(
                     .glassControl(
                         backdrop = thumbBackdrop,
                         shape = ToggleThumbShape,
-                        surface = Color.White,
+                        // A solid white fill hides the backdrop/lens completely. Keep only a
+                        // clear milk-glass tint so the page and track remain visible through it.
+                        surface = Color.White.copy(alpha = 0.25f),
                         tint = Color.Unspecified,
                         tintAlpha = 0f,
                         glow = if (checked) p.accent else p.glassStroke,
                         pressProgress = press,
                         pressedScale = 1.08f,
-                        lensAmount = 40.dp,
+                        lensAmount = 24.dp,
                         crystalHighlight = true,
                         shadow = Shadow(
                             radius = 4.dp,
