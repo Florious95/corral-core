@@ -17,6 +17,7 @@ import dev.agentmirror.app.ui.components.AppBottomNav
 import dev.agentmirror.app.ui.components.HairlineHighlight
 import dev.agentmirror.app.ui.components.HairlineInnerShadow
 import dev.agentmirror.app.ui.components.LiquidToggle
+import dev.agentmirror.app.ui.components.StandaloneLiquidToggle
 import dev.agentmirror.app.ui.model.NavTab
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.DarkPalette
@@ -52,6 +53,23 @@ class LiquidGlassControlsTest {
         compose.onNodeWithTag("test-liquid-toggle").assertIsOff().performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("test-liquid-toggle").assertIsOn()
+    }
+
+    @Test
+    fun standaloneLiquidToggleExposesSwitchSemanticsAndChangesState() {
+        var checked by mutableStateOf(false)
+        compose.setContent {
+            AppTheme {
+                StandaloneLiquidToggle(
+                    checked = checked,
+                    onCheckedChange = { checked = it },
+                    modifier = Modifier.testTag("test-standalone-toggle"),
+                )
+            }
+        }
+        compose.onNodeWithTag("test-standalone-toggle").assertIsOff().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("test-standalone-toggle").assertIsOn()
     }
 
     @Test

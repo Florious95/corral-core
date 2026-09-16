@@ -426,7 +426,7 @@ internal fun AttachmentButton(
             Text(
                 text = "＋",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = LocalAppPalette.current.accent,
                 modifier = Modifier.semantics { contentDescription = "添加图片附件" },
             )
         }
@@ -541,7 +541,8 @@ private fun StatusArea(viewModel: SessionViewModel) {
     Text(
         text = message,
         style = MaterialTheme.typography.labelMedium,
-        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        // 非错误状态文案走全 App 科技蓝，⛔ 不用 dock 主题的紫色 primary
+        color = if (isError) MaterialTheme.colorScheme.error else LocalAppPalette.current.accent,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier

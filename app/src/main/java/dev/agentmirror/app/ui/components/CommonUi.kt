@@ -1,8 +1,6 @@
 package dev.agentmirror.app.ui.components
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -16,14 +14,14 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -392,7 +390,54 @@ fun ScreenHeader(
     }
 }
 
-/** 二级页返回：‹ + 上级名称，44dp 高触控区 */
+/**
+ * 顶栏 FlatGlass 药丸按钮：44dp 触控地板（[Dims.pillTouchFloor]）内嵌 34dp 可见胶囊（[Dims.pillHeight]），
+ * 半透微透底 + 0.5dp 发丝光边 + 顶亮/底暗，按压叠一层变暗蒙层；禁用整体 45% 透明。
+ * 纯 [flatGlass]（不采样），可放在 ThreePane 录制树内的页面顶栏。语义合并到触控盒（Role.Button）。
+ */
+@Composable
+fun GlassPillButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp),
+    content: @Composable RowScope.() -> Unit,
+) {
+    val glass = flatGlassTokens()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    Box(
+        modifier = modifier
+            .height(Dims.pillTouchFloor)
+            .alpha(if (enabled) 1f else 0.45f)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            modifier = Modifier
+                .height(Dims.pillHeight)
+                .flatGlass(
+                    shape = CircleShape,
+                    fill = glass.fill,
+                    hairline = glass.hairline,
+                    topGlint = glass.topGlint,
+                    bottomShade = glass.bottomShade,
+                    overlay = if (pressed && enabled) glass.pressDim else Color.Transparent,
+                )
+                .padding(contentPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
+    }
+}
+
+/** 二级页返回：‹ + 上级名称，FlatGlass 药丸，44dp 触控地板 */
 @Composable
 fun BackAffordance(
     label: String,
@@ -400,19 +445,13 @@ fun BackAffordance(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    Row(
-        modifier = modifier
-            .height(Dims.tapTargetMin)
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (pressed) p.accentContainer else Color.Transparent)
-            .clickable(interactionSource = interaction, indication = null, onClick = onBack)
-            .padding(start = 6.dp, end = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    GlassPillButton(
+        onClick = onBack,
+        modifier = modifier,
+        contentPadding = PaddingValues(start = 6.dp, end = 12.dp),
     ) {
         BackChevron(tint = p.accent)
+        Box(Modifier.width(2.dp))
         AppText(label, p.accent, TypeSizes.actionButton, fontWeight = FontWeight.Medium, lineHeightMultiplier = 1f)
     }
 }
@@ -526,61 +565,3 @@ private val SettingsCardFillDark = Color(0xCC1E1E20)
 private val SettingsCardStrokeLight = Color(0x33000000)
 private val SettingsCardStrokeDark = Color(0x33FFFFFF)
 private val SettingsCardStrokeWidth = 0.5.dp
-
-/** 设置页现代纯平开关（独立于 LocalGlassBackdrop 录制树，避免 RenderNode 递归循环） */
-@Composable
-fun SettingsSwitch(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
-    val p = LocalAppPalette.current
-    val trackWidth = 48.dp
-    val trackHeight = 28.dp
-    val thumbSize = 22.dp
-    val thumbPadding = 3.dp
-
-    val trackColor by animateColorAsState(
-        targetValue = if (checked) p.accent else p.segmentedTrack,
-        animationSpec = tween(durationMillis = 200),
-        label = "switchTrackColor",
-    )
-    val thumbColor by animateColorAsState(
-        targetValue = if (checked) Color.White else p.bodyText.copy(alpha = 0.85f),
-        animationSpec = tween(durationMillis = 200),
-        label = "switchThumbColor",
-    )
-    val thumbOffset by animateDpAsState(
-        targetValue = if (checked) trackWidth - thumbSize - thumbPadding else thumbPadding,
-        animationSpec = tween(durationMillis = 200),
-        label = "switchThumbOffset",
-    )
-
-    Box(
-        modifier = modifier
-            .size(width = trackWidth, height = trackHeight)
-            .clip(RoundedCornerShape(trackHeight / 2))
-            .background(trackColor)
-            .border(
-                width = Dims.hairline,
-                color = if (checked) p.accent else p.cardBorder,
-                shape = RoundedCornerShape(trackHeight / 2),
-            )
-            .toggleable(
-                value = checked,
-                enabled = enabled,
-                role = Role.Switch,
-                onValueChange = onCheckedChange,
-            ),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Box(
-            modifier = Modifier
-                .offset(x = thumbOffset)
-                .size(thumbSize)
-                .clip(CircleShape)
-                .background(thumbColor),
-        )
-    }
-}

@@ -11,25 +11,29 @@
 package dev.agentmirror.app.session
 
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.R
+import dev.agentmirror.app.ui.components.DarkFlatGlass
+import dev.agentmirror.app.ui.components.FlatGlassTokens
+import dev.agentmirror.app.ui.components.FlatHairline
+import dev.agentmirror.app.ui.components.LightFlatGlass
+import dev.agentmirror.app.ui.components.flatGlass
+import dev.agentmirror.app.ui.theme.LocalAppPalette
 
 /**
  * Claude Design Nocturne variables mapped one-for-one onto the Material slots consumed by the dock.
@@ -148,36 +152,15 @@ internal fun sessionDockSourceTokens(): SessionDockSourceTokens =
     }
 
 /**
- * 会话底栏 FlatGlass（平整薄片）材质：键帽 / 输入胶囊 / 圆钮共用。
+ * 会话底栏 FlatGlass（平整薄片）材质：键帽 / 输入胶囊 / 圆钮共用，与全 App 的
+ * [FlatGlassTokens] 同一套常量（浅 / 深按 dock 主题的背景判定）。
  * 不采样背景（无 backdrop、无模糊、无折射），只有半透平面底色 + 0.5dp 发丝边 +
  * 「顶亮 / 底暗」的光学明暗对；按压只叠一层变暗蒙层，⛔ 不画大面积弧光。
  */
-internal data class SessionDockGlassTokens(
-    val fill: Color,          // 键帽 / 输入胶囊半透底
-    val fillSoft: Color,      // 方向键簇轨道 / 加号圆钮 / 空发送钮的更薄底
-    val hairline: Color,      // 0.5dp 发丝边
-    val topGlint: Color,      // 顶部内微高光
-    val bottomShade: Color,   // 底部贴边微暗
-    val pressDim: Color,      // 按压变暗蒙层
-)
+internal typealias SessionDockGlassTokens = FlatGlassTokens
 
-internal val sessionDockLightGlass = SessionDockGlassTokens(
-    fill = Color(0xD9FFFFFF),
-    fillSoft = Color(0x66FFFFFF),
-    hairline = Color(0x1F000000),
-    topGlint = Color(0xB3FFFFFF),
-    bottomShade = Color(0x14000000),
-    pressDim = Color(0x14000000),
-)
-
-internal val sessionDockDarkGlass = SessionDockGlassTokens(
-    fill = Color(0xD9252525),
-    fillSoft = Color(0x66252525),
-    hairline = Color(0x26FFFFFF),
-    topGlint = Color(0x2EFFFFFF),
-    bottomShade = Color(0x4D000000),
-    pressDim = Color(0x33000000),
-)
+internal val sessionDockLightGlass: SessionDockGlassTokens = LightFlatGlass
+internal val sessionDockDarkGlass: SessionDockGlassTokens = DarkFlatGlass
 
 @Composable
 internal fun sessionDockGlassTokens(): SessionDockGlassTokens =
@@ -188,15 +171,9 @@ internal fun sessionDockGlassTokens(): SessionDockGlassTokens =
     }
 
 /** 底栏发丝边宽度（比 [dev.agentmirror.app.ui.theme.Dims.hairline] 的 1dp 更细）。 */
-internal val SessionDockHairline: Dp = 0.5.dp
+internal val SessionDockHairline: Dp = FlatHairline
 
-/** 光学明暗对的内描边宽度：比发丝边宽，发丝边压在其上，边内侧留出顶亮 / 底暗的一线。 */
-private val SessionDockEdgeWidth: Dp = 1.5.dp
-
-/**
- * 纯平微水润薄片：clip → 半透底 → 按压蒙层 → 顶亮/底暗内边 → 发丝边。
- * 纯 [background] / [border] 组合，可安全用在任何录制树内部。
- */
+/** 纯平微水润薄片，见 [flatGlass]：clip → 半透底 → 按压蒙层 → 顶亮/底暗内边 → 发丝边。 */
 internal fun Modifier.dockFlatGlass(
     shape: Shape,
     fill: Color,
@@ -205,16 +182,15 @@ internal fun Modifier.dockFlatGlass(
     bottomShade: Color,
     overlay: Color = Color.Transparent,
     hairlineWidth: Dp = SessionDockHairline,
-): Modifier = this
-    .clip(shape)
-    .background(fill)
-    .background(overlay)
-    .border(
-        width = SessionDockEdgeWidth,
-        brush = Brush.verticalGradient(0f to topGlint, 0.45f to Color.Transparent, 1f to bottomShade),
-        shape = shape,
-    )
-    .border(width = hairlineWidth, color = hairline, shape = shape)
+): Modifier = flatGlass(
+    shape = shape,
+    fill = fill,
+    hairline = hairline,
+    topGlint = topGlint,
+    bottomShade = bottomShade,
+    overlay = overlay,
+    hairlineWidth = hairlineWidth,
+)
 
 internal val sessionDockDarkScheme = darkColorScheme(
     primary = Color(0xFF9184D9),
@@ -239,13 +215,20 @@ internal val sessionDockDarkScheme = darkColorScheme(
 
 @Composable
 internal fun SessionDockTheme(dark: Boolean, content: @Composable () -> Unit) {
+    // 选区柄 / 选区底走全 App 科技蓝：MaterialTheme 会按紫色 primary 重新派生 LocalTextSelectionColors，
+    // 所以必须在它的 content 内部再覆盖一次，输入框才不会露出紫色选区。
+    val accent = LocalAppPalette.current.accent
+    val selectionColors = remember(accent) {
+        TextSelectionColors(handleColor = accent, backgroundColor = accent.copy(alpha = 0.32f))
+    }
     // The source uses real 40/36/32px controls rather than Material's injected 48dp target.
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         MaterialTheme(
             colorScheme = if (dark) sessionDockDarkScheme else sessionDockLightScheme,
             typography = MaterialTheme.typography,
             shapes = MaterialTheme.shapes,
-            content = content,
-        )
+        ) {
+            CompositionLocalProvider(LocalTextSelectionColors provides selectionColors, content = content)
+        }
     }
 }

@@ -205,7 +205,9 @@ fun SessionScreenScaffold(
         targetBottom = if (effectiveImeHideRequested) 0.dp else imeSystemTargetBottom,
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            // 会话页外框用全 App 中性底色，⛔ 不用 dock 主题的淡紫 background（F3F5FE / 161826），
+            // 否则终端卡与底栏被一圈紫调包裹。dock 主题的 background 仅保留给浅/深判定。
+            .background(palette.screenBackground),
     ) {
         Column(Modifier.fillMaxSize()) {
             // Observe terminal pointer-down without consuming it: the real AndroidView keeps its

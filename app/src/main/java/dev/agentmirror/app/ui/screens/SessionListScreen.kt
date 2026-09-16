@@ -36,7 +36,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +70,7 @@ import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.ExtractedProviderIcon
 import dev.agentmirror.app.ui.components.GlassButton
 import dev.agentmirror.app.ui.components.GlassModalLayer
+import dev.agentmirror.app.ui.components.GlassPillButton
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.LiquidToggle
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
@@ -138,7 +138,8 @@ fun SessionListScreen(
             BackAffordance(label = "工作区", onBack = onBack)
             Box(Modifier.weight(1f))
             var showCreateDialog by remember { mutableStateOf(false) }
-            TextButton(
+            // 与左侧返回同款 FlatGlass 药丸（录制树内，不采样），不再是裸文字按钮
+            GlassPillButton(
                 onClick = {
                     showCreateDialog = true
                     onCreateAgentErrorCleared()
@@ -146,7 +147,13 @@ fun SessionListScreen(
                 enabled = agentLaunchers.isNotEmpty() && !createAgentState.inFlight,
                 modifier = Modifier.testTag("create-agent-button"),
             ) {
-                androidx.compose.material3.Text("+ 新建 Agent")
+                AppText(
+                    text = "+ 新建 Agent",
+                    color = p.accent,
+                    fontSize = TypeSizes.actionButton,
+                    fontWeight = FontWeight.Medium,
+                    lineHeightMultiplier = 1f,
+                )
             }
             if (connectionPath != null) {
                 Spacer(Modifier.width(8.dp))

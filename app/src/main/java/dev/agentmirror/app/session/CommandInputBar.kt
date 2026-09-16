@@ -82,6 +82,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import dev.agentmirror.app.ui.theme.LocalAppPalette
 
 /** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
 internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
@@ -104,6 +105,8 @@ fun CommandInputBar(
     val cs = MaterialTheme.colorScheme
     val source = sessionDockSourceTokens()
     val glass = sessionDockGlassTokens()
+    // 强调色一律走全 App 调色板的科技蓝（p.accent），⛔ 不用 dock 主题遗留的紫色 primary / accent*
+    val p = LocalAppPalette.current
     val keyboardController = LocalSoftwareKeyboardController.current
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
@@ -137,7 +140,7 @@ fun CommandInputBar(
         label = "inputFieldHeight",
     )
     val borderColor by animateColorAsState(
-        targetValue = if (focused) source.accent700 else glass.hairline,
+        targetValue = if (focused) p.accent.copy(alpha = 0.85f) else glass.hairline,
         animationSpec = tween(
             durationMillis = SessionDockMotion.InputBorderMillis,
             easing = SessionDockMotion.Ease,
@@ -227,7 +230,7 @@ fun CommandInputBar(
                         lineHeight = 20.sp,
                         color = cs.onSurface,
                     ),
-                    cursorBrush = SolidColor(cs.primary),
+                    cursorBrush = SolidColor(p.accent),
                     decorationBox = { inner ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (value.text.isEmpty()) {
@@ -289,9 +292,9 @@ fun CommandInputBar(
                 )
             }
             val hasText = value.text.isNotBlank()
-            // 有文本：primary 薄染 + 实色 primary 光边；空：与加号同款微透底 + 半透 primary 光边。
+            // 有文本：科技蓝薄染 + 实色科技蓝光边；空：与加号同款微透底 + 半透科技蓝光边。
             val sendBackground by animateColorAsState(
-                targetValue = if (hasText) source.accent.copy(alpha = 0.35f) else glass.fillSoft,
+                targetValue = if (hasText) p.accent.copy(alpha = 0.35f) else glass.fillSoft,
                 animationSpec = tween(
                     durationMillis = SessionDockMotion.InputBorderMillis,
                     easing = SessionDockMotion.Ease,
@@ -299,7 +302,7 @@ fun CommandInputBar(
                 label = "sendBackground",
             )
             val sendRing by animateColorAsState(
-                targetValue = if (hasText) source.accent else source.accent.copy(alpha = 0.55f),
+                targetValue = if (hasText) p.accent else p.accent.copy(alpha = 0.55f),
                 animationSpec = tween(
                     durationMillis = SessionDockMotion.InputBorderMillis,
                     easing = SessionDockMotion.Ease,
@@ -307,7 +310,7 @@ fun CommandInputBar(
                 label = "sendRing",
             )
             val sendForeground by animateColorAsState(
-                targetValue = if (hasText) source.accent200 else source.accent,
+                targetValue = if (hasText) p.accent else p.accent.copy(alpha = 0.75f),
                 animationSpec = tween(
                     durationMillis = SessionDockMotion.InputBorderMillis,
                     easing = SessionDockMotion.Ease,

@@ -172,6 +172,84 @@ private fun glassHighlight(color: Color = Color.Unspecified): Highlight = when {
     else -> Highlight.Plain
 }
 
+/** 发丝级晶莹高光：有着色器走 45° 聚光的 [HairlineHighlight]，否则退到同宽同透明度的纯色细环。 */
+private fun crystalHighlight(): Highlight =
+    if (GlassCapability.shaders) {
+        HairlineHighlight
+    } else {
+        Highlight(
+            width = 0.65.dp,
+            alpha = 0.65f,
+            style = HighlightStyle.Plain(color = Color.White.copy(alpha = 0.65f)),
+        )
+    }
+
+// ─────────────────────────────────────────────────────────────
+// FlatGlass（平整薄片）：不采样、纯 background / border，录制树内任何位置都安全
+// ─────────────────────────────────────────────────────────────
+
+/** FlatGlass 材质常量：半透平面底、更薄的软底、0.5dp 发丝边、顶亮 / 底暗明暗对、按压变暗蒙层。 */
+data class FlatGlassTokens(
+    val fill: Color,
+    val fillSoft: Color,
+    val hairline: Color,
+    val topGlint: Color,
+    val bottomShade: Color,
+    val pressDim: Color,
+)
+
+val LightFlatGlass = FlatGlassTokens(
+    fill = Color(0xD9FFFFFF),
+    fillSoft = Color(0x66FFFFFF),
+    hairline = Color(0x1F000000),
+    topGlint = Color(0xB3FFFFFF),
+    bottomShade = Color(0x14000000),
+    pressDim = Color(0x14000000),
+)
+
+val DarkFlatGlass = FlatGlassTokens(
+    fill = Color(0xD9252525),
+    fillSoft = Color(0x66252525),
+    hairline = Color(0x26FFFFFF),
+    topGlint = Color(0x2EFFFFFF),
+    bottomShade = Color(0x4D000000),
+    pressDim = Color(0x33000000),
+)
+
+/** 跟随 [LocalAppPalette] 的 FlatGlass 常量。 */
+@Composable
+fun flatGlassTokens(): FlatGlassTokens =
+    if (LocalAppPalette.current === DarkPalette) DarkFlatGlass else LightFlatGlass
+
+/** FlatGlass 发丝边宽度（比 [Dims.hairline] 的 1dp 更细）。 */
+val FlatHairline: Dp = 0.5.dp
+
+/** 光学明暗对的内描边宽度：比发丝边宽，发丝边压在其上，边内侧留出顶亮 / 底暗的一线。 */
+private val FlatEdgeWidth: Dp = 1.5.dp
+
+/**
+ * 纯平微水润薄片：clip → 半透底 → 按压蒙层 → 顶亮/底暗内边 → 发丝边。
+ * ⛔ 不采样任何 backdrop，因此可用于 ThreePane 录制树内部（列表 / 设置 / 顶栏）与会话底栏。
+ */
+fun Modifier.flatGlass(
+    shape: Shape,
+    fill: Color,
+    hairline: Color,
+    topGlint: Color,
+    bottomShade: Color,
+    overlay: Color = Color.Transparent,
+    hairlineWidth: Dp = FlatHairline,
+): Modifier = this
+    .clip(shape)
+    .background(fill)
+    .background(overlay)
+    .border(
+        width = FlatEdgeWidth,
+        brush = Brush.verticalGradient(0f to topGlint, 0.45f to Color.Transparent, 1f to bottomShade),
+        shape = shape,
+    )
+    .border(width = hairlineWidth, color = hairline, shape = shape)
+
 /**
  * 模态面板 / 导航胶囊：饱和提升 + 重模糊 + 深折射（depthEffect）+ 高光 + 投影。
  * [exportedBackdrop] 把面板自身的成像导出，供面板内控件继续采样（不含内容，故不成环）。
@@ -249,15 +327,7 @@ fun Modifier.glassControl(
         if (highlight != null) {
             highlight
         } else if (crystalHighlight) {
-            if (GlassCapability.shaders) {
-                HairlineHighlight
-            } else {
-                Highlight(
-                    width = 0.65.dp,
-                    alpha = 0.65f,
-                    style = HighlightStyle.Plain(color = Color.White.copy(alpha = 0.65f)),
-                )
-            }
+            crystalHighlight()
         } else {
             glassHighlight(glow)
         }
@@ -487,6 +557,138 @@ fun LiquidToggle(
         }
     }
 }
+
+/**
+ * 自包含液态开关（录制树内安全）。
+ * ⛔ 不读 [LocalGlassBackdrop]、⛔ 不采样任何图层：轨道与水滴圆钮都以 [emptyBackdrop] 走 [drawBackdrop]，
+ * 只靠表面着色 + 发丝高光 + 贴边内阴影 + 微投影 + 左上一点柔光来模拟水滴厚度，
+ * 因此可以放在 ThreePane 的 `layerBackdrop` 录制树里（设置页），不会触发 RenderNode 自采样递归。
+ * 语义与 [LiquidToggle] 一致（Role.Switch + toggleable 状态）。
+ */
+@Composable
+fun StandaloneLiquidToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val p = LocalAppPalette.current
+    val isDark = p === DarkPalette
+    val interaction = remember { MutableInteractionSource() }
+    val press = rememberPressProgress(interaction)
+
+    // 轨道：未开为中性凹槽（浅色微暗 / 深色微亮），开启为主色 —— 颜色与滑块平移同步 200ms 过渡
+    val trackSurface by animateColorAsState(
+        targetValue = when {
+            checked -> p.accent.copy(alpha = 0.88f)
+            isDark -> Color(0x2EFFFFFF)
+            else -> Color(0x24000000)
+        },
+        animationSpec = tween(Motion.toggle),
+        label = "standaloneToggleTrack",
+    )
+    val trackStroke by animateColorAsState(
+        targetValue = when {
+            checked -> p.accent.copy(alpha = 0.55f)
+            isDark -> Color(0x33FFFFFF)
+            else -> Color(0x1F000000)
+        },
+        animationSpec = tween(Motion.toggle),
+        label = "standaloneToggleStroke",
+    )
+    val trackInnerShadow = InnerShadow(
+        radius = 3.dp,
+        offset = DpOffset(0.dp, 1.dp),
+        color = Color.Black.copy(alpha = if (checked) 0.18f else if (isDark) 0.35f else 0.14f),
+    )
+    val thumbSurface = Color.White.copy(alpha = if (isDark) 0.92f else 0.96f)
+
+    BoxWithConstraints(
+        modifier = modifier
+            .width(StandaloneToggleWidth)
+            .height(StandaloneToggleHeight)
+            .clip(ToggleTrackShape)
+            .toggleable(
+                value = checked,
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .alpha(if (enabled) 1f else 0.45f)
+            .drawBackdrop(
+                backdrop = emptyBackdrop(),
+                shape = { ToggleTrackShape },
+                effects = {},
+                highlight = { crystalHighlight() },
+                innerShadow = { trackInnerShadow },
+                onDrawSurface = { drawRect(trackSurface) },
+            )
+            .border(FlatHairline, trackStroke, ToggleTrackShape),
+    ) {
+        val travel = (maxWidth - StandaloneThumbSize - StandaloneThumbInset * 2).coerceAtLeast(0.dp)
+        val thumbOffset by animateDpAsState(
+            targetValue = if (checked) travel else 0.dp,
+            animationSpec = tween(Motion.toggle, easing = Motion.sheetEnter),
+            label = "standaloneToggleThumb",
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(StandaloneThumbInset),
+        ) {
+            // 水滴圆钮：近乎白的半透表面 + 发丝高光 + 底部贴边内阴影 + 微投影；按压微胀 4%
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = thumbOffset)
+                    .size(StandaloneThumbSize)
+                    .drawBackdrop(
+                        backdrop = emptyBackdrop(),
+                        shape = { ToggleThumbShape },
+                        effects = {},
+                        highlight = { crystalHighlight() },
+                        shadow = {
+                            Shadow(
+                                radius = 4.dp,
+                                offset = DpOffset(0.dp, 1.5.dp),
+                                color = Color.Black.copy(alpha = 0.22f),
+                            )
+                        },
+                        innerShadow = {
+                            InnerShadow(
+                                radius = 2.5.dp,
+                                offset = DpOffset(0.dp, 1.dp),
+                                color = Color.Black.copy(alpha = 0.16f),
+                            )
+                        },
+                        layerBlock = {
+                            val scale = lerp(1f, 1.04f, press())
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                        onDrawSurface = {
+                            drawRect(thumbSurface)
+                            // 左上一点柔光，只占圆钮约 1/3，⛔ 不是整片釉面弧光
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color.White.copy(alpha = 0.55f), Color.Transparent),
+                                    center = Offset(size.width * 0.38f, size.height * 0.32f),
+                                    radius = size.minDimension * 0.42f,
+                                ),
+                            )
+                        },
+                    ),
+            )
+        }
+    }
+}
+
+private val StandaloneToggleWidth: Dp = 52.dp
+private val StandaloneToggleHeight: Dp = 32.dp
+private val StandaloneThumbSize: Dp = 26.dp
+private val StandaloneThumbInset: Dp = 3.dp
 
 // ─────────────────────────────────────────────────────────────
 // 页内模态：宿主 + 图层

@@ -32,6 +32,9 @@ object Dims {
     val topBarBackInkNudge: Dp = 2.dp
     val actionButtonHeight: Dp = 32.dp
     val actionButtonHPadding: Dp = 11.dp
+    // 顶栏 FlatGlass 药丸按钮：44dp 触控地板内嵌 34dp 可见胶囊
+    val pillTouchFloor: Dp = 44.dp
+    val pillHeight: Dp = 34.dp
 
     // 列表行（微玻璃卡：左右离屏边 10，卡间 8，列表首尾各 8）
     val cardHMargin: Dp = 10.dp
@@ -207,6 +210,8 @@ object Motion {
 
     // 玻璃控件按压回弹
     const val glassPress = 160
+    // 液态开关：轨道变色与滑块平移同步
+    const val toggle = 200
     const val sheetRow = 300                // 单行上浮
     const val sheetRowStagger = 34          // 逐行间隔
     const val sheetRowDelayBase = 40
