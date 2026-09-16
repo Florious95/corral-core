@@ -169,7 +169,7 @@ fun Modifier.glassPanel(
         vibrancy()
         blur(12.dp.toPx())
         if (GlassCapability.shaders) {
-            lens(refractionHeight = 20.dp.toPx(), refractionAmount = 40.dp.toPx(), depthEffect = true)
+            lens(refractionHeight = 16.dp.toPx(), refractionAmount = 24.dp.toPx(), depthEffect = false)
         }
     },
     highlight = { glassHighlight() },
@@ -248,39 +248,19 @@ fun Modifier.glassControl(
 private val NoPress: () -> Float = { 0f }
 
 /**
- * 列表行微玻璃卡：半透卡面 + 顶部一线高光 + 发丝描边。
- * 行处在被录制的分页内容之内，⛔ 不采样背景（采样即成环），层级感全靠静态材质。
+ * 列表行纯平微玻璃卡（Modern Flat Sheet Glass）：
+ * 彻底废除拟物凸面弧度高光与渐变反光，回归现代纯平通透玻璃板：
+ * 纯净半透平面底色（flat translucent surface） + 极细发丝级全局均匀微描边（hairline border）。
  */
 fun Modifier.glassCard(
     shape: Shape,
     fill: Color,
     stroke: Color,
-    specular: Color,
+    specular: Color = Color.Unspecified,
 ): Modifier = this
     .clip(shape)
     .background(fill)
     .border(Dims.hairline, stroke, shape)
-    .drawWithContent {
-        // 上半部极淡的玻璃泛光，压在卡面之上、内容之下
-        drawRect(
-            brush = Brush.verticalGradient(
-                0f to specular.copy(alpha = specular.alpha * 0.22f),
-                0.45f to Color.Transparent,
-            ),
-        )
-        drawContent()
-        // 顶沿高光：中段最亮、两端渐隐，落在描边内侧
-        val hairline = Dims.hairline.toPx()
-        drawRect(
-            brush = Brush.horizontalGradient(
-                0f to Color.Transparent,
-                0.5f to specular,
-                1f to Color.Transparent,
-            ),
-            topLeft = Offset(0f, hairline),
-            size = Size(size.width, hairline),
-        )
-    }
 
 /** 按压进度 0→1（[Motion.glassPress] 回弹），供 [glassControl] 的 pressProgress 使用。 */
 @Composable

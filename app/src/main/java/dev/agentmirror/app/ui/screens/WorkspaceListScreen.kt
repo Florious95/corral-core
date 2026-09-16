@@ -22,8 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -128,15 +126,6 @@ internal fun MahjongStatusBadge(
             .height(34.dp)
             .clip(RoundedCornerShape(5.dp))
             .background(if (count > 0) MahjongWorkingColor else MahjongIdleColor)
-            .drawWithContent {
-                drawContent()
-                drawRect(
-                    Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = 0.30f),
-                        0.5f to Color.Transparent,
-                    ),
-                )
-            }
             .border(Dims.hairline, Color.White.copy(alpha = 0.22f), RoundedCornerShape(5.dp))
             .testTag("mahjong-status-badge"),
         contentAlignment = Alignment.Center,
