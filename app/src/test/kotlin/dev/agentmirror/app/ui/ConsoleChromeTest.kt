@@ -20,6 +20,7 @@ import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.session.InputStatus
 import dev.agentmirror.app.session.OverlayTestHarness
 import dev.agentmirror.app.session.SessionScreen
+import dev.agentmirror.app.session.UploadStatus
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.BackChevronGeometry
 import dev.agentmirror.app.ui.model.SessionItem
@@ -119,6 +120,18 @@ class ConsoleChromeTest {
         assertEquals(
             0,
             compose.onAllNodesWithText("已发送", substring = true).fetchSemanticsNodes().size,
+        )
+        compose.runOnIdle { h.vm.inputStatus = InputStatus.Sending }
+        compose.waitForIdle()
+        assertEquals(
+            0,
+            compose.onAllNodesWithText("发送中", substring = true).fetchSemanticsNodes().size,
+        )
+        compose.runOnIdle { h.vm.uploadStatus = UploadStatus.Success("/tmp/a.png") }
+        compose.waitForIdle()
+        assertEquals(
+            0,
+            compose.onAllNodesWithText("已附加", substring = true).fetchSemanticsNodes().size,
         )
         compose.runOnIdle { h.vm.inputStatus = InputStatus.Failed("发送失败：超时") }
         compose.waitForIdle()
