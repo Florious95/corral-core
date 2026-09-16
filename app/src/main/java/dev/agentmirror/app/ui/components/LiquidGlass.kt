@@ -158,6 +158,7 @@ fun Modifier.glassPanel(
     surface: Color,
     exportedBackdrop: LayerBackdrop? = null,
     shadow: Shadow? = PanelShadow,
+    innerShadow: InnerShadow? = null,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
@@ -170,6 +171,7 @@ fun Modifier.glassPanel(
     },
     highlight = { glassHighlight() },
     shadow = shadow?.let { { it } },
+    innerShadow = innerShadow?.let { { it } },
     exportedBackdrop = exportedBackdrop,
     onDrawSurface = { drawRect(surface) },
 )
@@ -192,6 +194,7 @@ fun Modifier.glassControl(
     pressedScale: Float = 0.96f,
     lensAmount: Dp = 24.dp,
     crystalHighlight: Boolean = false,
+    shadow: Shadow? = null,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
@@ -209,7 +212,7 @@ fun Modifier.glassControl(
             glassHighlight(glow)
         }
     },
-    shadow = null,
+    shadow = shadow?.let { { it } },
     innerShadow = if (glow.isSpecified) {
         { InnerShadow(radius = 14.dp, offset = DpOffset.Zero, color = glow.copy(alpha = 0.32f)) }
     } else {
@@ -365,9 +368,23 @@ fun LiquidToggle(
             .glassPanel(
                 backdrop = pageBackdrop,
                 shape = ToggleTrackShape,
-                surface = p.glassSurface.copy(alpha = 0.48f).glassReadable(),
+                surface = if (checked) p.accent.copy(alpha = 0.85f) else Color(0x1A000000),
                 exportedBackdrop = trackBackdrop,
-                shadow = null,
+                shadow = if (checked) {
+                    Shadow(radius = 8.dp, color = p.accent.copy(alpha = 0.30f))
+                } else {
+                    null
+                },
+                innerShadow = InnerShadow(
+                    radius = 3.dp,
+                    offset = DpOffset.Zero,
+                    color = if (checked) Color.White.copy(alpha = 0.24f) else Color(0x14000000),
+                ),
+            )
+            .border(
+                width = Dims.hairline,
+                color = if (checked) p.accent.copy(alpha = 0.60f) else Color(0x1F000000),
+                shape = ToggleTrackShape,
             )
             .testTag("liquid-toggle"),
     ) {
@@ -392,14 +409,19 @@ fun LiquidToggle(
                     .glassControl(
                         backdrop = thumbBackdrop,
                         shape = ToggleThumbShape,
-                        surface = Color.Unspecified,
-                        tint = if (checked) p.accent else p.glassSurface,
-                        tintAlpha = if (checked) 0.34f else 0.24f,
+                        surface = Color.White,
+                        tint = Color.Unspecified,
+                        tintAlpha = 0f,
                         glow = if (checked) p.accent else p.glassStroke,
                         pressProgress = press,
                         pressedScale = 1.08f,
                         lensAmount = 40.dp,
                         crystalHighlight = true,
+                        shadow = Shadow(
+                            radius = 4.dp,
+                            offset = DpOffset(0.dp, 1.5.dp),
+                            color = Color(0x38000000),
+                        ),
                     ),
             )
         }
