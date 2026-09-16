@@ -111,19 +111,13 @@ import java.io.ByteArrayOutputStream
 internal fun dispatchSessionBack(
     focused: Boolean,
     overlayOpen: Boolean,
-    dockMode: DockRowMode,
     onCollapseFocused: () -> Unit,
     onCloseOverlay: () -> Unit,
-    onDockModeChange: (DockRowMode) -> Unit,
     onBack: () -> Unit,
 ) {
     when {
         focused -> onCollapseFocused()
-        overlayOpen -> {
-            onCloseOverlay()
-            onDockModeChange(DockRowMode.Sessions)
-        }
-        dockMode != DockRowMode.Sessions -> onDockModeChange(DockRowMode.Sessions)
+        overlayOpen -> onCloseOverlay()
         else -> onBack()
     }
 }
@@ -133,19 +127,15 @@ internal fun SessionScreenBackHandler(
     focused: () -> Boolean,
     onCollapseFocused: () -> Unit,
     overlayOpen: () -> Boolean,
-    dockMode: () -> DockRowMode,
     onCloseOverlay: () -> Unit,
-    onDockModeChange: (DockRowMode) -> Unit,
     onBack: () -> Unit,
 ) {
     val dispatch = rememberUpdatedState {
         dispatchSessionBack(
             focused = focused(),
             overlayOpen = overlayOpen(),
-            dockMode = dockMode(),
             onCollapseFocused = onCollapseFocused,
             onCloseOverlay = onCloseOverlay,
-            onDockModeChange = onDockModeChange,
             onBack = onBack,
         )
     }
@@ -269,19 +259,13 @@ fun SessionScreen(
     }
 
     var mirror by remember { mutableStateOf(TextFieldValue("")) }
-    var dockMode by androidx.compose.runtime.saveable.rememberSaveable {
-        mutableStateOf(DockRowMode.Sessions)
-    }
     SessionScreenBackHandler(
         focused = { inputFocused },
         onCollapseFocused = { requestDockCollapse("system-back") },
         overlayOpen = { viewModel.overlayOpen },
-        dockMode = { dockMode },
         onCloseOverlay = viewModel::closeOverlay,
-        onDockModeChange = { dockMode = it },
         onBack = onBack,
     )
-    val favoriteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
@@ -302,43 +286,6 @@ fun SessionScreen(
     AppTheme {
         val darkTheme = LocalAppPalette.current === DarkPalette
         val themeToken = TermPalette.token(darkTheme)
-        val visibleFavoriteRows = favoriteRows.filter { it.isOnline }
-        val favoriteByRef = visibleFavoriteRows.associateBy { it.ref }
-        val favoriteOrder = remember {
-            mutableStateListOf<String>().apply {
-                addAll(visibleFavoriteRows.map { it.ref }.filterNot { it == viewModel.ref })
-            }
-        }
-        var favoriteOrderCurrent by remember { mutableStateOf(viewModel.ref) }
-        LaunchedEffect(visibleFavoriteRows.map { it.ref }, viewModel.ref) {
-            val desired = visibleFavoriteRows.map { it.ref }.filterNot { it == viewModel.ref }
-            if (favoriteOrderCurrent != viewModel.ref) {
-                val replacementIndex = favoriteOrder.indexOf(viewModel.ref)
-                if (replacementIndex >= 0) {
-                    if (favoriteOrderCurrent in desired) {
-                        favoriteOrder[replacementIndex] = favoriteOrderCurrent
-                    } else {
-                        favoriteOrder.removeAt(replacementIndex)
-                    }
-                }
-                favoriteOrderCurrent = viewModel.ref
-            }
-            val desiredSet = desired.toSet()
-            for (index in favoriteOrder.lastIndex downTo 0) {
-                if (favoriteOrder[index] !in desiredSet) favoriteOrder.removeAt(index)
-            }
-            desired.forEach { ref -> if (ref !in favoriteOrder) favoriteOrder += ref }
-        }
-        val favoriteSessions = favoriteOrder.mapNotNull { ref ->
-            favoriteByRef[ref]?.let {
-                SessionChipUi(
-                    id = it.ref,
-                    name = it.identityLabel,
-                    isActive = false,
-                    isRunning = it.isOnline && it.status == L2Status.WORKING,
-                )
-            }
-        }
 
         SessionDockTheme(darkTheme) {
             val overlayItems = overlaySessions.map {
@@ -389,8 +336,6 @@ fun SessionScreen(
                             }
                         }
                     },
-                    dockMode = dockMode,
-                    onDockModeChange = { dockMode = it },
                     imeHideRequested = imeHideRequested,
                     collapseRequest = collapseRequest,
                     onDockCollapse = requestDockCollapse,
@@ -399,21 +344,6 @@ fun SessionScreen(
                         inputFocused = true
                         imeHideRequested = false
                         collapseRequest = 0
-                    },
-                    sessions = favoriteSessions,
-                    sessionListState = favoriteListState,
-                    onSessionSelect = { id ->
-                        val entry = favoriteByRef[id] ?: return@SessionScreenScaffold
-                        val slot = favoriteOrder.indexOf(id)
-                        if (slot >= 0) {
-                            if (viewModel.ref in favoriteByRef) {
-                                favoriteOrder[slot] = viewModel.ref
-                            } else {
-                                favoriteOrder.removeAt(slot)
-                            }
-                        }
-                        favoriteOrderCurrent = id
-                        onOpenOverlaySession(entry.ref, entry.identityLabel)
                     },
                     value = mirror,
                     onValueChange = {
@@ -426,7 +356,6 @@ fun SessionScreen(
                     },
                     onPickAttachment = { attachMenu = true },
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
-                    onOpenViewMenu = viewModel::openOverlay,
                     modifier = Modifier.statusBarsPadding().navigationBarsPadding(),
                 )
                 SessionSwitchSheet(
@@ -437,11 +366,6 @@ fun SessionScreen(
                     onDismiss = viewModel::closeOverlay,
                     onSelect = { item ->
                         val entry = byRef[item.id] ?: return@SessionSwitchSheet
-                        val slot = favoriteOrder.indexOf(entry.ref)
-                        if (slot >= 0) {
-                            favoriteOrder[slot] = viewModel.ref
-                        }
-                        favoriteOrderCurrent = entry.ref
                         viewModel.closeOverlay()
                         onOpenOverlaySession(entry.ref, entry.identityLabel)
                     },

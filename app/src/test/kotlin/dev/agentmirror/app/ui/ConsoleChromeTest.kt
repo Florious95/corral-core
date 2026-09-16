@@ -271,31 +271,21 @@ class ConsoleChromeTest {
     }
 
     @Test
-    fun ConsoleChromeFavoriteChipFollowsLiveStatusWithoutUnknownLabel() {
+    fun ConsoleChromeFavoriteChipAbsentFromSimplifiedDock() {
         val h = OverlayTestHarness()
         val idle = session("favorite-ref", L2Status.IDLE).toFavoriteRow()
-        val busy = session("favorite-ref", L2Status.WORKING).toFavoriteRow()
-        val unknown = session("favorite-ref", L2Status.UNKNOWN).toFavoriteRow()
-        var overlay by mutableStateOf(listOf(idle))
         compose.setContent {
             AppTheme(appearance = Appearance.Light) {
                 SessionScreen(
                     viewModel = h.vm,
                     name = "远控 leader",
                     onBack = {},
-                    favoriteRows = overlay,
+                    favoriteRows = listOf(idle),
                 )
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
-        compose.runOnIdle { overlay = listOf(busy) }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Running").assertIsDisplayed()
-        compose.runOnIdle { overlay = listOf(unknown) }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Unknown").assertDoesNotExist()
+        compose.onNodeWithTag("favorite-session-list").assertDoesNotExist()
     }
 
     @Test

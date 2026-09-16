@@ -64,7 +64,7 @@ class OverlayMenuTest {
                 )
             }
         }
-        openView()
+        openView(h)
 
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
         compose.onNodeWithText("切换会话").assertIsDisplayed()
@@ -91,7 +91,7 @@ class OverlayMenuTest {
                 )
             }
         }
-        openView()
+        openView(h)
         compose.onNodeWithText("会话乙").performClick()
         compose.waitForIdle()
 
@@ -113,7 +113,7 @@ class OverlayMenuTest {
                 )
             }
         }
-        openView()
+        openView(h)
         compose.onNodeWithTag("session-overlay-scrim").performTouchInput {
             click(percentOffset(0.5f, 0.08f))
         }
@@ -123,10 +123,8 @@ class OverlayMenuTest {
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
     }
 
-    private fun openView() {
-        compose.onNodeWithContentDescription("返回菜单").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay-open").performClick()
+    private fun openView(h: OverlayTestHarness) {
+        compose.runOnUiThread { h.vm.openOverlay() }
         compose.waitForIdle()
     }
 

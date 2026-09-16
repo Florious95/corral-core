@@ -20,16 +20,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -45,24 +44,14 @@ class MobileSessionFixtureActivity : ComponentActivity() {
         enableEdgeToEdge()
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         setContent {
-            var activeId by remember { mutableStateOf("0") }
-            var mode by remember { mutableStateOf(DockRowMode.Sessions) }
             var value by remember { mutableStateOf(TextFieldValue("")) }
             var overlayOpen by remember { mutableStateOf(false) }
             var overlayCurrent by remember { mutableStateOf(ProductionOverlayFixture.CURRENT_REF) }
             var inputFocused by remember { mutableStateOf(false) }
+            var lastKeyToken by remember { mutableStateOf<String?>(null) }
             val overlayItems = remember { ProductionOverlayFixture.overlayItems() }
-            val listState = rememberLazyListState()
             val focusManager = LocalFocusManager.current
-            val visibleOrder = remember { mutableStateListOf(*(1..8).toList().toTypedArray()) }
-            val sessions = visibleOrder.map { index ->
-                SessionChipUi(
-                    id = index.toString(),
-                    name = "收藏会话-$index",
-                    isActive = false,
-                    isRunning = index % 2 == 0,
-                )
-            }
+
             AppTheme(appearance = Appearance.Light) {
                 SessionDockTheme(dark = false) {
                     val source = sessionDockSourceTokens()
@@ -74,9 +63,7 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                                 focusManager.clearFocus(force = true)
                             },
                             overlayOpen = { overlayOpen },
-                            dockMode = { mode },
                             onCloseOverlay = { overlayOpen = false },
-                            onDockModeChange = { mode = it },
                             onBack = {},
                         )
                         SessionScreenScaffold(
@@ -93,20 +80,19 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                                         fontFamily = FontFamily.Monospace,
                                     )
                                     Text(
-                                        "$ git status\nOn branch feat/agent-cli-mobile-source-ui\nworking tree clean",
+                                        "$ git status\nOn branch feat/session-bar-simplify\nworking tree clean",
                                         color = source.neutral300,
                                         fontFamily = FontFamily.Monospace,
                                     )
+                                    if (lastKeyToken != null) {
+                                        Text(
+                                            "key: $lastKeyToken",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontFamily = FontFamily.Monospace,
+                                            modifier = Modifier.testTag("fixture-last-key"),
+                                        )
+                                    }
                                 }
-                            },
-                            dockMode = mode,
-                            onDockModeChange = { mode = it },
-                            sessions = sessions,
-                            sessionListState = listState,
-                            onSessionSelect = { next ->
-                                val slot = visibleOrder.indexOf(next.toInt())
-                                if (slot >= 0) visibleOrder[slot] = activeId.toInt()
-                                activeId = next
                             },
                             value = value,
                             onValueChange = { value = it },
@@ -115,9 +101,10 @@ class MobileSessionFixtureActivity : ComponentActivity() {
                                 focusManager.clearFocus()
                             },
                             onPickAttachment = {},
-                            onKeyToken = {},
+                            onKeyToken = { token ->
+                                lastKeyToken = token
+                            },
                             onInputFocusedChanged = { inputFocused = it },
-                            onOpenViewMenu = { overlayOpen = true },
                             modifier = Modifier.padding(top = 42.667.dp, bottom = 24.dp),
                         )
                         SessionSwitchSheet(

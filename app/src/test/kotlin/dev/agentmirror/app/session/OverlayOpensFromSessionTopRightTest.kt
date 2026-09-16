@@ -65,10 +65,7 @@ class OverlayOpensFromSessionTopRightTest {
             }
         }
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
-        compose.onNodeWithContentDescription("返回菜单").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay-open").assertIsDisplayed()
-        compose.onNodeWithTag("session-overlay-open").performClick()
+        compose.runOnUiThread { h.vm.openOverlay() }
         compose.waitForIdle()
 
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()

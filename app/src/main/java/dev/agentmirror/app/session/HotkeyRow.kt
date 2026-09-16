@@ -1,26 +1,23 @@
 /**
  * ─────────────────────────────────────────────────────────────
- * HotkeyRow.kt — 倒数第二行 · 终端按键条
+ * HotkeyRow.kt — 倒数第二行 · 终端按键条（常驻展示）
  *
- * 对应设计稿：菜单里点「快捷键」后替换出的一行：
- *   Esc  Tab  ↑ ↓ ← →  Ctrl-C   + 右侧「返回菜单」钮。
+ * 对应设计稿：常驻于输入条上方的终端按键条：
+ *   Esc  Tab  ↑ ↓ ← →  Ctrl-C
+ * 无多余返回/收起按键，按键整行填满、左右对称。
  *
  * 三种质感（直接对应导出源码的层次）：
  * - Esc/Tab：常规独立键，surface 底、outlineVariant 描边、圆角 8dp；
  * - 方向键：视觉成「一簇」——更深的 surfaceVariant 底、圆角收到 4dp、
  *   簇内间距 4dp（其余间距 8dp）；
  * - Ctrl-C：中断语义，error 描边 + error 前景（原稿即红粉描边）。
- * 宽度严格复用 390px 源画布的 CSS flex 结果，整行填满且保留源码负 margin。
- * 键文案用 FontFamily.Monospace（终端语境）。
+ * 宽度按比例填满整行，键文案用 FontFamily.Monospace（终端语境）。
  * ─────────────────────────────────────────────────────────────
  */
 package dev.agentmirror.app.session
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,8 +47,7 @@ private enum class KeyKind { Plain, Arrow, Interrupt }
 
 /**
  * @param label 显示文案；@param token 上报给 onKeyToken 的语义值
- * （token 采用 "Esc"/"Tab"/"Up"/"Down"/"Left"/"Right"/"Ctrl-C"，
- *  若你们现有协议不同，改这张表即可）。
+ * （token 采用 "Esc"/"Tab"/"Up"/"Down"/"Left"/"Right"/"Ctrl-C"）。
  */
 private data class KeySpec(
     val label: String,
@@ -61,7 +57,7 @@ private data class KeySpec(
     val kind: KeyKind,
 )
 
-/** Browser layout values exported by the fixed 390px source canvas (320px key area). */
+/** Browser layout values exported by the fixed 390px source canvas (320px key area, scaled to full width). */
 private val KEYS = listOf(
     KeySpec("Esc", "Esc", 0f, 43.9375f, KeyKind.Plain),
     KeySpec("Tab", "Tab", 49.9375f, 43.9375f, KeyKind.Plain),
@@ -72,23 +68,19 @@ private val KEYS = listOf(
     KeySpec("Ctrl-C", "Ctrl-C", 259.921875f, 60.078125f, KeyKind.Interrupt),
 )
 
-/** Source hotkey strip in the exported key order. */
+/** 常驻终端按键条：整排填满，无多余返回按钮。 */
 @Composable
 fun HotkeyRow(
     onKeyToken: (String) -> Unit,
-    onBackToMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth().height(40.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        SourceHotkeyButtons(
-            onKeyToken = onKeyToken,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-        )
-        DockIconButton(DockIconReturn, contentDescription = "返回菜单", onClick = onBackToMenu)
-    }
+    SourceHotkeyButtons(
+        onKeyToken = onKeyToken,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .testTag("session-dock-hotkeys"),
+    )
 }
 
 @Composable
@@ -149,7 +141,7 @@ private fun HotKey(key: KeySpec, onClick: () -> Unit) {
 @Composable
 private fun PreviewHotkeyLight() {
     MaterialTheme(colorScheme = lightColorScheme()) {
-        HotkeyRow({}, {}, Modifier.padding(8.dp))
+        HotkeyRow(onKeyToken = {}, modifier = Modifier.padding(8.dp))
     }
 }
 
@@ -157,6 +149,6 @@ private fun PreviewHotkeyLight() {
 @Composable
 private fun PreviewHotkeyDark() {
     MaterialTheme(colorScheme = darkColorScheme()) {
-        HotkeyRow({}, {}, Modifier.padding(8.dp))
+        HotkeyRow(onKeyToken = {}, modifier = Modifier.padding(8.dp))
     }
 }

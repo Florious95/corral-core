@@ -67,7 +67,7 @@ class SessionDockSourceTest {
     val compose = createComposeRule()
 
     @Test
-    fun sourceMenuHasExactlyThreeActionsAndDelegatesViewOverlay() {
+    fun sourceDockHasResidentHotkeysWithoutMenuOrReturnButton() {
         val h = OverlayTestHarness()
         compose.setContent {
             AgentMirrorTheme {
@@ -75,27 +75,17 @@ class SessionDockSourceTest {
             }
         }
 
-        compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
-        compose.onAllNodesWithText("快捷键").assertCountEquals(0)
-        compose.onNodeWithContentDescription("返回菜单").performClick()
-        compose.waitForIdle()
-
-        compose.onAllNodesWithText("快捷键").assertCountEquals(1)
-        compose.onAllNodesWithText("查看").assertCountEquals(1)
-        compose.onAllNodesWithText("会话").assertCountEquals(1)
-        compose.onNodeWithText("常用快捷键").assertDoesNotExist()
-        compose.onNodeWithText("收藏会话").assertDoesNotExist()
-
-        compose.onNodeWithTag("dock-open-hotkeys").performClick()
-        compose.waitForIdle()
+        // Hotkeys are permanently visible at rest
         listOf("Esc", "Tab", "↑", "↓", "←", "→", "Ctrl-C").forEach {
             compose.onNodeWithText(it).assertIsDisplayed()
         }
-        compose.onNodeWithContentDescription("返回菜单").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay-open").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay").assertIsDisplayed()
+
+        // No menu or return buttons
+        compose.onNodeWithContentDescription("返回菜单").assertDoesNotExist()
+        compose.onNodeWithText("常用快捷键").assertDoesNotExist()
+        compose.onNodeWithText("收藏会话").assertDoesNotExist()
+        compose.onAllNodesWithText("快捷键").assertCountEquals(0)
+        compose.onAllNodesWithText("会话").assertCountEquals(0)
     }
 
     @Test
@@ -105,16 +95,10 @@ class SessionDockSourceTest {
         compose.setContent {
             var value by remember { mutableStateOf(TextFieldValue("")) }
             val focusManager = LocalFocusManager.current
-            val listState = rememberLazyListState()
             AgentMirrorTheme {
                 SessionDockTheme(dark = false) {
                     SessionScreenScaffold(
                         terminalCanvas = { Box(Modifier.fillMaxSize()) },
-                        dockMode = DockRowMode.Sessions,
-                        onDockModeChange = {},
-                        sessions = emptyList(),
-                        sessionListState = listState,
-                        onSessionSelect = {},
                         value = value,
                         onValueChange = { value = it },
                         onSendText = {
@@ -124,7 +108,6 @@ class SessionDockSourceTest {
                         },
                         onPickAttachment = {},
                         onKeyToken = {},
-                        onOpenViewMenu = {},
                     )
                 }
             }
@@ -177,25 +160,17 @@ class SessionDockSourceTest {
                         focusManager.clearFocus(force = true)
                     },
                     overlayOpen = { false },
-                    dockMode = { DockRowMode.Sessions },
                     onCloseOverlay = {},
-                    onDockModeChange = {},
                     onBack = { hostBack++ },
                 )
                 SessionScreenScaffold(
                     terminalCanvas = { Box(Modifier.fillMaxSize()) },
-                    dockMode = DockRowMode.Sessions,
-                    onDockModeChange = {},
-                    sessions = emptyList(),
-                    sessionListState = rememberLazyListState(),
-                    onSessionSelect = {},
                     value = value,
                     onValueChange = { value = it },
                     onSendText = {},
                     onPickAttachment = {},
                     onKeyToken = {},
                     onInputFocusedChanged = { focused = it },
-                    onOpenViewMenu = {},
                 )
             }
         }
@@ -219,101 +194,61 @@ class SessionDockSourceTest {
     }
 
     @Test
-    fun sessionBackHandlerClosesOverlayAndReturnsDefaultBeforeHost() {
+    fun sessionBackHandlerClosesOverlayBeforeHost() {
         var host = 0
         var overlay = true
-        var dock = DockRowMode.Menu
         dispatchSessionBack(
             focused = false,
             overlayOpen = overlay,
-            dockMode = dock,
             onCollapseFocused = {},
             onCloseOverlay = { overlay = false },
-            onDockModeChange = { dock = it },
             onBack = { host++ },
         )
         assertEquals(false, overlay)
-        assertEquals(DockRowMode.Sessions, dock)
         assertEquals(0, host)
         dispatchSessionBack(
             focused = false,
             overlayOpen = overlay,
-            dockMode = dock,
             onCollapseFocused = {},
             onCloseOverlay = { overlay = false },
-            onDockModeChange = { dock = it },
             onBack = { host++ },
         )
         assertEquals(1, host)
     }
 
     @Test
-    fun sessionBackHandlerReturnsHotkeysThenSessionsHostFallthrough() {
-        var host = 0
-        var dock = DockRowMode.Hotkeys
-        dispatchSessionBack(
-            focused = false,
-            overlayOpen = false,
-            dockMode = dock,
-            onCollapseFocused = {},
-            onCloseOverlay = {},
-            onDockModeChange = { dock = it },
-            onBack = { host++ },
-        )
-        assertEquals(DockRowMode.Sessions, dock)
-        assertEquals(0, host)
-        dispatchSessionBack(
-            focused = false,
-            overlayOpen = false,
-            dockMode = dock,
-            onCollapseFocused = {},
-            onCloseOverlay = {},
-            onDockModeChange = { dock = it },
-            onBack = { host++ },
-        )
-        assertEquals(1, host)
-    }
-
-    @Test
-    fun sessionBackHandlerFocusedWinsOverOverlayAndDock() {
+    fun sessionBackHandlerFocusedWinsOverOverlay() {
         var host = 0
         var focused = true
         var overlay = true
-        var dock = DockRowMode.Hotkeys
         dispatchSessionBack(
             focused = focused,
             overlayOpen = overlay,
-            dockMode = dock,
             onCollapseFocused = { focused = false },
             onCloseOverlay = { overlay = false },
-            onDockModeChange = { dock = it },
             onBack = { host++ },
         )
         assertEquals(false, focused)
         assertEquals(true, overlay)
-        assertEquals(DockRowMode.Hotkeys, dock)
         assertEquals(0, host)
     }
 
     @Test
-    fun sessionBackHandlerDefaultSessionsPopsHostImmediately() {
+    fun sessionBackHandlerDefaultPopsHostImmediately() {
         var host = 0
         dispatchSessionBack(
             focused = false,
             overlayOpen = false,
-            dockMode = DockRowMode.Sessions,
             onCollapseFocused = {},
             onCloseOverlay = {},
-            onDockModeChange = {},
             onBack = { host++ },
         )
         assertEquals(1, host)
     }
 
     @Test
-    fun sessionBackHandlerRapidDockBackPopsHostExactlyOnce() {
+    fun sessionBackHandlerRapidBackPopsHost() {
         var host = 0
-        var dock = DockRowMode.Hotkeys
         lateinit var dispatcher: OnBackPressedDispatcher
         compose.setContent {
             dispatcher = LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
@@ -321,9 +256,7 @@ class SessionDockSourceTest {
                 focused = { false },
                 onCollapseFocused = {},
                 overlayOpen = { false },
-                dockMode = { dock },
                 onCloseOverlay = {},
-                onDockModeChange = { dock = it },
                 onBack = { host++ },
             )
         }
@@ -331,8 +264,7 @@ class SessionDockSourceTest {
             dispatcher.onBackPressed()
             dispatcher.onBackPressed()
         }
-        assertEquals(DockRowMode.Sessions, dock)
-        assertEquals(1, host)
+        assertEquals(2, host)
     }
 
     @Test
@@ -362,75 +294,18 @@ class SessionDockSourceTest {
     }
 
     @Test
-    fun lateFavoriteSwitchKeepsScrollModeAndExpandedInputThenSwitchesAgain() {
-        val entries = (0..8).map(::favoriteEntry)
-        val favorites = entries.map { it.toFavoriteRow() }
-        val harnesses = listOf(0, 6, 7).associate { index ->
-            entries[index].ref to OverlayTestHarness(entries[index].ref)
-        }
-        var active by mutableStateOf(harnesses.getValue(entries[0].ref).vm)
-        val selected = mutableListOf<String>()
-
-        compose.setContent {
-            AgentMirrorTheme {
-                SessionScreen(
-                    viewModel = active,
-                    name = "favorite",
-                    onBack = {},
-                    favoriteRows = favorites,
-                    onOpenOverlaySession = { ref, _ ->
-                        selected += ref
-                        active = harnesses.getValue(ref).vm
-                    },
-                )
-            }
-        }
-        compose.onNodeWithTag("session-command-editor").performClick()
-        compose.waitForIdle()
-        val expandedBefore = inputFieldHeight()
-
-        val favoriteList = compose.onNodeWithTag("favorite-session-list")
-        favoriteList.performScrollToNode(hasText("收藏-6"))
-        compose.waitForIdle()
-        val scrollBefore = horizontalScrollValue()
-        assertTrue("test must reach the late list segment", scrollBefore > 0f)
-
-        compose.onNodeWithText("收藏-6").performClick()
-        compose.waitForIdle()
-        val scrollAfterFirst = horizontalScrollValue()
-        val expandedAfterFirst = inputFieldHeight()
-        compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
-        compose.onNodeWithText("快捷键").assertDoesNotExist()
-        assertTrue(abs(scrollAfterFirst - scrollBefore) < 0.5f)
-        assertTrue(abs(expandedAfterFirst - expandedBefore) < 0.5f)
-
-        compose.onNodeWithText("收藏-7").performClick()
-        compose.waitForIdle()
-        assertEquals(listOf(entries[6].ref, entries[7].ref), selected)
-        assertTrue(abs(horizontalScrollValue() - scrollBefore) < 0.5f)
-        assertTrue(abs(inputFieldHeight() - expandedBefore) < 0.5f)
-    }
-
-    @Test
     fun sourceViewportUsesExactPanelDockInputAndHotkeyGeometry() {
         compose.setContent {
             Box(Modifier.size(width = 390.dp, height = 844.dp)) {
                 Box(Modifier.fillMaxSize().padding(top = 42.667.dp, bottom = 24.dp)) {
-                    var mode by remember { mutableStateOf(DockRowMode.Sessions) }
                     SessionDockTheme(dark = false) {
                         SessionScreenScaffold(
                             terminalCanvas = { Box(Modifier.fillMaxSize()) },
-                            dockMode = mode,
-                            onDockModeChange = { mode = it },
-                            sessions = emptyList(),
-                            sessionListState = rememberLazyListState(),
-                            onSessionSelect = {},
                             value = TextFieldValue(""),
                             onValueChange = {},
                             onSendText = {},
                             onPickAttachment = {},
                             onKeyToken = {},
-                            onOpenViewMenu = {},
                         )
                     }
                 }
@@ -439,31 +314,19 @@ class SessionDockSourceTest {
         compose.waitForIdle()
         assertRect("session-terminal-canvas", 0f, 42.667f, 390f, 675.333f)
         assertRect("session-terminal-card", 4f, 46.667f, 382f, 667.333f)
-        assertRect("favorite-session-list", 11f, 718f, 320f, 40f)
         assertRect("session-command-input", 11f, 766f, 368f, 46f)
         assertRect("session-command-input-field", 60f, 773f, 272f, 32f)
 
-        val returnBounds = compose.onNodeWithContentDescription("返回菜单").getUnclippedBoundsInRoot()
-        assertEquals(339f, returnBounds.left.value, 0.7f)
-        assertEquals(718f, returnBounds.top.value, 0.7f)
-        assertEquals(40f, returnBounds.right.value - returnBounds.left.value, 0.7f)
-        assertEquals(40f, returnBounds.bottom.value - returnBounds.top.value, 0.7f)
+        compose.onNodeWithContentDescription("返回菜单").assertDoesNotExist()
 
-        compose.onNodeWithContentDescription("返回菜单").performClick()
-        compose.waitForIdle()
-        assertRect("dock-open-hotkeys", 11f, 718f, 117.333f, 40f)
-        assertRect("session-overlay-open", 136.333f, 718f, 117.333f, 40f)
-        assertRect("dock-open-favorites", 261.667f, 718f, 117.333f, 40f)
-
-        compose.onNodeWithTag("dock-open-hotkeys").performClick()
-        compose.waitForIdle()
-        assertRect("hotkey-Esc", 11f, 718f, 43.94f, 40f)
-        assertRect("hotkey-Tab", 60.94f, 718f, 43.94f, 40f)
-        assertRect("hotkey-Up", 114.88f, 718f, 34.25f, 40f)
-        assertRect("hotkey-Down", 152.13f, 718f, 34.27f, 40f)
-        assertRect("hotkey-Left", 189.39f, 718f, 34.27f, 40f)
-        assertRect("hotkey-Right", 226.66f, 718f, 34.27f, 40f)
-        assertRect("hotkey-Ctrl-C", 270.92f, 718f, 60.08f, 40f)
+        // Hotkeys are permanently visible at top 718f, scaled to 368dp total width
+        assertRect("hotkey-Esc", 11f, 718f, 50.53f, 40f)
+        assertRect("hotkey-Tab", 68.43f, 718f, 50.53f, 40f)
+        assertRect("hotkey-Up", 130.46f, 718f, 39.39f, 40f)
+        assertRect("hotkey-Down", 173.29f, 718f, 39.41f, 40f)
+        assertRect("hotkey-Left", 216.15f, 718f, 39.41f, 40f)
+        assertRect("hotkey-Right", 259.00f, 718f, 39.41f, 40f)
+        assertRect("hotkey-Ctrl-C", 309.91f, 718f, 69.09f, 40f)
     }
 
     @Test
@@ -504,11 +367,6 @@ class SessionDockSourceTest {
         assertEquals("$tag height", height, bounds.bottom.value - bounds.top.value, 0.7f)
     }
 
-    private fun horizontalScrollValue(): Float {
-        val node = compose.onNodeWithTag("favorite-session-list").fetchSemanticsNode()
-        return node.config[SemanticsProperties.HorizontalScrollAxisRange].value()
-    }
-
     private fun inputFieldHeight(): Float {
         val bounds = compose.onNodeWithTag("session-command-input-field").getUnclippedBoundsInRoot()
         return bounds.bottom.value - bounds.top.value
@@ -519,29 +377,6 @@ class SessionDockSourceTest {
         return bounds.bottom.value - bounds.top.value
     }
 
-    private fun L2Entry.toFavoriteRow() = FavoriteRow(
-        name = name,
-        sessionName = sessionName,
-        windowIndex = windowIndex,
-        windowName = windowName,
-        addedAt = 0L,
-        isOnline = true,
-        ref = ref,
-        cwd = cwd,
-        title = title,
-        status = status,
-    )
-
-    private fun favoriteEntry(index: Int): L2Entry = L2Entry(
-        ref = "/tmp/tmux-1000/favorites\u001f%$index",
-        name = "收藏-$index",
-        title = "收藏-$index",
-        rows = 24,
-        cols = 80,
-        status = if (index % 2 == 0) L2Status.WORKING else L2Status.IDLE,
-        cwd = "/workspace",
-        sessionName = "favorites",
-        windowIndex = index.toString(),
-        windowName = "收藏-$index",
-    )
+    private fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
+        if (focused) 32 + (expandedLines - 1) * 20 else 32
 }

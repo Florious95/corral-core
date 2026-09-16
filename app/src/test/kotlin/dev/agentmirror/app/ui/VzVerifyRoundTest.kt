@@ -23,6 +23,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -157,26 +158,21 @@ class VzVerifyRoundTest {
     }
 
     @Test
-    fun VzVerifyFavoriteChipFollowsLiveOverlayWithoutNavigation() {
+    fun VzVerifyFavoriteChipAbsentFromSimplifiedDock() {
         val h = OverlayTestHarness()
         val idle = session("favorite-ref", L2Status.IDLE).toFavoriteRow()
-        val busy = session("favorite-ref", L2Status.WORKING).toFavoriteRow()
-        var overlay by mutableStateOf(listOf(idle))
         compose.setContent {
             AppTheme(appearance = Appearance.Light) {
                 SessionScreen(
                     viewModel = h.vm,
                     name = "远控 leader",
                     onBack = {},
-                    favoriteRows = overlay,
+                    favoriteRows = listOf(idle),
                 )
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
-        compose.runOnIdle { overlay = listOf(busy) }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Running").assertIsDisplayed()
+        compose.onNodeWithTag("favorite-session-list").assertDoesNotExist()
     }
 
     @Test
