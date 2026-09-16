@@ -187,17 +187,10 @@ fun CommandInputBar(
                 BasicTextField(
                     value = value,
                     onValueChange = { newValue ->
-                        if (newValue.text.contains('\n') || newValue.text.contains('\r')) {
-                            val cleaned = newValue.text.replace("\n", "").replace("\r", "")
-                            onValueChange(newValue.copy(text = cleaned))
-                            if (cleaned.isNotBlank()) {
-                                onSendText(cleaned)
-                            }
-                        } else {
-                            onValueChange(newValue)
-                        }
+                        onValueChange(newValue)
                     },
-                    singleLine = true,
+                    singleLine = false,
+                    maxLines = if (editorExpanded) sourceExpandedLines else 1,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Text,
                         imeAction = ImeAction.Send,

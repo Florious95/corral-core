@@ -456,7 +456,7 @@ class SessionViewModel(
      * - [inputSyncEnabled] == true（开启，默认）：输入期已通过 [onPassthroughInput] 实时直通
      *   CLI 行；发送仅需提交（发 text 为空的裸 Enter）。
      * - [inputSyncEnabled] == false（关闭）：输入期不向 CLI 注入按键；发送时将 [text] 一次性
-     *   发给 CLI 并附带回车提交（末尾附带 '\n'，确保单次点击直接执行，严禁二次点击）。
+     *   发给 CLI 并附带 CR（`\r` / 0x0D）提交。Raw 模式下 LF 只是插入换行，不是回车。
      *
      * @param text 本地待发送草稿文本；开启实时同步时忽略此参数（发送裸 Enter 避免重复内容）
      * @contract
@@ -487,10 +487,11 @@ class SessionViewModel(
         val textToSend = if (inputSyncEnabled) {
             ""
         } else {
-            if (text.isEmpty() || attachmentPath.isNotEmpty() || text.endsWith("\n")) {
+            if (text.isEmpty() || attachmentPath.isNotEmpty()) {
                 text
             } else {
-                "$text\n"
+                // 发送 CR (\r) 而非 LF (\n)，在 TTY Raw 模式下触发真正的回车提交
+                text.trimEnd('\r', '\n') + "\r"
             }
         }
         if (manager.sendInput(ref, textToSend, attachmentPath)) {

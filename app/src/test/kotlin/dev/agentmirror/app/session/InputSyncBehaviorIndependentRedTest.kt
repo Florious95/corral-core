@@ -69,7 +69,7 @@ class InputSyncBehaviorIndependentRedTest {
         send.invoke(h.vm, "echo 独立测试")
         val submitted = h.inputFrames().drop(beforeTyping)
         assertEquals("one complete text submission is expected", 1, submitted.size)
-        assertEquals("echo 独立测试\n", submitted.single().text)
+        assertEquals("echo 独立测试\r", submitted.single().text)
         assertTrue("submission must be a text frame, not a key frame", submitted.single().keys.isEmpty())
     }
 
@@ -84,7 +84,7 @@ class InputSyncBehaviorIndependentRedTest {
         send.invoke(h.vm, "echo 一次执行")
         val submitted = h.inputFrames()
         assertTrue("sendDraft must emit at least one input frame", submitted.isNotEmpty())
-        val hasNewline = submitted.any { it.text.endsWith("\n") }
+        val hasNewline = submitted.any { it.text.endsWith("\r") || it.text.endsWith("\n") }
         val hasEnterKey = submitted.any { frame ->
             frame.keys.any { key -> key.name.contains("ENTER", ignoreCase = true) }
         }

@@ -266,11 +266,11 @@ class SessionViewModelTest {
         h.vm.onPassthroughInput(tv(""), tv("echo hello"))
         assertTrue(h.inputFrames().isEmpty())
 
-        // sendDraft sends whole text with execution newline and commits
+        // sendDraft sends whole text with CR submit and commits
         h.vm.sendDraft("echo hello")
         assertEquals(InputStatus.Sending, h.vm.inputStatus)
         val sent = h.inputFrames().last()
-        assertEquals("echo hello\n", sent.text)
+        assertEquals("echo hello\r", sent.text)
         assertTrue(sent.keys.isEmpty())
         assertEquals("", sent.attachmentPath)
         h.ackOk(sent.reqId)

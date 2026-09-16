@@ -179,10 +179,10 @@ class SessionDockSourceTest {
     }
 
     @Test
-    fun editorInterceptsNewlineAndSubmitsDirectlyWithoutInsertingNewline() {
+    fun editorKeepsTypedNewlineWithoutAutoSubmit() {
         val sent = mutableListOf<String>()
+        var value by mutableStateOf(TextFieldValue(""))
         compose.setContent {
-            var value by remember { mutableStateOf(TextFieldValue("")) }
             SessionDockTheme(dark = false) {
                 CommandInputBar(
                     value = value,
@@ -196,12 +196,10 @@ class SessionDockSourceTest {
             }
         }
 
-        // Emulating an IME or physical keyboard that inputs text ending in newline
         compose.onNodeWithTag("session-command-editor").performTextInput("pwd\n")
 
-        // Must submit immediately and not leave newline in draft
-        assertEquals(listOf("pwd"), sent)
-        compose.onNodeWithTag("session-command-editor").assert(hasText(""))
+        assertTrue(sent.isEmpty())
+        assertTrue("multiline draft must keep the typed newline", value.text.contains('\n'))
     }
 
     @Test
