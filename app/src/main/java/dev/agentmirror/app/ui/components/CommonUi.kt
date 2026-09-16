@@ -1,6 +1,8 @@
 package dev.agentmirror.app.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -17,9 +19,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -36,6 +40,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -495,4 +500,62 @@ fun SettingsCard(
             .padding(Dims.cardPadding),
         content = content,
     )
+}
+
+/** 设置页现代纯平开关（独立于 LocalGlassBackdrop 录制树，避免 RenderNode 递归循环） */
+@Composable
+fun SettingsSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val p = LocalAppPalette.current
+    val trackWidth = 48.dp
+    val trackHeight = 28.dp
+    val thumbSize = 22.dp
+    val thumbPadding = 3.dp
+
+    val trackColor by animateColorAsState(
+        targetValue = if (checked) p.accent else p.segmentedTrack,
+        animationSpec = tween(durationMillis = 200),
+        label = "switchTrackColor",
+    )
+    val thumbColor by animateColorAsState(
+        targetValue = if (checked) Color.White else p.bodyText.copy(alpha = 0.85f),
+        animationSpec = tween(durationMillis = 200),
+        label = "switchThumbColor",
+    )
+    val thumbOffset by animateDpAsState(
+        targetValue = if (checked) trackWidth - thumbSize - thumbPadding else thumbPadding,
+        animationSpec = tween(durationMillis = 200),
+        label = "switchThumbOffset",
+    )
+
+    Box(
+        modifier = modifier
+            .size(width = trackWidth, height = trackHeight)
+            .clip(RoundedCornerShape(trackHeight / 2))
+            .background(trackColor)
+            .border(
+                width = Dims.hairline,
+                color = if (checked) p.accent else p.cardBorder,
+                shape = RoundedCornerShape(trackHeight / 2),
+            )
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            ),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset)
+                .size(thumbSize)
+                .clip(CircleShape)
+                .background(thumbColor),
+        )
+    }
 }

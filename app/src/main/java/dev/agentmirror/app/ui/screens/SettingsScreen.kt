@@ -46,11 +46,11 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.CardOutlineButton
 import dev.agentmirror.app.ui.components.CardTonalButton
-import dev.agentmirror.app.ui.components.LiquidToggle
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.MicroPill
 import dev.agentmirror.app.ui.components.ScreenHeader
 import dev.agentmirror.app.ui.components.SettingsCard
+import dev.agentmirror.app.ui.components.SettingsSwitch
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
@@ -146,7 +146,7 @@ fun SettingsScreen(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
                     )
-                    LiquidToggle(
+                    SettingsSwitch(
                         checked = inputSyncEnabled,
                         onCheckedChange = onInputSyncEnabledChange,
                         modifier = Modifier.testTag("input-sync-switch"),
