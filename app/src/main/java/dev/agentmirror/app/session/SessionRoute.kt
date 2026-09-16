@@ -160,6 +160,8 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
     // 认证同源。token 只作为参数下传，禁止日志/回显；配置未落地时 manager() 已阻止建 VM。
     val fontSp = context?.let { SharedPreferencesFontSizeStore(it).load() }
         ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
+    val inputSync = context?.let { SharedPreferencesInputSyncStore(it).load() }
+        ?: SharedPreferencesInputSyncStore.DEFAULT_INPUT_SYNC_ENABLED
     val densityDpi = context?.resources?.displayMetrics?.densityDpi ?: -1
     val cached = context?.let { SharedPreferencesViewportGeomStore(it).load() }
     val cacheHit = cached != null &&
@@ -195,6 +197,7 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
         cols,
         uploadToken = ServiceWire.currentConfig()?.token,
         liveBaseUrl = { ServiceWire.uploadBaseUrl },
+        inputSyncEnabled = inputSync,
     )
 }
 

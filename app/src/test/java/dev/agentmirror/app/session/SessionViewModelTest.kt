@@ -259,6 +259,49 @@ class SessionViewModelTest {
     }
 
     @Test
+    fun sendDraft_whenInputSyncDisabled_sendsWholeTextAndClearsDraft() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = false
+        // typing does NOT send any input frame
+        h.vm.onPassthroughInput(tv(""), tv("echo hello"))
+        assertTrue(h.inputFrames().isEmpty())
+
+        // sendDraft sends whole text and commits
+        h.vm.sendDraft("echo hello")
+        assertEquals(InputStatus.Sending, h.vm.inputStatus)
+        val sent = h.inputFrames().last()
+        assertEquals("echo hello", sent.text)
+        assertTrue(sent.keys.isEmpty())
+        assertEquals("", sent.attachmentPath)
+        h.ackOk(sent.reqId)
+        assertEquals(InputStatus.Sent, h.vm.inputStatus)
+    }
+
+    @Test
+    fun sendDraft_whenInputSyncDisabled_withAttachment_sendsTextAndAttachmentPath() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = false
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.vm.sendDraft("look at this")
+        val sent = h.inputFrames().last()
+        assertEquals("look at this", sent.text)
+        assertEquals("/host/img.png", sent.attachmentPath)
+    }
+
+    @Test
+    fun sendDraft_whenInputSyncEnabled_ignoresTextAndSendsBareEnter() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = true
+        h.vm.onPassthroughInput(tv(""), tv("live typing"))
+        assertEquals(1, h.inputFrames().size)
+
+        // sendDraft with text still sends bare enter because text was already synced
+        h.vm.sendDraft("live typing")
+        val sent = h.inputFrames().last()
+        assertEquals("", sent.text)
+    }
+
+    @Test
     fun sendDraftAckFailureShowsError() {
         val h = Harness()
         h.vm.sendDraft()

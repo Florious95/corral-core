@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.CardOutlineButton
 import dev.agentmirror.app.ui.components.CardTonalButton
+import dev.agentmirror.app.ui.components.LiquidToggle
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.MicroPill
 import dev.agentmirror.app.ui.components.ScreenHeader
@@ -83,6 +84,8 @@ fun SettingsScreen(
     darkFamilyId: String = TermThemeStore.DEFAULT_FAMILY_ID,
     onOpenLightTheme: () -> Unit = {},
     onOpenDarkTheme: () -> Unit = {},
+    inputSyncEnabled: Boolean = true,
+    onInputSyncEnabledChange: (Boolean) -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
@@ -131,6 +134,26 @@ fun SettingsScreen(
                 }
                 Box(Modifier.height(12.dp))
                 TerminalPreviewLine(fontSize = terminalFontSize)
+            }
+
+            // ── 输入框实时同步 ──
+            SettingsCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppText(
+                        text = "输入框实时同步",
+                        color = p.rowTitleText,
+                        fontSize = TypeSizes.cardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    LiquidToggle(
+                        checked = inputSyncEnabled,
+                        onCheckedChange = onInputSyncEnabledChange,
+                        modifier = Modifier.testTag("input-sync-switch"),
+                    )
+                }
+                Box(Modifier.height(8.dp))
+                CardBody("开启时打字实时显示在 CLI 终端，关闭时仅在点击发送后一次性投递。")
             }
 
             // ── 诊断日志 ──

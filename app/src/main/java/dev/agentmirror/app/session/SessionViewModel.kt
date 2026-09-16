@@ -90,6 +90,8 @@ class SessionViewModel(
     internal val uploadToken: String? = null,
     /** READY 原子发布后读取当前 endpoint；构造期 [baseUrl] 仅保留旧测试/诊断快照。 */
     private val liveBaseUrl: () -> String? = { baseUrl },
+    /** 输入框实时同步开关：默认 true 保持现有 diffsync 直通；false 时仅本地编辑，发送时一次性提交。 */
+    var inputSyncEnabled: Boolean = true,
 ) : ConnectionManager.Listener {
 
     /** 终端内核：live pane 的完整 snapshot/delta 状态。 */
@@ -449,32 +451,32 @@ class SessionViewModel(
     // ---- 用户动作 ----
 
     /**
-     * 直通输入（059）：发送键只提交——CLI 输入框即草稿（用户逐键直通已把内容打在
-     * CLI 输入框里），发送 = 裸 Enter。不再读取任何本地草稿文本整条注入（那正是被
-     * 取代的 003 第1条"一次性注入"）。
+     * 点按发送（R-1，017）：根据 [inputSyncEnabled] 提交当前草稿并清空输入状态。
      *
-     * 有待发附件（[pendingAttachmentPaths]）时路径已经在上传成功那一刻贴进 CLI pane 了
-     * （需求 057），提交这一步只需带最新一次预贴路径（服务端据此算沉降补差额：常见
-     * 路径零等待，只有选完图立刻发才补差额）；text 为空，服务端只发 Enter。
+     * - [inputSyncEnabled] == true（开启，默认）：输入期已通过 [onPassthroughInput] 实时直通
+     *   CLI 行；发送仅需提交（发 text 为空的裸 Enter）。
+     * - [inputSyncEnabled] == false（关闭）：输入期不向 CLI 注入按键；发送时将 [text] 一次性
+     *   发给 CLI 并附带回车提交。
      *
+     * @param text 本地待发送草稿文本；开启实时同步时忽略此参数（发送裸 Enter 避免重复内容）
      * @contract
      * @pre connectionState 为 READY，且 inputStatus 非 Sending
      * @post 提交成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent]
      *       （并清空 [pendingAttachmentPaths]）或 [InputStatus.Failed]（保留附件，可重发）
      * @err 未就绪 / 提交失败置 [InputStatus.Failed]
-     * @inv 在途不回发（发送闸）；不携带任何本地草稿文本（059 取代 003 第1条）
+     * @inv 在途不回发（发送闸）
      */
-    fun sendDraft() {
+    @JvmOverloads
+    fun sendDraft(text: String = "") {
         if (inputStatus is InputStatus.Sending) return // 在途不回发
         // 本地先判定可发送性：未就绪立即明确报错（静默失效猎杀）。
         if (connectionState != ConnectionState.READY) {
             inputStatus = InputStatus.Failed("连接未就绪，无法发送")
             return
         }
-        // 服务端只需要"最新一次预贴的是哪个路径"来核对沉降时间戳；多张图一起提交，
-        // 靠最新那次的时间戳兜底。text 为空 = 裸 Enter 提交（059：发送只提交）。
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
-        if (manager.sendInput(ref, "", attachmentPath)) {
+        val textToSend = if (inputSyncEnabled) "" else text
+        if (manager.sendInput(ref, textToSend, attachmentPath)) {
             inputStatus = InputStatus.Sending
             // Enter 提交后 CLI 行空；本地框跟着清。不同步会把下一轮当成「删掉上一条」。
             syncedText = ""
@@ -521,6 +523,7 @@ class SessionViewModel(
      * @inv 同步后光标约定在行尾；不改本地草稿；不引入额外延迟
      */
     fun onPassthroughInput(oldValue: TextFieldValue, newValue: TextFieldValue) {
+        if (!inputSyncEnabled) return
         val wasComposing = oldValue.composition != null
         val isComposing = newValue.composition != null
         val composition = newValue.composition

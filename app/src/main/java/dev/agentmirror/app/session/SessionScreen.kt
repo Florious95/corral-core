@@ -350,8 +350,8 @@ fun SessionScreen(
                         viewModel.onPassthroughInput(mirror, it)
                         mirror = it
                     },
-                    onSendText = {
-                        viewModel.sendDraft()
+                    onSendText = { text ->
+                        viewModel.sendDraft(text.ifEmpty { mirror.text })
                         mirror = TextFieldValue("")
                     },
                     onPickAttachment = { attachMenu = true },
