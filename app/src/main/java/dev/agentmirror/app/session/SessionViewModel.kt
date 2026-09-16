@@ -456,7 +456,7 @@ class SessionViewModel(
      * - [inputSyncEnabled] == true（开启，默认）：输入期已通过 [onPassthroughInput] 实时直通
      *   CLI 行；发送仅需提交（发 text 为空的裸 Enter）。
      * - [inputSyncEnabled] == false（关闭）：输入期不向 CLI 注入按键；发送时将 [text] 一次性
-     *   发给 CLI 并附带回车提交。
+     *   发给 CLI 并附带回车提交（末尾附带 '\n'，确保单次点击直接执行，严禁二次点击）。
      *
      * @param text 本地待发送草稿文本；开启实时同步时忽略此参数（发送裸 Enter 避免重复内容）
      * @contract
@@ -475,7 +475,15 @@ class SessionViewModel(
             return
         }
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
-        val textToSend = if (inputSyncEnabled) "" else text
+        val textToSend = if (inputSyncEnabled) {
+            ""
+        } else {
+            if (text.isEmpty() || attachmentPath.isNotEmpty() || text.endsWith("\n")) {
+                text
+            } else {
+                "$text\n"
+            }
+        }
         if (manager.sendInput(ref, textToSend, attachmentPath)) {
             inputStatus = InputStatus.Sending
             // Enter 提交后 CLI 行空；本地框跟着清。不同步会把下一轮当成「删掉上一条」。

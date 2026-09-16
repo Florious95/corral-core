@@ -266,11 +266,25 @@ class SessionViewModelTest {
         h.vm.onPassthroughInput(tv(""), tv("echo hello"))
         assertTrue(h.inputFrames().isEmpty())
 
-        // sendDraft sends whole text and commits
+        // sendDraft sends whole text with execution newline and commits
         h.vm.sendDraft("echo hello")
         assertEquals(InputStatus.Sending, h.vm.inputStatus)
         val sent = h.inputFrames().last()
-        assertEquals("echo hello", sent.text)
+        assertEquals("echo hello\n", sent.text)
+        assertTrue(sent.keys.isEmpty())
+        assertEquals("", sent.attachmentPath)
+        h.ackOk(sent.reqId)
+        assertEquals(InputStatus.Sent, h.vm.inputStatus)
+    }
+
+    @Test
+    fun sendDraft_whenInputSyncDisabled_emptyText_sendsBareEnter() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = false
+        h.vm.sendDraft("")
+        assertEquals(InputStatus.Sending, h.vm.inputStatus)
+        val sent = h.inputFrames().last()
+        assertEquals("", sent.text)
         assertTrue(sent.keys.isEmpty())
         assertEquals("", sent.attachmentPath)
         h.ackOk(sent.reqId)

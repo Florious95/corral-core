@@ -69,8 +69,29 @@ class InputSyncBehaviorIndependentRedTest {
         send.invoke(h.vm, "echo 独立测试")
         val submitted = h.inputFrames().drop(beforeTyping)
         assertEquals("one complete text submission is expected", 1, submitted.size)
-        assertEquals("echo 独立测试", submitted.single().text)
+        assertEquals("echo 独立测试\n", submitted.single().text)
         assertTrue("submission must be a text frame, not a key frame", submitted.single().keys.isEmpty())
+    }
+
+    @Test
+    fun disabledSyncSendDraftMustCarryEnterInTheSameSubmission() {
+        val h = Harness(inputSyncEnabled = false)
+        val send = SessionViewModel::class.java.methods.firstOrNull {
+            it.name == "sendDraft" && it.parameterTypes.contentEquals(arrayOf(String::class.java))
+        } ?: error("sendDraft(String) is required for disabled-sync submission")
+
+        // A single click is an execution request, not merely filling the remote CLI line.
+        send.invoke(h.vm, "echo 一次执行")
+        val submitted = h.inputFrames()
+        assertTrue("sendDraft must emit at least one input frame", submitted.isNotEmpty())
+        val hasNewline = submitted.any { it.text.endsWith("\n") }
+        val hasEnterKey = submitted.any { frame ->
+            frame.keys.any { key -> key.name.contains("ENTER", ignoreCase = true) }
+        }
+        assertTrue(
+            "disabled-sync submission must carry a newline or Enter; got $submitted",
+            hasNewline || hasEnterKey,
+        )
     }
 
     private fun findStoreClass(): Class<*>? = listOf(
