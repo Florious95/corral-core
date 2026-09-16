@@ -35,6 +35,8 @@ object Dims {
     // 顶栏 FlatGlass 药丸按钮：44dp 触控地板内嵌 34dp 可见胶囊
     val pillTouchFloor: Dp = 44.dp
     val pillHeight: Dp = 34.dp
+    // iOS 标志性圆形返回：44dp 触控地板内嵌 36dp 纯圆微透底盘
+    val circleBackDisc: Dp = 36.dp
 
     // 列表行（微玻璃卡：左右离屏边 10，卡间 8，列表首尾各 8）
     val cardHMargin: Dp = 10.dp

@@ -437,6 +437,48 @@ fun GlassPillButton(
     }
 }
 
+/**
+ * iOS 标志性圆形液态玻璃返回按钮：44dp 触控地板内嵌 36dp 纯圆微透底盘 +
+ * 0.5dp 发丝光边 + 居中折线箭头，无任何汉字。纯 [flatGlass]，不采样。
+ */
+@Composable
+fun GlassCircleBackButton(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalAppPalette.current
+    val glass = flatGlassTokens()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    Box(
+        modifier = modifier
+            .size(Dims.pillTouchFloor)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClick = onBack,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(Dims.circleBackDisc)
+                .flatGlass(
+                    shape = CircleShape,
+                    fill = glass.fill,
+                    hairline = glass.hairline,
+                    topGlint = glass.topGlint,
+                    bottomShade = glass.bottomShade,
+                    overlay = if (pressed) glass.pressDim else Color.Transparent,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            BackChevron(tint = p.accent)
+        }
+    }
+}
+
 /** 二级页返回：‹ + 上级名称，FlatGlass 药丸，44dp 触控地板 */
 @Composable
 fun BackAffordance(

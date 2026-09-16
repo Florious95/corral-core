@@ -206,6 +206,6 @@ class CreateAgentDialogTest {
                 )
             }
         }
-        compose.onNodeWithText("+ 新建 Agent").assertExists().assertIsNotEnabled()
+        compose.onNodeWithText("+ Agent").assertExists().assertIsNotEnabled()
     }
 }

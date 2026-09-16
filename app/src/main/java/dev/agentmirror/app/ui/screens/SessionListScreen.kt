@@ -65,7 +65,7 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.RoundedRectangle
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
-import dev.agentmirror.app.ui.components.BackAffordance
+import dev.agentmirror.app.ui.components.GlassCircleBackButton
 import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.ExtractedProviderIcon
 import dev.agentmirror.app.ui.components.GlassButton
@@ -92,7 +92,7 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
  * 会话列表（二级，某个工作区内）。
- * 顶部：‹ 工作区 + LAN，下面是工作区名 + 完整路径。
+ * 顶部：圆形液态玻璃返回 + 「+ Agent」+ LAN，下面是工作区名 + 完整路径。
  * 行结构：CLI 工作灯 → 会话显示名 + cwd 路径（66dp）→ 右侧官方 Provider 图标。
  * 整行是唯一手势 owner：短按打开（在线），长按弹出收藏/取消收藏。
  *
@@ -135,10 +135,9 @@ fun SessionListScreen(
                 .testTag("session-list-topbar"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BackAffordance(label = "工作区", onBack = onBack)
+            GlassCircleBackButton(onBack = onBack)
             Box(Modifier.weight(1f))
             var showCreateDialog by remember { mutableStateOf(false) }
-            // 与左侧返回同款 FlatGlass 药丸（录制树内，不采样），不再是裸文字按钮
             GlassPillButton(
                 onClick = {
                     showCreateDialog = true
@@ -148,7 +147,7 @@ fun SessionListScreen(
                 modifier = Modifier.testTag("create-agent-button"),
             ) {
                 AppText(
-                    text = "+ 新建 Agent",
+                    text = "+ Agent",
                     color = p.accent,
                     fontSize = TypeSizes.actionButton,
                     fontWeight = FontWeight.Medium,
