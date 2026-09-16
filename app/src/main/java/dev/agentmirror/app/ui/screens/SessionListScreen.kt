@@ -408,7 +408,7 @@ internal fun CreateAgentFormContent(
 
 /**
  * Agent 品牌图标卡（Pi / Codex / Cursor / Grok 官方图标）——玻璃面板上的玻璃卡。
- * 选中：主色 Hue 调色 + 2dp 纯净主色描边 + 主色内光晕，右上角 16dp 主色圆底白对勾 ✓。
+ * 选中：主色 Hue 调色 + 1dp 纯净主色描边 + 主色内光晕，右上角 16dp 主色圆底白对勾 ✓。
  */
 @Composable
 internal fun AgentIconCard(
@@ -436,9 +436,12 @@ internal fun AgentIconCard(
                 tintAlpha = 0.12f,
                 glow = if (isSelected) p.accent else Color.Unspecified,
                 pressProgress = press,
+                blurRadius = 2.dp,
+                lensHeight = 5.dp,
+                lensAmount = 12.dp,
             )
             .then(
-                if (isSelected) Modifier.border(2.dp, p.accent, RoundedCornerShape(Radii.glassControl)) else Modifier,
+                if (isSelected) Modifier.border(1.dp, p.accent, RoundedCornerShape(Radii.glassControl)) else Modifier,
             )
             .clickable(
                 interactionSource = interaction,

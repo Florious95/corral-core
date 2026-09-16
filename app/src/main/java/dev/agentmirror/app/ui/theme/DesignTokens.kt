@@ -410,7 +410,7 @@ val LightPalette = AppPalette(
     statusPillBg = Color(0x2112A594),
     statusPillText = Color(0xFF0F766E),
 
-    navBackground = Color(0x8CFAFBFD),
+    navBackground = Color(0x4DFAFBFD),
     navRail = Color(0xFF0B57D0),
     navActive = Color(0xFF0B57D0),
     navInactive = Color(0xFF5F6980),
@@ -504,7 +504,7 @@ val DarkPalette = AppPalette(
     statusPillBg = Color(0x244FD1C0),
     statusPillText = Color(0xFF4FD1C0),
 
-    navBackground = Color(0x8C0F1725),
+    navBackground = Color(0x610F1725),
     navRail = Color(0xFF77A6FF),
     navActive = Color(0xFF9CC0FF),
     navInactive = Color(0xFF8497B8),

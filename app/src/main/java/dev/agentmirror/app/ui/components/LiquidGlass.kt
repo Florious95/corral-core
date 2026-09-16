@@ -18,6 +18,7 @@ package dev.agentmirror.app.ui.components
 
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.core.MutableTransitionState
@@ -99,6 +100,7 @@ import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import com.kyant.shapes.RoundedRectangularShape
+import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Motion
@@ -143,6 +145,25 @@ private object GlassCapability {
 fun Color.glassReadable(): Color =
     if (GlassCapability.blur) this else copy(alpha = SURFACE_ALPHA_WITHOUT_BLUR)
 
+/** 发丝级高光：极窄 0.65dp，45° 聚光（falloff = 2.5f），浅色 alpha 0.65，避免整圈死白 */
+val HairlineHighlight: Highlight = Highlight(
+    width = 0.65.dp,
+    alpha = 0.65f,
+    style = HighlightStyle.Default(
+        color = Color.White,
+        angle = 45f,
+        falloff = 2.5f,
+    ),
+)
+
+/** 贴紧亮边的微暗内阴影：极窄 1.5dp，offset = (0, 0.75dp)，黑色 alpha 0.12，勾勒水滴晶莹立体厚度 */
+val HairlineInnerShadow: InnerShadow = InnerShadow(
+    radius = 1.5.dp,
+    offset = DpOffset(0.dp, 0.75.dp),
+    color = Color.Black.copy(alpha = 0.12f),
+    alpha = 0.12f,
+)
+
 /** 有着色器时用带角度衰减的默认高光，否则退到纯色描边高光；[color] 指定则整圈染色（危险项红光 / 选中主色光晕）。 */
 private fun glassHighlight(color: Color = Color.Unspecified): Highlight = when {
     GlassCapability.shaders && color.isSpecified -> Highlight(style = HighlightStyle.Default(color = color.copy(alpha = 0.7f)))
@@ -162,14 +183,21 @@ fun Modifier.glassPanel(
     exportedBackdrop: LayerBackdrop? = null,
     shadow: Shadow? = PanelShadow,
     innerShadow: InnerShadow? = null,
+    blurRadius: Dp = 12.dp,
+    lensHeight: Dp = 16.dp,
+    lensAmount: Dp = 24.dp,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
     effects = {
         vibrancy()
-        blur(12.dp.toPx())
+        blur(blurRadius.toPx())
         if (GlassCapability.shaders) {
-            lens(refractionHeight = 16.dp.toPx(), refractionAmount = 24.dp.toPx(), depthEffect = false)
+            lens(
+                refractionHeight = lensHeight.toPx(),
+                refractionAmount = lensAmount.toPx(),
+                depthEffect = false,
+            )
         }
     },
     highlight = { glassHighlight() },
@@ -195,17 +223,20 @@ fun Modifier.glassControl(
     glow: Color = Color.Unspecified,
     pressProgress: () -> Float = NoPress,
     pressedScale: Float = 0.96f,
+    blurRadius: Dp = 4.dp,
     lensHeight: Dp = 12.dp,
     lensAmount: Dp = 24.dp,
     chromaticAberration: Boolean = false,
     crystalHighlight: Boolean = false,
+    highlight: Highlight? = null,
     shadow: Shadow? = null,
+    innerShadow: InnerShadow? = null,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
     effects = {
         vibrancy()
-        blur(4.dp.toPx())
+        blur(blurRadius.toPx())
         if (GlassCapability.shaders) {
             lens(
                 refractionHeight = lensHeight.toPx(),
@@ -215,14 +246,26 @@ fun Modifier.glassControl(
         }
     },
     highlight = {
-        if (crystalHighlight && GlassCapability.shaders) {
-            Highlight(style = HighlightStyle.Default(color = Color.White.copy(alpha = 0.92f)))
+        if (highlight != null) {
+            highlight
+        } else if (crystalHighlight) {
+            if (GlassCapability.shaders) {
+                HairlineHighlight
+            } else {
+                Highlight(
+                    width = 0.65.dp,
+                    alpha = 0.65f,
+                    style = HighlightStyle.Plain(color = Color.White.copy(alpha = 0.65f)),
+                )
+            }
         } else {
             glassHighlight(glow)
         }
     },
     shadow = shadow?.let { { it } },
-    innerShadow = if (glow.isSpecified) {
+    innerShadow = innerShadow?.let { { it } } ?: if (crystalHighlight) {
+        { HairlineInnerShadow }
+    } else if (glow.isSpecified) {
         { InnerShadow(radius = 14.dp, offset = DpOffset.Zero, color = glow.copy(alpha = 0.32f)) }
     } else {
         null
@@ -338,6 +381,7 @@ fun LiquidToggle(
     enabled: Boolean = true,
 ) {
     val p = LocalAppPalette.current
+    val isDark = p === DarkPalette
     val pageBackdrop = LocalGlassBackdrop.current
     val trackBackdrop = rememberLayerBackdrop()
     val thumbBackdrop = rememberCombinedBackdrop(pageBackdrop, trackBackdrop)
@@ -345,8 +389,19 @@ fun LiquidToggle(
     val press = rememberPressProgress(interaction)
 
     // 轨道：半透微深灰胶囊凹槽（未开）/ 清澈科技蓝（开启）
-    val trackSurface = if (checked) p.accent.copy(alpha = 0.85f) else Color(0x33000000)
-    val trackBorder = if (checked) p.accent.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.16f)
+    // 轨道颜色过渡（200ms）与滑块平移同步启动
+    val targetTrackSurface = if (checked) p.accent.copy(alpha = 0.85f) else Color(0x33000000)
+    val trackSurface by animateColorAsState(
+        targetValue = targetTrackSurface,
+        animationSpec = tween(200),
+        label = "liquidToggleTrackSurface",
+    )
+    val targetTrackBorder = if (checked) p.accent.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.16f)
+    val trackBorder by animateColorAsState(
+        targetValue = targetTrackBorder,
+        animationSpec = tween(200),
+        label = "liquidToggleTrackBorder",
+    )
     val trackInnerShadow = InnerShadow(
         radius = 3.dp,
         offset = DpOffset(0.dp, 1.dp),
@@ -376,6 +431,9 @@ fun LiquidToggle(
                 exportedBackdrop = trackBackdrop,
                 shadow = null,
                 innerShadow = trackInnerShadow,
+                blurRadius = 3.dp,
+                lensHeight = 4.dp,
+                lensAmount = 6.dp,
             )
             .clip(ToggleTrackShape)
             .border(
@@ -389,9 +447,10 @@ fun LiquidToggle(
         val travel = (maxWidth - thumbSize - inset * 2).coerceAtLeast(0.dp)
         val thumbOffset by animateDpAsState(
             targetValue = if (checked) travel else 0.dp,
-            animationSpec = tween(Motion.glassPress * 2, easing = Motion.sheetEnter),
+            animationSpec = tween(200, easing = Motion.sheetEnter),
             label = "liquidToggleThumb",
         )
+        val thumbSurfaceAlpha = if (isDark) 0.14f else 0.10f
         Box(
             Modifier
                 .fillMaxSize()
@@ -406,15 +465,16 @@ fun LiquidToggle(
                     .glassControl(
                         backdrop = thumbBackdrop,
                         shape = ToggleThumbShape,
-                        // 纯净半透微光表面，不遮挡底层透镜折射
-                        surface = Color.White.copy(alpha = 0.12f),
+                        // 纯净半透微光表面，不遮挡底层透镜折射：浅色 0.10 / 深色 0.14
+                        surface = Color.White.copy(alpha = thumbSurfaceAlpha),
                         tint = if (checked) p.accent else Color.Unspecified,
-                        tintAlpha = if (checked) 0.15f else 0f,
-                        glow = if (checked) p.accent else Color.White.copy(alpha = 0.35f),
+                        tintAlpha = if (checked) 0.08f else 0f,
+                        glow = if (checked) p.accent else Color.Unspecified,
                         pressProgress = press,
-                        pressedScale = 1.08f,
-                        lensHeight = 8.dp,
-                        lensAmount = 16.dp,
+                        pressedScale = 1.03f,
+                        blurRadius = 1.dp,
+                        lensHeight = 5.dp,
+                        lensAmount = 12.dp,
                         chromaticAberration = true,
                         crystalHighlight = true,
                         shadow = Shadow(

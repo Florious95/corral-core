@@ -42,6 +42,7 @@ import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
 import dev.agentmirror.app.ui.model.NavTab
+import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Motion
@@ -49,6 +50,7 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * 底部导航 —— 悬浮液态玻璃胶囊。
@@ -105,10 +107,10 @@ fun AppBottomNav(
             ((indicatorPosition.value - animationStart) / delta).coerceIn(0f, 1f)
         }
         val travelSpeed = if (abs(delta) < 0.001f) 0f else sin(progress * PI).toFloat()
-        val lensScaleX = 1f + travelSpeed * 0.42f
-        val lensScaleY = 1f - travelSpeed * 0.14f
+        val lensScaleX = 1f + travelSpeed * 0.14f
+        val lensScaleY = 1f / sqrt(lensScaleX)
 
-        // 胶囊本体
+        // 胶囊本体：模糊由 12dp 降至 6dp，表面覆盖浓度浅色 0.30 / 深色 0.38
         Box(
             Modifier
                 .matchParentSize()
@@ -117,11 +119,14 @@ fun AppBottomNav(
                     shape = NavCapsule,
                     surface = p.navBackground.glassReadable(),
                     exportedBackdrop = barBackdrop,
+                    blurRadius = 6.dp,
+                    lensHeight = 8.dp,
+                    lensAmount = 18.dp,
                 ),
         )
 
         // 选中滑块：沿轨道移动时呈水滴拉伸，落位后回弹为自然胶囊；
-        // 强白高光 + 深折射让滑块区别于机械平移色块。
+        // 内部滑块：模糊降至 1.5dp，lensHeight = 7.dp，lensAmount = 22.dp，发丝高光 + 贴边微暗内阴影
         Box(
             Modifier
                 .padding(Dims.navIndicatorInset)
@@ -137,10 +142,12 @@ fun AppBottomNav(
                     shape = NavCapsule,
                     surface = Color.Unspecified,
                     tint = p.navRail,
-                    tintAlpha = 0.24f,
+                    tintAlpha = if (p === DarkPalette) 0.14f else 0.16f,
                     pressProgress = { pressProgress },
                     pressedScale = 1.06f,
-                    lensAmount = 40.dp,
+                    blurRadius = 1.5.dp,
+                    lensHeight = 7.dp,
+                    lensAmount = 22.dp,
                     crystalHighlight = true,
                 ),
         )
