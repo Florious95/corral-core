@@ -399,6 +399,8 @@ fun GlassButton(
     tint: Color = Color.Unspecified,
     textColor: Color = LocalAppPalette.current.rowTitleText,
     minWidth: Dp = 64.dp,
+    height: Dp = 44.dp,
+    backdrop: Backdrop = LocalGlassBackdrop.current,
 ) {
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
@@ -407,7 +409,7 @@ fun GlassButton(
         modifier = modifier
             .alpha(if (enabled) 1f else 0.45f)
             .glassControl(
-                backdrop = LocalGlassBackdrop.current,
+                backdrop = backdrop,
                 shape = ControlShape,
                 surface = if (tint.isSpecified) Color.Unspecified else p.glassSurface.copy(alpha = 0.35f),
                 tint = tint,
@@ -421,7 +423,7 @@ fun GlassButton(
                 onClick = onClick,
             )
             .defaultMinSize(minWidth = minWidth)
-            .height(44.dp)
+            .height(height)
             .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -433,6 +435,48 @@ fun GlassButton(
             lineHeightMultiplier = 1f,
         )
     }
+}
+
+/**
+ * 标杆 GlassButton 同款材质的图标钮（圆形 / 胶囊）。
+ * 录制树内（二级顶栏等）必须传 [emptyBackdrop]，⛔ 不得传 [LocalGlassBackdrop] 去采样自己。
+ */
+@Composable
+fun GlassIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color = Color.Unspecified,
+    glow: Color = Color.Unspecified,
+    size: Dp = 36.dp,
+    backdrop: Backdrop = LocalGlassBackdrop.current,
+    content: @Composable () -> Unit,
+) {
+    val p = LocalAppPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val press = rememberPressProgress(interaction)
+    Box(
+        modifier = modifier
+            .alpha(if (enabled) 1f else 0.45f)
+            .size(size)
+            .glassControl(
+                backdrop = backdrop,
+                shape = Capsule(),
+                surface = if (tint.isSpecified) Color.Unspecified else p.glassSurface.copy(alpha = 0.35f),
+                tint = tint,
+                glow = glow,
+                pressProgress = press,
+            )
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+        content = { content() },
+    )
 }
 
 private val ControlShape = RoundedRectangle(Radii.glassControl)

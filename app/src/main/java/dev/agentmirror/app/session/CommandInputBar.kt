@@ -4,8 +4,8 @@
  *
  * 对应设计稿：输入框「完全包裹」加号与发送——一只微水润 FlatGlass 胶囊
  * （见 [dockFlatGlass]：半透底 + 0.5dp 发丝边 + 顶亮/底暗，⛔ 不采样背景），
- * 内部从左到右：加号微透圆钮 · 受控 BasicTextField · 发送小圆钮
- * （primary 发丝光边圆形，主流 Chat App 式样）。与上方 HotkeyRow 键帽同一材质。
+ * 内部从左到右：中性 GlassIconButton 加号 · 受控 BasicTextField · 主色
+ * GlassIconButton 发送（tint=accent，与弹窗「创建」同材质）。键帽见 HotkeyRow。
  *
  * 交互（已验收，⛔ 视觉改造不得触碰）：
  * - 单行起步；获得焦点（IME 弹出）时文本区高度 animateDpAsState 膨胀到
@@ -31,7 +31,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -40,7 +39,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -71,7 +69,6 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -82,6 +79,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.kyant.backdrop.backdrops.emptyBackdrop
+import dev.agentmirror.app.ui.components.GlassIconButton
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 
 /** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
@@ -165,32 +164,15 @@ fun CommandInputBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(start = 5.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
         ) {
-            // 加号：36×32 触控槽不变，内嵌 32dp 微透圆钮（发丝光边），按压变暗。
-            val plusInteraction = remember { MutableInteractionSource() }
-            val plusPressed by plusInteraction.collectIsPressedAsState()
+            // 加号：36×32 触控槽不变，32dp 标杆中性 GlassIconButton（emptyBackdrop，不采样）。
             Box(
-                modifier = Modifier
-                    .size(width = 36.dp, height = 32.dp)
-                    .clickable(
-                        interactionSource = plusInteraction,
-                        indication = null,
-                        role = Role.Button,
-                        onClick = onPickAttachment,
-                    ),
+                modifier = Modifier.size(width = 36.dp, height = 32.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .dockFlatGlass(
-                            shape = CircleShape,
-                            fill = glass.fillSoft,
-                            hairline = glass.hairline,
-                            topGlint = glass.topGlint,
-                            bottomShade = glass.bottomShade,
-                            overlay = if (plusPressed) glass.pressDim else Color.Transparent,
-                        ),
-                    contentAlignment = Alignment.Center,
+                GlassIconButton(
+                    onClick = onPickAttachment,
+                    size = 32.dp,
+                    backdrop = emptyBackdrop(),
                 ) {
                     Icon(
                         DockIconPlus, contentDescription = "添加附件",
@@ -292,33 +274,6 @@ fun CommandInputBar(
                 )
             }
             val hasText = value.text.isNotBlank()
-            // 有文本：科技蓝薄染 + 实色科技蓝光边；空：与加号同款微透底 + 半透科技蓝光边。
-            val sendBackground by animateColorAsState(
-                targetValue = if (hasText) p.accent.copy(alpha = 0.35f) else glass.fillSoft,
-                animationSpec = tween(
-                    durationMillis = SessionDockMotion.InputBorderMillis,
-                    easing = SessionDockMotion.Ease,
-                ),
-                label = "sendBackground",
-            )
-            val sendRing by animateColorAsState(
-                targetValue = if (hasText) p.accent else p.accent.copy(alpha = 0.55f),
-                animationSpec = tween(
-                    durationMillis = SessionDockMotion.InputBorderMillis,
-                    easing = SessionDockMotion.Ease,
-                ),
-                label = "sendRing",
-            )
-            val sendForeground by animateColorAsState(
-                targetValue = if (hasText) p.accent else p.accent.copy(alpha = 0.75f),
-                animationSpec = tween(
-                    durationMillis = SessionDockMotion.InputBorderMillis,
-                    easing = SessionDockMotion.Ease,
-                ),
-                label = "sendForeground",
-            )
-            val sendInteraction = remember { MutableInteractionSource() }
-            val sendPressed by sendInteraction.collectIsPressedAsState()
             Box(
                 modifier = Modifier
                     .width(32.dp)
@@ -331,30 +286,18 @@ fun CommandInputBar(
                     ),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clickable(
-                            interactionSource = sendInteraction,
-                            indication = null,
-                            role = Role.Button,
-                            onClick = { onSend() },
-                        )
-                        .dockFlatGlass(
-                            shape = CircleShape,
-                            fill = sendBackground,
-                            hairline = sendRing,
-                            topGlint = glass.topGlint,
-                            bottomShade = glass.bottomShade,
-                            overlay = if (sendPressed) glass.pressDim else Color.Transparent,
-                        )
-                        .testTag("session-send-button"),
-                    contentAlignment = Alignment.Center,
+                // 主色 GlassIconButton（与弹窗「创建」同款 tint）；外层全高 zIndex 触控盒锁死首击发送
+                GlassIconButton(
+                    onClick = { onSend() },
+                    tint = p.accent,
+                    size = 32.dp,
+                    backdrop = emptyBackdrop(),
+                    modifier = Modifier.testTag("session-send-button"),
                 ) {
                     Icon(
                         DockIconArrowUp, contentDescription = "发送",
                         modifier = Modifier.width(16.dp),
-                        tint = sendForeground,
+                        tint = if (hasText) p.onAccent else p.onAccent.copy(alpha = 0.72f),
                     )
                 }
             }

@@ -6,35 +6,30 @@
  *   Esc  Tab  ↑ ↓ ← →  Ctrl-C
  * 无多余返回/收起按键，按键整行填满、左右对称。
  *
- * 三种质感（微水润 FlatGlass 键帽，见 [dockFlatGlass]，⛔ 不采样背景）：
- * - Esc/Tab：常规独立键，半透底 + 0.5dp 发丝边、圆角 8dp；
- * - 方向键：视觉成「一簇」——四键坐在一条统一微透轨道上（上下各内缩 2dp），
- *   圆角收到 4dp、簇内间距 4dp（其余间距 8dp）；
- * - Ctrl-C：中断语义，仅细 error 描边 + error 前景，⛔ 无红色大面积底。
- * 按压只叠一层变暗蒙层。宽度按比例填满整行，键文案用 FontFamily.Monospace（终端语境）。
+ * 三种质感（标杆 GlassButton / glassControl，emptyBackdrop 不采样）：
+ * - Esc/Tab：中性 glassSurface@0.35 + 按压缩放，圆角 glassControl；
+ * - 方向键：坐在统一微透轨道上，键帽上下内缩 2dp，圆角 8dp；
+ * - Ctrl-C：同款中性底 + error 字色，⛔ 无红色大面积底。
+ * 键位几何与源画布一致。文案 FontFamily.Monospace。
  * ─────────────────────────────────────────────────────────────
  */
 package dev.agentmirror.app.session
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -45,6 +40,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.emptyBackdrop
+import com.kyant.shapes.RoundedRectangle
+import dev.agentmirror.app.ui.components.glassControl
+import dev.agentmirror.app.ui.components.rememberPressProgress
+import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.Radii
 import kotlin.math.roundToInt
 
 /** 键的三种质感 */
@@ -130,55 +131,51 @@ private fun SourceHotkeyButtons(onKeyToken: (String) -> Unit, modifier: Modifier
     }
 }
 
-/** 方向键簇统一微透轨道：更薄的底 + 发丝边，无顶亮/底暗（明暗对留给坐在其上的键帽）。 */
+/** 方向键簇统一微透轨道：标杆中性玻璃更薄一层，无按压。 */
 @Composable
 private fun ArrowClusterTrack() {
-    val glass = sessionDockGlassTokens()
+    val p = LocalAppPalette.current
     Box(
-        Modifier.dockFlatGlass(
-            shape = RoundedCornerShape(ArrowClusterRadius),
-            fill = glass.fillSoft,
-            hairline = glass.hairline,
-            topGlint = Color.Transparent,
-            bottomShade = Color.Transparent,
+        Modifier.glassControl(
+            backdrop = emptyBackdrop(),
+            shape = RoundedRectangle(ArrowClusterRadius),
+            surface = p.glassSurface.copy(alpha = 0.18f),
         ),
     )
 }
 
 @Composable
 private fun HotKey(key: KeySpec, onClick: () -> Unit) {
+    val p = LocalAppPalette.current
     val source = sessionDockSourceTokens()
-    val glass = sessionDockGlassTokens()
     val error = MaterialTheme.colorScheme.error
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val (hairline, fg) = when (key.kind) {
-        KeyKind.Plain -> glass.hairline to source.neutral400
-        KeyKind.Arrow -> glass.hairline to source.neutral200
-        KeyKind.Interrupt -> error.copy(alpha = 0.75f) to error
+    val press = rememberPressProgress(interaction)
+    val fg = when (key.kind) {
+        KeyKind.Plain -> source.neutral400
+        KeyKind.Arrow -> source.neutral200
+        KeyKind.Interrupt -> error
     }
-    val overlay = when {
-        !pressed -> Color.Transparent
-        key.kind == KeyKind.Interrupt -> error.copy(alpha = 0.12f)
-        else -> glass.pressDim
-    }
+    val shape = RoundedRectangle(if (key.kind == KeyKind.Arrow) 8.dp else Radii.glassControl)
+    // testTag 盒必须铺满源几何；方向键只把玻璃画在内缩层，⛔ 不许改 tagged bounds
     Box(
         modifier = Modifier
             .fillMaxSize()
             .testTag("hotkey-${key.token}")
-            // 触控盒保持整格 40dp；方向键只把可见键帽上下内缩进簇轨道。
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
-            .then(if (key.kind == KeyKind.Arrow) Modifier.padding(vertical = ArrowClusterInset) else Modifier)
-            .dockFlatGlass(
-                shape = RoundedCornerShape(if (key.kind == KeyKind.Arrow) 4.dp else 8.dp),
-                fill = glass.fill,
-                hairline = hairline,
-                topGlint = glass.topGlint,
-                bottomShade = glass.bottomShade,
-                overlay = overlay,
-            ),
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .then(if (key.kind == KeyKind.Arrow) Modifier.padding(vertical = ArrowClusterInset) else Modifier)
+                .glassControl(
+                    backdrop = emptyBackdrop(),
+                    shape = shape,
+                    surface = p.glassSurface.copy(alpha = 0.35f),
+                    pressProgress = press,
+                ),
+        )
         Text(
             key.label,
             style = TextStyle(

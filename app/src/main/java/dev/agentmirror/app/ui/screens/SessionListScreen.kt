@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.RoundedRectangle
 import dev.agentmirror.app.tsnet.ConnectionPath
@@ -70,7 +72,6 @@ import dev.agentmirror.app.ui.components.CanonicalProviderMarks
 import dev.agentmirror.app.ui.components.ExtractedProviderIcon
 import dev.agentmirror.app.ui.components.GlassButton
 import dev.agentmirror.app.ui.components.GlassModalLayer
-import dev.agentmirror.app.ui.components.GlassPillButton
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.LiquidToggle
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
@@ -126,7 +127,7 @@ fun SessionListScreen(
     onCreateAgentErrorCleared: () -> Unit = {},
 ) {
     val p = LocalAppPalette.current
-    Column(modifier.fillMaxSize().background(p.screenBackground)) {
+    Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -138,22 +139,21 @@ fun SessionListScreen(
             GlassCircleBackButton(onBack = onBack)
             Box(Modifier.weight(1f))
             var showCreateDialog by remember { mutableStateOf(false) }
-            GlassPillButton(
+            // 录制树内：emptyBackdrop，与弹窗「创建」同款 tint，⛔ 不采样 LocalGlassBackdrop
+            GlassButton(
+                text = "+ Agent",
                 onClick = {
                     showCreateDialog = true
                     onCreateAgentErrorCleared()
                 },
                 enabled = agentLaunchers.isNotEmpty() && !createAgentState.inFlight,
+                tint = p.accent,
+                textColor = p.onAccent,
+                height = 36.dp,
+                minWidth = 72.dp,
+                backdrop = emptyBackdrop(),
                 modifier = Modifier.testTag("create-agent-button"),
-            ) {
-                AppText(
-                    text = "+ Agent",
-                    color = p.accent,
-                    fontSize = TypeSizes.actionButton,
-                    fontWeight = FontWeight.Medium,
-                    lineHeightMultiplier = 1f,
-                )
-            }
+            )
             if (connectionPath != null) {
                 Spacer(Modifier.width(8.dp))
                 LanPill(connectionPath)
