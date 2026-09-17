@@ -70,6 +70,18 @@ type ConnMetrics struct {
 	SnapshotsFromResize    int64
 	SnapshotsFromSubscribe int64
 	FramesSent             int64
+
+	// Wire counters include the complete binary WebSocket message after the
+	// writer successfully writes it.
+	DeltaWireBytes    int64
+	SnapshotWireBytes int64
+
+	// Reflow counters count bytes drained from pipe-pane while the resize gate
+	// is active. They are separate from queue drops: redraw bytes are suppressed
+	// by policy, not lost to a full send queue.
+	ReflowDiscardedBytes  int64
+	ReflowDiscardedChunks int64
+	ReflowEpochs          int64
 }
 
 // ConnMetricsSnapshot is a value copy; it never copies the live metrics mutex.
@@ -79,6 +91,11 @@ type ConnMetricsSnapshot struct {
 	SnapshotsFromResize    int64
 	SnapshotsFromSubscribe int64
 	FramesSent             int64
+	DeltaWireBytes         int64
+	SnapshotWireBytes      int64
+	ReflowDiscardedBytes   int64
+	ReflowDiscardedChunks  int64
+	ReflowEpochs           int64
 }
 
 // recordDrop 记录本连接因队列满丢弃的 delta。
@@ -116,6 +133,32 @@ func (m *ConnMetrics) recordFramesSent() {
 	m.mu.Unlock()
 }
 
+// recordWire records bytes after a binary frame has been written successfully.
+func (m *ConnMetrics) recordWire(snapshot bool, bytes int) {
+	m.mu.Lock()
+	if snapshot {
+		m.SnapshotWireBytes += int64(bytes)
+	} else {
+		m.DeltaWireBytes += int64(bytes)
+	}
+	m.mu.Unlock()
+}
+
+// recordReflowDiscarded records one pipe chunk drained during a reflow gate.
+func (m *ConnMetrics) recordReflowDiscarded(bytes int) {
+	m.mu.Lock()
+	m.ReflowDiscardedBytes += int64(bytes)
+	m.ReflowDiscardedChunks++
+	m.mu.Unlock()
+}
+
+// recordReflowEpoch records one resize gate coordination epoch.
+func (m *ConnMetrics) recordReflowEpoch() {
+	m.mu.Lock()
+	m.ReflowEpochs++
+	m.mu.Unlock()
+}
+
 func (m *ConnMetrics) snapshot() ConnMetricsSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -125,6 +168,11 @@ func (m *ConnMetrics) snapshot() ConnMetricsSnapshot {
 		SnapshotsFromResize:    m.SnapshotsFromResize,
 		SnapshotsFromSubscribe: m.SnapshotsFromSubscribe,
 		FramesSent:             m.FramesSent,
+		DeltaWireBytes:         m.DeltaWireBytes,
+		SnapshotWireBytes:      m.SnapshotWireBytes,
+		ReflowDiscardedBytes:   m.ReflowDiscardedBytes,
+		ReflowDiscardedChunks:  m.ReflowDiscardedChunks,
+		ReflowEpochs:           m.ReflowEpochs,
 	}
 }
 

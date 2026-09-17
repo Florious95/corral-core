@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
 	"github.com/agentmirror/agentmirror/internal/discovery"
@@ -154,6 +155,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		ready:         make(chan struct{}),
 		initialFailed: make(chan struct{}),
 		relayDone:     make(chan struct{}),
+		gate:           newReflowGate(),
 	}
 	// Install the release hook before any fallible operation after acquire. All
 	// exits (including capture/encode failure) then use the same idempotent owner.
@@ -537,28 +539,27 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
 		return
 	}
-	if !c.subscribed(r.Ref) {
+	sub := c.subscriptionFor(r.Ref)
+	if sub == nil {
 		return
 	}
-	// D-27 (fix-d27-v3): detect no-op resizes by comparing the pane's ACTUAL
-	// dims before and after the resize-window call (both fresh reads, never
-	// the request values — tmux may converge a same-size request to the same
-	// pane size). A resize that did not change the pane must NOT re-push a
-	// snapshot: the client replays a snapshot as clear-and-rebuild, which on
-	// the phone reads as the "top-down line-by-line refresh" D-27 reports.
-	// The IME keyboard/input-box relayout that follows every message send
-	// produces exactly these same-size resizes (fix-refresh-direction
-	// root-cause chain step 3), so skipping the no-op repush closes the only
-	// production path to the flicker without touching the protocol.
+	if sub.gate == nil {
+		sub.gate = newReflowGate()
+	}
+	// Read the actual pane size before opening the gate so a same-size request
+	// remains a no-op and does not disturb the live delta stream.
 	beforeW, beforeH, err := br.Size(c.ctx)
 	if err != nil {
 		c.logErr("resize read before", err)
-		// A size read failure should not silently abort: fall through and let
-		// the resize attempt's actual readback decide.
 		beforeW, beforeH = -1, -1
 	}
-	afterW, afterH, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows))
-	if err != nil {
+	epoch, started := sub.gate.begin()
+	if !started {
+		c.s.log.Debug("ws: resize already converging", "conn", c.id, "ref", r.Ref)
+		return
+	}
+	defer sub.gate.end()
+	if _, _, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows)); err != nil {
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		} else {
@@ -566,27 +567,20 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		}
 		return
 	}
+	afterW, afterH, err := br.Size(c.ctx)
+	if err != nil {
+		c.logErr("resize read after", err)
+		afterW, afterH = -1, -1
+	}
 	if beforeW >= 0 && beforeW == afterW && beforeH == afterH {
-		// Pane dims unchanged by the resize: no reflow happened, so there is
-		// no new geometry to converge. Skip the snapshot repush — the client
-		// keeps its grid and the delta stream stays authoritative (004).
 		c.s.log.Debug("ws: resize no-op, skip snapshot", "conn", c.id, "ref", r.Ref, "dims", fmt.Sprintf("%dx%d", beforeW, beforeH))
 		return
 	}
-	// Re-push a full snapshot after a REAL reflow (fix-term-residuals): the
-	// CLI's SIGWINCH redraw arrives only as deltas composited over the
-	// client's stale old-geometry grid, so leftover residue can never be
-	// cleared deterministically by the stream alone. A snapshot is replayed
-	// by the client as clear-and-rebuild (same semantics as the subscribe
-	// first frame), which is the single convergence point. tmux reflows the
-	// pane synchronously on resize-window, so capturing right after Resize is
-	// content-correct; any in-flight pre-resize delta the relay still sends
-	// afterwards is redundant repaint bytes, not residue (docs/protocol.md
-	// §4.2 resize).
-	// 溯源计数：handleResize 真实 reflow 补发的快照（非首帧快照的路径来源，见 sendq_metrics）。
+	c.markStaleBefore(r.Ref, epoch)
+	c.connMetrics.recordReflowEpoch()
 	c.s.sendQueue.recordResizeSnapshot()
 	c.connMetrics.recordResizeSnapshot()
-	snap, err := snapshotWithCursor(c.ctx, br)
+	snap, err := c.convergedReflowSnapshot(c.ctx, br, sub.gate)
 	if err != nil {
 		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		return
@@ -600,7 +594,39 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
 		return
 	}
-	c.sendBinary(frame)
+	c.sendPriorityBinary(r.Ref, epoch, frame)
+}
+
+// convergedReflowSnapshot waits for resize output to quiet, captures the
+// visible pane, then observes a post-capture quiet period. Late redraw output
+// causes at most two additional captures and never becomes a network delta.
+func (c *wsConn) convergedReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate) ([]byte, error) {
+	deadline := time.Now().Add(reflowHardCap)
+	_, timedOut, err := gate.waitQuiet(ctx, deadline, reflowQuietPeriod)
+	if err != nil {
+		return nil, err
+	}
+	snap, err := snapshotWithCursor(ctx, br)
+	if err != nil {
+		return nil, err
+	}
+	if timedOut {
+		return snap, nil
+	}
+	for captures := 1; captures < reflowMaxCaptures; captures++ {
+		sawActivity, timedOut, err := gate.waitQuiet(ctx, deadline, reflowQuietPeriod)
+		if err != nil {
+			return nil, err
+		}
+		if !sawActivity || timedOut {
+			return snap, nil
+		}
+		snap, err = snapshotWithCursor(ctx, br)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return snap, nil
 }
 
 // scrollbackRange converges a scrollback request (protocol from_line/count,

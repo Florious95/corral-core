@@ -36,6 +36,15 @@ type wsMsg struct {
 	// List admission stays live through queueing and the actual network write.
 	catalog *catalogWaiter
 
+	// streamRef/epoch identify droppable delta frames. A reflow snapshot
+	// advances the epoch so stale deltas already waiting in sendCh can be
+	// skipped instead of being written after the new screen.
+	streamRef string
+	epoch     uint64
+	droppable bool
+	// binarySnapshot marks a successful wire-byte accounting class.
+	binarySnapshot bool
+
 	// close, when set, tells the writer to send a WebSocket close frame with
 	// the given code/reason after any already-queued message (used for auth
 	// rejection and unsupported-version: send the error/ack, then close).
