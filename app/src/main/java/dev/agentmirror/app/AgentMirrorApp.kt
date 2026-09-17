@@ -18,6 +18,10 @@ package dev.agentmirror.app
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -128,8 +132,8 @@ fun AgentMirrorApp(
             else -> AppRoute.Workspace
         }
 
-        // 页面转场（018 §一.6）：淡入 + 轻微缩放进场（无方向性——三路由无严格层级栈，
-        // 方向滑动会在 深链/重配 等非线性跳转下语义错乱）。转场期间新旧屏短暂共存：
+        // 页面转场：进 Session 无位移直出（Astra P1：取消 300ms Push 整屏横移/淡入）。
+        // 返回 Pop 与同层 FadeThrough 原样。转场期间新旧屏仍可能短暂共存：
         // uiConnector 挂载安全性依赖两处 DisposableEffect 的同 VM 身份守卫（见下），
         // 新屏先挂新 VM、旧屏 onDispose 发现已非自己则不复位——不误伤。
         AnimatedContent(
@@ -145,7 +149,12 @@ fun AgentMirrorApp(
                         NavDirection.Pop
                     else -> NavDirection.FadeThrough
                 }
-                navTransition(dir)
+                if (targetState is AppRoute.Session && initialState !is AppRoute.Session) {
+                    @OptIn(ExperimentalAnimationApi::class)
+                    (EnterTransition.None togetherWith ExitTransition.None).using(null)
+                } else {
+                    navTransition(dir)
+                }
             },
             label = "app-route",
         ) { r ->
