@@ -93,7 +93,7 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
  * 会话列表（二级，某个工作区内）。
- * 顶部：圆形液态玻璃返回 + 「+ Agent」+ LAN，下面是工作区名 + 完整路径。
+ * 顶部：圆形液态玻璃返回 + 右侧独占「+ Agent」；下面是工作区大标题 + 并排网络标识（LAN/Tailnet） + 完整路径。
  * 行结构：CLI 工作灯 → 会话显示名 + cwd 路径（66dp）→ 右侧官方 Provider 图标。
  * 整行是唯一手势 owner：短按打开（在线），长按弹出收藏/取消收藏。
  *
@@ -154,10 +154,6 @@ fun SessionListScreen(
                 backdrop = emptyBackdrop(),
                 modifier = Modifier.testTag("create-agent-button"),
             )
-            if (connectionPath != null) {
-                Spacer(Modifier.width(8.dp))
-                LanPill(connectionPath)
-            }
             if (showCreateDialog && agentLaunchers.isNotEmpty()) {
                 CreateAgentDialog(
                     sessions = sessions,
@@ -169,16 +165,25 @@ fun SessionListScreen(
             }
         }
         Column(Modifier.padding(start = Dims.screenHPadding, end = Dims.screenHPadding, top = 2.dp, bottom = 13.dp)) {
-            AppText(
-                text = workspaceName,
-                color = p.titleText,
-                fontSize = TypeSizes.screenTitleSecondary,
-                fontWeight = FontWeight.Bold,
-                lineHeightMultiplier = 1.2f,
-                letterSpacing = (-0.4).sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    text = workspaceName,
+                    color = p.titleText,
+                    fontSize = TypeSizes.screenTitleSecondary,
+                    fontWeight = FontWeight.Bold,
+                    lineHeightMultiplier = 1.2f,
+                    letterSpacing = (-0.4).sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (connectionPath != null) {
+                    Spacer(Modifier.width(8.dp))
+                    LanPill(connectionPath)
+                }
+            }
             Box(Modifier.height(5.dp))
             PathText(workspacePath)
         }

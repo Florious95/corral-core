@@ -108,9 +108,9 @@ class PairingViewModel(
         if (!waitingForTsnet || pairingStatus !is PairingStatus.Pairing) return
         // An identity HTTP request may still be in flight when tsnet settles. Resume it
         // asynchronously, but do not consume this state as a dial attempt.
-        if (attemptQueue.isEmpty()) {
-            val identity = pendingIdentity
-            if (identity != null && (state is TsnetState.Up || state is TsnetState.Error)) {
+        val identity = pendingIdentity
+        if (identity != null) {
+            if (state is TsnetState.Up || state is TsnetState.Error) {
                 pendingIdentity = null
                 waitingForTsnet = false
                 identity()
@@ -403,6 +403,8 @@ class PairingViewModel(
     fun retry() {
         if (pairingStatus !is PairingStatus.Failed) return
         val queue = attemptQueue
+            .ifEmpty { candidateUrls }
+            .ifEmpty { listOfNotNull(manualUrl.takeIf { it.isNotBlank() }) }
         if (queue.isEmpty()) return
         // 扫码识别值仍留在手填表单可编辑；地址上屏、token 不上屏（§9）。
         recognizedUrl = queue.first()
@@ -543,8 +545,19 @@ class PairingViewModel(
         stopProbe()
         pendingIdentity = null
         attemptQueue = emptyList()
+        currentToken = token.trim()
         attemptIndex = 0
-        currentConfig = null
+        currentConfig = PairingConfig(
+            url = endpoint.wsUrl,
+            token = currentToken,
+            tsAuthKey = currentTsAuthKey,
+            hostId = hostId,
+            port = port,
+            tsNodeId = tsNodeId,
+            name = name,
+            legacyBootstrapUrl = legacyUrl,
+            scanHints = currentScanHints,
+        )
         pairingStatus = PairingStatus.Pairing(endpoint.wsUrl)
         waitingForTsnet = true // identity HTTP has its own timeout; pairing pump must not race it
         pairingStartedAt = nowMs()
@@ -570,12 +583,19 @@ class PairingViewModel(
                 waitingForTsnet = false
                 val ordered = proven.sortedWith(
                     compareBy<Pair<HostEndpoint, HostIdentifyResult>> {
-                        if (it.first.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET) 0 else 1
+                        if (legacyUrl != null && it.first.source == HostEndpointSource.SCANNED_PRIMARY) 0
+                        else if (it.first.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET) (if (legacyUrl != null) 1 else 0)
+                        else 2
                     }.thenBy { it.first.source.ordinal }.thenBy { it.first.authority },
                 )
                 val selected = ordered.firstOrNull()
                 if (selected == null) {
-                    failPairing(PairingFailCause.REJECTED, "主机身份验证失败")
+                    val tsErr = tsState as? dev.agentmirror.app.tsnet.TsnetState.Error
+                    if (tsErr != null && candidates.all { it.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET }) {
+                        failPairing(PairingFailCause.UNREACHABLE, "tailnet 入网失败：${tsErr.reason}")
+                    } else {
+                        failPairing(PairingFailCause.REJECTED, "主机身份验证失败")
+                    }
                     return@execute
                 }
                 when (val result = selected.second) {

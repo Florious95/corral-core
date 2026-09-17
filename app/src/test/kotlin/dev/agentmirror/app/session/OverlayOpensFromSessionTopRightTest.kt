@@ -22,6 +22,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import dev.agentmirror.app.conn.BinaryFrame
+import dev.agentmirror.app.conn.BinaryFrameCodec
+import dev.agentmirror.app.conn.BinaryKind
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.FakeClock
@@ -104,6 +107,10 @@ internal class OverlayTestHarness(ref: String = "/tmp/tmux-1000/default\u001f%3"
     }
 
     fun sent() = transport.sentText.mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() }
+
+    fun snap(text: String) = transport.deliverBinary(
+        BinaryFrameCodec.encode(BinaryFrame(BinaryKind.SNAPSHOT, vm.ref, text.toByteArray())),
+    )
 }
 
 private fun topRightProtocolSessions() = listOf(

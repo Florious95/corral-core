@@ -17,10 +17,13 @@
 package dev.agentmirror.app.session
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -54,5 +57,22 @@ class AttachmentButtonTest {
         compose.onNodeWithContentDescription("添加图片附件").performClick()
         compose.onNodeWithText("拍照").assertExists().performClick()
         assertTrue(cameraOpened)
+    }
+
+    @Test
+    fun plusMenu_hasCompact150dpWidth() {
+        compose.setContent {
+            MaterialTheme {
+                AttachmentButton(
+                    enabled = true,
+                    onPickImage = {},
+                    onTakePhoto = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("添加图片附件").performClick()
+        compose.onNodeWithTag("session-attach-menu").assertWidthIsEqualTo(150.dp)
+        compose.onNodeWithText("从相册选择").assertExists()
     }
 }

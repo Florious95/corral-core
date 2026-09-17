@@ -110,6 +110,16 @@ class PairingTsnetWindowProbeTest {
                 )
             },
             nowMs = { clock.nowMs() },
+            identifyClient = object : HostIdentityVerifier {
+                override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+                override fun identify(
+                    endpoint: HostEndpoint,
+                    hostId: String?,
+                    token: String,
+                    legacyUrl: String?,
+                ): HostIdentifyResult = HostIdentifyResult.Legacy404(endpoint)
+            },
+            discoveryExecutor = java.util.concurrent.Executor { it.run() },
         )
 
         fun lastTransport(): FakeWebSocketTransport = transports.last()

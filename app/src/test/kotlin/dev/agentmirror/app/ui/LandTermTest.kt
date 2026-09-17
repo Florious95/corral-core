@@ -126,4 +126,21 @@ class LandTermTest {
         compose.onNodeWithText("查看弹出菜单（原生实现，此处仅占位）").assertDoesNotExist()
         compose.onNodeWithText("点任意处关闭").assertDoesNotExist()
     }
+
+    @Test
+    fun sessionTerminalPlaceholderVisibleBeforeSnapshotThenDismisses() {
+        val h = OverlayTestHarness()
+        compose.setContent {
+            AppTheme(appearance = Appearance.Light) {
+                SessionScreen(viewModel = h.vm, name = "sess-a", onBack = {})
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-terminal-placeholder").assertIsDisplayed()
+        compose.runOnIdle {
+            h.snap("hello world")
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-terminal-placeholder").assertDoesNotExist()
+    }
 }

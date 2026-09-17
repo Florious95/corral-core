@@ -136,7 +136,11 @@ class ForegroundServiceWiringTest {
     private fun seedConfig(url: String, token: String) {
         RuntimeEnvironment.getApplication()
             .getSharedPreferences("pairing_config", Context.MODE_PRIVATE)
-            .edit().putString("url", url).putString("token", token).commit()
+            .edit()
+            .putInt("schema_version", 2)
+            .putString("url", url)
+            .putString("token", token)
+            .commit()
     }
 
     /** 构建 MainActivity（.create() 只跑 onCreate：force-stop→重开冷启动的真实路径，见 ColdStartReconnectTest KDoc）。 */

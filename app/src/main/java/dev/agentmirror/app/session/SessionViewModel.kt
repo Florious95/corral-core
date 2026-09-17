@@ -126,6 +126,16 @@ class SessionViewModel(
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
 
     /**
+     * Whether the current session has a complete display snapshot. This is a display gate,
+     * not a canvas gate: the terminal keeps drawing and Compose fades the loading surface away
+     * once either a live or copy-mode snapshot has been applied.
+     */
+    var hasSnapshot by mutableStateOf(false)
+        internal set
+
+    fun hasSnapshotContent(): Boolean = hasSnapshot
+
+    /**
      * 已贴进本会话 CLI pane、尚未确认发送的图片路径（需求 057）：上传成功那一刻就
      * 经 [ConnectionManager.sendAttachPreview] 贴进 pane（不等发送）。直通模型下草稿在
      * CLI，本地输入框不显示路径字符串，只显示"已附加 N 张图"这类轻量指示。
@@ -326,6 +336,9 @@ class SessionViewModel(
                     }
                     DiagLog.recordCritical("session", "snapshot_applied ref=$ref mode=copy bytes=${frame.data.size}")
                     presenter.setDisplaySnapshot(copyModeEmulator.snapshot())
+                    // Copy-mode is a valid first display source too. Do not leave the
+                    // Compose loading surface permanently covering a perfectly good snapshot.
+                    hasSnapshot = true
                 } else {
                     if (awaitingReconnectSnapshot) {
                         // 断线时仍可浏览旧历史；新代首帧到达才一起替换历史与视口。
@@ -368,6 +381,7 @@ class SessionViewModel(
                         return
                     }
                     DiagLog.recordCritical("session", "snapshot_applied ref=$ref mode=live bytes=${frame.data.size}")
+                    hasSnapshot = true
                     if (PerfTrace.isEnabled()) {
                         val alt = if (emulator.historyAvailable) 0 else 1
                         PerfTrace.emitSnapshotIfFirst(ref, alt, emulator.rows, emulator.cols) // snapshot_applied

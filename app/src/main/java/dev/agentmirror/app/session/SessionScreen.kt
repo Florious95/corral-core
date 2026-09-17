@@ -30,6 +30,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -45,9 +53,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -332,6 +342,32 @@ fun SessionScreen(
                                     .fillMaxSize()
                                     .semantics { contentDescription = themeToken },
                             )
+                            AnimatedVisibility(
+                                visible = !viewModel.hasSnapshotContent(),
+                                // The waiting surface is present on the very first frame; only
+                                // its removal is animated, so the cold-open never starts blank.
+                                enter = EnterTransition.None,
+                                exit = fadeOut(animationSpec = tween(180)),
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                // This is a Compose loading surface, not a renderer short-cut:
+                                // TermSurfaceView continues to draw and its normal frame/metric
+                                // path is never bypassed while the first complete snapshot lands.
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(LocalAppPalette.current.screenBackground)
+                                        .testTag("session-terminal-placeholder"),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = "正在加载终端…",
+                                        color = LocalAppPalette.current.metaText,
+                                        fontFamily = MonoFontFamily,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+                            }
                             Text(
                                 text = themeToken,
                                 color = Color.Transparent,
@@ -525,7 +561,7 @@ private fun StatusArea(viewModel: SessionViewModel) {
     )
 }
 
-/** 拍照 / 相册分流：FlatGlass 微透菜单（0.5dp 发丝边），替代 M3 实色 DropdownMenu。 */
+/** 拍照 / 相册分流：FlatGlass 液态玻璃紧凑菜单（150dp 紧凑包裹），以加号为原点缩放淡入淡出。 */
 @Composable
 internal fun AttachmentGlassMenu(
     expanded: Boolean,
@@ -533,46 +569,63 @@ internal fun AttachmentGlassMenu(
     onTakePhoto: () -> Unit,
     onPickImage: () -> Unit,
 ) {
-    if (!expanded) return
+    val visibleState = remember { MutableTransitionState(expanded) }
+    visibleState.targetState = expanded
+    if (!visibleState.currentState && !visibleState.targetState) return
+
     val glass = flatGlassTokens()
     val p = LocalAppPalette.current
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     Popup(
         alignment = Alignment.BottomStart,
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true),
     ) {
-        Column(
-            modifier = Modifier
-                .widthIn(min = 188.dp)
-                .flatGlass(
-                    shape = shape,
-                    fill = glass.fill,
-                    hairline = glass.hairline,
-                    topGlint = glass.topGlint,
-                    bottomShade = glass.bottomShade,
-                )
-                .padding(vertical = 6.dp)
-                .testTag("session-attach-menu"),
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = scaleIn(
+                initialScale = 0.85f,
+                transformOrigin = TransformOrigin(0f, 1f),
+                animationSpec = tween(durationMillis = 150),
+            ) + fadeIn(animationSpec = tween(durationMillis = 150)),
+            exit = scaleOut(
+                targetScale = 0.85f,
+                transformOrigin = TransformOrigin(0f, 1f),
+                animationSpec = tween(durationMillis = 120),
+            ) + fadeOut(animationSpec = tween(durationMillis = 120)),
         ) {
-            AttachmentGlassMenuItem(
-                label = "拍照",
-                onClick = {
-                    onDismissRequest()
-                    onTakePhoto()
-                },
-                textColor = p.rowTitleText,
-                pressDim = glass.pressDim,
-            )
-            AttachmentGlassMenuItem(
-                label = "从相册选择",
-                onClick = {
-                    onDismissRequest()
-                    onPickImage()
-                },
-                textColor = p.rowTitleText,
-                pressDim = glass.pressDim,
-            )
+            Column(
+                modifier = Modifier
+                    .width(150.dp)
+                    .flatGlass(
+                        shape = shape,
+                        fill = glass.fill,
+                        hairline = glass.hairline,
+                        topGlint = glass.topGlint,
+                        bottomShade = glass.bottomShade,
+                    )
+                    .padding(vertical = 4.dp)
+                    .testTag("session-attach-menu"),
+            ) {
+                AttachmentGlassMenuItem(
+                    label = "拍照",
+                    onClick = {
+                        onDismissRequest()
+                        onTakePhoto()
+                    },
+                    textColor = p.rowTitleText,
+                    pressDim = glass.pressDim,
+                )
+                AttachmentGlassMenuItem(
+                    label = "从相册选择",
+                    onClick = {
+                        onDismissRequest()
+                        onPickImage()
+                    },
+                    textColor = p.rowTitleText,
+                    pressDim = glass.pressDim,
+                )
+            }
         }
     }
 }
@@ -596,11 +649,11 @@ private fun AttachmentGlassMenuItem(
                 onClick = onClick,
             )
             .background(if (pressed) pressDim else Color.Transparent)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = textColor,
         )
     }

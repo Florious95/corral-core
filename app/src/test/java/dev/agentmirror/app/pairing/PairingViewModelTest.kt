@@ -21,6 +21,7 @@ import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.FakeClock
 import dev.agentmirror.app.conn.FakeWebSocketTransport
 import dev.agentmirror.app.conn.TransportFactory
+import java.util.concurrent.Executor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -69,6 +70,16 @@ class PairingViewModelTest {
         /** 下一次拨号脚本（默认成功）；见 [dialFails]。 */
         var nextDialScript: List<Boolean>? = null
 
+        val fakeVerifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ): HostIdentifyResult = HostIdentifyResult.Legacy404(endpoint)
+        }
+
         val vm = PairingViewModel(
             configStore = store,
             tsnetStarter = tsnetStarter,
@@ -89,6 +100,8 @@ class PairingViewModelTest {
                 )
             },
             nowMs = { clock.nowMs() },
+            identifyClient = fakeVerifier,
+            discoveryExecutor = Executor { it.run() },
         )
 
         fun lastTransport(): FakeWebSocketTransport = transports.last()

@@ -611,6 +611,16 @@ class SessionViewModelTest {
     // ---- 连接状态映射 ----
 
     @Test
+    fun snapshotContent_initiallyFalse_becomesTrueOnSnapshot() {
+        val h = Harness()
+        assertFalse("快照到达前尚未就绪", h.vm.hasSnapshotContent())
+        assertFalse(h.vm.hasSnapshot)
+        h.snap("line 1\r\nline 2")
+        assertTrue("快照应用后就绪", h.vm.hasSnapshotContent())
+        assertTrue(h.vm.hasSnapshot)
+    }
+
+    @Test
     fun reconnectStateSurfacesBanner() {
         val h = Harness()
         h.transport.peerClose(1006, "dropped")

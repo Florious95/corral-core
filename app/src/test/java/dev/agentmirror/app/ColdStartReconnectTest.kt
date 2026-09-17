@@ -144,7 +144,11 @@ class ColdStartReconnectTest {
     private fun seedConfig(url: String, token: String) {
         RuntimeEnvironment.getApplication()
             .getSharedPreferences("pairing_config", Context.MODE_PRIVATE)
-            .edit().putString("url", url).putString("token", token).commit()
+            .edit()
+            .putInt("schema_version", 2)
+            .putString("url", url)
+            .putString("token", token)
+            .commit()
     }
 
     // ---- 红测一：有配置冷启动必须启动连接（缺陷：无任何路径 start）----

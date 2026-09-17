@@ -1,12 +1,15 @@
 package dev.agentmirror.app.ui
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -62,6 +65,34 @@ class CreateAgentDialogTest {
             }
         }
         compose.onNodeWithTag("create-agent-button").assertIsEnabled()
+    }
+
+    @Test
+    fun l2TopBarRightHasOnlyCreateAgentAndNetworkPillBesideWorkspaceTitle() {
+        compose.setContent {
+            AppTheme {
+                SessionListScreen(
+                    workspaceName = "通用问题对话-chat",
+                    workspacePath = "/repo/chat",
+                    sessions = emptyList(),
+                    connectionPath = dev.agentmirror.app.tsnet.ConnectionPath.TAILNET,
+                    onBack = {},
+                    onSessionClick = {},
+                    onToggleStar = {},
+                    agentLaunchers = listOf(
+                        AgentLauncherUi("pi", "Pi Coding Agent", supportsBypass = true, naming = "cli"),
+                    ),
+                )
+            }
+        }
+        compose.onNodeWithTag("create-agent-button").assertIsDisplayed()
+        compose.onNodeWithText("tailnet").assertIsDisplayed()
+        compose.onNodeWithText("通用问题对话-chat").assertIsDisplayed()
+        val btnBounds = compose.onNodeWithTag("create-agent-button").getUnclippedBoundsInRoot()
+        val pillBounds = compose.onNodeWithText("tailnet").getUnclippedBoundsInRoot()
+        val titleBounds = compose.onNodeWithText("通用问题对话-chat").getUnclippedBoundsInRoot()
+        assertTrue("LanPill top must be below top bar button", pillBounds.top >= btnBounds.bottom)
+        assertTrue("LanPill must be to the right of title", pillBounds.left >= titleBounds.right)
     }
 
     @Test
