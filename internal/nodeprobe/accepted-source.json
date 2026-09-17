@@ -11,9 +11,9 @@
       "sha256": "cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58"
     },
     {
-      "base_blob": "e93afa54e473e90099f03cb932d9a54798c0dfe4",
+      "base_blob": "c1166ceabc6ae4e3075fb741c89759da6fcc7844",
       "path": "tools/nodeprobe/fixtures/providers.tsv",
-      "sha256": "c68f50115b33ae6a6806b463cc27c71d8bbfc92273435a533502e9bb84b8b522"
+      "sha256": "c9e02d01821df7d7afe2292fefb211cefea7e3abecde8b35bd9ffa2a0721ee7e"
     }
   ],
   "pi_extension": {
