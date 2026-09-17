@@ -107,7 +107,6 @@ type wsConn struct {
 	// Test-only relay/writer boundaries; nil in production, set before startup.
 	beforeRelay       func(*subscription)
 	snapshotFn        func(context.Context, *bridge.Pane) ([]byte, error)
-	sendBinaryFn      func([]byte)
 	controlEnqueue    func()
 	beforeWriterFrame func(wsMsg)
 	writeAttempt      func(wsMsg)
@@ -501,19 +500,17 @@ func (c *wsConn) sendBinary(data []byte) {
 	c.sendMsg(wsMsg{typ: wsBinary, data: data, binarySnapshot: len(data) > 3 && data[3] == byte(protocol.KindSnapshot)})
 }
 
-// sendPriorityBinary enqueues a reflow convergence snapshot ahead of stale
-// deltas already waiting in the normal queue.
+// sendPriorityBinary admits a snapshot without blocking the routing lock. A
+// full slot fails closed at the caller, like mirror queue overflow, rather than
+// draining uncovered bytes while publication waits.
 func (c *wsConn) sendPriorityBinary(ref string, epoch uint64, data []byte) bool {
 	c.s.sendQueue.recordSnapshot()
 	c.connMetrics.recordSnapshot()
 	c.markStaleBefore(ref, epoch)
 	m := wsMsg{typ: wsBinary, data: data, streamRef: ref, epoch: epoch, binarySnapshot: true}
-	// Direct connection fixtures do not run a writer or allocate priorityCh;
-	// preserve their historical sendCh behavior without double-counting the
-	// snapshot metrics recorded above.
-	if c.priorityCh == nil {
-		c.sendMsg(m)
-		return true
+	queue := c.priorityCh
+	if queue == nil {
+		queue = c.sendCh // direct fixtures have no writer priority channel
 	}
 	c.sendMu.RLock()
 	defer c.sendMu.RUnlock()
@@ -521,9 +518,9 @@ func (c *wsConn) sendPriorityBinary(ref string, epoch uint64, data []byte) bool 
 		return false
 	}
 	select {
-	case c.priorityCh <- m:
+	case queue <- m:
 		return true
-	case <-c.ctx.Done():
+	default:
 		return false
 	}
 }

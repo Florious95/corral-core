@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,11 +117,12 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 	c := newDirectWSConn(t, te.wsEnv.srv, 4)
 	captureStarted := make(chan struct{})
 	releaseCapture := make(chan struct{})
-	c.snapshotFn = func(ctx context.Context, _ *bridge.Pane) ([]byte, error) {
-		close(captureStarted)
+	var captureOnce sync.Once
+	c.snapshotFn = func(ctx context.Context, br *bridge.Pane) ([]byte, error) {
+		captureOnce.Do(func() { close(captureStarted) })
 		select {
 		case <-releaseCapture:
-			return []byte("controlled-snapshot"), nil
+			return snapshotWithCursor(ctx, br)
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -170,13 +172,19 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 		if err != nil {
 			t.Fatalf("decode mirror frame: %v", err)
 		}
-		if frame.Kind != protocol.KindSnapshot || !bytes.Equal(frame.Data, []byte("controlled-snapshot")) {
-			t.Fatalf("first frame kind=%d payload=%q", frame.Kind, frame.Data)
+		if frame.Kind != protocol.KindSnapshot || !bytes.Contains(frame.Data, bytes.Repeat([]byte("X"), 100)) {
+			t.Fatalf("first frame lost the real burst screen: kind=%d payload=%q", frame.Kind, frame.Data)
 		}
+		assertPaneSnapshot(t, te, frame.Data)
 	case <-time.After(10 * time.Second):
 		t.Fatal("initial snapshot was not queued")
 	}
-	for {
+	if err := sendTmuxLine(te, "after"); err != nil {
+		t.Fatal(err)
+	}
+	timer := time.NewTimer(4 * time.Second)
+	defer timer.Stop()
+	for !bytes.Contains(gotDelta, []byte("POST_SUBSCRIBE_LIVE")) {
 		select {
 		case msg := <-c.sendCh:
 			if msg.typ != wsBinary {
@@ -189,16 +197,13 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 			if frame.Kind == protocol.KindDelta {
 				gotDelta = append(gotDelta, frame.Data...)
 			}
-		default:
-			goto drained
+		case <-timer.C:
+			t.Fatal("post-subscribe stream did not resume")
 		}
 	}
-
-drained:
-	// The initial reflow barrier deliberately drains redraw bytes locally. The
-	// controlled first frame must arrive, but the raw burst and its marker must
-	// not escape as deltas while capture is blocked.
-	if len(gotDelta) != 0 || bytes.Contains(gotDelta, wantRun) || bytes.Contains(gotDelta, wantMarker) {
+	// Check through a real output fence, not a momentarily empty queue. The
+	// burst's current screen must be in the snapshot, not also in the deltas.
+	if bytes.Contains(gotDelta, wantRun) || bytes.Contains(gotDelta, wantMarker) {
 		t.Fatalf("initial redraw escaped barrier: got %d delta bytes", len(gotDelta))
 	}
 	if !c.subscribed(te.ref()) {
@@ -246,45 +251,25 @@ func TestInitialSubscribeDrainDoesNotAbortBlockedCapture(t *testing.T) {
 	}
 }
 
-// TestInitialSubscribeDrainDoesNotAbortBlockedFirstFrame proves that the
-// initial barrier drains redraw output even while first-frame enqueue is
-// blocked; explicit cancellation still releases the blocked send.
-func TestInitialSubscribeDrainDoesNotAbortBlockedFirstFrame(t *testing.T) {
+// Snapshot admission cannot block while holding the relay lock: fail closed
+// and release geometry instead of silently discarding post-capture output.
+func TestInitialSubscribeFullSnapshotQueueAborts(t *testing.T) {
 	te := startTmuxEnv(t, "bash")
 	c := newDirectWSConn(t, te.wsEnv.srv, 1)
-	c.sendCh <- wsMsg{typ: wsBinary, data: []byte("stale-before-snapshot")}
-	sendStarted := make(chan struct{})
-	c.sendBinaryFn = func(frame []byte) {
-		close(sendStarted)
-		c.sendBinary(frame)
-	}
-	c.snapshotFn = func(context.Context, *bridge.Pane) ([]byte, error) {
-		return []byte("controlled-snapshot"), nil
-	}
+	c.priorityCh = make(chan wsMsg, 1)
+	c.priorityCh <- wsMsg{typ: wsBinary, data: []byte("stale-before-snapshot")}
+	c.snapshotFn = snapshotWithCursor
 	done := make(chan struct{})
 	go func() {
 		c.handleSubscribe(protocol.Subscribe{Ref: te.ref(), Rows: 96, Cols: 108})
 		close(done)
 	}()
 	t.Cleanup(func() { c.cancel(); waitSubscribeDone(t, done) })
-	select {
-	case <-sendStarted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("initial snapshot send barrier was not reached")
-	}
-	if err := sendTmuxLine(te, recoveryBurstCommand()); err != nil {
-		t.Fatalf("trigger first-frame-window overflow: %v", err)
-	}
-	select {
-	case <-c.ctx.Done():
-		t.Fatal("initial redraw drain aborted the connection")
-	case <-time.After(250 * time.Millisecond):
-	}
-	c.cancel()
 	waitSubscribeDone(t, done)
+	awaitMirrorAbort(t, c)
 	assertNoLiveSubscription(t, c)
 	if got := waitPaneSize(te, "80x24"); got != "80x24" {
-		t.Fatalf("first-frame-cancel teardown left pane at %s, want 80x24", got)
+		t.Fatalf("snapshot-backpressure teardown left pane at %s, want 80x24", got)
 	}
 }
 
@@ -363,7 +348,7 @@ const (
 // post-reconnect release line, preventing a shell prompt or process exit from
 // changing the snapshot oracle before replay is exercised.
 func initialSnapshotBurstCommand() string {
-	return fmt.Sprintf(`stty -echo -onlcr; exec python3 -u -c 'import sys,time;sys.stdin.readline();sys.stdout.write("X"*%d);sys.stdout.flush();sys.stdout.write("\033]0;%s\007");sys.stdout.flush();time.sleep(120)'`, initialSnapshotBurstBytes, initialSnapshotReadyToken)
+	return fmt.Sprintf(`stty -echo -onlcr; exec python3 -u -c 'import sys,time;sys.stdin.readline();sys.stdout.write("X"*%d);sys.stdout.flush();sys.stdout.write("\033]0;%s\007");sys.stdout.flush();sys.stdin.readline();sys.stdout.write("\033]0;POST_SUBSCRIBE_LIVE\007");sys.stdout.flush();time.sleep(120)'`, initialSnapshotBurstBytes, initialSnapshotReadyToken)
 }
 
 func recoveryBurstCommand() string {

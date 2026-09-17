@@ -2,35 +2,33 @@ package api
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
 
 const (
-	// These bounds are deliberately local to the resize epoch. They are not a
-	// global output throttle: normal command output remains a live delta stream.
-	reflowQuietPeriod      = 90 * time.Millisecond
-	reflowPostCaptureQuiet = 350 * time.Millisecond
-	reflowHardCap          = 800 * time.Millisecond
-	reflowMaxCaptures      = 3
+	// tmux reports geometry, not completion of the application's SIGWINCH
+	// handler. Observe the whole local budget: a short silence between redraw
+	// stages is not an acknowledgement that reflow has finished.
+	reflowHardCap     = 800 * time.Millisecond
+	reflowMaxCaptures = 3
 )
 
-// reflowGate is the synchronization seam between the pipe relay and the
-// resize handler. It owns no terminal state; it only decides whether a pipe
-// chunk is forwarded or drained while the handler obtains a screen snapshot.
+var errReflowUnstable = errors.New("reflow changed during every capture")
+
+// reflowGate drains redraw output until a fresh snapshot replaces it. revision
+// invalidates a capture if the relay drains any more bytes during that capture.
+// Publication and switching back to deltas share the routing lock.
 type reflowGate struct {
 	mu       sync.Mutex
 	active   bool
 	epoch    uint64
-	activity chan struct{}
+	revision uint64
 }
 
-func newReflowGate() *reflowGate {
-	return &reflowGate{activity: make(chan struct{}, 1)}
-}
+func newReflowGate() *reflowGate { return &reflowGate{} }
 
-// begin activates the gate before tmux receives resize-window. The returned
-// epoch tags all deltas that may remain queued before the convergence snapshot.
 func (g *reflowGate) begin() (uint64, bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -38,8 +36,8 @@ func (g *reflowGate) begin() (uint64, bool) {
 		return g.epoch, false
 	}
 	g.active = true
+	g.revision = 0
 	g.epoch++
-	g.activity = make(chan struct{}, 1)
 	return g.epoch, true
 }
 
@@ -49,75 +47,67 @@ func (g *reflowGate) end() {
 	g.mu.Unlock()
 }
 
+// A resize whose actual readback is unchanged needs no replacement snapshot
+// only if nothing was drained. The check and release must be indivisible.
+func (g *reflowGate) endIfClean() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.revision != 0 {
+		return false
+	}
+	g.active = false
+	return true
+}
+
 func (g *reflowGate) isActive() bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.active
 }
 
-// route calls send while holding the gate lock, so begin cannot race between
-// the active check and enqueue. During a gate it drains the chunk and emits a
-// wake signal for quiet detection.
 func (g *reflowGate) route(data []byte, send func(epoch uint64), discard func()) {
 	g.mu.Lock()
 	if g.active {
-		select {
-		case g.activity <- struct{}{}:
-		default:
-		}
+		g.revision++
 		g.mu.Unlock()
 		discard()
 		return
 	}
-	epoch := g.epoch
-	send(epoch)
+	send(g.epoch)
 	g.mu.Unlock()
 }
 
-// waitQuiet waits until no pipe chunk arrives during quiet, or until deadline.
-// sawActivity tells the caller whether a post-capture redraw happened.
-func (g *reflowGate) waitQuiet(ctx context.Context, deadline time.Time, quiet time.Duration, activityQuiet ...time.Duration) (sawActivity, timedOut bool, err error) {
-	g.mu.Lock()
-	activity := g.activity
-	active := g.active
-	g.mu.Unlock()
-	if !active {
-		return false, false, nil
-	}
-
-	quietTimer := time.NewTimer(quiet)
-	defer quietTimer.Stop()
-	remaining := time.Until(deadline)
-	if remaining <= 0 {
-		return false, true, nil
-	}
-	hardTimer := time.NewTimer(remaining)
-	defer hardTimer.Stop()
-	quietAfterActivity := quiet
-	if len(activityQuiet) > 0 && activityQuiet[0] > 0 {
-		quietAfterActivity = activityQuiet[0]
-	}
-	resetQuiet := func() {
-		if !quietTimer.Stop() {
-			select {
-			case <-quietTimer.C:
-			default:
-			}
+// captureAndPublish never reuses a snapshot from before the observation budget
+// expired. A capture raced by drained bytes is retried, not published. publish
+// MUST be nonblocking: the relay must remain able to observe cancellation/loss
+// if the client cannot accept the snapshot. Failure leaves the gate closed;
+// the caller must tear down the mirror rather than resume an incomplete stream.
+func (g *reflowGate) captureAndPublish(ctx context.Context, capture func(context.Context) ([]byte, error), publish func([]byte) error) error {
+	for attempt := 0; attempt < reflowMaxCaptures; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		quietTimer.Reset(quietAfterActivity)
-	}
-
-	for {
-		select {
-		case <-activity:
-			sawActivity = true
-			resetQuiet()
-		case <-quietTimer.C:
-			return sawActivity, false, nil
-		case <-hardTimer.C:
-			return sawActivity, true, nil
-		case <-ctx.Done():
-			return sawActivity, false, ctx.Err()
+		g.mu.Lock()
+		revision := g.revision
+		g.mu.Unlock()
+		snap, err := capture(ctx)
+		if err != nil {
+			return err
 		}
+		g.mu.Lock()
+		if revision != g.revision {
+			g.mu.Unlock()
+			continue
+		}
+		err = ctx.Err()
+		if err == nil {
+			err = publish(snap)
+		}
+		if err == nil {
+			g.active = false
+		}
+		g.mu.Unlock()
+		return err
 	}
+	return errReflowUnstable
 }

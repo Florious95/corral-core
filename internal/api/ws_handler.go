@@ -193,41 +193,15 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
 		c.logErr("subscribe resize", err)
 	}
-	var snap []byte
-	if c.snapshotFn != nil {
-		// Test seams can provide a deterministic capture, but production initial
-		// subscribe uses the same post-capture convergence policy as resize.
-		snap, err = c.snapshotFn(c.ctx, br)
-	} else {
-		snap, err = c.convergedReflowSnapshot(c.ctx, br, sub.gate)
-	}
-	if err != nil {
+	if err := c.publishReflowSnapshot(subCtx, br, sub.gate, s.Ref, initialEpoch); err != nil {
+		if errors.Is(err, errReflowBackpressure) {
+			c.abortConnection("mirror_loss: ws_send_queue_overflow")
+		}
 		close(sub.initialFailed)
 		<-sub.relayDone
-		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		c.sendError(protocol.ErrCodeInternal, "cannot establish fresh mirror snapshot")
 		return
 	}
-	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
-		Kind: protocol.KindSnapshot,
-		Ref:  s.Ref,
-		Data: snap,
-	})
-	if err != nil {
-		close(sub.initialFailed)
-		<-sub.relayDone
-		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
-		return
-	}
-	if c.sendBinaryFn != nil {
-		c.sendBinaryFn(frame)
-	} else if !c.sendPriorityBinary(s.Ref, initialEpoch, frame) {
-		teardownSubscription(sub)
-		return
-	}
-	// The final snapshot is now atomically queued ahead of stale deltas. Only
-	// after that publication may the relay release the barrier and stream new
-	// output; any race is retained behind the snapshot by pending/flush below.
-	sub.gate.end()
 	if subCtx.Err() != nil || c.catalogAborted.Load() {
 		teardownSubscription(sub)
 		return
@@ -608,13 +582,20 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		c.logErr("resize read before", err)
 		beforeW, beforeH = -1, -1
 	}
+	if beforeW == int(r.Cols) && beforeH == int(r.Rows) {
+		return // Do not drain even one live byte for a no-op resize.
+	}
 	epoch, started := sub.gate.begin()
 	if !started {
 		c.s.log.Debug("ws: resize already converging", "conn", c.id, "ref", r.Ref)
 		return
 	}
 	defer sub.gate.end()
-	if _, _, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows)); err != nil {
+	afterW, afterH, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows))
+	if err != nil {
+		// Once draining starts, resuming deltas without a replacement snapshot
+		// would silently omit bytes. Keep the error reply, but retire the mirror.
+		c.subscribeCancel(r.Ref)
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		} else {
@@ -622,68 +603,52 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		}
 		return
 	}
-	afterW, afterH, err := br.Size(c.ctx)
-	if err != nil {
-		c.logErr("resize read after", err)
-		afterW, afterH = -1, -1
-	}
-	if beforeW >= 0 && beforeW == afterW && beforeH == afterH {
-		c.s.log.Debug("ws: resize no-op, skip snapshot", "conn", c.id, "ref", r.Ref, "dims", fmt.Sprintf("%dx%d", beforeW, beforeH))
+	if beforeW >= 0 && beforeW == afterW && beforeH == afterH && sub.gate.endIfClean() {
 		return
 	}
 	c.markStaleBefore(r.Ref, epoch)
 	c.connMetrics.recordReflowEpoch()
 	c.s.sendQueue.recordResizeSnapshot()
 	c.connMetrics.recordResizeSnapshot()
-	snap, err := c.convergedReflowSnapshot(c.ctx, br, sub.gate)
-	if err != nil {
-		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
-		return
+	if err := c.publishReflowSnapshot(c.ctx, br, sub.gate, r.Ref, epoch); err != nil {
+		c.logErr("resize snapshot", err)
+		c.abortConnection("mirror_loss: cannot establish fresh resize snapshot")
 	}
-	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
-		Kind: protocol.KindSnapshot,
-		Ref:  r.Ref,
-		Data: snap,
-	})
-	if err != nil {
-		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
-		return
-	}
-	c.sendPriorityBinary(r.Ref, epoch, frame)
 }
 
-// convergedReflowSnapshot waits for resize output to quiet, captures the
-// visible pane, then observes a post-capture quiet period. Late redraw output
-// causes at most two additional captures and never becomes a network delta.
-func (c *wsConn) convergedReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate) ([]byte, error) {
-	deadline := time.Now().Add(reflowHardCap)
-	_, timedOut, err := gate.waitQuiet(ctx, deadline, reflowQuietPeriod)
-	if err != nil {
-		return nil, err
+var errReflowBackpressure = errors.New("reflow snapshot queue unavailable")
+
+// publishReflowSnapshot deliberately observes the entire bounded redraw window.
+// A quiet gap cannot certify completion of an arbitrary SIGWINCH handler. At
+// the deadline we capture afresh, then commit that capture and open the gate in
+// one routing critical section. Output drained during capture forces a retry.
+func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate, ref string, epoch uint64) error {
+	capture := snapshotWithCursor
+	if c.snapshotFn != nil {
+		capture = c.snapshotFn // deterministic capture timing in concurrency tests
+	} else {
+		timer := time.NewTimer(reflowHardCap)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	snap, err := snapshotWithCursor(ctx, br)
-	if err != nil {
-		return nil, err
-	}
-	if timedOut {
-		return snap, nil
-	}
-	postCaptureQuiet := reflowPostCaptureQuiet
-	for captures := 1; captures < reflowMaxCaptures; captures++ {
-		sawActivity, timedOut, err := gate.waitQuiet(ctx, deadline, postCaptureQuiet, reflowQuietPeriod)
+	return gate.captureAndPublish(ctx, func(ctx context.Context) ([]byte, error) {
+		return capture(ctx, br)
+	}, func(snap []byte) error {
+		frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+			Kind: protocol.KindSnapshot, Ref: ref, Data: snap,
+		})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if !sawActivity || timedOut {
-			return snap, nil
+		if !c.sendPriorityBinary(ref, epoch, frame) {
+			return errReflowBackpressure
 		}
-		snap, err = snapshotWithCursor(ctx, br)
-		if err != nil {
-			return nil, err
-		}
-		postCaptureQuiet = reflowQuietPeriod
-	}
-	return snap, nil
+		return nil
+	})
 }
 
 // scrollbackRange converges a scrollback request (protocol from_line/count,
