@@ -111,12 +111,18 @@ class PairingViewModel(
         val identity = pendingIdentity
         if (identity != null) {
             if (state is TsnetState.Up || state is TsnetState.Error) {
+                // Keep the pairing window alive until the identity task itself
+                // finishes. A second Tsnet.Up must not turn the in-flight
+                // verification into a dial attempt.
                 pendingIdentity = null
-                waitingForTsnet = false
                 identity()
             }
             return
         }
+        // Tsnet.Up/Error can arrive while the direct identity task is still
+        // running. Until this generation owns a successful proof, neither
+        // state may start or advance a WebSocket attempt.
+        if (!identityProofVerifiedForCurrentGeneration()) return
         when (state) {
             is TsnetState.Up -> {
                 waitingForTsnet = false
@@ -154,8 +160,14 @@ class PairingViewModel(
 
     /** 已成功标记：成功后忽略后续 STOPPED（自身 stop 触发）不误报拒绝。 */
     private var succeeded = false
-    private var pairingGeneration = 0L
+    @Volatile private var pairingGeneration = 0L
     private var discoveryGeneration = 0L
+    @Volatile private var identityProofVerified = false
+    @Volatile private var identityProofGeneration = -1L
+    @Volatile private var dialReadyGeneration = -1L
+
+    private fun identityProofVerifiedForCurrentGeneration(): Boolean =
+        identityProofVerified && identityProofGeneration == pairingGeneration
 
     /** 候选 ws URL 列表（fix-pairing-candidates：全败后失败卡逐项展示，主选打头；无候选为空）。 */
     var candidateUrls by mutableStateOf<List<String>>(emptyList())
@@ -391,6 +403,9 @@ class PairingViewModel(
         currentTsNodeId = null
         currentLegacyUrl = null
         currentScanHints = emptyList()
+        identityProofVerified = false
+        identityProofGeneration = -1L
+        dialReadyGeneration = -1L
         discoveredHosts = emptyList()
         selectedHostId = null
         hostToken = ""
@@ -553,6 +568,10 @@ class PairingViewModel(
             failPairing(PairingFailCause.UNREACHABLE, "主机地址不可验证")
             return
         }
+        val generation = ++pairingGeneration
+        identityProofVerified = false
+        identityProofGeneration = -1L
+        dialReadyGeneration = -1L
         val candidates = buildList {
             add(endpoint)
             currentScanHints.drop(1).forEach { rawHint ->
@@ -581,7 +600,6 @@ class PairingViewModel(
         pairingStatus = PairingStatus.Pairing(endpoint.wsUrl)
         waitingForTsnet = true // identity HTTP has its own timeout; pairing pump must not race it
         pairingStartedAt = nowMs()
-        val generation = ++pairingGeneration
         val verify = {
             discoveryExecutor.execute {
                 if (generation != pairingGeneration) return@execute
@@ -634,6 +652,8 @@ class PairingViewModel(
                 currentPort = selected.first.port
                 currentTsNodeId = tsNodeId
                 currentToken = token.trim()
+                identityProofVerified = true
+                identityProofGeneration = generation
                 attemptQueue = ordered.map { it.first.wsUrl }
                 attemptIndex = 0
                 candidateUrls = emptyList()
@@ -656,6 +676,10 @@ class PairingViewModel(
      * 即旧版单次试配行为（15s 超时不变）；有候选时每候选 3s 超时、拨号失败立即推进。
      */
     private fun startPairingSequence(queue: List<String>, token: String, resetCandidates: Boolean) {
+        if (!identityProofVerifiedForCurrentGeneration()) {
+            failPairing(PairingFailCause.PROTOCOL_ERROR, "配对身份验证尚未完成")
+            return
+        }
         succeeded = false
         // 先置 Idle 再停旧探针：旧探针 stop 的同步 STOPPED 回调看到非 Pairing 不误报拒绝（陷阱④反序）。
         pairingStatus = PairingStatus.Idle
@@ -673,6 +697,7 @@ class PairingViewModel(
         // 每次新序列从队列头开始：attemptIndex 必须归零，否则 retryCandidate/retry 的新序列
         // beginAttempt 时用旧序列的推进值判 `attemptIndex >= size` 直接误落「全部候选失败」。
         attemptIndex = 0
+        dialReadyGeneration = pairingGeneration
         beginAttempt()
     }
 
@@ -726,6 +751,9 @@ class PairingViewModel(
 
     /** 真正创建并启动当前候选的试配对探针。 */
     private fun startProbe() {
+        if (!identityProofVerifiedForCurrentGeneration() || dialReadyGeneration != pairingGeneration) {
+            return
+        }
         val config = checkNotNull(currentConfig) { "pairing config missing before dial" }
         pairingStartedAt = nowMs()
         val manager = connectionFactory(ConnectionConfig(config.url, config.token))
@@ -782,6 +810,9 @@ class PairingViewModel(
         // leader 追加范围：失败态不得残留「正在连接」进行中文案——识别摘要随失败清空，
         // 避免 ScanCard 在 Failed 态仍显示旧地址的进行中文本（003 失败可见、状态纯净）。
         recognizedUrl = null
+        identityProofVerified = false
+        identityProofGeneration = -1L
+        dialReadyGeneration = -1L
         pairingStatus = PairingStatus.Failed(cause, message)
         waitingForTsnet = false
         pendingIdentity = null

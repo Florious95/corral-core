@@ -78,10 +78,13 @@ class PairingTsnetWindowProbeTest {
         }
     }
 
-    private class Harness {
+    private class Harness(
+        private val queueIdentity: Boolean = false,
+    ) {
         val store = FakeStore()
         val clock = FakeClock()
         val transports = mutableListOf<FakeWebSocketTransport>()
+        private val identityTasks = mutableListOf<Runnable>()
         /** 每次拨号脚本（按 transport 创建顺序消费；false=fail，true=ok）。默认全成功。 */
         val dialScripts = mutableListOf<List<Boolean>>()
 
@@ -119,8 +122,15 @@ class PairingTsnetWindowProbeTest {
                     legacyUrl: String?,
                 ): HostIdentifyResult = HostIdentifyResult.Legacy404(endpoint)
             },
-            discoveryExecutor = java.util.concurrent.Executor { it.run() },
+            discoveryExecutor = java.util.concurrent.Executor {
+                if (queueIdentity) identityTasks += it else it.run()
+            },
         )
+
+        fun runIdentity() {
+            check(identityTasks.size == 1) { "expected one queued identity task, got ${identityTasks.size}" }
+            identityTasks.removeAt(0).run()
+        }
 
         fun lastTransport(): FakeWebSocketTransport = transports.last()
 
@@ -211,9 +221,20 @@ class PairingTsnetWindowProbeTest {
      */
     @Test
     fun `T3 tsnet 路径配对成功 持久化配置含非空 tsAuthKey`() {
-        val h = Harness()
-        // tsnet 起网 → Up → 首拨成功（dialScript=[true]）→ READY → Success。
-        h.submitTailnet(dialScriptsPerAttempt = listOf(true))
+        val h = Harness(queueIdentity = true)
+        // Tsnet 已 Up 但身份 HTTP 仍在后台：重复 Up 不得在 proof 前创建 transport。
+        val up = TsnetState.Up(TsnetProxy("127.0.0.1", 1080, "fake-cred"))
+        h.vm.onTsnetState(up)
+        h.vm.manualUrl = "ws://100.101.2.3:9900/ws"
+        h.vm.manualToken = "ABC123"
+        h.vm.manualTsAuthKey = "fake-auth-key"
+        h.dialScripts.add(listOf(true))
+        h.vm.submitManual()
+        assertEquals("身份验证完成前不得拨号", 0, h.transports.size)
+        h.vm.onTsnetState(up)
+        assertEquals("重复 Tsnet.Up 不得跳过身份验证", 0, h.transports.size)
+        h.runIdentity()
+        assertEquals("身份验证完成后才允许首拨", 1, h.transports.size)
         h.authOk()
         assertEquals("前置：配对应成功", PairingStatus.Success, h.vm.pairingStatus)
 
