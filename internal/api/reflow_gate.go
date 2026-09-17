@@ -9,9 +9,10 @@ import (
 const (
 	// These bounds are deliberately local to the resize epoch. They are not a
 	// global output throttle: normal command output remains a live delta stream.
-	reflowQuietPeriod = 90 * time.Millisecond
-	reflowHardCap     = 800 * time.Millisecond
-	reflowMaxCaptures = 3
+	reflowQuietPeriod      = 90 * time.Millisecond
+	reflowPostCaptureQuiet = 350 * time.Millisecond
+	reflowHardCap          = 800 * time.Millisecond
+	reflowMaxCaptures      = 3
 )
 
 // reflowGate is the synchronization seam between the pipe relay and the
@@ -75,7 +76,7 @@ func (g *reflowGate) route(data []byte, send func(epoch uint64), discard func())
 
 // waitQuiet waits until no pipe chunk arrives during quiet, or until deadline.
 // sawActivity tells the caller whether a post-capture redraw happened.
-func (g *reflowGate) waitQuiet(ctx context.Context, deadline time.Time, quiet time.Duration) (sawActivity, timedOut bool, err error) {
+func (g *reflowGate) waitQuiet(ctx context.Context, deadline time.Time, quiet time.Duration, activityQuiet ...time.Duration) (sawActivity, timedOut bool, err error) {
 	g.mu.Lock()
 	activity := g.activity
 	active := g.active
@@ -92,6 +93,10 @@ func (g *reflowGate) waitQuiet(ctx context.Context, deadline time.Time, quiet ti
 	}
 	hardTimer := time.NewTimer(remaining)
 	defer hardTimer.Stop()
+	quietAfterActivity := quiet
+	if len(activityQuiet) > 0 && activityQuiet[0] > 0 {
+		quietAfterActivity = activityQuiet[0]
+	}
 	resetQuiet := func() {
 		if !quietTimer.Stop() {
 			select {
@@ -99,7 +104,7 @@ func (g *reflowGate) waitQuiet(ctx context.Context, deadline time.Time, quiet ti
 			default:
 			}
 		}
-		quietTimer.Reset(quiet)
+		quietTimer.Reset(quietAfterActivity)
 	}
 
 	for {

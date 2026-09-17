@@ -280,6 +280,9 @@ func (c *wsConn) markStaleBefore(ref string, epoch uint64) {
 		return
 	}
 	c.staleMu.Lock()
+	if c.staleBefore == nil {
+		c.staleBefore = make(map[string]uint64)
+	}
 	if epoch > c.staleBefore[ref] {
 		c.staleBefore[ref] = epoch
 	}
@@ -505,6 +508,13 @@ func (c *wsConn) sendPriorityBinary(ref string, epoch uint64, data []byte) bool 
 	c.connMetrics.recordSnapshot()
 	c.markStaleBefore(ref, epoch)
 	m := wsMsg{typ: wsBinary, data: data, streamRef: ref, epoch: epoch, binarySnapshot: true}
+	// Direct connection fixtures do not run a writer or allocate priorityCh;
+	// preserve their historical sendCh behavior without double-counting the
+	// snapshot metrics recorded above.
+	if c.priorityCh == nil {
+		c.sendMsg(m)
+		return true
+	}
 	c.sendMu.RLock()
 	defer c.sendMu.RUnlock()
 	if c.catalogAborted.Load() || c.ctx.Err() != nil {
@@ -860,6 +870,20 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 		c.beforeRelay(sub)
 	}
 	for {
+		// A live reflow gate can have a continuously readable pipe. Check loss
+		// before entering that drain path so a loss signal cannot be starved by
+		// redraw chunks while the initial snapshot is blocked.
+		if loss != nil {
+			select {
+			case cause, ok := <-loss:
+				if ok && ctx.Err() == nil {
+					c.abortConnection("mirror_loss: " + cause.Error())
+					return
+				}
+				loss = nil
+			default:
+			}
+		}
 		// During the initial reflow epoch, consume pipe chunks even though the
 		// first-frame ready latch is still closed. gate.route discards them and
 		// wakes the quiet timer; once the gate ends we return to the ready latch

@@ -166,7 +166,8 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// The first subscribe is a reflow epoch too. Open the gate before tmux
 	// receives SIGWINCH, so redraw bytes produced by the initial phone geometry
 	// are drained locally instead of becoming a wide, pre-reflow first frame.
-	if _, started := sub.gate.begin(); !started {
+	initialEpoch, started := sub.gate.begin()
+	if !started {
 		teardownSubscription(sub)
 		c.sendError(protocol.ErrCodeInternal, "cannot open initial reflow gate")
 		return
@@ -192,24 +193,13 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
 		c.logErr("subscribe resize", err)
 	}
-	if _, timedOut, err := sub.gate.waitQuiet(c.ctx, time.Now().Add(reflowHardCap), reflowQuietPeriod); err != nil {
-		close(sub.initialFailed)
-		<-sub.relayDone
-		c.sendError(protocol.ErrCodeInternal, "initial reflow cancelled")
-		return
-	} else if timedOut {
-		c.s.log.Debug("ws: initial subscribe reflow hard cap", "conn", c.id, "ref", s.Ref)
-	}
-	// Stop discarding before capture. The relay remains in its initial-ready
-	// state, so any post-quiet bytes stay behind the first snapshot and are
-	// delivered normally once that snapshot is queued.
-	sub.gate.end()
-
 	var snap []byte
 	if c.snapshotFn != nil {
+		// Test seams can provide a deterministic capture, but production initial
+		// subscribe uses the same post-capture convergence policy as resize.
 		snap, err = c.snapshotFn(c.ctx, br)
 	} else {
-		snap, err = snapshotWithCursor(c.ctx, br)
+		snap, err = c.convergedReflowSnapshot(c.ctx, br, sub.gate)
 	}
 	if err != nil {
 		close(sub.initialFailed)
@@ -230,9 +220,14 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	}
 	if c.sendBinaryFn != nil {
 		c.sendBinaryFn(frame)
-	} else {
-		c.sendBinary(frame)
+	} else if !c.sendPriorityBinary(s.Ref, initialEpoch, frame) {
+		teardownSubscription(sub)
+		return
 	}
+	// The final snapshot is now atomically queued ahead of stale deltas. Only
+	// after that publication may the relay release the barrier and stream new
+	// output; any race is retained behind the snapshot by pending/flush below.
+	sub.gate.end()
 	if subCtx.Err() != nil || c.catalogAborted.Load() {
 		teardownSubscription(sub)
 		return
@@ -673,8 +668,9 @@ func (c *wsConn) convergedReflowSnapshot(ctx context.Context, br *bridge.Pane, g
 	if timedOut {
 		return snap, nil
 	}
+	postCaptureQuiet := reflowPostCaptureQuiet
 	for captures := 1; captures < reflowMaxCaptures; captures++ {
-		sawActivity, timedOut, err := gate.waitQuiet(ctx, deadline, reflowQuietPeriod)
+		sawActivity, timedOut, err := gate.waitQuiet(ctx, deadline, postCaptureQuiet, reflowQuietPeriod)
 		if err != nil {
 			return nil, err
 		}
@@ -685,6 +681,7 @@ func (c *wsConn) convergedReflowSnapshot(ctx context.Context, br *bridge.Pane, g
 		if err != nil {
 			return nil, err
 		}
+		postCaptureQuiet = reflowQuietPeriod
 	}
 	return snap, nil
 }

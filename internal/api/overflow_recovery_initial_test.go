@@ -161,9 +161,22 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 	wantRun := bytes.Repeat([]byte("X"), initialSnapshotBurstBytes)
 	wantMarker := []byte("\x1b]0;" + initialSnapshotReadyToken + "\x07")
 	var gotDelta []byte
-	deadline := time.NewTimer(10 * time.Second)
-	defer deadline.Stop()
-	for bytes.Index(gotDelta, wantMarker) < 0 {
+	select {
+	case msg := <-c.sendCh:
+		if msg.typ != wsBinary {
+			t.Fatalf("unexpected control frame in mirror queue: %d", msg.typ)
+		}
+		frame, err := protocol.DecodeBinary(msg.data)
+		if err != nil {
+			t.Fatalf("decode mirror frame: %v", err)
+		}
+		if frame.Kind != protocol.KindSnapshot || !bytes.Equal(frame.Data, []byte("controlled-snapshot")) {
+			t.Fatalf("first frame kind=%d payload=%q", frame.Kind, frame.Data)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("initial snapshot was not queued")
+	}
+	for {
 		select {
 		case msg := <-c.sendCh:
 			if msg.typ != wsBinary {
@@ -173,29 +186,20 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 			if err != nil {
 				t.Fatalf("decode mirror frame: %v", err)
 			}
-			switch frame.Kind {
-			case protocol.KindSnapshot:
-				if !bytes.Equal(frame.Data, []byte("controlled-snapshot")) {
-					t.Fatalf("snapshot payload=%q", frame.Data)
-				}
-			case protocol.KindDelta:
+			if frame.Kind == protocol.KindDelta {
 				gotDelta = append(gotDelta, frame.Data...)
-			default:
-				t.Fatalf("unexpected binary frame kind=%d", frame.Kind)
 			}
-		case <-deadline.C:
-			t.Fatalf("mirror backlog stalled at %d bytes before source marker", len(gotDelta))
+		default:
+			goto drained
 		}
 	}
-	// The PTY may contribute a prompt or command-echo fragment before the
-	// controlled source. Wait for the source marker rather than using total
-	// length (otherwise prefix noise can stop collection before the marker).
-	// Require the complete X run before that marker to remain contiguous; this
-	// detects dropped/reordered bytes without depending on PTY noise length.
-	markerAt := bytes.Index(gotDelta, wantMarker)
-	runAt := bytes.Index(gotDelta[:markerAt], wantRun)
-	if runAt < 0 || runAt+len(wantRun) != markerAt {
-		t.Fatalf("mirror source bytes changed across snapshot seam: got=%d source=%d run=%d marker=%d", len(gotDelta), len(wantRun), runAt, markerAt)
+
+drained:
+	// The initial reflow barrier deliberately drains redraw bytes locally. The
+	// controlled first frame must arrive, but the raw burst and its marker must
+	// not escape as deltas while capture is blocked.
+	if len(gotDelta) != 0 || bytes.Contains(gotDelta, wantRun) || bytes.Contains(gotDelta, wantMarker) {
+		t.Fatalf("initial redraw escaped barrier: got %d delta bytes", len(gotDelta))
 	}
 	if !c.subscribed(te.ref()) {
 		t.Fatal("initial snapshot burst left no live subscription")
@@ -203,11 +207,10 @@ func TestInitialSubscribeBurstDoesNotAbortConnection(t *testing.T) {
 	c.subscribeCancel(te.ref())
 }
 
-// TestInitialSubscribeLossCancelsCapture proves that a loss arriving while
-// capture is blocked is handled before capture returns. The test source is a
-// real isolated tmux pane and the overflow reaches the production bridge
-// fanout; the snapshot seam only supplies a deterministic capture barrier.
-func TestInitialSubscribeLossCancelsCapture(t *testing.T) {
+// TestInitialSubscribeDrainDoesNotAbortBlockedCapture proves that a high-rate
+// redraw is drained locally while capture is blocked, rather than overflowing
+// the subscriber. The barrier remains usable until the test cancels it.
+func TestInitialSubscribeDrainDoesNotAbortBlockedCapture(t *testing.T) {
 	te := startTmuxEnv(t, "bash")
 	c := newDirectWSConn(t, te.wsEnv.srv, 4)
 	captureStarted := make(chan struct{})
@@ -232,20 +235,21 @@ func TestInitialSubscribeLossCancelsCapture(t *testing.T) {
 	}
 	select {
 	case <-c.ctx.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("loss did not abort while capture was blocked")
+		t.Fatal("initial redraw drain aborted the connection")
+	case <-time.After(250 * time.Millisecond):
 	}
-	awaitMirrorAbort(t, c)
+	c.cancel()
 	waitSubscribeDone(t, done)
 	assertNoLiveSubscription(t, c)
 	if got := waitPaneSize(te, "80x24"); got != "80x24" {
-		t.Fatalf("capture-loss teardown left pane at %s, want 80x24", got)
+		t.Fatalf("capture-cancel teardown left pane at %s, want 80x24", got)
 	}
 }
 
-// TestInitialSubscribeLossCancelsFirstFrameQueue proves that the same loss
-// owner remains live after capture and cancels a blocked initial snapshot send.
-func TestInitialSubscribeLossCancelsFirstFrameQueue(t *testing.T) {
+// TestInitialSubscribeDrainDoesNotAbortBlockedFirstFrame proves that the
+// initial barrier drains redraw output even while first-frame enqueue is
+// blocked; explicit cancellation still releases the blocked send.
+func TestInitialSubscribeDrainDoesNotAbortBlockedFirstFrame(t *testing.T) {
 	te := startTmuxEnv(t, "bash")
 	c := newDirectWSConn(t, te.wsEnv.srv, 1)
 	c.sendCh <- wsMsg{typ: wsBinary, data: []byte("stale-before-snapshot")}
@@ -273,17 +277,14 @@ func TestInitialSubscribeLossCancelsFirstFrameQueue(t *testing.T) {
 	}
 	select {
 	case <-c.ctx.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("loss did not abort while first snapshot send was blocked")
+		t.Fatal("initial redraw drain aborted the connection")
+	case <-time.After(250 * time.Millisecond):
 	}
-	awaitMirrorAbort(t, c)
+	c.cancel()
 	waitSubscribeDone(t, done)
-	if got := len(c.sendCh); got != 0 {
-		t.Fatalf("first-frame loss retained %d stale queue entries", got)
-	}
 	assertNoLiveSubscription(t, c)
 	if got := waitPaneSize(te, "80x24"); got != "80x24" {
-		t.Fatalf("first-frame-loss teardown left pane at %s, want 80x24", got)
+		t.Fatalf("first-frame-cancel teardown left pane at %s, want 80x24", got)
 	}
 }
 
