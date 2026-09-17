@@ -406,10 +406,9 @@ class PairingViewModel(
             .ifEmpty { candidateUrls }
             .ifEmpty { listOfNotNull(manualUrl.takeIf { it.isNotBlank() }) }
         if (queue.isEmpty()) return
-        // 扫码识别值仍留在手填表单可编辑；地址上屏、token 不上屏（§9）。
-        recognizedUrl = queue.first()
-        restartTsnetAfterFailure()
-        startPairingSequence(queue, currentToken, resetCandidates = true)
+        // Retry must repeat /pair/identify before any WebSocket probe. A prior
+        // proof is not reusable after the failed connection attempt.
+        retryWithIdentity(queue)
     }
 
     /**
@@ -419,10 +418,29 @@ class PairingViewModel(
     fun retryCandidate(url: String) {
         if (pairingStatus !is PairingStatus.Failed) return
         if (!isValidWsUrl(url)) return
-        recognizedUrl = url
-        restartTsnetAfterFailure()
+        val endpoint = HostRouter.endpointFromWsUrl(url, HostEndpointSource.QR) ?: return
         // resetCandidates=false：保留全候选列表展示，单候选再失败仍可点其他候选。
-        startPairingSequence(listOf(url), currentToken, resetCandidates = false)
+        retryWithIdentity(listOf(endpoint.wsUrl), preserveCandidates = true)
+    }
+
+    /** Re-prove every retry endpoint before allowing startPairingSequence to dial. */
+    private fun retryWithIdentity(queue: List<String>, preserveCandidates: Boolean = false) {
+        val config = currentConfig ?: return
+        val first = queue.firstOrNull() ?: return
+        val previousCandidates = candidateUrls
+        recognizedUrl = first
+        currentScanHints = queue
+        restartTsnetAfterFailure()
+        startVerifiedPairing(
+            rawUrl = first,
+            token = currentToken.ifBlank { config.token },
+            hostId = currentHostId ?: config.hostId,
+            name = currentHostName ?: config.name.orEmpty(),
+            port = currentPort ?: config.port,
+            tsNodeId = currentTsNodeId ?: config.tsNodeId,
+            legacyUrl = currentLegacyUrl ?: config.legacyBootstrapUrl,
+        )
+        if (preserveCandidates) candidateUrls = previousCandidates
     }
 
     /** 失败态是否可重试：由最近一次试配对是否已建立配置（[currentConfig]）决定；首启即解析失败的坏 payload 无配置，重试无意义（应重扫或手填）。 */
@@ -544,7 +562,9 @@ class PairingViewModel(
         pairingStatus = PairingStatus.Idle
         stopProbe()
         pendingIdentity = null
-        attemptQueue = emptyList()
+        // Keep the unproven endpoint queue only as a retry hint. No WebSocket
+        // manager is created until identify() proves one of these endpoints.
+        attemptQueue = candidates.map { it.wsUrl }
         currentToken = token.trim()
         attemptIndex = 0
         currentConfig = PairingConfig(

@@ -118,7 +118,7 @@ object HostRouter {
     ): HostEndpoint? {
         val uri = runCatching { URI(raw.trim()) }.getOrNull() ?: return null
         val address = uri.host ?: return null
-        val path = classify(address) ?: ConnectionPath.LAN
+        val path = classify(address) ?: return null
         val port = when {
             uri.port in 1..65535 -> uri.port
             fallbackPort in 1..65535 -> fallbackPort

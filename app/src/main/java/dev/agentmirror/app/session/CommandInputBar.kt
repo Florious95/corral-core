@@ -87,16 +87,6 @@ import dev.agentmirror.app.ui.theme.LocalAppPalette
 internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
     if (focused) 20 * expandedLines.coerceIn(2, 5) + 12 else 32
 
-/**
- * Height reserved by the dock before the editor receives focus.
- *
- * The input capsule animates between its collapsed and expanded field heights.  Its
- * parent must reserve the expanded capsule height from the first measure, otherwise
- * the terminal is resized once more when the first focus event settles.
- */
-internal fun sourceInputDockHeightDp(expandedLines: Int): Int =
-    sourceInputFieldHeightDp(focused = true, expandedLines) + 14
-
 /** Source input capsule with attachment, expanding editor, and send action. */
 @Composable
 fun CommandInputBar(

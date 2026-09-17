@@ -433,22 +433,21 @@ class SessionDockSourceTest {
             }
         }
         compose.waitForIdle()
-        assertRect("session-terminal-canvas", 0f, 42.667f, 390f, 635f)
-        assertRect("session-terminal-card", 4f, 46.667f, 382f, 627f)
-        assertRect("session-command-input", 11f, 726f, 368f, 46f)
-        assertRect("session-command-input-field", 60f, 733f, 272f, 32f)
+        assertRect("session-terminal-canvas", 0f, 42.667f, 390f, 675f)
+        assertRect("session-terminal-card", 4f, 46.667f, 382f, 667f)
+        assertRect("session-command-input", 11f, 766f, 368f, 46f)
+        assertRect("session-command-input-field", 60f, 773f, 272f, 32f)
 
         compose.onNodeWithContentDescription("返回菜单").assertDoesNotExist()
 
-        // Hotkeys are permanently visible at top 678f; the dock reserves the expanded editor
-        // slot so the terminal is stable before focus settles.
-        assertRect("hotkey-Esc", 11f, 678f, 50.53f, 40f)
-        assertRect("hotkey-Tab", 68.43f, 678f, 50.53f, 40f)
-        assertRect("hotkey-Up", 130.46f, 678f, 39.39f, 40f)
-        assertRect("hotkey-Down", 173.29f, 678f, 39.41f, 40f)
-        assertRect("hotkey-Left", 216.15f, 678f, 39.41f, 40f)
-        assertRect("hotkey-Right", 259.00f, 678f, 39.41f, 40f)
-        assertRect("hotkey-Ctrl-C", 309.91f, 678f, 69.09f, 40f)
+        // Hotkeys remain directly above the compact input capsule.
+        assertRect("hotkey-Esc", 11f, 718f, 50.53f, 40f)
+        assertRect("hotkey-Tab", 68.43f, 718f, 50.53f, 40f)
+        assertRect("hotkey-Up", 130.46f, 718f, 39.39f, 40f)
+        assertRect("hotkey-Down", 173.29f, 718f, 39.41f, 40f)
+        assertRect("hotkey-Left", 216.15f, 718f, 39.41f, 40f)
+        assertRect("hotkey-Right", 259.00f, 718f, 39.41f, 40f)
+        assertRect("hotkey-Ctrl-C", 309.91f, 718f, 69.09f, 40f)
     }
 
     @Test

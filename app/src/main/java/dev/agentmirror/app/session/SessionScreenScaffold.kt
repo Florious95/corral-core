@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
@@ -259,30 +258,20 @@ fun SessionScreenScaffold(
                 HotkeyRow(
                     onKeyToken = onKeyToken,
                 )
-                // Reserve the largest editor capsule before the terminal's first measure. The
-                // editor still animates inside this slot, but the terminal never loses another
-                // 40dp when focus expands the input (the observed ~86px first-open jump).
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(sourceInputDockHeightDp(inputExpandedLines).dp),
-                    contentAlignment = Alignment.TopStart,
-                ) {
-                    CommandInputBar(
-                        value = value,
-                        onValueChange = onValueChange,
-                        onSendText = { text ->
-                            requestDockCollapse("send")
-                            onSendText(text)
-                        },
-                        onPickAttachment = onPickAttachment,
-                        expandedLines = inputExpandedLines,
-                        collapseRequest = effectiveCollapseRequest,
-                        onFocusedChanged = { onInputFocusedChanged?.invoke(it) },
-                        onExpandRequested = requestDockExpand,
-                        onCollapseRequested = { requestDockCollapse("system-back") },
-                    )
-                }
+                CommandInputBar(
+                    value = value,
+                    onValueChange = onValueChange,
+                    onSendText = { text ->
+                        requestDockCollapse("send")
+                        onSendText(text)
+                    },
+                    onPickAttachment = onPickAttachment,
+                    expandedLines = inputExpandedLines,
+                    collapseRequest = effectiveCollapseRequest,
+                    onFocusedChanged = { onInputFocusedChanged?.invoke(it) },
+                    onExpandRequested = requestDockExpand,
+                    onCollapseRequested = { requestDockCollapse("system-back") },
+                )
             }
         }
     }
