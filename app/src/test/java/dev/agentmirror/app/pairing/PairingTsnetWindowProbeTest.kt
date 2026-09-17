@@ -257,9 +257,16 @@ class PairingTsnetWindowProbeTest {
         assertTrue("T3 命中（修前）：持久化配置必须含非空 tsAuthKey（冷启动靠它拉起 tsnet）。saved=$saved",
             saved != null && saved.tsAuthKey.isNotEmpty())
 
-        // Round4 C1 formal control: every initial/retry × QR/host path keeps Up/Error
-        // behind the queued identity proof, rejects a bad proof without a WS, and only
-        // creates one WS after a later valid proof.
+    }
+
+    /**
+     * Round4 C1 formal control: every initial/retry × QR/host path keeps Up/Error
+     * behind the queued identity proof, rejects a bad proof without a WS, and only
+     * creates one WS after a later valid proof.
+     */
+    @Test
+    fun `Round4 async identity proof gate blocks retry window across QR and host`() {
+        val up = TsnetState.Up(TsnetProxy("127.0.0.1", 1080, "fake-cred"))
         val proofEndpoint = HostEndpoint(
             address = "192.0.2.10",
             port = 9900,
@@ -313,6 +320,9 @@ class PairingTsnetWindowProbeTest {
                     assertTrue(check.vm.pairingStatus is PairingStatus.Failed)
                     check.vm.retry()
                     assertEquals("retry must enqueue a fresh proof", 1, check.pendingIdentityCount())
+                    check.vm.onTsnetState(up)
+                    check.vm.onTsnetState(TsnetState.Error("retry proof still pending"))
+                    assertEquals("retry Up/Error must not bypass queued proof", 0, check.transports.size)
                 }
 
                 check.runIdentity()
