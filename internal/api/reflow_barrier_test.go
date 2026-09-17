@@ -94,6 +94,71 @@ while True:
 	}
 }
 
+// TestInitialSubscribeReflowBarrier proves the first subscribe snapshot is
+// captured only after the phone resize burst has been drained locally. The
+// client must never receive the pre-reflow wide frame or its raw redraw bytes.
+func TestInitialSubscribeReflowBarrier(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "sigwinch-burst.sh")
+	const body = `#!/usr/bin/env python3
+import os
+import signal
+import time
+
+
+def redraw(_signum, _frame):
+    payload = ("\x1b[2K" + ("x" * 1024) + "\r") * 2300
+    payload += "\x1b[2KREFLOW_FINAL\r\n"
+    data = payload.encode()
+    while data:
+        written = os.write(1, data)
+        data = data[written:]
+
+
+signal.signal(signal.SIGWINCH, redraw)
+while True:
+    time.sleep(0.01)
+`
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	te := startTmuxEnv(t, "exec python3 "+script)
+	before := activeConnMetrics(t, te.wsEnv)
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 42, Cols: 46})
+	typ, data, err := te.wsEnv.conn.Read(context.Background())
+	if err != nil {
+		t.Fatalf("initial subscribe read: %v", err)
+	}
+	if typ != websocket.MessageBinary {
+		t.Fatalf("initial frame type = %v, want binary", typ)
+	}
+	payload, err := protocol.DecodeBinary(data)
+	if err != nil {
+		t.Fatalf("decode initial snapshot: %v", err)
+	}
+	if payload.Kind != protocol.KindSnapshot {
+		t.Fatalf("initial frame kind = %v, want snapshot", payload.Kind)
+	}
+	if !contains(payload.Data, "REFLOW_FINAL") {
+		t.Fatalf("initial snapshot does not contain final screen marker")
+	}
+	assertPaneSnapshot(t, te, payload.Data)
+
+	time.Sleep(250 * time.Millisecond)
+	after := activeConnMetrics(t, te.wsEnv)
+	wireBytes := (after.DeltaWireBytes - before.DeltaWireBytes) +
+		(after.SnapshotWireBytes - before.SnapshotWireBytes)
+	if wireBytes >= 150*1024 {
+		t.Fatalf("initial subscribe wire bytes = %d, want < 150KiB", wireBytes)
+	}
+	if after.ReflowDiscardedBytes-before.ReflowDiscardedBytes < 2*1024*1024 {
+		t.Fatalf("initial subscribe discarded bytes = %d, want at least 2MiB", after.ReflowDiscardedBytes-before.ReflowDiscardedBytes)
+	}
+	if after.ReflowEpochs-before.ReflowEpochs != 1 {
+		t.Fatalf("initial subscribe reflow epochs = %d, want 1", after.ReflowEpochs-before.ReflowEpochs)
+	}
+}
+
 // TestReflowBarrierDoesNotDropNormalDelta is the non-resize control group:
 // ordinary interactive output remains an immediate delta and does not consume
 // the reflow discard budget.

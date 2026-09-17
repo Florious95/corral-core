@@ -48,6 +48,12 @@ func (g *reflowGate) end() {
 	g.mu.Unlock()
 }
 
+func (g *reflowGate) isActive() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.active
+}
+
 // route calls send while holding the gate lock, so begin cannot race between
 // the active check and enqueue. During a gate it drains the chunk and emits a
 // wake signal for quiet detection.

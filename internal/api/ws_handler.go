@@ -155,7 +155,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		ready:         make(chan struct{}),
 		initialFailed: make(chan struct{}),
 		relayDone:     make(chan struct{}),
-		gate:           newReflowGate(),
+		gate:          newReflowGate(),
 	}
 	// Install the release hook before any fallible operation after acquire. All
 	// exits (including capture/encode failure) then use the same idempotent owner.
@@ -163,17 +163,19 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		geom.release(c.ctx, br, c.s.log, s.Ref)
 	}
 
-	// Initial client dims reshape the pane so the CLI redraws for the phone
-	// (requirement 005). A resize failure is not fatal: the mirror continues at
-	// the pane's current size, and the real existence check happens below.
-	if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
-		c.logErr("subscribe resize", err)
+	// The first subscribe is a reflow epoch too. Open the gate before tmux
+	// receives SIGWINCH, so redraw bytes produced by the initial phone geometry
+	// are drained locally instead of becoming a wide, pre-reflow first frame.
+	if _, started := sub.gate.begin(); !started {
+		teardownSubscription(sub)
+		c.sendError(protocol.ErrCodeInternal, "cannot open initial reflow gate")
+		return
 	}
+	defer sub.gate.end()
+	c.connMetrics.recordReflowEpoch()
 
-	// Attach the pipe before the snapshot so no output between the two is lost
-	// (term-bridge knowledge base: pipe first, then capture). Start the relay
-	// before capture, but keep its data gate closed until the snapshot is queued;
-	// this gives loss handling ownership to the whole initial-subscribe window.
+	// Attach the pipe before resize so the relay can continuously drain the
+	// SIGWINCH burst while the gate waits for a quiet terminal.
 	ch, loss, detach, err := br.SubscribeWithLoss(c.ctx)
 	if err != nil {
 		teardownSubscription(sub)
@@ -183,6 +185,25 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	sub.detach = detach
 	sub.loss = loss
 	go c.relay(subCtx, sub, ch)
+
+	// Initial client dims reshape the pane so the CLI redraws for the phone
+	// (requirement 005). A resize failure is not fatal: the mirror continues at
+	// the pane's current size, and the real existence check happens below.
+	if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
+		c.logErr("subscribe resize", err)
+	}
+	if _, timedOut, err := sub.gate.waitQuiet(c.ctx, time.Now().Add(reflowHardCap), reflowQuietPeriod); err != nil {
+		close(sub.initialFailed)
+		<-sub.relayDone
+		c.sendError(protocol.ErrCodeInternal, "initial reflow cancelled")
+		return
+	} else if timedOut {
+		c.s.log.Debug("ws: initial subscribe reflow hard cap", "conn", c.id, "ref", s.Ref)
+	}
+	// Stop discarding before capture. The relay remains in its initial-ready
+	// state, so any post-quiet bytes stay behind the first snapshot and are
+	// delivered normally once that snapshot is queued.
+	sub.gate.end()
 
 	var snap []byte
 	if c.snapshotFn != nil {
@@ -212,6 +233,14 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	} else {
 		c.sendBinary(frame)
 	}
+	if subCtx.Err() != nil || c.catalogAborted.Load() {
+		teardownSubscription(sub)
+		return
+	}
+	if !c.flushInitialPending(subCtx, sub) {
+		teardownSubscription(sub)
+		return
+	}
 	c.subsMu.Lock()
 	if subCtx.Err() != nil || c.catalogAborted.Load() {
 		c.subsMu.Unlock()
@@ -221,6 +250,37 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	c.subs[sub.ref] = sub
 	c.subsMu.Unlock()
 	sub.releaseRelayGate()
+}
+
+// flushInitialPending publishes the one or two chunks that can race the
+// initial gate handoff. It runs after the snapshot has been queued and before
+// the relay ready latch opens, so those deltas retain wire ordering.
+func (c *wsConn) flushInitialPending(ctx context.Context, sub *subscription) bool {
+	for {
+		sub.pendingMu.Lock()
+		pending := sub.pending
+		sub.pending = nil
+		if len(pending) == 0 {
+			sub.pendingClosed = true
+			sub.pendingMu.Unlock()
+			return true
+		}
+		sub.pendingMu.Unlock()
+		for _, delta := range pending {
+			frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+				Kind: protocol.KindDelta,
+				Ref:  sub.ref,
+				Data: delta.data,
+			})
+			if err != nil {
+				c.s.log.Debug("ws: encode initial pending delta", "conn", c.id, "err", err)
+				continue
+			}
+			if !c.sendMirrorWaitRef(ctx, sub.loss, sub.ref, delta.epoch, frame) {
+				return false
+			}
+		}
+	}
 }
 
 // handleUnsubscribe stops mirroring a session. Idempotent: unsubscribing a

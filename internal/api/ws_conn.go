@@ -153,6 +153,17 @@ type subscription struct {
 	// gate drains pipe output during a resize epoch and wakes the handler when
 	// another chunk arrives so it can wait for a quiet final screen.
 	gate *reflowGate
+	// pending holds the rare chunk selected by relay between gate.end and the
+	// initial snapshot send. Keeping it behind that snapshot preserves both
+	// first-frame ordering and the existing initial-loss ownership contract.
+	pendingMu     sync.Mutex
+	pending       []pendingDelta
+	pendingClosed bool
+}
+
+type pendingDelta struct {
+	epoch uint64
+	data  []byte
 }
 
 // serveConn owns the connection from accept to close.
@@ -162,14 +173,14 @@ func (s *Server) serveConn(conn *websocket.Conn) {
 	// WS 连接计数（重连线索：慢网下连接数暴增 = 超时断开→重连）。
 	s.sendQueue.recordConnection()
 	c := &wsConn{
-		s:         s,
-		id:        connSeq.Add(1),
-		conn:      conn,
-		ctx:       ctx,
-		cancel:    cancel,
-		writeCtx:  writeCtx,
-		writeStop: writeStop,
-		subs:      make(map[string]*subscription),
+		s:           s,
+		id:          connSeq.Add(1),
+		conn:        conn,
+		ctx:         ctx,
+		cancel:      cancel,
+		writeCtx:    writeCtx,
+		writeStop:   writeStop,
+		subs:        make(map[string]*subscription),
 		sendCh:      make(chan wsMsg, wsSendQueueCapacity),
 		priorityCh:  make(chan wsMsg, 1),
 		staleBefore: make(map[string]uint64),
@@ -849,7 +860,11 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 		c.beforeRelay(sub)
 	}
 	for {
-		if ready != nil {
+		// During the initial reflow epoch, consume pipe chunks even though the
+		// first-frame ready latch is still closed. gate.route discards them and
+		// wakes the quiet timer; once the gate ends we return to the ready latch
+		// so post-quiet bytes cannot overtake the initial snapshot.
+		if ready != nil && (sub.gate == nil || !sub.gate.isActive()) {
 			select {
 			case <-ready:
 				if ctx.Err() != nil {
@@ -946,6 +961,22 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 				sub.gate = newReflowGate()
 			}
 			sub.gate.route(chunk, func(epoch uint64) {
+				// A chunk selected while the initial gate was active can race
+				// gate.end. Keep it behind the first snapshot rather than letting
+				// it overtake the still-closed ready latch. Once the handler has
+				// closed this backlog, normal routing is safe again.
+				if ready != nil {
+					sub.pendingMu.Lock()
+					if !sub.pendingClosed {
+						sub.pending = append(sub.pending, pendingDelta{
+							epoch: epoch,
+							data:  append([]byte(nil), chunk...),
+						})
+						sub.pendingMu.Unlock()
+						return
+					}
+					sub.pendingMu.Unlock()
+				}
 				frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
 					Kind: protocol.KindDelta,
 					Ref:  sub.ref,
@@ -962,6 +993,21 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 			if !sent {
 				return
 			}
+		case <-sub.initialFailed:
+			// The handler may close initialFailed while a chunk selected under
+			// the reflow gate is still being drained. Keep the same loss-first
+			// handoff as the ready-latch path instead of waiting forever.
+			if sub.detach != nil {
+				sub.detach()
+			}
+			select {
+			case cause, ok := <-loss:
+				if ok && ctx.Err() == nil {
+					c.abortConnection("mirror_loss: " + cause.Error())
+				}
+			default:
+			}
+			return
 		case <-ctx.Done():
 			return
 		}
