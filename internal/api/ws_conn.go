@@ -153,6 +153,9 @@ type subscription struct {
 	// gate drains pipe output during a resize epoch and wakes the handler when
 	// another chunk arrives so it can wait for a quiet final screen.
 	gate *reflowGate
+	// One bounded-rate refresh worker, started only if this mirror cannot
+	// establish a stable capture/delta cut. Its lifetime is sub.ctx.
+	snapshotRefreshOnce sync.Once
 	// pending holds the rare chunk selected by relay between gate.end and the
 	// initial snapshot send. Keeping it behind that snapshot preserves both
 	// first-frame ordering and the existing initial-loss ownership contract.

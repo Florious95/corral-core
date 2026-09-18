@@ -226,6 +226,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	c.subs[sub.ref] = sub
 	c.subsMu.Unlock()
 	sub.releaseRelayGate()
+	c.startSnapshotRefresh(sub, br)
 }
 
 // flushInitialPending publishes the one or two chunks that can race the
@@ -597,6 +598,7 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		beforeW, beforeH = -1, -1
 	}
 	if beforeW == int(r.Cols) && beforeH == int(r.Rows) {
+		sub.gate.setSnapshotGeometry(int(r.Cols), int(r.Rows))
 		return // Do not drain even one live byte for a no-op resize.
 	}
 	epoch, started := sub.gate.begin()
@@ -635,7 +637,9 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		}
 		c.logErr("resize snapshot", err)
 		c.abortConnection("mirror_loss: cannot establish fresh resize snapshot")
+		return
 	}
+	c.startSnapshotRefresh(sub, br)
 }
 
 var errReflowBackpressure = errors.New("reflow snapshot queue unavailable")
@@ -650,6 +654,8 @@ func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gat
 	deadline := started.Add(reflowHardCap)
 	var captures, wrappedRejected, actualCols, actualRows int
 	var completed uint64
+	var failureStage, fallbackReason string
+	gate.setSnapshotGeometry(int(target.Cols), int(target.Rows))
 	defer func() {
 		// One metadata-only decision per handoff. A slow device trace alone
 		// cannot distinguish missing completion from rejected native wraps.
@@ -659,31 +665,59 @@ func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gat
 				"actual_cols", actualCols, "actual_rows", actualRows,
 				"captures", captures, "completed_frame", completed, "wrapped_rejected", wrappedRejected,
 				"deadline_reached", !time.Now().Before(deadline), "elapsed_ms", time.Since(started).Milliseconds(),
-				"success", result == nil)
+				"fallback_reason", fallbackReason, "failure_stage", failureStage, "success", result == nil)
 		}
 	}()
-	return gate.captureAndPublish(ctx, func(ctx context.Context) ([]byte, error) {
+	captureFrame := func(ctx context.Context) (bridge.CapturedPane, error) {
+		captures++
+		frame, err := br.CaptureState(ctx)
+		if err != nil {
+			failureStage = "capture"
+			return frame, err
+		}
+		actualCols, actualRows = frame.Cols, frame.Rows
+		if err := validateCapturedGeometry(frame, int(target.Cols), int(target.Rows)); err != nil {
+			failureStage = "geometry"
+			return frame, err
+		}
+		return frame, nil
+	}
+	captureFresh := func(ctx context.Context) ([]byte, error) {
 		if c.snapshotFn != nil {
 			return c.snapshotFn(ctx, br) // deterministic capture boundaries in tests
+		}
+		frame, err := captureFrame(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return snapshotFromCapture(frame), nil
+	}
+	publish := func(snap []byte) error {
+		err := c.queueReflowSnapshot(target.Ref, epoch, snap)
+		if err != nil {
+			failureStage = "publish"
+		}
+		return err
+	}
+	err := gate.captureAndPublish(ctx, func(ctx context.Context) ([]byte, error) {
+		if c.snapshotFn != nil {
+			return captureFresh(ctx)
 		}
 		for {
 			if waitForResize {
 				if err := gate.waitForReflow(ctx, deadline, false); err != nil {
+					failureStage = "wait"
 					return nil, err
 				}
 			}
 			if err := gate.waitForReflow(ctx, deadline, true); err != nil {
+				failureStage = "open_synchronized_frame"
 				return nil, err
 			}
 			completed = gate.completedFrame()
-			captures++
-			frame, err := br.CaptureState(ctx)
+			frame, err := captureFrame(ctx)
 			if err != nil {
 				return nil, err
-			}
-			actualCols, actualRows = frame.Cols, frame.Rows
-			if target.Cols > 0 && target.Rows > 0 && (frame.Cols != int(target.Cols) || frame.Rows != int(target.Rows)) {
-				return nil, fmt.Errorf("%w: requested=%dx%d actual=%dx%d", errMirrorGeometry, target.Cols, target.Rows, frame.Cols, frame.Rows)
 			}
 			// A 2026 frame can have been computed at the OLD width before the
 			// source handled SIGWINCH. Native tmux soft wraps expose that case;
@@ -696,18 +730,36 @@ func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gat
 			}
 			return snapshotFromCapture(frame), nil
 		}
-	}, func(snap []byte) error {
-		frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
-			Kind: protocol.KindSnapshot, Ref: target.Ref, Data: snap,
-		})
-		if err != nil {
-			return err
+	}, publish)
+	if errors.Is(err, errReflowUnstable) {
+		fallbackReason = failureStage
+		if fallbackReason == "" {
+			fallbackReason = "capture_contention"
 		}
-		if !c.sendPriorityBinary(target.Ref, epoch, frame) {
-			return errReflowBackpressure
-		}
-		return nil
-	})
+		failureStage = ""
+		// Never release uncertain raw bytes after a raced capture. Take a NEW
+		// snapshot, then maintain this mirror with dirty full-screen refreshes.
+		return gate.startSnapshotMode(ctx, captureFresh, publish)
+	}
+	return err
+}
+
+func validateCapturedGeometry(frame bridge.CapturedPane, cols, rows int) error {
+	if cols > 0 && rows > 0 && (frame.Cols != cols || frame.Rows != rows) {
+		return fmt.Errorf("%w: requested=%dx%d actual=%dx%d", errMirrorGeometry, cols, rows, frame.Cols, frame.Rows)
+	}
+	return nil
+}
+
+func (c *wsConn) queueReflowSnapshot(ref string, epoch uint64, snap []byte) error {
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{Kind: protocol.KindSnapshot, Ref: ref, Data: snap})
+	if err != nil {
+		return err
+	}
+	if !c.sendPriorityBinary(ref, epoch, frame) {
+		return errReflowBackpressure
+	}
+	return nil
 }
 
 // scrollbackRange converges a scrollback request (protocol from_line/count,
