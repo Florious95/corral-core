@@ -122,6 +122,7 @@ type wsConn struct {
 // cancel func, pipe detach func, and pane-size restore func, torn down together.
 type subscription struct {
 	ref    string
+	ctx    context.Context // resize/capture must stop when this mirror is retired
 	cancel context.CancelFunc
 	detach func()
 	// loss is independent from raw bytes so overflow remains observable even

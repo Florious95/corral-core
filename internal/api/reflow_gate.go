@@ -28,6 +28,7 @@ type reflowGate struct {
 	syncPrefix   int
 	syncOpen     bool
 	syncComplete bool
+	syncFrame    uint64
 	syncChanged  chan struct{}
 }
 
@@ -42,6 +43,7 @@ func (g *reflowGate) begin() (uint64, bool) {
 	g.active = true
 	g.revision = 0
 	g.syncPrefix, g.syncOpen, g.syncComplete = 0, false, false
+	g.syncFrame = 0
 	g.syncChanged = make(chan struct{}, 1)
 	g.epoch++
 	return g.epoch, true
@@ -106,6 +108,7 @@ func (g *reflowGate) observeSynchronizedOutput(data []byte) {
 			case 'l':
 				if g.syncOpen {
 					g.syncOpen, g.syncComplete = false, true
+					g.syncFrame++
 				}
 			}
 			select {
@@ -121,6 +124,24 @@ func (g *reflowGate) observeSynchronizedOutput(data []byte) {
 		} else {
 			g.syncPrefix = 0
 		}
+	}
+}
+
+func (g *reflowGate) completedFrame() uint64 {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.syncComplete && !g.syncOpen {
+		return g.syncFrame
+	}
+	return 0
+}
+
+// Do not erase a newer completion that arrived while tmux was being captured.
+func (g *reflowGate) rejectCompletedFrame(frame uint64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if frame != 0 && frame == g.syncFrame {
+		g.syncComplete = false
 	}
 }
 

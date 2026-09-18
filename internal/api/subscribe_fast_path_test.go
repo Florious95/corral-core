@@ -55,6 +55,51 @@ while True: time.sleep(0.01)
 	}
 }
 
+// A source already computing an old-width render can finish it after SIGWINCH.
+// Its valid 2026 end is not proof that wrapping matches the new pane grid.
+func TestInitialSubscribeOldWidthSyncFrameWaitsForCorrectGrid(t *testing.T) {
+	te := astraRound4Pane(t, `import os,signal,time
+
+def frame(cols,label):
+    body = "\x1b[?2026h\x1b[H\x1b[2J"+label+"\r\n"
+    body += (("x"*(cols-1))+"\r\n")*8
+    os.write(1,(body+"\x1b[?2026l").encode())
+def redraw(_s,_f):
+    frame(80,"OLD_SOURCE_WIDTH_80")
+    time.sleep(0.22)
+    frame(os.get_terminal_size(1).columns,"NEW_SOURCE_WIDTH_46")
+signal.signal(signal.SIGWINCH,redraw)
+os.write(1,b"\x1b]0;ASTRA_R4_READY\x07INITIAL_FRAME\r\n")
+while True: time.sleep(0.01)
+`)
+	start := time.Now()
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 42, Cols: 46})
+	first := astraRound4Read(t, te)
+	if first.Kind != protocol.KindSnapshot || !bytes.Contains(first.Data, []byte("NEW_SOURCE_WIDTH_46")) {
+		t.Fatalf("old-width synchronized frame exposed: %q", first.Data)
+	}
+	if elapsed := time.Since(start); elapsed >= 600*time.Millisecond {
+		t.Fatalf("valid new-width frame did not take fast path: %v", elapsed)
+	}
+}
+
+func TestInitialSubscribeWrappedSynchronizedOutputKeepsBoundedFallback(t *testing.T) {
+	te := astraRound4Pane(t, `import os,signal,time
+
+def redraw(_s,_f):
+    os.write(1,b"\x1b[?2026h\x1b[H\x1b[2JLEGITIMATE_WRAP_"+b"x"*120+b"\r\n\x1b[?2026l")
+signal.signal(signal.SIGWINCH,redraw)
+os.write(1,b"\x1b]0;ASTRA_R4_READY\x07INITIAL\r\n")
+while True: time.sleep(0.01)
+`)
+	te.wsEnv.sendFrame(&protocol.Subscribe{Ref: te.ref(), Rows: 42, Cols: 46})
+	first := astraRound4Read(t, te)
+	if first.Kind != protocol.KindSnapshot || !bytes.Contains(first.Data, []byte("LEGITIMATE_WRAP_")) {
+		t.Fatalf("bounded fallback lost legitimate wrapped output: %q", first.Data)
+	}
+	assertPaneSnapshot(t, te, first.Data)
+}
+
 func TestInitialSubscribeUnpairedSyncEndIsNotCompletion(t *testing.T) {
 	te := astraRound4Pane(t, `import os,signal,time
 
@@ -89,6 +134,24 @@ func TestReflowSynchronizedOutputEverySplit(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestReflowRejectKeepsNewerCompletion(t *testing.T) {
+	g := newReflowGate()
+	g.begin()
+	frame := func() { g.route([]byte("\x1b[?2026hframe\x1b[?2026l"), func(uint64) {}, func() {}) }
+	frame()
+	old := g.completedFrame()
+	frame()
+	newer := g.completedFrame()
+	g.rejectCompletedFrame(old)
+	if old == 0 || newer <= old || g.completedFrame() != newer {
+		t.Fatal("rejecting a captured old frame erased a newer completion")
+	}
+	g.rejectCompletedFrame(newer)
+	if g.completedFrame() != 0 {
+		t.Fatal("rejected frame still unlocks fast path")
 	}
 }
 
