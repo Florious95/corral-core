@@ -665,7 +665,8 @@ func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gat
 				"actual_cols", actualCols, "actual_rows", actualRows,
 				"captures", captures, "completed_frame", completed, "wrapped_rejected", wrappedRejected,
 				"deadline_reached", !time.Now().Before(deadline), "elapsed_ms", time.Since(started).Milliseconds(),
-				"fallback_reason", fallbackReason, "failure_stage", failureStage, "success", result == nil)
+				"fallback_reason", fallbackReason, "failure_stage", failureStage,
+				"snapshot_recovery", gate.usesSnapshots(), "success", result == nil)
 		}
 	}()
 	captureFrame := func(ctx context.Context) (bridge.CapturedPane, error) {
@@ -737,8 +738,8 @@ func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gat
 			fallbackReason = "capture_contention"
 		}
 		failureStage = ""
-		// Never release uncertain raw bytes after a raced capture. Take a NEW
-		// snapshot, then maintain this mirror with dirty full-screen refreshes.
+		// Retry with a NEW capture. A clean cut immediately returns to deltas;
+		// only a still-contended capture needs temporary snapshot recovery.
 		return gate.startSnapshotMode(ctx, captureFresh, publish)
 	}
 	return err

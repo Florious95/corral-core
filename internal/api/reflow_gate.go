@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync"
@@ -12,6 +13,9 @@ const (
 	// a completed synchronized-output frame keep this bounded fallback.
 	reflowHardCap     = 800 * time.Millisecond
 	reflowMaxCaptures = 3
+	// A contended recovery may display progress, but must not repeatedly
+	// rebuild the client's terminal at the server's capture sampling rate.
+	reflowSnapshotInterval = time.Second
 )
 
 var errReflowUnstable = errors.New("reflow changed during every capture")
@@ -31,15 +35,19 @@ type reflowGate struct {
 	syncFrame    uint64
 	syncChanged  chan struct{}
 
-	// Once a byte-exact snapshot/delta cut cannot be established, this mirror
-	// stays in snapshot mode until unsubscribe. Mixing raw deltas back in
-	// without a source watermark could lose or replay capture-window output.
+	// Snapshot recovery is temporary: the first uncontended capture returns
+	// to raw deltas. Until then, coalesce changes and rate-limit full frames.
 	snapshotMode               bool
 	snapshotDirty              bool
 	snapshotCols, snapshotRows int
+	snapshotWake               chan struct{}
+	lastSnapshot               []byte
+	lastSnapshotAt             time.Time
 }
 
-func newReflowGate() *reflowGate { return &reflowGate{} }
+func newReflowGate() *reflowGate {
+	return &reflowGate{snapshotWake: make(chan struct{}, 1)}
+}
 
 func (g *reflowGate) begin() (uint64, bool) {
 	g.mu.Lock()
@@ -49,6 +57,7 @@ func (g *reflowGate) begin() (uint64, bool) {
 	}
 	g.active = true
 	g.snapshotDirty = true
+	g.lastSnapshot = nil
 	g.revision = 0
 	g.syncPrefix, g.syncOpen, g.syncComplete = 0, false, false
 	g.syncFrame = 0
@@ -60,6 +69,7 @@ func (g *reflowGate) begin() (uint64, bool) {
 func (g *reflowGate) end() {
 	g.mu.Lock()
 	g.active = false
+	g.wakeSnapshotLocked()
 	g.mu.Unlock()
 }
 
@@ -72,6 +82,7 @@ func (g *reflowGate) endIfClean() bool {
 		return false
 	}
 	g.active = false
+	g.wakeSnapshotLocked()
 	return true
 }
 
@@ -87,6 +98,7 @@ func (g *reflowGate) route(data []byte, send func(epoch uint64), discard func())
 		g.revision++
 		g.snapshotDirty = true
 		g.observeSynchronizedOutput(data)
+		g.wakeSnapshotLocked()
 		g.mu.Unlock()
 		discard()
 		return
@@ -212,7 +224,7 @@ func (g *reflowGate) captureAndPublish(ctx context.Context, capture func(context
 			err = publish(snap)
 		}
 		if err == nil {
-			g.active = false
+			g.finishCaptureLocked()
 		}
 		g.mu.Unlock()
 		return err
@@ -225,8 +237,24 @@ func (g *reflowGate) setSnapshotGeometry(cols, rows int) {
 	if g.snapshotCols != cols || g.snapshotRows != rows {
 		g.snapshotCols, g.snapshotRows = cols, rows
 		g.snapshotDirty = true
+		g.wakeSnapshotLocked()
 	}
 	g.mu.Unlock()
+}
+
+// Caller holds mu, including across snapshot admission and delta release.
+func (g *reflowGate) finishCaptureLocked() {
+	g.active, g.snapshotMode, g.snapshotDirty = false, false, false
+	g.lastSnapshot = nil
+}
+
+func (g *reflowGate) wakeSnapshotLocked() {
+	if g.snapshotMode && g.snapshotDirty && !g.active {
+		select {
+		case g.snapshotWake <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (g *reflowGate) usesSnapshots() bool {
@@ -235,13 +263,16 @@ func (g *reflowGate) usesSnapshots() bool {
 	return g.snapshotMode
 }
 
-// A fresh snapshot makes a busy mirror usable, but does NOT certify a raw
-// delta cut. Keep draining and refresh full screen state instead. In particular,
-// bytes arriving after this capture require another capture, not silent loss.
+// Recheck the fresh fallback capture itself. If it is uncontended, the FIRST
+// published frame can already release deltas; prior failed attempts must not
+// condemn the subscription to permanent full-screen replays.
 func (g *reflowGate) startSnapshotMode(ctx context.Context, capture func(context.Context) ([]byte, error), publish func([]byte) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	g.mu.Lock()
+	revision := g.revision
+	g.mu.Unlock()
 	snap, err := capture(ctx)
 	if err != nil {
 		return err
@@ -254,14 +285,22 @@ func (g *reflowGate) startSnapshotMode(ctx context.Context, capture func(context
 	if err := publish(snap); err != nil {
 		return err
 	}
-	g.snapshotMode, g.snapshotDirty, g.active = true, true, false
+	if revision == g.revision && !g.syncOpen {
+		g.finishCaptureLocked()
+	} else {
+		g.snapshotMode, g.snapshotDirty, g.active = true, true, false
+		g.lastSnapshot, g.lastSnapshotAt = bytes.Clone(snap), time.Now()
+		g.wakeSnapshotLocked()
+	}
 	return nil
 }
 
-// refreshSnapshot coalesces output into bounded-rate authoritative snapshots.
-// Clearing dirty BEFORE capture preserves every notification racing capture or
-// publication. A resize epoch supersedes an in-flight refresh, including its
-// errors; it must never publish the old geometry after the new resize starts.
+// refreshSnapshot seeks a clean delta cut, not a permanent snapshot stream.
+// Contended captures may publish changed progress at most once per second.
+// A clean capture publishes one final handoff frame and immediately releases
+// deltas, even if the recovery progress-frame budget has not elapsed.
+// Clearing dirty BEFORE capture retains output racing capture/publication.
+// A resize supersedes an in-flight capture AND its errors.
 func (g *reflowGate) refreshSnapshot(ctx context.Context, capture func(context.Context, int, int) ([]byte, error), publish func(uint64, []byte) error) error {
 	g.mu.Lock()
 	if !g.snapshotMode || !g.snapshotDirty || g.active {
@@ -269,7 +308,7 @@ func (g *reflowGate) refreshSnapshot(ctx context.Context, capture func(context.C
 		return nil
 	}
 	g.snapshotDirty = false
-	epoch, cols, rows := g.epoch, g.snapshotCols, g.snapshotRows
+	epoch, revision, cols, rows := g.epoch, g.revision, g.snapshotCols, g.snapshotRows
 	g.mu.Unlock()
 
 	if err := ctx.Err(); err != nil {
@@ -278,6 +317,7 @@ func (g *reflowGate) refreshSnapshot(ctx context.Context, capture func(context.C
 	snap, err := capture(ctx, cols, rows)
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	defer g.wakeSnapshotLocked()
 	if epoch != g.epoch || g.active || cols != g.snapshotCols || rows != g.snapshotRows {
 		g.snapshotDirty = true
 		return nil
@@ -285,11 +325,27 @@ func (g *reflowGate) refreshSnapshot(ctx context.Context, capture func(context.C
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	stable := revision == g.revision && !g.syncOpen
+	if err == nil && !stable {
+		if bytes.Equal(snap, g.lastSnapshot) {
+			return nil
+		}
+		if time.Since(g.lastSnapshotAt) < reflowSnapshotInterval {
+			g.snapshotDirty = true
+			return nil
+		}
+	}
 	if err == nil {
 		err = publish(epoch, snap)
 	}
 	if err != nil {
 		g.snapshotDirty = true
+		return err
 	}
-	return err
+	if stable {
+		g.finishCaptureLocked()
+	} else {
+		g.lastSnapshot, g.lastSnapshotAt = bytes.Clone(snap), time.Now()
+	}
+	return nil
 }
