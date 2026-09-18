@@ -153,9 +153,8 @@ func TestDiffRemovedSessionWorkspaceStillAlive(t *testing.T) {
 }
 
 // TestDiffRemovedLastSessionWorkspaceVanishes pins the vanish path: removing a
-// cwd's last member announces the removal but NOT a changed_workspace for the
-// vanished cwd — emitting count 0 would be noise (listing.go's vanished-cwd
-// branch).
+// cwd's last member announces the removal and emits one zeroed workspace
+// aggregate so clients cannot retain a stale working badge.
 func TestDiffRemovedLastSessionWorkspaceVanishes(t *testing.T) {
 	prev := snapshotFromPanes([]discovery.Pane{
 		pane("%0", "/a", "s1"),
@@ -166,8 +165,12 @@ func TestDiffRemovedLastSessionWorkspaceVanishes(t *testing.T) {
 	if len(d.RemovedRefs) != 1 || d.RemovedRefs[0] != "/sock\x1f%0" {
 		t.Fatalf("removed_refs = %v, want [s1 ref]", d.RemovedRefs)
 	}
-	if len(d.ChangedWorkspaces) != 0 {
-		t.Fatalf("vanished workspace must not emit changed_workspaces, got %+v", d.ChangedWorkspaces)
+	if len(d.ChangedWorkspaces) != 1 {
+		t.Fatalf("vanished workspace must emit one clearing changed_workspace, got %+v", d.ChangedWorkspaces)
+	}
+	ws := d.ChangedWorkspaces[0]
+	if ws.Cwd != "/a" || ws.SessionCount != 0 || ws.WorkingCount != 0 {
+		t.Fatalf("vanished workspace = %+v, want /a count=0 working=0", ws)
 	}
 }
 

@@ -92,6 +92,58 @@ func TestIdentifyFallbackUsesConfiguredAddressSet(t *testing.T) {
 	}
 }
 
+func TestIdentifyWildcardListenerAcceptsRequestHostAlias(t *testing.T) {
+	const (
+		token  = "pairing-token"
+		hostID = "AAAAAAAAAAAAAAAAAAAAAAAAAA"
+		nonce  = "00112233445566778899aabbccddeeff"
+	)
+	s := NewServer(Options{HostID: hostID, HostName: "test-host", ListenPort: 9902, Token: token})
+	defer s.Close()
+	body := `{"v":1,"host_id":"` + hostID + `","nonce":"` + nonce + `","dest_ip":"10.0.2.2"}`
+	r := httptest.NewRequest(http.MethodPost, "http://10.0.2.2:9902/pair/identify", strings.NewReader(body))
+	r.RemoteAddr = "10.0.2.15:40000"
+	r = r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, net.Addr(&net.TCPAddr{IP: net.IPv4zero, Port: 9902})))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("identify status = %d body=%s", w.Code, w.Body.String())
+	}
+	var got identifyResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Bound != "10.0.2.2:9902" || len(got.MAC) != sha256.Size*2 {
+		t.Fatalf("identify = %+v", got)
+	}
+	want := IdentifyMAC(token, hostID, nonce, "10.0.2.2", 9902)
+	if got.MAC != want {
+		t.Fatalf("mac = %s want %s", got.MAC, want)
+	}
+}
+
+func TestIdentifyWildcardListenerRejectsMismatchedRequestHostAlias(t *testing.T) {
+	const hostID = "AAAAAAAAAAAAAAAAAAAAAAAAAA"
+	s := NewServer(Options{HostID: hostID, Token: "token", ListenPort: 9902})
+	defer s.Close()
+	body := `{"v":1,"host_id":"` + hostID + `","nonce":"00112233445566778899aabbccddeeff","dest_ip":"10.0.2.2"}`
+	r := httptest.NewRequest(http.MethodPost, "http://10.0.2.3:9902/pair/identify", strings.NewReader(body))
+	r.RemoteAddr = "10.0.2.15:40000"
+	r = r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, net.Addr(&net.TCPAddr{IP: net.IPv4zero, Port: 9902})))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("identify status = %d body=%s", w.Code, w.Body.String())
+	}
+	var got identityError
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Code != "bad_dest" {
+		t.Fatalf("code = %q want bad_dest", got.Code)
+	}
+}
+
 func TestIdentifyRejectsWrongBoundAndMalformedNonce(t *testing.T) {
 	const hostID = "AAAAAAAAAAAAAAAAAAAAAAAAAA"
 	s := NewServer(Options{HostID: hostID, Token: "token", ListenPort: 9900})

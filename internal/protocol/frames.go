@@ -52,6 +52,56 @@ type Auth struct {
 // reason. The server MUST close the connection after a rejection, so the
 // client can treat "connection closed right after auth" as a rejection too.
 type AuthAck struct {
+	OK             bool            `json:"ok"`
+	Reason         string          `json:"reason,omitempty"`
+	AgentLaunchers []AgentLauncher `json:"agent_launchers,omitempty"`
+}
+
+// AgentLauncher describes one provider executable the server can launch. The
+// capability list is deliberately explicit: clients may only offer providers
+// and flags that this daemon verified at startup.
+type AgentLauncher struct {
+	Provider       string `json:"provider"`
+	DisplayName    string `json:"display_name"`
+	SupportsBypass bool   `json:"supports_bypass"`
+	Naming         string `json:"naming"`
+}
+
+// CreateAgent asks the server to create a child agent from an existing pane.
+// AnchorRef is opaque to clients and resolves to the exact socket + pane;
+// Workspace is checked against that resolved pane's cwd.
+type CreateAgent struct {
+	ReqID     uint32 `json:"req_id"`
+	Workspace string `json:"workspace"`
+	AnchorRef string `json:"anchor_ref"`
+	Provider  string `json:"provider"`
+	Name      string `json:"name"`
+	Bypass    bool   `json:"bypass"`
+}
+
+// CreateAgentResult is the typed result of CreateAgent. Failed requests carry
+// only a controlled Reason; launch errors are never echoed to the client.
+type CreateAgentResult struct {
+	ReqID  uint32 `json:"req_id"`
+	OK     bool   `json:"ok"`
+	Ref    string `json:"ref,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Naming string `json:"naming,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// CloseSession asks the server to terminate exactly the pane addressed by Ref.
+// Ref is the opaque socket + pane identity emitted in Session listings; the
+// server never widens this request to a window or session operation.
+type CloseSession struct {
+	ReqID uint32 `json:"req_id"`
+	Ref   string `json:"ref"`
+}
+
+// CloseSessionResult is the typed result of CloseSession. A successful result
+// has no reason; failures carry a stable, human-safe reason string.
+type CloseSessionResult struct {
+	ReqID  uint32 `json:"req_id"`
 	OK     bool   `json:"ok"`
 	Reason string `json:"reason,omitempty"`
 }
@@ -65,10 +115,12 @@ type List struct {
 // Workspace is one first-level group of the two-level model (requirement
 // 002): it aggregates every session whose cwd equals Cwd. In a full Listing,
 // Sessions carries the group's members; in a ListDelta's ChangedWorkspaces it
-// is empty and only the session count is meaningful.
+// is empty and only the aggregate counts are meaningful. WorkingCount is the
+// number of identified panes currently classified as working.
 type Workspace struct {
 	Cwd          string    `json:"cwd"`
 	SessionCount int       `json:"session_count"`
+	WorkingCount int       `json:"working_count"`
 	Sessions     []Session `json:"sessions,omitempty"`
 }
 
@@ -95,14 +147,14 @@ type Workspace struct {
 // Status is the legacy alias and always equals Activity on current output. The
 // client must not re-derive any axis from Title.
 type Session struct {
-	Ref         string  `json:"ref"`
-	Name        string  `json:"name"`
-	WindowName  string  `json:"window_name"`
-	WindowIndex string  `json:"window_index"`
-	Cwd         string  `json:"cwd"`
-	Title       string  `json:"title"`
-	Provider    string  `json:"provider"`
-	Activity    string  `json:"activity"`
+	Ref         string `json:"ref"`
+	Name        string `json:"name"`
+	WindowName  string `json:"window_name"`
+	WindowIndex string `json:"window_index"`
+	Cwd         string `json:"cwd"`
+	Title       string `json:"title"`
+	Provider    string `json:"provider"`
+	Activity    string `json:"activity"`
 	// Native nodeprobe metadata, not display Name. omitempty: JSON null here
 	// is rejected by the 20260822 kotlinx Session.sessionName (non-null String)
 	// and drops the whole listing frame. Absent and "" both decode as empty.

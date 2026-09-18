@@ -30,6 +30,10 @@ func perfNowMS() int64 {
 	return time.Since(perfOrigin).Milliseconds()
 }
 
+// wsSendQueueCapacity bounds queued outbound frames while relay goroutines
+// wait for the writer to make progress.
+const wsSendQueueCapacity = 512
+
 // connSeq assigns each connection a monotonically increasing id for logging.
 var connSeq atomic.Uint64
 
@@ -84,6 +88,11 @@ type wsConn struct {
 	// must never be dropped); mirror deltas use a non-blocking send. Overflow
 	// aborts this connection so reconnect can restore a complete snapshot.
 	sendCh chan wsMsg
+	// priorityCh carries reflow convergence snapshots. They must overtake stale
+	// queued deltas; the writer filters those deltas by stream epoch.
+	priorityCh  chan wsMsg
+	staleMu     sync.Mutex
+	staleBefore map[string]uint64
 
 	// closeReason 连接关闭原因（可观测健康记录，leader msg_1f0c3455fac0）：
 	// readLoop 读错误 / 客户端主动关 / 写超时 / 正常 EOF。teardown 日志带出，
@@ -98,7 +107,6 @@ type wsConn struct {
 	// Test-only relay/writer boundaries; nil in production, set before startup.
 	beforeRelay       func(*subscription)
 	snapshotFn        func(context.Context, *bridge.Pane) ([]byte, error)
-	sendBinaryFn      func([]byte)
 	controlEnqueue    func()
 	beforeWriterFrame func(wsMsg)
 	writeAttempt      func(wsMsg)
@@ -114,6 +122,7 @@ type wsConn struct {
 // cancel func, pipe detach func, and pane-size restore func, torn down together.
 type subscription struct {
 	ref    string
+	ctx    context.Context // resize/capture must stop when this mirror is retired
 	cancel context.CancelFunc
 	detach func()
 	// loss is independent from raw bytes so overflow remains observable even
@@ -140,6 +149,24 @@ type subscription struct {
 	// @err Resize failures are logged and not returned to the already-unsubscribing client
 	restoreOnce sync.Once
 	restoreSize func()
+
+	// gate drains pipe output during a resize epoch and wakes the handler when
+	// another chunk arrives so it can wait for a quiet final screen.
+	gate *reflowGate
+	// One bounded-rate refresh worker, started only if this mirror cannot
+	// establish a stable capture/delta cut. Its lifetime is sub.ctx.
+	snapshotRefreshOnce sync.Once
+	// pending holds the rare chunk selected by relay between gate.end and the
+	// initial snapshot send. Keeping it behind that snapshot preserves both
+	// first-frame ordering and the existing initial-loss ownership contract.
+	pendingMu     sync.Mutex
+	pending       []pendingDelta
+	pendingClosed bool
+}
+
+type pendingDelta struct {
+	epoch uint64
+	data  []byte
 }
 
 // serveConn owns the connection from accept to close.
@@ -149,15 +176,17 @@ func (s *Server) serveConn(conn *websocket.Conn) {
 	// WS 连接计数（重连线索：慢网下连接数暴增 = 超时断开→重连）。
 	s.sendQueue.recordConnection()
 	c := &wsConn{
-		s:         s,
-		id:        connSeq.Add(1),
-		conn:      conn,
-		ctx:       ctx,
-		cancel:    cancel,
-		writeCtx:  writeCtx,
-		writeStop: writeStop,
-		subs:      make(map[string]*subscription),
-		sendCh:    make(chan wsMsg, 256),
+		s:           s,
+		id:          connSeq.Add(1),
+		conn:        conn,
+		ctx:         ctx,
+		cancel:      cancel,
+		writeCtx:    writeCtx,
+		writeStop:   writeStop,
+		subs:        make(map[string]*subscription),
+		sendCh:      make(chan wsMsg, wsSendQueueCapacity),
+		priorityCh:  make(chan wsMsg, 1),
+		staleBefore: make(map[string]uint64),
 	}
 	s.trackersMu.Lock()
 	init := s.connInit
@@ -239,7 +268,38 @@ func (c *wsConn) writeFrame(m wsMsg) error {
 			}
 		}
 	}
+	if err == nil {
+		if m.binarySnapshot {
+			c.connMetrics.recordWire(true, len(m.data))
+		} else if m.droppable {
+			c.connMetrics.recordWire(false, len(m.data))
+		}
+	}
 	return err
+}
+
+func (c *wsConn) markStaleBefore(ref string, epoch uint64) {
+	if ref == "" {
+		return
+	}
+	c.staleMu.Lock()
+	if c.staleBefore == nil {
+		c.staleBefore = make(map[string]uint64)
+	}
+	if epoch > c.staleBefore[ref] {
+		c.staleBefore[ref] = epoch
+	}
+	c.staleMu.Unlock()
+}
+
+func (c *wsConn) staleDelta(m wsMsg) bool {
+	if !m.droppable || m.streamRef == "" {
+		return false
+	}
+	c.staleMu.Lock()
+	before := c.staleBefore[m.streamRef]
+	c.staleMu.Unlock()
+	return m.epoch < before
 }
 
 // writeLoop drains the send queue and writes each message. On a close message
@@ -256,25 +316,47 @@ func (c *wsConn) writeLoop() {
 		}
 	}()
 	defer c.writeStop()
+	write := func(m wsMsg) bool {
+		if c.staleDelta(m) {
+			return true
+		}
+		if c.beforeWriterFrame != nil {
+			c.beforeWriterFrame(m)
+		}
+		if c.catalogAborted.Load() {
+			_ = c.conn.CloseNow()
+			return false
+		}
+		if m.close {
+			c.setCloseReason("client_close: " + m.reason)
+			_ = c.conn.Close(m.code, m.reason)
+			return false
+		}
+		if err := c.writeFrame(m); err != nil {
+			// 写超时/写错误 → 强制关闭：记录原因（重连假说：慢链路 30s 写超时是候选）。
+			c.setCloseReason("write_error: " + err.Error())
+			_ = c.conn.CloseNow()
+			return false
+		}
+		return true
+	}
 	for {
+		// Reflow snapshots overtake stale deltas already queued in sendCh.
 		select {
+		case m := <-c.priorityCh:
+			if !write(m) {
+				return
+			}
+			continue
+		default:
+		}
+		select {
+		case m := <-c.priorityCh:
+			if !write(m) {
+				return
+			}
 		case m := <-c.sendCh:
-			if c.beforeWriterFrame != nil {
-				c.beforeWriterFrame(m)
-			}
-			if c.catalogAborted.Load() {
-				_ = c.conn.CloseNow()
-				return
-			}
-			if m.close {
-				c.setCloseReason("client_close: " + m.reason)
-				_ = c.conn.Close(m.code, m.reason)
-				return
-			}
-			if err := c.writeFrame(m); err != nil {
-				// 写超时/写错误 → 强制关闭：记录原因（重连假说：慢链路 30s 写超时是候选）。
-				c.setCloseReason("write_error: " + err.Error())
-				_ = c.conn.CloseNow()
+			if !write(m) {
 				return
 			}
 		case <-c.ctx.Done():
@@ -284,14 +366,25 @@ func (c *wsConn) writeLoop() {
 	}
 }
 
-// flushQueued drains the send channel without blocking after the connection
+// flushQueued drains both send channels without blocking after the connection
 // has been cancelled, delivering any reply that was queued before the cancel
 // (auth rejection's auth_ack+close is the canonical case) and then closing the
 // connection so the peer's Read returns instead of hanging.
 func (c *wsConn) flushQueued() {
 	for {
 		select {
+		case m := <-c.priorityCh:
+			if c.staleDelta(m) {
+				continue
+			}
+			if err := c.writeFrame(m); err != nil {
+				_ = c.conn.CloseNow()
+				return
+			}
 		case m := <-c.sendCh:
+			if c.staleDelta(m) {
+				continue
+			}
 			if c.beforeWriterFrame != nil {
 				c.beforeWriterFrame(m)
 			}
@@ -332,7 +425,7 @@ func (c *wsConn) teardown() {
 	// 慢链路丢 delta → 客户端不一致 → 补发快照 → 整屏重建（D-36「发消息整屏刷」假说第 12 条）。
 	// per-conn 与 process-level 分开报，字段前缀一眼可辨（P0：此前进程累计被打在 per-conn 行）。
 	cm := c.connMetrics.snapshot()
-	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 || m.ConnectionsTotal > 0 || cm.FramesSent > 0 {
+	if m := c.s.sendQueue.Snapshot(); m.FramesSent > 0 || m.DeltasDropped > 0 || m.SnapshotsPushed > 0 || m.ConnectionsTotal > 0 || cm.FramesSent > 0 || cm.DeltaWireBytes > 0 || cm.SnapshotWireBytes > 0 || cm.ReflowDiscardedBytes > 0 {
 		c.s.log.Info("ws: sendq health",
 			"conn", c.id,
 			// 这条连接自己的数（per-connection，本行真正该报的东西）。
@@ -341,6 +434,11 @@ func (c *wsConn) teardown() {
 			"conn.snapshots_from_resize", cm.SnapshotsFromResize,
 			"conn.snapshots_from_subscribe", cm.SnapshotsFromSubscribe,
 			"conn.frames_sent", cm.FramesSent,
+			"conn.delta_wire_bytes", cm.DeltaWireBytes,
+			"conn.snapshot_wire_bytes", cm.SnapshotWireBytes,
+			"conn.reflow_discarded_bytes", cm.ReflowDiscardedBytes,
+			"conn.reflow_discarded_chunks", cm.ReflowDiscardedChunks,
+			"conn.reflow_epochs", cm.ReflowEpochs,
 			// 进程从启动到现在的累计（整体健康，非本连接）。
 			"total.deltas_dropped", m.DeltasDropped,
 			"total.snapshots_pushed", m.SnapshotsPushed,
@@ -403,7 +501,32 @@ func (c *wsConn) sendBinary(data []byte) {
 		c.s.sendQueue.recordSnapshot()
 		c.connMetrics.recordSnapshot()
 	}
-	c.sendMsg(wsMsg{typ: wsBinary, data: data})
+	c.sendMsg(wsMsg{typ: wsBinary, data: data, binarySnapshot: len(data) > 3 && data[3] == byte(protocol.KindSnapshot)})
+}
+
+// sendPriorityBinary admits a snapshot without blocking the routing lock. A
+// full slot fails closed at the caller, like mirror queue overflow, rather than
+// draining uncovered bytes while publication waits.
+func (c *wsConn) sendPriorityBinary(ref string, epoch uint64, data []byte) bool {
+	c.s.sendQueue.recordSnapshot()
+	c.connMetrics.recordSnapshot()
+	c.markStaleBefore(ref, epoch)
+	m := wsMsg{typ: wsBinary, data: data, streamRef: ref, epoch: epoch, binarySnapshot: true}
+	queue := c.priorityCh
+	if queue == nil {
+		queue = c.sendCh // direct fixtures have no writer priority channel
+	}
+	c.sendMu.RLock()
+	defer c.sendMu.RUnlock()
+	if c.catalogAborted.Load() || c.ctx.Err() != nil {
+		return false
+	}
+	select {
+	case queue <- m:
+		return true
+	default:
+		return false
+	}
 }
 
 // sendMirror enqueues a binary mirror frame without blocking: a slow client
@@ -417,13 +540,79 @@ func (c *wsConn) sendMirror(data []byte) {
 		return
 	}
 	select {
-	case c.sendCh <- wsMsg{typ: wsBinary, data: data}:
+	case c.sendCh <- wsMsg{typ: wsBinary, data: data, droppable: true}:
 		c.s.sendQueue.recordQueued(len(c.sendCh))
 		c.connMetrics.recordFramesSent()
 		c.sendMu.RUnlock()
 	default:
 		c.sendMu.RUnlock()
 		c.abortConnection("mirror_loss: ws_send_queue_overflow")
+	}
+}
+
+// sendMirrorWaitRef is the backpressure path used by a subscription relay.
+// Ref/epoch metadata lets a convergence snapshot invalidate old queued deltas.
+func (c *wsConn) sendMirrorWaitRef(ctx context.Context, loss <-chan error, ref string, epoch uint64, data []byte) bool {
+	return c.sendMirrorWaitWithMeta(ctx, loss, wsMsg{typ: wsBinary, data: data, streamRef: ref, epoch: epoch, droppable: true})
+}
+
+// sendMirrorWait enqueues one mirror frame with cancellable backpressure.
+// A full WS queue is not itself a loss boundary: the relay waits for the
+// writer while continuing to observe its subscription loss and context. If
+// the bridge reports loss while waiting, the connection is aborted before any
+// later delta can cross the gap. Caller must not hold sendMu.
+func (c *wsConn) sendMirrorWait(ctx context.Context, loss <-chan error, data []byte) bool {
+	return c.sendMirrorWaitWithMeta(ctx, loss, wsMsg{typ: wsBinary, data: data, droppable: true})
+}
+
+func (c *wsConn) sendMirrorWaitWithMeta(ctx context.Context, loss <-chan error, m wsMsg) bool {
+	c.sendMu.RLock()
+	lossCh := loss
+	for {
+		if c.catalogAborted.Load() || c.ctx.Err() != nil || ctx.Err() != nil {
+			c.sendMu.RUnlock()
+			return false
+		}
+		// Prefer an already-published loss over an available queue slot. The
+		// select below still handles a loss racing with the enqueue.
+		if lossCh != nil {
+			select {
+			case cause, ok := <-lossCh:
+				if !ok {
+					lossCh = nil
+					continue
+				}
+				c.sendMu.RUnlock()
+				if cause != nil && ctx.Err() == nil && c.ctx.Err() == nil {
+					c.abortConnection("mirror_loss: " + cause.Error())
+				}
+				return false
+			default:
+			}
+		}
+		select {
+		case c.sendCh <- m:
+			c.s.sendQueue.recordQueued(len(c.sendCh))
+			c.connMetrics.recordFramesSent()
+			c.sendMu.RUnlock()
+			return true
+		case cause, ok := <-lossCh:
+			if !ok {
+				lossCh = nil
+				continue
+			}
+			c.sendMu.RUnlock()
+			if cause != nil && ctx.Err() == nil && c.ctx.Err() == nil {
+				c.abortConnection("mirror_loss: " + cause.Error())
+			}
+			return false
+		case <-ctx.Done():
+			c.sendMu.RUnlock()
+			return false
+		case <-c.ctx.Done():
+			c.sendMu.RUnlock()
+			return false
+		}
 	}
 }
 
@@ -474,6 +663,10 @@ func (c *wsConn) handleFrame(data []byte, recvMS int64) bool {
 	}
 
 	switch t := typed.(type) {
+	case protocol.CreateAgent:
+		c.handleCreateAgent(t)
+	case protocol.CloseSession:
+		c.handleCloseSession(t)
 	case protocol.List:
 		c.handleList(t)
 	case protocol.Subscribe:
@@ -501,8 +694,9 @@ func (c *wsConn) handleFrame(data []byte, recvMS int64) bool {
 	case protocol.OverlayUnsubscribe:
 		c.handleOverlayUnsubscribe(t)
 	default:
-		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed,
-		// level2_frame, level2_heartbeat, overlay_frame are server-to-client only.
+		// auth_ack, create_agent_result, close_session_result, listing, list_delta,
+		// input_ack, error, pane_mode_changed, level2_frame, level2_heartbeat,
+		// overlay_frame are server-to-client only.
 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
 	}
 	return true
@@ -572,9 +766,13 @@ func (c *wsConn) subscribeAdd(sub *subscription) {
 
 // subscribed reports whether ref has a live subscription on this connection.
 func (c *wsConn) subscribed(ref string) bool {
+	return c.subscriptionFor(ref) != nil
+}
+
+func (c *wsConn) subscriptionFor(ref string) *subscription {
 	c.subsMu.Lock()
 	defer c.subsMu.Unlock()
-	return c.subs[ref] != nil
+	return c.subs[ref]
 }
 
 // closeSubscriptions drains every live subscription on this connection —
@@ -673,7 +871,25 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 		c.beforeRelay(sub)
 	}
 	for {
-		if ready != nil {
+		// A live reflow gate can have a continuously readable pipe. Check loss
+		// before entering that drain path so a loss signal cannot be starved by
+		// redraw chunks while the initial snapshot is blocked.
+		if loss != nil {
+			select {
+			case cause, ok := <-loss:
+				if ok && ctx.Err() == nil {
+					c.abortConnection("mirror_loss: " + cause.Error())
+					return
+				}
+				loss = nil
+			default:
+			}
+		}
+		// During the initial reflow epoch, consume pipe chunks even though the
+		// first-frame ready latch is still closed. gate.route discards them and
+		// wakes the quiet timer; once the gate ends we return to the ready latch
+		// so post-quiet bytes cannot overtake the initial snapshot.
+		if ready != nil && (sub.gate == nil || !sub.gate.isActive()) {
 			select {
 			case <-ready:
 				if ctx.Err() != nil {
@@ -765,16 +981,58 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 			if c.catalogAborted.Load() {
 				return
 			}
-			frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
-				Kind: protocol.KindDelta,
-				Ref:  sub.ref,
-				Data: chunk,
-			})
-			if err != nil {
-				c.s.log.Debug("ws: encode delta", "conn", c.id, "err", err)
-				continue
+			sent := true
+			if sub.gate == nil {
+				sub.gate = newReflowGate()
 			}
-			c.sendMirror(frame)
+			sub.gate.route(chunk, func(epoch uint64) {
+				// A chunk selected while the initial gate was active can race
+				// gate.end. Keep it behind the first snapshot rather than letting
+				// it overtake the still-closed ready latch. Once the handler has
+				// closed this backlog, normal routing is safe again.
+				if ready != nil {
+					sub.pendingMu.Lock()
+					if !sub.pendingClosed {
+						sub.pending = append(sub.pending, pendingDelta{
+							epoch: epoch,
+							data:  append([]byte(nil), chunk...),
+						})
+						sub.pendingMu.Unlock()
+						return
+					}
+					sub.pendingMu.Unlock()
+				}
+				frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+					Kind: protocol.KindDelta,
+					Ref:  sub.ref,
+					Data: chunk,
+				})
+				if err != nil {
+					c.s.log.Debug("ws: encode delta", "conn", c.id, "err", err)
+					return
+				}
+				sent = c.sendMirrorWaitRef(ctx, loss, sub.ref, epoch, frame)
+			}, func() {
+				c.connMetrics.recordReflowDiscarded(len(chunk))
+			})
+			if !sent {
+				return
+			}
+		case <-sub.initialFailed:
+			// The handler may close initialFailed while a chunk selected under
+			// the reflow gate is still being drained. Keep the same loss-first
+			// handoff as the ready-latch path instead of waiting forever.
+			if sub.detach != nil {
+				sub.detach()
+			}
+			select {
+			case cause, ok := <-loss:
+				if ok && ctx.Err() == nil {
+					c.abortConnection("mirror_loss: " + cause.Error())
+				}
+			default:
+			}
+			return
 		case <-ctx.Done():
 			return
 		}

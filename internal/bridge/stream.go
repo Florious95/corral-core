@@ -34,6 +34,11 @@ import (
 // lines so a burst of pane output is drained in few syscalls.
 const streamBufferBytes = 65536
 
+// streamSubscriberQueueChunks bounds the per-subscriber handoff backlog while
+// the API prepares the initial snapshot. The relay is started before capture,
+// but its ready gate remains closed until that snapshot is queued.
+const streamSubscriberQueueChunks = 512
+
 // ErrSubscriberOverflow marks raw-byte loss in one subscriber's private queue.
 // The owning connection must reconnect and subscribe to a fresh snapshot.
 var ErrSubscriberOverflow = errors.New("bridge: subscriber queue overflow")
@@ -235,7 +240,7 @@ func (s *sharedPipe) addWithLoss(ctx context.Context) (<-chan []byte, <-chan err
 	s.mu.Lock()
 	id := s.nextID
 	s.nextID++
-	sub := &streamSubscriber{data: make(chan []byte, 16), loss: make(chan error, 1)}
+	sub := &streamSubscriber{data: make(chan []byte, streamSubscriberQueueChunks), loss: make(chan error, 1)}
 	s.subs[id] = sub
 	s.refs++
 	s.mu.Unlock()
@@ -328,17 +333,34 @@ func (s *sharedPipe) fanout(reader *os.File, done chan struct{}, gen uint64) {
 				s.mu.Unlock()
 				return
 			}
-			for _, sub := range s.subs {
+			for id, sub := range s.subs {
 				if sub.closed {
 					continue
 				}
 				select {
 				case sub.data <- chunk:
 				default:
+					// The queue overflow makes this subscriber's stream
+					// unrecoverable. Remove it while holding the same lock that
+					// serializes fanout and detach, then close both channels so
+					// the relay observes the loss boundary immediately. Do not
+					// call drop here: it would re-enter s.mu and deadlock.
+					delete(s.subs, id)
+					s.refs--
 					sub.finish(ErrSubscriberOverflow)
 				}
 			}
+			last := s.refs == 0
+			fifo, live := s.fifo, !s.dead
 			s.mu.Unlock()
+			if last {
+				// fanout owns the active reader and cannot synchronously wait
+				// for its own done signal. Return after scheduling the normal
+				// owner-checked teardown; a concurrent new subscriber may
+				// safely keep this generation alive.
+				go s.teardownIfOwner(fifo, gen, live)
+				return
+			}
 		}
 		if err != nil {
 			s.mu.Lock()

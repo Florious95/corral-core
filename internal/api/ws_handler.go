@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
 	"github.com/agentmirror/agentmirror/internal/discovery"
@@ -37,25 +38,21 @@ import (
 // Both stay inside the snapshot's existing "raw ANSI bytes" contract: zero
 // protocol change, zero client change (docs/protocol.md §6.2).
 func snapshotWithCursor(ctx context.Context, br *bridge.Pane) ([]byte, error) {
-	snap, err := br.Snapshot(ctx)
+	frame, err := br.CaptureState(ctx)
 	if err != nil {
 		return nil, err
 	}
-	mouse, err := br.MouseMode(ctx)
-	if err != nil {
-		return nil, err
-	}
-	x, y, err := br.CursorPos(ctx)
-	if err != nil {
-		return nil, err
-	}
-	snap = bytes.TrimRight(snap, "\n")
-	prefix := mouseModePrefix(mouse)
+	return snapshotFromCapture(frame), nil
+}
+
+func snapshotFromCapture(frame bridge.CapturedPane) []byte {
+	snap := bytes.TrimRight(frame.Data, "\n")
+	prefix := mouseModePrefix(frame.Mouse)
 	out := make([]byte, 0, len(prefix)+len(snap)+16)
 	out = append(out, prefix...)
 	out = append(out, snap...)
-	out = append(out, []byte(fmt.Sprintf("\x1b[%d;%dH", y+1, x+1))...)
-	return out, nil
+	out = append(out, []byte(fmt.Sprintf("\x1b[%d;%dH", frame.CursorY+1, frame.CursorX+1))...)
+	return out
 }
 
 func mouseModePrefix(mode bridge.MouseMode) []byte {
@@ -89,7 +86,7 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 		// wakes for the 0→1 transition and keeps polling (idle-gate, taskbook
 		// #fix-daemon-idle-cpu). teardown un-counts it on close.
 		c.s.markAuthed()
-		c.send(&protocol.AuthAck{OK: true})
+		c.send(&protocol.AuthAck{OK: true, AgentLaunchers: c.s.agentLauncherValues()})
 		return true
 	}
 	c.send(&protocol.AuthAck{OK: false, Reason: "invalid token"})
@@ -150,10 +147,12 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	subCtx, cancel := context.WithCancel(c.ctx)
 	sub := &subscription{
 		ref:           s.Ref,
+		ctx:           subCtx,
 		cancel:        cancel,
 		ready:         make(chan struct{}),
 		initialFailed: make(chan struct{}),
 		relayDone:     make(chan struct{}),
+		gate:          newReflowGate(),
 	}
 	// Install the release hook before any fallible operation after acquire. All
 	// exits (including capture/encode failure) then use the same idempotent owner.
@@ -161,17 +160,22 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		geom.release(c.ctx, br, c.s.log, s.Ref)
 	}
 
-	// Initial client dims reshape the pane so the CLI redraws for the phone
-	// (requirement 005). A resize failure is not fatal: the mirror continues at
-	// the pane's current size, and the real existence check happens below.
-	if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
-		c.logErr("subscribe resize", err)
+	// The first subscribe is a reflow epoch too. Open the gate before tmux
+	// receives SIGWINCH, so redraw bytes produced by the initial phone geometry
+	// are drained locally instead of becoming a wide, pre-reflow first frame.
+	currentCols, currentRows, sizeErr := br.Size(c.ctx)
+	needsResize := sizeErr != nil || currentCols != int(s.Cols) || currentRows != int(s.Rows)
+	initialEpoch, started := sub.gate.begin()
+	if !started {
+		teardownSubscription(sub)
+		c.sendError(protocol.ErrCodeInternal, "cannot open initial reflow gate")
+		return
 	}
+	defer sub.gate.end()
+	c.connMetrics.recordReflowEpoch()
 
-	// Attach the pipe before the snapshot so no output between the two is lost
-	// (term-bridge knowledge base: pipe first, then capture). Start the relay
-	// before capture, but keep its data gate closed until the snapshot is queued;
-	// this gives loss handling ownership to the whole initial-subscribe window.
+	// Attach the pipe before resize so the relay can continuously drain the
+	// SIGWINCH burst while the gate waits for a quiet terminal.
 	ch, loss, detach, err := br.SubscribeWithLoss(c.ctx)
 	if err != nil {
 		teardownSubscription(sub)
@@ -182,33 +186,36 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	sub.loss = loss
 	go c.relay(subCtx, sub, ch)
 
-	var snap []byte
-	if c.snapshotFn != nil {
-		snap, err = c.snapshotFn(c.ctx, br)
-	} else {
-		snap, err = snapshotWithCursor(c.ctx, br)
+	// Initial client dims reshape the pane so the CLI redraws for the phone
+	// (requirement 005). A resize failure is not fatal: the mirror continues at
+	// the pane's current size, and the real existence check happens below.
+	if needsResize {
+		sub.gate.resetSynchronizedOutput()
+		if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
+			c.logErr("subscribe resize", err)
+		}
 	}
-	if err != nil {
+	if err := c.publishReflowSnapshot(subCtx, br, sub.gate, protocol.Resize{Ref: s.Ref, Cols: s.Cols, Rows: s.Rows}, initialEpoch, needsResize); err != nil {
+		if errors.Is(err, errReflowBackpressure) {
+			c.abortConnection("mirror_loss: ws_send_queue_overflow")
+		}
 		close(sub.initialFailed)
 		<-sub.relayDone
-		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+		if errors.Is(err, errMirrorGeometry) {
+			c.s.log.Warn("ws: subscription grid changed", "ref", s.Ref, "err", err)
+			c.sendError(protocol.ErrCodeInternal, err.Error())
+		} else {
+			c.sendError(protocol.ErrCodeInternal, "cannot establish fresh mirror snapshot")
+		}
 		return
 	}
-	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
-		Kind: protocol.KindSnapshot,
-		Ref:  s.Ref,
-		Data: snap,
-	})
-	if err != nil {
-		close(sub.initialFailed)
-		<-sub.relayDone
-		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
+	if subCtx.Err() != nil || c.catalogAborted.Load() {
+		teardownSubscription(sub)
 		return
 	}
-	if c.sendBinaryFn != nil {
-		c.sendBinaryFn(frame)
-	} else {
-		c.sendBinary(frame)
+	if !c.flushInitialPending(subCtx, sub) {
+		teardownSubscription(sub)
+		return
 	}
 	c.subsMu.Lock()
 	if subCtx.Err() != nil || c.catalogAborted.Load() {
@@ -219,6 +226,38 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	c.subs[sub.ref] = sub
 	c.subsMu.Unlock()
 	sub.releaseRelayGate()
+	c.startSnapshotRefresh(sub, br)
+}
+
+// flushInitialPending publishes the one or two chunks that can race the
+// initial gate handoff. It runs after the snapshot has been queued and before
+// the relay ready latch opens, so those deltas retain wire ordering.
+func (c *wsConn) flushInitialPending(ctx context.Context, sub *subscription) bool {
+	for {
+		sub.pendingMu.Lock()
+		pending := sub.pending
+		sub.pending = nil
+		if len(pending) == 0 {
+			sub.pendingClosed = true
+			sub.pendingMu.Unlock()
+			return true
+		}
+		sub.pendingMu.Unlock()
+		for _, delta := range pending {
+			frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
+				Kind: protocol.KindDelta,
+				Ref:  sub.ref,
+				Data: delta.data,
+			})
+			if err != nil {
+				c.s.log.Debug("ws: encode initial pending delta", "conn", c.id, "err", err)
+				continue
+			}
+			if !c.sendMirrorWaitRef(ctx, sub.loss, sub.ref, delta.epoch, frame) {
+				return false
+			}
+		}
+	}
 }
 
 // handleUnsubscribe stops mirroring a session. Idempotent: unsubscribing a
@@ -537,28 +576,45 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		c.sendError(protocol.ErrCodeSessionNotFound, "unknown session ref")
 		return
 	}
-	if !c.subscribed(r.Ref) {
+	sub := c.subscriptionFor(r.Ref)
+	if sub == nil {
 		return
 	}
-	// D-27 (fix-d27-v3): detect no-op resizes by comparing the pane's ACTUAL
-	// dims before and after the resize-window call (both fresh reads, never
-	// the request values — tmux may converge a same-size request to the same
-	// pane size). A resize that did not change the pane must NOT re-push a
-	// snapshot: the client replays a snapshot as clear-and-rebuild, which on
-	// the phone reads as the "top-down line-by-line refresh" D-27 reports.
-	// The IME keyboard/input-box relayout that follows every message send
-	// produces exactly these same-size resizes (fix-refresh-direction
-	// root-cause chain step 3), so skipping the no-op repush closes the only
-	// production path to the flicker without touching the protocol.
-	beforeW, beforeH, err := br.Size(c.ctx)
+	if sub.gate == nil {
+		sub.gate = newReflowGate()
+	}
+	ctx := sub.ctx
+	if ctx == nil { // direct subscription fixtures may use the connection context
+		ctx = c.ctx
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	// Read the actual pane size before opening the gate so a same-size request
+	// remains a no-op and does not disturb the live delta stream.
+	beforeW, beforeH, err := br.Size(ctx)
 	if err != nil {
 		c.logErr("resize read before", err)
-		// A size read failure should not silently abort: fall through and let
-		// the resize attempt's actual readback decide.
 		beforeW, beforeH = -1, -1
 	}
-	afterW, afterH, err := br.Resize(c.ctx, int(r.Cols), int(r.Rows))
+	if beforeW == int(r.Cols) && beforeH == int(r.Rows) {
+		sub.gate.setSnapshotGeometry(int(r.Cols), int(r.Rows))
+		return // Do not drain even one live byte for a no-op resize.
+	}
+	epoch, started := sub.gate.begin()
+	if !started {
+		c.s.log.Debug("ws: resize already converging", "conn", c.id, "ref", r.Ref)
+		return
+	}
+	defer sub.gate.end()
+	afterW, afterH, err := br.Resize(ctx, int(r.Cols), int(r.Rows))
 	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		// Once draining starts, resuming deltas without a replacement snapshot
+		// would silently omit bytes. Keep the error reply, but retire the mirror.
+		c.subscribeCancel(r.Ref)
 		if errors.Is(err, bridge.ErrPaneNotFound) {
 			c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
 		} else {
@@ -566,41 +622,144 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		}
 		return
 	}
-	if beforeW >= 0 && beforeW == afterW && beforeH == afterH {
-		// Pane dims unchanged by the resize: no reflow happened, so there is
-		// no new geometry to converge. Skip the snapshot repush — the client
-		// keeps its grid and the delta stream stays authoritative (004).
-		c.s.log.Debug("ws: resize no-op, skip snapshot", "conn", c.id, "ref", r.Ref, "dims", fmt.Sprintf("%dx%d", beforeW, beforeH))
+	if beforeW >= 0 && beforeW == afterW && beforeH == afterH && sub.gate.endIfClean() {
 		return
 	}
-	// Re-push a full snapshot after a REAL reflow (fix-term-residuals): the
-	// CLI's SIGWINCH redraw arrives only as deltas composited over the
-	// client's stale old-geometry grid, so leftover residue can never be
-	// cleared deterministically by the stream alone. A snapshot is replayed
-	// by the client as clear-and-rebuild (same semantics as the subscribe
-	// first frame), which is the single convergence point. tmux reflows the
-	// pane synchronously on resize-window, so capturing right after Resize is
-	// content-correct; any in-flight pre-resize delta the relay still sends
-	// afterwards is redundant repaint bytes, not residue (docs/protocol.md
-	// §4.2 resize).
-	// 溯源计数：handleResize 真实 reflow 补发的快照（非首帧快照的路径来源，见 sendq_metrics）。
+	c.markStaleBefore(r.Ref, epoch)
+	c.connMetrics.recordReflowEpoch()
 	c.s.sendQueue.recordResizeSnapshot()
 	c.connMetrics.recordResizeSnapshot()
-	snap, err := snapshotWithCursor(c.ctx, br)
-	if err != nil {
-		c.sendError(protocol.ErrCodeSessionNotFound, "pane unavailable")
+	if err := c.publishReflowSnapshot(ctx, br, sub.gate, r, epoch, true); err != nil {
+		// EOF/unsubscribe restores the original geometry. It invalidates this
+		// mirror's in-flight capture, not the otherwise healthy transport.
+		if ctx.Err() != nil {
+			return
+		}
+		c.logErr("resize snapshot", err)
+		c.abortConnection("mirror_loss: cannot establish fresh resize snapshot")
 		return
 	}
-	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
-		Kind: protocol.KindSnapshot,
-		Ref:  r.Ref,
-		Data: snap,
-	})
-	if err != nil {
-		c.sendError(protocol.ErrCodeInternal, "cannot encode snapshot")
-		return
+	c.startSnapshotRefresh(sub, br)
+}
+
+var errReflowBackpressure = errors.New("reflow snapshot queue unavailable")
+var errMirrorGeometry = errors.New("mirror geometry mismatch")
+
+// A same-geometry subscribe has no SIGWINCH to wait for. On a real resize,
+// a complete observed synchronized-output frame permits an early fresh capture;
+// unknown programs keep the bounded fallback. Publication still uses the same
+// revision check and atomic admission as the slow path.
+func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate, target protocol.Resize, epoch uint64, waitForResize bool) (result error) {
+	started := time.Now()
+	deadline := started.Add(reflowHardCap)
+	var captures, wrappedRejected, actualCols, actualRows int
+	var completed uint64
+	var failureStage, fallbackReason string
+	gate.setSnapshotGeometry(int(target.Cols), int(target.Rows))
+	defer func() {
+		// One metadata-only decision per handoff. A slow device trace alone
+		// cannot distinguish missing completion from rejected native wraps.
+		if c.s != nil && c.s.log != nil {
+			c.s.log.Info("perf_reflow", "conn", c.id, "ref", target.Ref, "epoch", epoch,
+				"resize", waitForResize, "cols", target.Cols, "rows", target.Rows,
+				"actual_cols", actualCols, "actual_rows", actualRows,
+				"captures", captures, "completed_frame", completed, "wrapped_rejected", wrappedRejected,
+				"deadline_reached", !time.Now().Before(deadline), "elapsed_ms", time.Since(started).Milliseconds(),
+				"fallback_reason", fallbackReason, "failure_stage", failureStage, "success", result == nil)
+		}
+	}()
+	captureFrame := func(ctx context.Context) (bridge.CapturedPane, error) {
+		captures++
+		frame, err := br.CaptureState(ctx)
+		if err != nil {
+			failureStage = "capture"
+			return frame, err
+		}
+		actualCols, actualRows = frame.Cols, frame.Rows
+		if err := validateCapturedGeometry(frame, int(target.Cols), int(target.Rows)); err != nil {
+			failureStage = "geometry"
+			return frame, err
+		}
+		return frame, nil
 	}
-	c.sendBinary(frame)
+	captureFresh := func(ctx context.Context) ([]byte, error) {
+		if c.snapshotFn != nil {
+			return c.snapshotFn(ctx, br) // deterministic capture boundaries in tests
+		}
+		frame, err := captureFrame(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return snapshotFromCapture(frame), nil
+	}
+	publish := func(snap []byte) error {
+		err := c.queueReflowSnapshot(target.Ref, epoch, snap)
+		if err != nil {
+			failureStage = "publish"
+		}
+		return err
+	}
+	err := gate.captureAndPublish(ctx, func(ctx context.Context) ([]byte, error) {
+		if c.snapshotFn != nil {
+			return captureFresh(ctx)
+		}
+		for {
+			if waitForResize {
+				if err := gate.waitForReflow(ctx, deadline, false); err != nil {
+					failureStage = "wait"
+					return nil, err
+				}
+			}
+			if err := gate.waitForReflow(ctx, deadline, true); err != nil {
+				failureStage = "open_synchronized_frame"
+				return nil, err
+			}
+			completed = gate.completedFrame()
+			frame, err := captureFrame(ctx)
+			if err != nil {
+				return nil, err
+			}
+			// A 2026 frame can have been computed at the OLD width before the
+			// source handled SIGWINCH. Native tmux soft wraps expose that case;
+			// do not accept the old wide frame as a fast-path completion. Unknown
+			// applications with legitimate soft wraps retain the bounded fallback.
+			if waitForResize && frame.WrappedRows && time.Now().Before(deadline) {
+				wrappedRejected++
+				gate.rejectCompletedFrame(completed)
+				continue
+			}
+			return snapshotFromCapture(frame), nil
+		}
+	}, publish)
+	if errors.Is(err, errReflowUnstable) {
+		fallbackReason = failureStage
+		if fallbackReason == "" {
+			fallbackReason = "capture_contention"
+		}
+		failureStage = ""
+		// Never release uncertain raw bytes after a raced capture. Take a NEW
+		// snapshot, then maintain this mirror with dirty full-screen refreshes.
+		return gate.startSnapshotMode(ctx, captureFresh, publish)
+	}
+	return err
+}
+
+func validateCapturedGeometry(frame bridge.CapturedPane, cols, rows int) error {
+	if cols > 0 && rows > 0 && (frame.Cols != cols || frame.Rows != rows) {
+		return fmt.Errorf("%w: requested=%dx%d actual=%dx%d", errMirrorGeometry, cols, rows, frame.Cols, frame.Rows)
+	}
+	return nil
+}
+
+func (c *wsConn) queueReflowSnapshot(ref string, epoch uint64, snap []byte) error {
+	frame, err := protocol.EncodeBinary(protocol.BinaryPayload{Kind: protocol.KindSnapshot, Ref: ref, Data: snap})
+	if err != nil {
+		return err
+	}
+	if !c.sendPriorityBinary(ref, epoch, frame) {
+		return errReflowBackpressure
+	}
+	return nil
 }
 
 // scrollbackRange converges a scrollback request (protocol from_line/count,

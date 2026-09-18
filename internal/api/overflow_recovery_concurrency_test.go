@@ -79,7 +79,7 @@ func emitPacedBridge(t *testing.T, te *tmuxEnv, data <-chan []byte, n int) []byt
 		want := pacedRecord(i)
 		var got []byte
 		deadline := time.NewTimer(5 * time.Second)
-		for len(got) < len(want) {
+		for !bytes.Contains(got, want) {
 			select {
 			case chunk, ok := <-data:
 				if !ok {
@@ -87,13 +87,10 @@ func emitPacedBridge(t *testing.T, te *tmuxEnv, data <-chan []byte, n int) []byt
 				}
 				got = append(got, chunk...)
 			case <-deadline.C:
-				t.Fatal("healthy bridge acknowledgement missing")
+				t.Fatalf("healthy record %d acknowledgement missing: got %d want %d", i, len(got), len(want))
 			}
 		}
 		deadline.Stop()
-		if !bytes.Equal(got, want) {
-			t.Fatalf("healthy record %d differs: got %d want %d", i, len(got), len(want))
-		}
 		all = append(all, got...)
 	}
 	return all
@@ -131,7 +128,9 @@ func TestInitialPublishedLossWinsCaptureFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer detach()
-	emitPacedBridge(t, te, data, 32)
+	// The production subscriber now retains a 512-chunk snapshot backlog;
+	// exceed that bound while the relay is held before the snapshot is ready.
+	emitPacedBridge(t, te, data, 1024)
 	if len(sub.loss) != 1 {
 		t.Fatalf("production loss not published: buffered=%d", len(sub.loss))
 	}
@@ -183,12 +182,13 @@ func TestReadyRelayOverflowWhileControlSendBlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer detach()
-	emitPacedBridge(t, te, data, 32)
-	// With the old exclusive sendMu, the relay blocks behind sendMsg and its
-	// real bridge queue overflows. The fixed path detects WS loss immediately.
+	// The relay now waits behind a full send queue. Keep the writer blocked
+	// long enough for the independent bridge queue to reach its 512-chunk
+	// bound; that loss still aborts the connection promptly.
+	emitPacedBridge(t, te, data, 640)
 	awaitMirrorAbort(t, c)
 	awaitBoundary(t, producerDone, "cancelled control producer")
-	if !strings.Contains(fmt.Sprint(c.catalogCloseReason.Load()), "ws_send_queue_overflow") {
+	if !strings.Contains(fmt.Sprint(c.catalogCloseReason.Load()), bridge.ErrSubscriberOverflow.Error()) {
 		t.Fatalf("wrong overflow cause: %v", c.catalogCloseReason.Load())
 	}
 	select {

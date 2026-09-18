@@ -1,8 +1,8 @@
 {
   "binary": {
     "path": "/Users/alauda/.local/bin/nodeprobe",
-    "sha256": "e5667b9ebe931de7805a87538e03b9a6ee1fb9cb9250c25282f8b054268226b5",
-    "size": 885504
+    "sha256": "57073fd42d7bdcfbd339687c09531d01aaaa02e02271257a5dd2a9ce72ffb2a3",
+    "size": 861088
   },
   "corpora": [
     {
@@ -11,9 +11,9 @@
       "sha256": "cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58"
     },
     {
-      "base_blob": "e93afa54e473e90099f03cb932d9a54798c0dfe4",
+      "base_blob": "c1166ceabc6ae4e3075fb741c89759da6fcc7844",
       "path": "tools/nodeprobe/fixtures/providers.tsv",
-      "sha256": "c68f50115b33ae6a6806b463cc27c71d8bbfc92273435a533502e9bb84b8b522"
+      "sha256": "c9e02d01821df7d7afe2292fefb211cefea7e3abecde8b35bd9ffa2a0721ee7e"
     }
   ],
   "pi_extension": {
@@ -22,8 +22,8 @@
     "size": 3572
   },
   "platform": "darwin/arm64",
-  "source_commit": "6e47021a7e3502843d490a2eeb0342c78c0231f3",
-  "source_tree": "047bfb0539047f592ef64d4d8bf9dfaba4278e20",
+  "source_commit": "dbe81822928449825ab77c0cca9285735e5baf5a",
+  "source_tree": "6d2d98d47a1a322e17cf38a01dde84c57a513f20",
   "sources": {
     "Cargo.toml": "7fef1cb5ac3173215d94b3c450fde0a928cd5af2ac304b4cc7111f5beb9bc08f",
     "Cargo.lock": "297185c9c0683bdaeadaf4d57a0688c6b91bcfe43a2495a86a9181a479749696",
@@ -36,7 +36,7 @@
     "src/main.rs": "767698d753987ecc06858f178819f377f0fecf17487de1fcc4ae89805bd953a9",
     "src/pi_activity.rs": "b61bfaa5fa6a81e0022c5fd662acf0054b75b2e97a120e11a357451ff4e735f7",
     "src/proctree.rs": "1cf4ef7701d5bd5576f19c4f34e31011e9417fa41aebbe2d0d8bf3ba6bdf5a78",
-    "src/providers.rs": "5fa17fce92d0ca1b5525475526bc88e8ae3a8f6a44d981f45d7d1a9ec91a3a57",
+    "src/providers.rs": "acba7b54c4d962c34a50bb906b8d5dd03d05473d86669a9fc48af2c5f186c34f",
     "src/web.rs": "27a518f9a9e9ab2c1714f1ad5811f96499b2fea34302fcade22926faec98b192",
     "tests/fake_tmux.rs": "c01c8aecd22d11418eada55f17a81bd6031ec1a24a422cf85d27e1fdfe3ac0e3",
     "tests/pi-deterministic.js": "cab70f837f19b6fc6a5791f8a8993aa234a8a3d0812111a0e2a1772a797965b1",

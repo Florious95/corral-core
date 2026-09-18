@@ -71,6 +71,18 @@ const (
 	ErrCodeInternal ErrorCode = "internal"
 )
 
+// CreateAgentReason is the machine-readable reason of a rejected
+// CreateAgentResult. It is a closed set and never contains command output.
+type CreateAgentReason string
+
+const (
+	CreateAgentInvalidField        CreateAgentReason = "invalid_field"
+	CreateAgentTargetNotFound      CreateAgentReason = "target_not_found"
+	CreateAgentProviderUnavailable CreateAgentReason = "provider_unavailable"
+	CreateAgentUnsupportedBypass   CreateAgentReason = "unsupported_bypass"
+	CreateAgentLaunchFailed        CreateAgentReason = "launch_failed"
+)
+
 // InputFailReason is the machine-readable reason of a rejected InputAck
 // (S→C). It is present if and only if OK=false; it is a closed set.
 type InputFailReason string
