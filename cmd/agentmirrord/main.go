@@ -131,6 +131,7 @@ func run(args []string) int {
 		"upload_dir", cfg.UploadDir,
 		"max_upload_mib", cfg.MaxUploadBytes/(1<<20),
 		"list_interval", cfg.ListInterval,
+		"retain_pane_size", cfg.RetainPaneSize,
 	)
 
 	// The host identity is independent of the pairing token and persists across
@@ -165,6 +166,7 @@ func run(args []string) int {
 		UploadDir:      cfg.UploadDir,
 		MaxUploadBytes: cfg.MaxUploadBytes,
 		MaxInputBytes:  int(cfg.MaxInputBytes),
+		RetainPaneSize: cfg.RetainPaneSize,
 		ListInterval:   cfg.ListInterval,
 		Nodeprobe:      nodeprobe.NewRunner(capability, logger),
 		Log:            logger,

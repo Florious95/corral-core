@@ -86,8 +86,15 @@ type Server struct {
 	// shrank/grew for the phone always returns to its pre-phone geometry
 	// regardless of who subscribed in between. This is the shared, connection-
 	// independent counterpart to the per-connection subscription table.
-	paneGeomsMu sync.Mutex
-	paneGeoms   map[string]*paneGeometry
+	paneGeomsMu    sync.Mutex
+	paneGeoms      map[string]*paneGeometry
+	retainPaneSize bool
+
+	// presenceSubs is the active, successfully admitted mirror set grouped by
+	// pane ref. It is derived from subscriptions so teardown races remain
+	// idempotent without a second set of counters.
+	presenceMu   sync.Mutex
+	presenceSubs map[string]map[*subscription]struct{}
 
 	// trackers is the list_delta fan-out: every live client's send channel.
 	trackersMu sync.Mutex
@@ -194,8 +201,10 @@ func NewServer(opts Options) *Server {
 		maxUpload:       opts.MaxUploadBytes,
 		maxUploadDir:    defaultMaxUploadDirBytes,
 		maxInput:        opts.MaxInputBytes,
+		retainPaneSize:  opts.RetainPaneSize,
 		catalog:         newSessionCatalog(),
 		paneGeoms:       make(map[string]*paneGeometry),
+		presenceSubs:    make(map[string]map[*subscription]struct{}),
 		trackers:        make(map[*wsConn]struct{}),
 		attachPreviews:  make(map[string]attachPreviewEntry),
 	}

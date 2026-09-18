@@ -141,6 +141,10 @@ type Options struct {
 	// MaxInputBytes caps the text of one input frame. Zero defaults to 1 MiB.
 	MaxInputBytes int
 
+	// RetainPaneSize keeps the pane at its last subscribed size after the final
+	// subscriber leaves. Zero value preserves original-size restore.
+	RetainPaneSize bool
+
 	// Log is the logger for connection lifecycle and errors. Nil discards.
 	Log *slog.Logger
 }

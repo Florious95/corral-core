@@ -29,10 +29,11 @@ import (
 type paneGeometry struct {
 	mu sync.Mutex
 
-	origCols  int
-	origRows  int
-	origKnown bool // 首个订阅者已记录原始几何；之后不覆盖（契约 1）
-	active    int  // 当前订阅者数（>=0；归零时恢复原始几何）
+	origCols       int
+	origRows       int
+	origKnown      bool // 首个订阅者已记录原始几何；之后不覆盖（契约 1）
+	active         int  // 当前订阅者数（>=0；归零时恢复原始几何）
+	retainPaneSize bool // true 时归零仍清账，但不恢复原始几何
 }
 
 // geometryFor returns the pane-level geometry tracker for ref, creating it on
@@ -42,7 +43,7 @@ func (s *Server) geometryFor(ref string) *paneGeometry {
 	defer s.paneGeomsMu.Unlock()
 	g := s.paneGeoms[ref]
 	if g == nil {
-		g = &paneGeometry{}
+		g = &paneGeometry{retainPaneSize: s.retainPaneSize}
 		s.paneGeoms[ref] = g
 	}
 	return g
@@ -71,9 +72,10 @@ func (g *paneGeometry) acquire(ctx context.Context, br *bridge.Pane) (cols, rows
 	return g.origCols, g.origRows, g.origKnown
 }
 
-// release claims one subscription left. When the count drops to zero it restores
-// the pane to the original baseline (the last subscriber to leave does the
-// restore, regardless of which exit path brought the count to zero — 契约 2).
+// release claims one subscription left. When the count drops to zero it
+// restores the pane to the original baseline unless retainPaneSize is enabled;
+// either way the geometry accounting is cleared (the last subscriber to leave
+// owns the decision, regardless of which exit path brought the count to zero).
 // log is the server logger for restore-failure diagnostics.
 func (g *paneGeometry) release(ctx context.Context, br *bridge.Pane, log *slog.Logger, ref string) {
 	g.mu.Lock()
@@ -90,7 +92,7 @@ func (g *paneGeometry) release(ctx context.Context, br *bridge.Pane, log *slog.L
 		g.origKnown = false
 		g.origCols, g.origRows = 0, 0
 		g.mu.Unlock()
-		if known {
+		if known && !g.retainPaneSize {
 			// 用 Background ctx 而非调用方的 ctx：恢复是清理收尾，可能发生在
 			// 连接已取消之后（teardown/断连路径），此时发起连接的 ctx 已死，
 			// 用它调 Resize 会让 tmux 命令被 exec 提前 kill（fix-host-pane-

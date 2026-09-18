@@ -99,6 +99,8 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[ListDelta](env)
 	case TypeSubscribe:
 		return decodeTyped[Subscribe](env)
+	case TypePresenceUpdate:
+		return decodeTyped[PresenceUpdate](env)
 	case TypeUnsubscribe:
 		return decodeTyped[Unsubscribe](env)
 	case TypeInput:

@@ -75,6 +75,10 @@ type Config struct {
 	// so tests and the e2e harness can isolate concurrent instances (taskbook
 	// #fix-daemon-idle-cpu single-instance guard).
 	StateDir string
+
+	// RetainPaneSize leaves the pane at its last subscribed size after the
+	// final subscriber leaves. The default preserves original-size restore.
+	RetainPaneSize bool
 }
 
 // parsePositiveInt64 parses a non-negative integer string (e.g. a byte cap).
@@ -174,6 +178,7 @@ func Load(args []string) (Config, error) {
 	fs.String("max-input-bytes", "1048576", "max input frame text bytes (default 1 MiB)")
 	fs.String("list-interval", "2s", "tmux re-scan / list_delta interval (default 2s)")
 	fs.String("state-dir", "", "state directory for the single-instance pidfile (default: user config dir/agentmirror)")
+	fs.Bool("retain-pane-size", false, "retain the last pane size after the final subscriber leaves")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -198,10 +203,14 @@ func Load(args []string) (Config, error) {
 		TSAuthKey: os.Getenv("TS_AUTHKEY"),
 	}
 
+	var err error
+	if cfg.RetainPaneSize, err = strconv.ParseBool(resolve(resolution{flagName: "retain-pane-size", envKey: "AGENTMIRROR_RETAIN_PANE_SIZE", def: "false"})); err != nil {
+		return Config{}, fmt.Errorf("config: retain-pane-size: invalid value: %w", err)
+	}
+
 	// Numeric/duration settings resolve as strings first (the resolution table
 	// is string-typed), then parse. An invalid value is a hard error so a
 	// misconfigured daemon fails fast instead of silently clamping.
-	var err error
 	if cfg.MaxUploadBytes, err = parsePositiveInt64("max-upload-bytes",
 		resolveNonEmpty(resolution{flagName: "max-upload-bytes", envKey: "AGENTMIRROR_MAX_UPLOAD_BYTES", def: "20971520"})); err != nil {
 		return Config{}, err

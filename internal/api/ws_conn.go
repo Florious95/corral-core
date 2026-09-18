@@ -121,10 +121,17 @@ type wsConn struct {
 // subscription is one live mirror on this connection: the relay goroutine's
 // cancel func, pipe detach func, and pane-size restore func, torn down together.
 type subscription struct {
-	ref    string
-	ctx    context.Context // resize/capture must stop when this mirror is retired
-	cancel context.CancelFunc
-	detach func()
+	ref        string
+	conn       *wsConn
+	server     *Server
+	clientType string
+	ctx        context.Context // resize/capture must stop when this mirror is retired
+	cancel     context.CancelFunc
+	detach     func()
+	// Presence admission/removal is guarded by server.presenceMu. The removed
+	// bit handles a relay teardown racing the initial subscribe handoff.
+	presenceRegistered bool
+	presenceRemoved    bool
 	// loss is independent from raw bytes so overflow remains observable even
 	// when the data channel already contains stale chunks or has closed.
 	loss <-chan error
@@ -807,6 +814,9 @@ func (sub *subscription) releaseRelayGate() {
 // of them alike (fix-host-pane-geometry-accounting 契约 2). restoreOnce makes
 // it idempotent if two routes race on the same subscription.
 func teardownSubscription(sub *subscription) {
+	if sub.server != nil {
+		sub.server.unregisterPresence(sub)
+	}
 	if sub.cancel != nil {
 		sub.cancel()
 	}

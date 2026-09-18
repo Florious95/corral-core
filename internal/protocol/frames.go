@@ -209,9 +209,20 @@ type ListDelta struct {
 // Subscribe is idempotent for the same ref: re-subscribing replays a fresh
 // snapshot and re-streams (requirement 004 reconnect semantics).
 type Subscribe struct {
-	Ref  string `json:"ref"`
-	Rows uint16 `json:"rows"`
-	Cols uint16 `json:"cols"`
+	Ref        string `json:"ref"`
+	Rows       uint16 `json:"rows"`
+	Cols       uint16 `json:"cols"`
+	ClientType string `json:"client_type,omitempty"`
+}
+
+// PresenceUpdate reports the currently subscribed client types for one ref.
+// Counts describe active subscriptions, not physical devices. It is sent to
+// the remaining subscribers after admission or teardown.
+type PresenceUpdate struct {
+	Ref          string `json:"ref"`
+	HasMobile    bool   `json:"has_mobile"`
+	MobileCount  uint32 `json:"mobile_count"`
+	DesktopCount uint32 `json:"desktop_count"`
 }
 
 // Unsubscribe stops mirroring a session (C→S). It is idempotent: unsubscribing

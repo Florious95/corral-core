@@ -145,8 +145,12 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	geom := c.s.geometryFor(s.Ref)
 	_, _, _ = geom.acquire(c.ctx, br)
 	subCtx, cancel := context.WithCancel(c.ctx)
+	clientType := s.ClientType
 	sub := &subscription{
 		ref:           s.Ref,
+		conn:          c,
+		server:        c.s,
+		clientType:    clientType,
 		ctx:           subCtx,
 		cancel:        cancel,
 		ready:         make(chan struct{}),
@@ -225,6 +229,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	}
 	c.subs[sub.ref] = sub
 	c.subsMu.Unlock()
+	c.s.registerPresence(sub)
 	sub.releaseRelayGate()
 	c.startSnapshotRefresh(sub, br)
 }

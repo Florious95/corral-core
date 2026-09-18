@@ -19,6 +19,7 @@ func (List) FrameType() FrameType               { return TypeList }
 func (Listing) FrameType() FrameType            { return TypeListing }
 func (ListDelta) FrameType() FrameType          { return TypeListDelta }
 func (Subscribe) FrameType() FrameType          { return TypeSubscribe }
+func (PresenceUpdate) FrameType() FrameType     { return TypePresenceUpdate }
 func (Unsubscribe) FrameType() FrameType        { return TypeUnsubscribe }
 func (Input) FrameType() FrameType              { return TypeInput }
 func (InputAck) FrameType() FrameType           { return TypeInputAck }
@@ -237,14 +238,30 @@ func (d ListDelta) Validate() error {
 	return nil
 }
 
-// Validate reports whether the subscription is well-formed: a non-empty ref
-// and nonzero client dimensions.
+// Validate reports whether the subscription is well-formed: a non-empty ref,
+// nonzero client dimensions, and a known client type. Empty ClientType remains
+// accepted for wire compatibility with pre-presence peers; such peers are not
+// included in presence counts.
 func (s Subscribe) Validate() error {
 	if s.Ref == "" {
 		return fmt.Errorf("%w: subscribe ref must be non-empty", ErrInvalidField)
 	}
 	if s.Rows == 0 || s.Cols == 0 {
 		return fmt.Errorf("%w: subscribe rows/cols must be >= 1", ErrInvalidField)
+	}
+	if s.ClientType != "" && s.ClientType != ClientTypeMobile && s.ClientType != ClientTypeDesktop {
+		return fmt.Errorf("%w: subscribe client_type must be mobile or desktop", ErrInvalidField)
+	}
+	return nil
+}
+
+// Validate reports whether a presence update is internally consistent.
+func (p PresenceUpdate) Validate() error {
+	if p.Ref == "" {
+		return fmt.Errorf("%w: presence_update ref must be non-empty", ErrInvalidField)
+	}
+	if p.HasMobile != (p.MobileCount > 0) {
+		return fmt.Errorf("%w: presence_update has_mobile must equal mobile_count > 0", ErrInvalidField)
 	}
 	return nil
 }

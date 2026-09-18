@@ -42,6 +42,9 @@ const (
 	// a binary Snapshot frame, then a Delta stream.
 	TypeSubscribe FrameType = "subscribe"
 
+	// TypePresenceUpdate reports active client types for one subscribed ref.
+	TypePresenceUpdate FrameType = "presence_update"
+
 	// TypeUnsubscribe stops mirroring a session (C→S). Idempotent.
 	TypeUnsubscribe FrameType = "unsubscribe"
 
@@ -115,4 +118,10 @@ const (
 	// TypeOverlayFrame is one captured choose-tree screen (S→C; requirement 064).
 	// Text is the PTY bytes of the dedicated client (not a self-drawn tree).
 	TypeOverlayFrame FrameType = "overlay_frame"
+)
+
+// Client types identify the subscribing surface, not a physical device.
+const (
+	ClientTypeMobile  = "mobile"
+	ClientTypeDesktop = "desktop"
 )
