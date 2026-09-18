@@ -8,9 +8,10 @@ import (
 	"github.com/agentmirror/agentmirror/internal/bridge"
 )
 
-// Snapshot mode is only the busy-source fallback. Coalesce its dirty output at
-// most ten times per second; idle mirrors perform no captures. This avoids both
-// an unbounded retry loop in the WebSocket reader and a lossy return to deltas.
+// Recovery is event-driven, not a permanent 10Hz full-screen stream. While a
+// dirty recovery is outstanding, debounce server-side capture attempts; the
+// gate separately budgets progress snapshots and returns to deltas as soon as
+// a capture is stable. In delta mode this worker sleeps without any polling.
 func (c *wsConn) startSnapshotRefresh(sub *subscription, br *bridge.Pane) {
 	if !sub.gate.usesSnapshots() {
 		return
@@ -21,13 +22,21 @@ func (c *wsConn) startSnapshotRefresh(sub *subscription, br *bridge.Pane) {
 	}
 	sub.snapshotRefreshOnce.Do(func() {
 		go func() {
-			ticker := time.NewTicker(100 * time.Millisecond)
-			defer ticker.Stop()
 			for {
 				select {
 				case <-ctx.Done():
 					return
-				case <-ticker.C:
+				case <-sub.gate.snapshotWake:
+				}
+				if !sub.gate.usesSnapshots() {
+					continue
+				}
+				timer := time.NewTimer(100 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
 				}
 				err := sub.gate.refreshSnapshot(ctx, func(ctx context.Context, cols, rows int) ([]byte, error) {
 					if c.snapshotFn != nil {
@@ -56,6 +65,9 @@ func (c *wsConn) startSnapshotRefresh(sub *subscription, br *bridge.Pane) {
 					c.logErr("snapshot refresh", err)
 					c.abortConnection("mirror_loss: cannot refresh mirror snapshot")
 					return
+				}
+				if !sub.gate.usesSnapshots() {
+					c.s.log.Info("perf_reflow_recovered", "conn", c.id, "ref", sub.ref)
 				}
 			}
 		}()
