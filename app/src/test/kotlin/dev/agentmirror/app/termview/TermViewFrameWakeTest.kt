@@ -17,6 +17,8 @@
 package dev.agentmirror.app.termview
 
 import dev.agentmirror.terminal.TerminalEmulator
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -39,9 +41,21 @@ class TermViewFrameWakeTest {
         val emulator = TerminalEmulator(80, 24)
         val presenter = TermViewPresenter(emulator) { _, _ -> }
         var frameRequests = 0
+        private var nextFrame = CountDownLatch(1)
 
         init {
-            presenter.onFrameRequested = { frameRequests++ }
+            presenter.onFrameRequested = {
+                frameRequests++
+                nextFrame.countDown()
+            }
+        }
+
+        fun expectFrame() {
+            nextFrame = CountDownLatch(1)
+        }
+
+        fun awaitFrame() {
+            assertTrue("frame request not delivered", nextFrame.await(1, TimeUnit.SECONDS))
         }
     }
 
@@ -55,6 +69,7 @@ class TermViewFrameWakeTest {
     fun feedingRealDeltaBytesTriggersFrameRequest() {
         val h = Harness()
         h.emulator.feed(deltaFixture())
+        h.awaitFrame()
         // 内核 damage 链路本来就通（脏区确实缓存了）——断掉的是最后一跳唤醒。
         assertTrue("feed 后应有脏区", h.presenter.takeDamage().isNotEmpty())
         assertTrue("增量注入后必须请求帧（画面冻结根因）", h.frameRequests > 0)
@@ -66,11 +81,16 @@ class TermViewFrameWakeTest {
         val h = Harness()
         // 制造历史行，让滚动有意义。
         h.emulator.feed("a\r\nb\r\nc\r\n".repeat(20))
+        h.awaitFrame()
         h.frameRequests = 0
+        h.expectFrame()
         h.presenter.onScrollBy(3)
+        h.awaitFrame()
         assertTrue("滚动锁定历史必须请求帧", h.frameRequests > 0)
         h.frameRequests = 0
+        h.expectFrame()
         h.presenter.onScrollToBottom()
+        h.awaitFrame()
         assertTrue("回到底部必须请求帧", h.frameRequests > 0)
     }
 
@@ -79,6 +99,7 @@ class TermViewFrameWakeTest {
     fun idlePresenterMakesNoSpontaneousFrameRequests() {
         val h = Harness()
         h.emulator.feed(deltaFixture())
+        h.awaitFrame()
         h.presenter.takeDamage() // 排空一帧
         val after = h.frameRequests
         // 无新数据/无交互：帧请求数不许增长（数据到达才唤醒）。

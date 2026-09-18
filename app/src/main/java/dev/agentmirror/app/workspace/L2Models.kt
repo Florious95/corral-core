@@ -80,6 +80,19 @@ data class L2UiState(
     val banner: String? = null,
 )
 
+/** One server-verified provider capability exposed by AuthAck. */
+data class AgentLauncherUi(
+    val provider: String,
+    val displayName: String,
+    val supportsBypass: Boolean,
+    val naming: String,
+)
+
+data class CreateAgentUiState(
+    val inFlight: Boolean = false,
+    val error: String? = null,
+)
+
 /**
  * 「查看」浮层读哪一份二级列表（076 §1）。
  *

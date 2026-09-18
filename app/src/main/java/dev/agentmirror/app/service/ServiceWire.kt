@@ -17,6 +17,7 @@
 package dev.agentmirror.app.service
 
 import androidx.compose.runtime.mutableStateOf
+import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
@@ -105,6 +106,7 @@ object ServiceWire {
 
     private fun replayTo(listener: ConnectionManager.Listener) {
         manager?.state()?.let(listener::onStateChanged)
+        lastAuthAck?.let(listener::onFrame)
         lastListing?.let(listener::onFrame)
     }
 
@@ -142,6 +144,9 @@ object ServiceWire {
      * 最近一次全量 listing 帧（挂载补播用）。只保留最新一份（覆盖式），
      * 与 [uiConnector] setter 的补播语义配套：晚挂载 UI 以它为列表基线。
      */
+    @Volatile
+    private var lastAuthAck: AuthAckFrame? = null
+
     @Volatile
     private var lastListing: ListingFrame? = null
 
@@ -306,7 +311,9 @@ object ServiceWire {
                     }
 
                     override fun onFrame(frame: FramePayload) {
-                        // 捕获全量 listing：晚挂载 UI 的列表基线（uiConnector setter 补播）。
+                        // 捕获鉴权能力与全量 listing：晚挂载 UI 的二级创建入口和列表基线
+                        // 均以最近一次服务端权威帧补播。
+                        if (frame is AuthAckFrame && frame.ok) lastAuthAck = frame
                         if (frame is ListingFrame) lastListing = frame
                         connListener.onFrame(frame)
                         serviceListener?.onFrame(frame)
@@ -397,6 +404,7 @@ object ServiceWire {
         val m = manager
         manager = null
         // 清掉列表基线：新管理器重连后以新 listing 为准（旧基线随旧连接作废）。
+        lastAuthAck = null
         lastListing = null
         m?.stop()
     }

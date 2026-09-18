@@ -22,6 +22,10 @@ import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.DamageListener
 import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 终端视口状态机：跟随/锁定历史、可见行窗口、字格像素→行列数换算、脏区合并（渲染逻辑与 Android View 分离的可测核心）。
@@ -51,6 +55,7 @@ class TermViewPresenter(
     ) : this(emulator, { rows, cols, _ -> onResizeRequest(rows, cols) })
 
     /** 视口顶行（逻辑行，0=最老历史）：null=跟随底部；非 null=锁定历史，冻结不变。 */
+    @Volatile
     private var topLine: Int? = null
 
     /**
@@ -62,6 +67,7 @@ class TermViewPresenter(
      * 画面冻结、重 attach 才刷新）。禁止用定时器轮询替代（静默经济红线：
      * 空闲必须零帧循环）。可能在任意线程被调（WS 收件线程/主线程），接收方自行跳线程。
      */
+    @Volatile
     var onFrameRequested: (() -> Unit)? = null
 
     /** 当前等宽字格像素尺寸（View 层实测字形度量后经 [seedCellMetrics] 写入）。 */
@@ -124,6 +130,7 @@ class TermViewPresenter(
      * 跟随态贴底露出末行（D-20 最后一行仍可见），而非把末行裁出画布。像素挤压是布局
      * 必然，真正被消灭的是 rows/cols 变化引发的服务端重排（resize 帧）。
      */
+    @Volatile
     private var visibleRowsOverride: Int? = null
 
     /** 内核脏区换算来的逻辑行区间缓冲（"画面已变化"信号载体，非局部重绘清单——渲染层
@@ -142,6 +149,23 @@ class TermViewPresenter(
     private var frameSbSize: Int = -1
     private var frameWindow: IntRange? = null
     private var frameHistoryLines: Map<Int, List<Cell>> = emptyMap()
+
+    /**
+     * 最近一次完整的帧捕获。捕获在后台线程执行，主线程只消费这个不可变值，避免在
+     * [beginFrame] 中与 WS 收件线程争用 emulator monitor。版本号让 beginFrame 不会把
+     * 尚未覆盖最新 damage 的旧帧误当成当前帧；在后台捕获尚未完成时暂留上一稳定帧。
+     */
+    private data class PreparedFrame(
+        val version: Long,
+        val snapshot: ScreenSnapshot,
+        val scrollbackSize: Int,
+        val window: IntRange,
+        val historyLines: Map<Int, List<Cell>>,
+    )
+
+    private val damageVersion = AtomicLong(0)
+    private val captureScheduled = AtomicBoolean(false)
+    private val preparedFrame = AtomicReference<PreparedFrame?>(null)
 
     /** copy-mode 的独立历史画面；live emulator 仍持续接收 Delta。 */
     @Volatile
@@ -194,7 +218,12 @@ class TermViewPresenter(
     /** Replace only the rendered source (used for remote copy-mode snapshots). */
     fun setDisplaySnapshot(snapshot: ScreenSnapshot?) {
         displaySnapshotOverride = snapshot
-        onFrameRequested?.invoke()
+        if (snapshot == null) {
+            scheduleFrameCapture()
+        } else {
+            // Copy-mode already owns an immutable snapshot; no background capture is needed.
+            onFrameRequested?.invoke()
+        }
     }
 
     /**
@@ -216,7 +245,7 @@ class TermViewPresenter(
         val next = (current - deltaLines).coerceIn(0, maxTop)
         topLine = if (next >= maxTop) null else next
         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
-        onFrameRequested?.invoke()
+        scheduleFrameCapture()
     }
 
     /**
@@ -230,7 +259,7 @@ class TermViewPresenter(
      */
     fun onScrollToBottom() {
         topLine = null
-        onFrameRequested?.invoke()
+        scheduleFrameCapture()
     }
 
     // ---- 字号 → 行列数换算（feat-font-size-setting-drop-pinch：让 CLI 自己重画）----
@@ -258,6 +287,7 @@ class TermViewPresenter(
             "source=onViewportSizeChanged oldW=$viewportWidthPx oldH=$viewportHeightPx " +
                 "newW=$widthPx newH=$heightPx viewportSeeded=$viewportSeeded " +
                 "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+            coalesceKey = "size|$widthPx|$heightPx|$viewportSeeded|${emulator.rows}|${emulator.cols}",
         )
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
@@ -290,7 +320,7 @@ class TermViewPresenter(
         // 可见行数变化（挤压/复原/增长恢复）即需重画——视口上推露出底行，本回调是唯一信号
         // （旧链路经 emulator.resize→flushDamage 间接唤醒，现在 resize 不再走，须直呼）。
         if (visibleRows != rowsBefore) {
-            onFrameRequested?.invoke()
+            scheduleFrameCapture()
         }
         // 仪表：结果与守卫状态，含守卫算出的"若重算会得到的候选行列数"——即使守卫拦下也记，
         // 让「该重算而没重算」（candidate != emulator 但 outgrewGuard=false）与「重算了但算
@@ -327,6 +357,7 @@ class TermViewPresenter(
             "source=onRealViewportChanged oldW=$viewportWidthPx oldH=$viewportHeightPx " +
                 "newW=$widthPx newH=$heightPx viewportSeeded=$viewportSeeded " +
                 "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+            coalesceKey = "real|$widthPx|$heightPx|$viewportSeeded|${emulator.rows}|${emulator.cols}",
         )
         viewportWidthPx = widthPx
         viewportHeightPx = heightPx
@@ -345,7 +376,7 @@ class TermViewPresenter(
             }
             resized = recomputeGeometry()
             updateVisibleRows()
-            onFrameRequested?.invoke()
+            scheduleFrameCapture()
             recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = true)
             return
         }
@@ -356,7 +387,7 @@ class TermViewPresenter(
         }
         updateVisibleRows()
         if (visibleRows != rowsBefore) {
-            onFrameRequested?.invoke()
+            scheduleFrameCapture()
         }
         recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = outgrew)
     }
@@ -389,6 +420,8 @@ class TermViewPresenter(
                 "candidateRows=${if (cellHeight > 0) viewportHeightPx / cellHeight else -1} " +
                 "candidateCols=${if (cellWidth > 0) viewportWidthPx / cellWidth else -1} " +
                 "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols}",
+            coalesceKey = "$source|$resized|$outgrewGuard|$viewportWidthPx|$viewportHeightPx|" +
+                "$cellWidth|$cellHeight|${emulator.rows}|${emulator.cols}",
         )
     }
 
@@ -538,19 +571,60 @@ class TermViewPresenter(
             frameHistoryLines = emptyMap()
             return
         }
-        synchronized(emulator) {
-            val snap = emulator.snapshot()
-            val sb = emulator.scrollback.size
-            val win = windowFor(sb)
-            val history = buildMap {
-                for (row in win) {
-                    if (row < sb) put(row, emulator.scrollback.line(row).toList())
-                }
+
+        // Do not enter the emulator monitor from the UI thread for the normal streaming path.
+        // The fallback is only needed before the first background capture has completed (or for
+        // deterministic direct callers); once a frame exists, beginFrame is lock-free.
+        val currentVersion = damageVersion.get()
+        val prepared = preparedFrame.get()
+        val state = when {
+            prepared == null -> captureFrame().also { preparedFrame.set(it) }
+            prepared.version >= currentVersion -> prepared
+            // A newer capture is already in flight. Keep the last complete frame instead of
+            // synchronously waiting for the emulator monitor on the UI thread.
+            captureScheduled.get() -> prepared
+            else -> captureFrame().also { preparedFrame.set(it) }
+        }
+        frameSnapshot = state.snapshot
+        frameSbSize = state.scrollbackSize
+        frameWindow = state.window
+        frameHistoryLines = state.historyLines
+    }
+
+    /**
+     * Publish a frame immediately for a caller that has just completed a bulk emulator mutation
+     * (snapshot replay, resize, or history prepend). Callers must not invoke this from the UI
+     * thread; the normal streaming path remains coalesced by [scheduleFrameCapture].
+     */
+    fun refreshPreparedFrame() {
+        preparedFrame.set(captureFrame())
+    }
+
+    /** Capture one immutable frame while keeping the monitor wait off the UI thread. */
+    private fun captureFrame(): PreparedFrame = synchronized(emulator) {
+        val snap = emulator.snapshot()
+        val sb = emulator.scrollback.size
+        val win = windowFor(sb)
+        val history = buildMap {
+            for (row in win) {
+                if (row < sb) put(row, emulator.scrollback.line(row).toList())
             }
-            frameSnapshot = snap
-            frameSbSize = sb
-            frameWindow = win
-            frameHistoryLines = history
+        }
+        PreparedFrame(damageVersion.get(), snap, sb, win, history)
+    }
+
+    /** Coalesce damage notifications into one background full-frame capture. */
+    private fun scheduleFrameCapture() {
+        if (!captureScheduled.compareAndSet(false, true)) return
+        FRAME_CAPTURE_EXECUTOR.execute {
+            val state = captureFrame()
+            val capturedVersion = state.version
+            preparedFrame.set(state)
+            captureScheduled.set(false)
+            // A new damage can arrive between the final version check and clearing the flag.
+            // Re-check after clearing so no update is stranded without a capture/request.
+            if (damageVersion.get() != capturedVersion) scheduleFrameCapture()
+            onFrameRequested?.invoke()
         }
     }
 
@@ -615,7 +689,8 @@ class TermViewPresenter(
         synchronized(damageLock) {
             (pendingDamage ?: mutableListOf<IntRange>().also { pendingDamage = it }).add(logical)
         }
-        onFrameRequested?.invoke()
+        damageVersion.incrementAndGet()
+        scheduleFrameCapture()
     }
 
     /** 把区间集合并成最小覆盖集（重叠或相邻 [a,b] 与 [b+1,c] 都合并，减少每帧 draw 调用数）。 */
@@ -637,6 +712,11 @@ class TermViewPresenter(
     }
 
     private companion object {
+        /** One daemon worker shared by presenters; captures never keep the process/JVM alive. */
+        val FRAME_CAPTURE_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "term-frame-capture").apply { isDaemon = true }
+        }
+
         /** [seedCellMetrics] 落定前的占位值（构造后到 View 注入 presenter 之间的间隙，
          *  正常生命周期内不会被任何几何计算实际使用）。 */
         const val DEFAULT_CELL_WIDTH = 10

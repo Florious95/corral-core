@@ -14,7 +14,9 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,6 +38,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -46,9 +49,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.theme.AppPalette
+import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Motion
@@ -386,7 +391,79 @@ fun ScreenHeader(
     }
 }
 
-/** 二级页返回：‹ + 上级名称，44dp 高触控区 */
+/**
+ * 顶栏 FlatGlass 药丸按钮：44dp 触控地板（[Dims.pillTouchFloor]）内嵌 34dp 可见胶囊（[Dims.pillHeight]），
+ * 半透微透底 + 0.5dp 发丝光边 + 顶亮/底暗，按压叠一层变暗蒙层；禁用整体 45% 透明。
+ * 纯 [flatGlass]（不采样），可放在 ThreePane 录制树内的页面顶栏。语义合并到触控盒（Role.Button）。
+ */
+@Composable
+fun GlassPillButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp),
+    content: @Composable RowScope.() -> Unit,
+) {
+    val glass = flatGlassTokens()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    Box(
+        modifier = modifier
+            .height(Dims.pillTouchFloor)
+            .alpha(if (enabled) 1f else 0.45f)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            modifier = Modifier
+                .height(Dims.pillHeight)
+                .flatGlass(
+                    shape = CircleShape,
+                    fill = glass.fill,
+                    hairline = glass.hairline,
+                    topGlint = glass.topGlint,
+                    bottomShade = glass.bottomShade,
+                    overlay = if (pressed && enabled) glass.pressDim else Color.Transparent,
+                )
+                .padding(contentPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
+    }
+}
+
+/**
+ * iOS 标志性圆形液态玻璃返回：44dp 触控地板内嵌 36dp 标杆 GlassButton 材质圆钮，
+ * 居中折线箭头，无汉字。默认 [emptyBackdrop]——二级列表在 layerBackdrop 录制树内，
+ * ⛔ 不得采样 [LocalGlassBackdrop]。
+ */
+@Composable
+fun GlassCircleBackButton(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalAppPalette.current
+    Box(
+        modifier = modifier.size(Dims.pillTouchFloor),
+        contentAlignment = Alignment.Center,
+    ) {
+        GlassIconButton(
+            onClick = onBack,
+            size = Dims.circleBackDisc,
+            backdrop = emptyBackdrop(),
+        ) {
+            BackChevron(tint = p.rowTitleText, contentDescription = "返回")
+        }
+    }
+}
+
+/** 二级页返回：‹ + 上级名称，FlatGlass 药丸，44dp 触控地板 */
 @Composable
 fun BackAffordance(
     label: String,
@@ -394,19 +471,13 @@ fun BackAffordance(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    Row(
-        modifier = modifier
-            .height(Dims.tapTargetMin)
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (pressed) p.accentContainer else Color.Transparent)
-            .clickable(interactionSource = interaction, indication = null, onClick = onBack)
-            .padding(start = 6.dp, end = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    GlassPillButton(
+        onClick = onBack,
+        modifier = modifier,
+        contentPadding = PaddingValues(start = 6.dp, end = 12.dp),
     ) {
         BackChevron(tint = p.accent)
+        Box(Modifier.width(2.dp))
         AppText(label, p.accent, TypeSizes.actionButton, fontWeight = FontWeight.Medium, lineHeightMultiplier = 1f)
     }
 }
@@ -434,7 +505,10 @@ fun TonalTextButton(
     }
 }
 
-/** 设置卡片里的主要按钮（轻着色，⛔ 不用满宽实心） */
+/**
+ * 设置卡片里的主要按钮：主色透光薄染（accent @ 0.35）+ 1dp 主色细边，按压叠一层变暗蒙层。
+ * 纯 background / border，⛔ 不用满宽实心，⛔ 不采样背景。
+ */
 @Composable
 fun CardTonalButton(
     text: String,
@@ -444,17 +518,27 @@ fun CardTonalButton(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val shape = RoundedCornerShape(Radii.cardButton)
     Box(
         modifier = modifier
             .height(Dims.cardButtonHeight)
-            .clip(RoundedCornerShape(Radii.cardButton))
-            .background(if (pressed) p.accentContainerPressed else p.accentContainer)
+            .clip(shape)
+            .background(p.accentContainer.copy(alpha = TonalButtonFillAlpha))
+            .background(if (pressed) FlatGlassPressDim else Color.Transparent)
+            .border(TonalButtonStrokeWidth, p.accent.copy(alpha = TonalButtonStrokeAlpha), shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         AppText(text, p.accent, TypeSizes.cardButton, fontWeight = FontWeight.SemiBold, lineHeightMultiplier = 1f)
     }
 }
+
+private const val TonalButtonFillAlpha = 0.35f
+private const val TonalButtonStrokeAlpha = 0.45f
+private val TonalButtonStrokeWidth = 1.dp
+
+/** 纯平薄片按压变暗蒙层（浅深通用：黑 12%）。 */
+private val FlatGlassPressDim = Color(0x1F000000)
 
 /** 设置卡片里的次要按钮（描边） */
 @Composable
@@ -479,20 +563,31 @@ fun CardOutlineButton(
     }
 }
 
-/** 设置页卡片外壳 */
+/**
+ * 设置页卡片外壳：纯平半透薄板（FlatGlass）。浅色 0xEEFFFFFF / 深色 0xCC1E1E20 的平面底
+ * + 0.5dp 发丝边（浅色微暗 / 深色微光）。卡片处于 ThreePane 的 layerBackdrop 录制树内，
+ * ⛔ 只能用 background / border，⛔ 不得换成 glassPanel / glassControl（自采样递归崩溃）。
+ */
 @Composable
 fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    val p = LocalAppPalette.current
+    val dark = LocalAppPalette.current === DarkPalette
+    val shape = RoundedCornerShape(Radii.card)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(Radii.card))
-            .background(p.cardBackground)
-            .border(Dims.hairline, p.cardBorder, RoundedCornerShape(Radii.card))
+            .clip(shape)
+            .background(if (dark) SettingsCardFillDark else SettingsCardFillLight)
+            .border(SettingsCardStrokeWidth, if (dark) SettingsCardStrokeDark else SettingsCardStrokeLight, shape)
             .padding(Dims.cardPadding),
         content = content,
     )
 }
+
+private val SettingsCardFillLight = Color(0xEEFFFFFF)
+private val SettingsCardFillDark = Color(0xCC1E1E20)
+private val SettingsCardStrokeLight = Color(0x33000000)
+private val SettingsCardStrokeDark = Color(0x33FFFFFF)
+private val SettingsCardStrokeWidth = 0.5.dp

@@ -89,6 +89,15 @@ class PairingScreenClockPumpTest {
             }
         }
         val transports = mutableListOf<FakeWebSocketTransport>()
+        val fakeVerifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ): HostIdentifyResult = HostIdentifyResult.Legacy404(endpoint)
+        }
         val vm = PairingViewModel(
             configStore = store,
             connectionFactory = { cfg: ConnectionConfig ->
@@ -97,10 +106,12 @@ class PairingScreenClockPumpTest {
                 ConnectionManager(cfg, TransportFactory { t })
             },
             nowMs = { FakeNowBaseMs },
+            identifyClient = fakeVerifier,
+            discoveryExecutor = java.util.concurrent.Executor { it.run() },
         )
 
         // 先开始配对（记录配对开始时刻 = 假时钟基准），再渲染屏幕让泵首拍驱动超时。
-        vm.onQrText("""{"v":1,"url":"ws://host:9900/ws","token":"T0K","ts_authkey":""}""")
+        vm.onQrText("""{"v":1,"url":"ws://192.0.2.10:9900/ws","token":"T0K","ts_authkey":""}""")
         val start = vm.pairingStatus
         assertTrue("pairing should start, got $start", start is PairingStatus.Pairing)
 

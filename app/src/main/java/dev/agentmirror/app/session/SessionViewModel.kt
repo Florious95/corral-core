@@ -90,6 +90,8 @@ class SessionViewModel(
     internal val uploadToken: String? = null,
     /** READY 原子发布后读取当前 endpoint；构造期 [baseUrl] 仅保留旧测试/诊断快照。 */
     private val liveBaseUrl: () -> String? = { baseUrl },
+    /** 输入框实时同步开关：默认 true 保持现有 diffsync 直通；false 时仅本地编辑，发送时一次性提交。 */
+    var inputSyncEnabled: Boolean = true,
 ) : ConnectionManager.Listener {
 
     /** 终端内核：live pane 的完整 snapshot/delta 状态。 */
@@ -122,6 +124,16 @@ class SessionViewModel(
         private set
 
     var uploadStatus by mutableStateOf<UploadStatus>(UploadStatus.Idle)
+
+    /**
+     * Whether the current session has a complete display snapshot. This is a display gate,
+     * not a canvas gate: the terminal keeps drawing and Compose fades the loading surface away
+     * once either a live or copy-mode snapshot has been applied.
+     */
+    var hasSnapshot by mutableStateOf(false)
+        internal set
+
+    fun hasSnapshotContent(): Boolean = hasSnapshot
 
     /**
      * 已贴进本会话 CLI pane、尚未确认发送的图片路径（需求 057）：上传成功那一刻就
@@ -212,6 +224,7 @@ class SessionViewModel(
     // ---- ConnectionManager.Listener（单收件线程串行回调）----
 
     override fun onStateChanged(state: ConnectionState) {
+        DiagLog.recordCritical("session", "connection_state ref=$ref state=$state")
         connectionState = state
         connectionBanner = when (state) {
             ConnectionState.CONNECTING -> "连接中…"
@@ -234,8 +247,8 @@ class SessionViewModel(
         when (frame) {
             // 列表帧归 workspace 渲染；本页只关心协议级错误（被动异常必须可见）。
             is ErrorFrame -> {
-                DiagLog.record(
-                    "overlay",
+                DiagLog.recordCritical(
+                    "session",
                     "error_frame code=${frame.code.wire} reason=${frame.reason} " +
                         "overlay_open=$overlayOpen ref=$ref",
                 )
@@ -309,8 +322,23 @@ class SessionViewModel(
             // viewport 回写 live emulator。
             BinaryKind.SNAPSHOT -> {
                 if (inCopyMode) {
-                    copyModeEmulator.replaySnapshot(frame.data, copyModeEmulator.cols, copyModeEmulator.rows)
+                    val failure = runCatching {
+                        copyModeEmulator.replaySnapshot(frame.data, copyModeEmulator.cols, copyModeEmulator.rows)
+                    }.exceptionOrNull()
+                    if (failure != null) {
+                        DiagLog.recordCritical(
+                            "session",
+                            "snapshot_apply_failed ref=$ref mode=copy ex=${failure.javaClass.simpleName} " +
+                                "message=${failure.message?.take(240)}",
+                        )
+                        transientError = "快照应用失败：${failure.message ?: failure.javaClass.simpleName}"
+                        return
+                    }
+                    DiagLog.recordCritical("session", "snapshot_applied ref=$ref mode=copy bytes=${frame.data.size}")
                     presenter.setDisplaySnapshot(copyModeEmulator.snapshot())
+                    // Copy-mode is a valid first display source too. Do not leave the
+                    // Compose loading surface permanently covering a perfectly good snapshot.
+                    hasSnapshot = true
                 } else {
                     if (awaitingReconnectSnapshot) {
                         // 断线时仍可浏览旧历史；新代首帧到达才一起替换历史与视口。
@@ -340,7 +368,23 @@ class SessionViewModel(
                                 "bookkept_rows=${bookkept?.first ?: -1} emulator_rows=${emulator.rows}",
                         )
                     }
-                    emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                    val failure = runCatching {
+                        emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                    }.exceptionOrNull()
+                    if (failure != null) {
+                        DiagLog.recordCritical(
+                            "session",
+                            "snapshot_apply_failed ref=$ref mode=live ex=${failure.javaClass.simpleName} " +
+                                "message=${failure.message?.take(240)}",
+                        )
+                        transientError = "快照应用失败：${failure.message ?: failure.javaClass.simpleName}"
+                        return
+                    }
+                    // replaySnapshot is a bulk mutation; publish its complete frame on the
+                    // receiver thread so the next UI draw never falls back to the old frame.
+                    presenter.refreshPreparedFrame()
+                    DiagLog.recordCritical("session", "snapshot_applied ref=$ref mode=live bytes=${frame.data.size}")
+                    hasSnapshot = true
                     if (PerfTrace.isEnabled()) {
                         val alt = if (emulator.historyAvailable) 0 else 1
                         PerfTrace.emitSnapshotIfFirst(ref, alt, emulator.rows, emulator.cols) // snapshot_applied
@@ -353,10 +397,30 @@ class SessionViewModel(
                 }
             }
             // 增量始终完整推进 live emulator；copy-mode 画面由独立 snapshot override 提供。
-            BinaryKind.DELTA -> emulator.feed(frame.data)
+            BinaryKind.DELTA -> {
+                val failure = runCatching { emulator.feed(frame.data) }.exceptionOrNull()
+                if (failure != null) {
+                    DiagLog.recordCritical(
+                        "session",
+                        "delta_apply_failed ref=$ref bytes=${frame.data.size} " +
+                            "ex=${failure.javaClass.simpleName} message=${failure.message?.take(240)}",
+                    )
+                    transientError = "增量应用失败：${failure.message ?: failure.javaClass.simpleName}"
+                }
+            }
             // 历史分页：按服务端收敛后的实际区间头插（经验基）。
             BinaryKind.SCROLLBACK -> {
-                emulator.prependHistory(frame.data)
+                val failure = runCatching { emulator.prependHistory(frame.data) }.exceptionOrNull()
+                if (failure != null) {
+                    DiagLog.recordCritical(
+                        "session",
+                        "scrollback_apply_failed ref=$ref bytes=${frame.data.size} " +
+                            "ex=${failure.javaClass.simpleName} message=${failure.message?.take(240)}",
+                    )
+                    transientError = "历史应用失败：${failure.message ?: failure.javaClass.simpleName}"
+                    return
+                }
+                presenter.refreshPreparedFrame()
                 historyRequestInFlight = false
                 // 收敛判顶：实际区间起点比请求的更近 0 ⇒ 已到历史顶。
                 if (frame.fromLine > historyRequestedFromLine) {
@@ -368,6 +432,10 @@ class SessionViewModel(
 
     override fun onLocalDecodeError(code: FrameError, message: String) {
         // 坏帧/未知 type/版本不匹配必须显式浮出，不得静默（静默失效猎杀）。
+        DiagLog.recordCritical(
+            "session",
+            "decode_error code=$code message=${message.take(240)} ref=$ref",
+        )
         transientError = "解码失败：${message ?: code.name}"
     }
 
@@ -386,6 +454,7 @@ class SessionViewModel(
     }
 
     override fun onReconnect(attempt: Int, delayMs: Long) {
+        DiagLog.recordCritical("session", "reconnect ref=$ref attempt=$attempt delay_ms=$delayMs")
         // 状态条已由 onStateChanged(RECONNECTING) 覆盖；此处无需额外动作。
     }
 
@@ -400,32 +469,50 @@ class SessionViewModel(
     // ---- 用户动作 ----
 
     /**
-     * 直通输入（059）：发送键只提交——CLI 输入框即草稿（用户逐键直通已把内容打在
-     * CLI 输入框里），发送 = 裸 Enter。不再读取任何本地草稿文本整条注入（那正是被
-     * 取代的 003 第1条"一次性注入"）。
+     * 点按发送（R-1，017）：根据 [inputSyncEnabled] 提交当前草稿并清空输入状态。
      *
-     * 有待发附件（[pendingAttachmentPaths]）时路径已经在上传成功那一刻贴进 CLI pane 了
-     * （需求 057），提交这一步只需带最新一次预贴路径（服务端据此算沉降补差额：常见
-     * 路径零等待，只有选完图立刻发才补差额）；text 为空，服务端只发 Enter。
+     * - [inputSyncEnabled] == true（开启，默认）：输入期已通过 [onPassthroughInput] 实时直通
+     *   CLI 行；发送仅需提交（发 text 为空的裸 Enter）。
+     * - [inputSyncEnabled] == false（关闭）：输入期不向 CLI 注入按键；发送时将 [text] 一次性
+     *   发给 CLI 并附带 CR（`\r` / 0x0D）提交。Raw 模式下 LF 只是插入换行，不是回车。
      *
+     * @param text 本地待发送草稿文本；开启实时同步时忽略此参数（发送裸 Enter 避免重复内容）
      * @contract
      * @pre connectionState 为 READY，且 inputStatus 非 Sending
      * @post 提交成功置 [InputStatus.Sending]，回执后由 [onInputResult] 转 [InputStatus.Sent]
      *       （并清空 [pendingAttachmentPaths]）或 [InputStatus.Failed]（保留附件，可重发）
      * @err 未就绪 / 提交失败置 [InputStatus.Failed]
-     * @inv 在途不回发（发送闸）；不携带任何本地草稿文本（059 取代 003 第1条）
+     * @inv 在途不回发（发送闸）
      */
-    fun sendDraft() {
+    @JvmOverloads
+    fun sendDraft(text: String = "") {
         if (inputStatus is InputStatus.Sending) return // 在途不回发
         // 本地先判定可发送性：未就绪立即明确报错（静默失效猎杀）。
         if (connectionState != ConnectionState.READY) {
             inputStatus = InputStatus.Failed("连接未就绪，无法发送")
             return
         }
-        // 服务端只需要"最新一次预贴的是哪个路径"来核对沉降时间戳；多张图一起提交，
-        // 靠最新那次的时间戳兜底。text 为空 = 裸 Enter 提交（059：发送只提交）。
         val attachmentPath = pendingAttachmentPaths.lastOrNull().orEmpty()
-        if (manager.sendInput(ref, "", attachmentPath)) {
+
+        // 核心修复：开启实时直通输入（inputSyncEnabled == true）时，
+        // 若草稿在输入法组合期（IME composition）期间尚未直通上屏到远端 CLI，
+        // 或者已同步内容滞后于本地待发送草稿，发送瞬间必须将差异补齐到远端 CLI！
+        // 坚决杜绝在远端 CLI 行空时直接发裸回车触发换行！
+        if (inputSyncEnabled && text.isNotEmpty() && syncedText != text) {
+            applyDiffSync(text)
+        }
+
+        val textToSend = if (inputSyncEnabled) {
+            ""
+        } else {
+            if (text.isEmpty() || attachmentPath.isNotEmpty()) {
+                text
+            } else {
+                // 发送 CR (\r) 而非 LF (\n)，在 TTY Raw 模式下触发真正的回车提交
+                text.trimEnd('\r', '\n') + "\r"
+            }
+        }
+        if (manager.sendInput(ref, textToSend, attachmentPath)) {
             inputStatus = InputStatus.Sending
             // Enter 提交后 CLI 行空；本地框跟着清。不同步会把下一轮当成「删掉上一条」。
             syncedText = ""
@@ -472,6 +559,7 @@ class SessionViewModel(
      * @inv 同步后光标约定在行尾；不改本地草稿；不引入额外延迟
      */
     fun onPassthroughInput(oldValue: TextFieldValue, newValue: TextFieldValue) {
+        if (!inputSyncEnabled) return
         val wasComposing = oldValue.composition != null
         val isComposing = newValue.composition != null
         val composition = newValue.composition
@@ -653,6 +741,13 @@ class SessionViewModel(
         manager.sendScrollWheel(ref, -toSend)
     }
 
+    /**
+     * 发起关闭当前会话 pane（协议 close_session 请求）。
+     */
+    fun closeSession(): Boolean {
+        return manager.sendCloseSession(ref) != null
+    }
+
     /** 离开会话页时释放：先封闭几何回调，再退订镜像（conn 层幂等）。 */
     fun dispose() {
         synchronized(lifecycleLock) {
@@ -668,9 +763,12 @@ class SessionViewModel(
     private fun onFirstGeometryReady(rows: Int, cols: Int) {
         synchronized(lifecycleLock) {
             if (disposed) return
+            DiagLog.recordCritical("session", "geometry_ready ref=$ref rows=$rows cols=$cols")
             emulator.resize(cols, rows)
+            presenter.refreshPreparedFrame()
             copyModeEmulator.resize(cols, rows)
-            manager.subscribe(ref, rows, cols)
+            val sent = manager.subscribe(ref, rows, cols)
+            DiagLog.recordCritical("session", "subscribe ref=$ref rows=$rows cols=$cols sent=$sent")
         }
     }
 
@@ -678,8 +776,10 @@ class SessionViewModel(
     private fun onResizeRequest(rows: Int, cols: Int, reason: String) {
         synchronized(lifecycleLock) {
             if (disposed) return
+            DiagLog.recordCritical("session", "resize_request ref=$ref rows=$rows cols=$cols reason=$reason")
             if (manager.resize(ref, rows, cols, reason)) {
                 emulator.resize(cols, rows)
+                presenter.refreshPreparedFrame()
                 copyModeEmulator.resize(cols, rows)
             }
         }

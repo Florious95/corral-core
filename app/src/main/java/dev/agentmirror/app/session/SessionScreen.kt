@@ -30,8 +30,19 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,9 +53,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -65,6 +78,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
@@ -72,6 +87,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -81,6 +98,8 @@ import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.TermSurfaceView
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.SessionSwitchSheet
+import dev.agentmirror.app.ui.components.flatGlass
+import dev.agentmirror.app.ui.components.flatGlassTokens
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.LocalAppPalette
@@ -111,19 +130,13 @@ import java.io.ByteArrayOutputStream
 internal fun dispatchSessionBack(
     focused: Boolean,
     overlayOpen: Boolean,
-    dockMode: DockRowMode,
     onCollapseFocused: () -> Unit,
     onCloseOverlay: () -> Unit,
-    onDockModeChange: (DockRowMode) -> Unit,
     onBack: () -> Unit,
 ) {
     when {
         focused -> onCollapseFocused()
-        overlayOpen -> {
-            onCloseOverlay()
-            onDockModeChange(DockRowMode.Sessions)
-        }
-        dockMode != DockRowMode.Sessions -> onDockModeChange(DockRowMode.Sessions)
+        overlayOpen -> onCloseOverlay()
         else -> onBack()
     }
 }
@@ -133,19 +146,15 @@ internal fun SessionScreenBackHandler(
     focused: () -> Boolean,
     onCollapseFocused: () -> Unit,
     overlayOpen: () -> Boolean,
-    dockMode: () -> DockRowMode,
     onCloseOverlay: () -> Unit,
-    onDockModeChange: (DockRowMode) -> Unit,
     onBack: () -> Unit,
 ) {
     val dispatch = rememberUpdatedState {
         dispatchSessionBack(
             focused = focused(),
             overlayOpen = overlayOpen(),
-            dockMode = dockMode(),
             onCollapseFocused = onCollapseFocused,
             onCloseOverlay = onCloseOverlay,
-            onDockModeChange = onDockModeChange,
             onBack = onBack,
         )
     }
@@ -269,19 +278,13 @@ fun SessionScreen(
     }
 
     var mirror by remember { mutableStateOf(TextFieldValue("")) }
-    var dockMode by androidx.compose.runtime.saveable.rememberSaveable {
-        mutableStateOf(DockRowMode.Sessions)
-    }
     SessionScreenBackHandler(
         focused = { inputFocused },
         onCollapseFocused = { requestDockCollapse("system-back") },
         overlayOpen = { viewModel.overlayOpen },
-        dockMode = { dockMode },
         onCloseOverlay = viewModel::closeOverlay,
-        onDockModeChange = { dockMode = it },
         onBack = onBack,
     )
-    val favoriteListState = androidx.compose.foundation.lazy.rememberLazyListState()
     var attachMenu by remember { mutableStateOf(false) }
     val pickImage = {
         pickMedia.launch(
@@ -302,43 +305,6 @@ fun SessionScreen(
     AppTheme {
         val darkTheme = LocalAppPalette.current === DarkPalette
         val themeToken = TermPalette.token(darkTheme)
-        val visibleFavoriteRows = favoriteRows.filter { it.isOnline }
-        val favoriteByRef = visibleFavoriteRows.associateBy { it.ref }
-        val favoriteOrder = remember {
-            mutableStateListOf<String>().apply {
-                addAll(visibleFavoriteRows.map { it.ref }.filterNot { it == viewModel.ref })
-            }
-        }
-        var favoriteOrderCurrent by remember { mutableStateOf(viewModel.ref) }
-        LaunchedEffect(visibleFavoriteRows.map { it.ref }, viewModel.ref) {
-            val desired = visibleFavoriteRows.map { it.ref }.filterNot { it == viewModel.ref }
-            if (favoriteOrderCurrent != viewModel.ref) {
-                val replacementIndex = favoriteOrder.indexOf(viewModel.ref)
-                if (replacementIndex >= 0) {
-                    if (favoriteOrderCurrent in desired) {
-                        favoriteOrder[replacementIndex] = favoriteOrderCurrent
-                    } else {
-                        favoriteOrder.removeAt(replacementIndex)
-                    }
-                }
-                favoriteOrderCurrent = viewModel.ref
-            }
-            val desiredSet = desired.toSet()
-            for (index in favoriteOrder.lastIndex downTo 0) {
-                if (favoriteOrder[index] !in desiredSet) favoriteOrder.removeAt(index)
-            }
-            desired.forEach { ref -> if (ref !in favoriteOrder) favoriteOrder += ref }
-        }
-        val favoriteSessions = favoriteOrder.mapNotNull { ref ->
-            favoriteByRef[ref]?.let {
-                SessionChipUi(
-                    id = it.ref,
-                    name = it.identityLabel,
-                    isActive = false,
-                    isRunning = it.isOnline && it.status == L2Status.WORKING,
-                )
-            }
-        }
 
         SessionDockTheme(darkTheme) {
             val overlayItems = overlaySessions.map {
@@ -376,6 +342,32 @@ fun SessionScreen(
                                     .fillMaxSize()
                                     .semantics { contentDescription = themeToken },
                             )
+                            AnimatedVisibility(
+                                visible = !viewModel.hasSnapshotContent(),
+                                // The waiting surface is present on the very first frame; only
+                                // its removal is animated, so the cold-open never starts blank.
+                                enter = EnterTransition.None,
+                                exit = fadeOut(animationSpec = tween(180)),
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                // This is a Compose loading surface, not a renderer short-cut:
+                                // TermSurfaceView continues to draw and its normal frame/metric
+                                // path is never bypassed while the first complete snapshot lands.
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(LocalAppPalette.current.screenBackground)
+                                        .testTag("session-terminal-placeholder"),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = "正在加载终端…",
+                                        color = LocalAppPalette.current.metaText,
+                                        fontFamily = MonoFontFamily,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+                            }
                             Text(
                                 text = themeToken,
                                 color = Color.Transparent,
@@ -389,8 +381,6 @@ fun SessionScreen(
                             }
                         }
                     },
-                    dockMode = dockMode,
-                    onDockModeChange = { dockMode = it },
                     imeHideRequested = imeHideRequested,
                     collapseRequest = collapseRequest,
                     onDockCollapse = requestDockCollapse,
@@ -400,33 +390,17 @@ fun SessionScreen(
                         imeHideRequested = false
                         collapseRequest = 0
                     },
-                    sessions = favoriteSessions,
-                    sessionListState = favoriteListState,
-                    onSessionSelect = { id ->
-                        val entry = favoriteByRef[id] ?: return@SessionScreenScaffold
-                        val slot = favoriteOrder.indexOf(id)
-                        if (slot >= 0) {
-                            if (viewModel.ref in favoriteByRef) {
-                                favoriteOrder[slot] = viewModel.ref
-                            } else {
-                                favoriteOrder.removeAt(slot)
-                            }
-                        }
-                        favoriteOrderCurrent = id
-                        onOpenOverlaySession(entry.ref, entry.identityLabel)
-                    },
                     value = mirror,
                     onValueChange = {
                         viewModel.onPassthroughInput(mirror, it)
                         mirror = it
                     },
-                    onSendText = {
-                        viewModel.sendDraft()
+                    onSendText = { text ->
+                        viewModel.sendDraft(text.ifEmpty { mirror.text })
                         mirror = TextFieldValue("")
                     },
                     onPickAttachment = { attachMenu = true },
                     onKeyToken = { viewModel.sendKey(it.toInputKey()) },
-                    onOpenViewMenu = viewModel::openOverlay,
                     modifier = Modifier.statusBarsPadding().navigationBarsPadding(),
                 )
                 SessionSwitchSheet(
@@ -437,11 +411,6 @@ fun SessionScreen(
                     onDismiss = viewModel::closeOverlay,
                     onSelect = { item ->
                         val entry = byRef[item.id] ?: return@SessionSwitchSheet
-                        val slot = favoriteOrder.indexOf(entry.ref)
-                        if (slot >= 0) {
-                            favoriteOrder[slot] = viewModel.ref
-                        }
-                        favoriteOrderCurrent = entry.ref
                         viewModel.closeOverlay()
                         onOpenOverlaySession(entry.ref, entry.identityLabel)
                     },
@@ -450,25 +419,12 @@ fun SessionScreen(
                     },
                 )
                 Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
-                    DropdownMenu(
+                    AttachmentGlassMenu(
                         expanded = attachMenu,
                         onDismissRequest = { attachMenu = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("拍照") },
-                            onClick = {
-                                attachMenu = false
-                                requestTakePhoto()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("从相册选择") },
-                            onClick = {
-                                attachMenu = false
-                                pickImage()
-                            },
-                        )
-                    }
+                        onTakePhoto = requestTakePhoto,
+                        onPickImage = pickImage,
+                    )
                 }
             }
         }
@@ -502,29 +458,16 @@ internal fun AttachmentButton(
             Text(
                 text = "＋",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = LocalAppPalette.current.accent,
                 modifier = Modifier.semantics { contentDescription = "添加图片附件" },
             )
         }
-        DropdownMenu(
+        AttachmentGlassMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text("拍照") },
-                onClick = {
-                    expanded = false
-                    onTakePhoto()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("从相册选择") },
-                onClick = {
-                    expanded = false
-                    onPickImage()
-                },
-            )
-        }
+            onTakePhoto = onTakePhoto,
+            onPickImage = onPickImage,
+        )
     }
 }
 
@@ -592,38 +535,128 @@ private val KEY_BAR_ENTRIES = listOf(
 )
 
 /**
- * 回执/错误状态区：失败/在途/上传/解码错误明确可见（003）。
- * 083 §4/§12：成功态不组「已发送」节点。不用 AnimatedVisibility——
- * 退出动画会把旧节点留在树上叠成蓝色悬浮堆。
+ * 只展示错误。成功/在途（已发送、发送中、已附加、上传中）不再上屏，
+ * 避免输入框上方浮一层科技蓝提示字。
  */
 @Composable
 private fun StatusArea(viewModel: SessionViewModel) {
     val message = when (val s = viewModel.inputStatus) {
-        is InputStatus.Sent -> null
         is InputStatus.Failed -> s.message
-        is InputStatus.Sending -> "发送中…"
-        InputStatus.Idle -> null
+        else -> null
     } ?: when (val u = viewModel.uploadStatus) {
-        is UploadStatus.Uploading -> "上传中…"
-        is UploadStatus.Success -> "已附加图片"
         is UploadStatus.Failed -> u.message
-        UploadStatus.Idle -> null
+        else -> null
     } ?: viewModel.transientError
 
     if (message == null) return
-    val isError = viewModel.inputStatus is InputStatus.Failed ||
-        viewModel.uploadStatus is UploadStatus.Failed ||
-        viewModel.transientError != null
     Text(
         text = message,
         style = MaterialTheme.typography.labelMedium,
-        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.error,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = Spacing.pageH, vertical = Spacing.xs),
     )
+}
+
+/** 拍照 / 相册分流：FlatGlass 液态玻璃紧凑菜单（150dp 紧凑包裹），以加号为原点缩放淡入淡出。 */
+@Composable
+internal fun AttachmentGlassMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onPickImage: () -> Unit,
+) {
+    val visibleState = remember { MutableTransitionState(expanded) }
+    visibleState.targetState = expanded
+    if (!visibleState.currentState && !visibleState.targetState) return
+
+    val glass = flatGlassTokens()
+    val p = LocalAppPalette.current
+    val shape = RoundedCornerShape(16.dp)
+    Popup(
+        alignment = Alignment.BottomStart,
+        onDismissRequest = onDismissRequest,
+        properties = PopupProperties(focusable = true),
+    ) {
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = scaleIn(
+                initialScale = 0.85f,
+                transformOrigin = TransformOrigin(0f, 1f),
+                animationSpec = tween(durationMillis = 150),
+            ) + fadeIn(animationSpec = tween(durationMillis = 150)),
+            exit = scaleOut(
+                targetScale = 0.85f,
+                transformOrigin = TransformOrigin(0f, 1f),
+                animationSpec = tween(durationMillis = 120),
+            ) + fadeOut(animationSpec = tween(durationMillis = 120)),
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(150.dp)
+                    .flatGlass(
+                        shape = shape,
+                        fill = glass.fill,
+                        hairline = glass.hairline,
+                        topGlint = glass.topGlint,
+                        bottomShade = glass.bottomShade,
+                    )
+                    .padding(vertical = 4.dp)
+                    .testTag("session-attach-menu"),
+            ) {
+                AttachmentGlassMenuItem(
+                    label = "拍照",
+                    onClick = {
+                        onDismissRequest()
+                        onTakePhoto()
+                    },
+                    textColor = p.rowTitleText,
+                    pressDim = glass.pressDim,
+                )
+                AttachmentGlassMenuItem(
+                    label = "从相册选择",
+                    onClick = {
+                        onDismissRequest()
+                        onPickImage()
+                    },
+                    textColor = p.rowTitleText,
+                    pressDim = glass.pressDim,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentGlassMenuItem(
+    label: String,
+    onClick: () -> Unit,
+    textColor: Color,
+    pressDim: Color,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .background(if (pressed) pressDim else Color.Transparent)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = textColor,
+        )
+    }
 }
 
 /**

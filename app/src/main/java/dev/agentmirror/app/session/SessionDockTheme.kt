@@ -11,18 +11,29 @@
 package dev.agentmirror.app.session
 
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import dev.agentmirror.app.R
+import dev.agentmirror.app.ui.components.DarkFlatGlass
+import dev.agentmirror.app.ui.components.FlatGlassTokens
+import dev.agentmirror.app.ui.components.FlatHairline
+import dev.agentmirror.app.ui.components.LightFlatGlass
+import dev.agentmirror.app.ui.components.flatGlass
+import dev.agentmirror.app.ui.theme.LocalAppPalette
 
 /**
  * Claude Design Nocturne variables mapped one-for-one onto the Material slots consumed by the dock.
@@ -140,6 +151,47 @@ internal fun sessionDockSourceTokens(): SessionDockSourceTokens =
         sessionDockDarkTokens
     }
 
+/**
+ * 会话底栏 FlatGlass（平整薄片）材质：键帽 / 输入胶囊 / 圆钮共用，与全 App 的
+ * [FlatGlassTokens] 同一套常量（浅 / 深按 dock 主题的背景判定）。
+ * 不采样背景（无 backdrop、无模糊、无折射），只有半透平面底色 + 0.5dp 发丝边 +
+ * 「顶亮 / 底暗」的光学明暗对；按压只叠一层变暗蒙层，⛔ 不画大面积弧光。
+ */
+internal typealias SessionDockGlassTokens = FlatGlassTokens
+
+internal val sessionDockLightGlass: SessionDockGlassTokens = LightFlatGlass
+internal val sessionDockDarkGlass: SessionDockGlassTokens = DarkFlatGlass
+
+@Composable
+internal fun sessionDockGlassTokens(): SessionDockGlassTokens =
+    if (MaterialTheme.colorScheme.background == sessionDockLightScheme.background) {
+        sessionDockLightGlass
+    } else {
+        sessionDockDarkGlass
+    }
+
+/** 底栏发丝边宽度（比 [dev.agentmirror.app.ui.theme.Dims.hairline] 的 1dp 更细）。 */
+internal val SessionDockHairline: Dp = FlatHairline
+
+/** 纯平微水润薄片，见 [flatGlass]：clip → 半透底 → 按压蒙层 → 顶亮/底暗内边 → 发丝边。 */
+internal fun Modifier.dockFlatGlass(
+    shape: Shape,
+    fill: Color,
+    hairline: Color,
+    topGlint: Color,
+    bottomShade: Color,
+    overlay: Color = Color.Transparent,
+    hairlineWidth: Dp = SessionDockHairline,
+): Modifier = flatGlass(
+    shape = shape,
+    fill = fill,
+    hairline = hairline,
+    topGlint = topGlint,
+    bottomShade = bottomShade,
+    overlay = overlay,
+    hairlineWidth = hairlineWidth,
+)
+
 internal val sessionDockDarkScheme = darkColorScheme(
     primary = Color(0xFF9184D9),
     onPrimary = Color(0xFF161826),
@@ -163,13 +215,20 @@ internal val sessionDockDarkScheme = darkColorScheme(
 
 @Composable
 internal fun SessionDockTheme(dark: Boolean, content: @Composable () -> Unit) {
+    // 选区柄 / 选区底走全 App 科技蓝：MaterialTheme 会按紫色 primary 重新派生 LocalTextSelectionColors，
+    // 所以必须在它的 content 内部再覆盖一次，输入框才不会露出紫色选区。
+    val accent = LocalAppPalette.current.accent
+    val selectionColors = remember(accent) {
+        TextSelectionColors(handleColor = accent, backgroundColor = accent.copy(alpha = 0.32f))
+    }
     // The source uses real 40/36/32px controls rather than Material's injected 48dp target.
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         MaterialTheme(
             colorScheme = if (dark) sessionDockDarkScheme else sessionDockLightScheme,
             typography = MaterialTheme.typography,
             shapes = MaterialTheme.shapes,
-            content = content,
-        )
+        ) {
+            CompositionLocalProvider(LocalTextSelectionColors provides selectionColors, content = content)
+        }
     }
 }

@@ -20,6 +20,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.compose.ui.graphics.toArgb
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.ui.theme.TermPalette
 import dev.agentmirror.app.ui.theme.TermSchemeCatalog
 import dev.agentmirror.terminal.TerminalColor
@@ -61,6 +62,7 @@ class TermRemapTest {
     @After
     fun tearDown() {
         TermPalette.resetBindingForTest()
+        DiagLog.resetForTest()
     }
 
     private val probes = listOf(
@@ -126,6 +128,32 @@ class TermRemapTest {
         assertSubset("Dracula", sDracula, rDracula)
         assertNotEquals(sVesper, sDracula)
         assertNotEquals(TermPalette.of(true).defaultBg, 0xFF101010.toInt())
+    }
+
+    @Test
+    fun contrastDiagnosticsStayBoundedAcrossAlternatingCellColors() {
+        DiagLog.resetForTest()
+        TermPalette.bindSelectionForTest("follow-system", "follow-system")
+        val background = TermPalette.of(false).defaultBg
+        val colors = listOf(
+            TerminalColor.Rgb(255, 255, 255),
+            TerminalColor.Rgb(255, 255, 200),
+            TerminalColor.Rgb(203, 144, 0),
+            TerminalColor.Rgb(255, 255, 255),
+        )
+        repeat(1_000) {
+            colors.forEach { color ->
+                TermPalette.colorFor(
+                    color,
+                    background = false,
+                    dark = false,
+                    againstBg = background,
+                )
+            }
+        }
+        val lines = DiagLog.snapshotForTest().filter { it.contains("[term-remap-contrast]") }
+        assertTrue("浅色终端对比度诊断必须不随逐格绘制刷屏 count=${lines.size} lines=$lines", lines.size <= 2)
+        assertTrue("应至少保留一条对比度诊断", lines.isNotEmpty())
     }
 
     @Test

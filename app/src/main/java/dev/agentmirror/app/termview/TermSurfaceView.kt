@@ -408,6 +408,7 @@ class TermSurfaceView @JvmOverloads constructor(
         DiagLog.record(
             "viewport",
             "source=windowVisibility visibility=$visibility width=$width height=$height",
+            coalesceKey = "window|$visibility|$width|$height",
         )
         if (visibility != VISIBLE) {
             drawControlSubscription?.close()

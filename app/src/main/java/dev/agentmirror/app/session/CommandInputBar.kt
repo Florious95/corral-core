@@ -2,16 +2,17 @@
  * ─────────────────────────────────────────────────────────────
  * CommandInputBar.kt — 最底行 · 输入胶囊
  *
- * 对应设计稿：输入框「完全包裹」加号与发送——一只圆角胶囊 Surface，
- * 内部从左到右：加号图标钮（无底色）· 受控 BasicTextField · 发送小圆钮
- * （primary 描边圆形，主流 Chat App 式样）。
+ * 对应设计稿：输入框「完全包裹」加号与发送——一只微水润 FlatGlass 胶囊
+ * （见 [dockFlatGlass]：半透底 + 0.5dp 发丝边 + 顶亮/底暗，⛔ 不采样背景），
+ * 内部从左到右：中性 GlassIconButton 加号 · 受控 BasicTextField · 主色
+ * GlassIconButton 发送（tint=accent，与弹窗「创建」同材质）。键帽见 HotkeyRow。
  *
- * 交互（已验收）：
+ * 交互（已验收，⛔ 视觉改造不得触碰）：
  * - 单行起步；获得焦点（IME 弹出）时文本区高度 animateDpAsState 膨胀到
  *   expandedLines 行（默认 3），失焦收回单行；
  * - 发送后由宿主清空 value 并可收起焦点（见接线说明）；发送钮在文本非空
- *   时底色填 primaryContainer 作可用暗示；
- * - 胶囊描边聚焦时 animateColorAsState 过渡到 primary。
+ *   时底色薄染 primary 作可用暗示；
+ * - 胶囊发丝边聚焦时 animateColorAsState 过渡到 primary。
  *
  * 尺寸严格对应源码 CSS：
  * - 胶囊圆角 22dp；Compose 内边距含源码 1dp border inset，视觉值仍是 4/6/6/6；
@@ -26,9 +27,10 @@ package dev.agentmirror.app.session
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -37,12 +39,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -58,6 +60,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -65,10 +72,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import com.kyant.backdrop.backdrops.emptyBackdrop
+import dev.agentmirror.app.ui.components.GlassIconButton
+import dev.agentmirror.app.ui.theme.LocalAppPalette
 
 /** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
 internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
@@ -90,6 +103,9 @@ fun CommandInputBar(
 ) {
     val cs = MaterialTheme.colorScheme
     val source = sessionDockSourceTokens()
+    val glass = sessionDockGlassTokens()
+    // 强调色一律走全 App 调色板的科技蓝（p.accent），⛔ 不用 dock 主题遗留的紫色 primary / accent*
+    val p = LocalAppPalette.current
     val keyboardController = LocalSoftwareKeyboardController.current
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
@@ -113,6 +129,7 @@ fun CommandInputBar(
     }
     val sourceExpandedLines = expandedLines.coerceIn(2, 5)
     val editorExpanded = focused && collapseRequest == 0
+    val onSend = { onSendText(value.text) }
     val fieldHeight by animateDpAsState(
         targetValue = sourceInputFieldHeightDp(editorExpanded, sourceExpandedLines).dp,
         animationSpec = tween(
@@ -122,18 +139,24 @@ fun CommandInputBar(
         label = "inputFieldHeight",
     )
     val borderColor by animateColorAsState(
-        targetValue = if (focused) source.accent700 else source.neutral800,
+        targetValue = if (focused) p.accent.copy(alpha = 0.85f) else glass.hairline,
         animationSpec = tween(
             durationMillis = SessionDockMotion.InputBorderMillis,
             easing = SessionDockMotion.Ease,
         ),
         label = "inputBorder",
     )
-    Surface(
-        modifier = modifier.fillMaxWidth().testTag("session-command-input"),
-        shape = RoundedCornerShape(22.dp),
-        color = source.neutral900,
-        border = BorderStroke(1.dp, borderColor),
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .dockFlatGlass(
+                shape = RoundedCornerShape(22.dp),
+                fill = glass.fill,
+                hairline = borderColor,
+                topGlint = glass.topGlint,
+                bottomShade = glass.bottomShade,
+            )
+            .testTag("session-command-input"),
     ) {
         Row(
             // 底对齐：膨胀时加号/发送钉在底边，与主流 Chat App 一致
@@ -141,13 +164,16 @@ fun CommandInputBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(start = 5.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
         ) {
-            Surface(
-                onClick = onPickAttachment,
-                shape = CircleShape,
-                color = Color.Transparent,
+            // 加号：36×32 触控槽不变，32dp 标杆中性 GlassIconButton（emptyBackdrop，不采样）。
+            Box(
                 modifier = Modifier.size(width = 36.dp, height = 32.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                GlassIconButton(
+                    onClick = onPickAttachment,
+                    size = 32.dp,
+                    backdrop = emptyBackdrop(),
+                ) {
                     Icon(
                         DockIconPlus, contentDescription = "添加附件",
                         modifier = Modifier.width(20.dp), tint = source.neutral400,
@@ -160,8 +186,18 @@ fun CommandInputBar(
             ) {
                 BasicTextField(
                     value = value,
-                    onValueChange = onValueChange,
+                    onValueChange = { newValue ->
+                        onValueChange(newValue)
+                    },
+                    singleLine = false,
                     maxLines = if (editorExpanded) sourceExpandedLines else 1,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Send,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSend = { onSend() },
+                    ),
                     textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.5.sp,
@@ -169,7 +205,7 @@ fun CommandInputBar(
                         lineHeight = 20.sp,
                         color = cs.onSurface,
                     ),
-                    cursorBrush = SolidColor(cs.primary),
+                    cursorBrush = SolidColor(p.accent),
                     decorationBox = { inner ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (value.text.isEmpty()) {
@@ -192,6 +228,16 @@ fun CommandInputBar(
                         .height(fieldHeight)
                         .padding(vertical = 6.dp)
                         .testTag("session-command-editor")
+                        .onPreviewKeyEvent { event ->
+                            if (event.key == Key.Enter && event.type == KeyEventType.KeyUp) {
+                                onSend()
+                                true
+                            } else if (event.key == Key.Enter) {
+                                true
+                            } else {
+                                false
+                            }
+                        }
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 awaitFirstDown(
@@ -221,34 +267,30 @@ fun CommandInputBar(
                 )
             }
             val hasText = value.text.isNotBlank()
-            val sendBackground by animateColorAsState(
-                targetValue = if (hasText) source.accent900 else Color.Transparent,
-                animationSpec = tween(
-                    durationMillis = SessionDockMotion.InputBorderMillis,
-                    easing = SessionDockMotion.Ease,
-                ),
-                label = "sendBackground",
-            )
-            val sendForeground by animateColorAsState(
-                targetValue = if (hasText) source.accent200 else source.accent,
-                animationSpec = tween(
-                    durationMillis = SessionDockMotion.InputBorderMillis,
-                    easing = SessionDockMotion.Ease,
-                ),
-                label = "sendForeground",
-            )
-            Surface(
-                onClick = { onSendText(value.text) },
-                shape = CircleShape,
-                color = sendBackground,
-                border = BorderStroke(1.dp, source.accent),
-                modifier = Modifier.size(32.dp),
+            Box(
+                modifier = Modifier
+                    .width(32.dp)
+                    .height(fieldHeight)
+                    .zIndex(2f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { onSend() },
+                    ),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                // 主色 GlassIconButton（与弹窗「创建」同款 tint）；外层全高 zIndex 触控盒锁死首击发送
+                GlassIconButton(
+                    onClick = { onSend() },
+                    tint = p.accent,
+                    size = 32.dp,
+                    backdrop = emptyBackdrop(),
+                    modifier = Modifier.testTag("session-send-button"),
+                ) {
                     Icon(
                         DockIconArrowUp, contentDescription = "发送",
                         modifier = Modifier.width(16.dp),
-                        tint = sendForeground,
+                        tint = if (hasText) p.onAccent else p.onAccent.copy(alpha = 0.72f),
                     )
                 }
             }

@@ -259,6 +259,80 @@ class SessionViewModelTest {
     }
 
     @Test
+    fun sendDraft_whenInputSyncDisabled_sendsWholeTextAndClearsDraft() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = false
+        // typing does NOT send any input frame
+        h.vm.onPassthroughInput(tv(""), tv("echo hello"))
+        assertTrue(h.inputFrames().isEmpty())
+
+        // sendDraft sends whole text with CR submit and commits
+        h.vm.sendDraft("echo hello")
+        assertEquals(InputStatus.Sending, h.vm.inputStatus)
+        val sent = h.inputFrames().last()
+        assertEquals("echo hello\r", sent.text)
+        assertTrue(sent.keys.isEmpty())
+        assertEquals("", sent.attachmentPath)
+        h.ackOk(sent.reqId)
+        assertEquals(InputStatus.Sent, h.vm.inputStatus)
+    }
+
+    @Test
+    fun sendDraft_whenInputSyncDisabled_emptyText_sendsBareEnter() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = false
+        h.vm.sendDraft("")
+        assertEquals(InputStatus.Sending, h.vm.inputStatus)
+        val sent = h.inputFrames().last()
+        assertEquals("", sent.text)
+        assertTrue(sent.keys.isEmpty())
+        assertEquals("", sent.attachmentPath)
+        h.ackOk(sent.reqId)
+        assertEquals(InputStatus.Sent, h.vm.inputStatus)
+    }
+
+    @Test
+    fun sendDraft_whenInputSyncDisabled_withAttachment_sendsTextAndAttachmentPath() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = false
+        h.vm.uploadAttachment(Attachment("a.png", "image/png", byteArrayOf(1)))
+        h.vm.sendDraft("look at this")
+        val sent = h.inputFrames().last()
+        assertEquals("look at this", sent.text)
+        assertEquals("/host/img.png", sent.attachmentPath)
+    }
+
+    @Test
+    fun sendDraft_whenInputSyncEnabled_ignoresTextAndSendsBareEnter() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = true
+        h.vm.onPassthroughInput(tv(""), tv("live typing"))
+        assertEquals(1, h.inputFrames().size)
+
+        // sendDraft with text still sends bare enter because text was already synced
+        h.vm.sendDraft("live typing")
+        val sent = h.inputFrames().last()
+        assertEquals("", sent.text)
+    }
+
+    @Test
+    fun sendDraft_whenInputSyncEnabled_andComposingTextNotYetSynced_flushesDiffBeforeEnter() {
+        val h = Harness()
+        h.vm.inputSyncEnabled = true
+        // Active IME composition: passthrough input holds keys (0 frames sent)
+        val composing = TextFieldValue(text = "git status", composition = androidx.compose.ui.text.TextRange(0, 10))
+        h.vm.onPassthroughInput(tv(""), composing)
+        assertTrue("composing text must not emit passthrough keys", h.inputFrames().isEmpty())
+
+        // User clicks send while keyboard / composition is still active
+        h.vm.sendDraft("git status")
+        val frames = h.inputFrames()
+        assertEquals("must send typing frame followed by bare enter frame", 2, frames.size)
+        assertEquals("first frame must type the unsynced draft into CLI", "git status", frames[0].text)
+        assertEquals("second frame must be bare enter to execute", "", frames[1].text)
+    }
+
+    @Test
     fun sendDraftAckFailureShowsError() {
         val h = Harness()
         h.vm.sendDraft()
@@ -535,6 +609,16 @@ class SessionViewModelTest {
     }
 
     // ---- 连接状态映射 ----
+
+    @Test
+    fun snapshotContent_initiallyFalse_becomesTrueOnSnapshot() {
+        val h = Harness()
+        assertFalse("快照到达前尚未就绪", h.vm.hasSnapshotContent())
+        assertFalse(h.vm.hasSnapshot)
+        h.snap("line 1\r\nline 2")
+        assertTrue("快照应用后就绪", h.vm.hasSnapshotContent())
+        assertTrue(h.vm.hasSnapshot)
+    }
 
     @Test
     fun reconnectStateSurfacesBanner() {

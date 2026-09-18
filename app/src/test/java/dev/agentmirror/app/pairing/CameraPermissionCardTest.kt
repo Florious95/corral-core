@@ -50,7 +50,7 @@ class CameraPermissionCardTest {
             }
         }
 
-        compose.onNodeWithText("相机权限已被永久拒绝，请到系统设置中开启；也可改用下方手填连接。").assertExists()
+        compose.onNodeWithText("相机权限已被永久拒绝，请到系统设置中开启；也可使用下方主机绑定。").assertExists()
         compose.onNodeWithText("打开系统设置").performClick()
         assertTrue(openedSettings)
     }

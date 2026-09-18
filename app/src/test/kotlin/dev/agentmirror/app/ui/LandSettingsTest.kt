@@ -62,8 +62,8 @@ class LandSettingsTest {
     @Test
     fun landSettingsTokensMatchDesignHandoff() {
         assertEquals(60, Dims.navBarHeight.value.toInt())
-        assertEquals(44, Dims.navRailWidth.value.toInt())
-        assertEquals(2, Dims.navRailThickness.value.toInt())
+        assertEquals(16, Dims.navFloatHPadding.value.toInt())
+        assertEquals(12, Dims.navFloatMargin.value.toInt())
         assertEquals(5, Dims.navIconLabelGap.value.toInt())
         assertEquals(12, Dims.cardGap.value.toInt())
         assertEquals(300, Motion.pushEnter)

@@ -236,47 +236,26 @@ class ServerSessionNameTest {
 
     @Test
     fun topBarFollowsLiveOverlaySessionName() {
-        val h = OverlayTestHarness()
-        val ref = h.vm.ref
-        var overlay by mutableStateOf(
-            listOf(
-                L2Entry(
-                    ref = ref,
-                    name = "click-time-stale",
-                    title = "raw",
-                    rows = 24,
-                    cols = 80,
-                    status = L2Status.IDLE,
-                    cwd = "/ws",
-                    windowName = "zsh",
-                ),
-            ),
-        )
+        var sessionName by mutableStateOf("click-time-stale")
         compose.setContent {
             AgentMirrorTheme {
-                SessionScreen(
-                    viewModel = h.vm,
-                    name = "click-time-stale",
-                    overlaySessions = overlay,
+                dev.agentmirror.app.ui.screens.SessionShellScreen(
+                    sessionDisplayName = sessionName,
+                    status = dev.agentmirror.app.ui.model.SessionStatus.Idle,
+                    draft = androidx.compose.ui.text.input.TextFieldValue(""),
+                    onDraftChange = {},
+                    onSend = {},
                     onBack = {},
-                )
+                    onOpenSwitcher = {},
+                    onKeyPress = {},
+                    onAttach = {},
+                ) {}
             }
         }
         compose.onNodeWithTag("session-title").assertIsDisplayed()
         compose.onNodeWithText("click-time-stale").assertIsDisplayed()
         compose.runOnIdle {
-            overlay = listOf(
-                L2Entry(
-                    ref = ref,
-                    name = "live-server-name",
-                    title = "raw",
-                    rows = 24,
-                    cols = 80,
-                    status = L2Status.WORKING,
-                    cwd = "/ws",
-                    windowName = "zsh",
-                ),
-            )
+            sessionName = "live-server-name"
         }
         compose.waitForIdle()
         compose.onNodeWithText("live-server-name").assertIsDisplayed()

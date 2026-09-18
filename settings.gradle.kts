@@ -25,8 +25,13 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
+        val candidateRepo = rootDir.parentFile.resolve("workspace-create-agent-core-maven/.team/nodes/developer/session-longpress-close-core-maven")
+        if (candidateRepo.isDirectory) {
+            maven { url = candidateRepo.toURI() }
+        }
+        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/maven/") }
         // Host-routing core artifacts, pinned to the immutable Maven publication commit.
-        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/813f81c672d663f65cef280bd1bc1a350c500f18/") }
+        maven { url = uri("https://raw.githubusercontent.com/Florious95/corral-core/0f365ec019bd4cf537972536eeae0f9588aa89dc/") }
         google()
         mavenCentral()
     }

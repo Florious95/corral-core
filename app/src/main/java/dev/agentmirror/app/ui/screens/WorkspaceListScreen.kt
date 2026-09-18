@@ -1,18 +1,20 @@
 package dev.agentmirror.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -30,9 +32,10 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.LanPill
+import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.PathText
-import dev.agentmirror.app.ui.components.RowDivider
 import dev.agentmirror.app.ui.components.ScreenHeader
+import dev.agentmirror.app.ui.components.glassCard
 import dev.agentmirror.app.ui.model.WorkspaceItem
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
@@ -43,8 +46,8 @@ import androidx.compose.ui.draw.clip
 
 /**
  * 工作区列表（一级）。
- * 行结构：❯ 方块 → 名称 / 路径 → 会话数 → ›
- * ❯ 方块从原来的 44dp 蓝色大块缩到 34dp 扁平化，保留作品牌符号但不再抢视线。
+ * 行结构：工作状态麻将牌 → 名称 / 路径 → 会话数 → ›。
+ * 麻将牌显示当前工作中的 Agent 数量；0 表示没有已识别的 working 节点。
  */
 @Composable
 fun WorkspaceListScreen(
@@ -68,17 +71,17 @@ fun WorkspaceListScreen(
         Box(
             Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .background(p.listBackground),
+                .fillMaxWidth(),
         ) {
             LazyColumn(
-                Modifier
+                modifier = Modifier
                     .fillMaxSize()
-                    .testTag("workspace-list-scroll")
+                    .testTag("workspace-list-scroll"),
+                contentPadding = PaddingValues(top = Dims.cardVGap, bottom = Dims.cardVGap + LocalFloatingNavInset.current),
+                verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
             ) {
                 items(workspaces, key = { it.id }) { item ->
                     WorkspaceRow(item = item, onClick = { onWorkspaceClick(item) })
-                    RowDivider()
                 }
             }
             if (connectionBanner != null) {
@@ -99,6 +102,46 @@ fun WorkspaceListScreen(
     }
 }
 
+internal val MahjongWorkingColor = Color(0xFF047857)
+internal val MahjongIdleColor = Color(0xFF6B7280)
+
+/**
+ * 一级工作区的工作状态指示牌：纯粹现代的 3:4 竖向圆角状态块（26×34，5dp圆角）。
+ * 工作节点>0 为深翠绿 #047857，无工作为灰色 #6B7280，白字等宽数字。
+ * 纯平现代设计，彻底废止任何拟物麻将釉光与弧面反光。
+ */
+@Composable
+internal fun MahjongStatusBadge(
+    workingCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    val count = workingCount.coerceAtLeast(0)
+    val fontSize = when {
+        count >= 100 -> 10.sp
+        count >= 10 -> 12.sp
+        else -> 14.sp
+    }
+    Box(
+        modifier
+            .width(26.dp)
+            .height(34.dp)
+            .clip(RoundedCornerShape(5.dp))
+            .background(if (count > 0) MahjongWorkingColor else MahjongIdleColor)
+            .border(Dims.hairline, Color.White.copy(alpha = 0.22f), RoundedCornerShape(5.dp))
+            .testTag("mahjong-status-badge"),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppText(
+            text = count.toString(),
+            color = Color.White,
+            fontSize = fontSize,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+            lineHeightMultiplier = 1f,
+        )
+    }
+}
+
 @Composable
 private fun WorkspaceRow(
     item: WorkspaceItem,
@@ -109,23 +152,21 @@ private fun WorkspaceRow(
     val pressed by interaction.collectIsPressedAsState()
     Row(
         modifier = Modifier
+            .padding(horizontal = Dims.cardHMargin)
             .fillMaxWidth()
             .height(Dims.rowHeightWithSubtitle)
-            .background(if (pressed) p.rowPressed else Color.Transparent)
+            .glassCard(
+                shape = RoundedCornerShape(Radii.card),
+                fill = if (pressed) p.glassCardFillPressed else p.glassCardFill,
+                stroke = p.glassStroke,
+                specular = p.glassSpecular,
+            )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(start = 14.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            Modifier
-                .size(Dims.workspaceGlyphBox)
-                .clip(RoundedCornerShape(Radii.workspaceGlyphBox))
-                .background(p.accentContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            AppText("❯", p.accent, 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
-        }
+        MahjongStatusBadge(workingCount = item.workingCount)
         Column(Modifier.weight(1f)) {
             AppText(
                 text = item.name,

@@ -18,6 +18,8 @@ package dev.agentmirror.app.termview
 
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.TerminalEmulator
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -154,6 +156,36 @@ class TermViewPresenterTest {
     }
 
     @Test
+    fun beginFrameDoesNotWaitForEmulatorAfterPreparedFrame() {
+        val h = harness(rows = 2, cols = 5)
+        val captured = CountDownLatch(1)
+        h.presenter.onFrameRequested = { captured.countDown() }
+        h.emulator.feed("ready")
+        assertTrue(captured.await(1, TimeUnit.SECONDS))
+        h.presenter.beginFrame()
+
+        val monitorHeld = CountDownLatch(1)
+        val releaseMonitor = CountDownLatch(1)
+        val holder = Thread {
+            synchronized(h.emulator) {
+                monitorHeld.countDown()
+                releaseMonitor.await(1, TimeUnit.SECONDS)
+            }
+        }
+        holder.start()
+        assertTrue(monitorHeld.await(1, TimeUnit.SECONDS))
+        try {
+            val started = System.nanoTime()
+            h.presenter.beginFrame()
+            val elapsedMs = (System.nanoTime() - started) / 1_000_000
+            assertTrue("beginFrame waited on emulator monitor: ${elapsedMs}ms", elapsedMs < 250)
+        } finally {
+            releaseMonitor.countDown()
+            holder.join(1_000)
+        }
+    }
+
+    @Test
     fun beginFrameFreezesScrollbackBoundaryAndRows() {
         val h = harness(rows = 2, cols = 5)
         h.emulator.feed("a\r\nb\r\nc\r\nd")
@@ -183,5 +215,18 @@ class TermViewPresenterTest {
         assertTrue(h.presenter.takeDamage().isEmpty())
         // 锁定语义仍保证窗口内容不动。
         assertEquals("a", text(h.presenter.lineCells(0)))
+    }
+
+    @Test
+    fun windowAnchorsToLatestActiveRowWhenScrollbackExists() {
+        // 4 行高终端，先产生 scrollback（2 行），然后主屏幕只有 1 行文字（其余 3 行空白）
+        val h = harness(rows = 4, cols = 10)
+        h.emulator.feed("hist1\r\nhist2\r\nactive1")
+        // 此时 scrollback=2 ("hist1", "hist2")，屏幕第0行="active1"，第1~3行空白。
+        // 首帧锚定在最新有效行：窗口底部直接钉在 active1（逻辑行 2），窗口为 0..3
+        assertEquals(0..3, h.presenter.window)
+        assertEquals("hist1", text(h.presenter.lineCells(0)))
+        assertEquals("hist2", text(h.presenter.lineCells(1)))
+        assertEquals("active1", text(h.presenter.lineCells(2)))
     }
 }

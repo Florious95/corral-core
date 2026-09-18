@@ -34,6 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -46,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.BackChevron
@@ -440,7 +446,15 @@ private fun DraftField(
             }
             BasicTextField(
                 value = draft,
-                onValueChange = onDraftChange,
+                onValueChange = { newValue ->
+                    if (newValue.text.contains('\n') || newValue.text.contains('\r')) {
+                        val cleaned = newValue.text.replace("\n", "").replace("\r", "")
+                        onDraftChange(newValue.copy(text = cleaned))
+                        if (cleaned.isNotBlank()) onSend()
+                    } else {
+                        onDraftChange(newValue)
+                    }
+                },
                 singleLine = true,
                 textStyle = LocalTextStyle.current.merge(
                     TextStyle(
@@ -455,7 +469,17 @@ private fun DraftField(
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { onSend() }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("session-draft"),
+                    .testTag("session-draft")
+                    .onPreviewKeyEvent { event ->
+                        if (event.key == Key.Enter && event.type == KeyEventType.KeyUp) {
+                            onSend()
+                            true
+                        } else if (event.key == Key.Enter) {
+                            true
+                        } else {
+                            false
+                        }
+                    },
             )
         }
     }
@@ -468,6 +492,7 @@ private fun SendButton(enabled: Boolean, onSend: () -> Unit) {
     Box(
         Modifier
             .size(Dims.sendButtonSize)
+            .zIndex(2f)
             .clip(RoundedCornerShape(Radii.sendButton))
             .background(if (enabled) p.sendEnabledBg else p.sendDisabledBg)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onSend),

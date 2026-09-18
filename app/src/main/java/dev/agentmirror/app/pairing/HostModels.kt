@@ -15,7 +15,7 @@ data class HostEndpoint(
     val source: HostEndpointSource = HostEndpointSource.DEFAULT_PORT,
 ) {
     init {
-        require(HostRouter.isLiteralIpv4(address)) { "host endpoint must use a literal IPv4" }
+        require(HostRouter.isLiteralIpv4(address)) { "host endpoint must use a valid IPv4 address" }
         require(port in 1..65535) { "host endpoint port out of range" }
     }
 

@@ -104,10 +104,10 @@ class LandTermTest {
         compose.onNodeWithTag("session-title").assertDoesNotExist()
         compose.onNodeWithText("远控 leader").assertDoesNotExist()
         compose.onNodeWithText("claude_code").assertDoesNotExist()
-        compose.onNodeWithTag("favorite-session-list").assertIsDisplayed()
-        compose.onNodeWithContentDescription("返回菜单").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithText("查看").assertIsDisplayed()
+        compose.onNodeWithTag("favorite-session-list").assertDoesNotExist()
+        compose.onNodeWithContentDescription("返回菜单").assertDoesNotExist()
+        compose.onNodeWithText("Esc").assertIsDisplayed()
+        compose.onNodeWithText("Tab").assertIsDisplayed()
     }
 
     @Test
@@ -119,13 +119,28 @@ class LandTermTest {
             }
         }
         compose.onNodeWithTag("session-overlay").assertDoesNotExist()
-        compose.onNodeWithContentDescription("返回菜单").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("session-overlay-open").performClick()
+        compose.runOnUiThread { h.vm.openOverlay() }
         compose.waitForIdle()
         compose.onNodeWithTag("session-overlay").assertIsDisplayed()
         compose.onNodeWithText("切换会话").assertIsDisplayed()
         compose.onNodeWithText("查看弹出菜单（原生实现，此处仅占位）").assertDoesNotExist()
         compose.onNodeWithText("点任意处关闭").assertDoesNotExist()
+    }
+
+    @Test
+    fun sessionTerminalPlaceholderVisibleBeforeSnapshotThenDismisses() {
+        val h = OverlayTestHarness()
+        compose.setContent {
+            AppTheme(appearance = Appearance.Light) {
+                SessionScreen(viewModel = h.vm, name = "sess-a", onBack = {})
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-terminal-placeholder").assertIsDisplayed()
+        compose.runOnIdle {
+            h.snap("hello world")
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("session-terminal-placeholder").assertDoesNotExist()
     }
 }

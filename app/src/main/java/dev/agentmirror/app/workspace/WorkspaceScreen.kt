@@ -21,8 +21,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +57,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.tsnet.ConnectionPath
+import dev.agentmirror.app.ui.components.NavDirection
+import dev.agentmirror.app.ui.components.navTransition
 import dev.agentmirror.app.ui.screens.SessionListScreen
 import dev.agentmirror.app.ui.screens.WorkspaceListScreen
 import dev.agentmirror.app.ui.theme.AppTheme
@@ -156,76 +156,98 @@ fun WorkspaceScreen(
                 .testTag("workspace-pull-refresh"),
         ) {
             if (silentHostRecovery) return@PullToRefreshBox
-            val level2Cwd = selectedWorkspaceCwd
-            if (level2Cwd != null) {
-                DisposableEffect(viewModel, level2Cwd, isActive) {
-                    val lease = if (isActive) viewModel.enterLevel2(level2Cwd) else null
-                    onDispose {
-                        // 旋转销毁组合不是离开菜单：退订会逼新组合再订，撞 069 经济红线。
-                        // 进会话页时 ThreePane 离屏，但二级订阅必须留下给顶栏灯（083 §10）。
-                        if (lease != null && activity?.isChangingConfigurations != true && !retainLevel2OnDispose()) {
-                            viewModel.leaveLevel2(lease)
+            // 一级 ↔ 二级：用现成 navTransition，不再 if/return 硬切（返回无动画）。
+            AnimatedContent(
+                targetState = selectedWorkspaceCwd,
+                transitionSpec = {
+                    val dir = if (targetState != null) NavDirection.Push else NavDirection.Pop
+                    navTransition(dir)
+                },
+                modifier = Modifier.fillMaxSize(),
+                label = "workspace-l1-l2",
+            ) { level2Cwd ->
+                if (level2Cwd != null) {
+                    DisposableEffect(viewModel, level2Cwd, isActive) {
+                        val lease = if (isActive) viewModel.enterLevel2(level2Cwd) else null
+                        onDispose {
+                            // 旋转销毁组合不是离开菜单：退订会逼新组合再订，撞 069 经济红线。
+                            // 进会话页时 ThreePane 离屏，但二级订阅必须留下给顶栏灯（083 §10）。
+                            // 跟在 AnimatedContent 的二级分支里：Pop 退场播完才 onDispose，租期不提前断。
+                            if (lease != null && activity?.isChangingConfigurations != true && !retainLevel2OnDispose()) {
+                                viewModel.leaveLevel2(lease)
+                            }
                         }
                     }
-                }
-                LaunchedEffect(viewModel, level2Cwd, isActive) {
-                    if (!isActive) return@LaunchedEffect
-                    while (true) {
-                        kotlinx.coroutines.delay(1_000)
-                        viewModel.checkLevel2Quiet()
+                    LaunchedEffect(viewModel, level2Cwd, isActive) {
+                        if (!isActive) return@LaunchedEffect
+                        while (true) {
+                            kotlinx.coroutines.delay(1_000)
+                            viewModel.checkLevel2Quiet()
+                        }
                     }
-                }
-                val starred = favorites.map { it.key }.toSet()
-                Column(Modifier.fillMaxSize()) {
-                    AppTheme {
-                        SessionListScreen(
-                            workspaceName = cwdDisplayName(level2Cwd),
-                            workspacePath = level2Cwd,
-                            sessions = level2.sessions.map {
-                                it.toSessionItem(starred.contains(it.favoriteKey()))
-                            },
-                            onBack = onBackToList,
-                            onSessionClick = { item -> onOpenSession(item.id, item.displayName) },
-                            onToggleStar = { item ->
-                                level2.sessions.firstOrNull { it.ref == item.id }?.let(viewModel::toggleFavorite)
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .statusBarsPadding(),
-                            connectionPath = readyPath,
-                            connectionBanner = reconnectBanner ?: level2.banner?.takeIf {
-                                it == "会话列表更新失败，请下拉重试"
-                            },
-                        )
+                    val starred = favorites.map { it.key }.toSet()
+                    val closingRef by viewModel.closingSessionRef.collectAsState()
+                    Column(Modifier.fillMaxSize()) {
+                        AppTheme {
+                            SessionListScreen(
+                                workspaceName = cwdDisplayName(level2Cwd),
+                                workspacePath = level2Cwd,
+                                sessions = level2.sessions.map {
+                                    it.toSessionItem(starred.contains(it.favoriteKey()))
+                                },
+                                onBack = onBackToList,
+                                onSessionClick = { item -> onOpenSession(item.id, item.displayName) },
+                                onToggleStar = { item ->
+                                    level2.sessions.firstOrNull { it.ref == item.id }?.let(viewModel::toggleFavorite)
+                                },
+                                onCloseSession = { item ->
+                                    viewModel.closeSession(item.id)
+                                },
+                                closingSessionRef = closingRef,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .statusBarsPadding(),
+                                connectionPath = readyPath,
+                                connectionBanner = reconnectBanner ?: level2.banner?.takeIf {
+                                    it == "会话列表更新失败，请下拉重试"
+                                },
+                                agentLaunchers = state.agentLaunchers,
+                                createAgentState = state.createAgent,
+                                onCreateAgent = { anchorRef, provider, name, bypass ->
+                                    viewModel.createAgent(anchorRef, provider, name, bypass)
+                                },
+                                onCreateAgentErrorCleared = viewModel::clearCreateAgentError,
+                            )
+                        }
                     }
-                }
-                return@PullToRefreshBox
-            }
-            // 一级列表 + 加载/空/错态。
-            AnimatedContent(
-                targetState = state.workspaces,
-                transitionSpec = { fadeIn().togetherWith(fadeOut()) },
-                modifier = Modifier.fillMaxSize(),
-                label = "workspace-level",
-            ) { workspaces ->
-                when {
-                    // 未绑定 skip：安静空工作区，不是无尽 Loading，也不是假 READY 空引导。
-                    state.isQuietEmpty -> UnboundEmptyContent()
-                    // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
-                    state.isLoading -> LoadingContent()
-                    state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
-                    state.isEmpty -> EmptyGuideContent()
-                    else -> AppTheme {
-                        WorkspaceListScreen(
-                            workspaces = workspaces.map { it.toWorkspaceItem() },
-                            onWorkspaceClick = { onSelectWorkspace(it.path) },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .statusBarsPadding(),
-                            connectionPath = readyPath,
-                            connectionBanner = reconnectBanner,
-                        )
+                } else {
+                    // 一级列表 + 加载/空/错态。
+                    AnimatedContent(
+                        targetState = state.workspaces,
+                        transitionSpec = { fadeIn().togetherWith(fadeOut()) },
+                        modifier = Modifier.fillMaxSize(),
+                        label = "workspace-level",
+                    ) { workspaces ->
+                        when {
+                            // 未绑定 skip：安静空工作区，不是无尽 Loading，也不是假 READY 空引导。
+                            state.isQuietEmpty -> UnboundEmptyContent()
+                            // 连接中且还没有任何数据：专门加载态（修旧版空 LazyColumn 白屏缺陷）。
+                            state.isLoading -> LoadingContent()
+                            state.isDisconnected && state.workspaces.isEmpty() -> DisconnectedEmptyContent(state)
+                            state.isEmpty -> EmptyGuideContent()
+                            else -> AppTheme {
+                                WorkspaceListScreen(
+                                    workspaces = workspaces.map { it.toWorkspaceItem() },
+                                    onWorkspaceClick = { onSelectWorkspace(it.path) },
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .statusBarsPadding(),
+                                    connectionPath = readyPath,
+                                    connectionBanner = reconnectBanner,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -476,6 +498,7 @@ private fun WorkspaceList(
                 WorkspaceRow(
                     cwd = ws.cwd,
                     sessionCount = ws.sessionCount,
+                    workingCount = ws.workingCount,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),

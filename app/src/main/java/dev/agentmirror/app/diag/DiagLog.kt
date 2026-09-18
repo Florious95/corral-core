@@ -109,8 +109,8 @@ object DiagLog {
         fun nowMs(): Long
     }
 
-    /** 单条记录（环形缓冲元素）。 */
-    private data class Entry(val line: String)
+    /** 单条记录（环形缓冲元素）；关键事件占用保留槽，不能被普通日志驱逐。 */
+    private data class Entry(val line: String, val critical: Boolean)
 
     private val lock = ReentrantLock()
     private var config = Config()
@@ -191,14 +191,27 @@ object DiagLog {
      *
      * @contract
      * @pre none（tag 非空；message 任意，含可能携带凭据的异常文案）
-     * @post 一条 `[tag] message` 追加到环形缓冲（写满覆盖最旧）；message 中已注册 secret
-     *       与结构敏感串（tskey 前缀 / Bearer 头 / URI userinfo）已被替换为 [REDACTED]。
+     * @post 一条 `[tag] message` 追加到环形缓冲（写满优先覆盖普通日志，保护关键事件）；
+     *       message 中已注册 secret 与结构敏感串（tskey 前缀 / Bearer 头 / URI userinfo）已
+     *       被替换为 [REDACTED]。关键诊断（PerfTrace / ws 状态）不会被普通日志驱逐。
      *       [coalesceKey] 非空且与该 tag 上次相同：不新开行，把最近一条同 tag 行改成 `×N`
      *       （操作数没变）；键一变立刻新开行（操作数变了不许吞）。
      * @err none（不抛异常）
      * @inv 缓冲条数恒 ≤ maxEntries；任何 registerSecret 过的值在缓冲输出中零命中
      */
     fun record(tag: String, message: String, coalesceKey: String? = null) {
+        recordInternal(tag, message, coalesceKey, critical = isCritical(tag, message))
+    }
+
+    /**
+     * 记录一条关键诊断事件。关键事件与普通日志共享有界环，但缓冲满时优先驱逐普通
+     * 日志，保证打开会话、连接状态和首帧时间线不会被热路径日志淹没。
+     */
+    fun recordCritical(tag: String, message: String, coalesceKey: String? = null) {
+        recordInternal(tag, message, coalesceKey, critical = true)
+    }
+
+    private fun recordInternal(tag: String, message: String, coalesceKey: String?, critical: Boolean) {
         val safe = redact(message)
         val ts = clock.nowMs()
         val line = formatLine(ts, tag, safe)
@@ -206,19 +219,22 @@ object DiagLog {
             if (coalesceKey != null) {
                 val prev = lastCoalesce[tag]
                 if (prev != null && prev.key == coalesceKey) {
-                    prev.count += 1
                     val needle = "[$tag]"
                     val idx = buffer.indexOfLast { it.line.contains(needle) }
                     if (idx >= 0) {
+                        prev.count += 1
                         val stripped = COALESCE_REPEAT.replace(buffer[idx].line, "")
-                        buffer[idx] = Entry("$stripped ×${prev.count}")
+                        buffer[idx] = Entry("$stripped ×${prev.count}", buffer[idx].critical || critical)
+                        return
                     }
-                    return
                 }
                 lastCoalesce[tag] = Coalesce(coalesceKey, 1)
             }
-            if (buffer.size >= config.maxEntries) buffer.removeFirst()
-            buffer.addLast(Entry(line))
+            if (buffer.size >= config.maxEntries) {
+                val regular = buffer.indexOfFirst { !it.critical }
+                if (regular >= 0) buffer.removeAt(regular) else buffer.removeFirst()
+            }
+            buffer.addLast(Entry(line, critical))
         }
     }
 
@@ -350,6 +366,9 @@ object DiagLog {
     /** 当前缓冲内容快照（测试断言 / 有界红测；导出前预检）。 */
     fun snapshotForTest(): List<String> = lock.withLock { buffer.map { it.line } }
 
+    /** Tests the reservation policy without exposing the internal Entry representation. */
+    internal fun criticalCountForTest(): Int = lock.withLock { buffer.count { it.critical } }
+
     /** 当前已注册 secret 数（脱敏红测前置）。 */
     fun secretCountForTest(): Int = lock.withLock { secrets.size }
 
@@ -375,6 +394,12 @@ object DiagLog {
         // 崩溃回调里再抛会吞掉原始崩溃：整个记录动作包 try/catch。
         runCatching { record(tag, "crash: $deep") }
     }
+
+    /** 连接/打开会话时间线是事实源，自动享有保留槽；其余热路径保持普通环形语义。 */
+    private fun isCritical(tag: String, message: String): Boolean =
+        tag == "PerfTrace" || tag == "ws" || tag == "connection" ||
+            message.contains("route_enter") || message.contains("snapshot_applied") ||
+            message.contains("first_draw") || message.contains("layout_settled")
 
     // ---- 结构兜底正则（写入点脱敏用；standalone object 不允许 companion object，直接作顶层属性）----
 

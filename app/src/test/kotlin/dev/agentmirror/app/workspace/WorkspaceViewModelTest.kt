@@ -16,8 +16,10 @@
 
 package dev.agentmirror.app.workspace
 
+import dev.agentmirror.app.conn.AgentLauncherFrame
 import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.ConnectionState
+import dev.agentmirror.app.conn.CreateAgentResultFrame
 import dev.agentmirror.app.conn.ListDeltaFrame
 import dev.agentmirror.app.conn.ListingFrame
 import dev.agentmirror.app.conn.Workspace
@@ -30,8 +32,9 @@ import org.junit.Test
  * WorkspaceViewModel 纯 JVM 单测（验收 --tests "*Workspace*"）。
  *
  * 060 uproot（2026-08-15）：二级会话列表模型与聚合状态随状态判定整体拔除，本 VM 只
- * 维护一级工作区（cwd → session_count）。二级会话增删（added/changed/removed sessions）
- * 是二级实时流的数据源，不在本一级 VM 消费；一级只消费 changed_workspaces 的 session_count。
+ * 维护一级工作区（cwd → session_count + working_count）。二级会话增删
+ * （added/changed/removed sessions）是二级实时流的数据源，不在本一级 VM 消费；一级只
+ * 消费 changed_workspaces 的两个聚合计数。
  */
 class WorkspaceViewModelTest {
 
@@ -45,8 +48,8 @@ class WorkspaceViewModelTest {
                 reqId = 1,
                 seq = 42,
                 workspaces = listOf(
-                    Workspace(cwd = "/proj/a", sessionCount = 2),
-                    Workspace(cwd = "/proj/b", sessionCount = 1),
+                    Workspace(cwd = "/proj/a", sessionCount = 2, workingCount = 2),
+                    Workspace(cwd = "/proj/b", sessionCount = 1, workingCount = 0),
                 ),
             ),
         )
@@ -58,9 +61,19 @@ class WorkspaceViewModelTest {
         val a = s.workspaces[0]
         assertEquals("/proj/a", a.cwd)
         assertEquals(2, a.sessionCount)
+        assertEquals(2, a.workingCount)
         val b = s.workspaces[1]
         assertEquals("/proj/b", b.cwd)
         assertEquals(1, b.sessionCount)
+        assertEquals(0, b.workingCount)
+    }
+
+    @Test
+    fun listing_missingWorkingCount_defaultsToZero() {
+        val vm = WorkspaceViewModel()
+        vm.onFrame(listing(workspaceOf("/legacy", count = 2)))
+
+        assertEquals(0, vm.uiState.value.workspaces.single().workingCount)
     }
 
     @Test
@@ -78,18 +91,24 @@ class WorkspaceViewModelTest {
         assertEquals(1, s.workspaces.single().sessionCount)
     }
 
-    // ---- delta：只消费 changed_workspaces 的 session_count ----
+    // ---- delta：只消费 changed_workspaces 的 aggregate counts ----
 
     @Test
-    fun delta_changedWorkspaces_updatesSessionCount() {
+    fun delta_changedWorkspaces_updatesSessionAndWorkingCount() {
         val vm = WorkspaceViewModel()
-        vm.onFrame(listing(workspaceOf("/a", count = 2)))
+        vm.onFrame(listing(Workspace(cwd = "/a", sessionCount = 2, workingCount = 2)))
 
-        // changed_workspaces 覆盖 session_count（服务端权威）。
-        vm.onFrame(ListDeltaFrame(seq = 43, changedWorkspaces = listOf(Workspace(cwd = "/a", sessionCount = 1))))
+        // changed_workspaces 整体替换两个服务端权威计数。
+        vm.onFrame(
+            ListDeltaFrame(
+                seq = 43,
+                changedWorkspaces = listOf(Workspace(cwd = "/a", sessionCount = 1, workingCount = 0)),
+            ),
+        )
 
         val w = vm.uiState.value.workspaces.single()
         assertEquals(1, w.sessionCount)
+        assertEquals(0, w.workingCount)
     }
 
     @Test
@@ -105,6 +124,60 @@ class WorkspaceViewModelTest {
     }
 
     // ---- 无关帧：忽略不崩溃 ----
+
+    @Test
+    fun authAck_exposesAgentLaunchers() {
+        val vm = WorkspaceViewModel()
+        vm.onFrame(
+            AuthAckFrame(
+                ok = true,
+                agentLaunchers = listOf(
+                    AgentLauncherFrame("pi", "Pi Coding Agent", supportsBypass = true, naming = "cli"),
+                ),
+            ),
+        )
+        assertEquals("pi", vm.uiState.value.agentLaunchers.single().provider)
+        assertTrue(vm.uiState.value.agentLaunchers.single().supportsBypass)
+    }
+
+    @Test
+    fun createAgent_correlatesResultAndRefreshesVisibleLevel2() {
+        val subscribed = mutableListOf<String>()
+        var request: List<String>? = null
+        val vm = WorkspaceViewModel(
+            initialConnection = ConnectionUi.READY,
+            subscribeLevel2 = { subscribed += it },
+            createAgentRequest = { workspace, anchor, provider, name, bypass ->
+                request = listOf(workspace, anchor, provider, name, bypass.toString())
+                77L
+            },
+        )
+        vm.enterLevel2("/repo")
+        assertTrue(vm.createAgent("/tmp/tmux.sock\u001f%0", "pi", "child", true))
+        assertEquals(listOf("/repo", "/tmp/tmux.sock\u001f%0", "pi", "child", "true"), request)
+        assertTrue(vm.uiState.value.createAgent.inFlight)
+        vm.onFrame(CreateAgentResultFrame(reqId = 77L, ok = true, ref = "/tmp/tmux.sock\u001f%1", name = "child", naming = "cli"))
+        assertTrue(!vm.uiState.value.createAgent.inFlight)
+        assertEquals(null, vm.uiState.value.createAgent.error)
+        assertTrue(subscribed.size >= 2)
+    }
+
+    @Test
+    fun createAgent_disconnectClearsPendingWithoutReplay() {
+        var requests = 0
+        val vm = WorkspaceViewModel(
+            initialConnection = ConnectionUi.READY,
+            subscribeLevel2 = {},
+            createAgentRequest = { _, _, _, _, _ -> requests++; 5L },
+        )
+        vm.enterLevel2("/repo")
+        assertTrue(vm.createAgent("anchor", "pi", "child", false))
+        vm.onConnectionStateChanged(ConnectionState.RECONNECTING)
+        assertFalse(vm.uiState.value.createAgent.inFlight)
+        assertEquals("创建结果未确认，请刷新", vm.uiState.value.createAgent.error)
+        vm.onFrame(CreateAgentResultFrame(reqId = 5L, ok = true, ref = "ref", name = "child", naming = "cli"))
+        assertEquals(1, requests)
+    }
 
     @Test
     fun onFrame_ignoresUnrelatedFrames() {

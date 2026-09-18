@@ -73,9 +73,9 @@ class QrPayloadParserTest {
     @Test
     fun rejectsBadWsUrlScheme() {
         // http(s) 不是 ws 端点（协议 §1），拒绝。
-        assertFalse(isValidWsUrl("http://host:1/ws"))
-        assertTrue(isValidWsUrl("ws://host:1/ws"))
-        assertTrue(isValidWsUrl("wss://host:1/ws"))
+        assertFalse(isValidWsUrl("http://192.0.2.10:1/ws"))
+        assertTrue(isValidWsUrl("ws://192.0.2.10:1/ws"))
+        assertTrue(isValidWsUrl("wss://192.0.2.10:1/ws"))
     }
 
     // ---- candidates 候选字段（fix-pairing-candidates：多网卡全候选，契约 §2.1）----

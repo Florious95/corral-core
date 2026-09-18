@@ -46,9 +46,11 @@ import androidx.compose.ui.unit.sp
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.CardOutlineButton
 import dev.agentmirror.app.ui.components.CardTonalButton
+import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.MicroPill
 import dev.agentmirror.app.ui.components.ScreenHeader
 import dev.agentmirror.app.ui.components.SettingsCard
+import dev.agentmirror.app.ui.components.StandaloneLiquidToggle
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
@@ -82,6 +84,8 @@ fun SettingsScreen(
     darkFamilyId: String = TermThemeStore.DEFAULT_FAMILY_ID,
     onOpenLightTheme: () -> Unit = {},
     onOpenDarkTheme: () -> Unit = {},
+    inputSyncEnabled: Boolean = true,
+    onInputSyncEnabledChange: (Boolean) -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
@@ -92,7 +96,8 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .testTag("settings-scroll")
-                .padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
+                // 底部多留悬浮导航压住的高度，最后一张卡才能滚出胶囊（卡底与胶囊顶留 4dp）
+                .padding(start = 14.dp, end = 14.dp, bottom = 4.dp + LocalFloatingNavInset.current),
             verticalArrangement = Arrangement.spacedBy(Dims.cardGap),
         ) {
             // ── 主机配对 ──
@@ -129,6 +134,27 @@ fun SettingsScreen(
                 }
                 Box(Modifier.height(12.dp))
                 TerminalPreviewLine(fontSize = terminalFontSize)
+            }
+
+            // ── 输入框实时同步 ──
+            SettingsCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppText(
+                        text = "输入框实时同步",
+                        color = p.rowTitleText,
+                        fontSize = TypeSizes.cardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // 自包含液态开关：⛔ 不读 LocalGlassBackdrop（设置页在录制树内，反向采样会 SIGSEGV）
+                    StandaloneLiquidToggle(
+                        checked = inputSyncEnabled,
+                        onCheckedChange = onInputSyncEnabledChange,
+                        modifier = Modifier.testTag("input-sync-switch"),
+                    )
+                }
+                Box(Modifier.height(8.dp))
+                CardBody("开启时打字实时显示在 CLI 终端，关闭时仅在点击发送后一次性投递。")
             }
 
             // ── 诊断日志 ──
@@ -201,6 +227,17 @@ private fun CardBody(text: String) {
     )
 }
 
+/*
+ * 设置页控件的 FlatGlass 常量：未选中微透底板（中性灰 8%）+ 中性细边，
+ * 选中主色薄染（accent @ 0.25）+ 主色细光边；0.5dp 发丝边。
+ * 全部是 background / border（设置页在 layerBackdrop 录制树内，⛔ 不采样）。
+ */
+private val FlatChipFill = Color(0x15808080)
+private val FlatChipStroke = Color(0x26808080)
+private val FlatHairline = 0.5.dp
+private const val SelectedTintAlpha = 0.25f
+private const val SelectedStrokeAlpha = 0.55f
+
 @Composable
 private fun FontSizeChip(
     value: Int,
@@ -211,22 +248,26 @@ private fun FontSizeChip(
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val shape = RoundedCornerShape(Radii.chip)
     val bg = when {
-        selected -> p.chipSelectedBg
+        selected -> p.accent.copy(alpha = SelectedTintAlpha)
         pressed -> p.chipPressed
-        else -> p.chipBg
+        else -> FlatChipFill
     }
+    val stroke = if (selected) p.accent.copy(alpha = SelectedStrokeAlpha) else FlatChipStroke
     Box(
         modifier = modifier
             .height(Dims.chipHeight)
-            .clip(RoundedCornerShape(Radii.chip))
+            .clip(shape)
             .background(bg)
+            .border(FlatHairline, stroke, shape)
             .clickable(interactionSource = interaction, indication = null, enabled = !selected, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        // 选中底只是薄染，数字改用主色实字保证清晰，不再用白字。
         AppText(
             text = value.toString(),
-            color = if (selected) p.chipSelectedText else p.chipText,
+            color = if (selected) p.accent else p.chipText,
             fontSize = TypeSizes.chip,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             fontFamily = FontFamily.Monospace,
@@ -282,11 +323,14 @@ private fun AppearanceSegmented(
 ) {
     val p = LocalAppPalette.current
     val options = remember { listOf(Appearance.Light, Appearance.Dark, Appearance.System) }
+    val trackShape = RoundedCornerShape(Radii.segmentedTrack)
+    val itemShape = RoundedCornerShape(Radii.segmentedItem)
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(Radii.segmentedTrack))
-            .background(p.segmentedTrack)
+            .clip(trackShape)
+            .background(FlatChipFill)
+            .border(FlatHairline, FlatChipStroke, trackShape)
             .padding(Dims.segmentedTrackPadding),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -298,13 +342,16 @@ private fun AppearanceSegmented(
                 Modifier
                     .weight(1f)
                     .height(Dims.segmentedItemHeight)
-                    .clip(RoundedCornerShape(Radii.segmentedItem))
+                    .clip(itemShape)
                     .background(
                         when {
-                            isOn -> p.segmentedSelectedBg
+                            isOn -> p.accent.copy(alpha = SelectedTintAlpha)
                             pressed -> p.chipPressed
                             else -> Color.Transparent
                         }
+                    )
+                    .then(
+                        if (isOn) Modifier.border(FlatHairline, p.accent.copy(alpha = SelectedStrokeAlpha), itemShape) else Modifier,
                     )
                     .clickable(interactionSource = interaction, indication = null, enabled = !isOn) { onSelect(option) },
                 contentAlignment = Alignment.Center,

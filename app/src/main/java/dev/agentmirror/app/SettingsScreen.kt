@@ -30,6 +30,7 @@ import androidx.core.content.FileProvider
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.diag.DiagLogViewScreen
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
+import dev.agentmirror.app.session.SharedPreferencesInputSyncStore
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.SharedPreferencesTermThemeStore
@@ -67,6 +68,10 @@ internal fun SettingsScreen(
     val fontSizeStore = remember { SharedPreferencesFontSizeStore(context) }
     var fontSizeSp by remember {
         mutableIntStateOf(fontSizeStore.load() ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP)
+    }
+    val inputSyncStore = remember { SharedPreferencesInputSyncStore(context) }
+    var inputSyncEnabled by remember {
+        mutableStateOf(inputSyncStore.load())
     }
     val paired = remember { SharedPreferencesPairingConfigStore(context).load() != null }
     val buildLabel = remember {
@@ -114,6 +119,11 @@ internal fun SettingsScreen(
         darkFamilyId = themeSel.darkFamilyId,
         onOpenLightTheme = { pickerDark = false },
         onOpenDarkTheme = { pickerDark = true },
+        inputSyncEnabled = inputSyncEnabled,
+        onInputSyncEnabledChange = { enabled ->
+            inputSyncEnabled = enabled
+            inputSyncStore.save(enabled)
+        },
     )
 }
 

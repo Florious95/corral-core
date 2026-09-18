@@ -16,9 +16,13 @@
 
 package dev.agentmirror.app.workspace
 
+import dev.agentmirror.app.conn.AgentLauncherFrame
+import dev.agentmirror.app.conn.AuthAckFrame
 import dev.agentmirror.app.conn.BinaryFrame
+import dev.agentmirror.app.conn.CloseSessionResultFrame
 import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.ConnectionState
+import dev.agentmirror.app.conn.CreateAgentResultFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.Level2Frame
@@ -61,17 +65,21 @@ enum class ConnectionUi {
  * 一级工作区条目：cwd 聚合。session_count 以服务端权威值为准，客户端只渲染不重算。
  *
  * 060 uproot（2026-08-15）：二级会话列表模型（会话条目 / sessions）与聚合状态随
- * 状态判定整体拔除；一级菜单只保留 cwd 与会话数。
+ * 状态判定整体拔除；一级菜单只保留 cwd 与会话数。工作中数量由服务端
+ * working_count 权威下发，缺字段时兼容为 0。
  */
 data class WorkspaceUi(
     val cwd: String,
     val sessionCount: Int,
+    val workingCount: Int = 0,
 )
 
 /** 工作区首页整体 UI 状态（唯一渲染源）。 */
 data class WorkspaceUiState(
     val connection: ConnectionUi = ConnectionUi.CONNECTING,
     val workspaces: List<WorkspaceUi> = emptyList(),
+    val agentLaunchers: List<AgentLauncherUi> = emptyList(),
+    val createAgent: CreateAgentUiState = CreateAgentUiState(),
 ) {
     /** 连接未就绪且无缓存列表 = 加载态；此时不能提前显示“暂无工作区”。 */
     val isLoading: Boolean get() = connection == ConnectionUi.CONNECTING && workspaces.isEmpty()
@@ -125,6 +133,14 @@ class WorkspaceViewModel(
         ServiceWire.managerOrNull()?.unsubscribeLevel2(cwd)
         Unit
     },
+    private val createAgentRequest: (String, String, String, String, Boolean) -> Long? =
+        { workspace, anchorRef, provider, name, bypass ->
+            ServiceWire.managerOrNull()?.sendCreateAgent(workspace, anchorRef, provider, name, bypass)
+        },
+    private val closeSessionRequest: (String) -> Long? =
+        { ref ->
+            ServiceWire.managerOrNull()?.sendCloseSession(ref)
+        },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     favoriteStore: FavoriteStore = MemoryFavoriteStore(),
 ) : ConnectionManager.Listener {
@@ -146,6 +162,12 @@ class WorkspaceViewModel(
 
     /** 刷新在途标记（Compose 下拉指示器消费）。 */
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private var pendingCloseSessionReqId: Long? = null
+    private val _closingSessionRef = MutableStateFlow<String?>(null)
+
+    /** 正在关闭中的会话 ref（用于列表触发淡出与收缩移出动效）。 */
+    val closingSessionRef: StateFlow<String?> = _closingSessionRef.asStateFlow()
 
     private val _level2 = MutableStateFlow(L2UiState())
 
@@ -201,6 +223,7 @@ class WorkspaceViewModel(
     }
 
     private var subscribedWorkspace: String? = null
+    private var pendingCreateAgentReqId: Long? = null
     private var lastLevel2AtMs: Long = 0L
     private var lastQuietDiagnosticStale: Boolean? = null
 
@@ -427,6 +450,46 @@ class WorkspaceViewModel(
         cancelFavoriteFetch(restoreVisible = false)
         level2RetryUsed = false
         requestVisibleLevel2(cwd, showRefresh = true)
+    }
+
+    fun clearCreateAgentError() {
+        if (!_uiState.value.createAgent.inFlight && _uiState.value.createAgent.error != null) {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState()) }
+        }
+    }
+
+    /** Send one create_agent request for the exact selected level-2 anchor. */
+    fun createAgent(anchorRef: String, provider: String, name: String, bypass: Boolean): Boolean {
+        if (_uiState.value.createAgent.inFlight) return false
+        val workspace = subscribedWorkspace ?: return false
+        val reqId = createAgentRequest(workspace, anchorRef, provider, name, bypass)
+        if (reqId == null) {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState(error = "创建请求发送失败")) }
+            return false
+        }
+        pendingCreateAgentReqId = reqId
+        _uiState.update { it.copy(createAgent = CreateAgentUiState(inFlight = true)) }
+        return true
+    }
+
+    /**
+     * 发起关闭单个会话 pane（kill-pane 安全精准退出）。
+     * 成功返回 true 并触发列表移出动效。
+     */
+    fun closeSession(ref: String): Boolean {
+        if (_closingSessionRef.value != null) return false
+        val reqId = closeSessionRequest(ref)
+        if (reqId == null) {
+            DiagLog.record("level2", "closeSession send failed ref=$ref")
+            return false
+        }
+        pendingCloseSessionReqId = reqId
+        _closingSessionRef.value = ref
+        val fav = _level2.value.sessions.firstOrNull { it.ref == ref }
+        if (fav != null && favoriteBook.isFavorited(fav.ref)) {
+            toggleFavorite(fav)
+        }
+        return true
     }
 
     fun toggleFavorite(entry: L2Entry) {
@@ -710,8 +773,13 @@ class WorkspaceViewModel(
         return ArrayList(byKey.values)
     }
 
-    /** 内部模型：cwd → session_count（保服务端下发顺序）。 */
-    private val workspaceCounts = LinkedHashMap<String, Int>()
+    /** 一级聚合元数据：两个计数随同一条 cwd 记录整体替换。 */
+    private data class WorkspaceCounts(
+        val sessionCount: Int,
+        val workingCount: Int,
+    )
+
+    private val workspaceCounts = LinkedHashMap<String, WorkspaceCounts>()
 
     // ---- ConnectionManager.Listener（接线层经 ServiceWire.uiConnector 原样路由进来）----
     // 与 SessionViewModel 同款接线语义：VM 实现 Listener 供接线层把 uiConnector 扇出的回调
@@ -723,6 +791,9 @@ class WorkspaceViewModel(
 
     override fun onFrame(frame: FramePayload) {
         when (frame) {
+            is AuthAckFrame -> applyAuthAck(frame)
+            is CreateAgentResultFrame -> applyCreateAgentResult(frame)
+            is CloseSessionResultFrame -> applyCloseSessionResult(frame)
             is ListingFrame -> applyListing(frame)
             is ListDeltaFrame -> applyDelta(frame)
             is Level2Frame -> applyLevel2(frame)
@@ -747,6 +818,14 @@ class WorkspaceViewModel(
     fun onConnectionStateChanged(state: ConnectionState) {
         val wasReady = _uiState.value.connection == ConnectionUi.READY
         _uiState.update { it.copy(connection = state.toUi()) }
+        if (state != ConnectionState.READY && pendingCreateAgentReqId != null) {
+            pendingCreateAgentReqId = null
+            _uiState.update { it.copy(createAgent = CreateAgentUiState(error = "创建结果未确认，请刷新")) }
+        }
+        if (state != ConnectionState.READY && pendingCloseSessionReqId != null) {
+            pendingCloseSessionReqId = null
+            _closingSessionRef.value = null
+        }
         if (state == ConnectionState.READY) {
             if (!wasReady) level2RetryUsed = false
             val favorite = favoriteFetchInFlight
@@ -763,6 +842,48 @@ class WorkspaceViewModel(
         }
     }
 
+    private fun applyAuthAck(frame: AuthAckFrame) {
+        if (!frame.ok) return
+        val launchers = frame.agentLaunchers.map(::toAgentLauncherUi)
+        _uiState.update { it.copy(agentLaunchers = launchers) }
+    }
+
+    private fun applyCreateAgentResult(frame: CreateAgentResultFrame) {
+        if (pendingCreateAgentReqId != frame.reqId) return
+        pendingCreateAgentReqId = null
+        if (frame.ok) {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState()) }
+            refreshLevel2()
+        } else {
+            _uiState.update { it.copy(createAgent = CreateAgentUiState(error = frame.reason)) }
+        }
+    }
+
+    private fun applyCloseSessionResult(frame: CloseSessionResultFrame) {
+        if (pendingCloseSessionReqId != frame.reqId) return
+        pendingCloseSessionReqId = null
+        val closedRef = _closingSessionRef.value
+        _closingSessionRef.value = null
+        if (frame.ok) {
+            if (closedRef != null) {
+                _level2.update { current ->
+                    current.copy(sessions = current.sessions.filterNot { it.ref == closedRef })
+                }
+            }
+            refreshLevel2()
+        } else {
+            DiagLog.record("level2", "closeSession failed reason=${frame.reason}")
+            _level2.update { it.copy(banner = "关闭会话失败：${frame.reason ?: "未知原因"}") }
+        }
+    }
+
+    private fun toAgentLauncherUi(frame: AgentLauncherFrame) = AgentLauncherUi(
+        provider = frame.provider,
+        displayName = frame.displayName,
+        supportsBypass = frame.supportsBypass,
+        naming = frame.naming,
+    )
+
     // ---- listing：权威全量，整体替换 ----
 
     private fun applyListing(frame: ListingFrame) {
@@ -776,7 +897,10 @@ class WorkspaceViewModel(
         )
         workspaceCounts.clear()
         for (w in frame.workspaces) {
-            workspaceCounts[w.cwd] = w.sessionCount
+            workspaceCounts[w.cwd] = WorkspaceCounts(
+                sessionCount = w.sessionCount,
+                workingCount = w.workingCount,
+            )
         }
         publish()
     }
@@ -785,12 +909,15 @@ class WorkspaceViewModel(
 
     private fun applyDelta(frame: ListDeltaFrame) {
         // 二级会话增删（added/changed/removed sessions）是二级实时流的数据源，
-        // 不在本一级 VM 消费；一级只关心 changed_workspaces 里的 session_count 元数据。
+        // 不在本一级 VM 消费；一级只关心 changed_workspaces 里的两个聚合计数。
         for (w in frame.changedWorkspaces) {
-            workspaceCounts[w.cwd] = w.sessionCount
+            workspaceCounts[w.cwd] = WorkspaceCounts(
+                sessionCount = w.sessionCount,
+                workingCount = w.workingCount,
+            )
         }
-        // 一级菜单的 session_count 是服务端权威值；removed 会话对一级的意义由
-        // changed_workspaces 携带（无 removed_workspaces 通道，服务端保证覆盖）。
+        // 一级菜单的 session_count 与 working_count 都是服务端权威值；removed 会话对
+        // 一级的意义由 changed_workspaces 携带（无 removed_workspaces 通道，服务端保证覆盖）。
         publish()
     }
 
@@ -859,8 +986,12 @@ class WorkspaceViewModel(
     private fun publish() {
         _uiState.update {
             it.copy(
-                workspaces = workspaceCounts.map { (cwd, count) ->
-                    WorkspaceUi(cwd = cwd, sessionCount = count)
+                workspaces = workspaceCounts.map { (cwd, counts) ->
+                    WorkspaceUi(
+                        cwd = cwd,
+                        sessionCount = counts.sessionCount,
+                        workingCount = counts.workingCount,
+                    )
                 },
             )
         }

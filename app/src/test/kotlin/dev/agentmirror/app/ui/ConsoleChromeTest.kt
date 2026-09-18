@@ -20,6 +20,7 @@ import dev.agentmirror.app.conn.Session
 import dev.agentmirror.app.session.InputStatus
 import dev.agentmirror.app.session.OverlayTestHarness
 import dev.agentmirror.app.session.SessionScreen
+import dev.agentmirror.app.session.UploadStatus
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.BackChevronGeometry
 import dev.agentmirror.app.ui.model.SessionItem
@@ -119,6 +120,18 @@ class ConsoleChromeTest {
         assertEquals(
             0,
             compose.onAllNodesWithText("已发送", substring = true).fetchSemanticsNodes().size,
+        )
+        compose.runOnIdle { h.vm.inputStatus = InputStatus.Sending }
+        compose.waitForIdle()
+        assertEquals(
+            0,
+            compose.onAllNodesWithText("发送中", substring = true).fetchSemanticsNodes().size,
+        )
+        compose.runOnIdle { h.vm.uploadStatus = UploadStatus.Success("/tmp/a.png") }
+        compose.waitForIdle()
+        assertEquals(
+            0,
+            compose.onAllNodesWithText("已附加", substring = true).fetchSemanticsNodes().size,
         )
         compose.runOnIdle { h.vm.inputStatus = InputStatus.Failed("发送失败：超时") }
         compose.waitForIdle()
@@ -271,31 +284,21 @@ class ConsoleChromeTest {
     }
 
     @Test
-    fun ConsoleChromeFavoriteChipFollowsLiveStatusWithoutUnknownLabel() {
+    fun ConsoleChromeFavoriteChipAbsentFromSimplifiedDock() {
         val h = OverlayTestHarness()
         val idle = session("favorite-ref", L2Status.IDLE).toFavoriteRow()
-        val busy = session("favorite-ref", L2Status.WORKING).toFavoriteRow()
-        val unknown = session("favorite-ref", L2Status.UNKNOWN).toFavoriteRow()
-        var overlay by mutableStateOf(listOf(idle))
         compose.setContent {
             AppTheme(appearance = Appearance.Light) {
                 SessionScreen(
                     viewModel = h.vm,
                     name = "远控 leader",
                     onBack = {},
-                    favoriteRows = overlay,
+                    favoriteRows = listOf(idle),
                 )
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
-        compose.runOnIdle { overlay = listOf(busy) }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Running").assertIsDisplayed()
-        compose.runOnIdle { overlay = listOf(unknown) }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Idle").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Unknown").assertDoesNotExist()
+        compose.onNodeWithTag("favorite-session-list").assertDoesNotExist()
     }
 
     @Test

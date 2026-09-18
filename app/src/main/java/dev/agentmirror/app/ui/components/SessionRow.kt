@@ -29,8 +29,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import dev.agentmirror.app.ui.model.SessionItem
@@ -55,13 +52,13 @@ import dev.agentmirror.app.ui.theme.TypeSizes
  * Left: existing CLI working lamp (animated iff online+working) or「不在线」.
  * Middle: display name and path. Right: official Provider mark only.
  * The row is the sole gesture owner: short-press opens when online; long-press
- * shows exactly one favorite action. Icons and the lamp are not clickable.
+ * shows modern ModalBottomSheet actions. Icons and the lamp are not clickable.
  *
  * @contract
  * @pre item.provider/status are fail-closed DTO fields; health remains metadata only
  * @post 66dp title+path; lamp motion from activity+online; mark has no gestures
  * @err none
- * @inv short-press opens only when online; long-press is the single favorite action
+ * @inv short-press opens only when online; long-press opens SessionActionBottomSheet
  * @consumes dev.agentmirror.app
  * @consumes dev.agentmirror.app.tsnet
  * @consumes dev.agentmirror.app.ui.model
@@ -75,26 +72,39 @@ fun SessionRow(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     unfavoriteOnly: Boolean,
+    onCloseSession: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    var menu by remember { mutableStateOf(false) }
+    var showSheet by remember { mutableStateOf(false) }
     val motion = sessionRowMotion(item.status, item.isOnline)
     val rowHeight = Dims.rowHeightWithSubtitle
-    val actionLabel = if (unfavoriteOnly || item.starred) "取消收藏" else "收藏"
     Box {
         Row(
             modifier = Modifier
+                .padding(horizontal = Dims.cardHMargin)
                 .fillMaxWidth()
                 .height(rowHeight)
                 .alpha(if (item.isOnline) 1f else 0.45f)
-                .background(if (pressed) p.rowPressed else Color.Transparent)
+                .glassCard(
+                    shape = RoundedCornerShape(Radii.card),
+                    fill = if (pressed) p.glassCardFillPressed else p.glassCardFill,
+                    stroke = p.glassStroke,
+                    specular = p.glassSpecular,
+                )
                 .combinedClickable(
                     interactionSource = interaction,
                     indication = null,
                     onClick = { if (item.isOnline) onClick() },
-                    onLongClick = { menu = true },
+                    onLongClick = {
+                        if (onLongClick != null) {
+                            onLongClick()
+                        } else {
+                            showSheet = true
+                        }
+                    },
                 )
                 .padding(start = Dims.listHPaddingStart, end = Dims.listHPaddingEnd)
                 .testTag("$tagPrefix-row-${item.id}"),
@@ -133,26 +143,16 @@ fun SessionRow(
                 testTag = "$tagPrefix-provider-${item.id}",
             )
         }
-        DropdownMenu(
-            expanded = menu,
-            onDismissRequest = { menu = false },
-            modifier = Modifier.testTag("$tagPrefix-favorite-menu"),
-        ) {
-            DropdownMenuItem(
-                text = {
-                    AppText(
-                        text = actionLabel,
-                        color = p.rowTitleText,
-                        fontSize = TypeSizes.rowTitle,
-                        fontWeight = FontWeight.Medium,
-                        lineHeightMultiplier = 1f,
-                    )
-                },
-                onClick = {
-                    menu = false
-                    onToggleFavorite()
-                },
-                modifier = Modifier.testTag("$tagPrefix-favorite-action"),
+
+        if (showSheet) {
+            // 动作回调即刻触发；弹层自己播完退场再回 onDismiss，这里才卸载它。
+            SessionActionBottomSheet(
+                session = item,
+                tagPrefix = tagPrefix,
+                allowClose = !unfavoriteOnly && onCloseSession != null,
+                onDismiss = { showSheet = false },
+                onToggleFavorite = onToggleFavorite,
+                onCloseSession = { onCloseSession?.invoke() },
             )
         }
     }

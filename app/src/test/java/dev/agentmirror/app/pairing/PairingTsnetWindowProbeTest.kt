@@ -22,6 +22,7 @@ import dev.agentmirror.app.conn.FakeClock
 import dev.agentmirror.app.conn.FakeWebSocketTransport
 import dev.agentmirror.app.conn.ReconnectPolicy
 import dev.agentmirror.app.conn.TransportFactory
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.tsnet.TsnetProxy
 import dev.agentmirror.app.tsnet.TsnetState
 import dev.agentmirror.app.tsnet.TsnetWire
@@ -78,10 +79,17 @@ class PairingTsnetWindowProbeTest {
         }
     }
 
-    private class Harness {
+    private class Harness(
+        private val queueIdentity: Boolean = false,
+        identityResults: List<HostIdentifyResult> = emptyList(),
+    ) {
         val store = FakeStore()
         val clock = FakeClock()
         val transports = mutableListOf<FakeWebSocketTransport>()
+        private val identityTasks = mutableListOf<Runnable>()
+        private val scriptedIdentity = identityResults.toMutableList()
+        var identityCalls = 0
+            private set
         /** 每次拨号脚本（按 transport 创建顺序消费；false=fail，true=ok）。默认全成功。 */
         val dialScripts = mutableListOf<List<Boolean>>()
 
@@ -110,7 +118,33 @@ class PairingTsnetWindowProbeTest {
                 )
             },
             nowMs = { clock.nowMs() },
+            identifyClient = object : HostIdentityVerifier {
+                override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+                override fun identify(
+                    endpoint: HostEndpoint,
+                    hostId: String?,
+                    token: String,
+                    legacyUrl: String?,
+                ): HostIdentifyResult {
+                    identityCalls++
+                    return if (scriptedIdentity.isEmpty()) {
+                        HostIdentifyResult.Legacy404(endpoint)
+                    } else {
+                        scriptedIdentity.removeAt(0)
+                    }
+                }
+            },
+            discoveryExecutor = java.util.concurrent.Executor {
+                if (queueIdentity) identityTasks += it else it.run()
+            },
         )
+
+        fun runIdentity() {
+            check(identityTasks.size == 1) { "expected one queued identity task, got ${identityTasks.size}" }
+            identityTasks.removeAt(0).run()
+        }
+
+        fun pendingIdentityCount(): Int = identityTasks.size
 
         fun lastTransport(): FakeWebSocketTransport = transports.last()
 
@@ -201,9 +235,20 @@ class PairingTsnetWindowProbeTest {
      */
     @Test
     fun `T3 tsnet 路径配对成功 持久化配置含非空 tsAuthKey`() {
-        val h = Harness()
-        // tsnet 起网 → Up → 首拨成功（dialScript=[true]）→ READY → Success。
-        h.submitTailnet(dialScriptsPerAttempt = listOf(true))
+        val h = Harness(queueIdentity = true)
+        // Tsnet 已 Up 但身份 HTTP 仍在后台：重复 Up 不得在 proof 前创建 transport。
+        val up = TsnetState.Up(TsnetProxy("127.0.0.1", 1080, "fake-cred"))
+        h.vm.onTsnetState(up)
+        h.vm.manualUrl = "ws://100.101.2.3:9900/ws"
+        h.vm.manualToken = "ABC123"
+        h.vm.manualTsAuthKey = "fake-auth-key"
+        h.dialScripts.add(listOf(true))
+        h.vm.submitManual()
+        assertEquals("身份验证完成前不得拨号", 0, h.transports.size)
+        h.vm.onTsnetState(up)
+        assertEquals("重复 Tsnet.Up 不得跳过身份验证", 0, h.transports.size)
+        h.runIdentity()
+        assertEquals("身份验证完成后才允许首拨", 1, h.transports.size)
         h.authOk()
         assertEquals("前置：配对应成功", PairingStatus.Success, h.vm.pairingStatus)
 
@@ -211,6 +256,90 @@ class PairingTsnetWindowProbeTest {
         val saved = h.store.saved
         assertTrue("T3 命中（修前）：持久化配置必须含非空 tsAuthKey（冷启动靠它拉起 tsnet）。saved=$saved",
             saved != null && saved.tsAuthKey.isNotEmpty())
+
+    }
+
+    /**
+     * Round4 C1 formal control: every initial/retry × QR/host path keeps Up/Error
+     * behind the queued identity proof, rejects a bad proof without a WS, and only
+     * creates one WS after a later valid proof.
+     */
+    @Test
+    fun `Round4 async identity proof gate blocks retry window across QR and host`() {
+        val up = TsnetState.Up(TsnetProxy("127.0.0.1", 1080, "fake-cred"))
+        val proofEndpoint = HostEndpoint(
+            address = "192.0.2.10",
+            port = 9900,
+            path = ConnectionPath.LAN,
+            source = HostEndpointSource.NSD,
+        )
+        fun proven() = HostIdentifyResult.Proven(
+            HostIdentity(
+                hostId = "final-review-host",
+                name = "review",
+                endpoint = proofEndpoint,
+                bound = proofEndpoint.authority,
+            ),
+        )
+        fun rejected() = HostIdentifyResult.Rejected("synthetic invalid proof")
+
+        for (retry in listOf(false, true)) {
+            for (hostPath in listOf(false, true)) {
+                val results = if (retry) {
+                    listOf(rejected(), rejected(), proven())
+                } else {
+                    listOf(rejected(), proven())
+                }
+                val check = Harness(queueIdentity = true, identityResults = results)
+                check.vm.onTsnetState(up)
+                if (hostPath) {
+                    check.vm.addDiscoveredHost(
+                        HostCandidate(
+                            hostId = "final-review-host",
+                            name = "review",
+                            endpoints = listOf(proofEndpoint),
+                        ),
+                    )
+                    check.vm.selectHost("final-review-host")
+                    check.vm.hostToken = "ABC123"
+                    check.vm.submitHostToken()
+                } else {
+                    check.vm.onQrText(
+                        """{"v":1,"url":"ws://192.0.2.10:9900/ws","token":"ABC123","ts_authkey":""}""",
+                    )
+                }
+                assertEquals("identity must be queued before any dial", 1, check.pendingIdentityCount())
+                assertEquals("initial proof must not dial", 0, check.transports.size)
+                check.vm.onTsnetState(up)
+                check.vm.onTsnetState(TsnetState.Error("proof still pending"))
+                assertEquals("Up/Error must not bypass queued proof", 0, check.transports.size)
+
+                if (retry) {
+                    check.runIdentity()
+                    assertEquals(1, check.identityCalls)
+                    assertTrue(check.vm.pairingStatus is PairingStatus.Failed)
+                    check.vm.retry()
+                    assertEquals("retry must enqueue a fresh proof", 1, check.pendingIdentityCount())
+                    check.vm.onTsnetState(up)
+                    check.vm.onTsnetState(TsnetState.Error("retry proof still pending"))
+                    assertEquals("retry Up/Error must not bypass queued proof", 0, check.transports.size)
+                }
+
+                check.runIdentity()
+                assertEquals("bad proof must never create a WS", if (retry) 2 else 1, check.identityCalls)
+                assertEquals(0, check.transports.size)
+                assertTrue(check.vm.pairingStatus is PairingStatus.Failed)
+
+                check.vm.retry()
+                assertEquals("valid retry must be re-proven", 1, check.pendingIdentityCount())
+                check.vm.onTsnetState(up)
+                assertEquals("second Up still waits for proof", 0, check.transports.size)
+                check.runIdentity()
+                assertEquals("valid proof permits exactly one WS", 1, check.transports.size)
+                check.authOk()
+                assertEquals(PairingStatus.Success, check.vm.pairingStatus)
+            }
+        }
     }
 
     /**
