@@ -138,6 +138,9 @@ class ConnectionManager(
     /** 活跃订阅簿记：ref → (rows, cols)，重连后重放。 */
     private val activeSubscriptions = LinkedHashMap<String, Pair<Int, Int>>()
 
+    /** 每个订阅的尺寸驻留意图；null 表示沿用服务端/旧客户端默认。 */
+    private val activeRetainPaneSizes = LinkedHashMap<String, Boolean?>()
+
     /** Single server slot: at most the latest workspace is replayed on READY/resume. */
     private val activeLevel2 = LinkedHashSet<String>()
 
@@ -495,12 +498,13 @@ class ConnectionManager(
      * @err STOPPED ⇒ 返回 false 且不记簿；未就绪（但已启动）⇒ 返回 true 仅记簿待重放
      * @inv 重复订阅以最新 rows/cols 覆盖簿记（重放意图最新优先）；同一 ref 可多次立发 SubscribeFrame
      */
-    fun subscribe(ref: String, rows: Int, cols: Int): Boolean {
+    fun subscribe(ref: String, rows: Int, cols: Int, retainPaneSize: Boolean? = null): Boolean {
         if (state == ConnectionState.STOPPED) {
             traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = false, reason = "stopped")
             return false
         }
         activeSubscriptions[ref] = rows to cols
+        activeRetainPaneSizes[ref] = retainPaneSize
         val conn = connection
         if (conn == null) {
             traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = false, reason = "no_conn")
@@ -510,7 +514,15 @@ class ConnectionManager(
             traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = true, reason = "not_ready")
             return true
         }
-        val ok = conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols))
+        val ok = conn.send(
+            SubscribeFrame(
+                ref = ref,
+                rows = rows,
+                cols = cols,
+                clientType = "mobile",
+                retainPaneSize = retainPaneSize,
+            ),
+        )
         traceSubscribe(ref, rows, cols, sent = ok, replay = false, ready = true, hasConn = true, reason = if (ok) "sent" else "send_failed")
         return ok
     }
@@ -526,6 +538,7 @@ class ConnectionManager(
      */
     fun unsubscribe(ref: String): Boolean {
         activeSubscriptions.remove(ref)
+        activeRetainPaneSizes.remove(ref)
         val conn = connection ?: return true
         if (!conn.isReady) return true
         return conn.send(UnsubscribeFrame(ref = ref))
@@ -915,7 +928,15 @@ class ConnectionManager(
             }
         }
         for ((ref, dims) in activeSubscriptions) {
-            val ok = conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
+            val ok = conn.send(
+                SubscribeFrame(
+                    ref = ref,
+                    rows = dims.first,
+                    cols = dims.second,
+                    clientType = "mobile",
+                    retainPaneSize = activeRetainPaneSizes[ref],
+                ),
+            )
             traceSubscribe(
                 ref,
                 dims.first,
