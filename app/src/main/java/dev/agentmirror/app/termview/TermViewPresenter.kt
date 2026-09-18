@@ -592,11 +592,17 @@ class TermViewPresenter(
     }
 
     /**
-     * Publish a frame immediately for a caller that has just completed a bulk emulator mutation
-     * (snapshot replay, resize, or history prepend). Callers must not invoke this from the UI
-     * thread; the normal streaming path remains coalesced by [scheduleFrameCapture].
+     * Publish a frame for a caller that has just completed a bulk emulator mutation
+     * (snapshot replay, resize, or history prepend).
+     *
+     * The mutation already raised [DamageListener], which schedules the single background
+     * capture. Do not capture the same emulator state a second time while that job is queued or
+     * running: on a busy mirror that duplicate copy needlessly holds the emulator monitor and
+     * competes with the WebSocket receiver. The direct path remains only for callers that changed
+     * the emulator without a damage notification.
      */
     fun refreshPreparedFrame() {
+        if (captureScheduled.get()) return
         preparedFrame.set(captureFrame())
     }
 

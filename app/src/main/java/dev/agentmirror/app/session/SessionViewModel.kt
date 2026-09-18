@@ -380,8 +380,8 @@ class SessionViewModel(
                         transientError = "快照应用失败：${failure.message ?: failure.javaClass.simpleName}"
                         return
                     }
-                    // replaySnapshot is a bulk mutation; publish its complete frame on the
-                    // receiver thread so the next UI draw never falls back to the old frame.
+                    // replaySnapshot already raised damage; Presenter coalesces the complete
+                    // prepared frame and avoids a second full copy while capture is in flight.
                     presenter.refreshPreparedFrame()
                     DiagLog.recordCritical("session", "snapshot_applied ref=$ref mode=live bytes=${frame.data.size}")
                     hasSnapshot = true
@@ -420,6 +420,8 @@ class SessionViewModel(
                     transientError = "历史应用失败：${failure.message ?: failure.javaClass.simpleName}"
                     return
                 }
+                // prependHistory already raised damage; keep frame publication coalesced with
+                // the same background capture rather than copying the emulator again here.
                 presenter.refreshPreparedFrame()
                 historyRequestInFlight = false
                 // 收敛判顶：实际区间起点比请求的更近 0 ⇒ 已到历史顶。
