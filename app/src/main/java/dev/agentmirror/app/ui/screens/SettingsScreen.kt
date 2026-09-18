@@ -86,6 +86,8 @@ fun SettingsScreen(
     onOpenDarkTheme: () -> Unit = {},
     inputSyncEnabled: Boolean = true,
     onInputSyncEnabledChange: (Boolean) -> Unit = {},
+    retainPaneSizeEnabled: Boolean = false,
+    onRetainPaneSizeEnabledChange: (Boolean) -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
@@ -155,6 +157,26 @@ fun SettingsScreen(
                 }
                 Box(Modifier.height(8.dp))
                 CardBody("开启时打字实时显示在 CLI 终端，关闭时仅在点击发送后一次性投递。")
+            }
+
+            // ── 尺寸驻留 ──
+            SettingsCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppText(
+                        text = "退出保留排版（尺寸驻留）",
+                        color = p.rowTitleText,
+                        fontSize = TypeSizes.cardTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    StandaloneLiquidToggle(
+                        checked = retainPaneSizeEnabled,
+                        onCheckedChange = onRetainPaneSizeEnabledChange,
+                        modifier = Modifier.testTag("retain-pane-size-switch"),
+                    )
+                }
+                Box(Modifier.height(8.dp))
+                CardBody("退出会话时不还原原生终端尺寸，再次进入实现极速秒开")
             }
 
             // ── 诊断日志 ──

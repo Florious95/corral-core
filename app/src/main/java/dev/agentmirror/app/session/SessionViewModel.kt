@@ -92,6 +92,8 @@ class SessionViewModel(
     private val liveBaseUrl: () -> String? = { baseUrl },
     /** 输入框实时同步开关：默认 true 保持现有 diffsync 直通；false 时仅本地编辑，发送时一次性提交。 */
     var inputSyncEnabled: Boolean = true,
+    /** 退出时是否要求服务端保留 pane 的最后尺寸；默认关闭以保持原有还原语义。 */
+    var retainPaneSizeEnabled: Boolean = false,
 ) : ConnectionManager.Listener {
 
     /** 终端内核：live pane 的完整 snapshot/delta 状态。 */
@@ -769,7 +771,12 @@ class SessionViewModel(
             emulator.resize(cols, rows)
             presenter.refreshPreparedFrame()
             copyModeEmulator.resize(cols, rows)
-            val sent = manager.subscribe(ref, rows, cols)
+            val sent = manager.subscribe(
+                ref,
+                rows,
+                cols,
+                retainPaneSize = retainPaneSizeEnabled,
+            )
             DiagLog.recordCritical("session", "subscribe ref=$ref rows=$rows cols=$cols sent=$sent")
         }
     }

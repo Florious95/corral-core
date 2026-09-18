@@ -31,6 +31,7 @@ import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.diag.DiagLogViewScreen
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.session.SharedPreferencesInputSyncStore
+import dev.agentmirror.app.session.SharedPreferencesRetainPaneSizeStore
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.SharedPreferencesTermThemeStore
@@ -72,6 +73,10 @@ internal fun SettingsScreen(
     val inputSyncStore = remember { SharedPreferencesInputSyncStore(context) }
     var inputSyncEnabled by remember {
         mutableStateOf(inputSyncStore.load())
+    }
+    val retainPaneSizeStore = remember { SharedPreferencesRetainPaneSizeStore(context) }
+    var retainPaneSizeEnabled by remember {
+        mutableStateOf(retainPaneSizeStore.load())
     }
     val paired = remember { SharedPreferencesPairingConfigStore(context).load() != null }
     val buildLabel = remember {
@@ -123,6 +128,11 @@ internal fun SettingsScreen(
         onInputSyncEnabledChange = { enabled ->
             inputSyncEnabled = enabled
             inputSyncStore.save(enabled)
+        },
+        retainPaneSizeEnabled = retainPaneSizeEnabled,
+        onRetainPaneSizeEnabledChange = { enabled ->
+            retainPaneSizeEnabled = enabled
+            retainPaneSizeStore.save(enabled)
         },
     )
 }

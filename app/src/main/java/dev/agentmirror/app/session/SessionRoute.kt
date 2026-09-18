@@ -162,6 +162,8 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
         ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP
     val inputSync = context?.let { SharedPreferencesInputSyncStore(it).load() }
         ?: SharedPreferencesInputSyncStore.DEFAULT_INPUT_SYNC_ENABLED
+    val retainPaneSize = context?.let { SharedPreferencesRetainPaneSizeStore(it).load() }
+        ?: SharedPreferencesRetainPaneSizeStore.DEFAULT_RETAIN_PANE_SIZE
     val densityDpi = context?.resources?.displayMetrics?.densityDpi ?: -1
     val cached = context?.let { SharedPreferencesViewportGeomStore(it).load() }
     val cacheHit = cached != null &&
@@ -198,6 +200,7 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
         uploadToken = ServiceWire.currentConfig()?.token,
         liveBaseUrl = { ServiceWire.uploadBaseUrl },
         inputSyncEnabled = inputSync,
+        retainPaneSizeEnabled = retainPaneSize,
     )
 }
 
