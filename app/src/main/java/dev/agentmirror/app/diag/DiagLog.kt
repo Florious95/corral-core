@@ -253,8 +253,17 @@ object DiagLog {
                 if (s.length >= 4) out = out.replace(s, REDACTED)
             }
         }
+        // Most diagnostics, including the per-frame PerfTrace/term-view lines,
+        // cannot contain a structural credential. Avoid entering the regex
+        // pipeline for those messages; this keeps the draw path free of
+        // Regex.replace while retaining the full fallback for candidate text.
+        if (!hasStructuralSecretShape(out)) return out
         return redactStructural(out)
     }
+
+    private fun hasStructuralSecretShape(text: String): Boolean =
+        text.contains("tskey-") || text.contains("Bearer ") ||
+            text.contains("http://") || text.contains("https://")
 
     /** 结构兜底：不依赖注册也拦得住的敏感形状。 */
     private fun redactStructural(text: String): String {
