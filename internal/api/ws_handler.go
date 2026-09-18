@@ -645,8 +645,23 @@ var errMirrorGeometry = errors.New("mirror geometry mismatch")
 // a complete observed synchronized-output frame permits an early fresh capture;
 // unknown programs keep the bounded fallback. Publication still uses the same
 // revision check and atomic admission as the slow path.
-func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate, target protocol.Resize, epoch uint64, waitForResize bool) error {
-	deadline := time.Now().Add(reflowHardCap)
+func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate, target protocol.Resize, epoch uint64, waitForResize bool) (result error) {
+	started := time.Now()
+	deadline := started.Add(reflowHardCap)
+	var captures, wrappedRejected, actualCols, actualRows int
+	var completed uint64
+	defer func() {
+		// One metadata-only decision per handoff. A slow device trace alone
+		// cannot distinguish missing completion from rejected native wraps.
+		if c.s != nil && c.s.log != nil {
+			c.s.log.Info("perf_reflow", "conn", c.id, "ref", target.Ref, "epoch", epoch,
+				"resize", waitForResize, "cols", target.Cols, "rows", target.Rows,
+				"actual_cols", actualCols, "actual_rows", actualRows,
+				"captures", captures, "completed_frame", completed, "wrapped_rejected", wrappedRejected,
+				"deadline_reached", !time.Now().Before(deadline), "elapsed_ms", time.Since(started).Milliseconds(),
+				"success", result == nil)
+		}
+	}()
 	return gate.captureAndPublish(ctx, func(ctx context.Context) ([]byte, error) {
 		if c.snapshotFn != nil {
 			return c.snapshotFn(ctx, br) // deterministic capture boundaries in tests
@@ -660,11 +675,13 @@ func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gat
 			if err := gate.waitForReflow(ctx, deadline, true); err != nil {
 				return nil, err
 			}
-			completed := gate.completedFrame()
+			completed = gate.completedFrame()
+			captures++
 			frame, err := br.CaptureState(ctx)
 			if err != nil {
 				return nil, err
 			}
+			actualCols, actualRows = frame.Cols, frame.Rows
 			if target.Cols > 0 && target.Rows > 0 && (frame.Cols != int(target.Cols) || frame.Rows != int(target.Rows)) {
 				return nil, fmt.Errorf("%w: requested=%dx%d actual=%dx%d", errMirrorGeometry, target.Cols, target.Rows, frame.Cols, frame.Rows)
 			}
@@ -673,6 +690,7 @@ func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gat
 			// do not accept the old wide frame as a fast-path completion. Unknown
 			// applications with legitimate soft wraps retain the bounded fallback.
 			if waitForResize && frame.WrappedRows && time.Now().Before(deadline) {
+				wrappedRejected++
 				gate.rejectCompletedFrame(completed)
 				continue
 			}
