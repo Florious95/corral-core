@@ -77,7 +77,7 @@ func (g *paneGeometry) acquire(ctx context.Context, br *bridge.Pane) (cols, rows
 // either way the geometry accounting is cleared (the last subscriber to leave
 // owns the decision, regardless of which exit path brought the count to zero).
 // log is the server logger for restore-failure diagnostics.
-func (g *paneGeometry) release(ctx context.Context, br *bridge.Pane, log *slog.Logger, ref string) {
+func (g *paneGeometry) release(ctx context.Context, br *bridge.Pane, log *slog.Logger, ref string, retainPaneSize bool) {
 	g.mu.Lock()
 	if g.active <= 0 {
 		// 防御：重复 release / 无订阅时释放，幂等无副作用。
@@ -92,7 +92,7 @@ func (g *paneGeometry) release(ctx context.Context, br *bridge.Pane, log *slog.L
 		g.origKnown = false
 		g.origCols, g.origRows = 0, 0
 		g.mu.Unlock()
-		if known && !g.retainPaneSize {
+		if known && !g.retainPaneSize && !retainPaneSize {
 			// 用 Background ctx 而非调用方的 ctx：恢复是清理收尾，可能发生在
 			// 连接已取消之后（teardown/断连路径），此时发起连接的 ctx 已死，
 			// 用它调 Resize 会让 tmux 命令被 exec 提前 kill（fix-host-pane-

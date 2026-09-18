@@ -121,13 +121,14 @@ type wsConn struct {
 // subscription is one live mirror on this connection: the relay goroutine's
 // cancel func, pipe detach func, and pane-size restore func, torn down together.
 type subscription struct {
-	ref        string
-	conn       *wsConn
-	server     *Server
-	clientType string
-	ctx        context.Context // resize/capture must stop when this mirror is retired
-	cancel     context.CancelFunc
-	detach     func()
+	ref            string
+	conn           *wsConn
+	server         *Server
+	clientType     string
+	retainPaneSize bool
+	ctx            context.Context // resize/capture must stop when this mirror is retired
+	cancel         context.CancelFunc
+	detach         func()
 	// Presence admission/removal is guarded by server.presenceMu. The removed
 	// bit handles a relay teardown racing the initial subscribe handoff.
 	presenceRegistered bool

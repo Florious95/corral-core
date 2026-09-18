@@ -209,10 +209,11 @@ type ListDelta struct {
 // Subscribe is idempotent for the same ref: re-subscribing replays a fresh
 // snapshot and re-streams (requirement 004 reconnect semantics).
 type Subscribe struct {
-	Ref        string `json:"ref"`
-	Rows       uint16 `json:"rows"`
-	Cols       uint16 `json:"cols"`
-	ClientType string `json:"client_type,omitempty"`
+	Ref            string `json:"ref"`
+	Rows           uint16 `json:"rows"`
+	Cols           uint16 `json:"cols"`
+	ClientType     string `json:"client_type,omitempty"`
+	RetainPaneSize *bool  `json:"retain_pane_size,omitempty"`
 }
 
 // PresenceUpdate reports the currently subscribed client types for one ref.

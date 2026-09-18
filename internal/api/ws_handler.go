@@ -146,22 +146,24 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	_, _, _ = geom.acquire(c.ctx, br)
 	subCtx, cancel := context.WithCancel(c.ctx)
 	clientType := s.ClientType
+	retainPaneSize := s.RetainPaneSize != nil && *s.RetainPaneSize
 	sub := &subscription{
-		ref:           s.Ref,
-		conn:          c,
-		server:        c.s,
-		clientType:    clientType,
-		ctx:           subCtx,
-		cancel:        cancel,
-		ready:         make(chan struct{}),
-		initialFailed: make(chan struct{}),
-		relayDone:     make(chan struct{}),
-		gate:          newReflowGate(),
+		ref:            s.Ref,
+		conn:           c,
+		server:         c.s,
+		clientType:     clientType,
+		retainPaneSize: retainPaneSize,
+		ctx:            subCtx,
+		cancel:         cancel,
+		ready:          make(chan struct{}),
+		initialFailed:  make(chan struct{}),
+		relayDone:      make(chan struct{}),
+		gate:           newReflowGate(),
 	}
 	// Install the release hook before any fallible operation after acquire. All
 	// exits (including capture/encode failure) then use the same idempotent owner.
 	sub.restoreSize = func() {
-		geom.release(c.ctx, br, c.s.log, s.Ref)
+		geom.release(c.ctx, br, c.s.log, s.Ref, sub.retainPaneSize)
 	}
 
 	// The first subscribe is a reflow epoch too. Open the gate before tmux
