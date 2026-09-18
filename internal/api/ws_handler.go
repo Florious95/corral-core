@@ -166,6 +166,8 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// The first subscribe is a reflow epoch too. Open the gate before tmux
 	// receives SIGWINCH, so redraw bytes produced by the initial phone geometry
 	// are drained locally instead of becoming a wide, pre-reflow first frame.
+	currentCols, currentRows, sizeErr := br.Size(c.ctx)
+	needsResize := sizeErr != nil || currentCols != int(s.Cols) || currentRows != int(s.Rows)
 	initialEpoch, started := sub.gate.begin()
 	if !started {
 		teardownSubscription(sub)
@@ -190,10 +192,13 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 	// Initial client dims reshape the pane so the CLI redraws for the phone
 	// (requirement 005). A resize failure is not fatal: the mirror continues at
 	// the pane's current size, and the real existence check happens below.
-	if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
-		c.logErr("subscribe resize", err)
+	if needsResize {
+		sub.gate.resetSynchronizedOutput()
+		if _, _, err := br.Resize(c.ctx, int(s.Cols), int(s.Rows)); err != nil {
+			c.logErr("subscribe resize", err)
+		}
 	}
-	if err := c.publishReflowSnapshot(subCtx, br, sub.gate, s.Ref, initialEpoch); err != nil {
+	if err := c.publishReflowSnapshot(subCtx, br, sub.gate, s.Ref, initialEpoch, needsResize); err != nil {
 		if errors.Is(err, errReflowBackpressure) {
 			c.abortConnection("mirror_loss: ws_send_queue_overflow")
 		}
@@ -610,7 +615,7 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 	c.connMetrics.recordReflowEpoch()
 	c.s.sendQueue.recordResizeSnapshot()
 	c.connMetrics.recordResizeSnapshot()
-	if err := c.publishReflowSnapshot(c.ctx, br, sub.gate, r.Ref, epoch); err != nil {
+	if err := c.publishReflowSnapshot(c.ctx, br, sub.gate, r.Ref, epoch, true); err != nil {
 		c.logErr("resize snapshot", err)
 		c.abortConnection("mirror_loss: cannot establish fresh resize snapshot")
 	}
@@ -618,24 +623,24 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 
 var errReflowBackpressure = errors.New("reflow snapshot queue unavailable")
 
-// publishReflowSnapshot deliberately observes the entire bounded redraw window.
-// A quiet gap cannot certify completion of an arbitrary SIGWINCH handler. At
-// the deadline we capture afresh, then commit that capture and open the gate in
-// one routing critical section. Output drained during capture forces a retry.
-func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate, ref string, epoch uint64) error {
+// A same-geometry subscribe has no SIGWINCH to wait for. On a real resize,
+// a complete observed synchronized-output frame permits an early fresh capture;
+// unknown programs keep the bounded fallback. Publication still uses the same
+// revision check and atomic admission as the slow path.
+func (c *wsConn) publishReflowSnapshot(ctx context.Context, br *bridge.Pane, gate *reflowGate, ref string, epoch uint64, waitForResize bool) error {
+	deadline := time.Now().Add(reflowHardCap)
 	capture := snapshotWithCursor
 	if c.snapshotFn != nil {
 		capture = c.snapshotFn // deterministic capture timing in concurrency tests
-	} else {
-		timer := time.NewTimer(reflowHardCap)
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			return ctx.Err()
+	} else if waitForResize {
+		if err := gate.waitForReflow(ctx, deadline, false); err != nil {
+			return err
 		}
 	}
 	return gate.captureAndPublish(ctx, func(ctx context.Context) ([]byte, error) {
+		if err := gate.waitForReflow(ctx, deadline, true); err != nil {
+			return nil, err
+		}
 		return capture(ctx, br)
 	}, func(snap []byte) error {
 		frame, err := protocol.EncodeBinary(protocol.BinaryPayload{
