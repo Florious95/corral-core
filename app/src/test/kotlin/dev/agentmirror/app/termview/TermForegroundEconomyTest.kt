@@ -1,16 +1,19 @@
 /* Copyright 2026 AgentMirror Project Authors. Licensed under Apache-2.0. */
 package dev.agentmirror.app.termview
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.Choreographer
+import android.view.View
 import dev.agentmirror.terminal.TerminalEmulator
 import java.io.File
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
@@ -72,16 +75,25 @@ class TermForegroundEconomyTest {
 
     @Test
     fun replacementPresenterStillSeedsAndReceivesFrames() {
+        val controller = Robolectric.buildActivity(Activity::class.java).setup()
         val v = view(); val p1 = presenter(); val p2 = presenter()
-        v.presenter = p1
-        v.presenter = p2
-        check(p1.onFrameRequested == null)
-        check(p2.cellMetricsSeeded && p2.cellWidth > 0 && p2.cellHeight > 0)
-        TermSurfaceView::class.java.getDeclaredField("framePending").apply {
-            isAccessible = true; setBoolean(v, false)
+        try {
+            controller.get().setContentView(v)
+            controller.visible()
+            check(v.isAttachedToWindow)
+            v.dispatchWindowVisibilityChanged(View.VISIBLE)
+            v.presenter = p1
+            v.presenter = p2
+            check(p1.onFrameRequested == null)
+            check(p2.cellMetricsSeeded && p2.cellWidth > 0 && p2.cellHeight > 0)
+            TermSurfaceView::class.java.getDeclaredField("framePending").apply {
+                isAccessible = true; setBoolean(v, false)
+            }
+            p2.onFrameRequested!!.invoke()
+            check(field(v, "framePending") == true)
+        } finally {
+            controller.pause().stop().destroy()
         }
-        p2.onFrameRequested!!.invoke()
-        check(field(v, "framePending") == true)
     }
 
     @Test
