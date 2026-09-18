@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.conn
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -51,6 +52,7 @@ sealed interface FramePayload {
                     FrameType.LISTING -> json.decodeFromJsonElement(ListingFrame.serializer(), el)
                     FrameType.LIST_DELTA -> json.decodeFromJsonElement(ListDeltaFrame.serializer(), el)
                     FrameType.SUBSCRIBE -> json.decodeFromJsonElement(SubscribeFrame.serializer(), el)
+                    FrameType.PRESENCE_UPDATE -> json.decodeFromJsonElement(PresenceUpdateFrame.serializer(), el)
                     FrameType.UNSUBSCRIBE -> json.decodeFromJsonElement(UnsubscribeFrame.serializer(), el)
                     FrameType.INPUT -> json.decodeFromJsonElement(InputFrame.serializer(), el)
                     FrameType.INPUT_ACK -> json.decodeFromJsonElement(InputAckFrame.serializer(), el)
@@ -100,6 +102,10 @@ sealed interface FramePayload {
                 is ListingFrame -> json.encodeToJsonElement(ListingFrame.serializer(), frame)
                 is ListDeltaFrame -> json.encodeToJsonElement(ListDeltaFrame.serializer(), frame)
                 is SubscribeFrame -> json.encodeToJsonElement(SubscribeFrame.serializer(), frame)
+                is PresenceUpdateFrame -> throw FrameEncodeException(
+                    FrameError.INVALID_FIELD,
+                    "presence_update is server-to-client only, never sent upstream",
+                )
                 is UnsubscribeFrame -> json.encodeToJsonElement(UnsubscribeFrame.serializer(), frame)
                 is InputFrame -> json.encodeToJsonElement(InputFrame.serializer(), frame)
                 is InputAckFrame -> json.encodeToJsonElement(InputAckFrame.serializer(), frame)
@@ -299,11 +305,35 @@ data class SubscribeFrame(
     @SerialName("ref") val ref: String,
     @SerialName("rows") val rows: Int,
     @SerialName("cols") val cols: Int,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("client_type") val clientType: String = "mobile",
 ) : FramePayload {
     override val frameType: String get() = FrameType.SUBSCRIBE
     override fun validate(): String? = when {
         ref.isEmpty() -> "subscribe ref must be non-empty"
         rows <= 0 || cols <= 0 -> "subscribe rows/cols must be >= 1"
+        clientType != "mobile" && clientType != "desktop" ->
+            "subscribe client_type must be mobile or desktop"
+        else -> null
+    }
+}
+
+/**
+ * 会话订阅状态 S→C。计数统计当前订阅，不推断物理设备数量。
+ */
+@Serializable
+data class PresenceUpdateFrame(
+    @SerialName("ref") val ref: String,
+    @SerialName("has_mobile") val hasMobile: Boolean,
+    @SerialName("mobile_count") val mobileCount: Int,
+    @SerialName("desktop_count") val desktopCount: Int,
+) : FramePayload {
+    override val frameType: String get() = FrameType.PRESENCE_UPDATE
+    override fun validate(): String? = when {
+        ref.isEmpty() -> "presence_update ref must be non-empty"
+        mobileCount < 0 || desktopCount < 0 -> "presence_update counts must be >= 0"
+        hasMobile != (mobileCount > 0) ->
+            "presence_update has_mobile must equal mobile_count > 0"
         else -> null
     }
 }

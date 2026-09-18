@@ -383,7 +383,7 @@ class ConnectionManager(
             traceSubscribe(ref, rows, cols, sent = false, replay = false, ready = false, hasConn = true, reason = "not_ready")
             return true
         }
-        val ok = conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols))
+        val ok = conn.send(SubscribeFrame(ref = ref, rows = rows, cols = cols, clientType = "mobile"))
         traceSubscribe(ref, rows, cols, sent = ok, replay = false, ready = true, hasConn = true, reason = if (ok) "sent" else "send_failed")
         return ok
     }
@@ -708,7 +708,7 @@ class ConnectionManager(
             }
         }
         for ((ref, dims) in activeSubscriptions) {
-            val ok = conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second))
+            val ok = conn.send(SubscribeFrame(ref = ref, rows = dims.first, cols = dims.second, clientType = "mobile"))
             traceSubscribe(
                 ref,
                 dims.first,

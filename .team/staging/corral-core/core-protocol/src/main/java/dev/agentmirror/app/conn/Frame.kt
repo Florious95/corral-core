@@ -43,6 +43,7 @@ internal object FrameType {
     const val LISTING = "listing"
     const val LIST_DELTA = "list_delta"
     const val SUBSCRIBE = "subscribe"
+    const val PRESENCE_UPDATE = "presence_update"
     const val UNSUBSCRIBE = "unsubscribe"
     const val INPUT = "input"
     const val INPUT_ACK = "input_ack"
