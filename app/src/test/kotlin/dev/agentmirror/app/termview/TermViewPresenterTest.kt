@@ -18,6 +18,8 @@ package dev.agentmirror.app.termview
 
 import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.TerminalEmulator
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -151,6 +153,36 @@ class TermViewPresenterTest {
         h.emulator.feed("b")
         // 相邻损伤合并成最小区间集 [0,1]。
         assertEquals(listOf(0..1), h.presenter.takeDamage())
+    }
+
+    @Test
+    fun beginFrameDoesNotWaitForEmulatorAfterPreparedFrame() {
+        val h = harness(rows = 2, cols = 5)
+        val captured = CountDownLatch(1)
+        h.presenter.onFrameRequested = { captured.countDown() }
+        h.emulator.feed("ready")
+        assertTrue(captured.await(1, TimeUnit.SECONDS))
+        h.presenter.beginFrame()
+
+        val monitorHeld = CountDownLatch(1)
+        val releaseMonitor = CountDownLatch(1)
+        val holder = Thread {
+            synchronized(h.emulator) {
+                monitorHeld.countDown()
+                releaseMonitor.await(1, TimeUnit.SECONDS)
+            }
+        }
+        holder.start()
+        assertTrue(monitorHeld.await(1, TimeUnit.SECONDS))
+        try {
+            val started = System.nanoTime()
+            h.presenter.beginFrame()
+            val elapsedMs = (System.nanoTime() - started) / 1_000_000
+            assertTrue("beginFrame waited on emulator monitor: ${elapsedMs}ms", elapsedMs < 250)
+        } finally {
+            releaseMonitor.countDown()
+            holder.join(1_000)
+        }
     }
 
     @Test

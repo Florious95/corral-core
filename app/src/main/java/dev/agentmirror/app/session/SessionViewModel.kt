@@ -380,6 +380,9 @@ class SessionViewModel(
                         transientError = "快照应用失败：${failure.message ?: failure.javaClass.simpleName}"
                         return
                     }
+                    // replaySnapshot is a bulk mutation; publish its complete frame on the
+                    // receiver thread so the next UI draw never falls back to the old frame.
+                    presenter.refreshPreparedFrame()
                     DiagLog.recordCritical("session", "snapshot_applied ref=$ref mode=live bytes=${frame.data.size}")
                     hasSnapshot = true
                     if (PerfTrace.isEnabled()) {
@@ -417,6 +420,7 @@ class SessionViewModel(
                     transientError = "历史应用失败：${failure.message ?: failure.javaClass.simpleName}"
                     return
                 }
+                presenter.refreshPreparedFrame()
                 historyRequestInFlight = false
                 // 收敛判顶：实际区间起点比请求的更近 0 ⇒ 已到历史顶。
                 if (frame.fromLine > historyRequestedFromLine) {
@@ -761,6 +765,7 @@ class SessionViewModel(
             if (disposed) return
             DiagLog.recordCritical("session", "geometry_ready ref=$ref rows=$rows cols=$cols")
             emulator.resize(cols, rows)
+            presenter.refreshPreparedFrame()
             copyModeEmulator.resize(cols, rows)
             val sent = manager.subscribe(ref, rows, cols)
             DiagLog.recordCritical("session", "subscribe ref=$ref rows=$rows cols=$cols sent=$sent")
@@ -774,6 +779,7 @@ class SessionViewModel(
             DiagLog.recordCritical("session", "resize_request ref=$ref rows=$rows cols=$cols reason=$reason")
             if (manager.resize(ref, rows, cols, reason)) {
                 emulator.resize(cols, rows)
+                presenter.refreshPreparedFrame()
                 copyModeEmulator.resize(cols, rows)
             }
         }
