@@ -18,6 +18,30 @@ class HostDiscoveryFlowTest {
     }
 
     @Test
+    fun lanDiscoveryUpgradesNsdPlaceholderWithoutTsToken() {
+        val endpoint = HostEndpoint("192.0.2.3", 9900, ConnectionPath.LAN, HostEndpointSource.NSD)
+        val transport = object : HostHttpTransport {
+            override fun whoami(endpoint: HostEndpoint) = HostHttpResponse(
+                200,
+                "{\"host_id\":\"host-1234\",\"name\":\"MacBook Pro\",\"port\":9900}",
+            )
+
+            override fun identify(endpoint: HostEndpoint, request: IdentifyRequest) = HostHttpResponse(500)
+        }
+        val vm = PairingViewModel(
+            configStore = Store(),
+            connectionFactory = { cfg -> dev.agentmirror.app.conn.ConnectionManager(cfg, NoopTransportFactory) },
+            identifyClient = HostIdentifyClient(transport) { ByteArray(16) },
+            discoveryExecutor = Executor { it.run() },
+        )
+
+        vm.addDiscoveredHost(HostCandidate("host-1234", "host-1234", listOf(endpoint)))
+
+        assertEquals("MacBook Pro", vm.discoveredHosts.single().name)
+        assertEquals(endpoint.authority, vm.discoveredHosts.single().endpoints.single().authority)
+    }
+
+    @Test
     fun tsPeerIsEnumeratedAndUnverifiedRowsNeverCreateWs() {
         val token = "host-token"
         val endpoint = HostEndpoint("100.101.2.3", 9911, ConnectionPath.TAILNET, HostEndpointSource.PEER)

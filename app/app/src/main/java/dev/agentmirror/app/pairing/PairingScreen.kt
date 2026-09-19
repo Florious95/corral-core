@@ -445,7 +445,10 @@ private fun HostBindingCard(viewModel: PairingViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.padding(Spacing.md)) {
-                        Text(host.name.ifBlank { "主机" }, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            HostRouter.displayName(host.name, host.hostId),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
                         Text(host.hostId, style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily)
                     }
                 }

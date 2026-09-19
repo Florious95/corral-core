@@ -264,6 +264,23 @@ class PairingViewModel(
     fun addDiscoveredHost(candidate: HostCandidate) {
         discoveredHosts = HostRouter.merge(discoveredHosts + candidate)
         discoveryInFlight = false
+        if (!HostRouter.isPlaceholderName(candidate.name, candidate.hostId)) return
+
+        // NSD gives us an authenticated-by-TXT host ID and a LAN endpoint, but its instance
+        // name is commonly that same random ID. Ask the public whoami route for the human name
+        // without requiring a TS token; the row remains usable as "主机" while this completes.
+        discoveryExecutor.execute {
+            val enriched = HostRouter.prioritize(candidate.endpoints)
+                .asSequence()
+                .mapNotNull { endpoint -> identifyClient.whoami(endpoint) }
+                .firstOrNull { identity ->
+                    identity.hostId == candidate.hostId &&
+                        !HostRouter.isPlaceholderName(identity.name, identity.hostId)
+                }
+            if (enriched != null) {
+                discoveredHosts = HostRouter.merge(discoveredHosts + enriched)
+            }
+        }
     }
 
     fun selectHost(hostId: String) {

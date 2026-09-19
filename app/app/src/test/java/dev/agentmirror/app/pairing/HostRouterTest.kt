@@ -19,7 +19,7 @@ class HostRouterTest {
     }
 
     @Test
-    fun sameHostAddressesMergeAndNameDoesNotIdentify() {
+    fun sameHostAddressesMergeAndKeepFirstHumanName() {
         val lan = HostEndpoint("192.0.2.2", 9900, ConnectionPath.LAN, HostEndpointSource.NSD)
         val ts = HostEndpoint("100.101.2.2", 9900, ConnectionPath.TAILNET, HostEndpointSource.PEER)
         val merged = HostRouter.merge(
@@ -31,6 +31,30 @@ class HostRouterTest {
         assertEquals(1, merged.size)
         assertEquals(2, merged.single().endpoints.size)
         assertEquals("display-a", merged.single().name)
+    }
+
+    @Test
+    fun realNameUpgradesLanHostIdPlaceholder() {
+        val lan = HostEndpoint("192.0.2.2", 9900, ConnectionPath.LAN, HostEndpointSource.NSD)
+        val ts = HostEndpoint("100.101.2.2", 9900, ConnectionPath.TAILNET, HostEndpointSource.PEER)
+        val merged = HostRouter.merge(
+            listOf(
+                HostCandidate("HOST-1234", "HOST-1234", listOf(lan)),
+                HostCandidate("HOST-1234", "MacBook Pro", listOf(ts)),
+            ),
+        )
+
+        assertEquals(1, merged.size)
+        assertEquals("MacBook Pro", merged.single().name)
+        assertEquals(setOf(lan.authority, ts.authority), merged.single().endpoints.map { it.authority }.toSet())
+    }
+
+    @Test
+    fun prioritizeUsesTailnetBeforeLanRegardlessOfDiscoverySource() {
+        val lan = HostEndpoint("192.0.2.2", 9900, ConnectionPath.LAN, HostEndpointSource.NSD)
+        val ts = HostEndpoint("100.101.2.2", 9900, ConnectionPath.TAILNET, HostEndpointSource.PEER)
+
+        assertEquals(listOf(ts, lan), HostRouter.prioritize(listOf(lan, ts)))
     }
 
     @Test
