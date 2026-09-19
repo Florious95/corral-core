@@ -246,6 +246,16 @@ class PairingViewModel(
         }
     }
 
+    /** Mark the LAN discovery window visible to the user before NSD callbacks arrive. */
+    fun beginLanDiscovery() {
+        discoveryInFlight = true
+    }
+
+    /** End the LAN window without hiding a host list that was already populated. */
+    fun finishLanDiscovery() {
+        if (discoveredHosts.isEmpty()) discoveryInFlight = false
+    }
+
     /** Begin TS/LAN public discovery. whoami never receives or persists host token. */
     fun discoverHosts(peers: List<TsPeer>, port: Int? = null) {
         val generation = ++discoveryGeneration
@@ -309,16 +319,20 @@ class PairingViewModel(
         )
     }
 
-    /** 手填提交：legacy compatibility only; new UI uses host selection above. */
+    /** 手填提交：高级入口支持 literal IPv4[:port]，同时保留旧 ws:// 兼容格式。 */
     fun submitManual() {
-        val url = manualUrl.trim()
+        val raw = manualUrl.trim()
+        val url = normalizeManualUrl(raw)
         val token = manualToken.trim()
-        formError = when {
-            !isValidWsUrl(url) -> "服务端地址不合法（需 ws:// 或 wss://）"
-            token.isEmpty() -> "配对 token 不能为空"
-            else -> null
+        if (url == null) {
+            formError = "请输入局域网 IP（例如 192.168.1.5）或 ws:// 地址"
+            return
         }
-        formError?.let { return }
+        if (token.isEmpty()) {
+            formError = "配对 token 不能为空"
+            return
+        }
+        formError = null
         recognizedUrl = url
         currentHostId = null
         currentHostName = null
@@ -338,6 +352,21 @@ class PairingViewModel(
             tsNodeId = null,
             legacyUrl = url,
         )
+    }
+
+    private fun normalizeManualUrl(raw: String): String? {
+        if (isValidWsUrl(raw)) return raw
+        val parts = raw.split(":")
+        val address = parts.firstOrNull()?.trim().orEmpty()
+        if (!HostRouter.isLiteralIpv4(address) || parts.size > 2) return null
+        val port = parts.getOrNull(1)?.toIntOrNull() ?: HostRouter.DEFAULT_PORT
+        if (port !in 1..65535) return null
+        return HostEndpoint(
+            address = address,
+            port = port,
+            path = HostRouter.classify(address) ?: return null,
+            source = HostEndpointSource.SCANNED_PRIMARY,
+        ).wsUrl
     }
 
     /**

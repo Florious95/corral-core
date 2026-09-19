@@ -453,6 +453,29 @@ class PairingViewModelTest {
     // ---- 手填（兜底入口）----
 
     @Test
+    fun manualLiteralLanIpUsesDefaultPort() {
+        val h = Harness()
+        h.vm.manualUrl = "192.168.1.5"
+        h.vm.manualToken = "LAN-T0K"
+
+        h.vm.submitManual()
+
+        assertNull(h.vm.formError)
+        assertEquals("ws://192.168.1.5:9900/ws", h.nextConfig?.url)
+        assertEquals("LAN-T0K", h.nextConfig?.token)
+    }
+
+    @Test
+    fun lanDiscoveryWindowExposesScanningUntilFinished() {
+        val h = Harness()
+
+        h.vm.beginLanDiscovery()
+        assertTrue(h.vm.discoveryInFlight)
+        h.vm.finishLanDiscovery()
+        assertTrue(!h.vm.discoveryInFlight)
+    }
+
+    @Test
     fun manualSubmitValidPairsAndPersists() {
         val h = Harness()
         h.vm.manualUrl = "ws://192.168.1.5:9900/ws"
