@@ -16,6 +16,18 @@ import java.net.URI
 object HostRouter {
     const val DEFAULT_PORT = 9900
     const val MAX_PEER_LINES = 256
+    private const val BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+    private val PLACEHOLDER_NAMES = setOf(
+        "unknown",
+        "unknown host",
+        "unnamed",
+        "未命名主机",
+        "未知主机",
+        "主机",
+        "主机名",
+        "电脑",
+        "电脑名",
+    )
 
     fun isValidHostId(value: String?): Boolean =
         !value.isNullOrBlank() && value.length in 8..64 && value.all {
@@ -89,7 +101,22 @@ object HostRouter {
             .toList()
     }
 
-    /** Merge addresses into one host row; name is display-only and never identity. */
+    /**
+     * A discovery name is display-only. DNS-SD commonly reports the random host ID as its
+     * instance name, so a later whoami/TS name must be allowed to upgrade that placeholder.
+     */
+    fun isPlaceholderName(name: String?, hostId: String? = null): Boolean {
+        val value = name?.trim().orEmpty()
+        if (value.isEmpty()) return true
+        if (!hostId.isNullOrBlank() && value.equals(hostId.trim(), ignoreCase = true)) return true
+        if (value.lowercase() in PLACEHOLDER_NAMES) return true
+        return value.length in 20..64 && value.all { it.uppercaseChar() in BASE32_ALPHABET }
+    }
+
+    fun displayName(name: String?, hostId: String): String =
+        name?.trim()?.takeUnless { isPlaceholderName(it, hostId) } ?: "主机"
+
+    /** Merge addresses into one host row; human names upgrade ID/placeholder names. */
     fun merge(candidates: Iterable<HostCandidate>): List<HostCandidate> {
         val merged = LinkedHashMap<String, HostCandidate>()
         for (candidate in candidates) {
@@ -97,11 +124,21 @@ object HostRouter {
             val old = merged[candidate.hostId]
             if (old == null) {
                 merged[candidate.hostId] = candidate.copy(
+                    name = candidate.name.trim().takeUnless {
+                        isPlaceholderName(it, candidate.hostId)
+                    }.orEmpty(),
                     endpoints = candidate.endpoints.distinctBy { it.authority },
                 )
             } else {
+                val oldName = old.name.trim()
+                val newName = candidate.name.trim()
+                val name = when {
+                    !isPlaceholderName(oldName, candidate.hostId) -> oldName
+                    !isPlaceholderName(newName, candidate.hostId) -> newName
+                    else -> ""
+                }
                 merged[candidate.hostId] = old.copy(
-                    name = old.name.ifBlank { candidate.name },
+                    name = name,
                     endpoints = (old.endpoints + candidate.endpoints)
                         .distinctBy { it.authority },
                 )
@@ -127,11 +164,11 @@ object HostRouter {
         return HostEndpoint(address, port, path, source)
     }
 
-    /** Trusted-source order from DESIGN §2.2; path priority is applied only after identify. */
+    /** TS is the primary channel; LAN remains the bounded fallback after it. */
     fun prioritize(endpoints: Iterable<HostEndpoint>): List<HostEndpoint> = endpoints
         .filter { isLiteralIpv4(it.address) }
-        .sortedWith(compareBy<HostEndpoint> { it.source.ordinal }
-            .thenBy { if (it.path == ConnectionPath.TAILNET) 0 else 1 }
+        .sortedWith(compareBy<HostEndpoint> { if (it.path == ConnectionPath.TAILNET) 0 else 1 }
+            .thenBy { it.source.ordinal }
             .thenBy { it.address }
             .thenBy { it.port })
         .distinctBy { it.authority }

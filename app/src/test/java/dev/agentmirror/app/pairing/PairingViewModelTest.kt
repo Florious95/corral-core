@@ -72,7 +72,8 @@ class PairingViewModelTest {
         var nextDialScript: List<Boolean>? = null
 
         val fakeVerifier = object : HostIdentityVerifier {
-            override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+            override fun whoami(endpoint: HostEndpoint): HostCandidate =
+                HostCandidate("manual-host-1234", "Manual Host", listOf(endpoint))
             override fun identify(
                 endpoint: HostEndpoint,
                 hostId: String?,
@@ -106,6 +107,7 @@ class PairingViewModelTest {
             nowMs = { clock.nowMs() },
             identifyClient = fakeVerifier,
             discoveryExecutor = Executor { it.run() },
+            localProbeTargets = { emptyList() },
         )
 
         fun lastTransport(): FakeWebSocketTransport = transports.last()
@@ -455,6 +457,29 @@ class PairingViewModelTest {
     // ---- 手填（兜底入口）----
 
     @Test
+    fun manualLiteralLanIpUsesDefaultPort() {
+        val h = Harness()
+        h.vm.manualUrl = "192.168.1.5"
+        h.vm.manualToken = "LAN-T0K"
+
+        h.vm.submitManual()
+
+        assertNull(h.vm.formError)
+        assertEquals("ws://192.168.1.5:9900/ws", h.nextConfig?.url)
+        assertEquals("LAN-T0K", h.nextConfig?.token)
+    }
+
+    @Test
+    fun lanDiscoveryWindowExposesScanningUntilFinished() {
+        val h = Harness()
+
+        h.vm.beginLanDiscovery()
+        assertTrue(h.vm.discoveryInFlight)
+        h.vm.finishLanDiscovery()
+        assertTrue(!h.vm.discoveryInFlight)
+    }
+
+    @Test
     fun manualSubmitValidPairsAndPersists() {
         val h = Harness()
         h.vm.manualUrl = "ws://192.168.1.5:9900/ws"
@@ -466,6 +491,53 @@ class PairingViewModelTest {
         h.authOk()
         assertEquals(PairingStatus.Success, h.vm.pairingStatus)
         assertEquals("MANUAL-T0K", h.store.saved?.token)
+    }
+
+    @Test
+    fun manualPairingResolvesHostIdBeforeIdentify() {
+        val calls = mutableListOf<String>()
+        val hostId = "manual-host-1234"
+        val verifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint): HostCandidate {
+                calls += "whoami:${endpoint.authority}"
+                return HostCandidate(hostId, "MacBook Pro", listOf(endpoint))
+            }
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ): HostIdentifyResult {
+                calls += "identify:$hostId:${endpoint.authority}"
+                return HostIdentifyResult.Proven(
+                    HostIdentity(
+                        hostId ?: error("manual identity must be resolved"),
+                        "MacBook Pro",
+                        endpoint,
+                        endpoint.authority,
+                    ),
+                )
+            }
+        }
+        val vm = PairingViewModel(
+            configStore = FakeStore(),
+            identifyClient = verifier,
+            discoveryExecutor = Executor { it.run() },
+            connectionFactory = { config ->
+                ConnectionManager(config, TransportFactory { FakeWebSocketTransport() })
+            },
+        )
+        vm.manualUrl = "192.0.2.20:9900"
+        vm.manualToken = "LAN-T0K"
+
+        vm.submitManual()
+
+        assertEquals(
+            listOf("whoami:192.0.2.20:9900", "identify:$hostId:192.0.2.20:9900"),
+            calls,
+        )
+        assertTrue(vm.pairingStatus is PairingStatus.Pairing)
     }
 
     @Test

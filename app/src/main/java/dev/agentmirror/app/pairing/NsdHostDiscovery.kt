@@ -72,7 +72,9 @@ class NsdHostDiscovery(context: Context) {
             val address = (serviceInfo.host as? Inet4Address)?.hostAddress ?: return
             val port = serviceInfo.port.takeIf { it in 1..65535 } ?: return
             val endpoint = HostEndpoint(address, port, ConnectionPath.LAN, HostEndpointSource.NSD)
-            listener?.onHost(HostCandidate(hostId, serviceInfo.serviceName.orEmpty(), listOf(endpoint)))
+            // The DNS-SD instance is the daemon's random host ID, not a human display name.
+            // Leave naming to /pair/whoami so the UI never promotes a Base32 ID to a title.
+            listener?.onHost(HostCandidate(hostId, "", listOf(endpoint)))
         }
     }
 

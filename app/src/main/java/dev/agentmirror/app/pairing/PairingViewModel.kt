@@ -26,6 +26,7 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ErrorFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.tsnet.TsnetDial
 import dev.agentmirror.app.tsnet.TsnetState
 import dev.agentmirror.app.tsnet.TsPeer
@@ -64,6 +65,8 @@ class PairingViewModel(
     private val tsnetStarter: (String) -> Unit = {},
     private val identifyClient: HostIdentityVerifier = HostIdentifyClient(OkHttpHostHttpTransport()),
     private val discoveryExecutor: Executor = Executors.newCachedThreadPool(),
+    /** Fixed, bounded local aliases; production includes the Android emulator host gateway. */
+    private val localProbeTargets: () -> List<HostEndpoint> = { defaultLocalProbeTargets() },
 ) : ConnectionManager.Listener {
 
     // ---- 可观察 UI 状态（Compose 屏直接读）----
@@ -270,6 +273,26 @@ class PairingViewModel(
         }
     }
 
+    /** Mark the LAN discovery window visible to the user before NSD callbacks arrive. */
+    fun beginLanDiscovery() {
+        val generation = ++discoveryGeneration
+        discoveryInFlight = true
+        // NSD remains the primary path. This one-shot, tokenless whoami probe covers the
+        // emulator host alias where QEMU NAT does not forward mDNS multicast.
+        discoveryExecutor.execute {
+            val found = localProbeTargets().asSequence().mapNotNull { endpoint ->
+                identifyClient.whoami(endpoint)
+            }.toList()
+            if (generation != discoveryGeneration) return@execute
+            found.forEach(::addDiscoveredHost)
+        }
+    }
+
+    /** End the LAN window without hiding a host list that was already populated. */
+    fun finishLanDiscovery() {
+        if (discoveredHosts.isEmpty()) discoveryInFlight = false
+    }
+
     /** Begin TS/LAN public discovery. whoami never receives or persists host token. */
     fun discoverHosts(peers: List<TsPeer>, port: Int? = null) {
         val generation = ++discoveryGeneration
@@ -288,6 +311,23 @@ class PairingViewModel(
     fun addDiscoveredHost(candidate: HostCandidate) {
         discoveredHosts = HostRouter.merge(discoveredHosts + candidate)
         discoveryInFlight = false
+        if (!HostRouter.isPlaceholderName(candidate.name, candidate.hostId)) return
+
+        // NSD gives us an authenticated-by-TXT host ID and a LAN endpoint, but its instance
+        // name is commonly that same random ID. Ask the public whoami route for the human name
+        // without requiring a TS token; the row remains usable as "主机" while this completes.
+        discoveryExecutor.execute {
+            val enriched = HostRouter.prioritize(candidate.endpoints)
+                .asSequence()
+                .mapNotNull { endpoint -> identifyClient.whoami(endpoint) }
+                .firstOrNull { identity ->
+                    identity.hostId == candidate.hostId &&
+                        !HostRouter.isPlaceholderName(identity.name, identity.hostId)
+                }
+            if (enriched != null) {
+                discoveredHosts = HostRouter.merge(discoveredHosts + enriched)
+            }
+        }
     }
 
     fun selectHost(hostId: String) {
@@ -339,16 +379,20 @@ class PairingViewModel(
         )
     }
 
-    /** 手填提交：legacy compatibility only; new UI uses host selection above. */
+    /** 手填提交：高级入口支持 literal IPv4[:port]，同时保留旧 ws:// 兼容格式。 */
     fun submitManual() {
-        val url = manualUrl.trim()
+        val raw = manualUrl.trim()
+        val url = normalizeManualUrl(raw)
         val token = manualToken.trim()
-        formError = when {
-            !isValidWsUrl(url) -> "服务端地址不合法（需 ws:// 或 wss://）"
-            token.isEmpty() -> "配对 token 不能为空"
-            else -> null
+        if (url == null) {
+            formError = "请输入局域网 IP（例如 192.168.1.5）或 ws:// 地址"
+            return
         }
-        formError?.let { return }
+        if (token.isEmpty()) {
+            formError = "配对 token 不能为空"
+            return
+        }
+        formError = null
         recognizedUrl = url
         currentHostId = null
         currentHostName = null
@@ -367,7 +411,23 @@ class PairingViewModel(
             port = null,
             tsNodeId = null,
             legacyUrl = url,
+            requireWhoami = true,
         )
+    }
+
+    private fun normalizeManualUrl(raw: String): String? {
+        if (isValidWsUrl(raw)) return raw
+        val parts = raw.split(":")
+        val address = parts.firstOrNull()?.trim().orEmpty()
+        if (!HostRouter.isLiteralIpv4(address) || parts.size > 2) return null
+        val port = parts.getOrNull(1)?.toIntOrNull() ?: HostRouter.DEFAULT_PORT
+        if (port !in 1..65535) return null
+        return HostEndpoint(
+            address = address,
+            port = port,
+            path = HostRouter.classify(address) ?: return null,
+            source = HostEndpointSource.SCANNED_PRIMARY,
+        ).wsUrl
     }
 
     /**
@@ -558,6 +618,7 @@ class PairingViewModel(
         port: Int?,
         tsNodeId: String?,
         legacyUrl: String?,
+        requireWhoami: Boolean = false,
     ) {
         val endpoint = HostRouter.endpointFromWsUrl(
             rawUrl,
@@ -603,6 +664,15 @@ class PairingViewModel(
         val verify = {
             discoveryExecutor.execute {
                 if (generation != pairingGeneration) return@execute
+                val verifiedHostId = if (requireWhoami && hostId == null) {
+                    identifyClient.whoami(endpoint)?.hostId ?: run {
+                        waitingForTsnet = false
+                        failPairing(PairingFailCause.REJECTED, "主机身份验证失败")
+                        return@execute
+                    }
+                } else {
+                    hostId
+                }
                 val proven = mutableListOf<Pair<HostEndpoint, HostIdentifyResult>>()
                 for (candidate in candidates) {
                     if (generation != pairingGeneration) return@execute
@@ -611,7 +681,7 @@ class PairingViewModel(
                         tsState is TsnetState.Error
                     ) continue
                     val candidateLegacy = if (candidate.authority == endpoint.authority) legacyUrl else null
-                    when (val result = identifyClient.identify(candidate, hostId, token, candidateLegacy)) {
+                    when (val result = identifyClient.identify(candidate, verifiedHostId, token, candidateLegacy)) {
                         is HostIdentifyResult.Proven,
                         is HostIdentifyResult.Legacy404 -> proven += candidate to result
                         is HostIdentifyResult.Rejected -> Unit
@@ -825,6 +895,15 @@ class PairingViewModel(
     }
 
     private companion object {
+        private fun defaultLocalProbeTargets(): List<HostEndpoint> = listOf(
+            HostEndpoint(
+                address = "10.0.2.2",
+                port = HostRouter.DEFAULT_PORT,
+                path = ConnectionPath.LAN,
+                source = HostEndpointSource.SCANNED_PRIMARY,
+            ),
+        )
+
         /** 配对超时：拨号+auth 握手在期限内未 READY 即判失败（003 明确报错，不无限等）。 */
         const val PAIR_TIMEOUT_MS = 15_000L
 

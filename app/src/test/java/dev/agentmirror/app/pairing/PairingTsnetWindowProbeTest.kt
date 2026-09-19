@@ -119,7 +119,8 @@ class PairingTsnetWindowProbeTest {
             },
             nowMs = { clock.nowMs() },
             identifyClient = object : HostIdentityVerifier {
-                override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+                override fun whoami(endpoint: HostEndpoint): HostCandidate =
+                    HostCandidate("manual-host-1234", "Manual Host", listOf(endpoint))
                 override fun identify(
                     endpoint: HostEndpoint,
                     hostId: String?,
