@@ -6,6 +6,7 @@
 package dev.agentmirror.app.pairing
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
@@ -87,10 +88,25 @@ class HostIdentifyClient(
             return HostWhoamiResult.Failed(HostWhoamiFailure.InvalidHostId)
         }
         val name = json.string("name").orEmpty()
-        val port = json.int("port")?.takeIf { it in 1..65535 }
-        // whoami's port is metadata attached to this original IP, never a new address.
-        val enriched = port?.let { endpoint.copy(port = it, source = endpoint.source) } ?: endpoint
-        return HostWhoamiResult.Found(HostCandidate(hostId, name, listOf(enriched)))
+        val port = json.int("port")?.takeIf { it in 1..65535 } ?: endpoint.port
+        // The transport endpoint may be a NAT alias (for example 10.0.2.2 on
+        // Android Emulator). New servers advertise their real LAN/Tailnet
+        // addresses here, allowing identify/WS to use a legal bound address
+        // without trusting or hard-coding an environment-specific IP.
+        val advertisedAddresses = runCatching {
+            json["addresses"]?.jsonArray.orEmpty().mapNotNull { element ->
+                element.jsonPrimitive.content.takeIf(HostRouter::isLiteralIpv4)
+            }
+        }.getOrDefault(emptyList())
+        val endpoints = buildList {
+            add(endpoint.copy(port = port, source = endpoint.source))
+            advertisedAddresses.forEach { address ->
+                if (address == endpoint.address) return@forEach
+                val path = HostRouter.classify(address) ?: return@forEach
+                add(HostEndpoint(address, port, path, HostEndpointSource.HOST_RECORD))
+            }
+        }.distinctBy { it.authority }
+        return HostWhoamiResult.Found(HostCandidate(hostId, name, endpoints))
     }
 
     override fun identify(

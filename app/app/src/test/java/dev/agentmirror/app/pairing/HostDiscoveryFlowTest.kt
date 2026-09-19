@@ -25,7 +25,8 @@ class HostDiscoveryFlowTest {
                 assertEquals(endpoint.authority, actual.authority)
                 return HostHttpResponse(
                     200,
-                    "{\"host_id\":\"gateway-host-1234\",\"name\":\"MacBook-Pro.local\",\"port\":9900}",
+                    "{\"host_id\":\"gateway-host-1234\",\"name\":\"MacBook-Pro.local\",\"port\":9900," +
+                        "\"addresses\":[\"192.168.31.116\"]}",
                 )
             }
 
@@ -42,7 +43,35 @@ class HostDiscoveryFlowTest {
         vm.beginLanDiscovery()
 
         assertEquals("MacBook-Pro.local", vm.discoveredHosts.single().name)
-        assertEquals(endpoint.authority, vm.discoveredHosts.single().endpoints.single().authority)
+        assertEquals(
+            listOf("10.0.2.2:9900", "192.168.31.116:9900"),
+            vm.discoveredHosts.single().endpoints.map { it.authority },
+        )
+        assertEquals(
+            "192.168.31.116:9900",
+            HostRouter.prioritize(vm.discoveredHosts.single().endpoints).first().authority,
+        )
+    }
+
+    @Test
+    fun whoamiAdvertisedAddressesReplaceNatAliasForIdentityAndKeepTailnet() {
+        val alias = HostEndpoint("10.0.2.2", 9900, ConnectionPath.LAN, HostEndpointSource.SCANNED_PRIMARY)
+        val transport = object : HostHttpTransport {
+            override fun whoami(endpoint: HostEndpoint) = HostHttpResponse(
+                200,
+                "{\"host_id\":\"host-1234\",\"name\":\"MacBook-Pro.local\",\"port\":9900," +
+                    "\"addresses\":[\"192.168.31.116\",\"100.75.207.88\",\"192.168.31.116\"]}",
+            )
+
+            override fun identify(endpoint: HostEndpoint, request: IdentifyRequest) = HostHttpResponse(500)
+        }
+        val candidate = HostIdentifyClient(transport).whoami(alias) ?: error("whoami candidate missing")
+
+        assertEquals(
+            listOf("10.0.2.2:9900", "192.168.31.116:9900", "100.75.207.88:9900"),
+            candidate.endpoints.map { it.authority },
+        )
+        assertEquals("100.75.207.88:9900", HostRouter.prioritize(candidate.endpoints).first().authority)
     }
 
     @Test
