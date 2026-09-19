@@ -49,6 +49,18 @@ fun PairingRoute(
     val context = LocalContext.current
     val viewModel = remember { createPairingViewModel(configStore) }
     val nsdDiscovery = remember { NsdHostDiscovery(context) }
+
+    val triggerDiscovery = remember(viewModel, nsdDiscovery) {
+        {
+            viewModel.beginLanDiscovery()
+            nsdDiscovery.start(listener = object : NsdHostDiscovery.Listener {
+                override fun onHost(candidate: HostCandidate) = viewModel.addDiscoveredHost(candidate)
+                override fun onFinished() = viewModel.finishLanDiscovery()
+                override fun onFailure(reason: String) = viewModel.finishLanDiscovery()
+            })
+        }
+    }
+
     // TS 态可视桥（018 标准5）：TsnetWire 状态 → VM observable；离屏卸钩防泄漏，
     // 挂载即补播当前态（节点可能已 Up——重进配对页时状态不回退）。
     DisposableEffect(viewModel) {
@@ -60,14 +72,11 @@ fun PairingRoute(
         }
         onState(TsnetWire.state)
         TsnetWire.stateListener = ::onState
-        nsdDiscovery.start(listener = object : NsdHostDiscovery.Listener {
-            override fun onHost(candidate: HostCandidate) = viewModel.addDiscoveredHost(candidate)
-            override fun onFinished() = Unit
-            override fun onFailure(reason: String) = Unit
-        })
+        triggerDiscovery()
         onDispose {
             TsnetWire.stateListener = null
             nsdDiscovery.stop()
+            viewModel.finishLanDiscovery()
         }
     }
     PairingScreen(
@@ -81,6 +90,7 @@ fun PairingRoute(
             onPaired()
         },
         onSkip = onSkip,
+        onRescan = triggerDiscovery,
     )
 }
 

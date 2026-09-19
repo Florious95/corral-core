@@ -25,11 +25,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import dev.agentmirror.app.pairing.HostCandidate
+import dev.agentmirror.app.pairing.HostEndpoint
+import dev.agentmirror.app.pairing.HostEndpointSource
 import dev.agentmirror.app.pairing.PairingConfig
 import dev.agentmirror.app.pairing.PairingConfigStore
 import dev.agentmirror.app.pairing.PairingScreen
 import dev.agentmirror.app.pairing.PairingViewModel
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.workspace.WorkspaceViewModel
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -44,6 +49,70 @@ class PairingUxTest {
 
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun lanScanningState_showsScanningGuidance_andRemovesMisleadingTailscalePrompt() {
+        val vm = PairingViewModel(
+            configStore = MemoryConfigStore(),
+            connectionFactory = { error("no connect") },
+        )
+        vm.beginLanDiscovery()
+
+        compose.setContent {
+            PairingScreen(viewModel = vm, onPaired = {}, onSkip = {})
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("正在扫描附近局域网主机…").assertExists()
+        compose.onAllNodesWithText("可选填 Tailscale auth key 后自动发现主机。").assertCountEquals(0)
+        compose.onAllNodesWithText("绑定主机").assertCountEquals(0)
+    }
+
+    @Test
+    fun discoveredHost_rendersHumanName_hostId_andLanBadge_andExpandsOnSelection() {
+        val vm = PairingViewModel(
+            configStore = MemoryConfigStore(),
+            connectionFactory = { error("no connect") },
+        )
+        val endpoint = HostEndpoint("192.168.31.116", 9900, ConnectionPath.LAN, HostEndpointSource.NSD)
+        vm.addDiscoveredHost(HostCandidate("host-mac-001", "MacBook-Pro.local", listOf(endpoint)))
+
+        compose.setContent {
+            PairingScreen(viewModel = vm, onPaired = {}, onSkip = {})
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("MacBook-Pro.local").assertExists()
+        compose.onNodeWithText("ID: host-mac-001").assertExists()
+        compose.onNodeWithText("LAN").assertExists()
+        // 未选中时不展示输入 Token
+        compose.onAllNodesWithText("请输入此电脑显示的配对 Token").assertCountEquals(0)
+
+        // 点击卡片展开
+        compose.onNodeWithText("MacBook-Pro.local").performClick()
+        compose.waitForIdle()
+
+        assertEquals("host-mac-001", vm.selectedHostId)
+        compose.onNodeWithText("请输入此电脑显示的配对 Token").assertExists()
+        compose.onAllNodesWithText("连接主机").assertCountEquals(2) // 顶栏标题 + 卡片按钮
+    }
+
+    @Test
+    fun manualDirectConnect_rendersDirectInputs() {
+        val vm = PairingViewModel(
+            configStore = MemoryConfigStore(),
+            connectionFactory = { error("no connect") },
+        )
+
+        compose.setContent {
+            PairingScreen(viewModel = vm, onPaired = {}, onSkip = {})
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("手动直连").assertExists()
+        compose.onNodeWithText("局域网主机地址（IP:端口）").assertExists()
+        compose.onNodeWithText("连接").assertExists()
+    }
 
     @Test
     fun manualToken_isAbsentFromVisibleTextNodes() {
