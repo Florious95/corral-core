@@ -317,15 +317,14 @@ private fun TerminalPreviewLine(
     foreground: Color,
     cursor: Color,
 ) {
-    Row(
+    Box(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(Radii.previewBox))
             .background(background)
-            .padding(horizontal = 12.dp, vertical = 11.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        contentAlignment = Alignment.CenterStart,
     ) {
-        AppText("❯", cursor, fontSize.sp, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1.55f)
         AppText(
             text = "claim-leader --team wiki-team",
             color = foreground,

@@ -439,7 +439,6 @@ private fun DraftField(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        AppText("❯", p.promptGlyph, 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (draft.text.isEmpty()) {
                 AppText("输入指令…", p.inputPlaceholder, TypeSizes.inputText, lineHeightMultiplier = 1f)

@@ -64,6 +64,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -81,6 +82,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -403,12 +407,18 @@ fun HostBindingCard(
                                 horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                             ) {
                                 Surface(
-                                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.size(42.dp),
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Text("🖥️", fontSize = 20.sp)
+                                        Icon(
+                                            imageVector = HostComputerIcon,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp),
+                                        )
                                     }
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
@@ -509,6 +519,24 @@ fun HostBindingCard(
             }
         }
     }
+}
+
+/** 现代极简矢量主机图标（替代彩色 Emoji，保持 Liquid Glass 视觉统一） */
+private val HostComputerIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "HostComputer",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        addPath(
+            pathData = PathParser().parsePathString(
+                "M20,18c1.1,0,2,-0.9,2,-2V6c0,-1.1,-0.9,-2,-2,-2H4C2.9,4,2,4.9,2,6v10c0,1.1,0.9,2,2,2H1c-0.55,0,-1,0.45,-1,1s0.45,1,1,1h22c0.55,0,1,-0.45,1,-1s-0.45,-1,-1,-1h-3zM5,16c-0.55,0,-1,-0.45,-1,-1V7c0,-0.55,0.45,-1,1,-1h14c0.55,0,1,0.45,1,1v8c0,0.55,-0.45,1,-1,1H5z",
+            ).toNodes(),
+            fill = SolidColor(Color.White),
+        )
+    }.build()
 }
 
 /** 绿色优雅 LAN 药丸标签 */
