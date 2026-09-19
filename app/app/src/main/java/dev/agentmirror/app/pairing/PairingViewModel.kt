@@ -343,6 +343,10 @@ class PairingViewModel(
         // feat-ts-wire 手填通道（FIELD 裁定：输入框接活）：填了 key 即起网。
         currentTsAuthKey = manualTsAuthKey.trim()
         if (currentTsAuthKey.isNotEmpty()) tsnetStarter(currentTsAuthKey)
+        // A manually entered endpoint has no trusted host ID. Resolve it over the same
+        // public whoami route used by LAN discovery before calculating identify's MAC;
+        // sending a null host_id is accepted by newer servers but is not a complete
+        // host-bound pairing contract on older/field servers.
         startVerifiedPairing(
             rawUrl = url,
             token = token,
@@ -351,6 +355,7 @@ class PairingViewModel(
             port = null,
             tsNodeId = null,
             legacyUrl = url,
+            requireWhoami = true,
         )
     }
 
@@ -533,6 +538,7 @@ class PairingViewModel(
         port: Int?,
         tsNodeId: String?,
         legacyUrl: String?,
+        requireWhoami: Boolean = false,
     ) {
         val endpoint = HostRouter.endpointFromWsUrl(
             rawUrl,
@@ -551,12 +557,21 @@ class PairingViewModel(
         val generation = ++pairingGeneration
         discoveryExecutor.execute {
             if (generation != pairingGeneration) return@execute
-            val result = identifyClient.identify(endpoint, hostId, token, legacyUrl)
+            val verifiedHostId = if (requireWhoami && hostId == null) {
+                identifyClient.whoami(endpoint)?.hostId ?: run {
+                    waitingForTsnet = false
+                    failPairing(PairingFailCause.REJECTED, "主机身份验证失败")
+                    return@execute
+                }
+            } else {
+                hostId
+            }
+            val result = identifyClient.identify(endpoint, verifiedHostId, token, legacyUrl)
             if (generation != pairingGeneration) return@execute
             waitingForTsnet = false
             when (result) {
                 is HostIdentifyResult.Rejected -> {
-                    failPairing(PairingFailCause.REJECTED, "主机身份验证失败")
+                    failPairing(PairingFailCause.REJECTED, identityFailureMessage(result.reason))
                     return@execute
                 }
                 is HostIdentifyResult.Proven -> {
@@ -573,12 +588,22 @@ class PairingViewModel(
             currentPort = endpoint.port
             currentTsNodeId = tsNodeId
             currentToken = token.trim()
-            attemptQueue = proveCandidateUrls(endpoint.wsUrl, currentToken, hostId)
+            attemptQueue = proveCandidateUrls(endpoint.wsUrl, currentToken, verifiedHostId)
             attemptIndex = 0
             candidateUrls = emptyList()
             currentTsAuthKey = currentTsAuthKey.trim()
             startPairingSequence(attemptQueue, currentToken, resetCandidates = true)
         }
+    }
+
+    /** Keep identity diagnostics actionable without exposing tokens or transport internals. */
+    private fun identityFailureMessage(reason: String): String = when (reason) {
+        "identify unavailable" -> "主机身份验证失败（身份接口不可达）"
+        "identify rejected" -> "主机身份验证失败（服务端拒绝）"
+        "bound address mismatch" -> "主机身份验证失败（地址不匹配）"
+        "mac mismatch" -> "主机身份验证失败（凭据不匹配）"
+        "empty token" -> "主机身份验证失败（token 为空）"
+        else -> "主机身份验证失败（身份响应无效）"
     }
 
     /** Prove QR candidate hints before admitting them to the bounded WS attempt queue. */

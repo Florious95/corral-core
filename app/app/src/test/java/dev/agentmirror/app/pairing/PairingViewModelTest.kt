@@ -490,6 +490,48 @@ class PairingViewModelTest {
     }
 
     @Test
+    fun manualPairingResolvesHostIdBeforeIdentify() {
+        val calls = mutableListOf<String>()
+        val hostId = "manual-host-1234"
+        val verifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint): HostCandidate {
+                calls += "whoami:${endpoint.authority}"
+                return HostCandidate(hostId, "MacBook Pro", listOf(endpoint))
+            }
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ): HostIdentifyResult {
+                calls += "identify:$hostId:${endpoint.authority}"
+                return HostIdentifyResult.Proven(
+                    HostIdentity(hostId ?: error("manual identity must be resolved"), "MacBook Pro", endpoint, endpoint.authority),
+                )
+            }
+        }
+        val vm = PairingViewModel(
+            configStore = FakeStore(),
+            identifyClient = verifier,
+            discoveryExecutor = Executor { it.run() },
+            connectionFactory = { config ->
+                ConnectionManager(config, TransportFactory { FakeWebSocketTransport() })
+            },
+        )
+        vm.manualUrl = "192.0.2.20:9900"
+        vm.manualToken = "LAN-T0K"
+
+        vm.submitManual()
+
+        assertEquals(
+            listOf("whoami:192.0.2.20:9900", "identify:$hostId:192.0.2.20:9900"),
+            calls,
+        )
+        assertTrue(vm.pairingStatus is PairingStatus.Pairing)
+    }
+
+    @Test
     fun manualRejectsInvalidUrl() {
         val h = Harness()
         h.vm.manualUrl = "htp://bad"
