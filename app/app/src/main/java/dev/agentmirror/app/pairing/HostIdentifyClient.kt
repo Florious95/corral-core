@@ -173,6 +173,10 @@ class OkHttpHostHttpTransport(
                 return listOf(InetAddress.getByAddress(hostname, bytes))
             }
         })
+        // Identity proofs target the literal LAN/Tailscale address directly. In particular,
+        // do not inherit an emulator/device HTTP proxy that can rewrite the destination or
+        // return a proxy-generated response which the caller reports as auth failure.
+        .proxy(java.net.Proxy.NO_PROXY)
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(false)
