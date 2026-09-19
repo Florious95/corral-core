@@ -41,6 +41,12 @@ interface PairingConfigStore {
 
     /** 清除（重新配对时可选）。 */
     fun clear()
+
+    /** Persist a standalone Tailscale auth key through the store's protected channel. */
+    fun saveTsAuthKey(authKey: String) = Unit
+
+    /** Read a previously persisted standalone Tailscale auth key, if available. */
+    fun loadTsAuthKey(): String? = null
 }
 
 /**
@@ -72,7 +78,7 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
             if (prefs.getInt(KEY_SCHEMA_VERSION, 0) < SCHEMA_VERSION && hostId == null) url.takeIf { it.isNotBlank() }
             else null
         if (url.isBlank() && hostId == null && legacyBootstrapUrl.isNullOrBlank()) return null
-        val tsAuthKey = loadTsAuthKey() ?: return null
+        val tsAuthKey = readTsAuthKey() ?: return null
         // 凭据脱敏前置（registerSecret 坑一：注册前窗口）：token 刚从 prefs 读出的那一刻
         // 就注册，把「值在内存」到「registerSecret 生效」的窗口压到零。tsAuthKey 在
         // TsnetWire.ensureStarted 入口已注册；这里补 token（URL 若带 userinfo 由结构兜底拦）。
@@ -92,6 +98,20 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
             scanHints = prefs.getStringSet(KEY_SCAN_HINTS, emptySet()).orEmpty().toList(),
         )
     }
+
+    override fun saveTsAuthKey(authKey: String) {
+        val normalized = authKey.trim()
+        val encrypted = normalized.takeIf { it.isNotEmpty() }?.let(secretCipher::encrypt)
+        // Standalone connect must survive a process death before a host is paired; commit
+        // synchronously only after encryption so plaintext is never written to prefs.
+        prefs.edit(commit = true) {
+            remove(KEY_TS_AUTHKEY_LEGACY)
+            if (encrypted == null) remove(KEY_TS_AUTHKEY_ENCRYPTED)
+            else putString(KEY_TS_AUTHKEY_ENCRYPTED, encrypted)
+        }
+    }
+
+    override fun loadTsAuthKey(): String? = readTsAuthKey()?.takeIf { it.isNotEmpty() }
 
     override fun save(config: PairingConfig) {
         // 先完成加密再打开 editor：Keystore 失败时不留下 url/token 已更新、key 未更新的半配置。
@@ -143,7 +163,7 @@ class SharedPreferencesPairingConfigStore(context: Context) : PairingConfigStore
      * 读取密文 key；前席/狗粮版若留下明文键则原地一次性迁移。迁移提交失败或密文损坏时
      * 返回 null，让整个配对配置失效并要求重新配对，绝不把无法保护的 key 当成功配置使用。
      */
-    private fun loadTsAuthKey(): String? {
+    private fun readTsAuthKey(): String? {
         val encrypted = prefs.getString(KEY_TS_AUTHKEY_ENCRYPTED, null)
         if (encrypted != null) return runCatching { secretCipher.decrypt(encrypted) }.getOrNull()
 

@@ -21,6 +21,8 @@ import dev.agentmirror.app.conn.ConnectionManager
 import dev.agentmirror.app.conn.FakeClock
 import dev.agentmirror.app.conn.FakeWebSocketTransport
 import dev.agentmirror.app.conn.TransportFactory
+import dev.agentmirror.app.tsnet.TsnetProxy
+import dev.agentmirror.app.tsnet.TsnetState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -41,12 +43,17 @@ class PairingViewModelTest {
     /** 记录型假存储：断言 save/clear。 */
     private class FakeStore : PairingConfigStore {
         var saved: PairingConfig? = null
+        var savedTsAuthKey: String? = null
         var cleared = false
         var failSave = false
         override fun load(): PairingConfig? = saved
         override fun save(config: PairingConfig) {
             if (failSave) error("keystore rejected fake-secret-material")
             saved = config
+        }
+
+        override fun saveTsAuthKey(authKey: String) {
+            savedTsAuthKey = authKey
         }
 
         override fun clear() {
@@ -451,6 +458,35 @@ class PairingViewModelTest {
     }
 
     // ---- 手填（兜底入口）----
+
+    @Test
+    fun connectTailscaleStartsStandaloneAndTracksUpState() {
+        val startedKeys = mutableListOf<String>()
+        val h = Harness(tsnetStarter = { startedKeys += it })
+
+        h.vm.connectTailscale("  tskey-auth-test  ")
+
+        assertEquals(listOf("tskey-auth-test"), startedKeys)
+        assertEquals("tskey-auth-test", h.store.savedTsAuthKey)
+        assertTrue(h.vm.tsnetConnecting)
+
+        h.vm.onTsnetState(TsnetState.Up(TsnetProxy("127.0.0.1", 1080, "cred")))
+
+        assertFalse(h.vm.tsnetConnecting)
+        assertEquals(TsnetState.Up(TsnetProxy("127.0.0.1", 1080, "cred")), h.vm.tsState)
+    }
+
+    @Test
+    fun connectTailscaleRejectsBlankKeyWithoutStarting() {
+        val startedKeys = mutableListOf<String>()
+        val h = Harness(tsnetStarter = { startedKeys += it })
+
+        h.vm.connectTailscale("  ")
+
+        assertTrue(startedKeys.isEmpty())
+        assertFalse(h.vm.tsnetConnecting)
+        assertTrue(h.vm.formError!!.contains("Auth Key"))
+    }
 
     @Test
     fun manualLiteralLanIpUsesDefaultPort() {

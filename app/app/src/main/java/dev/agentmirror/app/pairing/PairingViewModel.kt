@@ -102,9 +102,43 @@ class PairingViewModel(
     var tsState by mutableStateOf<TsnetState>(TsnetState.Idle)
         private set
 
+    /** Standalone Tailnet join progress; independent from host pairing progress. */
+    var tsnetConnecting by mutableStateOf(false)
+        private set
+
+    /**
+     * Start the embedded tsnet without requiring a LAN URL or host token first.
+     * The auth key is encrypted by the production PairingConfigStore before startup.
+     */
+    fun connectTailscale(authKey: String) {
+        val key = authKey.trim()
+        if (key.isEmpty()) {
+            tsnetConnecting = false
+            formError = "Tailscale Auth Key 不能为空"
+            return
+        }
+        try {
+            configStore.saveTsAuthKey(key)
+        } catch (_: Exception) {
+            tsnetConnecting = false
+            formError = "Tailscale 凭据保存失败，请检查设备安全设置后重试"
+            return
+        }
+        formError = null
+        manualTsAuthKey = key
+        currentTsAuthKey = key
+        tsnetConnecting = tsState !is TsnetState.Up
+        runCatching { tsnetStarter(key) }.onFailure {
+            tsnetConnecting = false
+            formError = "Tailnet 启动失败，请检查 Auth Key 后重试"
+        }
+        if (tsState is TsnetState.Up) tsnetConnecting = false
+    }
+
     /** TsnetWire 状态监听落点（可能来自后台线程；Compose snapshot 写线程安全）。 */
     fun onTsnetState(state: TsnetState) {
         tsState = state
+        if (state is TsnetState.Up || state is TsnetState.Error) tsnetConnecting = false
         if (!waitingForTsnet || pairingStatus !is PairingStatus.Pairing) return
         when (state) {
             is TsnetState.Up -> {
@@ -391,6 +425,7 @@ class PairingViewModel(
         // 先置 Idle 再停旧探针：旧探针 stop 的同步 STOPPED 回调看到非 Pairing 不误报拒绝。
         pairingStatus = PairingStatus.Idle
         waitingForTsnet = false
+        tsnetConnecting = false
         stopProbe()
         currentConfig = null
         pendingConfig = null

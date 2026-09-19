@@ -92,6 +92,20 @@ class SharedPreferencesPairingConfigStoreTest {
     }
 
     @Test
+    fun standaloneTsAuthKey_isEncryptedAndReadableWithoutPairingConfig() {
+        store.saveTsAuthKey("tskey-standalone-1")
+
+        assertEquals("tskey-standalone-1", store.loadTsAuthKey())
+        val rawValues = RuntimeEnvironment.getApplication()
+            .getSharedPreferences("pairing_config", Context.MODE_PRIVATE)
+            .all.values
+        assertFalse(rawValues.any { it.toString().contains("tskey-standalone-1") })
+
+        store.clear()
+        assertNull(store.loadTsAuthKey())
+    }
+
+    @Test
     fun load_migratesLegacyPlaintextTsAuthKeyToCiphertext() {
         val prefs = RuntimeEnvironment.getApplication()
             .getSharedPreferences("pairing_config", Context.MODE_PRIVATE)
