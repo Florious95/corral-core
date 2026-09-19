@@ -1,11 +1,28 @@
 package dev.agentmirror.app.pairing
 
+import dev.agentmirror.app.tsnet.ConnectionPath
+import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import dev.agentmirror.app.tsnet.ConnectionPath
 
 class HostIdentifyClientTest {
+    @Test
+    fun cappedBodyAcceptsShortWhoamiJsonWithoutEofFailure() {
+        val body = "{\"v\":1,\"host_id\":\"host-1234\",\"name\":\"MacBook Pro\",\"port\":9900}"
+
+        val actual = readCappedBody(Buffer().writeUtf8(body))
+
+        assertEquals(body, actual)
+    }
+
+    @Test
+    fun cappedBodyStopsAtMaxPlusOneBytes() {
+        val actual = readCappedBody(Buffer().writeUtf8("x".repeat(2048)))
+
+        assertEquals(1025, actual.toByteArray(Charsets.UTF_8).size)
+    }
+
     private val endpoint = HostEndpoint("192.0.2.10", 9900, ConnectionPath.LAN, HostEndpointSource.SCANNED_PRIMARY)
     private val token = "host-token"
     private val clientHolder = arrayOfNulls<HostIdentifyClient>(1)

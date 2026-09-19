@@ -12,6 +12,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.Buffer
+import okio.BufferedSource
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.security.SecureRandom
@@ -231,9 +233,7 @@ class OkHttpHostHttpTransport(
         }
         return runCatching {
             client.newCall(builder.build()).execute().use { response ->
-                val body = response.body?.source()?.readByteArray((MAX_HOST_BODY_BYTES + 1).toLong())
-                    ?.toString(Charsets.UTF_8)
-                    .orEmpty()
+                val body = response.body?.source()?.let(::readCappedBody).orEmpty()
                 HostHttpResponse(response.code, body, response.header("Location"))
             }
         }.getOrElse { HostHttpResponse(599) }
@@ -245,6 +245,18 @@ class OkHttpHostHttpTransport(
     private companion object {
         val JSON = "application/json".toMediaType()
     }
+}
+
+/** Read at most MAX+1 bytes without requiring the response to contain MAX+1 bytes. */
+internal fun readCappedBody(source: BufferedSource): String {
+    val buffer = Buffer()
+    var remaining = (MAX_HOST_BODY_BYTES + 1).toLong()
+    while (remaining > 0L) {
+        val read = source.read(buffer, remaining)
+        if (read <= 0L) break
+        remaining -= read
+    }
+    return buffer.readByteArray().toString(Charsets.UTF_8)
 }
 
 private fun ByteArray.toHex(): String = buildString(size * 2) {
