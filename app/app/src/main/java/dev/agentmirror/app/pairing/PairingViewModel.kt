@@ -353,7 +353,8 @@ class PairingViewModel(
         val token = hostToken.trim()
         if (host == null) { formError = "请先选择主机"; return }
         if (token.isEmpty()) { formError = "主机 token 不能为空"; return }
-        val endpoint = HostRouter.prioritize(host.endpoints).firstOrNull()
+        val endpoints = HostRouter.prioritize(host.endpoints)
+        val endpoint = endpoints.firstOrNull()
         if (endpoint == null) { formError = "所选主机暂不可达"; return }
         startVerifiedPairing(
             rawUrl = endpoint.wsUrl,
@@ -363,6 +364,7 @@ class PairingViewModel(
             port = endpoint.port,
             tsNodeId = null,
             legacyUrl = null,
+            alternateEndpoints = endpoints.drop(1),
         )
     }
 
@@ -587,26 +589,26 @@ class PairingViewModel(
         tsNodeId: String?,
         legacyUrl: String?,
         requireWhoami: Boolean = false,
+        alternateEndpoints: List<HostEndpoint> = emptyList(),
     ) {
-        val endpoint = HostRouter.endpointFromWsUrl(
+        val primaryEndpoint = HostRouter.endpointFromWsUrl(
             rawUrl,
             if (legacyUrl != null) HostEndpointSource.SCANNED_PRIMARY else HostEndpointSource.QR,
             port ?: HostRouter.DEFAULT_PORT,
-        )
-        if (endpoint == null) {
+        ) ?: run {
             failPairing(PairingFailCause.UNREACHABLE, "主机地址不可验证")
             return
         }
         pairingStatus = PairingStatus.Idle
         stopProbe()
-        pairingStatus = PairingStatus.Pairing(endpoint.wsUrl)
+        pairingStatus = PairingStatus.Pairing(primaryEndpoint.wsUrl)
         waitingForTsnet = true // identity HTTP has its own timeout; pairing pump must not race it
         pairingStartedAt = nowMs()
         val generation = ++pairingGeneration
         discoveryExecutor.execute {
             if (generation != pairingGeneration) return@execute
             val verifiedHostId = if (requireWhoami && hostId == null) {
-                when (val result = identifyClient.whoamiDetailed(endpoint)) {
+                when (val result = identifyClient.whoamiDetailed(primaryEndpoint)) {
                     is HostWhoamiResult.Found -> result.candidate.hostId
                     is HostWhoamiResult.Failed -> {
                         waitingForTsnet = false
@@ -620,17 +622,41 @@ class PairingViewModel(
             } else {
                 hostId
             }
-            val result = identifyClient.identify(endpoint, verifiedHostId, token, legacyUrl)
+            val identityEndpoints = buildList {
+                add(primaryEndpoint)
+                addAll(alternateEndpoints.filter { alternate ->
+                    alternate.authority != primaryEndpoint.authority
+                })
+            }
+            var result: HostIdentifyResult? = null
+            var provenEndpoint: HostEndpoint = primaryEndpoint
+            for (candidateEndpoint in identityEndpoints) {
+                if (generation != pairingGeneration) return@execute
+                pairingStatus = PairingStatus.Pairing(candidateEndpoint.wsUrl)
+                val attempt = identifyClient.identify(candidateEndpoint, verifiedHostId, token, legacyUrl)
+                result = attempt
+                when (attempt) {
+                    is HostIdentifyResult.Proven -> {
+                        provenEndpoint = attempt.identity.endpoint
+                        break
+                    }
+                    is HostIdentifyResult.Legacy404 -> {
+                        provenEndpoint = attempt.endpoint
+                        break
+                    }
+                    is HostIdentifyResult.Rejected -> Unit
+                }
+            }
             if (generation != pairingGeneration) return@execute
             waitingForTsnet = false
-            when (result) {
+            when (val identity = result) {
                 is HostIdentifyResult.Rejected -> {
-                    failPairing(PairingFailCause.REJECTED, identityFailureMessage(result.reason))
+                    failPairing(PairingFailCause.REJECTED, identityFailureMessage(identity.reason))
                     return@execute
                 }
                 is HostIdentifyResult.Proven -> {
-                    currentHostId = result.identity.hostId
-                    currentHostName = name.ifBlank { result.identity.name }
+                    currentHostId = identity.identity.hostId
+                    currentHostName = name.ifBlank { identity.identity.name }
                     currentLegacyUrl = null
                 }
                 is HostIdentifyResult.Legacy404 -> {
@@ -638,11 +664,15 @@ class PairingViewModel(
                     currentHostName = name
                     currentLegacyUrl = legacyUrl
                 }
+                null -> {
+                    failPairing(PairingFailCause.REJECTED, "主机身份验证失败（身份响应无效）")
+                    return@execute
+                }
             }
-            currentPort = endpoint.port
+            currentPort = provenEndpoint.port
             currentTsNodeId = tsNodeId
             currentToken = token.trim()
-            attemptQueue = proveCandidateUrls(endpoint.wsUrl, currentToken, verifiedHostId)
+            attemptQueue = proveCandidateUrls(provenEndpoint.wsUrl, currentToken, verifiedHostId)
             attemptIndex = 0
             candidateUrls = emptyList()
             currentTsAuthKey = currentTsAuthKey.trim()

@@ -75,6 +75,47 @@ class HostDiscoveryFlowTest {
     }
 
     @Test
+    fun hostTokenFallsBackToLanWhenTailnetIdentityIsUnavailable() {
+        val token = "host-token"
+        val hostId = "host-1234"
+        val ts = HostEndpoint("100.101.2.3", 9900, ConnectionPath.TAILNET, HostEndpointSource.HOST_RECORD)
+        val lan = HostEndpoint("192.168.31.116", 9900, ConnectionPath.LAN, HostEndpointSource.HOST_RECORD)
+        val requests = mutableListOf<HostEndpoint>()
+        val verifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ): HostIdentifyResult {
+                requests += endpoint
+                return if (endpoint.authority == ts.authority) {
+                    HostIdentifyResult.Rejected("identify unavailable")
+                } else {
+                    HostIdentifyResult.Proven(
+                        HostIdentity(hostId.orEmpty(), "MacBook-Pro.local", endpoint, endpoint.authority),
+                    )
+                }
+            }
+        }
+        val vm = PairingViewModel(
+            configStore = Store(),
+            connectionFactory = { cfg -> dev.agentmirror.app.conn.ConnectionManager(cfg, NoopTransportFactory) },
+            identifyClient = verifier,
+            discoveryExecutor = Executor { it.run() },
+        )
+        vm.addDiscoveredHost(HostCandidate(hostId, "MacBook-Pro.local", listOf(lan, ts)))
+        assertEquals(listOf(ts.authority, lan.authority), HostRouter.prioritize(vm.discoveredHosts.single().endpoints).map { it.authority })
+        vm.selectHost(hostId)
+        vm.hostToken = token
+        vm.submitHostToken()
+
+        assertEquals(listOf(ts.authority, lan.authority), requests.map { it.authority })
+    }
+
+    @Test
     fun lanDiscoveryUpgradesNsdPlaceholderWithoutTsToken() {
         val endpoint = HostEndpoint("192.0.2.3", 9900, ConnectionPath.LAN, HostEndpointSource.NSD)
         val transport = object : HostHttpTransport {
