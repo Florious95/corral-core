@@ -30,10 +30,11 @@ const (
 )
 
 type whoamiResponse struct {
-	Version int    `json:"v"`
-	HostID  string `json:"host_id"`
-	Name    string `json:"name"`
-	Port    int    `json:"port"`
+	Version   int      `json:"v"`
+	HostID    string   `json:"host_id"`
+	Name      string   `json:"name"`
+	Port      int      `json:"port"`
+	Addresses []string `json:"addresses"`
 }
 
 type identifyRequest struct {
@@ -99,7 +100,13 @@ func (s *Server) serveWhoami(w http.ResponseWriter, r *http.Request) {
 		writeIdentityError(w, http.StatusTooManyRequests, "rate_limited")
 		return
 	}
-	body := whoamiResponse{Version: identifyVersion, HostID: s.hostID, Name: s.hostName, Port: s.listenPort}
+	body := whoamiResponse{
+		Version:   identifyVersion,
+		HostID:    s.hostID,
+		Name:      s.hostName,
+		Port:      s.listenPort,
+		Addresses: s.publicIdentityAddresses(),
+	}
 	writeIdentityJSON(w, http.StatusOK, body)
 }
 
@@ -275,6 +282,28 @@ func (s *Server) identityAddresses() []net.IP {
 		}
 	}
 	return append(out, tailnet...)
+}
+
+// publicIdentityAddresses is the wire-safe projection of the server's current
+// address set. It deliberately emits only usable IPv4 literals and de-duplicates
+// them so a client can add real LAN/Tailnet endpoints without trusting the
+// transport alias used to reach /pair/whoami.
+func (s *Server) publicIdentityAddresses() []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, candidate := range s.identityAddresses() {
+		ip := candidate.To4()
+		if ip == nil || ip.IsLoopback() || ip.IsUnspecified() {
+			continue
+		}
+		text := ip.String()
+		if _, ok := seen[text]; ok {
+			continue
+		}
+		seen[text] = struct{}{}
+		out = append(out, text)
+	}
+	return out
 }
 
 func writeIdentityJSON(w http.ResponseWriter, status int, value any) {

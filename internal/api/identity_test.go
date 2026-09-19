@@ -9,13 +9,23 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
 
 func TestWhoamiDoesNotExposeToken(t *testing.T) {
 	const token = "secret-pairing-token"
-	s := NewServer(Options{HostID: "AAAAAAAAAAAAAAAAAAAAAAAAAA", HostName: "test-host", ListenPort: 9900, Token: token, DiscoverySocketDirs: []string{}})
+	s := NewServer(Options{
+		HostID:              "AAAAAAAAAAAAAAAAAAAAAAAAAA",
+		HostName:            "test-host",
+		ListenPort:          9900,
+		Token:               token,
+		DiscoverySocketDirs: []string{},
+		AddressProvider: func() []net.IP {
+			return []net.IP{net.ParseIP("192.0.2.7"), net.ParseIP("100.64.0.8"), net.ParseIP("192.0.2.7")}
+		},
+	})
 	defer s.Close()
 	r := httptest.NewRequest(http.MethodGet, "http://192.0.2.10:9900/pair/whoami", nil)
 	r.RemoteAddr = "192.0.2.10:40000"
@@ -33,6 +43,9 @@ func TestWhoamiDoesNotExposeToken(t *testing.T) {
 	}
 	if got.HostID != "AAAAAAAAAAAAAAAAAAAAAAAAAA" || got.Port != 9900 {
 		t.Fatalf("whoami = %+v", got)
+	}
+	if want := []string{"192.0.2.7", "100.64.0.8"}; !reflect.DeepEqual(got.Addresses, want) {
+		t.Fatalf("whoami addresses = %v want %v", got.Addresses, want)
 	}
 }
 
