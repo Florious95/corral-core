@@ -96,6 +96,7 @@ class PairingViewModelTest {
             tsnetStarter = tsnetStarter,
             identifyClient = identityVerifier,
             discoveryExecutor = Executor { it.run() },
+            localProbeTargets = { emptyList() },
             connectionFactory = { cfg ->
                 nextConfig = cfg
                 val t = FakeWebSocketTransport()

@@ -26,6 +26,7 @@ import dev.agentmirror.app.conn.ConnectionState
 import dev.agentmirror.app.conn.ErrorFrame
 import dev.agentmirror.app.conn.FrameError
 import dev.agentmirror.app.conn.FramePayload
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.tsnet.TsnetDial
 import dev.agentmirror.app.tsnet.TsnetState
 import dev.agentmirror.app.tsnet.TsPeer
@@ -64,6 +65,8 @@ class PairingViewModel(
     private val tsnetStarter: (String) -> Unit = {},
     private val identifyClient: HostIdentityVerifier = HostIdentifyClient(OkHttpHostHttpTransport()),
     private val discoveryExecutor: Executor = Executors.newCachedThreadPool(),
+    /** Fixed, bounded local aliases; production includes the Android emulator host gateway. */
+    private val localProbeTargets: () -> List<HostEndpoint> = { defaultLocalProbeTargets() },
 ) : ConnectionManager.Listener {
 
     // ---- 可观察 UI 状态（Compose 屏直接读）----
@@ -282,7 +285,17 @@ class PairingViewModel(
 
     /** Mark the LAN discovery window visible to the user before NSD callbacks arrive. */
     fun beginLanDiscovery() {
+        val generation = ++discoveryGeneration
         discoveryInFlight = true
+        // NSD remains the primary path. This one-shot, tokenless whoami probe covers the
+        // emulator host alias where QEMU NAT does not forward mDNS multicast.
+        discoveryExecutor.execute {
+            val found = localProbeTargets().asSequence().mapNotNull { endpoint ->
+                identifyClient.whoami(endpoint)
+            }.toList()
+            if (generation != discoveryGeneration) return@execute
+            found.forEach(::addDiscoveredHost)
+        }
     }
 
     /** End the LAN window without hiding a host list that was already populated. */
@@ -813,6 +826,15 @@ class PairingViewModel(
     }
 
     private companion object {
+        private fun defaultLocalProbeTargets(): List<HostEndpoint> = listOf(
+            HostEndpoint(
+                address = "10.0.2.2",
+                port = HostRouter.DEFAULT_PORT,
+                path = ConnectionPath.LAN,
+                source = HostEndpointSource.SCANNED_PRIMARY,
+            ),
+        )
+
         /** 配对超时：拨号+auth 握手在期限内未 READY 即判失败（003 明确报错，不无限等）。 */
         const val PAIR_TIMEOUT_MS = 15_000L
 

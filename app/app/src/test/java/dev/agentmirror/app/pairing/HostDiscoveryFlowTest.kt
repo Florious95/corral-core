@@ -18,6 +18,34 @@ class HostDiscoveryFlowTest {
     }
 
     @Test
+    fun lanDiscoveryProbesEmulatorGatewayWithoutManualIp() {
+        val endpoint = HostEndpoint("10.0.2.2", 9900, ConnectionPath.LAN, HostEndpointSource.SCANNED_PRIMARY)
+        val transport = object : HostHttpTransport {
+            override fun whoami(actual: HostEndpoint): HostHttpResponse {
+                assertEquals(endpoint.authority, actual.authority)
+                return HostHttpResponse(
+                    200,
+                    "{\"host_id\":\"gateway-host-1234\",\"name\":\"MacBook-Pro.local\",\"port\":9900}",
+                )
+            }
+
+            override fun identify(endpoint: HostEndpoint, request: IdentifyRequest) = HostHttpResponse(500)
+        }
+        val vm = PairingViewModel(
+            configStore = Store(),
+            connectionFactory = { cfg -> dev.agentmirror.app.conn.ConnectionManager(cfg, NoopTransportFactory) },
+            identifyClient = HostIdentifyClient(transport),
+            discoveryExecutor = Executor { it.run() },
+            localProbeTargets = { listOf(endpoint) },
+        )
+
+        vm.beginLanDiscovery()
+
+        assertEquals("MacBook-Pro.local", vm.discoveredHosts.single().name)
+        assertEquals(endpoint.authority, vm.discoveredHosts.single().endpoints.single().authority)
+    }
+
+    @Test
     fun lanDiscoveryUpgradesNsdPlaceholderWithoutTsToken() {
         val endpoint = HostEndpoint("192.0.2.3", 9900, ConnectionPath.LAN, HostEndpointSource.NSD)
         val transport = object : HostHttpTransport {
