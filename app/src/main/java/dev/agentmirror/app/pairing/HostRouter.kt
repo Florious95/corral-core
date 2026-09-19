@@ -127,7 +127,7 @@ object HostRouter {
                     name = candidate.name.trim().takeUnless {
                         isPlaceholderName(it, candidate.hostId)
                     }.orEmpty(),
-                    endpoints = candidate.endpoints.distinctBy { it.authority },
+                    endpoints = orderForDisplay(candidate.endpoints),
                 )
             } else {
                 val oldName = old.name.trim()
@@ -139,13 +139,22 @@ object HostRouter {
                 }
                 merged[candidate.hostId] = old.copy(
                     name = name,
-                    endpoints = (old.endpoints + candidate.endpoints)
-                        .distinctBy { it.authority },
+                    endpoints = orderForDisplay(old.endpoints + candidate.endpoints),
                 )
             }
         }
         return merged.values.toList()
     }
+
+    /** Keep advertised canonical endpoints ahead of NAT/discovery aliases for display. */
+    private fun orderForDisplay(endpoints: Iterable<HostEndpoint>): List<HostEndpoint> = endpoints
+        .distinctBy { it.authority }
+        .sortedWith(
+            compareBy<HostEndpoint> { it.source.ordinal }
+                .thenBy { if (it.path == dev.agentmirror.app.tsnet.ConnectionPath.LAN) 0 else 1 }
+                .thenBy { it.address }
+                .thenBy { it.port },
+        )
 
     /** Build a literal candidate from a legacy QR/last-good URL only as an untrusted hint. */
     fun endpointFromWsUrl(

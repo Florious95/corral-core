@@ -9,6 +9,7 @@ import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.tsnet.TsnetDial
 import dev.agentmirror.app.tsnet.TsnetWire
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
@@ -62,10 +63,21 @@ class HostIdentifyClient(
         val hostId = json.string("host_id") ?: return null
         if (!HostRouter.isValidHostId(hostId)) return null
         val name = json.string("name").orEmpty()
-        val port = json.int("port")?.takeIf { it in 1..65535 }
-        // whoami's port is metadata attached to this original IP, never a new address.
-        val enriched = port?.let { endpoint.copy(port = it, source = endpoint.source) } ?: endpoint
-        return HostCandidate(hostId, name, listOf(enriched))
+        val port = json.int("port")?.takeIf { it in 1..65535 } ?: endpoint.port
+        val advertisedAddresses = runCatching {
+            json["addresses"]?.jsonArray.orEmpty().mapNotNull { element ->
+                element.jsonPrimitive.content.takeIf(HostRouter::isLiteralIpv4)
+            }
+        }.getOrDefault(emptyList())
+        val endpoints = buildList {
+            advertisedAddresses.forEach { address ->
+                if (address == endpoint.address) return@forEach
+                val path = HostRouter.classify(address) ?: return@forEach
+                add(HostEndpoint(address, port, path, HostEndpointSource.HOST_RECORD))
+            }
+            add(endpoint.copy(port = port, source = endpoint.source))
+        }.distinctBy { it.authority }
+        return HostCandidate(hostId, name, endpoints)
     }
 
     override fun identify(

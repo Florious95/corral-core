@@ -437,7 +437,19 @@ fun HostBindingCard(
                                         )
                                     }
                                 }
-                                LanPillBadge()
+                                val hasTailscale = host.endpoints.any { it.path == dev.agentmirror.app.tsnet.ConnectionPath.TAILNET }
+                                val hasLan = host.endpoints.any { it.path == dev.agentmirror.app.tsnet.ConnectionPath.LAN } || (!hasTailscale && host.endpoints.isEmpty())
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (hasTailscale) {
+                                        TailscalePillBadge()
+                                    }
+                                    if (hasLan) {
+                                        LanPillBadge()
+                                    }
+                                }
                             }
 
                             // 选中卡片后内联展开 Token 输入与连接操作
@@ -509,6 +521,24 @@ private fun LanPillBadge() {
         Text(
             text = "LAN",
             color = Color(0xFF059669),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = MonoFontFamily,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/** 蓝色优雅 Tailscale 药丸标签 */
+@Composable
+private fun TailscalePillBadge() {
+    Surface(
+        color = Color(0x222563EB),
+        shape = RoundedCornerShape(6.dp),
+    ) {
+        Text(
+            text = "Tailscale",
+            color = Color(0xFF2563EB),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = MonoFontFamily,
@@ -845,6 +875,7 @@ private fun Context.hasCameraPermission(): Boolean =
  */
 @Composable
 private fun TailscaleConfigCard(viewModel: PairingViewModel) {
+    val isUp = viewModel.tsState is TsnetState.Up
     var expanded by remember {
         mutableStateOf(
             viewModel.manualTsAuthKey.isNotEmpty() ||
@@ -860,12 +891,31 @@ private fun TailscaleConfigCard(viewModel: PairingViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Tailscale 远程连接配置",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
+                    Text(
+                        text = "Tailscale 远程连接配置",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (isUp) {
+                        Surface(
+                            color = Color(0x2210B981),
+                            shape = RoundedCornerShape(4.dp),
+                        ) {
+                            Text(
+                                text = "● 已接入",
+                                color = Color(0xFF059669),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = "异地或蜂窝网络访问（高级配置）",
                     style = MaterialTheme.typography.bodySmall,
@@ -909,6 +959,46 @@ private fun TailscaleConfigCard(viewModel: PairingViewModel) {
                     colors = manualFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                Button(
+                    onClick = { viewModel.startTsnet() },
+                    enabled = viewModel.manualTsAuthKey.isNotBlank() && viewModel.tsState !is TsnetState.Starting,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (viewModel.tsState is TsnetState.Starting) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        ) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                            Text("正在接入 Tailnet…")
+                        }
+                    } else {
+                        Text("接入 Tailnet 并搜索主机")
+                    }
+                }
+
+                if (isUp) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = "● 已接入 Tailnet",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF059669),
+                        )
+                    }
+                }
             }
         }
     }
