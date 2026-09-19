@@ -6,9 +6,13 @@
 package dev.agentmirror.app.pairing
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import androidx.core.content.ContextCompat
 import dev.agentmirror.app.tsnet.ConnectionPath
 import java.net.Inet4Address
 
@@ -25,7 +29,9 @@ class NsdHostDiscovery(context: Context) {
 
     private val appContext = context.applicationContext
     private val nsd = appContext.getSystemService(NsdManager::class.java)
+    private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val wifi = appContext.getSystemService(WifiManager::class.java)
+    private val callbackExecutor = ContextCompat.getMainExecutor(appContext)
     private var lock: WifiManager.MulticastLock? = null
     private var listener: Listener? = null
     private var discovering = false
@@ -35,7 +41,7 @@ class NsdHostDiscovery(context: Context) {
         this.listener = listener
         lock = wifi?.createMulticastLock("agentmirror-discovery")?.apply { setReferenceCounted(false); acquire() }
         discovering = true
-        runCatching { nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener) }
+        runCatching { startDiscovery() }
             .onFailure { fail("NSD discover failed") }
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             if (discovering) {
@@ -51,6 +57,41 @@ class NsdHostDiscovery(context: Context) {
         lock?.let { if (it.isHeld) it.release() }
         lock = null
         listener = null
+    }
+
+    /**
+     * API 34+ allows NSD to bind to the actual Wi-Fi/Ethernet Network. The legacy overload
+     * delegates network selection to framework defaults, which is ambiguous when a VPN and
+     * virtual Ethernet coexist. This fixes interface selection, but cannot manufacture L2
+     * multicast through a QEMU NAT that does not forward 224.0.0.251.
+     */
+    private fun startDiscovery() {
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            val network = discoveryNetwork()
+            if (network != null) {
+                nsd.discoverServices(
+                    SERVICE_TYPE,
+                    NsdManager.PROTOCOL_DNS_SD,
+                    network,
+                    callbackExecutor,
+                    discoveryListener,
+                )
+                return
+            }
+        }
+        nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+    }
+
+    private fun discoveryNetwork(): Network? {
+        val manager = connectivity ?: return null
+        val candidates = buildList {
+            manager.activeNetwork?.let(::add)
+            addAll(manager.allNetworks)
+        }.distinct()
+        fun hasTransport(network: Network, transport: Int): Boolean =
+            manager.getNetworkCapabilities(network)?.hasTransport(transport) == true
+        return candidates.firstOrNull { hasTransport(it, NetworkCapabilities.TRANSPORT_WIFI) }
+            ?: candidates.firstOrNull { hasTransport(it, NetworkCapabilities.TRANSPORT_ETHERNET) }
     }
 
     private val discoveryListener = object : NsdManager.DiscoveryListener {
