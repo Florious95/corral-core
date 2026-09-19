@@ -99,12 +99,12 @@ class HostIdentifyClient(
             }
         }.getOrDefault(emptyList())
         val endpoints = buildList {
-            add(endpoint.copy(port = port, source = endpoint.source))
             advertisedAddresses.forEach { address ->
                 if (address == endpoint.address) return@forEach
                 val path = HostRouter.classify(address) ?: return@forEach
                 add(HostEndpoint(address, port, path, HostEndpointSource.HOST_RECORD))
             }
+            add(endpoint.copy(port = port, source = endpoint.source))
         }.distinctBy { it.authority }
         return HostWhoamiResult.Found(HostCandidate(hostId, name, endpoints))
     }

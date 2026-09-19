@@ -44,7 +44,7 @@ class HostDiscoveryFlowTest {
 
         assertEquals("MacBook-Pro.local", vm.discoveredHosts.single().name)
         assertEquals(
-            listOf("10.0.2.2:9900", "192.168.31.116:9900"),
+            listOf("192.168.31.116:9900", "10.0.2.2:9900"),
             vm.discoveredHosts.single().endpoints.map { it.authority },
         )
         assertEquals(
@@ -68,7 +68,7 @@ class HostDiscoveryFlowTest {
         val candidate = HostIdentifyClient(transport).whoami(alias) ?: error("whoami candidate missing")
 
         assertEquals(
-            listOf("10.0.2.2:9900", "192.168.31.116:9900", "100.75.207.88:9900"),
+            listOf("192.168.31.116:9900", "100.75.207.88:9900", "10.0.2.2:9900"),
             candidate.endpoints.map { it.authority },
         )
         assertEquals("100.75.207.88:9900", HostRouter.prioritize(candidate.endpoints).first().authority)
