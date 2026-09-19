@@ -558,10 +558,16 @@ class PairingViewModel(
         discoveryExecutor.execute {
             if (generation != pairingGeneration) return@execute
             val verifiedHostId = if (requireWhoami && hostId == null) {
-                identifyClient.whoami(endpoint)?.hostId ?: run {
-                    waitingForTsnet = false
-                    failPairing(PairingFailCause.REJECTED, "主机身份验证失败")
-                    return@execute
+                when (val result = identifyClient.whoamiDetailed(endpoint)) {
+                    is HostWhoamiResult.Found -> result.candidate.hostId
+                    is HostWhoamiResult.Failed -> {
+                        waitingForTsnet = false
+                        failPairing(
+                            PairingFailCause.REJECTED,
+                            whoamiFailureMessage(result.reason),
+                        )
+                        return@execute
+                    }
                 }
             } else {
                 hostId
@@ -594,6 +600,17 @@ class PairingViewModel(
             currentTsAuthKey = currentTsAuthKey.trim()
             startPairingSequence(attemptQueue, currentToken, resetCandidates = true)
         }
+    }
+
+    /** Keep discovery diagnostics actionable without exposing credentials or response bodies. */
+    private fun whoamiFailureMessage(reason: HostWhoamiFailure): String = when (reason) {
+        HostWhoamiFailure.NonLiteralAddress -> "主机身份验证失败（whoami 地址非法）"
+        HostWhoamiFailure.Transport -> "主机身份验证失败（whoami 网络不可达）"
+        is HostWhoamiFailure.HttpStatus -> "主机身份验证失败（whoami HTTP ${reason.code}）"
+        HostWhoamiFailure.BodyTooLarge -> "主机身份验证失败（whoami 响应过大）"
+        HostWhoamiFailure.InvalidJson -> "主机身份验证失败（whoami 响应格式无效）"
+        HostWhoamiFailure.MissingHostId -> "主机身份验证失败（whoami 缺少主机身份）"
+        HostWhoamiFailure.InvalidHostId -> "主机身份验证失败（whoami 主机身份无效）"
     }
 
     /** Keep identity diagnostics actionable without exposing tokens or transport internals. */

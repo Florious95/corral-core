@@ -532,6 +532,37 @@ class PairingViewModelTest {
     }
 
     @Test
+    fun manualWhoamiFailureSurfacesSafeHttpStatus() {
+        val verifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+
+            override fun whoamiDetailed(endpoint: HostEndpoint) =
+                HostWhoamiResult.Failed(HostWhoamiFailure.HttpStatus(503))
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ): HostIdentifyResult = error("identify must not run after whoami failure")
+        }
+        val vm = PairingViewModel(
+            configStore = FakeStore(),
+            identifyClient = verifier,
+            discoveryExecutor = Executor { it.run() },
+            connectionFactory = { error("WS must not start after whoami failure") },
+        )
+        vm.manualUrl = "192.0.2.20:9900"
+        vm.manualToken = "LAN-T0K"
+
+        vm.submitManual()
+
+        val status = vm.pairingStatus
+        assertTrue(status is PairingStatus.Failed)
+        assertEquals("主机身份验证失败（whoami HTTP 503）", (status as PairingStatus.Failed).message)
+    }
+
+    @Test
     fun manualRejectsInvalidUrl() {
         val h = Harness()
         h.vm.manualUrl = "htp://bad"

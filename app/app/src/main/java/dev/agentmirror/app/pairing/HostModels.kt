@@ -60,6 +60,23 @@ data class HostWhoAmI(
     val port: Int?,
 )
 
+/** Safe failure categories for the public /pair/whoami discovery probe. */
+sealed interface HostWhoamiFailure {
+    data object NonLiteralAddress : HostWhoamiFailure
+    data object Transport : HostWhoamiFailure
+    data class HttpStatus(val code: Int) : HostWhoamiFailure
+    data object BodyTooLarge : HostWhoamiFailure
+    data object InvalidJson : HostWhoamiFailure
+    data object MissingHostId : HostWhoamiFailure
+    data object InvalidHostId : HostWhoamiFailure
+}
+
+/** Detailed whoami result used for diagnostics; it never carries credentials or raw bodies. */
+sealed interface HostWhoamiResult {
+    data class Found(val candidate: HostCandidate) : HostWhoamiResult
+    data class Failed(val reason: HostWhoamiFailure) : HostWhoamiResult
+}
+
 sealed interface HostIdentifyResult {
     data class Proven(val identity: HostIdentity) : HostIdentifyResult
     data class Legacy404(val endpoint: HostEndpoint) : HostIdentifyResult

@@ -26,6 +26,33 @@ class HostIdentifyClientTest {
     }
 
     @Test
+    fun whoamiReportsHttpStatusWithoutExposingResponseBody() {
+        val client = HostIdentifyClient(object : HostHttpTransport {
+            override fun whoami(endpoint: HostEndpoint) = HostHttpResponse(503, "body-not-exposed")
+            override fun identify(endpoint: HostEndpoint, request: IdentifyRequest) = HostHttpResponse(500)
+        })
+
+        val result = client.whoamiDetailed(endpoint)
+
+        assertEquals(
+            HostWhoamiResult.Failed(HostWhoamiFailure.HttpStatus(503)),
+            result,
+        )
+    }
+
+    @Test
+    fun whoamiReportsMalformedBodyCategory() {
+        val client = HostIdentifyClient(object : HostHttpTransport {
+            override fun whoami(endpoint: HostEndpoint) = HostHttpResponse(200, "not-json")
+            override fun identify(endpoint: HostEndpoint, request: IdentifyRequest) = HostHttpResponse(500)
+        })
+
+        val result = client.whoamiDetailed(endpoint)
+
+        assertEquals(HostWhoamiResult.Failed(HostWhoamiFailure.InvalidJson), result)
+    }
+
+    @Test
     fun redirectsAndDnsNamesFailClosedBeforeTransport() {
         var calls = 0
         val client = HostIdentifyClient(object : HostHttpTransport {

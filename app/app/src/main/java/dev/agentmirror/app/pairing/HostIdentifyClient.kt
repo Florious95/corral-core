@@ -27,6 +27,12 @@ interface HostHttpTransport {
 /** Identity seam used by pairing orchestration; production defaults to [HostIdentifyClient]. */
 interface HostIdentityVerifier {
     fun whoami(endpoint: HostEndpoint): HostCandidate?
+
+    /** Detailed discovery seam; default preserves lightweight test fakes. */
+    fun whoamiDetailed(endpoint: HostEndpoint): HostWhoamiResult =
+        whoami(endpoint)?.let(HostWhoamiResult::Found)
+            ?: HostWhoamiResult.Failed(HostWhoamiFailure.Transport)
+
     fun identify(
         endpoint: HostEndpoint,
         hostId: String?,
@@ -51,18 +57,38 @@ class HostIdentifyClient(
     private val transport: HostHttpTransport,
     private val nonceSource: () -> ByteArray = { ByteArray(16).also(SecureRandom()::nextBytes) },
 ) : HostIdentityVerifier {
-    override fun whoami(endpoint: HostEndpoint): HostCandidate? {
-        if (!HostRouter.isLiteralIpv4(endpoint.address)) return null
-        val response = runCatching { transport.whoami(endpoint) }.getOrNull() ?: return null
-        if (response.code != 200 || response.body.toByteArray().size > MAX_HOST_BODY_BYTES) return null
-        val json = parse(response.body) ?: return null
-        val hostId = json.string("host_id") ?: return null
-        if (!HostRouter.isValidHostId(hostId)) return null
+    override fun whoami(endpoint: HostEndpoint): HostCandidate? =
+        when (val result = whoamiDetailed(endpoint)) {
+            is HostWhoamiResult.Found -> result.candidate
+            is HostWhoamiResult.Failed -> null
+        }
+
+    override fun whoamiDetailed(endpoint: HostEndpoint): HostWhoamiResult {
+        if (!HostRouter.isLiteralIpv4(endpoint.address)) {
+            return HostWhoamiResult.Failed(HostWhoamiFailure.NonLiteralAddress)
+        }
+        val response = runCatching { transport.whoami(endpoint) }.getOrElse {
+            return HostWhoamiResult.Failed(HostWhoamiFailure.Transport)
+        }
+        if (response.code == 599) return HostWhoamiResult.Failed(HostWhoamiFailure.Transport)
+        if (response.code != 200) {
+            return HostWhoamiResult.Failed(HostWhoamiFailure.HttpStatus(response.code))
+        }
+        if (response.body.toByteArray().size > MAX_HOST_BODY_BYTES) {
+            return HostWhoamiResult.Failed(HostWhoamiFailure.BodyTooLarge)
+        }
+        val json = parse(response.body)
+            ?: return HostWhoamiResult.Failed(HostWhoamiFailure.InvalidJson)
+        val hostId = json.string("host_id")
+            ?: return HostWhoamiResult.Failed(HostWhoamiFailure.MissingHostId)
+        if (!HostRouter.isValidHostId(hostId)) {
+            return HostWhoamiResult.Failed(HostWhoamiFailure.InvalidHostId)
+        }
         val name = json.string("name").orEmpty()
         val port = json.int("port")?.takeIf { it in 1..65535 }
         // whoami's port is metadata attached to this original IP, never a new address.
         val enriched = port?.let { endpoint.copy(port = it, source = endpoint.source) } ?: endpoint
-        return HostCandidate(hostId, name, listOf(enriched))
+        return HostWhoamiResult.Found(HostCandidate(hostId, name, listOf(enriched)))
     }
 
     override fun identify(
