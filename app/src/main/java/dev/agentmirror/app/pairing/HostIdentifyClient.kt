@@ -64,6 +64,9 @@ class HostIdentifyClient(
         if (!HostRouter.isValidHostId(hostId)) return null
         val name = json.string("name").orEmpty()
         val port = json.int("port")?.takeIf { it in 1..65535 } ?: endpoint.port
+        // The transport endpoint may be a NAT alias (for example 10.0.2.2 on
+        // Android Emulator). Prefer server-advertised literal addresses for identify/WS,
+        // while retaining the original endpoint as a bounded fallback.
         val advertisedAddresses = runCatching {
             json["addresses"]?.jsonArray.orEmpty().mapNotNull { element ->
                 element.jsonPrimitive.content.takeIf(HostRouter::isLiteralIpv4)

@@ -27,7 +27,8 @@ class HostDiscoveryFlowTest {
                 assertEquals(endpoint.authority, actual.authority)
                 return HostHttpResponse(
                     200,
-                    "{\"host_id\":\"gateway-host-1234\",\"name\":\"MacBook-Pro.local\",\"port\":9900}",
+                    "{\"host_id\":\"gateway-host-1234\",\"name\":\"MacBook-Pro.local\",\"port\":9900," +
+                        "\"addresses\":[\"192.168.31.116\"]}",
                 )
             }
 
@@ -44,7 +45,75 @@ class HostDiscoveryFlowTest {
         vm.beginLanDiscovery()
 
         assertEquals("MacBook-Pro.local", vm.discoveredHosts.single().name)
-        assertEquals(endpoint.authority, vm.discoveredHosts.single().endpoints.single().authority)
+        assertEquals(
+            listOf("192.168.31.116:9900", "10.0.2.2:9900"),
+            vm.discoveredHosts.single().endpoints.map { it.authority },
+        )
+        assertEquals(
+            "192.168.31.116:9900",
+            HostRouter.prioritize(vm.discoveredHosts.single().endpoints).first().authority,
+        )
+    }
+
+    @Test
+    fun whoamiAdvertisedAddressesKeepPhysicalAndTailnetEndpoints() {
+        val alias = HostEndpoint("10.0.2.2", 9900, ConnectionPath.LAN, HostEndpointSource.SCANNED_PRIMARY)
+        val transport = object : HostHttpTransport {
+            override fun whoami(endpoint: HostEndpoint) = HostHttpResponse(
+                200,
+                "{\"host_id\":\"host-1234\",\"name\":\"MacBook-Pro.local\",\"port\":9900," +
+                    "\"addresses\":[\"192.168.31.116\",\"100.75.207.88\",\"192.168.31.116\"]}",
+            )
+
+            override fun identify(endpoint: HostEndpoint, request: IdentifyRequest) = HostHttpResponse(500)
+        }
+        val candidate = HostIdentifyClient(transport).whoami(alias) ?: error("whoami candidate missing")
+
+        assertEquals(
+            listOf("192.168.31.116:9900", "100.75.207.88:9900", "10.0.2.2:9900"),
+            candidate.endpoints.map { it.authority },
+        )
+        assertEquals("100.75.207.88:9900", HostRouter.prioritize(candidate.endpoints).first().authority)
+    }
+
+    @Test
+    fun hostTokenFallsBackToLanWhenTailnetIdentityIsUnavailable() {
+        val token = "host-token"
+        val hostId = "host-1234"
+        val ts = HostEndpoint("100.101.2.3", 9900, ConnectionPath.TAILNET, HostEndpointSource.HOST_RECORD)
+        val lan = HostEndpoint("192.168.31.116", 9900, ConnectionPath.LAN, HostEndpointSource.HOST_RECORD)
+        val requests = mutableListOf<HostEndpoint>()
+        val verifier = object : HostIdentityVerifier {
+            override fun whoami(endpoint: HostEndpoint): HostCandidate? = null
+
+            override fun identify(
+                endpoint: HostEndpoint,
+                hostId: String?,
+                token: String,
+                legacyUrl: String?,
+            ): HostIdentifyResult {
+                requests += endpoint
+                return if (endpoint.authority == ts.authority) {
+                    HostIdentifyResult.Rejected("identify unavailable")
+                } else {
+                    HostIdentifyResult.Proven(
+                        HostIdentity(hostId.orEmpty(), "MacBook-Pro.local", endpoint, endpoint.authority),
+                    )
+                }
+            }
+        }
+        val vm = PairingViewModel(
+            configStore = Store(),
+            connectionFactory = { cfg -> dev.agentmirror.app.conn.ConnectionManager(cfg, NoopTransportFactory) },
+            identifyClient = verifier,
+            discoveryExecutor = Executor { it.run() },
+        )
+        vm.addDiscoveredHost(HostCandidate(hostId, "MacBook-Pro.local", listOf(lan, ts)))
+        vm.selectHost(hostId)
+        vm.hostToken = token
+        vm.submitHostToken()
+
+        assertEquals(listOf(ts.authority, lan.authority), requests.map { it.authority })
     }
 
     @Test

@@ -58,6 +58,8 @@ data class HostWhoAmI(
     val hostId: String,
     val name: String,
     val port: Int?,
+    /** Server-advertised literal LAN/Tailnet addresses for alias-safe dialing. */
+    val addresses: List<String> = emptyList(),
 )
 
 sealed interface HostIdentifyResult {
