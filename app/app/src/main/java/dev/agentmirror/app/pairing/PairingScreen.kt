@@ -97,6 +97,7 @@ import com.google.zxing.DecodeHintType
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.tsnet.TsnetState
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
@@ -298,7 +299,7 @@ fun HostBindingCard(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (viewModel.discoveryInFlight) {
+                if (viewModel.discoveryInFlight || viewModel.tsnetConnecting) {
                     CircularProgressIndicator(
                         strokeWidth = 2.dp,
                         modifier = Modifier.size(14.dp),
@@ -306,7 +307,7 @@ fun HostBindingCard(
                     )
                 }
             }
-            if (onRescan != null && !viewModel.discoveryInFlight) {
+            if (onRescan != null && !viewModel.discoveryInFlight && !viewModel.tsnetConnecting) {
                 TextButton(
                     onClick = onRescan,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
@@ -317,7 +318,7 @@ fun HostBindingCard(
         }
 
         if (viewModel.discoveredHosts.isEmpty()) {
-            if (viewModel.discoveryInFlight) {
+            if (viewModel.discoveryInFlight || viewModel.tsnetConnecting) {
                 // 正在扫描附近主机微动效卡
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -332,13 +333,15 @@ fun HostBindingCard(
                         PulsingDot()
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                text = "正在扫描附近局域网主机…",
+                                text = if (viewModel.tsnetConnecting) "正在接入 Tailnet 并扫描主机…"
+                                    else "正在扫描附近局域网主机…",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                text = "请确保手机与主机连接同一 Wi-Fi 网络",
+                                text = if (viewModel.tsnetConnecting) "接入成功后将自动列出远程主机"
+                                    else "请确保手机与主机连接同一 Wi-Fi 网络",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -437,7 +440,19 @@ fun HostBindingCard(
                                         )
                                     }
                                 }
-                                LanPillBadge()
+                                val hasTailscale = host.endpoints.any { it.path == ConnectionPath.TAILNET }
+                                val hasLan = host.endpoints.any { it.path == ConnectionPath.LAN } || (!hasTailscale && host.endpoints.isEmpty())
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (hasTailscale) {
+                                        TailscalePillBadge()
+                                    }
+                                    if (hasLan) {
+                                        LanPillBadge()
+                                    }
+                                }
                             }
 
                             // 选中卡片后内联展开 Token 输入与连接操作
@@ -509,6 +524,24 @@ private fun LanPillBadge() {
         Text(
             text = "LAN",
             color = Color(0xFF059669),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = MonoFontFamily,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/** 蓝色优雅 Tailscale 药丸标签 */
+@Composable
+private fun TailscalePillBadge() {
+    Surface(
+        color = Color(0x222563EB),
+        shape = RoundedCornerShape(6.dp),
+    ) {
+        Text(
+            text = "Tailscale",
+            color = Color(0xFF2563EB),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = MonoFontFamily,
@@ -845,10 +878,13 @@ private fun Context.hasCameraPermission(): Boolean =
  */
 @Composable
 private fun TailscaleConfigCard(viewModel: PairingViewModel) {
+    val isUp = viewModel.tsState is TsnetState.Up
+    val isConnecting = viewModel.tsnetConnecting
     var expanded by remember {
         mutableStateOf(
             viewModel.manualTsAuthKey.isNotEmpty() ||
-                viewModel.tsState !is TsnetState.Idle,
+                viewModel.tsState !is TsnetState.Idle ||
+                isConnecting,
         )
     }
     SectionCard {
@@ -860,12 +896,31 @@ private fun TailscaleConfigCard(viewModel: PairingViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Tailscale 远程连接配置",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
+                    Text(
+                        text = "Tailscale 远程连接配置",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (isUp) {
+                        Surface(
+                            color = Color(0x2210B981),
+                            shape = RoundedCornerShape(4.dp),
+                        ) {
+                            Text(
+                                text = "● 已接入",
+                                color = Color(0xFF059669),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = "异地或蜂窝网络访问（高级配置）",
                     style = MaterialTheme.typography.bodySmall,
@@ -909,6 +964,46 @@ private fun TailscaleConfigCard(viewModel: PairingViewModel) {
                     colors = manualFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                Button(
+                    onClick = { viewModel.connectTailscale(viewModel.manualTsAuthKey) },
+                    enabled = !isConnecting && viewModel.pairingStatus !is PairingStatus.Pairing,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (isConnecting) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        ) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                            Text("正在接入 Tailnet...")
+                        }
+                    } else {
+                        Text("接入 Tailnet 并搜索主机")
+                    }
+                }
+
+                if (isUp) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = "● 已接入 Tailnet",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF059669),
+                        )
+                    }
+                }
             }
         }
     }

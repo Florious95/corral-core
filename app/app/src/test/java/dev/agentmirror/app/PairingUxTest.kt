@@ -23,6 +23,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import dev.agentmirror.app.pairing.HostCandidate
@@ -112,6 +113,59 @@ class PairingUxTest {
         compose.onNodeWithText("手动直连").assertExists()
         compose.onNodeWithText("局域网主机地址（IP:端口）").assertExists()
         compose.onNodeWithText("连接").assertExists()
+    }
+
+    @Test
+    fun tailscaleHost_rendersTailscaleBadge() {
+        val vm = PairingViewModel(
+            configStore = MemoryConfigStore(),
+            connectionFactory = { error("no connect") },
+        )
+        val endpoint = HostEndpoint("100.64.0.5", 9900, ConnectionPath.TAILNET, HostEndpointSource.PEER)
+        vm.addDiscoveredHost(HostCandidate("host-ts-002", "Remote-MacBook.local", listOf(endpoint)))
+
+        compose.setContent {
+            PairingScreen(viewModel = vm, onPaired = {}, onSkip = {})
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Remote-MacBook.local").assertExists()
+        compose.onNodeWithText("ID: host-ts-002").assertExists()
+        compose.onNodeWithText("Tailscale").assertExists()
+        compose.onAllNodesWithText("LAN").assertCountEquals(0)
+    }
+
+    @Test
+    fun tailscaleConfigCard_supportsStandaloneConnectAndShowsLoadingAndUpState() {
+        var startedKey: String? = null
+        val vm = PairingViewModel(
+            configStore = MemoryConfigStore(),
+            connectionFactory = { error("no connect") },
+            tsnetStarter = { startedKey = it },
+        )
+        vm.manualTsAuthKey = "tskey-auth-sample"
+
+        compose.setContent {
+            PairingScreen(viewModel = vm, onPaired = {}, onSkip = {})
+        }
+        compose.waitForIdle()
+
+        // 展开状态下显示连接按钮
+        compose.onNodeWithText("接入 Tailnet 并搜索主机")
+            .performScrollTo()
+            .performClick()
+        compose.waitForIdle()
+
+        assertEquals("tskey-auth-sample", startedKey)
+        assertTrue(vm.tsnetConnecting)
+        compose.onNodeWithText("正在接入 Tailnet...").assertExists()
+
+        // tsnet 变为 Up 态
+        vm.onTsnetState(dev.agentmirror.app.tsnet.TsnetState.Up(dev.agentmirror.app.tsnet.TsnetProxy("127.0.0.1", 1080, "cred")))
+        compose.waitForIdle()
+
+        compose.onNodeWithText("● 已接入 Tailnet").assertExists()
+        compose.onNodeWithText("● 已接入").assertExists()
     }
 
     @Test

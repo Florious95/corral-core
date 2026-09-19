@@ -96,7 +96,7 @@ fun PairingRoute(
 
 /** 生产构造 [PairingViewModel]：真实存储 + 真实传输工厂（独立试配对连接，不碰常驻 manager）。 */
 private fun createPairingViewModel(configStore: PairingConfigStore): PairingViewModel {
-    return PairingViewModel(
+    val vm = PairingViewModel(
         configStore = configStore,
         connectionFactory = { cfg ->
             // 试配对用独立 ConnectionManager：工厂经 ServiceWire.pairingTransportFactory()
@@ -107,4 +107,8 @@ private fun createPairingViewModel(configStore: PairingConfigStore): PairingView
         // feat-ts-wire：扫码带 key / 手填 key → 进程级节点起网（幂等，节点随进程存活）。
         tsnetStarter = TsnetWire::ensureStarted,
     )
+    configStore.loadTsAuthKey()?.takeIf { it.isNotBlank() }?.let {
+        vm.manualTsAuthKey = it
+    }
+    return vm
 }
