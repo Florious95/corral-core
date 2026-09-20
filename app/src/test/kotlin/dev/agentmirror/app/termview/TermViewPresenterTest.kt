@@ -186,6 +186,28 @@ class TermViewPresenterTest {
     }
 
     @Test
+    fun emulatorMutationDefersCaptureUntilMutationCompletes() {
+        val h = harness(rows = 2, cols = 5)
+        val frameRequested = CountDownLatch(1)
+        h.presenter.onFrameRequested = { frameRequested.countDown() }
+        val mutationEntered = CountDownLatch(1)
+        val releaseMutation = CountDownLatch(1)
+        val worker = Thread {
+            h.presenter.withEmulatorMutation {
+                h.emulator.feed("busy")
+                mutationEntered.countDown()
+                releaseMutation.await(1, TimeUnit.SECONDS)
+            }
+        }
+        worker.start()
+        assertTrue(mutationEntered.await(1, TimeUnit.SECONDS))
+        assertFalse(frameRequested.await(100, TimeUnit.MILLISECONDS))
+        releaseMutation.countDown()
+        worker.join(1_000)
+        assertTrue(frameRequested.await(1, TimeUnit.SECONDS))
+    }
+
+    @Test
     fun beginFrameFreezesScrollbackBoundaryAndRows() {
         val h = harness(rows = 2, cols = 5)
         h.emulator.feed("a\r\nb\r\nc\r\nd")

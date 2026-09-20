@@ -109,6 +109,23 @@ class TermDrawMeterTest {
     }
 
     @Test
+    fun viewportChangeKeepsCompleteBackgroundAcrossTransitionFrames() {
+        TermDrawMeter.optEnabled = true
+        val emulator = TerminalEmulator(20, 5)
+        emulator.feed("aaaa")
+        val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+        view.presenter = TermViewPresenter(emulator) { _, _ -> }
+        view.layout(0, 0, 400, 120)
+        repeat(4) { index ->
+            val bitmap = Bitmap.createBitmap(400, 120, Bitmap.Config.ARGB_8888)
+            val canvas = RecordingCanvas(bitmap)
+            view.draw(canvas)
+            bitmap.recycle()
+            assertTrue("transition frame $index must draw complete backgrounds", canvas.rects > 1)
+        }
+    }
+
+    @Test
     fun optOnSkipsDefaultBgCellRects() {
         val slow = countRects(opt = false, text = "aaaa")
         val fast = countRects(opt = true, text = "aaaa")

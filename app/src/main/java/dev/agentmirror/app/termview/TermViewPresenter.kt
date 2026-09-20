@@ -24,6 +24,7 @@ import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -165,6 +166,7 @@ class TermViewPresenter(
 
     private val damageVersion = AtomicLong(0)
     private val captureScheduled = AtomicBoolean(false)
+    private val mutationDepth = AtomicInteger(0)
     private val preparedFrame = AtomicReference<PreparedFrame?>(null)
 
     /** copy-mode 的独立历史画面；live emulator 仍持续接收 Delta。 */
@@ -606,6 +608,20 @@ class TermViewPresenter(
         preparedFrame.set(captureFrame())
     }
 
+    /**
+     * Run one or more emulator mutations without allowing the damage callback to launch a
+     * competing capture against the emulator monitor. The final capture is scheduled only after
+     * the parser releases the monitor, avoiding feed/capture contention on large resize snapshots.
+     */
+    fun <T> withEmulatorMutation(block: () -> T): T {
+        mutationDepth.incrementAndGet()
+        return try {
+            block()
+        } finally {
+            if (mutationDepth.decrementAndGet() == 0) scheduleFrameCapture()
+        }
+    }
+
     /** Capture one immutable frame while keeping the monitor wait off the UI thread. */
     private fun captureFrame(): PreparedFrame = synchronized(emulator) {
         val snap = emulator.snapshot()
@@ -621,6 +637,7 @@ class TermViewPresenter(
 
     /** Coalesce damage notifications into one background full-frame capture. */
     private fun scheduleFrameCapture() {
+        if (mutationDepth.get() != 0) return
         if (!captureScheduled.compareAndSet(false, true)) return
         FRAME_CAPTURE_EXECUTOR.execute {
             val state = captureFrame()

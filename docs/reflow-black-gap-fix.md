@@ -34,7 +34,7 @@ Exit 0.
 
 ## Transient-frame follow-up
 
-The strict settled screenshot still showed default-background holes inside the terminal's ANSI status row for the first frame after a viewport change. Those pixels were terminal default background (`#0e0e0e`) under the optimized per-cell background skip, not a Compose root background gap. `TermSurfaceView` now disables only the default-background skip for the first frame after `onSizeChanged` or visible re-entry, while retaining the steady-state fast path. `TermDrawMeterTest.viewportChangeForcesCompleteBackgroundOnNextFrame` covers this transition.
+The strict settled screenshot still showed default-background holes inside the terminal's ANSI status row for the first frame after a viewport change. Those pixels were terminal default background (`#0e0e0e`) under the optimized per-cell background skip, not a Compose root background gap. `TermSurfaceView` now disables only the default-background skip for four frames after `onSizeChanged` or visible re-entry, covering rotation's multi-frame transition while retaining the steady-state fast path. `TermDrawMeterTest.viewportChangeForcesCompleteBackgroundOnNextFrame` and `viewportChangeKeepsCompleteBackgroundAcrossTransitionFrames` cover this transition. Emulator mutations also suppress damage-triggered captures until `feed`/snapshot/resize parsing releases the emulator monitor, preventing capture/feed lock contention.
 
 Focused rendering verification:
 
@@ -43,6 +43,18 @@ Focused rendering verification:
   --tests dev.agentmirror.app.termview.TermDrawMeterTest \
   --tests dev.agentmirror.app.termview.TermBgCjkAlignTest \
   --tests dev.agentmirror.app.termview.TermForegroundEconomyTest \
+  --tests dev.agentmirror.app.termview.TermViewPresenterTest \
+  --no-daemon
+```
+
+Exit 0.
+
+Session/mutation verification:
+
+```sh
+./gradlew :app:testDebugUnitTest \
+  --tests dev.agentmirror.app.session.SessionViewModelTest \
+  --tests dev.agentmirror.app.session.SessionImeResizeProtocolRegressionTest \
   --tests dev.agentmirror.app.termview.TermViewPresenterTest \
   --no-daemon
 ```

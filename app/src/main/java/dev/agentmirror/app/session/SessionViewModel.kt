@@ -371,7 +371,9 @@ class SessionViewModel(
                         )
                     }
                     val failure = runCatching {
-                        emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                        presenter.withEmulatorMutation {
+                            emulator.replaySnapshot(frame.data, emulator.cols, emulator.rows)
+                        }
                     }.exceptionOrNull()
                     if (failure != null) {
                         DiagLog.recordCritical(
@@ -400,7 +402,9 @@ class SessionViewModel(
             }
             // 增量始终完整推进 live emulator；copy-mode 画面由独立 snapshot override 提供。
             BinaryKind.DELTA -> {
-                val failure = runCatching { emulator.feed(frame.data) }.exceptionOrNull()
+                val failure = runCatching {
+                    presenter.withEmulatorMutation { emulator.feed(frame.data) }
+                }.exceptionOrNull()
                 if (failure != null) {
                     DiagLog.recordCritical(
                         "session",
@@ -412,7 +416,9 @@ class SessionViewModel(
             }
             // 历史分页：按服务端收敛后的实际区间头插（经验基）。
             BinaryKind.SCROLLBACK -> {
-                val failure = runCatching { emulator.prependHistory(frame.data) }.exceptionOrNull()
+                val failure = runCatching {
+                    presenter.withEmulatorMutation { emulator.prependHistory(frame.data) }
+                }.exceptionOrNull()
                 if (failure != null) {
                     DiagLog.recordCritical(
                         "session",
@@ -768,7 +774,7 @@ class SessionViewModel(
         synchronized(lifecycleLock) {
             if (disposed) return
             DiagLog.recordCritical("session", "geometry_ready ref=$ref rows=$rows cols=$cols")
-            emulator.resize(cols, rows)
+            presenter.withEmulatorMutation { emulator.resize(cols, rows) }
             presenter.refreshPreparedFrame()
             copyModeEmulator.resize(cols, rows)
             val sent = manager.subscribe(
@@ -787,7 +793,7 @@ class SessionViewModel(
             if (disposed) return
             DiagLog.recordCritical("session", "resize_request ref=$ref rows=$rows cols=$cols reason=$reason")
             if (manager.resize(ref, rows, cols, reason)) {
-                emulator.resize(cols, rows)
+                presenter.withEmulatorMutation { emulator.resize(cols, rows) }
                 presenter.refreshPreparedFrame()
                 copyModeEmulator.resize(cols, rows)
             }

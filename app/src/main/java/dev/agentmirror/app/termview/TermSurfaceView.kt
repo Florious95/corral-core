@@ -289,8 +289,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private var lastFrameTimeNanos: Long = 0L
     private var bgRectCount: Int = 0
     private var textDrawCount: Int = 0
-    /** The first frame after a viewport change must not expose skipped default-bg cells. */
-    private var forceFullBackgroundNextFrame = false
+    /** Keep the full-background path across the short multi-frame rotation/layout transition. */
+    private var forceFullBackgroundFrames = 0
     private var measureTextCount: Int = 0
     private var geomRectCount: Int = 0
     private var cellsNonBlank: Int = 0
@@ -386,7 +386,7 @@ class TermSurfaceView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        forceFullBackgroundNextFrame = true
+        forceFullBackgroundFrames = FULL_BACKGROUND_FRAMES
         presenter?.onViewportSizeChanged(usableWidthPx(w), h)
         persistViewportGeom()
     }
@@ -441,7 +441,7 @@ class TermSurfaceView @JvmOverloads constructor(
             return
         }
         renderActive = isAttachedToWindow
-        forceFullBackgroundNextFrame = true
+        forceFullBackgroundFrames = FULL_BACKGROUND_FRAMES
         watchDrawControls()
         if (width > 0 && height > 0) {
             presenter?.onRealViewportChanged(usableWidthPx(width), height)
@@ -585,8 +585,8 @@ class TermSurfaceView @JvmOverloads constructor(
         bgRectCount++
         val tClear = System.nanoTime()
 
-        val fullBackground = forceFullBackgroundNextFrame
-        forceFullBackgroundNextFrame = false
+        val fullBackground = forceFullBackgroundFrames > 0
+        if (fullBackground) forceFullBackgroundFrames--
         val win = p.drawWindow
         val contentLeft = contentLeftPx()
         recordLeftEdgeOnce(contentLeft)
@@ -1068,6 +1068,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private fun dp(v: Float): Float = v * resources.displayMetrics.density
 
     private companion object {
+        /** Keep complete background coverage over the short multi-frame rotation transition. */
+        const val FULL_BACKGROUND_FRAMES = 4
         /** Right edge reserved for the terminal application's native scrollbar. */
         const val EDGE_MOUSE_WIDTH_DP = 32f
         /** 历史深色默认值别名；真实取色走 [TermPalette.of]。 */
