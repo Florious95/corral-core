@@ -70,10 +70,17 @@ limitations under the License.
           不闪白、不丢当前屏（审计 D-2 深链消费方）。FLAG_ACTIVITY_SINGLE_TOP 只约束该 intent
           自身，launchMode 是 manifest 全局语义，二者配对本 Activity 幂等。
         -->
+        <!--
+          Keep the Compose/AndroidView tree alive across physical display changes. TermSurfaceView
+          already handles onSizeChanged/onRealViewportChanged in place; recreating MainActivity
+          here would briefly compose two different terminal/dock geometries and expose a stale
+          bottom layer during wm-size/orientation transitions.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

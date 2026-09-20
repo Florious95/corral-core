@@ -16,10 +16,13 @@
 
 package dev.agentmirror.app
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ActivityInfo
 import dev.agentmirror.app.service.NotificationHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,6 +66,20 @@ class MainActivityNavTest {
         controller.get().navState.activeSession = "ref-A" to "Agent A"
         controller.recreate() // 模拟旋转/进程回收：onSaveInstanceState → onCreate(saved)
         assertEquals("ref-A" to "Agent A", controller.get().navState.activeSession)
+    }
+
+    @Test
+    fun displayResizeKeepsActivityInstance() {
+        val component = ComponentName(RuntimeEnvironment.getApplication(), MainActivity::class.java)
+        val info = RuntimeEnvironment.getApplication().packageManager.getActivityInfo(component, 0)
+        val handled = ActivityInfo.CONFIG_ORIENTATION or
+            ActivityInfo.CONFIG_SCREEN_SIZE or
+            ActivityInfo.CONFIG_SMALLEST_SCREEN_SIZE or
+            ActivityInfo.CONFIG_SCREEN_LAYOUT
+        assertTrue(
+            "display resize must relayout in place instead of recreating MainActivity",
+            info.configChanges and handled == handled,
+        )
     }
 
     // ---- 防御：不误导航（halt 纪律：缺字段不猜）----
