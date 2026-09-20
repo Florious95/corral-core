@@ -94,6 +94,21 @@ class TermDrawMeterTest {
     }
 
     @Test
+    fun viewportChangeForcesCompleteBackgroundOnNextFrame() {
+        TermDrawMeter.optEnabled = true
+        val emulator = TerminalEmulator(20, 5)
+        emulator.feed("aaaa")
+        val view = TermSurfaceView(RuntimeEnvironment.getApplication())
+        view.presenter = TermViewPresenter(emulator) { _, _ -> }
+        view.layout(0, 0, 400, 120)
+        val bitmap = Bitmap.createBitmap(400, 120, Bitmap.Config.ARGB_8888)
+        val canvas = RecordingCanvas(bitmap)
+        view.draw(canvas)
+        bitmap.recycle()
+        assertTrue("resize frame must draw per-cell backgrounds, rects=${canvas.rects}", canvas.rects > 1)
+    }
+
+    @Test
     fun optOnSkipsDefaultBgCellRects() {
         val slow = countRects(opt = false, text = "aaaa")
         val fast = countRects(opt = true, text = "aaaa")

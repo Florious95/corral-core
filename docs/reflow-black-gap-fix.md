@@ -31,3 +31,20 @@ Green focused regression:
 ```
 
 Exit 0.
+
+## Transient-frame follow-up
+
+The strict settled screenshot still showed default-background holes inside the terminal's ANSI status row for the first frame after a viewport change. Those pixels were terminal default background (`#0e0e0e`) under the optimized per-cell background skip, not a Compose root background gap. `TermSurfaceView` now disables only the default-background skip for the first frame after `onSizeChanged` or visible re-entry, while retaining the steady-state fast path. `TermDrawMeterTest.viewportChangeForcesCompleteBackgroundOnNextFrame` covers this transition.
+
+Focused rendering verification:
+
+```sh
+./gradlew :app:testDebugUnitTest \
+  --tests dev.agentmirror.app.termview.TermDrawMeterTest \
+  --tests dev.agentmirror.app.termview.TermBgCjkAlignTest \
+  --tests dev.agentmirror.app.termview.TermForegroundEconomyTest \
+  --tests dev.agentmirror.app.termview.TermViewPresenterTest \
+  --no-daemon
+```
+
+Exit 0.

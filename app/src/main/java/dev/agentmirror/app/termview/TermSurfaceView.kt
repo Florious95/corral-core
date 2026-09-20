@@ -289,6 +289,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private var lastFrameTimeNanos: Long = 0L
     private var bgRectCount: Int = 0
     private var textDrawCount: Int = 0
+    /** The first frame after a viewport change must not expose skipped default-bg cells. */
+    private var forceFullBackgroundNextFrame = false
     private var measureTextCount: Int = 0
     private var geomRectCount: Int = 0
     private var cellsNonBlank: Int = 0
@@ -384,6 +386,7 @@ class TermSurfaceView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        forceFullBackgroundNextFrame = true
         presenter?.onViewportSizeChanged(usableWidthPx(w), h)
         persistViewportGeom()
     }
@@ -438,6 +441,7 @@ class TermSurfaceView @JvmOverloads constructor(
             return
         }
         renderActive = isAttachedToWindow
+        forceFullBackgroundNextFrame = true
         watchDrawControls()
         if (width > 0 && height > 0) {
             presenter?.onRealViewportChanged(usableWidthPx(width), height)
@@ -581,13 +585,15 @@ class TermSurfaceView @JvmOverloads constructor(
         bgRectCount++
         val tClear = System.nanoTime()
 
+        val fullBackground = forceFullBackgroundNextFrame
+        forceFullBackgroundNextFrame = false
         val win = p.drawWindow
         val contentLeft = contentLeftPx()
         recordLeftEdgeOnce(contentLeft)
         var drawnRows = 0
         for (logical in win) {
             val rowY = (logical - win.first) * cellH
-            drawLine(canvas, p.lineCells(logical), rowY)
+            drawLine(canvas, p.lineCells(logical), rowY, fullBackground)
             drawnRows++
         }
         val tLines = System.nanoTime()
@@ -634,7 +640,7 @@ class TermSurfaceView @JvmOverloads constructor(
      * 画一行逻辑行到 [rowY]：第一遍按格铺背景（BCE：空白格也带背景色），
      * 第二遍把连续同前景色格合并成一次 drawText（性能关键：draw 调用数 = run 数而非格数）。
      */
-    private fun drawLine(canvas: Canvas, cells: List<Cell>, rowY: Int) {
+    private fun drawLine(canvas: Canvas, cells: List<Cell>, rowY: Int, fullBackground: Boolean = false) {
         // 网格是「每列一条目」：宽字符 = width=2 主格 + width=0 续格两个条目，x 恒按
         // 一列推进；主格矩形铺满 width 列（含续格列），续格只占位不重画。旧实现把主格
         // 当 2 列推进、续格又推 1 列且只铺 1 列宽矩形——背景色块内每个 CJK 留 2 列
@@ -645,7 +651,7 @@ class TermSurfaceView @JvmOverloads constructor(
         // （否则空画布下每个矩形都越界，计数误报、测试错乱）。只有真实视口（width>0）才兜底。
         val guardActive = width > 0
         val defaultBg = themeBgArgb()
-        val fast = TermDrawMeter.optEnabled
+        val fast = TermDrawMeter.optEnabled && !fullBackground
         var runColor: Int? = null
         var runLeft = 0f
         var runRight = 0f
