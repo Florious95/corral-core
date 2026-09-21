@@ -34,6 +34,7 @@ import dev.agentmirror.app.tsnet.TsPeer
 import java.net.URI
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 配对页状态机（纯 JVM 可测核心，验收模式 `--tests "*Pairing*"` 打在它上面）。
@@ -165,7 +166,8 @@ class PairingViewModel(
     /** 已成功标记：成功后忽略后续 STOPPED（自身 stop 触发）不误报拒绝。 */
     private var succeeded = false
     @Volatile private var pairingGeneration = 0L
-    private var discoveryGeneration = 0L
+    @Volatile private var discoveryGeneration = 0L
+    private val discoveryStateLock = Any()
     @Volatile private var identityProofVerified = false
     @Volatile private var identityProofGeneration = -1L
     @Volatile private var dialReadyGeneration = -1L
@@ -298,32 +300,45 @@ class PairingViewModel(
     fun discoverHosts(peers: List<TsPeer>, port: Int? = null) {
         val generation = ++discoveryGeneration
         val targets = HostRouter.peerTargets(peers, knownPort = port)
-        discoveryInFlight = true
+        discoveryInFlight = targets.isNotEmpty()
         DiagLog.record(
             "pairing-discovery",
             "ts peer_page peers=${peers.size} targets=${targets.size} generation=$generation",
         )
-        discoveryExecutor.execute {
-            val found = targets.mapNotNull { endpoint -> identifyClient.whoami(endpoint) }
-            if (generation != discoveryGeneration) {
-                DiagLog.record(
-                    "pairing-discovery",
-                    "ts candidates=${found.size} generation=$generation stale=true",
-                )
-                return@execute
+        if (targets.isEmpty()) {
+            DiagLog.record("pairing-discovery", "ts candidates=0 hosts=${discoveredHosts.size} generation=$generation stale=false")
+            return
+        }
+        val remaining = AtomicInteger(targets.size)
+        targets.forEach { endpoint ->
+            discoveryExecutor.execute {
+                val candidate = runCatching { identifyClient.whoami(endpoint) }.getOrNull()
+                if (generation == discoveryGeneration && candidate != null) {
+                    val hostCount = synchronized(discoveryStateLock) {
+                        discoveredHosts = HostRouter.merge(discoveredHosts + candidate)
+                        discoveredHosts.size
+                    }
+                    DiagLog.record(
+                        "pairing-discovery",
+                        "ts candidate authority=${endpoint.authority} hosts=$hostCount generation=$generation stale=false",
+                    )
+                }
+                if (remaining.decrementAndGet() == 0 && generation == discoveryGeneration) {
+                    discoveryInFlight = false
+                    DiagLog.record(
+                        "pairing-discovery",
+                        "ts candidates_complete hosts=${discoveredHosts.size} generation=$generation stale=false",
+                    )
+                }
             }
-            discoveredHosts = HostRouter.merge(discoveredHosts + found)
-            discoveryInFlight = false
-            DiagLog.record(
-                "pairing-discovery",
-                "ts candidates=${found.size} hosts=${discoveredHosts.size} generation=$generation stale=false",
-            )
         }
     }
 
     /** A list row is a host identity, not a TS/LAN path. */
     fun addDiscoveredHost(candidate: HostCandidate) {
-        discoveredHosts = HostRouter.merge(discoveredHosts + candidate)
+        synchronized(discoveryStateLock) {
+            discoveredHosts = HostRouter.merge(discoveredHosts + candidate)
+        }
         discoveryInFlight = false
         if (!HostRouter.isPlaceholderName(candidate.name, candidate.hostId)) return
 
@@ -339,7 +354,9 @@ class PairingViewModel(
                         !HostRouter.isPlaceholderName(identity.name, identity.hostId)
                 }
             if (enriched != null) {
-                discoveredHosts = HostRouter.merge(discoveredHosts + enriched)
+                synchronized(discoveryStateLock) {
+                    discoveredHosts = HostRouter.merge(discoveredHosts + enriched)
+                }
             }
         }
     }

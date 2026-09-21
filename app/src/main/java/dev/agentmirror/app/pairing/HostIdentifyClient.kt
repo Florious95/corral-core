@@ -254,14 +254,15 @@ class HostIdentifyClient(
 }
 
 private const val MAX_HOST_BODY_BYTES = 1024
+private const val HOST_PROBE_TIMEOUT_MS = 1_500L
 
 /** Production OkHttp transport: literal IPv4 only, no redirects, no proxy/DNS fallback. */
 class OkHttpHostHttpTransport(
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
-        .writeTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
-        .callTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(HOST_PROBE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .readTimeout(HOST_PROBE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .writeTimeout(HOST_PROBE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .callTimeout(HOST_PROBE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
         .dns(object : okhttp3.Dns {
             override fun lookup(hostname: String): List<InetAddress> {
                 if (!HostRouter.isLiteralIpv4(hostname)) throw UnknownHostException(hostname)

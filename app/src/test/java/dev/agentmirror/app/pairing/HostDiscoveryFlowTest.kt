@@ -7,6 +7,7 @@ import dev.agentmirror.app.tsnet.TsnetProxy
 import dev.agentmirror.app.tsnet.TsnetState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.ArrayDeque
 import java.util.concurrent.Executor
@@ -16,7 +17,8 @@ class HostDiscoveryFlowTest {
     private class QueuedExecutor : Executor {
         private val tasks = ArrayDeque<Runnable>()
         override fun execute(command: Runnable) { tasks.addLast(command) }
-        fun drain() { while (tasks.isNotEmpty()) tasks.removeFirst().run() }
+        fun runNext() { tasks.removeFirst().run() }
+        fun drain() { while (tasks.isNotEmpty()) runNext() }
     }
     private class Store : PairingConfigStore {
         var saved: PairingConfig? = null
@@ -144,6 +146,40 @@ class HostDiscoveryFlowTest {
 
         assertEquals("MacBook Pro", vm.discoveredHosts.single().name)
         assertEquals(endpoint.authority, vm.discoveredHosts.single().endpoints.single().authority)
+    }
+
+    @Test
+    fun acceptedPeerIsEmittedBeforeSlowerPeersFinish() {
+        val fast = HostEndpoint("100.101.2.3", 9900, ConnectionPath.TAILNET, HostEndpointSource.PEER)
+        val slow = HostEndpoint("100.101.2.4", 9900, ConnectionPath.TAILNET, HostEndpointSource.PEER)
+        val executor = QueuedExecutor()
+        val transport = object : HostHttpTransport {
+            override fun whoami(endpoint: HostEndpoint) = if (endpoint == fast) {
+                HostHttpResponse(200, "{\"host_id\":\"host-fast-1234\",\"name\":\"fast\",\"port\":9900}")
+            } else {
+                HostHttpResponse(599)
+            }
+
+            override fun identify(endpoint: HostEndpoint, request: IdentifyRequest) = HostHttpResponse(404)
+        }
+        val vm = PairingViewModel(
+            configStore = Store(),
+            connectionFactory = { cfg -> dev.agentmirror.app.conn.ConnectionManager(cfg, NoopTransportFactory) },
+            identifyClient = HostIdentifyClient(transport),
+            discoveryExecutor = executor,
+            localProbeTargets = { emptyList() },
+        )
+
+        vm.discoverHosts(
+            listOf(
+                TsPeer("fast", true, listOf(fast.address), "fast"),
+                TsPeer("slow", true, listOf(slow.address), "slow"),
+            ),
+        )
+        executor.runNext()
+
+        assertEquals("fast", vm.discoveredHosts.single().name)
+        assertTrue(vm.discoveryInFlight)
     }
 
     @Test
