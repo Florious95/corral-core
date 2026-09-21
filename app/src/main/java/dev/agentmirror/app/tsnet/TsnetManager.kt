@@ -16,7 +16,10 @@
 
 package dev.agentmirror.app.tsnet
 
+import android.util.Log
 import dev.agentmirror.app.diag.DiagLog
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -78,6 +81,9 @@ class TsnetManager(
     /** 在途 start 的代次防伪票据（见类 KDoc）。 */
     private var generation = 0
 
+    /** Active key is retained only for redacting native diagnostics; it is never logged. */
+    private var activeAuthKey: String? = null
+
     /**
      * 启动节点。返回 false 的两种情形：已在 Starting/Up（重复启动被拒，状态不变）、
      * authkey 结构非法（状态置 Error）。返回 true 表示已受理，结果经 [onState] 异步到达。
@@ -97,6 +103,7 @@ class TsnetManager(
             return false
         }
         val gen = ++generation
+        activeAuthKey = key
         transition(TsnetState.Starting)
         executor.execute { runStart(gen, stateDir, hostname, key) }
         return true
@@ -132,16 +139,40 @@ class TsnetManager(
     /** 停节点回 Idle。Starting 期间调用依赖代次机制让迟到结果自清理。 */
     /** Read the typed peer snapshot without exposing the backend/native handle. */
     @Synchronized
-    fun peerSnapshot(knownId: String?, cursor: String?): TsPeerSnapshot =
-        runCatching { backend.peerSnapshot(knownId, cursor) }
+    fun peerSnapshot(knownId: String?, cursor: String?): TsPeerSnapshot {
+        var failure: Throwable? = null
+        val snapshot = runCatching { backend.peerSnapshot(knownId, cursor) }
+            .onFailure { failure = it }
             .getOrElse { TsPeerSnapshot(emptyList(), null, supported = false) }
+        failure?.let {
+            val message = "peerSnapshot backend failed type=${it.javaClass.simpleName} " +
+                "message=${it.message.orEmpty()} known=${knownId != null} " +
+                "cursor_present=${cursor != null}\n${sanitizedStack(it)}"
+            // Keep the full native cause/stack visible while replacing the active auth key.
+            runCatching { Log.e(TAG, message) }
+            DiagLog.record("tsnet-peer", message)
+        }
+        return snapshot
+    }
 
     @Synchronized
     fun stop() {
         val current = state
         generation++
         if (current is TsnetState.Up) runCatching { backend.close() }
+        activeAuthKey = null
         transition(TsnetState.Idle)
+    }
+
+    private fun sanitizedStack(error: Throwable): String {
+        val writer = StringWriter()
+        error.printStackTrace(PrintWriter(writer))
+        val stack = writer.toString()
+        return activeAuthKey?.let { stack.replace(it, "[REDACTED]") }?.take(16_384) ?: stack.take(16_384)
+    }
+
+    private companion object {
+        const val TAG = "TsnetManager"
     }
 
     /** 统一状态落点：先写 state 再回调（回调方见到的 state 与参数一致）。 */
