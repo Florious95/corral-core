@@ -26,12 +26,14 @@ package dev.agentmirror.app.session
 
 import android.os.Trace
 import android.view.View
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +45,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -87,13 +90,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.agentmirror.app.ui.components.GlassIconButton
@@ -175,18 +171,57 @@ fun CommandInputBar(
         ),
         label = "inputBorder",
     )
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .dockFlatGlass(
-                shape = RoundedCornerShape(22.dp),
-                fill = glass.fill,
-                hairline = borderColor,
-                topGlint = glass.topGlint,
-                bottomShade = glass.bottomShade,
-            )
-            .testTag("session-command-input"),
-    ) {
+    BackHandler(enabled = shortcutMenuOpen) {
+        shortcutMenuOpen = false
+    }
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (shortcutMenuOpen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .wrapContentHeight()
+                        .zIndex(10f),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .pointerInput(Unit) {
+                                detectTapGestures(onTap = { shortcutMenuOpen = false })
+                            },
+                    )
+                    ShortcutGlassMenu(
+                        commands = shortcutCommands,
+                        glass = shortcutGlass,
+                        modifier = Modifier.align(Alignment.BottomStart).zIndex(1f),
+                        onSelect = { command ->
+                            Trace.beginSection("shortcut/select")
+                            try {
+                                shortcutMenuOpen = false
+                                when (val result = resolveShortcutCommand(command, shortcutProvider)) {
+                                    is ShortcutResolution.Found -> onShortcutCommand(command)
+                                    else -> onShortcutError(shortcutProviderError(result))
+                                }
+                            } finally {
+                                Trace.endSection()
+                            }
+                        },
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .dockFlatGlass(
+                        shape = RoundedCornerShape(22.dp),
+                        fill = glass.fill,
+                        hairline = borderColor,
+                        topGlint = glass.topGlint,
+                        bottomShade = glass.bottomShade,
+                    )
+                    .testTag("session-command-input"),
+            ) {
         Row(
             // 底对齐：膨胀时加号/发送钉在底边，与主流 Chat App 一致
             verticalAlignment = Alignment.Bottom,
@@ -229,36 +264,6 @@ fun CommandInputBar(
                         DockIconPlus, contentDescription = "添加附件",
                         modifier = Modifier.width(20.dp), tint = source.neutral400,
                     )
-                }
-                if (shortcutMenuOpen) {
-                    Popup(
-                        popupPositionProvider = ShortcutMenuPositionProvider(
-                            with(LocalDensity.current) { 8.dp.roundToPx() },
-                        ),
-                        onDismissRequest = { shortcutMenuOpen = false },
-                        properties = PopupProperties(
-                            focusable = false,
-                            dismissOnBackPress = true,
-                            dismissOnClickOutside = true,
-                        ),
-                    ) {
-                        ShortcutGlassMenu(
-                            commands = shortcutCommands,
-                            glass = shortcutGlass,
-                            onSelect = { command ->
-                                Trace.beginSection("shortcut/select")
-                                try {
-                                    shortcutMenuOpen = false
-                                    when (val result = resolveShortcutCommand(command, shortcutProvider)) {
-                                        is ShortcutResolution.Found -> onShortcutCommand(command)
-                                        else -> onShortcutError(shortcutProviderError(result))
-                                    }
-                                } finally {
-                                    Trace.endSection()
-                                }
-                            },
-                        )
-                    }
                 }
             }
             Box(
@@ -377,29 +382,20 @@ fun CommandInputBar(
             }
         }
     }
+    }
 }
-
-private class ShortcutMenuPositionProvider(private val gapPx: Int) : PopupPositionProvider {
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize,
-    ): IntOffset = IntOffset(
-        anchorBounds.left,
-        (anchorBounds.top - popupContentSize.height - gapPx).coerceAtLeast(0),
-    )
 }
 
 @Composable
 private fun ShortcutGlassMenu(
     commands: List<ShortcutCommand>,
     glass: SessionDockGlassTokens,
+    modifier: Modifier = Modifier,
     onSelect: (ShortcutCommand) -> Unit,
 ) {
     val p = LocalAppPalette.current
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(190.dp)
             .dockFlatGlass(
                 shape = RoundedCornerShape(16.dp),
