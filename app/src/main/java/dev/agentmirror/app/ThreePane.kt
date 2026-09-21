@@ -153,10 +153,10 @@ internal fun ThreePaneHome(
         initialValue = 0f,
         targetValue = if (ambientEnabled) 1f else 0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = if (ambientEnabled) 12_000 else 1,
-                easing = LinearEasing,
-            ),
+            // Keep the infinite clock at the normal cadence even while the ambient
+            // layer is suppressed. A 1ms repeat would turn the disabled branch into a
+            // frame-invalidation storm instead of pausing it.
+            animation = tween(12_000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "fluidAmbientPhase",
