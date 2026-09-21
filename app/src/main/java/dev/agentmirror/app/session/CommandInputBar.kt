@@ -24,6 +24,8 @@
  */
 package dev.agentmirror.app.session
 
+import android.os.Trace
+import android.view.View
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -51,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +74,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -124,6 +128,12 @@ fun CommandInputBar(
     // 强调色一律走全 App 调色板的科技蓝（p.accent），⛔ 不用 dock 主题遗留的紫色 primary / accent*
     val p = LocalAppPalette.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val hostView = LocalView.current
+    DisposableEffect(hostView) {
+        val previousAutofillMode = hostView.importantForAutofill
+        hostView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+        onDispose { hostView.importantForAutofill = previousAutofillMode }
+    }
     var shortcutMenuOpen by remember { mutableStateOf(false) }
     val shortcutGlass = sessionDockGlassTokens()
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
@@ -192,8 +202,13 @@ fun CommandInputBar(
                 // height. It never requests focus, so tapping it leaves the IME untouched.
                 GlassIconButton(
                     onClick = {
-                        onShortcutMenuOpened()
-                        shortcutMenuOpen = true
+                        Trace.beginSection("shortcut/open")
+                        try {
+                            onShortcutMenuOpened()
+                            shortcutMenuOpen = true
+                        } finally {
+                            Trace.endSection()
+                        }
                     },
                     size = 32.dp,
                     backdrop = emptyBackdrop(),
@@ -231,10 +246,15 @@ fun CommandInputBar(
                             commands = shortcutCommands,
                             glass = shortcutGlass,
                             onSelect = { command ->
-                                shortcutMenuOpen = false
-                                when (val result = resolveShortcutCommand(command, shortcutProvider)) {
-                                    is ShortcutResolution.Found -> onShortcutCommand(command)
-                                    else -> onShortcutError(shortcutProviderError(result))
+                                Trace.beginSection("shortcut/select")
+                                try {
+                                    shortcutMenuOpen = false
+                                    when (val result = resolveShortcutCommand(command, shortcutProvider)) {
+                                        is ShortcutResolution.Found -> onShortcutCommand(command)
+                                        else -> onShortcutError(shortcutProviderError(result))
+                                    }
+                                } finally {
+                                    Trace.endSection()
                                 }
                             },
                         )

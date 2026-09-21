@@ -23,6 +23,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.os.Trace
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
@@ -395,21 +396,31 @@ fun SessionScreen(
                     shortcutCommands = shortcutCommands,
                     shortcutProvider = provider,
                     onShortcutCommand = { command ->
-                        when (val result = resolveShortcutCommand(command, provider)) {
-                            is ShortcutResolution.Found -> {
-                                val next = TextFieldValue(
-                                    text = result.text,
-                                    selection = TextRange(result.text.length),
-                                )
-                                viewModel.onPassthroughInput(mirror, next)
-                                mirror = next
+                        Trace.beginSection("shortcut/apply")
+                        try {
+                            when (val result = resolveShortcutCommand(command, provider)) {
+                                is ShortcutResolution.Found -> {
+                                    val next = TextFieldValue(
+                                        text = result.text,
+                                        selection = TextRange(result.text.length),
+                                    )
+                                    viewModel.onPassthroughInput(mirror, next)
+                                    mirror = next
+                                }
+                                else -> viewModel.transientError = shortcutProviderError(result)
                             }
-                            else -> viewModel.transientError = shortcutProviderError(result)
+                        } finally {
+                            Trace.endSection()
                         }
                     },
                     onShortcutError = { viewModel.transientError = it },
                     onShortcutMenuOpened = {
-                        shortcutCommands = SharedPreferencesShortcutCommandStore(context).load()
+                        Trace.beginSection("shortcut/load")
+                        try {
+                            shortcutCommands = SharedPreferencesShortcutCommandStore(context).load()
+                        } finally {
+                            Trace.endSection()
+                        }
                     },
                     collapseRequest = collapseRequest,
                     onDockCollapse = requestDockCollapse,
