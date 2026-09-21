@@ -2,10 +2,13 @@ package api
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/nodeprobe"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 )
 
@@ -45,6 +48,56 @@ func TestRefreshOnOpenListRescans(t *testing.T) {
 	names := listingNames(l2)
 	if !names["rf-keep"] || !names["rf-added"] {
 		t.Fatalf("list2 still old world names=%v (ensureInitialScan cache?)", names)
+	}
+}
+
+func TestRunnerBackedListPublishesActivityBeforeInventoryCacheRefresh(t *testing.T) {
+	idleMarker := filepath.Join(t.TempDir(), "idle")
+	probe := filepath.Join(t.TempDir(), "nodeprobe.sh")
+	script := "#!/bin/sh\nactivity=working\nif [ -f \"" + idleMarker + "\" ]; then activity=idle; fi\nprintf '{\\\"schema_version\\\":1,\\\"socket\\\":\\\"%s\\\",\\\"nodes\\\":[{\\\"session\\\":\\\"alpha\\\",\\\"window_index\\\":0,\\\"pane_id\\\":\\\"%%0\\\",\\\"provider\\\":\\\"pi\\\",\\\"state\\\":\\\"%s\\\",\\\"activity\\\":\\\"%s\\\",\\\"health\\\":\\\"normal\\\"}]}\\n' \"$2\" \"$activity\" \"$activity\"\n"
+	if err := os.WriteFile(probe, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	md := &mutableDiscoverer{model: &discovery.Model{
+		Workspaces: []discovery.Workspace{{CWD: "/ws/a", Panes: []discovery.Pane{
+			{Socket: "/tmp/sock1", Session: "alpha", PaneID: "%0", CWD: "/ws/a", PanePID: 4242,
+				Command: "node", WindowName: "status", Width: 80, Height: 24},
+		}}},
+	}}
+	e := startWS(t, Options{
+		Token:        "test-token",
+		Discoverer:   md,
+		Nodeprobe:    nodeprobe.NewRunner(nodeprobe.Capability{Binary: probe}),
+		ListInterval: 20 * time.Millisecond,
+	})
+	e.auth()
+	e.sendFrame(&protocol.List{ReqID: 1})
+	first := mustListing(t, e, 1)
+	if got := first.Workspaces[0].Sessions[0].Activity; got != "working" {
+		t.Fatalf("initial activity=%q, want working", got)
+	}
+	if err := os.WriteFile(idleMarker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The old inventory sampler served this same structural signature from a
+	// two-second cache. Dynamic activity must publish on the next scan instead.
+	idle := waitTyped(t, e, time.Now().Add(1500*time.Millisecond), func(typed protocol.Typed) bool {
+		d, ok := typed.(protocol.ListDelta)
+		return ok && len(d.ChangedSessions) == 1 && d.ChangedSessions[0].Activity == "idle"
+	})
+	if got := idle.(protocol.ListDelta).ChangedSessions[0].Status; got != "idle" {
+		t.Fatalf("idle delta status=%q, want idle", got)
+	}
+	if err := os.Remove(idleMarker); err != nil {
+		t.Fatal(err)
+	}
+	working := waitTyped(t, e, time.Now().Add(1500*time.Millisecond), func(typed protocol.Typed) bool {
+		d, ok := typed.(protocol.ListDelta)
+		return ok && len(d.ChangedSessions) == 1 && d.ChangedSessions[0].Activity == "working"
+	})
+	if got := working.(protocol.ListDelta).ChangedSessions[0].Status; got != "working" {
+		t.Fatalf("working delta status=%q, want working", got)
 	}
 }
 

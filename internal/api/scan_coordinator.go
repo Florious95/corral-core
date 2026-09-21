@@ -287,13 +287,8 @@ func (q *scanCoordinator) scan(ctx context.Context, g *catalogGeneration) catalo
 		result.err = fmt.Errorf("api: discover: %w", err)
 		return result
 	}
-	var observations map[string]nodeprobe.Observation
 	sampleStarted := time.Now()
-	if q.s.inventorySamples != nil {
-		observations, err = q.s.inventorySamples.sample(ctx, model)
-	} else {
-		observations, err = nodeprobe.SampleModel(ctx, model, q.s.nodeprobe)
-	}
+	observations, err := nodeprobe.SampleModel(ctx, model, q.s.nodeprobe)
 	sampleTime = time.Since(sampleStarted)
 	if err != nil {
 		result.err = fmt.Errorf("api: nodeprobe: %w", err)

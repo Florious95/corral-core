@@ -143,9 +143,8 @@ type Server struct {
 	overlay            overlay.Capturer
 	overlayLastHash    map[string]string
 
-	nodeprobe        nodeprobe.Sampler
-	inventorySamples *inventorySampler
-	filterAgents     bool
+	nodeprobe    nodeprobe.Sampler
+	filterAgents bool
 
 	// agentLaunchers is the explicit provider capability set advertised in
 	// AuthAck and used by create_agent. It is computed once so a client cannot
@@ -254,9 +253,6 @@ func NewServer(opts Options) *Server {
 	// 不再启动 overlayLoop。opts.OverlayCapturer 若注入也只保留字段，不被调用。
 	s.overlay = opts.OverlayCapturer
 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
-	if _, production := s.nodeprobe.(*nodeprobe.Runner); production {
-		s.inventorySamples = newInventorySampler(s.loopCtx, s.nodeprobe)
-	}
 	if scoped, ok := s.discoverer.(WorkspaceDiscoverer); ok {
 		s.workspaceScans = newWorkspaceCoordinator(s, scoped)
 	}
@@ -278,9 +274,6 @@ func NewServer(opts Options) *Server {
 // @inv 幂等：重复调用安全；只终结仍等待目录结果的连接
 func (s *Server) Close() {
 	s.scans.close()
-	if s.inventorySamples != nil {
-		s.inventorySamples.workers.Wait()
-	}
 	if s.workspaceScans != nil {
 		<-s.workspaceScans.done
 	}
