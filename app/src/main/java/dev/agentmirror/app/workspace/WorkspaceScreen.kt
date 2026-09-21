@@ -103,15 +103,12 @@ fun WorkspaceScreen(
     val favorites by viewModel.favorites.collectAsState()
     val activity = LocalContext.current as? Activity
 
-    // 进入即刷（069）：一级发 list，二级由 enterLevel2 重订。键是菜单身份，不是滚动。
+    // 进入一级发一次 list；二级只由 enterLevel2 建立目标工作区订阅。
     // 旋转重建走 suppressNextEnterRefresh，本拍不发 list。下拉见 onRefresh。
     LaunchedEffect(selectedWorkspaceCwd, isActive) {
         if (!isActive) return@LaunchedEffect
         if (selectedWorkspaceCwd == null) {
             viewModel.enterLevel1()
-        } else if (!viewModel.shouldSuppressEnterRefresh()) {
-            // 074：进二级仍发一次 list（转圈由 listing/首帧复位）；不是滚动触发。
-            viewModel.refresh()
         }
         viewModel.clearEnterRefreshSuppress()
     }

@@ -44,7 +44,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * 074 A-rf-noloop：进二级后静置不得自激 list；首帧到达后转圈必须消失。
- * 069 进菜单即时刷新保留——本测试仍要求进入时发出 list。
+ * 进入二级只订阅目标工作区，不得额外发一级 list。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -57,9 +57,10 @@ class WorkspaceScreenNoRefreshLoopTest {
     @Test
     fun enterLevel2_tenSeconds_listDoesNotGrow_andSpinnerClearsOnFirstFrame() {
         var lists = 0
+        var level2Subscriptions = 0
         val vm = WorkspaceViewModel(
             requestList = { lists++ },
-            subscribeLevel2 = {},
+            subscribeLevel2 = { level2Subscriptions++ },
             unsubscribeLevel2 = {},
         )
         vm.onConnectionStateChanged(ConnectionState.READY)
@@ -85,8 +86,9 @@ class WorkspaceScreenNoRefreshLoopTest {
         compose.waitForIdle()
 
         val listsOnEnter = lists
-        assertTrue("069：进二级必须发 list，got=$listsOnEnter", listsOnEnter in 1..2)
-        assertTrue("进菜单即时刷新应置转圈", vm.refreshing.value)
+        assertEquals("进入二级不得触发无关的一级 list", 0, listsOnEnter)
+        assertEquals("进入二级只应建立一次目标订阅", 1, level2Subscriptions)
+        assertTrue("目标二级订阅仍应置转圈", vm.refreshing.value)
 
         // 首帧 = level2_frame（不是 listing）。
         vm.onFrame(l2Frame(seq = 1))
@@ -105,11 +107,11 @@ class WorkspaceScreenNoRefreshLoopTest {
         compose.waitForIdle()
 
         assertEquals(
-            "静置 10s 内推送不得再触发 list：enter=$listsOnEnter after_frame=$listsAfterFirstFrame after_10s=$lists",
+            "静置 10s 内推送不得触发一级 list：enter=$listsOnEnter after_frame=$listsAfterFirstFrame after_10s=$lists",
             listsAfterFirstFrame,
             lists,
         )
-        assertTrue("10s 内 list=$lists 必须 ≤ 2", lists <= 2)
+        assertEquals("10s 内 list 必须保持为 0", 0, lists)
         assertFalse("静置后转圈仍须关闭", vm.refreshing.value)
     }
 

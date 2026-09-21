@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.testTag
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlin.math.abs
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.pairing.HostRouter
 import dev.agentmirror.app.tsnet.ConnectionPath
@@ -136,12 +137,26 @@ internal fun ThreePaneHome(
     // 液态玻璃三层：分页内容被 layerBackdrop 录成背景；悬浮导航胶囊与页内模态在录制边界之外采样它。
     // 内容延伸到胶囊下方（被折射），滚动容器经 LocalFloatingNavInset 补底部留白，末行才能滚出胶囊。
     val screenBackground = LocalAppPalette.current.screenBackground
+    // The L1→L2 Push already animates a full-screen content layer. Keep the recorded backdrop
+    // static while that transition is active/settled; the infinite ambient phase otherwise
+    // invalidates the backdrop every frame and competes with LiquidGlass blur on RenderThread.
+    // Returning to L1 recreates the same ambient animation without changing the glass contract.
+    val ambientEnabled = navState.selectedWorkspaceCwd == null
+    LaunchedEffect(ambientEnabled) {
+        DiagLog.record(
+            "fluid-ambient",
+            "enabled=$ambientEnabled reason=${if (ambientEnabled) "l1-settled" else "l1-l2-transition-or-l2"}",
+        )
+    }
     val ambientTransition = rememberInfiniteTransition(label = "fluidAmbient")
-    val ambientPhase by ambientTransition.animateFloat(
+    val ambientPhase = ambientTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 1f,
+        targetValue = if (ambientEnabled) 1f else 0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(12_000, easing = LinearEasing),
+            animation = tween(
+                durationMillis = if (ambientEnabled) 12_000 else 1,
+                easing = LinearEasing,
+            ),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "fluidAmbientPhase",
@@ -149,30 +164,32 @@ internal fun ThreePaneHome(
     val backdrop = rememberLayerBackdrop {
         drawRect(screenBackground)
         drawContent()
-        // Keep the ambient layer inside the recorded backdrop so every glass
-        // surface refracts the drifting blue/violet light, not just the page.
-        val blueCenter = Offset(
-            x = size.width * (0.84f - 0.06f * ambientPhase),
-            y = size.height * (0.14f + 0.04f * ambientPhase),
-        )
-        val violetCenter = Offset(
-            x = size.width * (0.14f + 0.05f * ambientPhase),
-            y = size.height * (0.82f - 0.05f * ambientPhase),
-        )
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0xFFB9D8FF).copy(alpha = 0.20f), Color.Transparent),
-                center = blueCenter,
-                radius = size.maxDimension * 0.72f,
-            ),
-        )
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0xFFD8C7FF).copy(alpha = 0.17f), Color.Transparent),
-                center = violetCenter,
-                radius = size.maxDimension * 0.66f,
-            ),
-        )
+        if (ambientEnabled) {
+            // Keep the ambient layer inside the recorded backdrop so every glass
+            // surface refracts the drifting blue/violet light, not just the page.
+            val blueCenter = Offset(
+                x = size.width * (0.84f - 0.06f * ambientPhase.value),
+                y = size.height * (0.14f + 0.04f * ambientPhase.value),
+            )
+            val violetCenter = Offset(
+                x = size.width * (0.14f + 0.05f * ambientPhase.value),
+                y = size.height * (0.82f - 0.05f * ambientPhase.value),
+            )
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFB9D8FF).copy(alpha = 0.20f), Color.Transparent),
+                    center = blueCenter,
+                    radius = size.maxDimension * 0.72f,
+                ),
+            )
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFD8C7FF).copy(alpha = 0.17f), Color.Transparent),
+                    center = violetCenter,
+                    radius = size.maxDimension * 0.66f,
+                ),
+            )
+        }
     }
     val navInset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() } +
         Dims.navBarHeight + Dims.navFloatMargin

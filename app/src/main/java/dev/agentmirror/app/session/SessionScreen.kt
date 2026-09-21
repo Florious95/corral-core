@@ -26,6 +26,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -188,6 +189,10 @@ fun SessionScreen(
                 inputFocused = false
                 imeHideRequested = true
                 collapseRequest++
+                Log.d(
+                    "SessionDockMotion",
+                    "collapse source=$source count=$collapseRequest",
+                )
                 val imeStartNs = System.nanoTime()
                 keyboardController?.hide()
                 ViewCompat.getWindowInsetsController(view)?.hide(WindowInsetsCompat.Type.ime())

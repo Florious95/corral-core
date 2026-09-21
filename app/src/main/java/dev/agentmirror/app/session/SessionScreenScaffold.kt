@@ -10,6 +10,7 @@
  */
 package dev.agentmirror.app.session
 
+import android.util.Log
 import android.view.ViewTreeObserver
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
@@ -65,6 +66,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+private const val SESSION_DOCK_MOTION_TAG = "SessionDockMotion"
+
 internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
     durationMillis = SessionDockMotion.KeyboardPushMillis,
     easing = SessionDockMotion.Standard,
@@ -107,17 +110,56 @@ internal fun ClearFocusWhenImeHides(
     var wasVisible by remember { mutableStateOf(false) }
     var hideNotified by remember { mutableStateOf(false) }
     LaunchedEffect(imeVisible, imeTargetVisible, collapseRequested) {
-        if (imeTargetVisible) {
-            wasVisible = true
-            hideNotified = false
-        } else if (wasVisible && !collapseRequested && !hideNotified) {
+        val observation = observeImeVisibility(
+            wasVisible = wasVisible,
+            currentInsetPx = imeCurrentPx,
+            rootVisible = rootImeVisible,
+            targetInsetPx = imeTargetPx,
+            collapseRequested = collapseRequested || hideNotified,
+        )
+        if (observation.shouldCollapse) {
             // System Back starts the inset transition before the current inset reaches zero.
             // Request the same-frame source collapse; do not wait for IME hidden.
             hideNotified = true
+            Log.d(
+                SESSION_DOCK_MOTION_TAG,
+                "hide-start event=1 current_inset_px=$imeCurrentPx target_inset_px=$imeTargetPx",
+            )
             onImeHideStarted()
+        } else if (imeTargetVisible) {
+            hideNotified = false
         }
-        if (!imeVisible && !imeTargetVisible) wasVisible = false
+        wasVisible = observation.wasVisible
     }
+}
+
+/**
+ * Tracks actual IME visibility separately from the animation target.
+ * A target inset is non-zero before the keyboard is visible and can remain so when a show is
+ * cancelled; neither case may collapse the source input. Once an actual inset/root-visible
+ * sample has been observed, a target returning to zero is the hide-start edge.
+ */
+internal data class ImeVisibilityObservation(
+    val wasVisible: Boolean,
+    val shouldCollapse: Boolean,
+)
+
+internal fun observeImeVisibility(
+    wasVisible: Boolean,
+    currentInsetPx: Int,
+    rootVisible: Boolean,
+    targetInsetPx: Int,
+    collapseRequested: Boolean,
+): ImeVisibilityObservation {
+    val actuallyVisible = rootVisible || currentInsetPx > 0
+    val targetVisible = targetInsetPx > 0
+    val shouldCollapse = wasVisible && !targetVisible && !collapseRequested
+    val nextWasVisible = when {
+        actuallyVisible -> true
+        !targetVisible -> false
+        else -> wasVisible
+    }
+    return ImeVisibilityObservation(nextWasVisible, shouldCollapse)
 }
 
 /** Production IME inset animator shared by real-window wiring and deterministic motion tests. */
@@ -174,6 +216,10 @@ fun SessionScreenScaffold(
                 val inputStartNs = System.nanoTime()
                 localImeHideRequested = true
                 localCollapseRequest++
+                Log.d(
+                    SESSION_DOCK_MOTION_TAG,
+                    "collapse source=$source count=$localCollapseRequest",
+                )
                 val imeStartNs = System.nanoTime()
                 keyboardController?.hide()
                 ViewCompat.getWindowInsetsController(view)?.hide(WindowInsetsCompat.Type.ime())

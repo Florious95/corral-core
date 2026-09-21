@@ -72,6 +72,57 @@ class SessionDockSourceTest {
     val compose = createComposeRule()
 
     @Test
+    fun cancelledImeShow_doesNotCollapseSource() {
+        val showTarget = observeImeVisibility(
+            wasVisible = false,
+            currentInsetPx = 0,
+            rootVisible = false,
+            targetInsetPx = 420,
+            collapseRequested = false,
+        )
+        val cancelled = observeImeVisibility(
+            wasVisible = showTarget.wasVisible,
+            currentInsetPx = 0,
+            rootVisible = false,
+            targetInsetPx = 0,
+            collapseRequested = false,
+        )
+
+        assertFalse("IME target alone must not mark it visible", showTarget.wasVisible)
+        assertFalse("a cancelled show must not collapse the source", showTarget.shouldCollapse)
+        assertFalse("cancel completion must remain non-collapsing", cancelled.shouldCollapse)
+    }
+
+    @Test
+    fun imeHideStart_collapsesExactlyOnceAfterActualVisibility() {
+        val visible = observeImeVisibility(
+            wasVisible = false,
+            currentInsetPx = 420,
+            rootVisible = true,
+            targetInsetPx = 420,
+            collapseRequested = false,
+        )
+        val hideStart = observeImeVisibility(
+            wasVisible = visible.wasVisible,
+            currentInsetPx = 420,
+            rootVisible = true,
+            targetInsetPx = 0,
+            collapseRequested = false,
+        )
+        val afterRequest = observeImeVisibility(
+            wasVisible = hideStart.wasVisible,
+            currentInsetPx = 0,
+            rootVisible = false,
+            targetInsetPx = 0,
+            collapseRequested = true,
+        )
+
+        assertTrue("actual inset must arm the hide transition", visible.wasVisible)
+        assertTrue("normal hide must notify collapse at hide start", hideStart.shouldCollapse)
+        assertFalse("collapse request must be idempotent", afterRequest.shouldCollapse)
+    }
+
+    @Test
     fun sourceDockHasResidentHotkeysWithoutMenuOrReturnButton() {
         val h = OverlayTestHarness()
         compose.setContent {
