@@ -58,12 +58,34 @@ class HostIdentifyClient(
     private val nonceSource: () -> ByteArray = { ByteArray(16).also(SecureRandom()::nextBytes) },
 ) : HostIdentityVerifier {
     override fun whoami(endpoint: HostEndpoint): HostCandidate? {
-        if (!HostRouter.isLiteralIpv4(endpoint.address)) return null
-        val response = runCatching { transport.whoami(endpoint) }.getOrNull() ?: return null
-        if (response.code != 200 || response.body.toByteArray().size > MAX_HOST_BODY_BYTES) return null
-        val json = parse(response.body) ?: return null
-        val hostId = json.string("host_id") ?: return null
-        if (!HostRouter.isValidHostId(hostId)) return null
+        if (!HostRouter.isLiteralIpv4(endpoint.address)) {
+            logWhoamiDecision(endpoint, "reject=non_literal_ip")
+            return null
+        }
+        val response = runCatching { transport.whoami(endpoint) }.getOrNull() ?: run {
+            logWhoamiDecision(endpoint, "reject=transport_null")
+            return null
+        }
+        if (response.code != 200) {
+            logWhoamiDecision(endpoint, "reject=http_code=${response.code}")
+            return null
+        }
+        if (response.body.toByteArray().size > MAX_HOST_BODY_BYTES) {
+            logWhoamiDecision(endpoint, "reject=body_oversize")
+            return null
+        }
+        val json = parse(response.body) ?: run {
+            logWhoamiDecision(endpoint, "reject=invalid_json")
+            return null
+        }
+        val hostId = json.string("host_id") ?: run {
+            logWhoamiDecision(endpoint, "reject=missing_host_id")
+            return null
+        }
+        if (!HostRouter.isValidHostId(hostId)) {
+            logWhoamiDecision(endpoint, "reject=invalid_host_id length=${hostId.length}")
+            return null
+        }
         val name = json.string("name").orEmpty()
         val port = json.int("port")?.takeIf { it in 1..65535 } ?: endpoint.port
         // The transport endpoint may be a NAT alias (for example 10.0.2.2 on
@@ -82,7 +104,16 @@ class HostIdentifyClient(
             }
             add(endpoint.copy(port = port, source = endpoint.source))
         }.distinctBy { it.authority }
-        return HostCandidate(hostId, name, endpoints)
+        val candidate = HostCandidate(hostId, name, endpoints)
+        logWhoamiDecision(endpoint, "accepted host_id_length=${hostId.length} endpoints=${endpoints.size}")
+        return candidate
+    }
+
+    private fun logWhoamiDecision(endpoint: HostEndpoint, verdict: String) {
+        if (endpoint.path != ConnectionPath.TAILNET) return
+        val message = "tailnet whoami authority=${endpoint.authority} $verdict"
+        runCatching { Log.d(TAG, message) }
+        DiagLog.record("identify-tailnet", message)
     }
 
     override fun identify(
@@ -214,6 +245,10 @@ class HostIdentifyClient(
         var diff = 0
         for (i in aa.indices) diff = diff or (aa[i].toInt() xor bb[i].toInt())
         return diff == 0
+    }
+
+    private companion object {
+        const val TAG = "HostIdentifyClient"
     }
 
 }
