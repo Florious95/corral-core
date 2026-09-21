@@ -84,6 +84,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -166,6 +167,7 @@ internal fun SessionScreenBackHandler(
 fun SessionScreen(
     viewModel: SessionViewModel,
     name: String,
+    provider: String = "unknown",
     connectionPath: ConnectionPath? = null,
     onBack: () -> Unit,
     favoriteRows: List<FavoriteRow> = emptyList(),
@@ -283,6 +285,9 @@ fun SessionScreen(
     }
 
     var mirror by remember { mutableStateOf(TextFieldValue("")) }
+    var shortcutCommands by remember {
+        mutableStateOf(SharedPreferencesShortcutCommandStore(context).load())
+    }
     SessionScreenBackHandler(
         focused = { inputFocused },
         onCollapseFocused = { requestDockCollapse("system-back") },
@@ -387,6 +392,25 @@ fun SessionScreen(
                         }
                     },
                     imeHideRequested = imeHideRequested,
+                    shortcutCommands = shortcutCommands,
+                    shortcutProvider = provider,
+                    onShortcutCommand = { command ->
+                        when (val result = resolveShortcutCommand(command, provider)) {
+                            is ShortcutResolution.Found -> {
+                                val next = TextFieldValue(
+                                    text = result.text,
+                                    selection = TextRange(result.text.length),
+                                )
+                                viewModel.onPassthroughInput(mirror, next)
+                                mirror = next
+                            }
+                            else -> viewModel.transientError = shortcutProviderError(result)
+                        }
+                    },
+                    onShortcutError = { viewModel.transientError = it },
+                    onShortcutMenuOpened = {
+                        shortcutCommands = SharedPreferencesShortcutCommandStore(context).load()
+                    },
                     collapseRequest = collapseRequest,
                     onDockCollapse = requestDockCollapse,
                     onInputFocusedChanged = { inputFocused = it },

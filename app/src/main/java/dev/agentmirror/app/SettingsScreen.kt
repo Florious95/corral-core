@@ -32,6 +32,8 @@ import dev.agentmirror.app.diag.DiagLogViewScreen
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.session.SharedPreferencesInputSyncStore
 import dev.agentmirror.app.session.SharedPreferencesRetainPaneSizeStore
+import dev.agentmirror.app.session.SharedPreferencesShortcutCommandStore
+import dev.agentmirror.app.session.ShortcutCommandRepository
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.SharedPreferencesTermThemeStore
@@ -75,6 +77,10 @@ internal fun SettingsScreen(
         mutableStateOf(inputSyncStore.load())
     }
     val retainPaneSizeStore = remember { SharedPreferencesRetainPaneSizeStore(context) }
+    val shortcutRepository = remember {
+        ShortcutCommandRepository(SharedPreferencesShortcutCommandStore(context))
+    }
+    var shortcutCommands by remember { mutableStateOf(shortcutRepository.load()) }
     var retainPaneSizeEnabled by remember {
         mutableStateOf(retainPaneSizeStore.load())
     }
@@ -133,6 +139,15 @@ internal fun SettingsScreen(
         onRetainPaneSizeEnabledChange = { enabled ->
             retainPaneSizeEnabled = enabled
             retainPaneSizeStore.save(enabled)
+        },
+        shortcutCommands = shortcutCommands,
+        onSaveShortcutCommand = { command ->
+            shortcutRepository.upsert(command)
+            shortcutCommands = shortcutRepository.load()
+        },
+        onDeleteShortcutCommand = { id ->
+            shortcutRepository.delete(id)
+            shortcutCommands = shortcutRepository.load()
         },
     )
 }

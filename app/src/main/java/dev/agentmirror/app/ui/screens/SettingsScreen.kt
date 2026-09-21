@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.agentmirror.app.session.ShortcutCommand
 import dev.agentmirror.app.ui.components.AppText
 import dev.agentmirror.app.ui.components.CardOutlineButton
 import dev.agentmirror.app.ui.components.CardTonalButton
@@ -88,6 +89,9 @@ fun SettingsScreen(
     onInputSyncEnabledChange: (Boolean) -> Unit = {},
     retainPaneSizeEnabled: Boolean = false,
     onRetainPaneSizeEnabledChange: (Boolean) -> Unit = {},
+    shortcutCommands: List<ShortcutCommand> = emptyList(),
+    onSaveShortcutCommand: (ShortcutCommand) -> Unit = {},
+    onDeleteShortcutCommand: (String) -> Unit = {},
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
@@ -178,6 +182,13 @@ fun SettingsScreen(
                 Box(Modifier.height(8.dp))
                 CardBody("退出会话时不还原原生终端尺寸，再次进入实现极速秒开")
             }
+
+            // ── 快捷命令 ──
+            ShortcutCommandSettingsCard(
+                commands = shortcutCommands,
+                onSave = onSaveShortcutCommand,
+                onDelete = onDeleteShortcutCommand,
+            )
 
             // ── 诊断日志 ──
             SettingsCard {

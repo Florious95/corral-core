@@ -33,11 +33,13 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -67,8 +69,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +83,13 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.agentmirror.app.ui.components.GlassIconButton
@@ -94,6 +106,11 @@ fun CommandInputBar(
     onValueChange: (TextFieldValue) -> Unit,
     onSendText: (String) -> Unit,
     onPickAttachment: () -> Unit,
+    shortcutCommands: List<ShortcutCommand> = emptyList(),
+    shortcutProvider: String = "unknown",
+    onShortcutCommand: (ShortcutCommand) -> Unit = {},
+    onShortcutError: (String) -> Unit = {},
+    onShortcutMenuOpened: () -> Unit = {},
     modifier: Modifier = Modifier,
     expandedLines: Int = 3,
     collapseRequest: Int = 0,
@@ -107,6 +124,8 @@ fun CommandInputBar(
     // 强调色一律走全 App 调色板的科技蓝（p.accent），⛔ 不用 dock 主题遗留的紫色 primary / accent*
     val p = LocalAppPalette.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    var shortcutMenuOpen by remember { mutableStateOf(false) }
+    val shortcutGlass = sessionDockGlassTokens()
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
     // GLOBAL_ACTION_BACK during IME attach can fail hide/clearFocus while the field
@@ -169,6 +188,23 @@ fun CommandInputBar(
                 modifier = Modifier.size(width = 36.dp, height = 32.dp),
                 contentAlignment = Alignment.Center,
             ) {
+                // Overlay the shortcut control above (+) without changing the dock's measured
+                // height. It never requests focus, so tapping it leaves the IME untouched.
+                GlassIconButton(
+                    onClick = {
+                        onShortcutMenuOpened()
+                        shortcutMenuOpen = true
+                    },
+                    size = 32.dp,
+                    backdrop = emptyBackdrop(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-36).dp)
+                        .testTag("session-shortcut-button")
+                        .semantics { contentDescription = "快捷命令" },
+                ) {
+                    Text(">_", color = source.neutral400, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                }
                 GlassIconButton(
                     onClick = onPickAttachment,
                     size = 32.dp,
@@ -178,6 +214,31 @@ fun CommandInputBar(
                         DockIconPlus, contentDescription = "添加附件",
                         modifier = Modifier.width(20.dp), tint = source.neutral400,
                     )
+                }
+                if (shortcutMenuOpen) {
+                    Popup(
+                        popupPositionProvider = ShortcutMenuPositionProvider(
+                            with(LocalDensity.current) { 8.dp.roundToPx() },
+                        ),
+                        onDismissRequest = { shortcutMenuOpen = false },
+                        properties = PopupProperties(
+                            focusable = false,
+                            dismissOnBackPress = true,
+                            dismissOnClickOutside = true,
+                        ),
+                    ) {
+                        ShortcutGlassMenu(
+                            commands = shortcutCommands,
+                            glass = shortcutGlass,
+                            onSelect = { command ->
+                                shortcutMenuOpen = false
+                                when (val result = resolveShortcutCommand(command, shortcutProvider)) {
+                                    is ShortcutResolution.Found -> onShortcutCommand(command)
+                                    else -> onShortcutError(shortcutProviderError(result))
+                                }
+                            },
+                        )
+                    }
                 }
             }
             Box(
@@ -298,11 +359,68 @@ fun CommandInputBar(
     }
 }
 
+private class ShortcutMenuPositionProvider(private val gapPx: Int) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset = IntOffset(
+        anchorBounds.left,
+        (anchorBounds.top - popupContentSize.height - gapPx).coerceAtLeast(0),
+    )
+}
+
+@Composable
+private fun ShortcutGlassMenu(
+    commands: List<ShortcutCommand>,
+    glass: SessionDockGlassTokens,
+    onSelect: (ShortcutCommand) -> Unit,
+) {
+    val p = LocalAppPalette.current
+    Column(
+        modifier = Modifier
+            .width(190.dp)
+            .dockFlatGlass(
+                shape = RoundedCornerShape(16.dp),
+                fill = glass.fill,
+                hairline = glass.hairline,
+                topGlint = glass.topGlint,
+                bottomShade = glass.bottomShade,
+            )
+            .padding(vertical = 4.dp)
+            .testTag("session-shortcut-menu"),
+    ) {
+        if (commands.isEmpty()) {
+            Text(
+                "暂无快捷命令",
+                color = p.rowTitleText,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            )
+        } else {
+            commands.forEach { command ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { onSelect(command) },
+                        )
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Text(command.name, color = p.rowTitleText)
+                }
+            }
+        }
+    }
+}
+
 @Preview(name = "CommandInputBar · Light", showBackground = true)
 @Composable
 private fun PreviewInputLight() {
     MaterialTheme(colorScheme = lightColorScheme()) {
-        CommandInputBar(TextFieldValue(""), {}, {}, {}, Modifier.padding(8.dp))
+        CommandInputBar(TextFieldValue(""), {}, {}, {}, modifier = Modifier.padding(8.dp))
     }
 }
 
@@ -310,6 +428,6 @@ private fun PreviewInputLight() {
 @Composable
 private fun PreviewInputDark() {
     MaterialTheme(colorScheme = darkColorScheme()) {
-        CommandInputBar(TextFieldValue("git status"), {}, {}, {}, Modifier.padding(8.dp))
+        CommandInputBar(TextFieldValue("git status"), {}, {}, {}, modifier = Modifier.padding(8.dp))
     }
 }

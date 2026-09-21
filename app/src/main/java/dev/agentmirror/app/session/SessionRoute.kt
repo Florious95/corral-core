@@ -126,9 +126,13 @@ fun SessionRoute(
         }
     }
 
+    val sessionProvider = overlaySessions.firstOrNull { it.ref == ref }?.provider
+        ?: favoriteRows.firstOrNull { it.ref == ref }?.provider
+        ?: "unknown"
     SessionScreen(
         viewModel = vm,
         name = name,
+        provider = sessionProvider,
         connectionPath = connectionPath,
         onBack = onBack,
         favoriteRows = favoriteRows,

@@ -123,6 +123,39 @@ class SessionDockSourceTest {
     }
 
     @Test
+    fun shortcutSelectionUpdatesTextWithoutSendingOrEnter() {
+        var value by mutableStateOf(TextFieldValue(""))
+        var sends = 0
+        val command = ShortcutCommand(
+            id = "handoff",
+            name = "交接",
+            providerCommands = mapOf("pi" to "/skill:handoff "),
+        )
+        compose.setContent {
+            AgentMirrorTheme {
+                CommandInputBar(
+                    value = value,
+                    onValueChange = { value = it },
+                    onSendText = { sends++ },
+                    onPickAttachment = {},
+                    shortcutCommands = listOf(command),
+                    shortcutProvider = "pi",
+                    onShortcutCommand = { selected ->
+                        val resolved = resolveShortcutCommand(selected, "pi") as ShortcutResolution.Found
+                        value = TextFieldValue(resolved.text)
+                    },
+                )
+            }
+        }
+        compose.onNodeWithTag("session-shortcut-button").performClick()
+        compose.onNodeWithTag("session-shortcut-menu").assertIsDisplayed()
+        compose.onNodeWithText("交接").performClick()
+        assertEquals("/skill:handoff ", value.text)
+        assertFalse(value.text.contains('\r') || value.text.contains('\n'))
+        assertEquals("shortcut selection must not submit", 0, sends)
+    }
+
+    @Test
     fun sourceDockHasResidentHotkeysWithoutMenuOrReturnButton() {
         val h = OverlayTestHarness()
         compose.setContent {
