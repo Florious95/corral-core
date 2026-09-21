@@ -19,6 +19,7 @@ package dev.agentmirror.app.pairing
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.conn.BinaryFrame
 import dev.agentmirror.app.conn.ConnectionConfig
 import dev.agentmirror.app.conn.ConnectionManager
@@ -296,14 +297,27 @@ class PairingViewModel(
     /** Begin TS/LAN public discovery. whoami never receives or persists host token. */
     fun discoverHosts(peers: List<TsPeer>, port: Int? = null) {
         val generation = ++discoveryGeneration
+        val targets = HostRouter.peerTargets(peers, knownPort = port)
         discoveryInFlight = true
+        DiagLog.record(
+            "pairing-discovery",
+            "ts peer_page peers=${peers.size} targets=${targets.size} generation=$generation",
+        )
         discoveryExecutor.execute {
-            val found = HostRouter.peerTargets(peers, knownPort = port).mapNotNull { endpoint ->
-                identifyClient.whoami(endpoint)
+            val found = targets.mapNotNull { endpoint -> identifyClient.whoami(endpoint) }
+            if (generation != discoveryGeneration) {
+                DiagLog.record(
+                    "pairing-discovery",
+                    "ts candidates=${found.size} generation=$generation stale=true",
+                )
+                return@execute
             }
-            if (generation != discoveryGeneration) return@execute
             discoveredHosts = HostRouter.merge(discoveredHosts + found)
             discoveryInFlight = false
+            DiagLog.record(
+                "pairing-discovery",
+                "ts candidates=${found.size} hosts=${discoveredHosts.size} generation=$generation stale=false",
+            )
         }
     }
 

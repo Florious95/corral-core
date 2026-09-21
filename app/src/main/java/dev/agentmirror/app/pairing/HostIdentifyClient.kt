@@ -5,7 +5,9 @@
  */
 package dev.agentmirror.app.pairing
 
+import android.util.Log
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.tsnet.TsnetDial
 import dev.agentmirror.app.tsnet.TsnetWire
 import kotlinx.serialization.json.Json
@@ -259,7 +261,7 @@ class OkHttpHostHttpTransport(
         } else {
             builder.get()
         }
-        return runCatching {
+        val result = runCatching {
             clientFor(endpoint).newCall(builder.build()).execute().use { response ->
                 val source = response.body?.source()
                 if (source == null) {
@@ -295,8 +297,24 @@ class OkHttpHostHttpTransport(
                 "transport_fail method=$method path=$path authority=${endpoint.authority} " +
                     "kind=${error.javaClass.simpleName} http_code=599",
             )
+            if (endpoint.path == ConnectionPath.TAILNET) {
+                logTailnetWarning(
+                    endpoint,
+                    "transport_fail kind=${error.javaClass.simpleName} message=${error.message.orEmpty()}",
+                )
+            }
             HostHttpResponse(599)
         }
+        if (endpoint.path == ConnectionPath.TAILNET && result.code !in 200..299) {
+            logTailnetWarning(endpoint, "http_code=${result.code} method=$method path=$path")
+        }
+        return result
+    }
+
+    private fun logTailnetWarning(endpoint: HostEndpoint, detail: String) {
+        val message = "Failed to identify tailnet peer ${endpoint.address}:${endpoint.port} - $detail"
+        runCatching { Log.w(TAG, message) }
+        DiagLog.record("identify-tailnet", message)
     }
 
     /** Tailnet identity requests must traverse the same authenticated tsnet SOCKS seam as WS. */
@@ -314,6 +332,7 @@ class OkHttpHostHttpTransport(
         "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
     private companion object {
+        const val TAG = "HostIdentifyClient"
         val JSON = "application/json".toMediaType()
     }
 }

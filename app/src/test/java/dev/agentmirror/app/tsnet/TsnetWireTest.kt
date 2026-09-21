@@ -39,11 +39,18 @@ class TsnetWireTest {
         var closed = false
         var lastAuthKey: String? = null
         var lastStateDir: String? = null
+        var peerCalls = mutableListOf<String?>()
+        var peerPages: Map<String?, TsPeerSnapshot> = emptyMap()
         override fun start(stateDir: String, hostname: String, authKey: String): TsnetProxy {
             startCount++
             lastAuthKey = authKey
             lastStateDir = stateDir
             return TsnetProxy("127.0.0.1", 40000, "cred")
+        }
+
+        override fun peerSnapshot(knownId: String?, cursor: String?): TsPeerSnapshot {
+            peerCalls += cursor
+            return peerPages[cursor] ?: TsPeerSnapshot(emptyList(), null)
         }
 
         override fun close() {
@@ -128,6 +135,25 @@ class TsnetWireTest {
         assertTrue("state=$st", st is TsnetState.Error)
         // authkey 红线（同 token §9）：错误文案绝不携带 key 值。
         assertTrue(!(st as TsnetState.Error).reason.contains(badKey))
+    }
+
+    @Test
+    fun `peerSnapshotAll reads every page and resets cursor`() {
+        val backend = FakeBackend()
+        backend.peerPages = mapOf(
+            null to TsPeerSnapshot(listOf(TsPeer("one", true, listOf("100.64.0.1"), "one")), "page-2"),
+            "page-2" to TsPeerSnapshot(listOf(TsPeer("two", true, listOf("100.64.0.2"), "")), null),
+        )
+        TsnetWire.environment = TsnetWire.Environment("/tmp/ts-state", "agentmirror-test")
+        TsnetWire.backendFactory = { backend }
+        TsnetWire.executorForTest = direct
+        TsnetWire.ensureStarted("tskey-abc")
+
+        assertEquals(listOf("one", "two"), TsnetWire.peerSnapshotAll().map { it.stableId })
+        assertEquals(listOf(null, "page-2"), backend.peerCalls)
+        backend.peerCalls.clear()
+        TsnetWire.peerSnapshotAll()
+        assertEquals(null, backend.peerCalls.first())
     }
 
     @Test

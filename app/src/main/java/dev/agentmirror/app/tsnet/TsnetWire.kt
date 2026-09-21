@@ -16,6 +16,7 @@
 
 package dev.agentmirror.app.tsnet
 
+import android.util.Log
 import dev.agentmirror.app.diag.DiagLog
 import java.io.File
 import java.security.MessageDigest
@@ -34,6 +35,8 @@ import java.util.concurrent.Executor
  * 状态回调只携带 [TsnetState]（Error 文案由 TsnetManager 保证不含 key）。
  */
 object TsnetWire {
+    private const val TAG = "TsnetWire"
+    private const val MAX_PEER_PAGES = 32
 
     /**
      * 节点运行环境（Android 侧注入：stateDir=filesDir/tsnet 状态根，hostname=设备名归一化）。
@@ -153,20 +156,67 @@ object TsnetWire {
     @Synchronized
     fun hasActiveNode(): Boolean = manager?.state is TsnetState.Starting || manager?.state is TsnetState.Up
 
-    /** Read a typed peer snapshot; unsupported/failed is fail-closed. */
+    /** Read a typed peer snapshot; unsupported/failed is fail-closed but observable. */
     @Synchronized
     fun peerSnapshot(knownId: String? = null, cursor: String? = null): TsPeerSnapshot {
         val requestedCursor = cursor ?: if (knownId == null) peerCursor else null
+        var failure: Throwable? = null
         val snapshot = manager?.let {
             runCatching { it.peerSnapshot(knownId, requestedCursor) }
+                .onFailure { failure = it }
                 .getOrElse { TsPeerSnapshot(emptyList(), null, false) }
         } ?: TsPeerSnapshot(emptyList(), null, false)
         if (knownId == null && cursor == null) peerCursor = snapshot.nextCursor
+        failure?.let {
+            logError(
+                "peerSnapshot failed type=${it.javaClass.simpleName} message=${safeError(it)} " +
+                    "known=${knownId != null} cursor_present=${requestedCursor != null}",
+            )
+        }
+        logDebug(
+            "peerSnapshot returned peers=${snapshot.peers.size} supported=${snapshot.supported} " +
+                "next_cursor_present=${snapshot.nextCursor != null} known=${knownId != null}",
+        )
         return snapshot
+    }
+
+    /** Read all bounded unknown-peer pages, restarting from page one on each scan. */
+    @Synchronized
+    fun peerSnapshotAll(maxPages: Int = MAX_PEER_PAGES): List<TsPeer> {
+        require(maxPages > 0) { "maxPages must be positive" }
+        var cursor: String? = null
+        val peers = ArrayList<TsPeer>()
+        var pages = 0
+        while (pages++ < maxPages) {
+            val snapshot = peerSnapshot(cursor = cursor)
+            peers += snapshot.peers
+            val next = snapshot.nextCursor
+            if (!snapshot.supported || next.isNullOrBlank() || next == cursor) break
+            cursor = next
+        }
+        peerCursor = null
+        val unique = peers.distinctBy { it.stableId }
+        logDebug("peerSnapshotAll complete pages=$pages peers=${unique.size}")
+        return unique
     }
 
     /** Cursor for the next bounded unknown-peer page; known IDs always bypass it. */
     private var peerCursor: String? = null
+
+    private fun safeError(error: Throwable): String {
+        val raw = error.message ?: error.javaClass.simpleName
+        return currentKey?.let { raw.replace(it, "[redacted]") }?.take(256) ?: raw.take(256)
+    }
+
+    private fun logDebug(message: String) {
+        runCatching { Log.d(TAG, message) }
+        DiagLog.record("tsnet-peer", message)
+    }
+
+    private fun logError(message: String) {
+        runCatching { Log.e(TAG, message) }
+        DiagLog.record("tsnet-peer", message)
+    }
 
     /**
      * tsnet 会在已有持久节点可运行时忽略新 authkey；按 key 的 SHA-256 指纹隔离状态，

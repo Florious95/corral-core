@@ -8,10 +8,16 @@ import dev.agentmirror.app.tsnet.TsnetState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
+import java.util.ArrayDeque
 import java.util.concurrent.Executor
 
 /** End-to-end discovery seam: enumerate, prove whoami, then create one token-bound WS attempt. */
 class HostDiscoveryFlowTest {
+    private class QueuedExecutor : Executor {
+        private val tasks = ArrayDeque<Runnable>()
+        override fun execute(command: Runnable) { tasks.addLast(command) }
+        fun drain() { while (tasks.isNotEmpty()) tasks.removeFirst().run() }
+    }
     private class Store : PairingConfigStore {
         var saved: PairingConfig? = null
         override fun load(): PairingConfig? = saved
@@ -138,6 +144,37 @@ class HostDiscoveryFlowTest {
 
         assertEquals("MacBook Pro", vm.discoveredHosts.single().name)
         assertEquals(endpoint.authority, vm.discoveredHosts.single().endpoints.single().authority)
+    }
+
+    @Test
+    fun upTailnetProbeSurvivesLanGenerationAndRescan() {
+        val endpoint = HostEndpoint("100.101.2.3", 9900, ConnectionPath.TAILNET, HostEndpointSource.PEER)
+        val transport = object : HostHttpTransport {
+            override fun whoami(actual: HostEndpoint) = HostHttpResponse(
+                200,
+                "{\"host_id\":\"host-up-1234\",\"name\":\"tailnet-box\",\"port\":9900}",
+            )
+
+            override fun identify(endpoint: HostEndpoint, request: IdentifyRequest) = HostHttpResponse(404)
+        }
+        val executor = QueuedExecutor()
+        val vm = PairingViewModel(
+            configStore = Store(),
+            connectionFactory = { cfg -> dev.agentmirror.app.conn.ConnectionManager(cfg, NoopTransportFactory) },
+            identifyClient = HostIdentifyClient(transport),
+            discoveryExecutor = executor,
+            localProbeTargets = { emptyList() },
+        )
+
+        vm.beginLanDiscovery()
+        vm.discoverHosts(listOf(TsPeer("peer-up", true, listOf(endpoint.address), "tailnet-box")))
+        executor.drain()
+        assertEquals("host-up-1234", vm.discoveredHosts.single().hostId)
+
+        vm.beginLanDiscovery()
+        vm.discoverHosts(listOf(TsPeer("peer-up", true, listOf(endpoint.address), "tailnet-box")))
+        executor.drain()
+        assertEquals("tailnet-box", vm.discoveredHosts.single().name)
     }
 
     @Test

@@ -21,6 +21,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import dev.agentmirror.app.conn.ConnectionManager
+import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.service.TsnetBootstrap
 import dev.agentmirror.app.tsnet.TsnetState
@@ -52,7 +53,12 @@ fun PairingRoute(
 
     val triggerDiscovery = remember(viewModel, nsdDiscovery) {
         {
+            // One generation owns both channels. Starting TS before LAN would let the
+            // LAN generation stampede invalidate an already-Up TS probe.
             viewModel.beginLanDiscovery()
+            if (TsnetWire.state is TsnetState.Up) {
+                viewModel.discoverHosts(TsnetWire.peerSnapshotAll())
+            }
             nsdDiscovery.start(listener = object : NsdHostDiscovery.Listener {
                 override fun onHost(candidate: HostCandidate) = viewModel.addDiscoveredHost(candidate)
                 override fun onFinished() = viewModel.finishLanDiscovery()
@@ -67,12 +73,15 @@ fun PairingRoute(
         fun onState(state: TsnetState) {
             viewModel.onTsnetState(state)
             if (state is TsnetState.Up) {
-                viewModel.discoverHosts(TsnetWire.peerSnapshot().peers)
+                val peers = TsnetWire.peerSnapshotAll()
+                DiagLog.record("pairing-discovery", "ts_up peer_page peers=${peers.size}")
+                viewModel.discoverHosts(peers)
             }
         }
-        onState(TsnetWire.state)
         TsnetWire.stateListener = ::onState
         triggerDiscovery()
+        // triggerDiscovery already probes an existing Up node; only mirror its state here.
+        viewModel.onTsnetState(TsnetWire.state)
         onDispose {
             TsnetWire.stateListener = null
             nsdDiscovery.stop()
