@@ -18,19 +18,19 @@
   ],
   "pi_extension": {
     "path": "/Users/alauda/.pi/agent/extensions/nodeprobe-pi-activity.js",
-    "sha256": "51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27",
-    "size": 3572
+    "sha256": "e747b844eddd2672b3fef7eb2873530ffc8e296dcae8fd7c4b9a8b9a4b7662c6",
+    "size": 5798
   },
   "platform": "darwin/arm64",
-  "source_commit": "dbe81822928449825ab77c0cca9285735e5baf5a",
-  "source_tree": "6d2d98d47a1a322e17cf38a01dde84c57a513f20",
+  "source_commit": "bf85a4d10",
+  "source_tree": "0e12c1464b4898429b6ae2717911b3b23d591175",
   "sources": {
     "Cargo.toml": "7fef1cb5ac3173215d94b3c450fde0a928cd5af2ac304b4cc7111f5beb9bc08f",
     "Cargo.lock": "297185c9c0683bdaeadaf4d57a0688c6b91bcfe43a2495a86a9181a479749696",
     "README.md": "b18f9b96bfc7504fbd17fea8e5813071cee565a363671bceb9b7b50ab0a2dd93",
     "docs/api-architecture.md": "a4a01c9bb18e00926305f50c635973b401bd9e1b6f8d76e11adf691f4528af07",
     "docs/consumer-migration-map.md": "40fc2cbfa14fee2af6f7044af33a95643e0015f4cd88d4e32f2cce2f3d849849",
-    "pi/nodeprobe-pi-activity.js": "51ffcad3f68ac22330d98ba0240b81f41b210939709a91637c917e1555494c27",
+    "pi/nodeprobe-pi-activity.js": "e747b844eddd2672b3fef7eb2873530ffc8e296dcae8fd7c4b9a8b9a4b7662c6",
     "src/classify.rs": "a9d4ffcf83b7de79e695ff90b2cdccc8ad362a81035d3a8596922a0ef0676bf7",
     "src/lib.rs": "2c5339202bb05b0cfe1afb233b65024824fd2fab7b09aac2572188dbf99bde44",
     "src/main.rs": "767698d753987ecc06858f178819f377f0fecf17487de1fcc4ae89805bd953a9",
