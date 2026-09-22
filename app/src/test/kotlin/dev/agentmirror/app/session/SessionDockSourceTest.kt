@@ -125,6 +125,7 @@ class SessionDockSourceTest {
     @Test
     fun shortcutSelectionUpdatesTextWithoutSendingOrEnter() {
         var value by mutableStateOf(TextFieldValue(""))
+        var menuOpen by mutableStateOf(false)
         var sends = 0
         val command = ShortcutCommand(
             id = "handoff",
@@ -133,18 +134,25 @@ class SessionDockSourceTest {
         )
         compose.setContent {
             AgentMirrorTheme {
-                CommandInputBar(
-                    value = value,
-                    onValueChange = { value = it },
-                    onSendText = { sends++ },
-                    onPickAttachment = {},
-                    shortcutCommands = listOf(command),
-                    shortcutProvider = "pi",
-                    onShortcutCommand = { selected ->
-                        val resolved = resolveShortcutCommand(selected, "pi") as ShortcutResolution.Found
-                        value = TextFieldValue(resolved.text)
-                    },
-                )
+                Box(Modifier.fillMaxSize()) {
+                    CommandInputBar(
+                        value = value,
+                        onValueChange = { value = it },
+                        onSendText = { sends++ },
+                        onPickAttachment = {},
+                        onShortcutMenuOpenChange = { menuOpen = it },
+                    )
+                    ShortcutGlassFloatingMenu(
+                        expanded = menuOpen,
+                        commands = listOf(command),
+                        onDismissRequest = { menuOpen = false },
+                        onSelect = { selected ->
+                            val resolved = resolveShortcutCommand(selected, "pi") as ShortcutResolution.Found
+                            value = TextFieldValue(resolved.text)
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
         compose.onNodeWithTag("session-shortcut-button").performClick()

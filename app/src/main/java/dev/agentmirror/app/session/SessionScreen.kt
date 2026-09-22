@@ -42,6 +42,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -90,8 +91,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -289,6 +290,7 @@ fun SessionScreen(
     var shortcutCommands by remember {
         mutableStateOf(SharedPreferencesShortcutCommandStore(context).load())
     }
+    var shortcutMenuOpen by remember { mutableStateOf(false) }
     SessionScreenBackHandler(
         focused = { inputFocused },
         onCollapseFocused = { requestDockCollapse("system-back") },
@@ -310,6 +312,24 @@ fun SessionScreen(
             launchCameraCapture()
         } else {
             cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+    val applyShortcut: (ShortcutCommand) -> Unit = { command ->
+        Trace.beginSection("shortcut/apply")
+        try {
+            when (val result = resolveShortcutCommand(command, provider)) {
+                is ShortcutResolution.Found -> {
+                    val next = TextFieldValue(
+                        text = result.text,
+                        selection = TextRange(result.text.length),
+                    )
+                    viewModel.onPassthroughInput(mirror, next)
+                    mirror = next
+                }
+                else -> viewModel.transientError = shortcutProviderError(result)
+            }
+        } finally {
+            Trace.endSection()
         }
     }
 
@@ -395,24 +415,7 @@ fun SessionScreen(
                     imeHideRequested = imeHideRequested,
                     shortcutCommands = shortcutCommands,
                     shortcutProvider = provider,
-                    onShortcutCommand = { command ->
-                        Trace.beginSection("shortcut/apply")
-                        try {
-                            when (val result = resolveShortcutCommand(command, provider)) {
-                                is ShortcutResolution.Found -> {
-                                    val next = TextFieldValue(
-                                        text = result.text,
-                                        selection = TextRange(result.text.length),
-                                    )
-                                    viewModel.onPassthroughInput(mirror, next)
-                                    mirror = next
-                                }
-                                else -> viewModel.transientError = shortcutProviderError(result)
-                            }
-                        } finally {
-                            Trace.endSection()
-                        }
-                    },
+                    onShortcutCommand = applyShortcut,
                     onShortcutError = { viewModel.transientError = it },
                     onShortcutMenuOpened = {
                         Trace.beginSection("shortcut/load")
@@ -422,6 +425,7 @@ fun SessionScreen(
                             Trace.endSection()
                         }
                     },
+                    onShortcutMenuOpenChange = { shortcutMenuOpen = it },
                     collapseRequest = collapseRequest,
                     onDockCollapse = requestDockCollapse,
                     onInputFocusedChanged = { inputFocused = it },
@@ -458,14 +462,20 @@ fun SessionScreen(
                         byRef[item.id]?.let(onToggleOverlayFavorite)
                     },
                 )
-                Box(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 72.dp)) {
-                    AttachmentGlassMenu(
-                        expanded = attachMenu,
-                        onDismissRequest = { attachMenu = false },
-                        onTakePhoto = requestTakePhoto,
-                        onPickImage = pickImage,
-                    )
-                }
+                ShortcutGlassFloatingMenu(
+                    expanded = shortcutMenuOpen,
+                    commands = shortcutCommands,
+                    onDismissRequest = { shortcutMenuOpen = false },
+                    onSelect = applyShortcut,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                AttachmentGlassMenu(
+                    expanded = attachMenu,
+                    onDismissRequest = { attachMenu = false },
+                    onTakePhoto = requestTakePhoto,
+                    onPickImage = pickImage,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
@@ -608,6 +618,7 @@ internal fun AttachmentGlassMenu(
     onDismissRequest: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickImage: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val visibleState = remember { MutableTransitionState(expanded) }
     visibleState.targetState = expanded
@@ -616,11 +627,15 @@ internal fun AttachmentGlassMenu(
     val glass = flatGlassTokens()
     val p = LocalAppPalette.current
     val shape = RoundedCornerShape(16.dp)
-    Popup(
-        alignment = Alignment.BottomStart,
-        onDismissRequest = onDismissRequest,
-        properties = PopupProperties(focusable = true),
-    ) {
+    BackHandler(enabled = expanded) { onDismissRequest() }
+    Box(modifier.fillMaxSize().zIndex(20f)) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .pointerInput(expanded) {
+                    detectTapGestures(onTap = { onDismissRequest() })
+                },
+        )
         AnimatedVisibility(
             visibleState = visibleState,
             enter = scaleIn(
@@ -633,6 +648,10 @@ internal fun AttachmentGlassMenu(
                 transformOrigin = TransformOrigin(0f, 1f),
                 animationSpec = tween(durationMillis = 120),
             ) + fadeOut(animationSpec = tween(durationMillis = 120)),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 16.dp, bottom = 72.dp)
+                .zIndex(1f),
         ) {
             Column(
                 modifier = Modifier

@@ -27,9 +27,15 @@ package dev.agentmirror.app.session
 import android.os.Trace
 import android.view.View
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -39,13 +45,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -67,6 +73,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -111,6 +118,7 @@ fun CommandInputBar(
     onShortcutCommand: (ShortcutCommand) -> Unit = {},
     onShortcutError: (String) -> Unit = {},
     onShortcutMenuOpened: () -> Unit = {},
+    onShortcutMenuOpenChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
     expandedLines: Int = 3,
     collapseRequest: Int = 0,
@@ -130,8 +138,6 @@ fun CommandInputBar(
         hostView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         onDispose { hostView.importantForAutofill = previousAutofillMode }
     }
-    var shortcutMenuOpen by remember { mutableStateOf(false) }
-    val shortcutGlass = sessionDockGlassTokens()
     // 焦点视觉态（非业务状态）：驱动膨胀、描边高亮与真实 IME 开合。
     var focused by remember { mutableStateOf(false) }
     // GLOBAL_ACTION_BACK during IME attach can fail hide/clearFocus while the field
@@ -171,57 +177,18 @@ fun CommandInputBar(
         ),
         label = "inputBorder",
     )
-    BackHandler(enabled = shortcutMenuOpen) {
-        shortcutMenuOpen = false
-    }
-    Box(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            if (shortcutMenuOpen) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                        .wrapContentHeight()
-                        .zIndex(10f),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .pointerInput(Unit) {
-                                detectTapGestures(onTap = { shortcutMenuOpen = false })
-                            },
-                    )
-                    ShortcutGlassMenu(
-                        commands = shortcutCommands,
-                        glass = shortcutGlass,
-                        modifier = Modifier.align(Alignment.BottomStart).zIndex(1f),
-                        onSelect = { command ->
-                            Trace.beginSection("shortcut/select")
-                            try {
-                                shortcutMenuOpen = false
-                                when (val result = resolveShortcutCommand(command, shortcutProvider)) {
-                                    is ShortcutResolution.Found -> onShortcutCommand(command)
-                                    else -> onShortcutError(shortcutProviderError(result))
-                                }
-                            } finally {
-                                Trace.endSection()
-                            }
-                        },
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .dockFlatGlass(
-                        shape = RoundedCornerShape(22.dp),
-                        fill = glass.fill,
-                        hairline = borderColor,
-                        topGlint = glass.topGlint,
-                        bottomShade = glass.bottomShade,
-                    )
-                    .testTag("session-command-input"),
-            ) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .dockFlatGlass(
+                shape = RoundedCornerShape(22.dp),
+                fill = glass.fill,
+                hairline = borderColor,
+                topGlint = glass.topGlint,
+                bottomShade = glass.bottomShade,
+            )
+            .testTag("session-command-input"),
+    ) {
         Row(
             // 底对齐：膨胀时加号/发送钉在底边，与主流 Chat App 一致
             verticalAlignment = Alignment.Bottom,
@@ -240,7 +207,7 @@ fun CommandInputBar(
                         Trace.beginSection("shortcut/open")
                         try {
                             onShortcutMenuOpened()
-                            shortcutMenuOpen = true
+                            onShortcutMenuOpenChange(true)
                         } finally {
                             Trace.endSection()
                         }
@@ -382,8 +349,6 @@ fun CommandInputBar(
             }
         }
     }
-    }
-}
 }
 
 @Composable
@@ -428,6 +393,54 @@ private fun ShortcutGlassMenu(
                     Text(command.name, color = p.rowTitleText)
                 }
             }
+        }
+    }
+}
+
+@Composable
+internal fun ShortcutGlassFloatingMenu(
+    expanded: Boolean,
+    commands: List<ShortcutCommand>,
+    onDismissRequest: () -> Unit,
+    onSelect: (ShortcutCommand) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val visibleState = remember { MutableTransitionState(false) }
+    visibleState.targetState = expanded
+    if (!visibleState.currentState && !visibleState.targetState) return
+
+    val glass = sessionDockGlassTokens()
+    BackHandler(enabled = expanded) { onDismissRequest() }
+    Box(modifier.fillMaxSize().zIndex(20f)) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .pointerInput(expanded) {
+                    detectTapGestures(onTap = { onDismissRequest() })
+                },
+        )
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = scaleIn(
+                initialScale = 0.85f,
+                transformOrigin = TransformOrigin(0f, 1f),
+                animationSpec = tween(durationMillis = 150),
+            ) + fadeIn(animationSpec = tween(durationMillis = 150)),
+            exit = scaleOut(
+                targetScale = 0.85f,
+                transformOrigin = TransformOrigin(0f, 1f),
+                animationSpec = tween(durationMillis = 120),
+            ) + fadeOut(animationSpec = tween(durationMillis = 120)),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 16.dp, bottom = 72.dp)
+                .zIndex(1f),
+        ) {
+            ShortcutGlassMenu(
+                commands = commands,
+                glass = glass,
+                onSelect = onSelect,
+            )
         }
     }
 }

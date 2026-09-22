@@ -2,12 +2,21 @@ package dev.agentmirror.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
@@ -16,18 +25,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import dev.agentmirror.app.session.ShortcutCommand
 import dev.agentmirror.app.session.ShortcutProvider
 import dev.agentmirror.app.ui.components.AppText
-import dev.agentmirror.app.ui.components.CardOutlineButton
-import dev.agentmirror.app.ui.components.CardTonalButton
 import dev.agentmirror.app.ui.components.SettingsCard
+import dev.agentmirror.app.ui.components.flatGlass
+import dev.agentmirror.app.ui.components.flatGlassTokens
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
@@ -56,14 +70,18 @@ internal fun ShortcutCommandSettingsCard(
     }
 
     SettingsCard {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             AppText(
                 "快捷命令管理",
                 p.rowTitleText,
                 TypeSizes.cardTitle,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
-            CardOutlineButton("新增", onClick = { edit(null) })
+            ShortcutActionButton("新增", onClick = { edit(null) })
         }
         Box(Modifier.padding(top = 6.dp)) {
             AppText(
@@ -78,22 +96,11 @@ internal fun ShortcutCommandSettingsCard(
             }
         }
         commands.forEach { command ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Column(Modifier.weight(1f)) {
-                    AppText(command.name, p.rowTitleText, TypeSizes.cardBody)
-                    AppText(
-                        command.providerCommands.keys.sorted().joinToString(" · "),
-                        p.pathText,
-                        TypeSizes.footnote,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
-                CardOutlineButton("编辑", onClick = { edit(command) })
-                CardOutlineButton("删除", onClick = { onDelete(command.id) })
-            }
+            ShortcutCommandRow(
+                command = command,
+                onEdit = { edit(command) },
+                onDelete = { onDelete(command.id) },
+            )
         }
         if (editorOpen) {
             ShortcutEditorField("名称", name, { name = it }, "shortcut-command-name")
@@ -117,10 +124,10 @@ internal fun ShortcutCommandSettingsCard(
                 )
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                CardTonalButton(
+                ShortcutActionButton(
                     "保存",
                     onClick = {
                         val cleanName = name.trim()
@@ -142,9 +149,120 @@ internal fun ShortcutCommandSettingsCard(
                     },
                     modifier = Modifier.weight(1f),
                 )
-                CardOutlineButton("取消", onClick = { editorOpen = false; editingId = null }, modifier = Modifier.weight(1f))
+                ShortcutActionButton(
+                    "取消",
+                    onClick = { editorOpen = false; editingId = null },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun ShortcutCommandRow(
+    command: ShortcutCommand,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val p = LocalAppPalette.current
+    val glass = flatGlassTokens()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .flatGlass(
+                shape = RoundedCornerShape(14.dp),
+                fill = glass.fill.copy(alpha = 0.72f),
+                hairline = glass.hairline,
+                topGlint = glass.topGlint,
+                bottomShade = glass.bottomShade,
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppText(
+                command.name,
+                p.rowTitleText,
+                TypeSizes.cardBody,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            ShortcutActionButton("编辑", onClick = onEdit)
+            Spacer(Modifier.width(6.dp))
+            ShortcutActionButton("删除", onClick = onDelete, destructive = true)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            command.providerCommands.entries
+                .sortedBy { it.key }
+                .forEach { (provider, value) ->
+                    ProviderChip(provider, value)
+                }
+        }
+    }
+}
+
+@Composable
+private fun ProviderChip(provider: String, value: String) {
+    val p = LocalAppPalette.current
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(p.accentContainer.copy(alpha = 0.35f))
+            .border(0.5.dp, p.accent.copy(alpha = 0.35f), RoundedCornerShape(50))
+            .padding(horizontal = 9.dp, vertical = 5.dp),
+    ) {
+        AppText(
+            "${provider.replaceFirstChar { it.uppercase() }}: $value",
+            p.providerMarkColor,
+            TypeSizes.footnote,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun ShortcutActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    destructive: Boolean = false,
+) {
+    val p = LocalAppPalette.current
+    val glass = flatGlassTokens()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val tint = if (destructive) MaterialTheme.colorScheme.error else p.accent
+    val shape = RoundedCornerShape(Radii.cardButton)
+    Box(
+        modifier = modifier
+            .height(36.dp)
+            .widthIn(min = 64.dp)
+            .clip(shape)
+            .flatGlass(
+                shape = shape,
+                fill = if (destructive) tint.copy(alpha = 0.12f) else glass.fill,
+                hairline = tint.copy(alpha = 0.45f),
+                topGlint = glass.topGlint,
+                bottomShade = glass.bottomShade,
+                overlay = if (pressed) Color.Black.copy(alpha = 0.08f) else Color.Transparent,
+            )
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppText(text, tint, TypeSizes.cardButton, fontWeight = FontWeight.SemiBold, lineHeightMultiplier = 1f)
     }
 }
 
