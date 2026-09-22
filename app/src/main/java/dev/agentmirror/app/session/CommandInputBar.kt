@@ -226,6 +226,7 @@ fun CommandInputBar(
                     onClick = onPickAttachment,
                     size = 32.dp,
                     backdrop = emptyBackdrop(),
+                    modifier = Modifier.testTag("session-attach-button"),
                 ) {
                     Icon(
                         DockIconPlus, contentDescription = "添加附件",

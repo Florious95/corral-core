@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -467,14 +468,14 @@ fun SessionScreen(
                     commands = shortcutCommands,
                     onDismissRequest = { shortcutMenuOpen = false },
                     onSelect = applyShortcut,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().imePadding(),
                 )
                 AttachmentGlassMenu(
                     expanded = attachMenu,
                     onDismissRequest = { attachMenu = false },
                     onTakePhoto = requestTakePhoto,
                     onPickImage = pickImage,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().imePadding(),
                 )
             }
         }

@@ -164,6 +164,35 @@ class SessionDockSourceTest {
     }
 
     @Test
+    fun sessionShortcutButtonOpensFloatingMenu() {
+        val h = OverlayTestHarness()
+        compose.setContent {
+            AgentMirrorTheme {
+                SessionScreen(viewModel = h.vm, name = "sess", onBack = {})
+            }
+        }
+
+        compose.onNodeWithTag("session-shortcut-button").performClick()
+        compose.onNodeWithTag("session-shortcut-menu").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionButtonsOpenMenusFromTouchInput() {
+        val h = OverlayTestHarness()
+        compose.setContent {
+            AgentMirrorTheme {
+                SessionScreen(viewModel = h.vm, name = "sess", onBack = {})
+            }
+        }
+
+        compose.onNodeWithTag("session-shortcut-button").performTouchInput { click() }
+        compose.onNodeWithTag("session-shortcut-menu").assertIsDisplayed()
+        compose.onNodeWithTag("session-shortcut-menu").performTouchInput { click(center) }
+        compose.onNodeWithTag("session-attach-button").performTouchInput { click() }
+        compose.onNodeWithTag("session-attach-menu").assertIsDisplayed()
+    }
+
+    @Test
     fun sourceDockHasResidentHotkeysWithoutMenuOrReturnButton() {
         val h = OverlayTestHarness()
         compose.setContent {
