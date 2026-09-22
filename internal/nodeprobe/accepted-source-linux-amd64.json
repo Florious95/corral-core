@@ -1,0 +1,27 @@
+{
+  "binary": {
+    "path": "/home/alaudalancy/.local/bin/nodeprobe",
+    "sha256": "7a9d0d3c3c02b736307afdd92af66feaf51e328b9fcf9c502471b06a363bf847",
+    "size": 642168
+  },
+  "corpora": [
+    {
+      "base_blob": "690e651f445793a36ed1cb6e6f6143e6ce5c989e",
+      "path": "tools/nodeprobe/fixtures/titles.tsv",
+      "sha256": "cff45d25492fdfe9689330c630c80bad20a1f27243e5aae1d93bc57de0a22b58"
+    },
+    {
+      "base_blob": "c1166ceabc6ae4e3075fb741c89759da6fcc7844",
+      "path": "tools/nodeprobe/fixtures/providers.tsv",
+      "sha256": "c9e02d01821df7d7afe2292fefb211cefea7e3abecde8b35bd9ffa2a0721ee7e"
+    }
+  ],
+  "pi_extension": {
+    "path": "/home/alaudalancy/.pi/agent/extensions/nodeprobe-pi-activity.js",
+    "sha256": "e747b844eddd2672b3fef7eb2873530ffc8e296dcae8fd7c4b9a8b9a4b7662c6",
+    "size": 5798
+  },
+  "platform": "linux/amd64",
+  "source_commit": "a7185aa2b93440ac9fd289c0de63d7767f8ef749",
+  "source_tree": "28e3aab4fac89374c0ac4b8c80ba7f13aaae2c75"
+}

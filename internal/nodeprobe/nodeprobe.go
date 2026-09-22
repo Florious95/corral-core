@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -25,9 +24,6 @@ import (
 
 	"github.com/agentmirror/agentmirror/internal/discovery"
 )
-
-//go:embed accepted-source.json
-var manifestBytes []byte
 
 type manifest struct {
 	SourceCommit string             `json:"source_commit"`
