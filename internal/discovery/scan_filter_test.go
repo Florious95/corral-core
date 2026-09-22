@@ -14,9 +14,9 @@ import (
 )
 
 // TestDiscoverScanFilterCommandBoundary is the executable command-boundary
-// contract: every candidate is a local UNIX listener, while all current-user
-// sockets, including a Team-agent ta-* socket, may reach the PATH-fronted tmux
-// spy and foreign/explicitly isolated paths do not.
+// contract: every candidate is a local UNIX listener, while every tmux-<uid>
+// socket, including a Team-agent ta-* socket and a foreign-uid socket, may
+// reach the PATH-fronted tmux spy; explicitly isolated paths do not.
 func TestDiscoverScanFilterCommandBoundary(t *testing.T) {
 	fixtureRoot := os.Getenv("SCAN_FILTER_FIXTURE_ROOT")
 	if fixtureRoot == "" {
@@ -122,7 +122,7 @@ exit 97
 		t.Fatalf("DiscoverWithDirs: %v", err)
 	}
 	if model == nil || len(model.Workspaces) != 4 {
-		t.Fatalf("current-user sockets did not produce four workspaces: %+v", model)
+		t.Fatalf("all tmux-uid sockets did not produce four grouped workspaces: %+v", model)
 	}
 
 	spyBytes, err := os.ReadFile(spyLog)
@@ -149,35 +149,24 @@ exit 97
 	if got := countCalls(taSocket); got != 1 {
 		t.Fatalf("ta list-panes calls = %d, want 1; argv=%q", got, spyOutput)
 	}
-	for label, socket := range map[string]string{
-		"isolated":  isolatedSocket,
-		"other_uid": otherUIDDir,
-	} {
-		if got := countCalls(socket); got != 0 {
-			t.Fatalf("%s list-panes calls = %d, want 0; argv=%q", label, got, spyOutput)
-		}
+	if got := countCalls(isolatedSocket); got != 0 {
+		t.Fatalf("isolated list-panes calls = %d, want 0; argv=%q", got, spyOutput)
+	}
+	if got := countCalls(otherUIDSocket); got != 1 {
+		t.Fatalf("other-uid list-panes calls = %d, want 1; argv=%q", got, spyOutput)
 	}
 	if got := countCalls(namedSocket); got != 1 {
 		t.Fatalf("named socket list-panes calls = %d, want 1; argv=%q", got, spyOutput)
 	}
-	if got := len(strings.Split(strings.TrimSpace(spyOutput), "\n")); got != 4 {
-		t.Fatalf("spy argv records = %d, want 4; argv=%q", got, spyOutput)
+	if got := len(strings.Split(strings.TrimSpace(spyOutput), "\n")); got != 5 {
+		t.Fatalf("spy argv records = %d, want 5; argv=%q", got, spyOutput)
 	}
 
-	for label, socket := range map[string]string{
-		"isolated":  isolatedSocket,
-		"other_uid": otherUIDDir,
-	} {
-		found := false
-		for _, line := range strings.Split(logs.String(), "\n") {
-			if strings.Contains(line, "path="+socket) && strings.Contains(line, "classification=") && strings.Contains(line, "action=skip") {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Fatalf("%s skip log lacks path/classification/action operands: %s", label, logs.String())
-		}
+	if !strings.Contains(logs.String(), "path="+isolatedSocket) || !strings.Contains(logs.String(), "classification=isolated_path") || !strings.Contains(logs.String(), "action=skip") {
+		t.Fatalf("isolated skip log lacks path/classification/action operands: %s", logs.String())
+	}
+	if !strings.Contains(logs.String(), "path="+otherUIDSocket) || !strings.Contains(logs.String(), "classification=user_socket") || !strings.Contains(logs.String(), "action=allow") {
+		t.Fatalf("other-uid allow log lacks path/classification/action operands: %s", logs.String())
 	}
 	if !strings.Contains(logs.String(), "path="+namedSocket) || !strings.Contains(logs.String(), "classification=user_socket") || !strings.Contains(logs.String(), "action=allow") {
 		t.Fatalf("named socket allow log lacks path/classification/action operands: %s", logs.String())
@@ -196,13 +185,13 @@ exit 97
 			seenSockets[pane.Socket] = true
 		}
 	}
-	if userAgents != 4 {
-		t.Fatalf("user agents found = %d, want 4; model=%+v", userAgents, model)
+	if userAgents != 5 {
+		t.Fatalf("user agents found = %d, want 5; model=%+v", userAgents, model)
 	}
-	if !seenSockets[defaultSocket] || !seenSockets[tmuxSocket] || !seenSockets[taSocket] || !seenSockets[namedSocket] {
+	if !seenSockets[defaultSocket] || !seenSockets[tmuxSocket] || !seenSockets[taSocket] || !seenSockets[namedSocket] || !seenSockets[otherUIDSocket] {
 		t.Fatalf("allowed socket identity was not preserved: %v", seenSockets)
 	}
 
-	fmt.Println("SCAN_FILTER_EVIDENCE default_list_panes=1 tmux_env_list_panes=1 named_list_panes=1 ta_list_panes=1 isolated_list_panes=0 other_uid_list_panes=0 user_agents_found=4 spy_argv_recorded=true")
-	fmt.Println("SCAN_FILTER_CLASSIFICATION_EVIDENCE ta=allow isolated=skip named=allow other_uid=skip path_operand=true classification_operand=true")
+	fmt.Println("SCAN_FILTER_EVIDENCE default_list_panes=1 tmux_env_list_panes=1 named_list_panes=1 ta_list_panes=1 isolated_list_panes=0 other_uid_list_panes=1 user_agents_found=5 spy_argv_recorded=true")
+	fmt.Println("SCAN_FILTER_CLASSIFICATION_EVIDENCE ta=allow isolated=skip named=allow other_uid=allow path_operand=true classification_operand=true")
 }

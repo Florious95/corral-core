@@ -37,19 +37,16 @@ type socketClass struct {
 	name    string
 }
 
-// classifySocketDirectory is intentionally evaluated before ReadDir. A
-// tmux-<other uid> directory is outside this daemon's discovery object and
-// must not even have its entries considered for a tmux child process.
+// classifySocketDirectory is intentionally evaluated before ReadDir. The
+// daemon's discovery contract is host-wide: every tmux-<uid> directory is a
+// candidate, including when the daemon itself runs as root and user sessions
+// live under another uid. Non-tmux directories remain fail-closed.
 func classifySocketDirectory(dir string) socketClass {
 	base := filepath.Base(filepath.Clean(dir))
-	current := "tmux-" + strconv.Itoa(os.Getuid())
-	if base != current {
-		if strings.HasPrefix(base, "tmux-") {
-			return socketClass{name: "other_uid_directory"}
-		}
-		return socketClass{name: "unknown_directory"}
+	if strings.HasPrefix(base, "tmux-") {
+		return socketClass{allowed: true, name: "tmux_uid_directory"}
 	}
-	return socketClass{allowed: true, name: "current_uid_directory"}
+	return socketClass{name: "unknown_directory"}
 }
 
 func tmuxEnvSocket() string {
@@ -89,7 +86,7 @@ func classifySocket(path string) socketClass {
 	if base == "default" {
 		return socketClass{allowed: true, name: "default_socket"}
 	}
-	// The parent directory is already restricted to this uid's tmux directory;
+	// The parent directory is already restricted to a tmux-<uid> directory;
 	// a user-created server may use any socket basename, not only "default" or
 	// the socket selected by TMUX. Keep isolated fixture names excluded above.
 	return socketClass{allowed: true, name: "user_socket"}
@@ -187,24 +184,33 @@ func DiscoverWithDirs(ctx context.Context, logger *slog.Logger, socketDirs []str
 	return buildModel(panes), nil
 }
 
-// DefaultSocketDirs returns the socket directories the scan walks:
-// the $TMUX_TMPDIR override tree if set, plus the platform defaults
-// /tmp/tmux-<uid> and /private/tmp/tmux-<uid> (macOS resolves /tmp to
-// /private/tmp, so both spellings are scanned but de-duplicated). Duplicate
-// paths that resolve to the same directory are listed once so panes are never
-// double-counted.
+// DefaultSocketDirs returns every tmux-<uid> directory under the explicit
+// TMUX_TMPDIR tree and both platform default trees. The daemon may run as root
+// while user sessions belong to another uid, so this deliberately does not
+// derive the scan surface from os.Getuid(). Duplicate paths that resolve to
+// the same directory are listed once so panes are never double-counted.
 // @contract
 // @pre none（无外部前置条件）
-// @post 返回目录列表去重（EvalSymlinks 解析后相同即只列一次）；列表永不为空，至少含平台默认目录
-// @err none（不返回错误；无法解析的路径按原样收录，由扫描时跳过）
+// @post 返回目录列表去重（EvalSymlinks 解析后相同即只列一次）；至少保留当前 uid 的默认路径作为不存在目录的探测占位
+// @err none（Glob 失败或目录不存在时按原样收录默认占位，由扫描时跳过）
 // @inv 不触发任何 tmux 调用，纯本地路径计算
 func DefaultSocketDirs() []string {
 	uid := "tmux-" + strconv.Itoa(os.Getuid())
-	var raw []string
+	bases := []string{}
 	if d := os.Getenv("TMUX_TMPDIR"); d != "" {
-		raw = append(raw, filepath.Join(d, uid))
+		bases = append(bases, d)
 	}
-	raw = append(raw, filepath.Join("/tmp", uid), filepath.Join("/private/tmp", uid))
+	bases = append(bases, "/tmp", "/private/tmp")
+
+	raw := make([]string, 0)
+	for _, base := range bases {
+		matches, err := filepath.Glob(filepath.Join(base, "tmux-*"))
+		if err == nil {
+			raw = append(raw, matches...)
+		}
+		// Preserve the old missing-directory probe when the glob has no match.
+		raw = append(raw, filepath.Join(base, uid))
+	}
 
 	seen := make(map[string]bool)
 	dirs := make([]string, 0, len(raw))

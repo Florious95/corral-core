@@ -1,8 +1,8 @@
 {
   "binary": {
     "path": "/home/alaudalancy/.local/bin/nodeprobe",
-    "sha256": "3db0975d4580c3b00b9a43647f52d2aab94996891da65ae77b75d09c903606b0",
-    "size": 642216
+    "sha256": "b9b869f8d6cfeafc101f95a284c406cd7c3071efee3d8996808a7815c03bd7ef",
+    "size": 756760
   },
   "corpora": [
     {

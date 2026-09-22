@@ -147,6 +147,10 @@ func TestDefaultSocketDirsNoDuplicates(t *testing.T) {
 func TestDefaultSocketDirsHonorsTMUXTMPDIR(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMUX_TMPDIR", tmp)
+	foreign := filepath.Join(tmp, "tmux-999999")
+	if err := os.Mkdir(foreign, 0o700); err != nil {
+		t.Fatal(err)
+	}
 
 	dirs := DefaultSocketDirs()
 	want := filepath.Join(tmp, "tmux-"+strconv.Itoa(os.Getuid()))
@@ -159,5 +163,15 @@ func TestDefaultSocketDirsHonorsTMUXTMPDIR(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("DefaultSocketDirs() = %v, missing TMUX_TMPDIR tree %q", dirs, want)
+	}
+	foreignFound := false
+	for _, d := range dirs {
+		if d == foreign {
+			foreignFound = true
+			break
+		}
+	}
+	if !foreignFound {
+		t.Fatalf("DefaultSocketDirs() = %v, missing foreign UID tree %q", dirs, foreign)
 	}
 }
