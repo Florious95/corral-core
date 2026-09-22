@@ -79,6 +79,15 @@ class MainActivityNavTest {
     }
 
     @Test
+    fun explicitBackClearsActiveSessionRoute() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        controller.get().navState.activeSession = "ref-A" to "Agent A"
+
+        assertTrue(controller.get().navState.onSystemBack())
+        assertNull(controller.get().navState.activeSession)
+    }
+
+    @Test
     fun displayResizeKeepsActivityInstance() {
         val component = ComponentName(RuntimeEnvironment.getApplication(), MainActivity::class.java)
         val info = RuntimeEnvironment.getApplication().packageManager.getActivityInfo(component, 0)
