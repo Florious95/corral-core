@@ -1,8 +1,8 @@
 {
   "binary": {
     "path": "/home/alaudalancy/.local/bin/nodeprobe",
-    "sha256": "7a9d0d3c3c02b736307afdd92af66feaf51e328b9fcf9c502471b06a363bf847",
-    "size": 642168
+    "sha256": "3db0975d4580c3b00b9a43647f52d2aab94996891da65ae77b75d09c903606b0",
+    "size": 642216
   },
   "corpora": [
     {
@@ -22,6 +22,6 @@
     "size": 5798
   },
   "platform": "linux/amd64",
-  "source_commit": "a7185aa2b93440ac9fd289c0de63d7767f8ef749",
+  "source_commit": "a7185aa2b93460ac9fd289c0de63d7767f8ef749",
   "source_tree": "28e3aab4fac89374c0ac4b8c80ba7f13aaae2c75"
 }
