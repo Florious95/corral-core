@@ -440,7 +440,10 @@ internal fun ShortcutGlassFloatingMenu(
             ShortcutGlassMenu(
                 commands = commands,
                 glass = glass,
-                onSelect = onSelect,
+                onSelect = { command ->
+                    onDismissRequest()
+                    onSelect(command)
+                },
             )
         }
     }

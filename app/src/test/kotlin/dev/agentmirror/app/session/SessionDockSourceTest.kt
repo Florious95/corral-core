@@ -35,6 +35,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -188,6 +189,7 @@ class SessionDockSourceTest {
         compose.onNodeWithTag("session-shortcut-button").performTouchInput { click() }
         compose.onNodeWithTag("session-shortcut-menu").assertIsDisplayed()
         compose.onNodeWithTag("session-shortcut-menu").performTouchInput { click(center) }
+        compose.onAllNodesWithTag("session-shortcut-menu").assertCountEquals(0)
         compose.onNodeWithTag("session-attach-button").performTouchInput { click() }
         compose.onNodeWithTag("session-attach-menu").assertIsDisplayed()
     }
