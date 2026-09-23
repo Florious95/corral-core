@@ -18,8 +18,11 @@
   ],
   "pi_extension": {
     "path": "/home/alaudalancy/.pi/agent/extensions/nodeprobe-pi-activity.js",
-    "sha256": "e747b844eddd2672b3fef7eb2873530ffc8e296dcae8fd7c4b9a8b9a4b7662c6",
-    "size": 5798
+    "sha256": "c28855ea4ac6f411044fb9a8066c2e5c3e5580197c1ae412e88d23d07467b714",
+    "size": 6844,
+    "source_path": "src-tauri/resources/nodeprobe-pi-activity.js",
+    "source_commit": "ccf8324ebe29e35038412ffad03157e269029232",
+    "source_tree": "6c5e782393741fe229216320fd14e2b5d1100231"
   },
   "platform": "linux/amd64",
   "source_commit": "a7185aa2b93460ac9fd289c0de63d7767f8ef749",

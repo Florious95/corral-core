@@ -26,17 +26,23 @@ import (
 )
 
 type manifest struct {
-	SourceCommit string             `json:"source_commit"`
-	SourceTree   string             `json:"source_tree"`
-	Platform     string             `json:"platform"`
-	Binary       fileCoordinate     `json:"binary"`
-	PiExtension  fileCoordinate     `json:"pi_extension"`
-	Corpora      []corpusCoordinate `json:"corpora"`
+	SourceCommit string                `json:"source_commit"`
+	SourceTree   string                `json:"source_tree"`
+	Platform     string                `json:"platform"`
+	Binary       fileCoordinate        `json:"binary"`
+	PiExtension  piExtensionCoordinate `json:"pi_extension"`
+	Corpora      []corpusCoordinate    `json:"corpora"`
 }
 type fileCoordinate struct {
 	Path   string `json:"path"`
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256"`
+}
+type piExtensionCoordinate struct {
+	fileCoordinate
+	SourcePath   string `json:"source_path"`
+	SourceCommit string `json:"source_commit"`
+	SourceTree   string `json:"source_tree"`
 }
 type corpusCoordinate struct {
 	Path     string `json:"path"`
