@@ -13,6 +13,7 @@ package dev.agentmirror.app.session
 import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -124,6 +125,33 @@ class SessionDockSourceTest {
     }
 
     @Test
+    fun shortcutControlIsAbsentWhenCollapsedInLightAndDarkThemes() {
+        compose.setContent {
+            Row {
+                AgentMirrorTheme(darkTheme = false) {
+                    CommandInputBar(
+                        value = TextFieldValue(""),
+                        onValueChange = {},
+                        onSendText = {},
+                        onPickAttachment = {},
+                        onShortcutMenuOpenChange = {},
+                    )
+                }
+                AgentMirrorTheme(darkTheme = true) {
+                    CommandInputBar(
+                        value = TextFieldValue(""),
+                        onValueChange = {},
+                        onSendText = {},
+                        onPickAttachment = {},
+                        onShortcutMenuOpenChange = {},
+                    )
+                }
+            }
+        }
+        compose.onAllNodesWithTag("session-shortcut-button").assertCountEquals(0)
+    }
+
+    @Test
     fun shortcutSelectionUpdatesTextWithoutSendingOrEnter() {
         var value by mutableStateOf(TextFieldValue(""))
         var menuOpen by mutableStateOf(false)
@@ -156,6 +184,8 @@ class SessionDockSourceTest {
                 }
             }
         }
+        compose.onAllNodesWithTag("session-shortcut-button").assertCountEquals(0)
+        compose.onNodeWithTag("session-command-editor").performClick()
         compose.onNodeWithTag("session-shortcut-button").performClick()
         compose.onNodeWithTag("session-shortcut-menu").assertIsDisplayed()
         compose.onNodeWithText("交接").performClick()
@@ -173,6 +203,7 @@ class SessionDockSourceTest {
             }
         }
 
+        compose.onNodeWithTag("session-command-editor").performClick()
         compose.onNodeWithTag("session-shortcut-button").performClick()
         compose.onNodeWithTag("session-shortcut-menu").assertIsDisplayed()
     }
@@ -186,6 +217,7 @@ class SessionDockSourceTest {
             }
         }
 
+        compose.onNodeWithTag("session-command-editor").performClick()
         compose.onNodeWithTag("session-shortcut-button").performTouchInput { click() }
         compose.onNodeWithTag("session-shortcut-menu").assertIsDisplayed()
         compose.onNodeWithTag("session-shortcut-menu").performTouchInput { click(center) }

@@ -202,25 +202,27 @@ fun CommandInputBar(
             ) {
                 // Overlay the shortcut control above (+) without changing the dock's measured
                 // height. It never requests focus, so tapping it leaves the IME untouched.
-                GlassIconButton(
-                    onClick = {
-                        Trace.beginSection("shortcut/open")
-                        try {
-                            onShortcutMenuOpened()
-                            onShortcutMenuOpenChange(true)
-                        } finally {
-                            Trace.endSection()
-                        }
-                    },
-                    size = 32.dp,
-                    backdrop = emptyBackdrop(),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(y = (-36).dp)
-                        .testTag("session-shortcut-button")
-                        .semantics { contentDescription = "快捷命令" },
-                ) {
-                    Text(">_", color = source.neutral400, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                if (editorExpanded) {
+                    GlassIconButton(
+                        onClick = {
+                            Trace.beginSection("shortcut/open")
+                            try {
+                                onShortcutMenuOpened()
+                                onShortcutMenuOpenChange(true)
+                            } finally {
+                                Trace.endSection()
+                            }
+                        },
+                        size = 32.dp,
+                        backdrop = emptyBackdrop(),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .offset(y = (-36).dp)
+                            .testTag("session-shortcut-button")
+                            .semantics { contentDescription = "快捷命令" },
+                    ) {
+                        Text(">_", color = source.neutral400, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    }
                 }
                 GlassIconButton(
                     onClick = onPickAttachment,
