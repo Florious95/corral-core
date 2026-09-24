@@ -11,7 +11,6 @@
 package dev.agentmirror.app.session
 
 import android.util.Log
-import android.view.ViewTreeObserver
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -28,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -36,9 +36,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +69,11 @@ import androidx.compose.ui.unit.dp
 
 private const val SESSION_DOCK_MOTION_TAG = "SessionDockMotion"
 
+private fun recordImeEvent(message: String) {
+    Log.d(SESSION_DOCK_MOTION_TAG, message)
+    DiagLog.record("session-dock-motion", message)
+}
+
 internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
     durationMillis = SessionDockMotion.KeyboardPushMillis,
     easing = SessionDockMotion.Standard,
@@ -75,41 +81,46 @@ internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
 
 /**
  * System Back / IME-swipe can hide the keyboard without moving Compose focus.
- * Collapse the source capsule when the *current* IME inset or root window IME
- * visibility transitions to hidden. The animation target is observed to catch
- * system Back at hide start; a cancelled show still cannot clear focus by itself.
+ * Observe hide edges only within the latest explicit expansion request. Reopening while an old
+ * hide is still in flight must invalidate its armed state before it can clear the new focus.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ClearFocusWhenImeHides(
     collapseRequested: Boolean,
+    expansionRequest: State<Int>,
     onImeHideStarted: () -> Unit,
 ) {
     val density = LocalDensity.current
-    val view = LocalView.current
-    val imeCurrentPx = WindowInsets.ime.getBottom(density)
-    val imeTargetPx = WindowInsets.imeAnimationTarget.getBottom(density)
-    var rootImeVisible by remember { mutableStateOf(false) }
-    DisposableEffect(view) {
-        fun readRootIme(): Boolean =
-            ViewCompat.getRootWindowInsets(view)
-                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
-        rootImeVisible = readRootIme()
-        val listener = ViewTreeObserver.OnGlobalLayoutListener {
-            val visible = readRootIme()
-            view.post { rootImeVisible = visible }
-        }
-        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
-        onDispose {
-            val observer = view.viewTreeObserver
-            if (observer.isAlive) observer.removeOnGlobalLayoutListener(listener)
-        }
-    }
-    val imeVisible = rootImeVisible || imeCurrentPx > 0
+    // All three values belong to Foundation's current inset snapshot. A separately posted root
+    // visibility callback can arrive after a new tap and must not revive the previous IME cycle.
+    ObserveImeHide(
+        WindowInsets.ime.getBottom(density),
+        WindowInsets.imeAnimationTarget.getBottom(density),
+        WindowInsets.isImeVisible,
+        collapseRequested,
+        expansionRequest,
+        onImeHideStarted,
+    )
+}
+
+/** Side-effect boundary shared by platform sampling and deterministic focus/IME ordering tests. */
+@Composable
+internal fun ObserveImeHide(
+    imeCurrentPx: Int,
+    imeTargetPx: Int,
+    rootImeVisible: Boolean,
+    collapseRequested: Boolean,
+    expansionRequest: State<Int>,
+    onImeHideStarted: () -> Unit,
+) {
+    val generation = expansionRequest.value
     val imeTargetVisible = imeTargetPx > 0
-    var wasVisible by remember { mutableStateOf(false) }
-    var hideNotified by remember { mutableStateOf(false) }
-    LaunchedEffect(imeVisible, imeTargetVisible, collapseRequested) {
+    var wasVisible by remember(generation) { mutableStateOf(false) }
+    var hideNotified by remember(generation) { mutableStateOf(false) }
+    LaunchedEffect(imeCurrentPx > 0, rootImeVisible, imeTargetVisible, collapseRequested, generation) {
+        // A new tap can precede recomposition/cancellation of this old effect on the UI queue.
+        if (generation != expansionRequest.value) return@LaunchedEffect
         val observation = observeImeVisibility(
             wasVisible = wasVisible,
             currentInsetPx = imeCurrentPx,
@@ -117,14 +128,15 @@ internal fun ClearFocusWhenImeHides(
             targetInsetPx = imeTargetPx,
             collapseRequested = collapseRequested || hideNotified,
         )
+        recordImeEvent(
+            "ime-sample generation=$generation current=$imeCurrentPx target=$imeTargetPx " +
+                "visible=$rootImeVisible armed=$wasVisible requested=$collapseRequested " +
+                "notified=$hideNotified collapse=${observation.shouldCollapse}",
+        )
         if (observation.shouldCollapse) {
             // System Back starts the inset transition before the current inset reaches zero.
             // Request the same-frame source collapse; do not wait for IME hidden.
             hideNotified = true
-            Log.d(
-                SESSION_DOCK_MOTION_TAG,
-                "hide-start event=1 current_inset_px=$imeCurrentPx target_inset_px=$imeTargetPx",
-            )
             onImeHideStarted()
         } else if (imeTargetVisible) {
             hideNotified = false
@@ -134,10 +146,9 @@ internal fun ClearFocusWhenImeHides(
 }
 
 /**
- * Tracks actual IME visibility separately from the animation target.
- * A target inset is non-zero before the keyboard is visible and can remain so when a show is
- * cancelled; neither case may collapse the source input. Once an actual inset/root-visible
- * sample has been observed, a target returning to zero is the hide-start edge.
+ * Arm only after an open target has actual visible pixels (or a visible zero-inset floating IME).
+ * Metadata/target alone during a cancelled normal show cannot arm a hide. Returning to a hidden
+ * target consumes the edge even if an explicit user collapse already handled it.
  */
 internal data class ImeVisibilityObservation(
     val wasVisible: Boolean,
@@ -151,14 +162,15 @@ internal fun observeImeVisibility(
     targetInsetPx: Int,
     collapseRequested: Boolean,
 ): ImeVisibilityObservation {
-    val actuallyVisible = rootVisible || currentInsetPx > 0
-    val targetVisible = targetInsetPx > 0
+    // Visibility metadata can turn true before the first occluding pixel of a normal IME show.
+    // It only substitutes for pixels for a floating IME, whose current and target are both zero.
+    val floatingVisible = currentInsetPx == 0 && targetInsetPx == 0 && rootVisible
+    val actuallyVisible = currentInsetPx > 0 || floatingVisible
+    val targetVisible = targetInsetPx > 0 || floatingVisible
     val shouldCollapse = wasVisible && !targetVisible && !collapseRequested
-    val nextWasVisible = when {
-        actuallyVisible -> true
-        !targetVisible -> false
-        else -> wasVisible
-    }
+    // Consume a hide even when an explicit collapse already handled it. Old nonzero pixels
+    // while target=0 cannot arm another hide against the next expansion request.
+    val nextWasVisible = actuallyVisible && targetVisible
     return ImeVisibilityObservation(nextWasVisible, shouldCollapse)
 }
 
@@ -243,13 +255,21 @@ fun SessionScreenScaffold(
     }
     val effectiveImeHideRequested = imeHideRequested ?: localImeHideRequested
     val effectiveCollapseRequest = collapseRequest ?: localCollapseRequest
-    val requestDockExpand: () -> Unit = onInputExpanded ?: {
-        localImeHideRequested = false
-        localCollapseRequest = 0
+    val expansionRequest = remember { mutableIntStateOf(0) }
+    val requestDockExpand: () -> Unit = {
+        expansionRequest.intValue++
+        recordImeEvent("expand generation=${expansionRequest.intValue}")
+        if (onInputExpanded != null) {
+            onInputExpanded()
+        } else {
+            localImeHideRequested = false
+            localCollapseRequest = 0
+        }
     }
     ClearFocusWhenImeHides(
         collapseRequested = effectiveImeHideRequested,
-        onImeHideStarted = { requestDockCollapse("system-back") },
+        expansionRequest = expansionRequest,
+        onImeHideStarted = { requestDockCollapse("ime-hide") },
     )
     val palette = LocalAppPalette.current
     val terminalCard = currentTerminalPalette()
@@ -328,7 +348,7 @@ fun SessionScreenScaffold(
                     collapseRequest = effectiveCollapseRequest,
                     onFocusedChanged = { onInputFocusedChanged?.invoke(it) },
                     onExpandRequested = requestDockExpand,
-                    onCollapseRequested = { requestDockCollapse("system-back") },
+                    onCollapseRequested = { requestDockCollapse("editor-focus-loss") },
                 )
             }
         }
