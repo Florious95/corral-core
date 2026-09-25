@@ -69,11 +69,6 @@ import androidx.compose.ui.unit.dp
 
 private const val SESSION_DOCK_MOTION_TAG = "SessionDockMotion"
 
-private fun recordImeEvent(message: String) {
-    Log.d(SESSION_DOCK_MOTION_TAG, message)
-    DiagLog.record("session-dock-motion", message)
-}
-
 internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
     durationMillis = SessionDockMotion.KeyboardPushMillis,
     easing = SessionDockMotion.Standard,
@@ -127,11 +122,6 @@ internal fun ObserveImeHide(
             rootVisible = rootImeVisible,
             targetInsetPx = imeTargetPx,
             collapseRequested = collapseRequested || hideNotified,
-        )
-        recordImeEvent(
-            "ime-sample generation=$generation current=$imeCurrentPx target=$imeTargetPx " +
-                "visible=$rootImeVisible armed=$wasVisible requested=$collapseRequested " +
-                "notified=$hideNotified collapse=${observation.shouldCollapse}",
         )
         if (observation.shouldCollapse) {
             // System Back starts the inset transition before the current inset reaches zero.
@@ -258,7 +248,6 @@ fun SessionScreenScaffold(
     val expansionRequest = remember { mutableIntStateOf(0) }
     val requestDockExpand: () -> Unit = {
         expansionRequest.intValue++
-        recordImeEvent("expand generation=${expansionRequest.intValue}")
         if (onInputExpanded != null) {
             onInputExpanded()
         } else {
