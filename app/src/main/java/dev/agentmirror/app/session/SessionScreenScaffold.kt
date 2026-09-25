@@ -45,7 +45,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -69,7 +68,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.collect
 
 private const val SESSION_DOCK_MOTION_TAG = "SessionDockMotion"
 
@@ -83,27 +81,24 @@ internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
  * Observe hide edges only within the latest explicit expansion request. Reopening while an old
  * hide is still in flight must invalidate its armed state before it can clear the new focus.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ClearFocusWhenImeHides(
     collapseRequested: Boolean,
     expansionRequest: State<Int>,
     onImeHideStarted: () -> Unit,
 ) {
-    val density = LocalDensity.current
     val view = LocalView.current
-    val imeInsets = WindowInsets.ime
-    val imeAnimationTargetInsets = WindowInsets.imeAnimationTarget
-    val latestCollapseRequested = rememberUpdatedState(collapseRequested)
     val latestOnImeHideStarted = rememberUpdatedState(onImeHideStarted)
-    val rootImeVisible = remember { mutableStateOf(false) }
+    val rootImeVisibleState = remember { mutableStateOf(false) }
     DisposableEffect(view) {
         fun readRootIme(): Boolean =
             ViewCompat.getRootWindowInsets(view)
                 ?.isVisible(WindowInsetsCompat.Type.ime()) == true
-        rootImeVisible.value = readRootIme()
+        rootImeVisibleState.value = readRootIme()
         val listener = ViewTreeObserver.OnGlobalLayoutListener {
-            view.post { rootImeVisible.value = readRootIme() }
+            // The state is read only by the boolean-edge effect below; repeated layout callbacks
+            // while the IME animates do not recompose the session tree.
+            view.post { rootImeVisibleState.value = readRootIme() }
         }
         view.viewTreeObserver.addOnGlobalLayoutListener(listener)
         onDispose {
@@ -111,47 +106,29 @@ internal fun ClearFocusWhenImeHides(
             if (observer.isAlive) observer.removeOnGlobalLayoutListener(listener)
         }
     }
+    val rootImeVisible = rootImeVisibleState.value
     val generation = expansionRequest.value
-    // Keep the dynamic pixel reads in the coroutine snapshot, not in the composable tree. The
-    // boolean sample also gives snapshotFlow distinct-until-changed semantics across the 300ms
-    // inset animation, so only visibility edges reach the focus state machine.
-    LaunchedEffect(density, generation) {
-        var wasVisible = false
-        var hideNotified = false
-        snapshotFlow {
-            ImeHideSample(
-                currentVisible = imeInsets.getBottom(density) > 0,
-                targetVisible = imeAnimationTargetInsets.getBottom(density) > 0,
-                rootVisible = rootImeVisible.value,
-                collapseRequested = latestCollapseRequested.value,
-            )
-        }.collect { sample ->
-            val observation = observeImeVisibility(
-                wasVisible = wasVisible,
-                currentInsetPx = if (sample.currentVisible) 1 else 0,
-                rootVisible = sample.rootVisible,
-                targetInsetPx = if (sample.targetVisible) 1 else 0,
-                collapseRequested = sample.collapseRequested || hideNotified,
-            )
-            if (observation.shouldCollapse) {
-                // System Back starts the inset transition before the current inset reaches zero.
-                // Request the same-frame source collapse; do not wait for IME hidden.
-                hideNotified = true
-                latestOnImeHideStarted.value()
-            } else if (sample.targetVisible) {
-                hideNotified = false
-            }
-            wasVisible = observation.wasVisible
+    var wasVisible by remember(generation) { mutableStateOf(false) }
+    var hideNotified by remember(generation) { mutableStateOf(false) }
+    LaunchedEffect(rootImeVisible, collapseRequested, generation) {
+        // Root visibility is a single boolean edge, so this state machine stays off the IME's
+        // per-pixel animation path. A new expansion generation resets stale hide arming.
+        val observation = observeImeVisibility(
+            wasVisible = wasVisible,
+            currentInsetPx = if (rootImeVisible) 1 else 0,
+            rootVisible = rootImeVisible,
+            targetInsetPx = if (rootImeVisible) 1 else 0,
+            collapseRequested = collapseRequested || hideNotified,
+        )
+        if (observation.shouldCollapse) {
+            hideNotified = true
+            latestOnImeHideStarted.value()
+        } else if (rootImeVisible) {
+            hideNotified = false
         }
+        wasVisible = observation.wasVisible
     }
 }
-
-private data class ImeHideSample(
-    val currentVisible: Boolean,
-    val targetVisible: Boolean,
-    val rootVisible: Boolean,
-    val collapseRequested: Boolean,
-)
 
 /** Side-effect boundary shared by platform sampling and deterministic focus/IME ordering tests. */
 @Composable
