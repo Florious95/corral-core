@@ -11,6 +11,7 @@
 package dev.agentmirror.app.session
 
 import android.util.Log
+import android.view.ViewTreeObserver
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -27,7 +28,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imeAnimationTarget
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -36,13 +36,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -66,6 +69,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.collect
 
 private const val SESSION_DOCK_MOTION_TAG = "SessionDockMotion"
 
@@ -87,17 +91,67 @@ internal fun ClearFocusWhenImeHides(
     onImeHideStarted: () -> Unit,
 ) {
     val density = LocalDensity.current
-    // All three values belong to Foundation's current inset snapshot. A separately posted root
-    // visibility callback can arrive after a new tap and must not revive the previous IME cycle.
-    ObserveImeHide(
-        WindowInsets.ime.getBottom(density),
-        WindowInsets.imeAnimationTarget.getBottom(density),
-        WindowInsets.isImeVisible,
-        collapseRequested,
-        expansionRequest,
-        onImeHideStarted,
-    )
+    val view = LocalView.current
+    val imeInsets = WindowInsets.ime
+    val imeAnimationTargetInsets = WindowInsets.imeAnimationTarget
+    val latestCollapseRequested = rememberUpdatedState(collapseRequested)
+    val latestOnImeHideStarted = rememberUpdatedState(onImeHideStarted)
+    val rootImeVisible = remember { mutableStateOf(false) }
+    DisposableEffect(view) {
+        fun readRootIme(): Boolean =
+            ViewCompat.getRootWindowInsets(view)
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        rootImeVisible.value = readRootIme()
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            view.post { rootImeVisible.value = readRootIme() }
+        }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose {
+            val observer = view.viewTreeObserver
+            if (observer.isAlive) observer.removeOnGlobalLayoutListener(listener)
+        }
+    }
+    val generation = expansionRequest.value
+    // Keep the dynamic pixel reads in the coroutine snapshot, not in the composable tree. The
+    // boolean sample also gives snapshotFlow distinct-until-changed semantics across the 300ms
+    // inset animation, so only visibility edges reach the focus state machine.
+    LaunchedEffect(density, generation) {
+        var wasVisible = false
+        var hideNotified = false
+        snapshotFlow {
+            ImeHideSample(
+                currentVisible = imeInsets.getBottom(density) > 0,
+                targetVisible = imeAnimationTargetInsets.getBottom(density) > 0,
+                rootVisible = rootImeVisible.value,
+                collapseRequested = latestCollapseRequested.value,
+            )
+        }.collect { sample ->
+            val observation = observeImeVisibility(
+                wasVisible = wasVisible,
+                currentInsetPx = if (sample.currentVisible) 1 else 0,
+                rootVisible = sample.rootVisible,
+                targetInsetPx = if (sample.targetVisible) 1 else 0,
+                collapseRequested = sample.collapseRequested || hideNotified,
+            )
+            if (observation.shouldCollapse) {
+                // System Back starts the inset transition before the current inset reaches zero.
+                // Request the same-frame source collapse; do not wait for IME hidden.
+                hideNotified = true
+                latestOnImeHideStarted.value()
+            } else if (sample.targetVisible) {
+                hideNotified = false
+            }
+            wasVisible = observation.wasVisible
+        }
+    }
 }
+
+private data class ImeHideSample(
+    val currentVisible: Boolean,
+    val targetVisible: Boolean,
+    val rootVisible: Boolean,
+    val collapseRequested: Boolean,
+)
 
 /** Side-effect boundary shared by platform sampling and deterministic focus/IME ordering tests. */
 @Composable
