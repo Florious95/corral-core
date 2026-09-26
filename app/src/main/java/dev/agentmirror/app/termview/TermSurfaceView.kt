@@ -266,23 +266,33 @@ class TermSurfaceView @JvmOverloads constructor(
             if (!renderActive) return
             lastFrameTimeNanos = frameTimeNanos
             val p = presenter ?: return
-            // 排空脏区缓冲（防无界增长）后整帧重绘。不再自续下一帧：帧循环是纯数据
-            // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线；
-            // 旧版 showBackToBottom 自续 = 锁定历史时 60fps 空转，本案顺带拆除）。
-            var dirtyRows = 0
-            while (true) {
-                val taken = p.takeDamage()
-                if (taken.isEmpty()) break
-                for (r in taken) dirtyRows += r.last - r.first + 1
-            }
-            lastDirtyRowsIn = dirtyRows
-            p.beginFrame()
-            invalidate()
-            // 只经 Choreographer 请下一帧（跟 vsync），禁止在 onDraw 里 postFrame
-            // 同步打满主线程——否则 WS 快照到不了，采集全是空屏。
-            if (TermDrawMeter.consumeBurstFrame()) {
-                framePending = false
-                postFrame()
+            try {
+                // 排空脏区缓冲（防无界增长）后整帧重绘。不再自续下一帧：帧循环是纯数据
+                // 驱动的（presenter.onFrameRequested 唤醒），空闲即零帧（静默经济红线；
+                // 旧版 showBackToBottom 自续 = 锁定历史时 60fps 空转，本案顺带拆除）。
+                var dirtyRows = 0
+                while (true) {
+                    val taken = p.takeDamage()
+                    if (taken.isEmpty()) break
+                    for (r in taken) dirtyRows += r.last - r.first + 1
+                }
+                lastDirtyRowsIn = dirtyRows
+                p.beginFrame()
+                invalidate()
+                // 只经 Choreographer 请下一帧（跟 vsync），禁止在 onDraw 里 postFrame
+                // 同步打满主线程——否则 WS 快照到不了，采集全是空屏。
+                if (TermDrawMeter.consumeBurstFrame()) {
+                    framePending = false
+                    postFrame()
+                }
+            } catch (failure: Throwable) {
+                // A bad frame must not permanently kill the only data-driven wakeup path.
+                DiagLog.recordCritical(
+                    "term-render",
+                    "frame_failed type=${failure.javaClass.simpleName} " +
+                        "message=${failure.message?.take(160)}",
+                )
+                p.recoverAfterRenderFailure()
             }
         }
     }
@@ -592,6 +602,20 @@ class TermSurfaceView @JvmOverloads constructor(
 
     /** 每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。 */
     override fun onDraw(canvas: Canvas) {
+        try {
+            drawFrame(canvas)
+        } catch (failure: Throwable) {
+            // Keep an isolated Canvas/palette failure from killing future frame delivery.
+            DiagLog.recordCritical(
+                "term-render",
+                "draw_failed type=${failure.javaClass.simpleName} " +
+                    "message=${failure.message?.take(160)}",
+            )
+            presenter?.recoverAfterRenderFailure()
+        }
+    }
+
+    private fun drawFrame(canvas: Canvas) {
         // 计时边界：本方法入口→出口。View 不是 SurfaceView，没有 lockCanvas/post。
         val t0 = System.nanoTime()
         super.onDraw(canvas)
@@ -624,6 +648,20 @@ class TermSurfaceView @JvmOverloads constructor(
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         bgRectCount++
         val tClear = System.nanoTime()
+        if (!p.hasPreparedFrame) {
+            emitDrawMeter(
+                t0 = t0,
+                tSuper = tSuper,
+                tChrome = tChrome,
+                tClear = tClear,
+                tLines = tClear,
+                rows = 0,
+                cols = 0,
+                drawnRows = 0,
+                presenterNull = 0,
+            )
+            return
+        }
 
         val fullBackground = forceFullBackgroundFrames > 0
         if (fullBackground) forceFullBackgroundFrames--

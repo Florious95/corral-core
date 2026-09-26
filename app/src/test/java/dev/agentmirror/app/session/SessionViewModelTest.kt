@@ -195,6 +195,31 @@ class SessionViewModelTest {
     }
 
     @Test
+    fun stalledScrollProbeResubscribesAfterQuietWindow() {
+        val h = Harness()
+        h.snap("screen")
+        val before = h.subscribeFrames().size
+        h.vm.onScrollWheel(1)
+
+        h.vm.onTick(System.currentTimeMillis() + 2_001L)
+
+        assertEquals(before + 1, h.subscribeFrames().size)
+    }
+
+    @Test
+    fun binaryReplySuppressesStalledScrollProbe() {
+        val h = Harness()
+        h.snap("screen")
+        val before = h.subscribeFrames().size
+        h.vm.onScrollWheel(1)
+        h.delta("reply")
+
+        h.vm.onTick(System.currentTimeMillis())
+
+        assertEquals(before, h.subscribeFrames().size)
+    }
+
+    @Test
     fun scrollbackReplyPrependsActualRange() {
         val h = Harness()
         h.snap("screen")

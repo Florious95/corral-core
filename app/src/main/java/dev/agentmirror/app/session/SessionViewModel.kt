@@ -193,6 +193,12 @@ class SessionViewModel(
     /** 上次向服务端发出 ScrollWheelFrame 的时间戳（ms）；用于 50ms 节流。 */
     private var lastScrollSentMs = 0L
 
+    /** 交互后等待远端响应的探针簿记；仅在 READY 且确有滚动请求时触发重订阅。 */
+    @Volatile
+    private var lastBinaryAtMs = System.currentTimeMillis()
+    private var lastScrollRequestAtMs = 0L
+    private var lastSnapshotProbeAtMs = 0L
+
     // ---- 历史分页簿记（006：滚动到边界按需补页）----
 
     /** 下一页请求的 from_line 锚点（协议 §6.3 capture-pane 语义：负=屏上历史）。 */
@@ -311,6 +317,8 @@ class SessionViewModel(
             return
         }
         if (awaitingReconnectSnapshot && frame.kind != BinaryKind.SNAPSHOT) return
+        lastBinaryAtMs = System.currentTimeMillis()
+        if (frame.kind == BinaryKind.SNAPSHOT) lastScrollRequestAtMs = 0L
         if (PerfTrace.isEnabled()) {
             val kind = when (frame.kind) {
                 BinaryKind.SNAPSHOT -> "snapshot"
@@ -474,6 +482,25 @@ class SessionViewModel(
     fun onTick(nowMs: Long) {
         manager.pump(nowMs)
         manager.resolveExpiredInputs(nowMs)
+        probeStalledScroll(nowMs)
+    }
+
+    /**
+     * 滚动请求发出后若长时间没有任何二进制回包，重发一次订阅以唤醒僵尸 pipe。
+     * 这是交互触发的单次探针，不是常驻轮询；正常增量/快照到达即清除等待。
+     */
+    private fun probeStalledScroll(nowMs: Long) {
+        if (connectionState != ConnectionState.READY || !hasSnapshot) return
+        val requestedAt = lastScrollRequestAtMs
+        if (requestedAt == 0L || nowMs - requestedAt < SNAPSHOT_PROBE_DELAY_MS) return
+        if (nowMs - lastSnapshotProbeAtMs < SNAPSHOT_PROBE_COOLDOWN_MS) return
+        if (nowMs - lastBinaryAtMs < SNAPSHOT_PROBE_DELAY_MS) return
+        lastSnapshotProbeAtMs = nowMs
+        val sent = manager.subscribe(ref, presenter.gridRows, presenter.gridCols)
+        DiagLog.recordCritical(
+            "session",
+            "snapshot_probe ref=$ref sent=$sent quiet_ms=${nowMs - lastBinaryAtMs}",
+        )
     }
 
     // ---- 用户动作 ----
@@ -748,7 +775,9 @@ class SessionViewModel(
         // 协议约定：delta<0=向上看历史（scroll-up）。
         // 手势约定：deltaLines>0=presenter 向更早历史滚（正值=看旧内容），
         // 因此 delta=-toSend 使两端符号语义对齐。
-        manager.sendScrollWheel(ref, -toSend)
+        if (manager.sendScrollWheel(ref, -toSend)) {
+            lastScrollRequestAtMs = nowMs
+        }
     }
 
     /**
@@ -837,6 +866,10 @@ class SessionViewModel(
 
         /** ScrollWheelFrame 发送节流窗口（ms）：GestureDetector 约每 16ms 触发，节流到 ~20fps。 */
         const val SCROLL_THROTTLE_MS = 50L
+        /** Scroll request without a binary reply is treated as a stalled pipe. */
+        const val SNAPSHOT_PROBE_DELAY_MS = 2_000L
+        /** Avoid re-subscribing a genuinely slow host more than once per window. */
+        const val SNAPSHOT_PROBE_COOLDOWN_MS = 8_000L
     }
 }
 

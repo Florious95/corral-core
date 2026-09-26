@@ -23,6 +23,7 @@ import dev.agentmirror.terminal.DamageListener
 import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -198,6 +199,8 @@ class TermViewPresenter(
 
     private val damageVersion = AtomicLong(0)
     private val captureScheduled = AtomicBoolean(false)
+    private val captureToken = AtomicLong(0)
+    private val captureBlockedVersion = AtomicLong(-1L)
     private val mutationDepth = AtomicInteger(0)
     private val preparedFrame = AtomicReference<PreparedFrame?>(null)
 
@@ -246,6 +249,9 @@ class TermViewPresenter(
             return top..bottom
         }
 
+    /** Whether a complete background-captured frame is available to the UI thread. */
+    val hasPreparedFrame: Boolean get() = preparedFrame.get() != null
+
     /** Window captured by the current render frame; falls back before the first frame. */
     val drawWindow: IntRange get() = frameWindow ?: displaySnapshotOverride?.let { 0 until it.rows } ?: window
 
@@ -279,6 +285,7 @@ class TermViewPresenter(
         val next = (current - deltaLines).coerceIn(0, maxTop)
         topLine = if (next >= maxTop) null else next
         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
+        damageVersion.incrementAndGet()
         scheduleFrameCapture()
     }
 
@@ -293,6 +300,7 @@ class TermViewPresenter(
      */
     fun onScrollToBottom() {
         topLine = null
+        damageVersion.incrementAndGet()
         scheduleFrameCapture()
     }
 
@@ -363,6 +371,7 @@ class TermViewPresenter(
         // 可见行数变化（挤压/复原/增长恢复）即需重画——视口上推露出底行，本回调是唯一信号
         // （旧链路经 emulator.resize→flushDamage 间接唤醒，现在 resize 不再走，须直呼）。
         if (visibleRows != rowsBefore) {
+            damageVersion.incrementAndGet()
             scheduleFrameCapture()
         }
         // 仪表：结果与守卫状态，含守卫算出的"若重算会得到的候选行列数"——即使守卫拦下也记，
@@ -435,6 +444,7 @@ class TermViewPresenter(
         }
         updateVisibleRows()
         if (visibleRows != rowsBefore) {
+            damageVersion.incrementAndGet()
             scheduleFrameCapture()
         }
         recordViewportResult(source = "onRealViewportChanged", resized = resized, outgrewGuard = outgrew)
@@ -626,12 +636,18 @@ class TermViewPresenter(
         val currentVersion = damageVersion.get()
         val prepared = preparedFrame.get()
         val state = when {
+            prepared == null && captureBlockedVersion.get() == damageVersion.get() -> return
             prepared == null -> captureFrame().also { preparedFrame.set(it) }
             prepared.version >= currentVersion -> prepared
             // A newer capture is already in flight. Keep the last complete frame instead of
             // synchronously waiting for the emulator monitor on the UI thread.
             captureScheduled.get() -> prepared
-            else -> captureFrame().also { preparedFrame.set(it) }
+            else -> {
+                // Never enter the emulator monitor on the UI thread after a frame exists.
+                // A stalled capture must not turn foreground input/scroll into an ANR.
+                scheduleFrameCapture()
+                prepared
+            }
         }
         frameSnapshot = state.snapshot
         frameSbSize = state.scrollbackSize
@@ -651,7 +667,17 @@ class TermViewPresenter(
      */
     fun refreshPreparedFrame() {
         if (captureScheduled.get()) return
-        preparedFrame.set(captureFrame())
+        if (preparedFrame.get() == null) {
+            preparedFrame.set(captureFrame())
+        } else {
+            scheduleFrameCapture()
+        }
+    }
+
+    /** Re-arm capture after an isolated render exception without blocking the UI thread. */
+    fun recoverAfterRenderFailure() {
+        synchronized(damageLock) { pendingDamage = null }
+        scheduleFrameCapture()
     }
 
     /**
@@ -684,16 +710,44 @@ class TermViewPresenter(
     /** Coalesce damage notifications into one background full-frame capture. */
     private fun scheduleFrameCapture() {
         if (mutationDepth.get() != 0) return
+        if (captureBlockedVersion.get() == damageVersion.get()) return
         if (!captureScheduled.compareAndSet(false, true)) return
+        val token = captureToken.incrementAndGet()
+        val watchdog = FRAME_CAPTURE_WATCHDOG.schedule({
+            if (captureToken.compareAndSet(token, 0L)) {
+                captureBlockedVersion.set(damageVersion.get())
+                captureScheduled.set(false)
+                DiagLog.recordCritical(
+                    "term-render",
+                    "capture_watchdog_release token=$token timeout_ms=$CAPTURE_WATCHDOG_MS",
+                )
+                onFrameRequested?.invoke()
+            }
+        }, CAPTURE_WATCHDOG_MS, TimeUnit.MILLISECONDS)
         FRAME_CAPTURE_EXECUTOR.execute {
-            val state = captureFrame()
-            val capturedVersion = state.version
-            preparedFrame.set(state)
-            captureScheduled.set(false)
+            var captured: PreparedFrame? = null
+            try {
+                val state = captureFrame()
+                if (captureToken.get() == token) {
+                    captureBlockedVersion.set(-1L)
+                    preparedFrame.set(state)
+                    captured = state
+                }
+            } catch (failure: Throwable) {
+                if (captureToken.get() == token) captureBlockedVersion.set(damageVersion.get())
+                DiagLog.recordCritical(
+                    "term-render",
+                    "capture_failed type=${failure.javaClass.simpleName} " +
+                        "message=${failure.message?.take(160)}",
+                )
+            } finally {
+                watchdog.cancel(false)
+                if (captureToken.compareAndSet(token, 0L)) captureScheduled.set(false)
+            }
             // A new damage can arrive between the final version check and clearing the flag.
             // Re-check after clearing so no update is stranded without a capture/request.
-            if (damageVersion.get() != capturedVersion) scheduleFrameCapture()
-            onFrameRequested?.invoke()
+            if (captured != null && damageVersion.get() != captured.version) scheduleFrameCapture()
+            runCatching { onFrameRequested?.invoke() }
         }
     }
 
@@ -785,6 +839,11 @@ class TermViewPresenter(
         val FRAME_CAPTURE_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "term-frame-capture").apply { isDaemon = true }
         }
+        /** Separate watchdog remains live even if the capture worker blocks on emulator state. */
+        val FRAME_CAPTURE_WATCHDOG = Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "term-frame-watchdog").apply { isDaemon = true }
+        }
+        const val CAPTURE_WATCHDOG_MS = 1_800L
 
         /** [seedCellMetrics] 落定前的占位值（构造后到 View 注入 presenter 之间的间隙，
          *  正常生命周期内不会被任何几何计算实际使用）。 */
