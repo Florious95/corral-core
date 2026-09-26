@@ -344,7 +344,11 @@ fun SessionScreen(
             }
             val workspaceName = overlaySessions.firstOrNull()?.cwd?.let(::cwdDisplayName).orEmpty()
             val byRef = overlaySessions.associateBy { it.ref }
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(LocalAppPalette.current.screenBackground),
+            ) {
                 SessionScreenScaffold(
                     terminalCanvas = {
                         Box(Modifier.fillMaxSize()) {

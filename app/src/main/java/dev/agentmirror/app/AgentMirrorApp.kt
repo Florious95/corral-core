@@ -95,6 +95,9 @@ fun AgentMirrorApp(
         (context as? ComponentActivity)?.window?.let { window ->
             WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = !darkTheme
             window.statusBarColor = AndroidColor.TRANSPARENT
+            window.decorView.setBackgroundColor(
+                if (darkTheme) AndroidColor.BLACK else AndroidColor.WHITE,
+            )
         }
     }
     AppTheme(appearance = appearance) {

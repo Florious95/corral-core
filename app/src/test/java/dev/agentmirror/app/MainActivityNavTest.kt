@@ -19,6 +19,7 @@ package dev.agentmirror.app
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.graphics.drawable.ColorDrawable
 import androidx.core.view.WindowCompat
 import dev.agentmirror.app.service.NotificationHelper
 import dev.agentmirror.app.ui.theme.Appearance
@@ -74,6 +75,7 @@ class MainActivityNavTest {
 
         assertFalse(controller.isAppearanceLightStatusBars)
         assertEquals(android.graphics.Color.TRANSPARENT, activity.window.statusBarColor)
+        assertEquals(android.graphics.Color.BLACK, (activity.window.decorView.background as ColorDrawable).color)
     }
 
     @Test
@@ -85,6 +87,7 @@ class MainActivityNavTest {
 
         assertTrue(controller.isAppearanceLightStatusBars)
         assertEquals(android.graphics.Color.TRANSPARENT, activity.window.statusBarColor)
+        assertEquals(android.graphics.Color.WHITE, (activity.window.decorView.background as ColorDrawable).color)
     }
 
     @Test
