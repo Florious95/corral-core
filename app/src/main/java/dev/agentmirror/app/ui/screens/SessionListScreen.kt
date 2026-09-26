@@ -559,14 +559,16 @@ fun SessionListRows(
     tagPrefix: String = "l2",
     listTestTag: String = "l2-session-list-scroll",
 ) {
+    val orderedSessions = sessions.sortedByDescending { it.starred }
     LazyColumn(
         modifier = modifier.testTag(listTestTag),
         contentPadding = PaddingValues(top = Dims.cardVGap, bottom = Dims.cardVGap + LocalFloatingNavInset.current),
         verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
     ) {
-        items(sessions, key = { it.id }) { item ->
+        items(orderedSessions, key = { it.id }) { item ->
             val isClosing = closingSessionRef == item.id
             AnimatedVisibility(
+                modifier = Modifier.animateItem(),
                 visible = !isClosing,
                 exit = fadeOut(animationSpec = tween(250)) + shrinkVertically(animationSpec = tween(250)),
             ) {
