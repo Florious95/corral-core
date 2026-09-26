@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,6 +50,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -101,6 +103,7 @@ fun WorkspaceScreen(
     val refreshing by viewModel.refreshing.collectAsState()
     val level2 by viewModel.level2.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
+    val workspaceListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val activity = LocalContext.current as? Activity
 
     // 进入一级发一次 list；二级只由 enterLevel2 建立目标工作区订阅。
@@ -234,6 +237,7 @@ fun WorkspaceScreen(
                             else -> AppTheme {
                                 WorkspaceListScreen(
                                     workspaces = workspaces.map { it.toWorkspaceItem() },
+                                    state = workspaceListState,
                                     onWorkspaceClick = { onSelectWorkspace(it.path) },
                                     modifier = Modifier
                                         .fillMaxSize()

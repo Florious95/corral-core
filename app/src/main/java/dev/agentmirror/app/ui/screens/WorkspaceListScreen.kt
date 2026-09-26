@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -54,6 +56,7 @@ fun WorkspaceListScreen(
     workspaces: List<WorkspaceItem>,
     onWorkspaceClick: (WorkspaceItem) -> Unit,
     modifier: Modifier = Modifier,
+    state: LazyListState = rememberLazyListState(),
     connectionPath: ConnectionPath? = null,
     connectionBanner: String? = null,
     bottomBar: @Composable () -> Unit = {},
@@ -74,6 +77,7 @@ fun WorkspaceListScreen(
                 .fillMaxWidth(),
         ) {
             LazyColumn(
+                state = state,
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("workspace-list-scroll"),

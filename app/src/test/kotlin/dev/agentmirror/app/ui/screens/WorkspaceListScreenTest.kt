@@ -1,9 +1,15 @@
 package dev.agentmirror.app.ui.screens
 
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.graphics.Color
 import dev.agentmirror.app.ui.model.WorkspaceItem
 import dev.agentmirror.app.ui.theme.AppTheme
@@ -74,6 +80,47 @@ class WorkspaceListScreenTest {
         compose.onNodeWithText("工作区").assertExists()
         compose.onNodeWithTag("connection-banner").assertExists()
         compose.onNodeWithText("连接中…").assertExists()
+    }
+
+    @Test
+    fun hoistedListStateSurvivesListReentry() {
+        val workspaces = (0 until 12).map { index ->
+            WorkspaceItem("/repo-$index", "repo-$index", "/repo-$index", 0)
+        }
+        var showList by mutableStateOf(true)
+        var expectedIndex = -1
+        var expectedOffset = -1
+        lateinit var listState: LazyListState
+
+        compose.setContent {
+            AppTheme(Appearance.Light) {
+                val state = rememberLazyListState()
+                listState = state
+                if (showList) {
+                    WorkspaceListScreen(
+                        workspaces = workspaces,
+                        onWorkspaceClick = {},
+                        state = state,
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("workspace-list-scroll").performScrollToIndex(3)
+        compose.runOnIdle {
+            expectedIndex = listState.firstVisibleItemIndex
+            expectedOffset = listState.firstVisibleItemScrollOffset
+            assertTrue(expectedIndex > 0)
+        }
+
+        compose.runOnIdle { showList = false }
+        compose.waitForIdle()
+        compose.runOnIdle { showList = true }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(expectedIndex, listState.firstVisibleItemIndex)
+            assertEquals(expectedOffset, listState.firstVisibleItemScrollOffset)
+        }
     }
 
     @Test
