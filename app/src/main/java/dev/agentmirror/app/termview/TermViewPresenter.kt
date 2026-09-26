@@ -109,6 +109,38 @@ class TermViewPresenter(
      */
     private var viewportSeeded = false
 
+    /** IME 过渡期间暂存最后尺寸，结算时一次性应用，避免逐帧重排。 */
+    private var viewportAnimationDepth = 0
+    private var pendingViewportWidthPx = 0
+    private var pendingViewportHeightPx = 0
+
+    /** 是否处于 IME 动画冻结窗口。 */
+    val viewportAnimationFrozen: Boolean
+        get() = viewportAnimationDepth > 0
+
+    /** 开始冻结视口；支持嵌套动画回调，避免并行动画提前解冻。 */
+    fun beginViewportAnimation() {
+        viewportAnimationDepth++
+        if (viewportAnimationDepth == 1) {
+            pendingViewportWidthPx = 0
+            pendingViewportHeightPx = 0
+            DiagLog.record("viewport", "source=ime_animation state=begin")
+        }
+    }
+
+    /** 结束冻结视口，并将动画期间最后一组尺寸作为单个结算事件应用。 */
+    fun endViewportAnimation() {
+        if (viewportAnimationDepth == 0) return
+        viewportAnimationDepth--
+        if (viewportAnimationDepth != 0) return
+        val width = pendingViewportWidthPx
+        val height = pendingViewportHeightPx
+        pendingViewportWidthPx = 0
+        pendingViewportHeightPx = 0
+        if (width > 0 && height > 0) applyViewportSizeChanged(width, height)
+        DiagLog.record("viewport", "source=ime_animation state=end applied=${width > 0 && height > 0}")
+    }
+
     /** 首次有效 rows/cols 已通知宿主；与尺寸是否等于本地初始值无关。 */
     private var firstGeometryReady = false
 
@@ -282,6 +314,15 @@ class TermViewPresenter(
      * @inv 像素/字格任一非正时不做换算（recomputeGeometry 提前返回）
      */
     fun onViewportSizeChanged(widthPx: Int, heightPx: Int) {
+        if (viewportAnimationDepth > 0) {
+            pendingViewportWidthPx = widthPx
+            pendingViewportHeightPx = heightPx
+            return
+        }
+        applyViewportSizeChanged(widthPx, heightPx)
+    }
+
+    private fun applyViewportSizeChanged(widthPx: Int, heightPx: Int) {
         // 仪表（leader 2026-08-14 补充裁定）：一进来就记入参与旧值——这是排查「回前台后
         // 只画上面三分之一」这类问题时判断「到底有没有被调用」的第一手证据，不等后续分支。
         DiagLog.record(
@@ -351,6 +392,11 @@ class TermViewPresenter(
      * @inv 挤压（视口 < 内核）不产生任何重算/emit
      */
     fun onRealViewportChanged(widthPx: Int, heightPx: Int) {
+        if (viewportAnimationDepth > 0) {
+            pendingViewportWidthPx = widthPx
+            pendingViewportHeightPx = heightPx
+            return
+        }
         // 仪表（leader 2026-08-14 补充裁定）：一进来就记——用户报「回前台后只画上面三分之一」，
         // 长后台（3.7 分钟）被系统回收 Surface 时 Activity ON_STOP/ON_START 与本回调（源自
         // View.onWindowVisibilityChanged）是否对得上，现在无从判断，光看日志就要能回答。

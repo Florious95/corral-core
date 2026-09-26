@@ -31,6 +31,9 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsAnimationCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnLayout
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
@@ -83,7 +86,7 @@ class TermSurfaceView @JvmOverloads constructor(
                 applyFontMetrics()
                 doOnLayout {
                     if (presenter === value && width > 0 && height > 0) {
-                        value.onViewportSizeChanged(usableWidthPx(width), height)
+                        dispatchViewportSize(width, height)
                     }
                 }
                 postFrame()
@@ -355,10 +358,47 @@ class TermSurfaceView @JvmOverloads constructor(
     private var drawControlSubscription: Closeable? = null
     private val boxGeometryCache = BoxBlockGeometryCache()
     private val viewportGeomStore by lazy { SharedPreferencesViewportGeomStore(context) }
+    private var imeAnimationDepth = 0
+    private val imeAnimationCallback = object : WindowInsetsAnimationCompat.Callback(
+        WindowInsetsAnimationCompat.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE,
+    ) {
+        override fun onPrepare(animation: WindowInsetsAnimationCompat) {
+            super.onPrepare(animation)
+            if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) beginImeAnimation()
+        }
+
+        override fun onEnd(animation: WindowInsetsAnimationCompat) {
+            super.onEnd(animation)
+            if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) endImeAnimation()
+        }
+
+        override fun onProgress(
+            insets: WindowInsetsCompat,
+            runningAnimations: MutableList<WindowInsetsAnimationCompat>,
+        ): WindowInsetsCompat = insets
+    }
 
     init {
         isFocusable = true
         isFocusableInTouchMode = true
+        ViewCompat.setWindowInsetsAnimationCallback(this, imeAnimationCallback)
+    }
+
+    private fun beginImeAnimation() {
+        imeAnimationDepth++
+        presenter?.beginViewportAnimation()
+    }
+
+    private fun endImeAnimation() {
+        if (imeAnimationDepth == 0) return
+        imeAnimationDepth--
+        presenter?.endViewportAnimation()
+        if (imeAnimationDepth == 0) persistViewportGeom()
+    }
+
+    private fun dispatchViewportSize(width: Int, height: Int) {
+        presenter?.onViewportSizeChanged(usableWidthPx(width), height)
+        if (imeAnimationDepth == 0) persistViewportGeom()
     }
 
     override fun onAttachedToWindow() {
@@ -372,6 +412,7 @@ class TermSurfaceView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         resetFrameScheduling()
+        while (imeAnimationDepth > 0) endImeAnimation()
         drawControlSubscription?.close()
         drawControlSubscription = null
         boxGeometryCache.clear()
@@ -387,8 +428,7 @@ class TermSurfaceView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         forceFullBackgroundFrames = FULL_BACKGROUND_FRAMES
-        presenter?.onViewportSizeChanged(usableWidthPx(w), h)
-        persistViewportGeom()
+        dispatchViewportSize(w, h)
     }
 
     /**
@@ -445,7 +485,7 @@ class TermSurfaceView @JvmOverloads constructor(
         watchDrawControls()
         if (width > 0 && height > 0) {
             presenter?.onRealViewportChanged(usableWidthPx(width), height)
-            persistViewportGeom()
+            if (imeAnimationDepth == 0) persistViewportGeom()
         }
         postFrame()
     }
@@ -940,6 +980,7 @@ class TermSurfaceView @JvmOverloads constructor(
     }
 
     private fun persistViewportGeom() {
+        if (imeAnimationDepth > 0 || presenter?.viewportAnimationFrozen == true) return
         if (cellW <= 0 || cellH <= 0 || width <= 0 || height <= 0) return
         val rows = (height / cellH).coerceAtLeast(1)
         val cols = minOf(usableWidthPx(width) / cellW, TerminalMetrics.maxCols).coerceAtLeast(1)
