@@ -50,7 +50,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,9 +63,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.NavDirection
+import dev.agentmirror.app.ui.components.WorkspaceActionBottomSheet
 import dev.agentmirror.app.ui.components.navTransition
 import dev.agentmirror.app.ui.screens.SessionListScreen
 import dev.agentmirror.app.ui.screens.WorkspaceListScreen
+import dev.agentmirror.app.ui.screens.sortWorkspacesPinnedFirst
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
@@ -105,6 +109,8 @@ fun WorkspaceScreen(
     val refreshing by viewModel.refreshing.collectAsState()
     val level2 by viewModel.level2.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
+    val pinnedWorkspaces by viewModel.pinnedWorkspaces.collectAsState()
+    var workspaceMenuTarget by remember { mutableStateOf<dev.agentmirror.app.ui.model.WorkspaceItem?>(null) }
     val initialWorkspaceListAnchor = viewModel.workspaceListScrollAnchor()
     val workspaceListState = remember {
         LazyListState(
@@ -137,11 +143,12 @@ fun WorkspaceScreen(
         (!state.isQuietEmpty && !state.isLoading && !state.isEmpty &&
             !(state.isDisconnected && state.workspaces.isEmpty()))
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
         if (!showingDesignList) {
             TopBar(
                 selectedCwd = selectedWorkspaceCwd,
@@ -251,9 +258,13 @@ fun WorkspaceScreen(
                             state.isEmpty -> EmptyGuideContent()
                             else -> AppTheme {
                                 WorkspaceListScreen(
-                                    workspaces = workspaces.map { it.toWorkspaceItem() },
+                                    workspaces = sortWorkspacesPinnedFirst(
+                                        workspaces = workspaces.map { it.toWorkspaceItem() },
+                                        pinnedPaths = pinnedWorkspaces,
+                                    ),
                                     state = workspaceListState,
                                     onWorkspaceClick = { onSelectWorkspace(it.path) },
+                                    onWorkspaceLongClick = { workspaceMenuTarget = it },
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .statusBarsPadding(),
@@ -266,6 +277,19 @@ fun WorkspaceScreen(
                 }
             }
         }
+        workspaceMenuTarget?.let { target ->
+            WorkspaceActionBottomSheet(
+                workspaceName = target.name,
+                workspacePath = target.path,
+                isPinned = target.path in pinnedWorkspaces,
+                onDismiss = { workspaceMenuTarget = null },
+                onTogglePin = {
+                    viewModel.toggleWorkspacePin(target.path)
+                    workspaceMenuTarget = null
+                },
+            )
+        }
+    }
     }
 }
 

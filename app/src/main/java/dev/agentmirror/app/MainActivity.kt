@@ -31,6 +31,7 @@ import dev.agentmirror.app.service.NotificationHelper
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.workspace.ConnectionUi
 import dev.agentmirror.app.workspace.SharedPreferencesFavoriteStore
+import dev.agentmirror.app.workspace.SharedPreferencesPinnedWorkspaceStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
 
 /**
@@ -115,6 +116,7 @@ class MainActivity : ComponentActivity() {
                 ConnectionUi.UNBOUND
             },
             favoriteStore = SharedPreferencesFavoriteStore(this),
+            pinnedWorkspaceStore = SharedPreferencesPinnedWorkspaceStore(this),
         )
         // 069：旋转重建不是「进入菜单」，不得再发 list / 重订二级。
         if (savedInstanceState != null) {

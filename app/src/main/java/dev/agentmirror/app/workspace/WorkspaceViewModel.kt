@@ -148,9 +148,25 @@ class WorkspaceViewModel(
         },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     favoriteStore: FavoriteStore = MemoryFavoriteStore(),
+    private val pinnedWorkspaceStore: PinnedWorkspaceStore = MemoryPinnedWorkspaceStore(),
 ) : ConnectionManager.Listener {
 
     private val favoriteBook = FavoriteBook(favoriteStore, nowMs)
+    private val _pinnedWorkspaces = MutableStateFlow(pinnedWorkspaceStore.load())
+
+    /** 已置顶工作区 cwd；排序由一级列表按服务端当前顺序稳定分组。 */
+    val pinnedWorkspaces: StateFlow<Set<String>> = _pinnedWorkspaces.asStateFlow()
+
+    /** 切换一级工作区置顶状态并立即持久化。返回切换后的状态。 */
+    fun toggleWorkspacePin(cwd: String): Boolean {
+        if (cwd.isEmpty()) return false
+        val next = _pinnedWorkspaces.value.toMutableSet().apply {
+            if (!add(cwd)) remove(cwd)
+        }.toSet()
+        _pinnedWorkspaces.value = next
+        pinnedWorkspaceStore.save(next)
+        return cwd in next
+    }
 
     private val _favorites = MutableStateFlow(favoriteBook.records())
 

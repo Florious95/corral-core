@@ -10,6 +10,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.graphics.Color
 import dev.agentmirror.app.ui.model.WorkspaceItem
 import dev.agentmirror.app.ui.theme.AppTheme
@@ -121,6 +123,34 @@ class WorkspaceListScreenTest {
             assertEquals(expectedIndex, listState.firstVisibleItemIndex)
             assertEquals(expectedOffset, listState.firstVisibleItemScrollOffset)
         }
+    }
+
+    @Test
+    fun pinnedWorkspacesMoveFirstWhilePreservingServerOrder() {
+        val workspaces = listOf(
+            WorkspaceItem("/a", "a", "/a", 0),
+            WorkspaceItem("/b", "b", "/b", 0),
+            WorkspaceItem("/c", "c", "/c", 0),
+        )
+        val ordered = sortWorkspacesPinnedFirst(workspaces, setOf("/c", "/a"))
+        assertEquals(listOf("/a", "/c", "/b"), ordered.map { it.path })
+    }
+
+    @Test
+    fun longPressReportsWorkspaceItem() {
+        var selected: WorkspaceItem? = null
+        compose.setContent {
+            AppTheme(Appearance.Light) {
+                WorkspaceListScreen(
+                    workspaces = listOf(WorkspaceItem("/repo", "repo", "/repo", 1)),
+                    onWorkspaceClick = {},
+                    onWorkspaceLongClick = { selected = it },
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("workspace-row-/repo").performTouchInput { longClick() }
+        compose.runOnIdle { assertEquals("/repo", selected?.path) }
     }
 
     @Test

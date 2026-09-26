@@ -1,8 +1,9 @@
 package dev.agentmirror.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -46,15 +47,23 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 
+/** Stable server order within pinned and unpinned groups. */
+internal fun sortWorkspacesPinnedFirst(
+    workspaces: List<WorkspaceItem>,
+    pinnedPaths: Set<String>,
+): List<WorkspaceItem> = workspaces.sortedByDescending { it.path in pinnedPaths }
+
 /**
  * 工作区列表（一级）。
  * 行结构：工作状态麻将牌 → 名称 / 路径 → 会话数 → ›。
  * 麻将牌显示当前工作中的 Agent 数量；0 表示没有已识别的 working 节点。
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun WorkspaceListScreen(
     workspaces: List<WorkspaceItem>,
     onWorkspaceClick: (WorkspaceItem) -> Unit,
+    onWorkspaceLongClick: (WorkspaceItem) -> Unit = {},
     modifier: Modifier = Modifier,
     state: LazyListState = rememberLazyListState(),
     connectionPath: ConnectionPath? = null,
@@ -85,7 +94,12 @@ fun WorkspaceListScreen(
                 verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
             ) {
                 items(workspaces, key = { it.id }) { item ->
-                    WorkspaceRow(item = item, onClick = { onWorkspaceClick(item) })
+                    WorkspaceRow(
+                        item = item,
+                        onClick = { onWorkspaceClick(item) },
+                        onLongClick = { onWorkspaceLongClick(item) },
+                        modifier = Modifier.animateItem(),
+                    )
                 }
             }
             if (connectionBanner != null) {
@@ -146,16 +160,19 @@ internal fun MahjongStatusBadge(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WorkspaceRow(
     item: WorkspaceItem,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     Row(
-        modifier = Modifier
+        modifier = modifier
             .padding(horizontal = Dims.cardHMargin)
             .fillMaxWidth()
             .height(Dims.rowHeightWithSubtitle)
@@ -165,8 +182,14 @@ private fun WorkspaceRow(
                 stroke = p.glassStroke,
                 specular = p.glassSpecular,
             )
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(start = 14.dp, end = 12.dp),
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .padding(start = 14.dp, end = 12.dp)
+            .testTag("workspace-row-${item.id}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

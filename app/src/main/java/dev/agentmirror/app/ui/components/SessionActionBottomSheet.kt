@@ -226,6 +226,104 @@ fun SessionActionBottomSheet(
     }
 }
 
+/** 一级工作区长按操作面板，复用会话长按面板的 Liquid Glass 材质与动效。 */
+@Composable
+fun WorkspaceActionBottomSheet(
+    workspaceName: String,
+    workspacePath: String,
+    isPinned: Boolean,
+    onDismiss: () -> Unit,
+    onTogglePin: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    GlassModalLayer(onDismiss = onDismiss) {
+        val p = LocalAppPalette.current
+        val panelBackdrop = rememberLayerBackdrop()
+        val requestDismiss = ::dismiss
+        Column(
+            modifier = modifier
+                .align(Alignment.BottomCenter)
+                .animateEnterExit(
+                    enter = slideInVertically(tween(Motion.sheetSlideIn, easing = Motion.sheetEnter)) { it },
+                    exit = slideOutVertically(tween(Motion.sheetSlideOut)) { it },
+                )
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 12.dp)
+                .fillMaxWidth()
+                .pointerInput(Unit) {}
+                .glassPanel(
+                    backdrop = LocalGlassBackdrop.current,
+                    shape = PanelShape,
+                    surface = p.glassSurface.glassReadable(),
+                    exportedBackdrop = panelBackdrop,
+                )
+                .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)
+                .testTag("workspace-action-bottom-sheet"),
+        ) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(Dims.sheetGrabberWidth)
+                    .height(Dims.sheetGrabberHeight)
+                    .clip(CircleShape)
+                    .background(p.sheetGrabber),
+            )
+            Spacer(Modifier.height(14.dp))
+            Column(Modifier.fillMaxWidth()) {
+                AppText(
+                    text = workspaceName,
+                    color = p.rowTitleText,
+                    fontSize = TypeSizes.sheetTitle,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("workspace-action-title"),
+                )
+                Spacer(Modifier.height(3.dp))
+                PathText(
+                    path = workspacePath,
+                    modifier = Modifier.testTag("workspace-action-path"),
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.glassStroke))
+            Spacer(Modifier.height(14.dp))
+
+            CompositionLocalProvider(LocalGlassBackdrop provides panelBackdrop) {
+                GlassActionRow(
+                    onClick = {
+                        onTogglePin()
+                        requestDismiss()
+                    },
+                    modifier = Modifier.testTag("workspace-pin-action"),
+                    icon = {
+                        ActionPinIcon(
+                            tint = p.rowTitleText,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    iconWell = p.glassSurface,
+                ) {
+                    AppText(
+                        text = if (isPinned) "取消置顶" else "置顶工作区",
+                        color = p.rowTitleText,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                GlassButton(
+                    text = "取消",
+                    onClick = requestDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("workspace-action-cancel"),
+                )
+            }
+        }
+    }
+}
+
 private val PanelShape = RoundedRectangle(Radii.glassPanel)
 private val ActionShape = RoundedRectangle(Radii.glassControl)
 private val DangerColor = Color(0xFFDC2626)
@@ -310,6 +408,39 @@ internal fun ActionStarIcon(
         } else {
             drawPath(path, color = tint, style = Stroke(width = size * 0.1f))
         }
+    }
+}
+
+/** 置顶图标。 */
+@Composable
+internal fun ActionPinIcon(
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val size = this.size.minDimension
+        val center = size / 2f
+        drawLine(
+            color = tint,
+            start = Offset(center, size * 0.08f),
+            end = Offset(center, size * 0.92f),
+            strokeWidth = size * 0.11f,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = tint,
+            start = Offset(size * 0.22f, size * 0.32f),
+            end = Offset(size * 0.78f, size * 0.32f),
+            strokeWidth = size * 0.11f,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = tint,
+            start = Offset(size * 0.33f, size * 0.67f),
+            end = Offset(size * 0.67f, size * 0.67f),
+            strokeWidth = size * 0.11f,
+            cap = StrokeCap.Round,
+        )
     }
 }
 
