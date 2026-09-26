@@ -74,6 +74,11 @@ data class WorkspaceUi(
     val workingCount: Int = 0,
 )
 
+data class WorkspaceListScrollAnchor(
+    val firstVisibleItemIndex: Int = 0,
+    val firstVisibleItemScrollOffset: Int = 0,
+)
+
 /** 工作区首页整体 UI 状态（唯一渲染源）。 */
 data class WorkspaceUiState(
     val connection: ConnectionUi = ConnectionUi.CONNECTING,
@@ -153,6 +158,18 @@ class WorkspaceViewModel(
     val favorites: StateFlow<List<FavoriteRecord>> = _favorites.asStateFlow()
 
     private val _uiState = MutableStateFlow(WorkspaceUiState(connection = initialConnection))
+
+    /** L1 列表锚点驻留在 VM，跨 L1/L2 组合销毁仍保留。 */
+    private var workspaceListScrollAnchor = WorkspaceListScrollAnchor()
+
+    fun workspaceListScrollAnchor(): WorkspaceListScrollAnchor = workspaceListScrollAnchor
+
+    fun updateWorkspaceListScrollAnchor(index: Int, offset: Int) {
+        workspaceListScrollAnchor = WorkspaceListScrollAnchor(
+            firstVisibleItemIndex = index.coerceAtLeast(0),
+            firstVisibleItemScrollOffset = offset.coerceAtLeast(0),
+        )
+    }
 
     /** 唯一渲染源（Compose 屏 collectAsState 消费）。 */
     val uiState: StateFlow<WorkspaceUiState> = _uiState.asStateFlow()

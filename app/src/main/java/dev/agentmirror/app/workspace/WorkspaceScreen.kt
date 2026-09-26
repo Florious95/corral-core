@@ -50,7 +50,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -66,6 +67,7 @@ import dev.agentmirror.app.ui.screens.WorkspaceListScreen
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.MonoFontFamily
 import dev.agentmirror.app.ui.theme.Spacing
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * 工作区一级菜单（需求 001 舰队视角 → 002 一级分组），018 全面重设计版。
@@ -103,7 +105,20 @@ fun WorkspaceScreen(
     val refreshing by viewModel.refreshing.collectAsState()
     val level2 by viewModel.level2.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
-    val workspaceListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val initialWorkspaceListAnchor = viewModel.workspaceListScrollAnchor()
+    val workspaceListState = remember {
+        LazyListState(
+            firstVisibleItemIndex = initialWorkspaceListAnchor.firstVisibleItemIndex,
+            firstVisibleItemScrollOffset = initialWorkspaceListAnchor.firstVisibleItemScrollOffset,
+        )
+    }
+    LaunchedEffect(workspaceListState) {
+        snapshotFlow {
+            workspaceListState.firstVisibleItemIndex to workspaceListState.firstVisibleItemScrollOffset
+        }.distinctUntilChanged().collect { (index, offset) ->
+            viewModel.updateWorkspaceListScrollAnchor(index, offset)
+        }
+    }
     val activity = LocalContext.current as? Activity
 
     // 进入一级发一次 list；二级只由 enterLevel2 建立目标工作区订阅。
