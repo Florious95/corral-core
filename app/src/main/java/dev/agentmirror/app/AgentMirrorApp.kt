@@ -16,6 +16,8 @@
 
 package dev.agentmirror.app
 
+import android.graphics.Color as AndroidColor
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
@@ -30,7 +32,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
 import dev.agentmirror.app.pairing.PairingRoute
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.service.OnScreenFallbackPump
@@ -86,6 +90,12 @@ fun AgentMirrorApp(
         Appearance.Light -> false
         Appearance.Dark -> true
         Appearance.System -> isSystemInDarkTheme()
+    }
+    SideEffect {
+        (context as? ComponentActivity)?.window?.let { window ->
+            WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = !darkTheme
+            window.statusBarColor = AndroidColor.TRANSPARENT
+        }
     }
     AppTheme(appearance = appearance) {
     AgentMirrorTheme(darkTheme = darkTheme) {

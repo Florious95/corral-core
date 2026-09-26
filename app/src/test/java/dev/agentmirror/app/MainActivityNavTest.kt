@@ -19,8 +19,12 @@ package dev.agentmirror.app
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ActivityInfo
+import androidx.core.view.WindowCompat
 import dev.agentmirror.app.service.NotificationHelper
+import dev.agentmirror.app.ui.theme.Appearance
+import dev.agentmirror.app.ui.theme.SharedPreferencesAppearanceStore
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -54,9 +58,34 @@ class MainActivityNavTest {
         RuntimeEnvironment.getApplication()
             .getSharedPreferences("pairing_config", Context.MODE_PRIVATE)
             .edit().clear().commit()
+        RuntimeEnvironment.getApplication()
+            .getSharedPreferences("app_appearance", Context.MODE_PRIVATE)
+            .edit().clear().commit()
     }
 
     // ---- D-3 重建保态：旋转/进程回收重建后仍停在会话页 ----
+
+    @Test
+    fun darkAppearanceUsesTransparentStatusBarAndLightIcons() {
+        SharedPreferencesAppearanceStore(RuntimeEnvironment.getApplication()).save(Appearance.Dark)
+
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+
+        assertFalse(controller.isAppearanceLightStatusBars)
+        assertEquals(android.graphics.Color.TRANSPARENT, activity.window.statusBarColor)
+    }
+
+    @Test
+    fun lightAppearanceUsesTransparentStatusBarAndDarkIcons() {
+        SharedPreferencesAppearanceStore(RuntimeEnvironment.getApplication()).save(Appearance.Light)
+
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+
+        assertTrue(controller.isAppearanceLightStatusBars)
+        assertEquals(android.graphics.Color.TRANSPARENT, activity.window.statusBarColor)
+    }
 
     @Test
     fun recreation_keepsActiveSession() {
