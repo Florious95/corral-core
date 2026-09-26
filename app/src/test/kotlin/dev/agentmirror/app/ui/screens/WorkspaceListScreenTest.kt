@@ -59,6 +59,24 @@ class WorkspaceListScreenTest {
     }
 
     @Test
+    fun connectingBannerRendersAlongsideWorkspaceHeader() {
+        compose.setContent {
+            AppTheme(Appearance.Light) {
+                WorkspaceListScreen(
+                    workspaces = emptyList(),
+                    onWorkspaceClick = {},
+                    connectionBanner = "连接中…",
+                )
+            }
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("工作区").assertExists()
+        compose.onNodeWithTag("connection-banner").assertExists()
+        compose.onNodeWithText("连接中…").assertExists()
+    }
+
+    @Test
     fun multiDigitWorkingBadgeRendersWithoutError() {
         compose.setContent {
             AppTheme(Appearance.Light) {

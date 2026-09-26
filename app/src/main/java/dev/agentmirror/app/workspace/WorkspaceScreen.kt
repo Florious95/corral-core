@@ -89,7 +89,7 @@ fun WorkspaceScreen(
     viewModel: WorkspaceViewModel,
     selectedWorkspaceCwd: String?,
     connectionPath: ConnectionPath? = null,
-    hostBound: Boolean = false,
+    @Suppress("UNUSED_PARAMETER") hostBound: Boolean = false,
     retainLevel2OnDispose: () -> Boolean = { false },
     onSelectWorkspace: (cwd: String) -> Unit,
     onBackToList: () -> Unit,
@@ -115,7 +115,6 @@ fun WorkspaceScreen(
 
     val readyPath = connectionPath.takeIf { state.connection == ConnectionUi.READY }
     val reconnectBanner = connectionBannerText(state.connection)
-    val silentHostRecovery = hostBound && state.connection != ConnectionUi.READY
     val showingDesignList = selectedWorkspaceCwd != null ||
         (!state.isQuietEmpty && !state.isLoading && !state.isEmpty &&
             !(state.isDisconnected && state.workspaces.isEmpty()))
@@ -125,7 +124,7 @@ fun WorkspaceScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        if (!silentHostRecovery && !showingDesignList) {
+        if (!showingDesignList) {
             TopBar(
                 selectedCwd = selectedWorkspaceCwd,
                 // 拨号工厂记录的是本次尝试路径；只有 READY 后才可称为当前已连接路径。
@@ -133,7 +132,7 @@ fun WorkspaceScreen(
                 onBack = onBackToList,
             )
         }
-        if (!silentHostRecovery && !showingDesignList) {
+        if (!showingDesignList) {
             ConnectionBanner(connection = state.connection)
         }
 
@@ -152,7 +151,6 @@ fun WorkspaceScreen(
                 .fillMaxSize()
                 .testTag("workspace-pull-refresh"),
         ) {
-            if (silentHostRecovery) return@PullToRefreshBox
             // 一级 ↔ 二级：用现成 navTransition，不再 if/return 硬切（返回无动画）。
             AnimatedContent(
                 targetState = selectedWorkspaceCwd,
