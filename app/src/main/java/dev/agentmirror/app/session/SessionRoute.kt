@@ -45,6 +45,7 @@ import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
 import dev.agentmirror.app.termview.SharedPreferencesViewportGeomStore
+import dev.agentmirror.app.termview.termTextSizePx
 import dev.agentmirror.app.workspace.FavoriteKey
 import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Entry
@@ -59,7 +60,8 @@ import dev.agentmirror.app.workspace.L2Entry
  * （见 ServiceWire KDoc）。本组合：
  * - 安全获取共享 manager：连接配置未注入（配对层未落地）时明确返回等待态，不崩溃不白屏；
  * - 把会话 VM 挂到 [ServiceWire.uiConnector]（当前屏持有，退出即复位）；
- * - [SessionViewModel] 构造时已 subscribe（conn 层记簿，重连自动重放，004 无状态）。
+ * - 几何缓存与本次排布条件全等时 [SessionViewModel] 构造即 warm subscribe，否则首次布局后订阅
+ *   （conn 层记簿，重连自动重放，004 无状态）。
  *
  * 连接与时钟泵归属（feat-fg-service-wiring + fix-app-runtime-sa）：连接由前台服务承接
  * （[MirrorForegroundService] 持有 [ServiceWire.manager] 单例并驱动时钟泵），在屏组合
@@ -168,31 +170,37 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
         ?: SharedPreferencesInputSyncStore.DEFAULT_INPUT_SYNC_ENABLED
     val retainPaneSize = context?.let { SharedPreferencesRetainPaneSizeStore(it).load() }
         ?: SharedPreferencesRetainPaneSizeStore.DEFAULT_RETAIN_PANE_SIZE
-    val densityDpi = context?.resources?.displayMetrics?.densityDpi ?: -1
+    val resources = context?.resources
+    val densityDpi = resources?.displayMetrics?.densityDpi ?: -1
+    // 首次布局的 rows/cols 只由窗口尺寸与字格像素决定：这几项与缓存全等即可在布局前 warm 订阅。
+    val windowWidthDp = resources?.configuration?.screenWidthDp ?: -1
+    val windowHeightDp = resources?.configuration?.screenHeightDp ?: -1
+    val textSizePx = resources?.let { termTextSizePx(fontSp.toFloat(), it) } ?: -1f
     val cached = context?.let { SharedPreferencesViewportGeomStore(it).load() }
-    val cacheHit = cached != null &&
-        cached.fontSizeSp == fontSp &&
-        cached.densityDpi == densityDpi &&
-        cached.rows >= 1 &&
-        cached.cols >= 1
-    val rows = if (cacheHit) cached!!.rows else INITIAL_ROWS
-    val cols = if (cacheHit) cached.cols else INITIAL_COLS
     val reason = when {
         context == null -> "no-context"
         cached == null -> "empty"
         cached.fontSizeSp != fontSp -> "font"
         cached.densityDpi != densityDpi -> "dpi"
-        cacheHit -> "hit"
-        else -> "invalid"
+        cached.windowWidthDp != windowWidthDp || cached.windowHeightDp != windowHeightDp -> "window"
+        cached.textSizePx != textSizePx -> "text-size"
+        cached.rows < 1 || cached.cols < 1 -> "invalid"
+        else -> "hit"
     }
+    val cacheHit = reason == "hit"
+    val rows = if (cacheHit) cached!!.rows else INITIAL_ROWS
+    val cols = if (cacheHit) cached!!.cols else INITIAL_COLS
     DiagLog.record(
         "term-geom",
         "source=subscribe cache=${if (cacheHit) "hit" else "miss"} reason=$reason " +
             "rows=$rows cols=$cols fontSp=$fontSp densityDpi=$densityDpi " +
+            "windowDp=${windowWidthDp}x$windowHeightDp textPx=$textSizePx " +
             "cachedRows=${cached?.rows ?: -1} cachedCols=${cached?.cols ?: -1} " +
             "cachedFontSp=${cached?.fontSizeSp ?: -1} cachedDpi=${cached?.densityDpi ?: -1} " +
+            "cachedWindowDp=${cached?.windowWidthDp ?: -1}x${cached?.windowHeightDp ?: -1} " +
+            "cachedTextPx=${cached?.textSizePx ?: -1f} " +
             "fallbackRows=$INITIAL_ROWS fallbackCols=$INITIAL_COLS",
-        coalesceKey = "$reason|$rows|$cols|$fontSp|$densityDpi",
+        coalesceKey = "$reason|$rows|$cols|$fontSp|$densityDpi|$windowWidthDp|$windowHeightDp",
     )
     return SessionViewModel(
         manager,
@@ -205,6 +213,7 @@ internal fun createSessionViewModel(ref: String, context: Context? = null): Sess
         liveBaseUrl = { ServiceWire.uploadBaseUrl },
         inputSyncEnabled = inputSync,
         retainPaneSizeEnabled = retainPaneSize,
+        warmSubscribe = cacheHit,
     )
 }
 

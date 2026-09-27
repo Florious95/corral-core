@@ -20,10 +20,11 @@ import android.content.Context
 import androidx.core.content.edit
 
 /**
- * 上次成功视口行列（S1：订阅不再写死 40×120）。
+ * 上次未挤压的真实视口行列（S1：订阅不再写死 40×120）。
  *
- * 命中条件：字号 sp 与 densityDpi 都与写入时一致。字号/密度变了弃缓存，否则列错
- * （083 格对齐）。旋转后 viewW/viewH 对不上由调用方视为未命中或等 081 那一次 resize。
+ * 命中条件：字号 sp、densityDpi、窗口 dp 尺寸（旋转/分屏）与字号像素（系统字体缩放）都与
+ * 写入时一致——此时首次布局必然测得同一 rows/cols，会话可在布局前按它 warm 订阅。
+ * 任一不同即弃缓存，退回布局后首订（083 格对齐）。
  */
 data class ViewportGeom(
     val rows: Int,
@@ -34,6 +35,9 @@ data class ViewportGeom(
     val viewW: Int,
     val viewH: Int,
     val densityDpi: Int,
+    val windowWidthDp: Int = 0,
+    val windowHeightDp: Int = 0,
+    val textSizePx: Float = 0f,
 )
 
 interface ViewportGeomStore {
@@ -59,6 +63,9 @@ class SharedPreferencesViewportGeomStore(context: Context) : ViewportGeomStore {
             viewW = prefs.getInt(KEY_VIEW_W, 0),
             viewH = prefs.getInt(KEY_VIEW_H, 0),
             densityDpi = prefs.getInt(KEY_DPI, 0),
+            windowWidthDp = prefs.getInt(KEY_WINDOW_W_DP, 0),
+            windowHeightDp = prefs.getInt(KEY_WINDOW_H_DP, 0),
+            textSizePx = prefs.getFloat(KEY_TEXT_SIZE_PX, 0f),
         )
     }
 
@@ -73,6 +80,9 @@ class SharedPreferencesViewportGeomStore(context: Context) : ViewportGeomStore {
             putInt(KEY_VIEW_W, geom.viewW)
             putInt(KEY_VIEW_H, geom.viewH)
             putInt(KEY_DPI, geom.densityDpi)
+            putInt(KEY_WINDOW_W_DP, geom.windowWidthDp)
+            putInt(KEY_WINDOW_H_DP, geom.windowHeightDp)
+            putFloat(KEY_TEXT_SIZE_PX, geom.textSizePx)
         }
     }
 
@@ -86,5 +96,8 @@ class SharedPreferencesViewportGeomStore(context: Context) : ViewportGeomStore {
         private const val KEY_VIEW_W = "view_w"
         private const val KEY_VIEW_H = "view_h"
         private const val KEY_DPI = "density_dpi"
+        private const val KEY_WINDOW_W_DP = "window_w_dp"
+        private const val KEY_WINDOW_H_DP = "window_h_dp"
+        private const val KEY_TEXT_SIZE_PX = "text_size_px"
     }
 }

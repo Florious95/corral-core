@@ -19,6 +19,7 @@ package dev.agentmirror.app.termview
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -31,6 +32,9 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.widget.OverScroller
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnLayout
 import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
@@ -42,9 +46,15 @@ import dev.agentmirror.terminal.TerminalColor
 import dev.agentmirror.terminal.TerminalEmulator
 import dev.agentmirror.terminal.TextStyle
 import java.io.Closeable
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
+
+/** 字号 sp → 画笔像素：绘制与几何缓存命中判定（会话打开前）共用同一公式，结果逐位一致。 */
+@Suppress("DEPRECATION")
+internal fun termTextSizePx(fontSizeSp: Float, resources: Resources): Float =
+    fontSizeSp * resources.displayMetrics.scaledDensity
 
 /**
  * 终端画布视图：Canvas 逐格绘制 + 拖动手势 + Choreographer 帧调度（薄层，业务状态全在 [TermViewPresenter]）。
@@ -78,6 +88,7 @@ class TermSurfaceView @JvmOverloads constructor(
                 if (old.onFrameRequested === frameRequestCallback) old.onFrameRequested = null
             }
             field = value
+            stopFling()
             if (value != null) {
                 value.onFrameRequested = frameRequestCallback
                 applyFontMetrics()
@@ -111,6 +122,12 @@ class TermSurfaceView @JvmOverloads constructor(
      * 内部负责，View 层不感知连接状态。null 分支保留是为了在测试/预览中允许不注入 VM。
      */
     var onRemoteScrollBy: ((deltaLines: Int) -> Unit)? = null
+
+    /**
+     * 远端滚动尾沿（[onRemoteScrollBy] 的伴随回调）：会话层节流窗口内累积、尚未发出的行数由它
+     * 补发。每次远端投送后重排一次延迟调用，拖动/甩动停下一个节流窗口后触发，末段位移不滞留。
+     */
+    var onRemoteScrollFlush: (() -> Unit)? = null
 
     /**
      * 鼠标/触点采集（输入透传第 4 步）：行列 1-based，修饰键已从 MotionEvent 拆出。
@@ -163,6 +180,24 @@ class TermSurfaceView @JvmOverloads constructor(
      * 丢失的亚行像素，两层累加器职责不重叠。
      */
     private var pendingScrollPx: Float = 0f
+
+    /** 抬手后的惯性甩动：每个动画帧把位移增量喂进同一个像素累加器（与拖动同一投送路径）。 */
+    private val flingScroller = OverScroller(context)
+    private var flingLastY = 0
+    private val flingStep = object : Runnable {
+        override fun run() {
+            if (!flingScroller.computeScrollOffset()) return
+            val y = flingScroller.currY
+            dispatchScrollPx((y - flingLastY).toFloat())
+            flingLastY = y
+            if (!flingScroller.isFinished) postOnAnimation(this)
+        }
+    }
+
+    /** 本次按下接住了进行中的甩动：只是“停住”，抬手不当点按上报。 */
+    private var touchCaughtFling: Boolean = false
+
+    private val remoteScrollFlushRunnable = Runnable { onRemoteScrollFlush?.invoke() }
 
     private val mouseCap = TermMouseCapture()
     private val touchSlopPx = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
@@ -238,24 +273,54 @@ class TermSurfaceView @JvmOverloads constructor(
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
             // GestureDetector 的 distanceY 是”上一点 - 当前点”：手指下拖为负；
             // Presenter 的正值才是看更早历史，因此必须反号以保持内容跟手移动。
-            if (lineHeightPx <= 0) return true // 度量还没来（首帧前）：不除，避免 Infinity/NaN
-            // 像素余数累加（见 pendingScrollPx 字段注释）：先把本次增量并入累加器，再从
-            // 累加器里取出能凑出的整行数，取出多少扣多少，不清零整个累加器——不足一行的
-            // 部分留给下一次回调，像素不会在这一层消失。
-            pendingScrollPx += -dy
-            val deltaLines = (pendingScrollPx / lineHeightPx.toFloat()).toInt() // 向零截断，符号随累加器
-            if (deltaLines == 0) return true
-            pendingScrollPx -= deltaLines * lineHeightPx.toFloat()
-            lastScrollDelta = deltaLines
-            val remoteScroll = onRemoteScrollBy
-            if (remoteScroll != null) {
-                remoteScroll(deltaLines) // 远端路径；降级判断由 SessionViewModel 负责
-            } else {
-                presenter?.onScrollBy(deltaLines) // 本地缓冲路径（测试/预览，无 VM 注入时）
-            }
+            dispatchScrollPx(-dy)
+            return true
+        }
+
+        override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+            // 横向为主的甩动不动视口；velocityY 与拖动同号（手指下甩 = 正 = 看更早历史）。
+            if (lineHeightPx <= 0 || abs(velocityY) < abs(velocityX)) return false
+            stopFling()
+            flingLastY = 0
+            flingScroller.fling(0, 0, 0, velocityY.roundToInt(), 0, 0, Int.MIN_VALUE, Int.MAX_VALUE)
+            postOnAnimation(flingStep)
             return true
         }
     })
+
+    /**
+     * 拖动/甩动的像素位移 → 整行投送（正 = 看更早历史）。
+     *
+     * 像素余数累加（见 pendingScrollPx 字段注释）：先把本次增量并入累加器，再从累加器里取出
+     * 能凑出的整行数，取出多少扣多少，不清零整个累加器——不足一行的部分留给下一次回调，
+     * 像素不会在这一层消失。
+     */
+    private fun dispatchScrollPx(px: Float) {
+        if (lineHeightPx <= 0) return // 度量还没来（首帧前）：不除，避免 Infinity/NaN
+        pendingScrollPx += px
+        val deltaLines = (pendingScrollPx / lineHeightPx.toFloat()).toInt() // 向零截断，符号随累加器
+        if (deltaLines == 0) return
+        pendingScrollPx -= deltaLines * lineHeightPx.toFloat()
+        lastScrollDelta = deltaLines
+        val remoteScroll = onRemoteScrollBy
+        if (remoteScroll != null) {
+            remoteScroll(deltaLines) // 远端路径；降级判断由 SessionViewModel 负责
+            if (onRemoteScrollFlush != null) {
+                removeCallbacks(remoteScrollFlushRunnable)
+                postDelayed(remoteScrollFlushRunnable, REMOTE_SCROLL_FLUSH_MS)
+            }
+        } else {
+            presenter?.onScrollBy(deltaLines) // 本地缓冲路径（测试/预览，无 VM 注入时）
+        }
+    }
+
+    /** 停掉进行中的甩动；返回是否确实打断了一次甩动。 */
+    private fun stopFling(): Boolean {
+        removeCallbacks(flingStep)
+        if (flingScroller.isFinished) return false
+        flingScroller.forceFinished(true)
+        return true
+    }
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -309,6 +374,8 @@ class TermSurfaceView @JvmOverloads constructor(
     /** 非空格可见字（first_draw glyphs；BLANK 是 " " 不算字）。与 cellsNonBlank 同一次扫描。 */
     private var cellsWithGlyph: Int = 0
     private val glyphAdvanceCache = HashMap<Int, Float>(256)
+    /** drawTextRuns 的颜色段拼接缓冲：每帧每行复用，不再逐行新建。 */
+    private val runText = StringBuilder(256)
 
     /** Only an attached, visible window may schedule frames, including worker-thread wakes. */
     @Volatile
@@ -357,6 +424,7 @@ class TermSurfaceView @JvmOverloads constructor(
     // a late capture completion must not rearm a hidden/detached View. Resume
     // also resets both claims, since an old callback may never be delivered.
     private fun resetFrameScheduling() {
+        stopFling()
         renderActive = false
         mainHandler.removeCallbacks(wakeRunnable)
         wakeQueued.set(false)
@@ -384,6 +452,7 @@ class TermSurfaceView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         resetFrameScheduling()
+        removeCallbacks(remoteScrollFlushRunnable)
         if (viewportSettlePending) {
             removeCallbacks(viewportSettleRunnable)
             viewportSettleRunnable.run()
@@ -483,13 +552,14 @@ class TermSurfaceView @JvmOverloads constructor(
         val p = presenter ?: return super.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                touchCaughtFling = stopFling()
                 requestFocus()
                 touchDownX = event.x
                 touchDownY = event.y
                 touchMoved = false
                 edgeTouchActive = event.x >= width - dp(EDGE_MOUSE_WIDTH_DP)
                 mouseCap.reset()
-                edgeMouseHeld = edgeTouchActive && dispatchEdgeMouse(p, event)
+                edgeMouseHeld = edgeTouchActive && !touchCaughtFling && dispatchEdgeMouse(p, event)
             }
             MotionEvent.ACTION_MOVE -> if (!touchMoved) {
                 val dx = event.x - touchDownX
@@ -554,7 +624,7 @@ class TermSurfaceView @JvmOverloads constructor(
     /** Tap-only mouse support. Dragging never emits motion/button-32 reports. */
     private fun dispatchTermMouse(p: TermViewPresenter, event: MotionEvent) {
         if (event.actionMasked == MotionEvent.ACTION_CANCEL) return
-        if (event.actionMasked != MotionEvent.ACTION_UP || touchMoved) return
+        if (event.actionMasked != MotionEvent.ACTION_UP || touchMoved || touchCaughtFling) return
         val sink = onTermMouse ?: return
         val cw = p.cellWidth
         val ch = p.cellHeight
@@ -777,7 +847,8 @@ class TermSurfaceView @JvmOverloads constructor(
         var runStartCol = 0
         var col = 0
         var runColor: Int? = null
-        val sb = StringBuilder()
+        val sb = runText
+        sb.setLength(0)
         for (cell in cells) {
             if (cell.width == 0) {
                 // 宽字符续格：主格已按 width=2 计列，这里不再推进——否则每个 CJK 多漂
@@ -1007,8 +1078,12 @@ class TermSurfaceView @JvmOverloads constructor(
 
     private fun persistViewportGeom() {
         if (cellW <= 0 || cellH <= 0 || width <= 0 || height <= 0) return
+        // 只落真实排布：IME 在屏或视口被挤到内核行数以下时的行数是过渡值，落盘会让下次
+        // warm 订阅按挤压值订阅、布局后再补一次 resize（双重重排）。
+        if (presenter?.viewportSqueezed == true || imeVisible()) return
         val rows = (height / cellH).coerceAtLeast(1)
         val cols = minOf(usableWidthPx(width) / cellW, TerminalMetrics.maxCols).coerceAtLeast(1)
+        val config = resources.configuration
         val geom = ViewportGeom(
             rows = rows,
             cols = cols,
@@ -1018,6 +1093,9 @@ class TermSurfaceView @JvmOverloads constructor(
             viewW = width,
             viewH = height,
             densityDpi = resources.displayMetrics.densityDpi,
+            windowWidthDp = config.screenWidthDp,
+            windowHeightDp = config.screenHeightDp,
+            textSizePx = fontTextSizePx(),
         )
         // Compare the shared value, not a per-View lastSaved value (A -> B -> A).
         if (viewportGeomStore.load() != geom) viewportGeomStore.save(geom)
@@ -1031,12 +1109,20 @@ class TermSurfaceView @JvmOverloads constructor(
         )
     }
 
+    private var leftEdgeContentLeft = -1
+    private var leftEdgeCellW = -1
+    private var leftEdgeWidth = -1
+
     /**
-     * 操作数（contentLeft/col0/cellW/viewW/verdict）没变不新开行——Compose 会在
-     * 180ms 内重建多个 View，实例字段拦不住，合并放在 [DiagLog] 进程级。
-     * 键一变立刻新开行（密度/viewW 变化不许吞）。
+     * 操作数（contentLeft/col0/cellW/viewW/verdict）没变不新开行——本 View 逐帧重复先由实例字段
+     * 拦下（onDraw 每帧都走这里，进程级合并要持锁回扫缓冲并跑正则）；Compose 会在 180ms 内重建
+     * 多个 View，跨 View 的合并仍在 [DiagLog] 进程级。键一变立刻新开行（密度/viewW 变化不许吞）。
      */
     private fun recordLeftEdgeOnce(contentLeft: Int) {
+        if (contentLeft == leftEdgeContentLeft && cellW == leftEdgeCellW && width == leftEdgeWidth) return
+        leftEdgeContentLeft = contentLeft
+        leftEdgeCellW = cellW
+        leftEdgeWidth = width
         val col0 = TermLeftEdge.cellOriginX(0, cellW, contentLeft)
         val verdict = TermLeftEdge.classify(contentLeft.toFloat(), contentLeft, contentLeft)
         val key = "$contentLeft|$col0|$cellW|$width|$verdict"
@@ -1064,7 +1150,7 @@ class TermSurfaceView @JvmOverloads constructor(
      */
     private fun applyFontMetrics() {
         val p = presenter ?: return
-        val sizePx = fontSizeSp * resources.displayMetrics.scaledDensity
+        val sizePx = fontTextSizePx()
         // 主字体 textSize 决定格宽（等宽栅格基准）；回退槽字体同尺寸，逐格居中使用同指标。
         fgPaint.textSize = sizePx
         glyphs().setTextSize(sizePx)
@@ -1085,6 +1171,11 @@ class TermSurfaceView @JvmOverloads constructor(
         }
         persistViewportGeom()
     }
+
+    private fun fontTextSizePx(): Float = termTextSizePx(fontSizeSp, resources)
+
+    private fun imeVisible(): Boolean =
+        ViewCompat.getRootWindowInsets(this)?.isVisible(WindowInsetsCompat.Type.ime()) == true
 
     /** 终端色 → ARGB。色值与 083 §2 重映射都在 [TermPalette.colorFor]，这里不写字面量。 */
     private fun colorFor(color: TerminalColor, background: Boolean): Int =
@@ -1138,6 +1229,8 @@ class TermSurfaceView @JvmOverloads constructor(
         const val FULL_BACKGROUND_FRAMES = 4
         /** 最后一次尺寸变化后静默这么久视为 IME/dock 运动结束（覆盖偶发掉帧，不拖慢结算）。 */
         const val VIEWPORT_SETTLE_MS = 150L
+        /** 远端滚动尾沿延迟：与会话层 ScrollWheelFrame 节流窗口（SessionViewModel，50ms）同长。 */
+        const val REMOTE_SCROLL_FLUSH_MS = 50L
         /** Right edge reserved for the terminal application's native scrollbar. */
         const val EDGE_MOUSE_WIDTH_DP = 32f
         /** 历史深色默认值别名；真实取色走 [TermPalette.of]。 */

@@ -200,6 +200,13 @@ class TermViewPresenter(
     /** 是否锁定在历史中（"回到底部"按钮可见性）。 */
     val showBackToBottom: Boolean get() = topLine != null
 
+    /**
+     * 首订后视口被 IME/dock 挤压到内核行数以下：此刻的像素行数只是过渡排布，不是下次打开
+     * 会测到的真实视口，几何缓存不得落这个值（否则 warm 订阅会按挤压值订阅再被 resize）。
+     */
+    val viewportSqueezed: Boolean
+        get() = viewportSeeded && cellHeight > 0 && viewportHeightPx / cellHeight < emulator.rows
+
     /** 总逻辑行数 = 本地 scrollback + 当前屏幕（渲染窗口的坐标空间上界）。 */
     private val logicalCount: Int get() = emulator.scrollback.size + emulator.rows
 

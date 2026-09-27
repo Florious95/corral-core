@@ -146,6 +146,48 @@ class TermViewPresenterTest {
     }
 
     @Test
+    fun viewportSqueezedOnlyWhileSeededViewportIsBelowEmulatorRows() {
+        val h = seededFollowing()
+        assertFalse("首订前没有已协商几何，谈不上挤压", h.presenter.viewportSqueezed)
+        h.presenter.onViewportSizeChanged(100, 110)
+        assertFalse(h.presenter.viewportSqueezed)
+        h.presenter.onViewportSizeChanged(100, 61) // IME 弹起：只剩 3 行
+        assertTrue("挤压排布不得落入 warm 几何缓存", h.presenter.viewportSqueezed)
+        h.presenter.onViewportSizeChanged(100, 110)
+        assertFalse(h.presenter.viewportSqueezed)
+    }
+
+    // ---- 滚动跟手：视口偏移同步、O(1)、不等内核锁 ----
+
+    @Test
+    fun scrollOffsetMovesSynchronouslyWhileParserHoldsEmulator() {
+        val h = harness(rows = 3, cols = 5)
+        h.emulator.feed((0 until 12).joinToString("\r\n") { "l$it" }) // scrollback 9 + 屏幕 3
+        val monitorHeld = CountDownLatch(1)
+        val releaseMonitor = CountDownLatch(1)
+        val holder = Thread {
+            synchronized(h.emulator) { // WS 线程正在 feed/重放大快照
+                monitorHeld.countDown()
+                releaseMonitor.await(2, TimeUnit.SECONDS)
+            }
+        }
+        holder.start()
+        assertTrue(monitorHeld.await(1, TimeUnit.SECONDS))
+        try {
+            val started = System.nanoTime()
+            repeat(4) { h.presenter.onScrollBy(1) } // 逐帧拖动/甩动投送
+            val elapsedMs = (System.nanoTime() - started) / 1_000_000
+            assertTrue("拖动不得等内核锁：${elapsedMs}ms", elapsedMs < 250)
+            assertEquals("偏移当帧生效，不等捕获", 5..7, h.presenter.window)
+            h.presenter.onScrollBy(-4)
+            assertTrue("拖回底部当帧恢复跟随", h.presenter.isFollowingBottom)
+        } finally {
+            releaseMonitor.countDown()
+            holder.join(1_000)
+        }
+    }
+
+    @Test
     fun lockedHistoryIsTopAnchoredWhileFollowingIsBottomAnchored() {
         val h = seededFollowing()
         h.presenter.onViewportSizeChanged(100, 110)

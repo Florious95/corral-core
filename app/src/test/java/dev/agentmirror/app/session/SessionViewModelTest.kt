@@ -31,6 +31,7 @@ import dev.agentmirror.app.conn.FramePayload
 import dev.agentmirror.app.conn.InputFrame
 import dev.agentmirror.app.conn.InputKey
 import dev.agentmirror.app.conn.ResizeFrame
+import dev.agentmirror.app.conn.ScrollWheelFrame
 import dev.agentmirror.app.conn.ScrollbackFrame
 import dev.agentmirror.app.conn.SubscribeFrame
 import dev.agentmirror.app.conn.TransportFactory
@@ -39,6 +40,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * SessionViewModel 测试：003 四标准在会话页的落地面 + 006 本地滚动补页 + 附件管线。
@@ -63,7 +67,7 @@ class SessionViewModelTest {
     }
 
     /** 测试夹具：READY 的 ConnectionManager + 已构造的 VM（首订待首次有效视口）。 */
-    private class Harness(ref: String = "s1", rows: Int = 5, cols: Int = 10) {
+    private class Harness(ref: String = "s1", rows: Int = 5, cols: Int = 10, warm: Boolean = false) {
         val clock = FakeClock()
         val transport = FakeWebSocketTransport()
         val uploader = FakeUploader()
@@ -79,7 +83,7 @@ class SessionViewModelTest {
             manager.start()
             // 假传输同步 onOpen ⇒ auth 已发出；auth_ack ok ⇒ READY。
             transport.deliverText("""{"v":1,"type":"auth_ack","payload":{"ok":true}}""")
-            vm = SessionViewModel(manager, uploader, "http://host:0", ref, rows, cols)
+            vm = SessionViewModel(manager, uploader, "http://host:0", ref, rows, cols, warmSubscribe = warm)
             // 测试自建 manager：显式把 VM 挂为监听（生产经接线层 uiConnector 扇出路由，见 VM KDoc）。
             manager.setListener(vm)
             emulator = vm.emulator
@@ -93,6 +97,7 @@ class SessionViewModelTest {
         fun scrollbackFrames(): List<ScrollbackFrame> = sentFrames().filterIsInstance<ScrollbackFrame>()
         fun resizeFrames(): List<ResizeFrame> = sentFrames().filterIsInstance<ResizeFrame>()
         fun subscribeFrames(): List<SubscribeFrame> = sentFrames().filterIsInstance<SubscribeFrame>()
+        fun scrollWheelDeltas(): List<Int> = sentFrames().filterIsInstance<ScrollWheelFrame>().map { it.delta }
         fun attachPreviewFrames(): List<AttachPreviewFrame> = sentFrames().filterIsInstance<AttachPreviewFrame>()
 
         fun snap(text: String) = transport.deliverBinary(
@@ -631,6 +636,124 @@ class SessionViewModelTest {
         assertTrue("首次有效几何不得额外发 Resize", h.resizeFrames().isEmpty())
         assertEquals(12, h.emulator.rows)
         assertEquals(41, h.emulator.cols)
+    }
+
+    // ---- warm 几何订阅（极速打开：不等 View 首次布局）----
+
+    @Test
+    fun warmGeometrySubscribesAtConstructionBeforeAnyLayout() {
+        val h = Harness(rows = 12, cols = 41, warm = true)
+        val r = h.subscribeFrames()
+        assertEquals("缓存命中必须在构造期即订阅，不等 onSizeChanged", 1, r.size)
+        assertEquals(12, r[0].rows)
+        assertEquals(41, r[0].cols)
+        assertEquals(12, h.emulator.rows)
+        assertEquals(41, h.emulator.cols)
+    }
+
+    @Test
+    fun warmGeometryMatchingFirstLayoutSendsNoResizeOrResubscribe() {
+        val h = Harness(rows = 12, cols = 41, warm = true)
+        h.snap("warm first frame")
+        assertTrue("warm 首帧先于布局到达也照常应用", h.vm.hasSnapshot)
+
+        h.vm.presenter.seedCellMetrics(12, 24)
+        h.vm.presenter.onViewportSizeChanged(500, 300) // 实测 12×41 == 缓存
+
+        assertEquals("同尺寸不得重订", 1, h.subscribeFrames().size)
+        assertTrue("同尺寸 N_resize_active 必须为 0", h.resizeFrames().isEmpty())
+        assertEquals(12, h.emulator.rows)
+        assertEquals(41, h.emulator.cols)
+    }
+
+    @Test
+    fun warmGeometryMismatchResubscribesOnceWithMeasuredGeometry() {
+        val h = Harness(rows = 10, cols = 41, warm = true)
+
+        h.vm.presenter.seedCellMetrics(12, 24)
+        h.vm.presenter.onViewportSizeChanged(500, 300) // 实测 12×41 ≠ 缓存 10×41
+
+        val r = h.subscribeFrames()
+        assertEquals(listOf(10 to 41, 12 to 41), r.map { it.rows to it.cols })
+        assertTrue("按实测重订，不走 resize", h.resizeFrames().isEmpty())
+        assertEquals(12 to 41, h.manager.subscriptionSize("s1"))
+        assertEquals(12, h.emulator.rows)
+    }
+
+    @Test
+    fun coldOpenStillDefersSubscribeUntilFirstLayout() {
+        val h = Harness(rows = 12, cols = 41)
+        assertTrue("缓存未命中不得按占位尺寸抢订", h.subscribeFrames().isEmpty())
+        h.vm.presenter.seedCellMetrics(12, 24)
+        h.vm.presenter.onViewportSizeChanged(500, 300)
+        assertEquals(1, h.subscribeFrames().size)
+    }
+
+    // ---- 滚动跟手：节流尾沿 / 点按不等内核锁 ----
+
+    @Test
+    fun flushScrollWheelSendsTailStrandedInsideThrottleWindow() {
+        val h = Harness()
+        h.vm.onScrollWheel(3) // 前沿立发
+        h.vm.onScrollWheel(2) // 窗口内：只累加
+        assertEquals(listOf(-3), h.scrollWheelDeltas())
+
+        h.vm.flushScrollWheel() // 尾沿：补发滞留的 2 行
+
+        assertEquals(listOf(-3, -2), h.scrollWheelDeltas())
+        h.vm.flushScrollWheel()
+        assertEquals("无尾量不发空帧", listOf(-3, -2), h.scrollWheelDeltas())
+    }
+
+    @Test
+    fun flushScrollWheelAfterDisconnectDropsTailWithoutSending() {
+        val h = Harness()
+        h.vm.onScrollWheel(3)
+        h.vm.onScrollWheel(2)
+        h.transport.peerClose(1006, "dropped")
+
+        h.vm.flushScrollWheel()
+
+        assertEquals(listOf(-3), h.scrollWheelDeltas())
+    }
+
+    @Test
+    fun flushScrollWheelAfterDisposeSendsNothing() {
+        val h = Harness()
+        h.vm.onScrollWheel(3)
+        h.vm.onScrollWheel(2)
+        h.vm.dispose()
+
+        h.vm.flushScrollWheel()
+
+        assertEquals(listOf(-3), h.scrollWheelDeltas())
+    }
+
+    @Test
+    fun terminalTapDoesNotWaitForEmulatorParserLock() {
+        val h = Harness()
+        h.delta("\u001b[?1000h\u001b[?1006h") // 对端开 SGR 鼠标跟踪
+        val expected = h.emulator.encodeMouse(button = 0, column = 5, row = 3, press = true)!!
+        val locked = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val parser = thread {
+            synchronized(h.emulator) { // 模拟 WS 线程正在 feed/头插大段历史
+                locked.countDown()
+                release.await()
+            }
+        }
+        try {
+            assertTrue(locked.await(2, TimeUnit.SECONDS))
+            val t0 = System.nanoTime()
+            val sent = h.vm.onTermMouse(column = 5, row = 3, press = true)
+            val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0)
+            assertTrue("跟踪开着必须发出", sent)
+            assertTrue("点按不得等内核锁（${elapsedMs}ms）", elapsedMs < 500)
+        } finally {
+            release.countDown()
+            parser.join()
+        }
+        assertEquals(expected.toList(), h.inputFrames().last().bytes?.toList())
     }
 
     // ---- 连接状态映射 ----

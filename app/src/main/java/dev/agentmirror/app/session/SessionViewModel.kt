@@ -33,6 +33,7 @@ import dev.agentmirror.app.diag.DiagLog
 import dev.agentmirror.app.perf.PerfTrace
 import dev.agentmirror.app.termview.TerminalKeyEncoder
 import dev.agentmirror.app.termview.TermViewPresenter
+import dev.agentmirror.terminal.MouseSgr
 import dev.agentmirror.terminal.ScreenSnapshot
 import dev.agentmirror.terminal.TerminalEmulator
 
@@ -68,7 +69,7 @@ internal fun ScreenSnapshot.plainText(): String =
  * resize 上报、连接状态映射全部收敛在本类；Compose 屏只是薄渲染壳。
  *
  * 接线（session-ui 知识基底 §1）：
- * - 进入：首次有效视口几何就绪后 [ConnectionManager.subscribe] → 首帧 snapshot 重放 + 预取历史；
+ * - 进入：几何缓存命中即构造期 warm 订阅，否则首次有效视口几何就绪后 [ConnectionManager.subscribe] → 首帧 snapshot 重放 + 预取历史；
  * - 增量：delta → [TerminalEmulator.feed]；历史页 → [TerminalEmulator.prependHistory]；
  * - 滚动到顶：[syncFromPresenter] 收敛 presenter 视口信号 → 按页拉更老历史；
  * - 差分同步（084）：本地输入框完整编辑，每次变化经 [onPassthroughInput] 发最小按键
@@ -94,6 +95,11 @@ class SessionViewModel(
     var inputSyncEnabled: Boolean = true,
     /** 退出时是否要求服务端保留 pane 的最后尺寸；默认关闭以保持原有还原语义。 */
     var retainPaneSizeEnabled: Boolean = false,
+    /**
+     * [initialRows]×[initialCols] 来自与本次排布条件全等的几何缓存：构造即订阅（warm），
+     * 不等 View 首次布局。布局测得同值即零 resize；不同则按实测补订一次。
+     */
+    warmSubscribe: Boolean = false,
 ) : ConnectionManager.Listener {
 
     /** 终端内核：live pane 的完整 snapshot/delta 状态。 */
@@ -106,6 +112,9 @@ class SessionViewModel(
     private val lifecycleLock = Any()
     @Volatile
     private var disposed = false
+
+    /** warm 订阅已按此行列发出；首次布局实测与之相同则无需再订。 */
+    private val warmGeometry: Pair<Int, Int>? = if (warmSubscribe) initialRows to initialCols else null
 
     /** 视口状态机：跟随/锁定、字号→行列数换算、脏区（渲染逻辑与 View 分离）。 */
     val presenter = TermViewPresenter(emulator) { rows, cols, reason ->
@@ -225,8 +234,12 @@ class SessionViewModel(
         if (PerfTrace.isEnabled() && PerfTrace.isKeyEchoEnabled()) {
             emulator.onAsciiPrint = { ch -> PerfTrace.notePrintableEcho(ch) }
         }
-        // 首订延后到 View 提供首次有效实测几何；连接层仍由该回调记簿，READY 立发，
-        // 重连自动重放（004 无状态）。initialRows/initialCols 仅初始化本地空内核。
+        // 首订：缓存命中即刻按缓存几何订阅，与 Compose 首次组合/布局并行拉首帧；未命中则
+        // 延后到 View 提供首次有效实测几何。连接层均记簿，READY 立发，重连自动重放（004 无状态）。
+        warmGeometry?.let { (rows, cols) ->
+            val sent = manager.subscribe(ref, rows, cols, retainPaneSize = retainPaneSizeEnabled)
+            DiagLog.recordCritical("session", "subscribe ref=$ref rows=$rows cols=$cols sent=$sent warm=1")
+        }
     }
 
     // ---- ConnectionManager.Listener（单收件线程串行回调）----
@@ -717,7 +730,12 @@ class SessionViewModel(
         meta: Boolean = false,
         ctrl: Boolean = false,
     ): Boolean {
-        val bytes = emulator.encodeMouse(
+        // 触点在主线程：不走 @Synchronized 的 emulator.encodeMouse——WS 线程 feed/历史头插
+        // 持内核锁期间点按会被挂住。模式位是单写者的 Int，无锁读取；判据与核层
+        // canEncode 相同（1000/1002 跟踪 + 1006 SGR 编码），字节由同一个 MouseSgr 编出。
+        val tracking = emulator.mouseTrackingMode
+        if ((tracking != 1000 && tracking != 1002) || emulator.mouseEncodingMode != 1006) return false
+        val bytes = MouseSgr.encode(
             button = 0,
             column = column,
             row = row,
@@ -726,7 +744,7 @@ class SessionViewModel(
             shift = shift,
             meta = meta,
             ctrl = ctrl,
-        ) ?: return false
+        )
         if (bytes.isEmpty()) return false
         return manager.sendRawBytes(ref, bytes)
     }
@@ -751,6 +769,7 @@ class SessionViewModel(
      * 每帧都发帧，链路负担大；50ms 约保留 20fps 的手势密度，足以响应滑动速度。
      * 窗口内的事件**累加**到 pendingScrollDelta，窗口到点时把累计量一并发出——
      * 不累加则一次完整滑动只送出 ~6 帧 × 1–2 行 ≈ 10 行，用户体感是"没反应"。
+     * 手势停下后窗口内未发出的尾量由 [flushScrollWheel] 在尾沿补发。
      *
      * @contract
      * @pre deltaLines 非零（调用方 TermSurfaceView 在 deltaLines==0 时不调用此方法）
@@ -781,6 +800,24 @@ class SessionViewModel(
     }
 
     /**
+     * 节流窗口的尾沿（View 在最后一次滚动投送后一个节流窗口调用）：把窗口内累积、尚未发出的
+     * 行数补发。无尾沿时手势末段不足一窗的位移会滞留到下一次手势才发，画面停在半路。
+     *
+     * @post pendingScrollDelta 归零；READY 且非零时发一帧 ScrollWheelFrame(delta=-pending)
+     */
+    fun flushScrollWheel() {
+        val toSend = pendingScrollDelta
+        if (toSend == 0) return
+        pendingScrollDelta = 0
+        if (disposed || connectionState != ConnectionState.READY || awaitingReconnectSnapshot) return
+        val nowMs = System.currentTimeMillis()
+        lastScrollSentMs = nowMs
+        if (manager.sendScrollWheel(ref, -toSend)) {
+            lastScrollRequestAtMs = nowMs
+        }
+    }
+
+    /**
      * 发起关闭当前会话 pane（协议 close_session 请求）。
      */
     fun closeSession(): Boolean {
@@ -802,7 +839,15 @@ class SessionViewModel(
     private fun onFirstGeometryReady(rows: Int, cols: Int) {
         synchronized(lifecycleLock) {
             if (disposed) return
-            DiagLog.recordCritical("session", "geometry_ready ref=$ref rows=$rows cols=$cols")
+            val warm = warmGeometry
+            DiagLog.recordCritical(
+                "session",
+                "geometry_ready ref=$ref rows=$rows cols=$cols " +
+                    "warm=${if (warm == null) "none" else if (warm == rows to cols) "hit" else "miss"}",
+            )
+            // warm 订阅已按同一几何发出：内核也已是该尺寸，零 resize、零重订。
+            if (warm == rows to cols) return
+            // warm 几何未命中实测：按实测重订（替换在途订阅并更新重放簿记，未 READY 也不丢）。
             presenter.withEmulatorMutation { emulator.resize(cols, rows) }
             presenter.refreshPreparedFrame()
             copyModeEmulator.resize(cols, rows)

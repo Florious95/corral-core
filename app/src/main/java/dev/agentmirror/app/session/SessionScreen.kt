@@ -360,6 +360,7 @@ fun SessionScreen(
                                         it.fontSizeSp = savedSp.toFloat()
                                         it.presenter = viewModel.presenter
                                         it.onRemoteScrollBy = viewModel::onScrollWheel
+                                        it.onRemoteScrollFlush = viewModel::flushScrollWheel
                                         it.onTermMouse = viewModel::onTermMouse
                                         it.onTermKey = viewModel::onTermKey
                                         it.sessionRef = viewModel.ref
@@ -370,6 +371,7 @@ fun SessionScreen(
                                     view.nightOverride = darkTheme
                                     view.presenter = viewModel.presenter
                                     view.onRemoteScrollBy = viewModel::onScrollWheel
+                                    view.onRemoteScrollFlush = viewModel::flushScrollWheel
                                     view.onTermMouse = viewModel::onTermMouse
                                     view.onTermKey = viewModel::onTermKey
                                     view.sessionRef = viewModel.ref
