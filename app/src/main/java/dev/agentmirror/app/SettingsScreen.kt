@@ -17,6 +17,8 @@
 package dev.agentmirror.app
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,6 +37,9 @@ import dev.agentmirror.app.session.SharedPreferencesRetainPaneSizeStore
 import dev.agentmirror.app.session.SharedPreferencesShortcutCommandStore
 import dev.agentmirror.app.session.ShortcutCommandRepository
 import dev.agentmirror.app.termview.SharedPreferencesFontSizeStore
+import dev.agentmirror.app.ui.components.NavDirection
+import dev.agentmirror.app.ui.components.navTransition
+import dev.agentmirror.app.ui.screens.ShortcutCommandsScreen
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.SharedPreferencesTermThemeStore
 import dev.agentmirror.app.ui.screens.TermThemePickerScreen
@@ -44,12 +49,18 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import dev.agentmirror.app.ui.screens.SettingsScreen as DesignSettingsScreen
 
+/** 设置页内的二级页。主页常驻底层，二级页经 Push / Pop 转场进出。 */
+private enum class SettingsPage { Main, ShortcutCommands, LightTheme, DarkTheme, DiagLogs }
+
 /**
  * 单档设置页：重新配对成功时覆盖现有主机配置，不提前清除仍可用的档案。
  *
  * 诊断日志导出（feat-diagnostic-log-export）：一键导出按钮——把内存环形缓冲倾倒到
  * 文件并经系统分享（FileProvider）发出去。用户复现完缺陷、烦躁时点一下就能把日志发
  * 给我们，交互最短。失败可见：导出失败 / 无内容都在界面明确提示，绝不静默。
+ *
+ * 二级页（快捷命令 / 终端主题 / 诊断日志）共用一个 [SettingsPage] 状态与 navTransition；
+ * 主页滚动位置由这里持有，从二级页返回时不回顶。
  */
 @Composable
 internal fun SettingsScreen(
@@ -59,15 +70,11 @@ internal fun SettingsScreen(
     appearance: Appearance = Appearance.System,
     onAppearanceChange: (Appearance) -> Unit = {},
 ) {
-    var showDiagView by remember { mutableStateOf(false) }
-    var pickerDark by remember { mutableStateOf<Boolean?>(null) }
-    if (showDiagView) {
-        DiagLogViewScreen(onBack = { showDiagView = false })
-        return
-    }
-    BackHandler(enabled = enableBackHandler && pickerDark == null, onBack = onBack)
+    var page by remember { mutableStateOf(SettingsPage.Main) }
+    BackHandler(enabled = enableBackHandler && page == SettingsPage.Main, onBack = onBack)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val mainScroll = rememberScrollState()
     val fontSizeStore = remember { SharedPreferencesFontSizeStore(context) }
     var fontSizeSp by remember {
         mutableIntStateOf(fontSizeStore.load() ?: SharedPreferencesFontSizeStore.DEFAULT_FONT_SIZE_SP)
@@ -91,65 +98,82 @@ internal fun SettingsScreen(
     }
     val themeStore = remember { SharedPreferencesTermThemeStore(context) }
     var themeSel by remember { mutableStateOf(themeStore.load()) }
-    val pickerSlot = pickerDark
-    if (pickerSlot != null) {
-        TermThemePickerScreen(
-            darkSlot = pickerSlot,
-            selectedFamilyId = if (pickerSlot) themeSel.darkFamilyId else themeSel.lightFamilyId,
-            onSelect = { id ->
-                if (pickerSlot) themeStore.saveDark(id) else themeStore.saveLight(id)
-                themeSel = themeStore.load()
-                pickerDark = null
-            },
-            onBack = { pickerDark = null },
-        )
-        return
-    }
-    DesignSettingsScreen(
-        paired = paired,
-        terminalFontSize = fontSizeSp,
-        appearance = appearance,
-        buildLabel = buildLabel,
-        onRepair = onRePair,
-        onFontSizeChange = { sp ->
-            fontSizeSp = sp
-            fontSizeStore.save(sp)
+    val backToMain = { page = SettingsPage.Main }
+    AnimatedContent(
+        targetState = page,
+        transitionSpec = {
+            navTransition(if (targetState == SettingsPage.Main) NavDirection.Pop else NavDirection.Push)
         },
-        onAppearanceChange = onAppearanceChange,
-        onExportLogs = {
-            scope.launch {
-                val result = withContext(Dispatchers.IO) { exportDiagLog(context) }
-                when (result) {
-                    is ExportOutcome.Success -> shareFile(context, result.file)
-                    is ExportOutcome.Failed, is ExportOutcome.Empty -> Unit
-                }
+        label = "settings-page",
+    ) { target ->
+        when (target) {
+            SettingsPage.Main -> DesignSettingsScreen(
+                paired = paired,
+                terminalFontSize = fontSizeSp,
+                appearance = appearance,
+                buildLabel = buildLabel,
+                onRepair = onRePair,
+                onFontSizeChange = { sp ->
+                    fontSizeSp = sp
+                    fontSizeStore.save(sp)
+                },
+                onAppearanceChange = onAppearanceChange,
+                onExportLogs = {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) { exportDiagLog(context) }
+                        when (result) {
+                            is ExportOutcome.Success -> shareFile(context, result.file)
+                            is ExportOutcome.Failed, is ExportOutcome.Empty -> Unit
+                        }
+                    }
+                },
+                onViewLogs = { page = SettingsPage.DiagLogs },
+                lightFamilyId = themeSel.lightFamilyId,
+                darkFamilyId = themeSel.darkFamilyId,
+                onOpenLightTheme = { page = SettingsPage.LightTheme },
+                onOpenDarkTheme = { page = SettingsPage.DarkTheme },
+                inputSyncEnabled = inputSyncEnabled,
+                onInputSyncEnabledChange = { enabled ->
+                    inputSyncEnabled = enabled
+                    inputSyncStore.save(enabled)
+                },
+                retainPaneSizeEnabled = retainPaneSizeEnabled,
+                onRetainPaneSizeEnabledChange = { enabled ->
+                    retainPaneSizeEnabled = enabled
+                    retainPaneSizeStore.save(enabled)
+                },
+                shortcutCommands = shortcutCommands,
+                onOpenShortcutCommands = { page = SettingsPage.ShortcutCommands },
+                scrollState = mainScroll,
+            )
+            SettingsPage.ShortcutCommands -> ShortcutCommandsScreen(
+                commands = shortcutCommands,
+                onSave = { command ->
+                    shortcutRepository.upsert(command)
+                    shortcutCommands = shortcutRepository.load()
+                },
+                onDelete = { id ->
+                    shortcutRepository.delete(id)
+                    shortcutCommands = shortcutRepository.load()
+                },
+                onBack = backToMain,
+            )
+            SettingsPage.LightTheme, SettingsPage.DarkTheme -> {
+                val darkSlot = target == SettingsPage.DarkTheme
+                TermThemePickerScreen(
+                    darkSlot = darkSlot,
+                    selectedFamilyId = if (darkSlot) themeSel.darkFamilyId else themeSel.lightFamilyId,
+                    onSelect = { id ->
+                        if (darkSlot) themeStore.saveDark(id) else themeStore.saveLight(id)
+                        themeSel = themeStore.load()
+                        page = SettingsPage.Main
+                    },
+                    onBack = backToMain,
+                )
             }
-        },
-        onViewLogs = { showDiagView = true },
-        lightFamilyId = themeSel.lightFamilyId,
-        darkFamilyId = themeSel.darkFamilyId,
-        onOpenLightTheme = { pickerDark = false },
-        onOpenDarkTheme = { pickerDark = true },
-        inputSyncEnabled = inputSyncEnabled,
-        onInputSyncEnabledChange = { enabled ->
-            inputSyncEnabled = enabled
-            inputSyncStore.save(enabled)
-        },
-        retainPaneSizeEnabled = retainPaneSizeEnabled,
-        onRetainPaneSizeEnabledChange = { enabled ->
-            retainPaneSizeEnabled = enabled
-            retainPaneSizeStore.save(enabled)
-        },
-        shortcutCommands = shortcutCommands,
-        onSaveShortcutCommand = { command ->
-            shortcutRepository.upsert(command)
-            shortcutCommands = shortcutRepository.load()
-        },
-        onDeleteShortcutCommand = { id ->
-            shortcutRepository.delete(id)
-            shortcutCommands = shortcutRepository.load()
-        },
-    )
+            SettingsPage.DiagLogs -> DiagLogViewScreen(onBack = backToMain)
+        }
+    }
 }
 
 /** 导出结果（失败可见红线：导出必须可判定）。 */

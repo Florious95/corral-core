@@ -26,6 +26,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import dev.agentmirror.app.ui.components.AppBottomNav
 import dev.agentmirror.app.ui.model.NavTab
 import dev.agentmirror.app.ui.screens.SettingsScreen
@@ -144,7 +145,7 @@ class LandSettingsTest {
         val lightTerm = termBg
         assertEquals(LightPalette.screenBackground, lightPage)
         assertEquals(TerminalPaletteLight.background, lightTerm)
-        compose.onNodeWithText("深色").performClick()
+        compose.onNodeWithText("深色").performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(Appearance.Dark, appearance)
         assertEquals(DarkPalette.screenBackground, pageBg)

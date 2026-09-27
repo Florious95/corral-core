@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,8 +18,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -40,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,7 +54,6 @@ import dev.agentmirror.app.ui.components.CardTonalButton
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.MicroPill
 import dev.agentmirror.app.ui.components.ScreenHeader
-import dev.agentmirror.app.ui.components.SettingsCard
 import dev.agentmirror.app.ui.components.StandaloneLiquidToggle
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.Dims
@@ -65,8 +68,10 @@ import dev.agentmirror.app.ui.theme.TypeSizes
 import dev.agentmirror.app.ui.theme.currentTerminalPalette
 
 /**
- * 设置页。五张卡：主机配对 / 字体大小 / 诊断日志 / 外观 / 终端主题。
- * 原来四个满宽实心蓝按钮改成一主多辅：每张卡最多一个着色按钮，日志两个并排。
+ * 设置页：iOS 分组卡结构，五组——主机配对 / 会话与输入 / 终端 / 界面 / 支持。
+ * 快捷命令不再平铺在本页，只留一行入口（数量 + 各 Provider 覆盖），点进二级页管理，
+ * 命令再多本页高度也不变。每组一张 FlatGlass 卡，行首彩色图标砖，行间发丝线。
+ * [scrollState] 由容器持有：进出二级页后回到原滚动位置。
  */
 @Composable
 fun SettingsScreen(
@@ -90,8 +95,8 @@ fun SettingsScreen(
     retainPaneSizeEnabled: Boolean = false,
     onRetainPaneSizeEnabledChange: (Boolean) -> Unit = {},
     shortcutCommands: List<ShortcutCommand> = emptyList(),
-    onSaveShortcutCommand: (ShortcutCommand) -> Unit = {},
-    onDeleteShortcutCommand: (String) -> Unit = {},
+    onOpenShortcutCommands: () -> Unit = {},
+    scrollState: ScrollState = rememberScrollState(),
 ) {
     val p = LocalAppPalette.current
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
@@ -100,139 +105,157 @@ fun SettingsScreen(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .testTag("settings-scroll")
                 // 底部多留悬浮导航压住的高度，最后一张卡才能滚出胶囊（卡底与胶囊顶留 4dp）
                 .padding(start = 14.dp, end = 14.dp, bottom = 4.dp + LocalFloatingNavInset.current),
-            verticalArrangement = Arrangement.spacedBy(Dims.cardGap),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // ── 主机配对 ──
-            SettingsCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AppText("主机配对", p.rowTitleText, TypeSizes.cardTitle, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    if (paired) MicroPill("PAIRED", p.busyChipText, p.busyChipBg)
-                }
-                Box(Modifier.height(8.dp))
-                CardBody("当前只保留一个主机档案。重新配对成功后会覆盖现有档案。")
-                Box(Modifier.height(13.dp))
-                CardTonalButton("重新配对", onRepair, Modifier.fillMaxWidth())
-            }
-
-            // ── 字体大小 ──
-            SettingsCard {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    AppText("字体大小", p.rowTitleText, TypeSizes.cardTitle, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    AppText("$terminalFontSize pt", p.accent, 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, lineHeightMultiplier = 1f)
-                }
-                Box(Modifier.height(8.dp))
-                CardBody("取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。")
-                Box(Modifier.height(12.dp))
-                // 9 个档位单行等分，⛔ 不要折行（折行会回到 5+4 的老问题）
-                Row(horizontalArrangement = Arrangement.spacedBy(Dims.chipGap)) {
-                    TerminalMetrics.fontSizeSteps.forEach { size ->
-                        FontSizeChip(
-                            value = size,
-                            selected = size == terminalFontSize,
-                            onClick = { onFontSizeChange(size) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-                Box(Modifier.height(12.dp))
-                TerminalPreviewLine(fontSize = terminalFontSize)
-            }
-
-            // ── 输入框实时同步 ──
-            SettingsCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AppText(
-                        text = "输入框实时同步",
-                        color = p.rowTitleText,
-                        fontSize = TypeSizes.cardTitle,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // 自包含液态开关：⛔ 不读 LocalGlassBackdrop（设置页在录制树内，反向采样会 SIGSEGV）
-                    StandaloneLiquidToggle(
-                        checked = inputSyncEnabled,
-                        onCheckedChange = onInputSyncEnabledChange,
-                        modifier = Modifier.testTag("input-sync-switch"),
-                    )
-                }
-                Box(Modifier.height(8.dp))
-                CardBody("开启时打字实时显示在 CLI 终端，关闭时仅在点击发送后一次性投递。")
-            }
-
-            // ── 尺寸驻留 ──
-            SettingsCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AppText(
-                        text = "退出保留排版（尺寸驻留）",
-                        color = p.rowTitleText,
-                        fontSize = TypeSizes.cardTitle,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StandaloneLiquidToggle(
-                        checked = retainPaneSizeEnabled,
-                        onCheckedChange = onRetainPaneSizeEnabledChange,
-                        modifier = Modifier.testTag("retain-pane-size-switch"),
-                    )
-                }
-                Box(Modifier.height(8.dp))
-                CardBody("退出会话时不还原原生终端尺寸，再次进入实现极速秒开")
-            }
-
-            // ── 快捷命令 ──
-            ShortcutCommandSettingsCard(
-                commands = shortcutCommands,
-                onSave = onSaveShortcutCommand,
-                onDelete = onDeleteShortcutCommand,
-            )
-
-            // ── 诊断日志 ──
-            SettingsCard {
-                AppText("诊断日志", p.rowTitleText, TypeSizes.cardTitle, fontWeight = FontWeight.SemiBold)
-                Box(Modifier.height(8.dp))
-                CardBody("一键导出诊断日志，帮助我们定位问题。日志会自动脱敏（配对 token、密钥等不会包含）。")
-                Box(Modifier.height(13.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    CardTonalButton("导出", onExportLogs, Modifier.weight(1f))
-                    CardOutlineButton("查看", onViewLogs, Modifier.weight(1f))
-                }
-            }
-
-            // ── 外观 ──
-            SettingsCard {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    AppText("外观", p.rowTitleText, TypeSizes.cardTitle, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    AppText(appearance.label(), p.accent, 11.5f.sp, fontWeight = FontWeight.SemiBold, lineHeightMultiplier = 1f)
-                }
-                Box(Modifier.height(8.dp))
-                CardBody("列表、设置和外壳走这里。终端正文按下面选的浅槽 / 深槽主题画。")
-                Box(Modifier.height(12.dp))
-                AppearanceSegmented(selected = appearance, onSelect = onAppearanceChange)
-            }
-
-            SettingsCard {
-                AppText("终端主题", p.rowTitleText, TypeSizes.cardTitle, fontWeight = FontWeight.SemiBold)
-                Box(Modifier.height(8.dp))
-                CardBody("外观决定此刻用浅槽还是深槽。每个槽各自记住一个主题族。")
-                Box(Modifier.height(8.dp))
-                TermThemeSlotRow(
-                    label = "浅色时",
-                    testTag = "term-theme-light-row",
-                    family = familyOrDefault(lightFamilyId),
-                    darkSlot = false,
-                    onClick = onOpenLightTheme,
+            SettingsGroup {
+                SettingsRow(
+                    glyph = SettingsGlyph.Host,
+                    title = "主机配对",
+                    subtitle = "当前只保留一个主机档案。重新配对成功后会覆盖现有档案。",
+                    trailing = {
+                        if (paired) {
+                            MicroPill("PAIRED", p.busyChipText, p.busyChipBg)
+                        } else {
+                            MicroPill("UNPAIRED", p.unknownChipText, p.unknownChipBg)
+                        }
+                    },
+                    below = { CardTonalButton("重新配对", onRepair, Modifier.fillMaxWidth()) },
                 )
-                Box(Modifier.height(4.dp))
-                TermThemeSlotRow(
-                    label = "深色时",
-                    testTag = "term-theme-dark-row",
-                    family = familyOrDefault(darkFamilyId),
-                    darkSlot = true,
-                    onClick = onOpenDarkTheme,
+            }
+
+            // ── 会话与输入 ──
+            SettingsSectionLabel("会话与输入")
+            SettingsGroup {
+                SettingsRow(
+                    glyph = SettingsGlyph.Shortcut,
+                    title = "快捷命令",
+                    subtitle = shortcutCoverageSummary(shortcutCommands),
+                    onClick = onOpenShortcutCommands,
+                    modifier = Modifier.testTag("settings-shortcut-entry"),
+                    trailing = {
+                        if (shortcutCommands.isNotEmpty()) {
+                            AppText(
+                                text = shortcutCommands.size.toString(),
+                                color = p.metaText,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeightMultiplier = 1f,
+                                modifier = Modifier.testTag("settings-shortcut-count"),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        ForwardChevron()
+                    },
+                )
+                SettingsGroupDivider()
+                SettingsToggleRow(
+                    glyph = SettingsGlyph.Sync,
+                    title = "输入框实时同步",
+                    subtitle = "开启时打字实时显示在 CLI 终端，关闭时仅在点击发送后一次性投递。",
+                    checked = inputSyncEnabled,
+                    onCheckedChange = onInputSyncEnabledChange,
+                    switchTag = "input-sync-switch",
+                )
+                SettingsGroupDivider()
+                SettingsToggleRow(
+                    glyph = SettingsGlyph.Retain,
+                    title = "退出保留排版（尺寸驻留）",
+                    subtitle = "退出会话时不还原原生终端尺寸，再次进入实现极速秒开",
+                    checked = retainPaneSizeEnabled,
+                    onCheckedChange = onRetainPaneSizeEnabledChange,
+                    switchTag = "retain-pane-size-switch",
+                )
+            }
+
+            // ── 终端 ──
+            SettingsSectionLabel("终端")
+            SettingsGroup {
+                SettingsRow(
+                    glyph = SettingsGlyph.Font,
+                    title = "字体大小",
+                    subtitle = "取代原捏合缩放：终端字号在此设置，进入会话前已确定，会话中不再变化。",
+                    trailing = {
+                        AppText(
+                            "$terminalFontSize pt",
+                            p.accent,
+                            12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeightMultiplier = 1f,
+                        )
+                    },
+                    below = {
+                        // 9 个档位单行等分，⛔ 不要折行（折行会回到 5+4 的老问题）
+                        Row(horizontalArrangement = Arrangement.spacedBy(Dims.chipGap)) {
+                            TerminalMetrics.fontSizeSteps.forEach { size ->
+                                FontSizeChip(
+                                    value = size,
+                                    selected = size == terminalFontSize,
+                                    onClick = { onFontSizeChange(size) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                        Box(Modifier.height(10.dp))
+                        TerminalPreviewLine(fontSize = terminalFontSize)
+                    },
+                )
+                SettingsGroupDivider()
+                SettingsRow(
+                    glyph = SettingsGlyph.Theme,
+                    title = "终端主题",
+                    subtitle = "「外观」决定此刻用浅槽还是深槽，每个槽各自记住一个主题族。",
+                    below = {
+                        TermThemeSlotRow(
+                            label = "浅色时",
+                            testTag = "term-theme-light-row",
+                            family = familyOrDefault(lightFamilyId),
+                            darkSlot = false,
+                            onClick = onOpenLightTheme,
+                        )
+                        Box(Modifier.height(6.dp))
+                        TermThemeSlotRow(
+                            label = "深色时",
+                            testTag = "term-theme-dark-row",
+                            family = familyOrDefault(darkFamilyId),
+                            darkSlot = true,
+                            onClick = onOpenDarkTheme,
+                        )
+                    },
+                )
+            }
+
+            // ── 界面 ──
+            SettingsSectionLabel("界面")
+            SettingsGroup {
+                SettingsRow(
+                    glyph = SettingsGlyph.Appearance,
+                    title = "外观",
+                    subtitle = "列表、设置和外壳跟随这里；终端正文见「终端主题」。",
+                    trailing = { SettingsValueText(appearance.label()) },
+                    below = { AppearanceSegmented(selected = appearance, onSelect = onAppearanceChange) },
+                )
+            }
+
+            // ── 支持 ──
+            SettingsSectionLabel("支持")
+            SettingsGroup {
+                SettingsRow(
+                    glyph = SettingsGlyph.Logs,
+                    title = "诊断日志",
+                    subtitle = "一键导出诊断日志，帮助我们定位问题。日志会自动脱敏（配对 token、密钥等不会包含）。",
+                    below = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            CardTonalButton("导出", onExportLogs, Modifier.weight(1f))
+                            CardOutlineButton("查看", onViewLogs, Modifier.weight(1f))
+                        }
+                    },
                 )
             }
 
@@ -242,21 +265,39 @@ fun SettingsScreen(
                 fontSize = TypeSizes.footnote,
                 fontFamily = FontFamily.Monospace,
                 lineHeightMultiplier = 1.5f,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp, bottom = 4.dp),
             )
         }
         bottomBar()
     }
 }
 
+/** 开关行：整行可点切换（更大的触控面），开关本身保留独立 testTag 与 Role.Switch 语义。 */
 @Composable
-private fun CardBody(text: String) {
-    val p = LocalAppPalette.current
-    AppText(
-        text = text,
-        color = p.bodyText,
-        fontSize = TypeSizes.cardBody,
-        lineHeightMultiplier = TypeSizes.bodyLineHeight,
+private fun SettingsToggleRow(
+    glyph: SettingsGlyph,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    switchTag: String,
+) {
+    SettingsRow(
+        glyph = glyph,
+        title = title,
+        subtitle = subtitle,
+        onClick = { onCheckedChange(!checked) },
+        trailing = {
+            // 自包含液态开关：⛔ 不读 LocalGlassBackdrop（设置页在录制树内，反向采样会 SIGSEGV）
+            StandaloneLiquidToggle(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.testTag(switchTag),
+            )
+        },
     )
 }
 
@@ -426,17 +467,11 @@ internal fun TermThemePickerScreen(
     val paired = visible.filter { it.lightSource != it.darkSource }
     val darkOnly = visible.filter { it.lightSource == it.darkSource }
     Column(modifier.fillMaxSize().background(p.screenBackground).statusBarsPadding()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onBack)
-                .padding(start = Dims.screenHPadding, end = Dims.screenHPadding, top = 8.dp)
-                .testTag("term-theme-picker-back"),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AppText("‹ 返回", p.accent, TypeSizes.cardBody, fontWeight = FontWeight.Medium)
-        }
-        ScreenHeader(title = if (darkSlot) "深色时的主题" else "浅色时的主题", meta = null)
+        SettingsSubPageHeader(
+            title = if (darkSlot) "深色时的主题" else "浅色时的主题",
+            onBack = onBack,
+            backTag = "term-theme-picker-back",
+        )
         Column(Modifier.padding(horizontal = 14.dp)) {
             TerminalPreviewLine(
                 fontSize = 14,
@@ -524,6 +559,7 @@ private fun ThemeGroupHeader(title: String) {
     )
 }
 
+/** 主题槽：嵌在「终端主题」行下的内凹小行——槽名 + 色板条 + 主题名 + 前进折线。 */
 @Composable
 private fun TermThemeSlotRow(
     label: String,
@@ -534,19 +570,24 @@ private fun TermThemeSlotRow(
 ) {
     val p = LocalAppPalette.current
     val colors = slotColors(family, darkSlot)
+    val shape = RoundedCornerShape(Radii.cardButton)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
     Row(
         Modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .clip(RoundedCornerShape(Radii.chip))
-            .clickable(onClick = onClick)
+            .height(48.dp)
+            .clip(shape)
+            .background(if (pressed) p.chipPressed else FlatChipFill)
+            .border(FlatHairline, FlatChipStroke, shape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .testTag(testTag)
             .semantics { contentDescription = testTag }
-            .padding(horizontal = 4.dp),
+            .padding(start = 12.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        AppText(label, p.rowTitleText, TypeSizes.cardBody, modifier = Modifier.weight(1f))
+        AppText(label, p.rowTitleText, TypeSizes.cardBody, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         MiniSwatch(colors)
         AppText(
             text = family.title,
@@ -555,8 +596,9 @@ private fun TermThemeSlotRow(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.testTag("term-theme-family-${family.id}"),
+            modifier = Modifier.widthIn(max = 120.dp).testTag("term-theme-family-${family.id}"),
         )
+        ForwardChevron()
     }
 }
 
@@ -610,11 +652,11 @@ private fun TermThemeFamilyRow(
 
 @Composable
 private fun MiniSwatch(colors: TermSchemeColors) {
-    Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+    Row(Modifier.clip(RoundedCornerShape(3.dp))) {
         swatchArgb(colors).forEach { argb ->
             Box(
                 Modifier
-                    .size(8.dp)
+                    .size(width = 7.dp, height = 14.dp)
                     .background(argbColor(argb)),
             )
         }

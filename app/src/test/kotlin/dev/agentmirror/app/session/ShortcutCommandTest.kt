@@ -37,6 +37,20 @@ class ShortcutCommandTest {
     }
 
     @Test
+    fun upsertReplacesInPlaceAndAppendsNewCommands() {
+        val second = ShortcutCommand(id = "review", name = "审查", providerCommands = mapOf("pi" to "/review"))
+        val repository = ShortcutCommandRepository(MemoryShortcutCommandStore(listOf(command, second)))
+
+        val renamed = command.copy(name = "交接并归档")
+        repository.upsert(renamed)
+        assertEquals(listOf(renamed, second), repository.load())
+
+        val added = ShortcutCommand(id = "archive", name = "归档")
+        repository.upsert(added)
+        assertEquals(listOf(renamed, second, added), repository.load())
+    }
+
+    @Test
     fun providerResolutionIsExplicitAndCaseInsensitive() {
         assertEquals(ShortcutResolution.Found("/skill:handoff "), resolveShortcutCommand(command, "pi"))
         assertEquals(ShortcutResolution.Found("\$handoff"), resolveShortcutCommand(command, "CODEX"))

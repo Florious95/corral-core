@@ -50,8 +50,14 @@ class MemoryShortcutCommandStore(initial: List<ShortcutCommand> = emptyList()) :
 class ShortcutCommandRepository(private val store: ShortcutCommandStore) {
     fun load(): List<ShortcutCommand> = store.load()
 
+    /** 新命令追加到末尾；已有 id 原位替换，编辑不改变会话快捷菜单里的顺序。 */
     fun upsert(command: ShortcutCommand) {
-        val next = store.load().filterNot { it.id == command.id } + command
+        val current = store.load()
+        val next = if (current.any { it.id == command.id }) {
+            current.map { if (it.id == command.id) command else it }
+        } else {
+            current + command
+        }
         store.save(next)
     }
 
