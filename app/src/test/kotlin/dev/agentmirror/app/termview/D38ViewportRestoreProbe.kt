@@ -40,6 +40,7 @@ import org.junit.Test
  * ══════════════════════════════════════════════════════════════
  * 测试红 = D-38「切后台再回前台输入框跑到屏幕中间」很可能重现。请检查：
  *   1. TermViewPresenter.onViewportSizeChanged 的 viewportOutgrewEmulator() 分支是否仍在
+ *      （IME/dock 运动中的纯高度增长只挂起，由 onViewportSettled 在运动静默后合并执行一次）
  *   2. TermViewPresenter.onRealViewportChanged 是否仍有 viewportOutgrewEmulator() 触发
  *   3. visibleRows getter 的 coerceIn(1, emulator.rows) 上限是否随 emulator.rows 正确更新
  */
@@ -82,9 +83,11 @@ class D38ViewportRestoreProbe {
         assertEquals("首帧 seed: emulator.rows=84", 84, h.emulator.rows)
         assertEquals("首帧 seed: 应 emit (84,108)", listOf(84 to 108), h.resizeCalls)
 
-        // IME 收起，View 增长到 140 行。
-        // viewportOutgrewEmulator(): 2800/20=140 > emulator.rows(84) → true → recomputeGeometry()
-        h.presenter.onViewportSizeChanged(1080, 2800)
+        // IME 收起，View 逐帧增长到 140 行：运动帧不逐帧 resize（实时跟随契约），
+        // 运动静默后 onViewportSettled：2800/20=140 > emulator.rows(84) → recomputeGeometry()
+        for (height in listOf(1900, 2250, 2600, 2800)) h.presenter.onViewportSizeChanged(1080, height)
+        assertEquals("运动帧只挂起 outgrow，不逐帧 resize", listOf(84 to 108), h.resizeCalls)
+        h.presenter.onViewportSettled()
 
         assertEquals(
             "P1 PASS = D-38 已修复: IME 收起后 emulator.rows 应恢复到 140（不再卡在 84）",
@@ -111,7 +114,8 @@ class D38ViewportRestoreProbe {
         val h = harness()
 
         h.presenter.onViewportSizeChanged(1080, 1680) // seed 84
-        h.presenter.onViewportSizeChanged(1080, 2800) // grow → viewportOutgrewEmulator() → 140
+        h.presenter.onViewportSizeChanged(1080, 2800) // grow（运动帧）→ outgrow 挂起
+        h.presenter.onViewportSettled() // 运动静默 → viewportOutgrewEmulator() → 140
 
         val win = h.presenter.window
         val windowRows = win.last - win.first + 1

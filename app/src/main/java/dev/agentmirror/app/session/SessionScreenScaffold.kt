@@ -12,9 +12,6 @@ package dev.agentmirror.app.session
 
 import android.util.Log
 import android.view.ViewTreeObserver
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -22,12 +19,9 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -56,7 +50,6 @@ import dev.agentmirror.app.ui.theme.Elevations
 import dev.agentmirror.app.ui.theme.LocalAppPalette
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.currentTerminalPalette
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -66,15 +59,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 private const val SESSION_DOCK_MOTION_TAG = "SessionDockMotion"
-
-internal val sourceImeAnimationSpec: FiniteAnimationSpec<Dp> = tween(
-    durationMillis = SessionDockMotion.KeyboardPushMillis,
-    easing = SessionDockMotion.Standard,
-)
 
 /**
  * System Back / IME-swipe can hide the keyboard without moving Compose focus.
@@ -195,25 +182,7 @@ internal fun observeImeVisibility(
     return ImeVisibilityObservation(nextWasVisible, shouldCollapse)
 }
 
-/** Production IME inset animator shared by real-window wiring and deterministic motion tests. */
-@Composable
-internal fun SourceImeMotionLayout(
-    targetBottom: Dp,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val animatedBottom by animateDpAsState(
-        targetValue = targetBottom,
-        animationSpec = sourceImeAnimationSpec,
-        label = "sourceImeBottom",
-    )
-    Box(modifier.padding(bottom = animatedBottom)) {
-        content()
-    }
-}
-
 /** Source session layout: terminal slot above a constant two-row IME-aware dock (HotkeyRow + CommandInputBar). */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SessionScreenScaffold(
     terminalCanvas: @Composable () -> Unit,
@@ -236,13 +205,9 @@ fun SessionScreenScaffold(
     modifier: Modifier = Modifier,
     inputExpandedLines: Int = 3,
 ) {
-    val density = LocalDensity.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val view = LocalView.current
-    val imeSystemTargetBottom = with(density) {
-        WindowInsets.imeAnimationTarget.getBottom(this).toDp()
-    }
     var localImeHideRequested by remember { mutableStateOf(false) }
     var localCollapseRequest by remember { mutableStateOf(0) }
     val requestDockCollapse: (String) -> Unit = onDockCollapse ?: remember(
@@ -293,13 +258,16 @@ fun SessionScreenScaffold(
     )
     val palette = LocalAppPalette.current
     val terminalCard = currentTerminalPalette()
-    SourceImeMotionLayout(
-        targetBottom = if (effectiveImeHideRequested) 0.dp else imeSystemTargetBottom,
+    Box(
         modifier = modifier
             .fillMaxSize()
             // 会话页外框用全 App 中性底色，⛔ 不用 dock 主题的淡紫 background（F3F5FE / 161826），
             // 否则终端卡与底栏被一圈紫调包裹。dock 主题的 background 仅保留给浅/深判定。
-            .background(palette.screenBackground),
+            .background(palette.screenBackground)
+            // Dock 逐帧骑在系统 IME 实际 inset 上（同一条系统曲线、同一帧，布局阶段读取不重组），
+            // 终端卡作为 Column 余量与 dock 顶边同帧升降：弹起不遮挡、收起不留空带。已被外层
+            // navigationBarsPadding 消费的导航栏高度自动扣除，不再双计。
+            .imePadding(),
     ) {
         Column(Modifier.fillMaxSize()) {
             // Observe terminal pointer-down without consuming it: the real AndroidView keeps its

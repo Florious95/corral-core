@@ -20,6 +20,7 @@ import dev.agentmirror.terminal.Cell
 import dev.agentmirror.terminal.TerminalEmulator
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -55,6 +56,112 @@ class TermViewPresenterTest {
 
     /** 取逻辑行可见文本（Presenter 渲染数据源，去尾部空白）。 */
     private fun text(cells: List<Cell>): String = cells.joinToString("") { it.text }.trimEnd()
+
+    // ---- IME/dock 实时跟随 ----
+
+    /** 先灌内容再建 presenter：首帧同步捕获，后续是否重捕获完全由视口路径决定（可断言为 0）。 */
+    private fun seededFollowing(rows: Int = 5, lines: Int = 10): Harness {
+        val emulator = TerminalEmulator(10, rows)
+        emulator.feed((0 until lines).joinToString("\r\n") { "r$it" })
+        val resizeCalls = mutableListOf<Pair<Int, Int>>()
+        val presenter = TermViewPresenter(emulator) { r, c ->
+            resizeCalls.add(r to c)
+            emulator.resize(c, r)
+        }
+        presenter.seedCellMetrics(10, 20)
+        return Harness(emulator, presenter, resizeCalls)
+    }
+
+    private fun awaitDrawWindow(h: Harness, predicate: () -> Boolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        while (System.nanoTime() < deadline) {
+            h.presenter.beginFrame()
+            if (predicate()) return
+            Thread.sleep(5)
+        }
+        throw AssertionError("frame never converged: window=${h.presenter.drawWindow}")
+    }
+
+    @Test
+    fun imeMotionFramesOnlyMoveDrawOffsetWithoutCaptureOrResize() {
+        val h = seededFollowing()
+        // 静止：5 行内核 + 10px 余量（110 / 20）。
+        h.presenter.onViewportSizeChanged(100, 110)
+        h.presenter.beginFrame()
+        val restWindow = h.presenter.drawWindow
+        assertEquals(5..9, restWindow)
+        assertTrue(h.presenter.drawAnchorBottom)
+        h.resizeCalls.clear()
+        val frameRequests = AtomicInteger()
+        h.presenter.onFrameRequested = { frameRequests.incrementAndGet() }
+
+        // IME 弹起 + 输入框膨胀 + 收起：逐帧非整行高度。
+        for (height in listOf(104, 97, 83, 61, 40, 22, 61, 97, 110)) {
+            h.presenter.onViewportSizeChanged(100, height)
+        }
+        Thread.sleep(100)
+
+        assertEquals("motion frames must not capture or request frames", 0, frameRequests.get())
+        assertTrue("motion frames must not resize the PTY", h.resizeCalls.isEmpty())
+        h.presenter.beginFrame()
+        assertEquals("render window already spans every emulator row", restWindow, h.presenter.drawWindow)
+        assertTrue(h.presenter.drawAnchorBottom)
+        // 可见行语义不变：挤压到 61px 仍是末 3 行。
+        h.presenter.onViewportSizeChanged(100, 61)
+        assertEquals(7..9, h.presenter.window)
+    }
+
+    @Test
+    fun heightOnlyOutgrowDuringMotionResizesOnceWhenSettled() {
+        val h = seededFollowing(rows = 5, lines = 12)
+        // 首帧恰逢键盘未收完：以 3 行建立几何。
+        h.presenter.onViewportSizeChanged(100, 60)
+        assertEquals(listOf(3 to 10), h.resizeCalls)
+
+        // 键盘继续收起：逐帧 outgrow，动画中不得逐行 resize。
+        for (height in listOf(75, 98, 121, 139, 150)) {
+            h.presenter.onViewportSizeChanged(100, height)
+        }
+        assertEquals(listOf(3 to 10), h.resizeCalls)
+        // 等待期间用历史行补满像素容量（7 行），底部不露空带。
+        awaitDrawWindow(h) { h.presenter.drawWindow.count() == 7 }
+        assertEquals(h.presenter.drawWindow.last, h.emulator.scrollback.size + h.emulator.rows - 1)
+
+        h.presenter.onViewportSettled()
+        assertEquals(listOf(3 to 10, 7 to 10), h.resizeCalls)
+        h.presenter.onViewportSettled()
+        assertEquals("settle is idempotent", listOf(3 to 10, 7 to 10), h.resizeCalls)
+    }
+
+    @Test
+    fun squeezeSettleNeverResizes() {
+        val h = seededFollowing()
+        h.presenter.onViewportSizeChanged(100, 110)
+        h.resizeCalls.clear()
+        h.presenter.onViewportSizeChanged(100, 47)
+        h.presenter.onViewportSettled()
+        h.presenter.onViewportSizeChanged(100, 110)
+        h.presenter.onViewportSettled()
+        assertTrue(h.resizeCalls.isEmpty())
+    }
+
+    @Test
+    fun lockedHistoryIsTopAnchoredWhileFollowingIsBottomAnchored() {
+        val h = seededFollowing()
+        h.presenter.onViewportSizeChanged(100, 110)
+        h.presenter.onViewportSizeChanged(100, 61)
+        h.presenter.beginFrame()
+        assertTrue(h.presenter.drawAnchorBottom)
+
+        h.presenter.onScrollBy(2)
+        awaitDrawWindow(h) { !h.presenter.drawAnchorBottom }
+        // 锁定窗口从冻结顶行开始，挤压只在 View 底部裁剪。
+        assertEquals(5, h.presenter.drawWindow.first)
+
+        h.presenter.onScrollToBottom()
+        awaitDrawWindow(h) { h.presenter.drawAnchorBottom }
+        assertEquals(5..9, h.presenter.drawWindow)
+    }
 
     // ---- 视口状态机 ----
 

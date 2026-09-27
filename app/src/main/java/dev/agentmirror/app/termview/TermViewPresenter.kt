@@ -87,6 +87,8 @@ class TermViewPresenter(
 
     /** 视图像素尺寸，字号→行列数换算的基准。 */
     private var viewportWidthPx: Int = 0
+    /** 后台捕获线程经 [renderRows] 读取（逐帧写入不再伴随捕获调度，需自带可见性）。 */
+    @Volatile
     private var viewportHeightPx: Int = 0
 
     /** 上次栅格快照的关键量（recordGridSnapshot 的变更守卫，防每帧重复记录刷缓冲）。 */
@@ -112,6 +114,9 @@ class TermViewPresenter(
 
     /** 首次有效 rows/cols 已通知宿主；与尺寸是否等于本地初始值无关。 */
     private var firstGeometryReady = false
+
+    /** IME/dock 运动中出现的纯高度 outgrow：不逐帧 resize，由 [onViewportSettled] 合并为一次。 */
+    private var outgrowPending = false
 
     /**
      * [seedCellMetrics] 是否已调用（防静默失效守卫：区分"字号已实测落定"与"仍是构造期
@@ -151,6 +156,7 @@ class TermViewPresenter(
     private var frameSbSize: Int = -1
     private var frameWindow: IntRange? = null
     private var frameHistoryLines: Map<Int, List<Cell>> = emptyMap()
+    private var frameAnchorBottom: Boolean = true
 
     /**
      * 最近一次完整的帧捕获。捕获在后台线程执行，主线程只消费这个不可变值，避免在
@@ -163,6 +169,7 @@ class TermViewPresenter(
         val scrollbackSize: Int,
         val window: IntRange,
         val historyLines: Map<Int, List<Cell>>,
+        val anchorBottom: Boolean,
     )
 
     private val damageVersion = AtomicLong(0)
@@ -222,6 +229,23 @@ class TermViewPresenter(
 
     /** Window captured by the current render frame; falls back before the first frame. */
     val drawWindow: IntRange get() = frameWindow ?: displaySnapshotOverride?.let { 0 until it.rows } ?: window
+
+    /**
+     * Whether [drawWindow] is pinned to the View's live bottom edge (following live output).
+     * The View then offsets rows by its own height, so an IME/dock height change moves the text
+     * pixel-for-pixel with the dock in the same layout frame; locked history and copy-mode stay
+     * top-anchored and are simply clipped.
+     */
+    val drawAnchorBottom: Boolean
+        get() = if (frameWindow != null) frameAnchorBottom else displaySnapshotOverride == null && topLine == null
+
+    /** Logical index of screen row 0 in [drawWindow]'s coordinates (maps touches onto the grid). */
+    val drawScreenTop: Int
+        get() = when {
+            frameWindow != null -> frameSbSize
+            displaySnapshotOverride != null -> 0
+            else -> emulator.scrollback.size
+        }
 
     /** Replace only the rendered source (used for remote copy-mode snapshots). */
     fun setDisplaySnapshot(snapshot: ScreenSnapshot?) {
@@ -290,6 +314,12 @@ class TermViewPresenter(
      * @inv 像素/字格任一非正时不做换算（recomputeGeometry 提前返回）
      */
     fun onViewportSizeChanged(widthPx: Int, heightPx: Int) {
+        // IME/dock 实时跟随：首帧后的纯高度变化是逐动画帧到达的挤压/复原，走 O(1) 热路径。
+        // 其仪表由运动结束后的 onViewportSettled 落一条，不在每帧拼日志串。
+        if (viewportSeeded && widthPx == viewportWidthPx && heightPx > 0) {
+            onViewportHeightMoved(heightPx)
+            return
+        }
         // 仪表（leader 2026-08-14 补充裁定）：一进来就记入参与旧值——这是排查「回前台后
         // 只画上面三分之一」这类问题时判断「到底有没有被调用」的第一手证据，不等后续分支。
         DiagLog.record(
@@ -337,6 +367,51 @@ class TermViewPresenter(
         // 让「该重算而没重算」（candidate != emulator 但 outgrewGuard=false）与「重算了但算
         // 错了」（resized=true 但 emulatorRows/Cols 仍不对）能光看日志区分开。
         recordViewportResult(source = "onViewportSizeChanged", resized = resized, outgrewGuard = outgrew)
+    }
+
+    /**
+     * IME/dock 运动帧：只改像素高与可见行数，O(1)、零分配。
+     *
+     * 跟随态捕获窗口已覆盖全部内核行，View 按自身实时高度把末行钉在底边，文字随 dock
+     * 逐像素移动——无需重捕获、不 resize、不重排。真正超出内核的 outgrow 只记挂起，
+     * 由 [onViewportSettled] 合并为一次 resize，杜绝动画期间逐行 SIGWINCH 风暴。
+     */
+    private fun onViewportHeightMoved(heightPx: Int) {
+        val rowsBefore = renderRows
+        val topBefore = lockedRenderTop()
+        viewportHeightPx = heightPx
+        updateVisibleRows()
+        if (viewportOutgrewEmulator()) outgrowPending = true
+        if (renderRows != rowsBefore || lockedRenderTop() != topBefore) {
+            damageVersion.incrementAndGet()
+            scheduleFrameCapture()
+        }
+    }
+
+    /**
+     * 视口运动结束（View 在最后一次尺寸变化后静默一段时间回调）：落一条仪表，并把运动中
+     * 挂起的 outgrow 一次性重算上抛。
+     *
+     * @contract
+     * @pre none
+     * @post 挂起 outgrow 清除；视口仍超出内核则按当前像素重算一次 rows/cols 并 emit
+     * @err none
+     * @inv 挤压（视口 <= 内核）不产生任何重算/emit
+     */
+    fun onViewportSettled() {
+        val pending = outgrowPending
+        outgrowPending = false
+        DiagLog.record(
+            "viewport",
+            "source=onViewportSettled w=$viewportWidthPx h=$viewportHeightPx visibleRows=$visibleRows " +
+                "emulatorRows=${emulator.rows} emulatorCols=${emulator.cols} outgrowPending=$pending",
+            coalesceKey = "settled|$viewportWidthPx|$viewportHeightPx|${emulator.rows}|${emulator.cols}|$pending",
+        )
+        if (!pending || !viewportOutgrewEmulator()) return
+        // 内核随 resize 变更经 damage 自行重捕获，这里无需再请求帧。
+        lastResizeReason = "rotate"
+        val resized = recomputeGeometry()
+        recordViewportResult(source = "onViewportSettled", resized = resized, outgrewGuard = true)
     }
 
     /**
@@ -581,6 +656,7 @@ class TermViewPresenter(
             frameSbSize = 0
             frameWindow = 0 until override.rows
             frameHistoryLines = emptyMap()
+            frameAnchorBottom = false
             return
         }
 
@@ -607,6 +683,7 @@ class TermViewPresenter(
         frameSbSize = state.scrollbackSize
         frameWindow = state.window
         frameHistoryLines = state.historyLines
+        frameAnchorBottom = state.anchorBottom
     }
 
     /**
@@ -652,13 +729,14 @@ class TermViewPresenter(
     private fun captureFrame(): PreparedFrame = synchronized(emulator) {
         val snap = emulator.snapshot()
         val sb = emulator.scrollback.size
-        val win = windowFor(sb)
+        val locked = topLine
+        val win = windowFor(sb, locked)
         val history = buildMap {
             for (row in win) {
                 if (row < sb) put(row, emulator.scrollback.line(row).toList())
             }
         }
-        PreparedFrame(damageVersion.get(), snap, sb, win, history)
+        PreparedFrame(damageVersion.get(), snap, sb, win, history, anchorBottom = locked == null)
     }
 
     /** Coalesce damage notifications into one background full-frame capture. */
@@ -727,14 +805,38 @@ class TermViewPresenter(
 
     // ---- 内部实现 ----
 
-    /** Compute a window from the boundary frozen by beginFrame. */
-    private fun windowFor(sbSize: Int): IntRange {
-        val height = visibleRows
+    /**
+     * Render window from the boundary frozen by beginFrame. It spans [renderRows] rather than
+     * [visibleRows]: IME/dock squeeze only clips it in the View, so a height change never waits
+     * for a new capture. Following ends at the newest row; locked starts at the frozen top.
+     */
+    private fun windowFor(sbSize: Int, locked: Int?): IntRange {
+        val rows = renderRows
         val count = sbSize + emulator.rows
-        val maxTop = (count - height).coerceAtLeast(0)
-        val top = (topLine ?: maxTop).coerceIn(0, maxTop)
-        val bottom = (top + height - 1).coerceAtMost((count - 1).coerceAtLeast(0))
+        val top = if (locked == null) {
+            (count - rows).coerceAtLeast(0)
+        } else {
+            locked.coerceIn(0, (count - visibleRows).coerceAtLeast(0))
+        }
+        val bottom = (top + rows - 1).coerceAtMost((count - 1).coerceAtLeast(0))
         return top..bottom
+    }
+
+    /**
+     * 每帧捕获行数：全部内核行（挤压只在 View 里裁剪）；视口 outgrow 且 resize 尚在
+     * 合并等待时扩到像素容量，用历史行补满，运动中不露空白。
+     */
+    private val renderRows: Int
+        get() = if (viewportHeightPx > 0 && cellHeight > 0) {
+            maxOf(emulator.rows, viewportHeightPx / cellHeight)
+        } else {
+            emulator.rows
+        }
+
+    /** 锁定态捕获窗口顶（随可见行数钳制）；跟随态恒 -1（窗口顶随内容走，不依赖视口高度）。 */
+    private fun lockedRenderTop(): Int {
+        val locked = topLine ?: return -1
+        return locked.coerceIn(0, (logicalCount - visibleRows).coerceAtLeast(0))
     }
 
     /**

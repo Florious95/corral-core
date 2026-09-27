@@ -10,11 +10,10 @@
 
 package dev.agentmirror.app.session
 
-import androidx.compose.animation.core.TargetBasedAnimation
-import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -27,6 +26,7 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -48,8 +48,11 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import android.view.View
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.workspace.FavoriteRow
 import dev.agentmirror.app.workspace.L2Entry
@@ -544,29 +547,52 @@ class SessionDockSourceTest {
     }
 
     @Test
-    fun imeDockUsesSourceThreeHundredMillisecondStandardCurveInBothDirections() {
-        val opening = TargetBasedAnimation(
-            animationSpec = sourceImeAnimationSpec,
-            typeConverter = Dp.VectorConverter,
-            initialValue = 0.dp,
-            targetValue = 236.dp,
-        )
-        val closing = TargetBasedAnimation(
-            animationSpec = sourceImeAnimationSpec,
-            typeConverter = Dp.VectorConverter,
-            initialValue = 236.dp,
-            targetValue = 0.dp,
-        )
-        val midpointNanos = 150_000_000L
-        val expectedOpeningMidpoint = 236f * SessionDockMotion.Standard.transform(0.5f)
-        val expectedClosingMidpoint = 236f * (1f - SessionDockMotion.Standard.transform(0.5f))
+    fun dockRidesLiveImeInsetInTheSameFrameWithoutDoubleCountingNavigationBar() {
+        lateinit var root: View
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            root = LocalView.current
+            Box(Modifier.size(width = 390.dp, height = 844.dp)) {
+                SessionDockTheme(dark = false) {
+                    SessionScreenScaffold(
+                        terminalCanvas = { Box(Modifier.fillMaxSize()) },
+                        value = TextFieldValue(""),
+                        onValueChange = {},
+                        onSendText = {},
+                        onPickAttachment = {},
+                        onKeyToken = {},
+                        modifier = Modifier.navigationBarsPadding(),
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        val density = root.resources.displayMetrics.density
+        val navPx = (24 * density).toInt()
 
-        assertEquals(300_000_000L, opening.durationNanos)
-        assertEquals(300_000_000L, closing.durationNanos)
-        assertEquals(expectedOpeningMidpoint, opening.getValueFromNanos(midpointNanos).value, 0.1f)
-        assertEquals(expectedClosingMidpoint, closing.getValueFromNanos(midpointNanos).value, 0.1f)
-        assertEquals(236f, opening.getValueFromNanos(opening.durationNanos).value, 0.1f)
-        assertEquals(0f, closing.getValueFromNanos(closing.durationNanos).value, 0.1f)
+        // Each platform IME animation frame lands on the same Compose frame: no private tween,
+        // and the navigation bar already consumed by the outer padding is not added again.
+        for (imeDp in listOf(0, 80, 236, 300, 120, 0)) {
+            val imePx = (imeDp * density).toInt()
+            compose.runOnUiThread {
+                ViewCompat.dispatchApplyWindowInsets(
+                    root,
+                    WindowInsetsCompat.Builder()
+                        .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, navPx))
+                        .setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, imePx))
+                        .setVisible(WindowInsetsCompat.Type.ime(), imePx > 0)
+                        .build(),
+                )
+            }
+            compose.mainClock.advanceTimeByFrame()
+            val bottomInsetDp = maxOf(imePx, navPx) / density
+            val canvas = compose.onNodeWithTag("session-terminal-canvas").getUnclippedBoundsInRoot()
+            val input = compose.onNodeWithTag("session-command-input").getUnclippedBoundsInRoot()
+            assertEquals("ime=$imeDp dock bottom", 844f - bottomInsetDp - 8f, input.bottom.value, 0.7f)
+            // The terminal card rides the dock top: no gap and no overlap while the IME moves.
+            assertEquals("ime=$imeDp terminal bottom", 844f - bottomInsetDp - 8f - 46f - 8f - 40f, canvas.bottom.value, 0.7f)
+        }
     }
 
     @Test

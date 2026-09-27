@@ -295,6 +295,8 @@ class TermSurfaceView @JvmOverloads constructor(
     }
 
     private var lastDirtyRowsIn: Int = 0
+    /** 最近一帧屏幕第 0 行的 y（跟随态挤压时为负）；鼠标上报按它换算行号。 */
+    private var screenTopPx: Int = 0
     private var lastScrollDelta: Int = 0
     private var lastFrameTimeNanos: Long = 0L
     private var bgRectCount: Int = 0
@@ -382,6 +384,10 @@ class TermSurfaceView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         resetFrameScheduling()
+        if (viewportSettlePending) {
+            removeCallbacks(viewportSettleRunnable)
+            viewportSettleRunnable.run()
+        }
         drawControlSubscription?.close()
         drawControlSubscription = null
         boxGeometryCache.clear()
@@ -398,6 +404,18 @@ class TermSurfaceView @JvmOverloads constructor(
         super.onSizeChanged(w, h, oldw, oldh)
         forceFullBackgroundFrames = FULL_BACKGROUND_FRAMES
         presenter?.onViewportSizeChanged(usableWidthPx(w), h)
+        // 纯高度变化是 IME/dock 逐帧运动：本帧只移动绘制偏移（onDraw 按实时高度底锚定），
+        // 几何持久化与挂起的 outgrow resize 合并到运动静默后的一次 settle。
+        if (w != oldw) persistViewportGeom()
+        removeCallbacks(viewportSettleRunnable)
+        viewportSettlePending = true
+        postDelayed(viewportSettleRunnable, VIEWPORT_SETTLE_MS)
+    }
+
+    private var viewportSettlePending = false
+    private val viewportSettleRunnable = Runnable {
+        viewportSettlePending = false
+        presenter?.onViewportSettled()
         persistViewportGeom()
     }
 
@@ -502,7 +520,7 @@ class TermSurfaceView @JvmOverloads constructor(
         val cw = p.cellWidth
         val ch = p.cellHeight
         val xPx = event.x - contentLeftPx()
-        if (!mouseCap.hit(xPx, event.y, cw, ch, p.gridCols, p.gridRows)) return false
+        if (!mouseCap.hit(xPx, event.y - screenTopPx, cw, ch, p.gridCols, p.gridRows)) return false
         val shift = event.metaState and KeyEvent.META_SHIFT_ON != 0
         val meta = event.metaState and KeyEvent.META_ALT_ON != 0
         val ctrl = event.metaState and KeyEvent.META_CTRL_ON != 0
@@ -543,7 +561,7 @@ class TermSurfaceView @JvmOverloads constructor(
         // Drawing starts at the terminal content edge rather than view x=0. Keep pointer
         // coordinates in the same grid origin so the first visible glyph is column 1.
         val xPx = event.x - contentLeftPx()
-        if (!mouseCap.hit(xPx, event.y, cw, ch, p.gridCols, p.gridRows)) return
+        if (!mouseCap.hit(xPx, event.y - screenTopPx, cw, ch, p.gridCols, p.gridRows)) return
         val shift = event.metaState and KeyEvent.META_SHIFT_ON != 0
         val meta = event.metaState and KeyEvent.META_ALT_ON != 0
         val ctrl = event.metaState and KeyEvent.META_CTRL_ON != 0
@@ -629,10 +647,20 @@ class TermSurfaceView @JvmOverloads constructor(
         val contentLeft = contentLeftPx()
         recordLeftEdgeOnce(contentLeft)
         var drawnRows = 0
+        // 跟随态把末行钉在实时底边（不低于静止排布）：IME/dock 每帧改高度时文字与 dock 同帧
+        // 逐像素移动，不按整行跳、不等重捕获；锁定/copy-mode 顶锚定。被裁出的行不画。
+        val viewH = height
+        val anchorBottom = viewH > 0 && p.drawAnchorBottom
+        var rowY = if (anchorBottom) minOf(0, viewH - (win.last - win.first + 1) * cellH) else 0
+        // 触点与所见同源：跟随态屏幕首行随底锚定偏移（锁定/copy-mode 保持原映射）。
+        screenTopPx = if (anchorBottom) rowY + (p.drawScreenTop - win.first) * cellH else 0
         for (logical in win) {
-            val rowY = (logical - win.first) * cellH
-            drawLine(canvas, p.lineCells(logical), rowY, fullBackground)
-            drawnRows++
+            if (viewH > 0 && rowY >= viewH) break
+            if (rowY > -cellH) {
+                drawLine(canvas, p.lineCells(logical), rowY, fullBackground)
+                drawnRows++
+            }
+            rowY += cellH
         }
         val tLines = System.nanoTime()
 
@@ -1108,6 +1136,8 @@ class TermSurfaceView @JvmOverloads constructor(
     private companion object {
         /** Keep complete background coverage over the short multi-frame rotation transition. */
         const val FULL_BACKGROUND_FRAMES = 4
+        /** 最后一次尺寸变化后静默这么久视为 IME/dock 运动结束（覆盖偶发掉帧，不拖慢结算）。 */
+        const val VIEWPORT_SETTLE_MS = 150L
         /** Right edge reserved for the terminal application's native scrollbar. */
         const val EDGE_MOUSE_WIDTH_DP = 32f
         /** 历史深色默认值别名；真实取色走 [TermPalette.of]。 */

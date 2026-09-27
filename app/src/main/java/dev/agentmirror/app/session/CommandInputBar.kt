@@ -47,7 +47,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
@@ -64,6 +63,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +82,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -95,6 +96,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -105,6 +108,16 @@ import dev.agentmirror.app.ui.theme.LocalAppPalette
 /** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
 internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
     if (focused) 20 * expandedLines.coerceIn(2, 5) + 12 else 32
+
+/**
+ * Fixed height read from an animated [State] at layout time: the 250ms expand/collapse that runs
+ * alongside the IME only re-measures the capsule each frame instead of recomposing it.
+ */
+private fun Modifier.animatedHeight(height: State<Dp>): Modifier = layout { measurable, constraints ->
+    val px = constraints.constrainHeight(height.value.roundToPx())
+    val placeable = measurable.measure(constraints.copy(minHeight = px, maxHeight = px))
+    layout(placeable.width, px) { placeable.place(0, 0) }
+}
 
 /** Source input capsule with attachment, expanding editor, and send action. */
 @Composable
@@ -161,7 +174,7 @@ fun CommandInputBar(
     val sourceExpandedLines = expandedLines.coerceIn(2, 5)
     val editorExpanded = focused && collapseRequest == 0
     val onSend = { onSendText(value.text) }
-    val fieldHeight by animateDpAsState(
+    val fieldHeight = animateDpAsState(
         targetValue = sourceInputFieldHeightDp(editorExpanded, sourceExpandedLines).dp,
         animationSpec = tween(
             durationMillis = SessionDockMotion.InputHeightMillis,
@@ -237,7 +250,7 @@ fun CommandInputBar(
                 }
             }
             Box(
-                Modifier.weight(1f).height(fieldHeight).testTag("session-command-input-field"),
+                Modifier.weight(1f).animatedHeight(fieldHeight).testTag("session-command-input-field"),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 BasicTextField(
@@ -281,7 +294,7 @@ fun CommandInputBar(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(fieldHeight)
+                        .animatedHeight(fieldHeight)
                         .padding(vertical = 6.dp)
                         .testTag("session-command-editor")
                         .onPreviewKeyEvent { event ->
@@ -326,7 +339,7 @@ fun CommandInputBar(
             Box(
                 modifier = Modifier
                     .width(32.dp)
-                    .height(fieldHeight)
+                    .animatedHeight(fieldHeight)
                     .zIndex(2f)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
