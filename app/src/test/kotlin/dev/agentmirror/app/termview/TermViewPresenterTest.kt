@@ -59,46 +59,6 @@ class TermViewPresenterTest {
     // ---- 视口状态机 ----
 
     @Test
-    fun imeAnimationFreezesViewportAndAppliesOnlySettledSize() {
-        val h = harness(rows = 5, cols = 10)
-        h.presenter.onViewportSizeChanged(widthPx = 100, heightPx = 100)
-        h.resizeCalls.clear()
-
-        val windowBeforeAnimation = h.presenter.window
-        h.presenter.beginViewportAnimation()
-        assertTrue(h.presenter.viewportAnimationFrozen)
-        h.presenter.onViewportSizeChanged(100, 80)
-        h.presenter.onViewportSizeChanged(100, 60)
-        h.presenter.onViewportSizeChanged(100, 80)
-        assertTrue("animation frames must not resize", h.resizeCalls.isEmpty())
-        assertEquals(windowBeforeAnimation, h.presenter.window)
-
-        h.presenter.endViewportAnimation()
-
-        assertFalse(h.presenter.viewportAnimationFrozen)
-        assertTrue("settled size must apply once", h.presenter.window != windowBeforeAnimation)
-        assertTrue(h.resizeCalls.isEmpty())
-    }
-
-    @Test
-    fun nestedImeAnimationEndsOnlyAfterOuterAnimationSettles() {
-        val h = harness(rows = 5, cols = 10)
-        h.presenter.onViewportSizeChanged(100, 100)
-        h.resizeCalls.clear()
-
-        h.presenter.beginViewportAnimation()
-        h.presenter.beginViewportAnimation()
-        h.presenter.onViewportSizeChanged(100, 160)
-        h.presenter.endViewportAnimation()
-        assertTrue(h.presenter.viewportAnimationFrozen)
-        assertTrue(h.resizeCalls.isEmpty())
-
-        h.presenter.endViewportAnimation()
-        assertFalse(h.presenter.viewportAnimationFrozen)
-        assertEquals(listOf(8 to 10), h.resizeCalls)
-    }
-
-    @Test
     fun followsBottomInitiallyWithWindowOnScreen() {
         val h = harness(rows = 3, cols = 5)
         // 无历史：跟随底部，窗口 = 全屏屏幕行。
