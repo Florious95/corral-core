@@ -93,6 +93,7 @@ type wsConn struct {
 	priorityCh  chan wsMsg
 	staleMu     sync.Mutex
 	staleBefore map[string]uint64
+	reflowEpoch atomic.Uint64
 
 	// closeReason 连接关闭原因（可观测健康记录，leader msg_1f0c3455fac0）：
 	// readLoop 读错误 / 客户端主动关 / 写超时 / 正常 EOF。teardown 日志带出，
@@ -284,6 +285,14 @@ func (c *wsConn) writeFrame(m wsMsg) error {
 		}
 	}
 	return err
+}
+
+// The stale-frame floor survives unsubscribe. Allocate epochs from the same
+// connection lifetime so a new subscription cannot restart below that floor.
+func (c *wsConn) newReflowGate() *reflowGate {
+	g := newReflowGate()
+	g.nextEpoch = func() uint64 { return c.reflowEpoch.Add(1) }
+	return g
 }
 
 func (c *wsConn) markStaleBefore(ref string, epoch uint64) {
@@ -994,7 +1003,7 @@ func (c *wsConn) relay(ctx context.Context, sub *subscription, ch <-chan []byte)
 			}
 			sent := true
 			if sub.gate == nil {
-				sub.gate = newReflowGate()
+				sub.gate = c.newReflowGate()
 			}
 			sub.gate.route(chunk, func(epoch uint64) {
 				// A chunk selected while the initial gate was active can race
