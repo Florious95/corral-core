@@ -158,7 +158,7 @@ func (c *wsConn) handleSubscribe(s protocol.Subscribe) {
 		ready:          make(chan struct{}),
 		initialFailed:  make(chan struct{}),
 		relayDone:      make(chan struct{}),
-		gate:           newReflowGate(),
+		gate:           c.newReflowGate(),
 	}
 	// Install the release hook before any fallible operation after acquire. All
 	// exits (including capture/encode failure) then use the same idempotent owner.
@@ -588,7 +588,7 @@ func (c *wsConn) handleResize(r protocol.Resize) {
 		return
 	}
 	if sub.gate == nil {
-		sub.gate = newReflowGate()
+		sub.gate = c.newReflowGate()
 	}
 	ctx := sub.ctx
 	if ctx == nil { // direct subscription fixtures may use the connection context

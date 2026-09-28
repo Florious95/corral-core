@@ -24,10 +24,11 @@ var errReflowUnstable = errors.New("reflow changed during every capture")
 // invalidates a capture if the relay drains any more bytes during that capture.
 // Publication and switching back to deltas share the routing lock.
 type reflowGate struct {
-	mu       sync.Mutex
-	active   bool
-	epoch    uint64
-	revision uint64
+	mu        sync.Mutex
+	active    bool
+	epoch     uint64
+	revision  uint64
+	nextEpoch func() uint64
 
 	syncPrefix   int
 	syncOpen     bool
@@ -62,7 +63,11 @@ func (g *reflowGate) begin() (uint64, bool) {
 	g.syncPrefix, g.syncOpen, g.syncComplete = 0, false, false
 	g.syncFrame = 0
 	g.syncChanged = make(chan struct{}, 1)
-	g.epoch++
+	if g.nextEpoch != nil {
+		g.epoch = g.nextEpoch()
+	} else {
+		g.epoch++
+	}
 	return g.epoch, true
 }
 
