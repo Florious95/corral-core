@@ -1,0 +1,1 @@
+{"task_id": "doc-contract-batch4.verify", "dispatched_to": "w-doc-verify4", "base": "agents/w-doc-verify4.md", "case_id": "msg_d1b48e557fb8", "at": "2026-08-11 06:00:00", "note": "第四批对抗性复核；intent 随派单同批写入"}

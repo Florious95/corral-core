@@ -1,0 +1,12 @@
+=== 手机 RTT（30 包）===
+30 packets transmitted, 30 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 32.606/122.696/344.058/85.462 ms
+=== 路径 ===
+100.114.207.123  agentmirror-v2502a     alaudalancy@  android  offline, last seen 7h ago               
+100.69.43.120    v2502a                 alaudalancy@  android  active; relay "gz", tx 411060 rx 58376  
+=== netcheck ===
+	* Nearest DERP: Guangzhou
+		-  gz: 50.2ms  (Guangzhou)
+		- lax: 184.4ms (Los Angeles)
+=== daemon 连接 ===
+agentmirr 70317 alauda    8u  IPv6 0xeba703506dbf5ff9      0t0  TCP 100.75.207.88:9900->100.69.43.120:56572 (ESTABLISHED)

@@ -1,0 +1,2 @@
+pkg=dev.agentmirror.app.session 基线=1 本次=0 新增=0 消掉=1
+  ✅ 消掉: T3-4 dev.agentmirror.app.session :0

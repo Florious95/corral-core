@@ -64,9 +64,11 @@ import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.LocalGlassBackdrop
 import dev.agentmirror.app.ui.model.NavTab
 import dev.agentmirror.app.ui.theme.Appearance
-import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Spacing
+import dev.agentmirror.app.ui.theme.ThemeId
+import dev.agentmirror.app.ui.theme.ThemeRegistry
 import dev.agentmirror.app.workspace.ConnectionUi
 import dev.agentmirror.app.workspace.FavoriteList
 import dev.agentmirror.app.workspace.WorkspaceScreen
@@ -101,7 +103,10 @@ internal fun ThreePaneHome(
     workspaceViewModel: WorkspaceViewModel,
     appearance: Appearance = Appearance.System,
     onAppearanceChange: (Appearance) -> Unit = {},
+    themeId: ThemeId = ThemeRegistry.default.metadata.id,
+    onThemeChange: (ThemeId) -> Unit = {},
 ) {
+    val kit = LocalThemeSuite.current
     val pagerState = rememberPagerState(
         initialPage = navState.homePane.ordinal,
         pageCount = { ThreePane.entries.size },
@@ -141,12 +146,15 @@ internal fun ThreePaneHome(
     // static while that transition is active/settled; the infinite ambient phase otherwise
     // invalidates the backdrop every frame and competes with LiquidGlass blur on RenderThread.
     // Returning to L1 recreates the same ambient animation without changing the glass contract.
-    val ambientEnabled = navState.selectedWorkspaceCwd == null
+    // 直角风格没有环境光斑：录制背景只剩纯底色。
+    val ambientEnabled = navState.selectedWorkspaceCwd == null && kit.surfaces.ambientLight
     LaunchedEffect(ambientEnabled) {
-        DiagLog.record(
-            "fluid-ambient",
-            "enabled=$ambientEnabled reason=${if (ambientEnabled) "l1-settled" else "l1-l2-transition-or-l2"}",
-        )
+        val reason = when {
+            ambientEnabled -> "l1-settled"
+            !kit.surfaces.ambientLight -> "flat-theme"
+            else -> "l1-l2-transition-or-l2"
+        }
+        DiagLog.record("fluid-ambient", "enabled=$ambientEnabled reason=$reason")
     }
     val ambientTransition = rememberInfiniteTransition(label = "fluidAmbient")
     val ambientPhase = ambientTransition.animateFloat(
@@ -192,7 +200,7 @@ internal fun ThreePaneHome(
         }
     }
     val navInset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() } +
-        Dims.navBarHeight + Dims.navFloatMargin
+        kit.geometry.tabBarHeight + kit.geometry.tabBarBottomGap
     GlassModalHost(
         modifier = Modifier
             .fillMaxSize()
@@ -245,6 +253,8 @@ internal fun ThreePaneHome(
                         enableBackHandler = pagerState.currentPage == ThreePane.Settings.ordinal,
                         appearance = appearance,
                         onAppearanceChange = onAppearanceChange,
+                        themeId = themeId,
+                        onThemeChange = onThemeChange,
                     )
                 }
             }

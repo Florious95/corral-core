@@ -1,0 +1,21 @@
+{
+  "task_id": "fix-app-network-manifest",
+  "status": "pass",
+  "summary": "e2e 层2 实证缺陷修复：app manifest 缺 INTERNET 权限 + targetSdk35 禁明文导致 ws:// 连接全断。已加 INTERNET 权限，debug/release 均 usesCleartextTraffic=true（引 007/011），红测先行 ManifestNetworkPolicyTest 4 断言 debug/release merged manifest，先红后绿。",
+  "root_cause": "①manifest 无 INTERNET 权限→所有出网 socket 被系统拒绝；②targetSdk 35 默认禁明文→ws:// 抛 CleartextNotPermitted，即使有权限也连不上。10.0.2.2 ping 通，env 排除。",
+  "changes": [
+    "app/app/src/main/AndroidManifest.xml: +android.permission.INTERNET（根因①）；application +android:usesCleartextTraffic=true（根因②，明文裁定引 007/011，debug/release 一致）",
+    "app/app/build.gradle.kts: testDebugUnitTest 前置 dependsOn processReleaseManifest，保证 release merged manifest 产物存在（release 单测由 debug 任务跑，AGP 默认不合并 release）",
+    "app/app/src/test/java/dev/agentmirror/app/manifest/ManifestNetworkPolicyTest.kt: 红测，4 断言（debug/release × INTERNET/cleartext），类名含 Manifest 命中验收过滤器"
+  ],
+  "tests": [
+    "红测先行：修复前 4/4 failed（缺 INTERNET + cleartext=null，纯产品红无 harness 干扰）",
+    "验收命令 bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Manifest*\"' → exit 0，4/4 绿",
+    "全量 :app:testDebugUnitTest --rerun → 15 suites / 173 tests / 0 failures / 0 errors（零新回归）",
+    "merged manifests 产物复核：debug+release 均含 INTERNET ×1、usesCleartextTraffic=true"
+  ],
+  "notes": "跨层缺陷为何单测漏掉（013 归因）：出网能力是 manifest 静态声明，此前测试全在业务逻辑层（conn/pairing/service 纯 JVM），无任何测试触碰 manifest 合并产物，故缺权限/禁明文这类构建期缺陷单测盲区漏掉，只能靠 e2e 实机暴露。新增 manifest 解析测试（非 robolectric）零新依赖、确定性，DIRECT 读 AGP merged_manifests 产物，把构建期声明纳入单测内环。",
+  "write_scope_compliance": "仅动 app/app/src/main/AndroidManifest.xml、app/app/src/test/、app/app/build.gradle.kts；零 Kotlin 业务代码改动。",
+  "evidence_file": ".team/evidence/fix-app-network-manifest.json",
+  "leader_note": "leader 复跑验收 exit 0；manifest 三处（INTERNET+cleartext debug/release）核实在位。"
+}

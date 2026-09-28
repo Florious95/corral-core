@@ -1,0 +1,13 @@
+--------- beginning of main
+08-13 10:55:07.995 D/D36Forensics(20004): ForensicsSnapshot(scrollbackSize=331, logicalCount=418, visibleRows=87, maxTop=331, topLine=null, isFollowingBottom=true)
+08-13 10:55:57.622 D/D36Forensics(20004): ForensicsSnapshot(scrollbackSize=331, logicalCount=418, visibleRows=87, maxTop=331, topLine=null, isFollowingBottom=true)
+08-13 10:56:57.411 D/D36Forensics(20004): ForensicsSnapshot(scrollbackSize=331, logicalCount=418, visibleRows=87, maxTop=331, topLine=null, isFollowingBottom=true)
+08-13 10:58:19.160 D/D36Forensics(20004): ForensicsSnapshot(scrollbackSize=331, logicalCount=418, visibleRows=87, maxTop=331, topLine=null, isFollowingBottom=true)
+08-13 11:04:30.050 D/D36Forensics(20515): ForensicsSnapshot(scrollbackSize=331, logicalCount=418, visibleRows=87, maxTop=331, topLine=null, isFollowingBottom=true)
+08-13 11:04:43.469 D/D36Forensics(20515): ForensicsSnapshot(scrollbackSize=331, logicalCount=418, visibleRows=87, maxTop=331, topLine=277, isFollowingBottom=false)
+08-13 11:06:16.758 D/D36Forensics(20515): ForensicsSnapshot(scrollbackSize=332, logicalCount=419, visibleRows=87, maxTop=332, topLine=277, isFollowingBottom=false)
+08-13 11:06:42.116 D/D36Forensics(20515): ForensicsSnapshot(scrollbackSize=332, logicalCount=419, visibleRows=87, maxTop=332, topLine=null, isFollowingBottom=true)
+08-13 11:06:53.359 D/D36Forensics(20515): ForensicsSnapshot(scrollbackSize=332, logicalCount=419, visibleRows=87, maxTop=332, topLine=null, isFollowingBottom=true)
+08-13 11:07:04.292 D/D36Forensics(20515): ForensicsSnapshot(scrollbackSize=332, logicalCount=419, visibleRows=87, maxTop=332, topLine=278, isFollowingBottom=false)
+08-13 11:20:09.992 D/D36Forensics(20515): ForensicsSnapshot(scrollbackSize=332, logicalCount=419, visibleRows=87, maxTop=332, topLine=null, isFollowingBottom=true)
+08-13 11:20:57.130 D/D36Forensics(20515): ForensicsSnapshot(scrollbackSize=332, logicalCount=419, visibleRows=87, maxTop=332, topLine=276, isFollowingBottom=false)

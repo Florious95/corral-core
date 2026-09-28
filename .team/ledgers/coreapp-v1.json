@@ -1,0 +1,829 @@
+{
+  "acceptance": {
+    "judgment_requires_distinct_provider": true,
+    "mechanical_exit_code_is_authoritative": true
+  },
+  "audit": {
+    "route_hops": [
+      {
+        "from": "t.capp",
+        "to": "t.perf",
+        "status": "done",
+        "at_revision": 3,
+        "case_id": "ledger_coreapp_v1__t.capp__r3"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 4,
+        "case_id": "ledger_coreapp_v1__t.perf__r4"
+      },
+      {
+        "from": "t.rv",
+        "to": "t.capp",
+        "status": "rework",
+        "at_revision": 5,
+        "case_id": "ledger_coreapp_v1__t.rv__r5"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 7,
+        "case_id": "ledger_coreapp_v1__t.perf__r7"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 10,
+        "case_id": "ledger_coreapp_v1__t.perf__r10"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 13,
+        "case_id": "ledger_coreapp_v1__t.perf__r13"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 15,
+        "case_id": "ledger_coreapp_v1__t.perf__r15"
+      },
+      {
+        "from": "t.perf",
+        "to": "t.rv",
+        "status": "done",
+        "at_revision": 17,
+        "case_id": "ledger_coreapp_v1__t.perf__r17"
+      },
+      {
+        "from": "t.rv",
+        "to": "t.close",
+        "status": "pass",
+        "at_revision": 19,
+        "case_id": "ledger_coreapp_v1__t.rv__r19"
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.path",
+      "same_source_required": false,
+      "to": "t.pub"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.pub",
+      "same_source_required": false,
+      "to": "t.capp"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.capp",
+      "same_source_required": false,
+      "to": "t.perf"
+    },
+    {
+      "carries_artifact": false,
+      "condition": "requires_success",
+      "from": "t.perf",
+      "same_source_required": false,
+      "to": "t.rv"
+    }
+  ],
+  "evidence_policy": {
+    "missing_evidence": "cannot_close_success",
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ]
+  },
+  "fallback": {
+    "f.escalate": {
+      "action": "escalate_to_advisor",
+      "agent": {
+        "role": "r.advisor"
+      },
+      "max_attempts": 1,
+      "silent_substitution": false,
+      "triggers": [
+        "blocked_on_unknown",
+        "result_deadline_elapsed",
+        "delivery_uncertain"
+      ]
+    }
+  },
+  "fanout_aggregation": {},
+  "handoff": {
+    "delivery_uncertain": "needs_reconcile",
+    "missing_result": "alarm",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "result_route": "report_result",
+    "send_command": "team-agent send"
+  },
+  "ledger_id": "ledger.coreapp.v1",
+  "parallelism": [],
+  "resource_isolation": {
+    "closed_read": false,
+    "read_only_shared": [],
+    "rules": []
+  },
+  "revision": 23,
+  "roles": {
+    "r.advisor": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/advisor/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.emu": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/ca-emu/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "ca-emu2",
+        "team": "remote-agent-android"
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.impl": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/ca-impl/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "pb-impl",
+        "team": "grok-l2"
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.rv": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/ca-rv/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "ca-rv2",
+        "team": "remote-agent-android"
+      },
+      "seat_policy": "resident_reuse"
+    },
+    "r.rv2": {
+      "artifact_landing": {
+        "form": "committed",
+        "path": ".team/nodes/ca-close/"
+      },
+      "provider": "unstated",
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "ca-rv2",
+        "team": "remote-agent-android"
+      },
+      "seat_policy": "resident_reuse"
+    }
+  },
+  "run": {
+    "desired_state": "running"
+  },
+  "schema_version": "ledger.v2",
+  "tasks": {
+    "t.capp": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.capp",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-capp.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.capp"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "baseline-20260822-release"
+        },
+        "read_paths": [
+          ".team/tasks/coreapp/任务书.md",
+          "docs/基线-20260822-release.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-capp.sh",
+          ".team/nodes/ca-pub/"
+        ],
+        "worktree_id": "wt-ca",
+        "write_paths": [
+          ".team/staging/",
+          ".team/nodes/ca-app/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "succeeded",
+      "statuses": [
+        {
+          "artifact": {
+            "report": ".team/nodes/<本格>/说明.md"
+          },
+          "description": "本格交付物全落盘，交下游独立判",
+          "name": "done"
+        }
+      ],
+      "title": "格3·corral-app 只引用产物：把 .team/staging/corral-app 从「源码 composite」改造成「只引用发布产物」。⛔ settings.gradle.kts 里不许再有 includeBuild；⛔ 工程内不许有核源码目录。仓库声明两个且顺序固定：① raw.githubusercontent.com/Florious95/corral-core/maven/ ② 本仓 .team/staging/maven-repo（本地兜底，maven 分支推上去之前也能构建）。依赖钉死 dev.agentmirror.core:<模块>:20260822.0。assembleRelease 必须绿并产出 APK，且 dex 里 PerfTrace/addBinaryListener/debug.agentmirror.perftrace 都还在（量具没了就没法自证不回退）。细则读 .team/tasks/coreapp/任务书.md",
+      "status_record": {
+        "status": "done",
+        "artifacts": {
+          "kind": "report",
+          "path": ".team/nodes/ca-app/说明.md"
+        },
+        "case_id": "ledger_coreapp_v1__t.capp__r3",
+        "recorded_at_revision": 3
+      },
+      "attempts": [
+        {
+          "attempt_id": "att-t.capp-seq3-t1787379462278",
+          "delivery_id": "del-t.capp-seq3-t1787379462278",
+          "state": "succeeded",
+          "writeback_revision": 4,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.capp",
+            "acceptance_success.writeback_revision=4"
+          ]
+        }
+      ]
+    },
+    "t.close": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.close",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/artifacts/coreapp-收账-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.close"
+        ]
+      },
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv2"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "baseline-20260822-release"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-ca-close",
+        "write_paths": [
+          ".team/artifacts/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "succeeded",
+      "title": "⚠️ cursor 席位 restart 会失忆 ⇒ 话写进收账文书，⛔ 不要给 leader 发消息。\n⚠️ 本轮判者裁定书在 .team/nodes/ca-rv/裁定.md（status=pass），收账以它与账本为准。\n\n收账：把本轮现状汇成一页给用户——三分口径「已验证完成 / 自报未核 / 未做」，各附证据路径。必须单列一节「留给 leader 与用户的缺口」，至少含：① 推 maven 分支与推 corral-app 远端仓（席位禁 push，是 leader 的动作）；② **用户真机复验**引用式构建的包「秒开无空白」——模拟器绿不能替代金标准；③ 本仓 app/app 壳还没删（删壳是真机复验通过之后的下一步，不在本链范围）。⛔ 不许把自报当已完成。落 .team/artifacts/coreapp-收账-<日期>.md",
+      "attempts": [
+        {
+          "attempt_id": "att-t.close-seq1-t1787404441902",
+          "delivery_id": "del-t.close-seq1-t1787404441902",
+          "state": "acceptance_pending",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=c.close",
+            "acceptance_failure.argv=[\"/bin/sh\", \"tools/perfbase/judge-doc.sh\", \".team/artifacts/coreapp-收账-*.md\"]",
+            "acceptance_failure.cwd=.worktrees/wt-ca-close",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ]
+        },
+        {
+          "attempt_id": "att-t.close-seq1-t1787408103550",
+          "delivery_id": "del-t.close-seq1-t1787408103550",
+          "state": "succeeded",
+          "writeback_revision": 23,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.close",
+            "acceptance_success.writeback_revision=23"
+          ]
+        }
+      ]
+    },
+    "t.esc": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.esc",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-doc.sh",
+              ".team/escalations/coreapp-esc-*.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 120,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.esc"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv2"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "baseline-20260822-release"
+        },
+        "read_paths": [],
+        "worktree_id": "wt-ca-esc",
+        "write_paths": [
+          ".team/escalations/"
+        ]
+      },
+      "seat_wait_seconds": 1800,
+      "state": "not_applicable",
+      "title": "升报：返修穷尽或判者判不出时，把「卡在哪、试了什么、缺什么、需要 leader 决定什么」写清升报，⛔ 不许静默收工、⛔ 不许把判不出改写成通过。落 .team/escalations/coreapp-esc-<日期>.md"
+    },
+    "t.path": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.path",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-perfpath.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 600,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.path"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "baseline-20260822-release"
+        },
+        "read_paths": [
+          ".team/tasks/coreapp/任务书.md",
+          "docs/基线-20260822-release.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-perfpath.sh"
+        ],
+        "worktree_id": "wt-ca",
+        "write_paths": [
+          "docs/",
+          ".team/nodes/ca-impl/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "succeeded",
+      "title": "格1·钉住性能关键路径：产出 docs/性能关键路径.md，把八个事件逐条列出（事件｜在核还是在壳｜真实存在的文件路径｜慢了会表现成什么）+ 一节「改动纪律」。判据会逐个 test -e 你写的路径，写错即红；必须标明「核」或「壳」。⛔ 不许只写模块名糊弄、⛔ 不许把不在链路上的文件塞进来充数（那会让守门判据天天误报）。细则读 .team/tasks/coreapp/任务书.md",
+      "attempts": [
+        {
+          "attempt_id": "att-t.path-seq1-t1787378651028",
+          "delivery_id": "del-t.path-seq1-t1787378651028",
+          "state": "succeeded",
+          "writeback_revision": 2,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.path",
+            "acceptance_success.writeback_revision=2"
+          ]
+        }
+      ]
+    },
+    "t.perf": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.perf",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-perf-ab.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 1200,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.perf"
+        ]
+      },
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.emu"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "baseline-20260822-release"
+        },
+        "read_paths": [
+          ".team/tasks/coreapp/任务书.md",
+          "docs/基线-20260822-release.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-perf-nonregress.sh",
+          ".team/tasks/perfbase/任务书-02-基线.md",
+          ".team/nodes/pb-emu/",
+          ".team/perf/"
+        ],
+        "worktree_id": "wt-ca",
+        "write_paths": [
+          ".team/perf/",
+          ".team/nodes/ca-emu/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "succeeded",
+      "statuses": [
+        {
+          "artifact": {
+            "report": ".team/nodes/<本格>/说明.md"
+          },
+          "description": "本格交付物全落盘，交下游独立判",
+          "name": "done"
+        }
+      ],
+      "title": "格4·加样本证伪那个红（⛔ 只测 big_scrollback 一个夹具，别动另外两个）。\n【上一轮结果：12 段里 10 段过，2 段红】\n RED  big_scrollback first_draw p50  A=142.0ms B=167.5ms (+18.0%)\n RED  big_scrollback first_draw p95  A=160.8ms B=212.9ms (+32.4%)\n 其余 10 段（含 redraw_tui first_draw p50 +9.2%）都在 +10% 门内。两组 load 几乎一样（A 8.57 / B 8.51），不是负载差。B 的红主要由右尾两次（192、230）拉起，但 p50 本身已 +18%。\n【为什么要加样本，⛔ 不是为了让它变绿】\nA/B 两个包 dex 内容等价、大小同为 35044459 bytes，纯换依赖形态造成 18% 在机理上讲不通。\n但「讲不通」不是证据——10 次样本对这个夹具可能不够。**加样本是让数据自己说话：**\n红扛住 ⇒ 是真回退，得从 app 侧找原因；红塌了 ⇒ 是噪声，同时说明最小样本数要提。\n⛔ 你无权决定它是噪声，只负责把数打出来。\n【怎么做】\n① 只跑 big_scrollback，A/B **各 20 次**，仍然 A,B,A,B 交替，冷点开流程不变；\n② 复用已有脚本与包：A=.team/nodes/ca-emu/tmp/app-release-a.apk（md5 aecdbd46…）、B=.team/staging/corral-app/app/build/outputs/apk/release/app-release.apk（md5 3ebc9c55…）；\n③ 新样本落 .team/perf/raw-capp2/{A,B}/，⛔ 不许覆盖 raw-capp/ 与 raw/；\n④ 汇总进 .team/perf/recheck-<日期>-capp-ab.json（判据只读最新那份），形状与上一份相同，**把上一轮的 10 次与本轮 20 次分开列，不要合并成一堆**，另给合并后的统计；\n⑤ 每批记 load 读数；极端值不剔除。\n⛔ 不许编数、⛔ 不许剔极端值、⛔ 不许改 tools/perfbase/*.sh、⛔ 不许碰 .team/perf/raw/。\n起模拟器前先探 load1 ≤15；探不到就如实报不可判（合法终态）。\n⚠️ cursor 席位 restart 会失忆 ⇒ 话写进 .team/nodes/ca-emu/说明.md，⛔ 不要给 leader 发消息。",
+      "attempts": [
+        {
+          "attempt_id": "att-t.perf-seq4-t1787379878976",
+          "delivery_id": "del-t.perf-seq4-t1787379878976",
+          "state": "succeeded",
+          "writeback_revision": 5,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.perf",
+            "acceptance_success.writeback_revision=5"
+          ]
+        },
+        {
+          "attempt_id": "att-t.perf-seq1-t1787399125591",
+          "delivery_id": "del-t.perf-seq1-t1787399125591",
+          "state": "succeeded",
+          "writeback_revision": 18,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.perf",
+            "acceptance_success.writeback_revision=18"
+          ]
+        }
+      ],
+      "blocking_reasons": [],
+      "status_record": {
+        "status": "done",
+        "artifacts": {
+          "report": ".team/nodes/ca-emu/说明.md"
+        },
+        "case_id": "ledger_coreapp_v1__t.perf__r17",
+        "recorded_at_revision": 17
+      }
+    },
+    "t.pub": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.pub",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-pub.sh"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.pub"
+        ]
+      },
+      "blocking_reasons": [],
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.impl"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "baseline-20260822-release"
+        },
+        "read_paths": [
+          ".team/tasks/coreapp/任务书.md",
+          "docs/基线-20260822-release.md",
+          "CLAUDE.md",
+          "tools/perfbase/judge-pub.sh"
+        ],
+        "worktree_id": "wt-ca",
+        "write_paths": [
+          "app/",
+          ".team/staging/",
+          ".team/nodes/ca-pub/"
+        ]
+      },
+      "seat_wait_seconds": 5400,
+      "state": "succeeded",
+      "title": "格2·三核发布成 maven 产物：给 core-protocol/core-terminal/core-conn 加 maven-publish，坐标 group=dev.agentmirror.core、artifact=模块名、version=20260822.0（对应基线 tag），产物发到本地目录 .team/staging/maven-repo/（标准 maven 布局）。三核必须仍是纯 JVM：⛔ 不许上 Android 插件、⛔ 源码不许 import android./androidx.；三核单测必须绿。⛔ 你不许 push——推 maven 分支是 leader 的动作。细则读 .team/tasks/coreapp/任务书.md",
+      "attempts": [
+        {
+          "attempt_id": "att-t.pub-seq2-t1787379231041",
+          "delivery_id": "del-t.pub-seq2-t1787379231041",
+          "state": "succeeded",
+          "writeback_revision": 3,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=c.pub",
+            "acceptance_success.writeback_revision=3"
+          ]
+        }
+      ]
+    },
+    "t.rv": {
+      "acceptance": {
+        "judgment": [],
+        "mechanical": [
+          {
+            "acceptance_id": "c.rv",
+            "argv": [
+              "/bin/sh",
+              "tools/perfbase/judge-verdict.sh",
+              ".team/nodes/ca-rv/裁定.md"
+            ],
+            "artifacts": [],
+            "cwd": "${worktree}",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 300,
+            "unjudgeable_exit_codes": [
+              2
+            ]
+          }
+        ],
+        "required": [
+          "c.rv"
+        ]
+      },
+      "handoff": {
+        "required_artifacts": [],
+        "route": "report_result"
+      },
+      "owner": {
+        "role": "r.rv"
+      },
+      "resources": {
+        "environment_fidelity": {
+          "runs_real_cli": true
+        },
+        "provenance": {
+          "identity": "git",
+          "revision": "baseline-20260822-release"
+        },
+        "read_paths": [
+          ".team/tasks/coreapp/任务书.md",
+          "app/",
+          ".team/staging/",
+          ".team/perf/",
+          "tools/perfbase/",
+          "docs/"
+        ],
+        "worktree_id": "wt-ca-rv",
+        "write_paths": [
+          ".team/nodes/ca-rv/"
+        ]
+      },
+      "seat_wait_seconds": 3600,
+      "state": "blocked",
+      "statuses": [
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "四条判据自己重跑均过且核过未被改弱",
+          "name": "pass"
+        },
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "不成立，带逐条理由与代码原文证据打回",
+          "name": "rework"
+        },
+        {
+          "artifact": {
+            "report": "裁定.md"
+          },
+          "description": "判不出（合法终态），写清判不出什么",
+          "name": "inconclusive"
+        }
+      ],
+      "title": "⚠️ 你是 cursor 席位，restart 会失忆 ⇒ 话一律写进裁定书，⛔ 不要给 leader 发消息。\n⚠️ 前一个判者（pb-rv1）被 grok 周额度打死（Weekly limit 0%），没留下本轮裁定；盘上 .team/nodes/ca-rv/裁定.md 是**上一轮**那份（判 rework 的），可读作背景，⛔ 不要当本轮结论。\n\n格5·异源终审：你与施工席不同席位、零上下文，⛔ 不采信自报。**自己重跑**四条判据（judge-perfpath / judge-pub / judge-capp / judge-perf-nonregress）并贴退出码原文。另外必须核：① git diff 看 tools/perfbase/ 有没有被动过——动了直接 rework；② corral-app 里确实没有核源码（自己 find，别信文档）；③ 复测的数真从 .team/perf/raw*/ 的 PerfTrace 原文来（抽查 ≥3 份对上统计值）、有没有剔极端值、load 读数在不在；④ 性能关键路径清单里的文件逐个存在且没塞无关文件。裁定书落 .team/nodes/ca-rv/裁定.md，恰好一行 status=pass|rework|inconclusive。判不出写 inconclusive，那是合法终态，⛔ 不许把没核到的写成 pass。\n\n【🔴 本轮追加·审 leader 自己的改动，这是本次终审最重要的一条】\nleader 在你之前动了两处，你要把它们当**可疑对象**核，⛔ 不许因为「是 leader 改的」就默认成立：\n① 判据 tools/perfbase/judge-perf-ab.sh 是 leader 新写的（旧判据 judge-perf-nonregress.sh 读不了 A/B 形状）。\n② **leader 把判决依据从「跨批合并 n=30」改成了「单批最大 n=20」**，理由写在脚本注释里：\n   两批之间 A 组自身 p50 从 142.0 漂到 165.5（+16.5%），机器漂移量大于要检测的效应，\n   跨批合并量到的是漂移不是差异。**改之前合并批是红的（p95 +13.6%），改之后是绿的。**\n你必须回答：**这算不算「改判据放行」？**\n a. 自己把三批数都算一遍（raw-capp/{A,B} 各 30 份、raw-capp2/{A,B} 各 40 份原文都在盘上），\n    核 leader 引的「A 组自身漂移 142.0→165.5」是不是真的、B 组是不是真的两批都稳（167.5/166.0）。\n b. 如果 A 的漂移属实 ⇒ 跨批合并确实不成立，改口径是排除混杂因素，判 pass 那一侧；\n    如果 A 的漂移不属实、或你认为合并批才是对的口径 ⇒ **直接 rework，明写「leader 放宽了判据」**。\n c. 门槛 +10% 有没有被动过？MIN_N 有没有被降过？两包 md5 检查还在不在？逐条核 git diff。\n⛔ 判不出写 inconclusive。⛔ 不许因为「leader 说得有道理」就放行——你要的是数，不是道理。\n\n细则读 .team/tasks/coreapp/任务书.md",
+      "rounds": [
+        {
+          "n": 1,
+          "status": "rework",
+          "reason": "",
+          "case_id": "ledger_coreapp_v1__t.rv__r5",
+          "at_revision": 5
+        }
+      ],
+      "attempts": [],
+      "blocking_reasons": [
+        "route_contradicts_success: dest=t.close"
+      ],
+      "status_record": {
+        "status": "pass",
+        "artifacts": {
+          "report": "裁定.md",
+          "path": ".team/nodes/ca-rv/裁定.md"
+        },
+        "case_id": "ledger_coreapp_v1__t.rv__r19",
+        "recorded_at_revision": 19
+      }
+    }
+  },
+  "transitions": [
+    {
+      "assemble": {
+        "include_upstream_case": false
+      },
+      "from": "t.capp",
+      "on_status": [
+        "done"
+      ],
+      "to": "t.perf"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": false
+      },
+      "from": "t.perf",
+      "on_status": [
+        "done"
+      ],
+      "to": "t.rv"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": false
+      },
+      "from": "t.rv",
+      "on_status": [
+        "pass"
+      ],
+      "to": "t.close"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true
+      },
+      "from": "t.rv",
+      "max_rounds": 2,
+      "on_exhausted": "t.esc",
+      "on_status": [
+        "rework"
+      ],
+      "to": "t.capp"
+    },
+    {
+      "assemble": {
+        "include_upstream_case": true
+      },
+      "from": "t.rv",
+      "on_status": [
+        "inconclusive"
+      ],
+      "to": "t.esc"
+    }
+  ]
+}

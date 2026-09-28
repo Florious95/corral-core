@@ -76,10 +76,10 @@ import dev.agentmirror.app.ui.components.GlassModalLayer
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.LocalGlassBackdrop
 import dev.agentmirror.app.ui.components.ProviderMark
-import dev.agentmirror.app.ui.components.glassPanel
-import dev.agentmirror.app.ui.components.glassReadable
+import dev.agentmirror.app.ui.components.modalPanel
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
@@ -274,12 +274,13 @@ private fun FilterPill(
         animationSpec = tween(Motion.toggle),
         label = "shortcutFilterStroke",
     )
+    val shape = LocalThemeSuite.current.geometry.shape(CircleShape)
     Row(
         Modifier
             .height(34.dp)
-            .clip(CircleShape)
+            .clip(shape)
             .background(fill)
-            .border(0.5.dp, stroke, CircleShape)
+            .border(0.5.dp, stroke, shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -466,12 +467,7 @@ private fun ShortcutCommandEditorSheet(
                 .widthIn(max = 560.dp)
                 .fillMaxWidth()
                 .pointerInput(Unit) {} // 面板内空白处的点击不落到遮罩
-                .glassPanel(
-                    backdrop = LocalGlassBackdrop.current,
-                    shape = EditorPanelShape,
-                    surface = p.glassSurface.glassReadable(),
-                    exportedBackdrop = panelBackdrop,
-                )
+                .modalPanel(EditorPanelShape, panelBackdrop)
                 .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)
                 .testTag("shortcut-command-editor"),
         ) {
@@ -480,7 +476,7 @@ private fun ShortcutCommandEditorSheet(
                     .align(Alignment.CenterHorizontally)
                     .width(Dims.sheetGrabberWidth)
                     .height(Dims.sheetGrabberHeight)
-                    .clip(CircleShape)
+                    .clip(LocalThemeSuite.current.geometry.shape(CircleShape))
                     .background(p.sheetGrabber),
             )
             Spacer(Modifier.height(14.dp))
@@ -623,7 +619,7 @@ private fun EditorField(
         animationSpec = tween(Motion.toggle),
         label = "shortcutFieldBorder",
     )
-    val shape = RoundedCornerShape(Radii.input)
+    val shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.input))
     val family = if (monospace) FontFamily.Monospace else FontFamily.Default
     BasicTextField(
         value = value,

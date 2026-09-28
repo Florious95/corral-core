@@ -1,0 +1,1 @@
+{"task_id":"perf-ts-link-guidance","dispatched_to":"w-perf-ts","role_file":"agents/w-perf-ts.md","model":"claude-fable-5","intent":"TS 链路性能指导：先判直连/DERP，再定基线与指标，再排优化方向。只出指导不施工，write_scope 仅 docs/。","at":"2026-08-13"}

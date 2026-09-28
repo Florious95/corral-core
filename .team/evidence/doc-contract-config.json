@@ -1,0 +1,61 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-config",
+  "case_id": "msg_a568c4cae2f8",
+  "scope": "server/internal/config/",
+  "summary": "核实并改写 1 条不实注释（QRListenAddr 声称 serving the pairing QR page，实际 QR 是 stdout 打印、无 HTTP 服务）；补 3 个 @contract 契约（Load + parsePositiveInt64 + parsePositiveDuration，四标签齐全）；本包 import 图只有 stdlib，T3-4 漂移清单无本包行，无需补 @consumes。单包硬判、包内测试、全仓库 check 三项全绿。",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/config",
+      "rc": 0,
+      "note": "基线（改动前）与收口（改动后）均 exit 0，T3-1..T3-4 全 PASS"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/config/...\"",
+      "rc": 0,
+      "note": "ok github.com/agentmirror/agentmirror/internal/config"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库 exit 0；T3-4 其余 28 条漂移属其他包，非本包职责，未被打坏"
+    }
+  ],
+  "changes": [
+    "server/internal/config/config.go: 改 1 条不实注释 + 补 3 个 @contract（23 行注释变更，0 行实现变更）"
+  ],
+  "rewritten": [
+    {
+      "symbol": "Config.QRListenAddr",
+      "file": "server/internal/config/config.go:23-28",
+      "inaccurate": "原注释称 'serving the pairing QR page. Empty means pairing-QR serving is disabled'——但全仓库唯一消费 QRListenAddr 的是 cmd/agentmirrord/main.go:104 的启动日志行；配对 QR 实际由 printPairingGuide -> pairing.PrintOnboarding 打印到 stdout（需求 011 路线(a) 终端打印），不存在任何 HTTP QR 页面服务。qr-listen 这个 flag 从未驱动监听器，git 历史无 QR HTTP server 存在记录（blame 自 6b55b3e 起即如此）。",
+      "rewritten_to": "如实改写为：'resolved -qr-listen / AGENTMIRROR_QR_LISTEN setting；QR 打印到 stdout（printPairingGuide in server/cmd/agentmirrord/main.go），不经 HTTP 服务；本字段当前不达任何 listener、仅出现在启动日志行，保留以便未来 QR-serving 任务接线而不破坏 flag/env 面。Empty 表示未配置此类监听。'"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "Load",
+      "file": "server/internal/config/config.go",
+      "contract": "@contract + @pre none + @post flag>env>default 优先级解析、数值/时长已解析 + @err 未知 flag 被 flag 包拒绝（-h/--help 返回 flag.ErrHelp）、数值/时长非法或为负返回非 nil error + @inv none（纯函数）"
+    },
+    {
+      "symbol": "parsePositiveInt64",
+      "file": "server/internal/config/config.go",
+      "contract": "@contract + @pre none + @post 返回值 >= 0、0 合法（下游用默认）+ @err 非数字或负数返回含 name/原值的 error + @inv none（纯函数）"
+    },
+    {
+      "symbol": "parsePositiveDuration",
+      "file": "server/internal/config/config.go",
+      "contract": "@contract + @pre none + @post 返回值 >= 0、0 合法 + @err 非 time.ParseDuration 可解析格式或负数返回 error + @inv none（纯函数）"
+    }
+  ],
+  "consumes_added": [],
+  "uncertain": [],
+  "deviation": [],
+  "positive_control": {
+    "method": "删除 Load 的 @err 标签，跑 --strict-t3 --pkg internal/config",
+    "rc_before_break": 0,
+    "rc_while_broken": 1,
+    "output_summary": "T3-3 : FAIL — 契约标签完备：1 条违规  [T3-3] internal/config  server/internal/config/config.go:153  `@contract` — 缺契约标签: @err；随后已改回，收口复跑 rc=0。判据确实扫描本包并能精确定位符号，非'没扫到所以全绿'。"
+  }
+}

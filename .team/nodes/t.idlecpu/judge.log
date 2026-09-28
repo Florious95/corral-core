@@ -1,0 +1,5 @@
+  ok   N0        n=60   mean=  0.0%  p95=  0.0%  max=  0.0%  load1=18.04
+  ok   N1-idle   n=60   mean=  0.0%  p95=  0.0%  max=  1.0%  load1=18.04
+  ok   N1-busy   n=60   mean=  0.0%  p95=  0.0%  max=  1.0%  load1=17.44
+PASS 三态齐、序列够长、隔离端口 19971、commit 4120c0884817
+     结论由 leader 读：N0=0.0% N1-idle=0.0%（趋近 0 = 复现不出，也是合法结果）

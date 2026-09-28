@@ -1,0 +1,284 @@
+{
+  "status": "pass",
+  "percentile_method": "linear interpolation on sorted samples at (n-1)*p",
+  "scenarios": [
+    {
+      "id": "pairing_rejection_reason",
+      "status": "pass",
+      "assertions": [
+        "invalid token rejected",
+        "reason is non-empty",
+        "credential not echoed"
+      ]
+    },
+    {
+      "id": "pair_and_two_level_listing",
+      "status": "pass",
+      "assertions": [
+        "dial+auth+auth_ack succeeds",
+        "workspace/cwd first level present",
+        "session/ref second level present",
+        "state and aggregate fields are valid"
+      ]
+    },
+    {
+      "id": "state_field_transition",
+      "status": "pass",
+      "assertions": [
+        "initial state idle",
+        "API input changes visible pane state",
+        "list_delta carries blocked",
+        "workspace aggregate follows blocked"
+      ]
+    },
+    {
+      "id": "subscribe_snapshot_and_incremental_stream",
+      "status": "pass",
+      "assertions": [
+        "ten non-empty snapshot replies",
+        "matching session ref",
+        "subscription remains live for deltas"
+      ]
+    },
+    {
+      "id": "input_ack_and_output_round_trip",
+      "status": "pass",
+      "assertions": [
+        "twenty req_id-correlated input_ack replies",
+        "twenty hidden execution markers returned in delta",
+        "p50/p95 recorded"
+      ]
+    },
+    {
+      "id": "special_keys",
+      "status": "pass",
+      "assertions": [
+        "seven independent one-key input frames accepted",
+        "each distinct req_id has a successful input_ack",
+        "terminal effects are not claimed"
+      ]
+    },
+    {
+      "id": "multiline_paste",
+      "status": "pass",
+      "assertions": [
+        "one input frame carries embedded newline",
+        "one input_ack received",
+        "both executed-output markers returned"
+      ]
+    },
+    {
+      "id": "resize",
+      "status": "pass",
+      "assertions": [
+        "post-resize snapshot is the fact receipt",
+        "fresh listing reports 100x40"
+      ]
+    },
+    {
+      "id": "large_output_throughput",
+      "status": "pass",
+      "assertions": [
+        "one MiB exact payload received",
+        "begin/end markers exclude tty echo",
+        "zero lost bytes",
+        "throughput recorded"
+      ]
+    },
+    {
+      "id": "scrollback_pagination",
+      "status": "pass",
+      "assertions": [
+        "ten distinct contiguous req_id-correlated pages",
+        "range headers prove no gaps or overlaps",
+        "each page has 100 lines and a non-empty payload"
+      ]
+    },
+    {
+      "id": "upload_authentication",
+      "status": "pass",
+      "assertions": [
+        "missing bearer token rejected with 401 and reason",
+        "wrong bearer token rejected with 401 and reason",
+        "valid pairing token accepted",
+        "credentials not echoed"
+      ]
+    },
+    {
+      "id": "image_upload_and_path_injection",
+      "status": "pass",
+      "assertions": [
+        "five one-MiB multipart uploads return 200",
+        "paths stay inside isolated upload dir",
+        "on-disk size exact",
+        "returned path injected and visible via WS"
+      ]
+    },
+    {
+      "id": "disconnect_reconnect_resubscribe",
+      "status": "pass",
+      "assertions": [
+        "ten new WS auth handshakes",
+        "same ref resubscribed",
+        "current visible marker replayed in every snapshot"
+      ]
+    },
+    {
+      "id": "failure_reason",
+      "status": "pass",
+      "assertions": [
+        "unknown ref returns session_not_found",
+        "human-readable reason is non-empty"
+      ]
+    }
+  ],
+  "metrics": {
+    "pair_to_first_listing": {
+      "unit": "ms",
+      "count": 10,
+      "samples": [
+        0.796,
+        0.81,
+        0.612,
+        0.448,
+        0.46,
+        0.484,
+        0.472,
+        0.426,
+        0.436,
+        0.616
+      ],
+      "min": 0.426,
+      "p50": 0.478,
+      "p95": 0.8037000000000001,
+      "max": 0.81
+    },
+    "subscribe_first_frame": {
+      "unit": "ms",
+      "count": 10,
+      "samples": [
+        122.424,
+        151.667,
+        137.841,
+        127.082,
+        127.749,
+        127.44,
+        128.358,
+        125.054,
+        133.288,
+        119.527
+      ],
+      "min": 119.527,
+      "p50": 127.5945,
+      "p95": 145.4453,
+      "max": 151.667
+    },
+    "output_end_to_end": {
+      "unit": "ms",
+      "count": 20,
+      "samples": [
+        44.965,
+        44.827,
+        40.336,
+        40.059,
+        42.102,
+        39.11,
+        39.625,
+        40.291,
+        38.851,
+        44.146,
+        36.854,
+        37.111,
+        43.276,
+        38.765,
+        40.581,
+        47.074,
+        36.933,
+        37.203,
+        36.902,
+        42.298
+      ],
+      "min": 36.854,
+      "p50": 40.175,
+      "p95": 45.07045,
+      "max": 47.074
+    },
+    "large_output": {
+      "expected_bytes": 1048576,
+      "received_bytes": 1048576,
+      "loss_bytes": 0,
+      "input_to_end_ms": 72.456,
+      "stream_elapsed_ms": 34.289,
+      "throughput_bytes_per_second": 30580053.550439768
+    },
+    "scrollback_page": {
+      "unit": "ms",
+      "count": 10,
+      "samples": [
+        38.373,
+        42.83,
+        35.436,
+        39.851,
+        37.431,
+        36.384,
+        35.466,
+        36.855,
+        36.363,
+        36.251
+      ],
+      "min": 35.436,
+      "p50": 36.6195,
+      "p95": 41.48945,
+      "max": 42.83
+    },
+    "upload": {
+      "file_bytes": 1048576,
+      "latency": {
+        "unit": "ms",
+        "count": 5,
+        "samples": [
+          1.91,
+          3.279,
+          1.303,
+          1.884,
+          1.581
+        ],
+        "min": 1.303,
+        "p50": 1.884,
+        "p95": 3.0052,
+        "max": 3.279
+      },
+      "multipart_bytes": [
+        1048823,
+        1048823,
+        1048823,
+        1048823,
+        1048823
+      ]
+    },
+    "reconnect_recovery": {
+      "unit": "ms",
+      "count": 10,
+      "samples": [
+        122.667,
+        113.708,
+        109.639,
+        123.458,
+        112.46,
+        121.004,
+        109.951,
+        118.824,
+        111.955,
+        117.465
+      ],
+      "min": 109.639,
+      "p50": 115.5865,
+      "p95": 123.10205,
+      "max": 123.458
+    }
+  },
+  "observed_states": [
+    "idle",
+    "blocked"
+  ]
+}

@@ -1,0 +1,4 @@
+gradle.beforeProject { project ->
+    def safePath = project.path == ":" ? "root" : project.path.substring(1).replace(':', '/')
+    project.layout.buildDirectory.set(new File("/Volumes/nvme/Projects/远程Agent安卓/e2e/artifacts/baseline-v2/gradle-build/${safePath}"))
+}

@@ -1,0 +1,118 @@
+{
+  "task_id": "fix-ts-state-dir-e2e",
+  "case_id": "msg_3ecb805221f8",
+  "status": "red",
+  "summary": "The cmd-side state directory wiring is verified, but the single judge-authorized latest-tree E2E run failed because only the daemon joined the isolated headscale control plane; the App remained in NeedsLogin and the workspace proof could not run.",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\"'",
+      "rc": 0,
+      "output": "ok  \tgithub.com/agentmirror/agentmirror/cmd/agentmirrord\t(cached)\nok  \tgithub.com/agentmirror/agentmirror/internal/config\t(cached)\nok  \tgithub.com/agentmirror/agentmirror/internal/tsnetd\t(cached)"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh'",
+      "rc": 1,
+      "output": "FAIL fix-ts-state-dir-e2e reason=expected_two_headscale_nodes artifact=/Volumes/nvme/Projects/远程Agent安卓/e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T164543-50690"
+    }
+  ],
+  "changes": [
+    {
+      "path": "server/cmd/agentmirrord/main.go",
+      "summary": "Passes the already resolved stateDir to tsnetd.Options.Dir as <stateDir>/tsnet through the cmd consumer seam."
+    },
+    {
+      "path": "server/cmd/agentmirrord/main_test.go",
+      "summary": "Captures tsnetd.Options at the consumer boundary and asserts the resolved <stateDir>/tsnet path."
+    },
+    {
+      "path": "e2e/feat-ts-wire-headscale.sh",
+      "summary": "Runs isolated headscale, daemon, tmux, and disposable Android-user validation with adb private-store stdin pairing injection, env-only TS_AUTHKEY, presence-only secret checks, and exact cleanup."
+    },
+    {
+      "path": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T164543-50690/",
+      "summary": "Authoritative latest-tree red run: one headscale node, daemon state-dir proof yes, artifact secret leak no, cleanup yes."
+    }
+  ],
+  "deviation": [
+    {
+      "kind": "local_harness_invocation",
+      "detail": "An initial non-acceptance invocation omitted the outer bash -lc; zsh expanded TEAM_AGENT_* and returned rc=1 before Go ran. The exact acceptance argv was then executed once and returned rc=0."
+    },
+    {
+      "kind": "fingerprint_boundary",
+      "detail": "The judge's fingerprint ruling arrived after the one permitted latest-tree E2E had started. Pre-run mtimes were recorded, but pre-Gradle SHA-256 values for the three concurrently edited App sources were not. SHA-256 was first recorded after the new APK build and remained identical after the run; this does not retroactively prove the exact bytes at Gradle start. The E2E result is therefore attributed only to the built APK SHA-256 listed below, without a stronger source-input claim."
+    }
+  ],
+  "result": {
+    "server_state_dir": {
+      "consumer_dir": "<resolved-stateDir>/tsnet",
+      "unit_gate": "pass",
+      "tailnet_disabled_state_dir_test": "pass",
+      "latest_e2e_state_dir_proof": "yes"
+    },
+    "latest_e2e": {
+      "run": "run-20260810T164543-50690",
+      "failure_reason": "expected_two_headscale_nodes",
+      "headscale_node_count": 1,
+      "app_observation": "App tsnet logged NeedsLogin and did not reach the control plane before the bounded node-count check ended.",
+      "workspace_visible": "no",
+      "isolated_session_visible": "no",
+      "pairing_injection_method": "adb_private_store_stdin",
+      "pairing_security_rationale": "The direct path replaces camera transport only: secrets travel over adb stdin into a disposable app-private store, production Keystore migration remains mandatory, daemon token authentication is not bypassed, and real App/daemon tsnet membership is still required."
+    },
+    "secret_hygiene": {
+      "home_override_used": "no",
+      "camera_path_used": "no",
+      "foreground_mouse_or_window_targeting_used": "no",
+      "daemon_ts_authkey_flag_present": "no",
+      "daemon_authkey_value_present": "no",
+      "daemon_authkey_shape_present": "no",
+      "daemon_pair_token_value_present": "no",
+      "app_log_secret_value_present": "no",
+      "artifact_secret_value_present": "no"
+    },
+    "cleanup": {
+      "cleanup_status": "yes",
+      "daemon_pid_absent": "yes",
+      "headscale_pid_absent": "yes",
+      "isolated_tmux_pid_absent": "yes",
+      "android_task_user_absent": "yes",
+      "android_task_package_data_absent": "yes",
+      "android_original_user_restored": "yes",
+      "emulator_app_apk_restored": "yes",
+      "adb_reverse_absent": "yes",
+      "task_temp_absent": "yes",
+      "task_temp_open_files_before_remove": 0,
+      "production_agentmirrord_baseline_count": 1,
+      "production_agentmirrord_baseline_untouched": "yes",
+      "task_ports_zero": [43910, 43911, 43912, 43913, 43920]
+    }
+  },
+  "fingerprints": {
+    "pre_run_observation": {
+      "PairingConfigStore.kt_mtime": "2026-08-10T16:31:40+0800",
+      "TsnetWire.kt_mtime": "2026-08-10T16:32:16+0800",
+      "PersistentConnection.kt_mtime": "2026-08-10T16:35:57+0800",
+      "pre_run_apk_sha256": "58640b12c847a65be9b07cd187d230a5af27e2a4c778ae91db12e872490ee8e9",
+      "source_sha256": null
+    },
+    "post_build_checkpoint": {
+      "PairingConfigStore.kt_sha256": "0b46b9f3f71f6deacfc5b30e3af91e8e52ad03d63b0d6cd76a25e357173c5f22",
+      "TsnetWire.kt_sha256": "b21808776f7e73421b2e690f9cce23271e2c84b8d836eca77636b2348df2bbfc",
+      "PersistentConnection.kt_sha256": "4f1e7a9d2ee9412c98dcdbead57d75a23960eff4c9db70387068500b06380895",
+      "app-debug.apk_sha256": "8d0e2277733061f5dc610f71e805dc6b458726b682b8cd969498d8c79b16e3f7"
+    },
+    "post_run_checkpoint": {
+      "PairingConfigStore.kt_sha256": "0b46b9f3f71f6deacfc5b30e3af91e8e52ad03d63b0d6cd76a25e357173c5f22",
+      "TsnetWire.kt_sha256": "b21808776f7e73421b2e690f9cce23271e2c84b8d836eca77636b2348df2bbfc",
+      "PersistentConnection.kt_sha256": "4f1e7a9d2ee9412c98dcdbead57d75a23960eff4c9db70387068500b06380895",
+      "app-debug.apk_sha256": "8d0e2277733061f5dc610f71e805dc6b458726b682b8cd969498d8c79b16e3f7"
+    }
+  },
+  "artifacts": [
+    "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T164543-50690/result.json",
+    "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T164543-50690/cleanup.txt",
+    "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T164543-50690/diagnostics.log",
+    "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T164543-50690/app-build.log"
+  ]
+}

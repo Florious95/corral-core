@@ -1,0 +1,42 @@
+{
+  "task_id": "fix-cols-grid-convergence",
+  "status": "pass_jvm_pending_real_device",
+  "seats": {"dev": "w-cols-dev", "test": "w-cols-prep"},
+  "at": "2026-08-14",
+  "commit": "fa9b12fa6",
+  "rootcause": "presenter.cellWidth 恒为名义值 10（measureCells() 从不回写），而绘制按实测 ≈11px 步进——上报给服务端的 cols 按名义值算、绘制按实测值走，两套栅格永不收敛。",
+  "real_repro_before_fix": {
+    "params": "用户真机：viewportW=1260，名义 cellWidth=10，实测 cellW=11",
+    "numbers": "reportedCols=126(=1260/10) 而 canvasCapacity=114(=1260/11)；末列字形右缘 1265 > 画布 1260",
+    "overflow": "超出 5px，而半字宽 5.5px —— 正是用户主诉「最右侧的字只能看到一半」",
+    "note": "此前那三条红测用的是「120 列画在 100px 上」的构造极端值，按用户判据『测试链路必须先抓到真实缺陷』退回重做，才有了这条。"
+  },
+  "fix": {
+    "X2": "measureCells() 回写 presenter.setMeasuredCellWidth（幂等，同值 no-op，不重算不 emit，不动 cellHeight）",
+    "X1": "cellW roundToInt→floor，宁可少一列不可多一列",
+    "X3": "护栏钳背景矩形与 MONO 段字形右缘，带金丝雀计数 clipGuardEngageCount()，保留 width>0 guard",
+    "files": "TermSurfaceView.kt、TermViewPresenter.kt（write_scope 内 2 文件）"
+  },
+  "canary_semantics": "X3 一旦在正常路径 engage，就说明 X2 失效了。计数恒 0 = 主修复在干活；计数涨 = 有路径绕过了回写，是要查的 bug，不是『护栏立功』。已写进外骨骼注释。",
+  "acceptance_actual_numbers": {
+    "判别红测": "5/5 PASS",
+    "USER-REAL": "reportedCols=114，capacity=114，超出量=0，clipGuardEngageCount()=0",
+    "B-字形": "clipGuardEngageCount()=60（异常网格 120 列 > 100px，护栏兜住）",
+    "A-真机": "cols=98==98",
+    "写回约束": "5/5 PASS（原 3 条 SKIP 因 setMeasuredCellWidth 出现而自动启用）",
+    "BgCjk对基线": "2/2 PASS，对照 docs/_baseline-termbgcjk-v6-20260814.txt 未倒退",
+    "全量": "436 条 433 绿 3 红；3 红全部是 feat-diagnostic-log-export 的接线红测，不属本条验收线",
+    "strict-t3": "exit 0",
+    "verified_by": "leader 亲自跑过 :app:testDebugUnitTest 与 strict-t3 核实，非仅凭席位自报"
+  },
+  "leader_rulings": [
+    "否决『定义 JVM 下的期望值』：改测试环境喂 11 可以，改期望值不行——那会让唯一的真复现与用户看到的现象脱钩。USER-REAL 期望值必须是 114（用用户真机参数算出），不是 126 也不是 JVM stub 的 1260。",
+    "裁掉一个死结：B-字形原断言 glyphRight = cols × realCellW 是纯计算值，无论护栏怎么实现恒为 1320，assertTrue(1320<=100) 恒假——一个实现无论如何都无法让它变绿的断言不是红测。改为断言可观测的护栏行为。",
+    "X3 从『选做』改为『必做』：开发席算出仅 X1 时 126×11=1386>1260 越界 126px，X1+X2 后 114×11=1254≤1260——数字把这件事定死了。",
+    "DiagLog 接线不算②的验收线：DiagLog API 还在流动，现在接线一改就返工；那条红测是诊断日志任务自己的先红后绿。"
+  ],
+  "regression_caught_by_dev_itself": "开发席自己发现并修掉了它引入的 fgPaint.color 误删回归（TermBgCjkAlignTest 抓到）。",
+  "forbidden": "不许 git apply docs/reverted-to-v6/horizontal-grid-convergence.patch —— --check 零冲突是陷阱（补丁基线与 v6 HEAD 逐字节一致），62630 字节里 3/4 是用户已否掉的 D-38/D-36/捏合预览。",
+  "handover": "docs/cols-convergence-patch-triage.md §7『诊断日志栅格字段规格』已写入（七字段语义+取值时机+overflow 公式+窄接口依赖约束），已直接移交 w-diag-dev。",
+  "pending": "真机验收：JVM stub 下 advance=1，读不到真机 11，『字形真的被收进画布』这条只能真机验。"
+}

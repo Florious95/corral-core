@@ -1,0 +1,10 @@
+argv: bash -lc 'env -u TEAM_AGENT_* bash e2e/connected-idle-economy.sh'
+exit_code: 1
+
+zero_connection wall=0.009108000s cpu_delta=0.000000s mean_cpu=0.000000% capture=0 rate=0.000000/s panes=27
+zero_connection wall window below frozen 60s
+connected-idle-economy: FAIL
+
+diagnosis: the process did sleep for the full window (daemon log spanned 63s), but separate Python processes on this host exposed non-comparable monotonic epochs. The harness correctly rejected 0.009s instead of weakening the frozen 60s gate. It was changed to cross-process-comparable wall-clock nanoseconds and rerun.
+cleanup_followup: the exact self-owned runtime root was absent (exit 0) and its exact high port accepted no connection (exit 0) before the final rerun.
+product_conclusion: none; this rejected harness sample was not used in metrics or verdict.

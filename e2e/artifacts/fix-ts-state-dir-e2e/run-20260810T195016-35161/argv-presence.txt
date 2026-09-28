@@ -1,0 +1,7 @@
+daemon_ts_authkey_flag_present=no
+daemon_authkey_value_present=no
+daemon_authkey_shape_present=no
+daemon_pair_token_value_present=no
+app_authkey_value_present=no
+app_authkey_shape_present=no
+app_pair_token_value_present=no

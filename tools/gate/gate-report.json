@@ -1,0 +1,196 @@
+{
+  "schema": "agentmirror-gate-report-v1",
+  "conclusion": "fail",
+  "generated_at": "2026-08-21T05:07:11+00:00",
+  "baseline_accept": {
+    "applied": false,
+    "reason": null
+  },
+  "suites": [
+    {
+      "name": "server",
+      "ok": false,
+      "skipped": false,
+      "cases": 382,
+      "duration_ms": 53526,
+      "failures": [
+        {
+          "test": "gofmt:internal/api/api_tmux_test.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "gofmt:internal/api/delta_merge_scenario_test.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "gofmt:internal/api/lifecycle_test.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "gofmt:internal/bridge/bridge.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "gofmt:internal/overlay/tmux.go",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/l2detect_footer.go:57",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:15",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:54",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:72",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:76",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:98",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:178",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:185",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:192",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:199",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:242",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay.go:248",
+          "category": "unclassified"
+        },
+        {
+          "test": "staticcheck:internal/api/overlay_test.go:70",
+          "category": "unclassified"
+        }
+      ],
+      "skip_reason": null,
+      "detail": null,
+      "ratchet": {
+        "baseline": 353,
+        "current": 382,
+        "action": "up"
+      }
+    },
+    {
+      "name": "app",
+      "ok": false,
+      "skipped": false,
+      "cases": 1447,
+      "duration_ms": 2615,
+      "failures": [
+        {
+          "test": "lint:OldTargetApi:app/app/build.gradle.kts:50",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:GradleDependency:app/app/build.gradle.kts:95",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:GradleDependency:app/app/build.gradle.kts:96",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:GradleDependency:app/app/build.gradle.kts:132",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:NewerVersionAvailable:app/app/build.gradle.kts:34",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:NewerVersionAvailable:app/app/build.gradle.kts:108",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:NewerVersionAvailable:app/app/build.gradle.kts:122",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:ContextCastToActivity:app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt:104",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:ModifierParameter:app/app/src/main/java/dev/agentmirror/app/ui/screens/SessionShellScreen.kt:102",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2ListRendersStatusTest.kt:71",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2NavigationIdentityTest.kt:105",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/workspace/L2UnknownStatusTest.kt:81",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:65",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:101",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:StateFlowValueCalledInComposition:app/app/src/test/kotlin/dev/agentmirror/app/session/OverlayMenuTest.kt:127",
+          "category": "unclassified"
+        },
+        {
+          "test": "lint:UseOfNonLambdaOffsetOverload:app/app/src/main/java/dev/agentmirror/app/ui/components/AppBottomNav.kt:105",
+          "category": "unclassified"
+        }
+      ],
+      "skip_reason": null,
+      "detail": null,
+      "ratchet": {
+        "baseline": 1447,
+        "current": 1447,
+        "action": "same"
+      }
+    },
+    {
+      "name": "archwiki",
+      "ok": true,
+      "skipped": false,
+      "cases": 1,
+      "duration_ms": 19593,
+      "failures": [],
+      "skip_reason": null,
+      "detail": null,
+      "ratchet": {
+        "baseline": 1,
+        "current": 1,
+        "action": "same"
+      }
+    }
+  ],
+  "issues": [],
+  "summary": "结论 fail：3 套件共 1830 用例。红：本次非全绿，详见 suites/issues。"
+}

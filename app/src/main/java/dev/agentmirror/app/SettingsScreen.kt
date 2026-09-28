@@ -42,6 +42,8 @@ import dev.agentmirror.app.ui.components.navTransition
 import dev.agentmirror.app.ui.screens.ShortcutCommandsScreen
 import dev.agentmirror.app.ui.theme.Appearance
 import dev.agentmirror.app.ui.theme.SharedPreferencesTermThemeStore
+import dev.agentmirror.app.ui.theme.ThemeId
+import dev.agentmirror.app.ui.theme.ThemeRegistry
 import dev.agentmirror.app.ui.screens.TermThemePickerScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,6 +71,8 @@ internal fun SettingsScreen(
     enableBackHandler: Boolean = true,
     appearance: Appearance = Appearance.System,
     onAppearanceChange: (Appearance) -> Unit = {},
+    themeId: ThemeId = ThemeRegistry.default.metadata.id,
+    onThemeChange: (ThemeId) -> Unit = {},
 ) {
     var page by remember { mutableStateOf(SettingsPage.Main) }
     BackHandler(enabled = enableBackHandler && page == SettingsPage.Main, onBack = onBack)
@@ -118,6 +122,8 @@ internal fun SettingsScreen(
                     fontSizeStore.save(sp)
                 },
                 onAppearanceChange = onAppearanceChange,
+                themeId = themeId,
+                onThemeChange = onThemeChange,
                 onExportLogs = {
                     scope.launch {
                         val result = withContext(Dispatchers.IO) { exportDiagLog(context) }

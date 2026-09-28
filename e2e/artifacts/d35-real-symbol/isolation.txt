@@ -1,0 +1,2 @@
+IDENTITY
+socket=/private/tmp/tmux-501/d35-real-symbol\nsession=d35-real-symbol\npane=%0\ncommand=claude.exe\nsize=100x34

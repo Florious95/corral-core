@@ -1,0 +1,10 @@
+INSTRUMENTATION_RESULT: api_status=pass
+INSTRUMENTATION_RESULT: connection_manager_ready=yes
+INSTRUMENTATION_RESULT: listing_received=yes
+INSTRUMENTATION_RESULT: pairing_entry=onQrText_pass
+INSTRUMENTATION_RESULT: secret_source=environment
+INSTRUMENTATION_RESULT: session_present=yes
+INSTRUMENTATION_RESULT: socks5_path=explicit_tsnet_proxy_socket_factory
+INSTRUMENTATION_RESULT: tsnet_start_called=yes
+INSTRUMENTATION_RESULT: tsnet_state_file=yes
+INSTRUMENTATION_RESULT: workspace_cwd_match=yes

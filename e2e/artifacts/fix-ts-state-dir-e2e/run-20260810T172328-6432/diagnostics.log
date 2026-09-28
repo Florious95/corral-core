@@ -1,0 +1,126 @@
+## headscale-configtest.log
+
+
+## headscale.stderr
+
+
+## headscale-cli.stderr
+
+
+## sandbox-check.log
+
+
+## go-build.log
+
+
+## daemon.stderr
+time=2026-08-10T17:24:52.758+08:00 level=INFO msg="single-instance guard acquired" pidfile=TASK_TMP/daemon-state/agentmirrord.pid
+time=2026-08-10T17:24:52.758+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T17:24:52.758+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:43920 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-10T17:24:52.759+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir=TASK_TMP/daemon-state/tsnet
+time=2026-08-10T17:24:52.759+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/10 17:24:52 tsnet running state path TASK_TMP/daemon-state/tsnet/tailscaled.state
+2026/08/10 17:24:52 tsnet starting with hostname "MacBook-Pro.local", varRoot "TASK_TMP/daemon-state/tsnet"
+2026/08/10 17:24:52 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/10 17:24:52 AuthLoop: state is Starting; done
+time=2026-08-10T17:24:55.896+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+time=2026-08-10T17:25:49.499+08:00 level=INFO msg="shutting down"
+
+
+## android-start-user.log
+Success: user started
+
+
+## android-switch-user.log
+
+
+## android-data-init.log
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+
+
+## android-device-ready.log
+[exec] wake emulator device=emulator-5554 key=KEYCODE_WAKEUP
+[exec] dismiss keyguard device=emulator-5554 user=27
+[policy] camera=no foreground_mouse=no window_targeting=no
+[state] wakefulness=Awake user_state=RUNNING_UNLOCKED
+
+
+## android-app-start.log
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+
+
+## pairing-injection.log
+method=adb_private_store_stdin
+secret_transport=stdin
+temporary_android_user=yes
+app_private_store_owner_verified=yes
+app_private_store_context_verified=yes
+production_keystore_migration_required=yes
+camera_used=no
+foreground_mouse_used=no
+window_targeting_used=no
+daemon_auth_bypassed=no
+security_rationale=bypasses only the QR carrier and VM pre-probe; temporary app-private store, production Keystore migration, daemon token auth, and real tsnet join remain mandatory
+
+
+## app-logcat-redacted.log
+--------- beginning of main
+08-10 17:25:17.881 18016 18016 I agentmirror.app: Late-enabling -Xcheck:jni
+08-10 17:25:17.904 18016 18016 I agentmirror.app: Using CollectorTypeCMC GC.
+08-10 17:25:17.919 18016 18016 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+08-10 17:25:18.069 18016 18016 D nativeloader: Load libstats_jni.so using APEX ns com_android_os_statsd for caller /apex/com.android.os.statsd/javalib/framework-statsd.jar: ok
+08-10 17:25:18.103 18016 18016 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+08-10 17:25:18.103 18016 18016 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+08-10 17:25:18.105 18016 18016 W ziparchive: Unable to open '/data/app/~~2lq1q0GhsBgxXHijFwgxNw==/dev.agentmirror.app-g7YygJ6j87R-h-UAm4WOxQ==/base.dm': No such file or directory
+08-10 17:25:18.105 18016 18016 W ziparchive: Unable to open '/data/app/~~2lq1q0GhsBgxXHijFwgxNw==/dev.agentmirror.app-g7YygJ6j87R-h-UAm4WOxQ==/base.dm': No such file or directory
+08-10 17:25:18.816 18016 18016 D nativeloader: Configuring clns-7 for other apk /data/app/~~2lq1q0GhsBgxXHijFwgxNw==/dev.agentmirror.app-g7YygJ6j87R-h-UAm4WOxQ==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~2lq1q0GhsBgxXHijFwgxNw==/dev.agentmirror.app-g7YygJ6j87R-h-UAm4WOxQ==/lib/arm64:/data/app/~~2lq1q0GhsBgxXHijFwgxNw==/dev.agentmirror.app-g7YygJ6j87R-h-UAm4WOxQ==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/27/dev.agentmirror.app
+08-10 17:25:18.818 18016 18016 D CompatChangeReporter: Compat change id reported: 202956589; UID 2710207; state: ENABLED
+08-10 17:25:18.825 18016 18016 V GraphicsEnvironment: Currently set values for:
+08-10 17:25:18.825 18016 18016 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+08-10 17:25:18.825 18016 18016 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+08-10 17:25:18.825 18016 18016 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+08-10 17:25:18.825 18016 18016 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+08-10 17:25:18.839 18016 18016 D CompatChangeReporter: Compat change id reported: 279646685; UID 2710207; state: ENABLED
+08-10 17:25:18.954 18016 18016 D CompatChangeReporter: Compat change id reported: 309578419; UID 2710207; state: ENABLED
+08-10 17:25:19.194 18016 18317 D nativeloader: Load /data/app/~~2lq1q0GhsBgxXHijFwgxNw==/dev.agentmirror.app-g7YygJ6j87R-h-UAm4WOxQ==/base.apk!/lib/arm64-v8a/libgojni.so using ns clns-7 from class loader (caller=/data/app/~~2lq1q0GhsBgxXHijFwgxNw==/dev.agentmirror.app-g7YygJ6j87R-h-UAm4WOxQ==/base.apk!classes10.dex): ok
+08-10 17:25:19.278 18016 18016 W HWUI    : Unknown dataspace 0
+08-10 17:25:19.347 18016 18317 I GoLog   : tsnet running state path /data/user/27/dev.agentmirror.app/files/tsnet/node-4334f06a701a3fe4f5c59b6cf0b5e01968fb654a40ca73ff6b3a1d2177923263/tailscaled.state
+08-10 17:25:19.358 18016 18317 I GoLog   : tsnet starting with hostname "agentmirror-sdk-gphone64-arm64", varRoot "/data/user/27/dev.agentmirror.app/files/tsnet/node-4334f06a701a3fe4f5c59b6cf0b5e01968fb654a40ca73ff6b3a1d2177923263"
+08-10 17:25:19.366 18016 18317 I GoLog   : LocalBackend state is NeedsLogin; running StartLoginInteractive...
+08-10 17:25:19.403 18016 18016 I Choreographer: Skipped 33 frames!  The application may be doing too much work on its main thread.
+08-10 17:25:19.756 18016 18016 W agentmirror.app: Accessing hidden method Landroid/os/SystemProperties;->addChangeCallback(Ljava/lang/Runnable;)V (unsupported, reflection, allowed)
+08-10 17:25:19.948 18016 18031 I agentmirror.app: Compiler allocated 5250KB to compile void android.view.ViewRootImpl.performTraversals()
+08-10 17:25:20.102 18016 18277 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+08-10 17:25:20.103 18016 18277 I EGL_emulation: Opening libGLESv2_emulation.so
+08-10 17:25:20.106 18016 18277 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+08-10 17:25:20.108 18016 18277 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+08-10 17:25:20.132 18016 18277 I Gralloc4: mapper 4.x is not supported
+08-10 17:25:20.191 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+08-10 17:25:20.192 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+08-10 17:25:20.192 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+08-10 17:25:20.198 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+08-10 17:25:20.203 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+08-10 17:25:20.203 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+08-10 17:25:20.203 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inClipPlane
+08-10 17:25:20.203 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 4 name inIsectPlane
+08-10 17:25:20.203 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 5 name inRoundCapCenters
+08-10 17:25:20.210 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+08-10 17:25:20.210 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+08-10 17:25:20.210 18016 18333 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inTextureCoords
+08-10 17:25:20.237 18016 18016 I Choreographer: Skipped 44 frames!  The application may be doing too much work on its main thread.
+--------- beginning of system
+08-10 17:25:21.271 18016 18016 I ActivityThread: ApplicationInfo updating for dev.agentmirror.app, new timestamp: 65802849
+08-10 17:25:21.271 18016 18016 I ActivityThread: assets removed: []
+08-10 17:25:21.271 18016 18016 I ActivityThread: assets added: [/data/resource-cache/com.android.systemui-neutral-VlON.frro, /data/resource-cache/com.android.systemui-accent-ELTP.frro, /data/resource-cache/com.android.systemui-dynamic-ClK3.frro]
+08-10 17:25:24.651 18016 19322 D ProfileInstaller: Installing profile for dev.agentmirror.app
+
+
+## app-install.log
+Performing Streamed Install
+Success
+
+
+## app-restore.log
+Performing Streamed Install
+Success
+

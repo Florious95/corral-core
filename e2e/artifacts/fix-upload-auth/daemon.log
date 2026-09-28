@@ -1,0 +1,5 @@
+time=2026-08-11T00:12:55.154+08:00 level=INFO msg="single-instance guard acquired" pidfile=/tmp/am-api-scenarios-run.gKcAbn/state/agentmirrord.pid
+time=2026-08-11T00:12:55.155+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-11T00:12:55.155+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:62792 qr_listen="" token_source=explicit upload_dir=/tmp/am-api-scenarios-run.gKcAbn/uploads max_upload_mib=20 list_interval=500ms
+time=2026-08-11T00:12:55.155+08:00 level=WARN msg="tailnet 未启用：未配置 TS authkey，仅 LAN 监听"
+time=2026-08-11T00:43:11.580+08:00 level=INFO msg="shutting down"

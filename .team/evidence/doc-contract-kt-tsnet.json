@@ -1,0 +1,99 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-kt-tsnet",
+  "case_id": "msg_8437de67c320",
+  "pkg": "dev.agentmirror.app.tsnet",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.tsnet",
+      "rc": 0,
+      "note": "单包硬判全绿：T3-1/T3-2/T3-3/T3-4 全 PASS（施工前基线：T3-1 1 条违规（TsnetInterfaceCodec 缺 KDoc）、T3-4 由 workspace 包承担、本包当时 PASS）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据未被打坏：T1-1/T1-2 仍 PASS，T3 报告模式全绿"
+    },
+    {
+      "argv": "env -u TEAM_AGENT_API_PROVIDER -u TEAM_AGENT_AUTH_MODE -u TEAM_AGENT_PROFILE ./gradlew -q :app:testDebugUnitTest",
+      "rc": 0,
+      "note": "模块测试绿：42 套件 0 失败 0 错误；tsnet 包 6 套件（TsnetAuthKeyTest/TsnetDialTest/TsnetInterfaceCodecTest/TsnetManagerTest/TsnetSocksTest/TsnetWireTest）全绿"
+    },
+    {
+      "argv": "故意破坏阳性对照：删除 TsnetSocks.handshake 的 @err 标签后 python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.tsnet",
+      "rc": 1,
+      "note": "阳性对照输出摘要：T3-3 FAIL — 契约标签完备：1 条违规；[T3-3] dev.agentmirror.app.tsnet app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetSocks.kt:41 `@contract` — 缺契约标签: @err；结果：未通过（exit 1）。已改回，最终复跑 exit 0。证明判据真实扫描本包、能精确指向被破坏符号。"
+    }
+  ],
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetInterfaceCodec.kt",
+    "app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetDial.kt",
+    "app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetBackend.kt",
+    "app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetManager.kt",
+    "app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetSocks.kt"
+  ],
+  "rewritten": [
+    {
+      "symbol": "TsnetSocksAuthenticator",
+      "pattern": "形态④把未接线的能力写成现状（同族：虚构接线/死路径被描述为活）",
+      "original_inaccurate": "KDoc 写「节点 Up 后安装本类实例」——暗示存在一条把本类装进 Authenticator.setDefault 的生产接线，JDK SOCKS 客户端会调用它应答认证。",
+      "basis": "全仓库 grep：TsnetSocksAuthenticator 仅被 TsnetDialTest.kt:63 引用（单测构造），生产代码零引用；Authenticator.setDefault 全仓库无任何安装调用。SOCKS 拨号实际由 TsnetSocks 自实现握手经 TsnetProxySocketFactory 注入（OkHttpWebSocketTransport.kt:161-168 用 socketFactory 而非 proxy+Authenticator；TsnetSocks.kt 自述「不用 JDK 内建 SOCKS…Authenticator.setDefault 本身是进程级可变全局态」；TsnetWire.kt:125-127 自述「SOCKS 认证不走全局 Authenticator」）。原 KDoc 描述的「安装本类实例」接线在当前实现中不存在。",
+      "rewritten_to": "KDoc 改为：当前生产接线不用本类（Android libcore 内建 SOCKS 客户端 RFC 1929 认证不生效，模拟器实证），SOCKS 拨号改由 [TsnetSocks] 自实现握手经 [TsnetProxySocketFactory] 注入，零全局态；本类保留作 RFC 1929 认证决策逻辑的纯 JVM 参考实现（[TsnetDialTest] 覆盖应答约束）。",
+      "self_verified": "重写后所指的 [TsnetSocks]/[TsnetProxySocketFactory] 为真实导出符号；「零全局态」与 TsnetSocks.kt/TsnetWire.kt 自述一致；TsnetDialTest 确实实例化本类测 credentialsFor——「参考实现」成立。"
+    },
+    {
+      "symbol": "TsnetDial（类级 KDoc 的消费方声明）",
+      "pattern": "形态⑤虚构一个已存在的消费方（conn 层并不存在）",
+      "original_inaccurate": "类 KDoc 写「这是 conn/service 层消费 tsnet 的唯一公开面」——把 conn 层列为消费方。",
+      "basis": "grep 全仓库 conn 包源码：conn/ 下零 TsnetDial/TsnetWire/TsnetState/ConnectionPath 引用、零 `import dev.agentmirror.app.tsnet`。实际消费 tsnet 的只有 service（OkHttpWebSocketTransport.kt 按址选路）与 pairing（PersistentConnection.kt / PairingViewModel.kt）。",
+      "rewritten_to": "改为「service/pairing 层消费 tsnet 的公开面」，并列出真实消费方：[OkHttpTransportFactory] 按址选路经 [socketFactoryFor] 注入；[PairingViewModel] 经 [isTailnetHost] 判配对探针目标；[TsnetWire.ensureStarted] 在 [startPersistentConnection] 起网。",
+      "self_verified": "grep 确认 service/pairing 两处消费方真实存在；[OkHttpTransportFactory]/[PairingViewModel] 为顶层导出符号；startPersistentConnection 为 PersistentConnection.kt:57 顶层 fun。"
+    },
+    {
+      "symbol": "ConnectionPath（枚举 KDoc）",
+      "pattern": "形态⑤/表述精确化：原「label 是界面/通知使用的固定文案」过于笼统且未指明消费方",
+      "original_inaccurate": "KDoc 仅一句「用户可见的实际拨号网络类型；label 是界面/通知使用的固定文案」——消费方不明，读不出「谁在写、谁在读」。",
+      "basis": "核实真实消费面：写入方仅 OkHttpWebSocketTransport.kt:165（OkHttpTransportFactory 按选路结果 ServiceWire.recordConnectionPath）；读取方为 WorkspaceScreen.kt:185、SessionScreen.kt:293（UI 路径徽标）与 MirrorForegroundService.kt:128（常驻通知文案「已连接 · tailnet」）。",
+      "rewritten_to": "KDoc 展开：label 由 UI（[WorkspaceScreen]/[SessionScreen] 路径徽标）与通知（[MirrorForegroundService] 常驻通知）读取；枚举本身由 [OkHttpTransportFactory] 按选路结果记录（[ServiceWire.recordConnectionPath]）。",
+      "self_verified": "逐行核过三个消费点（WorkspaceScreen.kt:185/SessionScreen.kt:293/MirrorForegroundService.kt:128）与唯一写入点（OkHttpWebSocketTransport.kt:165）；引用符号全部真实存在。"
+    },
+    {
+      "symbol": "TsnetInterfaceCodec",
+      "pattern": "T3-1 缺紧邻 KDoc（leader 实测基线的 1 条违规）",
+      "original_inaccurate": "顶层 public object 无紧邻 KDoc（T3-1 违规，判据能抓到的那 1 条）。",
+      "basis": "leader 施工前实测基线 T3-1=1 条，build_wiki.py 精确指向 TsnetInterfaceCodec.kt:46 缺 KDoc。",
+      "rewritten_to": "补 KDoc：本对象是 [NetIfSnapshot] 表 → tsnetbind 行文本的编码器，与解析端 tools/tsnetbind/tsnetbind.go 的 parseInterfaces 是跨语言 wire 契约，两端各有契约锁测，改一端必须同改另一端；只编码不解析。",
+      "self_verified": "parseInterfaces 在 tools/tsnetbind/tsnetbind.go:119 真实存在；tsnetbind_test.go 有 TestParseInterfaces 三件、Kotlin 侧有 TsnetInterfaceCodecTest；「只编码不解析」与实现（仅 encode 一个公开方法）相符。"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "TsnetProxy.parse（TsnetBackend.kt）",
+      "reason": "真实契约面：pre 条件（addr 形如 host:port 且 port 可解析为 1..65535）、err 面（缺端口/端口非法抛 IllegalArgumentException）——实现里两个 require 显式存在。"
+    },
+    {
+      "symbol": "TsnetDial（TsnetDial.kt）",
+      "reason": "真实契约面：纯函数集合；inv 关键约束（isTailnetHost 绝不走 InetAddress 触发 DNS、socketFactoryFor 非 Up/非 tailnet 返回 null 直拨不兜底）是 feat-ts-wire 红测边界，值得写死。"
+    },
+    {
+      "symbol": "TsnetState（TsnetManager.kt）",
+      "reason": "真实契约面：状态闭集与 Up 恒带非空 proxy 的不变量；错误面以 Error 状态承载不抛异常。"
+    },
+    {
+      "symbol": "TsnetManager（TsnetManager.kt）",
+      "reason": "真实契约面：start 双 false 语义、异步终态经 onState 到达、redactAuthKey 剔除 key、代次机制杜绝僵尸 Up——均有实现与单测背书。"
+    },
+    {
+      "symbol": "TsnetSocks.handshake（TsnetSocks.kt）",
+      "reason": "真实契约面：SOCKS5 RFC1928/1929 协议握手，err 面按实现逐一列全（凭证超长/版本非法/认证被拒/不支持认证法/域名超长/应答地址类型非法/REP 建链失败/EOF），inv 是凭证红线。"
+    }
+  ],
+  "consumes_added": [],
+  "uncertain": [],
+  "deviation": [],
+  "positive_control": {
+    "method": "故意删除 TsnetSocks.handshake 的 @err 标签 → 单包硬判 exit 1 精确指向 TsnetSocks.kt:41 `@contract` 缺 @err → 改回后 exit 0",
+    "red_output": "T3-3 FAIL — 契约标签完备：1 条违规；[T3-3] dev.agentmirror.app.tsnet app/app/src/main/java/dev/agentmirror/app/tsnet/TsnetSocks.kt:41 `@contract` — 缺契约标签: @err；结果：未通过（exit 1）"
+  },
+  "summary": "包 dev.agentmirror.app.tsnet：改写 4 条注释（含补 T3-1 的 1 条缺 KDoc），补 5 个契约，消 0 条 T3-4 漂移（本包 import 图零内部包依赖，T3-4 本就 PASS，声明 @consumes 反而会判红，故不补）。形态谱系：①TsnetSocksAuthenticator 为「把未接线的能力写成现状」——原 KDoc 称节点 Up 后安装本类实例，全仓库无任何安装调用点，SOCKS 认证实际走 TsnetSocks 自实现握手，本类仅被单测引用；②TsnetDial 类 KDoc 虚构 conn 层为消费方，实际消费方只有 service/pairing 两层，已逐一点名真实消费方；③ConnectionPath 消费面从笼统改为点名真实读写方；④TsnetInterfaceCodec 补 T3-1 缺的紧邻 KDoc。逐符号核对了全部顶层导出（ConnectionPath/Environment/Error/GomobileTsnetBackend/NetIfSnapshot/TsnetAuthKeys/TsnetBackend/TsnetDial/TsnetInterfaceCodec/TsnetManager/TsnetProxy/TsnetProxySocketFactory/TsnetSocks/TsnetSocksAuthenticator/TsnetState/TsnetWire/Up），其余符号 KDoc 与实现相符未改。验收三件全绿：单包硬判 exit 0、模块测试 exit 0、全仓库判据 exit 0；阳性对照证明判据真实扫描本包。"
+}

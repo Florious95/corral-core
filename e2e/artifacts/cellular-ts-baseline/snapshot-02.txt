@@ -1,0 +1,52 @@
+# 蜂窝 + TS 增量取证快照（w-perf-link）  2026-08-13 23:33–23:41
+# 所有数字为瞬时值，产地：daemon 主机（192.168.31.116），用户手机在蜂窝+TS 条件。
+# 配套 nettop 原始采样：nettop-39476-during-ping.txt
+
+## [23:33:02] ping 手机 tailnet（20 包，i=0.5）
+64 bytes from 100.69.43.120: icmp_seq=0 ttl=64 time=1073.052 ms
+（... 序列呈锯齿振荡：1073/2396/1891/1560/1103/603/457/1510/1005/1887/1383/879/1427/1778/1273/773/455/2027/1523/1344 ...）
+20 packets transmitted, 20 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 455.282/1317.768/2396.221/518.536 ms
+# 注：0% 丢包但 RTT 5 倍振幅锯齿 → 深缓冲排队（bufferbloat）特征。
+
+## [23:33:13] ping 82.21.81.136 经默认路由（Clash TUN）
+round-trip min/avg/max/stddev = 0.342/0.487/0.693/0.103 ms  （TTL=64）
+## [23:35:44] ping 8.8.8.8 经默认路由
+round-trip min/avg/max/stddev = 0.306/0.483/0.870/0.225 ms
+# 方法论结论：Clash TUN 对经默认路由的 ICMP 本地代答（0.4ms/TTL64 不可能是真实海外 RTT）。
+# 经 TUN 的 ICMP 一律不可信；ping 100.69.43.120 的数百~数千 ms 是真实穿透值（量级排除代答）。
+
+## [23:33:22] lsof -nP -p 39476 -a -i（MacPacketTunnel，节选）
+UDP *:41641（通配绑定，无连接态对端）
+TCP 192.168.31.116:{多端口} -> 82.21.81.136:443/8443 共 30+ 条（源=en0 实地址）
+TCP 192.168.31.116:54166 -> 172.237.72.43:443
+TCP 127.0.0.1:1082 LISTEN（本地 SOCKS）
+
+## [23:33:22] lsof -nP -iTCP:9900
+agentmirr 70317: TCP 198.18.0.1:9900 -> 100.69.43.120:50914 (ESTABLISHED)
+
+## [23:35:41] 中转服务器身份判定
+rDNS 172.237.72.43 = 172-237-72-43.ip.linodeusercontent.com
+TLS 172.237.72.43:443  subject: CN=sg-proxy2.team-agent.net（Let's Encrypt YE1）
+TLS 82.21.81.136:443   subject: CN=sg-proxy2.team-agent.net（同一证书身份）
+# 结论：两个"海外出口"都是用户自建新加坡代理节点（team-agent.net），不是 Tailscale DERP 本体。
+
+## [23:35:44] en0 绕开 TUN 的真实 RTT（ping -b en0）
+-> 172.237.72.43: 8 发 4 收（丢 50%），min/avg/max = 271.751/287.703/325.763 ms
+-> 82.21.81.136:  5 发 4 收（丢 20%），min/avg/max = 121.109/139.756/190.314 ms
+
+## [23:36:02–23:36:10] nettop -p 39476 三采样，期间向手机发 60 个 ping（i=0.25）
+udp4 *:41641  bytes_in 138868 -> 138868 -> 138992（+124B），bytes_out 534124 全程不变
+# 结论：ping 风暴流经手机期间 WG UDP 端口零载流 → 无活跃直连 UDP 路径。
+# 同窗口到 82.21.81.136 的 TCP 流 rtt_avg 122–284ms（与 en0 裸 ICMP 同量级 → 本机用户态转发开销 ≤10ms 级）。
+
+## [23:36:32] nettop -p 70317（daemon 真实 WS TCP 连接的内核视角）
+tcp4 198.18.0.1:9900 <-> 100.69.43.120:49834  utun4  Established
+bytes_in 714  bytes_out 13261  rx_dupe 332  re-tx 1374  rtt_avg 1762.66 ms
+# 两个要点：① 传输层 srtt 1763ms > 同窗 ICMP avg 1318ms，重传率 10.4%（1374/13261）；
+# ② 端口 50914(23:29/23:33) -> 49834(23:36)：3 分钟内发生过一次重连（原因未判定）。
+
+## [23:40:59] 收尾核查
+lsof -iTCP:9900 -sTCP:ESTABLISHED：无输出 —— 连接已消失（App 断开或链路掉线，原因未判定）。
+ping 100.69.43.120（6 包）：丢 16.7%，min/avg/max = 413.572/1568.530/3971.556 ms
+# 蜂窝观测窗口在 23:41 前后开始关闭/恶化。

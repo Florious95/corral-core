@@ -1,0 +1,105 @@
+[
+  {
+    "id": 1,
+    "machine_key": "mkey:f4ae4bf9840ae9a5250d371cc828f8fa2fd1d4d507ccdc3ca121a194f52a6b19",
+    "node_key": "nodekey:2e0edb5c762e5199559533ad6759beffc335bbf685fe117afd0811bbc9e87f4c",
+    "disco_key": "discokey:665bccae573a6d7aeef3b0e5e0c964a332cd4eedfa484273996e45a92b123f07",
+    "ip_addresses": [
+      "100.64.0.1",
+      "fd7a:115c:a1e0::1"
+    ],
+    "name": "MacBook-Pro.local",
+    "user": {
+      "id": 1,
+      "name": "fix-ts-state-e2e",
+      "created_at": {
+        "seconds": 1786362477,
+        "nanos": 794209000
+      }
+    },
+    "last_seen": {
+      "seconds": 1786362481,
+      "nanos": 386093000
+    },
+    "pre_auth_key": {
+      "user": {
+        "id": 1,
+        "name": "fix-ts-state-e2e",
+        "created_at": {
+          "seconds": 1786362477,
+          "nanos": 794209000
+        }
+      },
+      "id": 1,
+      "key": "[REDACTED]",
+      "reusable": true,
+      "ephemeral": true,
+      "expiration": {
+        "seconds": 1786363377,
+        "nanos": 825229000
+      },
+      "created_at": {
+        "seconds": 1786362477,
+        "nanos": 826186000
+      }
+    },
+    "created_at": {
+      "seconds": 1786362478,
+      "nanos": 359935000
+    },
+    "register_method": 1,
+    "given_name": "macbook-pro.local",
+    "online": true
+  },
+  {
+    "id": 2,
+    "machine_key": "mkey:c86da3b7c4db47ebaeae6b8e1ad66c81cea7d917f1d0aeb4472418cd39c12656",
+    "node_key": "nodekey:dafd0c6fdd2d503f0ff280734d96501ed0314028db008ffa1ea914fbe6ddd84a",
+    "disco_key": "discokey:d60baf1ddbf8e592ce4fcd1d52b3cb86f507eaad3855c710506d4a82d0e8bf60",
+    "ip_addresses": [
+      "100.64.0.2",
+      "fd7a:115c:a1e0::2"
+    ],
+    "name": "agentmirror-api-e2e",
+    "user": {
+      "id": 1,
+      "name": "fix-ts-state-e2e",
+      "created_at": {
+        "seconds": 1786362477,
+        "nanos": 794209000
+      }
+    },
+    "last_seen": {
+      "seconds": 1786362492,
+      "nanos": 776796000
+    },
+    "pre_auth_key": {
+      "user": {
+        "id": 1,
+        "name": "fix-ts-state-e2e",
+        "created_at": {
+          "seconds": 1786362477,
+          "nanos": 794209000
+        }
+      },
+      "id": 1,
+      "key": "[REDACTED]",
+      "reusable": true,
+      "ephemeral": true,
+      "expiration": {
+        "seconds": 1786363377,
+        "nanos": 825229000
+      },
+      "created_at": {
+        "seconds": 1786362477,
+        "nanos": 826186000
+      }
+    },
+    "created_at": {
+      "seconds": 1786362488,
+      "nanos": 973391000
+    },
+    "register_method": 1,
+    "given_name": "agentmirror-api-e2e"
+  }
+]

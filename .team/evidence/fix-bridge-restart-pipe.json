@@ -1,0 +1,50 @@
+{
+  "task_id": "fix-bridge-restart-pipe",
+  "status": "pass",
+  "worker": "w-fix-bridge",
+  "date": "2026-08-09",
+  "summary": "e2e 老化实证缺陷修复：跨 daemon 重启后 delta 流 0 帧（残留 pipe-pane cat 持有旧 FIFO，新 pipe-pane -o 静默 toggle，relay 永久阻塞，teardown 死锁）。红测先行 + 最小修复 + 可选加固全部落地并验收 exit 0。",
+  "root_cause_chain": [
+    "1. bridge 流是 FIFO 会合：relay O_RDONLY open 阻塞等 writer，cat O_WRONLY 阻塞等 reader，首次订阅两侧成对解开",
+    "2. daemon 被杀（SIGKILL/SIGTERM）后旧 cat 不退出，仍 attach 在 pane 上持有旧 FIFO",
+    "3. 新 daemon pipe-pane -o 见 pane 已有 pipe → 静默 no-op（实测为 toggle，不挂新命令），新 FIFO 永远无 writer",
+    "4. 新 relay 永久阻塞在 OpenFile，teardown 的 detach 排在 relay 之后永不执行——死锁不能自愈"
+  ],
+  "fixes": {
+    "main_fix": "subscribe 路径先无条件 pipe-pane -t（无命令=detach）再 pipe-pane -o：把崩溃残留当常态输入做幂等自愈（004 哲学）；无 pipe 时 detach 幂等 rc=0，残留 cat 收 EOF 退出（实测证实）",
+    "hardening": "relay 打开 FIFO 改用 openFIFO：goroutine 阻塞 open + fifoOpenTimeout(3s) 超时后用自身 O_WRONLY|O_NONBLOCK open 解开阻塞（POSIX 技法，macOS 实测 0s 生效），超时上抛可判定错误'no writer connected within'，teardown 必可达",
+    "graceful_shutdown_optional": "Server.Close 现在 drain 所有活跃连接订阅（wsConn.closeSubscriptions：cancel relay + detach pipe），优雅关闭不残留 pipe-pane cat；SIGKILL 路径仍靠主修自愈"
+  },
+  "empirical_probes": [
+    "macOS(BSD) FIFO poll 语义：writer 已连接但无数据 → 无 POLLIN（与 Linux 不同），不能用 poll 等 writer 连接做 open 有界化",
+    "tmux pipe-pane toggle 语义：-o 已有 pipe 时不挂新命令（pane_pipe 1→0，catB=0）；detach 后 -o 恢复（pane_pipe=1）",
+    "无 pipe 时无参 detach 幂等 rc=0",
+    "blocking O_RDONLY open 可被自身 O_WRONLY|O_NONBLOCK open 解开（macOS 0s）"
+  ],
+  "red_tests": [
+    "TestSubscribeRecoversAfterCrashedPipe: 预置 stale cat 残留 → 重新 subscribe → 注入 CRASH_RECOVER_77 → delta 必须到达。修前红（delta 0 帧超时），修后绿",
+    "TestSubscribeTeardownNotBlockedAfterCrashedPipe: 预置残留 → subscribe → cancel → ch 必须关闭。修前红（relay 卡 open 死锁），修后绿",
+    "TestOpenFIFOTimesOut: 无 writer FIFO → openFIFO 限时报错不挂死（加固直接验证）",
+    "TestCloseDrainsSubscriptions: Server.Close 后 pane_pipe 归 0。修前红（pipe 仍 attach），修后绿"
+  ],
+  "tests": {
+    "bridge_full": "go test ./internal/bridge/... -> ok 5.1s (15 tests incl 3 new)",
+    "api_full": "go test ./internal/api/... -> ok 2.5s (incl 1 new close-drain)",
+    "race_key": "go test -race -run 'TestSubscribeRecovers|TestSubscribeTeardown|TestOpenFIFO|TestCloseDrains' -> PASS all",
+    "server_full": "go test ./... (server module) -> all ok",
+    "vet_build_fmt": "go vet ./internal/bridge/ ./internal/api/ + go build ./... + gofmt -l -> all clean"
+  },
+  "write_scope_check": {
+    "changed": [
+      "server/internal/bridge/stream.go",
+      "server/internal/bridge/restart_pipe_test.go",
+      "server/internal/api/server.go",
+      "server/internal/api/ws_conn.go",
+      "server/internal/api/close_drain_test.go"
+    ],
+    "e2e_readonly": "严格遵守：未写 e2e/ 下任何文件；e2e/ 的 M 与 untracked 文件（layer2.*、metrics-*.json、bin/agentmirrord）均来自并行 w-e2e2 席位（时间戳 09:29-09:34），非本席位产出",
+    "protocol_untouched": "未改 internal/protocol/、internal/discovery/"
+  },
+  "note": "bridge 改动已被 leader 的 commit e446859 带入 HEAD（其 commit 时工作区含我已编辑的 stream.go + restart_pipe_test.go）；api 加固改动仍在工作树未提交（纪律：本地不 commit）。",
+  "leader_note": "leader 复跑 bridge+api -count=1 与全量门均 exit 0；macOS poll 不触发 POLLIN 的 self-writer 技法已沉淀基底。"
+}

@@ -1,0 +1,1 @@
+{"task_id":"tsnet-embed","status":"pass","acceptance_results":[{"cmd":"bash -lc cd server && go test ./internal/tsnetd/...","exit":0}],"result_id":"res_e808b0a155d0","notes":"tailnet/LAN 双栈 listener 组，无 authkey 纯 LAN 降级零触网，10 测全过；沉淀 tsnet.Close 未启动即 panic 坑与 go.mod 升级 1.26.5。"}

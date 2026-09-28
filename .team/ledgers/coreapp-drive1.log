@@ -1,0 +1,58 @@
+[ledger-run 2026-08-22T06:04:00Z] 开工 start | ledger_id=ledger.coreapp.v1 revision=1 账本=.team/ledgers/coreapp-v1.json 墙钟上限=57600s 派单死线=90s
+[ledger-run 2026-08-22T06:04:11Z] 轮次 round | 第 1 轮开始：前沿 ["t.path"]（墙钟已跑 10s / 上限 57600s）
+[ledger-run 2026-08-22T06:04:11Z] 派单 dispatch | task=t.path 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pb-impl 席位=pb-impl attempt=att-t.path-seq1-t1787378651028 delivery=del-t.path-seq1-t1787378651028 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:04:11Z] 投递回执 send-ok | task=t.path case_id=ledger_coreapp_v1__t.path__r1 message_id=msg_6566d2aa37e0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T06:04:11Z] 派单落地 dispatch-landed | task=t.path 席位 pb-impl 的收件箱已多出这条派单
+[ledger-run 2026-08-22T06:04:11Z] 等待 wait | task=t.path 在等的 key（case_id）=ledger_coreapp_v1__t.path__r1 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:13:50Z] 已唤醒 wait-signaled | task=t.path 等到结果了
+[ledger-run 2026-08-22T06:13:50Z] 判据 acceptance | task=t.path 在跑 required=["c.path"]
+[ledger-run 2026-08-22T06:13:51Z] 判据通过留档 acceptance-success | task=t.path 成功 attempt 落进 attempts[] writeback_revision=2 passed=["c.path"]
+[ledger-run 2026-08-22T06:13:51Z] 原子写回 writeback-atomic | task=t.path state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=2 hash=4d9ca9679dc8d8df）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T06:13:51Z] 写回 writeback | task=t.path state=succeeded revision=1 → 2
+[ledger-run 2026-08-22T06:13:51Z] 轮次 round | 第 2 轮开始：前沿 ["t.pub"]（墙钟已跑 590s / 上限 57600s）
+[ledger-run 2026-08-22T06:13:51Z] 派单 dispatch | task=t.pub 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pb-impl 席位=pb-impl attempt=att-t.pub-seq2-t1787379231041 delivery=del-t.pub-seq2-t1787379231041 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:13:51Z] 投递回执 send-ok | task=t.pub case_id=ledger_coreapp_v1__t.pub__r2 message_id=msg_1136e66af378 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T06:13:51Z] 派单落地 dispatch-landed | task=t.pub 席位 pb-impl 的收件箱已多出这条派单
+[ledger-run 2026-08-22T06:13:51Z] 等待 wait | task=t.pub 在等的 key（case_id）=ledger_coreapp_v1__t.pub__r2 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:17:40Z] 已唤醒 wait-signaled | task=t.pub 等到结果了
+[ledger-run 2026-08-22T06:17:40Z] 判据 acceptance | task=t.pub 在跑 required=["c.pub"]
+[ledger-run 2026-08-22T06:17:42Z] 判据通过留档 acceptance-success | task=t.pub 成功 attempt 落进 attempts[] writeback_revision=3 passed=["c.pub"]
+[ledger-run 2026-08-22T06:17:42Z] 原子写回 writeback-atomic | task=t.pub state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=3 hash=a6d4f458063b28f2）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T06:17:42Z] 写回 writeback | task=t.pub state=succeeded revision=2 → 3
+[ledger-run 2026-08-22T06:17:42Z] 轮次 round | 第 3 轮开始：前沿 ["t.capp"]（墙钟已跑 821s / 上限 57600s）
+[ledger-run 2026-08-22T06:17:42Z] 派单 dispatch | task=t.capp 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pb-impl 席位=pb-impl attempt=att-t.capp-seq3-t1787379462278 delivery=del-t.capp-seq3-t1787379462278 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:17:42Z] 投递回执 send-ok | task=t.capp case_id=ledger_coreapp_v1__t.capp__r3 message_id=msg_4e4dbb52a218 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T06:17:42Z] 派单落地 dispatch-landed | task=t.capp 席位 pb-impl 的收件箱已多出这条派单
+[ledger-run 2026-08-22T06:17:42Z] 等待 wait | task=t.capp 在等的 key（case_id）=ledger_coreapp_v1__t.capp__r3 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:24:29Z] 原子写回 writeback-atomic | task=t.capp status_record + route_hops → 临时文件+rename 已落盘（revision=4 hash=a090701348802d8b）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T06:24:29Z] 状态路由点火 route-fire | task=t.capp status=done → t.perf exhausted=false reentered=false
+[ledger-run 2026-08-22T06:24:29Z] 已唤醒 wait-signaled | task=t.capp 等到结果了
+[ledger-run 2026-08-22T06:24:29Z] 判据 acceptance | task=t.capp 在跑 required=["c.capp"]
+[ledger-run 2026-08-22T06:24:38Z] 判据通过留档 acceptance-success | task=t.capp 成功 attempt 落进 attempts[] writeback_revision=4 passed=["c.capp"]
+[ledger-run 2026-08-22T06:24:38Z] 原子写回 writeback-atomic | task=t.capp state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=4 hash=e95342903710d59a）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T06:24:38Z] 写回 writeback | task=t.capp state=succeeded revision=3 → 4
+[ledger-run 2026-08-22T06:24:38Z] 轮次 round | 第 4 轮开始：前沿 ["t.perf"]（墙钟已跑 1238s / 上限 57600s）
+[ledger-run 2026-08-22T06:24:39Z] 派单 dispatch | task=t.perf 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pb-emu 席位=pb-emu attempt=att-t.perf-seq4-t1787379878976 delivery=del-t.perf-seq4-t1787379878976 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:24:39Z] 投递回执 send-ok | task=t.perf case_id=ledger_coreapp_v1__t.perf__r4 message_id=msg_248ec452a758 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T06:24:39Z] 派单落地 dispatch-landed | task=t.perf 席位 pb-emu 的收件箱已多出这条派单
+[ledger-run 2026-08-22T06:24:39Z] 等待 wait | task=t.perf 在等的 key（case_id）=ledger_coreapp_v1__t.perf__r4 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:39:16Z] 原子写回 writeback-atomic | task=t.perf status_record + route_hops → 临时文件+rename 已落盘（revision=5 hash=92ab098062bda733）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T06:39:16Z] 状态路由点火 route-fire | task=t.perf status=done → t.rv exhausted=false reentered=false
+[ledger-run 2026-08-22T06:39:16Z] 已唤醒 wait-signaled | task=t.perf 等到结果了
+[ledger-run 2026-08-22T06:39:16Z] 判据 acceptance | task=t.perf 在跑 required=["c.perf"]
+[ledger-run 2026-08-22T06:39:27Z] 判据通过留档 acceptance-success | task=t.perf 成功 attempt 落进 attempts[] writeback_revision=5 passed=["c.perf"]
+[ledger-run 2026-08-22T06:39:27Z] 原子写回 writeback-atomic | task=t.perf state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=5 hash=728fe1f01d8ba03d）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T06:39:27Z] 写回 writeback | task=t.perf state=succeeded revision=4 → 5
+[ledger-run 2026-08-22T06:39:27Z] 轮次 round | 第 5 轮开始：前沿 ["t.rv"]（墙钟已跑 2127s / 上限 57600s）
+[ledger-run 2026-08-22T06:39:27Z] 派单 dispatch | task=t.rv 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pb-rv1 席位=pb-rv1 attempt=att-t.rv-seq5-t1787380767763 delivery=del-t.rv-seq5-t1787380767763 等席位预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:39:28Z] 投递回执 send-ok | task=t.rv case_id=ledger_coreapp_v1__t.rv__r5 message_id=msg_c53cb52c9138 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T06:39:28Z] 派单落地 dispatch-landed | task=t.rv 席位 pb-rv1 的收件箱已多出这条派单
+[ledger-run 2026-08-22T06:39:28Z] 等待 wait | task=t.rv 在等的 key（case_id）=ledger_coreapp_v1__t.rv__r5 team=remote-agent-android 预算=3600s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T06:47:07Z] 原子写回 writeback-atomic | task=t.rv status_record + route_hops → 临时文件+rename 已落盘（revision=6 hash=6ca6129791d0fa18）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T06:47:07Z] 状态路由回环 route-loop | task=t.rv status=rework → t.capp，源格 blocked 等再入
+[ledger-run 2026-08-22T06:47:07Z] 无人消费 unconsumed-results | 有结果但本驱动器没消费过的 case（⛔ 未自动 collect，请自己去看 `team-agent results --case <id>`）: t.rv（case_id=ledger_coreapp_v1__t.rv__r5）
+[ledger-run 2026-08-22T06:47:07Z] 收工 finish | 停机原因=AwaitingHuman 写回=["t.path", "t.pub", "t.capp", "t.capp", "t.perf", "t.perf", "t.rv"] 冻结=[] 不可判=[] 墙钟已跑 2587s
+[ledger-run 2026-08-22T06:47:07Z] 通知 notify-begin | 正在把停机原因发给 leader（--team 取自账本 roles[].seat.team）
+[ledger-run 2026-08-22T06:47:08Z] 通知 notify-done | 停机通知已投递（投递结果不静默丢弃）
+ledger_id: ledger.coreapp.v1  revision: 1 → 6  wrote_back: ["t.path", "t.pub", "t.capp", "t.capp", "t.perf", "t.perf", "t.rv"]  frozen: []  unjudgeable: []  preflight_rejected: false  awaiting_human: false  idle_reason: None
+notice: ledger_id: ledger.coreapp.v1 | revision: 6 | 停机原因: AwaitingHuman | 最后失败判据: 未干完的任务（非 Succeeded）: t.close=Planned, t.esc=Planned, t.rv=Blocked ｜ 有结果但本驱动器没消费过的 case（⛔ 未自动 collect，请自己去看 `team-agent results --case <id>`）: t.rv（case_id=ledger_coreapp_v1__t.rv__r5） | 各任务终态: t.capp=Succeeded, t.close=Planned, t.esc=Planned, t.path=Succeeded, t.perf=Succeeded, t.pub=Succeeded, t.rv=Blocked

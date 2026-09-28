@@ -1,0 +1,1 @@
+{"task_id":"app-scaffold","status":"pass","acceptance_results":[{"cmd":"bash -lc cd app && ./gradlew -q :app:assembleDebug","exit":0}],"result_id":"res_e7f4a2425548","notes":"Kotlin+Compose 骨架 27 文件全注释；沉淀：compileSdk 须 36（BOM 依赖链）、wrapper 引导需先有 settings 文件、adaptive-icon 免 PNG。"}

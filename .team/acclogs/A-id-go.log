@@ -1,0 +1,10 @@
+ok  	github.com/agentmirror/agentmirror/cmd/agentmirrord	2.648s
+ok  	github.com/agentmirror/agentmirror/internal/api	46.291s
+ok  	github.com/agentmirror/agentmirror/internal/bridge	19.783s
+ok  	github.com/agentmirror/agentmirror/internal/config	0.459s
+ok  	github.com/agentmirror/agentmirror/internal/discovery	2.355s
+ok  	github.com/agentmirror/agentmirror/internal/overlay	3.285s
+ok  	github.com/agentmirror/agentmirror/internal/pairing	3.992s
+ok  	github.com/agentmirror/agentmirror/internal/protocol	0.874s
+ok  	github.com/agentmirror/agentmirror/internal/provider	1.259s
+ok  	github.com/agentmirror/agentmirror/internal/tsnetd	3.586s

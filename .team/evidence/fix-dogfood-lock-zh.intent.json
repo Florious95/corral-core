@@ -1,0 +1,1 @@
+{"task_id": "fix-dogfood-lock-zh", "dispatched_to": "w-lock-zh", "base": ".team/nodes/fix-dogfood-lock-zh/CLAUDE.md", "case_id": "msg_b98ce71c72f0", "at": "2026-08-11 11:45:00", "note": "D-12 派单；intent 随派单同批写入"}

@@ -1,0 +1,69 @@
+# D-36 上滑失效 · 回退 diff（2026-08-13，回炉第一步）
+#
+# 用户裁定：「滑动未修复，属于最疑难 bug，回退相关修复代码，commit diff 供后续审查」
+# 本文件记录「回退前（含 D-36 修法）」→「回退后」的差异，是 w-dev-repaint 审查席
+# 反推根因的输入。
+#
+# 回退范围（精确，只退 D-36 客户端修法）：
+#   1. TermViewPresenter.onScrollBy 的空 buffer 锁定到逻辑行 0（D-36 鸡生蛋打破）
+#   2. TermViewPresenter.onHistoryPrepend(merged) 整个方法（D-36 连续滚动锚定保持）
+#   3. SessionViewModel SCROLLBACK 分支的 merged 计算 + onHistoryPrepend 调用（D-36 锚定）
+# 不退：prependHistory（既有历史加载）、atHistoryTop/syncFromPresenter（既有补页）、
+#       D-38 onRealViewportChanged / forensicsSnapshot / 捏合改动 / 上传改动。
+#
+# 注：此 diff 用 diff -u 生成（含时间戳头），git apply 不可直接应用，仅作审查参考。
+--- /tmp/d36-revert-backup/TermViewPresenter.kt	2026-08-13 14:02:17
++++ app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt	2026-08-13 14:02:42
+@@ -223,36 +223,11 @@
+         val current = topLine ?: maxTop
+         val next = (current - deltaLines).coerceIn(0, maxTop)
+         topLine = if (next >= maxTop) null else next
+-        // D-36 鸡生蛋打破：本地 buffer 为空（打开会话初始态/ED3 清屏后）时 maxTop == 0，
+-        // 上滑（deltaLines > 0）本无可滚空间、next 被钳到 0 且恒触底 → topLine 恒 null（跟随），
+-        // 「滚到顶才拉历史」的补页条件（SessionViewModel.syncFromPresenter: atHistoryTop =
+-        // locked && window.first == 0）永远走不到，上滑完全失效。空 buffer 上滑显式锁定到
+-        // 逻辑行 0（可补页锚点），使上层补页条件命中、历史并入后 buffer 有内容可滚。
+-        if (maxTop == 0 && deltaLines > 0) {
+-            topLine = 0
+-        }
+         // 视口移动即需重画（真机实证 swipe 无效与缺陷①同根：无人请求帧）。
+         onFrameRequested?.invoke()
+     }
+ 
+     /**
+-     * 历史分页头插并入 [merged] 行后，已锁定历史区的视口随之平移：头插让所有旧逻辑行号
+-     * +[merged]，冻结的 [topLine] 必须同步平移，否则视口跳到并入的旧页而非停在原内容处
+-     * （D-36：连续滚动的锚定保持）。跟随态（topLine == null）贴底不动，无需平移。
+-     *
+-     * @contract
+-     * @pre [merged] >= 0（本页实际并入缓冲的历史行数，非请求 count——容量满时并入数更少）
+-     * @post 锁定态 topLine += merged（并入后仍指向同一内容行）；跟随态不变；随后必触发一次 [onFrameRequested]
+-     * @err none
+-     * @inv none
+-     */
+-    fun onHistoryPrepend(merged: Int) {
+-        if (merged <= 0) return
+-        topLine?.let { topLine = it + merged }
+-        onFrameRequested?.invoke()
+-    }
+-
+-    /**
+      * 回到底部：恢复跟随，视口钉回最新输出。
+      *
+      * @contract
+--- /tmp/d36-revert-backup/SessionViewModel.kt	2026-08-13 14:02:17
++++ app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt	2026-08-13 14:02:56
+@@ -171,13 +171,7 @@
+             BinaryKind.DELTA -> emulator.feed(frame.data)
+             // 历史分页：按服务端收敛后的实际区间头插（经验基）。
+             BinaryKind.SCROLLBACK -> {
+-                val before = emulator.scrollback.size
+                 emulator.prependHistory(frame.data)
+-                val merged = emulator.scrollback.size - before
+-                // D-36 锚定保持：头插并入 [merged] 行后，锁定历史区的视口必须同步平移
+-                // （topLine += merged），否则视口跳到并入的旧页、用户被顶离原内容处；
+-                // 若并入 0 行（容量满/空历史）平移是无操作。跟随态贴底不受影响。
+-                presenter.onHistoryPrepend(merged)
+                 historyRequestInFlight = false
+                 // 收敛判顶：实际区间起点比请求的更近 0 ⇒ 已到历史顶。
+                 if (frame.fromLine > historyRequestedFromLine) {

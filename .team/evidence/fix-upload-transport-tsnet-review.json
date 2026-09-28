@@ -1,0 +1,43 @@
+{
+  "task_id": "fix-upload-transport-tsnet-review",
+  "status": "pass_with_findings",
+  "seat": "w-rev-upload",
+  "at": "2026-08-14",
+  "reviewed": "fb31674d2 — app/app/src/main/java/dev/agentmirror/app/session/HttpUrlConnectionUploader.kt（129+/31-）",
+  "report": "docs/upload-transport-diff-review.md",
+  "why_this_seat_existed": "补漏：①的 diff 从未被第二双眼睛审过就被 leader 提交进了主线。CLAUDE.md 派单铁律要求开发+测试+审查三席并行，此前只有①做到了形式上的三席，而那个'审查席'做的是根因探针、没审代码 diff。",
+  "verified_clean": [
+    "选路边界 100.63.x / 100.128.x 不误判",
+    "缺陷⑤ state 谎报（Up 但实际不可拨通）场景下是快速失败，不会挂满 10 秒",
+    "D-22 二参入口零 HTTP 请求断言仍成立",
+    "multipart 构造、CRLF 消毒、boundary、Bearer 头在 OkHttp 新路径上完整"
+  ],
+  "findings": {
+    "F1_medium": {
+      "issue": "OkHttpClient 只调 dispatcher.executorService.shutdown()，未调 client.close()——API 用法错误",
+      "actual_impact": "当前 ConnectionPool(0,1,ns) 参数下无实际泄漏",
+      "reviewer_suggestion": "下次触碰时顺带修",
+      "leader_ruling": "否，现在修。两行的事；且'当前参数下没事'这种依赖，下一个人改了连接池参数就变成真泄漏且极难归因。已派 w-up-dev 单独提交。（后续：修法按开发席的 javap 实证订正为 shutdown + evictAll，见 correction_2026_08_14）",
+      "correction_2026_08_14": {
+        "by": "w-up-dev",
+        "verdict": "审查席的 F1 前提被部分证伪",
+        "evidence": "javap 实证：本仓库依赖的是 canonical JVM 版 com.squareup.okhttp3:okhttp:4.12.0，其 OkHttpClient 没有 close() 方法。Closeable 是 okhttp 5.x 拆分后的 okhttp-kotlin 新 API。照审查席建议改会直接编译失败（Unresolved reference 'close'），开发席第一版照抄即踩到。",
+        "what_was_actually_wrong": "原代码 shutdown 执行器是 JVM OkHttp 的正确做法，不是'API 用法错误'。但确实缺了显式清连接池。",
+        "final_fix": "shutdown 执行器（原有）+ 补 evictAll() 清连接池，两处加外骨骼注释说明为什么不是 close()。提交 807c122f9。",
+        "leader_note": "我下令按审查席的说法修，开发席用 javap 顶了回来并给出正确做法——这是对的。审查结论也是要被验证的对象，不能因为它来自审查席就免检。"
+      }
+    },
+    "F2_low": {
+      "issue": "SOCKS 路径最坏连接超时 20s（TCP+握手各 10s）vs 直连 10s",
+      "leader_ruling": "与 WS 参照一致，非退步，接受"
+    },
+    "F3_low": {
+      "issue": "SOCKS 失败文案含协议细节（如「SOCKS5 代理建链失败: host unreachable」）会进用户 UI",
+      "leader_ruling": "记下不在本任务改，等 feat-diagnostic-log-export 把「用户看什么 / 日志记什么」分层后一起处理"
+    },
+    "F4_info": {
+      "issue": "IPv6 tailnet 地址（fd7a:115c:a1e0::/48）与主机名端点走直连",
+      "leader_ruling": "与 WS 路径同款限制，当前无影响，记档"
+    }
+  }
+}

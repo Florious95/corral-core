@@ -1,0 +1,7 @@
+line=  ⏵⏵ bypass permissions on (shift+tab to cycle)
+prefix_repr='  ⏵⏵ '
+prefix[0] U+0020 ' '
+prefix[1] U+0020 ' '
+prefix[2] U+23F5 '⏵'
+prefix[3] U+23F5 '⏵'
+prefix[4] U+0020 ' '

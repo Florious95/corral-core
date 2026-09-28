@@ -1,0 +1,39 @@
+{
+  "status": "fail",
+  "failure_reason": "app_wrapper_prepare_failed",
+  "headscale_node_count": 0,
+  "app_registration_observation": "not_observed",
+  "daemon_state_dir_proof": "yes",
+  "instrumentation": {
+    "runner": "ApiE2ERunner",
+    "ui_path_used": "no",
+    "activity_started": "no",
+    "pairing_entry": "unknown",
+    "tsnet_binding_state_file": "unknown",
+    "connection_manager": "unknown",
+    "workspace_listing_received": "no",
+    "isolated_session_received": "no",
+    "secret_source": "TS_AUTHKEY environment via task FIFO wrapper"
+  },
+  "socks5_proof": "unknown",
+  "home_override_used": "no",
+  "camera_path_used": "no",
+  "foreground_mouse_or_window_targeting_used": "no",
+  "screenshots": [],
+  "argv": {
+    "daemon": {
+      "ts_authkey_flag_present": "no",
+      "authkey_value_present": "no",
+      "authkey_shape_present": "no",
+      "pair_token_value_present": "no"
+    },
+    "app": {
+      "authkey_value_present": "unknown",
+      "authkey_shape_present": "unknown",
+      "pair_token_value_present": "unknown"
+    }
+  },
+  "app_log_secret_value_present": "unknown",
+  "artifact_secret_value_present": "no",
+  "cleanup_status": "yes"
+}

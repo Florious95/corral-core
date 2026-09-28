@@ -1,0 +1,38 @@
+{
+  "task_id": "feat-input-keys-app",
+  "status": "pass",
+  "worker": "w-input-keys-app",
+  "date": "2026-08-09",
+  "summary": "R-1 快捷键条 App 侧 + R-2 多行不拆分（017 裁定实装）。conn 层：InputFrame 增可选 keys 字段 + InputKey 闭集枚举（esc/ctrl_c/tab/up/down/left/right，text 与 keys 一帧至多其一，keys 不附加回车——契约 docs/protocol.md §4.2 冻结语义），消费共享黄金夹具 input_keys.json 做字节级断言防两端漂移；ConnectionManager.sendInputKeys 走既有 input→input_ack 决定性链路（003 发送必达：ack 失败/超时/掉线全可见）。会话页：输入条上方快捷键条最小集 Esc/Ctrl-C/Tab/↑↓←→（017 原文顺序），点按即发 keys 帧，回执 ok 只显示已发送不动草稿（用户打断 agent 时正打字）；锁中文 + contentDescription 语义标注（R-6/R-7 顺带）。R-2：审计发送路径仅 sendInput 单帧整段（无拆行逻辑，有则删无则锁），新增锁定测试 multilineTextSentAsSingleFrame 防回归。",
+  "acceptance": {
+    "command": "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'",
+    "result": "exit 0：238 用例 0 失败（三次连跑稳定；含并行席全量测试）",
+    "my_suites": "ConnCodecTest 48 / ConnManagerTest 26 / SessionViewModelTest 20 / ConnConnectionTest 10 全绿（debug+release 双变体）",
+    "gate": "tools/gate/run.sh 三面并行：server 276 / archwiki 1 绿；app 面 release 变体被并行席新测试 infra 缺口阻断（见 note）"
+  },
+  "tests": {
+    "conn_keys": "ConnCodecTest.testGoldenInputKeysFrame 消费 input_keys.json（req_id=10/ref=s1/keys=[esc,ctrl_c,tab]，字节级 decode→re-encode 稳定）+ reencodeEquiv；testRedInputUnknownKey（home→INVALID_FIELD）、testRedInputBothTextAndKeys（text+keys 互斥→INVALID_FIELD）、testRedInputKeysNotArray（keys 非数组→BAD_FRAME）；testControlFrameRoundTrips 增 keys 变体；testEncodeRedPaths 增互斥帧",
+    "conn_send": "ConnManagerTest.testInputKeysSendsKeysFrameWithoutText（keys 帧无 text + input_ack ok 必达）、testInputKeysFailureReasonSurfaces（reason 上浮）、testInputKeysBeforeReadyFails（未就绪不可发）",
+    "vm_keys": "SessionViewModelTest.sendKeyEmitsKeysFrameWithoutText（VM 层红测：点键→帧 keys 正确无 text）、sendKeyAckOkKeepsDraft（ok 回执不动草稿）、sendKeyFailureKeepsDraftAndShowsError、sendKeyWhileDisconnectedFailsVisiblyWithoutFrame",
+    "r2_multiline": "SessionViewModelTest.multilineTextSentAsSingleFrame：含 \\n 文本整段一条 input.text（服务端 paste-buffer -p 括号粘贴路径），断言单帧不拆分 + 原样含换行",
+    "fixture_freeze": "消费 server/internal/protocol/testdata/input_keys.json（FeatPath 候选路径），夹具零改动",
+    "full_suite": ":app:testDebugUnitTest 全量 238 用例 0 失败（不 --tests 过滤，证明 conn 公共模型改动全套无回归）"
+  },
+  "write_scope_check": {
+    "in_scope": [
+      "app/app/src/main/java/dev/agentmirror/app/conn/Keys.kt（新）",
+      "app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt（InputFrame.keys + validate 互斥）",
+      "app/app/src/main/java/dev/agentmirror/app/conn/FrameEnums.kt（strictDeserialize 提为 package 内可见复用）",
+      "app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt（sendInputKeys）",
+      "app/app/src/main/java/dev/agentmirror/app/session/SessionViewModel.kt（sendKey + pendingSendIsKey）",
+      "app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt（KeyBar UI + contentDescription）",
+      "app/app/src/test/java/dev/agentmirror/app/conn/ConnCodecTest.kt",
+      "app/app/src/test/java/dev/agentmirror/app/conn/ConnManagerTest.kt",
+      "app/app/src/test/java/dev/agentmirror/app/session/SessionViewModelTest.kt"
+    ],
+    "other_seats_touched": "none（与 w-test-appseams/w-fix-wswire/w-fix-pairpump 文件零交集）",
+    "deviation": "无越权；每次落盘前保持 :app 整模块可编译"
+  },
+  "note": "全量 gate 的 testReleaseUnitTest 面被并行席新建 Robolectric/Compose 测试阻断（StateBadgeTest 9 / WorkspaceWiringTest 3 / PairingScreenClockPumpTest 1，统一 Unable to resolve activity），根因 ui-test-manifest 仅 debugImplementation，release 变体无宿主 Activity——非本席 scope，已报 leader 定夺（w-test-appseams 已出 scope 无法直发）。编译互阻全程按 leader 标准处置直发文件主人（w-test-appseams/w-fix-wswire 已回执修复）。",
+  "leader_note": "leader 复跑全量 :app:testDebugUnitTest exit 0（238/0）。R-1/R-2 全链（protocol.md 契约→server→App UI）至此闭合，『真实可用』两大交互缺口（Esc 打断/方向键、多行粘贴）补齐。release 变体 infra 债（ui-test-manifest）leader 接手处置。交件即退役。"
+}

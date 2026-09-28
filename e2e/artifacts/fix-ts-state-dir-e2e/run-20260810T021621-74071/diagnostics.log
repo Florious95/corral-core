@@ -1,0 +1,6 @@
+## headscale-configtest.log
+
+
+## headscale.stderr
+2026-08-10T02:16:54+08:00 FTL ../../../../home/runner/work/headscale/headscale/cmd/headscale/cli/serve.go:29 > Headscale ran into an error and had to shut down. error="initial DERPMap is empty, Headscale requires at least one entry"
+

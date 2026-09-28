@@ -1,0 +1,47 @@
+{
+  "task_id": "study-web-terminal-model",
+  "status": "pass",
+  "result_id": "res_1556e1c5a9a0",
+  "agent": "w-model-study",
+  "summary": "以 Web 客户端（xterm.js，MIT）为对照标准，产出安卓自研终端内核的模型差异清单，四个模型点逐条对照且每条附文件:行证据。三条差异（buffer/viewport、cell 宽度、scrollback 分页）直接由安卓内核模型缺陷造成，一条（reflow 锚定）是捏合 resize 无合并 + 本地不 reflow 的放大效应。",
+  "由来": {
+    "user_judgment": "用户指出「这个东西应该有开源的办法……SSH 客户端里能用的 CLI 对移动窗口做过优化」",
+    "leader_insight_gap": "对照实现一直就在本仓库里没用：web/ 用 xterm.js 成熟库，app/ 用自研内核（避 GPL，Termux 系 GPLv3 不可用），同协议同 daemon，而四条缺陷全部只出在安卓端。工程约定第一条测试流水线本就写着「Web 端 → 拦 80% 问题」，这四条从未走过那道关。"
+  },
+  "核心发现": {
+    "最硬根因_模型点3_cols栅格不收敛": {
+      "statement": "安卓把「上报给服务端的 cols」用**名义字格宽（默认 10px）**计算，而「画布的列推进」用**实测字形宽**计算——两个独立栅格从不收敛。",
+      "user_symptom": "最右侧文字被截断，只能看到半个字（用户第 4 次报告）",
+      "web_contrast": "xterm 用同一套 cell 度量决定列数与绘制推进，不存在两套栅格"
+    },
+    "模型点1_buffer填充来源不同": {
+      "web": "snapshot 与 delta 全部写进 buffer（web/js/terminal.js:74-82），滚动是 viewport 偏移零网络",
+      "android": "本地 buffer 只在屏幕顶行滚出时累积（TerminalEmulator.kt:94-96 onLineScrolledOut → scrollback.appendTail）",
+      "deadlock": "打开会话时 replaySnapshot 走 main.resize()+main.reset() 重建网格（TerminalEmulator.kt:139-140），而 capture-pane 快照恰好只有可见屏 rows 行、剥掉尾部 LF 后正好填满网格（:144-151）→ 无行滚出 → buffer 恒空 → logicalCount == rows → maxTop == 0 → TermViewPresenter.kt:150-155 的 next 被 coerceIn(0,0) 钳死且 next>=maxTop 恒真 → topLine 恒为 null（跟随态）→ 上滑完全无效",
+      "user_symptom": "「向上滑动就是完全失效的……它就加载了最小字体的一页」"
+    },
+    "模型点4_历史拉取的鸡生蛋": {
+      "statement": "补页触发依赖「先锁定滚到顶」，而空 buffer 锁不住 → 永远触发不了拉页",
+      "significance": "要滚到顶才拉历史，但没历史就滚不动。**这是 D-36 四轮修不好的根因**——历次修复都在改「滚到顶时怎么发请求」，而那条线永远走不到。"
+    },
+    "模型点2_reflow锚定": {
+      "statement": "捏合 resize 无防抖 + 本地不 reflow → 闪烁；Web 端靠 xterm 内置能力 + 120ms 合并规避",
+      "user_symptom": "「捏合后整体会重绘和闪烁一段时间，然后再才好」+「发消息从上往下刷新」"
+    }
+  },
+  "web端的诚实边界": "Web 端唯一比安卓弱的是历史不进本地滚动空间（独立只读面板 + 显式按钮），但靠 xterm 自身 buffer，用户报告的四条现象在 Web 上均不出现。",
+  "leader_verification": {
+    "done": [
+      "读交付物 docs/web-vs-android-terminal-model.md（317 行），四个模型点结构完整",
+      "核对结论形态：每条差异均附文件:行证据（web/js/terminal.js、app/terminal/TerminalEmulator.kt、TermViewPresenter.kt 等），非概念描述——这是本任务的硬性要求，达标",
+      "因果链自洽：模型点 1 的死结推导（快照正好填满网格 → 无行滚出 → buffer 空 → maxTop=0 → 钳死）与用户「只有一屏、捏小字体完全滑不动、捏大字体才像能滚」的现象完全对应"
+    ],
+    "pending": "文中代码行号未逐条抽样复核；因结论已足以驱动修复且各条互相印证，判为可用。后续修复席若发现行号偏移，以实际代码为准。"
+  },
+  "downstream": {
+    "已转发": "w-dev-d36 已收到模型点 1/4 的完整机制，修法方向随之改变——不再是「滚到顶时把请求发出去」（那条线本就在、只是永远走不到），而是先让 buffer 有内容可滚，打破鸡生蛋",
+    "待派": "模型点 3（cols 栅格不收敛致右侧截断）需独立立案；模型点 2（reflow 锚定 + 捏合防抖）与 raw/041「捏合时预览、松手时生效」是同一件事，宜合并处理"
+  },
+  "artifacts": ["docs/web-vs-android-terminal-model.md"],
+  "at": "2026-08-12"
+}

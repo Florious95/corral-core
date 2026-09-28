@@ -1,0 +1,20 @@
+{
+  "task_id": "fix-pairing-timeout-pump",
+  "status": "pass",
+  "worker": "w-fix-pairpump",
+  "date": "2026-08-09",
+  "summary": "e2e-harden 取证实锤缺陷②修复（工程常识红线5 失败可见违反）。PairingScreen 加 LaunchedEffect 时钟泵（与 SessionScreen.kt:85 同构，100ms 泵调 viewModel.onTick，离屏停泵）。修复前全仓唯一 onTick 调用在 SessionScreen（SessionViewModel 的），配对页无人泵 → PAIR_TIMEOUT_MS=15s 永不裁决 → 地址不可达/握手静默失败时无限「连接中…」，fix-pairing-scan-flow 交付的超时分类报错在生产是死代码。",
+  "red_tests": [
+    "PairingScreenClockPumpTest（渲染真实 PairingScreen，createComposeRule）：先发起配对（VM 假时钟基准远小于墙钟）再 setContent，生产泵首拍即裁决 Failed(TIMEOUT) 上屏——修前红、修后绿双向实证。关键设计：测试由**生产泵**驱动而非测试手调 onTick，杜绝『测试假泵掩盖生产无泵』（本缺陷正是这样漏网的，教训已写进交件注释）"
+  ],
+  "tests": {
+    "acceptance": "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"' -> exit 0（leader 复跑实证；含此前 w-test-appseams 全量复现的那 1 红转绿）",
+    "cross_seat_confirmation": "并行席位 w-test-appseams 全量 238 用例曾复现该红（timeoutBecomesVisibleOnScreen），修复后归零"
+  },
+  "write_scope_check": {
+    "in_scope": ["app/app/src/main/java/dev/agentmirror/app/pairing/PairingScreen.kt", "app/app/src/test/java/dev/agentmirror/app/pairing/PairingScreenClockPumpTest.kt"],
+    "deviation": "无越权。过程违纪留痕：半成品测试文件两度落盘挡并行席位编译（advanceBy Long/Duration、denyPermissions 解析——后者实为 appseams 文件，pairpump 的是前者），触发『编译互阻点对点处置』常规下发；已按插单及时修复"
+  },
+  "note": "至此 e2e-harden 取证的两案（缺陷①列表接线+缺陷②超时泵）全部闭合；配对失败五分类（fix-pairing-scan-flow）在生产真实可达。",
+  "leader_note": "leader 复跑验收 exit 0。席位未写证据文件，leader 代写留痕。交件即退役。"
+}

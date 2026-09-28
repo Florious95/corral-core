@@ -1,0 +1,55 @@
+argv: bash e2e/connected-idle-economy.sh (static assertion on post-rework file)
+method: static text analysis; zero process/network/tmux interaction
+{
+  "target": "e2e/connected-idle-economy.sh",
+  "method": "static text analysis; zero process/network/tmux interaction",
+  "green_conditions": [
+    {
+      "id": "green-item-2",
+      "claim": "client token arrives only via CIDLE_E2E_CLIENT_TOKEN env; no -token argv",
+      "where": [
+        15,
+        40,
+        394,
+        738,
+        740,
+        912
+      ],
+      "shape": [
+        "#     (CIDLE_E2E_CLIENT_TOKEN); no -token argv. Logs/evidence record only",
+        "# the daemon via AGENTMIRROR_TOKEN and the client via CIDLE_E2E_CLIENT_TOKEN;",
+        "CIDLE_E2E_CLIENT_TOKEN=\"$TOKEN\" \\",
+        "token := os.Getenv(\"CIDLE_E2E_CLIENT_TOKEN\")",
+        "panic(\"CIDLE_E2E_CLIENT_TOKEN not set\")",
+        "\"rework\": \"three states each in a fresh self-owned runtime (own mktemp root, own client process, own daemon process, own tmux -L server, own high port, own socket dir, own state dir); same read-only binaries reused; zero-residue proven at every state boundary; client token env-only (CIDLE_E2E_CLIENT_TOKEN), no -token argv\","
+      ]
+    },
+    {
+      "id": "green-item-1",
+      "claim": "each state body creates its own fresh mktemp runtime root (/tmp/am-cidle-${state}.*)",
+      "where": [
+        427
+      ],
+      "shape": [
+        "STATE_ROOT=\"$(mktemp -d \"/tmp/am-cidle-${state}.XXXXXX\")\""
+      ]
+    },
+    {
+      "id": "green-item-1",
+      "claim": "run_state calls state_cleanup for every state; per-state cleanup+residue log landed",
+      "where": [
+        637,
+        844
+      ],
+      "shape": [
+        "state_cleanup \"$state\" || cleanup_rc=$?",
+        "for state in zero_connection connected_zero_subscription connected_single_subscription; do"
+      ]
+    }
+  ],
+  "red_conditions": [],
+  "green_count": 3,
+  "red_count": 0,
+  "frozen_thresholds_touched": false,
+  "token_value_printed": false
+}

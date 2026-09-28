@@ -1,0 +1,16 @@
+[ledger-run 2026-08-22T01:02:43Z] 开工 start | ledger_id=ledger.perfbase.v1 revision=24 账本=.team/ledgers/perfbase-v1.json 墙钟上限=140400s 派单死线=90s
+[ledger-run 2026-08-22T01:02:47Z] 轮次 round | 第 1 轮开始：前沿 ["t.core"]（墙钟已跑 4s / 上限 140400s）
+[ledger-run 2026-08-22T01:02:47Z] 派单 dispatch | task=t.core 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/pb-impl 席位=pb-impl attempt=att-t.core-seq1-t1787360567210 delivery=del-t.core-seq1-t1787360567210 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T01:02:47Z] 投递回执 send-ok | task=t.core case_id=ledger_perfbase_v1__t.core__r24 message_id=msg_81be5a38b980 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T01:02:47Z] 派单落地 dispatch-landed | task=t.core 席位 pb-impl 的收件箱已多出这条派单
+[ledger-run 2026-08-22T01:02:47Z] 等待 wait | task=t.core 在等的 key（case_id）=ledger_perfbase_v1__t.core__r24 team=grok-l2 预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T01:10:31Z] 已唤醒 wait-signaled | task=t.core 等到结果了
+[ledger-run 2026-08-22T01:10:31Z] 判据 acceptance | task=t.core 在跑 required=["c.core.split"]
+[ledger-run 2026-08-22T01:11:06Z] 判据通过留档 acceptance-success | task=t.core 成功 attempt 落进 attempts[] writeback_revision=25 passed=["c.core.split"]
+[ledger-run 2026-08-22T01:11:06Z] 原子写回 writeback-atomic | task=t.core state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=25 hash=b3f6cfeaa6300090）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-22T01:11:06Z] 写回 writeback | task=t.core state=succeeded revision=24 → 25
+[ledger-run 2026-08-22T01:11:06Z] 轮次 round | 第 2 轮开始：前沿 ["t.cperf"]（墙钟已跑 503s / 上限 140400s）
+[ledger-run 2026-08-22T01:11:06Z] 派单 dispatch | task=t.cperf 收件人=/Volumes/nvme/Projects/远程Agent安卓::remote-agent-android/pb-emu 席位=pb-emu attempt=att-t.cperf-seq2-t1787361066199 delivery=del-t.cperf-seq2-t1787361066199 等席位预算=5400s 来源=任务 seat_wait_seconds
+[ledger-run 2026-08-22T01:11:06Z] 投递回执 send-ok | task=t.cperf case_id=ledger_perfbase_v1__t.cperf__r25 message_id=msg_64fc8dae74c0 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-22T01:11:06Z] 派单落地 dispatch-landed | task=t.cperf 席位 pb-emu 的收件箱已多出这条派单
+[ledger-run 2026-08-22T01:11:06Z] 等待 wait | task=t.cperf 在等的 key（case_id）=ledger_perfbase_v1__t.cperf__r25 team=remote-agent-android 预算=5400s 来源=任务 seat_wait_seconds

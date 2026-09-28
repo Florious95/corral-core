@@ -65,10 +65,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -82,6 +84,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
@@ -100,12 +103,13 @@ import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import com.kyant.shapes.RoundedRectangularShape
-import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
+import dev.agentmirror.app.ui.theme.isDark
 import kotlinx.coroutines.flow.first
 
 /*
@@ -219,7 +223,7 @@ val DarkFlatGlass = FlatGlassTokens(
 /** 跟随 [LocalAppPalette] 的 FlatGlass 常量。 */
 @Composable
 fun flatGlassTokens(): FlatGlassTokens =
-    if (LocalAppPalette.current === DarkPalette) DarkFlatGlass else LightFlatGlass
+    if (LocalAppPalette.current.isDark) DarkFlatGlass else LightFlatGlass
 
 /** FlatGlass 发丝边宽度（比 [Dims.hairline] 的 1dp 更细）。 */
 val FlatHairline: Dp = 0.5.dp
@@ -375,6 +379,53 @@ fun Modifier.glassCard(
     .background(fill)
     .border(Dims.hairline, stroke, shape)
 
+/**
+ * 直角风格的表面：不透明填充 + 发丝描边，直角。⛔ 不采样 backdrop，无模糊 / 高光 / 投影，录制树内任何位置都安全。
+ */
+fun Modifier.ruledSurface(
+    fill: Color,
+    stroke: Color = Color.Transparent,
+    strokeWidth: Dp = Dims.hairline,
+    shape: Shape = RectangleShape,
+): Modifier = this
+    .background(fill, shape)
+    .then(if (stroke.alpha > 0f) Modifier.border(strokeWidth, stroke, shape) else Modifier)
+
+/** 单侧直线所在的边。 */
+enum class RuleEdge { Top, Bottom, Start, End }
+
+/** 单侧发丝线 / 重线：drawBehind 画在背景之上、内容之下，不改变测量，也不与相邻边框叠画。 */
+fun Modifier.edgeRule(edge: RuleEdge, color: Color, width: Dp): Modifier = drawBehind {
+    val px = width.toPx()
+    val atLeft = (edge == RuleEdge.Start) == (layoutDirection == LayoutDirection.Ltr)
+    when (edge) {
+        RuleEdge.Top -> drawRect(color, Offset.Zero, Size(size.width, px))
+        RuleEdge.Bottom -> drawRect(color, Offset(0f, size.height - px), Size(size.width, px))
+        RuleEdge.Start, RuleEdge.End ->
+            drawRect(color, Offset(if (atLeft) 0f else size.width - px, 0f), Size(px, size.height))
+    }
+}
+
+/**
+ * 模态面板材质（弹窗 / 底部动作面板 / 编辑面板）。液态玻璃：折射其下页面并导出自身成像供面板内控件采样；
+ * 直角风格：不透明底 + 1dp 墨线，不采样。
+ */
+@Composable
+fun Modifier.modalPanel(shape: RoundedRectangularShape, exportedBackdrop: LayerBackdrop): Modifier {
+    val kit = LocalThemeSuite.current
+    val p = LocalAppPalette.current
+    return if (kit.surfaces.isGlass) {
+        glassPanel(
+            backdrop = LocalGlassBackdrop.current,
+            shape = shape,
+            surface = p.glassSurface.glassReadable(),
+            exportedBackdrop = exportedBackdrop,
+        )
+    } else {
+        ruledSurface(fill = p.sheetBackground, stroke = kit.colors.headerRule, strokeWidth = kit.geometry.hairline)
+    }
+}
+
 /** 按压进度 0→1（[Motion.glassPress] 回弹），供 [glassControl] 的 pressProgress 使用。 */
 @Composable
 fun rememberPressProgress(interaction: MutableInteractionSource): () -> Float {
@@ -402,6 +453,10 @@ fun GlassButton(
     height: Dp = 44.dp,
     backdrop: Backdrop = LocalGlassBackdrop.current,
 ) {
+    if (!LocalThemeSuite.current.surfaces.isGlass) {
+        RuledButton(text, onClick, modifier, enabled, tint, textColor, minWidth, height)
+        return
+    }
     val p = LocalAppPalette.current
     val interaction = remember { MutableInteractionSource() }
     val press = rememberPressProgress(interaction)
@@ -437,6 +492,56 @@ fun GlassButton(
     }
 }
 
+/** 直角风格按钮：主色实底，或透明底 + 1dp 墨线；尺寸与 [GlassButton] 一致。 */
+@Composable
+private fun RuledButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    enabled: Boolean,
+    tint: Color,
+    textColor: Color,
+    minWidth: Dp,
+    height: Dp,
+) {
+    val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    Box(
+        modifier = modifier
+            .alpha(if (enabled) 1f else 0.45f)
+            .ruledSurface(
+                fill = if (tint.isSpecified) tint else Color.Transparent,
+                stroke = if (tint.isSpecified) Color.Transparent else p.outlineButtonBorder,
+                strokeWidth = kit.geometry.hairline,
+            )
+            .background(if (pressed && enabled) RuledPressDim else Color.Transparent)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .defaultMinSize(minWidth = minWidth)
+            .height(height)
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppText(
+            text = text,
+            color = textColor,
+            fontSize = TypeSizes.actionButton,
+            fontWeight = FontWeight.Bold,
+            lineHeightMultiplier = 1f,
+        )
+    }
+}
+
+/** 直角控件按压蒙层（浅深通用：黑 12%）。 */
+private val RuledPressDim = Color(0x1F000000)
+
 /**
  * 标杆 GlassButton 同款材质的图标钮（圆形 / 胶囊）。
  * 录制树内（二级顶栏等）必须传 [emptyBackdrop]，⛔ 不得传 [LocalGlassBackdrop] 去采样自己。
@@ -453,7 +558,33 @@ fun GlassIconButton(
     content: @Composable () -> Unit,
 ) {
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     val interaction = remember { MutableInteractionSource() }
+    if (!kit.surfaces.isGlass) {
+        // 直角图标钮：主色实底，或透明底 + 1dp 发丝线；尺寸 / 触控盒不变。
+        val pressed by interaction.collectIsPressedAsState()
+        Box(
+            modifier = modifier
+                .alpha(if (enabled) 1f else 0.45f)
+                .size(size)
+                .ruledSurface(
+                    fill = if (tint.isSpecified) tint else Color.Transparent,
+                    stroke = if (tint.isSpecified) Color.Transparent else p.glassStroke,
+                    strokeWidth = kit.geometry.hairline,
+                )
+                .background(if (pressed && enabled) RuledPressDim else Color.Transparent)
+                .clickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClick = onClick,
+                ),
+            contentAlignment = Alignment.Center,
+            content = { content() },
+        )
+        return
+    }
     val press = rememberPressProgress(interaction)
     Box(
         modifier = modifier
@@ -494,8 +625,12 @@ fun LiquidToggle(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    if (!LocalThemeSuite.current.surfaces.isGlass) {
+        RuledToggle(checked, onCheckedChange, modifier, enabled, width = 64.dp, height = 36.dp)
+        return
+    }
     val p = LocalAppPalette.current
-    val isDark = p === DarkPalette
+    val isDark = p.isDark
     val pageBackdrop = LocalGlassBackdrop.current
     val trackBackdrop = rememberLayerBackdrop()
     val thumbBackdrop = rememberCombinedBackdrop(pageBackdrop, trackBackdrop)
@@ -616,8 +751,12 @@ fun StandaloneLiquidToggle(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    if (!LocalThemeSuite.current.surfaces.isGlass) {
+        RuledToggle(checked, onCheckedChange, modifier, enabled, StandaloneToggleWidth, StandaloneToggleHeight)
+        return
+    }
     val p = LocalAppPalette.current
-    val isDark = p === DarkPalette
+    val isDark = p.isDark
     val interaction = remember { MutableInteractionSource() }
     val press = rememberPressProgress(interaction)
 
@@ -728,6 +867,60 @@ fun StandaloneLiquidToggle(
         }
     }
 }
+
+/** 直角开关：墨线方轨 + 方钮，开启时主色实底；尺寸与对应的液态开关一致，语义同为 Role.Switch。 */
+@Composable
+private fun RuledToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier,
+    enabled: Boolean,
+    width: Dp,
+    height: Dp,
+) {
+    val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
+    val track by animateColorAsState(
+        targetValue = if (checked) p.accent else Color.Transparent,
+        animationSpec = tween(Motion.toggle),
+        label = "ruledToggleTrack",
+    )
+    BoxWithConstraints(
+        modifier = modifier
+            .width(width)
+            .height(height)
+            .toggleable(
+                value = checked,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .alpha(if (enabled) 1f else 0.45f)
+            .ruledSurface(
+                fill = track,
+                stroke = if (checked) p.accent else p.rowTitleText,
+                strokeWidth = kit.geometry.hairline,
+            )
+            .padding(RuledToggleInset),
+    ) {
+        val travel = (maxWidth - maxHeight).coerceAtLeast(0.dp)
+        val thumbOffset by animateDpAsState(
+            targetValue = if (checked) travel else 0.dp,
+            animationSpec = tween(Motion.toggle, easing = Motion.sheetEnter),
+            label = "ruledToggleThumb",
+        )
+        Box(
+            Modifier
+                .offset(x = thumbOffset)
+                .size(maxHeight)
+                .background(if (checked) p.onAccent else p.rowTitleText),
+        )
+    }
+}
+
+private val RuledToggleInset: Dp = 3.dp
 
 private val StandaloneToggleWidth: Dp = 52.dp
 private val StandaloneToggleHeight: Dp = 32.dp

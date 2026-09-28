@@ -1,0 +1,99 @@
+{
+  "task_id": "fix-pinch-preview-commit",
+  "status": "partial",
+  "agent": "w-dev-cols",
+  "summary": "P0 捏合预览/提交：单测证明合成手势 4→1（onScaleEnd 一次提交）。**但模拟器实测（w-base-v2）真实多指手势是 4→2，不达标（判据要求 1）**。中途仍有一次额外落地（108x87→83x67），松手才到最终值。帧差分修复前 5 帧/修复后 6 帧，闪烁未被显著抑制。status=partial：只修了一半（预览生效、提交点从每步→松手，但提交仍触发两次）。",
+  "evidence_classification": "partial",
+  "unit_test_finding": {
+    "proven": [
+      "合成 5 MOVE 手势：onResizeRequest 恰 1 次、带最终行列数、预览实时生效"
+    ],
+    "model_gap": "单测建模的是理想手势（一个结束点）；真实手势两根手指、两次抬起，onScaleEnd/onPinchCommit 可能被多次触发。单测证明的是「如果输入按我们建模的方式来」",
+    "structure_not_behavior": {
+      "statement": "**本次单测绿不构成修复有效的证据**——Robolectric 无法复现真机的多次触发，旧代码（onScaleEnd 提交）在 Robolectric 下对同一分阶段抬起序列也是 1 次，真机才是 2 次（w-base-v2 实测 4→2）。一个在旧代码上就通过的测试，在新代码上通过，什么也没证明。",
+      "test_role": "TermPinchPreviewCommitTest 锚的是「提交点在 ACTION_UP 而不是别处」这一**结构**，不是「真机上恰好 1 次」这一**行为**。结构测试有价值，只是别把它当行为证据。",
+      "fix_validity": "修复有效与否只能由真机/模拟器实测判定（排 w-base-v2 D-36 取证之后）"
+    },
+    "root_cause_fix": {
+      "statement": "根因：onScaleEnd 在真机多指分阶段抬起时多次触发。修复：提交点改为 onTouchEvent 的 ACTION_UP（全部手指离开 = 手势真正结束，唯一可靠）。",
+      "pending_verification": "真机复验 ACTION_UP 修复后能否 4→1、闪烁有无改善（排 w-base-v2 队列）"
+    }
+  },
+  "simulator_measurement": {
+    "by": "w-base-v2",
+    "method": "对照组 d53aba161 vs 当前 HEAD，同一份手势逐字节相同，只换 APK",
+    "before": "108x87→98x76→90x67→83x67→77x60 = 4 次",
+    "after": "108x87→83x67→77x60 = 2 次（判据要求 1，不达标）",
+    "frame_diff": "修复前 5 帧非零差分、修复后 6 帧，闪烁未被显著抑制",
+    "root_cause_pending": "多指抬起分阶段：onScaleEnd 可能被调多次；ACTION_UP/ACTION_POINTER_UP/取消路径也可能走到提交",
+    "not_implied": "resize 次数下降 ≠ 闪烁改善（实测 4→2 差分帧数反而 5→6，关系实测不成立，不是未知）"
+  },
+  "claims": {
+    "proven_by_unit": [
+      "一次完整捏合手势 onResizeRequest 恰好被调 1 次（发生在手势结束）",
+      "那一次 resize 带最终行列数（不是中间某步）",
+      "手势过程中字号实时变化（本地预览生效）"
+    ],
+    "not_proven": [
+      "闪烁是否消失（视觉验收，等 w-base-v2 修好捏合注入器）"
+    ],
+    "synthetic_lower_bound": {
+      "statement": "单测用 5 个 MOVE 事件，4→1 是合成手势下限；真实手势一次几十个 MOVE，按往返审计（docs/roundtrip-audit.md）推算为 10-20 次 → 1 次",
+      "warning": "不许把「捏合期间 resize 帧数从 N 降到 1」写成「捏合闪烁已修复」"
+    }
+  },
+  "covers_three_things": {
+    "delay_optimization": {
+      "covered": true,
+      "detail": "往返审计最大浪费点：一次捏合 10-20 往返 + 10-20 次全屏快照 → 松手 1 次（用户裁定「测出来延迟高就得优化」）"
+    },
+    "D29_pinch_flicker": {
+      "covered": "partial",
+      "detail": "raw/041 裁定实现（预览不重排、松手生效）——只做了「发帧次数」这一半（N→1），视觉那一半未验（闪烁是否消失）"
+    },
+    "D31_zoom_persist": {
+      "covered": false,
+      "detail": "未覆盖。提交时用最终字号 recomputeGeometry，但字号本身未持久化（TermSurfaceView/TermViewPresenter 无 CellSizeStore/SharedPreferences 接线）。D-31 是独立任务，不得视为被顺带修复"
+    }
+  },
+  "red_test_numbers": {
+    "before": {
+      "synthetic_5_moves": 4,
+      "resize_sequence_before": "[(96,108),(71,83),(56,67),(46,56)]"
+    },
+    "after": {
+      "synthetic_5_moves": 1,
+      "resize_sequence_after": "[(46,56)]"
+    }
+  },
+  "implementation": {
+    "TermViewPresenter.kt": "onFontSizeChanged 改预览语义（只更新字号+visibleRows+请求重画，绝不 emit resize）；新增 onPinchCommit（手势结束用最终字号 recomputeGeometry → emit 一次）",
+    "TermSurfaceView.kt": "onScale 调预览（不重排）；新增 onScaleEnd → onPinchCommit"
+  },
+  "regression": {
+    "gates_green": [
+      "TermPinchPreviewCommitTest（红测 3 条）",
+      "TermSurfacePinchGestureTest（强制门）",
+      "TermSurfaceSessionBindingRegressionTest（强制门）",
+      "TermViewImeResizePresenterProbeTest",
+      "TermViewPresenterTest",
+      "TermSurfaceImeInsetViewportRestoreTest",
+      "TermMeasuredCellWritebackTest",
+      "TermColsGridConvergenceDiscriminationTest"
+    ],
+    "adapted_tests": [
+      "TermViewImeResizePresenterProbeTest.pinchFontChangeStillRequestsResize（预览不 emit/commit emit）",
+      "TermViewPresenterTest.pinchChangesFontAndRequestsResize / pinchWithoutEffectiveChangeSkipsResize",
+      "TermSurfaceImeInsetViewportRestoreTest.pinchZoomDoesNotTriggerCorrection"
+    ],
+    "not_mine": {
+      "test": "TermScrollbackEd3ClearRedTest",
+      "reason": "w-dev-d38 的在途红测（ED3 清 scrollback，D-36「发消息不能上滑」同链），不引用我任何改动"
+    }
+  },
+  "visual_acceptance": {
+    "status": "pending",
+    "blocker": "w-base-v2 捏合注入器坏（raw sendevent 在新 AVD 不被 InputReader 识别），修好后才能模拟器验「捏合不闪烁」",
+    "gate": "不闪（screenrecord + 抽帧目检，对齐 base-v2-gate 判据）"
+  }
+}

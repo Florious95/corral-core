@@ -1,0 +1,23 @@
+{
+  "result": "PASS_SIGNING_ONLY",
+  "source_commit": "649f5f91f35a66de8afd73221045d8187f74664c",
+  "artifact_commit": "c4fe527876825d9cc4f1534b848b161c093d83e2",
+  "input": "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/favorites-online-filter/tmp/release-artifact-git/artifact/app-release.apk",
+  "input_sha256": "416746b3ad2c69856016ce7ce7b9add568869780bd424bb6a1c533790e42dc32",
+  "output": "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/favorites-online-filter/signing/AgentMirror-Favorites-Online-649f5f91-signed.apk",
+  "output_bytes": 35655272,
+  "output_sha256": "5d17659776f95026a5c22320e6c7d99b69184c9eb1d2afac5531d4ee21943263",
+  "signer_sha256": "ea427eb4e14f95654a66802b6558fbbf6f93f1ca69d8117795fb7cef376cb13b",
+  "v2_verified": true,
+  "zipalign": "PASS",
+  "non_signing_entries": 544,
+  "changed_non_signing_entries": 0,
+  "package": "dev.agentmirror.app",
+  "versionCode": "1",
+  "versionName": "0.1.0",
+  "input_and_reference_untouched": true,
+  "password_source": "Installed Android Gradle Plugin public DefaultSigningConfig constant; child-process env only, never logged",
+  "private_key_handling": "Existing keystore consumed only by signing tools; no raw read/copy/print",
+  "installation": "NOT_RUN",
+  "performance": "NOT_RUN"
+}

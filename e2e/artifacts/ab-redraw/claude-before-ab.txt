@@ -1,0 +1,34 @@
+
+╭─── Claude Code v2.1.226 ─────────────────────────────────────────────────────────────────────────╮
+│                                                    │ What's new                                  │
+│                Welcome back Claude!                │ Bug fixes and reliability improvements      │
+│                                                    │ Added gateway spend-limit support to Claud… │
+│                       ▐▛███▜▌                      │ Added a workspace trust prompt to `claude … │
+│                      ▝▜█████▛▘                     │ /release-notes for more                     │
+│                        ▘▘ ▝▝                       │                                             │
+│   Opus 5 (1M context) with high… · Claude Max ·    │                                             │
+│   codebaton@team-agent.net's Organization          │                                             │
+│        /Volumes/nvme/Projects/远程Agent安卓        │                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                   ● high · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Ctx: n/a | Opus 5 (1M context) | 远程Agent安卓 | main
+  ⏵⏵ bypass permissions on (shift+tab to cycle)

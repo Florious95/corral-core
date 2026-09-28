@@ -1,0 +1,16 @@
+{
+  "task_id": "web-client",
+  "status": "pass",
+  "acceptance_results": [
+    { "cmd": "bash -lc 'cd web && npm test'", "exit": 0 },
+    { "cmd": "test -f web/index.html", "exit": 0 }
+  ],
+  "result_id": "res_webclient_0001",
+  "notes": "Web 端客户端构建完成。web/ 目录完整可运行：配对页（ws+token，type=password）、工作区列表（两级分组 cwd→session + 状态徽章，服务端聚合直接渲染）、会话页（xterm.js 终端 + 输入框 + 特殊键条 + 历史页）。完整控制帧 auth/list/subscribe/unsubscribe/input(text+keys 互斥)/scrollback/resize；二进制帧 snapshot(清屏重建)/delta(追加)/scrollback(12 字节收敛区间元数据头)。重连语义：掉线指数退避→READY 重 list+重放订阅；list_delta seq 不连续自动重新 list；input 超时/掉线判明确失败不静默。xterm 经 npm 安装（@xterm/xterm 6.0.0 MIT）postinstall 拷 vendor/，npx serve 即用无 CDN。36/36 单测通过（对 server/testdata 契约夹具字节级断言）；真机 daemon e2e 10/10（node 走 web/ js 栈：connect/auth/list/subscribe/snapshot/delta/input_ack/scrollback）；浏览器 headless Chrome 冒烟 7/7（CDP 三页真实点击：配对→连接→工作区 116 组/164 会话→会话 xterm 挂载→snapshot 渲染→UI 发消息）。进程卫生：测试后零孤儿进程/零残留监听。写范围仅 web/，无 git commit。",
+  "blockers": [
+    {
+      "area": "server-origin-policy",
+      "detail": "server/internal/api/server.go:395 websocket.Accept(w, r, nil) 用 coder/websocket 默认配置拒绝一切浏览器 Origin（browsers 总是带 Origin 头；daemon 日志实证 'request Origin \"127.0.0.1:8124\" is not authorized for Host'）。node 客户端无 Origin 故 e2e 通过，但浏览器真实使用连不上当前 daemon。修复在服务端一行：Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true}) 或配 OriginPatterns。web 侧协议实现已用 /tmp 打补丁 daemon fork 验证正确（浏览器冒烟 7/7），web 代码无需改。"
+    }
+  ]
+}

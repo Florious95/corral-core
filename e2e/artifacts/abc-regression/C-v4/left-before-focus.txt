@@ -1,0 +1,2 @@
+  mCurrentFocus=Window{fdb2f0a u0 dev.agentmirror.app/dev.agentmirror.app.MainActivity}
+  mFocusedApp=ActivityRecord{3f60097 u0 dev.agentmirror.app/.MainActivity t846}

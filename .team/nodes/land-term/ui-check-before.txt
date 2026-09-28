@@ -1,0 +1,7 @@
+# 改前红（当前已装 APK，未含 SessionShellScreen / SessionSwitchSheet）
+# 2026-08-19 land-v1-term
+
+SESSION_SCREEN: ['‹ 返回', '远控 leader', 'LAN', '查看', 'term-theme-light source=app-theme', 'Esc', 'Tab', '↑', '↓', '←', '→', 'Ctrl-C', '＋', '输入指令…', '发送']
+SHEET: ['★', '远控 leader', '/Volumes/nvme/Projects/远程Agent安卓', '空闲', '☆', 'advisor', '/Volumes/nvme/Projects/远程Agent安卓', '空闲', '☆', 'land-v1-set', '/Volumes/nvme/Projects/远程Agent安卓', '空闲', '☆', 'land-v1-term', '/Volumes/nvme/Projects/远程Agent安卓', '进行中', '☆', 'land-v1-reflow', '/Volumes/nvme/Projects/远程Agent安卓', '空闲']
+FAIL A-tm-ui 点「查看」后没有「切换会话」sheet。
+EXIT:1

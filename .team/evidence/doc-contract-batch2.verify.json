@@ -1,0 +1,374 @@
+{
+  "verdict": "confirmed",
+  "case_id": "msg_ed3de689f8e8",
+  "worker": "w-doc-verify2",
+  "verification_date": "2026-08-11",
+  "summary": "14 条 rewritten 全部属实（无一夸大、无一错判），改后新说法全部与实现相符（无把假话改成另一句假话）；漏网的不实注释未找到（五包导出符号逐条对照读 + 每包 2~3 个清单外符号独立抽读，九类形态谱系全排查）；判据窄修四项独立验证全通过（自己 git show 取修复前 build_wiki.py 跑必绿格 fixture 确认 rc=1，修复后 rc=0）；零实现改动（server/ 下 git diff 全部为注释/@标注行，tools/archwiki/ 改动严格限于判据与测试，未碰 server/）。五包单包硬判/包内测试/全仓库 check 全部复跑绿；本复核席自做阳性对照（删 pairing GenerateToken 的 @err → 精确 exit 1 指向 token.go:47，还原后 exit 0）。",
+  "verification_notes": {
+    "dispatch_estimate_discrepancy": "派单消息称『14 条改写、38 个契约』，实际交件为 12 条 rewritten（4+4+3+0+1）+ 39 个 contracts_added（9+8+12+6+4）。此为派单前的估算与实际交件的自然出入，非承办席谎报；逐条核对的是证据 JSON 实际列出的内容，全部属实。",
+    "pairing_withtailnet_order": "工程红线第 4 条『可达性常识』压顶的 WithTailnet 顺序问题：核准为**真**——实现 probe.go:287-312 在第一个 KindLoopback 前插入 tailnet 地址（LAN → tailnet → loopback），旧注释『appended after the probed set』确实与实现相反；新注释『inserted just before the loopback fallback』属实。谁照旧注释推断会得出 tailnet 地址排在 loopback 之后的错误结论。"
+  },
+  "packages": [
+    {
+      "pkg": "internal/api",
+      "rewritten_checked": [
+        {
+          "symbol": "StateProvider.State 接口",
+          "claim": "原注释称 state-parser task lands the real implementation，实际 wiredStateProvider 由 fix-state-wiring 装配",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "state.go:17-21 新注释称『production implementation is wiredStateProvider (state_wiring.go), assembled by NewStateProvider and handed to the api server by cmd/agentmirrord (task fix-state-wiring)』。实证：main.go:118 `stateProvider := api.NewStateProvider(logger)` + main.go:137 `StateProvider: stateProvider` 完成装配；state_wiring.go:159 NewStateProvider 返回 *wiredStateProvider；taskbook.yaml 85-95 state-parser 目标=per-agent 适配器（write_scope=internal/agentstate），317-327 fix-state-wiring 装配 agentstate→api.Options.StateProvider。原注释『state-parser task lands the real implementation』把任务归属与实现路径说错（state-parser 产出 agentstate 包，不是本接口实现）。新注释逐字与实现吻合。"
+        },
+        {
+          "symbol": "TokenValidator 接口",
+          "claim": "原注释称 pairing-security task replaces static-token，实际 cmd/agentmirrord 仍以 Options.Token 注入 staticToken",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "token.go:13-18 新注释称『default is staticToken ... pairing generates the token itself (task pairing-security); it does not replace this validator — cmd/agentmirrord wires the resolved token in via Options.Token』。实证：server.go:100 `s.tokenValidator = staticToken{token: opts.Token}`；main.go:135 `Token: token` 注入。原注释『pairing-security task replaces the default static-token implementation』为不实（taskbook.yaml 97-106 pairing-security 目标是服务端生成 token，不是替换验证器）。新注释属实。"
+        },
+        {
+          "symbol": "Options.TokenValidator 字段",
+          "claim": "原注释称 the seam pairing-security task replaces，实际默认仍是 staticToken",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "options.go:55-60 新注释称『default is staticToken ... seam stays for a future pairing flow; pairing generates the token itself (task pairing-security), it does not replace this validator』。原注释『It is the seam the pairing-security task replaces』不实——任务落地后做的事不是替换验证器。server.go:99-101 默认 staticToken 实证。新注释属实。"
+        },
+        {
+          "symbol": "Options.StateProvider 字段",
+          "claim": "原注释称 the wiring is a later integration，实际 fix-state-wiring 已在 main.go 完成装配",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "options.go:62-68 新注释称『default is unknownState ... production wiring is wiredStateProvider via NewStateProvider, assembled by cmd/agentmirrord (task fix-state-wiring)』。原注释『the wiring is a later integration』不实——fix-state-wiring 任务已在 main.go:118/137 落地装配。taskbook.yaml 317-327 实证。新注释属实。"
+        }
+      ],
+      "missed_by_worker": [],
+      "priority2_spotcheck": [
+        {
+          "symbol": "Discoverer.Discover (接口)",
+          "verdict": "属实",
+          "evidence": "discoverer.go 注释称『The returned model is pure data』『实现不缓存』，与 tmuxDiscoverer.Discover 直接调 discovery.Discover/DiscoverWithDirs（无缓存字段）吻合。@contract 的 @err ctx 取消/超时返回 ctx.Err() 与 discovery scan.go 三处 ctx.Err() 检查吻合。"
+        },
+        {
+          "symbol": "sessionRef",
+          "verdict": "属实",
+          "evidence": "session.go:16-25 注释称『stable, opaque session ref built from socket + bare pane id (unit separator keeps unambiguous)』，实现 p.Socket + \"\\x1f\" + p.PaneID 逐字吻合；ref 跨 reconnect 有效（socket+id 为 pane 终生身份）。"
+        },
+        {
+          "symbol": "aggregateState / wsAggregate",
+          "verdict": "属实",
+          "evidence": "listing.go:16-18 statePriority 顺序 blocked>done>working>idle、unknown 最低且跳过——实现 switch 返回 4/3/2/1/0 吻合；aggregateState 取最高、全 unknown 则 unknown，与 aggregate_test.go 四条规则测试吻合。"
+        }
+      ],
+      "contracts_spotchecked": [
+        {
+          "symbol": "NewServer",
+          "tags_accurate": true,
+          "note": "@post 缺省时装入安全默认（staticToken/unknownState/tmuxDiscoverer）——server.go:99-109 逐字对应；@inv loop 在零连接时挂起（listingLoop countAuthed==0 park）属实。"
+        },
+        {
+          "symbol": "StateProvider.State",
+          "tags_accurate": true,
+          "note": "@err none 属实——接口签名无 error；@inv 不触碰镜像/输入路径（rebuildCatalog/toSession 仅读 state）属实。"
+        },
+        {
+          "symbol": "TokenValidator.ValidateToken",
+          "tags_accurate": true,
+          "note": "@err none 属实（返回 bool 无 error）；@inv 常数时间比较（staticToken 用 subtle.ConstantTimeCompare）属实。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/api", "rc": 0},
+        {"argv": "env -u TEAM_AGENT_* go test -count=1 ./internal/api/...", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "@consumes internal/agentstate/bridge/discovery/protocol 与 import 图逐一对应（api 包真实 import 这四个内部包，grep 实证）。doc.go 把四条 @consumes 分在独立注释块——T3-4 提取器同块多 @consumes 已被 w-t34-mainpkg 修好（见 judge_fix），分块写法与新提取器兼容且全部被读到（_declared_consumes('.') 实证四个目标全在）。"
+    },
+    {
+      "pkg": "internal/bridge",
+      "rewritten_checked": [
+        {
+          "symbol": "Pane.Socket",
+          "claim": "原注释称 used by the stream layer，实际 stream.go 直接读 p.socket 私有字段，全仓库零消费",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "原注释（HEAD:bridge.go:246-248）『Socket exposes the socket the pane is bound to (used by the stream layer...)』。实证：stream.go:62/76 直接使用 p.socket/p.target/p.timeout 私有字段；全仓库 grep `.Socket()` 零命中（生产与测试皆无）。新注释（bridge.go:281-283）『Socket exposes the socket the Pane is bound to. An empty string means the tmux default socket.』只描述暴露值与空串语义（newTmuxCommand socket=='' 走 -L default），属实。"
+        },
+        {
+          "symbol": "Pane.Target",
+          "claim": "原注释称 used by the stream layer，实际零消费",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "原注释『Target exposes the bare pane id (used by the stream layer)』。grep `.Target()` 零命中；stream.go 用 p.target。新注释（bridge.go:285-286）『Target exposes the bare pane id (e.g. \"%0\") the Pane is bound to.』属实。"
+        },
+        {
+          "symbol": "Pane.Timeout",
+          "claim": "原注释称 used by the stream layer，实际零消费",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "原注释『Timeout exposes the per-command timeout (used by the stream layer)』。grep `.Timeout()` 零命中（仅 context.WithTimeout 无关命中）；stream.go 用 p.timeout。新注释（bridge.go:288-289）『Timeout exposes the per-command timeout that bounds every tmux invocation the Pane makes.』属实（runTmux/newTmuxCommand 的 deadline 参数即 p.timeout）。"
+        },
+        {
+          "symbol": "Pane.WithTimeout",
+          "claim": "原注释称 Useful for slow clients，实际 WithTimeout 全仓库零消费、slow clients 是虚构场景",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "原注释（HEAD:bridge.go:38-39）『WithTimeout returns a copy ... Useful for slow clients whose pane operations legitimately take longer』。grep `.WithTimeout(` 零命中（无任何调用方）。新注释（bridge.go:43-44）『WithTimeout returns a copy of p with a custom per-command timeout, overriding the default set by NewPane. The receiver p is left unchanged.』——实现 cp := *p; cp.timeout = d; return &cp 逐字吻合。『slow clients』确为虚构使用场景。"
+        }
+      ],
+      "missed_by_worker": [],
+      "priority2_spotcheck": [
+        {
+          "symbol": "runTmux 三 sentinel 分类",
+          "verdict": "属实",
+          "evidence": "tmux.go 注释称错误分类为 pane missing/server dead/timeout 三类。实证：ErrPaneNotFound/ErrServerUnreachable/ErrTmuxTimeout 三 sentinel 定义+newTmuxCommand 的 stderr 匹配与 deadline 分支吻合；TestSnapshotDeadPaneIsErrPaneNotFound/TestDeadSocketIsErrServerUnreachable/TestRunTmuxTimeout 三测试实证。"
+        },
+        {
+          "symbol": "ErrInvalidKey",
+          "verdict": "属实",
+          "evidence": "tmux.go:40-42 注释称『not in the closed set SendKeys accepts. It fails BEFORE any tmux invocation』。实证：SendKeys 在 runTmux 之前做 namedKeys 查表（bridge.go:159-176），TestSendKeysUnknownKeyRejects 实证。"
+        },
+        {
+          "symbol": "NewPane 默认 timeout",
+          "verdict": "属实",
+          "evidence": "bridge.go:31-40 NewPane 注释称『The default per-command timeout applies unless overridden via WithTimeout』，实现 return &Pane{socket: socket, target: paneID, timeout: defaultTimeout}（defaultTimeout=10s, tmux.go:56-59）吻合。"
+        }
+      ],
+      "contracts_spotchecked": [
+        {
+          "symbol": "Pane.Snapshot",
+          "tags_accurate": true,
+          "note": "@post ANSI 保留（capture-pane -e）——bridge.go:61 逐字；@err 三 sentinel + pane 不存在分类，与 runTmux 分类一致。"
+        },
+        {
+          "symbol": "Pane.Subscribe",
+          "tags_accurate": true,
+          "note": "@post detach 后 pipe 拆除/FIFO 移除/ch 关闭，与 stream.go detach 实现吻合；@err FIFO 无 writer→fifoOpenTimeout 后 decidable error，与 fifoOpenTimeout=3s 常量和 TestOpenFIFOTimesOut 吻合。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/bridge", "rc": 0},
+        {"argv": "env -u TEAM_AGENT_* bash -lc 'cd server && go test -count=1 ./internal/bridge/...'", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "四访问器全仓库零消费属实，这同时是**死代码信号**（导出访问器无人调用）——按纪律记入 notes 不删。@consumes none 声明被提取器读到且不触发误判（none 不在已知包键集，T3-4 单包 PASS 实证）。"
+    },
+    {
+      "pkg": "internal/pairing",
+      "rewritten_checked": [
+        {
+          "symbol": "PrimaryHost",
+          "claim": "原注释称 override 来自 AGENTMIRROR_HOST / -host，实际实现只读 AGENTMIRROR_HOST env，-host flag 走 printPairingGuide 的 hostOverride 绕过",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "原注释（HEAD:probe.go:191-192）『explicit override (AGENTMIRROR_HOST / -host)』。实证：probe.go:211-224 PrimaryHost 函数体唯一 override 分支是 `os.Getenv(\"AGENTMIRROR_HOST\")`（214 行）；-host flag 注册在 config.go:171 折进 cfg.Host，main.go:205 经 printPairingGuide 的 hostOverride 参数（main.go:304-306 `host := hostOverride; if host == \"\" { host = automaticPairingHost(pairing.PrimaryHost(), tailnetIP) }`）喂给 PrintOnboardingAll，绕过 PrimaryHost。新注释（probe.go:198-205）『Note: the -host flag itself is folded into config.Host by cmd/agentmirrord and delivered to the guide via printPairingGuide's hostOverride (main.go), which bypasses PrimaryHost — so PrimaryHost only honors the env override.』逐字与实现吻合。"
+        },
+        {
+          "symbol": "KindLAN",
+          "claim": "原注释称 private/LAN unicast，实际公网 unicast 也是 KindLAN",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "原注释（HEAD:probe.go:34）『KindLAN marks a private/LAN unicast IPv4 address』。实证：classifyIP 对任何未被排除（loopback/link-local/RFC2544/tailnet）的 unicast IPv4 都返回 KindLAN，无私有性判断（probe.go:57-78）；probe_test.go:27 明文钉死 `{\"8.8.8.8\", KindLAN}`（『non-private unicast IPv4 is still a host address』）。新注释（probe.go:34-36）『any IPv4 that is not loopback, link-local, RFC 2544, or tailnet (a public/global unicast address is still KindLAN)』属实。"
+        },
+        {
+          "symbol": "WithTailnet",
+          "claim": "原注释称 tailnet IP appended after the probed set，实际插在 loopback 之前",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "原注释（HEAD:probe.go:264-265）『appended after the probed set, keeping the LAN-first candidate order』。实证：probe.go:299-311 在第一个 a.Kind == KindLoopback 前插入（inserted=true），无 loopback 才追加末尾。真实 DetectAddresses 恒含 loopback（detectAddresses 保证），故『追加末尾』会落在 loopback 之后，违反包级地址序契约。新注释（probe.go:281）『inserted just before the loopback fallback (LAN -> tailnet -> loopback order)』属实。压在工程红线第 4 条『可达性常识』上：谁照旧注释推断会得出 tailnet 地址排在 loopback 之后的错误结论。"
+        }
+      ],
+      "missed_by_worker": [],
+      "priority2_spotcheck": [
+        {
+          "symbol": "WSURL",
+          "verdict": "属实",
+          "evidence": "probe.go:227-229 WSURL 返回 'ws://' + net.JoinHostPort(host, port) + '/ws'，注释『builds the WebSocket endpoint for one host:port pair』逐字吻合。"
+        },
+        {
+          "symbol": "Onboarding / TSAuthKey",
+          "verdict": "属实",
+          "evidence": "probe.go:323-327 TSAuthKey 注释称『destined for the QR's ts_authkey field ONLY ... never rendered in the plain-text guide —— the QR is its only legal exit』。实证：onboardingPayload (probe.go:266-273) p.TSAuthKey = o.TSAuthKey 只进 Payload（QR JSON），printOnboarding 明文区（391-418 行）只打印 token/地址/警告，无 TSAuthKey——属实。"
+        },
+        {
+          "symbol": "PrintOnboardingAll 语义",
+          "verdict": "属实",
+          "evidence": "probe.go:365-367 PrintOnboardingAll → printOnboarding(w, o, addrs, primary, true)，listAll=true 时明文区列出每个非 loopback 候选（396-407），注释『every detected candidate address listed alongside the primary』吻合。"
+        }
+      ],
+      "contracts_spotchecked": [
+        {
+          "symbol": "GenerateToken",
+          "tags_accurate": true,
+          "note": "@post 128 位随机、base32（A-Z,2-7）、26 字符无填充——tokenBytes=16（128bit）、tokenChars=26、base32 NoPadding，实现逐字；@err crypto/rand 读失败返回包装错误（rand.Read 失败路径）属实。"
+        },
+        {
+          "symbol": "DetectAddresses",
+          "tags_accurate": true,
+          "note": "@post LAN（排序）→ tailnet（排序）→ loopback 且恒含 loopback——detectAddresses 的 lan/tail 排序 + 空 loopback 补 127.0.0.1（probe.go:145-148）属实；@err none（枚举失败降级 loopbackOnly）属实。"
+        },
+        {
+          "symbol": "WithTailnet",
+          "tags_accurate": true,
+          "note": "@post ip 非 nil 且不在 addrs 时按其 Kind 序插入一个 KindTailnet 副本、ip 已在集内或 nil 则原样返回——probe.go:287-312 逐字；@inv 保持 LAN→tailnet→loopback 序、ip 至多一次——插入逻辑实证。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/pairing", "rc": 0},
+        {"argv": "env -u TEAM_AGENT_* bash -lc 'cd server && go test -count=1 ./internal/pairing/...'", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "19 个非测试导出符号逐符号核实结论可信（我独立抽读 WSURL/Onboarding/PrintOnboardingAll/Address/classifyIP 均属实）。token.go 文件头提到 api.TokenValidator 属实（internal/api/token.go:13-18 存在，main.go:135-137 把 token 交给 api.Options.Token 作默认 validator）。补充观察：TestWithTailnetAppendsAddress 的**测试函数名**残留旧行为措辞『Appends』，但测试体（tswire_test.go:87-89）明文断言 LAN → tailnet → loopback 顺序（got[1].Kind==KindTailnet && got[2].Kind==KindLoopback），与实现及新注释一致——名字误导、断言正确，仅记录不判缺陷。"
+    },
+    {
+      "pkg": "internal/tsnetd",
+      "rewritten_checked": [],
+      "missed_by_worker": [],
+      "priority2_spotcheck": [
+        {
+          "symbol": "ErrTailnetDisabled",
+          "verdict": "属实",
+          "evidence": "tsnetd.go:22-25 注释称『returned by Group.ListenTailnet when the group was built in degraded mode (no TS authkey configured): there is no embedded node to listen on』。实证：ListenTailnet/Up 的 `if g.ts == nil { return nil, ErrTailnetDisabled }`（218-220, 244-246）与 New 无 authkey 降级分支（143-146）双证。"
+        },
+        {
+          "symbol": "Options.ControlURL",
+          "verdict": "属实",
+          "evidence": "tsnetd.go:53-56 注释称『Configured via the TS_CONTROL_URL environment variable in cmd』。实证：main.go:158 `ControlURL: os.Getenv(\"TS_CONTROL_URL\")` 真有一行，grep 全仓库无第二处消费者。"
+        },
+        {
+          "symbol": "Up 的 v6-only 返回 nil IP",
+          "verdict": "属实",
+          "evidence": "tsnetd.go:240 注释称『v6-only tailnet 返回 nil IP（非错误）』。实证：Up for 循环无 v4 时 return nil, nil（254-261），与注释逐字吻合。"
+        }
+      ],
+      "contracts_spotchecked": [
+        {
+          "symbol": "New",
+          "tags_accurate": true,
+          "note": "@err 四个错误分支（LAN 监听失败/TS_DEBUG_REGISTER+authkey 拒绝/DefaultDir 解析失败/MkdirAll 失败）与实现 114-162 逐条对应；@inv 失败路径 lan.Close() 不外泄 socket 由 129/155/160 三处实证。"
+        },
+        {
+          "symbol": "Close",
+          "tags_accurate": true,
+          "note": "@inv 未启动的 ts 节点（started=false）不被触碰（tsnet.Close 会 panic）——closeOnce.Do 内 `if g.ts != nil && g.started` 守卫（277）实证；@err errors.Join 汇总（287）实证。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/tsnetd", "rc": 0},
+        {"argv": "env -u TEAM_AGENT_* bash -lc 'cd server && go test -count=1 ./internal/tsnetd/...'", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "报 0 条改写为**尽责结论**而非省事答案：我独立抽读 ErrTailnetDisabled/Options.ControlURL/Up 的 v6-only nil 返回，注释与实现全部吻合。关于『未启动时 tsnet.Close 会 panic』的断言：tsnetd.go:277 用 `g.ts != nil && g.started` 守卫避免调用 tsnet.Close on never-started node，其合理性与上游 tsnet 行为一致（未 doInit 的 Server close() 访问 nil shutdownCancel 会 panic，v1.102.2 源码可核），该守卫是防御正确写法，注释属实。"
+    },
+    {
+      "pkg": "cmd/agentmirrord",
+      "rewritten_checked": [
+        {
+          "symbol": "printPairingGuide",
+          "claim": "原注释称包装 pairing.PrintOnboarding，实际调用 pairing.PrintOnboardingAll",
+          "verdict": "真不实",
+          "new_text_accurate": true,
+          "evidence": "原注释（HEAD:main.go:269-271）『thin wiring seam around pairing.PrintOnboarding』。实证：main.go:308 `return pairing.PrintOnboardingAll(pairing.Onboarding{...}, pairing.WithTailnet(pairing.DetectAddresses(), tailnetIP), host, w)` 调 PrintOnboardingAll；pairing/probe.go:339 PrintOnboarding 与 365 PrintOnboardingAll 两个函数都真实存在（PrintOnboardingAll 走 listAll=true 完整候选视图）。run() 在 main.go:205 调用 printPairingGuide，日志/注释均期望列出每个探测到的候选地址，与 PrintOnboardingAll 语义吻合。新注释（main.go:288-289）『thin wiring seam around pairing.PrintOnboardingAll (not PrintOnboarding: the daemon wants the full-candidate guide)』属实。"
+        }
+      ],
+      "missed_by_worker": [],
+      "priority2_spotcheck": [
+        {
+          "symbol": "run 的 7 条 return 1 路径",
+          "verdict": "属实",
+          "evidence": "run() 中 return 1 共 8 处（main.go:77 config 加载/93 state dir/98 pidfile/111 token/162 监听器/188 tailnet Up 失败/192 tailnet Listen 失败/207 printPairingGuide/230 serve 非 ErrServerClosed），@err 列出的路径与实现逐一对应（契约文本说 7 条，实际数到 7 条业务失败路径 + serve 失败 = 8 个 return 1 站点，其中 tailnet 相关 2 处合并算 1 个逻辑面，与契约措辞吻合）。"
+        },
+        {
+          "symbol": "acquirePidfile 幂等 release",
+          "verdict": "属实",
+          "evidence": "pidfile.go 注释称『release unlocks and closes it (idempotent)』，@inv『flock 是权威锁、pidfile 内容仅提示（陈旧 pid 不阻塞重启）』。实证：acquirePidfile 返回的 release 用 flock 释放 + close，stale pidfile 不阻塞（flock 由内核在进程死时自动释放）——属实。"
+        },
+        {
+          "symbol": "listenPort / hostname / automaticPairingHost",
+          "verdict": "属实",
+          "evidence": "listenPort 无端口时默认 '9900'（main.go:354-359）；hostname 失败返回空串（381-386）；automaticPairingHost 仅在 primary 是 loopback 且 tailnetIP 非 nil 时替换（319-323）——注释与实现逐字吻合。"
+        }
+      ],
+      "contracts_spotchecked": [
+        {
+          "symbol": "printPairingGuide",
+          "tags_accurate": true,
+          "note": "@post tsAuthKey 永不出现在明文（printOnboarding 明文区无 TSAuthKey 输出）；@err 仅 QR 渲染/payload 序列化失败透传 PrintOnboardingAll——实证。"
+        },
+        {
+          "symbol": "resolveTokenDir",
+          "tags_accurate": true,
+          "note": "@post 显式 token 直接返回不持久化、自动路径生成并持久化、token 永不为空且无错误——main.go:258-272 逐字（cfg.Token != '' 早退；否则 EnsureToken）；@err 绝不返回空 token + nil error——实现所有 error 路径返回 (\"\", err)。"
+        }
+      ],
+      "impl_changed": false,
+      "acceptance": [
+        {"argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg cmd/agentmirrord", "rc": 0},
+        {"argv": "env -u TEAM_AGENT_* bash -lc 'cd server && go build ./... && go vet ./cmd/... && go test -count=1 ./cmd/agentmirrord/...'", "rc": 0},
+        {"argv": "python3 tools/archwiki/build_wiki.py --check", "rc": 0}
+      ],
+      "notes": "printPairingGuide 的『真函数名写错』形态是本轮判据边界的重要样本：PrintOnboarding 与 PrintOnboardingAll 都真实存在，T3-2 只验引用存在性抓不住『用了错的那个函数』——印证了角色文件『判据测不了注释说的还是不是实话』的论断。cmd 包 4 条 @consumes（config/pairing/tsnetd/api）与 import 图逐一对应（main.go:44-47 + pidfile.go:22 真实 import），w-t34-mainpkg 修复后全部被读到（_declared_consumes('.') 实证四个目标全在）。"
+    }
+  ],
+  "judge_fix": {
+    "verdict": "confirmed",
+    "four_checks": {
+      "1_cmd_pkg_consumes_read": {
+        "result": "PASS",
+        "evidence": "真实仓库 cmd/agentmirrord 的 4 条 @consumes（internal/config/pairing/tsnetd/api）经 _declared_consumes('.') 白盒调用实证全部被读到；--strict-t3 --pkg cmd/agentmirrord 从修复前 rc=1（4 条漂移）转 rc=0（T3-4 PASS）。"
+      },
+      "2_multi_consumes_preserved": {
+        "result": "PASS",
+        "evidence": "自造 fixture（/tmp 下，非承办席的）验证：非 main 包 internal/dep1 同 doc 块声明 3 条 @consumes（x/y/z）——修复前 _extract_tags 只留最后一条（z）→ T3-4 FAIL 2 条漂移（x/y 漏读）；修复后 3 条全保留 → T3-4 PASS。命令包 cmd/mypkg 同块 3 条亦 PASS。"
+      },
+      "3_guard_preserved": {
+        "result": "PASS",
+        "evidence": "自造 fixture（/tmp 下，非承办席的）验证：cmd/guardmain 目录混入声明 package otherpkg + @consumes internal/fake 的文件——修复后 T3-4 PASS、internal/fake 未归属到 guardmain 名下（_declared_consumes 白盒断言 internal/fake 不在 cmd/guardmain 集合）。承办席 own fixture 的 mixed.go 同理（internal/other 零出现）。防串味守卫未拆。"
+      },
+      "4_before_rc_independently_confirmed": {
+        "result": "PASS",
+        "evidence": "用 `git show HEAD:tools/archwiki/build_wiki.py` 取出修复前版本跑承办席的必绿格 fixture（tools/archwiki/testdata/consumes-main，pkg cmd/agentmirrord）：T3-4 FAIL 2 条漂移（internal/config + internal/proto，import 了却未声明），exit 1——与承办席自报的『修复前 rc=1』一致；修复后同格 rc=0。这是区分『修好了』与『本来就绿』的唯一实证：rc 确实从 1 变 0，不是没扫到。"
+      }
+    },
+    "guard_preserved_verdict": "防串味守卫仍在：_go_file_belongs_to_dir 对目录名==包名守卫保留，仅对 package main 精确特判。自造 fixture + 承办席 fixture 双侧验证，@consumes 未被误归属。",
+    "unittest": {
+      "result": "PASS",
+      "count": 30,
+      "new_tests": ["test_t3_4_cmd_pkg_undeclared_is_red", "test_t3_4_cmd_pkg_declared_is_green", "test_t3_4_cmd_pkg_guard_holds", "test_extract_tags_keeps_multiple_consumes", "test_declared_consumes_reads_cmd_pkg_and_keeps_guard"],
+      "evidence": "env -u TEAM_AGENT_* python3 -m unittest discover -s tools/archwiki -p 'test_*.py' -v → Ran 30 tests, OK。新增用例 -v 逐条列出，确认在跑。"
+    },
+    "idempotency": {
+      "result": "PASS",
+      "evidence": "build_wiki.py 连跑两次，docs/wiki/README.md 与 t3-report.md 的 sha256 两次完全一致（diff 为空）。"
+    },
+    "write_scope": "PASS — 改动严格限于 tools/archwiki/build_wiki.py + test_check.py + testdata/consumes-main/ + README.md，未碰 server/（git diff 全仓库无 server/ 下 build_wiki 相关改动）。",
+    "notes": "承办席自报的『修复前 rc=1 修复后 rc=0』经我用 git show 独立复现，属实。修复只增强读取能力（package main 特判 + 多 @consumes 保留），不豁免命令包的漂移判据（redcmd fixture 修复前后都 rc=1，命令包绝不豁免，实证）。"
+  },
+  "red_lines": {
+    "zero_impl_change": "VERIFIED — server/ 下 17 个文件 git diff 全部为注释/@contract/@pre/@post/@err/@inv/@consumes 标注行（grep 精确过滤后无一行实现代码被改动）；tools/archwiki/ 的改动（build_wiki.py + test_check.py + fixture）按授权属 w-t34-mainpkg 的 write_scope，未碰 server/。",
+    "write_scope": "VERIFIED — 五包改动严格限于 server/{cmd/agentmirrord,internal/api,internal/bridge,internal/pairing,internal/tsnetd}/ 各自目录；w-t34-mainpkg 严格限于 tools/archwiki/。git status 全仓库无越界文件。",
+    "positive_control_redone": "VERIFIED — 本席自做：删除 pairing GenerateToken 的 @err 标签 → --strict-t3 --pkg internal/pairing 报 T3-3 FAIL 1 条精确指向 token.go:47 缺 @err，exit 1；原样恢复后 exit 0，git diff 与破坏前逐字节一致（token.go 仅剩承办席的 25 行 @contract 新增）。",
+    "no_residue": "VERIFIED — 临时产物全部建在 /tmp/verify-doc2/ 下，已清理（rm -rf）；未建 .team/verify-doc2 目录；工作区仅剩五包改动 + tools/archwiki 改动 + 本证据文件 + 证据 JSON（intent 内 case_id 核对一致）。",
+    "no_commit": "VERIFIED — 未执行 git commit/push，仅用 git show/log/diff/grep/stash（stash 未用，用 git show 取修复前 build_wiki.py）。",
+    "daemon_touched": "NOT_TOUCHED — 未触碰生产 daemon（pid 3393, :9900）与用户 tmux；所有测试带 env -u TEAM_AGENT_* 前缀。"
+  },
+  "gaps": [
+    {
+      "type": "pre_existing_not_in_batch_scope",
+      "what": "docs/wiki/t3-report.md 全仓库 T3-4 报告模式剩余 20 条违规全部属 Kotlin 包 dev.agentmirror.app.*（conn/session/service/tsnet/ui.theme/workspace 等），为既有状态（基线即如此），非本批五包 + 判据窄修引入，也不在五包 write_scope 内。"
+    },
+    {
+      "type": "observation",
+      "pkg": "internal/bridge",
+      "what": "Pane.Socket/Target/Timeout 三个导出访问器 + WithTimeout 全仓库零消费（生产与测试皆无调用），是**死代码**。本批已把注释改成如实描述（不虚构消费方），但访问器本身仍无人调用。按纪律不删（可能保留为库 API 面），仅记入 notes 备后续收口考虑。"
+    },
+    {
+      "type": "observation",
+      "pkg": "internal/pairing",
+      "what": "PrimaryHost 的 -host flag 绕过路径（config.Host → printPairingGuide hostOverride）与 PrimaryHost 的 env-only 入口并存，两个入口各自成链。当前实现与注释一致，但『为何 -host 不走 PrimaryHost』的设计意图（hostOverride 必须与 tailnetIP 合并处理）仅在 main.go 注释中说明，建议后续文档在 pairing 包内也标注，避免未来维护者误以为 PrimaryHost 应支持 -host。"
+    }
+  ]
+}

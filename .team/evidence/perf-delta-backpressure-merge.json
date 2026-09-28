@@ -1,0 +1,41 @@
+{
+  "task_id": "perf-delta-backpressure-merge",
+  "status": "halted_gate1_premise_refuted",
+  "seat": "w-c1-probe",
+  "gate": 1,
+  "verdict": "sendCh(cap 256) 不会满——C1 合并不该上线",
+  "verdict_short": "不会满",
+  "one_liner": "sendCh(cap 256) 在真实链路上不会满：LLM 流式输出 400-500 B/s、峰值 84 帧、queue_peak=1、deltas_buffered=0；即使对端完全不读 + 2KB 窗口 + 2000 行突发，queue_peak 也仅 2-4，从未逼近 256。",
+  "measured_at": "2026-08-14 00:30-01:10 (+08)",
+  "probe_code": "e2e/harness/c1_sendq_probe_test.go",
+  "evidence_numbers": [
+    {
+      "scenario": "LLM 量级持续流式（400-500 B/s，80 行/4s），健康读者",
+      "conn_frames_sent": 84,
+      "conn_deltas_buffered": 0,
+      "total_queue_peak": 1
+    },
+    {
+      "scenario": "对端完全不读 + 2KB 读窗口 + 2000 行突发（最恶劣本地背压）",
+      "conn_frames_sent": 570,
+      "conn_deltas_buffered": 0,
+      "total_queue_peak": 2
+    }
+  ],
+  "mechanism_findings": [
+    "macOS loopback 的 TCP 自动调窗让「对端慢读/不读」无法在本地制造 sendCh 积压：2000 行突发被内核 socket 缓冲整包吸收，writer 从未真正阻塞，writeFrame 没停过，sendMirror 从未看到满队列。",
+    "test 席独立复现同一机制：对端完全不读，writer 照样能推 4MB+。",
+    "持续低速流式（LLM 的真实生成速率，数百字节/秒）在任何能排空该速率的链路上都不会积压：队列峰值 1，代表『入队即刻被消费』。",
+    "delays_proxy 20KB/s 档位测出的 deltas_dropped=0 不是「队列不满的证据」，是『那个档位根本没造成压力』——但在真实更快的链路上，队列同样不满。"
+  ],
+  "real_link_context": [
+    "leader 通报：用户装了官方 Tailscale，打洞成功过一次——RTT avg 147ms、0 丢包、重传 0%（snapshot-03-direct.txt），比开始测时的 1221ms/10.4% 快一个数量级。",
+    "即使按最慢的『蜂窝 + DERP 双重中继』档（srtt 1762ms、重传 10.4%），队列是否满取决于 writeFrame 是否被 socket 阻塞；而本地最恶劣的『不读 + 2KB 窗口』都无法制造积压，说明要填满 256 槽需要 writer 持续阻塞数十秒量级——这在任何生成速率受限（数百 B/s）的链路上都不现实。"
+  ],
+  "conclusion_for_leader": "结论：不会满。C1 不该上线。dev 的合并实现 + test 的红测留档为『未来真遇背压时的现成方案』。",
+  "supporting": {
+    "production_steps_doc": "docs/c1-probe-production-steps.md",
+    "probe_file": "e2e/harness/c1_sendq_probe_test.go",
+    "evidence_dir": ".team/evidence/perf-delta-backpressure-merge.json"
+  }
+}

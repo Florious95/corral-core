@@ -1,0 +1,96 @@
+{
+  "status": "red",
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\"'",
+      "rc": 0,
+      "result": "all requested Go packages passed"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh'",
+      "rc": 1,
+      "result": "functional path passed, but the artifact secret gate failed",
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T191127-57035"
+    }
+  ],
+  "changes": [
+    {
+      "path": "e2e/feat-ts-wire-headscale.sh",
+      "summary": "Added a task-owned TLS DERP relay pinned to tailscale.com/cmd/derper@v1.102.2, forced both isolated tsnet nodes through it, recorded listener/client/packet proof, and extended cleanup to the DERP PID, TCP/UDP port, reverse rule, private keys, and task temp tree."
+    }
+  ],
+  "deviation": [],
+  "functional_proof": {
+    "headscale_node_count": 2,
+    "app_registration": "registered",
+    "derp": {
+      "listener_proof": "tls_health_and_tcp_listener_verified",
+      "accepts": 2,
+      "packets_received": 36,
+      "packets_sent": 36,
+      "route_proof": "forced_route_with_two_clients_and_packet_flow",
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T191127-57035/derp-proof.json"
+    },
+    "instrumentation": {
+      "api_status": "pass",
+      "listing_received": "yes",
+      "workspace_cwd_match": "yes",
+      "session_present": "yes",
+      "socks5_path": "explicit_tsnet_proxy_socket_factory",
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T191127-57035/instrumentation-proof.txt"
+    },
+    "route_artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T191127-57035/app-route-proof.txt"
+  },
+  "safety_gate": {
+    "status": "failed",
+    "failure_reason": "secret_value_found_in_artifacts",
+    "source_category": "task-local headscale preauth key generated inside the isolated run",
+    "secret_value_recorded_in_evidence": false,
+    "incident": "headscale-nodes.json was written with preAuthKey.key before the artifact scanner ran; replacing it afterward with [REDACTED] limited exposure but does not satisfy the no-secret-artifact contract.",
+    "current_artifact_state": "preAuthKey.key is redacted or absent",
+    "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T191127-57035/headscale-nodes.json"
+  },
+  "cleanup": {
+    "contract_status": "no",
+    "contract_status_reason": "the artifact secret gate failed",
+    "physical_cleanup_zero": true,
+    "derper_pid_absent": "yes",
+    "derp_private_keys_absent": "yes",
+    "task_temp_absent": "yes",
+    "task_temp_open_files_before_remove": 0,
+    "adb_reverse_absent": "yes",
+    "android_task_user_absent": "yes",
+    "android_task_package_data_absent": "yes",
+    "production_agentmirrord_baseline_untouched": "yes",
+    "ports": {
+      "43910": {"tcp_listeners": 0, "udp_sockets": 0},
+      "43911": {"tcp_listeners": 0, "udp_sockets": 0},
+      "43912": {"tcp_listeners": 0, "udp_sockets": 0},
+      "43913": {"tcp_listeners": 0, "udp_sockets": 0},
+      "43914": {"tcp_listeners": 0, "udp_sockets": 0},
+      "43920": {"tcp_listeners": 0, "udp_sockets": 0}
+    },
+    "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T191127-57035/cleanup.txt"
+  },
+  "history": [
+    {
+      "run": "run-20260810T184645-42670",
+      "fact": "cleanup was incomplete because the App wrap property remained set",
+      "cleanup_status": "no"
+    },
+    {
+      "run": "run-20260810T185347-57462",
+      "fact": "the later run cleared the prior residue and proved all then-covered physical cleanup checks zero",
+      "cleanup_status": "yes"
+    },
+    {
+      "run": "run-20260810T191127-57035",
+      "fact": "all physical cleanup checks, including the new DERP checks, are zero; contract cleanup remains no solely because the artifact secret gate failed",
+      "cleanup_status": "no"
+    }
+  ],
+  "notes": [
+    "Rework headscale node output as a pre-artifact streaming allowlist or delete .preAuthKey.key before any artifact write. Writing the original and redacting later is forbidden.",
+    "The only adjudicated new E2E run was run-20260810T191127-57035; it was not rerun after the red result."
+  ]
+}

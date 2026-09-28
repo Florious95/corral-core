@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/Volumes/nvme/Projects/远程Agent安卓/tools/gate/wiki-ratchet.py", line 83, in <module>
+    sys.exit(main())
+  File "/Volumes/nvme/Projects/远程Agent安卓/tools/gate/wiki-ratchet.py", line 56, in main
+    viols, t1_red, out = run(root, pkg)
+  File "/Volumes/nvme/Projects/远程Agent安卓/tools/gate/wiki-ratchet.py", line 37, in run
+    r = subprocess.run([sys.executable, str(root / "tools/archwiki/build_wiki.py"),
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 505, in run
+    with Popen(*popenargs, **kwargs) as process:
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 951, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 1821, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/nvme/Projects/远程Agent安卓/.worktrees/hl1.perf1'

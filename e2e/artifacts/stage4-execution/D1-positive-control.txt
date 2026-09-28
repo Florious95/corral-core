@@ -1,0 +1,10 @@
+D1 阳性对照：已连接态 vs 零连接态
+====================================
+已连接态（WS client auth+list，daemon pid 87425）：
+  密集采样(0.1s x30): t+7x0.1s child=1 cpu=0.9%; t+15x0.1s child=1 cpu=1.2%; t+23x0.1s child=1 cpu=0.6%
+  每秒采样(10s): t+3s cpu=0.7% child=1; t+5s cpu=1.8%; t+7s cpu=1.7%; t+9s cpu=0.8%
+  结论：已连接态 daemon 周期性派生 tmux 扫描子进程（瞬时~0.1s），CPU 抬升
+零连接态（daemon pid 65712/54093，6分钟 x2 轮）：
+  第一轮(:19983): 12/12 点 cpu=0.0% n_child=0（含 19:56:04 一个 1.6% 系阳性对照连接污染，已排除）
+  独立重跑(:19985): 12/12 点 cpu=0.0% n_child=0  [D1-samples-clean.tsv]
+结论：零连接 idle-gate park（server.go:230-255），不扫描不派生；已连接才扫描。

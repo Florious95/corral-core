@@ -1,0 +1,12 @@
+# 改前红
+
+1. 用户现场 `.team/issues/shots/14-诊断日志每帧刷屏.png`：
+   `[term-left-edge] source=onDraw contentLeft=49 col0Origin=49 cellW=17 viewW=1204 verdict=OK`
+   100ms 内连打 6 条，操作数完全相同。
+
+2. 旧居中公式（GlyphSeamTest.glyphSeamLegacyCenteredAdvanceLeavesGap）：
+   cellW=17 advance=14.2 → right0=15.6 left1=18.4 gap=2.8
+   这就是框线断点 / logo 块缝的操作数。
+
+3. ui-check 改前（未去重包）日志页扫不到稳定 ≤3 条；空闲不 onDraw 时计数为 0，
+   与「每帧刷屏」同形的另一端——判据必须同时要「有首条」和「不变不打」。

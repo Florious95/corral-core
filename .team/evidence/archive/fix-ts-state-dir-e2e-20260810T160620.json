@@ -1,0 +1,60 @@
+{
+  "status": "red",
+  "tests": [
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\""
+      ],
+      "rc": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh"
+      ],
+      "rc": 1,
+      "artifact": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T154035-48094",
+      "failure_reason": "expected_two_headscale_nodes"
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "env -u TEAM_AGENT_* bash -n e2e/feat-ts-wire-headscale.sh"
+      ],
+      "rc": 0
+    }
+  ],
+  "changes": [
+    {
+      "path": "server/cmd/agentmirrord/main.go",
+      "summary": "复用 cmd 已解析的 stateDir，将 filepath.Join(stateDir, \"tsnet\") 传给 tsnetd.Options.Dir；不新增第二套 state-dir 配置，tailnet 未启用时 tsnetd 仍在使用 Dir 前返回。"
+    },
+    {
+      "path": "server/cmd/agentmirrord/main_test.go",
+      "summary": "通过 newTSNetGroup 窄 seam 截获 tsnetd.Options，锁定消费方收到解析后的独立 tsnet 子目录。"
+    },
+    {
+      "path": "e2e/feat-ts-wire-headscale.sh",
+      "summary": "固化隔离 headscale/daemon/tmux/临时 Android user 实链；以 adb stdin 写入临时 app-private 配对存储，不使用摄像头、Extended Controls、前台鼠标或窗口寻址，并在所有退出路径核验零残留与密钥 presence-only。"
+    },
+    {
+      "path": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T154035-48094",
+      "summary": "本 case 的权威红测：daemon state-dir 证明成立，App 节点未加入，自建 headscale 节点数为 1，cleanup 全绿。"
+    }
+  ],
+  "deviation": [
+    "E2E 验收 rc=1；当前源码 APK 的 App tsnet 停在 NeedsLogin/StartLoginInteractive，产品缺口归属 feat-tsnet-wiring 的 App/tools 范围，超出本任务 write_scope，依既有 judge 裁定停止继续复跑且不跨范围修改。"
+  ],
+  "notes": [
+    "run-20260810T154035-48094/result.json 记录 failure_reason=expected_two_headscale_nodes、headscale_node_count=1、state_dir_proof=yes、cleanup_status=yes。",
+    "同一运行的脱敏 diagnostics.log 证明 daemon 以 100.64.0.1 入网；App 启动真实 tsnet 后停在 NeedsLogin/StartLoginInteractive，未完成 headscale 注册。",
+    "旧 APK 的 run-20260810T134912-69413 曾在同场景记录 headscale_node_count=2；当前源码 APK 的重复清洁运行稳定为 node_count=1。",
+    "run-20260810T154035-48094/cleanup.txt 记录生产 agentmirrord 身份未变、原模拟器 APK 已按哈希恢复、临时 Android user/包数据/adb reverse/任务目录/自建 tmux/五个端口均零残留。",
+    "配对注入路径为 adb_private_store_stdin：秘密只经 stdin 进入临时 app-private store，随后仍要求生产 Keystore 迁移、真实 App tsnet 入网与 daemon pairing-token 鉴权；未弱化认证或连通性验收。",
+    "daemon 的 TS authkey 只经 TS_AUTHKEY 环境变量进入；result.json 记录 daemon argv 中 authkey flag/value/key-shape/pairing-token value 均为 no，App log 与全部 artifact 的 secret-value 扫描均为 no。"
+  ]
+}

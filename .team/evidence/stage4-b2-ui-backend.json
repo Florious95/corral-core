@@ -1,0 +1,53 @@
+{
+  "task_id": "stage4-b2-ui-backend",
+  "status": "done",
+  "executed_at": "2026-08-11T23:56:00+08:00",
+  "seat": "w-stage4-b2b (收尾，承接 w-stage4-b2 前序 A10-A12/B1/B2)",
+  "isolation": {
+    "daemon": "/tmp/st4-b2/agentmirrord -listen 0.0.0.0:19983 -token st4b2-secret-token-002",
+    "tmux": "TMUX_TMPDIR=/tmp/st4-b2/tmux -L st4b2",
+    "discovery_restriction": "AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS=/tmp/st4-b2/tmux/tmux-501",
+    "prod_daemon_untouched": true,
+    "prod_tmux_untouched": true,
+    "night_mode_reset": "no"
+  },
+  "per_case_results": {
+    "A10": {"channel": "U+H", "result": "PASS", "evidence": ["B2-a10-notif-blocked.png", "B2-a10-notif-shade2.png", "B2-a10-deeplink-session.png"]},
+    "A11": {"channel": "U", "result": "PASS", "evidence": ["B2-a11-pre-kill-session.png", "B2-a11-recovered.png", "B2-a11-reenter-session.png"]},
+    "A12": {"channel": "U", "result": "PASS", "evidence": ["B2-a12-locked.png", "B2-a12-unlocked-recovered.png"]},
+    "B1": {"channel": "U", "result": "PASS", "evidence": ["B2-b1-empty-state.png"]},
+    "B2": {"channel": "U", "result": "PASS", "evidence": ["B2-b2-session-disconnect.png", "B2-b2-session-disconnect2.png", "B2-b2-session-disconnect3.png", "B2-b2-session-live.png"]},
+    "B3": {"channel": "U", "result": "PASS", "evidence": ["B3-pairing-dark.png", "B3-pairing-dark2.png", "B3-session-dark.png", "B3-settings-dark.png", "B3-workspace-dark.png"], "note": "cmd uimode night yes 三页走查后复位 no"},
+    "B4": {"channel": "U", "result": "PASS", "evidence": ["B4-session-ime.png", "B4-session-no-ime.png"], "note": "IME 弹出输入框不被遮不被压"},
+    "B5": {"channel": "U", "result": "PASS", "evidence": ["B2b-B5-workspace-bounds.png", "B2b-B5-session-before.png"], "note": "420dpi 48dp=110px; 工作区4可点短边126-171, 会话页6可点全部>=126"},
+    "B6": {"channel": "U", "result": "PASS", "evidence": ["B6-workspace-truncation.png"], "note": "超长 cwd 截断非撑爆"},
+    "B7": {"channel": "U", "result": "PASS", "evidence": ["B2b-B7-nav-workspace.png", "B2b-B7-nav-sessionlist.png", "B2b-B7-daemon-down.png", "B2b-B7-recovered.png"], "note": "列表转场 + daemon 断连重连中…可见 + 恢复"},
+    "B8": {"channel": "U", "result": "PASS", "evidence": ["B2b-B8-five-states.png", "B2b-B8-done-badge.png"], "note": "五态 content-desc 全部非空: 未知/需人/空闲/工作中/完成; daemon WS 实证 blocked/working/idle/done"},
+    "C1": {"channel": "U+H", "result": "PASS", "evidence": ["B2b-C1-tab-complete.png", "B2b-C1-ctrl-c-final.png", "B2b-C1-arrows.png", "B2b-C1-left-right-arrows.png"], "note": "七键逐键+效果对账: Esc收到0x1b/Ctrl-C终止sleep/Tab补全cwd/UpDown历史/LeftRight行内移动"},
+    "C2": {"channel": "U+H", "result": "PASS", "evidence": ["B2b-C2-multiline-draft.png", "B2b-C2-multiline-sent.png"], "note": "3行块整段一次注入: 一个prompt后连贴三echo并连出三输出"},
+    "C3": {"channel": "U", "result": "PASS", "evidence": ["B2b-C3-settings-repair-entry.png", "B2b-C3-repair-filled.png", "B2b-C3-pairing-screen.png"], "note": "设置→重新配对→换地址192.168.31.116:19983→连接→重连工作区列表"},
+    "C5(U)": {"channel": "U", "result": "PASS", "evidence": [], "note": "配对/工作区/会话列表/会话页 UI 文案全中文"},
+    "C6(菜单)": {"channel": "U", "result": "PASS", "evidence": ["B2b-C6-add-menu-camera.png", "B2b-C6-camera-permission.png", "B2b-C6-camera-denied-visible.png"], "note": "＋菜单含拍照/从相册选择; 点拍照触发相机权限弹窗; 拒绝显示可见错误"},
+    "D5": {"channel": "U", "result": "PASS", "evidence": ["B2b-D5-unreachable-visible.png", "B2b-D5-wrong-token-visible.png"], "note": "四失败路径均有限时间可见: 不可达1s/错token1s/相机拒绝即时/断连<3s; token不上屏掩码••••••••••"}
+  },
+  "positive_control": {
+    "uiautomator_fake_node": "每次 dump 断言 assert_never_exists 计数=0, 全部通过",
+    "screenshot_dimensions": "30张 B2b-*.png + 17张 B2-*.png + 8张 B3/B4/B6 全部 1080x2400 非纯色",
+    "device_boot": "getprop sys.boot_completed=1",
+    "tmux_capture_nonempty": "每键每命令 capture-pane -e 非空含预期"
+  },
+  "unverified": [
+    "真实相机扫码/拍照（AVD 无 camera HAL，归真机）",
+    "Doze/厂商 ROM 杀后台（A10/A11/A12 真机深度）",
+    "真实锁屏策略/通知投递渠道（真机）",
+    "E1 捏合手势实机（辅法未果，归真机）"
+  ],
+  "deviation": [
+    "隔离 daemon 初启未设 AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS 误扫生产舰队 — 已用该 env 限定隔离 socket 目录解决",
+    "模拟器崩溃重启：SDK emulator 目录不完整，改用 /opt/homebrew/share/android-commandlinetools/emulator/emulator",
+    "blocked 夹具 sleep 到期无后代致状态判 unknown — 重跑夹具脚本恢复（夹具生命周期非产品）",
+    "done 态为 working→idle 瞬态边缘，用 0.8s 间隔轮询捕获"
+  ],
+  "new_defects": [],
+  "report": "e2e/artifacts/stage4-execution/REPORT-B2.md"
+}

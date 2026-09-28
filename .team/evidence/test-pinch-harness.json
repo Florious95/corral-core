@@ -1,0 +1,60 @@
+{
+  "task_id": "test-pinch-harness",
+  "status": "pass_with_instrumented_red",
+  "result_id": "res_0dfcbbdeb4e0",
+  "agent": "w-pinch-harness",
+  "summary": "交付长期 JVM/Robolectric 真双指捏合回归门（TermSurfacePinchGestureTest），并判定 v2 捏合功能未坏、旧 adb /dev/input 注入手段不足。规范多指 MotionEvent 序列（ACTION_DOWN → ACTION_POINTER_DOWN → ACTION_MOVE x3 → ACTION_POINTER_UP → ACTION_UP，双稳定 pointer id、finger toolType、touchscreen source、非零 pressure/size、坐标真实变化）喂给 TermSurfaceView.onTouchEvent 后，ScaleGestureDetector 正常进入/退出 isInProgress，TermViewPresenter.cellWidth/cellHeight 增大。instrumented 层设备运行保留为红，未冒充通过。",
+  "origin": {
+    "trigger": "用户否掉了 leader 的手测方案",
+    "user_words": "假如说没有找到好的办法去测的话，那以后这个东西回归了，它也发现不了。",
+    "leader_error": "leader 原打算把捏合判定甩给用户真机手测。手测只能回答「现在坏没坏」，回答不了「以后坏了谁来发现」。用户的判断正确，本任务因此立案：先补测试能力，再谈修复。"
+  },
+  "verdict": {
+    "question": "v2 捏合是功能真坏，还是取证手段不足",
+    "answer": "取证手段不足（读法二）。功能未坏。",
+    "evidence": [
+      "JVM 层：规范双指序列使 ScaleGestureDetector 进入/退出且 presenter 字格改变",
+      "独立佐证：用户在真机上实测报告「捏合看起来完全正常」"
+    ],
+    "consequence": "base-v2-gate 的 blocking_finding「v2-pinch-inert」据此解除。D-28 / D-29 / D-31 / D-34 四条解除挂起。此前 R5「注入真实双指后前后截图 SHA-256 全等」是注入未构成 App 可识别手势的证据，不是功能坏的证据。"
+  },
+  "capability_delivered": {
+    "jvm_guard": "app/app/src/test/kotlin/dev/agentmirror/app/termview/TermSurfacePinchGestureTest.kt —— 长期回归哨兵，必须留在常规 JVM 门内。破坏 View 的 scale-detector→presenter 接线会使其失败。",
+    "coverage": "守住「App 自身手势处理逻辑」这一层：以后谁改坏捏合接线，无需人手指即可发现。",
+    "not_covered": "不覆盖 View/Window/触摸事件投递这一层。该层目前仍无自动化守门。"
+  },
+  "instrumented_red": {
+    "status": "RED / unresolved，非通过",
+    "what_was_built": "test-only PinchHarnessInstrumentation，零额外 Gradle 依赖，拉起隔离 ComponentActivity 承载真实 TermSurfaceView，调 UiAutomation.injectInputEvent(event, true) 发送同一多指序列。编译 / 安装 / 执行三步均通。",
+    "observed": "每次 injectInputEvent 均返回 true，但 presenter 字格保持 10x20 → 10x20 未变。",
+    "undetermined": "未能区分是 window dispatch/focus、事件时序，还是 harness 自身问题；两次运行预算用尽即停，未继续猜测。",
+    "landmine": "⚠️ `am instrument` 对该自定义 runner **即使结果包 pinch_harness=FAIL 也返回 shell exit 0**。任何自动化若只看退出码，此测试将永远假绿。判真伪必须读 INSTRUMENTATION_RESULT 包里的字段，不能读 shell 退出码。本工程已被「假绿」坑过多次，此条必须在 instrumented 层被提升为必需门之前解决。"
+  },
+  "tests": [
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests dev.agentmirror.app.termview.TermSurfacePinchGestureTest", "rc": 0, "note": "JVM 守门 PASS，日志 jvm-focused.log"},
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest", "rc": 0, "note": "全量 PASS，含强制回归门 TermSurfaceSessionBindingRegressionTest，日志 jvm-full.log"},
+    {"argv": "cd app && env -u TEAM_AGENT_* ./gradlew :app:assembleDebugAndroidTest", "rc": 0, "note": "androidTest 构建 PASS"},
+    {"argv": "adb -s emulator-5554 shell am instrument -w dev.agentmirror.app.test/dev.agentmirror.app.termview.PinchHarnessInstrumentation", "rc": 0, "note": "⚠️ shell exit 0 但 INSTRUMENTATION_RESULT: pinch_harness=FAIL —— 实为 RED"}
+  ],
+  "leader_verification": {
+    "done": [
+      "席位未冒充通过：instrumented 红态如实上报并写入 RESULT.md，status 自报为 pass_with_instrumented_red",
+      "守重试预算：第三次编译前主动向 leader 请示授权，未擅自加码",
+      "零产品代码改动、未改构建配置、未碰真实 tmux 与生产 daemon"
+    ],
+    "boundary_accepted": "JVM 层守门已足以承担回归哨兵职责；instrumented 层判为加分项而非必需项，红态如实封账不强行转绿。"
+  },
+  "open_followups": [
+    "instrumented 层若要提升为必需门：需先诊断 window focus / 事件投递，并让 runner 输出驱动非零自动化判定（不得依赖 am instrument 的 shell 退出码）",
+    "模拟器手势注入不可靠已影响多条判定：R5 捏合（本任务已澄清）、D-36 上滑（基线报「画面完全不动」，用户真机可拉一段，同源假象）。凡涉触控手势的模拟器结论，在注入通路修好前一律不得单独作为判据。"
+  ],
+  "artifacts": [
+    "e2e/artifacts/pinch-harness/RESULT.md",
+    "e2e/artifacts/pinch-harness/jvm-focused.log",
+    "e2e/artifacts/pinch-harness/jvm-full.log",
+    "e2e/artifacts/pinch-harness/androidtest-build-final.log",
+    "e2e/artifacts/pinch-harness/instrumented-runtime-final.log",
+    "app/app/src/test/kotlin/dev/agentmirror/app/termview/TermSurfacePinchGestureTest.kt"
+  ],
+  "at": "2026-08-12"
+}

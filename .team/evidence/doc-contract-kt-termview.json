@@ -1,0 +1,111 @@
+{
+  "task_id": "doc-contract-kt-termview",
+  "status": "pass",
+  "seat": "w-doc-kt-termview",
+  "pkg": "dev.agentmirror.app.termview",
+  "summary": "核实并改写 7 条不实注释（形态：①虚构消费方/描述已不存在行为 2 条、D-14 同形态（注释称界面上有按钮而按钮不存在）1 条、半真半假探针描述 2 条、旧行为残留 2 条），补 8 个 @contract 四标签齐，消 0 条 T3-4 漂移（本包 import 图无跨 wiki 包依赖边，deps=[]），单包硬判 exit 0、模块测试 43 例全绿、全仓库 check exit 0，故意破坏阳性对照 exit 1 精确指向 GlyphRunBuilder.kt:44 后还原 exit 0。追加：archwiki 扫描根修复后 dev.agentmirror.terminal 进入包图，新暴露 1 条 T3-4 漂移（import 了却未声明 @consumes），已在包级 KDoc（PackageDoc.kt）补 @consumes dev.agentmirror.terminal；三条 acceptance 重跑全绿（19 包）。再追加：复核席 w-doc-verify4 指出 TermViewPresenter init 注释残留「60fps 增量刷新数据源」——与已改的脏区重绘条同源假话，已连同 pendingDamage 字段、takeDamage KDoc 两处同类措辞一并改实。",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.termview",
+      "rc": 0,
+      "note": "补 @consumes + 窄修后重跑：扫描 19 包，T3-4 PASS"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "note": "补 @consumes + 窄修后重跑：43 例全绿"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "补 @consumes + 窄修后重跑：扫描 19 包，全仓库 exit 0"
+    }
+  ],
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/termview/PackageDoc.kt",
+    "app/app/src/main/java/dev/agentmirror/app/termview/TermSurfaceView.kt",
+    "app/app/src/main/java/dev/agentmirror/app/termview/GlyphFontProvider.kt",
+    "app/app/src/main/java/dev/agentmirror/app/termview/GlyphProbe.kt",
+    "app/app/src/main/java/dev/agentmirror/app/termview/GlyphRunBuilder.kt",
+    "app/app/src/main/java/dev/agentmirror/app/termview/GlyphFallbackPolicy.kt",
+    "app/app/src/main/java/dev/agentmirror/app/termview/TermViewPresenter.kt"
+  ],
+  "rewritten": [
+    {
+      "symbol": "TermSurfaceView",
+      "kind": "class KDoc",
+      "original_issue": "KDoc 称「每帧只重绘 presenter 给出的脏逻辑行区间（60fps 工作量 = 脏行数而非全屏）」——描述的是「脏区精确重绘」的旧行为，现实现为整帧全窗口重绘：doFrame 里 `while (p.takeDamage().isNotEmpty()) Unit` 把脏区排空即弃（仅当画面已变化的触发信号），随后 invalidate()；onDraw 对 `p.window` 全部可见行逐行 drawLine。类 KDoc 与实现不符。",
+      "evidence": "TermSurfaceView.doFrame（frameCallback）取走即弃脏区后整帧 invalidate；onDraw `for (logical in win)` 画窗口全部行；TermViewFrameWakeTest/TermViewPresenterTest 佐证脏区为触发信号而非重绘内容。",
+      "rewritten_to": "改 KDoc 为「帧循环纯数据驱动：presenter 的脏区只作\"画面已变化\"的触发信号（TermViewPresenter.takeDamage 排空即弃，防缓冲无界增长），之后整帧重绘可见窗口全部行（每帧工作量 = 窗口行数，非脏行数，006）」"
+    },
+    {
+      "symbol": "TermSurfaceView.backToBottomLabel 块注释",
+      "kind": "行内注释",
+      "original_issue": "onDraw 内 `// 回到底部悬浮按钮（锁定历史时显示）`——D-14 同形态：声称视图内存在该悬浮按钮，但 backToBottomLabel 全仓库唯一两处引用是声明（line 66）与读（line 200），无任何赋值点，本块永不走（恒为 null）。视图内按钮实际不存在；真实回到底部入口在 session 层 Compose。",
+      "evidence": "grep 全仓库 backToBottomLabel 仅 termview 包内声明+读取两处，无赋值；SessionScreen.kt:204 读 SessionViewModel.showBackToBottom 渲染 Compose 悬浮钮。",
+      "rewritten_to": "改注释为「视图内\"回到底部\"悬浮钮为历史遗留死代码：backToBottomLabel 全仓库无赋值点，本块永不走；实际回到底部入口是 session 层 Compose 悬浮钮（读 `SessionViewModel.showBackToBottom`）」"
+    },
+    {
+      "symbol": "TermSurfaceView.onDraw",
+      "kind": "方法注释",
+      "original_issue": "`/** 每帧：清屏、铺脏行背景、按同色 run 合并画前景。 */` 残留「脏行」描述，onDraw 实际铺窗口全部行背景（与 doFrame 全窗口重绘同根）。",
+      "evidence": "onDraw 主体 `for (logical in win) drawLine(...)` 遍历可见窗口全部行。",
+      "rewritten_to": "改为「每帧：清屏、铺可见窗口全部行背景、按同色 run 合并画前景。」"
+    },
+    {
+      "symbol": "GlyphFontProvider",
+      "kind": "class KDoc",
+      "original_issue": "KDoc 首句称「并用真实 Paint.hasGlyph 实现 GlyphProbe」——半真半假：MONO 槽的判定不是 Paint.hasGlyph 而是 ASCII 区间预判（codepoint in 0x20..0x7E），同文件 6 行后自己的 KDoc 也写明「MONO 的判定**不是** hasGlyph」；只有 SYSTEM_FALLBACK/POWERLINE 槽用真实 Paint.hasGlyph。首句与实现/自身后续段落自相矛盾。",
+      "evidence": "GlyphFontProvider.hasGlyph 实现：GlyphSlot.MONO -> `codepoint in 0x20..0x7E`；SYSTEM_FALLBACK/POWERLINE -> systemPaint/powerlinePaint.hasGlyph(oneChar(cp))。",
+      "rewritten_to": "改为「为 GlyphSlot 三槽位各造一支 Paint，并实现 GlyphProbe（Android 层的运行时字形判定，替换单测假探针）：GlyphSlot.MONO 槽按 ASCII 原生等宽预判，系统/Powerline 槽用真实 Paint.hasGlyph 实测」"
+    },
+    {
+      "symbol": "GlyphProbe",
+      "kind": "fun interface KDoc",
+      "original_issue": "KDoc 称「Android 层由 GlyphFontProvider 用真实 Paint.hasGlyph 实现」——与 GlyphFontProvider 同根的半真半假：MONO 槽按 ASCII 原生等宽预判而非 Paint.hasGlyph（实证 fallback 字形 advance 不配格宽）。",
+      "evidence": "GlyphFontProvider.hasGlyph 实现同上；GlyphFallbackPolicy.resolve 对 ASCII 可打印连探针都不调。",
+      "rewritten_to": "改为「策略只依赖这个接口做回退决策（纯 JVM 可测）；Android 层由 GlyphFontProvider 实现：GlyphSlot.MONO 槽按 ASCII 原生等宽预判（非 Paint.hasGlyph，实证 fallback 字形 advance 不配格宽），系统/Powerline 槽用真实 Paint.hasGlyph 实测；单测用假探针编码真机字体覆盖事实（Field 实证）」"
+    },
+    {
+      "symbol": "TermViewPresenter.init 注释 + pendingDamage 字段 + takeDamage KDoc",
+      "kind": "行内注释/字段 KDoc/方法 KDoc（同源三处）",
+      "original_issue": "init 注释称脏区缓存为「（60fps 增量刷新数据源）」，pendingDamage 字段 KDoc 称「待重绘的逻辑行区间」，takeDamage KDoc 称「取当前待重绘的逻辑行区间」——同一句假话的残留副本：暗示渲染层据此做增量/局部重绘。实际渲染层拿到脏区后取走即弃（仅作排空/唤醒信号），整帧全窗口重绘（TermSurfaceView.doFrame + onDraw 对 p.window 全行 drawLine）。复核席 w-doc-verify4 指出，与本轮已改的 TermSurfaceView 类 KDoc「脏区精确重绘」条同源。",
+      "evidence": "TermViewPresenter.markScreenRowsDirty 缓存后触发 onFrameRequested（唤醒信号）；TermSurfaceView.doFrame `while (p.takeDamage().isNotEmpty()) Unit` 取走即弃后 invalidate()；onDraw 遍历 p.window 全部行。TerminalEmulator 的 DamageListener 是真实 API，脏区真实回调——只是渲染层不据此局部重绘。",
+      "rewritten_to": "init 注释改为「把屏幕脏行换算为逻辑行区间后缓存，作\"画面已变化\"的数据驱动唤醒信号（缺陷①：增量流到达的唯一唤醒点）。渲染层不据此局部重绘——View 帧回调取走即弃（仅排空缓冲防无界增长），实际整帧全窗口重绘」；pendingDamage 字段改为「内核脏区换算来的逻辑行区间缓冲（\"画面已变化\"信号载体，非局部重绘清单——渲染层整帧全窗口重绘，View 帧回调取走即弃）」；takeDamage KDoc 改为「取当前缓存的逻辑行区间…渲染层整帧全窗口重绘，本返回值仅作\"画面已变化\"的排空信号，不用于局部重绘」。保住「接管内核脏区回调、换算为逻辑行区间后缓存」真事实，只纠正下游用途描述。"
+    }
+  ],
+  "contracts_added": [
+    "GlyphRunBuilder.build（@pre none / @post 空输入返回空表、同槽位聚段、段起列为段首格列 / @err none / @inv 各码点占格宽度不变、总列宽==CharWidth 宽度之和）",
+    "GlyphFallbackPolicy.resolve（@pre none / @post 零宽/控制→MONO 不进缓存、ASCII 可打印→MONO 连探针都不调、其余按 MONO→SYSTEM_FALLBACK→POWERLINE 回退、全链皆缺保底 MONO / @err none / @inv 按码点缓存终身复用）",
+    "TermViewPresenter.window（@pre none / @post 长度恒为 emulator.rows、顶部钳制/底部钳制 / @err none / @inv 跟随态贴底、锁定态顶==冻结 topLine）",
+    "TermViewPresenter.onScrollBy（@pre deltaLines 任意整数、正=向更早滚 / @post 顶行平移钳制、触底恢复跟随、必触发 onFrameRequested / @err none / @inv topLine 恒为 null 或冻结于 [0,maxTop]）",
+    "TermViewPresenter.onScrollToBottom（@pre none / @post topLine 置 null、必触发 onFrameRequested / @err none / @inv none）",
+    "TermViewPresenter.onViewportSizeChanged（@pre none / @post 更新视口像素、行列不一致经 onResizeRequest 上抛 / @err none / @inv 像素或字格非正不做换算）",
+    "TermViewPresenter.onFontSizeChanged（@pre newCellWidth/newCellHeight 为正整数 / @post 更新字格、行列变化上抛、必触发 onFrameRequested / @err none / @inv none）",
+    "TermViewPresenter.takeDamage（@pre none / @post 返回待重绘区间并清空、裁剪到 window 内并合并成最小覆盖集 / @err none / @inv 锁内只取走置空最小临界区）"
+  ],
+  "contracts_skipped_reasoning": "GlyphSegment（纯值对象）、GlyphSlot（纯值枚举）、ANSI_COLORS/XTERM_256（纯常量表）、GlyphProbe（接口）、TermSurfaceView（薄 Android 层，无自有契约面）按「不为凑数而标」原则不标 @contract。",
+  "consumes_added": [
+    "dev.agentmirror.terminal"
+  ],
+  "consumes_reasoning": "本包 import 图唯一内部依赖为 dev.agentmirror.terminal（:terminal 内核模块，GlyphFallbackPolicy/GlyphRunBuilder/TermSurfaceView/TermViewPresenter 共 4 文件 10 处 import），无其他内部包依赖。archwiki 扫描根修复（KT_SEARCH 现含 app/terminal/src/main/kotlin）后 terminal 进入 wiki 包图，新暴露 1 条 T3-4 漂移，已在包级 KDoc（PackageDoc.kt）补 @consumes dev.agentmirror.terminal。",
+  "uncertain": [],
+  "deviation": [
+    {
+      "item": "T3-4 漂移 dev.agentmirror.terminal",
+      "reason": "非上一轮遗漏：上轮判断『本包 deps=[]，仅消费 :terminal 内核非 wiki 包』在当时正确——archwiki 的 KT_SEARCH 原先只找 src/main/java，:terminal 模块在 app/terminal/src/main/kotlin/，dev.agentmirror.terminal 整个模块此前对判据完全不可见，四项 T3 全为空通过。扫描根修复（w-doc-kt-terminal 故意破坏对照时发现）后 terminal 进入依赖图，全仓库新暴露 2 条 T3-4 漂移，其中本包 1 条。已在 PackageDoc.kt 补 @consumes dev.agentmirror.terminal 消除。"
+    },
+    {
+      "item": "TermViewPresenter init/pendingDamage/takeDamage 同源残留",
+      "reason": "复核席 w-doc-verify4 指出，与本轮已改的 TermSurfaceView 类 KDoc『脏区精确重绘』条同源：init 注释『60fps 增量刷新数据源』等三处仍暗示渲染层据此增量/局部重绘，而实际是整帧全窗口重绘。已一并改实（保留『接管内核脏区回调、换算为逻辑行区间后缓存』真事实，只纠正下游用途描述）。TerminalEmulator.kt 侧同类注释归 w-doc-kt-terminal，未越界。"
+    }
+  ],
+  "positive_control": {
+    "method": "删除 GlyphRunBuilder.build 的 @err 标签，重跑单包硬判，再还原",
+    "before_break_rc": 0,
+    "broken_rc": 1,
+    "broken_output": "T3-3 : FAIL — 契约标签完备：1 条违规\n  [T3-3] dev.agentmirror.app.termview  app/app/src/main/java/dev/agentmirror/app/termview/GlyphRunBuilder.kt:44  `@contract` — 缺契约标签: @err\n结果：未通过（exit 1）",
+    "restored_rc": 0,
+    "verdict": "判据真在扫本包：删标签必红且精确指向该符号；还原即绿。"
+  }
+}

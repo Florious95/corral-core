@@ -1,0 +1,21 @@
+{
+  "task_id": "fix-viewport-restore-d38",
+  "status": "reverted_no_deliverable",
+  "worker": "w-dev-d38",
+  "at": "2026-08-13",
+  "status_reason": "三版实现全部回退，任务无交付物。原为「有 intent 无 evidence」的虚假在途态，本记录用于关闭。",
+  "summary": "D-38 后台返回底部空黑。根因已闭合：onRealViewportChanged（回前台）在 IME 仍在屏时重算并上报，把被挤压的几何当成基线；onViewportSizeChanged（IME 收起）按 fix-ime-no-resize 不再上报，于是挤压值成为永久基线。",
+  "根因证据": {
+    "measured": "bottomMarginPx=106（健康值 6），5 秒后仍稳定",
+    "user_screenshot_match": "用户真机 1123px ≈ 56 行；140（视口行）− 84（已绘行）= 56，数值精确吻合"
+  },
+  "三版失败复盘": {
+    "doc": "docs/d38-three-attempts-postmortem.md",
+    "v1": "height + imeInset 相加——两个值取自不同时刻",
+    "v2": "在 imeBottom==0 时记录稳定高——而 imeBottom 恒为 0，因为 Compose 的 imePadding() 作用在兄弟节点上，终端 Box 是被布局挤小的，IME 从不覆盖该 View",
+    "v3": "改用 Compose isImeVisible 事件源——引入用户实测的点击输入框闪黑屏",
+    "共性": "Robolectric 建模不了 Compose insets 分发链；单测绿证明的是「如果输入按我们建模的方式来」"
+  },
+  "patch": "docs/reverted-to-v6/d38-viewport-restore.patch（65467 字节）",
+  "缺陷现状": "未修，已按用户裁定封存。根因认知已闭合，后继重做时不必再从零定位。"
+}

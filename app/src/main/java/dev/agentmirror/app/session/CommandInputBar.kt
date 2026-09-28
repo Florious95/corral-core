@@ -103,7 +103,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import dev.agentmirror.app.ui.components.GlassIconButton
+import dev.agentmirror.app.ui.components.ruledSurface
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 
 /** Source textarea height in dp: collapsed 32; focused `20 * expandLines + 12`. */
 internal fun sourceInputFieldHeightDp(focused: Boolean, expandedLines: Int): Int =
@@ -144,6 +146,9 @@ fun CommandInputBar(
     val glass = sessionDockGlassTokens()
     // 强调色一律走全 App 调色板的科技蓝（p.accent），⛔ 不用 dock 主题遗留的紫色 primary / accent*
     val p = LocalAppPalette.current
+    // 风格只换外壳（圆角薄片 / 直角固色）与描边、图标色；编辑器、焦点 / IME、展开高度与快捷钮几何一律不变。
+    val kit = LocalThemeSuite.current
+    val iconTint = if (kit.surfaces.isGlass) source.neutral400 else p.rowTitleText
     val keyboardController = LocalSoftwareKeyboardController.current
     val hostView = LocalView.current
     DisposableEffect(hostView) {
@@ -183,7 +188,11 @@ fun CommandInputBar(
         label = "inputFieldHeight",
     )
     val borderColor by animateColorAsState(
-        targetValue = if (focused) p.accent.copy(alpha = 0.85f) else glass.hairline,
+        targetValue = when {
+            !kit.surfaces.isGlass -> if (focused) p.accent else p.inputBorder
+            focused -> p.accent.copy(alpha = 0.85f)
+            else -> glass.hairline
+        },
         animationSpec = tween(
             durationMillis = SessionDockMotion.InputBorderMillis,
             easing = SessionDockMotion.Ease,
@@ -193,12 +202,18 @@ fun CommandInputBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .dockFlatGlass(
-                shape = RoundedCornerShape(22.dp),
-                fill = glass.fill,
-                hairline = borderColor,
-                topGlint = glass.topGlint,
-                bottomShade = glass.bottomShade,
+            .then(
+                if (kit.surfaces.isGlass) {
+                    Modifier.dockFlatGlass(
+                        shape = RoundedCornerShape(22.dp),
+                        fill = glass.fill,
+                        hairline = borderColor,
+                        topGlint = glass.topGlint,
+                        bottomShade = glass.bottomShade,
+                    )
+                } else {
+                    Modifier.ruledSurface(fill = p.inputBackground, stroke = borderColor, strokeWidth = kit.geometry.hairline)
+                },
             )
             .testTag("session-command-input"),
     ) {
@@ -234,7 +249,7 @@ fun CommandInputBar(
                             .testTag("session-shortcut-button")
                             .semantics { contentDescription = "快捷命令" },
                     ) {
-                        Text(">_", color = source.neutral400, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        Text(">_", color = iconTint, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     }
                 }
                 GlassIconButton(
@@ -245,7 +260,7 @@ fun CommandInputBar(
                 ) {
                     Icon(
                         DockIconPlus, contentDescription = "添加附件",
-                        modifier = Modifier.width(20.dp), tint = source.neutral400,
+                        modifier = Modifier.width(20.dp), tint = iconTint,
                     )
                 }
             }
@@ -375,15 +390,22 @@ private fun ShortcutGlassMenu(
     onSelect: (ShortcutCommand) -> Unit,
 ) {
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     Column(
         modifier = modifier
             .width(190.dp)
-            .dockFlatGlass(
-                shape = RoundedCornerShape(16.dp),
-                fill = glass.fill,
-                hairline = glass.hairline,
-                topGlint = glass.topGlint,
-                bottomShade = glass.bottomShade,
+            .then(
+                if (kit.surfaces.isGlass) {
+                    Modifier.dockFlatGlass(
+                        shape = RoundedCornerShape(16.dp),
+                        fill = glass.fill,
+                        hairline = glass.hairline,
+                        topGlint = glass.topGlint,
+                        bottomShade = glass.bottomShade,
+                    )
+                } else {
+                    Modifier.ruledSurface(fill = p.sheetBackground, stroke = kit.colors.headerRule, strokeWidth = kit.geometry.hairline)
+                },
             )
             .padding(vertical = 4.dp)
             .testTag("session-shortcut-menu"),

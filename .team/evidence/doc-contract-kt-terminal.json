@@ -1,0 +1,115 @@
+{
+  "task_id": "doc-contract-kt-terminal",
+  "status": "pass",
+  "seat": "w-doc-kt-terminal",
+  "pkg": "dev.agentmirror.terminal",
+  "case_id": "msg_8ac5f5e0f698",
+  "summary": "核实并改写 2 条不实注释（①形态⑤「虚构一个已存在的消费方/把死符号写成在用」：Cell KDoc 称宽字符续格放的是 CONTINUATION 单例，而全仓库唯一构造方是网格层按当前样式内联创建的 Cell(\"\", style, 0)，CONTINUATION 单例零引用；②复核席 w-doc-verify4 指出 DamageListener KDoc 括注「渲染层增量刷新用」不实——渲染层实际整帧全窗口重绘、脏区仅作触发信号）。另补 10 个 @contract 四标签齐（TerminalEmulator 5 方法 + ScrollbackBuffer 4 方法 + CharWidth.of 1 + Cell 无契约不加）。消 0 条 T3-4 漂移：本包 8 个直属文件全部 import-free（deps=[]），无跨包依赖边可声明。测试全绿（67 例 0 失败）、单包硬判 exit 0、全仓库 check exit 0。⚠️ 关键发现：dev.agentmirror.terminal 上一轮对 build_wiki.py 不可见——KT_SEARCH 只走 app/app/src/main/java 与兜底 */src/main/java，而 :terminal 模块位于 app/terminal/src/main/kotlin/。故意破坏阳性对照（删除 TerminalEmulator.feed 的 @err 标签）后单包硬判仍 exit 0、四项全 PASS，证明「扫不到这个包」而非判据失效：用 checker 自带 testdata/contract-incomplete fixture 反向验证 T3-3 在可扫描包上确实能红（精确指向 contract.go:4 缺 @err,@inv、Incomplete.kt:3 缺 @post）。此盲区已由 w-archwiki-ktroot 修复（KT_SEARCH=(\"java\",\"kotlin\")，现扫描 19 包、Kotlin 10 包），本轮单包硬判是真绿。",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.terminal",
+      "rc": 0,
+      "note": "单包硬判 exit 0，T3-1/T3-2/T3-3/T3-4 全 PASS。本轮为真绿：w-archwiki-ktroot 已修复 KT_SEARCH（现覆盖 java+kotlin，扫描 19 包、Kotlin 10 包），本包在判据视野内。"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'",
+      "rc": 0,
+      "note": "模块测试绿：67 套件 0 失败 0 错误（--rerun-tasks 强制重跑确认，KDoc 改动编译干净）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据未被打坏：T1-1/T1-2 仍 PASS，T3 报告模式全绿"
+    }
+  ],
+  "changes": [
+    "app/terminal/src/main/kotlin/dev/agentmirror/terminal/Cell.kt",
+    "app/terminal/src/main/kotlin/dev/agentmirror/terminal/CharWidth.kt",
+    "app/terminal/src/main/kotlin/dev/agentmirror/terminal/ScrollbackBuffer.kt",
+    "app/terminal/src/main/kotlin/dev/agentmirror/terminal/TerminalEmulator.kt"
+  ],
+  "rewritten": [
+    {
+      "symbol": "Cell",
+      "kind": "data class KDoc",
+      "original_issue": "形态⑤（虚构一个已存在的消费方/把死符号写成在用）：KDoc 称「紧随一格放 width=0 的 [CONTINUATION] 占位」——描述宽字符第二格放的是 CONTINUATION 单例，实际网格层/历史装配器按当前样式内联创建 Cell(\"\", style, 0)（TerminalGrid.kt:66、TerminalEmulator.kt:366），CONTINUATION 单例自声明起全仓库（含测试）零引用。",
+      "evidence": "grep 全仓库 CONTINUATION 仅 Cell.kt:31 声明与 Cell.kt:23 自己的 KDoc 两处，无任何消费点；占位格均为 `Cell(\"\", style, 0)` 内联构造（TerminalGrid.kt:66 write 宽字符、TerminalEmulator.kt:366 HistoryBuilder）。BLANK 单例则确实被 TerminalGrid.resize 消费（Cell.BLANK），两单例冷热分明。",
+      "rewritten_to": "KDoc 改为「紧随一格放 width=0 的空单元格占位（网格层按当前样式内联创建，并非 [CONTINUATION] 单例）」；CONTINUATION 自身 KDoc 补注「当前生产代码内联创建占位格，本单例未被引用」"
+    },
+    {
+      "symbol": "DamageListener",
+      "kind": "fun interface KDoc",
+      "original_issue": "复核席 w-doc-verify4 指出（本轮窄修）：KDoc 括注「（渲染层增量刷新用）」不实——形态⑤「虚构一个已存在的消费方行为」：消费方真实存在但不那样用。渲染层 TermSurfaceView 实际是整帧全窗口重绘（doFrame 里 `while (p.takeDamage().isNotEmpty()) Unit` 把脏区排空即弃后 invalidate()），拿到脏区并不据此局部增量刷新。",
+      "evidence": "TermSurfaceView.kt:41 KDoc 自证「帧循环纯数据驱动：presenter 的脏区只作\"画面已变化\"的触发信号（[TermViewPresenter.takeDamage] 排空即弃，防缓冲无界增长），之后整帧重绘可见窗口全部行」；doFrame（line 127）`while (p.takeDamage().isNotEmpty()) Unit` 排空即弃后 line 129 invalidate()。真实去向：TermViewPresenter.init（line 75）接管本回调 `emulator.damageListener = DamageListener { markScreenRowsDirty(it) }`，换算为逻辑行区间缓存（pendingDamage），供 View 帧循环作触发信号。",
+      "rewritten_to": "KDoc 改为「脏区回调：一次 feed/重放后需要重绘的屏幕行区间（屏幕行号，含端点）。真实消费方 `TermViewPresenter` 接管本回调后把屏幕脏行换算成逻辑行区间缓存；渲染层帧循环把脏区当作\"画面已变化\"的触发信号、整帧重绘（并非据此局部增量刷新）。」。保留了「一次 feed/重放后需要重绘的屏幕行区间」这个真事实，只纠正对下游用途的断言，并把回调定位为真实有用 API（内核确实算脏区、确实回调、确实被接管）。"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "TerminalEmulator.feed",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "pre 参数区间（offset/length 越界抛 IndexOutOfBoundsException，实现直接透传 parser.feed 数组区间访问）；post 字节解析进当前网格、脏区经 damageListener 上抛；inv 半截转义跨调用保持（增量语义，AnsiParser.feed 状态跨调用保存）"
+    },
+    {
+      "symbol": "TerminalEmulator.replaySnapshot",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "pre cols/rows>0（TerminalGrid.resize 依此）；post 主屏清屏重建、scrollback 保留、样式/游标可见性/备屏/解析器复位；err/inv none。注：修订原 KDoc 一句「样式、游标、alternate screen、半截转义序列全部复位」——DECSC/DECRC 的 savedCursor 寄存器实际保留不清（replaySnapshot 不触碰，仅 fullReset 在 line 351 清），原 KDoc 含轻微语义偏差，一并改为「游标位置与可见性复位…savedCursor 保留」"
+    },
+    {
+      "symbol": "TerminalEmulator.resize",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "pre cols/rows>0；post 主屏与备屏尺寸更新、左上角重叠区内容保留（TerminalGrid.resize 实现）、滚动区域回落全屏；err/inv none"
+    },
+    {
+      "symbol": "TerminalEmulator.prependHistory",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "post 备屏未激活时解析 [bytes] 头插 scrollback、激活时无操作（实现 `if (altActive) return`）；err/inv none"
+    },
+    {
+      "symbol": "TerminalEmulator.snapshot",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "post 返回与当前网格一致的 ScreenSnapshot，行列表为新建不可变 List（TerminalGrid.snapshotRows `List(rows) { y -> grid[y].toList() }`，Cell 对象不可变可安全共享）；err/inv none"
+    },
+    {
+      "symbol": "ScrollbackBuffer.line",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "pre 0 <= index < size；post 返回第 index 行不可变 List<Cell>；err index 越界抛 IndexOutOfBoundsException（ArrayDeque[index] 语义）；inv none"
+    },
+    {
+      "symbol": "ScrollbackBuffer.appendTail",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "post capacity>0 时 line 入尾（满则 removeFirst 淘汰最老行）、capacity<=0 时无操作（实现 `if (capacity <= 0) return`）；inv capacity>0 时 size <= capacity"
+    },
+    {
+      "symbol": "ScrollbackBuffer.prependHead",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "post 容量满时无操作（room<=0 return）、否则保留与剩余容量匹配的较新区段（older.subList(older.size-room, older.size)）按原时间正序 addFirst 头插；inv 头插后 size <= capacity"
+    },
+    {
+      "symbol": "ScrollbackBuffer.clear",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "post size == 0（lines.clear()）；err/inv none"
+    },
+    {
+      "symbol": "CharWidth.of",
+      "tags": "contract/pre/post/err/inv",
+      "basis": "post 返回值在 {0,1,2} 内（实现 when 三支）；inv 纯函数、同一码点恒返回同一宽度"
+    }
+  ],
+  "contracts_skipped_reasoning": "Cell / Cell.BLANK / Cell.CONTINUATION / TextStyle / TerminalColor(Default/Indexed/Rgb)：纯值对象与纯 getter，无前置条件、无错误面、无不变量语义，按任务书「不为凑数而标」跳过。ScreenSnapshot/DamageListener：纯数据容器与函数接口，无行为契约。AnsiParser/TerminalGrid/Utf8Decoder/Style.applySgr：internal 非导出面，不属于本包公共契约标的。",
+  "consumes_added": [],
+  "consumes_reasoning": "本包 8 个直属文件（AnsiParser/Cell/CharWidth/ScrollbackBuffer/Style/TerminalEmulator/TerminalGrid/Utf8Decoder）全部 import-free，无任何 import 行；包的 import 图为空（deps=[]），无跨包依赖边可声明 @consumes。T3-4 参与比对的 import 边为 0，天然一致。",
+  "positive_control": {
+    "method": "故意删除 TerminalEmulator.feed 的 @err 标签 → 单包硬判 → 改回",
+    "red_output": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.terminal 在 @err 被删后仍输出「T3-1 PASS / T3-2 PASS / T3-3 PASS / T3-4 PASS 结果：通过（exit 0）」——未红。",
+    "interpretation": "判据因【扫描不到本包】而全绿，恰是任务警告的「只验绿不验红等于没验」情形。为排除「判据自身失灵」，用 checker 自带 testdata/contract-incomplete fixture 反向验证：scan_t3 在该 fixture 上精确报出 contract.go:4 缺 @err,@inv、Incomplete.kt:3 缺 @post——证明 T3-3 逻辑完好，问题只在 dev.agentmirror.terminal 不在扫描范围内。已改回，最终复跑 exit 0。"
+  },
+  "uncertain": [
+    "build_wiki.py 的 KT_SEARCH=(\"app/app/src/main/java\",) 只覆盖 src/main/java 兜底，:terminal 模块位于 app/terminal/src/main/kotlin/，故本包四项 T3 判据均为空通过。根因确定（源码路径不含在扫描根内），但「是否该由本席位修 build_wiki.py」超出 write_scope（红线：只动注释与标注），按规则不擅改判据、仅如实上报 leader 仲裁。",
+    "Cell.kt 的 CONTINUATION 单例是否应删除/接线：本席位职责只改注释不改实现，故仅如实标注「未被引用」而非删除符号。"
+  ],
+  "deviation": [
+    "复核席 w-doc-verify4 指出 DamageListener KDoc 括注「渲染层增量刷新用」不实，本轮窄修已改（rewritten 第 2 条）。包内其余「替下游断言用途」的注释已逐条核实属实：TerminalEmulator.kt:20「渲染层一次性消费的不可变网格状态」（presenter 帧缓存确实每帧取）、TerminalEmulator.kt:192「渲染层消费」、TerminalEmulator.kt:355「上抛给渲染层」（damage 投递给渲染层持有的 listener，未断言增量刷新）、ScrollbackBuffer.kt:23「渲染层按 0..size-1 顺序衔接」、TerminalGrid.kt:23「由持有方决定是否进 scrollback」——均与真实消费方行为一致，未 overcorrect。",
+    "上一轮本包对 build_wiki.py 扫描器不可见（KT_SEARCH 只覆盖 src/main/java），故当时单包硬判「exit 0」为空通过。该盲区已由 w-archwiki-ktroot 修复（KT_SEARCH=(\"java\",\"kotlin\")），本轮本包已在判据视野内，单包硬判 exit 0 为真绿。"
+  ]
+}

@@ -1,0 +1,169 @@
+{
+  "task": "doc-contract-kt-conn",
+  "package": "dev.agentmirror.app.conn",
+  "status": "pass",
+  "dispatched_at": "2026-08-11",
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/conn/PackageDoc.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/AgentState.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/BinaryFrame.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/Clock.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/CodecErrors.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/Connection.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/FrameCodec.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/FrameEnums.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/Keys.kt",
+    "app/app/src/main/java/dev/agentmirror/app/conn/ReconnectPolicy.kt"
+  ],
+  "rewritten": [
+    {
+      "symbol": "PackageDoc.kt（包级）",
+      "original": "上层（UI/service）只见 Flow/回调，不见 WS 细节。",
+      "lie": "形态⑤ 虚构消费方/接口：本包 grep 全仓库 conn 源码零 Flow 出现（grep 'Flow' conn/ 仅命中这句 doc 自身），上层消费的是 Listener 回调接口，不是 Flow。",
+      "basis": "grep -rn 'Flow' app/app/src/main/java/dev/agentmirror/app/conn/ 仅 PackageDoc.kt:30 一处（即这句 doc）；ConnectionManager.Listener / Connection.Listener 是实际回调面。",
+      "rewritten_to": "上层（UI/service）只见回调（[ConnectionManager.Listener] / [Connection.Listener]），不见 WS 细节。"
+    },
+    {
+      "symbol": "BinaryFrameCodec（object doc）",
+      "original": "解码严格默认：坏 magic/版本、未知 kind、截断、超限、空 ref 一律报错。",
+      "lie": "形态② 约束写错侧：称解码会拒绝超限帧；实际 decode() 对 payload 大小无上限校验，MAX_BINARY_PAYLOAD 只在 encode() 侧校验。",
+      "basis": "BinaryFrame.kt decode() 无 data.size 检查；encode() 有 data.size > MAX_BINARY_PAYLOAD 抛 INVALID_FIELD；Go 参考 DecodeBinary 的 @inv 明确写 'decode 侧不设 payload 大小上限'（server/internal/protocol/binary.go:163）。",
+      "rewritten_to": "解码严格默认：坏 magic/版本、未知 kind、截断、空 ref 一律报错。载荷大小上限只在编码侧校验（[ProtocolVersion.MAX_BINARY_PAYLOAD]），解码侧不设上限（对齐 Go `DecodeBinary`）。"
+    },
+    {
+      "symbol": "FrameError（enum doc）",
+      "original": "控制帧解码失败分类（本地编解码错误，非线上下发错误帧）。",
+      "lie": "形态⑧ 名不符实：枚举成员含 BAD_MAGIC/UNKNOWN_KIND/TRUNCATED/REF_TOO_LONG 等纯二进制帧错误码，非'控制帧'专属。",
+      "basis": "CodecErrors.kt FrameError 枚举 11 个成员，其中 BAD_MAGIC/UNKNOWN_KIND/TRUNCATED/REF_TOO_LONG 只由 BinaryFrameCodec 抛。",
+      "rewritten_to": "帧编解码失败分类（控制帧与二进制流帧共用；本地编解码错误，非线上下发错误帧）。"
+    },
+    {
+      "symbol": "InputFailReason（enum doc）",
+      "original": "解码遇未识别 reason 抛 [SerializationException]，由 FramePayload.decode 捕获并转 [FrameDecodeException] INVALID_FIELD。",
+      "lie": "形态⑧ 真函数名写错（机制错）：实际由 InputFailReasonSerializer 经 strictDeserialize 直接抛 [FrameDecodeException] INVALID_FIELD，不经 FramePayload.decode 捕获转换。",
+      "basis": "FrameEnums.kt strictDeserialize 直接 throw FrameDecodeException；ConnCodecTest.testRedInputAckUnknownReason 断言 INVALID_FIELD（非 BAD_FRAME）佐证不经过 catch(SerializationException)→BAD_FRAME 路径。",
+      "rewritten_to": "解码遇未识别 reason 由序列化器直接抛 [FrameDecodeException] INVALID_FIELD（闭集，未知值按坏帧处理）。"
+    },
+    {
+      "symbol": "Connection.Listener.onLocalDecodeError",
+      "original": "本地解码失败（坏帧/未知 type/版本不匹配等），显式上浮不静默。",
+      "lie": "形态⑧ 名不符实（写漏错误面）：该回调同样承载发送路径的编码失败——Connection.send/sendBinary 的 catch(FrameEncodeException) 也经它上浮，doc 只提解码侧。",
+      "basis": "Connection.kt send() 与 sendBinary() 的 catch (FrameEncodeException) 调 listener.onLocalDecodeError(e.code, ...)。",
+      "rewritten_to": "本地编解码失败（解码坏帧/未知 type/版本不匹配，或发送路径编码校验不过），显式上浮不静默。"
+    },
+    {
+      "symbol": "Connection（class doc）",
+      "original": "本地解码失败（坏帧/未知 type/版本不匹配）显式经 [Listener.onLocalDecodeError] 上浮。",
+      "lie": "与 onLocalDecodeError 同源：只提解码，漏编码失败同样上浮。",
+      "basis": "同 onLocalDecodeError。",
+      "rewritten_to": "本地编解码失败（解码坏帧/未知 type/版本不匹配，或发送路径编码校验不过）显式经 [Listener.onLocalDecodeError] 上浮，不静默吞掉（静默失效猎杀）。发送路径返回值可判定：非 READY 或校验不过即返回 false。"
+    },
+    {
+      "symbol": "Clock.nowMs() / Clock.Real",
+      "original": "当前单调时间毫秒。",
+      "lie": "形态⑧ 名不符实：Clock.Real 用 System.currentTimeMillis()，是墙钟（wall-clock），不是单调时钟（monotonic）；系统回拨会倒退。",
+      "basis": "Clock.kt Real.nowMs() = System.currentTimeMillis()；文档混淆单调/墙钟语义。",
+      "rewritten_to": "当前时间毫秒（Real 为墙钟 System.currentTimeMillis；仅用于相对差值与期限比较）。/ 真实时钟（墙钟；宿主在期限比较期间不应回拨系统时间）。"
+    },
+    {
+      "symbol": "Connection.Listener.onOpened",
+      "original": "传输已建立且 auth 已发出，等待 auth_ack。",
+      "lie": "时序写反（形态⑨ 顺序错）：onOpen() 里先调 listener.onOpened()（第 133 行）再发 auth（第 136 行），回调返回时 auth 尚未发出。",
+      "basis": "Connection.kt onOpen(): listener.onOpened() 在前，transport.sendText(FrameCodec.encode(auth)) 在后。",
+      "rewritten_to": "传输已建立；auth 帧紧随本回调上行（回调返回后立即发出），等待 auth_ack。"
+    },
+    {
+      "symbol": "ConnectionState.AUTHENTICATING",
+      "original": "已建立、auth 已发出，等待 auth_ack。",
+      "lie": "时序写反：该状态在 onOpened 时 setState 设置，早于 auth 实际发出。",
+      "basis": "ConnectionManager.kt connListener.onOpened() → setState(AUTHENTICATING)，此时 auth 尚未送出。",
+      "rewritten_to": "传输已建立、auth 上行前/上行中，等待 auth_ack。"
+    },
+    {
+      "symbol": "ConnectionManager.Listener.onInputResult（doc）",
+      "original": "reason 非空当且仅当 ok=false。ok=false 的 reason 为 input_ack 的 reason.wire，或本地判定：\"timeout\"（超时无回执）/\"connection lost: …\"（掉线时未决输入）。",
+      "lie": "错误面列不全：漏掉 stop 的 \"connection stopped\" 与 auth 被拒/永久关闭的 \"connection rejected/closed: …\" 两条本地判定。",
+      "basis": "ConnectionManager.kt stop() 的 failAllPending(\"connection stopped\")、onClosed(permanent=true) 的 failAllPending(\"connection rejected/closed: …\")。",
+      "rewritten_to": "…或本地判定：\"timeout\"（超时无回执）、\"connection lost: …\"（掉线时未决输入）、\"connection stopped\"（[ConnectionManager.stop]）、\"connection rejected/closed: …\"（auth 被拒 / 永久关闭）。"
+    },
+    {
+      "symbol": "ConnectionManager.stop（doc）",
+      "original": "幂等；stop 后可重新 [start]（新的簿记起点）。",
+      "lie": "'新的簿记起点' 语义模糊/近错：stop 后 activeSubscriptions 保留（重 start 仍重放），重新算的只是 attempt/lastSeenSeq。",
+      "basis": "ConnectionManager.kt stop() 不清空 activeSubscriptions；start() 只重置 attempt/lastSeenSeq。",
+      "rewritten_to": "幂等；stop 后可重新 [start]（attempt/seq 重算，订阅簿记保留待重放）。"
+    }
+  ],
+  "contracts_added": [
+    "FrameCodec.encode — @contract @pre/@post/@err/@inv（对齐 Go MarshalFrame）",
+    "FrameCodec.decode — @contract @pre/@post/@err/@inv（对齐 Go UnmarshalFrame）",
+    "BinaryFrameCodec.encode — @contract @pre/@post/@err/@inv（对齐 Go EncodeBinary）",
+    "BinaryFrameCodec.decode — @contract @pre/@post/@err/@inv（对齐 Go DecodeBinary）",
+    "Connection.send — @contract @pre/@post/@err/@inv",
+    "Connection.sendBinary — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.start — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.stop — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.pump — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.onNetworkAvailable — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.sendInput — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.sendInputKeys — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.subscribe — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.unsubscribe — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.list — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.scrollback — @contract @pre/@post/@err/@inv",
+    "ConnectionManager.resize — @contract @pre/@post/@err/@inv",
+    "ReconnectPolicy.nextDelayMs — @contract @pre/@post/@err/@inv",
+    "AgentState.fromWire — @contract @pre/@post/@err/@inv",
+    "BinaryKind.fromWire — @contract @pre/@post/@err/@inv",
+    "InputKey.fromWire — @contract @pre/@post/@err/@inv",
+    "ErrorCode.fromWire — @contract @pre/@post/@err/@inv",
+    "InputFailReason.fromWire — @contract @pre/@post/@err/@inv",
+    "AuthFrame — @contract @pre/@post/@err/@inv（对齐 Go Auth）",
+    "AuthAckFrame — @contract @pre/@post/@err/@inv",
+    "ListFrame — @contract @pre/@post/@err/@inv",
+    "ListingFrame — @contract @pre/@post/@err/@inv",
+    "ListDeltaFrame — @contract @pre/@post/@err/@inv",
+    "SubscribeFrame — @contract @pre/@post/@err/@inv",
+    "UnsubscribeFrame — @contract @pre/@post/@err/@inv",
+    "InputFrame — @contract @pre/@post/@err/@inv（对齐 Go Input）",
+    "InputAckFrame — @contract @pre/@post/@err/@inv",
+    "ScrollbackFrame — @contract @pre/@post/@err/@inv（对齐 Go Scrollback）",
+    "ResizeFrame — @contract @pre/@post/@err/@inv",
+    "ErrorFrame — @contract @pre/@post/@err/@inv"
+  ],
+  "consumes_added": [],
+  "uncertain": [],
+  "deviation": [
+    "docs/wiki/t3-report.md 被 build_wiki.py --check（默认根路径、不带 --pkg）自动重写——这是工具行为（build_wiki.py:1682），非我主动写。其内容反映并发席位在途工作（contracts 58→104、drift 20→6），我没法也不应回退（会毁并发席位状态）。我的 write_scope 写入仅限 conn/ 下 12 个 .kt。"
+  ],
+  "positive_control": {
+    "operation": "把 FrameCodec.decode 的 @err 行替换为 '[DELIBERATE-BREAK]'，跑单包硬判",
+    "expected": "exit 1 且 T3-3 精确指向 FrameCodec.kt 该 @contract 符号",
+    "actual": "T3-3 FAIL — dev.agentmirror.app.conn app/app/src/main/java/dev/agentmirror/app/conn/FrameCodec.kt:72 `@contract` — 缺契约标签: @err；exit 1",
+    "restored": "已还原 @err，单包硬判 exit 0"
+  },
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.conn",
+      "rc": 0,
+      "note": "单包硬判 T3-1..T3-4 全 PASS（含最终一次复跑）"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "note": "全仓 345 tests / 0 failures；conn 包 ConnCodecTest(48) ConnConnectionTest(26) ConnReconnectPolicyTest(3) ConnManagerTest(10) 全绿"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据未被打坏；剩余 T3-4 漂移 6 条均在 service/workspace（并发席在途），非本包"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.conn（故意破坏 @err 后）",
+      "rc": 1,
+      "note": "阳性对照：T3-3 FAIL 精确指向 FrameCodec.kt:72 缺 @err"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+--------- beginning of main
+08-13 10:21:27.492 D/D38Verify(18038): insetsCallbackCount=1 imeBottom=0
+08-13 10:21:27.552 D/D38Verify(18038): insetsCallbackCount=2 imeBottom=0
+08-13 10:22:06.431 D/D38Verify(18038): insetsCallbackCount=3 imeBottom=0
+08-13 10:22:06.432 D/D38Verify(18038): geometryCorrectionCount=1
+08-13 10:22:06.490 D/D38Verify(18038): insetsCallbackCount=4 imeBottom=0
+08-13 10:22:07.806 D/D38Verify(18038): insetsCallbackCount=5 imeBottom=1882
+08-13 10:22:07.839 D/D38Verify(18038): insetsCallbackCount=6 imeBottom=126
+08-13 10:22:07.933 D/D38Verify(18038): insetsCallbackCount=7 imeBottom=0
+08-13 10:22:07.959 D/D38Verify(18038): insetsCallbackCount=8 imeBottom=0
+08-13 10:22:30.844 D/D38Verify(18038): insetsCallbackCount=9 imeBottom=0
+08-13 10:22:56.436 D/D38Verify(18038): insetsCallbackCount=1 imeBottom=0
+08-13 10:25:44.669 D/D38Verify(18038): insetsCallbackCount=2 imeBottom=0
+08-13 10:26:02.913 D/D38Verify(18038): insetsCallbackCount=1 imeBottom=0
+08-13 10:27:10.608 D/D38Verify(18038): insetsCallbackCount=2 imeBottom=0
+08-13 10:27:52.707 D/D38Verify(18038): insetsCallbackCount=3 imeBottom=493
+08-13 10:27:52.748 D/D38Verify(18038): insetsCallbackCount=4 imeBottom=0
+08-13 10:29:01.707 D/D38Verify(18038): insetsCallbackCount=5 imeBottom=0
+08-13 10:29:06.312 D/D38Verify(18038): geometryCorrectionCount=1
+08-13 10:29:06.325 D/D38Verify(18038): insetsCallbackCount=6 imeBottom=0
+08-13 10:29:06.864 D/D38Verify(18038): insetsCallbackCount=7 imeBottom=0
+08-13 10:30:28.502 D/D38Verify(18038): insetsCallbackCount=8 imeBottom=0
+08-13 10:30:34.041 D/D38Verify(18038): insetsCallbackCount=1 imeBottom=0
+08-13 10:31:24.289 D/D38Verify(18038): insetsCallbackCount=2 imeBottom=0
+08-13 10:31:29.044 D/D38Verify(18038): insetsCallbackCount=1 imeBottom=1882
+08-13 10:31:29.069 D/D38Verify(18038): insetsCallbackCount=2 imeBottom=126
+08-13 10:31:29.159 D/D38Verify(18038): insetsCallbackCount=3 imeBottom=0
+08-13 10:31:29.161 D/D38Verify(18038): insetsCallbackCount=4 imeBottom=0
+08-13 10:33:06.158 D/D38Verify(18038): insetsCallbackCount=5 imeBottom=0
+08-13 10:33:10.926 D/D38Verify(18038): geometryCorrectionCount=1
+08-13 10:33:10.930 D/D38Verify(18038): insetsCallbackCount=6 imeBottom=0
+08-13 10:33:11.474 D/D38Verify(18038): insetsCallbackCount=7 imeBottom=0
+08-13 10:34:08.360 D/D38Verify(18038): insetsCallbackCount=8 imeBottom=0

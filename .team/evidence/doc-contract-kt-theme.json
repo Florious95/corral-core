@@ -1,0 +1,72 @@
+{
+  "status": "pass",
+  "task": "doc-contract-kt-theme",
+  "pkg": "dev.agentmirror.app.ui.theme",
+  "summary": "包内 10 个顶层 public 导出符号逐符号对照 KDoc 与实现、消费方、引用真实性与指向正确性核实。改写 2 条不实注释（brandPrimary / brandBackground，均为形态①/④「旧 API 残留 + 未接线的能力写成现状」：ui-redesign 提交 e00e41d 把 M3 深浅两套 primary 与深色 background 换成内联字面量后，这两个 token 成了孤儿导出，全仓库零消费点，原 doc 却仍写成活跃品牌色来源）。补 2 个契约（LocalStateTones / AgentMirrorTheme，均四标签齐全）。本包零内部包 import ⇒ 无本包 T3-4 漂移条目（报告里 workspace→theme 漂移属 workspace 包职责，非本包）。全部验收绿：单包硬判 exit 0、模块测试 3/3 绿、全仓库 check exit 0；阳性对照（故意删 @err 后 exit 1 并精确指向 Theme.kt:285）符合预期。",
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.ui.theme",
+      "rc": 0,
+      "note": "施工前基线即绿（leader 已实测）；施工后仍绿，T3-1..T3-4 全 PASS"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'",
+      "rc": 0,
+      "note": "StateTonesTest 3/3 通过（tests=3 failures=0 errors=0）"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据未被打坏；T3-1(tsnet TsnetInterfaceCodec) 与 T3-4(workspace 三条) 为既有/他包范围"
+    }
+  ],
+  "positive_control": {
+    "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.ui.theme",
+    "rc": 1,
+    "note": "故意删除 AgentMirrorTheme 注释块内 @err none 后硬判 exit 1，精确指向 T3-3 违规：Theme.kt:285 `@contract` — 缺契约标签: @err。改回后 exit 0。证明单包硬判真实扫描本包，非'扫不到而全绿'。",
+    "out": "[T3-3] dev.agentmirror.app.ui.theme  app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt:285  `@contract` — 缺契约标签: @err"
+  },
+  "changes": [
+    "app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt（仅注释与 @contract 标注，实现零改动）"
+  ],
+  "rewritten": [
+    {
+      "symbol": "brandPrimary",
+      "file": "app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt:47",
+      "morph": "形态①旧 API 残留 + 形态④未接线的能力写成现状",
+      "original": "「品牌主色：深蓝（终端深夜配色基调，与资源 colors.xml 一致）。」",
+      "why_inaccurate": "提交 e00e41d（ui-redesign, 018）已把 M3 深浅两套 colorScheme 的 primary 由 brandPrimary 换成内联字面量（深 0xFF9DBDFF / 浅 0xFF2F5DA8）；此后 brandPrimary 全仓库零消费点（grep 仅命中自身定义与 colors.xml 资源，M3 scheme 不再引用）。doc 却仍把它写成活跃品牌主色，把孤儿导出说成现状。",
+      "rewritten_as": "「历史品牌深蓝（0xFF1B2A4A，与资源 colors.xml 的 brand_primary 同值）。ui-redesign（018）后 M3 深浅两套 primary 均已改用独立取值，本 token 自彼时起无任何消费点——保留仅为资源一致性对照，不作配色来源。」"
+    },
+    {
+      "symbol": "brandBackground",
+      "file": "app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt:56",
+      "morph": "形态①旧 API 残留 + 形态④未接线的能力写成现状",
+      "original": "「品牌背景色：接近黑的深蓝，用于深色终端背景。」",
+      "why_inaccurate": "提交 e00e41d 已把深色 scheme 的 background 由 brandBackground 换成内联字面量 0xFF0B111D（近黑深蓝，与纯黑终端画布分层次）；brandBackground 自彼时起全仓库零消费点。终端画布底色由 TermSurfaceView.DEFAULT_BG 以同一字面量 0xFF0D1626 承载，但不经本 token 引用——原 doc 把'品牌背景色'写成深色终端背景的来源，实际已不是。",
+      "rewritten_as": "「历史品牌背景深蓝（0xFF0D1626）。ui-redesign（018）后深色 scheme 的 background 已改用 0xFF0B111D（近黑深蓝，与纯黑终端画布分层次）；终端画布默认底色由 TermSurfaceView.DEFAULT_BG 以同一字面量承载，但不经本 token 引用。本 token 自彼时起无任何消费点，保留仅为存档。」"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "LocalStateTones",
+      "file": "app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt:283",
+      "contract": "四标签齐全（@pre none / @post current 始终为可用 StateTones，未覆盖时取 LightStateTones / @err none / @inv 值非空默认 LightStateTones）",
+      "why": "staticCompositionLocalOf 的 current 有'未覆盖时取默认值、不崩溃'的真实后置保证，且被 StateBadge 的 LocalStateTones.current 消费——是 CompositionLocal 的取值契约"
+    },
+    {
+      "symbol": "AgentMirrorTheme",
+      "file": "app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt:285",
+      "contract": "四标签齐全（@pre none / @post 按 darkTheme 注入对应徽章色板与 scheme / @err none / @inv 注入的 LocalStateTones 与 colorScheme 同套）",
+      "why": "主题入口的实质契约：darkTheme 决定 scheme 与徽章色板的配对一致性（深=DarkStateTones，浅=LightStateTones），code 证实 if(darkTheme) 同源选择"
+    }
+  ],
+  "consumes_added": [],
+  "uncertain": [],
+  "deviation": [],
+  "notes": [
+    "逐符号确认方法：本包仅 Theme.kt 一文件，10 个导出符号（brandPrimary/brandBackground/Spacing/StateTone/StateTones/LightStateTones/DarkStateTones/LocalStateTones/MonoFontFamily/AgentMirrorTheme）。除上述 2 条外其余 8 个与实现逐项对照均一致：Spacing 的 xs..xl/pageH/rowV 值=码值且被 4 个消费包大量使用；StateTone/StateTones 三色语义与 @Immutable 符合；Light/DarkStateTones 值各自成对且与注释一致；MonoFontFamily=FontFamily.Monospace 且被 workspace/session/pairing 实际消费；LocalStateTones=staticCompositionLocalOf{LightStateTones} 与注释一致；AgentMirrorTheme 的 darkTheme→scheme/tone 配对与注释一致。文件头块注释'所有页面/组件禁止字面量颜色'经全仓库 grep 验证为真（Color( 字面量仅 TermSurfaceView 的终端渲染/ANSI 色板，非页面/组件层，不违背）。",
+    "本包零内部包 import（仅 androidx.*/Compose），故无本包 T3-4 漂移条目可消；报告中的 workspace→theme 漂移属 workspace 包席位职责，不在本包 write_scope。",
+    "只动注释与标注，实现零改动；未删任何 doc/标签；未 commit/push。"
+  ]
+}

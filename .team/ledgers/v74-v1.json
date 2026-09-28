@@ -1,0 +1,332 @@
+{
+  "schema_version": "ledger.v2",
+  "ledger_id": "ledger.v74.v1",
+  "run": {
+    "desired_state": "running"
+  },
+  "roles": {
+    "r.unk": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/unk-fix/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "v74-v1-unk",
+        "team": "grok-l2"
+      }
+    },
+    "r.noloop": {
+      "provider": "grok",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/noloop/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      },
+      "seat": {
+        "agent": "v74-v1-noloop",
+        "team": "grok-l2"
+      }
+    },
+    "r.leader": {
+      "provider": "human",
+      "seat_policy": "resident_reuse",
+      "artifact_landing": {
+        "path": ".team/nodes/v74-esc/",
+        "form": "committed"
+      },
+      "retirement_condition": {
+        "artifacts_persisted": true,
+        "ledger_updated": true
+      }
+    }
+  },
+  "tasks": {
+    "t.unk": {
+      "title": "收尾「新会话判未知」回归的 **Rust 侧**。契约 requirement-base/entries/074-无限刷新与未知回归收尾.md §2，根因见 068 §8。\nGo 侧 leader 已改完并全绿；Rust 侧 `classify_for` 也已同步改好，但 `cargo test -q` 仍红：`footer rows 2 < 3` —— 语料 `tools/nodeprobe/fixtures/titles.tsv` 里 footer 行少一条。\n⚠️ **成因交代**：leader 用 `git checkout titles.tsv` 回退时误删了一份未提交的 footer 语料，已凭报错原文恢复两条，**第三条内容不详**。\n⇒ 按 `server/internal/api/l2detect_footer_test.go` 与 `tools/nodeprobe/src/classify.rs` 的**实际用例**把第三条补回来。⛔ **不要凭空编一条让计数达标** —— 那是骗判据。补不回来就发 `class=\"blocking\"` 找 leader 裁定，halt 是默认。\n🔴 注意 footer 语料的 payload 是**子串针**（`strings.Contains(footer, needle)`），不是整句样本。\n判据：`cargo test -q` 全绿 + `go test ./... -count=1` 全绿，且两侧对同一语料判定一致。说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/unk-fix/说明.md。\n🔴 worktree_id 只是并发互斥标签，**不是 git worktree**。必须在**仓根**干活。⛔⛔ 绝对不要 `git worktree add` —— 上一轮有席位建了 wt15.ident，然后卡在「worktree 在 detached HEAD、仓根在 main」的矛盾里出不来。\n🔴 ⚠️ **仓库工作区当前有未提交改动**（leader 手改的 detect.go / classify.rs / titles.tsv / provider_whitelist_test.go）。**在此基础上继续改，⛔ 不要 git checkout / git restore 任何文件** —— leader 就是这么误删了一份未提交语料。\n🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 模拟器**已关闭**，本轮不要启动它（用户令：用完要关）。验收走单测 + 计数证据。\n⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/unk/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。",
+      "owner": {
+        "role": "r.unk"
+      },
+      "resources": {
+        "worktree_id": "wt16.unk",
+        "write_paths": [
+          "tools/nodeprobe/",
+          "server/",
+          ".team/nodes/unk-fix/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/074-无限刷新与未知回归收尾.md",
+          "requirement-base/entries/068-节点白名单按进程comm过滤.md",
+          "server/internal/api/",
+          "tools/nodeprobe/src/",
+          ".team/nodes/unk/BASE.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "c69a73dde"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/unk-fix/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-uk-rust",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/tools/nodeprobe && cargo test -q"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-uk-go",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-uk-doc",
+            "argv": [
+              "test",
+              "-s",
+              "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/unk-fix/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-uk-rust",
+          "A-uk-go",
+          "A-uk-doc"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.unk-seq1-t1787118561968",
+          "delivery_id": "del-t.unk-seq1-t1787118561968",
+          "state": "failed_retryable",
+          "artifact_refs": [
+            "acceptance_failure.acceptance_id=A-uk-go",
+            "acceptance_failure.argv=[\"sh\", \"-c\", \"cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1\"]",
+            "acceptance_failure.cwd=/Volumes/nvme/Projects/远程Agent安卓",
+            "acceptance_failure.exit_code=1",
+            "acceptance_failure.expected_exit_code=0",
+            "acceptance_failure.error=exit_code_mismatch: expected 0, observed 1（stdout/stderr 已截，见 stderr_tail）",
+            "acceptance_failure.stderr_tail(末20行)="
+          ]
+        },
+        {
+          "attempt_id": "att-t.unk-seq1-t1787119162311",
+          "delivery_id": "del-t.unk-seq1-t1787119162311",
+          "state": "succeeded",
+          "writeback_revision": 4,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-uk-rust",
+            "acceptance_success.acceptance_id=A-uk-go",
+            "acceptance_success.acceptance_id=A-uk-doc",
+            "acceptance_success.writeback_revision=4"
+          ]
+        }
+      ]
+    },
+    "t.noloop": {
+      "title": "修 **App 无限刷新**。契约 requirement-base/entries/074-无限刷新与未知回归收尾.md §1。\n用户实测：二级菜单列表中央**转圈不停**，持续处于刷新态。\n🔴 **先把环路量出来再改**：记一次进入菜单后 10 秒内的 `list` 请求数与 `level2_frame` 推送数，**两个数都要有**。⛔ 不要照 leader 那条猜测（list→推送→list 自激）直接动手——那只是方向，不是结论。\n判据 `A-rf-noloop`：进入二级菜单后静置 10 秒，`list` 请求数 **≤ 2** 且**不随时间线性增长**；转圈指示在**首帧到达后必须消失**。🔴 先在当前实现上验红，把红数据（两个计数）写进说明。\n🔴 **不得倒退 069 的「进菜单即时刷新」**——修法不是把即时刷新关掉，而是**断掉自激**（推送不得再触发 list）。用户明确说过刷新及时这一点手感很好。\n配套测试名须含 `NoRefreshLoop`。说明写 /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/noloop/说明.md。\n🔴 worktree_id 只是并发互斥标签，**不是 git worktree**。必须在**仓根**干活。⛔⛔ 绝对不要 `git worktree add` —— 上一轮有席位建了 wt15.ident，然后卡在「worktree 在 detached HEAD、仓根在 main」的矛盾里出不来。\n🔴 ⚠️ **仓库工作区当前有未提交改动**（leader 手改的 detect.go / classify.rs / titles.tsv / provider_whitelist_test.go）。**在此基础上继续改，⛔ 不要 git checkout / git restore 任何文件** —— leader 就是这么误删了一份未提交语料。\n🔴 静默纪律：不给 leader 发进度消息。干完调一次 report_result，**不要传 task_id 参数**。\n⛔ 模拟器**已关闭**，本轮不要启动它（用户令：用完要关）。验收走单测 + 计数证据。\n⛔⛔ 绝不碰用户真实 tmux。⛔⛔ 遍历进程只取 comm，禁止取 argv。\n🔴 **先完整读知识基底 .team/nodes/noloop/BASE.md**（模块影响闭包现算产物：正向依赖=你消费的契约，反向依赖=你的回归自查范围）。⛔ 不读就动手 = 凭空猜架构。",
+      "owner": {
+        "role": "r.noloop"
+      },
+      "resources": {
+        "worktree_id": "wt17.noloop",
+        "write_paths": [
+          "app/",
+          "server/",
+          ".team/nodes/noloop/"
+        ],
+        "read_paths": [
+          "requirement-base/entries/074-无限刷新与未知回归收尾.md",
+          "requirement-base/entries/069-进菜单必触发一次即时刷新.md",
+          "app/app/src/",
+          "server/internal/",
+          ".team/nodes/noloop/BASE.md"
+        ],
+        "environment_fidelity": {
+          "runs_real_cli": true,
+          "injects_latency": false,
+          "carries_long_history": false
+        },
+        "provenance": {
+          "identity": "repo:remote-agent-android",
+          "revision": "c69a73dde"
+        }
+      },
+      "handoff": {
+        "route": "report_result",
+        "required_artifacts": [
+          "/Volumes/nvme/Projects/远程Agent安卓/.team/nodes/noloop/说明.md"
+        ]
+      },
+      "acceptance": {
+        "mechanical": [
+          {
+            "acceptance_id": "A-nl-test",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest --tests '*NoRefreshLoop*'"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-nl-counts",
+            "argv": [
+              "sh",
+              "-c",
+              "grep -qE 'list=|list 请求数|level2_frame' /Volumes/nvme/Projects/远程Agent安卓/.team/nodes/noloop/说明.md"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-nl-go",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/server && go test ./... -count=1"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          },
+          {
+            "acceptance_id": "A-nl-app",
+            "argv": [
+              "sh",
+              "-c",
+              "cd /Volumes/nvme/Projects/远程Agent安卓/app && ./gradlew -q testDebugUnitTest"
+            ],
+            "cwd": "/Volumes/nvme/Projects/远程Agent安卓",
+            "expected_exit_code": 0,
+            "time_budget_seconds": 2400
+          }
+        ],
+        "judgment": [],
+        "required": [
+          "A-nl-test",
+          "A-nl-counts",
+          "A-nl-go",
+          "A-nl-app"
+        ]
+      },
+      "state": "succeeded",
+      "attempts": [
+        {
+          "attempt_id": "att-t.noloop-seq2-t1787119723647",
+          "delivery_id": "del-t.noloop-seq2-t1787119723647",
+          "state": "succeeded",
+          "writeback_revision": 5,
+          "artifact_refs": [
+            "acceptance_success.acceptance_id=A-nl-test",
+            "acceptance_success.acceptance_id=A-nl-counts",
+            "acceptance_success.acceptance_id=A-nl-go",
+            "acceptance_success.acceptance_id=A-nl-app",
+            "acceptance_success.writeback_revision=5"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": [
+    {
+      "from": "t.unk",
+      "to": "t.noloop",
+      "condition": "requires_success"
+    }
+  ],
+  "parallelism": [
+    {
+      "group": "g14",
+      "max_concurrency": 1
+    }
+  ],
+  "handoff": {
+    "send_command": "team-agent send",
+    "result_route": "leader",
+    "required_envelope_fields": [
+      "task_id",
+      "status"
+    ],
+    "missing_result": "完成以机械判据为准",
+    "delivery_uncertain": "重发并去重"
+  },
+  "acceptance": {
+    "mechanical_exit_code_is_authoritative": true,
+    "judgment_requires_distinct_provider": false
+  },
+  "fallback": {
+    "F.esc": {
+      "agent": {
+        "role": "r.leader"
+      },
+      "triggers": [
+        "blocked_on_unknown",
+        "provider_unavailable",
+        "result_deadline_elapsed"
+      ],
+      "max_attempts": 1,
+      "action": "escalate_to_leader",
+      "silent_substitution": false
+    }
+  },
+  "evidence_policy": {
+    "required_fields": [
+      "reported_by",
+      "revision",
+      "supports_or_refutes",
+      "observed_at",
+      "freshness"
+    ],
+    "missing_evidence": "判据必须是可重跑命令"
+  },
+  "resource_isolation": {
+    "default_write_scope": ".team/nodes",
+    "rules": [],
+    "read_only_shared": [
+      "requirement-base/entries/074-无限刷新与未知回归收尾.md"
+    ]
+  },
+  "fanout_aggregation": {},
+  "audit": {},
+  "revision": 5
+}

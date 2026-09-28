@@ -1,0 +1,5 @@
+--- FAIL: TestSubscribeQueueMsBehindSlowDiscover (0.83s)
+    ws_frame_latency_test.go:74: subscribe queue_ms=800 want < 50 (scan frame still on readLoop)
+FAIL
+FAIL	github.com/agentmirror/agentmirror/internal/api	1.500s
+FAIL

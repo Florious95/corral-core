@@ -1,0 +1,76 @@
+{
+  "team": "regressions-20260907",
+  "keep": [
+    "app-fix-luna"
+  ],
+  "executed_at": "2026-09-07T19:43:00.418722",
+  "results": [
+    {
+      "agent": "bot-space-luna",
+      "returncode": 1,
+      "ok": false,
+      "agent_id": "bot-space-luna",
+      "status": "refused",
+      "action": "rerun: team-agent remove-agent bot-space-luna --workspace '/Volumes/nvme/Projects/远程Agent安卓' --team regressions-20260907 --confirm --force",
+      "error": "remove-agent requires --confirm --force for this agent",
+      "reason": "force_required"
+    },
+    {
+      "agent": "bot-space-luna",
+      "returncode": 0,
+      "ok": true,
+      "status": "removed",
+      "via": "exact force_required action"
+    },
+    {
+      "agent": "chain-audit-luna",
+      "returncode": 1,
+      "ok": false,
+      "agent_id": "chain-audit-luna",
+      "status": "refused",
+      "action": "rerun: team-agent remove-agent chain-audit-luna --workspace '/Volumes/nvme/Projects/远程Agent安卓' --team regressions-20260907 --from-spec --confirm --force",
+      "error": "remove-agent requires --from-spec --confirm --force for this agent",
+      "reason": "from_spec_confirm_required"
+    },
+    {
+      "agent": "chain-audit-luna",
+      "returncode": 0,
+      "ok": true,
+      "status": "removed",
+      "via": "exact from_spec_confirm_required action"
+    },
+    {
+      "agent": "contract-astra",
+      "returncode": 0,
+      "ok": true,
+      "agent_id": "contract-astra",
+      "status": "removed"
+    },
+    {
+      "agent": "probe-fix-luna",
+      "returncode": 0,
+      "ok": true,
+      "agent_id": "probe-fix-luna",
+      "status": "removed"
+    },
+    {
+      "agent": "status-final-accept-luna",
+      "returncode": 0,
+      "ok": true,
+      "agent_id": "status-final-accept-luna",
+      "status": "removed"
+    },
+    {
+      "agent": "ui-repro-luna",
+      "returncode": 0,
+      "ok": true,
+      "agent_id": "ui-repro-luna",
+      "status": "removed"
+    }
+  ],
+  "verified_at": "2026-09-07T19:45:48.433826",
+  "remaining_registered_seats": [
+    "app-fix-luna"
+  ],
+  "production_listener_pid_92596_preserved": true
+}

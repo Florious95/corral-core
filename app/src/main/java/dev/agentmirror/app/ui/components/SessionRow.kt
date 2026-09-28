@@ -43,7 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.sessionRowMotion
 import dev.agentmirror.app.ui.theme.Dims
+import dev.agentmirror.app.ui.theme.ListRowStyle
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.TypeSizes
 
@@ -76,24 +78,35 @@ fun SessionRow(
     onLongClick: (() -> Unit)? = null,
 ) {
     val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     var showSheet by remember { mutableStateOf(false) }
     val motion = sessionRowMotion(item.status, item.isOnline)
-    val rowHeight = Dims.rowHeightWithSubtitle
+    val rowHeight = kit.geometry.sessionRowHeight
+    // 行样式只换外壳：浮动微玻璃卡 / 通栏直角条（底部发丝线）。手势、长按弹层与内容结构不变。
+    val shell = when (kit.recipes.listRow) {
+        ListRowStyle.FloatingCard -> Modifier
+            .padding(horizontal = Dims.cardHMargin)
+            .fillMaxWidth()
+            .height(rowHeight)
+            .alpha(if (item.isOnline) 1f else 0.45f)
+            .glassCard(
+                shape = RoundedCornerShape(Radii.card),
+                fill = if (pressed) p.glassCardFillPressed else p.glassCardFill,
+                stroke = p.glassStroke,
+                specular = p.glassSpecular,
+            )
+        ListRowStyle.RuledStrip -> Modifier
+            .fillMaxWidth()
+            .height(rowHeight)
+            .alpha(if (item.isOnline) 1f else 0.45f)
+            .background(if (pressed) p.glassCardFillPressed else p.glassCardFill)
+            .edgeRule(RuleEdge.Bottom, kit.colors.separator, kit.geometry.hairline)
+    }
     Box {
         Row(
-            modifier = Modifier
-                .padding(horizontal = Dims.cardHMargin)
-                .fillMaxWidth()
-                .height(rowHeight)
-                .alpha(if (item.isOnline) 1f else 0.45f)
-                .glassCard(
-                    shape = RoundedCornerShape(Radii.card),
-                    fill = if (pressed) p.glassCardFillPressed else p.glassCardFill,
-                    stroke = p.glassStroke,
-                    specular = p.glassSpecular,
-                )
+            modifier = shell
                 .combinedClickable(
                     interactionSource = interaction,
                     indication = null,
@@ -106,7 +119,13 @@ fun SessionRow(
                         }
                     },
                 )
-                .padding(start = Dims.listHPaddingStart, end = Dims.listHPaddingEnd)
+                .then(
+                    if (kit.recipes.listRow == ListRowStyle.FloatingCard) {
+                        Modifier.padding(start = Dims.listHPaddingStart, end = Dims.listHPaddingEnd)
+                    } else {
+                        Modifier.padding(horizontal = kit.geometry.pageInset)
+                    },
+                )
                 .testTag("$tagPrefix-row-${item.id}"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Dims.rowGap),
@@ -164,7 +183,7 @@ private fun OfflineChip(prefix: String, id: String) {
     Row(
         modifier = Modifier
             .height(Dims.statusChipHeight)
-            .clip(RoundedCornerShape(Radii.statusChip))
+            .clip(LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.statusChip)))
             .background(p.idleChipBg)
             .padding(horizontal = Dims.statusChipHPadding)
             .testTag("$prefix-offline-$id"),

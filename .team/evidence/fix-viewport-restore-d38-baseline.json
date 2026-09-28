@@ -1,0 +1,15 @@
+{
+  "task_id": "fix-viewport-restore-d38",
+  "stage": "baseline-before-fix",
+  "ts": "2026-08-14",
+  "author": "w-d38-dev",
+  "probe_command": "./gradlew :app:testDebugUnitTest --tests \"dev.agentmirror.app.termview.D38ViewportRestoreProbe\"",
+  "results": {
+    "PROBE_P1_emulatorRowsStuckAtSqueezedValueAfterViewGrows": "PASS (hit)",
+    "PROBE_P2_windowCappedByStaleEmulatorRows": "PASS (hit)",
+    "PROBE_P3_foregroundReturnViaSizeChangedCannotRecoverGeometry": "PASS (hit)",
+    "PROBE_P4_ifFirstFrameIsFullHeightNoDefect": "PASS (hit)",
+    "PROBE_P5_onRealViewportChangedDoesNotExistInV6": "PASS (hit)"
+  },
+  "summary": "Baseline on v6 HEAD: all 5 probes PASS (defect present). Matches w-d38-probe report. Fix target: P1/P2/P3/P5 FAIL, P4 stays PASS."
+}

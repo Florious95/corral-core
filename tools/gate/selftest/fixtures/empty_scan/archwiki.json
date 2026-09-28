@@ -1,0 +1,9 @@
+{
+  "name": "archwiki",
+  "ok": true,
+  "skipped": true,
+  "skip_reason": "selftest fixture: 缺席跳过，不参与基线",
+  "cases": 0,
+  "failures": [],
+  "duration_ms": 1
+}

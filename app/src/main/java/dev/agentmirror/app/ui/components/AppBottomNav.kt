@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -38,15 +40,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
 import dev.agentmirror.app.ui.model.NavTab
-import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
+import dev.agentmirror.app.ui.theme.TabBarStyle
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.TypeSizes
+import dev.agentmirror.app.ui.theme.isDark
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
@@ -66,6 +71,10 @@ fun AppBottomNav(
     onSelect: (NavTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (LocalThemeSuite.current.recipes.tabBar == TabBarStyle.RuledBar) {
+        RuledBottomNav(selected, onSelect, modifier)
+        return
+    }
     val p = LocalAppPalette.current
     val backdrop = LocalGlassBackdrop.current
     val tabs = remember { listOf(NavTab.Favorites, NavTab.Sessions, NavTab.Settings) }
@@ -142,7 +151,7 @@ fun AppBottomNav(
                     shape = NavCapsule,
                     surface = Color.Unspecified,
                     tint = p.navRail,
-                    tintAlpha = if (p === DarkPalette) 0.14f else 0.16f,
+                    tintAlpha = if (p.isDark) 0.14f else 0.16f,
                     pressProgress = { pressProgress },
                     pressedScale = 1.06f,
                     blurRadius = 1.5.dp,
@@ -176,6 +185,72 @@ fun AppBottomNav(
 }
 
 private val NavCapsule = Capsule()
+
+/**
+ * 通栏直角标签栏：贴底不透明，顶部 2dp 墨色重线，三等分直角格、格间 1dp 竖线；
+ * 选中格顶部 4dp 猩红强调线，图标与文字横排。语义 / testTag 与悬浮胶囊一致。
+ */
+@Composable
+private fun RuledBottomNav(
+    selected: NavTab,
+    onSelect: (NavTab) -> Unit,
+    modifier: Modifier,
+) {
+    val p = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
+    val tabs = remember { listOf(NavTab.Favorites, NavTab.Sessions, NavTab.Settings) }
+    Row(
+        modifier
+            .testTag("bottom-tabs")
+            .fillMaxWidth()
+            .background(p.navBackground)
+            .navigationBarsPadding()
+            .height(kit.geometry.tabBarHeight)
+            .edgeRule(RuleEdge.Top, kit.colors.headerRule, kit.geometry.headerRule)
+            .padding(top = kit.geometry.headerRule),
+    ) {
+        tabs.forEachIndexed { index, tab ->
+            val active = tab == selected
+            val tint = if (active) p.navActive else p.navInactive
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .then(
+                        if (index > 0) Modifier.edgeRule(RuleEdge.Start, kit.colors.separator, kit.geometry.hairline) else Modifier,
+                    )
+                    .then(if (active) Modifier.edgeRule(RuleEdge.Top, p.navRail, RuledActiveRule) else Modifier)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Tab,
+                        onClick = { onSelect(tab) },
+                    )
+                    .testTag(tab.tabTag())
+                    .semantics { this.selected = active }
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppText(
+                    text = tab.glyph(),
+                    color = tint,
+                    fontSize = TypeSizes.navGlyph,
+                    lineHeightMultiplier = 1f,
+                )
+                AppText(
+                    text = tab.label(),
+                    color = tint,
+                    fontSize = 14.sp,
+                    fontWeight = if (active) FontWeight.Black else FontWeight.SemiBold,
+                    lineHeightMultiplier = 1f,
+                )
+            }
+        }
+    }
+}
+
+private val RuledActiveRule = 4.dp
 
 @Composable
 private fun NavCell(

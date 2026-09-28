@@ -1,0 +1,107 @@
+{
+  "task_id": "feat-fg-service-wiring",
+  "status": "pass",
+  "summary": "兑现 011 已裁的「Android 前台服务 + 常驻连接」路线：MirrorForegroundService 从死件（manifest 声明但全仓库无 startService 调用点）接线为真实运行的前台服务。服务生命周期与配对完成/冷启动/进入会话绑定；连接与时钟泵归属改由服务承接（在屏组合不再各自持有）；通知栏常驻 + 深链；foregroundServiceType 分档合规；锁屏/后台连接维持由服务泵 + conn 层退避 + NetworkConnectivityWatcher 网络恢复打断退避共同保证。004 架构底线守住：前台服务是体验增强，不持有连接状态，服务被杀后冷启动 1 秒恢复原状（红测二守门）。并案处理 stage3 两条 P1：#10 manifest 相机 uses-feature（Error 级，补 required=false）、#11 MirrorForegroundService.kt InlinedApi（API 29 字段在 minSdk 26 直用，加 API 守卫）。",
+  "case_id": "msg_624cf23c0648",
+  "tests": [
+    {
+      "argv": "cd app && env -u TEAM_AGENT_* ./gradlew -q :app:testDebugUnitTest",
+      "rc": 0,
+      "result": "352 tests, 0 failures (含新增 ForegroundServiceWiringTest 6 条 + ForegroundServiceEconomyTest 1 条)"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "result": "T1-1/T1-2/T3-1/T3-2/T3-3/T3-4 全 PASS（19 包 31 条依赖边）"
+    },
+    {
+      "argv": "grep -rn 'startForegroundService\\|startService' app/app/src/main/java --include=*.kt | grep -v test",
+      "rc": 0,
+      "result": "真实调用点存在：MirrorForegroundService.kt:218 context.startForegroundService(...)；接线入口 MirrorForegroundService.start() 被 startPersistentConnection/createSessionViewModel/MainActivity 调用"
+    },
+    {
+      "argv": "cd app && env -u TEAM_AGENT_* ./gradlew -q :app:lintDebug",
+      "rc": 0,
+      "result": "P1 规则 InlinedApi 与 PermissionImpliesUnsupportedChromeOsHardware 均 0 出现；StaticFieldLeak 0 出现"
+    }
+  ],
+  "changes": [
+    "app/app/src/main/AndroidManifest.xml — 补 <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\">（stage3 #10，相机非硬性要求，防无相机设备被商店过滤）",
+    "app/app/src/main/java/dev/agentmirror/app/service/MirrorForegroundService.kt — 接线：新增 start()/stop() 静态入口、pumpOnce()（时钟泵单拍，服务驱动）、ServiceWire.serviceListener 挂载/摘除、managerOrNull 读取、foregroundServiceType 分档（API 29+ 用带类型重载 + ServiceCompat，26-28 走无类型重载，stage3 #11）；移除 onDestroy 里对 manager 字段的缓存（服务不持有连接状态，004）",
+    "app/app/src/main/java/dev/agentmirror/app/service/ServiceWire.kt — 新增 serviceListener（服务监听槽，与 uiConnector 并行扇出）、managerOrNull()（服务/测试读取单例，不缓存）；manager() 包装监听增加 serviceListener 扇出",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PersistentConnection.kt — startPersistentConnection 增加 context 参数并启动前台服务（startPersistentConnectionNow 内 MirrorForegroundService.start）；移除 static Context 字段（w-sa-appbuild 触发的 StaticFieldLeak，改为显式传参）",
+    "app/app/src/main/java/dev/agentmirror/app/MainActivity.kt — 冷启动 startPersistentConnection 传 this 作服务启动 Context",
+    "app/app/src/main/java/dev/agentmirror/app/pairing/PairingRoute.kt — 配对成功 startPersistentConnection 传 LocalContext",
+    "app/app/src/main/java/dev/agentmirror/app/session/SessionRoute.kt — createSessionViewModel 增加 context 参数并启动前台服务；移除 UI 侧对 persistentContext 静态的依赖",
+    "app/app/src/main/java/dev/agentmirror/app/session/SessionScreen.kt — 移除连接时钟泵 LaunchedEffect（vm.onTick），改由服务驱动；保留本地 syncFromPresenter 视口收敛拍（纯 UI 本地逻辑）",
+    "app/app/src/main/java/dev/agentmirror/app/service/PackageDoc.kt — 更新：MirrorForegroundService 已接线，时钟泵由服务承接，在屏组合不再各自持有",
+    "app/app/src/test/java/dev/agentmirror/app/service/ForegroundServiceWiringTest.kt — 新增红测 6 条",
+    "app/app/src/test/java/dev/agentmirror/app/service/ForegroundServiceEconomyTest.kt — 新增静默经济三态量测 1 条"
+  ],
+  "lifecycle_design": {
+    "start_conditions": [
+      "配对成功：PairingRoute.onPaired → startPersistentConnection(cfg, context) → MirrorForegroundService.start（startForegroundService）",
+      "冷启动有配置：MainActivity.onCreate → startPersistentConnection(storedConfig, this)",
+      "进入会话：SessionRoute.createSessionViewModel(ref, context) → MirrorForegroundService.start（幂等，系统对已运行服务只再投 onStartCommand）"
+    ],
+    "stop_conditions": [
+      "用户显式断开：MirrorForegroundService.stop()（017 R-3 切主机即断开重连、R-5 通知全局开关的规范停止入口）→ onDestroy 停泵、解绑 serviceListener、releaseManager",
+      "重配新主机（017 R-3）：setConfig 配置变更 → releaseManager 释放旧链路；服务继续跟随新连接（不显式停服务）"
+    ],
+    "rationale": "启动绑定「已配对 + 连接存在」：无配置（首启配对页）不启动服务（红测对照锁定）。停止入口规范化为 MirrorForegroundService.stop()，服务被杀/被系统回收由冷启动路径自动恢复（004 无状态免疫）。服务不持有连接状态（004 底线）：连接是 ServiceWire 进程级单例，配置唯一来源 SharedPreferences，服务只经 managerOrNull 读取并驱动泵。"
+  },
+  "statelessness_proof": {
+    "test": "ForegroundServiceWiringTest.serviceKilled_coldStartRestores_sameWorkspaceState",
+    "method": "首启：冷启动建立连接 + 启动服务，推进 READY + 全量 listing → 工作区渲染出数据（1 工作区 /proj/a，1 会话 s1）。杀服务 + 进程回收：MirrorForegroundService.stop() + Activity.destroy() + ServiceWire.releaseManager()/resetConfigForTest()——等价进程死亡，连接/配置全部归零（状态唯一来源是 SharedPreferences，不在服务内）。冷启动恢复：新进程从 prefs 重读配置 → 重连（第 2 条连接）→ READY + 全量 listing → 工作区恢复到被杀前完全一致（1 工作区 /proj/a，1 会话 s1）。",
+    "result": "恢复后状态与被杀前一致；连接计数 2（首启 1 + 恢复 1，证明是重新拨号而非残留复用）。若把配置/连接状态搬进服务，此测试必红——004 底线守住。"
+  },
+  "economy_measurements": {
+    "method": "Robolectric 下直接驱动 MirrorForegroundService.pumpOnce()（生产 pumpRunnable 单拍同一逻辑）10000 拍取 wall-clock 平均成本；子进程派生经代码审计：app/src/main 下 ProcessBuilder/Runtime.exec 零出现。三态口径参照 e2e/artifacts/test-api-user-scenarios-perf/baseline.json 的服务端三态（零连接/已连接零订阅/已连接单订阅）。",
+    "pump_interval_ms": 2000,
+    "states": {
+      "zero_connection": { "ns_per_tick": 49, "us_per_tick": 0.05, "note": "config 未注入、manager 未创建：pumpOnce 经 managerOrNull()==null 零工作" },
+      "connected_zero_sub": { "ns_per_tick": 85, "us_per_tick": 0.09, "note": "manager READY、无活跃订阅：pump()/resolveExpiredInputs() 均无待办" },
+      "connected_one_sub": { "ns_per_tick": 53, "us_per_tick": 0.05, "note": "manager READY、单会话订阅：同为零待办，不随舰队规模线性增长" }
+    },
+    "cpu_boundedness": "每 2s 一拍，单拍 <0.1µs ⇒ 常驻 CPU 占比 <0.000005%，随舰队规模不线性增长（输入超时裁决 O(pendingInputs)，重连判定 O(1)）",
+    "subprocess_boundedness": "0 子进程派生（App 侧无 ProcessBuilder/Runtime.exec；服务泵纯内存推进，不 spawn）",
+    "assertion": "三态单拍均 <1ms 断言通过（实测 0.05-0.09µs，余量 ~10000×）"
+  },
+  "comments_synced": [
+    "service/PackageDoc.kt — 移除「死件家族第六例」「当前前台服务未接线」「退避泵由在屏组合 LaunchedEffect 驱动，服务启动留待后案」；改为「已接线（feat-fg-service-wiring）……连接与时钟泵由本服务承接」",
+    "service/ServiceWire.kt — uiConnector KDoc 补 serviceListener 并行扇出；新增 serviceListener 槽 KDoc；manager() KDoc 更新为「服务经本方法确保连接创建」；新增 managerOrNull() KDoc（服务不缓存引用）",
+    "session/SessionRoute.kt — 类 KDoc 更新：时钟泵归属服务、在屏组合不再各自持有；createSessionViewModel KDoc 补 context 参数语义",
+    "session/SessionScreen.kt — 时钟泵注释更新：连接时钟由服务驱动，本屏只剩 syncFromPresenter 视口收敛",
+    "pairing/PersistentConnection.kt — startPersistentConnection KDoc 补第④步「启动前台服务」；startPersistentConnectionNow KDoc 补 context 语义；移除 persistentContext 静态字段",
+    "MainActivity.kt — 冷启动注释补 service 启动 Context 说明",
+    "PairingRoute.kt — 配对成功注释补 LocalContext 传参说明",
+    "session/PackageDoc.kt — 先补后撤 @consumes dev.agentmirror.app.pairing（因 context 改显式传参后 session 不再 import pairing；最终保持一致）"
+  ],
+  "p1_fixes": [
+    {
+      "inventory_id": 10,
+      "rule_id": "PermissionImpliesUnsupportedChromeOsHardware",
+      "file_line": "AndroidManifest.xml:40",
+      "severity": "Error",
+      "actual_risk": "声明 CAMERA 权限但无对应 <uses-feature android:name=\"android.hardware.camera\">。不带相机硬件的设备（ChromeOS/部分平板）被 Play 商店判为不兼容而过滤，用户根本搜不到这个 App——商店可见性硬伤。",
+      "fix": "补 <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />（相机只用于扫码配对，已有手填连接回退路径 D-01，非硬性要求）。",
+      "why_resolved": "required=false 明确声明相机是可选能力：设备无相机仍被商店判为兼容（可安装），App 内以手填连接兜底。merged manifest（debug+release）均已确认该 uses-feature 保留，且 camera 1.6.1 未引入冲突合并要求。",
+      "lint_occurrences": 0
+    },
+    {
+      "inventory_id": 11,
+      "rule_id": "InlinedApi",
+      "file_line": "MirrorForegroundService.kt:91",
+      "severity": "P1",
+      "actual_risk": "ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC 是 API 29 引入的字段，minSdk 26 直用会在低版本机型（API 26-28）上潜在崩溃（引用不存在的常量）。",
+      "fix": "分档调用：Build.VERSION.SDK_INT >= Q（29）时用 ServiceCompat.startForeground(this, id, notification, FOREGROUND_SERVICE_TYPE_DATA_SYNC)；低版本走 @Suppress(DEPRECATION) startForeground(id, notification) 无类型重载（API 26-28 前台服务本无类型之分）。",
+      "why_resolved": "API 26-28 不再引用 API 29 字段 → InlinedApi 消除；API 29+ 保留类型声明满足 Android 14+ targetSdk 要求。foregroundServiceType 声明在 manifest 侧（dataSync）+ 运行时（API 29+）分档一致，非打补丁式各修各的。",
+      "lint_occurrences": 0
+    }
+  ],
+  "positive_control": {
+    "runtime_evidence": "ForegroundServiceWiringTest.coldStartWithConfig_startsForegroundService_andConnection 断言 ShadowApplication.getNextStartedService() 返回 MirrorForegroundService（startForegroundService 真实调用被 Robolectric 捕获）+ 连接创建并拨号；serviceLifecycle_startAndStop_drivesManagerAndNotification 断言 startCommand 后服务持有 manager 且常驻通知发布（ID_PERSISTENT）、destroy 后释放连接并解绑监听。",
+    "economy_evidence": "ForegroundServiceEconomyTest 三态 pumpOnce 实测（见 economy_measurements），断言单拍 <1ms 通过。"
+  },
+  "deviation": []
+}

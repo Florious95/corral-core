@@ -1,0 +1,69 @@
+{
+  "task_id": "fix-ts-dial-timing",
+  "status": "pass",
+  "tests": [
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd app && ./gradlew -q :app:testDebugUnitTest --tests 'dev.agentmirror.app.pairing.PairingViewModelTest.manualTailnetWaitsForTsnetUpBeforeFirstDial' --tests 'dev.agentmirror.app.pairing.PairingViewModelTest.mixedCandidatesTryLanButDelayTailnetUntilTsnetUp' --tests 'dev.agentmirror.app.pairing.PairingViewModelTest.waitingTailnetFailsVisiblyOnTsnetErrorWithoutDial'"
+      ],
+      "rc": 1,
+      "phase": "red"
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd app && ./gradlew -q :app:testDebugUnitTest --tests 'dev.agentmirror.app.pairing.PairingViewModelTest.manualTailnetWaitsForTsnetUpBeforeFirstDial' --tests 'dev.agentmirror.app.pairing.PairingViewModelTest.mixedCandidatesTryLanButDelayTailnetUntilTsnetUp' --tests 'dev.agentmirror.app.pairing.PairingViewModelTest.waitingTailnetFailsVisiblyOnTsnetErrorWithoutDial'"
+      ],
+      "rc": 0,
+      "phase": "green"
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd app && ./gradlew -q :app:testDebugUnitTest --tests 'dev.agentmirror.app.pairing.PairingViewModelTest'"
+      ],
+      "rc": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd app && ./gradlew -q :app:testDebugUnitTest"
+      ],
+      "rc": 1,
+      "note": "A concurrent Gradle test runner collided while writing the same ColdStartReconnectTest XML result."
+    },
+    {
+      "argv": [
+        "bash",
+        "-lc",
+        "cd app && ./gradlew -q :app:testDebugUnitTest"
+      ],
+      "rc": 0,
+      "phase": "final"
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "app/app/src/main/java/dev/agentmirror/app/pairing/PairingViewModel.kt"
+      ],
+      "rc": 0
+    }
+  ],
+  "changes": [
+    {
+      "path": "app/app/src/main/java/dev/agentmirror/app/pairing/PairingViewModel.kt",
+      "summary": "Delay 100.64.0.0/10 pairing probes while tsnet is starting, start the dial on Up, surface tsnet Error through the existing visible failure/candidate progression path, and begin the per-candidate timeout only when dialing actually starts. LAN and no-key downgrade behavior remain unchanged."
+    }
+  ],
+  "deviation": [
+    "The first full-suite run overlapped another worker's Gradle run and failed only while both writers targeted the same XML result file; after that runner exited, the exact acceptance argv passed with rc=0."
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "task_id": "fix-d27-v3",
+  "status": "pass",
+  "worker": "w-d27-v3",
+  "date": "2026-08-12",
+  "summary": "D-27 第二次回炉：定位并根治「发消息后逐行刷新（从上往下清屏重建）」在协议层的唯一生产入口。帧流对比实证：CLI 自行输出与 input 响应同为纯 delta 流（服务端 relay 逐 chunk 转发，零 snapshot），两者帧型一致——差异不在数据路径，而在「发消息后必然伴随的 IME 重布局 → 客户端发同尺寸 resize → 服务端 handleResize 无条件补发整帧 snapshot → 客户端 replaySnapshot 清屏重建 = 逐行刷新观感」。修复：服务端 handleResize 用 tmux 读回的实际 pane 尺寸（resize 前后各一次）判定 no-op——实际尺寸未变（同尺寸请求被 tmux 收敛）即跳过 snapshot 补发，只对真实改尺寸（SIGWINCH 重排）补发（fix-term-residuals 对账语义保留）。统一了两个场景：resize 不再产生与 CLI 自吐不同的渲染路径。",
+  "root_cause_chain": [
+    "1. 帧流对比（隔离 daemon+tmux+真实 CLI，自建 framecap 工具）：CLI 自行输出 = 约 40fps、72B 的纯 delta 帧（relay 逐 chunk 转发，零 snapshot）；input 注入后 echo = 同型 delta 流。两者数据路径完全一致（都是 pipe-pane → bridge → relay → KindDelta），协议层无差异。",
+    "2. 「发消息后逐行刷新」的真正触发点不在 delta 流，而在服务端 handleResize 的 snapshot 补发：客户端 replaySnapshot = 清屏重建（SessionViewModel.onBinary SNAPSHOT 分支），整屏重绘即「从上往下逐行刷新、底部是旧内容」观感。",
+    "3. 发消息场景天然伴随 IME 重布局（键盘弹出/输入框增行/发送按钮状态变化），TermViewPresenter.onViewportSizeChanged 无几何锁时重算 rows/cols → 发 resize → 服务端对任何 resize（含同尺寸 no-op）都补发 snapshot（fix-refresh-direction 诊断已锁此链）。CLI 自吐时无 IME 交互、无 resize → 永不触发。",
+    "4. 同尺寸 resize 的判定关键：tmux 对同尺寸 resize-window 请求收敛到相同 pane 尺寸，必须用读回的实际 dims（display-message pane_width/pane_height）而非请求值（测试席补充，采纳）。",
+    "5. 已回退的 delta 合并修复（dangling commit 32f530e）方向错误：那是在服务端 relay 加 40ms 批合并，治标（减少帧数）不治本（snapshot 清屏重建仍在），且引入延迟。本次回炉改为根治 no-op resize 补发。"
+  ],
+  "diagnostics_added": [
+    "server/internal/api/ws_handler.go handleResize：no-op 判定日志 'ws: resize no-op, skip snapshot'（conn/ref/dims）——每次被跳过的冗余 resize 留痕，供真机核对该路径是否被触达。"
+  ],
+  "tests": {
+    "acceptance_server": "cd server && env -u TEAM_AGENT_* go test ./... → 全部包 ok（api/bridge 非缓存重跑通过）",
+    "acceptance_app": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest → BUILD SUCCESSFUL（首次失败为 w-d38-dev 同模块并发占锁致 XML 写冲突，非本席代码问题，占用结束后重跑通过）",
+    "acceptance_archwiki": "python3 tools/archwiki/build_wiki.py --check → exit 0（T3-3 MainNavState.kt:88 为既有违规，fix-workspace-wiring 在途工作树，非本席引入；T3-4 本席曾引入的 cmd/d27framecap 已移除后归零）",
+    "red_test_server": "api_tmux_test.go TestSameSizeResizeDoesNotRepushSnapshot：订阅后发同尺寸 resize，断言 800ms 窗口内绝无 snapshot——旧行为红（实测 FAIL: same-size resize re-pushed a snapshot），修复后绿",
+    "positive_control_server": "api_tmux_test.go TestRealResizeStillRepushesSnapshot：真实改尺寸 resize 仍补发 snapshot + cursor 后缀断言——证明 no-op 判定不误伤文档化行为（fix-term-residuals 保留）",
+    "node_runner_d27": "cd test && node runner.js --tag=d27 → 3 passed 0 failed（测试席 w-d27-v3-test 重跑确认：第1条 input 响应纯 delta PASS、第2条 no-op resize 红→绿、第3条真实 resize 阳性对照绿）；full suite 11/11 全绿"
+  },
+  "write_scope_check": {
+    "in_scope": [
+      "server/internal/bridge/bridge.go（暴露 Pane.Size 只读方法：读回 pane 实际尺寸）",
+      "server/internal/api/ws_handler.go（handleResize no-op 判定：resize 前后实际 dims 相等 → 跳过 snapshot 补发）",
+      "server/internal/api/api_tmux_test.go（TestSameSizeResizeDoesNotRepushSnapshot 红测 + TestRealResizeStillRepushesSnapshot 阳性对照）"
+    ],
+    "note": "工作树另含他席在途改动（fix-session-alias 的 listing.go、fix-state-detection 的 state_wiring.go、fix-workspace-wiring 的 MainNavState.kt 等），本席未触碰其 write_scope；禁 commit/push 已遵守。frame 对比实验用的临时工具 server/cmd/d27framecap 已删除（曾致 T3-4 违规），临时 daemon/tmux/目录已全部清理。"
+  },
+  "note": "本席未改协议（零协议变更：snapshot/delta/resize 语义与 docs/protocol.md 完全一致）。修复与测试席红测断言对齐：按 pane 前后实际 dims 比较判定 no-op，dims 未变不补发、dims 变化仍补发。残余风险：若真机日志显示 input 后无 resize 却仍有快照（服务端他处泄漏），本席 Go 红测会红，需再排——与 fix-refresh-direction 诊断的残余风险清单一致。"
+}

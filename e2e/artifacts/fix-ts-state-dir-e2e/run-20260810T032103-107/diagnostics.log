@@ -1,0 +1,61 @@
+## headscale-configtest.log
+
+
+## headscale.stderr
+
+
+## headscale-cli.stderr
+
+
+## sandbox-check.log
+
+
+## go-build.log
+
+
+## daemon.stderr
+time=2026-08-10T03:21:36.264+08:00 level=INFO msg="single-instance guard acquired" pidfile=TASK_TMP/daemon-state/agentmirrord.pid
+time=2026-08-10T03:21:36.264+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T03:21:36.264+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:43920 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-10T03:21:36.264+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir=TASK_TMP/daemon-state/tsnet
+time=2026-08-10T03:21:36.264+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/10 03:21:36 tsnet running state path TASK_TMP/daemon-state/tsnet/tailscaled.state
+2026/08/10 03:21:36 tsnet starting with hostname "MacBook-Pro.local", varRoot "TASK_TMP/daemon-state/tsnet"
+2026/08/10 03:21:36 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/10 03:21:36 AuthLoop: state is Starting; done
+time=2026-08-10T03:21:39.395+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+time=2026-08-10T03:24:35.669+08:00 level=INFO msg="shutting down"
+
+
+## android-start-user.log
+Success: user started
+
+
+## android-switch-user.log
+
+
+## android-app-start.log
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+
+
+## android-device-ready.log
+[exec] wake emulator device=emulator-5554 key=KEYCODE_WAKEUP
+[exec] dismiss keyguard device=emulator-5554 user=14
+[exec] unlock swipe device=emulator-5554 from=540,1900 to=540,300 duration_ms=350
+[state] wakefulness=Awake user_state=RUNNING_UNLOCKED focus=  mCurrentFocus=Window{c5bd602 u14 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+
+
+## android-camera-state.log
+Active Camera Clients:
+[
+(Camera ID: 1, Cost: 100, PID: 4868, Score: 0, State: 2User Id: 14, Client Package Name: dev.agentmirror.app, Conflicting Client Devices: {})
+]
+Allowed user IDs: 14
+
+
+## camera-control.log
+[tcc] Accessibility UI elements enabled=true (binary=/Volumes/nvme/android-sdk/emulator/qemu/darwin-aarch64/qemu-system-aarch64)
+[exec] raise emulator process=qemu-system-aarch64 window=Android Emulator - wedding_user_a_api35:5554
+[exec] virtual-scene yaw sweep center=678,565 steps=36 delta=-50,0 degrees_per_pixel=0.2
+[exec] input injection has no camera-result return; headscale node count and App workspace UI are authoritative
+

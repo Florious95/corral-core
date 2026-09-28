@@ -1,0 +1,6 @@
+seal-pr: worktree=/Volumes/nvme/Projects/远程Agent安卓/.worktrees/pr2.input 当前分支=pr/e1-resync 目标分支=pr/e2-composer 待提交=0
+Switched to branch 'pr/e2-composer'
+seal-pr: 工作区干净，已切到 pr/e2-composer
+seal-pr: 工作区待提交条目=0
+seal-pr: 分支超出 main 的提交数=0  head=e40985515
+红：封版后分支上仍无提交 —— 这一格没有可引用的交付物

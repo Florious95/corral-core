@@ -1,0 +1,13 @@
+  ok   big_scrollback first_draw p50 基线=1492.0ms 复测=172.0ms (-88.5%)
+  ok   big_scrollback first_draw p95 基线=1891.8ms 复测=231.0ms (-87.8%)
+  ok   big_scrollback layout_settled p50 基线=1586.5ms 复测=640.0ms (-59.7%)
+  ok   big_scrollback layout_settled p95 基线=2029.7ms 复测=673.1ms (-66.8%)
+  ok   real_claude_idle first_draw p50 基线=1450.5ms 复测=148.5ms (-89.8%)
+  ok   real_claude_idle first_draw p95 基线=1908.0ms 复测=170.1ms (-91.1%)
+  ok   real_claude_idle layout_settled p50 基线=1591.0ms 复测=626.0ms (-60.7%)
+  ok   real_claude_idle layout_settled p95 基线=2009.7ms 复测=637.8ms (-68.3%)
+  ok   redraw_tui first_draw p50 基线=1478.0ms 复测=152.0ms (-89.7%)
+  ok   redraw_tui first_draw p95 基线=2280.0ms 复测=178.0ms (-92.2%)
+  ok   redraw_tui layout_settled p50 基线=1609.0ms 复测=623.0ms (-61.3%)
+  ok   redraw_tui layout_settled p95 基线=2403.5ms 复测=647.2ms (-73.1%)
+PASS 全段不低于基线

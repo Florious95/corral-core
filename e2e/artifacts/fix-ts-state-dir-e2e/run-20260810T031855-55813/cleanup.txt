@@ -1,0 +1,22 @@
+cleanup_status=yes
+daemon_pid_absent=yes
+headscale_pid_absent=yes
+hang_server_pid_absent=yes
+qr_reader_pid_absent=yes
+isolated_tmux_pid_absent=yes
+isolated_tmux_pane_pid_absent=yes
+android_task_user_absent=yes
+android_task_package_data_absent=yes
+android_task_data_forced_cleanup=no
+android_original_user_restored=yes
+adb_reverse_absent=yes
+device_ui_dump_absent=yes
+virtualscene_restored=yes
+task_temp_absent=yes
+task_temp_open_files_before_remove=0
+production_pid_3393_untouched=yes
+port_43910_tcp_listeners=0 udp_sockets=0
+port_43911_tcp_listeners=0 udp_sockets=0
+port_43912_tcp_listeners=0 udp_sockets=0
+port_43913_tcp_listeners=0 udp_sockets=0
+port_43920_tcp_listeners=0 udp_sockets=0

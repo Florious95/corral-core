@@ -1,0 +1,131 @@
+## headscale-configtest.log
+
+
+## headscale.stderr
+
+
+## headscale-cli.stderr
+
+
+## sandbox-check.log
+
+
+## go-build.log
+
+
+## daemon.stderr
+time=2026-08-10T17:30:46.232+08:00 level=INFO msg="single-instance guard acquired" pidfile=TASK_TMP/daemon-state/agentmirrord.pid
+time=2026-08-10T17:30:46.232+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T17:30:46.232+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:43920 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-10T17:30:46.232+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir=TASK_TMP/daemon-state/tsnet
+time=2026-08-10T17:30:46.232+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/10 17:30:46 tsnet running state path TASK_TMP/daemon-state/tsnet/tailscaled.state
+2026/08/10 17:30:46 tsnet starting with hostname "MacBook-Pro.local", varRoot "TASK_TMP/daemon-state/tsnet"
+2026/08/10 17:30:46 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/10 17:30:46 AuthLoop: state is Starting; done
+time=2026-08-10T17:30:49.365+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+time=2026-08-10T17:33:14.364+08:00 level=INFO msg="shutting down"
+
+
+## android-start-user.log
+Success: user started
+
+
+## android-switch-user.log
+
+
+## android-data-init.log
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+
+
+## android-device-ready.log
+[exec] wake emulator device=emulator-5554 key=KEYCODE_WAKEUP
+[exec] dismiss keyguard device=emulator-5554 user=29
+[policy] camera=no foreground_mouse=no window_targeting=no
+[state] wakefulness=Awake user_state=RUNNING_UNLOCKED
+
+
+## android-app-start.log
+Starting: Intent { cmp=dev.agentmirror.app/.MainActivity }
+
+
+## pairing-injection.log
+method=adb_private_store_stdin
+secret_transport=stdin
+temporary_android_user=yes
+app_private_store_owner_verified=yes
+app_private_store_context_verified=yes
+preinjection_process_absent=yes
+production_keystore_migration_required=yes
+camera_used=no
+foreground_mouse_used=no
+window_targeting_used=no
+daemon_auth_bypassed=no
+security_rationale=bypasses only the QR carrier and VM pre-probe; temporary app-private store, production Keystore migration, daemon token auth, and real tsnet join remain mandatory
+production_keystore_migration_verified=yes
+app_tsnet_state_created=yes
+
+
+## app-logcat-redacted.log
+--------- beginning of main
+08-10 17:31:00.947 26059 26059 I agentmirror.app: Late-enabling -Xcheck:jni
+08-10 17:31:00.963 26059 26059 I agentmirror.app: Using CollectorTypeCMC GC.
+08-10 17:31:00.973 26059 26059 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+08-10 17:31:00.993 26059 26059 D nativeloader: Load libstats_jni.so using APEX ns com_android_os_statsd for caller /apex/com.android.os.statsd/javalib/framework-statsd.jar: ok
+08-10 17:31:00.999 26059 26059 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+08-10 17:31:00.999 26059 26059 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+08-10 17:31:00.999 26059 26059 W ziparchive: Unable to open '/data/app/~~hivk-9FHYR45z99LEtLvww==/dev.agentmirror.app-Ztk2NpAa3_gVqOf64FmAfA==/base.dm': No such file or directory
+08-10 17:31:00.999 26059 26059 W ziparchive: Unable to open '/data/app/~~hivk-9FHYR45z99LEtLvww==/dev.agentmirror.app-Ztk2NpAa3_gVqOf64FmAfA==/base.dm': No such file or directory
+08-10 17:31:01.314 26059 26059 D nativeloader: Configuring clns-7 for other apk /data/app/~~hivk-9FHYR45z99LEtLvww==/dev.agentmirror.app-Ztk2NpAa3_gVqOf64FmAfA==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~hivk-9FHYR45z99LEtLvww==/dev.agentmirror.app-Ztk2NpAa3_gVqOf64FmAfA==/lib/arm64:/data/app/~~hivk-9FHYR45z99LEtLvww==/dev.agentmirror.app-Ztk2NpAa3_gVqOf64FmAfA==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/29/dev.agentmirror.app
+08-10 17:31:01.316 26059 26059 D CompatChangeReporter: Compat change id reported: 202956589; UID 2910207; state: ENABLED
+08-10 17:31:01.340 26059 26059 V GraphicsEnvironment: Currently set values for:
+08-10 17:31:01.340 26059 26059 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+08-10 17:31:01.340 26059 26059 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+08-10 17:31:01.340 26059 26059 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+08-10 17:31:01.340 26059 26059 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+08-10 17:31:01.368 26059 26059 D CompatChangeReporter: Compat change id reported: 279646685; UID 2910207; state: ENABLED
+08-10 17:31:01.632 26059 26059 D CompatChangeReporter: Compat change id reported: 309578419; UID 2910207; state: ENABLED
+08-10 17:31:01.877 26059 26178 D nativeloader: Load /data/app/~~hivk-9FHYR45z99LEtLvww==/dev.agentmirror.app-Ztk2NpAa3_gVqOf64FmAfA==/base.apk!/lib/arm64-v8a/libgojni.so using ns clns-7 from class loader (caller=/data/app/~~hivk-9FHYR45z99LEtLvww==/dev.agentmirror.app-Ztk2NpAa3_gVqOf64FmAfA==/base.apk!classes10.dex): ok
+08-10 17:31:01.925 26059 26059 W HWUI    : Unknown dataspace 0
+08-10 17:31:01.977 26059 26059 I Choreographer: Skipped 32 frames!  The application may be doing too much work on its main thread.
+08-10 17:31:02.218 26059 26178 I GoLog   : tsnet running state path /data/user/29/dev.agentmirror.app/files/tsnet/node-9defdbac6ab26150c68029c79dc6ec5c5eb7788e7cddb4517a4a8f2637500883/tailscaled.state
+08-10 17:31:02.226 26059 26178 I GoLog   : tsnet starting with hostname "agentmirror-sdk-gphone64-arm64", varRoot "/data/user/29/dev.agentmirror.app/files/tsnet/node-9defdbac6ab26150c68029c79dc6ec5c5eb7788e7cddb4517a4a8f2637500883"
+08-10 17:31:02.231 26059 26178 I GoLog   : LocalBackend state is NeedsLogin; running StartLoginInteractive...
+08-10 17:31:02.389 26059 26059 W agentmirror.app: Accessing hidden method Landroid/os/SystemProperties;->addChangeCallback(Ljava/lang/Runnable;)V (unsupported, reflection, allowed)
+08-10 17:31:02.661 26059 26141 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+08-10 17:31:02.661 26059 26141 I EGL_emulation: Opening libGLESv2_emulation.so
+08-10 17:31:02.670 26059 26141 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+08-10 17:31:02.670 26059 26141 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+08-10 17:31:02.701 26059 26141 I Gralloc4: mapper 4.x is not supported
+08-10 17:31:02.768 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+08-10 17:31:02.768 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+08-10 17:31:02.768 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+08-10 17:31:02.779 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+08-10 17:31:02.779 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+08-10 17:31:02.779 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+08-10 17:31:02.779 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inClipPlane
+08-10 17:31:02.779 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 4 name inIsectPlane
+08-10 17:31:02.779 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 5 name inRoundCapCenters
+08-10 17:31:02.785 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+08-10 17:31:02.786 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+08-10 17:31:02.786 26059 26192 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inTextureCoords
+08-10 17:31:02.819 26059 26086 I HWUI    : Davey! duration=1371ms; Flags=1, FrameTimelineVsyncId=967336, IntendedVsync=66143012703147, Vsync=66143546036459, InputEventId=0, HandleInputStart=66143559484372, AnimationStart=66143559486747, PerformTraversalsStart=66143559487872, DrawStart=66144305479414, FrameDeadline=66143029369813, FrameInterval=66143558752955, FrameStartTime=16666666, SyncQueued=66144321084664, SyncStart=66144323163706, IssueDrawCommandsStart=66144323780039, SwapBuffers=66144369702789, FrameCompleted=66144386021122, DequeueBufferDuration=1917, QueueBufferDuration=188917, GpuCompleted=66144385959664, SwapBuffersCompleted=66144386021122, DisplayPresentTime=72904454231359566, CommandSubmissionCompleted=66144369702789, 
+08-10 17:31:02.840 26059 26059 I Choreographer: Skipped 46 frames!  The application may be doing too much work on its main thread.
+--------- beginning of system
+08-10 17:31:03.009 26059 26059 I ActivityThread: ApplicationInfo updating for dev.agentmirror.app, new timestamp: 66144571
+08-10 17:31:03.009 26059 26059 I ActivityThread: assets removed: []
+08-10 17:31:03.009 26059 26059 I ActivityThread: assets added: [/data/resource-cache/com.android.systemui-neutral-zUWC.frro, /data/resource-cache/com.android.systemui-accent-ONij.frro, /data/resource-cache/com.android.systemui-dynamic-teUW.frro]
+08-10 17:31:03.232 26059 26080 I agentmirror.app: Compiler allocated 5250KB to compile void android.view.ViewRootImpl.performTraversals()
+08-10 17:31:06.924 26059 26916 D ProfileInstaller: Installing profile for dev.agentmirror.app
+08-10 17:32:07.160 26059 27679 D TrafficStats: tagSocket(68) with statsTag=0xffffffff, statsUid=-1
+
+
+## app-install.log
+Performing Streamed Install
+Success
+
+
+## app-restore.log
+Performing Streamed Install
+Success
+

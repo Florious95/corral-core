@@ -1,0 +1,23 @@
+ .../java/dev/agentmirror/app/AgentMirrorApp.kt     |   2 +
+ .../dev/agentmirror/app/conn/ConnectionManager.kt  |  24 +++
+ .../main/java/dev/agentmirror/app/conn/Frame.kt    |   3 +
+ .../main/java/dev/agentmirror/app/conn/Frames.kt   |  61 ++++++
+ .../app/workspace/Level2LiveStreamScreen.kt        | 107 +++++++++++
+ .../agentmirror/app/workspace/Level2ViewModel.kt   |  96 ++++++++++
+ .../agentmirror/app/workspace/WorkspaceScreen.kt   |  28 ++-
+ .../app/workspace/Level2LiveStreamRenderTest.kt    |  78 ++++++++
+ .../app/workspace/Level2NavigationIdentityTest.kt  |  76 ++++++++
+ .../app/workspace/Level2StreamLifecycleTest.kt     |  99 ++++++++++
+ .../app/workspace/WorkspaceRefreshTest.kt          |   1 +
+ server/internal/api/level2.go                      | 206 ++++++++++++++++++++
+ server/internal/api/level2_test.go                 | 209 +++++++++++++++++++++
+ server/internal/api/server.go                      |  18 ++
+ server/internal/api/ws_conn.go                     |  21 ++-
+ server/internal/protocol/frames.go                 |  57 +++++-
+ server/internal/protocol/frametype.go              |  17 ++
+ server/internal/protocol/json.go                   |   6 +
+ server/internal/protocol/json_test.go              |  11 ++
+ server/internal/protocol/testdata/list_delta.json  |   2 +
+ server/internal/protocol/testdata/listing.json     |   3 +
+ server/internal/protocol/validate.go               |  29 +++
+ 22 files changed, 1145 insertions(+), 9 deletions(-)

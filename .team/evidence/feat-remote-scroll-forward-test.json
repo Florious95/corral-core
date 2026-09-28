@@ -1,0 +1,58 @@
+{
+  "task_id": "feat-remote-scroll-forward",
+  "seat": "w-scroll-test",
+  "role": "scenario_red_test",
+  "round": "回炉第7轮·场景红测",
+  "status": "red_confirmed",
+  "judging_criterion": "唯一合法断言对象：客户端经产品自己的 Subscribe/WebSocket 通道最终收到的画面字节变了没有。不断言 capture-pane、不断言 #{scroll_position}、不断言'调用了 InjectScroll'。",
+  "file": "server/internal/api/scroll_forward_scenario_test.go",
+  "isolation": "每条测试 startTmuxEnv() 起独立 tmux socket（临时目录内），从未触碰生产 daemon(pid 81134)/用户真实 tmux；socket 名含随机序号，与 w-scroll-probe 的隔离 socket 不会撞车",
+  "root_cause_manually_verified_before_writing_tests": {
+    "what": "在隔离 tmux 上手工验证：进 copy-mode 后 send-keys -X -N 50 scroll-up，pipe-pane FIFO 在整个滚动过程中收到 0 字节",
+    "why_it_matters": "Subscribe 的镜像流（server/internal/bridge/stream.go）完全由 pipe-pane 驱动；InjectScroll（bridge.go）只调用 tmux copy-mode / send-keys -X 滚动命令，这些是 tmux 客户端视图操作，从不产生新的 pty 输出字节。协议文档 frames.go 里 ScrollWheel 的注释'No ack on success — mirror deltas carry the visual result'这句话本身未经验证，本轮测试证明它是假的：mirror 通道拿不到滚动结果。",
+    "repro": "tmux -S sock new-session -d cmd sh; 打印200行; tmux copy-mode -e; tmux send-keys -X -N 50 scroll-up; 期间挂的 pipe-pane FIFO 全程 0 字节写入"
+  },
+  "tests": [
+    {
+      "name": "TestScrollForward_NonAltScreenTUI_HistoryReachesRealChannel",
+      "tier": "HANDOFF §4.1 第①档：Claude Code 类比（非 alt-screen TUI）",
+      "assertion": "上滑 140 档后，marker（此前已在 backlog 中滚出屏幕）必须出现在 Subscribe 通道 2 秒窗口内到达的二进制帧字节中",
+      "result": "FAIL（红）",
+      "actual_output": "上滑后收到的唯一帧是 pane_mode_changed{in_copy_mode:true}；二进制镜像字节为空；marker 从未到达客户端",
+      "diagnosis": "PASS_would_mean_content_delivered；当前 FAIL 证明这正是三次真机翻车的机制：服务端自认为滚动'成功'（发了 PaneModeChanged），但用户实际看到的画面（唯一由 Subscribe 通道决定）没有变"
+    },
+    {
+      "name": "TestScrollForward_BareShell_HistoryReachesRealChannel",
+      "tier": "HANDOFF §4.1 第③档：裸 shell",
+      "assertion": "同上机制的最小复现，marker 必须经镜像通道到达",
+      "result": "FAIL（红）",
+      "actual_output": "同上：收到 pane_mode_changed{true}，二进制字节为空"
+    },
+    {
+      "name": "TestScrollForward_AltScreenApp_MustBeDistinguishableFromWorkingScroll",
+      "tier": "HANDOFF §4.1 第②档：alt-screen（vim -c 'set mouse=a'）",
+      "assertion": "对照组（真实非 alt-screen pane，滚动应该'有效'）与实验组（vim/alt-screen，本身没有可滚动历史）收到的首个 pane_mode_changed 帧（去掉 Ref 后）必须不同——否则客户端无法分辨'真滚动'与'结构上不可能滚动'",
+      "result": "FAIL（红）",
+      "actual_output": "两组收到的帧完全相同：{\"ref\":\"\",\"in_copy_mode\":true}",
+      "diagnosis": "'不支持'目前是未定义行为：服务端只看 pane_in_mode，不看 alt-screen 状态，对 alt-screen pane 一样宣称'已进入 copy-mode'，客户端拿到的信号和真的能看到历史时一模一样。任务要求'把不支持钉成明确行为'——现状显示它还没被钉，是本轮要防住的第4次翻车候选点之一（用户在 vim 里滑不动时目前没有任何区别于'成功'的信号）"
+    },
+    {
+      "name": "TestScrollForward_BareShell_TypingAfterScrollLandsInShellOnRealChannel",
+      "tier": "HANDOFF §4.1 第③档：copy-mode 打字自动脱困",
+      "assertion": "进 copy-mode 后发 Input('echo <marker>')，marker 必须真的在 shell 里执行并经镜像通道可见（不是只满足收到 PaneModeChanged{false} 这个元信号）",
+      "result": "PASS（绿，如实报告）",
+      "actual_output": "marker 出现在镜像字节流中",
+      "note": "这条目前是真绿——ExitCopyMode+Inject 这条已有链路本来就直接写 pty，会被 pipe-pane 正常捕获，和滚动结果需要的通道不是同一件事。没有把它删掉凑'全红'：leader 判据是'现在必须是红的'指整体反映真实缺口，不是要求每条子用例都红。"
+    }
+  ],
+  "raw_test_output": "=== RUN   TestScrollForward_NonAltScreenTUI_HistoryReachesRealChannel\n    scroll_forward_scenario_test.go:241: FAIL（判据：唯一合法断言——marker 必须经 Subscribe/WS 镜像通道到达客户端）：\n        上滑 140 档后，1 个窗口内到达的帧中未出现 marker \"CLAUDE_CODE_CONTEXT_MARKER_9f3a\"。\n        实际收到的二进制字节（可能为空——InjectScroll 只驱动 tmux 客户端视图，从不产生新的 pipe-pane 字节）：\n        \"\"\n        收到的帧列表：\n          [0] control type=pane_mode_changed payload={\"ref\":\"/var/folders/45/xpp3dfrd3dsgh482sxfl_2f80000gn/T/wsapi985254179/sock\\u001f%0\",\"in_copy_mode\":true}\n--- FAIL: TestScrollForward_NonAltScreenTUI_HistoryReachesRealChannel (2.12s)\n=== RUN   TestScrollForward_BareShell_HistoryReachesRealChannel\n    scroll_forward_scenario_test.go:268: FAIL：裸 shell 上滑后，marker \"BARE_SHELL_HISTORY_MARKER_2c71\" 未经真实镜像通道到达客户端。收到字节：\"\"。帧列表：\n          [0] control type=pane_mode_changed payload={\"ref\":\"/var/folders/45/xpp3dfrd3dsgh482sxfl_2f80000gn/T/wsapi1013718856/sock\\u001f%0\",\"in_copy_mode\":true}\n--- FAIL: TestScrollForward_BareShell_HistoryReachesRealChannel (2.14s)\n=== RUN   TestScrollForward_AltScreenApp_MustBeDistinguishableFromWorkingScroll\n    scroll_forward_scenario_test.go:316: FAIL（判据：alt-screen 的'不支持'必须是客户端可分辨的明确信号，不许和真滚动撞成同一个信号）：\n        对照组（真的能滚动）与实验组（vim/alt-screen，scroll_position 结构上恒为 0）收到的首个 pane_mode_changed 帧在去掉 Ref 后完全相同：{\"ref\":\"\",\"in_copy_mode\":true}\n        客户端无法仅凭收到的字节区分这两种质上不同的结果。\n--- FAIL: TestScrollForward_AltScreenApp_MustBeDistinguishableFromWorkingScroll (5.74s)\n=== RUN   TestScrollForward_BareShell_TypingAfterScrollLandsInShellOnRealChannel\n--- PASS: TestScrollForward_BareShell_TypingAfterScrollLandsInShellOnRealChannel (3.19s)\nFAIL\nFAIL\tgithub.com/agentmirror/agentmirror/internal/api\t13.485s\nFAIL\n",
+  "regression_check": "同时跑了 internal/api 与 internal/bridge 全部既有测试（未改动任何实现代码），除上述 3 条新红测外全部保持原状（api 包既有测试绿，bridge 包全绿）——本轮新增测试未破坏任何既有断言",
+  "app_side_client_test": {
+    "file": "app/app/src/test/java/dev/agentmirror/app/session/ScrollWheelTest.kt",
+    "status": "已存在（此前落地，非本轮新增）",
+    "coverage": "手势→ScrollWheelFrame 方向/节流/累加、非 READY 降级、PaneModeChangedFrame 状态更新、协议层 validate/encode/decode round-trip",
+    "why_not_extended": "该文件用 FakeWebSocketTransport，测的是 App 是否忠实构造并发送 ScrollWheelFrame——这一层本身没有问题；本轮红测揭示的缺口在服务端'滚动结果是否真的回到镜像通道'，FakeWebSocketTransport 结构上不可能捕获这个缺口（它不连真服务端）。App 侧无需新增用例即可覆盖客户端职责边界内的行为。"
+  },
+  "note_to_implementer": "服务端需要让 InjectScroll 之后的可见结果真正进入 Subscribe 通道（例如滚动后主动做一次 copy-mode 视图的 capture 并作为 KindSnapshot/KindDelta 推给客户端），以及让 alt-screen pane 的响应与非 alt-screen 的响应在客户端可分辨——具体走哪条实现路径由开发席按裁定方案定，本红测只钉住'客户端最终看到什么'这一层结果，不预设实现。",
+  "at": "2026-08-14"
+}

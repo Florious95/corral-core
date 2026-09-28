@@ -1,0 +1,5 @@
+TASK_TMP/daemon-state/agentmirrord.pid
+TASK_TMP/daemon-state/tsnet/tailscaled.log.conf
+TASK_TMP/daemon-state/tsnet/tailscaled.log1.txt
+TASK_TMP/daemon-state/tsnet/tailscaled.log2.txt
+TASK_TMP/daemon-state/tsnet/tailscaled.state

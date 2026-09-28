@@ -1,0 +1,1 @@
+session=d22-upload pane=%0 command=zsh size=100x34

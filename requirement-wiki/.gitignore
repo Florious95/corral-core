@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────────────
+# Personal content — these are YOUR notes, not framework
+# ─────────────────────────────────────────────────────────
+
+# Raw source materials (your private research)
+raw/**
+!raw/.gitkeep
+!raw/README.md
+
+# AI-generated wiki content (yours, not part of the framework)
+wiki/concepts/**
+wiki/techniques/**
+wiki/architectures/**
+wiki/projects/**
+wiki/patterns/**
+wiki/questions/**
+wiki/ideas/**
+wiki/claims/**
+!wiki/*/.gitkeep
+
+# Wiki entry-point files (initialized on first ingest)
+wiki/index.md
+wiki/log.md
+wiki/hot.md
+
+# ─────────────────────────────────────────────────────────
+# Generated / runtime
+# ─────────────────────────────────────────────────────────
+.claude/settings.local.json
+wiki/_graph.html
+wiki/_graph.md
+wiki/_z_test.html
+wiki/_archive/
+wiki/lint-report-*.md
+.wiki-runtime/
+
+# ─────────────────────────────────────────────────────────
+# Tooling / cache / OS
+# ─────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Optional personal docs (keep or remove as you wish)
+卡帕西知识库-B站Top3总结.md

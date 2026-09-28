@@ -1,0 +1,34 @@
+printf 'GLYPH PROBE\nU+23F5 \342\217\265   U+25B8 \342\226\270   U+25B6 \342\226\266   U+25B7 \342\2
+26\267   U+25BA \342\226\272   U+2023 \342\200\243   U+27A4 \342\236\244\n'
+alauda@MacBook-Pro d35-real-symbol % printf 'GLYPH PROBE\nU+23F5 \342\217\265   U+25B8 \342\226\270
+  U+25B6 \342\226\266   U+25B7 \342\226\267   U+25BA \342\226\272   U+2023 \342\200\243   U+27A4 \34
+2\236\244\n'
+GLYPH PROBE
+U+23F5 ⏵   U+25B8 ▸   U+25B6 ▶   U+25B7 ▷   U+25BA ►   U+2023 ‣   U+27A4 ➤
+alauda@MacBook-Pro d35-real-symbol %
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

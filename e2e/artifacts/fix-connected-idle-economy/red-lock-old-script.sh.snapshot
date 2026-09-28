@@ -1,0 +1,723 @@
+#!/usr/bin/env bash
+# connected-idle-economy.sh measures one isolated real daemon in the three
+# frozen states: zero connection, authenticated with zero subscriptions, and
+# authenticated with one subscription. Every tmux command is fail-closed to
+# the socket created below; no default or Team Agent socket is ever addressed.
+
+set -euo pipefail
+
+E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$E2E_ROOT/.." && pwd)"
+SERVER_ROOT="$REPO_ROOT/server"
+ART="$E2E_ROOT/artifacts/fix-connected-idle-economy"
+mkdir -p "$ART"
+
+MEASURE_SECONDS=60
+PANE_COUNT=27
+CPU_LIMIT=5.0
+TOKEN="connected-idle-e2e-token"
+
+METRICS_TSV="$ART/measurements.tsv"
+METRICS_JSON="$ART/metrics.json"
+DAEMON_LOG="$ART/daemon.log"
+TARGET_AUDIT="$ART/tmux-targets.tsv"
+CAPTURE_LOG="$ART/capture-pane.log"
+VIOLATIONS="$ART/isolation-violations.log"
+CLEANUP_LOG="$ART/cleanup.log"
+NOSUB_LOG="$ART/client-zero-subscription.log"
+SUB_LOG="$ART/client-single-subscription.log"
+BUILD_LOG="$ART/build.log"
+
+: >"$DAEMON_LOG"
+: >"$TARGET_AUDIT"
+: >"$CAPTURE_LOG"
+: >"$VIOLATIONS"
+: >"$CLEANUP_LOG"
+: >"$NOSUB_LOG"
+: >"$SUB_LOG"
+: >"$BUILD_LOG"
+printf 'state\tpanes\twall_start_ns\twall_end_ns\twall_seconds\tcpu_start_raw\tcpu_end_raw\tcpu_start_seconds\tcpu_end_seconds\tcpu_delta_seconds\tmean_cpu_percent\tcapture_start\tcapture_end\tcapture_delta\tcapture_per_second\n' >"$METRICS_TSV"
+
+REAL_TMUX="$(command -v tmux)"
+REAL_GO="$(command -v go)"
+RUN_ROOT="$(mktemp -d /tmp/am-cidle.XXXXXX)"
+case "$RUN_ROOT" in
+  /tmp/am-cidle.*|/private/tmp/am-cidle.*) ;;
+  *) echo "unsafe runtime root: $RUN_ROOT" >&2; exit 1 ;;
+esac
+
+TMUX_ROOT="$RUN_ROOT/tmux"
+SOCKET_DIR="$TMUX_ROOT/tmux-$(id -u)"
+TMUX_LABEL="am-cidle-$$"
+TMUX_SOCKET="$SOCKET_DIR/$TMUX_LABEL"
+PANE_CWD="$RUN_ROOT/panes"
+OWNED_PIDS="$RUN_ROOT/owned-pane-pids.tsv"
+SHIM_DIR="$RUN_ROOT/shim"
+STATE_DIR="$RUN_ROOT/state"
+UPLOAD_DIR="$RUN_ROOT/uploads"
+DAEMON_TMP="$RUN_ROOT/daemon-tmp"
+RUN_HOME="$RUN_ROOT/home"
+DAEMON_BIN="$RUN_ROOT/bin/agentmirrord"
+CLIENT_DIR="$RUN_ROOT/client"
+CLIENT_BIN="$RUN_ROOT/bin/connected-idle-client"
+READY_FILE="$RUN_ROOT/client.ready"
+
+mkdir -p "$TMUX_ROOT" "$PANE_CWD" "$SHIM_DIR" "$STATE_DIR" "$UPLOAD_DIR" "$DAEMON_TMP" "$RUN_HOME" "$RUN_ROOT/bin" "$CLIENT_DIR"
+: >"$OWNED_PIDS"
+
+DAEMON_PID=""
+CLIENT_PID=""
+TMUX_SERVER_PID=""
+PORT=""
+
+pid_alive() {
+  local pid="${1:-}"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+pid_zombie() {
+  local pid="${1:-}" state
+  [ -n "$pid" ] || return 1
+  state="$(ps -o stat= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+  [ "${state#Z}" != "$state" ]
+}
+
+stop_owned_pid() {
+  local pid="${1:-}"
+  [ -n "$pid" ] || return 0
+  if pid_alive "$pid"; then
+    kill -TERM "$pid" 2>/dev/null || true
+    for _ in $(seq 1 50); do
+      pid_alive "$pid" || return 0
+      if pid_zombie "$pid"; then
+        wait "$pid" 2>/dev/null || true
+        ! pid_alive "$pid"
+        return
+      fi
+      sleep 0.1
+    done
+    kill -KILL "$pid" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+      pid_alive "$pid" || return 0
+      if pid_zombie "$pid"; then
+        wait "$pid" 2>/dev/null || true
+        ! pid_alive "$pid"
+        return
+      fi
+      sleep 0.1
+    done
+  fi
+  wait "$pid" 2>/dev/null || true
+  ! pid_alive "$pid"
+}
+
+tmux_own() {
+  env -i \
+    HOME="$RUN_HOME" \
+    LANG=C \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    SHELL=/bin/bash \
+    TMPDIR="$RUN_ROOT" \
+    TMUX_TMPDIR="$TMUX_ROOT" \
+    CIDLE_OWNED_PIDS="$OWNED_PIDS" \
+    "$REAL_TMUX" -L "$TMUX_LABEL" "$@"
+}
+
+cleanup() {
+  local cleanup_ok=1 client_gone=true daemon_gone=true tmux_gone=true
+  local owned_pids_gone=true listener_absent=true handles_zero=true
+  local violations_zero=true socket_absent=true runtime_absent=true
+  trap - EXIT INT TERM
+
+  if [ -n "$CLIENT_PID" ]; then
+    if ! stop_owned_pid "$CLIENT_PID"; then
+      client_gone=false
+      cleanup_ok=0
+    fi
+    CLIENT_PID=""
+  fi
+  if [ -n "$DAEMON_PID" ]; then
+    if ! stop_owned_pid "$DAEMON_PID"; then
+      daemon_gone=false
+      cleanup_ok=0
+    fi
+  fi
+
+  tmux_own kill-server >/dev/null 2>&1 || true
+  if [ -n "$TMUX_SERVER_PID" ]; then
+    if ! stop_owned_pid "$TMUX_SERVER_PID"; then
+      tmux_gone=false
+      cleanup_ok=0
+    fi
+  fi
+
+  if [ -f "$OWNED_PIDS" ]; then
+    while IFS=$'\t' read -r root_pid child_pid; do
+      if ! stop_owned_pid "$child_pid"; then
+        owned_pids_gone=false
+        cleanup_ok=0
+      fi
+      if ! stop_owned_pid "$root_pid"; then
+        owned_pids_gone=false
+        cleanup_ok=0
+      fi
+    done <"$OWNED_PIDS"
+  fi
+
+  if [ -n "$DAEMON_PID" ] && pid_alive "$DAEMON_PID"; then
+    daemon_gone=false
+    cleanup_ok=0
+  fi
+  if [ -n "$TMUX_SERVER_PID" ] && pid_alive "$TMUX_SERVER_PID"; then
+    tmux_gone=false
+    cleanup_ok=0
+  fi
+
+  if [ -n "$PORT" ]; then
+    if ! python3 - "$PORT" <<'PY'
+import socket, sys
+s = socket.socket()
+s.settimeout(0.2)
+try:
+    listening = s.connect_ex(("127.0.0.1", int(sys.argv[1]))) == 0
+finally:
+    s.close()
+raise SystemExit(1 if listening else 0)
+PY
+    then
+      listener_absent=false
+      cleanup_ok=0
+    fi
+  fi
+
+  if ! command -v lsof >/dev/null 2>&1; then
+    handles_zero=false
+    cleanup_ok=0
+  elif [ -d "$RUN_ROOT" ]; then
+    if lsof -nP +D "$RUN_ROOT" >/dev/null 2>&1; then
+      handles_zero=false
+      cleanup_ok=0
+    fi
+  fi
+
+  if [ -s "$VIOLATIONS" ]; then
+    violations_zero=false
+    cleanup_ok=0
+  fi
+
+  case "$RUN_ROOT" in
+    /tmp/am-cidle.*|/private/tmp/am-cidle.*) rm -rf -- "$RUN_ROOT" ;;
+    *) runtime_absent=false; cleanup_ok=0 ;;
+  esac
+  if [ -e "$RUN_ROOT" ]; then
+    runtime_absent=false
+    cleanup_ok=0
+  fi
+  if [ -e "$TMUX_SOCKET" ]; then
+    socket_absent=false
+    cleanup_ok=0
+  fi
+
+  printf 'client_pid_gone=%s\n' "$client_gone" >>"$CLEANUP_LOG"
+  printf 'daemon_pid_gone=%s\n' "$daemon_gone" >>"$CLEANUP_LOG"
+  printf 'tmux_pid_gone=%s\n' "$tmux_gone" >>"$CLEANUP_LOG"
+  printf 'owned_pane_pids_gone=%s\n' "$owned_pids_gone" >>"$CLEANUP_LOG"
+  printf 'listener_absent=%s\n' "$listener_absent" >>"$CLEANUP_LOG"
+  printf 'runtime_handles_zero=%s\n' "$handles_zero" >>"$CLEANUP_LOG"
+  printf 'socket_absent=%s\n' "$socket_absent" >>"$CLEANUP_LOG"
+  printf 'runtime_tree_absent=%s\n' "$runtime_absent" >>"$CLEANUP_LOG"
+  printf 'out_of_scope_tmux_targets=%s\n' "$([ "$violations_zero" = true ] && echo 0 || wc -l <"$VIOLATIONS" | tr -d ' ')" >>"$CLEANUP_LOG"
+  printf 'ps_scope=read-only snapshot; classification only beneath self-owned pane roots; raw process table not recorded or displayed; zero production interaction\n' >>"$CLEANUP_LOG"
+
+  [ "$cleanup_ok" -eq 1 ]
+}
+
+on_exit() {
+  local rc=$?
+  if ! cleanup; then
+    rc=1
+  fi
+  if [ "$rc" -eq 0 ]; then
+    echo "connected-idle-economy: PASS"
+  else
+    echo "connected-idle-economy: FAIL (see $ART)" >&2
+  fi
+  exit "$rc"
+}
+trap on_exit EXIT
+trap 'exit 130' INT TERM
+
+# The daemon resolves every tmux operation through this shim. It records only
+# the self-owned socket target and operation name, counts capture-pane starts,
+# and refuses before exec if any target falls outside the isolated directory.
+cat >"$SHIM_DIR/tmux" <<'SH'
+#!/bin/sh
+target=
+operation=
+take_next=0
+for arg in "$@"; do
+  if [ "$take_next" = 1 ]; then
+    target=$arg
+    take_next=0
+    continue
+  fi
+  if [ "$arg" = "-S" ]; then
+    take_next=1
+    continue
+  fi
+  if [ -z "$operation" ] && [ "${arg#-}" = "$arg" ]; then
+    operation=$arg
+  fi
+done
+printf '%s\t%s\n' "$target" "$operation" >>"$CIDLE_TMUX_TARGET_AUDIT"
+case "$target" in
+  "$CIDLE_ALLOWED_SOCKET_DIR"/*) ;;
+  *) printf 'refused_non_owned_target\n' >>"$CIDLE_TMUX_VIOLATIONS"; exit 97 ;;
+esac
+if [ "$operation" = "capture-pane" ]; then
+  printf '%s\n' "$target" >>"$CIDLE_CAPTURE_LOG"
+fi
+exec "$CIDLE_REAL_TMUX" "$@"
+SH
+chmod 700 "$SHIM_DIR/tmux"
+
+# A real wrapper-shaped pane root (bash) owns a fake codex-named descendant.
+# The provider therefore exercises its existing read-only ps identification
+# path, but all recorded PIDs belong to this runtime and no ps output is kept.
+cat >"$RUN_ROOT/fake-agent-wrapper.sh" <<'SH'
+#!/bin/bash
+bash -c 'exec -a codex /bin/sleep 600' &
+child=$!
+printf '%s\t%s\n' "$$" "$child" >>"$CIDLE_OWNED_PIDS"
+wait "$child"
+SH
+chmod 700 "$RUN_ROOT/fake-agent-wrapper.sh"
+
+export CIDLE_OWNED_PIDS="$OWNED_PIDS"
+for i in $(seq 1 "$PANE_COUNT"); do
+  name="cidle-$(printf '%02d' "$i")"
+  tmux_own new-session -d -x 80 -y 24 -s "$name" -c "$PANE_CWD" "$RUN_ROOT/fake-agent-wrapper.sh"
+done
+TMUX_SERVER_PID="$(tmux_own display-message -p '#{pid}' | tr -d '[:space:]')"
+actual_panes="$(tmux_own list-panes -a -F '#{pane_id}' | wc -l | tr -d ' ')"
+if [ "$actual_panes" -ne "$PANE_COUNT" ]; then
+  echo "isolated pane count $actual_panes, want $PANE_COUNT" >&2
+  exit 1
+fi
+PANE_CWD="$(cd "$PANE_CWD" && pwd -P)"
+
+cat >"$CLIENT_DIR/go.mod" <<'EOF'
+module github.com/agentmirror/agentmirror/connectedidleclient
+
+go 1.26.5
+
+require github.com/coder/websocket v1.8.14
+EOF
+cp "$E2E_ROOT/harness/go.sum" "$CLIENT_DIR/go.sum"
+cat >"$CLIENT_DIR/main.go" <<'EOF'
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/coder/websocket"
+)
+
+type envelope struct {
+	V       int             `json:"v"`
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type session struct {
+	Ref string `json:"ref"`
+}
+
+type workspace struct {
+	Cwd      string    `json:"cwd"`
+	Sessions []session `json:"sessions"`
+}
+
+func writeFrame(ctx context.Context, c *websocket.Conn, typ string, payload any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	body, err := json.Marshal(envelope{V: 1, Type: typ, Payload: raw})
+	if err != nil {
+		return err
+	}
+	return c.Write(ctx, websocket.MessageText, body)
+}
+
+func nextControl(ctx context.Context, c *websocket.Conn, want string) (json.RawMessage, error) {
+	for {
+		typ, body, err := c.Read(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if typ != websocket.MessageText {
+			continue
+		}
+		var env envelope
+		if err := json.Unmarshal(body, &env); err != nil {
+			return nil, err
+		}
+		if env.Type == "error" {
+			return nil, fmt.Errorf("server error: %s", env.Payload)
+		}
+		if env.Type == want {
+			return env.Payload, nil
+		}
+	}
+}
+
+func main() {
+	mode := flag.String("mode", "", "zero-subscription or single-subscription")
+	url := flag.String("url", "", "WebSocket URL")
+	token := flag.String("token", "", "pairing token")
+	cwd := flag.String("cwd", "", "expected isolated cwd")
+	ready := flag.String("ready", "", "ready-file path")
+	wantPanes := flag.Int("panes", 27, "expected isolated pane count")
+	flag.Parse()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	c, _, err := websocket.Dial(ctx, *url, nil)
+	if err != nil {
+		cancel()
+		panic(err)
+	}
+	cancel()
+	defer c.CloseNow()
+
+	ctx, cancel = context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := writeFrame(ctx, c, "auth", map[string]any{"token": *token}); err != nil {
+		panic(err)
+	}
+	raw, err := nextControl(ctx, c, "auth_ack")
+	if err != nil {
+		panic(err)
+	}
+	var ack struct{ OK bool `json:"ok"` }
+	if err := json.Unmarshal(raw, &ack); err != nil || !ack.OK {
+		panic("authentication rejected")
+	}
+	if err := writeFrame(ctx, c, "list", map[string]any{"req_id": 1}); err != nil {
+		panic(err)
+	}
+	raw, err = nextControl(ctx, c, "listing")
+	if err != nil {
+		panic(err)
+	}
+	var listing struct {
+		Workspaces []workspace `json:"workspaces"`
+	}
+	if err := json.Unmarshal(raw, &listing); err != nil {
+		panic(err)
+	}
+	count := 0
+	ref := ""
+	for _, ws := range listing.Workspaces {
+		if ws.Cwd != *cwd {
+			panic(fmt.Sprintf("listing escaped isolated cwd: %q", ws.Cwd))
+		}
+		count += len(ws.Sessions)
+		if ref == "" && len(ws.Sessions) > 0 {
+			ref = ws.Sessions[0].Ref
+		}
+	}
+	if count != *wantPanes || ref == "" {
+		panic(fmt.Sprintf("isolated listing panes=%d want=%d", count, *wantPanes))
+	}
+
+	if *mode == "single-subscription" {
+		if err := writeFrame(ctx, c, "subscribe", map[string]any{"ref": ref, "rows": 24, "cols": 80}); err != nil {
+			panic(err)
+		}
+		for {
+			typ, _, err := c.Read(ctx)
+			if err != nil {
+				panic(err)
+			}
+			if typ == websocket.MessageBinary {
+				break
+			}
+		}
+	} else if *mode != "zero-subscription" {
+		panic("unknown mode")
+	}
+
+	if err := os.WriteFile(*ready, []byte("ready\n"), 0o600); err != nil {
+		panic(err)
+	}
+	fmt.Printf("ready mode=%s panes=%d\n", *mode, count)
+
+	readErr := make(chan error, 1)
+	go func() {
+		for {
+			_, _, err := c.Read(context.Background())
+			if err != nil {
+				readErr <- err
+				return
+			}
+		}
+	}()
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case <-sig:
+		_ = c.Close(websocket.StatusNormalClosure, "measurement complete")
+	case err := <-readErr:
+		panic(fmt.Sprintf("connection ended before signal: %v", err))
+	}
+}
+EOF
+
+(
+  cd "$SERVER_ROOT"
+  "$REAL_GO" build -o "$DAEMON_BIN" ./cmd/agentmirrord
+) >>"$BUILD_LOG" 2>&1
+(
+  cd "$CLIENT_DIR"
+  GOWORK=off "$REAL_GO" build -mod=readonly -o "$CLIENT_BIN" .
+) >>"$BUILD_LOG" 2>&1
+
+PORT="$(python3 <<'PY'
+import random, socket
+for _ in range(500):
+    port = random.randint(49152, 65000)
+    s = socket.socket()
+    try:
+        s.bind(("127.0.0.1", port))
+    except OSError:
+        s.close()
+        continue
+    s.close()
+    print(port)
+    break
+else:
+    raise SystemExit("no high port available")
+PY
+)"
+
+env -i \
+  HOME="$RUN_HOME" \
+  LANG=C \
+  PATH="$SHIM_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
+  TMPDIR="$DAEMON_TMP" \
+  TMUX_TMPDIR="$TMUX_ROOT" \
+  AGENTMIRROR_TOKEN="$TOKEN" \
+  AGENTMIRROR_STATE_DIR="$STATE_DIR" \
+  AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS="$SOCKET_DIR" \
+  CIDLE_REAL_TMUX="$REAL_TMUX" \
+  CIDLE_ALLOWED_SOCKET_DIR="$SOCKET_DIR" \
+  CIDLE_TMUX_TARGET_AUDIT="$TARGET_AUDIT" \
+  CIDLE_CAPTURE_LOG="$CAPTURE_LOG" \
+  CIDLE_TMUX_VIOLATIONS="$VIOLATIONS" \
+  "$DAEMON_BIN" \
+    -listen "127.0.0.1:$PORT" \
+    -host 127.0.0.1 \
+    -state-dir "$STATE_DIR" \
+    -upload-dir "$UPLOAD_DIR" \
+    -log-level info \
+    >"$RUN_ROOT/daemon.stdout" 2>"$DAEMON_LOG" &
+DAEMON_PID=$!
+
+listener_ready=0
+for _ in $(seq 1 150); do
+  if ! pid_alive "$DAEMON_PID"; then
+    echo "isolated daemon exited during startup" >&2
+    exit 1
+  fi
+  if python3 - "$PORT" <<'PY' >/dev/null 2>&1
+import socket, sys
+s = socket.socket()
+s.settimeout(0.1)
+try:
+    s.connect(("127.0.0.1", int(sys.argv[1])))
+finally:
+    s.close()
+PY
+  then
+    listener_ready=1
+    break
+  fi
+  sleep 0.1
+done
+if [ "$listener_ready" -ne 1 ]; then
+  echo "isolated daemon did not open its high port" >&2
+  exit 1
+fi
+
+cpu_seconds() {
+  local raw="$1"
+  python3 - "$raw" <<'PY'
+import sys
+raw = sys.argv[1].strip()
+days = 0
+if "-" in raw:
+    d, raw = raw.split("-", 1)
+    days = int(d)
+parts = raw.split(":")
+if len(parts) == 3:
+    hours, minutes, seconds = int(parts[0]), int(parts[1]), float(parts[2])
+elif len(parts) == 2:
+    hours, minutes, seconds = 0, int(parts[0]), float(parts[1])
+else:
+    hours, minutes, seconds = 0, 0, float(parts[0])
+print(days * 86400 + hours * 3600 + minutes * 60 + seconds)
+PY
+}
+
+capture_count() {
+  awk 'END { print NR + 0 }' "$CAPTURE_LOG"
+}
+
+wall_time_ns() {
+  # Separate Python processes on this host do not share a monotonic epoch;
+  # wall-clock nanoseconds are comparable across the two bounded samples.
+  python3 -c 'import time; print(time.time_ns())'
+}
+
+measure_state() {
+  local state="$1"
+  local cpu_start_raw cpu_end_raw cpu_start cpu_end wall_start wall_end wall_seconds
+  local cap_start cap_end cpu_delta mean_cpu cap_delta cap_rate panes_now
+
+  panes_now="$(tmux_own list-panes -a -F '#{pane_id}' | wc -l | tr -d ' ')"
+  [ "$panes_now" -eq "$PANE_COUNT" ] || { echo "$state pane count changed: $panes_now" >&2; return 1; }
+  pid_alive "$DAEMON_PID" || { echo "$state daemon is not alive" >&2; return 1; }
+
+  cpu_start_raw="$(ps -o time= -p "$DAEMON_PID" | tr -d '[:space:]')"
+  cpu_start="$(cpu_seconds "$cpu_start_raw")"
+  cap_start="$(capture_count)"
+  wall_start="$(wall_time_ns)"
+  sleep "$MEASURE_SECONDS"
+  wall_end="$(wall_time_ns)"
+  cap_end="$(capture_count)"
+  cpu_end_raw="$(ps -o time= -p "$DAEMON_PID" | tr -d '[:space:]')"
+  cpu_end="$(cpu_seconds "$cpu_end_raw")"
+
+  wall_seconds="$(awk -v a="$wall_start" -v b="$wall_end" 'BEGIN { printf "%.9f", (b-a)/1000000000 }')"
+  cpu_delta="$(awk -v a="$cpu_start" -v b="$cpu_end" 'BEGIN { printf "%.6f", b-a }')"
+  mean_cpu="$(awk -v c="$cpu_delta" -v w="$wall_seconds" 'BEGIN { printf "%.6f", c/w*100 }')"
+  cap_delta=$((cap_end - cap_start))
+  cap_rate="$(awk -v c="$cap_delta" -v w="$wall_seconds" 'BEGIN { printf "%.6f", c/w }')"
+
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$state" "$panes_now" "$wall_start" "$wall_end" "$wall_seconds" \
+    "$cpu_start_raw" "$cpu_end_raw" "$cpu_start" "$cpu_end" "$cpu_delta" "$mean_cpu" \
+    "$cap_start" "$cap_end" "$cap_delta" "$cap_rate" >>"$METRICS_TSV"
+  printf '%-28s wall=%ss cpu_delta=%ss mean_cpu=%s%% capture=%s rate=%s/s panes=%s\n' \
+    "$state" "$wall_seconds" "$cpu_delta" "$mean_cpu" "$cap_delta" "$cap_rate" "$panes_now"
+
+  awk -v w="$wall_seconds" -v min="$MEASURE_SECONDS" 'BEGIN { exit !(w >= min) }' || {
+    echo "$state wall window below frozen ${MEASURE_SECONDS}s" >&2
+    return 1
+  }
+  if [ "$state" = "zero_connection" ] && [ "$cap_delta" -ne 0 ]; then
+    echo "zero connection spawned $cap_delta capture-pane processes" >&2
+    return 1
+  fi
+  if [ "$state" != "zero_connection" ]; then
+    awk -v cpu="$mean_cpu" -v limit="$CPU_LIMIT" 'BEGIN { exit !(cpu <= limit) }' || {
+      echo "$state mean CPU ${mean_cpu}% exceeds frozen ${CPU_LIMIT}%" >&2
+      return 1
+    }
+  fi
+}
+
+start_client() {
+  local mode="$1" log="$2"
+  rm -f "$READY_FILE"
+  env -i HOME="$RUN_HOME" LANG=C PATH="/usr/bin:/bin" \
+    "$CLIENT_BIN" -mode "$mode" -url "ws://127.0.0.1:$PORT/ws" -token "$TOKEN" \
+    -cwd "$PANE_CWD" -ready "$READY_FILE" -panes "$PANE_COUNT" >"$log" 2>&1 &
+  CLIENT_PID=$!
+  for _ in $(seq 1 150); do
+    if [ -f "$READY_FILE" ]; then
+      return 0
+    fi
+    pid_alive "$CLIENT_PID" || { echo "$mode client exited before ready" >&2; return 1; }
+    sleep 0.1
+  done
+  echo "$mode client did not become ready" >&2
+  return 1
+}
+
+stop_client() {
+  if [ -n "$CLIENT_PID" ]; then
+    stop_owned_pid "$CLIENT_PID" || return 1
+    CLIENT_PID=""
+  fi
+}
+
+# State 1: the listener is up but no authenticated client exists. The one
+# readiness TCP probe above never authenticates, so the listing loop is parked.
+sleep 3
+measure_state zero_connection
+
+# State 2: auth + full listing proves the connection and exactly 27 scoped
+# panes, but the client never sends subscribe.
+start_client zero-subscription "$NOSUB_LOG"
+sleep 3
+measure_state connected_zero_subscription
+stop_client
+sleep 3
+
+# State 3: a fresh connection lists the same 27 panes, subscribes exactly one,
+# consumes its snapshot, then remains silent for the full measurement window.
+start_client single-subscription "$SUB_LOG"
+sleep 3
+measure_state connected_single_subscription
+stop_client
+
+python3 - "$METRICS_TSV" "$METRICS_JSON" "$CPU_LIMIT" "$MEASURE_SECONDS" "$PANE_COUNT" "$SOCKET_DIR" <<'PY'
+import csv, json, sys
+src, dst, cpu_limit, seconds, panes, socket_dir = sys.argv[1:]
+numeric_int = {"panes", "wall_start_ns", "wall_end_ns", "capture_start", "capture_end", "capture_delta"}
+numeric_float = {"wall_seconds", "cpu_start_seconds", "cpu_end_seconds", "cpu_delta_seconds", "mean_cpu_percent", "capture_per_second"}
+with open(src, newline="") as fh:
+    rows = list(csv.DictReader(fh, delimiter="\t"))
+for row in rows:
+    for key in numeric_int:
+        row[key] = int(row[key])
+    for key in numeric_float:
+        row[key] = float(row[key])
+payload = {
+    "verdict": "pass",
+    "thresholds": {
+        "online_mean_cpu_percent_max": float(cpu_limit),
+        "state_window_seconds_min": int(seconds),
+        "pane_count": int(panes),
+        "deterministic_fleet_sizes": [3, 27, 200],
+        "fairness_seconds_max": 60,
+    },
+    "discovery": {
+        "mode": "explicit_scoped_socket_dirs",
+        "socket_dir": socket_dir,
+        "default_socket_dirs_opened": False,
+        "team_agent_socket_opened": False,
+    },
+    "process_snapshot_deviation": "ps read-only snapshot; classification only beneath self-owned pane roots; raw process table not recorded or displayed; zero production interaction",
+    "states": rows,
+}
+with open(dst, "w") as fh:
+    json.dump(payload, fh, ensure_ascii=False, indent=2)
+    fh.write("\n")
+PY
+
+target_count="$(awk 'END { print NR + 0 }' "$TARGET_AUDIT")"
+capture_total="$(capture_count)"
+printf 'scoped_socket_dir=%s\ntmux_target_count=%s\ncapture_total=%s\nout_of_scope_targets=0\ndefault_socket_dirs_opened=false\nteam_agent_socket_opened=false\n' \
+  "$SOCKET_DIR" "$target_count" "$capture_total" >"$ART/isolation-summary.txt"
+
+exit 0

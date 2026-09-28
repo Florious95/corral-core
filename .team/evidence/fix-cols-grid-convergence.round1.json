@@ -1,0 +1,14 @@
+{
+  "task_id": "fix-cols-grid-convergence",
+  "status": "reverted_no_deliverable",
+  "worker": "w-dev-cols",
+  "at": "2026-08-13",
+  "status_reason": "代码已随全量回退 v6 移除，任务无交付物。此前只有 intent 没有 evidence，导致看门狗（.team/watchdog.sh:10-13 以「有 intent 无 evidence」判在途）永久把本任务算作在途。本记录用于关闭该虚假在途态，不代表缺陷已修。",
+  "summary": "横向栅格收敛：presenter.cellWidth 恒为名义值 10（只有捏合会改，measureCells() 从不回写），而绘制按实测 cellW≈11px 步进——上报的 cols 由名义值算、绘制由实测值走，两套栅格永不收敛。",
+  "认知产出_代码退了但结论留下": {
+    "doc": "docs/nominal-vs-measured-cell-width.md",
+    "value": "这是用户报了 4 次的「最右列文字跑到屏幕外」的根因，今天由两个席位从两个方向独立撞上，可信度高于任何单席结论。",
+    "patch": "docs/reverted-to-v6/horizontal-grid-convergence.patch（62630 字节，供后继审查，不建议直接 apply）"
+  },
+  "缺陷现状": "未修。用户裁定「上面那些问题全部搁置」（2026-08-13），本项随之封存。"
+}

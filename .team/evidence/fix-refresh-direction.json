@@ -1,0 +1,40 @@
+{
+  "task_id": "fix-refresh-direction",
+  "status": "pass",
+  "worker": "w-fix-refresh",
+  "date": "2026-08-12",
+  "summary": "D-27 发消息后概率性从上往下逐行刷新排查+诊断+契约锁定。排查结论：服务端 input 路径绝不重发 snapshot（handleInput 只注入+回 input_ack，pane 响应经 relay 以 delta 流出）；客户端 input_ack 处理绝不触发 resubscribe/resize（ConnectionManager.resolveInput 仅移除 pending 并回调 onInputResult）。snapshot 全屏重放（即'从上往下逐行刷新'的观感，客户端 replaySnapshot 清屏重建）只有两个生产者：handleSubscribe（含重连重放）与 handleResize。发消息后出现 snapshot 的最可能通道：键盘弹出/输入框增行等 IME 重布局触发 TermViewPresenter.onViewportSizeChanged → 未锁定几何时发 resize → 服务端 handleResize 补发 snapshot（已提交代码无 geometryLocked；fix-terminal-resize-cluster 席在途的锁定正修此根因，不在本席 write_scope）。概率性来源：IME 重布局时序不定，且与 delta 流背靠背时首见效果即顶部先清。交付：两端诊断日志 + 服务端红测（input 绝不回 snapshot）+ 客户端 D-27 回归测试（input_ack 不触发任何额外上行帧）。",
+  "root_cause_chain": [
+    "1. 服务端 input 路径（server/internal/api/ws_handler.go handleInput）：注入 text/keys → 回 input_ack，唯一副作用是 tmux send-keys/paste-buffer；pane 的响应由 Subscribe 挂的 pipe relay 以 KindDelta 流出。全仓 snapshot 生产者仅两处：handleSubscribe（含重复订阅/重连重放）与 handleResize（fix-term-residuals：SIGWINCH 重排后补全屏快照清残影）。input 路径零 snapshot。",
+    "2. 客户端 input_ack 处理（app conn/ConnectionManager.resolveInput）：从 pendingInputs 移除 → listener.onInputResult → VM 清输入框。零 resubscribe、零 resize、零 list。输入发送只产生 input 一帧（sendInput）。",
+    "3. 真正的 snapshot 触发通道（已提交代码）在 TermViewPresenter.onViewportSizeChanged → recomputeGeometry()：无几何锁，IME 每次重布局（键盘弹出→发消息→草稿框增行/收窄→重布局）都重算 rows/cols，变化即经 SessionViewModel presenter 回调 manager.resize → ResizeFrame → 服务端 handleResize → snapshotWithCursor 补发 KindSnapshot → 客户端 replaySnapshot 清屏重建。发消息场景天然伴随键盘 IME 重布局（发送按钮使草稿框状态变化、IME 动画中间测量态），故只在'发消息'后概率出现，Claude Code 自己工作时（无 IME 交互）从不出现——与用户现象完全吻合。",
+    "4. 概率性来源：IME 重布局时序不定（可能多发 resize 或与 delta 背靠背），慢网络下 snapshot 大、delta 流在新网格上重画，首见效果即顶部行先清、底部仍是旧内容——'从上往下一行行刷新、底部是旧内容'。",
+    "5. 已在途修复（fix-terminal-resize-cluster 席，2026-08-12）：TermViewPresenter 增加 geometryLocked 首次锁定 + visibleHeightPx 视口上推，使键盘/输入框纯高度变化不再发 resize。该修复与本案结论互补：本席不触碰其 write_scope（termview/），只立诊断与契约测试。"
+  ],
+  "diagnostics_added": [
+    "server/internal/api/ws_handler.go handleInput：Debug('ws: input', conn, ref, req, keys, text_len)——每次 input 留痕，证明 input 路径不发 snapshot。",
+    "server/internal/api/ws_handler.go handleSubscribe：Debug('ws: subscribe re-pushes snapshot', conn, ref)——重复订阅（不必要的重放来源候选）可见。",
+    "server/internal/api/ws_handler.go handleResize：Debug('ws: resize re-pushes snapshot', conn, ref, dims)——resize 补发 snapshot 留痕；若日志显示 input 后紧跟本行 ⇒ 元凶是 IME 触发的 resize 帧。",
+    "app conn/ConnectionManager：新增 @Volatile debugLog 钩子（纯 JVM 可测，生产挂 android.util.Log，测试默认 null 零崩溃）；sendInput 记 'input sent'、resolveInput 记 'input_ack'、replaySubscriptions 记 'replay subscribe'——把'发送→回执→（是否又来 snapshot/resize）'的关键路径暴露到 logcat。"
+  ],
+  "tests": {
+    "acceptance_server": "cd server && env -u TEAM_AGENT_* go test ./... → 全部包 ok（api 包 65 个测试全绿）",
+    "acceptance_app": "cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest → BUILD SUCCESSFUL，384 用例 0 失败 0 错误",
+    "acceptance_archwiki": "python3 tools/archwiki/build_wiki.py --check → exit 0（T1/T3 报告项为既有违规，未触碰相关文件）",
+    "red_test_server": "api_tmux_test.go TestInputNeverResendsSnapshot：subscribe 后发 input，断言 input 响应窗口内绝不出现 KindSnapshot——若 handleInput 被改成发 snapshot 即红。",
+    "regression_client": "SessionViewModelTest.inputAckDoesNotTriggerSnapshotResendOrResubscribe / inputKeyAckDoesNotTriggerSnapshotResendOrResubscribe：input_ack ok 后 sentFrames 只允许多出 input 一帧，不得出现重复 subscribe/resize/scrollback 重拉。",
+    "diagnostic_hook_client": "ConnManagerTest.debugLogHookIsNullSafeWithoutAndroidRuntime（钩子默认 null，纯 JVM 收发路径零崩溃）+ debugLogHookRecordsSendAndAckWhenWired（挂上后 input sent/input_ack 均入日志）"
+  },
+  "write_scope_check": {
+    "in_scope": [
+      "server/internal/api/ws_handler.go（input/subscribe/resize 三路径诊断日志）",
+      "server/internal/api/api_tmux_test.go（TestInputNeverResendsSnapshot 红测）",
+      "app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt（debugLog 诊断钩子 + 三处埋点）",
+      "app/app/src/test/java/dev/agentmirror/app/conn/ConnManagerTest.kt（钩子单测）",
+      "app/app/src/test/java/dev/agentmirror/app/session/SessionViewModelTest.kt（D-27 发送回归测试）"
+    ],
+    "note": "工作树另含他席在途改动（fix-ime-resize/fix-terminal-resize-cluster 的 TermViewPresenter/TermViewPresenterTest、fix-state-detection 的 server state_wiring、fix-upload-token-chain、fix-ts-auth-inapp 等），本席未触碰其 write_scope；禁 commit/push 已遵守。"
+  },
+  "note": "本席未改协议（零协议变更：snapshot/delta/resize 语义与 docs/protocol.md 完全一致）。D-27 的根治落在 fix-terminal-resize-cluster 的几何锁定（已在途，其 write_scope 在 termview/），本席交付为：契约红测 + 两端诊断日志 + 客户端回归测试，三者在根治落地后依然成立（根治只让 resize 不再被 IME 触发，本席断言 input 不重发 snapshot 与 input_ack 不触发额外帧的契约恒成立）。残余风险：若真机日志显示 input 后确无 resize/subscribe 却仍有快照，则属服务端他处泄漏，本席测试会红、需再排。",
+  "leader_note": "交件即退役。"
+}

@@ -1,0 +1,16 @@
+pkg=dev.agentmirror.app.ui.theme 基线=15 本次=0 新增=0 消掉=15
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:103
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:128
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:164
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:176
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:214
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:22
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:309
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:394
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/DesignTokens.kt:479
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/TermThemeStore.kt:35
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/TerminalSpec.kt:35
+  ✅ 消掉: T3-1 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/TerminalSpec.kt:98
+  ✅ 消掉: T3-2 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/TermSchemes.kt:1
+  ✅ 消掉: T3-3 dev.agentmirror.app.ui.theme app/app/src/main/java/dev/agentmirror/app/ui/theme/Theme.kt:226
+  ✅ 消掉: T3-4 dev.agentmirror.app.ui.theme :0

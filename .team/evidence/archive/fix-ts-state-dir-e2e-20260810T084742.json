@@ -1,0 +1,216 @@
+{
+  "task_id": "fix-ts-state-dir-e2e",
+  "status": "red",
+  "summary": "cmd 已把解析后的 stateDir/tsnet 传到 tsnetd.Options.Dir，消费方 seam 的非缓存测试与 Go 验收均通过。自建 headscale 实链已证明隔离 daemon 节点以 100.64.0.1 入网且 tailscaled.state 落在任务 stateDir；最终 E2E 如实红：用户要求只能用后台 Computer Use 扫码，但当前持窗 qemu 是 bundleID=NULL 的裸 Mach-O，@oai/sky 无法按 app 身份寻址，故没有执行鼠标/前台窗口动作，App 节点未加入，headscale 节点数为 1。",
+  "notes": "用户裁定 2026-08-10：「模拟器扫不了码，就不要测模拟器的扫码。这任务看样子还没有完成。」⇒ 验收口径已改（taskbook 同步更新）：禁止依赖模拟器摄像头/Extended Controls/任何前台鼠标或窗口寻址；App 侧配对与 authkey 改经非摄像头路径注入（adb 直投配对参数 / App 手填入口 / instrumentation 直调配对入口，三选一并在证据写明该路径为何不弱化安全性：authkey 仍不上屏、不落日志、不入截图）；在此前提下实证 App 节点入网 + 经 SOCKS5 拨 daemon 的 100.64/10 地址 + 进入工作区。真扫码改由用户真机验收覆盖，不在本任务范围。已完成且需保留的部分：stateDir→tsnetd.Options.Dir 接线与红测 TestRunPassesResolvedStateDirToTSNet（人工无缓存复跑 PASS），headscale 隔离 runner 与零残留清理，禁鼠标/前台路径的自检；这些不要推倒重做，只补非摄像头配对路径与实链验证。",
+  "changes": [
+    "server/cmd/agentmirrord/main.go：增加 newTSNetGroup 窄 seam，并把 filepath.Join(stateDir, \"tsnet\") 传给 tsnetd.Options.Dir；未新增 state-dir flag/env，tailnet 未启用时 tsnetd 在使用 Dir 前返回。",
+    "server/cmd/agentmirrord/main_test.go：TestRunPassesResolvedStateDirToTSNet 截获 tsnetd.Options，证明消费方收到解析后的独立子目录。",
+    "e2e/feat-ts-wire-headscale.sh：固化 headscale 0.26.1、任务高端口/临时目录/隔离 tmux/临时 Android user、FIFO QR 消费、argv presence-only、失败也全量清场；移除 cliclick、osascript、System Events、AXRaise、前台抢焦点与鼠标状态路径。",
+    "e2e/feat-ts-wire-headscale.sh：只在 PackageManager 已创建、UID 与 SELinux context 均核验通过的临时 user 包目录内创建 files/tsnet，并逐项校验目录/文件 UID、context 与 control_url 内容。"
+  ],
+  "acceptance_results": [
+    {
+      "cmd": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\"'",
+      "exit": 0,
+      "result": "cmd/agentmirrord、internal/config、internal/tsnetd 全绿。",
+      "evidence_path": ".team/evidence/fix-ts-state-dir-e2e.json"
+    },
+    {
+      "cmd": "bash -lc 'env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh'",
+      "exit": 1,
+      "result": "expected_two_headscale_nodes；daemon 节点入网，App 节点未能经被禁止前台控制的模拟器扫码加入；未包装成绿。",
+      "evidence_path": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T033730-5688/result.json"
+    }
+  ],
+  "independent_checks": [
+    {
+      "cmd": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./cmd/agentmirrord/... -run ^TestRunPassesResolvedStateDirToTSNet$\"'",
+      "exit": 0,
+      "result": "非缓存执行，消费方确收 stateDir/tsnet。"
+    },
+    {
+      "cmd": "bash -lc 'if rg -n \"cliclick|/usr/bin/osascript|System Events|CAMERA_CONTROL_USED|set frontmost|AXRaise\" e2e/feat-ts-wire-headscale.sh; then exit 1; fi; bash -n e2e/feat-ts-wire-headscale.sh'",
+      "exit": 0,
+      "result": "runner 无前台鼠标/窗口控制路径且语法通过；该检查修前 exit 1，列出 12 处违规命中。"
+    }
+  ],
+  "e2e": {
+    "status": "blocked",
+    "authoritative_run": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T033730-5688",
+    "failure_reason": "expected_two_headscale_nodes",
+    "headscale_node_count": 1,
+    "daemon_tailnet_ip": "100.64.0.1",
+    "state_dir_proof": "TASK_TMP/daemon-state/tsnet/tailscaled.state existed and daemon diagnostics report the same state_dir",
+    "camera_proof": "CameraX active client dev.agentmirror.app, temporary Android user 16",
+    "workspace_visible": false,
+    "isolated_session_visible": false,
+    "paired_url_class": "unknown",
+    "socks5_loopback_proof": "unknown",
+    "background_computer_use": {
+      "skill": "/Users/alauda/.codex/plugins/cache/openai-bundled/computer-use/1.0.1000621/skills/computer-use/SKILL.md",
+      "read_completely": true,
+      "sky_app_candidates_matching_emulator_qemu_android": 0,
+      "launchservices_identity": "qemu-system-aarch64 PID 44635, bundleID=NULL, bundle path is the bare executable",
+      "get_app_state_results": [
+        "Android Emulator: Invalid app",
+        "qemu-system-aarch64: Invalid app",
+        "bare executable path: Invalid app"
+      ],
+      "ui_actions_performed": 0,
+      "real_mouse_moved": false,
+      "classification": "@oai/sky only accepts app display name, .app path, or bundle id and exposes no PID/window-title/raw AX route; Extended Controls belongs to the same qemu process. Repackaging/restarting the user's emulator or using console/gRPC would expand authority, so the run failed closed."
+    },
+    "unverified_due_to_blocker": [
+      "App node joins the isolated headscale",
+      "App persists ws://100.64/10...:43920/ws",
+      "App reaches daemon through loopback SOCKS5 with no Android system 100.64/10 route",
+      "App enters 工作区 and displays the isolated fix-ts-e2e session"
+    ]
+  },
+  "secret_hygiene": {
+    "authkey_daemon_ingress": "TS_AUTHKEY environment only",
+    "daemon_argv": {
+      "ts_authkey_flag_present": "no",
+      "authkey_value_present": "no"
+    },
+    "qr_stdout": "daemon stdout is consumed only through TASK_TMP/daemon.stdout.pipe FIFO; no daemon.stdout file is created, copied, logged, or screenshotted; the FIFO reader keeps draining until cleanup and its temporary QR PNG is removed with TASK_TMP.",
+    "artifact_secret_value_present": "no",
+    "screenshots": [],
+    "screenshot_review": "No success screenshot was produced because the E2E failed before workspace entry; screenshot_count=0, so no QR/authkey/token image was retained."
+  },
+  "deviations": [
+    {
+      "kind": "failed_harness_write_to_user0",
+      "what_happened": "旧 runner 使用 run-as + tee，模拟器上的 run-as 实际固定到 user 0；它误在 /data/user/0/dev.agentmirror.app/files/tsnet/control_url.txt 建立了空文件，没有把 control URL 写进临时 user。",
+      "ownership_attribution": "删除前已核对文件 mtime 落在本任务 runner 时间窗，因此归本任务；原 mtime 的具体秒值没有保存在存续 artifact，本 evidence 不伪造该数值。",
+      "cleanup": "只对上述精确文件执行删除，并复核 absent；没有递归删除或改动 user 0 的其他资产。最终独立复核仍为 absent。",
+      "correction": "新 runner 不再使用 run-as/tee；只写临时 user 的已核验包目录，并校验 user ID、package UID、SELinux context 和文件内容。"
+    },
+    {
+      "kind": "failed_harness_user10_residue",
+      "what_happened": "一轮 runner 过早以 root mkdir，留下 /data/user/10/dev.agentmirror.app。",
+      "cleanup": "确认 Android user 10 不存在且该路径是唯一任务残留后，只精确删除该 package 路径；最终独立复核 absent。",
+      "correction": "当前 runner 先确认临时 user 存在、PackageManager 已建包根且 UID/context 正确，随后才在其下创建 files/tsnet；cleanup 对 user 与包数据双重验零。"
+    },
+    {
+      "kind": "foreground_control_removed_after_user_correction",
+      "what_happened": "旧 runner 曾包含 AppleScript 抢焦点与 cliclick Alt+拖动 yaw sweep，违反用户‘不要动我的鼠标’指令。",
+      "cleanup": "相关 preflight、cleanup key-up、CAMERA_CONTROL_USED、窗口 raise/geometry 与 cliclick 动作全部删除；删除后静态检查 exit 0。",
+      "current_behavior": "runner 只加载任务临时 QR 到 virtual scene 并等待后台 Computer Use/真实 App 结果；由于 qemu 不可由 @oai/sky 寻址，最终 fail-closed。"
+    },
+    {
+      "kind": "failed_runs_preserved",
+      "what_happened": "所有失败 artifact 与 failure_reason 均保留；早期 cleanup 不完整没有被隐藏，最终 runner 修复后给出 cleanup_status=yes。"
+    }
+  ],
+  "attempts": [
+    {
+      "run": "run-20260810T021429-44487",
+      "exit": 1,
+      "failure": "headscale_exited_early",
+      "cleanup": "yes"
+    },
+    {
+      "run": "run-20260810T021621-74071",
+      "exit": 1,
+      "failure": "headscale_exited_early",
+      "cleanup": "yes"
+    },
+    {
+      "run": "run-20260810T021758-95008",
+      "exit": 1,
+      "failure": "cleanup_incomplete",
+      "cleanup": "no",
+      "detail": "android task user remained at that attempt"
+    },
+    {
+      "run": "run-20260810T022340-72116",
+      "exit": 1,
+      "failure": "cleanup_incomplete",
+      "cleanup": "no",
+      "detail": "android task user remained at that attempt"
+    },
+    {
+      "run": "run-20260810T024557-94479",
+      "exit": 1,
+      "failure": "cleanup_incomplete",
+      "cleanup": "no",
+      "detail": "android task user remained at that attempt"
+    },
+    {
+      "run": "run-20260810T025701-75486",
+      "exit": 1,
+      "failure": "cleanup_incomplete",
+      "cleanup": "no",
+      "detail": "production PID continuity check was not yet correct"
+    },
+    {
+      "run": "run-20260810T025944-19489",
+      "exit": 1,
+      "failure": "app_start_failed",
+      "cleanup": "yes"
+    },
+    {
+      "run": "run-20260810T030822-55741",
+      "exit": 1,
+      "failure": "pairing_screen_not_visible",
+      "cleanup": "yes"
+    },
+    {
+      "run": "run-20260810T031447-74973",
+      "exit": 1,
+      "failure": "not_completed",
+      "cleanup": "yes"
+    },
+    {
+      "run": "run-20260810T031855-55813",
+      "exit": 1,
+      "failure": "unexpected_command_failure_line_707",
+      "cleanup": "yes"
+    },
+    {
+      "run": "run-20260810T032103-107",
+      "exit": 1,
+      "failure": "expected_two_headscale_nodes",
+      "cleanup": "yes",
+      "headscale_nodes": 1
+    },
+    {
+      "run": "run-20260810T033213-13528",
+      "exit": 1,
+      "failure": "app_files_dir_not_ready",
+      "cleanup": "yes"
+    },
+    {
+      "run": "run-20260810T033730-5688",
+      "exit": 1,
+      "failure": "expected_two_headscale_nodes",
+      "cleanup": "yes",
+      "headscale_nodes": 1
+    }
+  ],
+  "cleanup": {
+    "status": "pass",
+    "authoritative_path": "e2e/artifacts/fix-ts-state-dir-e2e/run-20260810T033730-5688/cleanup.txt",
+    "runner_proof": {
+      "daemon_pid_absent": "yes",
+      "headscale_pid_absent": "yes",
+      "hang_server_pid_absent": "yes",
+      "qr_reader_pid_absent": "yes",
+      "isolated_tmux_pid_absent": "yes",
+      "isolated_tmux_pane_pid_absent": "yes",
+      "android_task_user_absent": "yes",
+      "android_task_package_data_absent": "yes",
+      "android_original_user_restored": "yes",
+      "adb_reverse_absent": "yes",
+      "device_ui_dump_absent": "yes",
+      "virtualscene_restored": "yes",
+      "task_temp_absent": "yes",
+      "task_temp_open_files_before_remove": 0,
+      "production_pid_3393_untouched": "yes",
+      "ports_43910_43911_43912_43913_43920_tcp_udp": "all zero"
+    },
+    "independent_final_probe": "pm list users only user 0; current user 0; adb reverse empty; task temp count 0; ports 43910/43911/43912/43913/43920 TCP+UDP all 0; old user0 control_url absent; old user10 package residue absent; PID 3393 retained original start time 2026-08-10 01:23:19 and command ./server/agentmirrord -host 192.168.31.116."
+  }
+}

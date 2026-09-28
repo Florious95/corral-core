@@ -1,0 +1,121 @@
+diff --git a/.team/stable-pr/host-auto-discovery/DESIGN.md b/.team/stable-pr/host-auto-discovery/DESIGN.md
+index d6b033c7c..47fd0a0c8 100644
+--- a/.team/stable-pr/host-auto-discovery/DESIGN.md
++++ b/.team/stable-pr/host-auto-discovery/DESIGN.md
+@@ -33,8 +33,10 @@ QR 给出 `host_id` + 主机 token + 可选 TS key + `port` + 可选 `ts_node_id
+ 
+ 1. **发现候选主机**（公开、可伪造、不含 token）  
+    - LAN：DNS-SD `_agentmirror._tcp`，TXT `id=<host_id>`，实例名=`host_id`，端口=监听端口，可选展示名。  
+-   - TS：本机 `TsnetState.Up` 后，对 peer 的字面 IPv4:`port` 做 `GET /pair/whoami`（无 token）。200 且字段合法则视为一台 AgentMirror 主机；非本服务/超时/RST/3xx/4xx/5xx 不是主机。  
++   - TS：本机 `TsnetState.Up` 后，对 peer 的字面 IPv4 做 `GET /pair/whoami`（无 token）。**引导端口**见下段，不是实现者现场猜值。200 且字段合法则视为一台 AgentMirror 主机；非本服务/超时/RST/3xx/4xx/5xx 不是主机。  
+    - 同一 `host_id` 的多地址合并成**一行主机**，不展示 IP，不让用户选 TS/LAN。
++
++   **TS 首次发现的端口（R1 / B11）**：无主机记录、无 QR/`port` 字段、无 NSD 解析端口、无 last-good 时，whoami 只打 **产品协议默认端口 9900**（与基线 daemon `ListenAddr` 默认 `0.0.0.0:9900` 一致，`internal/config/config.go`）。已有可信来源给出的端口继续按既定候选规则使用，优先级：当前主机记录 `port` → QR `port`/主 url 的 port → NSD `resolveService` 端口 → 否则 9900。`whoami` 响应里的 `port` 只允许附着**本次请求的原始字面 IPv4**，不得改 IP、不得当成新主机地址；该字段仍是不可信元数据，后续 identify 仍走 §3。非默认监听端口只能经 NSD、QR 或已有主机记录获得。不恢复用户手填端口/链接，不扫全端口，不扫 `100.64/10`。默认 9900 引导**只覆盖**「peer 上 AgentMirror 正在默认端口监听」；改了 `-listen`/`AGENTMIRROR_LISTEN` 且无 QR/NSD/记录时，TS-only 列表可以找不到该主机——如实范围，不宣称能推导任意服务端口。
+ 2. **展示/选择主机**：列表项 = 展示名（仅展示，不匹配）+ `host_id`。多台则必选其一；一台也可确认。可手填 `host_id`（daemon 指引印刷），输入校验：charset/长度。
+ 3. **输入主机 token**：必填，空 token 不得绑定、不得 identify、不得 WS `auth`。TS key 不得填进该框当主机 token。
+ 4. **验证绑定**：对所选 `host_id` 的候选字面地址走 §3 identify；通过后才允许对该**同一字面地址** `create` WS 并 `auth`。identify 失败不发 token，换该主机的下一地址；地址用尽则仍停在绑定页（校验/鉴权失败可见），不把“发现失败”写成已绑定。
+@@ -63,7 +65,7 @@ QR 给出 `host_id` + 主机 token + 可选 TS key + `port` + 可选 `ts_node_id
+ {"v":1,"host_id":"<self>","name":"<hostname>","port":9900}
+ ```
+ 
+-无 MAC、无 token。4xx/5xx/非 JSON = 该地址不是可展示主机。body ≤ 1KiB；每 IP ≤ 5 次/秒（与 identify 共用计数）。不加 `authed`、不唤醒 listing。
++无 MAC、无 token。客户端与 identify 同一纪律：只字面 IPv4、`followRedirects=false`、3xx = 不是主机，禁止把 `Location` 写成候选 IP。响应 `port` 若采用，只附着本次 GET 的原始字面 IPv4，不得改 IP。4xx/5xx/非 JSON = 该地址不是可展示主机。body ≤ 1KiB；每 IP ≤ 5 次/秒（与 identify 共用计数）。不加 `authed`、不唤醒 listing。whoami 不得写 prefs 的 `token`/`host_id`。
+ 
+ ### 3.3 `POST /pair/identify`（无 token）
+ 
+@@ -163,7 +165,7 @@ identify 成功 ≠ 登录：不加 `authed`，`/upload` 仍要 Bearer，WS 仍
+ 
+ `generation` 单调递增，在 `start`、掉线后的新一轮、`onNetworkAvailable` 于非 READY、`onForegroundResume` 于 RECONNECTING 时 +1。过期回调、identify 完成、WS `onClosed` 若 `generation` 不匹配则丢弃。`cancel(generation)`：停 NSD、取消 in-flight HTTP、不 `create`、不把结果发布为 READY。READY 期间不因 TS Up 开新代次。
+ 
+-删除 `PersistentConnection` 的 `whenSettled` 门闩：`TsnetState` 非 Up 时本代次跳过 TS 类候选，**同时**跑 LAN；last-good/QR 即使是 100.x 也不等待 TS。
++新代次 `begin` 才读取磁盘上的**最新待用 TS key** 并（若非空）`ensureStarted`；READY 中途改 key 不在本代次重启 TS（§6.3）。删除 `PersistentConnection` 的 `whenSettled` 门闩：`TsnetState` 非 Up 时本代次跳过 TS 类候选，**同时**跑 LAN；last-good/QR 即使是 100.x 也不等待 TS。过期代次不得把旧 key 写回磁盘或抢占新 READY。
+ 
+ ### 4.4 状态机
+ 
+@@ -280,17 +282,17 @@ QR 提示不得写成 `legacy_bootstrap_url`。
+ 
+ | 变化 | `releaseManager` | 其它 |
+ |---|---|---|
+-| `host_id` 或主机 token 变 | 是（身份变，单档覆盖） | 新代次 |
++| `host_id` 或主机 token 变 | 是（身份变，单档覆盖） | 显式更换身份：可 `releaseManager` 并停旧 TS；新代次 |
+ | 同主机重复扫码，token 同 | 否 | 更新 port / `ts_node_id` / hints / name |
+ | last-good / `url` 回写 | 否 | READY 不闪断 |
+-| 同主机 TS key 变 | 否 | 加密存储新 key；后台 `TsnetWire` 用新 key 重启（Error 静默）；**不**拆 READY；下一代次按新 TS 状态择路（非 Up 则 LAN） |
+-| TS key 从有到无或反向，身份不变 | 否 | 同上 |
++| 同主机、主机 token 未变，仅 TS key 变 | 否 | **READY 期间只持久化最新待用 key**（磁盘最新覆盖先前待用值）。不调用会 `stop` 旧 manager 的 `TsnetWire.ensureStarted`（基线 `TsnetWire.kt:84-115` 换 key 会停旧节点），不后台立即重启 TS 后端，不拆现有 TS 或 LAN socket。当前连接自然结束、进入**下一次连接代次**时才 `ensureStarted(最新待用 key)`。TS Starting 仍不得挡 LAN。过期代次回调不得复活旧 key、不得抢占新 READY。与上一行身份重建分开 |
++| TS key 从有到无或反向，身份不变 | 否 | 同上：READY 只改待用值；下一代次才按有/无 key 择路 |
+ 
+ ## 7. 发现传输细节
+ 
+ LAN 广告：`_agentmirror._tcp`，TXT 无 token。小型 DNS-SD（默认 `hashicorp/mdns` 或同等）。不用 `ListenService`。清单：`CHANGE_WIFI_MULTICAST_STATE`（及若需要的 `ACCESS_WIFI_STATE`），MulticastLock 仅窗口内。
+ 
+-TS：gomobile 扁平字符串。`PeerSnapshot(knownId, cursor) -> lines, nextCursor`。已知 ID 全表命中。客户端 whoami/identify 用字面 IPv4 + 记录中的 `port`（缺 port 则该来源不能单独构成候选）。
++TS：gomobile 扁平字符串。`PeerSnapshot(knownId, cursor) -> lines, nextCursor`。已知 ID 全表命中。客户端 whoami/identify 的端口按 §2.2：有记录/QR/NSD 则用该来源；无主机记录且无已知端口时引导 **9900**，不是缺 port 即丢弃、也不是现场猜值。
+ 
+ 分类：字面 `100.64/10` = TS，其余可用 IPv4 = LAN。无 loopback/link-local/RFC2544/IPv6。
+ 
+@@ -302,7 +304,7 @@ TS：gomobile 扁平字符串。`PeerSnapshot(knownId, cursor) -> lines, nextCur
+ |---|---|
+ | `ConnectionManager.attemptConnect` | 开代次，异步 coordinator；唯一 `create` |
+ | `pump` / 网络 / 前台 RECONNECTING | 不阻塞 IO；READY 前台仍不重建 |
+-| `PersistentConnection` | 无 `whenSettled`；有 ts key 则 `ensureStarted`（Error 内部） |
++| `PersistentConnection` | 无 `whenSettled`。`ensureStarted` 只在**连接代次开始**且存在待用 TS key 时调用；READY 中途改 key 只写盘，不在此入口重启 TS |
+ | `ServiceWire.setConfig` | 仅身份变重建 |
+ | 配对 UI | 主机列表+选择+token+可选 TS key；无 URL/候选下拉/TS 失败文案 |
+ | `PairingViewModel` 喷 candidates | 删除 |
+@@ -333,6 +335,9 @@ TS：gomobile 扁平字符串。`PeerSnapshot(knownId, cursor) -> lines, nextCur
+ | 场景 | 断言 | 装置 |
+ |---|---|---|
+ | 无扫码：TS key 入网后列出候选主机，选择后才收 token | 证明前零 `AuthFrame`；多 peer 含非 AgentMirror 不得当目标 | 隔离测试节点 + 假 whoami；禁止扫用户 tailnet |
++| **TS-only 新装（R1）**：无 QR、无 last-good、无主机记录、仅 TS key；peer 混合默认 9900 AgentMirror 与非本服务 | 必须实际发出 `GET http://<peerIPv4>:9900/pair/whoami`；列表出现该 `host_id`；选主机后才收主机 token；证明前零 `AuthFrame`。不扫其它端口、不扫 `100.64/10` | 隔离测试节点；目标 daemon 监听 9900；禁止用户 tailnet |
++| **TS READY 改 TS key（R2）** | 改 key 期间 `TsnetWire.stop`/`close`/新 `AuthFrame` 增量 = 0；现 socket 与徽标保持；下一次自然断线进入新代次后才 `ensureStarted(最后一把 key)`，仍 TS 优先择路 | 可控夹具；记 stop/close/AuthFrame 计数 |
++| **LAN READY 改 TS key（R2）** | 同上增量 = 0，不抢占 LAN socket；下一次断线后才应用最后一把 key，按 TS 优先（TS 可用则下一 READY 为 TS） | 同上 |
+ | 仅一台/多台主机 | 多台必须选择；主机选择≠路径选择 | 同上 |
+ | 四格路由 + 不抢占 | 与需求 101 表一致；徽标只 READY | 可控双监听夹具 |
+ | TS 黑洞×N + 可达 LAN | 8s 内 LAN READY，徽标局域网，无 TS 失败文案 | 黑洞 100.x + LAN |
+@@ -418,10 +423,12 @@ TS：gomobile 扁平字符串。`PeerSnapshot(knownId, cursor) -> lines, nextCur
+ | ID | 处置 | 位置 |
+ |---|---|---|
+ | S1 / Luna B1 | 闭合：whoami 列举 → 选主机 → 输入 token → identify。Grok N1 的“TS key≠主机 token”保留，不排除无扫码入口 | §2 |
++| v2 B11 / Luna R1 | 无记录无已知端口时 TS whoami 引导 9900；响应 port 只附着原始字面 IPv4；非默认端口靠 NSD/QR/记录；覆盖范围如实；夹具必须真 GET `:9900` | §2.2、§3.2、§7、§10.1 |
+ | S2 / Luna B2 B5 / Grok B4 N2 | 已知 ID 全表先匹配；窗口/并发/cursor 续扫；退化≠自主发现 PASS | §5、§11 |
+ | S3 / Luna B3 / Grok B2 B3 | 异步代次状态机；单 create；LAN 槽；无 pump 阻塞；删 whenSettled | §4 |
+ | S4 / Luna B6 / Grok B1 B5 B6 B7 B9 B10 | 字面地址、禁重定向/DNS、LocalAddr API、dest_ip MAC、先验后写 host_id、遗留仅确切 404+来源+未升级身份 | §3 |
+-| S5 / Luna B2 B4 / Grok B8 | port/ts_node_id/name 冷启；READY 原子发布；live 上传；TS key 变不拆 READY | §4.6、§6 |
++| S5 / Luna B2 B4 / Grok B8 | port/ts_node_id/name 冷启；READY 原子发布；live 上传 | §4.6、§6 |
++| v2 Luna R2 | 同主机同 token 仅改 TS key：READY 只持久化待用 key，不 `ensureStarted`/不拆 socket；下一代次才应用；与身份重建分开。TS/LAN READY 各一条时序夹具 | §4.3、§6.3、§8、§10.1 |
+ | S6 / Luna B7 B8 | 17 项全名、前台五项、CONTRACT/envcheck、签名/覆盖映射；删“先合”；冻结后可 push/开 PR，merge/生产未授权 | §9、§10 |
+ | Grok N3 | 两连接间 ARP/DHCP：与今日明文 WS 同阶，不升级 PKI；重定向另案已关 | §3.1 |
+ | Grok N4 | 旧 App 喷 candidates：旧客户端例外 | §3.5 |
+diff --git a/.team/stable-pr/host-auto-discovery/GOAL-DRAFT.md b/.team/stable-pr/host-auto-discovery/GOAL-DRAFT.md
+index 22a1cd724..529bb8a0c 100644
+--- a/.team/stable-pr/host-auto-discovery/GOAL-DRAFT.md
++++ b/.team/stable-pr/host-auto-discovery/GOAL-DRAFT.md
+@@ -3,7 +3,7 @@
+ - Baseline SHA: `corral-core@eaaa7d47d88e7e2de6c82988fe462e7adf29f86d`（PR #74，OPEN，未合并）+ `corral-serve@911dd94176a34e11f66b61b15b191216463c48cf`（PR #7，OPEN，未合并）；来源文档提交 `67d472b83f7a6715c464fd204adad8afa58bb640`
+ - User outcome: 用户只绑定目标主机及其主机 token；未绑定也可先入 TS 再发现候选主机并选择主机（不是路径）后输入主机 token 完成绑定。客户端自行发现并验证该主机的 TS 与局域网可达地址，用户不再填写、查看或选择 URL、IP、端口或网络路径。首次连接和每次重连优先 TS；当前连接仍可用时保持，不因另一条路径恢复而抢占。
+ - Observable success:
+-  - 绑定/扫码流程面向“主机 + 主机 token”，不把链接或候选路径暴露为用户选择项。无扫码时：发现候选主机→展示/选择主机→输入主机 token→验证绑定。TS token 仍只用于 TS 入网，不能替代主机 token，不能免鉴权绑定。
++  - 绑定/扫码流程面向“主机 + 主机 token”，不把链接或候选路径暴露为用户选择项。无扫码时：发现候选主机→展示/选择主机→输入主机 token→验证绑定。无主机记录且无已知端口的 TS 首次 whoami 使用产品默认端口 9900（与 daemon 默认监听一致）；非默认端口只经 NSD/QR/已有记录，不手填端口、不扫全端口。TS token 仍只用于 TS 入网，不能替代主机 token，不能免鉴权绑定。
+   - 在 TS、局域网或两者均可用的场景，客户端能从自动发现结果建立目标主机连接；首次连接与掉线后的下一次重连按 TS 优先，TS 不可用而局域网可用时自动使用局域网。PeerLines/NSD 未验证或失败时，QR/last-good 静态提示可保留连接，但不得将自主发现标为通过。
+   - 已建立的 TS 或局域网连接仍可用时不主动重建；例如当前为局域网时 TS 恢复，不立即切换，下一次重连才按 TS 优先重新选择。
+   - TS 入网失败不弹出提示，不阻止局域网尝试；两条路径均不可用时工作区为空，不出现额外弹窗、错误条或提示文案。
+@@ -45,7 +45,8 @@
+   - **选定方案**：`.team/stable-pr/host-auto-discovery/DESIGN.md` 为 FAIL 审查后的统一返修（S1–S6）。失败审查归档提交 `6528ecaf9a27867f44971404e5b42100a3a5bfc2` 是失败证据不是通过。席位证据 `.team/nodes/host-discovery-design-grok/EVIDENCE.md`。能力补证 `.team/nodes/host-discovery-explore-luna/CAPABILITY-EVIDENCE.md`。
+   - **架构工具事实**：探索文档 §1 记录独立工具目录 `/Users/alauda/team-agent-scratch/wiki-tooling` 不存在，无法据此声称 `build_wiki.py`、`code_abstract_tree.py` 或全量架构闭包 PASS；此缺口保留为 unknown，不扩成全仓治理。
+ - Unknowns requiring bounded experiments:
+-  - 方案已选定、不再当空洞：无扫码主机发现入口、公平续扫而非永久 32/8 盲截、异步代次状态机、identify 字面地址/禁重定向/LocalAddr 与 dest_ip MAC、遗留仅确切 404、冷启 port/ts_node_id、READY 原子发布与 live 上传、TS key 变化不拆链。
++  - 方案已选定、不再当空洞：无扫码主机发现入口、无记录时 TS whoami 引导 9900、公平续扫而非永久 32/8 盲截、异步代次状态机、identify 字面地址/禁重定向/LocalAddr 与 dest_ip MAC、遗留仅确切 404、冷启 port/ts_node_id、READY 原子发布与 live 上传、同身份仅改 TS key 时 READY 只持久化待用 key、下一代次才 `ensureStarted`。
++  - 默认 9900 引导不覆盖「非默认监听且无 QR/NSD/主机记录」的 TS-only 主机：范围已写明，不是实现期再猜端口。
+   - 仍需隔离实验、失败不得冒充自主发现通过（`DESIGN.md` §11）：Android `PeerSnapshot`/`Status`；`NsdManager`+组播锁；tsnet 已接受连接 LocalAddr 是否为拨号 100.x（两种 MAC 路径已冻结）。
+   - 预存在、本功能不修：tsnet 换 key 同名冲突（`sanitizeHostname` / 按 key 分 state dir）。
+   - `DESIGN.md` §10 所列 17 项、前台恢复、CONTRACT/envcheck、签名覆盖：未跑保持未验证，不得 PASS。
+@@ -53,7 +54,7 @@
+   - 客户端与服务端各自 PR 的 exact head 必须通过对应仓库 CI；若发现/身份契约跨仓变化，CI 必须在匹配的客户端/服务端协议版本上验证兼容，而非只验证单仓编译。
+   - CI 结果须绑定实际提交身份并覆盖受影响模块与旧绑定/协议兼容行为；具体 job、命令和测试矩阵留到后续 PR 任务，不在本目标臆定。
+ - Required module/Grok/real-machine tests:
+-  - 行为与安全：见 `DESIGN.md` §10.1（无扫码发现入口、四格路由、LAN 槽、单 create 推进、公平续扫、冷启字段、重定向/404 谓词、live 上传）。
++  - 行为与安全：见 `DESIGN.md` §10.1（无扫码发现入口、TS-only 对新装必须 `GET <peerIPv4>:9900/pair/whoami`、四格路由、LAN 槽、单 create 推进、公平续扫、冷启字段、重定向/404 谓词、live 上传、TS READY 与 LAN READY 改 key 时 stop/close/AuthFrame 增量为 0）。
+   - 回归映射：`DESIGN.md` §10.2–10.5，证据入口为已有 FINAL-COMPOSE-VERDICT / foreground FINAL-VERDICT / SIGNING-RECEIPT / UPDATE-INSTALL-RECEIPT / perf CONTRACT / envcheck --gate。不编造阈值。
+   - 真实验收必须在用户认可的真实网络路径与真实设备上确认：首次连接、断线重连、TS/LAN 切换条件下的实际路径徽标与工作区行为；不能以单测、模拟器或“TS Up”代替最终行为证据。静态提示成功不得替代自主发现 PASS。
+ - Irreversible actions requiring explicit authorization:

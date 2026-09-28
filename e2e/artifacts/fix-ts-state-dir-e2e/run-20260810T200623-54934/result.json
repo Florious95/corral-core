@@ -1,0 +1,46 @@
+{
+  "status": "pass",
+  "failure_reason": "",
+  "headscale_node_count": 2,
+  "app_registration_observation": "registered",
+  "daemon_state_dir_proof": "yes",
+  "instrumentation": {
+    "runner": "ApiE2ERunner",
+    "ui_path_used": "no",
+    "activity_started": "no",
+    "pairing_entry": "onQrText_pass",
+    "tsnet_binding_state_file": "yes",
+    "connection_manager": "ready",
+    "workspace_listing_received": "yes",
+    "isolated_session_received": "yes",
+    "secret_source": "TS_AUTHKEY environment via task FIFO wrapper"
+  },
+  "socks5_proof": "connection_manager_ready_via_explicit_tsnet_proxy_socket_factory",
+  "home_override_used": "no",
+  "camera_path_used": "no",
+  "derp": {
+    "listener_proof": "tls_health_and_tcp_listener_verified",
+    "route_proof": "forced_route_with_two_clients_and_packet_flow",
+    "accepts": 2,
+    "packets_received": 40,
+    "packets_sent": 40
+  },
+  "foreground_mouse_or_window_targeting_used": "no",
+  "screenshots": [],
+  "argv": {
+    "daemon": {
+      "ts_authkey_flag_present": "no",
+      "authkey_value_present": "no",
+      "authkey_shape_present": "no",
+      "pair_token_value_present": "no"
+    },
+    "app": {
+      "authkey_value_present": "no",
+      "authkey_shape_present": "no",
+      "pair_token_value_present": "no"
+    }
+  },
+  "app_log_secret_value_present": "no",
+  "artifact_secret_value_present": "no",
+  "cleanup_status": "yes"
+}

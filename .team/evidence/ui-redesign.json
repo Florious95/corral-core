@@ -1,0 +1,19 @@
+{
+  "task_id": "ui-redesign",
+  "status": "pass",
+  "worker": "w-ui-redesign",
+  "date": "2026-08-09",
+  "summary": "全 App 按 018 七条整体重设计：Theme token 化（M3 深浅双套/五态徽章 tonal）；列表页顶栏+safe-area+三级层级+路径中段省略+四态设计（修出厂白屏隐患）；会话页 48dp 紧凑顶栏+长名中段省略；IME ADJUST_RESIZE 根治键盘空洞；ripple/转场。21 张全页全态截图落 e2e/artifacts/ui-review/。",
+  "ui_review": {
+    "reviewer": "leader 逐图目检（workspace-list 深/浅、session-longname、session-ime、pairing-error、workspace-empty 六张关键位精查，余图清单核对）",
+    "018-1 现代设计语言": "pass——M3 token 单一事实源、深浅双套完整、页面零字面量色（StateTonesTest 锁定）",
+    "018-2 系统集成": "pass——safe-area 全页（图28 状态栏叠压消除）；IME 重排零空洞（图31 修复实证 session-ime 截图）",
+    "018-3 信息层级": "pass——列表行三级（目录名主/路径次中段省略/徽章+会话数右对齐）；对比图28 四行撑爆质变",
+    "018-4 密度呼吸": "pass——48dp 触控、行距统一、无悬空错位",
+    "018-5 状态可视": "pass——加载/空/断连/错误四态专门设计（空态引导文案+图标；错误横幅+重试）；五态徽章 tonal 可辨",
+    "018-6 反馈动效": "pending-walkthrough——ripple/转场静图不可判，统一真机模拟走查印证",
+    "018-7 终端页专项": "pass(顶栏紧凑)；字形完整归 fix-term-glyph-render 在途不在本案判",
+    "verdict": "目检通过；已知残留两项已归案：终端行叠压→fix-term-glyph-render；ScanCard 失败后旧值残留→fix-pairing-candidates"
+  },
+  "leader_note": "leader 复跑全量 exit 0；六张关键截图逐图目检对照 018 七条（首次执行审查关）。VM/conn/service 零改动核实（MainActivity 一行窗口模式已协调）。交件即退役。"
+}

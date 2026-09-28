@@ -1,0 +1,29 @@
+{
+  "task_id": "feat-diagnostic-log-export-review",
+  "status": "round1_preaudit_pass_pending_module_landing",
+  "seat": "w-diag-rev",
+  "at": "2026-08-14",
+  "note": "diag 模块尚未落地，本轮是对『未来诊断日志必然复用的凭据路径』做的对抗性预审。静默经济与白记两条主攻线无代码可测，留待模块落地后复审（round2）。",
+  "report": "docs/diag-log-review.md",
+  "findings_all_proven_by_red_tests": {
+    "1_AuthFrame_toString": "缺安全 toString() 覆盖，默认 toString 明文吐 token",
+    "2_ConnectionConfig_toString": "同上",
+    "3_redactAuthKey_cause_chain": "TsnetManager.redactAuthKey 只清洗顶层 message、不触达 cause 链——一句 Log.e(TAG, msg, throwable) 即可经 cause chain 泄露 authkey",
+    "4_prefix_redaction_fails_headscale": "『认 tskey- 前缀』式脱敏对 headscale 纯 hex 格式 key 必然失效，而本工程契约明确放行 headscale"
+  },
+  "red_tests": [
+    "app/app/src/test/java/dev/agentmirror/app/conn/AuthCredentialToStringLeakTest.kt",
+    "app/app/src/test/java/dev/agentmirror/app/tsnet/TsnetManagerCauseChainLeakTest.kt",
+    "app/app/src/test/java/dev/agentmirror/app/tsnet/TsnetAuthKeyFormatRedactionRiskTest.kt"
+  ],
+  "design_stage_warnings": [
+    "崩溃 / ANR trace 接入点全项目空白——diag 要不要收、收了怎么脱敏，写代码前就要有答案",
+    "第三方库全局 Hook Log 会绕开脱敏——若要 hook，脱敏必须在 hook 之后",
+    "QR 原始扫码字符串若被记录，会绕过 QrPayload 已做的脱敏"
+  ],
+  "leader_rulings": {
+    "prerequisite": "四处泄露定为 diag 的前置依赖：先修再做本体，单独提交（纪律⑦）。理由：这些泄露本来就在，但 diag 会把它们接进一条常设的、会落盘、会被用户导出的管道——偶发泄露变批量泄露。本工程 08-13 与 08-14 已各发生一次 TS authkey 泄露事故。",
+    "polarity": "这三个 *LeakTest 目前是『跑绿 = 泄露存在』。作为一次性取证可以，作为长期回归闸必须翻成『断言不泄露且永远绿』——否则半年后有人看到一个叫 LeakTest 的绿测试会以为一切正常，而它其实在说泄露还在。一个语义反着的长期测试比没有测试更危险。"
+  },
+  "next": "round2：diag 模块落地后复审静默经济（空闲零 CPU、无固定频率线程）、资源有界、以及『白记』判据（能否从日志看出缺陷⑤的 state 说谎+幂等守卫拦截、能否算出缺陷②末列超出几像素）"
+}

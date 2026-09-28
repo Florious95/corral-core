@@ -1,0 +1,14 @@
+checked_at=2026-08-10T00:58:19+0800
+pid_19738=absent
+pid_88840=absent
+temp_dir=absent
+port_33900=tcp_listeners:0,udp_sockets:0
+port_58436=tcp_listeners:0,udp_sockets:0
+port_38090=tcp_listeners:0,udp_sockets:0
+port_38095=tcp_listeners:0,udp_sockets:0
+port_38478=tcp_listeners:0,udp_sockets:0
+production_pid_46081=present_untouched
+46081 46069 /Volumes/nvme/Projects/远程Agent安卓/server/agentmirrord
+production_cwd=/Users/alauda
+production_listen=*:9900
+matching_cwd_open_files=0

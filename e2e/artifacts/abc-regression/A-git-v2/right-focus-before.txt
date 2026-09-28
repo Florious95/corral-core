@@ -1,0 +1,2 @@
+  mCurrentFocus=Window{a3a5080 u0 com.google.android.gm/com.google.android.gm.welcome.WelcomeTourActivity}
+  mFocusedApp=ActivityRecord{e510edb u0 com.google.android.gm/.welcome.WelcomeTourActivity t835}

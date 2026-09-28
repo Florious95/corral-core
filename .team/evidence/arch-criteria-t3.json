@@ -1,0 +1,84 @@
+{
+  "status": "pass",
+  "task_id": "arch-criteria-t3",
+  "summary": "返工#1（独立复核席 w-t3-verify refuted，leader 认定目标设定错误在己不在我，实现本身边界内正常）：T3-2 扫描面扩到全部注释形态（KDoc/doc + 函数体内普通 // + /* */ + 行尾，Go 与 Kotlin 两侧对齐含 Kotlin 侧 --flag），带形状的引用无论藏哪种注释里都被判；新扩面先配必红 fixture（lying-ref/ 扩展）再配必绿阳性对照（truthful-ref/ 扩展），四格齐全。Kotlin KDoc 内谎报 flag 现也抓（原仅 Go 侧）。保守取舍不变：仍只判反引号大写符号/含/带扩展名路径/--flag 三形状，外部参考（herdr 合规注记 claude.toml）与外部工具 flag（gradle --tests）走白名单放行，真仓库扩展扫描 0 误报（T3-2 仍 0 违规，T3-1 仍仅 1 真违规 TsnetInterfaceCodec.kt:46）。D-14 自然语言语义谎报确认静态判据抓不住（WorkspaceScreen 真实存在、谎言在语义断言），由用例 PairingUxTest 覆盖，判据诚实边界已写入 HANDBOOK 与 t3-report。修复幂等缺陷：docs/wiki/ 生成物目录现排除在基名索引外，重跑无 diff。验收三条全过：unittest 19 用例（含新扩面红测与阳性对照）、--check exit 0（T1 保持绿）、t3-report 非空含 T3-1/T3-2。",
+  "rework": {
+    "round": 1,
+    "reason": "独立复核席 w-t3-verify 判 refuted：T3-2 原只扫 Go doc 与 Kotlin KDoc，函数体内普通 // 注释完全不扫，带正确形状的谎报可藏在其中绕过；Kotlin KDoc 内 --flag 谎报也不抓（Kotlin 侧不判 flag）。leader 认定目标设定错误（专抓 D-14 语义谎报）在己，实现本身边界内正常。",
+    "fixes": [
+      "T3-2 扫描面扩到全部注释形态（_all_comment_lines 字符串感知提取器，Go/Kotlin 双侧），带形状引用无论哪种注释形态都判",
+      "CLI flag Go 与 Kotlin 两侧对齐判定；外部工具 flag（gradle --tests）走 T3_EXTERNAL_FLAGS 白名单放行",
+      "外部参考路径（herdr 合规注记 src/detect/manifests/claude.toml）走 T3_EXTERNAL_PATH_PREFIXES 白名单放行",
+      "诚实边界明写：T3-2 只验引用形状可判者，不验语义事实；行为性断言由用例覆盖",
+      "幂等修复：docs/wiki/ 生成物目录排除在基名索引外，重跑无 diff"
+    ],
+    "d14_archetype": {
+      "conclusion": "静态判据抓不住语义谎报。D-14 注释'见 WorkspaceScreen 顶栏设置钮'里 WorkspaceScreen 真实存在、谎言在'顶栏有设置钮'这个语义断言，没有可判形状。已由用例 PairingUxTest（重配入口可达性断言）覆盖，判据不为它设保护网。"
+    }
+  },
+  "tests": [
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"'",
+      "rc": 0,
+      "note": "19 用例全绿，含 T3-1/T3-2 红测（扩展面）、阳性对照、--pkg 单包精度、报告模式不改退出码"
+    },
+    {
+      "argv": "bash -lc 'python3 tools/archwiki/build_wiki.py --check'",
+      "rc": 0,
+      "note": "T1-1/T1-2 保持绿；T3 报告模式列清单不改退出码；真仓库扩展扫描 0 误报"
+    },
+    {
+      "argv": "bash -lc 'test -s docs/wiki/t3-report.md && grep -q \"T3-1\" docs/wiki/t3-report.md && grep -q \"T3-2\" docs/wiki/t3-report.md'",
+      "rc": 0,
+      "note": "报告非空且含 T3-1/T3-2 两节 + 诚实边界说明"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3",
+      "rc": 1,
+      "note": "真仓库严格模式诚实红：T3-1 1 条（TsnetInterfaceCodec.kt:46），证明判据能真的红"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/lying-ref --check --go-source --strict-t3",
+      "rc": 1,
+      "note": "T3-2 红测：18 条违规，覆盖 KDoc+函数体内普通//+Kotlin KDoc flag 全部注释形态"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --root tools/archwiki/testdata/truthful-ref --check --go-source --strict-t3",
+      "rc": 0,
+      "note": "T3-2 阳性对照：同形状全真实引用（含函数体//引用真实符号/路径/--listen flag）0 误报"
+    },
+    {
+      "argv": "Go 函数体内 // 注释谎报（GhostLies/docs/fake-body.md/--no-such-body-flag）",
+      "rc": 1,
+      "note": "复核席 gap 实证：现抓（原不可见）"
+    },
+    {
+      "argv": "Kotlin 函数体 // 注释 + KDoc flag 谎报（GhostBodyComment/bad-body.yaml/--no-such-plain-flag）",
+      "rc": 1,
+      "note": "复核席 gap 实证：现抓（原不可见）"
+    },
+    {
+      "argv": "重跑 python3 tools/archwiki/build_wiki.py --check 多次，diff docs/wiki/t3-report.md",
+      "rc": 0,
+      "note": "幂等：docs/wiki/ 生成物目录已排除在基名索引外，重跑无 diff"
+    }
+  ],
+  "changes": [
+    "tools/archwiki/build_wiki.py: T3-2 扫描面扩到全部注释形态（_all_comment_lines 字符串感知提取器替换 _go_doc_lines/_kt_kdoc_lines 的 doc-only 实现），flag 判定 Go+Kotlin 双侧对齐，外部参考/外部工具 flag 白名单，诚实边界写入 t3-report 生成器，docs/wiki/ 排除在基名索引外修幂等",
+    "tools/archwiki/testdata/lying-ref/: 扩展覆盖函数体内普通 // 注释谎报（Go ghostdoc.go GhostBody + Kotlin BodyLying.kt MissingBodyComment）+ Kotlin KDoc 内 flag 谎报",
+    "tools/archwiki/testdata/truthful-ref/: 扩展阳性对照（truthbody.go + BodyTruthful.kt 引用真实符号/路径/docs/real-body.md/--listen flag）",
+    "tools/archwiki/testdata/README.md: 登记表注明 T3-2 覆盖全部注释形态",
+    "tools/archwiki/test_check.py: T3-2 红测断言扩展到新面（GhostBody/fake-body.md/MissingBodyComment/bad-body.yaml/no-such-plain-flag），绿对照覆盖扩展面真实引用",
+    "docs/wiki/t3-report.md: 真仓库违规清单（T3-1=1, T3-2=0）+ 扫描覆盖量 + 诚实边界说明",
+    ".team/nodes/arch-criteria-t3/HANDBOOK.md: 扫描面/白名单/诚实边界（D-14 由用例覆盖）/自检套路/误报处理全面对齐"
+  ],
+  "deviation": [],
+  "artifacts": [
+    "docs/wiki/t3-report.md",
+    "tools/archwiki/build_wiki.py",
+    "tools/archwiki/test_check.py",
+    "tools/archwiki/testdata/lying-ref/",
+    "tools/archwiki/testdata/truthful-ref/",
+    ".team/nodes/arch-criteria-t3/HANDBOOK.md"
+  ]
+}

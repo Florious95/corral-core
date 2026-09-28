@@ -1,0 +1,34 @@
+
+ ▐▛███▜▌   Claude Code v2.1.219
+▝▜█████▛▘  Opus 5 (1M context) with high effort · Claude Max
+  ▘▘ ▝▝    /Volumes/nvme/Projects/远程Agent安卓/e2e/artifacts/d35-real-symbol
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+──────────────────────────────────────────────────────────────────────────────────────── d35-real ──
+❯ [7m [0m
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Ctx: n/a | Opus 5 (1M context) | d35-real-symbol | main
+  ⏵⏵ bypass permissions on (shift+tab to cycle)

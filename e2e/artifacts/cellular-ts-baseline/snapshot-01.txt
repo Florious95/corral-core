@@ -1,0 +1,29 @@
+# 蜂窝 + TS 基线快照  2026-08-13 23:29:14
+## daemon 活跃连接
+COMMAND     PID   USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+agentmirr 70317 alauda    7u  IPv6 0x4b4cb768e3a3cda8      0t0  TCP *:9900 (LISTEN)
+agentmirr 70317 alauda    9u  IPv6 0xa9b710eb3dbba51d      0t0  TCP 198.18.0.1:9900->100.69.43.120:50914 (ESTABLISHED)
+## 手机 tailnet RTT (30 包)
+--- 100.69.43.120 ping statistics ---
+30 packets transmitted, 30 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 394.310/1220.987/2298.373/492.775 ms
+## 对照: 局域网地址是否还在(应消失=确实在蜂窝)
+--- 192.168.31.57 ping statistics ---
+3 packets transmitted, 0 packets received, 100.0% packet loss
+## 对照: ZeroTier
+--- 10.202.81.184 ping statistics ---
+5 packets transmitted, 0 packets received, 100.0% packet loss
+## 对照: 路由器
+5 packets transmitted, 5 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 4.386/9.812/24.270/7.330 ms
+## MacPacketTunnel 对端
+   1 192.168.31.116:65359->101.89.49.42:443
+   1 192.168.31.116:61859->192.73.252.65:443
+   1 192.168.31.116:61858->192.73.244.245:443
+   1 192.168.31.116:61856->103.6.84.152:443
+   1 192.168.31.116:57998->58.220.18.11:7826
+   1 192.168.31.116:53784->111.124.200.84:443
+   1 192.168.31.116:53741->82.21.81.136:8443
+   1 192.168.31.116:53739->82.21.81.136:8443
+   1 192.168.31.116:53735->82.21.81.136:443
+   1 192.168.31.116:53733->82.21.81.136:443

@@ -1,0 +1,4 @@
+红：本次引入了新的架构维基违规。
+pkg=dev.agentmirror.app.workspace 基线=8 本次=9 新增=1 消掉=0（键不含行号）
+  ❌ 新增: T3-2 dev.agentmirror.app.workspace app/app/src/main/java/dev/agentmirror/app/workspace/ProviderLaunch.kt (0→1)
+EXIT:1

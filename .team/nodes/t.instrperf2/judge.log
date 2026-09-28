@@ -1,0 +1,15 @@
+判决依据批次 = batch1（单批 n=20）
+  ok   big_scrollback  first_draw     p50 A=  483.5ms B=  442.0ms (-8.6%)
+  ok   big_scrollback  layout_settled p50 A= 1164.0ms B= 1139.0ms (-2.1%)
+  ok   big_scrollback  layout_settled p95 A= 1394.6ms B= 1348.4ms (-3.3%)
+  ok   real_claude_idle first_draw     p95 A= 1009.7ms B= 1097.5ms (+8.7%)
+  ok   real_claude_idle layout_settled p50 A=  973.0ms B= 1034.5ms (+6.3%)
+  ok   redraw_tui      first_draw     p95 A= 1266.2ms B= 1101.5ms (-13.0%)
+  ok   redraw_tui      layout_settled p50 A= 1163.5ms B= 1084.0ms (-6.8%)
+  ok   redraw_tui      layout_settled p95 A= 1704.1ms B= 1569.2ms (-7.9%)
+  RED  big_scrollback  first_draw     p95 A=  772.1ms B=  872.8ms (+13.0%)
+  RED  real_claude_idle first_draw     p50 A=  620.0ms B=  713.0ms (+15.0%)
+  RED  real_claude_idle layout_settled p95 A= 1546.9ms B= 1778.9ms (+15.0%)
+  RED  redraw_tui      first_draw     p50 A=  551.5ms B=  644.5ms (+16.9%)
+FAIL 打点让打开会话慢了超过 10%，共 4 段（A=c3fada124cfa B=34fc06811279）
+rc=1

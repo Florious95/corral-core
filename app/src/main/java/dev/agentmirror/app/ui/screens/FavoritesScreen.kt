@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,14 +18,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import dev.agentmirror.app.tsnet.ConnectionPath
 import dev.agentmirror.app.ui.components.AppText
+import dev.agentmirror.app.ui.components.HeaderRule
 import dev.agentmirror.app.ui.components.LanPill
 import dev.agentmirror.app.ui.components.LocalFloatingNavInset
 import dev.agentmirror.app.ui.components.ScreenHeader
 import dev.agentmirror.app.ui.components.SessionRow
 import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.model.SessionStatus
-import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
 import dev.agentmirror.app.ui.theme.TypeSizes
 
 /**
@@ -50,6 +50,7 @@ fun FavoritesScreen(
     bottomBar: @Composable () -> Unit = {},
 ) {
     val p = LocalAppPalette.current
+    val rowGap = LocalThemeSuite.current.geometry.listRowGap
     val activeCount = remember(favorites) { favorites.count { it.status == SessionStatus.Busy } }
 
     Column(modifier.fillMaxSize().background(p.screenBackground)) {
@@ -58,7 +59,7 @@ fun FavoritesScreen(
             meta = "${favorites.size} SESSIONS · $activeCount ACTIVE",
             trailing = if (connectionPath != null) ({ LanPill(connectionPath) }) else null,
         )
-        Box(Modifier.fillMaxWidth().height(Dims.hairline).background(p.divider))
+        HeaderRule()
         Box(
             Modifier
                 .weight(1f)
@@ -68,8 +69,8 @@ fun FavoritesScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("favorite-list"),
-                contentPadding = PaddingValues(top = Dims.cardVGap, bottom = Dims.cardVGap + LocalFloatingNavInset.current),
-                verticalArrangement = Arrangement.spacedBy(Dims.cardVGap),
+                contentPadding = PaddingValues(top = rowGap, bottom = rowGap + LocalFloatingNavInset.current),
+                verticalArrangement = Arrangement.spacedBy(rowGap),
             ) {
                 items(favorites, key = { it.id }) { item ->
                     SessionRow(

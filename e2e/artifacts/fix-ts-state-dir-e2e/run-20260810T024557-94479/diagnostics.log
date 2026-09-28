@@ -1,0 +1,28 @@
+## headscale-configtest.log
+
+
+## headscale.stderr
+
+
+## headscale-cli.stderr
+
+
+## sandbox-check.log
+
+
+## go-build.log
+
+
+## daemon.stderr
+time=2026-08-10T02:46:30.086+08:00 level=INFO msg="single-instance guard acquired" pidfile=TASK_TMP/daemon-state/agentmirrord.pid
+time=2026-08-10T02:46:30.087+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-10T02:46:30.087+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:43920 qr_listen="" token_source=explicit upload_dir="" max_upload_mib=20 list_interval=2s
+time=2026-08-10T02:46:30.087+08:00 level=INFO msg="tailnet 已启用" hostname=MacBook-Pro.local state_dir=TASK_TMP/daemon-state/tsnet
+time=2026-08-10T02:46:30.087+08:00 level=INFO msg="tailnet 入网中（等待 Tailscale 控制面握手）…"
+2026/08/10 02:46:30 tsnet running state path TASK_TMP/daemon-state/tsnet/tailscaled.state
+2026/08/10 02:46:30 tsnet starting with hostname "MacBook-Pro.local", varRoot "TASK_TMP/daemon-state/tsnet"
+2026/08/10 02:46:30 LocalBackend state is NeedsLogin; running StartLoginInteractive...
+2026/08/10 02:46:30 AuthLoop: state is Starting; done
+time=2026-08-10T02:46:33.234+08:00 level=INFO msg="tailnet 已入网" ip=100.64.0.1
+time=2026-08-10T02:47:18.715+08:00 level=INFO msg="shutting down"
+

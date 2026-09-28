@@ -1,0 +1,101 @@
+argv: bash e2e/connected-idle-economy.sh (static assertion on pre-rework snapshot)
+snapshot_sha256: 3245872b9b6b62fd0f2fa2002820d483bdde6d9af957f5c3256e34f69c51ed78
+snapshot_path: e2e/artifacts/fix-connected-idle-economy/red-lock-old-script.sh.snapshot
+method: static text analysis; zero process/network/tmux interaction
+{
+  "target": "e2e/artifacts/fix-connected-idle-economy/red-lock-old-script.sh.snapshot",
+  "method": "static text analysis; zero process/network/tmux interaction",
+  "red_conditions": [
+    {
+      "id": "red-item-2",
+      "claim": "client launch passes helper token through -token argv (argv-shape; value not printed)",
+      "where": [
+        642
+      ],
+      "shape": [
+        "\"$CLIENT_BIN\" -mode \"$mode\" -url \"ws://127.0.0.1:$PORT/ws\" -token \"$TOKEN\" \\"
+      ]
+    },
+    {
+      "id": "red-item-2",
+      "claim": "client helper reads token from a -token flag.String (argv origin), not environment",
+      "where": [
+        385
+      ],
+      "shape": [
+        "token := flag.String(\"token\", \"\", \"pairing token\")"
+      ]
+    },
+    {
+      "id": "red-item-1",
+      "claim": "exactly one mktemp runtime root created and reused across the three states",
+      "where": [
+        43
+      ],
+      "shape": [
+        "RUN_ROOT=\"$(mktemp -d /tmp/am-cidle.XXXXXX)\""
+      ]
+    },
+    {
+      "id": "red-item-1",
+      "claim": "daemon launched exactly once via a single env -i exec before all three states; never restarted between states",
+      "where": [
+        525
+      ],
+      "shape": [
+        "env -i \\",
+        "HOME=\"$RUN_HOME\" \\",
+        "LANG=C \\",
+        "PATH=\"$SHIM_DIR:/usr/bin:/bin:/usr/sbin:/sbin\" \\",
+        "TMPDIR=\"$DAEMON_TMP\" \\",
+        "TMUX_TMPDIR=\"$TMUX_ROOT\" \\",
+        "AGENTMIRROR_TOKEN=\"$TOKEN\" \\",
+        "AGENTMIRROR_STATE_DIR=\"$STATE_DIR\" \\",
+        "AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS=\"$SOCKET_DIR\" \\",
+        "CIDLE_REAL_TMUX=\"$REAL_TMUX\" \\",
+        "CIDLE_ALLOWED_SOCKET_DIR=\"$SOCKET_DIR\" \\",
+        "CIDLE_TMUX_TARGET_AUDIT=\"$TARGET_AUDIT\" \\",
+        "CIDLE_CAPTURE_LOG=\"$CAPTURE_LOG\" \\",
+        "CIDLE_TMUX_VIOLATIONS=\"$VIOLATIONS\" \\",
+        "\"$DAEMON_BIN\" \\"
+      ]
+    },
+    {
+      "id": "red-item-1",
+      "claim": "single tmux server PID captured once; one tmux server instance spans all three states",
+      "where": [
+        301
+      ],
+      "shape": [
+        "TMUX_SERVER_PID=\"$(tmux_own display-message -p '#{pid}' | tr -d '[:space:]')\""
+      ]
+    },
+    {
+      "id": "red-item-1",
+      "claim": "no per-state boundary cleanup call exists; the three measure_state windows run under one shared runtime",
+      "where": [
+        666,
+        672,
+        680
+      ],
+      "shape": [
+        "measure_state zero_connection",
+        "measure_state connected_zero_subscription",
+        "measure_state connected_single_subscription"
+      ]
+    },
+    {
+      "id": "red-item-1",
+      "claim": "the only residue proof is the final cleanup() via EXIT trap; not per-state",
+      "where": [
+        247
+      ],
+      "shape": [
+        "trap on_exit EXIT"
+      ]
+    }
+  ],
+  "red_count": 7,
+  "frozen_thresholds_touched": false,
+  "token_value_printed": false
+}

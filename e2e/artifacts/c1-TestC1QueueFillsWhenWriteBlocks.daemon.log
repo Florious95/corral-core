@@ -1,0 +1,52 @@
+time=2026-08-14T00:18:33.572+08:00 level=INFO msg="single-instance guard acquired" pidfile=/tmp/am-e2e-2486654281/state/agentmirrord.pid
+time=2026-08-14T00:18:33.572+08:00 level=INFO msg="pairing token source=explicit"
+time=2026-08-14T00:18:33.572+08:00 level=INFO msg="agentmirrord starting" listen=127.0.0.1:60985 qr_listen="" token_source=explicit upload_dir=/tmp/am-e2e-2486654281/uploads max_upload_mib=20 list_interval=500ms
+time=2026-08-14T00:18:33.572+08:00 level=DEBUG msg="listing loop started" interval=500ms
+time=2026-08-14T00:18:33.572+08:00 level=WARN msg="tailnet 未启用：未配置 TS authkey，仅 LAN 监听"
+                                                             
+                                                             
+    █▀▀▀▀▀█ ▀█▀▀ ▀█ ▀█▀█▄▀ ▄█▀█ ▀▄▀█ ▄▄█ █▀ ▀▄█▄  █▀▀▀▀▀█    
+    █ ███ █ ▄▄▀▀ █    ▀▀▄█▀█▄▄   █▀▄▄▀▄▄  ▄▀▀█▄▀▄ █ ███ █    
+    █ ▀▀▀ █ █▀ ▀ ▀█▀▄▀▄▄█▀▄ █▀▀▀█▀▄▀▀▄▄▀█ ▀█▀ █   █ ▀▀▀ █    
+    ▀▀▀▀▀▀▀ █▄▀ █▄▀▄█ ▀ ▀▄█▄█ ▀ █▄▀ ▀ █▄▀ ▀ ▀ ▀ █ ▀▀▀▀▀▀▀    
+    █   ▀ ▀█▀██▀▀ ▄█▄██▀  ▄ ██▀▀▀▄▄▄ ▄█ █▄█▀ ██ ▀▀▀▀▀▀  █    
+    ▀  ▄█▄▀ ▀ █▀█  █▀▀▀▀█▄ ▀█▄█▄▀▄▀▀██▀▄ █▀ █ ▀   ▄▀█ ▀▀▀    
+     ▀██▀▀▀▄ ▀▀▀▄██▄ █  █▀█▄█▀▄█ ▀███▄▀▀▄▀█▄ ▀▀ ▀ ▀▀▀▄ ▄▀    
+       ▄ █▀▄ ██▄██ ███▄▄ ██▀█ █▀▀▄▄▀▀   ▄  ▄ ▄▀ ▄ ▀█▄▄ ▀▄    
+    █ ▀  ▀▀ █▄▄ ▄▀ ▀▄▀█ █▄▀ █▀█▀  ▄▄ ▄█ ██▄ ▄▄▀▄ ▄█ █▀▀█▀    
+     ██▀▀▀▀█ ▀ ▄▄▄▀▀█ ▄█▀▄ █ ▄ █▀▀▀▄▄████▄ ▀  ▄█▀██ █▄▀▄▀    
+    ▄▀█  █▀  ▀ █▀█▄█▀█▀ ▄▀▀▀█   ▀▀ █ ▀ ▄▀ ▀▄▄▄  ▄    ▀▄█▀    
+    █▄▀█▀▄▀▀▄█  ▀▀ ▄▄█████▀▀▄▀▀▄ ▄▀▀  ▄▄▀█  █ ▄ ▀ █    ▄█    
+    █▀█ █▀▀▀█ ▀ ▄▄▄▀▄▄  ██▀▄█▀▀▀█▄ ██▀█▀  ▄▀█▄█▀█▀▀▀██▄▀     
+    ▀█▀ █ ▀ █▀ █ ██▄██▀▀▀█▄ █ ▀ █▀▀▄ ▄▄ █▀▀███ ██ ▀ █▄▀█▀    
+    ▄█  ██▀▀▀▄▄█ ▀█ █▄ ███  ▀▀████▄▀█▄█  ▄▀▀▄▄▄█▀▀▀▀█▄ ▄█    
+    ██▄▀█▀▀ ██▀█ ▀███▀▀█▄▄▀▄▄▀██▄ █ ▄ █▄ █ ▀██▀▀▄▄█▄ ▀█▄▀    
+    ██▀▀ █▀ ▄  ██▀█▄▀ ▄ ▄█▄▀▀▄▄ █▄ █▀█▀▀█▀█▄   █▀▄ ▀▄ ▄█     
+     █▄▄ ▄▀▀ █▀▄▄█▄▀▀█▀▀▄ ▀▀▄▄ ▀ █ ▄ ▄▄▀█  ▀▀ ▀▄▄█▀█▀▄▄▄     
+    ███▄▀ ▀ █▄ ███▄▀██ ▄ ▀▄ █▄▀ █▄█▄▄▀   ▄█ ▄▄  █▄ ▄ █▄▄     
+    █▄▄ █▄▀█ ▄▀ ██  ▄ ▄ ▀▀██▄ ▀▄ ▀▀▄▀▄█▄▄▄▀▀▀▀ █▀▀▀█▀▄▀▄█    
+    ▄ ▀██▄▀██▀▀  █ █▀▀█▀█▄ █▀██ ▀▀▀█    ▀  █▄ █▀█ ▄███ ▀     
+    ▀█▄▀▀▀▀▄▀▄▄▄▄  ▄▀█▄█ ▀▀ ▀▀ ▀▄▄█▄ █▄█▀▀ ▄█▄ █ ▄ █ ▀█▄▀    
+       ▀  ▀ ▄▀▀▀ ▀█▄▀▀▀▄▄ ▄██▀▀▀█▄▀█▀▀  █▄▄█▀▄███▀▀▀█▀█▄     
+    █▀▀▀▀▀█ ▀▀▄█▄▄▄█▄█▀▀ ▄ ██ ▀ ██ ▀▀  ▀▄▀█ ▀ ▄▄█ ▀ █ ▀ ▀    
+    █ ███ █ ▀▀█ ▀ ▄ █▀█▄▄▀▀▄██▀██▀▄▄ ▄▄▄▄█▀▀█ █▄█▀█▀▀█ ▄▀    
+    █ ▀▀▀ █  █ ▀█▀█▄█▀▀▄▀▄▀█ ▀▀ ▄▄▀▀███  █ ▀▄▀▀▄█▄▀▄▀▀▄██    
+    ▀▀▀▀▀▀▀ ▀▀▀▀ ▀     ▀ ▀▀ ▀▀▀  ▀▀▀▀▀▀▀▀▀▀  ▀ ▀▀▀    ▀▀     
+                                                             
+                                                             
+
+──────────────────────────────────────────────
+配对信息 · 用 App 扫码，或手填以下内容：
+  服务端 ws 地址 : ws://10.202.81.20:60985/ws
+  配对 token      : c1-probe-token-001833
+  其他可达地址（若上面的连不上，改用下列之一）：
+    ws://10.202.81.20:60985/ws   [lan]
+    ws://192.168.31.116:60985/ws   [lan]
+time=2026-08-14T00:18:33.725+08:00 level=DEBUG msg="listing: first snapshot" seq=1
+time=2026-08-14T00:18:33.725+08:00 level=INFO msg="ws: sendq health" conn=1 conn.deltas_buffered=0 conn.snapshots_pushed=0 conn.snapshots_from_resize=0 conn.snapshots_from_subscribe=0 conn.frames_sent=0 total.deltas_buffered=0 total.snapshots_pushed=0 total.snapshots_from_resize=0 total.subscribes=0 total.snapshots_from_subscribe=0 total.connections=1 total.queue_peak=0 total.frames_sent=0 close_reason="read_error: failed to get reader: failed to read frame header: EOF"
+time=2026-08-14T00:18:33.733+08:00 level=DEBUG msg="listing: no changes"
+time=2026-08-14T00:18:34.748+08:00 level=DEBUG msg="listing: no changes"
+time=2026-08-14T00:18:35.255+08:00 level=DEBUG msg="listing: no changes"
+time=2026-08-14T00:18:36.270+08:00 level=DEBUG msg="listing: no changes"
+time=2026-08-14T00:18:36.778+08:00 level=DEBUG msg="listing: no changes"
+time=2026-08-14T00:18:36.803+08:00 level=INFO msg="ws: sendq health" conn=2 conn.deltas_buffered=0 conn.snapshots_pushed=1 conn.snapshots_from_resize=0 conn.snapshots_from_subscribe=1 conn.frames_sent=553 total.deltas_buffered=0 total.snapshots_pushed=1 total.snapshots_from_resize=0 total.subscribes=1 total.snapshots_from_subscribe=1 total.connections=2 total.queue_peak=2 total.frames_sent=553 close_reason="read_error: failed to get reader: failed to read frame header: read tcp 127.0.0.1:60985->127.0.0.1:60989: read: connection reset by peer"

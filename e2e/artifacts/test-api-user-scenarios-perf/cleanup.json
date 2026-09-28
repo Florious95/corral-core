@@ -1,0 +1,11 @@
+{
+  "daemon_pid_gone": true,
+  "client_pid_gone": true,
+  "tmux_pid_gone": true,
+  "listener_absent": true,
+  "socket_absent": true,
+  "runtime_handles_zero": true,
+  "runtime_tree_absent": true,
+  "build_tree_absent": true,
+  "out_of_scope_tmux_targets": 0
+}

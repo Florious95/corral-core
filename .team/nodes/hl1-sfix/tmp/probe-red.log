@@ -1,0 +1,7 @@
+=== RUN   TestHandleSubscribeStaticAltScreenFirstFrameHasGlyphs
+    hl092_static_alt_first_frame_probe_test.go:77: 世界B 快照发了但内容为空: KindSnapshot 已到 bytes=6 glyphs="" marker="STATIC_ALT_MARKER_092" 不在其中（CUP 后缀使 len>0 不能当有字）
+--- FAIL: TestHandleSubscribeStaticAltScreenFirstFrameHasGlyphs (0.76s)
+FAIL
+FAIL	github.com/agentmirror/agentmirror/internal/api	1.287s
+FAIL
+EXIT:1

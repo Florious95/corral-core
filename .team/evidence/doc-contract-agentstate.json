@@ -1,0 +1,108 @@
+{
+  "status": "pass",
+  "task_id": "doc-contract-agentstate",
+  "case_id": "msg_a52fcd054940",
+  "changes": [
+    "server/internal/agentstate/sample.go",
+    "server/internal/agentstate/identify.go",
+    "server/internal/agentstate/track.go",
+    "server/internal/agentstate/doc.go"
+  ],
+  "tests": [
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/agentstate",
+      "rc": 0,
+      "note": "单包硬判全绿（T3-1..T3-4 PASS）"
+    },
+    {
+      "argv": "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/agentstate/...\"'",
+      "rc": 0,
+      "note": "包内测试绿：ok github.com/agentmirror/agentmirror/internal/agentstate"
+    },
+    {
+      "argv": "python3 tools/archwiki/build_wiki.py --check",
+      "rc": 0,
+      "note": "全仓库既有判据未被打坏；其余包 T3-4 漂移属他包 write_scope，非本包"
+    }
+  ],
+  "rewritten": [
+    {
+      "symbol": "Sample.LastOutputAge",
+      "file": "server/internal/agentstate/sample.go",
+      "original": "It is an input for time-assisted rules (the idle/blocked distinction)",
+      "inaccuracy": "无任何规则表消费 LastOutputAge——生产方 internal/api/state_wiring.go:344 自认 'no rule table consumes it today'，且包内规则匹配（rules.go）零引用 age。原注释把未接线能力写成现状",
+      "rewritten": "It is reserved for future time-assisted rules (the idle/blocked distinction) — no rule table consumes it today — and is never a blocking wait"
+    },
+    {
+      "symbol": "Confidence",
+      "file": "server/internal/agentstate/sample.go",
+      "original": "It accompanies every State so the consumer (ws-api push logic) can weigh whether an edge like done/blocked is worth a notification",
+      "inaccuracy": "全仓库 ws-api（internal/api，反向依赖闭包）对 Confidence 零引用——不存在 'the consumer (ws-api push logic)'。原注释称消费方已存在，实则无人消费",
+      "rewritten": "It accompanies every State so a future push layer can weigh whether an edge like done/blocked is worth a notification (requirement 003 standard four); no consumer reads it yet"
+    }
+  ],
+  "contracts_added": [
+    {
+      "symbol": "Identify",
+      "file": "server/internal/agentstate/identify.go",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "in 为任意 IdentifyInput；无非法输入（PanePID=0 视为无 pane）",
+      "post": "返回合法 AgentKind；识别失败时恒为 AgentKindUnknown，从不返回错误",
+      "err": "none — 所有失败路径降级为 AgentKindUnknown，错误不向调用方泄漏",
+      "inv": "进程树 I/O 单次 ps 且受 ≤500ms 预算约束（identifyTimeout）；决策核心 identifyFromTable/classifyArgv 纯函数"
+    },
+    {
+      "symbol": "Track",
+      "file": "server/internal/agentstate/track.go",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "prev 为 protocol.AgentState 的合法值，sample 任意（未知输出合法）",
+      "post": "仅当 prev=working 且当前判定 idle 时返回 done；其余情况返回当前规则判定",
+      "err": "none — 永不 error；未知输入降级为 StateUnknown",
+      "inv": "纯函数：(prev, sample) 完全决定结果，无 I/O、无隐藏内存，可无状态重放"
+    },
+    {
+      "symbol": "Registry.Detect",
+      "file": "server/internal/agentstate/sample.go",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "sample 任意；PaneCommand 决定路由，未知命令合法",
+      "post": "返回一个 State：已识别命令为对应 adapter 的判定，未知命令为 StateUnknown",
+      "err": "none — 未知命令不报错，降级为 StateUnknown（requirement 008）",
+      "inv": "无 I/O，Detect 是 sample 的纯函数"
+    },
+    {
+      "symbol": "Registry.DetectForKind",
+      "file": "server/internal/agentstate/sample.go",
+      "tags": ["@contract", "@pre", "@post", "@err", "@inv"],
+      "pre": "kind 为任意 AgentKind，sample 任意",
+      "post": "已知 kind 返回对应 adapter 的判定；未知 kind 返回 StateUnknown",
+      "err": "none — 未知 kind 不报错，降级为 StateUnknown",
+      "inv": "无 I/O；kind.Command() + 路由逻辑是纯函数"
+    }
+  ],
+  "consumes_added": [
+    {
+      "pkg": "internal/agentstate",
+      "target": "internal/protocol",
+      "file": "server/internal/agentstate/doc.go",
+      "note": "import 了 internal/protocol 却未声明 @consumes（T3-4 漂移清单 1 条），已在包级 doc 补 @consumes internal/protocol"
+    }
+  ],
+  "uncertain": [
+    {
+      "symbol": "Sample.RecentOutput / adapters.go / rules.go",
+      "note": "契约语言 'tail window (e.g. last 4KiB)' 与生产采样方不一致：internal/api/state_wiring.go capturePaneOutput 实为整屏 capture-pane -p -t -e，无 4KiB 截断，且 api 侧自己的 header 也称 'bounded tail'。'4KiB/tail-window' 是贯穿该包与 herdr 归因的设计语言（bounded-input 概念），非可证伪的具体谎报；若当作'截断事实'则属过时措辞。为避免臆断改语义，判不准，列入 uncertain"
+    },
+    {
+      "symbol": "Sample.LastOutputAge 被保留",
+      "note": "该字段仍被 production 填充（state_wiring.go:305 age）且被 api 测试 seam 使用，字段本身非死代码；仅'规则消费它'的断言不实，已改。字段保留合理，未删"
+    }
+  ],
+  "deviation": [],
+  "positive_control": {
+    "procedure": "临时删除 Track 的 @err 标签，跑单包硬判，确认 exit 1 并指向该符号，随后改回",
+    "result_red": "T3-3 FAIL — 契约标签完备：1 条违规 [T3-3] internal/agentstate server/internal/agentstate/track.go:21 `@contract` — 缺契约标签: @err；结果：未通过（exit 1）",
+    "exit_red": 1,
+    "exit_after_restore": 0,
+    "note": "判据对 internal/agentstate 真实生效且精确到符号行——非'扫不到包而全绿'"
+  }
+}

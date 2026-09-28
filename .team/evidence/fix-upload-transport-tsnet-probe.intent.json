@@ -1,0 +1,1 @@
+{"task_id":"fix-upload-transport-tsnet-probe","dispatched_to":"w-up-probe","base":".team/nodes/fix-upload-transport-tsnet/CLAUDE.md","at":"2026-08-14","note":"审查/探针席：查清系统级 Tailscale VPN 在场时上传为何仍走蜂窝"}

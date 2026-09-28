@@ -1,0 +1,2 @@
+  mCurrentFocus=Window{5879b3b u0 com.google.android.apps.photos/com.google.android.apps.photos.home.HomeActivity}
+  mFocusedApp=ActivityRecord{d8dac0a u0 com.google.android.apps.photos/.home.HomeActivity t833}

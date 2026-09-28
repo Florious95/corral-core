@@ -1,0 +1,1452 @@
+diff --git a/app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt b/app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt
+index bbbb2fe95..b2cd8ecb9 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt
+@@ -164,6 +164,8 @@ fun AgentMirrorApp(
+                         onSelectWorkspace = { navState.selectedWorkspaceCwd = it },
+                         onBackToList = { navState.selectedWorkspaceCwd = null },
+                         onOpenSettings = { navState.showSettings = true },
++                        // 二级实时流（060）：点一行用 ref（结构身份）进三级终端（唯一入口）。
++                        onOpenSession = { ref, name -> navState.activeSession = ref to name },
+                     )
+                 }
+             }
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt b/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
+index ef307b1de..9f46af4e4 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/ConnectionManager.kt
+@@ -350,6 +350,30 @@ class ConnectionManager(
+         return conn.send(UnsubscribeFrame(ref = ref))
+     }
+ 
++    /**
++     * 二级菜单订阅（060）：进入二级菜单时发 [Level2SubscribeFrame]，服务端开始推该工作区
++     * 的实时流（Level2Frame）。fire-and-forget：服务端有订阅者才 scan、零订阅者 park。
++     *
++     * @contract
++     * @pre 连接已启动（非 STOPPED）
++     * @post 连接就绪时 Level2SubscribeFrame 已发出；未就绪则静默（重连后由 UI 重挂订阅）
++     * @err 无（不抛异常）
++     * @inv 不登记 pending 回执；订阅/退订幂等
++     */
++    fun subscribeLevel2(workspace: String): Boolean {
++        if (state == ConnectionState.STOPPED) return false
++        val conn = connection ?: return true
++        if (!conn.isReady) return true
++        return conn.send(Level2SubscribeFrame(workspace = workspace))
++    }
++
++    /** 二级菜单退订（060）：离开二级菜单时发 [Level2UnsubscribeFrame]，服务端停止推。幂等。 */
++    fun unsubscribeLevel2(workspace: String): Boolean {
++        val conn = connection ?: return true
++        if (!conn.isReady) return true
++        return conn.send(Level2UnsubscribeFrame(workspace = workspace))
++    }
++
+     /**
+      * 请求全量列表。
+      *
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt b/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+index 166ac2c76..dad88651d 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/Frame.kt
+@@ -52,4 +52,7 @@ internal object FrameType {
+     const val SCROLL_WHEEL = "scroll_wheel"
+     const val ATTACH_PREVIEW = "attach_preview"
+     const val PANE_MODE_CHANGED = "pane_mode_changed"
++    const val LEVEL2 = "level2"
++    const val LEVEL2_SUBSCRIBE = "level2_subscribe"
++    const val LEVEL2_UNSUBSCRIBE = "level2_unsubscribe"
+ }
+diff --git a/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt b/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
+index 73f87fffd..3c786d247 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/conn/Frames.kt
+@@ -60,6 +60,9 @@ sealed interface FramePayload {
+                     FrameType.SCROLL_WHEEL -> json.decodeFromJsonElement(ScrollWheelFrame.serializer(), el)
+                     FrameType.ATTACH_PREVIEW -> json.decodeFromJsonElement(AttachPreviewFrame.serializer(), el)
+                     FrameType.PANE_MODE_CHANGED -> json.decodeFromJsonElement(PaneModeChangedFrame.serializer(), el)
++                    FrameType.LEVEL2 -> json.decodeFromJsonElement(Level2Frame.serializer(), el)
++                    FrameType.LEVEL2_SUBSCRIBE -> json.decodeFromJsonElement(Level2SubscribeFrame.serializer(), el)
++                    FrameType.LEVEL2_UNSUBSCRIBE -> json.decodeFromJsonElement(Level2UnsubscribeFrame.serializer(), el)
+                     else -> throw FrameDecodeException(
+                         FrameError.UNSUPPORTED_TYPE,
+                         "unknown frame type: $type",
+@@ -115,6 +118,13 @@ sealed interface FramePayload {
+                     FrameError.INVALID_FIELD,
+                     "pane_mode_changed is server-to-client only, never sent upstream",
+                 )
++                // Level2Frame is S→C only; client never encodes it upstream.
++                is Level2Frame -> throw FrameEncodeException(
++                    FrameError.INVALID_FIELD,
++                    "level2 is server-to-client only, never sent upstream",
++                )
++                is Level2SubscribeFrame -> json.encodeToJsonElement(Level2SubscribeFrame.serializer(), frame)
++                is Level2UnsubscribeFrame -> json.encodeToJsonElement(Level2UnsubscribeFrame.serializer(), frame)
+             }
+         }
+     }
+@@ -205,6 +215,11 @@ data class Session(
+     @SerialName("cwd") val cwd: String,
+     @SerialName("rows") val rows: Int,
+     @SerialName("cols") val cols: Int,
++    /**
++     * pane_title 原样透传（060 二级实时流）：服务端不解析、App 渲染原样画。零解析——
++     * 一个字符都不 trim/strip/匹配/映射/美化。默认空串兼容旧帧（一级 listing 无 title）。
++     */
++    @SerialName("title") val title: String = "",
+ )
+ 
+ /**
+@@ -502,3 +517,49 @@ data class PaneModeChangedFrame(
+     override fun validate(): String? = if (ref.isEmpty()) "pane_mode_changed ref must be non-empty" else null
+ }
+ 
++/**
++ * 二级菜单实时流 S→C（060）：服务端把单个工作区的会话全量快照推给二级菜单订阅者。
++ *
++ * 每次 scan 后全量替换该工作区视图（行数少，全量免 diff）；[seq] 单调递增，客户端可检测
++ * 跳变触发重连。每个 [Session] 的 [Session.title] 是 pane_title 原样（零解析），[Session.ref]
++ * 是结构字段身份（socket+paneid），[Session.name] 是 window_name（fallback session_name）。
++ *
++ * @contract
++ * @pre workspace 非空、seq ≥ 1、sessions 为服务端权威快照
++ * @post 客户端以 sessions 整体替换该工作区的二级视图
++ * @err validate() 对空 workspace / seq ≤ 0 返回非空原因
++ * @inv sessions 每项 title 原样（App 零解析）；ref 永不来自标题字符串
++ */
++@Serializable
++data class Level2Frame(
++    @SerialName("workspace") val workspace: String,
++    @SerialName("seq") val seq: Long,
++    @SerialName("sessions") val sessions: List<Session>,
++) : FramePayload {
++    override val frameType: String get() = FrameType.LEVEL2
++    override fun validate(): String? = when {
++        workspace.isEmpty() -> "level2 workspace must be non-empty"
++        seq <= 0 -> "level2 seq must be >= 1"
++        else -> null
++    }
++}
++
++/** 二级菜单订阅 C→S（060）：客户端进入二级菜单时发，服务端开始推该工作区实时流。 */
++@Serializable
++data class Level2SubscribeFrame(
++    @SerialName("workspace") val workspace: String,
++) : FramePayload {
++    override val frameType: String get() = FrameType.LEVEL2_SUBSCRIBE
++    override fun validate(): String? =
++        if (workspace.isEmpty()) "level2_subscribe workspace must be non-empty" else null
++}
++
++/** 二级菜单退订 C→S（060）：客户端离开二级菜单时发，服务端停止推。 */
++@Serializable
++data class Level2UnsubscribeFrame(
++    @SerialName("workspace") val workspace: String,
++) : FramePayload {
++    override val frameType: String get() = FrameType.LEVEL2_UNSUBSCRIBE
++    override fun validate(): String? = null
++}
++
+diff --git a/app/app/src/main/java/dev/agentmirror/app/workspace/Level2LiveStreamScreen.kt b/app/app/src/main/java/dev/agentmirror/app/workspace/Level2LiveStreamScreen.kt
+new file mode 100644
+index 000000000..bd17bd17d
+--- /dev/null
++++ b/app/app/src/main/java/dev/agentmirror/app/workspace/Level2LiveStreamScreen.kt
+@@ -0,0 +1,107 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.defaultMinSize
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.navigationBarsPadding
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.items
++import androidx.compose.material3.HorizontalDivider
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Surface
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.testTag
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import dev.agentmirror.app.ui.theme.MonoFontFamily
++import dev.agentmirror.app.ui.theme.Spacing
++
++/**
++ * 二级菜单实时流渲染（060 t.app）：服务端推来的会话行，**标题原样画**（一个字符都不解析）。
++ *
++ * - 每行主文本 = `title`（pane_title 原样，含 ◐/✳ 前缀与尾空格），**零字符串处理**；
++ * - 每行次行 = `name`（结构字段展示名，window_name fallback session_name），可做次级标签；
++ * - 点行 → [onOpenSession](ref, name)，ref 是结构字段身份（socket+paneid），**title 不参与
++ *   寻址**——三级终端唯一入口。
++ *
++ * 不复活：无状态徽章、无下拉刷新、无二级 diff 模型（060 重建纪律）。
++ *
++ * @contract
++ * @pre sessions 为服务端 Level2Frame 的全量快照（title 原样）
++ * @post 每行 title 原样渲染；点行回调 [onOpenSession] 携带结构 ref
++ * @err none
++ * @inv 对 title 不做任何 startsWith/contains/trim/replace/removePrefix/substring
++ */
++@Composable
++internal fun Level2LiveStreamScreen(
++    sessions: List<Level2Entry>,
++    onOpenSession: (ref: String, name: String) -> Unit,
++) {
++    LazyColumn(
++        modifier = Modifier
++            .fillMaxSize()
++            .navigationBarsPadding(),
++    ) {
++        items(sessions, key = { it.ref }) { entry ->
++            // Surface onClick：ripple 点击态 + 48dp 最小触控目标（018 §一.4）。
++            Surface(
++                onClick = { onOpenSession(entry.ref, entry.name) },
++                color = MaterialTheme.colorScheme.background,
++                modifier = Modifier.testTag("l2-row-${entry.ref}"),
++            ) {
++                Row(
++                    modifier = Modifier
++                        .fillMaxWidth()
++                        .defaultMinSize(minHeight = 56.dp)
++                        .padding(horizontal = Spacing.pageH, vertical = Spacing.rowV),
++                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
++                    verticalAlignment = Alignment.CenterVertically,
++                ) {
++                    // 标题原样画：pane_title 逐字节，不 trim/不剥前缀/不匹配/不映射。
++                    Text(
++                        text = entry.title,
++                        style = MaterialTheme.typography.bodyLarge,
++                        fontFamily = MonoFontFamily,
++                        color = MaterialTheme.colorScheme.onSurface,
++                        maxLines = 1,
++                        overflow = TextOverflow.Ellipsis,
++                        modifier = Modifier.weight(1f),
++                    )
++                    // 结构字段展示名（window_name fallback session_name），次级标签。
++                    Text(
++                        text = entry.name,
++                        style = MaterialTheme.typography.labelMedium,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant,
++                    )
++                }
++            }
++            HorizontalDivider(
++                color = MaterialTheme.colorScheme.outlineVariant,
++                thickness = 0.5.dp,
++                modifier = Modifier.padding(start = Spacing.pageH),
++            )
++        }
++    }
++}
+diff --git a/app/app/src/main/java/dev/agentmirror/app/workspace/Level2ViewModel.kt b/app/app/src/main/java/dev/agentmirror/app/workspace/Level2ViewModel.kt
+new file mode 100644
+index 000000000..416afd96c
+--- /dev/null
++++ b/app/app/src/main/java/dev/agentmirror/app/workspace/Level2ViewModel.kt
+@@ -0,0 +1,96 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.setValue
++import dev.agentmirror.app.conn.BinaryFrame
++import dev.agentmirror.app.conn.ConnectionManager
++import dev.agentmirror.app.conn.ConnectionState
++import dev.agentmirror.app.conn.FrameError
++import dev.agentmirror.app.conn.FramePayload
++import dev.agentmirror.app.conn.Level2Frame
++
++/**
++ * 二级菜单实时流条目（060）：服务端推的单个 pane 行。
++ *
++ * [ref] 是结构字段身份（socket+paneid），App 用它进三级终端——**永不来自 title**。
++ * [name] 是展示名（window_name，fallback session_name）。[title] 是 pane_title **原样**
++ * （一个字符都不解析/匹配/映射/美化），渲染时直接 Text(title)。
++ */
++data class Level2Entry(
++    val ref: String,
++    val name: String,
++    val title: String,
++    val rows: Int,
++    val cols: Int,
++)
++
++/**
++ * 二级菜单实时流 ViewModel（060 重建，不复活旧列表模型）。
++ *
++ * 消费服务端 [Level2Frame]（单个工作区会话全量快照）→ [sessions] 全量替换。标题零解析。
++ * 生命周期：构造即 [ConnectionManager.subscribeLevel2]（进入二级菜单自动订阅）；[dispose]
++ * 时 [ConnectionManager.unsubscribeLevel2]（离开即退订，不后台持续拉取）。
++ *
++ * @contract
++ * @pre 构造时传入目标工作区 cwd（一级选中的工作区）
++ * @post 构造即发 Level2Subscribe；收到 Level2Frame 全量替换 [sessions]；[dispose] 发
++ *       Level2Unsubscribe 并停止消费
++ * @err none（无关帧忽略；连接未就绪时订阅/退订静默幂等）
++ * @inv [Level2Entry.title] 原样，不做任何字符串处理；[ref] 只来自结构字段
++ */
++class Level2ViewModel(
++    private val manager: ConnectionManager,
++    private val workspace: String,
++) : ConnectionManager.Listener {
++
++    /** 二级菜单会话行（服务端 Level2Frame 全量替换）。 */
++    var sessions by mutableStateOf<List<Level2Entry>>(emptyList())
++        private set
++
++    init {
++        manager.subscribeLevel2(workspace)
++    }
++
++    /** ConnectionManager.Listener：只消费 Level2Frame（本工作区实时流），其余帧忽略。 */
++    override fun onFrame(frame: FramePayload) {
++        if (frame !is Level2Frame) return
++        if (frame.workspace != workspace) return // 只收本工作区流
++        sessions = frame.sessions.map { s ->
++            Level2Entry(
++                ref = s.ref,
++                name = s.name,
++                title = s.title, // 原样，零加工
++                rows = s.rows,
++                cols = s.cols,
++            )
++        }
++    }
++
++    override fun onStateChanged(state: ConnectionState) = Unit
++    override fun onBinary(frame: BinaryFrame) = Unit
++    override fun onLocalDecodeError(code: FrameError, message: String) = Unit
++    override fun onInputResult(reqId: Long, ok: Boolean, reason: String?) = Unit
++    override fun onReconnect(attempt: Int, delayMs: Long) = Unit
++
++    /** 离开二级菜单：退订实时流（不再后台拉取）。幂等。 */
++    fun dispose() {
++        manager.unsubscribeLevel2(workspace)
++    }
++}
+diff --git a/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt b/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt
+index ae9aabc7e..27b3847c1 100644
+--- a/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt
++++ b/app/app/src/main/java/dev/agentmirror/app/workspace/WorkspaceScreen.kt
+@@ -46,15 +46,18 @@ import androidx.compose.material3.Text
+ import androidx.compose.material3.TextButton
+ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+ import androidx.compose.runtime.Composable
++import androidx.compose.runtime.DisposableEffect
+ import androidx.compose.runtime.LaunchedEffect
+ import androidx.compose.runtime.collectAsState
+ import androidx.compose.runtime.getValue
++import androidx.compose.runtime.remember
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.platform.testTag
+ import androidx.compose.ui.text.style.TextAlign
+ import androidx.compose.ui.text.style.TextOverflow
+ import androidx.compose.ui.unit.dp
++import dev.agentmirror.app.service.ServiceWire
+ import dev.agentmirror.app.tsnet.ConnectionPath
+ import dev.agentmirror.app.ui.theme.MonoFontFamily
+ import dev.agentmirror.app.ui.theme.Spacing
+@@ -90,6 +93,7 @@ fun WorkspaceScreen(
+     onSelectWorkspace: (cwd: String) -> Unit,
+     onBackToList: () -> Unit,
+     onOpenSettings: () -> Unit,
++    onOpenSession: (ref: String, name: String) -> Unit,
+ ) {
+     val state by viewModel.uiState.collectAsState()
+     val refreshing by viewModel.refreshing.collectAsState()
+@@ -126,8 +130,28 @@ fun WorkspaceScreen(
+                 .fillMaxSize()
+                 .testTag("workspace-pull-refresh"),
+         ) {
+-            // 一级列表 + 加载/空/错态。060 uproot：二级会话列表（SessionList）随状态判定
+-            // 整体拔除，待二级实时流重建；此处只渲染一级工作区列表。
++            // 二级实时流（060 重建）：选中工作区（selectedWorkspaceCwd 非空）时渲染服务端
++            // 推来的会话行（标题原样 + 结构 ref 点行进三级）。Level2ViewModel 构造即订阅、
++            // 离开即退订（DisposableEffect onDispose）。
++            val level2Cwd = selectedWorkspaceCwd
++            if (level2Cwd != null) {
++                val l2Vm = remember(level2Cwd) {
++                    ServiceWire.managerOrNull()?.let { Level2ViewModel(it, level2Cwd) }
++                }
++                DisposableEffect(l2Vm) {
++                    onDispose { l2Vm?.dispose() }
++                }
++                if (l2Vm != null) {
++                    Level2LiveStreamScreen(
++                        sessions = l2Vm.sessions,
++                        onOpenSession = onOpenSession,
++                    )
++                } else {
++                    LoadingContent()
++                }
++                return@PullToRefreshBox
++            }
++            // 一级列表 + 加载/空/错态。060 uproot：一级菜单刷新模型保留（进入即刷 + 下拉刷）。
+             AnimatedContent(
+                 targetState = state.workspaces,
+                 transitionSpec = { fadeIn().togetherWith(fadeOut()) },
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2LiveStreamRenderTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2LiveStreamRenderTest.kt
+new file mode 100644
+index 000000000..8fee4a021
+--- /dev/null
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2LiveStreamRenderTest.kt
+@@ -0,0 +1,78 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import androidx.compose.ui.test.junit4.createComposeRule
++import androidx.compose.ui.test.onNodeWithText
++import dev.agentmirror.app.ui.theme.AgentMirrorTheme
++import org.junit.Assert.assertEquals
++import org.junit.Rule
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
++import org.robolectric.annotation.GraphicsMode
++
++/**
++ * 二级菜单实时流渲染红测（060 t.app A-a-*）。
++ *
++ * 断言：收到 Level2Frame → 每行 title 原样渲染（含 ◐/✳ 前缀），文本逐字节等于输入——
++ * **一个字符都不解析**。渲染用 createComposeRule 驱动 [WorkspaceScreen] 的二级分支，
++ * title 直接 Text(title)。
++ *
++ * 红测先行：修复前无 Level2ViewModel / 二级渲染 → 编译失败即红。
++ */
++@RunWith(RobolectricTestRunner::class)
++@Config(sdk = [34])
++@GraphicsMode(GraphicsMode.Mode.NATIVE)
++class Level2LiveStreamRenderTest {
++
++    @get:Rule
++    val compose = createComposeRule()
++
++    private fun entry(ref: String, name: String, title: String) =
++        Level2Entry(ref = ref, name = name, title = title, rows = 24, cols = 80)
++
++    @Test
++    fun titleRenderedVerbatimIncludingPrefixGlyphs() {
++        // 服务端原样推来的标题：含 ◐/✳ 前缀 + 尾空格（不可被 trim 掉）。
++        val titles = listOf(
++            "◐  claude  正在工作",
++            "✳  codex  输入中  ",
++        )
++        val sessions = listOf(
++            entry("ref-1", "claude", titles[0]),
++            entry("ref-2", "codex", titles[1]),
++        )
++
++        var openedRef: String? = null
++        var openedName: String? = null
++        compose.setContent {
++            AgentMirrorTheme {
++                Level2LiveStreamScreen(
++                    sessions = sessions,
++                    onOpenSession = { ref, name -> openedRef = ref; openedName = name },
++                )
++            }
++        }
++
++        // 标题逐字节原样：含前缀字形与尾空格，一个字符都不改。
++        compose.onNodeWithText(titles[0]).assertExists("标题必须原样渲染（含 ◐ 前缀与尾内容）")
++        compose.onNodeWithText(titles[1]).assertExists("标题必须原样渲染（含 ✳ 前缀与尾空格）")
++        assertEquals("标题渲染不得丢失前缀字符", "◐", titles[0].substring(0, 1))
++    }
++}
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2NavigationIdentityTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2NavigationIdentityTest.kt
+new file mode 100644
+index 000000000..13723efe3
+--- /dev/null
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2NavigationIdentityTest.kt
+@@ -0,0 +1,76 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import androidx.compose.ui.test.junit4.createComposeRule
++import androidx.compose.ui.test.onNodeWithTag
++import androidx.compose.ui.test.performClick
++import dev.agentmirror.app.ui.theme.AgentMirrorTheme
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertNull
++import org.junit.Rule
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
++import org.robolectric.annotation.GraphicsMode
++
++/**
++ * 二级菜单导航身份红测（060 t.app A-a-*）。
++ *
++ * 断言：点一行用 ref（结构字段身份，socket+paneid）导航，跳转**不依赖 title 内容**——
++ * 两个 ref 不同但 title 相同的行，点各自必须进各自 ref 的会话。
++ *
++ * 红测先行：修复前二级不可点（拔除后无 onOpenSession）→ 编译/运行失败即红。
++ */
++@RunWith(RobolectricTestRunner::class)
++@Config(sdk = [34])
++@GraphicsMode(GraphicsMode.Mode.NATIVE)
++class Level2NavigationIdentityTest {
++
++    @get:Rule
++    val compose = createComposeRule()
++
++    @Test
++    fun clickUsesRefIdentityNotTitleContent() {
++        // 两个会话 ref 不同、title 完全一致——身份必须只来自 ref（结构字段）。
++        val refA = "/sockA%0"
++        val refB = "/sockB%1"
++        val sharedTitle = "◐  same-looking-agent"
++        val sessions = listOf(
++            Level2Entry(ref = refA, name = "claude", title = sharedTitle, rows = 24, cols = 80),
++            Level2Entry(ref = refB, name = "codex", title = sharedTitle, rows = 24, cols = 80),
++        )
++
++        var openedRef: String? = null
++        var openedName: String? = null
++        compose.setContent {
++            AgentMirrorTheme {
++                Level2LiveStreamScreen(
++                    sessions = sessions,
++                    onOpenSession = { ref, name -> openedRef = ref; openedName = name },
++                )
++            }
++        }
++
++        // 点第二行（相同 title 的另一会话）：必须进 refB，不能因 title 相同而混淆。
++        compose.onNodeWithTag("l2-row-$refB").performClick()
++        assertEquals("点行必须用 ref（结构身份）导航", refB, openedRef)
++        assertEquals("点行应带上结构字段展示名", "codex", openedName)
++        assertNull("title 内容不得影响身份（未点第一行就不该开 refA）", openedRef?.takeIf { it == refA })
++    }
++}
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2StreamLifecycleTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2StreamLifecycleTest.kt
+new file mode 100644
+index 000000000..3b5f42705
+--- /dev/null
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/Level2StreamLifecycleTest.kt
+@@ -0,0 +1,99 @@
++/*
++ * Copyright 2026 AgentMirror Project Authors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package dev.agentmirror.app.workspace
++
++import dev.agentmirror.app.conn.ConnectionConfig
++import dev.agentmirror.app.conn.ConnectionManager
++import dev.agentmirror.app.conn.FakeClock
++import dev.agentmirror.app.conn.FakeWebSocketTransport
++import dev.agentmirror.app.conn.FrameCodec
++import dev.agentmirror.app.conn.FramePayload
++import dev.agentmirror.app.conn.Level2Frame
++import dev.agentmirror.app.conn.Level2SubscribeFrame
++import dev.agentmirror.app.conn.Level2UnsubscribeFrame
++import dev.agentmirror.app.conn.Session
++import dev.agentmirror.app.conn.TransportFactory
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++/**
++ * 二级菜单流生命周期红测（060 t.app A-a-*）。
++ *
++ * 断言：进入二级 → 发 Level2Subscribe；退出 → 发 Level2Unsubscribe；退订后 VM dispose
++ * 不再有拉取（无定时器/后台轮询）。
++ *
++ * 红测先行：修复前无 Level2ViewModel → 编译失败即红。
++ */
++class Level2StreamLifecycleTest {
++
++    private class Harness(workspace: String = "/proj/a") {
++        val transport = FakeWebSocketTransport()
++        val manager = ConnectionManager(
++            config = ConnectionConfig(url = "ws://host:0/ws", token = "tok"),
++            transportFactory = TransportFactory { transport },
++            clock = FakeClock(),
++        )
++        lateinit var vm: Level2ViewModel
++
++        init {
++            manager.start()
++            transport.deliverText("""{"v":1,"type":"auth_ack","payload":{"ok":true}}""")
++            vm = Level2ViewModel(manager, workspace)
++            manager.setListener(vm)
++        }
++
++        fun sentFrames(): List<FramePayload> =
++            transport.sentText.mapNotNull { runCatching { FrameCodec.decode(it) }.getOrNull() }
++
++        fun level2Frame(sessions: List<Session>) = Level2Frame(
++            workspace = "/proj/a",
++            seq = 1,
++            sessions = sessions,
++        )
++    }
++
++    @Test
++    fun enteringSubscribesLevel2() {
++        val h = Harness()
++        // 构造即发 Level2Subscribe（进入二级菜单自动订阅）。
++        assertTrue(
++            "进入二级必须发 Level2Subscribe",
++            h.sentFrames().any { it is Level2SubscribeFrame },
++        )
++    }
++
++    @Test
++    fun leavingUnsubscribesLevel2() {
++        val h = Harness()
++        h.vm.dispose()
++        assertTrue(
++            "离开二级必须发 Level2Unsubscribe",
++            h.sentFrames().any { it is Level2UnsubscribeFrame },
++        )
++    }
++
++    @Test
++    fun receivingLevel2FrameReplacesEntriesVerbatim() {
++        val h = Harness()
++        val entry = Session(ref = "ref-1", name = "claude", cwd = "/proj/a", rows = 24, cols = 80, title = "◐  live")
++        h.vm.onFrame(h.level2Frame(listOf(entry)))
++        assertEquals(1, h.vm.sessions.size)
++        assertEquals("ref-1", h.vm.sessions[0].ref)
++        assertEquals("◐  live", h.vm.sessions[0].title) // title 原样，零加工
++    }
++}
+diff --git a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt
+index 22a761f09..da3cdcfd5 100644
+--- a/app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt
++++ b/app/app/src/test/kotlin/dev/agentmirror/app/workspace/WorkspaceRefreshTest.kt
+@@ -85,6 +85,7 @@ class WorkspaceRefreshTest {
+                     onSelectWorkspace = {},
+                     onBackToList = {},
+                     onOpenSettings = {},
++                    onOpenSession = { _, _ -> },
+                 )
+             }
+         }
+diff --git a/server/internal/api/level2.go b/server/internal/api/level2.go
+new file mode 100644
+index 000000000..21481c2c7
+--- /dev/null
++++ b/server/internal/api/level2.go
+@@ -0,0 +1,206 @@
++package api
++
++import (
++	"context"
++	"time"
++
++	"github.com/agentmirror/agentmirror/internal/protocol"
++)
++
++// level2.go implements the second-level live stream (requirement 060: 二级菜单
++// 改为实时流并取代状态判定). The level-2 menu is "Ctrl-B w 的重绘": the server
++// pushes each pane's verbatim pane-title plus structural identity to the client
++// in real time while the menu is open.
++//
++// Three invariants (from the design at .team/nodes/level2-livestream/实现方案.md):
++//
++//  1. Title verbatim — the pane title is transmitted byte-for-byte (including
++//     ◐/✳ prefixes), zero parsing/matching/mapping. It is display-only; never
++//     used for identity.
++//  2. Identity structural — Ref/Name come from tmux structural fields
++//     (session_name / window_index / window_name → sessionRef socket+paneid).
++//     Never derived from the title string.
++//  3. Pull only while open — the loop scans tmux only while ≥1 level2 subscriber
++//     exists; at zero subscribers it parks (idle CPU ≈ 0). Never attach tmux.
++
++// defaultLevel2Interval is how often the level2 loop scans while subscribers
++// exist. The live stream should feel fresher than the level-1 menu cadence.
++const defaultLevel2Interval = 500 * time.Millisecond
++
++// level2Entry is one row the server pushes to a level-2 subscriber: the pane's
++// verbatim title plus structural identity. Name comes from window_name
++// (fallback session_name); Ref is the stable session ref (socket + pane id).
++type level2Entry struct {
++	ref      string
++	name     string
++	cwd      string
++	title    string
++	rows     uint16
++	cols     uint16
++}
++
++// level2Loop is the idle-gated scan heartbeat for the second-level live stream.
++// While ≥1 subscriber exists it scans tmux on the level2 cadence and pushes a
++// full-replace Level2Frame to each subscriber's workspace; at zero subscribers
++// it parks and spawns no scan subprocesses (idle CPU ≈ 0, engineering red line
++// 1). The 0→1 wake (markLevel2) breaks the park immediately.
++func (s *Server) level2Loop(ctx context.Context) {
++	s.log.Debug("level2 loop started", "interval", s.level2Interval)
++	for {
++		if s.countLevel2() == 0 {
++			// No second-level subscribers: park and spawn no scan subprocesses.
++			select {
++			case <-ctx.Done():
++				s.log.Debug("level2 loop stopped")
++				return
++			case <-s.level2WakeCh:
++			}
++		} else {
++			select {
++			case <-ctx.Done():
++				s.log.Debug("level2 loop stopped")
++				return
++			case <-s.level2WakeCh:
++			case <-time.After(s.level2Interval):
++			}
++		}
++		s.publishLevel2(ctx)
++	}
++}
++
++// markLevel2 is called when a connection subscribes to the level-2 stream: it
++// bumps the subscriber count and wakes the loop (0→1) so the first subscriber's
++// stream is fresh immediately.
++func (s *Server) markLevel2() {
++	if s.level2Subscribers.Add(1) == 1 {
++		select {
++		case s.level2WakeCh <- struct{}{}:
++		default:
++		}
++	}
++}
++
++// unmarkLevel2 is called when a connection unsubscribes or tears down: it drops
++// the subscriber count. At zero the loop parks after the in-flight scan, so an
++// idle daemon spawns no further level2 scan subprocesses.
++func (s *Server) unmarkLevel2() {
++	if s.level2Subscribers.Add(-1) <= 0 {
++		s.level2Subscribers.Store(0) // never negative: teardown is idempotent-guarded
++	}
++}
++
++// countLevel2 returns the number of connections currently viewing the second
++// level.
++func (s *Server) countLevel2() int64 {
++	return s.level2Subscribers.Load()
++}
++
++// publishLevel2 performs one scan-and-push cycle: one Discover (list-panes -a,
++// zero attach), then for each subscribed connection push a Level2Frame covering
++// its workspace. It is the level2Loop's only scan point, so with zero
++// subscribers it never runs (zero tmux calls).
++func (s *Server) publishLevel2(ctx context.Context) {
++	model, err := s.discoverer.Discover(ctx)
++	if err != nil {
++		s.log.Warn("level2: discover failed", "err", err)
++		return
++	}
++	// Build a per-workspace index of panes.
++	byCWD := make(map[string][]level2Entry)
++	for _, ws := range model.Workspaces {
++		for _, p := range ws.Panes {
++			name := p.WindowName
++			if name == "" {
++				name = p.Session
++			}
++			byCWD[ws.CWD] = append(byCWD[ws.CWD], level2Entry{
++				ref:   sessionRef(p),
++				name:  name,
++				cwd:   ws.CWD,
++				title: p.PaneTitle, // verbatim, zero parsing (requirement 060)
++				rows:  uint16(p.Height),
++				cols:  uint16(p.Width),
++			})
++		}
++	}
++
++	// Push to each subscribed connection, scoped to its workspace.
++	s.trackersMu.Lock()
++	conns := make([]*wsConn, 0, len(s.trackers))
++	for c := range s.trackers {
++		if c.level2Active() {
++			conns = append(conns, c)
++		}
++	}
++	s.trackersMu.Unlock()
++
++	seq := s.nextSeq()
++	for _, c := range conns {
++		ws := c.level2Workspace()
++		entries := byCWD[ws] // empty if the workspace has no panes
++		sessions := make([]protocol.Session, 0, len(entries))
++		for _, e := range entries {
++			sessions = append(sessions, protocol.Session{
++				Ref:   e.ref,
++				Name:  e.name,
++				Cwd:   e.cwd,
++				Title: e.title, // verbatim, zero parsing
++				Rows:  e.rows,
++				Cols:  e.cols,
++			})
++		}
++		c.send(protocol.Level2Frame{
++			Workspace: ws,
++			Seq:       seq,
++			Sessions:  sessions,
++		})
++	}
++}
++
++// handleLevel2Subscribe starts this connection's second-level live stream. The
++// workspace scopes the push; empty means all workspaces.
++//
++// @contract
++// @pre 连接已认证
++// @post 连接计入 level2 订阅者并绑定 workspace；服务端开始按 cadence 推 Level2Frame
++// @err none
++func (c *wsConn) handleLevel2Subscribe(f protocol.Level2Subscribe) {
++	c.setLevel2(true, f.Workspace)
++	c.s.markLevel2()
++}
++
++// handleLevel2Unsubscribe stops this connection's second-level live stream.
++//
++// @contract
++// @pre 连接已认证
++// @post 连接移出 level2 订阅者；最后一名订阅者退出后 level2Loop park
++// @err none
++func (c *wsConn) handleLevel2Unsubscribe(protocol.Level2Unsubscribe) {
++	if c.level2Active() {
++		c.setLevel2(false, "")
++		c.s.unmarkLevel2()
++	}
++}
++
++// level2Active reports whether this connection is subscribed to the level-2
++// live stream.
++func (c *wsConn) level2Active() bool {
++	c.level2Mu.Lock()
++	defer c.level2Mu.Unlock()
++	return c.level2On
++}
++
++// level2Workspace returns the workspace scope this connection subscribes to.
++func (c *wsConn) level2Workspace() string {
++	c.level2Mu.Lock()
++	defer c.level2Mu.Unlock()
++	return c.level2WS
++}
++
++// setLevel2 records this connection's level-2 subscription state.
++func (c *wsConn) setLevel2(on bool, workspace string) {
++	c.level2Mu.Lock()
++	defer c.level2Mu.Unlock()
++	c.level2On = on
++	c.level2WS = workspace
++}
+diff --git a/server/internal/api/level2_test.go b/server/internal/api/level2_test.go
+new file mode 100644
+index 000000000..60b2d1e5b
+--- /dev/null
++++ b/server/internal/api/level2_test.go
+@@ -0,0 +1,209 @@
++package api
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/agentmirror/agentmirror/internal/discovery"
++	"github.com/agentmirror/agentmirror/internal/protocol"
++)
++
++// level2_test.go pins the three invariants of the second-level live stream
++// (requirement 060; design at .team/nodes/level2-livestream/实现方案.md):
++//
++//  1. Title verbatim — the pane title is transmitted byte-for-byte (including
++//     ◐/✳ prefixes), zero parsing/matching/mapping.
++//  2. Identity structural — Ref/Name come from tmux structural fields
++//     (session_name/window_index/window_name), never from the title string.
++//  3. Pull only while open — the loop scans tmux only while ≥1 level2
++//     subscriber exists; at zero subscribers it parks (zero Discover calls).
++//     Never attach tmux.
++
++// TestLevel2TitleVerbatim asserts the pane title reaches the client byte-for-
++// byte: a title carrying a ◐ (working) or ✳ (idle) prefix is transmitted
++// unchanged, never stripped, trimmed, matched, or mapped.
++func TestLevel2TitleVerbatim(t *testing.T) {
++	working := "◐ w-librarian"
++	idle := "✳ dev-state"
++	md := &mutableDiscoverer{model: &discovery.Model{
++		Workspaces: []discovery.Workspace{
++			{CWD: "/ws/a", Panes: []discovery.Pane{
++				{Socket: "/tmp/sock1", Session: "alpha", PaneID: "%0", CWD: "/ws/a", Command: "claude", PaneTitle: working, WindowName: "claude", Width: 100, Height: 40},
++				{Socket: "/tmp/sock1", Session: "beta", PaneID: "%1", CWD: "/ws/a", Command: "codex", PaneTitle: idle, WindowName: "codex", Width: 80, Height: 24},
++			}},
++		},
++	}}
++	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour})
++	e.auth()
++
++	// Subscribe to the level-2 stream for workspace /ws/a.
++	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
++
++	// The level2 loop wakes on 0→1 and scans immediately; read the pushed frame.
++	deadline := time.Now().Add(5 * time.Second)
++	var got *protocol.Level2Frame
++	for time.Now().Before(deadline) {
++		typed := e.readControl()
++		if f, ok := typed.(protocol.Level2Frame); ok {
++			got = &f
++			break
++		}
++		// Not a level2 frame (e.g. a listing delta); keep reading.
++	}
++	if got == nil {
++		t.Fatal("no level2_frame received after subscribing")
++	}
++	if len(got.Sessions) != 2 {
++		t.Fatalf("level2_frame sessions = %d, want 2", len(got.Sessions))
++	}
++	byRef := map[string]protocol.Session{}
++	for _, s := range got.Sessions {
++		byRef[s.Ref] = s
++	}
++	// Title must be byte-identical to the source pane title, ◐/✳ prefixes intact.
++	if byRef["/tmp/sock1\x1f%0"].Title != working {
++		t.Fatalf("working pane title = %q, want verbatim %q (◐ prefix stripped/mapped?)", byRef["/tmp/sock1\x1f%0"].Title, working)
++	}
++	if byRef["/tmp/sock1\x1f%1"].Title != idle {
++		t.Fatalf("idle pane title = %q, want verbatim %q (✳ prefix stripped/mapped?)", byRef["/tmp/sock1\x1f%1"].Title, idle)
++	}
++}
++
++// TestLevel2IdentityStructural asserts identity comes ONLY from structural
++// fields: two panes with the same title but different session_name get
++// different refs/names, and changing a pane's title does not change its
++// ref/name.
++func TestLevel2IdentityStructural(t *testing.T) {
++	// Two panes, same title "same title" — identity must still distinguish them
++	// by structural fields (session_name → ref = socket+paneid).
++	md := &mutableDiscoverer{model: &discovery.Model{
++		Workspaces: []discovery.Workspace{
++			{CWD: "/ws/a", Panes: []discovery.Pane{
++				{Socket: "/tmp/sock1", Session: "alpha", PaneID: "%0", CWD: "/ws/a", Command: "claude", PaneTitle: "same title", WindowName: "claude", Width: 100, Height: 40},
++				{Socket: "/tmp/sock1", Session: "beta", PaneID: "%1", CWD: "/ws/a", Command: "codex", PaneTitle: "same title", WindowName: "codex", Width: 80, Height: 24},
++			}},
++		},
++	}}
++	e := startWS(t, Options{Token: "test-token", Discoverer: md, ListInterval: time.Hour})
++	e.auth()
++	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
++
++	deadline := time.Now().Add(5 * time.Second)
++	var got *protocol.Level2Frame
++	for time.Now().Before(deadline) {
++		typed := e.readControl()
++		if f, ok := typed.(protocol.Level2Frame); ok {
++			got = &f
++			break
++		}
++	}
++	if got == nil {
++		t.Fatal("no level2_frame received")
++	}
++	refs := map[string]bool{}
++	for _, s := range got.Sessions {
++		refs[s.Ref] = true
++		// Ref must be the structural identity (socket + paneid), never the title.
++		if strings.Contains(s.Ref, "same title") {
++			t.Fatalf("ref %q derives from the title string — identity must be structural", s.Ref)
++		}
++	}
++	if !refs["/tmp/sock1\x1f%0"] || !refs["/tmp/sock1\x1f%1"] {
++		t.Fatalf("expected structural refs /tmp/sock1\\x1f%%0 and %%1, got %v", refs)
++	}
++}
++
++// TestLevel2StopsWhenNoSubscriber asserts the zero-subscriber idle gate: with
++// no level2 subscribers the server makes zero Discover (tmux) calls; after
++// subscribing, scans happen; after unsubscribing, they stop.
++func TestLevel2StopsWhenNoSubscriber(t *testing.T) {
++	cd := &countingDiscoverer{model: testModel()}
++	e := startWS(t, Options{Token: "test-token", Discoverer: cd, ListInterval: time.Hour})
++	e.auth()
++
++	// Establish the pre-subscription scan count (the listing loop with ListInterval
++	// time.Hour still does one initial scan, so snapshot the baseline).
++	baseline := cd.scans.Load()
++
++	// Give any spurious level2 scans a chance to show up; none should.
++	time.Sleep(150 * time.Millisecond)
++	if got := cd.scans.Load(); got > baseline {
++		t.Fatalf("level2 scan ran with zero subscribers: scans %d > baseline %d (idle gate broken)", got, baseline)
++	}
++
++	// Subscribe: scans must now run.
++	e.sendFrame(&protocol.Level2Subscribe{Workspace: "/ws/a"})
++	deadline := time.Now().Add(5 * time.Second)
++	for time.Now().Before(deadline) && cd.scans.Load() == baseline {
++		time.Sleep(10 * time.Millisecond)
++	}
++	if cd.scans.Load() == baseline {
++		t.Fatal("no level2 scan after subscribing (gate did not wake)")
++	}
++
++	// Unsubscribe: scans must stop.
++	e.sendFrame(&protocol.Level2Unsubscribe{})
++	time.Sleep(150 * time.Millisecond)
++	after := cd.scans.Load()
++	time.Sleep(200 * time.Millisecond)
++	if got := cd.scans.Load(); got != after {
++		t.Fatalf("level2 scan continued after unsubscribe: %d -> %d (idle gate broken)", after, got)
++	}
++}
++
++// TestLevel2NoTmuxAttach asserts the server's tmux command set never contains
++// "attach": the level-2 data source is list-panes -a (discovery), which never
++// attaches a client (requirement 060 §六; avoids multi-client size negotiation).
++func TestLevel2NoTmuxAttach(t *testing.T) {
++	root := repoRoot(t) // repoRoot walks up from the test package to go.mod → the server module root
++	// Search discovery (the tmux command source) and level2.go (the live stream)
++	// for any attach command. Exclude test files.
++	for _, dir := range []string{"internal/discovery", "internal/api"} {
++		err := filepath.Walk(filepath.Join(root, dir), func(path string, info os.FileInfo, err error) error {
++			if err != nil {
++				return err
++			}
++			if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
++				return nil
++			}
++			data, err := os.ReadFile(path)
++			if err != nil {
++				return err
++			}
++			// A real attach command appears in source as "attach-session" (the
++			// tmux command) or "attach" as a quoted command token. Plain-word
++			// "attach" in a comment (e.g. "never attach tmux") is not a command
++			// and must not fail the check.
++			if strings.Contains(string(data), "attach-session") || strings.Contains(string(data), `"attach"`) || strings.Contains(string(data), "`attach`") {
++				t.Errorf("%s: contains an attach command (must use list-panes -a only)", path)
++			}
++			return nil
++		})
++		if err != nil {
++			t.Fatalf("walk %s: %v", dir, err)
++		}
++	}
++}
++
++// repoRoot returns the repository root by walking up from the test package.
++func repoRoot(t *testing.T) string {
++	t.Helper()
++	dir, err := os.Getwd()
++	if err != nil {
++		t.Fatalf("getwd: %v", err)
++	}
++	for {
++		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
++			return dir
++		}
++		parent := filepath.Dir(dir)
++		if parent == dir {
++			t.Fatal("could not find repo root")
++		}
++		dir = parent
++	}
++}
++
+diff --git a/server/internal/api/server.go b/server/internal/api/server.go
+index d7c658e67..5718f50b2 100644
+--- a/server/internal/api/server.go
++++ b/server/internal/api/server.go
+@@ -87,6 +87,19 @@ type Server struct {
+ 	// runs a fresh full scan immediately instead of waiting for the next tick.
+ 	authed atomic.Int64
+ 	wakeCh chan struct{}
++
++	// level2Subscribers counts connections currently viewing the second-level
++	// menu (requirement 060). The level2Loop polls only while this is > 0; at
++	// zero it parks and spawns no scan subprocesses (idle CPU ≈ 0). level2WakeCh
++	// is a capacity-1 signal that the count just went 0→1, so the first
++	// subscriber's stream is fresh immediately.
++	level2Subscribers atomic.Int64
++	level2WakeCh      chan struct{}
++
++	// level2Interval is how often the level2 loop scans while subscribers exist.
++	// Distinct from listInterval so the live stream can be fresher than the
++	// level-1 menu cadence.
++	level2Interval time.Duration
+ }
+ 
+ // NewServer constructs the API server from Options. Zero values use the
+@@ -140,8 +153,13 @@ func NewServer(opts Options) *Server {
+ 	// channel. Capacity 1: a wake that finds the slot occupied is dropped —
+ 	// the loop is already about to run, so one scan covers both clients.
+ 	s.wakeCh = make(chan struct{}, 1)
++	// Same reasoning for the level2 live stream: the 0→1 subscriber wake must
++	// never send on a nil channel, and a dropped wake is fine (a scan is coming).
++	s.level2WakeCh = make(chan struct{}, 1)
++	s.level2Interval = defaultLevel2Interval
+ 	s.loopCtx, s.loopStop = context.WithCancel(context.Background())
+ 	go s.listingLoop(s.loopCtx)
++	go s.level2Loop(s.loopCtx)
+ 	return s
+ }
+ 
+diff --git a/server/internal/api/ws_conn.go b/server/internal/api/ws_conn.go
+index b1f5d9a2b..c682b8248 100644
+--- a/server/internal/api/ws_conn.go
++++ b/server/internal/api/ws_conn.go
+@@ -51,6 +51,13 @@ type wsConn struct {
+ 	subsMu sync.Mutex
+ 	subs   map[string]*subscription
+ 
++	// level2Mu guards the second-level live-stream subscription state (060).
++	// level2On records whether this connection is viewing the level-2 menu;
++	// level2WS is the workspace scope (empty = all).
++	level2Mu  sync.Mutex
++	level2On  bool
++	level2WS  string
++
+ 	// send is the writer queue. Control frames use a blocking send (a reply
+ 	// must never be dropped); mirror deltas use a non-blocking send that drops
+ 	// on overflow (the next snapshot reconciles, requirement 004).
+@@ -239,6 +246,12 @@ func (c *wsConn) teardown() {
+ 	if c.authed.Load() {
+ 		c.s.unmarkAuthed()
+ 	}
++	// If this connection was viewing the level-2 menu, un-count it so the
++	// level2 loop parks once zero subscribers remain (060 idle gate).
++	if c.level2Active() {
++		c.setLevel2(false, "")
++		c.s.unmarkLevel2()
++	}
+ 	c.subsMu.Lock()
+ 	subs := c.subs
+ 	c.subs = make(map[string]*subscription)
+@@ -353,9 +366,13 @@ func (c *wsConn) handleFrame(data []byte) bool {
+ 		c.handleScrollWheel(t)
+ 	case protocol.AttachPreview:
+ 		c.handleAttachPreview(t)
++	case protocol.Level2Subscribe:
++		c.handleLevel2Subscribe(t)
++	case protocol.Level2Unsubscribe:
++		c.handleLevel2Unsubscribe(t)
+ 	default:
+-		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed
+-		// are server-to-client only.
++		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed,
++		// level2_frame are server-to-client only.
+ 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
+ 	}
+ 	return true
+diff --git a/server/internal/protocol/frames.go b/server/internal/protocol/frames.go
+index cf3c9818c..6454acc65 100644
+--- a/server/internal/protocol/frames.go
++++ b/server/internal/protocol/frames.go
+@@ -77,12 +77,18 @@ type Workspace struct {
+ // client uses to address subscribe / input / scrollback / resize; it is
+ // distinct from the display-only Name. Rows/Cols are the pane's current
+ // dimensions.
++//
++// Title is the pane's OSC title, transmitted VERBATIM (requirement 060:
++// 二级菜单 = Ctrl-B w 的重绘, 标题原样显示, 一个字符都不解析). It is display-only:
++// never used for identity — Ref/Name come from tmux structural fields, and the
++// client must never derive any addressing from Title.
+ type Session struct {
+-	Ref  string `json:"ref"`
+-	Name string `json:"name"`
+-	Cwd  string `json:"cwd"`
+-	Rows uint16 `json:"rows"`
+-	Cols uint16 `json:"cols"`
++	Ref   string `json:"ref"`
++	Name  string `json:"name"`
++	Cwd   string `json:"cwd"`
++	Title string `json:"title"`
++	Rows  uint16 `json:"rows"`
++	Cols  uint16 `json:"cols"`
+ }
+ 
+ // Listing is the full two-level workspace/session model (S→C, reply to List).
+@@ -316,3 +322,44 @@ type PaneModeChanged struct {
+ 	Ref        string `json:"ref"`
+ 	InCopyMode bool   `json:"in_copy_mode"`
+ }
++
++// Level2Subscribe starts the second-level live stream (C→S; requirement 060).
++// The client sends it on entering the second-level menu. Workspace is a cwd
++// that scopes the push to one workspace; empty means all workspaces.
++//
++// @contract
++// @pre Workspace 可为空（订阅全部）或任意 cwd 字符串
++// @post 服务端把该连接计入 level2 订阅者；有订阅者时扫描 tmux 并推 TypeLevel2Frame
++// @err none — Workspace 为空合法
++// @inv 零订阅者时服务端零 tmux 调用（idle-gate）
++type Level2Subscribe struct {
++	Workspace string `json:"workspace"`
++}
++
++// Level2Unsubscribe stops the second-level live stream (C→S; requirement 060).
++// The client sends it on leaving the second-level menu. Idempotent: unsubscribing
++// when not subscribed is not an error.
++//
++// @contract
++// @pre none
++// @post 服务端把该连接移出 level2 订阅者；最后一名订阅者退出后扫描循环 park
++// @err none
++// @inv 可重复调用；与 Level2Subscribe 配对使用
++type Level2Unsubscribe struct{}
++
++// Level2Frame is the server-pushed second-level live snapshot (S→C; requirement
++// 060). It carries one workspace's sessions as a full replace; Seq increments
++// each scan so the client can detect a gap and re-subscribe (requirement 004
++// stateless replay). Sessions carry Ref (structural identity), Name, and Title
++// (verbatim pane title, zero parsing).
++//
++// @contract
++// @pre Workspace 非空、Seq >= 1
++// @post 客户端以 Sessions 整体替换该工作区的二级视图
++// @err none
++// @inv Title 逐字节原样透传，服务端不做任何字符串处理
++type Level2Frame struct {
++	Workspace string    `json:"workspace"`
++	Seq       uint64    `json:"seq"`
++	Sessions  []Session `json:"sessions"`
++}
+diff --git a/server/internal/protocol/frametype.go b/server/internal/protocol/frametype.go
+index 688756f26..a48e51868 100644
+--- a/server/internal/protocol/frametype.go
++++ b/server/internal/protocol/frametype.go
+@@ -70,4 +70,21 @@ const (
+ 	// No ack on success (the mirror delta stream carries the `[Image #N]`
+ 	// result); TypeError on failure.
+ 	TypeAttachPreview FrameType = "attach_preview"
++
++	// TypeLevel2Subscribe starts the second-level live stream (C→S; requirement
++	// 060: 二级菜单改为实时流). The client sends it on entering the second-level
++	// menu; while ≥1 level-2 subscriber exists the server scans tmux and pushes
++	// TypeLevel2Frame. Workspace (a cwd) scopes the push to one workspace; empty
++	// means all workspaces.
++	TypeLevel2Subscribe FrameType = "level2_subscribe"
++
++	// TypeLevel2Unsubscribe stops the second-level live stream (C→S). Idempotent.
++	// Sent on leaving the second-level menu; at zero subscribers the server
++	// parks the scan loop (idle CPU ≈ 0).
++	TypeLevel2Unsubscribe FrameType = "level2_unsubscribe"
++
++	// TypeLevel2Frame is the server-pushed second-level live snapshot (S→C;
++	// requirement 060). Each scan pushes a full replace of one workspace's
++	// sessions; Seq lets the client detect a gap and re-subscribe.
++	TypeLevel2Frame FrameType = "level2_frame"
+ )
+diff --git a/server/internal/protocol/json.go b/server/internal/protocol/json.go
+index cdadf4a4a..c1c39bc14 100644
+--- a/server/internal/protocol/json.go
++++ b/server/internal/protocol/json.go
+@@ -107,6 +107,12 @@ func decodePayload(env Envelope) (Typed, error) {
+ 		return decodeTyped[ScrollWheel](env)
+ 	case TypeAttachPreview:
+ 		return decodeTyped[AttachPreview](env)
++	case TypeLevel2Subscribe:
++		return decodeTyped[Level2Subscribe](env)
++	case TypeLevel2Unsubscribe:
++		return decodeTyped[Level2Unsubscribe](env)
++	case TypeLevel2Frame:
++		return decodeTyped[Level2Frame](env)
+ 	// TypePaneModeChanged is S→C only; a client sending it is a protocol error.
+ 	default:
+ 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, env.Type)
+diff --git a/server/internal/protocol/json_test.go b/server/internal/protocol/json_test.go
+index de334da36..97b03bd52 100644
+--- a/server/internal/protocol/json_test.go
++++ b/server/internal/protocol/json_test.go
+@@ -73,6 +73,17 @@ func TestControlFramesRoundTrip(t *testing.T) {
+ 		{"scrollback", protocol.Scrollback{ReqID: 5, Ref: "s1", FromLine: -300, Count: 100}},
+ 		{"resize", protocol.Resize{Ref: "s1", Rows: 48, Cols: 120}},
+ 		{"error frame", protocol.ErrorFrame{Code: protocol.ErrCodeSessionNotFound, Reason: "session s1 vanished"}},
++		{"level2_subscribe all", protocol.Level2Subscribe{}},
++		{"level2_subscribe scoped", protocol.Level2Subscribe{Workspace: "/proj/a"}},
++		{"level2_unsubscribe", protocol.Level2Unsubscribe{}},
++		{"level2_frame", protocol.Level2Frame{
++			Workspace: "/proj/a",
++			Seq:       7,
++			Sessions: []protocol.Session{
++				{Ref: "s1", Name: "claude", Cwd: "/proj/a", Title: "◐ w-librarian", Rows: 24, Cols: 80},
++				{Ref: "s2", Name: "codex", Cwd: "/proj/a", Title: "✳ dev-state", Rows: 24, Cols: 80},
++			},
++		}},
+ 	}
+ 	for _, tt := range tests {
+ 		t.Run(tt.name, func(t *testing.T) {
+diff --git a/server/internal/protocol/testdata/list_delta.json b/server/internal/protocol/testdata/list_delta.json
+index e74d7a471..ecc5826a3 100644
+--- a/server/internal/protocol/testdata/list_delta.json
++++ b/server/internal/protocol/testdata/list_delta.json
+@@ -8,6 +8,7 @@
+         "ref": "s4",
+         "name": "claude",
+         "cwd": "/proj/c",
++        "title": "",
+         "rows": 25,
+         "cols": 100
+       }
+@@ -20,6 +21,7 @@
+         "ref": "s2",
+         "name": "codex",
+         "cwd": "/proj/a",
++        "title": "",
+         "rows": 24,
+         "cols": 80
+       }
+diff --git a/server/internal/protocol/testdata/listing.json b/server/internal/protocol/testdata/listing.json
+index ed0891cbd..f9968713d 100644
+--- a/server/internal/protocol/testdata/listing.json
++++ b/server/internal/protocol/testdata/listing.json
+@@ -13,6 +13,7 @@
+             "ref": "s1",
+             "name": "claude",
+             "cwd": "/proj/a",
++            "title": "",
+             "rows": 40,
+             "cols": 100
+           },
+@@ -20,6 +21,7 @@
+             "ref": "s2",
+             "name": "codex",
+             "cwd": "/proj/a",
++            "title": "",
+             "rows": 24,
+             "cols": 80
+           }
+@@ -33,6 +35,7 @@
+             "ref": "s3",
+             "name": "claude",
+             "cwd": "/proj/b",
++            "title": "",
+             "rows": 30,
+             "cols": 90
+           }
+diff --git a/server/internal/protocol/validate.go b/server/internal/protocol/validate.go
+index 5edc7c6be..c7af76ada 100644
+--- a/server/internal/protocol/validate.go
++++ b/server/internal/protocol/validate.go
+@@ -21,6 +21,9 @@ func (ErrorFrame) FrameType() FrameType      { return TypeError }
+ func (ScrollWheel) FrameType() FrameType     { return TypeScrollWheel }
+ func (PaneModeChanged) FrameType() FrameType { return TypePaneModeChanged }
+ func (AttachPreview) FrameType() FrameType   { return TypeAttachPreview }
++func (Level2Subscribe) FrameType() FrameType   { return TypeLevel2Subscribe }
++func (Level2Unsubscribe) FrameType() FrameType { return TypeLevel2Unsubscribe }
++func (Level2Frame) FrameType() FrameType       { return TypeLevel2Frame }
+ 
+ // Validate reports whether the auth frame is well-formed: a non-empty token.
+ func (a Auth) Validate() error {
+@@ -276,3 +279,29 @@ func (p PaneModeChanged) Validate() error {
+ 	}
+ 	return nil
+ }
++
++// Validate reports whether the level2 subscribe frame is well-formed. The
++// workspace may be empty (subscribe all) or any cwd string; there is no
++// invalid value.
++func (s Level2Subscribe) Validate() error { return nil }
++
++// Validate reports whether the level2 unsubscribe frame is well-formed. It
++// has no fields; always valid.
++func (s Level2Unsubscribe) Validate() error { return nil }
++
++// Validate checks a level2 live frame: a non-empty workspace, a seq >= 1, and
++// every session valid.
++func (f Level2Frame) Validate() error {
++	if f.Workspace == "" {
++		return fmt.Errorf("%w: level2_frame workspace must be non-empty", ErrInvalidField)
++	}
++	if f.Seq == 0 {
++		return fmt.Errorf("%w: level2_frame seq must be >= 1", ErrInvalidField)
++	}
++	for _, s := range f.Sessions {
++		if err := s.Validate(); err != nil {
++			return err
++		}
++	}
++	return nil
++}

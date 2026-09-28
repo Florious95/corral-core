@@ -1,0 +1,1 @@
+{"task_id":"ws-api","status":"pass","acceptance_results":[{"cmd":"bash -lc cd server && go test ./internal/api/...","exit":0},{"cmd":"bash tools/gate/run.sh","exit":0}],"result_id":"res_f376869e63d0","notes":"WS 服务总装 17 测（auth/订阅重放/ack/delta seq/upload），修 auth 拒绝竞态；两项扩权(discovery.Socket/config 五字段)核实落地；全量门 526 用例全绿。经历三任席位（api_error 崩溃/恢复半死/处女 id 重建），A-24 案主。"}

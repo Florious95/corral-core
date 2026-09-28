@@ -1,0 +1,36 @@
+{
+  "task_id": "stage4-b1-ui-firsttouch",
+  "status": "PASS_WITH_DEFECT",
+  "executed_by": ["w-stage4-b1", "w-stage4-b1b", "w-stage4-b1c", "leader"],
+  "note": "三个席位均因第三方 API 端点不稳定崩溃（共 4 次 api_error），leader 最终从截图汇总 REPORT",
+  "per_case_results": {
+    "A1": {"result": "PASS", "screenshot": "A1-cold-launch-pairing.png"},
+    "A2": {"result": "PASS", "screenshot": "A2-camera-permission-dialog.png"},
+    "A2a": {"result": "PASS", "screenshot": ["A2a-denied-fallback.png", "A2a-double-deny-settings-guide.png"]},
+    "A3": {"result": "PASS", "screenshot": ["A3-form-filled.png", "A3-connecting.png", "A3-after-connect.png"]},
+    "A3a": {"result": "PASS", "screenshot": "A3a-wrong-token-error.png"},
+    "A3b": {"result": "PASS", "screenshot": ["A3b-connecting.png", "A3b-unreachable-error.png"]},
+    "A4": {"result": "PASS", "screenshot": ["A4-workspace-list.png", "A4-session-list.png"]},
+    "A5": {"result": "PASS", "screenshot": "A5-aggregate-badge.png"},
+    "A6": {"result": "PASS", "screenshot": "A6-session-first-frame.png", "note": "体感秒开需 leader 目检"},
+    "A7": {"result": "PASS", "screenshot": ["A7-terminal-fixture.png", "A7-terminal-fixture-zoom.png"], "note": "需 leader 逐图目检 018 七条"},
+    "A8": {"result": "PASS", "screenshot": ["A8-input-typed.png", "A8-input-sent.png"]},
+    "A9": {"result": "FAIL", "screenshot": "A9-upload-401-failure.png", "defect": "B1-D1", "attribution": "product", "root_cause": "HttpUrlConnectionUploader.kt missing Authorization Bearer header, server upload.go requires it since fix-upload-auth"},
+    "A9a": {"result": "PASS", "screenshot": "A9a-upload-failure-visible.png"}
+  },
+  "positive_control": {
+    "screenshot_dimensions": "20/20 verified 1080x2400 (A7-zoom intentionally 1080x520)",
+    "structural_assertions": "executed by seats before crash, not independently re-verified by leader"
+  },
+  "defects": [
+    {
+      "id": "B1-D1",
+      "severity": "P1-pending",
+      "case": "A9",
+      "description": "upload returns HTTP 401, attribution pending (harness vs product)",
+      "screenshot": "A9-upload-401-failure.png"
+    }
+  ],
+  "unverified": ["A2 真实相机扫码=真机", "A7 018 七条逐图目检=leader", "A6 秒开体感=leader"],
+  "deviation": "三席因 API 不稳定崩溃共 4 次，REPORT 由 leader 从截图汇总而非席位自报"
+}

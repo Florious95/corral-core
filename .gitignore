@@ -1,4 +1,53 @@
-build/
-.gradle/
+# 依赖与系统
+node_modules/
+.DS_Store
+
+# 团队编排运行时（含 profile 凭据，绝不入库）
+.team/runtime/
+.team/logs/
+.team/current/profiles/*.env
+
+# 构建产物
+app/.gradle/
+app/app/build/
+app/build/
+app/terminal/build/
+**/build/
+__pycache__/
+*.pyc
+
+# 编译二进制
+server/agentmirrord
+e2e/bin/agentmirrord
+
+# e2e 取证目录里的构建残留：截图/日志/录屏留档，Gradle 缓存与构建输出不入库
+# （2026-08-13：这两类曾被 9653be07f 整体入库，占 2.9 GB / 68093 个文件）
+e2e/artifacts/**/gradle-home/
+e2e/artifacts/**/gradle-build/
+
+# Web 端生成物
+web/vendor/
+web/dist/
+
+# ffmpeg 抽帧目录：由同目录 mp4 重出，不入库
+# （2026-08-13：abc-regression 764 张 + flicker-*-frames 606 张，共已入库 222 MB，本次摘除跟踪）
+# 注意规则写法：*-frames/ 带连字符，故意不命中 abc-regression/keyframes/
+# —— 后者是 15 张按场景步骤命名的精选关键帧，是证据不是转储。
+e2e/artifacts/**/frames*/
+e2e/artifacts/**/*-frames/
+.team/ledgers/.dispatched/
+app/.kotlin/
+.team/artifacts/apk-release/
+
+# 每台机器各自生成，含本机 sdk.dir 路径（2026-08-23：公开仓后不再新增）
 local.properties
-*.apk
+
+# git worktree 挂载点，⛔ 不入库（2026-08-23 误 add -A 带进来过一次）
+.worktrees/
+
+# 席位临时目录里的 daemon 日志会长到 140MB+，超 GitHub 100MB 上限（2026-08-23 实撞：镜像推 main 被 pre-receive 拒）
+.team/nodes/*/tmp/daemon.log
+# 席位 tmp 里会落二进制(30MB agentmirrord)与大日志——只收证据文本，⛔ 不收产物
+.team/nodes/*/tmp/agentmirrord
+.team/nodes/*/tmp/bin/
+.team/nodes/*/tmp/daemon-state/

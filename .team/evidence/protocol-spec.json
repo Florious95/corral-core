@@ -1,0 +1,1 @@
+{"task_id":"protocol-spec","status":"pass","acceptance_results":[{"cmd":"bash -lc cd server && go test ./internal/protocol/...","exit":0}],"result_id":"res_e8b793b23021","notes":"契约 v1 定稿：13 控制帧+3 二进制帧、聚合规则固化、17 golden 夹具字节级稳定；回炉项 scrollback 12 字节区间头已修（含收敛红测）。docs/protocol.md 为全工程唯一协议权威。"}

@@ -1,0 +1,45 @@
+2026-08-20T16:07:50.211 [lifecycle] ON_CREATE
+2026-08-20T16:07:50.327 [ws] conn state STOPPED → CONNECTING
+2026-08-20T16:07:50.363 [lifecycle] ON_START
+2026-08-20T16:07:50.364 [ws] conn state CONNECTING → AUTHENTICATING
+2026-08-20T16:07:50.388 [ws] conn state AUTHENTICATING → READY
+2026-08-20T16:07:51.255 [refresh] enterLevel1 list cached=0 first_frame=missing refreshing_prev=false → refresh()
+2026-08-20T16:07:51.256 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=0
+2026-08-20T16:07:51.282 [refresh] applyListing seq=1303 workspaces=6 refreshing_prev=true refreshing_next=false
+2026-08-20T16:07:52.171 [refresh] applyListing seq=1303 workspaces=6 refreshing_prev=false refreshing_next=false
+2026-08-20T16:08:00.492 [refresh] enterLevel2 subscribe cwd=/Users/alauda/Documents/code/agent前沿探索/多agent协作 painted=0 cached=0
+2026-08-20T16:08:00.518 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=6
+2026-08-20T16:08:00.811 [level2] applyLevel2 src=level2-push workspace=/Users/alauda/Documents/code/agent前沿探索/多agent协作 seq=6772 subscribed=/Users/alauda/Documents/code/agent前沿探索/多agent协作 incoming=6 publish=true statuses=x-501/ta-a9fd5b7defbd%0:<none>->idle,x-501/ta-a9fd5b7defbd%1:<none>->idle,x-501/ta-a9fd5b7defbd%2:<none>->idle,-501/ta-a9fd5b7defbd%19:<none>->idle,x-501/ta-a9fd5b7defbd%5:<none>->idle,-501/ta-a9fd5b7defbd%20:<none>->idle
+2026-08-20T16:08:02.289 [refresh] applyListing seq=1303 workspaces=6 refreshing_prev=false refreshing_next=false
+2026-08-20T16:08:04.301 [view-menu] viewMenuSource current_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 current_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 current_socket=/tmp/tmux-501/ta-a9fd5b7defbd overlay_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 overlay_socket=/tmp/tmux-501/ta-a9fd5b7defbd last_published_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 sessions=6 source_match=true singleton_mismatch=false
+2026-08-20T16:08:04.320 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T16:08:04.321 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T16:08:04.335 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T16:08:04.335 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T16:08:04.377 [term-bg-remap] source=theme-chrome night=true defaultBg=0xff101010 ansi0=0xff101010 userBlock=0xff10241f paperLuma=16 ansi0Luma=16 blockLuma=29 verdict=PAPER_EQ_ANSI0
+2026-08-20T16:08:04.382 [viewport] source=windowVisibility visibility=0 width=0 height=0
+2026-08-20T16:08:04.411 [view-menu] viewMenuSource current_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 current_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 current_socket=/tmp/tmux-501/ta-a9fd5b7defbd overlay_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 overlay_socket=/tmp/tmux-501/ta-a9fd5b7defbd last_published_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 sessions=6 source_match=true singleton_mismatch=false
+2026-08-20T16:08:04.412 [session-live] enterSessionLive src=session-route ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 resolved_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 hint_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 use_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 subscribed=/Users/alauda/Documents/code/agent前沿探索/多agent协作 already=true cache_sessions=6 will_subscribe=false
+2026-08-20T16:08:04.464 [viewport] source=onViewportSizeChanged oldW=0 oldH=0 newW=1200 newH=2099 viewportSeeded=false emulatorRows=40 emulatorCols=120
+2026-08-20T16:08:04.465 [reflow] resize sent rows=42 cols=48 reason=user ok=true bookkept_rows=42 bookkept_cols=48
+2026-08-20T16:08:04.466 [grid] viewport_width_px=1200 cell_width_nominal=25 cell_width_measured=25 reported_cols=48 canvas_capacity_cols=48 overflow_px=0 half_cell_px=12.5
+2026-08-20T16:08:04.466 [viewport] source=onViewportSizeChanged result resized=true outgrewGuard=false candidateRows=42 candidateCols=48 emulatorRows=42 emulatorCols=48
+2026-08-20T16:08:04.470 [term-left-edge] source=onDraw contentLeft=18 col0Origin=18 cellW=25 viewW=1236 verdict=OK ×4
+2026-08-20T16:08:04.533 [session-lamp] src=level2-push ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 overlay_n=6 hit=true hit_status=idle hit_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 lamp=Idle eq_ref=true
+2026-08-20T16:08:04.547 [reflow] frame cols=48 render cols=48 bookkept_rows=42 emulator_rows=42
+2026-08-20T16:08:05.878 [level2] applyLevel2 src=level2-push workspace=/Users/alauda/Documents/code/agent前沿探索/多agent协作 seq=6777 subscribed=/Users/alauda/Documents/code/agent前沿探索/多agent协作 incoming=6 publish=true statuses=x-501/ta-a9fd5b7defbd%0:idle->idle,x-501/ta-a9fd5b7defbd%1:idle->idle,x-501/ta-a9fd5b7defbd%2:idle->idle,-501/ta-a9fd5b7defbd%19:idle->idle,x-501/ta-a9fd5b7defbd%5:idle->idle,-501/ta-a9fd5b7defbd%20:idle->idle
+2026-08-20T16:08:05.882 [view-menu] viewMenuSource current_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 current_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 current_socket=/tmp/tmux-501/ta-a9fd5b7defbd overlay_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 overlay_socket=/tmp/tmux-501/ta-a9fd5b7defbd last_published_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 sessions=6 source_match=true singleton_mismatch=false
+2026-08-20T16:08:05.886 [view-menu] viewMenuSource current_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 current_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 current_socket=/tmp/tmux-501/ta-a9fd5b7defbd overlay_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 overlay_socket=/tmp/tmux-501/ta-a9fd5b7defbd last_published_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 sessions=6 source_match=true singleton_mismatch=false
+2026-08-20T16:08:05.886 [session-live] enterSessionLive src=session-route ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 resolved_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 hint_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 use_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 subscribed=/Users/alauda/Documents/code/agent前沿探索/多agent协作 already=true cache_sessions=6 will_subscribe=false
+2026-08-20T16:08:05.886 [session-lamp] src=level2-push ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 overlay_n=6 hit=true hit_status=idle hit_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 lamp=Idle eq_ref=true
+2026-08-20T16:08:14.449 [view-menu] viewMenuSource current_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 current_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 current_socket=/tmp/tmux-501/ta-a9fd5b7defbd overlay_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 overlay_socket=/tmp/tmux-501/ta-a9fd5b7defbd last_published_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 sessions=6 source_match=true singleton_mismatch=false
+2026-08-20T16:08:23.017 [view-menu] viewMenuSource current_ref=/tmp/tmux-501/ta-a9fd5b7defbd%0 current_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 current_socket=/tmp/tmux-501/ta-a9fd5b7defbd overlay_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 overlay_socket=/tmp/tmux-501/ta-a9fd5b7defbd last_published_ws=/Users/alauda/Documents/code/agent前沿探索/多agent协作 sessions=6 source_match=true singleton_mismatch=false
+2026-08-20T16:08:23.138 [refresh] applyListing seq=1303 workspaces=6 refreshing_prev=false refreshing_next=false
+2026-08-20T16:08:23.159 [refresh] enterLevel2 subscribe cwd=/Users/alauda/Documents/code/agent前沿探索/多agent协作 painted=6 cached=6
+2026-08-20T16:08:23.251 [refresh] refresh() refreshing_prev=false refreshing_next=true cached=6
+2026-08-20T16:08:23.522 [viewport] source=windowVisibility visibility=8 width=1236 height=2099
+2026-08-20T16:08:24.092 [level2] applyLevel2 src=level2-push workspace=/Users/alauda/Documents/code/agent前沿探索/多agent协作 seq=6786 subscribed=/Users/alauda/Documents/code/agent前沿探索/多agent协作 incoming=6 publish=true statuses=x-501/ta-a9fd5b7defbd%0:idle->idle,x-501/ta-a9fd5b7defbd%1:idle->idle,x-501/ta-a9fd5b7defbd%2:idle->idle,-501/ta-a9fd5b7defbd%19:idle->idle,x-501/ta-a9fd5b7defbd%5:idle->idle,-501/ta-a9fd5b7defbd%20:idle->idle
+2026-08-20T16:08:24.101 [level2] applyLevel2 src=level2-push workspace=/Users/alauda/Documents/code/agent前沿探索/多agent协作 seq=6788 subscribed=/Users/alauda/Documents/code/agent前沿探索/多agent协作 incoming=6 publish=true statuses=x-501/ta-a9fd5b7defbd%0:idle->idle,x-501/ta-a9fd5b7defbd%1:idle->idle,x-501/ta-a9fd5b7defbd%2:idle->idle,-501/ta-a9fd5b7defbd%19:idle->idle,x-501/ta-a9fd5b7defbd%5:idle->idle,-501/ta-a9fd5b7defbd%20:idle->idle
+2026-08-20T16:08:26.160 [term-theme] raw=vesper catalogHit=true slot=light
+2026-08-20T16:08:26.160 [term-theme] raw=vesper catalogHit=true slot=dark
+2026-08-20T16:08:26.307 [refresh] applyListing seq=1309 workspaces=6 refreshing_prev=false refreshing_next=false

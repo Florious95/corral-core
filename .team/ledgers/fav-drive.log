@@ -1,0 +1,46 @@
+[ledger-run 2026-08-18T23:05:57Z] 开工 start | ledger_id=ledger.favorites.v1 revision=1 账本=.team/ledgers/favorites-v1.json 墙钟上限=11000s 派单死线=90s
+[ledger-run 2026-08-18T23:06:09Z] 轮次 round | 第 1 轮开始：前沿 ["t.probe"]（墙钟已跑 12s / 上限 11000s）
+[ledger-run 2026-08-18T23:06:09Z] 派单 dispatch | task=t.probe 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/fav-advisor 席位=fav-advisor attempt=att-t.probe-seq1-t1787094369742 delivery=del-t.probe-seq1-t1787094369742
+[ledger-run 2026-08-18T23:06:10Z] 投递回执 send-ok | task=t.probe case_id=ledger_favorites_v1__t.probe__r1 message_id=msg_09db7a0ea390 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T23:06:10Z] 派单落地 dispatch-landed | task=t.probe 席位 fav-advisor 的收件箱已多出这条派单
+[ledger-run 2026-08-18T23:06:10Z] 等待 wait | task=t.probe 在等的 key（case_id）=ledger_favorites_v1__t.probe__r1 team=grok-l2 预算=950s
+[ledger-run 2026-08-18T23:16:42Z] 已唤醒 wait-signaled | task=t.probe 等到结果了
+[ledger-run 2026-08-18T23:16:42Z] 判据 acceptance | task=t.probe 在跑 required=["A-p-exec", "A-p-doc", "A-p-red"]
+[ledger-run 2026-08-18T23:17:18Z] 判据通过留档 acceptance-success | task=t.probe 成功 attempt 落进 attempts[] writeback_revision=2 passed=["A-p-exec", "A-p-doc", "A-p-red"]
+[ledger-run 2026-08-18T23:17:18Z] 原子写回 writeback-atomic | task=t.probe state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=2 hash=b6d6c2ab668fbed6）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T23:17:18Z] 写回 writeback | task=t.probe state=succeeded revision=1 → 2
+[ledger-run 2026-08-18T23:17:18Z] 轮次 round | 第 2 轮开始：前沿 ["t.fav"]（墙钟已跑 680s / 上限 11000s）
+[ledger-run 2026-08-18T23:17:18Z] 派单 dispatch | task=t.fav 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/fav-dev-app 席位=fav-dev-app attempt=att-t.fav-seq2-t1787095038228 delivery=del-t.fav-seq2-t1787095038228
+[ledger-run 2026-08-18T23:17:18Z] 投递回执 send-ok | task=t.fav case_id=ledger_favorites_v1__t.fav__r2 message_id=msg_0de01b40ad80 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T23:17:18Z] 派单落地 dispatch-landed | task=t.fav 席位 fav-dev-app 的收件箱已多出这条派单
+[ledger-run 2026-08-18T23:17:18Z] 等待 wait | task=t.fav 在等的 key（case_id）=ledger_favorites_v1__t.fav__r2 team=grok-l2 预算=1800s
+[ledger-run 2026-08-18T23:25:11Z] 已唤醒 wait-signaled | task=t.fav 等到结果了
+[ledger-run 2026-08-18T23:25:11Z] 判据 acceptance | task=t.fav 在跑 required=["A-f-test", "A-f-nokey", "A-f-doc"]
+[ledger-run 2026-08-18T23:25:39Z] 判据通过留档 acceptance-success | task=t.fav 成功 attempt 落进 attempts[] writeback_revision=3 passed=["A-f-test", "A-f-nokey", "A-f-doc"]
+[ledger-run 2026-08-18T23:25:39Z] 原子写回 writeback-atomic | task=t.fav state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=3 hash=33702ccc61f37c66）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T23:25:39Z] 写回 writeback | task=t.fav state=succeeded revision=2 → 3
+[ledger-run 2026-08-18T23:25:39Z] 轮次 round | 第 3 轮开始：前沿 ["t.cols"]（墙钟已跑 1182s / 上限 11000s）
+[ledger-run 2026-08-18T23:25:39Z] 派单 dispatch | task=t.cols 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/fav-dev-app 席位=fav-dev-app attempt=att-t.cols-seq3-t1787095539686 delivery=del-t.cols-seq3-t1787095539686
+[ledger-run 2026-08-18T23:25:40Z] 投递回执 send-ok | task=t.cols case_id=ledger_favorites_v1__t.cols__r3 message_id=msg_51a1db154110 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T23:25:40Z] 派单落地 dispatch-landed | task=t.cols 席位 fav-dev-app 的收件箱已多出这条派单
+[ledger-run 2026-08-18T23:25:40Z] 等待 wait | task=t.cols 在等的 key（case_id）=ledger_favorites_v1__t.cols__r3 team=grok-l2 预算=1800s
+[ledger-run 2026-08-18T23:35:57Z] 已唤醒 wait-signaled | task=t.cols 等到结果了
+[ledger-run 2026-08-18T23:35:57Z] 判据 acceptance | task=t.cols 在跑 required=["A-c-test", "A-c-doc"]
+[ledger-run 2026-08-18T23:36:30Z] 判据通过留档 acceptance-success | task=t.cols 成功 attempt 落进 attempts[] writeback_revision=4 passed=["A-c-test", "A-c-doc"]
+[ledger-run 2026-08-18T23:36:30Z] 原子写回 writeback-atomic | task=t.cols state=succeeded + revision+1 → 临时文件+rename 已落盘（revision=4 hash=671fcec228d22b3a）——中途死也不会留下半份账本，进度不会全废
+[ledger-run 2026-08-18T23:36:30Z] 写回 writeback | task=t.cols state=succeeded revision=3 → 4
+[ledger-run 2026-08-18T23:36:30Z] 轮次 round | 第 4 轮开始：前沿 ["t.ver"]（墙钟已跑 1833s / 上限 11000s）
+[ledger-run 2026-08-18T23:36:30Z] 派单 dispatch | task=t.ver 收件人=/Volumes/nvme/Projects/远程Agent安卓::grok-l2/fav-control 席位=fav-control attempt=att-t.ver-seq4-t1787096190697 delivery=del-t.ver-seq4-t1787096190697
+[ledger-run 2026-08-18T23:36:30Z] 投递回执 send-ok | task=t.ver case_id=ledger_favorites_v1__t.ver__r4 message_id=msg_764f66bcec08 —— 回执成功≠席位收到，下一步查收件箱确认落地
+[ledger-run 2026-08-18T23:36:30Z] 派单落地 dispatch-landed | task=t.ver 席位 fav-control 的收件箱已多出这条派单
+[ledger-run 2026-08-18T23:36:30Z] 等待 wait | task=t.ver 在等的 key（case_id）=ledger_favorites_v1__t.ver__r4 team=grok-l2 预算=950s
+[ledger-run 2026-08-18T23:41:32Z] 已唤醒 wait-signaled | task=t.ver 等到结果了
+[ledger-run 2026-08-18T23:41:32Z] 判据 acceptance | task=t.ver 在跑 required=["A-v-probe", "A-v-suite", "A-v-doc"]
+[ledger-run 2026-08-18T23:42:05Z] 判据通过留档 acceptance-success | task=t.ver 成功 attempt 落进 attempts[] writeback_revision=5 passed=["A-v-probe", "A-v-suite", "A-v-doc"]
+[ledger-run 2026-08-18T23:42:05Z] 延后落盘 writeback-deferred | task=t.ver 这一格让整张账本进入全绿：**先通知 leader 再落盘**——不许出现「账本读起来全绿而没人被通知」的窗口
+[ledger-run 2026-08-18T23:42:05Z] 写回 writeback | task=t.ver state=succeeded revision=4 → 5
+[ledger-run 2026-08-18T23:42:05Z] 收工 finish | 停机原因=AllSucceeded 写回=["t.probe", "t.fav", "t.cols", "t.ver"] 冻结=[] 不可判=[] 墙钟已跑 2168s
+[ledger-run 2026-08-18T23:42:05Z] 通知 notify-begin | 正在把停机原因发给 leader
+[ledger-run 2026-08-18T23:42:05Z] 通知 notify-fail | 通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)
+[ledger-run 2026-08-18T23:42:05Z] 原子写回 writeback-atomic | task=- 全绿落盘（leader 通知已先行） → 临时文件+rename 已落盘（revision=5 hash=09acd077b173a8cc）——中途死也不会留下半份账本，进度不会全废
+{"ok":true,"ledger_id":"ledger.favorites.v1","revision_before":1,"revision_after":5,"wrote_back":["t.probe","t.fav","t.cols","t.ver"],"unjudgeable":[],"frozen":[],"preflight_rejected":false,"notices_sent":["ledger_id: ledger.favorites.v1 | revision: 5 | 停机原因: AllSucceeded | 最后失败判据: 全部任务 succeeded：本轮没有失败判据、没有投递失败、没有超限 | 各任务终态: t.cols=Succeeded, t.fav=Succeeded, t.probe=Succeeded, t.ver=Succeeded","通知未送达：team key `annot` is not a runtime key in target workspace `/Volumes/nvme/Projects/远程Agent安卓` (spec/display name may differ from runtime key)"]}

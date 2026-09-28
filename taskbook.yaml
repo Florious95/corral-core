@@ -1,0 +1,3001 @@
+# 任务书 v1（五栏+争议度；谁来干/带什么干由基础设施推导，不在此声明）
+# 规范见 ~/.claude/skills/taskbook-orchestration/references/taskbook-schema.md
+# 需求权威：requirement-base/（001-011）；技术路线：entries/011
+project: 远程Agent安卓  # 产品命名任务见 naming
+repo: /Volumes/nvme/Projects/远程Agent安卓
+baseline:
+  sha: 1d046caa87a5
+  regression_anchor: "绿场起步：0 测试 0 失败；此后标尺=0 新回归"
+tasks:
+  # ---------- 环境 ----------
+  - id: env-android
+    goal: >
+      在本机建立可无人值守的安卓构建环境：安装 JDK 17+（brew）、Android platform-tools（adb）、
+      确认 cmdline-tools/sdkmanager 可用并接受 licenses。红线：只装缺的，不动已有 SDK 组件。
+    acceptance:
+      - "bash -lc 'java -version && ~/Library/Android/sdk/platform-tools/adb --version'"
+    deps: []
+    write_scope: ["无仓库写入；仅系统环境"]
+    evidence: ".team/evidence/env-android.json"
+    contention: impl
+
+  # ---------- 服务端（Go） ----------
+  - id: server-scaffold
+    goal: >
+      建立 server/ Go module 骨架（module 名 github.com/占位待 naming 定）：cmd/agentmirrord 入口、
+      internal/ 分层目录、结构化日志、配置加载、根 LICENSE(Apache-2.0)、server/README。
+      每个包和导出符号必须有说明注释（工程红线，见 010）。
+    acceptance:
+      - "bash -lc 'cd server && go build ./... && go vet ./...'"
+    deps: []
+    write_scope: ["server/", "LICENSE"]
+    evidence: ".team/evidence/server-scaffold.json"
+    contention: impl
+
+  - id: protocol-spec
+    goal: >
+      产出 WS 协议契约：docs/protocol.md + server/internal/protocol/ Go 类型。
+      覆盖：工作区/会话列表（两级模型见 002）、会话订阅（快照+增量流+scrollback 分页，见 006）、
+      输入注入、resize、agent 状态字段（working/idle/blocked/done/unknown，见 008）、
+      图片上传（multipart→落盘→返回主机路径，见 003）、配对鉴权帧（见 011）。
+      JSON 控制帧 + 二进制流帧。红线：状态字段与镜像通道解耦，unknown 不得阻塞镜像。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/protocol/...'"
+    deps: ["server-scaffold"]
+    write_scope: ["server/internal/protocol/", "docs/protocol.md"]
+    evidence: ".team/evidence/protocol-spec.json"
+    contention: contract   # 协议是全工程契约，产出后 leader 验收定稿
+
+  - id: tmux-discovery
+    goal: >
+      枚举主机上所有 tmux server（默认 socket 目录 /tmp/tmux-<uid>/、/private/tmp/tmux-<uid>/ 下全部
+      socket，含 team-agent 私有 socket，见 001），列出 session/pane 及其 cwd，按 cwd 聚合为两级模型
+      （见 002）。红测先行：fake 多 socket 场景单测。红线：对不可连 socket 容错跳过，不得让一个死
+      socket 拖垮扫描。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/discovery/...'"
+    deps: ["server-scaffold"]
+    write_scope: ["server/internal/discovery/"]
+    evidence: ".team/evidence/tmux-discovery.json"
+    contention: impl
+
+  - id: term-bridge
+    goal: >
+      单 pane 终端桥：capture-pane -e 首帧快照、pipe-pane 增量字节流、send-keys 整条注入（003 输入
+      范式）、resize（window-size latest + grouped session，见 005）、capture-pane -S 分页拉取
+      scrollback（见 006）。集成测试用真实 tmux（净化 env 前缀）。红线：注入必须有可判定回执。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/bridge/...'"
+    deps: ["server-scaffold"]
+    write_scope: ["server/internal/bridge/"]
+    evidence: ".team/evidence/term-bridge.json"
+    contention: impl
+
+  - id: ws-api
+    goal: >
+      按 protocol-spec 实现服务端 WS API 与图片上传端点，接线 discovery 与 bridge。
+      断连重连后订阅重放当前快照（003 状态零丢失）。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/api/...'"
+    deps: ["protocol-spec", "tmux-discovery", "term-bridge"]
+    write_scope: ["server/internal/api/", "server/cmd/", "server/internal/discovery/  # 仅 Pane.Socket 字段加法性修补，leader 裁定 2026-08-09", "server/internal/config/  # 仅五配置字段加法（Token/UploadDir/MaxUploadBytes/MaxInputBytes/ListInterval），leader 裁定 2026-08-09"]
+    evidence: ".team/evidence/ws-api.json"
+    contention: impl
+
+  - id: state-parser
+    goal: >
+      per-agent 状态适配器（首批：Claude Code、Codex；架构预留扩展）：从 pane 输出/进程树判定
+      working/idle/blocked/done，判不出降级 unknown（008 隔离铁律）。研读 herdr（Apache 2.0）状态
+      检测实现并合规借鉴（保留声明、标注出处）。红线：状态层任何失败不得影响镜像与输入。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/agentstate/...'"
+    deps: ["term-bridge"]
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/state-parser.json"
+    contention: impl
+
+  - id: pairing-security
+    goal: >
+      配对与鉴权：服务端生成配对 token，终端打印二维码（QR 载 服务端地址+token，预留 TS authkey 字段，
+      路线(a) 见 011）；WS 握手校验 token；未配对连接一律拒绝。红线：token 不落日志。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/pairing/...'"
+    deps: ["ws-api"]
+    write_scope: ["server/internal/pairing/"]
+    evidence: ".team/evidence/pairing-security.json"
+    contention: impl
+
+  - id: tsnet-embed
+    goal: >
+      服务端内嵌 tsnet 监听（007）：配置 TS authkey 后同时在 LAN 与 tailnet 上服务；无 authkey 时纯
+      LAN 降级。单测覆盖配置分支；真实 tailnet 连通性列入 e2e-aging 手册。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/tsnetd/...'"
+    deps: ["server-scaffold"]
+    write_scope: ["server/internal/tsnetd/"]
+    evidence: ".team/evidence/tsnet-embed.json"
+    contention: impl
+
+  # ---------- 安卓（Kotlin + Compose） ----------
+  - id: app-scaffold
+    goal: >
+      app/ 安卓工程骨架：Kotlin + Jetpack Compose、gradle wrapper、包结构分层、Apache-2.0 头。
+      每个模块/类必须有说明注释（010 红线）。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:assembleDebug'"
+    deps: ["env-android"]
+    write_scope: ["app/"]
+    evidence: ".team/evidence/app-scaffold.json"
+    contention: impl
+
+  - id: term-core-android
+    goal: >
+      终端模拟内核（客户端最大契约，006/011）：先出候选对比一页纸（改造 Android-Terminal-Emulator /
+      ConnectBot vt320 / 自研；许可必须 Apache-2.0 兼容，Termux 核 GPLv3 禁用）落
+      docs/decisions/term-core.md，leader 验收后施工：ANSI/CSI 解析 + 网格 + 本地 scrollback buffer，
+      纯 JVM 可测（不依赖 Android 运行时）。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :terminal:test'"
+    deps: ["app-scaffold"]
+    write_scope: ["app/terminal/", "docs/decisions/term-core.md"]
+    evidence: ".team/evidence/term-core-android.json"
+    contention: contract   # Fable 5 攻坚候选
+
+  - id: term-view
+    goal: >
+      Canvas 终端渲染视图：60fps 本地滚动（006）、锁定视口+回到底部、捏合调字号→触发 resize（005）。
+      渲染正确性用截图/网格断言测试。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*TermView*\"'"
+    deps: ["term-core-android"]
+    write_scope: ["app/app/src/main/java/**/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/term-view.json"
+    contention: impl
+
+  - id: conn-layer
+    goal: >
+      连接层：WS 客户端、指数退避自动重连、重连即快照重放（003/004 无状态铁律：本层不持久任何会话
+      状态）、protocol-spec 帧编解码，纯 JVM 单测。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Conn*\"'"
+    deps: ["app-scaffold", "protocol-spec"]
+    write_scope: ["app/app/src/main/java/**/conn/", "app/app/src/test/"]
+    evidence: ".team/evidence/conn-layer.json"
+    contention: impl
+
+  - id: workspace-ui
+    goal: >
+      两级导航 UI（002）：一级工作目录列表（会话数徽章+聚合状态），二级会话列表（状态徽章，
+      unknown 灰显不阻塞）。Compose UI 测试。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Workspace*\"'"
+    deps: ["conn-layer"]
+    write_scope: ["app/app/src/main/java/**/workspace/", "app/app/src/test/"]
+    evidence: ".team/evidence/workspace-ui.json"
+    contention: impl
+
+  - id: session-ui
+    goal: >
+      会话页（003）：终端视图 + 底部本地输入条 + 发送 + 左侧加号（相册/拍照→上传→路径注入）。
+      发送回执可见；失败明确报错。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Session*\"'"
+    deps: ["term-view", "conn-layer"]
+    write_scope: ["app/app/src/main/java/**/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/session-ui.json"
+    contention: impl
+
+  - id: pairing-ui
+    goal: >
+      配对 UI：扫码（CameraX/ML Kit 或 ZXing，Apache-2.0 兼容）+ 手填地址/token 兜底 + TS token 填写
+      入口（App 内嵌 tailscale 接入为后续任务 app-tsnet，本任务先打通 LAN/已有 tailnet 直连配对）。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'"
+    deps: ["conn-layer", "pairing-security"]
+    write_scope: ["app/app/src/main/java/**/pairing/", "app/app/src/test/", "app/app/src/main/java/**/service/  # OkHttpWebSocketTransport 新增+ServiceWire 接线，leader 裁定 2026-08-09（全 app 无真实传输的债务清偿）"]
+    evidence: ".team/evidence/pairing-ui.json"
+    contention: impl
+
+  - id: fg-service
+    goal: >
+      前台服务（004/011）：常驻连接、blocked/done 状态变化发系统通知、断连静默重连；
+      无 Google 服务依赖。电量策略：仅在有活跃订阅时保持连接。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Service*\"'"
+    deps: ["conn-layer", "state-parser"]
+    write_scope: ["app/app/src/main/java/**/service/", "app/app/src/test/"]
+    evidence: ".team/evidence/fg-service.json"
+    contention: impl
+
+  - id: app-tsnet
+    goal: >
+      App 内嵌 tailscale（007/011，硬模块）：集成 libtailscale（Android gomobile 绑定），
+      填 TS token 即入网，与 pairing-ui 打通。若评估后风险过高，出一页纸降级方案报 leader 裁定。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Tsnet*\"'"
+    deps: ["app-scaffold", "pairing-security"]
+    write_scope: ["app/app/src/main/java/**/tsnet/", "app/app/src/test/", "docs/decisions/app-tsnet.md", "tools/tsnetbind/  # 基底预授权构建脚本", "app/app/libs/  # AAR 构建产物入库，leader 追认 2026-08-09", "app/app/build.gradle.kts  # 仅加依赖"]
+    evidence: ".team/evidence/app-tsnet.json"
+    contention: contract   # Fable 5 攻坚候选
+
+  - id: state-ident-wrapper
+    goal: >
+      wrapper 场景的 agent 识别（state-parser 实测缺口：舰队 pane 的 pane_current_command=bash，
+      规则表按 command 键分派全部降级 unknown，blocked 推送对核心舰队场景失效）。
+      在 agentstate 增加有界识别器：进程树下钻（pane_pid → 后代进程 argv 匹配 claude/codex）
+      与/或 pane 标题启发式，输出 AgentKind 提示供注册表分派；识别器允许有界 IO（超时必回 unknown），
+      判定路径 Decide 保持纯函数零 IO。红线：只做加法性 API 变更（ws-api 在途消费现有 API），
+      每次落盘保持 go build ./... 绿。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/agentstate/...'"
+    deps: ["state-parser"]
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/state-ident-wrapper.json"
+    contention: impl
+
+  - id: fix-bridge-restart-pipe
+    goal: >
+      修复 e2e 老化层实证缺陷（004 无状态免疫跨 daemon 重启失守）：daemon 被杀重启后，重新 subscribe
+      的 delta 流 0 帧。根因已实证：旧 pipe-pane cat 进程残留持有旧 FIFO，新 pipe-pane -o 见 pane 已
+      pipe 即静默 no-op，新 relay O_RDONLY 永久阻塞且 teardown 不可达。修复要求：①subscribe 先无条件
+      detach 旧 pipe 再 -o（对任何崩溃残留幂等自愈——崩溃是常态路径不是异常）；②relay 打开 FIFO 非阻塞
+      +超时重试，保证 teardown 可达；③daemon 优雅关闭 drain 订阅（可选加固）。红测先行：以 e2e 实证
+      形状写 bridge 集成红测（预置 stale cat 残留 → 重新 subscribe → delta 必须恢复）。
+      红线：不改协议；e2e/ 只读。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/bridge/...'"
+    deps: ["term-bridge", "ws-api"]
+    write_scope: ["server/internal/bridge/", "server/internal/api/", "server/cmd/"]
+    evidence: ".team/evidence/fix-bridge-restart-pipe.json"
+    contention: impl
+
+  - id: fix-app-network-manifest
+    goal: >
+      修复 e2e 层2 实证缺陷：APP 无法建立任何出网连接。①AndroidManifest 加 INTERNET 权限；
+      ②明文策略 leader 裁定：debug 与 release 均允许明文（usesCleartextTraffic=true + 注释引 007/011
+      ——ws:// 是本产品的出厂传输，tailnet 层已有 WireGuard 加密，LAN 明文属用户自网；TLS 列后续版本
+      议题，不许用禁明文杀死产品本体）；③红测先行：robolectric 断言 debug/release merged manifest
+      含 INTERNET 且 cleartext 允许。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Manifest*\"'"
+    deps: ["pairing-ui"]
+    write_scope: ["app/app/src/main/AndroidManifest.xml", "app/app/src/test/", "app/app/build.gradle.kts"]
+    evidence: ".team/evidence/fix-app-network-manifest.json"
+    contention: impl
+
+  - id: fix-qr-host-detect
+    goal: >
+      修复真机验收缺陷 A：QR 主地址选中代理 TUN 虚拟网卡（实测 198.18.0.1，RFC2544 基准段），手机不可达。
+      重写地址择优：排除 198.18.0.0/15、169.254/16、utun*/tun/tap/awdl*/llw*/bridge*，RFC1918 实网卡
+      （en* 优先）排最前；QR 用最优者，启动指引列出全部候选地址+各自完整 ws URL 供手填；新增 -host
+      flag 显式覆盖。红测先行：fake 接口表驱动排序断言（含 198.18 TUN 混入场景，修前红）。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/pairing/...'"
+    deps: ["pairing-security"]
+    write_scope: ["server/internal/pairing/", "server/cmd/", "server/internal/config/"]
+    evidence: ".team/evidence/fix-qr-host-detect.json"
+    contention: impl
+
+  - id: fix-pairing-scan-flow
+    goal: >
+      修复真机验收缺陷 B：扫码"已识别"后无任何可见后续——须改为：识别成功→立即自动发起配对并显示
+      "连接中…"进度态→失败显式报错（含原因：超时/拒绝/不可达）+ 重试按钮 + **识别出的 url/token 自动
+      回填手填表单**（用户可改地址重试，正是绕过缺陷 A 的通路）；识别到坏 payload 也要显式提示。
+      003 静默失败最高罪。红测先行：ViewModel 状态机（识别→auto 连接中→失败态含原因与回填、成功态
+      路由）修前红。
+    acceptance:
+      - "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'"
+    deps: ["pairing-ui"]
+    write_scope: ["app/app/src/main/java/**/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-pairing-scan-flow.json"
+    contention: impl
+
+  - id: fix-daemon-idle-cpu
+    goal: >
+      修复真机验收缺陷 C（用户实测：4 孤儿实例各吃 17.5% CPU 空转）。三件套：
+      ①空闲降耗：零已认证客户端时**暂停** discovery 轮询与状态采样（有客户端接入才恢复），目标空闲
+      CPU <1%；每次扫描的子进程派生数有界（合并 tmux 调用）。②单实例守卫：状态目录 pidfile+活性校验，
+      二启检测到活实例即明确报错退出（或 -takeover 显式接管），禁止静默并存。③e2e 泄漏修复：layer2
+      脚本 trap 补 daemon 清理（孤儿实证：父进程1、-list-interval 500ms、e2e/bin 路径）。
+      红测先行：零客户端时扫描器不 tick（fake clock 断言）、二启拒绝、e2e 脚本退出后无残留进程。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/api/... ./internal/discovery/... ./cmd/...'"
+    deps: ["ws-api"]
+    write_scope: ["server/internal/api/", "server/internal/discovery/", "server/cmd/", "e2e/layer2.sh", "e2e/run.sh"]
+    evidence: ".team/evidence/fix-daemon-idle-cpu.json"
+    contention: impl
+
+  # ---------- 场景审计波次（docs/scenario-coverage.md 为总图纸，2026-08-09）----------
+  - id: scenario-audit
+    goal: 用户场景全景覆盖审计（追认登记：Fable5 攻坚，交付 docs/scenario-coverage.md 总图纸）。
+    acceptance: ["bash -lc 'test -s docs/scenario-coverage.md'"]
+    deps: []
+    write_scope: ["docs/scenario-coverage.md"]
+    evidence: ".team/evidence/scenario-audit.json"
+    contention: contract
+
+  - id: fix-state-wiring
+    goal: >
+      修复实锤缺陷 D-1（审计 §0.4）：agentstate 从未装配进 daemon，生产全会话恒 unknown、blocked 通知
+      源头即断。main.go 组装 agentstate Registry+Identify → api.Options.StateProvider，打通
+      识别→listing→聚合→通知主链。红测先行：api 集成测试隔离 tmux 起假 claude 进程树，断言 listing
+      中该 pane state≠unknown 且聚合正确；层1 harness 增状态断言场景。
+    acceptance: ["bash -lc 'cd server && go test ./...'"]
+    deps: ["state-parser", "state-ident-wrapper", "ws-api"]
+    write_scope: ["server/cmd/", "server/internal/api/", "e2e/harness/"]  # 扩权留痕：discovery/{model,scan,model_test}.go 加法性新增 Pane.PanePID（状态装配必需输入，leader 追认，见证据 JSON）
+    evidence: ".team/evidence/fix-state-wiring.json"
+    contention: impl
+
+  - id: fix-app-nav
+    goal: >
+      合并修复实锤缺陷 D-2+D-3（审计 §0.4，同写作用域）：①通知深链断链——MainActivity/AgentMirrorApp
+      消费 ACTION_OPEN_SESSION+EXTRA_SESSION_REF（含 onNewIntent），点通知直达对应会话页；
+      ②旋转/回收丢导航态——activeSession/showPairing 改 rememberSaveable。引入 Robolectric 基建
+      （后续 seams 任务共用）。红测先行（深链 intent 断言+重建保态断言，修前红）。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Nav*\"'"]
+    deps: ["fg-service", "session-ui"]
+    write_scope: ["app/app/src/main/", "app/app/src/test/", "app/app/build.gradle.kts"]
+    evidence: ".team/evidence/fix-app-nav.json"
+    contention: impl
+
+  - id: e2e-layer2-harden
+    goal: >
+      消除 e2e 账实落差（审计 §0.3-2，本任务同时是 taskbook#e2e goal 落差的修正案）：层2 判定语义化
+      （替换硬编码坐标与弱文本判定）；真旅程：列表含真实会话→点开→断言快照文本→输入回显→
+      am force-stop 真杀 App→重开断言恢复原画面。
+    acceptance: ["bash -lc 'bash e2e/run.sh --layer 2'"]
+    deps: ["e2e"]
+    write_scope: ["e2e/"]
+    evidence: ".team/evidence/e2e-layer2-harden.json"
+    contention: impl
+
+  # ---------- P0 第二波（场景审计 §12 + 017 裁定实装；2026-08-09 开出）----------
+  - id: test-aggregate-status
+    goal: >
+      补齐 012 聚合规则与 server 端 diff 的零覆盖（审计 D-5/D-6/G-6）：statePriority 全序、
+      unknown 剔除、全 unknown 才 unknown、空工作区；modelSnapshot.diff() 的 removed/changed/
+      跨 cwd 迁移/噪声抑制；discovery 扫描失败时 API 行为（scriptedDiscoverer.err 死接缝激活）。
+      仅新增 _test.go 不改生产代码；测出真缺陷即停、报 leader 立案，不顺手修。新增 ≥12 具名用例。
+    acceptance: ["bash -lc 'cd server && go test ./internal/api/...'"]
+    deps: ["fix-state-wiring"]
+    write_scope: ["server/internal/api/"]  # 仅 _test.go 新文件；用例数棘轮随全量门 --accept-baseline 上行
+    evidence: ".team/evidence/test-aggregate-status.json"
+    contention: none
+
+  - id: feat-input-keys-server
+    goal: >
+      R-1 特殊键服务端全链（017 裁定）：docs/protocol.md 契约先行——input 帧可选 keys 字段
+      （前向兼容增量不 bump 版本，闭集 esc/ctrl_c/tab/up/down/left/right）；protocol 包模型+
+      闭集校验+黄金夹具（testdata/，Kotlin 共享消费）；bridge 命名键注入（send-keys 非 -l 映射），
+      与 Inject 同款决定性 ack；ws_handler keys 分支接线（末步，互斥约束见基底）。R-2 服务端
+      paste-buffer -p 路径已存在不新增代码，仅 protocol.md 标注 ?2004 退化风险。红测先行。
+    acceptance: ["bash -lc 'cd server && go test ./internal/protocol/... ./internal/bridge/... ./internal/api/...'"]
+    deps: ["fix-state-wiring"]
+    write_scope: ["docs/protocol.md", "server/internal/protocol/", "server/internal/bridge/", "server/internal/api/"]
+    evidence: ".team/evidence/feat-input-keys-server.json"
+    contention: impl
+
+  - id: feat-input-keys-app
+    goal: >
+      R-1 特殊键 App 侧（017 裁定）：会话页输入条上方快捷键条（Esc/Ctrl-C/Tab/↑↓←→ 最小集），
+      conn 层 Input 帧 keys 字段（消费共享黄金夹具字节级断言）；R-2 多行粘贴 App 不拆分整段发送
+      （走服务端 paste-buffer -p 既有路径）。红测先行（VM 层键发送/多行不拆分断言）。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["feat-input-keys-server", "fix-app-nav"]
+    write_scope: ["app/app/src/main/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-input-keys-app.json"
+    contention: impl
+
+  - id: test-app-android-seams
+    goal: >
+      Android 接缝零测四类补齐（审计 §12 P0-6，复用 fix-app-nav 落地的 Robolectric 基建）：
+      NotificationHelper（渠道/构建/权限缺失降级）、HttpUrlConnectionUploader（multipart 组包/
+      非200/坏JSON/空path/base 未配）、SharedPreferencesPairingConfigStore（真持久化 round-trip）、
+      StateBadge 语义（Compose rule + R-7 contentDescription 标注顺带断言）。仅测试不改生产代码
+      （StateBadge contentDescription 若缺失属 R-7 当期项，可加法性补标注——唯一允许的生产触碰，
+      行内注释留痕）。新增 ≥20 用例。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["fix-app-nav"]
+    write_scope: ["app/app/src/test/", "app/app/src/main/java/dev/agentmirror/app/workspace/"]  # main 仅限 StateBadge contentDescription 加法（R-7）
+    evidence: ".team/evidence/test-app-android-seams.json"
+    contention: none
+
+  - id: fix-workspace-wiring
+    goal: >
+      修复 e2e-layer2-harden 取证实锤缺陷①（阻断配对后进列表，真机 T1 必挂）：WorkspaceViewModel
+      的 onConnectionStateChanged/onFrame 入口（WorkspaceViewModel.kt:109/117）全仓无调用点——
+      WorkspaceScreen 的 VM 在 AgentMirrorApp.kt:53 remember 裸建，从未挂到 ServiceWire.uiConnector，
+      配对成功切屏后收不到 READY/listing，永远"连接中…"空白。修复：与 SessionRoute.kt:72 同构的
+      DisposableEffect 接线。红测先行：Robolectric/JVM 断言工作区 VM 经 uiConnector 收到
+      READY+listing 后渲染列表状态。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Workspace*\"'"]
+    deps: ["workspace-ui", "fg-service"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/workspace/", "app/app/src/main/java/dev/agentmirror/app/AgentMirrorApp.kt", "app/app/src/test/"]  # 扩权留痕：service/ServiceWire.kt uiConnector 补播 setter + MainActivity.kt VM 提升（修复必需最小连带，leader 追认，见证据 JSON）
+    evidence: ".team/evidence/fix-workspace-wiring.json"
+    contention: impl
+
+  - id: fix-pairing-timeout-pump
+    goal: >
+      修复 e2e-layer2-harden 取证实锤缺陷②（红线5 失败可见违反）：PairingViewModel.onTick
+      （PairingViewModel.kt:147）生产无人调用——配对页无时钟泵，PAIR_TIMEOUT_MS=15s 永不触发，
+      地址不可达/握手失败时无限"连接中…"，fix-pairing-scan-flow 的超时五分类报错成死代码。
+      修复：PairingScreen 加 LaunchedEffect 时钟泵（与 SessionScreen.kt:85 同构）。红测先行：
+      JVM 假时钟断言超时→Failed(TIMEOUT) 上屏。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest --tests \"*Pairing*\"'"]
+    deps: ["fix-pairing-scan-flow"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-pairing-timeout-pump.json"
+    contention: impl
+
+  - id: fix-recovery-baseline
+    goal: >
+      P1（test-aggregate-status 席位测出，红测已 t.Skip 留档）：discovery 全程失败后客户端持
+      空 listing（seq=1）保持连接；舰队恢复后的首个成功扫描被当基线处理不推 delta、seq 不变，
+      客户端 seq 连续性检查判不出断点，空 listing 静默滞留至手动重 list（违红线5 失败可见）。
+      修复后解除 TestDiscoveryRecoveryReachesConnectedClientFromStartFailure 的 t.Skip 转绿。
+      前置说明：P0 波次已于 2026-08-10 收口（feat-tsnet-wiring 与 TS 链入库），本条放行。
+    acceptance: ["bash -lc 'cd server && go test ./internal/api/...'"]
+    deps: ["test-aggregate-status", "feat-tsnet-wiring", "fix-ts-state-dir-e2e"]
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/fix-recovery-baseline.json"
+    contention: impl
+
+  - id: fix-cold-start-reconnect
+    goal: >
+      P0（层2 真旅程末步抓获，2026-08-09）：冷启动自动重连缺失——ServiceWire.manager().start()
+      全仓唯一调用点在 PairingRoute.onPaired（配对成功一刻），force-stop/正常重开后有配置直接进
+      工作区页但无人启动连接，顶栏永远「连接中…」列表空白（e2e/artifacts/layer2.restore-fail.xml
+      现场）。004「被杀即无所谓」破坏，真机每次重开必撞。修复：冷启动检测到已有配对配置即启动
+      常驻连接（与 PairingRoute.onPaired 同构；幂等防重复 start）。红测先行：Robolectric 冷启动
+      （config 非空）断言连接启动且工作区接线收到状态推进；层2 末步（force-stop 恢复断言）即
+      端到端验收，脚本无需改。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'", "bash -lc 'bash e2e/run.sh --layer 2'"]
+    deps: ["fix-workspace-wiring"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-cold-start-reconnect.json"
+    contention: impl
+
+  - id: fix-reconnect-stale-config
+    goal: >
+      P0（四次真机实证，2026-08-09 活现场）：锁屏断连后无限「重连中」且会话全点不开，daemon 侧
+      全程零连接到达——重连请求根本没发到正确地址。根因候选（席位取证定性，两条都要查）：
+      ①ServiceWire.manager 单例幂等复用（fix-cold-start-reconnect 引入的双层守卫）导致 setConfig
+      变更后已存在 manager 仍持旧拨号地址——用户先扫错地址(10.20.55.20)再改对(192.168.31.116)
+      的真实序列下，重连永远拨旧址；②审计 E2 缺口：ConnectivityManager.NetworkCallback 未注册，
+      网络恢复不触发立即重连、退避空转。修复：配置变更必须使 manager 重建或热更新拨号目标
+      （锁定测试：改配置后重连拨新址）；注册网络回调网络恢复即重试；重连中 UI 显示当前拨号
+      地址+已试次数（018 标准 5 失败可见）。**同根并案（图30 实证）**：某会话内传图报「未配置
+      上传地址」——uploadBaseUrl 是启动装配三件套之一，取证哪条真实路径未走 PersistentConnection
+      统一入口（丢 uploadBaseUrl 的路径大概率同样丢配置更新），统一收口到唯一入口+锁定测试。红测先行。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["fix-cold-start-reconnect"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-reconnect-stale-config.json"
+    contention: impl
+
+  - id: ui-redesign
+    goal: >
+      P0（用户三次真机批评+018 裁定，2026-08-09）：全 App 按 018 视觉标准整体重设计，非打补丁。
+      范围：Theme token 化（M3 色板/字阶/间距/圆角，深浅双套）、全页 safe-area、配对页/列表页/
+      会话页三页重做（列表行层级+路径中段省略+徽章五态色彩语义、会话页紧凑顶栏+名称省略、
+      每页加载/空/错误态设计）、点击态与转场。实锤缺陷清单：图28 状态栏叠压/无标题栏/行距悬空，
+      图29 顶栏撑爆压返回键，图31 键盘弹出后终端区与输入区之间巨幅空白（IME insets/adjustResize
+      重排缺陷——键盘弹出应内容重排跟随而非留洞）（豆腐块归 fix-term-glyph-render 不在本案）。
+      **视觉验收关（018 §二）**：交件必附全页全态截图落 e2e/artifacts/ui-review/，leader 逐图
+      目检对照 018 七条逐条结论进证据 ui_review 字段——测试绿但目检不过=打回。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'", "bash -lc 'ls e2e/artifacts/ui-review/*.png | head -1'"]
+    deps: ["fix-workspace-wiring"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/", "app/app/src/test/"]
+    evidence: ".team/evidence/ui-redesign.json"
+    contention: contract
+
+  - id: fix-term-glyph-render
+    goal: >
+      P0（三次真机实证，图29）：终端画面大片 ■ 豆腐块——Android 默认 monospace 缺字形
+      （Claude Code TUI 重度使用盲文旋转符 U+28xx、制表符/框线、Powerline 私有区、特殊符号）。
+      修复：终端画布字形回退链（paint.hasGlyph 检测缺字→按字符逐段回退系统字体/内置兜底），
+      宽字符（CJK/emoji 双宽）测量与列对齐不破坏。红测先行：夹具字符串（盲文轮转/框线/
+      CJK/emoji 混排）逐字符 hasGlyph+测量断言；模拟器会话页截图对照留档。禁止整体换字体
+      牺牲等宽对齐。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'"]
+    deps: ["term-view"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-glyph-render.json"
+    contention: impl
+
+  - id: fix-pairing-candidates
+    goal: >
+      P0（2026-08-09 二次真机实证：QR 主地址赌错网卡，用户撞「地址不可达」后只能靠人肉猜正确地址）：
+      多网卡下正确地址机器不可判定，产品必须把选择权给用户而不是赌。方案：①QR payload 增可选
+      candidates 字段（全部候选 ws URL，服务端已会算，qr-host-detect 交付的终端清单同源）；
+      ②App 配对失败（不可达/超时）时若有 candidates，展示候选列表逐项一键重试（自动逐个试探
+      更佳——3s 超时/个）；③手填表单地址下拉可选候选。协议前向兼容（无 candidates 行为不变）。
+      红测先行：解析含 candidates 的 QR、失败后候选可见可点、逐试成功即连。
+    acceptance: ["bash -lc 'cd server && go test ./internal/pairing/... ./internal/protocol/...'", "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["fix-qr-host-detect", "fix-pairing-scan-flow"]
+    write_scope: ["server/internal/pairing/", "docs/protocol.md", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-pairing-candidates.json"
+    contention: impl
+
+  - id: fix-term-render-debt
+    goal: >
+      P0（w-glyph-f5 界外实锤两条，2026-08-09，走查前置阻断）：①增量流不唤醒渲染帧循环——
+      clear+printf 后画面冻结、swipe 无效、重 attach 才刷新（postFrame 仅 presenter 注入与
+      damage 自续时触发，新数据到达无人唤醒；镜像画面不动=产品失格+红线5）；②行首 x 漂移——
+      每行起点接上一行末尾逐行右移（tmux capture 侧对齐正常，疑 :terminal feed 链 \n/\r 处理；
+      term-glyph-after.png 肉眼可见）。红测先行：①增量注入后 damageListener/帧调度必触发断言；
+      ②\r\n / 裸 \n 序列网格列归零断言（真实 capture 字节夹具）。验收含模拟器截图（行对齐）+
+      注入后无重 attach 画面更新实证。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'"]
+    deps: ["fix-term-glyph-render"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-render-debt.json"
+    contention: impl
+
+  - id: fix-term-residuals
+    goal: >
+      P1（w-term-debt 界外两条，2026-08-09）：①resize 后服务端不补快照——SIGWINCH 重排后客户端
+      留提示符残影（协议/服务端 resize 语义补快照或增量重放，方案席位裁量报 leader）；②会话页
+      首行被 translate(0,-lineHeightPx) 裁切半行（A-snapshot-align.png 可见）。红测先行。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'", "bash -lc 'cd server && go test ./internal/api/... ./internal/bridge/...'"]
+    deps: ["fix-term-render-debt"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "server/internal/api/", "server/internal/bridge/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-residuals.json"
+    contention: impl
+
+  - id: fix-term-bg-cjk
+    goal: >
+      P0（用户真机实拍经 App 传图链路上传取证，2026-08-09 21:50）：终端带背景色区块（SGR bg，
+      Claude Code recap/引用框）内 CJK 文字大面积重叠错位黑块化，默认背景区域同字符完全正常。
+      疑点：背景色 run 绘制路径的双宽单元格测量/推进与默认路径不一致（glyph 案修复未覆盖该路径）
+      或反色处理缺陷——取证定性再修。顺带：会话页键条最右「→」被屏幕右缘裁半（KeyBar 横向布局
+      约束最小修）。红测先行（SGR 背景色+CJK 混排夹具网格断言+真实 recap capture 字节），修后
+      同机位截图对照留档。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :terminal:test :app:testDebugUnitTest'"]
+    deps: ["fix-term-render-debt"]
+    write_scope: ["app/terminal/", "app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-term-bg-cjk.json"
+    contention: impl
+
+  - id: feat-tsnet-wiring
+    goal: >
+      P0（用户验收标准原文即含 TS——单一 App 内嵌 tsnet 是三痛点之一，007/011 裁定；死件家族
+      第七例：tsnetd 服务端在、app-tsnet gomobile 绑定在，App 配对页 authkey 输入框是死占位
+      「即将推出」，连接层从未走 tsnet 拨号）：全链接线——①App：authkey 填入/QR 携带（011 预留
+      字段）→ 起内嵌 tsnet 节点 → ConnectionManager 拨号经 tsnet SOCKS5（有 tsnet 走隧道，无则
+      LAN 直连，运行时可判定）；连接状态区分展示 LAN/tailnet；authkey 安全存储不进日志。
+      ②服务端：daemon 起 tsnetd 双栈的操作路径文档化（authkey 环境变量/flag，README 补节）。
+      ③QR：candidates 与 tailnet 地址共存语义（tailnet 地址入候选）。红测先行（假 tsnet 接缝：
+      拨号路由选择/authkey 存取/QR 解析）；真实 tailnet 端到端留用户真机验收（需用户 authkey，
+      模拟器自验到 SOCKS5 拨号路由正确为止，未达部分显式列未验证清单）。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'", "bash -lc 'cd server && go test ./internal/tsnetd/... ./internal/pairing/...'"]
+    deps: ["app-tsnet", "tsnet-embed", "fix-pairing-candidates"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/", "app/app/src/test/", "server/internal/pairing/", "server/internal/tsnetd/", "server/cmd/", "docs/protocol.md", "server/README.md"]  # 扩权留痕：internal/config 纯加法 TSAuthKey（flag+env+单测，leader 裁定 2026-08-09）
+    evidence: ".team/evidence/feat-tsnet-wiring.json"
+    contention: contract
+
+  - id: feat-ts-wire
+    goal: >
+      P0（用户验收标准硬项，2026-08-09 回炉：配对页 TS 输入框是「即将推出」空壳）：TS 全链接线——
+      死件家族最大件，两端组件均已交付从未接通。①服务端：-ts-authkey（或环境变量）配置→tsnetd
+      真实起网→QR candidates 追加 tailnet 地址（100.x）→QR ts_authkey 字段按 011 载入（预授权
+      分发给 App）；②App：authkey（扫码带入或手填）→TsnetBackend 启动入网→连接层对 tailnet
+      地址经 TsnetDial（SOCKS5）拨号，LAN 地址直拨不回退；③「即将推出」占位文案删除，TS 态
+      可视（入网中/已入网/失败原因，018 标准5）；④验收边界：模拟器验 tsnet 起网+SOCKS 通道
+      建立+无 authkey 降级不回退（红测）；真实 tailnet 端到端连通需真实 authkey——交件后由
+      用户真机填 key 验证，未验部分显式进未验证清单。authkey 安全：不落日志不上屏明文（同
+      token 红线）。契约先行：docs/protocol.md QR payload 节 ts_authkey 语义补全。
+    acceptance: ["bash -lc 'cd server && go test ./internal/tsnetd/... ./internal/pairing/...'", "bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["tsnet-embed", "app-tsnet", "fix-pairing-candidates"]
+    write_scope: ["server/internal/tsnetd/", "server/internal/pairing/", "server/cmd/", "docs/protocol.md", "app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/test/", "server/internal/config/  # 纯加法 TSAuthKey flag+env+单测，leader 裁定 2026-08-09", "tools/tsnetbind/  # Android netlink 禁令→netmon.RegisterInterfaceGetter 接口提供者+AAR 重建，leader 裁定 2026-08-09 23:2x", "app/app/libs/  # 同上，gomobile AAR 产物"]
+    evidence: ".team/evidence/feat-ts-wire.json"
+    contention: contract
+
+  - id: fix-ts-state-dir-e2e
+    goal: >
+      P0 收尾阻塞（feat-ts-wire 最终验证发现，2026-08-10 裁定席立案）：cmd 已解析有效
+      -state-dir/AGENTMIRROR_STATE_DIR 并用于 pidfile，却未把隔离目录传入 tsnetd.Options.Dir；
+      tailnet 启用时空 Dir 回落 os.UserConfigDir()，在禁止改写 HOME、禁止触碰用户真实 tsnet 的
+      验收铁律下，自建 headscale + daemon + 模拟器实链只能记 BLOCKED。纯加法修复：把 cmd 已
+      resolve 的有效 stateDir 下独立 tsnet 子目录显式接入 Options.Dir，默认用户行为不变，不新增
+      第二套重叠 state-dir 配置；红测锁定消费方确实收到该目录、tailnet 未启用时不创建 tsnet
+      状态。随后把 headscale 验收固化为可重复脚本：全程不得赋值/重定向 HOME，不碰生产 daemon/
+      用户真实 tmux/真实 Tailscale；TS authkey 只经 TS_AUTHKEY 环境进入 daemon、禁止 argv flag、
+      禁止日志与截图明文。**用户裁定 2026-08-10：模拟器扫不了码就不要测模拟器扫码**——本任务
+      验收**不得**依赖模拟器摄像头/Extended Controls/任何前台鼠标或窗口寻址（此前因裸 qemu
+      bundleID=NULL 无法后台寻址而卡死，见 .team/evidence/fix-ts-state-dir-e2e.json 的 attempts）。
+      **用户裁定 2026-08-10（二次）：通过 API 测试**——即完全不经任何 UI 路径（不点界面、不填
+      输入框、不扫码、不做窗口寻址），改用 instrumentation/程序接口**直调**配对入口与 tsnet 启动
+      入口（App 侧走 androidTest instrumentation 直接调用 ConnectionManager/tsnet 绑定 API 并传入
+      authkey；authkey 只经受测进程的环境/参数注入，不上屏、不落日志、不入截图）。已连续 8 代
+      在「headscale_node_count=1 / expected_two_headscale_nodes」同一处失败，本轮**先定位再验证**：
+      必须先给出 App 侧节点到底有没有发起注册的证据（tsnet 启动是否被调用、authkey 是否真送达、
+      headscale 端有无收到该节点的注册请求、失败在哪一层），定位结论写进证据；在此基础上再实证
+      App 节点入网、经 SOCKS5 拨 daemon 的 100.64/10 地址并进入工作区。
+      真扫码（相机识别 QR）改由用户真机验收覆盖，不在本任务范围。
+      脚本无论成败都精确清理自建 headscale/daemon/端口/状态目录，落 argv 密钥形状 presence-only
+      与零残留证据。未跑成必须如实红交，不得再用 HOME 旁路，也不得回退鼠标/前台方案。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./cmd/agentmirrord/... ./internal/config/... ./internal/tsnetd/...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/feat-ts-wire-headscale.sh'"
+    deps: ["feat-ts-wire"]
+    write_scope: ["server/cmd/agentmirrord/", "e2e/feat-ts-wire-headscale.sh", "e2e/artifacts/fix-ts-state-dir-e2e/"]
+    evidence: ".team/evidence/fix-ts-state-dir-e2e.json"
+    contention: impl
+
+  - id: fix-release-test-host
+    goal: >
+      基建债（w-input-keys-app 上报，2026-08-09）：testReleaseUnitTest 13 红——Robolectric/Compose
+      测试（StateBadgeTest/WorkspaceWiringTest/PairingScreenClockPumpTest）统一 Unable to resolve
+      activity。根因 ui-test-manifest 仅 debugImplementation，release 单测变体无宿主 Activity。
+      修复方向自选（testImplementation 迁移/变体豁免/显式 test manifest），验收=双变体全绿。
+      gate 当前跑 debug 变体不挡门，P2 排期。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest :app:testReleaseUnitTest'"]
+    deps: ["test-app-android-seams"]
+    write_scope: ["app/app/build.gradle.kts", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-release-test-host.json"
+    contention: none
+
+  # ---------- 横切 ----------
+  - id: test-gate
+    goal: >
+      全量回归门（013 测试体系裁定的落地）：tools/gate/run.sh 并行跑 server 全量
+      （go test ./... + go vet + gofmt -l）、app 全量（gradlew test，含 :terminal:test 若存在）、
+      archwiki --check（若存在），输出机器可读 gate-report.json（套件/用例数/失败清单/四归因模板
+      product|harness|baseline|flaky）。基线 manifest：每套件用例数棘轮只增不减，减少即红。
+      --self-test 模式自带 fixture 验证门本身（含"用例数下降必须红"的红测）。
+    acceptance:
+      - "bash -lc 'bash tools/gate/run.sh --self-test'"
+    deps: ["server-scaffold", "app-scaffold"]
+    write_scope: ["tools/gate/"]
+    evidence: ".team/evidence/test-gate.json"
+    contention: impl
+
+  - id: arch-wiki
+    goal: >
+      架构维基自动化（010：注释自动衍生维基图 + 腐败识别）：从 Go/Kotlin 源码注释与 import 图现算
+      模块架构图（docs/wiki/ 生成物），判据从 T1 环依赖起步进门禁脚本（tools/archwiki/）。
+      红线：禁止任何需要人工另行维护的架构文档。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["server-scaffold", "app-scaffold"]
+    write_scope: ["tools/archwiki/", "docs/wiki/"]
+    evidence: ".team/evidence/arch-wiki.json"
+    contention: impl
+
+  - id: naming
+    goal: >
+      产品命名 + 仓库元信息：候选名查重（GitHub/商标常识面）、定名后统一 Go module 名、
+      Android applicationId、根 README（含架构总览与快速开始）。
+    acceptance:
+      - "bash -lc 'test -s README.md && cd server && go build ./...'"
+    deps: ["server-scaffold", "app-scaffold"]
+    write_scope: ["README.md", "server/", "app/", "tools/archwiki/build_wiki.py  # 仅 MODULE_PREFIX 改名同步，leader 事后追认 2026-08-09"]
+    evidence: ".team/evidence/naming.json"
+    contention: impl
+
+  - id: e2e
+    goal: >
+      端到端验收（对齐 010 验收标准）：真实 tmux + 真实 Claude Code 会话 + 服务端 + 安卓模拟器实机
+      链路：两级列表→打开会话→首帧<200ms 断言→输入回显→图片路径注入→杀 App 重开恢复→断网重连恢复。
+      老化实验：20 轮杀进程/断连循环（006/004）。产出 e2e 脚本与报告。
+    acceptance:
+      - "bash -lc 'bash e2e/run.sh'"
+    deps: ["ws-api", "state-parser", "pairing-security", "session-ui", "workspace-ui", "pairing-ui", "fg-service"]
+    write_scope: ["e2e/"]
+    evidence: ".team/evidence/e2e.json"
+    contention: impl
+
+  - id: fix-ts-dial-timing
+    goal: >
+      P1 排队（feat-ts-wire 交件时移交的已知 UX 皱褶，leader 裁定 2026-08-09 后置）：
+      tailnet-only 地址手填时首拨早于 tsnet 节点 Up 会先失败一次，需用户在「已入网」后
+      手动重试——候选逐试与 TS 起网无时序编排。修复方向：tailnet 地址（100.64/10 CGNAT）
+      候选延迟到 Up 事件后再试（或 Up 前对 tailnet 候选显示「等待入网」而非失败），
+      失败可见红线不变。依赖 feat-ts-wire 落地后的 TsnetBackend Up 状态导出面。
+    acceptance: ["bash -lc 'cd app && ./gradlew -q :app:testDebugUnitTest'"]
+    deps: ["feat-ts-wire"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-ts-dial-timing.json"
+    contention: impl
+
+  - id: test-app-dogfood
+    goal: >
+      真机模拟试用（2026-08-09 立案，用户点名 Opus 5 识图席；用户裁定：用例必须从需求分析
+      推导，不许凭直觉拍场景）。两段式：①测试设计——通读 requirement-base/（INDEX+条目）与
+      docs/scenario-coverage.md 场景总图纸，从需求推导用户场景与完备用例集，落
+      e2e/artifacts/dogfood/TESTPLAN.md：每用例=需求出处（条目编号/场景图纸行）+前置+步骤+期望
+      +判定方式（结构断言/截图目检/tmux 对账），附需求→用例覆盖矩阵，未覆盖需求显式列明原因；
+      ②执行——模拟器（AVD wedding_user_a_api35）自打最新 APK 冷装，按 TESTPLAN 逐用例跑，
+      逐屏截图并亲自目检（018 七条+工程常识红线五条），结果与"新毛病"落 REPORT.md（每条：
+      现象+截图文件名+复现步骤+严重度+对照条款）。只报不修。TS 功能在途（feat-ts-wire）
+      不计新毛病只记现象。隔离铁律：自建 TMUX_TMPDIR+高端口 daemon，绝不触碰生产 daemon
+      与用户真实 tmux。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/dogfood/TESTPLAN.md && test -s e2e/artifacts/dogfood/REPORT.md && ls e2e/artifacts/dogfood/*.png >/dev/null'"
+    deps: ["fix-term-bg-cjk", "ui-redesign"]
+    write_scope: ["e2e/artifacts/dogfood/"]
+    evidence: ".team/evidence/test-app-dogfood.json"
+    contention: impl
+
+  - id: fix-connected-idle-economy
+    goal: >
+      P1（test-app-dogfood D-16，2026-08-10 契约升级）：修复 daemon 在“已连接+单订阅+用户零操作”
+      稳态持续约 14.8% CPU 的在线静默能耗缺陷。已证边界仅为零连接 0.0% 对比单订阅静默态；
+      已连接零订阅尚未量测，listing 轮询与订阅成本占比不得凭推断写结论。红测先行：以假时钟/
+      可计数 sampler 锁定 3/27/200 pane 下全局采样速率有界且不随舰队规模线性常烧，并保证任一
+      pane 状态变化最迟 60s 可见；再做隔离 27-pane 真进程三态量测（零连接/已连接零订阅/
+      已连接单订阅），两种在线静默态平均 CPU 均 ≤5%，原始 CPU time、capture-pane 派生率与
+      pane 数完整落证。不得调阈值凑数；若 5% 不可达则如实红交。协议/App 不改，生产 daemon 与
+      用户真实 tmux 绝不触碰。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test ./internal/api/... ./cmd/...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/connected-idle-economy.sh'"
+    deps: ["fix-daemon-idle-cpu", "fix-state-wiring"]
+    write_scope: ["server/internal/api/", "e2e/connected-idle-economy.sh", "e2e/artifacts/fix-connected-idle-economy/"]
+    evidence: ".team/evidence/fix-connected-idle-economy.json"
+    contention: impl
+
+  - id: audit-prod-daemon-lifecycle
+    goal: >
+      调查 2026-08-10 01:2x 前生产 daemon PID 46081 无声退出事件：在不触碰当前生产 PID 3393、
+      不读取密钥/profile 原文、不把 token/authkey 上屏落盘的前提下，对齐旧进程约 3.5h 生命周期、
+      各席位/测试脚本活动、系统退出证据与 daemon 自身 panic/主动退出路径，给出 product|environment|
+      unknown 三选一且逐证据可复核的结论。若属 product，只提交后续 fix 案五栏提案，不顺手修产品；
+      若属 environment，仅在裁定台账追加一行。同步加固值守面：生产启动必须经日志落盘脚本，
+      watchdog 对 :9900 监听、进程与日志接管做只读存活探针，异常只写 watchdog-escalation.log，
+      不自动重启、不发信号。红线：生产 daemon 与用户真实 tmux 禁触。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/audit-prod-daemon-lifecycle/REPORT.md && python3 -m json.tool .team/evidence/audit-prod-daemon-lifecycle.json >/dev/null'"
+      - "bash -lc 'python3 -m py_compile .team/watchdog.py && bash -n .team/prod-daemon-launch.sh'"
+      - "bash -lc 'test -s e2e/artifacts/audit-prod-daemon-lifecycle/prod-guard-selftest.log'"
+    deps: ["fix-daemon-idle-cpu"]
+    write_scope: [".team/watchdog.py", ".team/prod-daemon-launch.sh", ".team/adjudicator/log.md", "e2e/artifacts/audit-prod-daemon-lifecycle/", ".team/evidence/audit-prod-daemon-lifecycle.json"]
+    evidence: ".team/evidence/audit-prod-daemon-lifecycle.json"
+    contention: impl
+
+  - id: test-api-user-scenarios-perf
+    goal: >
+      用户裁定 2026-08-10：**由 API 组成用户场景的测试，且必须包含性能测试**。建立一套完全经
+      程序接口（WS 协议 + HTTP 上传口 + 配对口）驱动的端到端场景套件，不经任何 UI 路径
+      （不点界面、不扫码、不做窗口寻址），把 016 首触九步与 017 当期承诺翻译成可重复跑的
+      API 剧本：配对建立→工作区/会话两级列举→会话订阅（快照+增量流+scrollback 分页）→
+      输入注入→输出回流→resize→图片上传→断线重连续订→状态字段流转。每个场景断言的是
+      用户可见结果（拿到什么、多久拿到、失败有没有原因），不是内部实现。
+      **性能面必须同场量测并落盘基线 JSON**：配对到首帧会话列表的时延、订阅首帧时延、
+      输出流端到端时延（p50/p95）、大输出吞吐、scrollback 分页时延、上传耗时/大小、
+      重连恢复时延；以及工程常识红线 1 要求的静默经济三态 CPU 与内存（零连接/已连接零订阅/
+      已连接单订阅），并记录 daemon 常驻内存与子进程派生计数。本轮**先建套件与基线**：
+      门限值不得自行拍脑袋，基线跑出来后连同建议门限写进证据，由用户或裁定席定门限后再转为
+      硬断言。红线：自建隔离 daemon + 高端口，绝不触碰生产 daemon（:9900）与用户真实 tmux；
+      配对 token 不落日志不上屏；跑完零残留进程/端口/临时目录。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'"
+      - "bash -lc 'python3 -m json.tool e2e/artifacts/test-api-user-scenarios-perf/baseline.json >/dev/null'"
+      - "bash -lc 'test -s e2e/artifacts/test-api-user-scenarios-perf/REPORT.md'"
+    deps: ["protocol-spec"]
+    write_scope: ["e2e/api-user-scenarios.sh", "e2e/artifacts/test-api-user-scenarios-perf/", ".team/evidence/test-api-user-scenarios-perf.json"]
+    evidence: ".team/evidence/test-api-user-scenarios-perf.json"
+    contention: impl
+
+  - id: fix-upload-auth
+    goal: >
+      P0 安全缺口（test-api-user-scenarios-perf 套件 2026-08-10 实测发现，证据见
+      e2e/artifacts/test-api-user-scenarios-perf/baseline.json 的 deviations）：`POST /upload`
+      端点当前**没有任何鉴权检查**——任何能连到 :9900 的人都能往用户主机的上传目录写文件，
+      而 WS 侧是有配对 token 校验的，等于绕过配对直写磁盘。修复：上传端点复用现有配对 token 校验
+      （与 WS 握手同一套凭据来源，不新发明 header 契约前先在 docs/protocol.md 补该端点的鉴权契约
+      再实现）；未授权请求返回明确错误码与原因（红线5 失败可见），token 不落日志。
+      红测先行：未带凭据/带错凭据/带对凭据三分支断言，并在 API 场景套件里加一条对应场景。
+      同时处置 D-13：上传目录大小上限、超限拒绝或轮转、README 说明（红线3 资源有界）。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/... ./internal/pairing/...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'"
+    deps: ["test-api-user-scenarios-perf"]
+    write_scope: ["server/internal/api/", "server/internal/pairing/", "server/internal/config/", "docs/protocol.md", "server/README.md", "e2e/api-user-scenarios.sh", "e2e/artifacts/fix-upload-auth/"]
+    evidence: ".team/evidence/fix-upload-auth.json"
+    contention: impl
+
+  - id: fix-dogfood-pairing-ux
+    goal: >
+      dogfood 缺陷波次一（P1+P2，来源 e2e/artifacts/dogfood/REPORT.md）：
+      D-07 配对 token 明文上屏（协议 §9 铁律：QR 是唯一合法出口，token 不上屏不落日志）；
+      D-14 配对完成后再无重配入口，且代码注释谎称"设置里有重配按钮"（注释与实现不符，红线：
+      注释即契约）——补设置页单档重配流程并修正注释；D-11 017 R-4 token 吊销与 `-token` flag
+      的文档欠账（README/protocol 补齐吊销与轮换说明）。红测先行：token 不出现在任何可见文本节点
+      的断言、重配入口可达性断言。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/pairing/...\"'"
+    deps: ["test-app-dogfood"]
+    write_scope: ["app/app/src/main/java/", "app/app/src/test/", "server/internal/pairing/", "server/README.md", "docs/protocol.md", ".team/evidence/fix-dogfood-pairing-ux.json"]
+    evidence: ".team/evidence/fix-dogfood-pairing-ux.json"
+    contention: impl
+
+  - id: fix-dogfood-upload-media
+    goal: >
+      dogfood 缺陷波次二（P1，来源 e2e/artifacts/dogfood/REPORT.md）：
+      D-03 上传文件名传的是 MediaStore 数字 ID、扩展名全丢（SessionScreen.kt 用 uri.lastPathSegment），
+      需取真实 displayName/MIME 推导扩展名；D-02 「+」菜单只有相册，017 R-8 承诺的拍照直传缺席；
+      D-01 相机权限二次拒绝后按钮静默无响应（红线5 失败可见：必须给出可见原因与去设置的引导）。
+      红测先行：文件名推导单测（含无扩展名/中文名/重名）、权限拒绝态 UI 断言。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+    deps: ["test-app-dogfood"]
+    write_scope: ["app/app/src/main/java/", "app/app/src/test/", ".team/evidence/fix-dogfood-upload-media.json"]
+    evidence: ".team/evidence/fix-dogfood-upload-media.json"
+    contention: impl
+
+  - id: fix-dogfood-term-ux
+    goal: >
+      dogfood 缺陷波次三（P1+P2，来源 e2e/artifacts/dogfood/REPORT.md）：
+      D-04 终端滚动方向与全平台惯例相反（TermSurfaceView 手势符号反）；D-08 连接后先闪空态、
+      缺加载态（红线5：用户动作必须有可见中间反馈）；D-09 emoji 单宽排版吃掉后随空格（宽字符
+      推进与 CJK 同源，参照 fix-term-bg-cjk 的列推进修复）。红测先行：滚动方向断言、
+      加载态状态机断言、emoji 宽度网格断言。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'"
+    deps: ["test-app-dogfood"]
+    write_scope: ["app/app/src/main/java/", "app/app/src/test/", "app/terminal/", ".team/evidence/fix-dogfood-term-ux.json"]
+    evidence: ".team/evidence/fix-dogfood-term-ux.json"
+    contention: impl
+
+  - id: perf-thresholds-enforce
+    goal: >
+      把 test-api-user-scenarios-perf 的基线转成硬门限断言（门限由 leader 2026-08-10 依基线定，
+      留 ~3x 余量，避免机器抖动误红；基线见 e2e/artifacts/test-api-user-scenarios-perf/baseline.json）：
+      pair_to_first_listing p95 ≤ 5ms；subscribe_first_frame p95 ≤ 400ms；output_end_to_end
+      p95 ≤ 150ms；scrollback_page p95 ≤ 150ms；reconnect_recovery p95 ≤ 400ms。
+      静默经济三态：零连接 CPU ≤ 0.5% 且子进程派生 = 0；已连接零订阅 CPU ≤ 5%；已连接单订阅
+      CPU ≤ 5% 且子进程 ≤ 4；任一态 10 分钟窗口 RSS 净增 ≤ 20MiB。
+      同时补齐基线里没测出数的两项：large_output 吞吐与 upload 耗时（当前 p50/p95 为 null）。
+      超门限必须 exit 非 0 并打印实测值与门限值对比，不得静默通过。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash e2e/api-user-scenarios.sh'"
+      - "bash -lc 'python3 -c \"import json;d=json.load(open(\\\"e2e/artifacts/test-api-user-scenarios-perf/baseline.json\\\"));assert d[\\\"performance\\\"][\\\"hard_numeric_thresholds\\\"],\\\"门限未落盘\\\"\"'"
+    deps: ["test-api-user-scenarios-perf"]
+    write_scope: ["e2e/api-user-scenarios.sh", "e2e/artifacts/test-api-user-scenarios-perf/", ".team/evidence/perf-thresholds-enforce.json"]
+    evidence: ".team/evidence/perf-thresholds-enforce.json"
+    contention: impl
+
+  # ---------- 2026-08-11 本轮：结账 + 阶段一判据 ----------
+  - id: recheck-settle-20260811
+    goal: >
+      结账（只复跑不修）：工作区悬着 54 项未提交改动，来自 6 个案子——4 案席位自报 pass
+      （fix-dogfood-pairing-ux / fix-dogfood-upload-media / fix-dogfood-term-ux / fix-recovery-baseline）、
+      2 案被清场杀在半路（fix-upload-auth 是 P0 安全：POST /upload 曾零鉴权；perf-thresholds-enforce）。
+      逐案原样复跑该案 taskbook acceptance 的 argv，并为每次测量配阳性对照（解析测试结果 XML/输出，
+      确认用例数非零、本轮新增红测文件确实被执行且计数非零——"exit 0"本身不算证据，
+      gradle -q 配 UP-TO-DATE 可以让没跑测试也退 0）。再逐案核对 goal 里的声明是否真落地
+      （例：fix-recovery-baseline 要求解除 TestDiscoveryRecoveryReachesConnectedClientFromStartFailure
+      的 t.Skip；fix-dogfood-pairing-ux 要求 D-14 的设置页重配入口可达、且原先谎称"设置里有重配按钮"
+      的注释已改真；fix-upload-auth 要求 docs/protocol.md 先有该端点鉴权契约再实现，且含 D-13 上传目录上限）。
+      产出 .team/recheck-20260811/verdict.json（每案 status pass/red/blocked + tests 的 argv 与 rc 原文
+      + positive_control 计数 + goal 逐条落地核对结论 + 建议的窄提交文件分组）与同目录 VERDICT.md 人读版；
+      同时把每案判定写回 .team/evidence/ 下该案的证据文件。
+      硬红线：只复跑不修——测试红了不许改测试、不许改产品代码、不许放宽 acceptance，
+      差口原样记进 verdict.json 的 gaps 数组（后续转缺陷条目排进阶段三）。不许 git commit/push（leader 收口）。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/... ./internal/pairing/...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest :terminal:test\"'"
+      - "bash -lc 'python3 -c \"import json;d=json.load(open(\\\".team/recheck-20260811/verdict.json\\\"));c=d[\\\"cases\\\"];assert len(c)>=6;assert all(x[\\\"tests\\\"] for x in c);assert d[\\\"positive_control\\\"][\\\"app_tests_run\\\"]>0 and d[\\\"positive_control\\\"][\\\"terminal_tests_run\\\"]>0\"'"
+    deps: []
+    write_scope: [".team/recheck-20260811/", ".team/evidence/"]
+    evidence: ".team/evidence/recheck-settle-20260811.json"
+    contention: impl
+
+  - id: arch-criteria-t3
+    goal: >
+      阶段一的验收定义先行：把"注释最新/契约齐"变成机器判据，否则该阶段只能靠席位自报。
+      命名裁定（leader 2026-08-11）：tools/archwiki/build_wiki.py 里 T2-1/T2-2 已被 FUTURE_CRITERIA
+      占用（零消费者包 / 孤儿子图）、T2-3 被 parse_exoskeleton_fences 预留，故新判据另开 T3 系列，
+      不得覆盖既有编号。落地两条：
+      T3-1 符号级 doc 覆盖——非测试导出符号（Go 顶层导出 decl / Kotlin 顶层 public 声明）必须有紧邻 doc/KDoc；
+      T3-2 引用真实性（限定形状）——注释文本里提到的符号名、仓库文件路径、CLI flag 必须在仓库中真实存在。
+      **边界更正（leader 2026-08-11，w-t3-verify 对抗性复核判 refuted 后改写）**：本条原写作
+      "专抓注释谎称设置里有重配按钮那类"，那是 leader 的目标设定错误——D-14 的谎言是自然语言语义断言
+      （"见 WorkspaceScreen 顶栏设置钮"：该符号真实存在，不存在的是它顶栏上那个按钮），
+      静态判据永远解析不出"某组件里有没有某按钮"。实证：取 9c2adf3 的谎报原件跑 --strict-t3 得 exit 0。
+      故本条的真实职责限定为**引用形状可判者**：反引号符号、含路径分隔且带已知扩展名的路径、--flag。
+      行为性/语义性断言不归判据管，归用例管（D-14 现由 PairingUxTest 的重配入口可达性断言守住）——
+      阶段一的验收因此是两条腿，缺一条就会把"看着做完了"当成做完了。
+      同一复核暴露的**真实现缺口必须修**：T3-2 当前只扫 Go doc 与 Kotlin /** */ KDoc，
+      普通 `//` 与 `/* */` 注释完全不扫，实证在 Go/Kotlin 双侧写形状完全正确的假符号/假路径/假 flag
+      都抓不到；Kotlin KDoc 里的 --flag 谎报也不抓。扫描面须扩到全部注释形态，双侧对齐。
+      准入纪律（沿用本文件既有约定）：每条判据必须先配红测 fixture 才准入——testdata/ 下各建至少一个
+      必红 mini-repo，另各配一个必绿的阳性对照 fixture（防"没扫到"被当成"干净"），全部挂进 test_check.py。
+      分级开关：默认报告模式（列清单、不改变退出码，因真仓库 18 包尚未刷注释、此刻必然大面积违规），
+      --strict-t3 才计入退出码，--pkg 包名 支持单包硬判——阶段一逐包收口时用它做每包 acceptance。
+      对真仓库跑一次报告模式，清单落 docs/wiki/t3-report.md（阳性对照：清单必须非空，空即判工具没真扫）。
+      红线：既有 T1-1/T1-2 必须保持绿；不得为了让真仓库好看而放宽判据。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "bash -lc 'test -s docs/wiki/t3-report.md && grep -q \"T3-1\" docs/wiki/t3-report.md && grep -q \"T3-2\" docs/wiki/t3-report.md'"
+    deps: []
+    write_scope: ["tools/archwiki/", "docs/wiki/t3-report.md"]
+    evidence: ".team/evidence/arch-criteria-t3.json"
+    contention: impl
+
+  - id: arch-criteria-t3-contract
+    goal: >
+      阶段二（补契约）的验收定义先行，与 arch-criteria-t3 同一逻辑：判据不先立，
+      补契约就只能靠席位自报。落地两条新判据，编号续 T3 系列（T2-x 已被既有 FUTURE_CRITERIA 占用）：
+      T3-3 契约标签完备——凡标了 @contract 的符号，四标签 @pre / @post / @err / @inv 必须齐全，
+      允许显式写 none（表示"确无此项"），但不许缺项；缺项即"契约半成品"，比没有契约更坏，
+      因为它让读者以为契约已定。
+      T3-4 跨层声明一致——@consumes 声明的包必须真在该包的 import 图里；反之，跨层 import 了
+      却没声明的判架构漂移。这条让架构维基能从代码现算真依赖，而不是只统计 import。
+      标签集以 docs/next-round-plan-20260810.md §3.1 为准（@contract / @pre / @post / @inv /
+      @err / @consumes / @produces），本工程自定，不套用任何 Rust 工程的既有标注标准。
+      Go 写在 doc 注释里，Kotlin 写同名 KDoc 标签。
+      准入纪律与分级开关全部沿用 arch-criteria-t3 既有约定：每条判据先配必红 fixture 再配必绿
+      阳性对照（四格齐才准入，防"没扫到"被当成"干净"），挂进 test_check.py；
+      默认报告模式不改退出码，--strict-t3 计入退出码，--pkg 单包硬判供阶段二逐包收口。
+      复用 arch-criteria-t3 已建成的 _all_comment_lines 字符串感知提取器，不另起炉灶。
+      边界诚实（承 arch-criteria-t3 的教训，不得重犯）：本条只验标签的完备性与声明一致性，
+      **不验契约内容是否描述正确**——"@post 写的是不是真的"属语义事实，静态判据判不了，
+      那一面由用例覆盖。报告与 HANDBOOK 必须明写这条边界，不许暗示有它不具备的保护力。
+      对真仓库跑一次报告模式，清单落 docs/wiki/t3-report.md 的新增两节
+      （阳性对照：当前全仓库尚未标注 @contract，故 T3-3 违规数很可能为 0——**这个 0 必须自证是
+      "真没有标注"而不是"判据扫不到"**，做法是造一个带残缺 @contract 的 fixture 与真仓库同法扫描，
+      并在报告里给出"扫描到的 @contract 符号总数"这一覆盖量数字）。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* python3 -m unittest discover -s tools/archwiki -p \"test_*.py\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "bash -lc 'grep -q \"T3-3\" docs/wiki/t3-report.md && grep -q \"T3-4\" docs/wiki/t3-report.md'"
+    deps: ["arch-criteria-t3"]
+    write_scope: ["tools/archwiki/", "docs/wiki/t3-report.md"]
+    evidence: ".team/evidence/arch-criteria-t3-contract.json"
+    contention: impl
+
+  # ---------- 阶段一二第一批：Go 侧 4 包（一包一席，同文件零并发） ----------
+  - id: doc-contract-protocol
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/protocol` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。实证背景：缺陷 D-14 就是"注释在、写得工整、内容是假的"，
+      而全仓库 206 个导出符号里 T3-1 只报出 1 条缺失——覆盖率本来就近满分，问题从来不在缺注释。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，全仓库 29 条，本包只管自己那些）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿（改注释不该影响行为，
+      测试红了说明你动了不该动的东西）。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/protocol'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/protocol/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/protocol/"]
+    evidence: ".team/evidence/doc-contract-protocol.json"
+    contention: impl
+
+  - id: doc-contract-config
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/config` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。实证背景：缺陷 D-14 就是"注释在、写得工整、内容是假的"，
+      而全仓库 206 个导出符号里 T3-1 只报出 1 条缺失——覆盖率本来就近满分，问题从来不在缺注释。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，全仓库 29 条，本包只管自己那些）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿（改注释不该影响行为，
+      测试红了说明你动了不该动的东西）。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/config'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/config/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/config/"]
+    evidence: ".team/evidence/doc-contract-config.json"
+    contention: impl
+
+  - id: doc-contract-agentstate
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/agentstate` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。实证背景：缺陷 D-14 就是"注释在、写得工整、内容是假的"，
+      而全仓库 206 个导出符号里 T3-1 只报出 1 条缺失——覆盖率本来就近满分，问题从来不在缺注释。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，全仓库 29 条，本包只管自己那些）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿（改注释不该影响行为，
+      测试红了说明你动了不该动的东西）。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/agentstate'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/agentstate/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/doc-contract-agentstate.json"
+    contention: impl
+
+  - id: doc-contract-discovery
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/discovery` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。实证背景：缺陷 D-14 就是"注释在、写得工整、内容是假的"，
+      而全仓库 206 个导出符号里 T3-1 只报出 1 条缺失——覆盖率本来就近满分，问题从来不在缺注释。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，全仓库 29 条，本包只管自己那些）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿（改注释不该影响行为，
+      测试红了说明你动了不该动的东西）。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/discovery'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/discovery/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/discovery/"]
+    evidence: ".team/evidence/doc-contract-discovery.json"
+    contention: impl
+
+  # ---------- 阶段一二第二批：Go 侧剩余 5 包 ----------
+  - id: doc-contract-api
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/api` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/api'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/api/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/doc-contract-api.json"
+    contention: impl
+
+  - id: doc-contract-bridge
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/bridge` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/bridge'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/bridge/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/bridge/"]
+    evidence: ".team/evidence/doc-contract-bridge.json"
+    contention: impl
+
+  - id: doc-contract-pairing
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/pairing` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/pairing'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/pairing/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/pairing/"]
+    evidence: ".team/evidence/doc-contract-pairing.json"
+    contention: impl
+
+  - id: doc-contract-tsnetd
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `internal/tsnetd` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg internal/tsnetd'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./internal/tsnetd/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/internal/tsnetd/"]
+    evidence: ".team/evidence/doc-contract-tsnetd.json"
+    contention: impl
+
+  - id: doc-contract-cmd
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 `cmd/agentmirrord` 一个包。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个非测试导出符号，把注释与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是本条最主要的工作量，也是判据测不了的部分：T3-1 只看 doc 在不在，
+      一条过时但存在的 doc 在它眼里是满分。第一批 4 包实证的不实形态谱系，供你按图索骥：
+      旧 API 残留（描述一个早已不存在的参数）、约束写错侧（称 decode 会拒超大帧，实际限制在 encode 侧）、
+      死错误面仍被描述为活（sentinel 全仓库无构造方）、把未接线的能力写成现状、虚构一个已存在的消费方、
+      以及 D-14 同形态（`QRListenAddr` 称在服务 QR 页面，实际该 flag 从未驱动任何 HTTP 监听）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项就显式写 `none`，不许缺项）。不是每个符号都需要契约，别为凑数而标；
+      标了就必须齐全，半成品契约比没有更坏。
+      ③**消该包的架构漂移**——补 `@consumes` 声明，使之与真实 import 图一致（清单见
+      `docs/wiki/t3-report.md` 的 T3-4 一节，本包只管自己那些；别替别的包补，那会判红）。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法与自检套路见
+      `.team/nodes/arch-criteria-t3/HANDBOOK.md`。Go 侧契约一律写在 `//` doc 注释里
+      （已知 gap：`/* */` 块注释内带 `*` 前缀的 `@contract` 判据看不见）。
+      红线：**只动注释与标注，不动任何实现代码**；包内测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg cmd/agentmirrord'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go build ./... && go vet ./cmd/...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["server/cmd/agentmirrord/"]
+    evidence: ".team/evidence/doc-contract-cmd.json"
+    contention: impl
+
+  # ---------- 阶段一二第三批：Kotlin 侧 5 包 ----------
+  - id: doc-contract-kt-root
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/doc-contract-kt-root.json"
+    contention: impl
+
+  - id: doc-contract-kt-conn
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.conn`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.conn'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/conn/"]
+    evidence: ".team/evidence/doc-contract-kt-conn.json"
+    contention: impl
+
+  - id: doc-contract-kt-pairing
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.pairing`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.pairing'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/pairing/"]
+    evidence: ".team/evidence/doc-contract-kt-pairing.json"
+    contention: impl
+
+  - id: doc-contract-kt-service
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.service`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.service'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/service/"]
+    evidence: ".team/evidence/doc-contract-kt-service.json"
+    contention: impl
+
+  - id: doc-contract-kt-session
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.session`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明，把 KDoc 与实现对照，说的与做的不一致就改注释
+      （不是改实现）。这是最主要的工作量，也是判据测不了的部分。Go 侧 9 包已实证出**九类不实形态**
+      （见角色文件谱系），Kotlin 侧照同样的方法找。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；标了必须齐全。Kotlin 写同名 KDoc 标签。
+      ③**消该包的架构漂移**——补 `@consumes`，使之与真实 import 图一致。Kotlin 侧当前共 20 条漂移
+      （清单见 `docs/wiki/t3-report.md` 的 T3-4 一节），本包只管自己那些，别替别的包补。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；`:app:testDebugUnitTest` 必须保持绿。
+      Compose 的 `@Composable` 函数同样算顶层 public 声明，不得跳过。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.session'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/"]
+    evidence: ".team/evidence/doc-contract-kt-session.json"
+    contention: impl
+
+  # ---------- 阶段一二第四批：Kotlin 侧收尾 5 包 ----------
+  - id: doc-contract-kt-termview
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.termview`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.termview'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/doc-contract-kt-termview.json"
+    contention: impl
+
+  - id: doc-contract-kt-tsnet
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.tsnet`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.tsnet'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/tsnet/"]
+    evidence: ".team/evidence/doc-contract-kt-tsnet.json"
+    contention: impl
+
+  - id: doc-contract-kt-theme
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.ui.theme`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.ui.theme'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/ui/theme/"]
+    evidence: ".team/evidence/doc-contract-kt-theme.json"
+    contention: impl
+
+  - id: doc-contract-kt-workspace
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.app.workspace`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.app.workspace'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/workspace/"]
+    evidence: ".team/evidence/doc-contract-kt-workspace.json"
+    contention: impl
+
+  - id: doc-contract-kt-terminal
+    goal: >
+      阶段一二（注释最新 + 补契约）逐包施工，本条负责 Kotlin 包 `dev.agentmirror.terminal`。三件事，按重要性排序：
+      ①**核实并改写现存注释**——逐个顶层 public 声明（含 `@Composable` 函数、`object`、`data class`、
+      顶层 `val`/`fun`），把 KDoc 与实现对照，说的与做的不一致就改注释（不是改实现）。
+      这是最主要的工作量，也是判据测不了的部分。前三批 14 个包已实证出**十类不实形态**（见角色文件谱系）。
+      ②**补契约标注**——对确有契约的符号加 `@contract` 并补齐四标签 `@pre` / `@post` / `@err` / `@inv`
+      （确无此项显式写 `none`）。不为凑数而标；纯值对象与纯 getter 一般不需要契约。
+      ③**消该包的架构漂移**——补 `@consumes` 使之与真实 import 图一致，本包只管自己那些。
+      标签集以 `docs/next-round-plan-20260810.md` §3.1 为准；写法见 `.team/nodes/arch-criteria-t3/HANDBOOK.md`。
+      红线：**只动注释与标注，不动任何实现代码**；模块测试必须保持绿。
+    acceptance:
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3 --pkg dev.agentmirror.terminal'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["arch-criteria-t3", "arch-criteria-t3-contract"]
+    write_scope: ["app/terminal/src/main/kotlin/dev/agentmirror/terminal/"]
+    evidence: ".team/evidence/doc-contract-kt-terminal.json"
+    contention: impl
+
+  # ---------- 撞库后立案：未兑现的已裁需求 ----------
+  - id: feat-fg-service-wiring
+    goal: >
+      兑现 011 已裁的「Android 前台服务 + 常驻连接」路线。当前 `MirrorForegroundService`
+      在 AndroidManifest.xml 里声明了，但**全仓库没有任何 startService / startForegroundService /
+      stopService 调用点**，它从未被启动过（其自身 KDoc 在 commit 105a2fe 即写明"死件家族第六例，
+      接线留待后案"）；真实接线是 ConnectionManager 由 startPersistentConnection（MainActivity.onCreate）
+      或 SessionRoute.createSessionViewModel 创建，时钟泵由在屏组合的 LaunchedEffect 驱动，
+      fg-service 的 pumpRunnable 从未运行。
+      本条不是新功能，是**未兑现的已裁需求**：011「推送/后台：Android 前台服务 + 常驻连接，
+      不依赖 FCM/Google 服务」（依据 010 验收只含安卓 + 004 前台服务路线已裁 + 008 开源自托管友好）；
+      004 亦明写「Android 额外提供前台服务选项（通知栏常驻），成本低收益实」。
+      **架构底线（004 不得违背）**：前台服务是**体验增强，不得成为正确性依赖**。
+      004 的主张是「不保活、客户端无状态、被杀即无所谓」——即便服务被杀，
+      冷启动 → 重连 → 首屏快照仍须在 1 秒内恢复到被杀前的画面。
+      所以接线后必须仍能通过「杀服务 → 冷启动恢复」的验证，不许把状态搬进服务里。
+      范围：服务生命周期接线（何时启动/何时停止，与配对完成、会话进入、用户显式断开的关系）；
+      连接与时钟泵归属改由服务承接（在屏组合不再各自持有）；通知栏常驻内容与点击深链
+      （NotificationHelper 已有深链实现，真实消费方是 MainActivity.handleDeepLink）；
+      前台服务类型与 Android 14+ 的 foregroundServiceType 合规声明；
+      锁屏/后台期间连接维持与恢复。
+      红线：不得依赖 FCM/Google 服务（011）；不得把客户端变成有状态（004）；
+      通知内容不得含配对 token 明文（协议 §9）；静默经济红线照常适用——
+      服务常驻期间 CPU 与子进程派生必须有界，须给出量测。
+      红测先行：服务启动/停止的状态机断言、被杀后冷启动恢复断言、
+      「连接由服务承接而非在屏组合」的归属断言。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "bash -lc 'grep -rn \"startForegroundService\\|startService\" app/app/src/main/java --include=*.kt | grep -v test'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/main/java/dev/agentmirror/app/", "app/app/src/main/AndroidManifest.xml", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-fg-service-wiring.json"
+    contention: impl
+
+  # ---------- 阶段三：一次性跑出所有隐含问题并全修 ----------
+  - id: gate-static-analysis
+    goal: >
+      阶段三第一步——**把隐含问题一次性全部暴露出来并立账**，本条只负责"暴露与立账 + 门禁接入"，
+      修复由后续按账施工（避免边扫边修导致清单永远不收敛）。
+      背景：`tools/gate/run.sh` 最后一次运行是 **2026-08-09 18:47**（`tools/gate/gate-report.json` mtime），
+      此后两天的全部改动**没过过门**——这是"隐含问题从不被发现"的直接原因。
+      三件事：
+      ①**接入静态分析**（`docs/next-round-plan-20260810.md` §3.3 已裁）：Go 侧 `go vet`（已有）+
+      **staticcheck**（BSD-3，许可与 Apache-2.0 兼容，符合 008）；Android 侧 **Android Lint**
+      （AGP 自带，零新依赖）。**不引 detekt**（需加插件、收益与 Lint 重叠）。三者接进 `tools/gate/run.sh`
+      的对应面，成为门禁的一部分。
+      ②**把 gate 加进每条 acceptance 的收口位**——taskbook 里凡涉及代码改动的条目，
+      acceptance 末尾补一条全量门；本条先在 `tools/gate/README.md` 写明该约定并给出标准 argv，
+      具体条目的批量补写由 leader 收口时做。
+      ③**全量跑一遍并立账**：`tools/gate/run.sh` 三面 + `archwiki --check`（含 T3 全套）+
+      新接的静态分析，把**所有** issue 逐条落进 `docs/stage3-issue-inventory.md`
+      （字段：来源工具 / 文件:行 / 规则 id / 原文 / 初判严重度 / 建议归属包）。
+      红线：**本条只暴露不修复**——发现问题原样记账，不许顺手改产品代码（顺手改会让"这一批到底发现了多少"
+      永远算不清）；工具自身的接入改动除外。
+      **不许为了让门禁变绿而降低规则集**：staticcheck 与 Lint 的默认规则集不得裁剪，
+      确有必须豁免的（如生成物目录）逐条给理由写进 README。
+      **阳性对照**：接入后必须自证工具真在跑——故意引入一个必然被 staticcheck 报的构造
+      （如未使用的变量）确认它真报、再撤销；Android Lint 同法。空清单不算健康，
+      扫出 0 条要说明是"真干净"还是"没扫到"。
+      注意 gate 有**用例数棘轮**，本轮 19 包大量注释改动可能撞红，如撞红照实记账、不许绕过棘轮。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash tools/gate/run.sh'"
+      - "bash -lc 'test -s docs/stage3-issue-inventory.md'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["tools/gate/", "docs/stage3-issue-inventory.md", "app/app/build.gradle.kts", "app/build.gradle.kts", "server/"]
+    evidence: ".team/evidence/gate-static-analysis.json"
+    contention: impl
+
+
+  - id: fix-dogfood-lock-zh
+    goal: >
+      兑现 017 R-6（当期**锁中文**并在 README 明示；抽取翻译后置）——dogfood 缺陷 D-12，至今未开工。
+      现状：产品界面全中文，但仓库文档从未明示"当期锁定中文、国际化后置"这一裁定。
+      本产品 Apache-2.0 全开源（见 008），外部读者无从得知这是**有意为之的当期边界**而非疏漏，
+      也不知道翻译抽取属已裁的后置项而非欢迎 PR 的开放任务。
+      范围：根 README.md 与 server/README.md（以及 app 侧若有面向用户的说明文档）明确写出——
+      ① 当期界面语言锁定中文；
+      ② 国际化与翻译抽取为**已裁定的后置项**（出处 requirement-base/entries/017-场景审计八项裁定.md 的 R-6），
+      不是待办疏漏；
+      ③ 对外部贡献者说明当前不接受翻译 PR 的原因与将来开放的条件。
+      措辞要让不了解本项目决策史的人一眼看懂，不要只写"锁中文"三个字。
+      红线：**只改文档，不动任何代码与界面文案**；不得把后置项写成"计划中"或"即将支持"——
+      那正是本轮在治的形态⑦（把未来效果写成现在式），需求基裁的是**后置**，不是承诺。
+      引用需求条目时写成可验证的形状（真实文件路径），让 T3-2 的引用真实性判据能验。
+    acceptance:
+      - "bash -lc 'grep -q 中文 README.md'"
+      - "bash -lc 'grep -q 017 README.md'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["README.md", "server/README.md", "docs/"]
+    evidence: ".team/evidence/fix-dogfood-lock-zh.json"
+    contention: impl
+
+  # ---------- 阶段三修复批：按 docs/stage3-issue-inventory.md 分组 ----------
+  - id: fix-sa-server
+    goal: >
+      修复 `docs/stage3-issue-inventory.md` 分组 A / B / C / D 的全部 9 条 staticcheck 问题
+      （`internal/api` 6 + `internal/api` 测试辅助 1 + `internal/agentstate` 1 + `cmd/agentmirrord` 1）。
+      逐条按清单原文处置：**能修则修，不能修则给出不修的技术理由并在清单里标注**——
+      staticcheck 存在少量在本工程语境下不适用的规则，但**默认规则集不得裁剪**（已裁），
+      个别不适用项只允许用最小范围的行内 `//lint:ignore <规则> <理由>` 且**理由必须具体**，
+      不许写"误报"三个字了事；用了几条、各是什么理由，逐条写进证据。
+      红线：**修的是问题不是告警**——不许用改签名、加空引用、`_ = x` 之类的手法把告警糊过去；
+      若某条 staticcheck 告警指向的是真实死代码（如本轮已记录的 `internal/bridge` 四个零消费导出符号），
+      **不要顺手删**，那超出本条范围，记进证据的 `out_of_scope` 数组交 leader 排期。
+      改动若使某个符号的行为或错误面发生变化，**必须同步更新该符号的注释与 `@err` 契约标签**——
+      本轮刚花整轮治"注释落后于实现"，不许在修 lint 时当场制造新的。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go test -count=1 ./...\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd server && go vet ./...\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["gate-static-analysis"]
+    write_scope: ["server/"]
+    evidence: ".team/evidence/fix-sa-server.json"
+    contention: impl
+
+  - id: fix-sa-appbuild
+    goal: >
+      修复 `docs/stage3-issue-inventory.md` 分组 F 的 14 条 Android Lint 问题
+      （`app/app` 构建配置：依赖版本与工程卫生）。
+      逐条处置：依赖版本升级须**确认兼容性**（升完 `:app:testDebugUnitTest` 与 `:terminal:test` 必须仍绿），
+      工程卫生项按 Lint 建议修正。
+      红线：**不得为了消告警而放宽 Lint 规则集或加 `lintOptions` 豁免**（默认规则集不裁剪已裁定）；
+      确有必须豁免的逐条给具体理由，写进 `tools/gate/README.md` 的豁免表，一条豁免一行理由。
+      **不得升级到未验证的大版本**——若某条 Lint 建议的升级跨越主版本且存在破坏性变更风险，
+      记进证据的 `deferred` 数组并说明风险，交 leader 排期，不要赌。
+      注意与其他席位的写入面隔离：**不要动 `app/app/src/main/` 下任何源码或 manifest**
+      （那是运行时组与 `w-fg-wiring` 的地盘），本条只管构建配置与依赖声明。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :terminal:test\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["gate-static-analysis"]
+    write_scope: ["app/build.gradle.kts", "app/app/build.gradle.kts", "app/terminal/build.gradle.kts", "app/settings.gradle.kts", "app/gradle/", "app/gradle.properties", "tools/gate/README.md"]
+    evidence: ".team/evidence/fix-sa-appbuild.json"
+    contention: impl
+
+  - id: fix-tsnetbind-align
+    goal: >
+      修复 `docs/stage3-issue-inventory.md` 分组 G 的 `Aligned16KB`（3 条为同一 AAR 的重复告警）：
+      `app/app/libs/tsnetbind.aar` 内的 `jni/arm64-v8a/libgojni.so` **未按 16KB 对齐**。
+      **这是 P1 且是上架硬性要求**：Android 15+ 对未 16KB 对齐的 native 库强制拒绝，
+      不修则 App 无法在 Android 15 及以上正常分发/运行——不是告警洁癖，是发布阻断项。
+      修法：在 `tools/tsnetbind` 的 gomobile 构建链里加 16KB 对齐
+      （Go 1.22+ 的 gomobile 可经链接器参数指定 max-page-size；具体手段由你按实测确定），
+      重新产出 AAR 并替换 `app/app/libs/tsnetbind.aar`。
+      **阳性对照（必做）**：不许只看 Lint 不再报。要用客观工具直接验证 `.so` 的段对齐
+      （如 `objdump -p` / `readelf -l` 读 LOAD 段的 align 值，或 `zipalign -c -P 16 -v`），
+      给出**修复前与修复后的实测数字对比**——"Lint 不报了"可能只是产物没被重新扫描。
+      同时确认替换后 tsnet 功能未坏：TS 链相关测试与 e2e 必须仍绿。
+      红线：不得用给 Lint 加豁免的方式"解决"（那会把上架阻断项藏起来）；
+      重建 AAR 的构建步骤必须**可复现**并写进 `tools/tsnetbind/README`（或等价文档），
+      不许只在本机手工产出一个二进制就交件——那样下次没人能重建。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: ["gate-static-analysis"]
+    write_scope: ["tools/tsnetbind/", "app/app/libs/"]
+    evidence: ".team/evidence/fix-tsnetbind-align.json"
+    contention: impl
+
+  - id: fix-app-runtime-sa
+    goal: >
+      两件事合并（同属 `:app` 模块运行时，按「同一 Gradle 模块同一时刻只放一席」的红线合席）：
+      ①**补在屏兜底时钟泵**（阶段三复核 `w-stage3-verify` 记的 medium gap）：
+      `feat-fg-service-wiring` 把时钟泵改为**单归属前台服务**（2s 一拍），
+      在屏组合不再各自持有；后果是**服务被杀时即使 App 在前台也没有泵**，界面停止更新。
+      接线前泵由在屏组合的 `LaunchedEffect` 驱动、前台恒有泵，所以这是功能回退。
+      它踩在 004 的自检标准上——「删掉前台服务这一层，产品功能应当仍然完整，**只是后台期间体验降级**」，
+      现状是**前台也降级**。修法：在屏组合检测到服务不可用时接管泵（服务恢复后让出，不得双泵重复拍），
+      并配红测断言「服务不可用 + 前台在屏 ⇒ 泵仍在跑」与「服务恢复 ⇒ 不出现双泵」。
+      ②**修 `docs/stage3-issue-inventory.md` 分组 E**（`app/app` 运行时，gate 复跑后剩 10 条）：
+      逐条按清单处置，**修的是问题不是告警**——不许用 `@Suppress` 或改写法把告警糊过去，
+      每条要能说清"这条告警指出的实际风险是什么、修完为什么风险消失了"。
+      确有必须抑制的逐条给具体理由写进证据，不许写"误报"了事。
+      红线：改动若使符号行为或错误面变化，**必须同步更新该符号的注释与契约标签**——
+      本轮刚花整轮治「注释落后于实现」（19 包 75 条），且 `.session`/`.workspace`/`.service`
+      三个包的注释在前台服务接线后刚同步过第二版，**不要造出第三版不实注释**。
+      不得放宽 Lint 规则集或加 `lintOptions` 豁免（已裁定）。
+    acceptance:
+      - "bash -lc 'env -u TEAM_AGENT_* bash -lc \"cd app && ./gradlew -q :app:testDebugUnitTest\"'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "bash -lc 'env -u TEAM_AGENT_* bash tools/gate/run.sh'"
+    deps: ["feat-fg-service-wiring", "gate-static-analysis"]
+    write_scope: ["app/app/src/main/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-app-runtime-sa.json"
+    contention: impl
+
+  - id: plan-stage4-execution
+    goal: >
+      阶段四（把用例设计里的用例全部跑一遍）的**执行方案先行**，本条**只产出文档、不跑任何用例、
+      不改任何代码**——用例执行等阶段三收口后另派。
+      输入：`e2e/artifacts/dogfood/TESTPLAN.md` 的 41 条用例、`docs/perf-scenarios.md` 的 A–F 六组性能场景、
+      `docs/next-round-plan-20260810.md` §3.5 的三通道分工、`requirement-base/entries/016-生产级验收定义修正.md`
+      （真机验收权威性）与 `013-测试体系与回归门禁.md`（五层测试体系）。
+      产出 `docs/stage4-execution-plan.md`，必须回答清楚：
+      ①**逐条用例的通道归属**——模拟器 UI 自动化 / API 与 instrumentation（仅 TS 网络）/ 真机（交付后用户验）。
+      用户裁定原文：「模拟器能测的全测；测不到测不了的才用 API 模拟用户场景」，
+      **UI 必须测**，走 API 只针对 TS 网络（tailnet 在模拟器里不好测）。别把 UI 划进 API 通道偷懒。
+      ②**已知不可用面**：相机与 Extended Controls 的窗口寻址在本机模拟器上已实证不可用
+      （2026-08-10 为此空转八代），相关用例直接划真机通道，不要再在模拟器上硬撞。
+      ③**每条用例的判定方式**：uiautomator 结构断言写什么、截图截哪一屏（018 要求 leader 逐图目检）、
+      失败如何归因（013 的失败四归因）。
+      ④**执行顺序与批次切分**：受「同一 Gradle 模块同一时刻只放一席」约束（本轮实证，已入 CLAUDE.md），
+      UI 自动化批次不能与 `:app` 施工席并行；给出可操作的排期形状。
+      ⑤**阳性对照方案**：每类判定配一个必然非空的对照（例如故意让断言目标缺失、确认用例真的会红），
+      防止"没测到"被当成"通过"——本轮已三次栽在这个坑上（T3-2 抓不住原型、gradle UP-TO-DATE 假绿、
+      terminal 模块整体不在扫描根）。
+      ⑥**性能场景的接入点**：A–F 六组里哪些进本轮、哪些后置，F1 终端滚动帧率必须进
+      （`docs/round-findings-20260811.md` P-3 已裁：先量 F1 再决定要不要接脏区局部重绘）。
+      红线：**不许在本条里跑用例或改代码**；不许把"可自动化度"当成覆盖优先级
+      （016 明裁：自动化必要非充分、验收权在真机、可自动化度不决定覆盖优先级）。
+    acceptance:
+      - "bash -lc 'test -s docs/stage4-execution-plan.md'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["docs/stage4-execution-plan.md"]
+    evidence: ".team/evidence/plan-stage4-execution.json"
+    contention: impl
+
+  # ---------- 阶段四：用例执行（42 条，A10a 随 R-004 撤销） ----------
+  - id: stage4-b1-ui-firsttouch
+    goal: >
+      阶段四 B1 批次：模拟器 UI 自动化·首触主干。独占 :app 编译 + 独占模拟器。
+      按 docs/stage4-execution-plan.md §1 A 组执行 A1–A9a 共 13 条用例。
+      需先 assembleDebug 装最新 APK 到模拟器、预置隔离 tmux 夹具。
+      每用例逐条：结构断言 + 截图 + 阳性对照 + 失败四归因。
+      截图落 e2e/artifacts/stage4-execution/；判定结果逐条落 REPORT.md。
+      A10a 已随 R-004 撤销，不跑。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/stage4-execution/REPORT.md'"
+      - "bash -lc 'ls e2e/artifacts/stage4-execution/A1-*.png e2e/artifacts/stage4-execution/A3-*.png 2>/dev/null | wc -l | xargs test 0 -lt'"
+    deps: ["plan-stage4-execution"]
+    write_scope: ["e2e/artifacts/stage4-execution/"]
+    evidence: ".team/evidence/stage4-b1-ui-firsttouch.json"
+    contention: none
+
+  - id: stage4-b3-host-t
+    goal: >
+      阶段四 B3 批次：宿主 T 对账。零设备依赖，独立隔离 daemon 端口。
+      按 docs/stage4-execution-plan.md §1 执行 C4、C5(H 面)、D1–D4 共 6 条用例。
+      隔离铁律：自建 TMUX_TMPDIR + 高端口 daemon（≥19983），绝不触碰生产 daemon（pid 3393，:9900）
+      与用户真实 tmux。测试一律 env -u TEAM_AGENT_*。
+      每用例逐条判定落 REPORT，收尾自证零残留（lsof + 进程表）。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/stage4-execution/REPORT.md'"
+    deps: ["plan-stage4-execution"]
+    write_scope: ["e2e/artifacts/stage4-execution/"]
+    evidence: ".team/evidence/stage4-b3-host-t.json"
+    contention: none
+
+  - id: stage4-b2-ui-backend
+    goal: >
+      阶段四 B2 批次：模拟器 UI 自动化·后台/通知/视觉。独占 :app 编译 + 独占模拟器。
+      按 docs/stage4-execution-plan.md §1 执行 A10、A11、A12 + B1–B8 + C1、C2、C3、C5(U)、C6(菜单) + D5
+      共 22 条用例（A10a 已随 R-004 撤销）。
+      需先 assembleDebug 装最新 APK（含 fix-upload-bearer 修复）。
+      每用例逐条：结构断言 + 截图 + 阳性对照 + 失败四归因。
+      截图落 e2e/artifacts/stage4-execution/；判定结果逐条落 REPORT-B2.md。
+    acceptance:
+      - "bash -lc 'test -s e2e/artifacts/stage4-execution/REPORT-B2.md'"
+    deps: ["stage4-b1-ui-firsttouch"]
+    write_scope: ["e2e/artifacts/stage4-execution/"]
+    evidence: ".team/evidence/stage4-b2-ui-backend.json"
+    contention: none
+
+  # ---------- 本轮新增（2026-08-12 用户裁定） ----------
+  - id: web-client
+    goal: >
+      构建 Web 端客户端（同协议浏览器客户端）。基于 docs/protocol.md WebSocket 协议，
+      用 xterm.js 做终端渲染，实现与安卓端功能对齐：配对页（ws 地址+token）、
+      工作区列表（两级分组）、会话页（终端镜像+输入+特殊键条）。
+      主要用途：测试第一道（Playwright/Chrome DevTool MCP），80% 问题在 Web 端先拦。
+      二进制帧协议需在 JS 侧实现解析（与 Go/Kotlin 对称）。
+      目录：web/（monorepo 内新目录）。
+    acceptance:
+      - "bash -lc 'cd web && npm test'"
+      - "bash -lc 'test -f web/index.html'"
+    deps: []
+    write_scope: ["web/"]
+    evidence: ".team/evidence/web-client.json"
+    contention: none
+
+  - id: test-automation
+    goal: >
+      构建独立的自动化测试工程。完全独立项目，不嵌入产品代码。
+      提供：通用断言库、通用测试函数、环境管理（隔离 daemon/tmux 起停）、
+      用例注册与选择性执行、结果持久化。脚本是执行单元，工程是粘合层。
+      技术栈：Playwright（Web 端测试） + adb/uiautomator helpers（安卓端）。
+      目录：test/（monorepo 内新目录）。
+    acceptance:
+      - "bash -lc 'test -f test/package.json || test -f test/pytest.ini || test -f test/Makefile'"
+    deps: []
+    write_scope: ["test/"]
+    evidence: ".team/evidence/test-automation.json"
+    contention: none
+
+  - id: fix-terminal-resize-cluster
+    goal: >
+      修复终端尺寸管理四连缺陷（D-20/D-21/D-28/D-29）：
+      D-20 键盘弹出时内容被遮挡（视口要上推但 rows/cols 不变）；
+      D-21 退出会话不恢复终端原始尺寸；
+      D-28 捏合缩放后右侧内容溢出（cols 没跟着减少）；
+      D-29 捏合过程中闪烁重绘（应松手后才发一次 resize）。
+      规则（用户裁定）：仅首次进入 CLI 时 resize 一次，此后键盘/输入框不触发 resize；
+      捏合缩放松手后发一次 resize（过程中只做本地视觉缩放）；退出时恢复原始尺寸。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/"]
+    evidence: ".team/evidence/fix-terminal-resize-cluster.json"
+    contention: none
+
+  - id: fix-upload-token-chain
+    goal: >
+      修复图片上传永远 401（D-22）。fix-upload-bearer 已在 HttpUrlConnectionUploader 加了
+      Bearer 头参数，但运行时 token 可能没传到。需排查：ServiceWire.currentConfig()?.token
+      是否为 null、SessionRoute 是否正确传入 uploadToken、ViewModel 是否下传。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/service/"]
+    evidence: ".team/evidence/fix-upload-token-chain.json"
+    contention: none
+
+  - id: fix-back-gesture
+    goal: >
+      修复安卓侧滑返回直接退出 App（D-23）。Android predictive back / edge gesture
+      应该返回上一级页面（会话→工作区列表→配对页），而不是退出 App。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-back-gesture.json"
+    contention: none
+
+  - id: fix-ts-auth-inapp
+    goal: >
+      修复 App 内填 TS auth key 无法入网（D-25）。排查 App 侧 tsnet 客户端（gomobile 绑定）
+      是否在 auth 帧发送时正确启动。用户实测外部 TS（小火箭）可用但 App 内置入网不工作。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/pairing/", "app/app/src/main/java/dev/agentmirror/app/conn/"]
+    evidence: ".team/evidence/fix-ts-auth-inapp.json"
+    contention: none
+
+  - id: fix-state-detection
+    status: superseded
+    superseded_reason: >
+      2026-08-13 账目审计：与 fix-agentstate-detection-d26（status=superseded_by_revert）
+      及 fix-agentstate-anchor-region（status=pass_unit_tests_pending_deploy）为同一缺陷 D-26
+      的三次重复立案。以 fix-agentstate-anchor-region 为准，本条不再派单。
+      调研结论见 study-herdr-agent-state：herdr 也没有进程层信号，强项在时序/仲裁层。
+    goal: >
+      提升 Agent 工作状态检测准确率（D-26）。当前状态检测（working/idle/blocked 等）准确率低。
+      参考开源项目 herdr（GitHub）的 CLI 状态检测实现。state_wiring 已有框架，需改进算法。
+    acceptance:
+      - "bash -lc 'cd server && env -u TEAM_AGENT_* go test ./...'"
+    deps: []
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/fix-state-detection.json"
+    contention: none
+
+  - id: fix-refresh-direction
+    goal: >
+      修复发消息后概率性从上往下逐行刷新（D-27）。只在 input 发送后概率出现——从上往下一行行刷新、
+      底部是旧内容。可能是 input 后触发了不必要的 snapshot 重放。需服务端日志排查。
+    acceptance:
+      - "bash -lc 'cd server && env -u TEAM_AGENT_* go test ./...'"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["server/internal/api/", "app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-refresh-direction.json"
+    contention: none
+
+  - id: fix-d27-v3
+    goal: >
+      D-27 第二次回炉：发消息后逐行刷新。核心问题——为什么发消息追加和 CLI 自己吐字追加
+      表现不同？两者本质都是 CLI 底部追加内容。找到差异点，统一实现。
+    acceptance:
+      - "bash -lc 'cd server && env -u TEAM_AGENT_* go test ./...'"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["server/internal/api/", "app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-d27-v3.json"
+    contention: none
+
+  - id: fix-rendering-d34-d35
+    goal: >
+      D-34 缩放字体堆叠 + D-35 bypass 符号缺省。需多模态开发者处理（能看截图判断渲染效果）。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-rendering-d34-d35.json"
+    contention: none
+
+  - id: fix-scrollback-d36
+    goal: >
+      D-36 向上滑动无法查看历史消息。触摸滑动手势未转成 scrollback 请求。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-scrollback-d36.json"
+    contention: none
+
+  - id: base-v2-gate
+    goal: >
+      v2 基线门禁（取证任务，不改产品代码）。v5 被用户判定不合格已退回 v2 基线
+      （tag v2-baseline，v5 改动封存于分支 v5-failed）。本任务证伪或证实
+      「v2 基线不闪」这一前提：打 v2 包上模拟器，录屏抽帧判定点开输入框 / 发消息
+      增行时是否闪烁；同时建立回归基准截图集（后续每修一条缺陷重跑，判定不倒退），
+      并复现 D-35 / D-36 留证。产出即后续各修复任务的现场基（FIELD.md）素材。
+    acceptance:
+      - "e2e/artifacts/baseline-v2/REPORT.md 给出 v2 闪/不闪的明确结论 + 抽帧证据路径"
+      - "e2e/artifacts/baseline-v2/ 内含 R1-R5 回归基准截图与 D-35/D-36 复现截图"
+    deps: []
+    write_scope: ["e2e/artifacts/baseline-v2/"]
+    evidence: ".team/evidence/base-v2-gate.json"
+    contention: none
+
+  - id: feat-daemon-scoped-discovery
+    status: void
+    void_reason: >
+      2026-08-12 立案后即撤：leader 调研遗漏，该能力已存在。
+      server/internal/api/discoverer.go:21 已定义 AGENTMIRROR_E2E_DISCOVERY_SOCKET_DIRS，
+      语义完全一致（不设=生产全扫；设空=一个都不扫；设了=fail-closed 白名单）。
+      w-nav-recover 第二次运行实测该环境变量生效，UI 只见本席临时 cwd。
+      其真实阻塞是脚本 /tmp 与 /private/tmp 路径文本不一致（macOS symlink），非产品缺口。
+      本条不施工。保留条目作为「leader 因未查 env 常量而误立案」的记录。
+    original_goal: >
+      给 agentmirrord 增加「只扫指定 tmux socket 目录」的配置出口，使测试可以起一个
+      真正隔离的 daemon。现状：discovery.DefaultSocketDirs() 扫「$TMUX_TMPDIR 覆盖树
+      **加上**平台默认目录」，故设 TMUX_TMPDIR 也无法排除宿主真实 socket；
+      api.Discoverer 内部已有 socketDirs 字段（注释明写 set-but-empty means scan none），
+      但 cmd/agentmirrord 未将其暴露为 flag/env。
+      后果（2026-08-12 实证）：w-nav-recover 自建隔离 daemon 后，其 discovery 仍扫到宿主
+      真实 socket，UI dump 出现用户真实工作区与会话名，触碰「绝不触碰用户真实 tmux」红线并 halt。
+      这卡死整条模拟器测试流水线：要么碰真实 tmux，要么 blocked。
+      本任务只做配置出口接线，不改扫描算法、不改默认行为（不传即维持现状全扫）。
+    acceptance:
+      - "bash -lc 'cd server && env -u TEAM_AGENT_* go test ./...'"
+      - "红测：给定隔离 socket 目录时，Discover 结果不含该目录之外的任何 socket"
+      - "默认行为不变：未配置时仍等价于 DefaultSocketDirs()"
+    deps: []
+    write_scope: ["server/cmd/agentmirrord/", "server/internal/api/"]
+    evidence: ".team/evidence/feat-daemon-scoped-discovery.json"
+    contention: none
+
+  - id: fix-session-list-stale
+    goal: >
+      修复「已消失的会话仍留在 App 会话列表中」（用户 2026-08-12 截图实证）。
+      复现：leader 释放席位 w-dev-d26，其 tmux 窗口随之消失；但 App 会话列表仍显示该会话，
+      点进去得到「协议错误：session_not_found（unknown session ref）」外加整屏空白。
+      用户原话：「你释放是完全没有任何问题的。有问题的是，**为什么这个释放的角色还出现在我 APP 里面的会话列表当中**？」
+      daemon 每 2s 扫一次 tmux（list_interval=2s）并发 list_delta，因此要么删除事件未下发、
+      要么客户端未按 delta 剔除、要么 seq 不连续时未重新 list。须查清并修。
+      附带（同一现象的第二面）：会话确已消失时的错误态是把协议错误码原文上屏 + 整屏空白，
+      违反 raw/018 视觉标准第 5 项「错误态每页专门设计」。合理行为是「该会话已结束」+ 可返回列表。
+      本产品中 tmux 会话消失是常态（agent 跑完退出、用户 kill、机器重启），不是边缘情况。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "红测：收到删除某 ref 的 list_delta 后，会话列表不再包含该 ref"
+      - "红测：list_delta.seq 不连续于上次见过的值时自动重新 list"
+      - "红测：进入已不存在的会话时呈现「会话已结束」态并可返回列表，不得把协议错误码原文上屏"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/workspace/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/conn/"]
+    evidence: ".team/evidence/fix-session-list-stale.json"
+    contention: none
+
+  - id: study-image-inline-context
+    goal: >
+      调研并给出方案：用户从手机发图片时，图片应**直接进入 Agent CLI 的上下文**，
+      而不是只注入一个路径、再由 Agent 额外发一次读取请求。
+      用户 2026-08-12 原话：「我发一张图片给你，希望这个图片在我发的这个消息里面它就能直接被读取，
+      **就像我直接在 CLI 里面给你发图片一样**……而不至于要重新发一个请求去读这张图，这样的话会浪费。
+      这个问题我已经提过了，但是**四五轮都没有解决**。」
+      现状：raw/003 的既定语义是「手机上传 → 主机落盘 → **文件路径注入 CLI 输入**」，
+      即当前行为符合原裁定；用户现在要的是更进一步。**这属于需求演进，不是实现缺陷**，
+      故先立调研任务而非修复任务：查清 Claude Code / Codex 等 CLI 在终端里接收图片的实际机制
+      （终端图片粘贴序列？bracketed paste？CLI 自身的附件语法？），
+      判断我方 daemon 能否在注入侧复现该机制，产出可行性结论与方案选项。
+      不产品化前不动代码。
+    acceptance:
+      - "产出 docs/image-inline-context.md：各 CLI 接收图片的实际机制 + 我方可否复现 + 方案选项与代价"
+      - "每条结论须有出处（文档/源码/实测），不得停留在推测"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/study-image-inline-context.json"
+    contention: none
+
+  - id: fix-viewport-restore-d38
+    goal: >
+      修复「切后台再回前台，终端只占屏幕一小块、下方大片空白」（D-38，用户已多次报告）。
+      用户 2026-08-12 截图实证：终端内容仅占屏幕顶部约 1/4，中间大片空黑，键条与输入框在底部
+      —— 即终端行数停留在一个更小的旧视口几何上，未随回前台恢复。
+      ⚠️ **leader 引入的风险必须一并处理**：今晚 fix-ime-no-resize 把
+      TermViewPresenter.onViewportSizeChanged 改成「首帧 seed 一次后不再 emit resize、
+      只更新 visibleRows」。修复前视口变化会触发重算并纠正几何；修复后则不会，
+      因此后台期间视口若变过（如 IME 收起），回前台会卡在旧的小几何上 —— 与本现象一致。
+      **根子是同一个毛病：onViewportSizeChanged 分不清「输入框临时挤压」与「真实视口变化」。**
+      「一律 emit」和「一律不 emit」都是错的。本任务要给出能区分两者的判据：
+      输入框/IME 引起的挤压 → 视口上推、不重算 rows/cols、不发 resize；
+      真实视口变化（回前台、旋转、分屏、窗口尺寸变更）→ 必须重算并按需发一次 resize。
+      v5 曾用 TermSurfaceView.onWindowVisibilityChanged 处理回前台（QA PASS），
+      代码在归档分支 v5-failed@2874c54 可参考，但该文件同时含 v5 闪烁回归元凶，**不得整文件捞回**。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "红测：IME 挤压序列不产生 resize 帧（保住 fix-ime-no-resize 成果）"
+      - "红测：模拟切后台→视口变化→回前台，几何必须恢复到与当前 View 尺寸一致，且最多发一次 resize"
+      - "强制门 TermSurfaceSessionBindingRegressionTest / TermSurfacePinchGestureTest / TermViewImeResizePresenterProbeTest 全绿"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-viewport-restore-d38.json"
+    contention: none
+
+  - id: fix-pinch-preview-commit
+    goal: >
+      兑现 raw/041 已裁定但从未实现的规则：捏合过程中**只做本地视觉缩放**（Canvas scale，
+      不改 rows/cols、不发 resize），**手指松开后才算最终 rows/cols 发一次 resize**，
+      并在此时持久化字号；下次进入会话在 View 布局完成之后再应用持久化值。
+      一次改动同时解决三条：D-29 捏合闪烁重绘、D-31 缩放不持久化、并为 D-28 右侧溢出提供收敛点。
+      **用户 2026-08-12 实证了根本病**：局域网下捏合整体重绘约 0.5 秒内结束，
+      Tailscale 下则「频繁闪烁」——即捏合过程中每帧都发 resize、服务端每次重排回一次整屏，
+      痛苦程度正比于 RTT。局域网把病掩盖了，而用户主场景是 TS。
+      ⚠️ 历史教训：v5 曾用 CellSizeStore 做字号持久化并引入输入框闪烁回归，
+      根因是**在新 View 尚未布局时**用 retained presenter 的旧 viewport 应用持久化字号，
+      沿 termview→session 反向边发出错误 resize。持久化功能本身没错，错在时机。
+      守门探针 TermSurfaceSessionBindingRegressionTest 专防此事，重做必须保持它绿。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "红测：捏合过程中（多次 scale 事件）不产生任何 resize 帧；松手后恰好产生一次"
+      - "红测：松手时持久化字号；重新绑定 View 时在布局完成后才应用，绑定期零 resize 帧"
+      - "强制门 TermSurfaceSessionBindingRegressionTest 保持绿"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-pinch-preview-commit.json"
+    contention: none
+
+  - id: study-herdr-agent-state
+    goal: >
+      调研 herdr 如何正确检测 Agent CLI 的运行状态，产出可落地的替代方案，
+      终结本工程「靠刮屏幕字符判状态」的路线。
+      **用户 2026-08-12 直接裁定**：「你假如说认为这两种，一个是完成态，一个是工作中态，
+      还在通过这样的字符串形式去确定它的工作状态，那就**完全走偏了**。
+      并且**这两个实际上都是完成的状态**。你可以通过 **herdr** 这个仓库去确定
+      如何正确的检测 Agent CLI 的状态。」
+      背景实证：Claude Code 完成态输出 `Brewed for 42m 3s`、也输出 `Churned for 3m 37s`，
+      两者**都是完成态**，且前导为同类星号字形 —— 字形与字符串层面根本无法分辨状态。
+      leader 此前让 D-26 往 spinnerFrames 白名单补 `✳` 等字形，方向错误，
+      上线后只会让「已停止工作却显示工作中」的误检更严重（用户已实测报告该误检）。
+      herdr 自述是 "the runtime your coding agents live on" —— 它托管 agent 进程，
+      因此可能以进程/PTY/运行时协议等结构性信号判定状态，而非刮屏。本任务查清其机制。
+    acceptance:
+      - "产出 docs/herdr-agent-state-detection.md：herdr 判定 agent 状态的实际机制（数据来源/信号/判据）+ 出处（仓库/文件/函数）+ 许可证 + 我方能否复现"
+      - "明确回答：不刮屏的前提下，我方 daemon 能获得哪些结构性信号（进程状态/PTY 活性/子进程/CLI 自身协议或钩子）"
+      - "给出替代方案与代价，并说明 D-26 现有 rules.go 字形白名单应如何退场"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/study-herdr-agent-state.json"
+    contention: contract
+
+  - id: fix-agentstate-detection-d26
+    goal: >
+      修复 D-26「Agent 工作状态检测准确率低」（用户报过三次失败）。
+      直接原因（用户 2026-08-12 截图实证）：Claude Code 新版把「工作中」指示符改成了 `◐` 这类
+      半填充圆动画，而本工程的 agentstate 检测仍在匹配旧的转圈 / 左右移动点的字形，**指示符换了检测没跟上**。
+      但只补新字形是治标：**按具体字形匹配，上游每改一次就失灵一次，且上游不会通知我们。**
+      因此本任务要两层一起做：
+      ① 立即修：补齐当前 Claude Code / Codex 等 CLI 的工作指示字形，让检测立刻恢复准确；
+      ② 治本：改成不依赖具体字形的判据 —— 例如「同一区域在短窗口内高频变化」这类
+      与字形无关的活性信号，使上游换图标不再导致误判。两层都要有测试。
+    acceptance:
+      - "bash -lc 'cd server && go test ./internal/agentstate/...'"
+      - "红测：给定含新版 ◐ 类指示符的 pane 采样，判定为 working；给定静止 pane 判定为 idle"
+      - "红测：字形无关判据 —— 用一组从未见过的指示字形，仍能判出 working"
+    deps: []
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/fix-agentstate-detection-d26.json"
+    contention: none
+
+  - id: fix-input-send-fullrepaint
+    goal: >
+      修复「用户从 App 发消息后整屏自上而下逐行重刷、底部最新消息反而看不到」
+      （用户第 4 次报告，历史上从未真正解决）。
+      **关键差分（用户 2026-08-12 提供）**：该现象**只在用户从 App 发消息时出现**；
+      teammate 从其他进程往同一 tmux 会话写入时，终端内容变化本质相同，**却不会重刷**。
+      即渲染层有能力正确增量绘制，问题出在「App 发送 input」这条路径上多做了什么。
+      调研已指出（docs/oss-terminal-solutions.md）：内核早有行级脏区 takeDirty，
+      但 TermSurfaceView 仍整帧全窗口重绘；herdr 内嵌 ghostty（MIT）的 collect_dirty_patch
+      逐行 patch 是直接模板。但根治前须先解释清楚「为何只有自己发消息才触发」。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "红测：模拟『本端发送 input 后收到回显 delta』与『纯外部 delta』两条路径，断言两者产生的重绘范围一致（均为脏行级，不得整屏）"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-input-send-fullrepaint.json"
+    contention: none
+
+  - id: fix-cols-grid-convergence
+    goal: >
+      修复最右列文字被截断（用户第 4 次报告：「最右侧的字跑到屏幕外，只能看到一半」）。
+      根因由 study-web-terminal-model 查实并附代码证据：安卓把「上报给服务端的 cols」用
+      **名义字格宽（默认 10px）**计算，而「画布的列推进」用**实测字形宽**计算——
+      两个独立栅格从不收敛，服务端按较宽的 cols 换行，画布按较窄的实测宽推进，
+      于是最右一列必然画到 View 外。Web 端（xterm.js）用同一套 cell 度量决定列数与绘制推进，
+      不存在两套栅格，故无此现象。
+      修法方向：统一栅格来源，cols 必须由实测字形推进宽度求得且向下取整（宁可少一列不可多一列）。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "红测：给定 View 宽度与实测字形宽，上报 cols 与画布可容纳列数必须相等；且 cols*字形宽 <= View 宽"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/", "app/app/src/androidTest/"]
+    evidence: ".team/evidence/fix-cols-grid-convergence.json"
+    scope_expanded: >
+      2026-08-14 leader 扩至测试目录：w-cols-prep 预研指出「判别红测 + 写回约束测试」
+      是开工第一产出，但测试文件原不在 write_scope 内。红测与主代码分席（测试席只写
+      src/test 与 src/androidTest，开发席只写 termview/），仍满足「同一 Gradle 模块
+      同一时刻只放一席施工」——施工权指的是主代码。
+    contention: none
+
+  - id: research-oss-terminal-solutions
+    goal: >
+      调研开源终端实现如何解决移动/小窗口下的四类问题，产出可落地的技术方案（不改产品代码）。
+      用户判断：「这个东西应该有开源的办法……SSH 客户端里能用的 CLI 对移动窗口做过优化，
+      这些问题都应该能找到解决办法。」判断成立——终端 reflow、scrollback 分页、
+      小窗口 cols 收敛都是被反复解决过的问题，不应由本工程从零发明。
+      调研对象至少覆盖：xterm.js（MIT，本仓库 web/ 已在用）、libvterm/vte 类状态机、
+      alacritty/wezterm 的 grid 与 reflow 实现、mosh 的预测与重绘策略、
+      以及移动 SSH 客户端（Blink/Termius 等）对窄屏的处理。
+      硬约束：终端内核须 Apache-2.0 兼容（GPL 隔离红线，Termux 系 GPLv3 不可用）——
+      可借鉴模型与算法、可引用 MIT/Apache 代码，不得复制 GPL 代码。
+    acceptance:
+      - "产出 docs/oss-terminal-solutions.md：四类问题逐条给出至少一个开源实现的具体做法 + 出处（仓库/文件/函数）+ 许可证 + 可否直接采用的结论"
+      - "每条方案必须落到「我们要改哪个函数的什么行为」，不得停留在概念"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/research-oss-terminal-solutions.json"
+    contention: none
+
+  - id: study-web-terminal-model
+    goal: >
+      以 Web 客户端（xterm.js，MIT）为对照标准，产出安卓自研终端内核的模型差异清单。
+      同协议、同 daemon、两个客户端：Web 用成熟终端库，安卓自研内核（当初为避 GPL，
+      Termux 那套是 GPLv3 不可用）。用户反复报告的四条缺陷全部出在安卓端：
+      右侧文字截断、发消息从上往下刷新致最新消息看不到、向上滑看不到打开会话前的历史、
+      捏合后闪烁重绘且字号不持久化。
+      本任务只做对照分析，不改产品代码：读 web/js/{scrollback,terminal,client}.js 与
+      app 的 termview/terminal 内核，逐条比对 buffer 与 viewport 分离、reflow 锚定、
+      cell 宽度求法、scrollback 分页拉取四个模型点，产出差异清单与可执行的修法建议。
+    acceptance:
+      - "产出 docs/web-vs-android-terminal-model.md：四个模型点逐条对照 + 差异 + 修法建议"
+      - "每条差异必须给出代码位置（文件:行）作为证据，不得停留在概念描述"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/study-web-terminal-model.json"
+    contention: none
+
+  - id: fix-scrollback-history-d36
+    goal: >
+      D-36 精确定义（用户 2026-08-12 真机原话）：「向上滑只有部分生效……历史仅限于我打开这个
+      窗口积攒的历史。我的含义是我可以往上滑看到所有历史，就像我在 CLI 通过移动鼠标滚轮往上滑」。
+      即：本地缓冲滚动已通，但会话订阅之前的 tmux 历史从未被拉取。
+      注意管道已存在：ConnectionManager.scrollback(ref, fromLine, count) 可发 ScrollbackFrame，
+      SessionViewModel:333 也有调用点，服务端与协议均支持（二进制 kind=3，12 字节元数据头
+      req_id/from_line/line_count）。**所以这不是"没实现"，是行为不对**——
+      须查清触发条件、分页收敛、以及拉回的历史有没有真正并入本地 scrollback 可被滚动到。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "红测：滚到本地缓冲顶部时发出 scrollback 请求，且返回的历史并入缓冲后可继续向上滚动"
+      - "红测：连续翻页收敛（不重复拉同一页、不无限拉）"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/termview/", "server/internal/api/", "server/internal/bridge/", "test/cases/"]
+    evidence: ".team/evidence/fix-scrollback-history-d36.json"
+    scope_expanded: >
+      2026-08-12 leader 授权扩至 server/：席位以隔离 daemon 实证服务端 scrollback 坐标平移
+      （ws_handler.go:237 的 start-pane.Height）与 historySize 双计屏（scrollbackRange:324-332），
+      导致返回内容锚点错位一屏、出现空洞、且客户端据此提前判顶停止补页。
+      只修客户端无法达成 D-36 目标，故一并纳入。
+    contention: none
+
+  - id: fix-upload-transport-tsnet
+    goal: >
+      修复图片上传在 tailnet 下必然 timeout（用户 2026-08-12 真机实证，失败模式为 Timeout 而非 401）。
+      根因：WebSocket 经 tsnet 用户态节点的 SOCKS 代理拨号（TsnetDial.proxyFor 状态为 Up 时返回
+      java.net.Proxy SOCKS），而 HttpUrlConnectionUploader 用系统网络栈直连，无任何 Proxy 引用。
+      两条通道不同——daemon 只在 tailnet 可达时，WS 通而 HTTP 上传出不去，表现为 connectTimeout。
+      D-22（401，Bearer 头缺失）已修复且经模拟器实测通过，但该实测用的是隔离 daemon + 10.0.2.2
+      局域网直连，未经 tsnet，故未能覆盖本缺陷。修法：上传必须与 WS 使用同一传输通道。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "红测：tsnet 状态为 Up 时上传请求经 SOCKS 代理建连；Down/直连时保持系统直连"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/service/"]
+    evidence: ".team/evidence/fix-upload-transport-tsnet.json"
+    contention: none
+
+  - id: fix-ime-no-resize
+    goal: >
+      兑现 raw/019 已裁定但从未实现的规则：键盘弹出 / 输入框变高时，**终端 rows/cols 不变、
+      不触发 tmux resize**，改为视口上推（像聊天软件那样内容区平移）。
+      用户 2026-08-12 真机原话：「点击输入框导致界面的尺寸变化，从而导致重绘。
+      同时我输入框多说一句话，也会导致它尺寸变化和重绘，这是绝对难以接受的。」
+      A/B/C 三包实测证实这不是回归：v2 基线 / d35fix / v4 三组终端下边界数字完全相同
+      （2010 → 聚焦 1896 → 两行 1833 → 三行 1770），即该规则从未被实现过。
+      注意与 D-20 的边界：D-20「键盘不遮挡内容」已修（ui-redesign「IME 空洞根治」）；
+      本条是同一裁定的另一半「不触发 resize」，两者不可互相代替。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check'"
+      - "红测断言：IME 弹起与输入框行数变化时不产生 resize 协议帧（rows/cols 不变）"
+      - "模拟器实测：输入框由一行变两行三行，终端已有内容不整体重绘、不重排"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/termview/"]
+    evidence: ".team/evidence/fix-ime-no-resize.json"
+    contention: none
+
+  - id: test-pinch-harness
+    goal: >
+      让捏合缩放在模拟器/JVM 上可测，并据此判定 v2 捏合是真坏还是取证手段不行。
+      base-v2-gate 实测发现：向 /dev/input/event1 注入真实双指后前后截图 SHA-256 全等
+      且未生成 cell_size.xml，捏合无任何可观察效果。该现象有两种读法（功能真坏 /
+      注入未构成 App 可识别手势），两种导向完全不同的工作，未定夺前 D-28/D-29/D-31/D-34
+      四条挂起。更要紧的是：多点触控目前在三层测试流水线里是盲区，
+      即使修好也没有任何回归守门，改坏了不会有人知道。本任务先补测试能力再谈修复。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "产出可重复的捏合手势测试（JVM 层合成多指 MotionEvent），能断言 ScaleGestureDetector 触发与 presenter 字号变更"
+      - "给出明确判定：v2 捏合是功能坏 还是 注入手段不足，附证据"
+    deps: []
+    write_scope: ["app/app/src/test/", "app/app/src/androidTest/", "e2e/artifacts/pinch-harness/"]
+    evidence: ".team/evidence/test-pinch-harness.json"
+    contention: none
+
+  - id: rootcause-flicker-v5
+    goal: >
+      v5 输入框闪烁回归回炉根因（审查任务，只加测试不改产品代码）。失败 diff 封存于
+      分支 v5-failed（commit 2874c54），嫌疑为 TermSurfaceView 三处叠加：D-28 clipRect
+      + D-31 CellSizeStore（presenter setter 内同步 onFontSizeChanged）+ D-38
+      onWindowVisibilityChanged。产出单一根因陈述 + 双向根因探针（v5 代码上命中、
+      v2 基线上不命中）。探针即后续 termview 改动的回归守门。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "探针在 v2 基线通过、在 v5-failed 工作树失败，两次实跑输出原样入报告"
+    deps: []
+    write_scope: ["app/app/src/test/"]
+    evidence: ".team/evidence/rootcause-flicker-v5.json"
+    contention: none
+
+  - id: fix-keybar-d37
+    goal: >
+      D-37 特殊键条不支持连按。MVP 方案已出（.team/evidence/research-keybar-rapid.md）：
+      conn 返回 req_id + VM 键去闸按 req_id 路由 + UI 键条放开。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-keybar-d37.json"
+    contention: none
+
+  - id: fix-bg-resume-d38
+    status: superseded
+    superseded_reason: >
+      2026-08-13 账目审计：与 fix-viewport-restore-d38（status=reverted_no_deliverable）
+      及 d38-bgresume（status=superseded_by_retask）为同一缺陷 D-38 的三次重复立案。
+      以 fix-viewport-restore-d38 为准，本条不再派单。根因已闭合，复盘见
+      docs/d38-three-attempts-postmortem.md。
+    goal: >
+      D-38 后台返回对话显示在半截（必现）。恢复时 viewport 没滚到底部。
+    acceptance:
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/"]
+    evidence: ".team/evidence/fix-bg-resume-d38.json"
+    contention: none
+
+  # ↓ 2026-08-13 账目审计补立：这两条已有 evidence 但从未在任务书立案（有账无单）
+  - id: fix-agentstate-anchor-region
+    goal: >
+      D-26 Agent 状态误检的根因修复：状态规则从「全屏 strings.Contains 扫描」改为
+      「最后一个 `❯` 提示符之后」的锚点区域限定。全屏扫描会把已滚上去的历史残留
+      `esc to interrupt` 当成 working，表现为状态**持续**卡在工作中（已实测复现：
+      state=working conf=2）。无锚点时回落到底部 8 行（anchorFallbackBottomLines）。
+      注：用户 2026-08-13 已裁定服务端只保留 working/idle 两态，「完成」改为 App 侧
+      派生的未读标记——本任务只解决误检，不涉及态的增删。
+    acceptance:
+      - "cd server && env -u TEAM_AGENT_* go test ./internal/agentstate/... -> 五条红测全绿"
+      - "cd server && env -u TEAM_AGENT_* go test ./... -> 全绿"
+      - "模拟器/真机实测：制造历史残留后状态不再卡 working（**未做，因未部署**）"
+    deps: []
+    write_scope: ["server/internal/agentstate/"]
+    evidence: ".team/evidence/fix-agentstate-anchor-region.json"
+    contention: none
+
+  - id: fix-host-pane-geometry
+    goal: >
+      主机 tmux pane 几何记账缺陷（新立案，不挂 D-38）。根因：pane 原始几何是
+      per-connection 快照，每个订阅者各自记录订阅前尺寸；且恢复只在显式 unsubscribe
+      路径触发——异常断连（teardown / closeSubscriptions / relay 退出）不调 restoreSize，
+      多订阅者会把变形尺寸当新基线逐轮叠加。修复：pane 级原始几何单例
+      （首个订阅者 acquire 记基线、中间订阅者只增计数、最后一个 release 归零恢复），
+      四条退出路径统一走 teardownSubscription。
+    acceptance:
+      - "cd server && env -u TEAM_AGENT_* go test ./... -> 全绿"
+      - "隔离 daemon 实测：多订阅者进出后主机 pane 尺寸回到原值（**未做，因未部署**）"
+    deps: []
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/fix-host-pane-geometry.json"
+    contention: none
+
+  - id: perf-ts-link-guidance
+    goal: >
+      TS 链路性能指导（顾问席，只出指导不施工）。用户 2026-08-13 裁定：
+      「在 v6 版本优化性能，无论是服务端还是 app」「性能优化要有基线和指标」
+      「核心是优化 tailscale 的链路」「我在本地局域网很流畅……基于 ts 就有（闪烁），
+      你们复现不了也是因为网络好」。
+      该裁定改变了一整类问题的定性：**闪烁不是渲染缺陷，是网络症状**——
+      局域网下中间状态一闪而过，TS 下用户看见每一个中间状态。
+      本任务不改任何代码，产出 docs/ts-link-perf-guidance.md：
+      §1 链路诊断（直连 vs DERP 中继，这是性价比最高的一问）
+      §2 基线与指标定义（含棘轮、出处可比性、NOT_MEASURED 默认失败）
+      §3 优化方向（按 收益/风险/验证难度 排序，分「只依赖自己」与「依赖对端」）
+      §4 第一步做什么（一两小时能出第一个数）
+    acceptance:
+      - "产出 docs/ts-link-perf-guidance.md，四节齐全"
+      - "§1 给出直连/中继的判定结论 + 命令原始输出（两端各判一次）"
+      - "§2 每个指标写清：对应用户哪个体感 / 探针在哪 / 局域网与 TS 两组基线 / 棘轮判据"
+      - "零代码改动：git diff 中不得出现 app/ server/ test/ 下任何文件"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/perf-ts-link-guidance.json"
+    contention: none
+
+  - id: perf-cellular-ts
+    goal: >
+      蜂窝数据 + Tailscale 真实场景下的链路优化建议（顾问席，只出建议不动手）。
+      用户 2026-08-13 23:29 把手机切到蜂窝数据并保持 TS 连接，测量窗口易逝。
+      已测（同一台手机）：局域网 9.2/47.6/130.8ms、家里WiFi+TS 327/669/1479ms、
+      蜂窝+TS 394/1221/2298ms、路由器 4.4/9.8/24.3ms。
+      拓扑已查清：Tailscale 跑在 Shadowrocket 的 MacPacketTunnel(pid 39476, UDP *:41641)
+      里，同进程挂着到 82.21.81.136:443/8443 的海外出口；主机默认路由为 Clash TUN(utun4)。
+      关键认识：家里 WiFi 下 TS 的 min 已 327ms 而局域网 9.2ms，蜂窝只加约 70ms
+      —— 绕海外是大头，蜂窝不是。
+      产出 docs/cellular-ts-optimization.md：§1 现状判读（增量，含 DIRECT/DERP 判定、
+      延迟成分能否拆开、ICMP 与 WS 应用层往返的差）、§2 网络侧建议（用户自己动手，
+      每步可回退）、§3 代码侧建议（按 1.22s/往返 重排前一席 D1-D6 并说明理由）、
+      §4 第一步。
+    acceptance:
+      - "产出 docs/cellular-ts-optimization.md，四节齐全"
+      - "§1 每个观测带时间戳并标注瞬时值/稳态值；推断与实测分开标注"
+      - "§3 给出对前一席 D1-D6 排序的重新判断与理由（尤其省往返与 delta 背压合并）"
+      - "零代码改动：git diff 中不得出现 app/ server/ test/ 下任何文件"
+    deps: []
+    write_scope: ["docs/"]
+    evidence: ".team/evidence/perf-cellular-ts.json"
+    contention: none
+
+  - id: perf-delta-backpressure-merge
+    goal: >
+      C1：delta 背压合并。服务端 ws_conn.go sendMirror 在 sendCh(cap 256) 满时丢弃 delta
+      （契约 004「下一个 snapshot 会对账」）；改为并入待发缓冲，队列排空后 flush 成一个
+      大 delta 帧（≤1MiB）。目标是用户主诉「慢链上看得见每个中间状态」——
+      合并的是本就在排队的东西，不引入定时器、零延迟代价、零协议改动、纯服务端、
+      不碰任何被回退过的 UI 路径。
+      **第一关是证伪自己**：从未证实过该队列在真实链路上会满（20KB/s 限速下
+      deltas_dropped 实测为 0）。队列不满则合并永不触发，C1 即为修一个不存在的问题。
+      故第一步是部署 sendq_metrics.go（已写好未部署）在真实 tailnet 链路上取
+      conn.queue_peak / conn.deltas_dropped，**拿到「队列会满」的实证再动代码**。
+      真实链路实测基线：应用层 srtt 1762ms、重传 10.4%、DERP 中继 HKG、
+      ICMP avg 1221ms（见 docs/cellular-ts-optimization.md）。
+    acceptance:
+      - "关卡1（前提）：真实 tailnet 链路上取到 conn.queue_peak 与 conn.deltas_dropped；队列峰值接近 256 或 dropped>0 才继续，否则 halt 报 leader 改方向"
+      - "关卡2（红测）：合并前后客户端收到的字节流逐字节相同（不依赖网络，纯单测）"
+      - "关卡3：cd server && env -u TEAM_AGENT_* go test ./... 全绿"
+      - "关卡4：python3 tools/archwiki/build_wiki.py --check --strict-t3 exit 0"
+      - "关卡5：deltas_dropped 计数器语义随丢弃路径消失而同步订正（纪律⑨：仪表要说清作用域）"
+      - "关卡6（眼见为实）：真机/模拟器上走复现步骤，慢链下中间状态个数下降且不倒退"
+    deps: []
+    write_scope: ["server/internal/api/", "test/cases/"]
+    evidence: ".team/evidence/perf-delta-backpressure-merge.json"
+    contention: none
+
+  - id: feat-remote-scroll-forward
+    goal: >
+      D-36 用户 2026-08-14 重新定义（原话）：「我在屏幕里面向上滑的时候，我向上滑的这个行为
+      没有投放到这个界面。也就是说我向上滑，要类似于我在这个界面鼠标滚轮也向上滑，
+      它才能配合看到上面的内容。」「之前所有的假的复现、假的修改正确，全部都是它本身
+      从上往下加载了大量的 CLI 的内容，因此我才能上上滑。」
+      **这个定义推翻了 fix-scrollback-history-d36 的全部前提**：我们一直在修「App 本地缓冲
+      怎么滚」和「服务端 scrollback 分页怎么对齐」，而用户要的是**把滚动手势送到远端终端**，
+      等价于在该 TUI 里滚鼠标滚轮（Claude Code / vim / less 等自己处理滚轮，App 侧滚本地缓冲
+      永远看不到它们的历史）。
+      现状已 grep 实证：App 从未向服务端发过滚轮/鼠标事件；服务端 input 路径只有 send-keys；
+      bridge 无 copy-mode/滚动。**整条链路上不存在这个能力**，属于补一条从未有过的能力，
+      跨「手势 → 事件 → 协议 → 服务端 → tmux」四层。
+      范围张力：与「只修缺陷零新功能」封存令冲突，用户 2026-08-14 裁定「核心就是把这四个
+      缺陷开发好」，本条即其中之一。
+    acceptance:
+      - "关卡1（契约，必须先过）：产出协议方案书交 leader 定夺——滚轮事件怎么上线（复用 send-keys 发 SGR/正常鼠标序列，还是新增 wire kind），谁判断远端是否处于 alt-screen/mouse-tracking 模式，非 TUI 场景（裸 shell）如何降级到 tmux copy-mode。leader 未裁定前不得改协议与 app/"
+      - "关卡2（红测）：手势 → 事件的单测；远端 mouse-tracking 开/关两种模式各有一条期望字节序列的红测"
+      - "关卡3：cd server && env -u TEAM_AGENT_* go test ./... 全绿"
+      - "关卡4：python3 tools/archwiki/build_wiki.py --check --strict-t3 exit 0"
+      - "关卡5（眼见为实）：真机在 Claude Code 会话里上滑，能看到该 TUI 自己的上文，改前录到不动、改后录到动，且不倒退"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/termview/", "server/internal/api/", "server/internal/bridge/", "test/cases/"]
+    evidence: ".team/evidence/feat-remote-scroll-forward.json"
+    contention: contract
+
+  - id: fix-tsnet-resume-reconnect
+    goal: >
+      缺陷⑤（用户 2026-08-14 真机报告，附决定性 A/B 差分）：
+      **用 App 内嵌 tsnet（TS token 配对）连上后，把 App 切到后台再回前台 —— 永远连不上。**
+      对照组：改用手机上的**官方 Tailscale App** 建立 tailnet，App 侧按 tailnet 局域网地址
+      直连（不走 token/内嵌 tsnet），**杀到后台再打开可以立刻连上**。
+      **差分把范围锁死在内嵌 tsnet 的前后台生命周期上**，与 UI/几何/服务端无关。
+      候选方向（未验证，开工先证伪）：Android 后台冻结进程后内嵌 tsnet 用户态节点的
+      DERP 长连接/网卡枚举失效，回前台无重连逻辑；或 TsnetWire.state 仍停在 Up 而底层
+      节点已死，导致 socketFactoryFor 继续返回 SOCKS 工厂但拨号必失败（**状态说谎**）。
+      与缺陷①相关：①的修法是让上传复用内嵌 tsnet SOCKS，若内嵌 tsnet 在恢复后不可靠，
+      ①的修复会继承这份脆弱 —— 两条任务的结论要互相对账。
+    acceptance:
+      - "关卡1（复现）：模拟器/真机上走用户的复现步骤，改前必须亲眼看到「内嵌 tsnet 路径回前台连不上、官方 TS 局域网路径回前台秒连」的差分，留截图/日志"
+      - "关卡2（探针）：能判真假的探针——回前台后 TsnetWire.state 报的值 与 底层节点实际可拨通性 是否一致（状态说谎则命中）"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
+      - "关卡3（眼见为实）：改后同样步骤重走，回前台能连上，且官方 TS 局域网路径不倒退"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/service/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-tsnet-resume-reconnect.json"
+    contention: none
+
+  - id: feat-diagnostic-log-export
+    goal: >
+      用户 2026-08-14 裁定：**测试链路必须先抓到真实缺陷，抓不到就不许改代码**；
+      而抓不到的时候，出路不是放宽标准，而是**在 App 里做诊断日志 + 设置里的日志导出**——
+      「我复现了之后，你们看日志要能够抓到问题，并且真正的定位到原因，并且修正」。
+      本条把「用户真机复现一次」变成一份可分析的证据，直接解阻缺陷⑤
+      （内嵌 tsnet 回前台连不上，模拟器造不出后台冻结）以及一切只在用户真实
+      蜂窝+TS 链路上出现的缺陷。
+      能力要求：环形缓冲（内存+落盘）、有界不无限增长、设置页一键导出（分享/另存）。
+      **记录内容必须足以定位根因，不是流水账**：至少覆盖 tsnet 状态迁移与迁移原因、
+      SOCKS 拨号尝试与失败码、WS 连接/断开与关闭原因、上传尝试的源目的地址与结果、
+      前后台生命周期事件、几何/视口变更。
+      **用户 2026-08-14 追加**：缺陷②（右列文字跑到屏幕外）同样适用——
+      「你这些东西抓不到，你就加日志」。所以渲染栅格也必须可观测：
+      名义 cellWidth 与实测 cellWidth 各是多少、上报给服务端的 cols 是多少、
+      画布宽多少、末列字形右缘落在哪、超出 View 边界多少像素、捏合事件前后各值如何变化。
+      判据：**光看导出的日志，就能算出「最右列超出屏幕几个像素」**，
+      不需要再问用户要截图。
+      **凭据绝对不许入日志**：配对 token、TS authkey、Bearer 头一律脱敏，
+      这条是硬红线（2026-08-13 与 08-14 已各发生一次 authkey 泄露）。
+    acceptance:
+      - "红测：任何一条日志记录路径喂入配对 token / TS authkey / Bearer 值，导出产物中必须零命中（脱敏红测，先红后绿）"
+      - "红测：缓冲有界——写入远超容量的记录后，内存与磁盘占用不超过设定上限（资源有界红线）"
+      - "红测：tsnet 状态迁移、SOCKS 拨号失败、WS 关闭原因三类事件各有一条断言其被记录且字段完整"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
+      - "静默经济：空闲时日志子系统零 CPU、无固定频率线程/子进程；用实测数据证明"
+      - "眼见为实：模拟器上走一遍导出流程，拿到文件并打开确认内容可读、无凭据"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/diag/", "app/app/src/main/java/dev/agentmirror/app/ui/", "app/app/src/main/java/dev/agentmirror/app/tsnet/", "app/app/src/main/java/dev/agentmirror/app/conn/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-diagnostic-log-export.json"
+    contention: none
+
+  - id: fix-cellheight-writeback
+    title: "cellHeight 从不回写测量值：rows 上报偏大，底部内容被画到画布外（缺陷② 的纵轴镜像）"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 由 w-scroll-dev 在④ 只读调研中发现，非用户报障"
+    context: |
+      **和缺陷②（fix-cols-grid-convergence）是同一个 bug 的另一个轴。**
+      ② 修的是：measureCells() 实测 cellWidth 后回写给 presenter（setMeasuredCellWidth），
+      使上报的 cols 与画布实际能容纳的列数一致。
+      **cellHeight 那条回写通路从来没做过：**
+        TermViewPresenter.kt:339  rows = viewportHeightPx / cellHeight  ← cellHeight 恒为
+                                  DEFAULT_CELL_HEIGHT=20（只有捏合缩放会改它）
+        TermSurfaceView.kt:428    cellH = descent - ascent              ← 真实值只存 View 私有字段
+        TermSurfaceView.kt:262    rowY = (logical - win.first) * cellH  ← 画字用真实值
+      于是「报给服务端有多少行」用偏小的 nominal 高度算（rows 偏大），
+      而「画布上每行占多高」用真实高度 ⇒ 最下面几行被画到画布下缘之外。
+      预测体感：底部内容/输入区被吃掉一截，或最新几行要手动下滚才看得到。
+      **④ 依赖此项**：TermSurfaceView.onScroll 的 lineHeightPx = presenter.cellHeight，
+      行高被低估 ⇒ 同样像素位移被算成更多行 ⇒ deltaLines 量级偏大（符号已在第 9 轮修对，量未必准）。
+      **未闭合的取证**：真实字形高度与 20px 差多少，至今没有数字。
+      Robolectric LEGACY 图形对 fontMetrics 返回全 0，JVM 上量不出来，
+      需模拟器/真机实测或切 NATIVE 图形模式。不许用推断的数字代替。
+
+      **2026-08-14 用户答复：从未遇到过底部内容显示不全、或最新几行要手动下滚才可见。**
+      这条负面观测把本任务降档，并给出一个更可能的解释：
+      nominal 20px 很可能当初就是照着 textSize=20×0.85=17px 等宽字体的
+      descent-ascent（典型 20~21px）定的，本来就接近准确 ⇒ 误差接近零 ⇒ 从不表现。
+      而② 的宽度轴差 10%（10 vs 11），是因为等宽字体字符步进宽度约为 em 的 0.6 倍，
+      那 1px 被 126 列放大成 12 列的偏差，所以肉眼可见。
+      **结论：回写通路缺失是真的（结构性缺陷），但实际影响可能为零。**
+      **因此本任务的第一步不是修，是量**——量出来若差 ≤1px 就只补注释说明
+      「nominal 与实测同量级，回写通路刻意未做」，不动代码；差得多才修。
+      禁止在没有那个数字之前动手改代码。
+    acceptance:
+      - "先量后改：拿到真实测量 cellHeight 与 nominal 20px 的实际差值（模拟器/真机实证，禁止推断）"
+      - "红测：给定 viewportHeightPx 与真实字高，断言上报的 rows 与画布实际能完整容纳的行数一致（先红后绿）"
+      - "红测：不倒退——缺陷② 的 cellWidth 回写与 cols 收敛行为不受影响"
+      - "眼见为实：模拟器上截图证明底部行完整、不再被画布下缘裁切；改前必须先复现裁切"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
+    deps: ["fix-cols-grid-convergence"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-cellheight-writeback.json"
+
+  - id: fix-local-scroll-degrade-sign
+    title: "断线降级时上滑完全无效：presenter 与手势层符号约定相反"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 由 w-scroll-dev 在④ 第10轮写不倒退测试时实测发现，非用户报障"
+    context: |
+      连接非 READY 时，SessionViewModel.onScrollWheel 走本地降级路径
+      `presenter.onScrollBy(deltaLines)`。但两侧符号约定相反：
+        - TermSurfaceView.onScroll 产出的是【协议原生符号】：上滑为负
+        - presenter.onScrollBy 要求【正值＝看更早历史】
+      于是上滑传入负值 → 被 coerceIn 夹回跟随底部 → topLine 保持 null ⇒ **完全无效**。
+      已由 TermSurfaceRemoteScrollSignTest 的不倒退用例实锤（用 300 行 scrollback
+      排除「没历史可锁」的干扰项，证明是符号被夹住而非无内容）。
+      **用户影响**：断线/重连中途上滑，画面一动不动，而这恰恰是最想翻看上文的时刻。
+      注：第 9 轮修的是【远端路径】符号（已修好并经模拟器实证），本条是【本地降级路径】，
+      两者独立。第 9 轮 KDoc 里已写明「presenter 符号约定相反、本轮不修」，现在有断言了。
+    acceptance:
+      - "红测：非 READY 状态上滑，断言 presenter 视口真的向更早历史移动（先红后绿）"
+      - "红测：不倒退——第 9 轮的远端路径符号（上滑发负 delta / 下滑发正 delta）不受影响"
+      - "红测：不倒退——第 10 轮的像素守恒断言不受影响"
+      - "眼见为实：模拟器上断开连接后上滑，截图证明画面真的滚动；改前必须先复现无效"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: ["feat-remote-scroll-forward"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-local-scroll-degrade-sign.json"
+
+  - id: investigate-short-swipe-deadzone
+    title: "短距离上滑死区未解释：150px 以下 0 帧，而 touch slop 只有 20px"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 w-scroll-qa 在④ 第10轮复测中发现并自证；假设已被自己的测量推翻"
+    context: |
+      模拟器实测（adb input swipe 合成事件，时长统一 3000ms）：
+        700px → 34 帧，正常     300px → 15 帧，正常
+        150px → 0 帧            130 / 100 / 50px → 全部 0 帧
+      断点在 150~300px 之间。
+      **最初假设（Android touch slop 地板）已被测量推翻**：
+      `adb shell dumpsys input` 读出 TapSlop = 20.0px；`wm density` = 480（3.0x），
+      AOSP 默认 8dp×3 = 24px，两个独立读数互证同一量级。
+      20px 解释不了 150~300px 的死区，差 7~15 倍。
+      第 10 轮新加的 pendingScrollPx 是 Float，数学上不丢亚像素；
+      且实测是 onScroll **压根没被调用**，不是 deltaLines 算成 0 —— 问题在手势识别之前那一关。
+
+      **关键存疑：这个死区可能只存在于合成事件下。**
+      `adb input swipe` 生成的 MotionEvent 采样密度与真手指完全不同，
+      而真正的被测对象是一根手指。本工程 2026-08-14 已四次栽在
+      「测了替身而不是真正的被测对象」（capture-pane 替 pipe-pane、自建 client 替工厂、
+      注协议帧替手势层、Int.MIN_VALUE 骗过 `<0` 断言），这是第五个候选替身，
+      只是这次替身是测试手段本身。
+      **因此下一步不是继续在模拟器上做实验，是先拿到真手指的结果。**
+    acceptance:
+      - "先取真机数据：用户在真机上做一次很轻很短（1~2cm）的上滑，报告动没动"
+      - "真机上不复现 ⇒ 判定为合成事件伪影，关闭本项并在④ 证据里注明模拟器该量级不可信"
+      - "真机上复现 ⇒ 才继续查；届时禁止再用 adb input swipe 作判据，须用真实触摸录制回放"
+      - "禁止在没有真机结果之前改代码"
+    deps: ["feat-remote-scroll-forward"]
+    write_scope: ["e2e/", "docs/"]
+    evidence: ".team/evidence/investigate-short-swipe-deadzone.json"
+
+  - id: fix-cols-cjk-doublewidth
+    title: "② 复发：中文双宽字符行最右列仍被切掉半个字（2026-08-14 用户实测）"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 用户自证：「可能是我之前看错了，边缘在屏幕外的问题依然存在」，附截图，末字「条」右半被切"
+    context: |
+      用户 2026-08-14 上午曾报② 已 OK，当日下午自行更正：问题仍在。
+      截图特征：**整屏是中文（双宽字符）**，行末「条」贴在右边缘、右半被切，
+      下一行从「)」开始。
+      与已闭合的 `fix-cols-grid-convergence` 的关系存疑，两种可能，**禁止先入为主**：
+        a. ② 的修复（measureCells 回写 cellWidth）本身回退了或盖不住此场景
+        b. 这是【另一个缺陷】：② 修的是等宽拉丁的单元宽，而 CJK 占两格，
+           若双宽步进不是恰好 2×cellWidth，误差沿整行累积，末格被挤出画布
+      GlyphRunBuilder.kt:101 已有「双宽码点用两个 ASCII '?' 占两格」的处理，
+      说明双宽在渲染层是被显式对待的——那条路径是否与 cols 计算一致，未查。
+
+      **取证工具已就位但可能不够**：DiagLog 的 grid 记录（TermViewPresenter.kt:377）已含
+        viewport_width_px / cell_width_nominal / cell_width_measured /
+        reported_cols / canvas_capacity_cols / overflow_px / half_cell_px
+      **但它是按等宽拉丁 cellWidth 算的。** 若真因在 CJK 双宽步进，
+      overflow_px 可能显示 0 而屏幕仍在切字。
+      **届时「日志说没事而屏幕在切字」本身就是结论**——说明仪表没覆盖出问题的场景，
+      要先补仪表再谈修复（纪律⑨：新仪表必须先证明它测的是你以为的东西）。
+    acceptance:
+      - "先取数：用户粘一行 grid 记录（等 feat-diag-inapp-view 落地后即可十秒取得）"
+      - "分野：overflow_px > 0 ⇒ 走 a 路线（cellWidth 回写失效）；overflow_px == 0 而屏幕仍切 ⇒ 走 b 路线（仪表未覆盖 CJK，先补仪表）"
+      - "红测：给定一行纯 CJK 内容，断言末列字形右缘不超出画布宽度（先红后绿）"
+      - "红测：不倒退——等宽拉丁场景的 cols 收敛行为不变"
+      - "眼见为实：模拟器上用【纯中文内容】复现切字并截图，改后同样内容不再切"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: ["fix-cols-grid-convergence", "feat-diag-inapp-view"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-cols-cjk-doublewidth.json"
+
+  - id: fix-mainactivity-store-injectable
+    title: "可测试性缺陷：MainActivity 硬编码 Keystore store，冷启动读配置这一环 JVM 上验不了"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 w-tsnet-dev 写⑤ 的 T4 冷启动红测时撞上，如实上报而非绕过"
+    context: |
+      用户症状链：配对存 key → **MainActivity 从 store 读回** → PersistentConnection 见非空 key
+      → ensureStarted → tsnet 起网 → 能连上。
+      两端都已有断言：
+        - 落盘侧 `saveThenLoad_roundTripsTsAuthKey`：store 能持久化并读回 tsAuthKey
+        - 装配侧 `ColdStartReconnectTest.coldStart_persistedTsAuthKey_triggersTsnetStart`：
+          给定含 key 的配置，冷启动装配确实拉起 tsnet
+      **中间那一环没有断言**：`MainActivity:87` 硬编码真实 `SharedPreferencesPairingConfigStore`
+      （Android Keystore cipher），而 Robolectric 不提供 AndroidKeyStore provider，无法注入假 cipher。
+      当前风险评估为低——该环与 ws url / token 的读取共用同一条代码路径，而那条路径
+      在真机上反复被证明有效（App 冷启动能带着已存配置连上 LAN 地址）。
+      **但它确实是用户症状链上唯一没有断言的一环**，不许因为"应该没问题"而永久搁置。
+    acceptance:
+      - "让 MainActivity 的 configStore 可注入（构造参数 / 工厂 / 内部可见的 seam 均可，选最小改动）"
+      - "红测：注入假 store（含 tsAuthKey）走冷启动完整链路，断言 ensureStarted 被调用——补上中间那一环"
+      - "红测：不倒退——真实 Keystore 路径在真机/instrumented 上仍正常（不许为了可测试性把加密存储换掉）"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+    deps: ["fix-tsnet-resume-reconnect"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/MainActivity.kt", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-mainactivity-store-injectable.json"
+
+  - id: feat-font-size-setting-drop-pinch
+    title: "移除捏合缩放，改为设置页字号选择；字号→单元尺寸走实测度量，进入前定尺寸"
+    status: todo
+    owner: null
+    contention: contract
+    origin: "2026-08-14 用户裁定（架构决策，非缺陷单）"
+    context: |
+      **用户原话**：「移除捏合相关代码，并行在设置加字体大小设置，字体大小和尺寸相关联，
+      此后不再捏合调整……直接改字体大小，背后直接和尺寸关联，进入直接以对应尺寸加载，
+      根本上避免上面问题」。
+
+      **捏合关联的三个从未修好的问题**（用户列举）：
+        1. 捏合后闪烁，且延迟明显
+        2. 边缘在屏幕外（＝缺陷②）
+        3. 捏合后大小未延续（不持久化）
+
+      **用户的关键现场证据**：「我进入对话，这个问题是没有的」——
+      ② 在进入会话时【不出现】，只在捏合之后出现。
+      ⇒ 初始计算是对的，**坏的是重算路径**。leader 最初判断"删捏合不会自动修好②"，
+      被这条证据推翻，已收回。
+
+      **代码层的对应（已核实）**：
+        TermViewPresenter.onFontSizeChanged(L275)  捏合路径：cellWidth = 名义值 → recomputeGeometry() → 按名义值上报 cols
+        TermViewPresenter.setMeasuredCellWidth(L313) 实测回写：下一帧测得实测值 → 不同则再上报一次
+        注释原文：「真机收敛序列 seed 名义 10 → 回写实测 11 → 停」
+      ⇒ **每次几何变化都先向服务端上报一个错的列数再纠正。**
+      进入会话时这次收敛发生在画面出现之前，所以用户看不到；捏合时发生在眼前，所以看得到。
+
+      **另一个被本任务顺带拆掉的结构**（今日发现）：
+        TermViewPresenter.kt:294 注释：「否则 cellH→textSize→cellH 反馈环」
+        textSize = cellHeight × 0.85，而 cellHeight = descent - ascent
+        ⇒ 回写 cellHeight 会成环，所以它被钉死在 DEFAULT_CELL_HEIGHT=20，从不实测。
+      本方案把字号变成【用户选定的独立输入】，textSize 不再由 cellHeight 推导 ⇒ 环断开 ⇒
+      cellWidth 与 cellHeight 都能用实测值。这使 `fix-cellheight-writeback` 一并消解。
+    hard_requirements:
+      - "字号 → 单元尺寸【必须走实测字形度量】（measureText / fontMetrics），禁止查表配常量——否则② 会在固定字号下原样活下来"
+      - "禁止保留「先用名义值播种、再靠实测回写收敛」的模式：几何只算一次，且算的时候就用实测值，不许先上报一个错的 cols 再纠正"
+      - "字号必须持久化（用户列举的问题 3：捏合后大小未延续）"
+      - "进入会话前尺寸即已确定，首帧就是最终尺寸（用户列举的问题 1：闪烁与延迟的根治方式）"
+    acceptance:
+      - "红测：给定字号，断言上报的 cols 与画布实际能完整容纳的列数一致（先红后绿）"
+      - "红测：全流程只上报一次 resize，不存在「名义值 → 实测值」两次上报（钉死播种-收敛模式已消失）"
+      - "红测：字号变更后重启 App，断言仍是所选字号（持久化）"
+      - "红测：纯 CJK 双宽内容下末列字形右缘不超出画布宽度（吸收 fix-cols-cjk-doublewidth）"
+      - "红测：cellHeight 使用实测值而非 DEFAULT_CELL_HEIGHT（吸收 fix-cellheight-writeback）"
+      - "眼见为实（2026-08-14 用户指令：暂停模拟器，改走 web 端 + 真机）：
+          ① web 端验协议层与几何计算（cols/rows 正确、resize 次数、字号持久化）——这层 web 能覆盖；
+          ② 安卓特有的渲染时序与生命周期（无闪烁、首帧即最终尺寸、CJK 末列、IME/后台回前台）
+             **web 覆盖不了**，由用户真机验收并导出诊断日志作为证据；
+          ③ 禁止用模拟器截图充当上述任一项的证据。
+          附记：模拟器 2026-08-14 曾给出错误的绿（在裸 shell 上验滚动全绿，而用户实际用的是
+          alt-screen 的 Claude Code），真机才是权威被测对象。"
+      - "不倒退：删除捏合后，既有 TermSurfacePinchGestureTest 等测试需一并清理，但终端渲染/输入/重连基本功能全绿"
+      - "bash -lc 'cd app && env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'"
+      - "bash -lc 'python3 tools/archwiki/build_wiki.py --check --strict-t3'"
+    supersedes: ["fix-cellheight-writeback", "fix-cols-cjk-doublewidth"]
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-font-size-setting-drop-pinch.json"
+
+  - id: fix-shared-gradle-build-dir
+    title: "多席共用一个 gradle build 目录：一夜产生三次假警报，其中一次差点被当成回归上报用户"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 无人值守验收期间，leader 连续三次取不到一致读数后定位"
+    context: |
+      同一工作区内多个席位并行跑 `./gradlew :app:testDebugUnitTest`，共用同一个
+      `app/build/` 目录，互相污染中间产物与 test-results，导致读数不可信。
+
+      **当晚实发的三次假警报**：
+        1. 一次跑出一大片 `initializationError`（ConnCodec / DiagLog / Glyph* 等与改动无关的包）
+        2. 一次 `mergeDebugResources FAILED`，重跑立刻 BUILD SUCCESSFUL
+        3. 一次 54 failed；另有席位报 469/470 绿，而 leader 同时刻跑出完全不同的数字
+      清场（要求全体停跑）+ 清理 test-results 后重跑，真实结果是 **469 测试 1 红**。
+      **其中第 1 次 leader 差点当成回归上报给用户。**
+
+      更隐蔽的一层：席位为了排查而做的"隔离单跑"同样污染别人——w-font-dev 主动指出
+      它那组 3 次 PairingTsnetWindowProbeTest 隔离重跑「大概率也是撞车源之一，请勿采信为独立观测」。
+      **也就是说：在共用 build 目录的前提下，"隔离跑"这个概念本身是失效的。**
+
+      当前临时规矩（口头，已广播）：同一时刻只允许一席跑 gradle，跑前在频道声明。
+      这靠自律，不靠机制，无人值守下迟早失效。
+    acceptance:
+      - "机制上保证并行安全：每席独立 build 目录（GRADLE_USER_HOME / --project-cache-dir / 独立 worktree 任选），不靠自律"
+      - "验收专用通道：leader 取权威读数时使用与所有席位都隔离的构建环境"
+      - "红测/演示：两席同时跑全量，双方读数都正确且互不影响"
+      - "把结论写进 CLAUDE.md 派单纪律，替换掉当前那条靠自律的口头规矩"
+    deps: []
+    write_scope: ["CLAUDE.md", ".team/", "tools/"]
+    evidence: ".team/evidence/fix-shared-gradle-build-dir.json"
+
+  - id: fix-font-size-scale-unit
+    title: "字号最小档仍比旧字号大一倍多：预设用 sp，旧世界用物理像素，量纲选错"
+    status: todo
+    owner: null
+    contention: none
+    discovered: "2026-08-14 用户真机反馈：「我把字体调到最小，还是比之前的字体大很多」「最小的字体都不够特别小，导致我看的内容很少」"
+    context: |
+      **前提：架构方向是对的，别推翻。** 用户同一条反馈的前半句是
+      「尺寸这个问题就相当于已经完全把上面几个问题解决了——第一个是闪烁，第二个是部分跑到
+      屏幕外面，第三个是一致性」。feat-font-size-setting-drop-pinch 的三条主症状全消。
+      本条只是刻度盘的量纲错了，不是方案错了。
+
+      **根因（leader 已核代码）**：
+        TermSurfaceView.kt:446   val sizePx = fontSizeSp * resources.displayMetrics.scaledDensity
+        旧世界（已删的捏合时代）  textSize = DEFAULT_CELL_HEIGHT(20) × 0.85 = 17【物理像素】
+      预设 12/14/16/18/20 用的是 **sp**（受系统字体缩放影响），旧世界用的是**物理像素**。
+      用户手机若为 3.0x 密度，12sp = 36px ≈ 旧字号的 2.1 倍。
+      **所以"最小档"比他一直在用的字号还大一倍——不是选项不够多，是整个刻度盘错了量纲。**
+
+      **⛔ 未闭合的取证，动手前必须先拿到**：用户手机真实的 px/sp 比值。
+      取法：让用户在 App 里 设置 → 查看诊断日志 → 复制全部，找 `grid` 那条记录里的
+      `cell_width_measured`（那是当前字号下实测的字形推进宽，单位物理像素）。
+      配合当时选中的档位（sp 值）即可反算 scaledDensity，据此定准确档位。
+      **不许拍脑袋改数字**——本工程 2026-08-14 已七次栽在"没测量就下结论"上。
+
+      **一个待定的设计问题（拿到数后一并裁）**：终端字号是否应该受系统 sp 缩放影响？
+      终端用户要的是"一屏能看多少内容"，而 sp 会被系统无障碍设置放大——两者诉求冲突。
+      候选：改用 dp/px 直接控制；或保留 sp 但把范围下探到覆盖旧字号。此问需 leader 裁定。
+    acceptance:
+      - "先取数：拿到用户真机 grid 记录里的 cell_width_measured + 当时档位，反算 px/sp 比值（禁止推断）"
+      - "最小档必须 ≤ 旧世界的等效字号（textSize 17 物理像素），用户诉求是'看到更多内容'"
+      - "红测：给定档位与 px/sp 比值，断言算出的 textSize 落在预期物理像素区间"
+      - "眼见为实：用户真机切到最小档，截图证明一屏内容量明显多于当前"
+      - "不倒退：feat-font-size-setting-drop-pinch 的 11 个用例与 5 处定点变异全部保持有效"
+    deps: ["feat-font-size-setting-drop-pinch"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-font-size-scale-unit.json"
+
+  - id: feat-terminal-theme-selection
+    title: "终端主题可选（黑/白等 CLI 常见主题）；并查清用户消息为何渲染成白底"
+    status: todo
+    owner: null
+    contention: contract
+    discovered: "2026-08-14 用户反馈：「我发的是白色的底，这不太符合它的，这显示不太舒服」「你要把 CLI 常见的一些主题在设置里面列出来，然后都可选……就像 Claude Code 它自身 CLI 也有多个主题」"
+    context: |
+      **这是两件事，只做后一件不会让白底消失——这一点必须先讲清楚，否则会白做一轮。**
+
+      **(a) 白底的成因（leader 已初查，未定案）**：
+      那个浅色块**不是我们画的，是 Claude Code 自己画的**。它有明暗主题，
+      会探测终端背景色来决定用哪套。现在渲染出浅色块，说明**它以为自己跑在浅色终端里**。
+      探测途径通常是 OSC 11 背景色查询或 `COLORFGBG` 环境变量。
+      leader grep 实证：**服务端与 App 侧都没有任何 COLORFGBG / OSC 11 背景查询的处理**
+      （`server/internal/` 与 `app/.../termview/` 全无命中）。
+      ⇒ 假设：我们不回答这个查询，Claude Code 猜错。**这是假设不是结论，要实测证否。**
+
+      **(a-补) 2026-08-14 19:36 用户第二张截图把根因收窄了，且证明这不是 Claude Code 专属问题**：
+      那个 pane 跑的是 **Cursor Grok**（不是 Claude Code），同样出现浅底块，
+      **而且浅底上的字几乎完全看不见**（「你有目标模式吗？」浅灰底浅灰字、
+      「→ Add a follow-up」白底极浅字）。
+      leader 查出两个硬事实：
+        TermSurfaceView.kt:485   DEFAULT_FG = 0xFFE8E8E8   ← 接近白
+        TermSurfaceView.kt:486   DEFAULT_BG = 0xFF0D1626   ← 深蓝黑，非标准黑
+        反显 SGR 7 的处理：全 App grep **零命中**
+      ⇒ **统一解释**：那些 CLI 以为自己在浅色终端，于是画输入框时显式设浅色背景、
+        而**前景留给"默认值"**（它期望默认是深色）。我们的默认前景是接近白的 ⇒ 浅底浅字 ⇒ 看不见。
+      ⇒ **白底、以及白底上看不见字，是同一个根因的两面**，不是两个 bug。
+      ⇒ 同时印证用户那句「和日常看到的黑底主题、白色主题都不一样」：
+        我们的底色 `#0D1626` 是自造的深蓝黑，不是标准黑。
+      **另外要顺手查的**：反显（SGR 7）零命中意味着可能压根没实现。若某些 CLI 用反显画输入框，
+      现在会渲染成普通字——**这是独立于上面那条的第二个候选缺陷，实测确认后再决定是否并入本条。**
+
+      **(b) App 自己的主题调色板（用户要的功能）**：
+      设置页列出 CLI 常见主题供选。注意：**这不能替代 (a)**——
+      若 Claude Code 发的是 truecolor 背景，调色板改不了它；若是索引色，
+      改索引映射又会波及其他用途。**先做 (a) 定案，再决定 (b) 的形态。**
+    acceptance:
+      - "(a) 先证否：实测 Claude Code 在本 App 终端里如何选择明暗主题（OSC 11 / COLORFGBG / 其他），给出观测证据而非推断"
+      - "(a) 若确因未回答背景查询：补上回答/设置 COLORFGBG，实测用户消息块变为深色"
+      - "(b) 主题选择：设置页可选，持久化；至少覆盖深色/浅色两套完整 ANSI 16 色 + 前景/背景"
+      - "红测：切换主题后调色板实际生效（断言渲染取色，不断言'调用了 setTheme'）"
+      - "眼见为实：用户真机截图确认用户消息块不再是刺眼白底"
+      - "不倒退：GlyphFallbackPolicy / 双宽 / BCE 背景等既有渲染行为不变"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/SettingsScreen.kt", "server/internal/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-terminal-theme-selection.json"
+
+  - id: fix-image-upload-input-box
+    title: "发图后文件名落进输入框；且需 leader 额外 Read 一次，每次多烧一整轮 LLM 请求"
+    status: pass_user_verified   # 2026-08-14 用户真机「没问题了」；文字+[Image #N] 内联+真提交三条同时成立。commit d597da97e，daemon pid 10313
+    owner: null
+    contention: contract
+    discovered: "2026-08-14 用户反馈 + 截图（upload-20260814T112827）"
+    context: |
+      **用户原话**：「要解决一下我发一张图，它出现在输入框的问题，它不应该出现在输入框。
+      并且……我在节点上给你发张图的话，你在那条消息直接就把图片给读了。但是我给你发图的话，
+      你需要还有一个额外的读的动作，那这样的话就有额外的费用，因为它都是一次完整的 LM 请求，
+      它会把全面的内容全部都加载一遍。」
+
+      **两个子问题，成本那条更值钱**：
+      1. **UI**：上传后文件名 `upload-20260814T112812-1000022709.jpg` 被塞进了输入框，
+         用户还得自己删。截图可见输入框里就是这个文件名。
+      2. **成本**：App 发图 ⇒ pane 里出现一个**路径字符串** ⇒ leader 必须再调一次 Read
+         才能看到图。而用户在 Mac 上直接拖图给 Claude Code 时，图是**内联附件**，零额外往返。
+         **每多一次 Read＝一次完整 LLM 请求，把整个上下文重新加载一遍**——
+         用户当前上下文已达 1M 的 62%，这个代价很实。
+
+      **一个待验的候选修法（假设，未测）**：App 插入的不是裸路径，而是 Claude Code 的
+      文件引用语法（如 `@/path/to/image.jpg`）。若 Claude Code 对 `@` 引用的图片会内联附上，
+      则一次往返即可，成本问题消失。**必须实测确认 Claude Code 是否对图片支持这个语法**，
+      不要假定。若不支持，则本条只能优化 UI，成本那半需另想办法（或明确告知用户不可解）。
+
+      **注意 PTY 的结构性限制**：App 与 Claude Code 之间隔着 tmux/PTY，
+      没有传输"图片内容块"的通道，只能传字节。所以"像 Mac 上那样内联"未必可达——
+      **如果实测证明不可达，如实告诉用户不可解，不要造一个假的解法。**
+    acceptance:
+      - "先实测：Claude Code 对 `@<图片路径>` 是否内联附图（给出观测证据）"
+      - "若可行：App 改为插入该语法，实测 leader 无需额外 Read 即可看到图"
+      - "若不可行：如实结论化，并至少修掉 UI 问题（文件名不落输入框）"
+      - "UI：上传完成后输入框保持干净，用户不需要手动删除文件名"
+      - "眼见为实：用户真机发一张图，截图证明输入框干净 + leader 侧一次往返内看到图"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/session/", "server/internal/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-image-upload-input-box.json"
+
+  - id: feat-remote-scroll-mouse-wheel
+    title: "④ 重开的方向已由用户定死：把上滑手势变成【给窗口发鼠标滚轮指令】"
+    status: pass_user_verified   # 2026-08-14 用户真机实测：「丝滑，特别满意」。服务端 commit f9a4cedf8 + daemon pid 48296 已部署
+    owner: null
+    contention: contract
+    origin: "2026-08-14 用户裁定（取代 feat-remote-scroll-forward 前十轮的全部方向）"
+    context: |
+      **用户原话（这是唯一权威，前十轮的方向全部作废）**：
+      「我在 Mac 上用鼠标滚轮往上滑，你可以看到它是可以往上滑的。要不然的话，
+      它也不会出现那个 Jump to Bottom。那实际上你要做的不是，你要加上滑这个动作，
+      实际上就是要把鼠标上滑的这个行为改成滚轮往上滑，给它给这个窗口发这样的指令。」
+
+      **用户附了证据**：Mac 上滚轮上滑，Claude Code 出现 "Jump to Bottom" 提示
+      ——证明 **Claude Code 自己就有滚动能力，只是没人给它发滚轮事件**。
+
+      **这与 leader 2026-08-14 的实测吻合**（在自己跑着 Claude Code 的 tmux pane 上）：
+        alternate_on = 1     alt-screen TUI
+        history_size = 0     tmux 里零行 scrollback
+        mouse_any_flag = 1   **它自己已经开着鼠标上报**
+      ⇒ 第 8~10 轮做的「读 tmux scrollback 推快照」对它读的是空历史，已全轮归档
+        （docs/archive/scroll-rounds-8-10/）。
+      ⇒ 而更早那条「SGR 鼠标字节注入是死路」的结论**也是错的**：
+        当时测的 less/vim 是 mouse=0，没开鼠标上报当然没反应。
+
+      **所以新方向**：手势 → 鼠标滚轮事件 → 送到 pane 里那个开着 mouse 上报的程序。
+
+      **从归档里可以直接复用、不要重造的**：
+      - 手势层符号错（上滑发正值＝协议的"向下"）与手势层丢帧（不足一行的位移被丢弃、
+        无累加器，700px 拖动只送达 3 行）——两个真 bug，与架构无关，补丁在
+        docs/archive/scroll-rounds-8-10/diffs/rounds-8-10.patch，红测在同目录 tests/
+      - copy-mode 滚动的结果进不了 pipe-pane 推流（字节级实证）——任何新方案都不能依赖它送画面
+    open_questions:
+      - "leader 问过但用户尚未回答：除 Claude Code 外是否还需要在别的 TUI（vim/htop/lazygit）里上滑？这决定要不要做 mouse_any_flag 判别与降级路径"
+      - "鼠标事件怎么送达：tmux send-keys -M 无法外部合成（已实证）；候选是把 SGR 1006 序列写进 pane 的 pty。需实测在 mouse_any_flag=1 的程序上是否被解析"
+      - "非 mouse 上报的程序（裸 shell）怎么办：不发、还是回落 tmux copy-mode？"
+    acceptance:
+      - "开工前先消掉部署分歧：生产 daemon pid 86755 跑的是已回退代码编出的二进制（见 docs/archive/scroll-rounds-8-10/README.md §四）"
+      - "先实测：在 mouse_any_flag=1 的真实 Claude Code pane 上注入 SGR 滚轮序列，观测它是否真的滚动（禁止靠推断定案，前十轮全栽在这）"
+      - "判据只认用户可见结果：画面里的字真的往上走、能看到上文；不许断言'调用了 InjectScroll'或'tmux 里滚了'"
+      - "复用归档里的手势层符号与守恒红测，不要重写"
+      - "眼见为实：用户真机验收（模拟器暂停中，且模拟器曾在裸 shell 上给出错误的绿）"
+    deps: []
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/main/java/dev/agentmirror/app/session/", "server/internal/", "app/app/src/test/"]
+    evidence: ".team/evidence/feat-remote-scroll-mouse-wheel.json"
+
+  - id: fix-terminal-right-margin
+    title: "右边缘留白偏大：修完溢出后变成用不满宽度，与 Mac 上 CLI 的边距不一致"
+    status: pass_user_verified   # 2026-08-14 用户真机截图确认：空隙已加上，末列不再跑出屏幕。commit 33518d757
+    owner: null
+    contention: none
+    discovered: "2026-08-14 用户真机反馈：「边缘还是可以往外扩一扩……我的屏幕截图右边还是缩了一点点，它右边再往外扩一点点就好了，就和 Mac 电脑上看到的那个边缘那个空隙是一致的了」"
+    context: |
+      **这是 feat-font-size-setting-drop-pinch 之后出现的新状态，方向是对的、过头了一点。**
+      修复前：上报的 cols 偏大 ⇒ 末列字形被挤出屏幕（缺陷②）。
+      修复后：几何一次算对 ⇒ 不再溢出，但右侧留白比 Mac 上的 CLI 更宽，
+      即**现在偏保守，宽度没用满**。
+
+      候选成因（未验，禁止先入为主）：
+      - cols 用了 floor 除法，余数全部变成右侧留白；余数接近一整列时浪费明显
+      - 画布本身可能有额外 padding / 边距
+      - 与 fix-font-size-scale-unit 耦合：字号偏大时列数少，同样的余数占比更显眼
+        ⇒ **可能字号量纲修完后本条自动缓解，先修那条再看**
+    acceptance:
+      - "先取数：用户真机 grid 记录里的 viewport_width_px / cell_width_measured / reported_cols / canvas_capacity_cols，算出右侧实际留白像素"
+      - "与 Mac 上 CLI 的等效留白做对照（用户可给截图，按字宽折算）"
+      - "红测：给定视口宽与实测字宽，断言 cols 取满且右侧留白 < 一个字宽"
+      - "不倒退：不许为了用满宽度把末列又挤出屏幕——缺陷② 的红测必须保持绿"
+      - "眼见为实：用户真机截图确认右边距与 Mac 观感一致"
+    deps: ["fix-font-size-scale-unit"]
+    write_scope: ["app/app/src/main/java/dev/agentmirror/app/termview/", "app/app/src/test/"]
+    evidence: ".team/evidence/fix-terminal-right-margin.json"
+
+  - id: fix-paste-settle-signal
+    title: "发图那 2 秒沉降延时是猜的阈值、无单测保护、且阻塞连接读循环"
+    status: todo   # 2026-08-15 降优先级：057 预贴落地后，那 2 秒只在【选完图立刻发、不打字】这条路径上出现，
+                   # 而用户明确说「基本上很少有纯图片的」。缺口仍真实（阈值是猜的、失败不报错），但不紧迫。
+    owner: null
+    contention: none
+    discovered: "2026-08-14 leader 独立变异发现（fix-image-upload-input-box 第 2 轮交付时）"
+    context: |
+      `bridge.go: InjectWithAttachment` 在最后一次 `send-keys Enter` 前 `time.Sleep(pasteSettleDelay)`
+      等 2 秒。这 2 秒是整个发图内联修复真正起作用的那一环——Claude Code 收到 bracketed paste 后
+      要解码/缩放/重编码/写 ~/.claude/image-cache，Enter 在这段异步 I/O 完成前到达会被静默吞掉。
+
+      **三条缺口，按严重度排：**
+
+      ① **无单测保护（最严重）**：leader 把 `time.Sleep(pasteSettleDelay)` 整行删掉，
+         server 全部测试仍然通过。**谁下次顺手清理掉它，门全绿而功能当场废。**
+         根因是 `time.Sleep` 硬编码、时钟不可注入；不注入时钟就测不了竞态。
+         目前唯一保护它的是端到端实测，而端到端不在门里。
+
+      ② **2000ms 是实测阈值不是理论上界**：500ms 不够、2000ms 够（w-img-probe 实测）。
+         更大的图 / 更慢的机器可能仍不够，届时症状退回「消息卡在输入框发不出去」，
+         而且**不会有任何报错**——跟修复前一模一样，会被误判成回归。
+
+      ③ **阻塞连接读循环**：`ws_conn.go:347 handleFrame → handleInput` 是同步调用，
+         发图后这条 WS 连接的帧处理被阻塞约 2 秒，期间用户的输入/滚动指令不被处理。
+         （镜像输出走独立 goroutine，画面刷新不受影响。）
+
+      **建议方向（未定夺）**：等一个明确的「粘贴已处理完成」信号而不是固定 sleep——
+      例如轮询 capture-pane 直到输入行出现 `[Image #N]`，带上界超时兜底。
+      这样 ①（可断言可注入）②（自适应真实耗时）③（可做成非阻塞）三条一起解。
+      **但轮询判据是 Claude Code 专属字面量**，对别的 CLI 要有降级路径，这是要先想清楚的地方。
+    acceptance:
+      - "红测：时钟可注入，断言『Enter 在沉降完成之前不得发出』——先红后绿"
+      - "定点变异自证：删掉沉降等待，该红测必须转红（当前变异是全绿的，这就是本任务的起点）"
+      - "不倒退：无附件路径的 argv 与耗时不受影响"
+      - "眼见为实：用户真机发一张【大图】，确认仍能提交（当前只验过普通截图尺寸）"
+    deps: ["fix-image-upload-input-box"]
+    write_scope: ["server/internal/bridge/", "server/internal/api/"]
+    evidence: ".team/evidence/fix-paste-settle-signal.json"
+
+  - id: decide-pane-reflow-wip
+    title: "工作区里混进过一份无人派单的多客户端 pane 尺寸广播 WIP，要不要"
+    status: todo
+    owner: null
+    contention: contract
+    discovered: "2026-08-14 leader 在交付 fix-image-upload-input-box 第 2 轮时发现并剥离"
+    context: |
+      `PaneSizeChanged` 帧 + `Server.fanoutPaneReflow`：手机与 Web 同时订阅同一个 pane 时，
+      后改尺寸的一端胜出，对端把本地网格改成同一行列、且不上行 resize，避免两端互顶。
+      代码是完整的（含契约注释、validate、往返测试、App 侧 applyRemoteSize/noteRemoteSize），
+      但**本轮无人派单、无人验收，来源未查明**。
+      leader 已完整剥离并存档：`docs/archive/pane-reflow-wip/pane-size-changed-wip.patch`，
+      剥离后 server + app 双门复跑全绿，未随 d597da97e 进入生产。
+
+      **为什么不直接丢掉**：它解决的是一个真实存在的矛盾——
+      「两端共用一个 pane、两块屏尺寸不同」。这与主题那轮遇到的
+      「两块屏底色不同」是同一个形状的问题（见 feat-terminal-theme-selection 的
+      why_not_pursued）。将来做多端并存时会重新撞上。
+
+      **为什么不直接合进去**：影响面是协议 + 双端渲染，且改的是「谁说了算」这类归属规则，
+      属契约级；且当前用户只用 App 单端，收益为零而风险非零。
+    acceptance:
+      - "先查来源：问清是哪一轮哪个席位的产出，有没有对应的需求条目（撞库：requirement-base 有无相关裁定）"
+      - "若要：按正常流程重新派单——红测先行 + 双端实测 + 用户真机验收，不许直接把存档 patch 合进去"
+      - "若不要：明确关闭并在证据里写清为什么（不要让后来的人再发现一次、再纠结一次）"
+    deps: []
+    write_scope: ["docs/", "taskbook.yaml"]
+    evidence: ".team/evidence/decide-pane-reflow-wip.json"
+
+  - id: fix-nodeprobe-plus-title-unknown
+    title: nodeprobe 把「+ ...」开头的 grok idle 标题判成 unknown
+    status: pending
+    detail: >-
+      2026-08-21 实撞：席位 pane 标题「+ Agent 弹窗图标卡片重做 - grok」按既有样本
+      （「<摘要> - grok」=idle）应判 idle，实际输出 ❓unknown；样本行「+ Agent 弹窗图标卡片重做 - grok\tidle\tgrok\ttitle」已从 titles.tsv 暂撤（它让 TestL2FixtureCorpusParity 先红并卡住发货）；修复格开工第一步把它加回作先验红。unknown 不许当 idle，判活方要人工读屏兜底。
+    acceptance:
+      - "红测：以该标题字符串喂 nodeprobe 分类器，断言 idle/grok（先验红）"
+      - "修后 nodes.sh 对该 pane 不再出 ❓"
+    deps: []
+    write_scope: ["tools/nodeprobe/"]
+    evidence: ".team/evidence/fix-nodeprobe-plus-title.json"
+
+  - id: feat-fav-phone-geometry-priority
+    title: 收藏会话手机几何优先与活动让渡（契约 099）
+    status: pending
+    detail: >-
+      跨 server(pane 几何策略/活动信号)+app(连接时机)。排在 hl1-v1 打开速度链（perf0/perf1/verify2）
+      收口之后立格：设计裁定（活动信号+滞回）→ 实现 → 异源评审 → 模拟器双端验收。
+      与 P1 几何 seed 互补：P1 治首开，099 治收藏常驻。
+    deps: ["hl1-v1 收口"]
+    write_scope: ["server/", "app/"]
+    evidence: ".team/evidence/feat-fav-phone-geometry.json"
+
+  - id: perf14-scrollback-page-metadata
+    goal: >-
+      修复 corral-serve Issue14：固定 base b98504e742ed1e7c7475767c512934b07eac592b，
+      以一次有界 history_size/pane_height 元数据查询代替分页前全历史 capture，
+      保留正文、真实尾空行、协议头与空历史占位；不改其他性能问题。
+      当前 PR 流程与完整判据见 .team/closeout-20260908/PERF14-TASK.md。
+    acceptance:
+      - "hosted 固定base无界capture具名红、精确候选同oracle绿；Go -race -count=1，禁止本机编译"
+      - "独立区间/正文/头布局/空历史/极值与真实隔离tmux场景；不接受SKIP或零匹配"
+      - "独立App分页和最终同批性能非退化另验，不以结构改进冒称手机提速"
+    deps: []
+    write_scope: ["server/internal/bridge/", "server/internal/api/"]
+    evidence: ".team/evidence/perf14-scrollback-page-metadata.json"
+    contention: impl
+    base_extra: [".team/closeout-20260908/PERF14-TASK.md", ".team/nodes/perf-triage-astra/RESULT.md"]
+
+  - id: perf15-catalog-refresh-coordinator
+    goal: >-
+      修复serve Issue15：已有目录的已知ref订阅不受同连接List/L2扫描阻塞；
+      单扫描/单pending、同代发布与有界请求生命周期。
+      owning依赖PR20精确1fa3b651，完整裁定见 .team/closeout-20260908/PERF15-TASK.md。
+    acceptance:
+      - "hosted未修复1fa3上的真实Subscribe先于扫描释放具名红，精确候选同oracle绿；Go -race -count=1"
+      - "目录水位/epoch/每请求回复/取消退出和PR20相关兼容门，禁止缓存及SKIP替代执行"
+    deps: []
+    write_scope: ["server/internal/api/server.go", "server/internal/api/ws_handler.go", "server/internal/api/level2.go", "server/internal/api/ws_conn.go", "server/internal/api/scan_coordinator.go"]
+    evidence: ".team/evidence/perf15-catalog-refresh-coordinator.json"
+    contention: impl
+    base_extra: [".team/closeout-20260908/PERF15-TASK.md", ".team/nodes/perf-triage-astra/PERF15-CONTRACT.md"]
+
+  - id: perf17-resize-readback-reuse
+    goal: >-
+      修复serve Issue17：仅handleResize复用Resize实际readback，删除紧跟的重复Size，
+      保留实际几何/错误/snapshot/cursor与连接健康语义。
+      具体产品写边界以 .team/closeout-20260908/PERF17-TASK.md 为准。
+    acceptance:
+      - "hosted固定b985命令观测具名红及候选同oracle绿，Go -race -count=1，不本机编译"
+      - "same-size连接健康、实际reflow完整Ref/snapshot/cursor与多端几何兼容"
+    deps: []
+    write_scope: ["server/internal/api/"]
+    evidence: ".team/evidence/perf17-resize-readback-reuse.json"
+    contention: impl
+    base_extra: [".team/closeout-20260908/PERF17-TASK.md", ".team/nodes/perf-triage-astra/RESULT.md"]
+
+  - id: external-tmux-socket-discovery
+    goal: >-
+      Issue10外部-S：Darwin同uid真实tmux监听socket原生补集，保留标准根/隔离/ref。
+      具体base、平台边界与判据见 .team/closeout-20260908/EXTERNAL-SOCKET-TASK.md。
+    acceptance:
+      - "hosted真实libproc自有PID来源、旧base兼容具名红、候选同oracle绿，Go -race -count=1"
+      - "显式隔离零宿主源调用、owner/stale/容量/取消/旧平台标准根兼容及候选App逐ref实测"
+    deps: []
+    write_scope: ["server/internal/discovery/", "server/internal/api/"]
+    evidence: ".team/evidence/external-tmux-socket-discovery.json"
+    contention: impl
+    base_extra: [".team/closeout-20260908/EXTERNAL-SOCKET-TASK.md", ".team/nodes/perf16-repair-astra/EXTERNAL-SOCKET-PLAN.md"]
+
+  - id: perf16-overflow-recovery-e2e
+    goal: >-
+      原始 corral-serve Issue16 单角色端到端 PR20：修复真实桥/WS溢出后的静默丢字节，
+      让受影响连接明确终结并由真实App自动重订恢复完整当前屏，健康连接保持连续。
+      固定比较base b98504e742ed1e7c7475767c512934b07eac592b，1fa3b651仅为已有候选。
+      本轮目标与16-A至E范围见 .team/rolling-acceptance-20260908/PARALLEL-WAVE.md；
+      与其他四项并行，独立PR准入后统一组合功能验收，不自行升级滚动基线。
+    acceptance:
+      - "固定base与精确候选的真实桥/WS loss具名红绿、健康端全量连续、代次与退出race；hosted Go -race -count=1，零匹配或SKIP不可判"
+      - "精确App04bf真实专用设备无额外输出/点击/resize自动恢复完整当前grid/style/cursor；既有A6组合不替代设备证据"
+      - "10轮loss/恢复及前后台，按App既有delay/上限/认证重置常量核实际调度、资源有界与完整清理；逐项原件评定16-A至E"
+    deps: []
+    write_scope: ["server/internal/api/", "server/internal/bridge/"]
+    evidence: ".team/evidence/perf16-overflow-recovery-e2e.json"
+    contention: impl
+    base_extra: [".team/rolling-acceptance-20260908/PARALLEL-WAVE.md", ".team/nodes/perf-triage-astra/tmp/rolling-foundation/ISSUE-16.md", ".team/nodes/perf-triage-astra/tmp/rolling-foundation/ISSUE-ACCEPTANCE.md", ".team/nodes/perf-triage-astra/APP-A6-HOSTED-REVIEW.md"]

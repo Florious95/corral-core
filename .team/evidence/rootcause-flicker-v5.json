@@ -1,0 +1,53 @@
+{
+  "task_id": "rootcause-flicker-v5",
+  "status": "pass",
+  "result_id": "res_091943751e78",
+  "agent": "w-rev-flicker",
+  "summary": "v5 输入框闪烁回归回炉根因收敛为单一原因：D-31 缩放持久化在 TermSurfaceView.presenter setter 内，于新 View 尚未布局时用 retained presenter 的旧 viewport 叠加持久化的新字格尺寸同步重算，沿 termview→session 反向边发出错误 resize（观测值 rows/cols=(17,57)），IME 弹起与终端增行触发的重绘被放大为闪烁。根因探针 TermSurfaceSessionBindingRegressionTest 双向成立：同一 SHA-1 dd94c202de72d7ebe044eb82b51901bc606087ea 的测试文件在 v5-failed(2874c54) 隔离工作树 rc=1 并精确命中 [(17,57)]，在 v2-baseline(7c56353) rc=0。探针只禁「绑定期用 stale viewport 发 resize」，不禁 D-31 功能本身——重做 D-31 时必须把持久化字号推迟到新 View 布局之后再应用，该实现仍可通过本探针。",
+  "root_cause": {
+    "single": "D-31 CellSizeStore 在 presenter setter 内同步应用持久化字号，此时新 TermSurfaceView 尚无 viewport，presenter 仍持有前一个 View 的 800x480 几何，重算结果沿 termview→session 反向边发出错误 resize。",
+    "leader_hypothesis_refuted": "leader 在 FIELD.md 给的嫌疑是「presenter setter 同步 onFontSizeChanged 形成重组回环」，以及 D-28 clipRect / D-38 onWindowVisibilityChanged 三处叠加。审查席以行级证据收敛到 D-31 单一原因，未采纳 leader 的叠加假设。线索被证据修正，属预期。",
+    "closure_edge": "架构基（build_wiki.py 现算）给出 termview 反向依赖 = dev.agentmirror.app.session，故障正落在这条边上；v5 未做该边回归自查，是 QA PASS 却引入回归的结构性原因。"
+  },
+  "tests": [
+    {
+      "argv": "cd /tmp/v5-tree/app && bash -lc 'env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests dev.agentmirror.app.termview.TermSurfaceSessionBindingRegressionTest'",
+      "rc": 1,
+      "note": "v5-failed 隔离工作树：探针命中，AssertionError: binding emitted session resize(s): [(17, 57)]。原始输出见 docs/rootcause-flicker-v5.md 第 27-133 行。"
+    },
+    {
+      "argv": "cd app && bash -lc 'env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest --tests dev.agentmirror.app.termview.TermSurfaceSessionBindingRegressionTest'",
+      "rc": 0,
+      "note": "v2-baseline：探针不命中，BUILD SUCCESSFUL。原始输出见 docs/rootcause-flicker-v5.md 第 134-199 行。"
+    },
+    {
+      "argv": "cd app && bash -lc 'env -u TEAM_AGENT_* ./gradlew :app:testDebugUnitTest'",
+      "rc": 0,
+      "note": "v2 基线全套单测，探针加入后不倒退。"
+    },
+    {
+      "argv": "git diff --numstat -- app/app/src/main server",
+      "rc": 0,
+      "note": "空输出，产品代码零改动，符合审查席只加测试的约束。"
+    }
+  ],
+  "leader_verification": {
+    "done": [
+      "产品代码零改动：git diff --numstat -- app/app/src/main server/ 空",
+      "探针文件 SHA-1 自证吻合：shasum -a 1 = dd94c202de72d7ebe044eb82b51901bc606087ea（席位报的是 sha1sum 口径，非 git hash-object）",
+      "隔离工作树已清理：git worktree list 仅主仓库，/tmp/v5-tree 不存在",
+      "v5-failed 分支完好未删",
+      "探针源码复核：非恒真恒假，精确复刻故障条件（预置 cell_size 持久化 + retained presenter 旧 viewport + 绑定新 View），两侧同一份代码均可编译（未引用 CellSizeStore 类，只用字符串键）",
+      "报告含两次原始输出，形状正确（v5 BUILD FAILED + [(17,57)]；v2 BUILD SUCCESSFUL）"
+    ],
+    "pending": [
+      "leader 独立复跑探针未做：w-base-v2 正在同一 Gradle 工程施工，本工程红线「同一 Gradle 模块同一时刻只放一席施工」，避让以免抢锁破坏基线门禁构建。待 base-v2-gate 收口后补跑。"
+    ]
+  },
+  "artifacts": [
+    "app/app/src/test/kotlin/dev/agentmirror/app/termview/TermSurfaceSessionBindingRegressionTest.kt",
+    "docs/rootcause-flicker-v5.md"
+  ],
+  "downstream_binding": "本探针是 D-31 重做与后续一切 termview 改动的回归守门；D-28/D-38 重做时同样必须先过此探针。",
+  "at": "2026-08-12"
+}

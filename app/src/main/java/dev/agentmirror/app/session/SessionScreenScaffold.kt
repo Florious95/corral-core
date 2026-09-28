@@ -44,10 +44,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import dev.agentmirror.app.diag.DiagLog
-import dev.agentmirror.app.ui.theme.DarkPalette
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.Elevations
 import dev.agentmirror.app.ui.theme.LocalAppPalette
+import dev.agentmirror.app.ui.theme.LocalThemeSuite
+import dev.agentmirror.app.ui.theme.isDark
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.ui.theme.currentTerminalPalette
 import androidx.compose.ui.platform.LocalFocusManager
@@ -257,6 +258,7 @@ fun SessionScreenScaffold(
         onImeHideStarted = { requestDockCollapse("ime-hide") },
     )
     val palette = LocalAppPalette.current
+    val kit = LocalThemeSuite.current
     val terminalCard = currentTerminalPalette()
     Box(
         modifier = modifier
@@ -293,18 +295,19 @@ fun SessionScreenScaffold(
                         .fillMaxSize()
                         .padding(Dims.terminalCardMargin)
                         .testTag("session-terminal-card"),
-                    shape = RoundedCornerShape(Radii.terminalCard),
+                    // 风格只换卡的外观（圆角 / 投影 / 描边），外距与尺寸不变：终端 viewport 与 PTY 行列不因换肤重排。
+                    shape = kit.geometry.shape(RoundedCornerShape(Radii.terminalCard)),
                     color = terminalCard.background,
                     tonalElevation = Elevations.none,
-                    shadowElevation = if (palette === DarkPalette) {
-                        Elevations.terminalCardDark
-                    } else {
-                        Elevations.terminalCardLight
+                    shadowElevation = when {
+                        !kit.surfaces.shadows -> Elevations.none
+                        palette.isDark -> Elevations.terminalCardDark
+                        else -> Elevations.terminalCardLight
                     },
-                    border = if (palette === DarkPalette) {
-                        BorderStroke(Dims.hairline, palette.divider)
-                    } else {
-                        null
+                    border = when {
+                        !kit.surfaces.isGlass -> BorderStroke(kit.geometry.hairline, kit.colors.separator)
+                        palette.isDark -> BorderStroke(Dims.hairline, palette.divider)
+                        else -> null
                     },
                 ) {
                     terminalCanvas()
