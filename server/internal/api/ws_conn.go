@@ -17,6 +17,7 @@ import (
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
 	"github.com/agentmirror/agentmirror/internal/discovery"
+	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
 )
@@ -57,7 +58,11 @@ type wsConn struct {
 
 	// authed is set once the auth frame validates. Until then every frame
 	// except auth is refused with error: unauthorized.
-	authed atomic.Bool
+	authed           atomic.Bool
+	notificationsCap atomic.Bool
+
+	notificationViewsMu sync.Mutex
+	notificationViews   map[string]notify.View
 
 	subsMu sync.Mutex
 	subs   map[string]*subscription
@@ -122,15 +127,16 @@ func (s *Server) serveConn(conn *websocket.Conn) {
 	// WS 连接计数（重连线索：慢网下连接数暴增 = 超时断开→重连）。
 	s.sendQueue.recordConnection()
 	c := &wsConn{
-		s:         s,
-		id:        connSeq.Add(1),
-		conn:      conn,
-		ctx:       ctx,
-		cancel:    cancel,
-		writeCtx:  writeCtx,
-		writeStop: writeStop,
-		subs:      make(map[string]*subscription),
-		sendCh:    make(chan wsMsg, 256),
+		s:                 s,
+		id:                connSeq.Add(1),
+		conn:              conn,
+		ctx:               ctx,
+		cancel:            cancel,
+		writeCtx:          writeCtx,
+		writeStop:         writeStop,
+		subs:              make(map[string]*subscription),
+		notificationViews: make(map[string]notify.View),
+		sendCh:            make(chan wsMsg, 256),
 	}
 	s.registerTracker(c)
 	go c.writeLoop()
@@ -304,6 +310,21 @@ func (c *wsConn) send(typed protocol.Typed) {
 	c.sendMsg(wsMsg{typ: wsText, data: body})
 }
 
+// sendNotification is intentionally non-blocking: a slow client can recover
+// via notifications_sync and must never delay CLI persistence or other peers.
+func (c *wsConn) sendNotification(record protocol.NotificationRecord) {
+	body, err := protocol.MarshalFrame(record)
+	if err != nil {
+		c.s.log.Error("ws: marshal notification", "conn", c.id, "err", err)
+		return
+	}
+	select {
+	case c.sendCh <- wsMsg{typ: wsText, data: body}:
+	default:
+		c.s.log.Debug("ws: dropping notification for slow connection", "conn", c.id)
+	}
+}
+
 // sendError enqueues an ErrorFrame (docs/protocol.md §7.1).
 func (c *wsConn) sendError(code protocol.ErrorCode, reason string) {
 	c.send(&protocol.ErrorFrame{Code: code, Reason: reason})
@@ -404,9 +425,16 @@ func (c *wsConn) handleFrame(data []byte, recvMS int64) bool {
 		c.handleOverlaySubscribe(t)
 	case protocol.OverlayUnsubscribe:
 		c.handleOverlayUnsubscribe(t)
+	case protocol.NotificationsSync:
+		if !c.notificationsCap.Load() {
+			c.sendError(protocol.ErrCodeUnsupportedType, "notifications capability not negotiated")
+			break
+		}
+		c.handleNotificationsSync(t)
 	default:
 		// auth_ack, listing, list_delta, input_ack, error, pane_mode_changed,
-		// level2_frame, level2_heartbeat, overlay_frame are server-to-client only.
+		// level2_frame, level2_heartbeat, overlay_frame, notification and
+		// notifications_page are server-to-client only.
 		c.sendError(protocol.ErrCodeUnsupportedType, "frame type is not client-to-server")
 	}
 	return true

@@ -121,6 +121,12 @@ func decodePayload(env Envelope) (Typed, error) {
 		return decodeTyped[OverlayUnsubscribe](env)
 	case TypeOverlayFrame:
 		return decodeTyped[OverlayFrame](env)
+	case TypeNotification:
+		return decodeTyped[NotificationRecord](env)
+	case TypeNotificationsSync:
+		return decodeTyped[NotificationsSync](env)
+	case TypeNotificationsPage:
+		return decodeTyped[NotificationsPage](env)
 	// TypePaneModeChanged is S→C only; a client sending it is a protocol error.
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, env.Type)

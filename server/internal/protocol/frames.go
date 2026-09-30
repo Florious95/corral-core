@@ -44,7 +44,8 @@ type Typed interface {
 // @err Validate 对空 Token 返回 ErrInvalidField
 // @inv Token 绝不被记录或回显（011 路由 (a)）
 type Auth struct {
-	Token string `json:"token"`
+	Token        string   `json:"token"`
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 // AuthAck is the server's verdict on Auth (S→C). OK=true means the connection
@@ -52,8 +53,10 @@ type Auth struct {
 // reason. The server MUST close the connection after a rejection, so the
 // client can treat "connection closed right after auth" as a rejection too.
 type AuthAck struct {
-	OK     bool   `json:"ok"`
-	Reason string `json:"reason,omitempty"`
+	OK                bool               `json:"ok"`
+	Reason            string             `json:"reason,omitempty"`
+	Capabilities      []string           `json:"capabilities,omitempty"`
+	NotificationState *NotificationState `json:"notification_state,omitempty"`
 }
 
 // List requests a fresh full listing (C→S). ReqID correlates the Listing
@@ -296,6 +299,61 @@ type Resize struct {
 	Ref  string `json:"ref"`
 	Rows uint16 `json:"rows"`
 	Cols uint16 `json:"cols"`
+}
+
+// NotificationRecord is the durable, server-assigned notification event. The
+// record itself is also the payload of the S→C notification frame so the live
+// and history codecs share exactly one field definition.
+type NotificationRecord struct {
+	ID              string  `json:"id"`
+	HostID          string  `json:"host_id"`
+	StreamID        string  `json:"stream_id"`
+	Seq             string  `json:"seq"`
+	Timestamp       string  `json:"timestamp"`
+	Title           string  `json:"title"`
+	Body            string  `json:"body"`
+	SessionRef      *string `json:"session_ref"`
+	SessionInstance *string `json:"session_instance"`
+	Workspace       *string `json:"workspace"`
+	AgentName       *string `json:"agent_name"`
+	Level           string  `json:"level"`
+}
+
+// NotificationCursor is the completed-sync position; seq is a decimal string
+// to preserve uint64 precision across JavaScript clients.
+type NotificationCursor struct {
+	StreamID string `json:"stream_id"`
+	Seq      string `json:"seq"`
+}
+
+type NotificationState struct {
+	HostID          string `json:"host_id"`
+	StreamID        string `json:"stream_id"`
+	HeadSeq         string `json:"head_seq"`
+	RetainedFromSeq string `json:"retained_from_seq"`
+}
+
+// NotificationsSync is both the initial and continuation history request.
+type NotificationsSync struct {
+	ReqID     uint32              `json:"req_id"`
+	Cursor    *NotificationCursor `json:"cursor,omitempty"`
+	PageSize  uint16              `json:"page_size,omitempty"`
+	PageToken string              `json:"page_token,omitempty"`
+}
+
+// NotificationsPage is a frozen ascending history page.
+type NotificationsPage struct {
+	ReqID           uint32               `json:"req_id"`
+	OK              bool                 `json:"ok"`
+	HostID          string               `json:"host_id,omitempty"`
+	StreamID        string               `json:"stream_id,omitempty"`
+	SnapshotCursor  *NotificationCursor  `json:"snapshot_cursor,omitempty"`
+	RetainedFromSeq string               `json:"retained_from_seq,omitempty"`
+	ResetReason     *string              `json:"reset_reason,omitempty"`
+	Order           string               `json:"order,omitempty"`
+	Items           []NotificationRecord `json:"items"`
+	NextPageToken   string               `json:"next_page_token,omitempty"`
+	ResumeCursor    *NotificationCursor  `json:"resume_cursor,omitempty"`
 }
 
 // ErrorFrame is a protocol-level failure (S→C): bad frame, unknown type,

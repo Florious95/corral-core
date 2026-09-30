@@ -61,7 +61,26 @@ func (c *wsConn) handleAuth(a protocol.Auth) bool {
 		// wakes for the 0→1 transition and keeps polling (idle-gate, taskbook
 		// #fix-daemon-idle-cpu). teardown un-counts it on close.
 		c.s.markAuthed()
-		c.send(&protocol.AuthAck{OK: true})
+		ack := &protocol.AuthAck{OK: true}
+		if len(a.Capabilities) > 0 {
+			seen := make(map[string]struct{}, len(a.Capabilities))
+			for _, capability := range a.Capabilities {
+				if _, duplicate := seen[capability]; duplicate {
+					continue
+				}
+				seen[capability] = struct{}{}
+				if capability == "notifications_v1" && c.s.notifications != nil {
+					ack.Capabilities = append(ack.Capabilities, capability)
+					ack.NotificationState = ptrNotificationState(c.s.notifications.State())
+				}
+			}
+		}
+		// Queue auth_ack before exposing the capability to the broadcaster: a
+		// concurrent local publish must never overtake the handshake verdict.
+		c.send(ack)
+		if len(ack.Capabilities) > 0 {
+			c.notificationsCap.Store(true)
+		}
 		return true
 	}
 	c.send(&protocol.AuthAck{OK: false, Reason: "invalid token"})

@@ -43,6 +43,7 @@ import (
 
 	"github.com/agentmirror/agentmirror/internal/api"
 	"github.com/agentmirror/agentmirror/internal/config"
+	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/pairing"
 	"github.com/agentmirror/agentmirror/internal/provider"
 	"github.com/agentmirror/agentmirror/internal/tsnetd"
@@ -134,18 +135,45 @@ func run(args []string) int {
 		"list_interval", cfg.ListInterval,
 	)
 
+	// Durable notification history is private to this daemon state directory.
+	// A storage failure fail-closes only notifications; terminal mirroring still
+	// starts and old clients remain usable.
+	notificationStore, notificationErr := notify.New(filepath.Join(stateDir, "notifications"))
+	if notificationErr != nil {
+		logger.Error("notification storage unavailable; disabling notifications", "err", notificationErr)
+	}
+
 	// The API server consumes the resolved settings. The token is write-only:
 	// it is passed into the validator seam and never logged or echoed here
 	// (docs/protocol.md §9).
 	apiServer := api.NewServer(api.Options{
-		Token:          token,
-		UploadDir:      cfg.UploadDir,
-		MaxUploadBytes: cfg.MaxUploadBytes,
-		MaxInputBytes:  int(cfg.MaxInputBytes),
-		ListInterval:   cfg.ListInterval,
-		Log:            logger,
+		Token:                token,
+		UploadDir:            cfg.UploadDir,
+		MaxUploadBytes:       cfg.MaxUploadBytes,
+		MaxInputBytes:        int(cfg.MaxInputBytes),
+		ListInterval:         cfg.ListInterval,
+		Log:                  logger,
+		NotificationStore:    notificationStore,
+		DisableNotifications: notificationErr != nil,
 	})
 	defer apiServer.Close()
+
+	// The publish side is HTTP-over-UDS only; Handler() below remains LAN/
+	// tailnet and never exposes a notification POST endpoint.
+	notifySocketPath := api.NotificationSocketPath(stateDir)
+	notifyListener, err := api.ListenNotificationSocket(notifySocketPath)
+	if err != nil {
+		logger.Error("failed to open notification IPC socket", "err", err)
+		return 1
+	}
+	defer func() { _ = notifyListener.Close(); _ = os.Remove(notifySocketPath) }()
+	notifyHTTP := &http.Server{Handler: apiServer.NotificationHandler()}
+	go func() {
+		if err := notifyHTTP.Serve(notifyListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("notification IPC server stopped", "err", err)
+		}
+	}()
+	defer func() { _ = notifyHTTP.Shutdown(context.Background()) }()
 
 	// The listener group always opens the LAN listener; the tailnet listener is
 	// created lazily only when a TS authkey is configured. No authkey means a

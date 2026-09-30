@@ -103,4 +103,13 @@ const (
 	// TypeOverlayFrame is one captured choose-tree screen (S→C; requirement 064).
 	// Text is the PTY bytes of the dedicated client (not a self-drawn tree).
 	TypeOverlayFrame FrameType = "overlay_frame"
+
+	// TypeNotification is one newly accepted server notification (S→C).
+	TypeNotification FrameType = "notification"
+
+	// TypeNotificationsSync requests a bounded historical view (C→S).
+	TypeNotificationsSync FrameType = "notifications_sync"
+
+	// TypeNotificationsPage is one page of the frozen historical view (S→C).
+	TypeNotificationsPage FrameType = "notifications_page"
 )

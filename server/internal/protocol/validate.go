@@ -2,7 +2,10 @@ package protocol
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 )
 
 // FrameType methods map each payload Go type to its wire discriminator, and
@@ -31,13 +34,16 @@ func (Level2Heartbeat) FrameType() FrameType    { return TypeLevel2Heartbeat }
 func (OverlaySubscribe) FrameType() FrameType   { return TypeOverlaySubscribe }
 func (OverlayUnsubscribe) FrameType() FrameType { return TypeOverlayUnsubscribe }
 func (OverlayFrame) FrameType() FrameType       { return TypeOverlayFrame }
+func (NotificationRecord) FrameType() FrameType { return TypeNotification }
+func (NotificationsSync) FrameType() FrameType  { return TypeNotificationsSync }
+func (NotificationsPage) FrameType() FrameType  { return TypeNotificationsPage }
 
 // Validate reports whether the auth frame is well-formed: a non-empty token.
 func (a Auth) Validate() error {
 	if a.Token == "" {
 		return fmt.Errorf("%w: auth token must be non-empty", ErrInvalidField)
 	}
-	return nil
+	return validateCapabilities(a.Capabilities)
 }
 
 // Validate reports whether the ack is unambiguous: a rejection must carry a
@@ -50,7 +56,39 @@ func (a AuthAck) Validate() error {
 	if a.OK && a.Reason != "" {
 		return fmt.Errorf("%w: accepted auth_ack must not carry a reason", ErrInvalidField)
 	}
+	if err := validateCapabilities(a.Capabilities); err != nil {
+		return err
+	}
+	if a.NotificationState != nil && !a.OK {
+		return fmt.Errorf("%w: rejected auth_ack must not carry notification_state", ErrInvalidField)
+	}
 	return nil
+}
+
+func validateCapabilities(caps []string) error {
+	if len(caps) > 32 {
+		return fmt.Errorf("%w: capabilities must contain at most 32 entries", ErrInvalidField)
+	}
+	seen := make(map[string]struct{}, len(caps))
+	for _, cap := range caps {
+		if cap == "" || len(cap) > 64 || !isCapability(cap) {
+			return fmt.Errorf("%w: invalid capability", ErrInvalidField)
+		}
+		if _, ok := seen[cap]; ok {
+			continue
+		}
+		seen[cap] = struct{}{}
+	}
+	return nil
+}
+
+func isCapability(s string) bool {
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_-.", r)) {
+			return false
+		}
+	}
+	return true
 }
 
 // Validate reports whether the request is well-formed: ReqID >= 1.
@@ -354,6 +392,159 @@ func (f Level2Frame) Validate() error {
 	for _, s := range f.Sessions {
 		if err := s.Validate(); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (r NotificationRecord) Validate() error {
+	if !isUUIDv4(r.ID) || !isUUIDv4(r.StreamID) {
+		return fmt.Errorf("%w: notification id/stream_id must be UUID v4", ErrInvalidField)
+	}
+	if r.HostID == "" || len(r.HostID) < 8 || len(r.HostID) > 64 || !isHostID(r.HostID) {
+		return fmt.Errorf("%w: invalid notification host_id", ErrInvalidField)
+	}
+	if !isSeq(r.Seq) {
+		return fmt.Errorf("%w: notification seq must be canonical uint64", ErrInvalidField)
+	}
+	if _, err := time.Parse("2006-01-02T15:04:05.000Z", r.Timestamp); err != nil {
+		return fmt.Errorf("%w: notification timestamp must be RFC3339 milliseconds UTC", ErrInvalidField)
+	}
+	if err := validateText(r.Title, 256, false); err != nil {
+		return fmt.Errorf("%w: notification title", ErrInvalidField)
+	}
+	if err := validateText(r.Body, 16384, false); err != nil {
+		return fmt.Errorf("%w: notification body", ErrInvalidField)
+	}
+	if r.Level != "info" && r.Level != "success" && r.Level != "warning" && r.Level != "error" {
+		return fmt.Errorf("%w: invalid notification level", ErrInvalidField)
+	}
+	if (r.SessionRef == nil) != (r.SessionInstance == nil) {
+		return fmt.Errorf("%w: session_ref and session_instance must be paired", ErrInvalidField)
+	}
+	if r.SessionRef != nil {
+		if *r.SessionRef == "" || len(*r.SessionRef) > 255 || strings.IndexByte(*r.SessionRef, 0) >= 0 || *r.SessionInstance == "" || len(*r.SessionInstance) > 128 || !isASCIIIdentifier(*r.SessionInstance) {
+			return fmt.Errorf("%w: invalid notification session link", ErrInvalidField)
+		}
+	}
+	if r.Workspace != nil {
+		if err := validateText(*r.Workspace, 4096, true); err != nil {
+			return fmt.Errorf("%w: notification workspace", ErrInvalidField)
+		}
+	}
+	if r.AgentName != nil {
+		if err := validateText(*r.AgentName, 128, false); err != nil {
+			return fmt.Errorf("%w: notification agent_name", ErrInvalidField)
+		}
+	}
+	return nil
+}
+
+func (c NotificationCursor) Validate() error {
+	if !isUUIDv4(c.StreamID) || (c.Seq != "0" && !isSeq(c.Seq)) {
+		return fmt.Errorf("%w: invalid notification cursor", ErrInvalidField)
+	}
+	return nil
+}
+
+func (s NotificationsSync) Validate() error {
+	if s.ReqID == 0 {
+		return fmt.Errorf("%w: notifications_sync req_id must be >= 1", ErrInvalidField)
+	}
+	if s.PageSize > 100 {
+		return fmt.Errorf("%w: notifications_sync page_size must be <= 100", ErrInvalidField)
+	}
+	if s.Cursor != nil && s.PageToken != "" {
+		return fmt.Errorf("%w: notifications_sync cursor and page_token are exclusive", ErrInvalidField)
+	}
+	if s.PageToken != "" && s.PageSize != 0 {
+		return fmt.Errorf("%w: notifications_sync page_token cannot carry page_size", ErrInvalidField)
+	}
+	if s.Cursor != nil {
+		if err := s.Cursor.Validate(); err != nil {
+			return err
+		}
+	}
+	if len(s.PageToken) > 256 || !isASCII(s.PageToken) {
+		return fmt.Errorf("%w: invalid notifications_sync page_token", ErrInvalidField)
+	}
+	return nil
+}
+
+func (p NotificationsPage) Validate() error {
+	if p.ReqID == 0 {
+		return fmt.Errorf("%w: notifications_page req_id must be >= 1", ErrInvalidField)
+	}
+	if !p.OK {
+		return nil
+	}
+	if p.HostID == "" || p.StreamID == "" || p.Order != "asc" {
+		return fmt.Errorf("%w: invalid notifications_page identity/order", ErrInvalidField)
+	}
+	if p.SnapshotCursor == nil || !isSeq(p.RetainedFromSeq) {
+		return fmt.Errorf("%w: notifications_page cursor missing", ErrInvalidField)
+	}
+	for _, item := range p.Items {
+		if err := item.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isSeq(s string) bool {
+	if s == "" || (len(s) > 1 && s[0] == '0') {
+		return false
+	}
+	n, err := strconv.ParseUint(s, 10, 64)
+	return err == nil && n > 0
+}
+
+func isUUIDv4(s string) bool {
+	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' || s[14] != '4' {
+		return false
+	}
+	if !strings.ContainsRune("89abAB", rune(s[19])) {
+		return false
+	}
+	for i, r := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			continue
+		}
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isHostID(s string) bool { return isASCIIIdentifier(s) }
+
+func isASCIIIdentifier(s string) bool {
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCII(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func validateText(s string, max int, allowEmpty bool) error {
+	if !utf8.ValidString(s) || len(s) == 0 && !allowEmpty || len(s) > max || strings.TrimSpace(s) == "" && !allowEmpty {
+		return fmt.Errorf("invalid text")
+	}
+	for _, r := range s {
+		if r == 0 || r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			return fmt.Errorf("invalid control character")
 		}
 	}
 	return nil

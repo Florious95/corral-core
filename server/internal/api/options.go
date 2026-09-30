@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/overlay"
 )
 
@@ -109,4 +110,12 @@ type Options struct {
 
 	// Log is the logger for connection lifecycle and errors. Nil discards.
 	Log *slog.Logger
+
+	// NotificationStore owns the daemon's bounded notification history. Nil
+	// creates an in-memory store, which keeps API unit tests isolated.
+	NotificationStore *notify.Store
+
+	// DisableNotifications fail-closes the extension when durable storage could
+	// not initialize; the ordinary terminal service remains available.
+	DisableNotifications bool
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/agentmirror/agentmirror/internal/bridge"
+	"github.com/agentmirror/agentmirror/internal/notify"
 	"github.com/agentmirror/agentmirror/internal/overlay"
 	"github.com/agentmirror/agentmirror/internal/protocol"
 	"github.com/coder/websocket"
@@ -118,6 +119,8 @@ type Server struct {
 	overlayLastHash    map[string]string
 
 	providerFinder ProviderFinder
+
+	notifications *notify.Store
 }
 
 // NewServer constructs the API server from Options. Zero values use the
@@ -137,6 +140,7 @@ func NewServer(opts Options) *Server {
 	s := &Server{
 		log:            log,
 		tokenValidator: opts.TokenValidator,
+		notifications:  opts.NotificationStore,
 		discoverer:     opts.Discoverer,
 		listInterval:   opts.ListInterval,
 		uploadDir:      opts.UploadDir,
@@ -147,6 +151,12 @@ func NewServer(opts Options) *Server {
 		paneGeoms:      make(map[string]*paneGeometry),
 		trackers:       make(map[*wsConn]struct{}),
 		attachPreviews: make(map[string]attachPreviewEntry),
+	}
+	if s.notifications == nil && !opts.DisableNotifications {
+		store, err := notify.New("")
+		if err == nil {
+			s.notifications = store
+		}
 	}
 	if s.tokenValidator == nil {
 		s.tokenValidator = staticToken{token: opts.Token}
