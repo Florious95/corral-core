@@ -176,10 +176,12 @@ fun AppTheme(
         Appearance.System -> isSystemInDarkTheme()
     }
     val suite = ThemeRegistry.resolve(themeId, ThemeContext(isDark = dark))
+    val modernistTokens = if (dark) ModernistDarkTokens else ModernistLightTokens
     CompositionLocalProvider(
         LocalAppPalette provides suite.colors.palette,
         LocalAppearance provides appearance,
         LocalThemeSuite provides suite,
+        LocalModernistTokens provides modernistTokens,
     ) {
         MaterialTheme(
             colorScheme = suite.colors.materialScheme,

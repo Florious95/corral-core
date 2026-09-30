@@ -422,7 +422,11 @@ fun Modifier.modalPanel(shape: RoundedRectangularShape, exportedBackdrop: LayerB
             exportedBackdrop = exportedBackdrop,
         )
     } else {
-        ruledSurface(fill = p.sheetBackground, stroke = kit.colors.headerRule, strokeWidth = kit.geometry.hairline)
+        ruledSurface(
+            fill = p.sheetBackground,
+            stroke = kit.colors.headerRule,
+            strokeWidth = if (kit.geometry.sharpCorners) 2.dp else kit.geometry.hairline,
+        )
     }
 }
 

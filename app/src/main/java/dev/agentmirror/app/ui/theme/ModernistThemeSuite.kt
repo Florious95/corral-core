@@ -20,11 +20,53 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/**
+ * Modernist 语义令牌（对齐 iOS Modernist 跨团队交接契约）：
+ * 供浅 / 深色模式动态分发使用，包含冷金属漫反射渐变端点、深炭黑 ink、纯红 accent 等。
+ */
+@Immutable
+data class ModernistTokens(
+    val canvas: Color,
+    val surface: Color,
+    val diffuseEnd: Color,
+    val ink: Color,
+    val accent: Color,
+    val onAccent: Color,
+    val divider: Color,
+    val scrim: Color,
+)
+
+val ModernistLightTokens = ModernistTokens(
+    canvas = Color(0xFFF3F2F2),
+    surface = Color(0xFFEAE9E9), // RGB 234 (#EAE9E9)
+    diffuseEnd = Color(0xFFF2F2F2), // RGB 242 (#F2F2F2)
+    ink = Color(0xFF201E1D), // 深炭黑
+    accent = Color(0xFFEC3013), // 纯红
+    onAccent = Color(0xFFF3F2F2),
+    divider = Color(0x66201E1D), // 1px 发丝线
+    scrim = Color(0x802D2B2B), // #2D2B2B Modernist scrim，alpha 50%
+)
+
+val ModernistDarkTokens = ModernistTokens(
+    canvas = Color(0xFF201E1D),
+    surface = Color(0xFF2D2B2B),
+    diffuseEnd = Color(0xFF353332),
+    ink = Color(0xFFF3F2F2),
+    accent = Color(0xFFEC3013),
+    onAccent = Color(0xFFF3F2F2),
+    divider = Color(0x667D7979),
+    scrim = Color(0x99000000),
+)
+
+val LocalModernistTokens = staticCompositionLocalOf { ModernistLightTokens }
 
 /*
  * 瑞士现代主义（iOS 交付令牌）：瑞士纸白 / 墨色、猩红强调、全局直角、1dp / 2dp 单侧直线、

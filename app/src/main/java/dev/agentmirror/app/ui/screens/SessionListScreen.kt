@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -53,6 +54,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -90,6 +93,8 @@ import dev.agentmirror.app.ui.model.SessionItem
 import dev.agentmirror.app.ui.theme.Dims
 import dev.agentmirror.app.ui.theme.HeaderStyle
 import dev.agentmirror.app.ui.theme.LocalThemeSuite
+import dev.agentmirror.app.ui.theme.ModernistDarkTokens
+import dev.agentmirror.app.ui.theme.ModernistLightTokens
 import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.Radii
 import dev.agentmirror.app.workspace.AgentLauncherUi
@@ -163,6 +168,7 @@ fun SessionListScreen(
             )
             if (showCreateDialog && agentLaunchers.isNotEmpty()) {
                 CreateAgentDialog(
+                    workspaceName = workspaceName,
                     sessions = sessions,
                     launchers = agentLaunchers,
                     state = createAgentState,
@@ -229,6 +235,7 @@ fun SessionListScreen(
 
 @Composable
 private fun CreateAgentDialog(
+    workspaceName: String = "",
     sessions: List<SessionItem>,
     launchers: List<AgentLauncherUi>,
     state: CreateAgentUiState,
@@ -244,6 +251,7 @@ private fun CreateAgentDialog(
         if (launcher?.supportsBypass != true) bypass = false
     }
     // 晶莹液态玻璃弹窗：居中面板折射其下的会话列表；表单控件再采样面板自身。
+    // 现代主义直角弹窗：冷白底色与深炭黑描边。
     // 提交进行中锁住遮罩与返回键；创建成功（无错且已填名）播完退场再关闭。
     GlassModalLayer(onDismiss = onDismiss, dismissible = !state.inFlight) {
         val requestDismiss = ::dismiss
@@ -251,6 +259,7 @@ private fun CreateAgentDialog(
             if (!state.inFlight && state.error == null && name.isNotEmpty()) requestDismiss()
         }
         val p = LocalAppPalette.current
+        val kit = LocalThemeSuite.current
         val panelBackdrop = rememberLayerBackdrop()
         Column(
             modifier = Modifier
@@ -270,11 +279,22 @@ private fun CreateAgentDialog(
                 .padding(22.dp)
                 .testTag("create-agent-dialog"),
         ) {
+            if (!kit.surfaces.isGlass && workspaceName.isNotBlank()) {
+                AppText(
+                    text = workspaceName,
+                    color = kit.colors.eyebrow,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeightMultiplier = 1f,
+                    letterSpacing = 1.3.sp,
+                )
+                Spacer(Modifier.height(4.dp))
+            }
             AppText(
                 text = "新建 Agent",
                 color = p.titleText,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = if (kit.surfaces.isGlass) 20.sp else 24.sp,
+                fontWeight = if (kit.surfaces.isGlass) FontWeight.Bold else FontWeight.Black,
                 lineHeightMultiplier = 1.2f,
                 letterSpacing = (-0.3).sp,
             )
@@ -337,6 +357,7 @@ internal fun CreateAgentFormContent(
 ) {
     val p = LocalAppPalette.current
     val kit = LocalThemeSuite.current
+    val t = if (kit.isDark) ModernistDarkTokens else ModernistLightTokens
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -349,14 +370,15 @@ internal fun CreateAgentFormContent(
             label = { androidx.compose.material3.Text("名称") },
             placeholder = { androidx.compose.material3.Text("例如：代码助手") },
             singleLine = true,
-            shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.glassControl)),
+            shape = kit.geometry.shape(RoundedCornerShape(Radii.glassControl)),
             colors = OutlinedTextFieldDefaults.colors(
-                // 输入框坐在玻璃面板上：半透卡面透出折射背景，边框仍保持可见轮廓
-                focusedContainerColor = p.glassCardFill,
-                unfocusedContainerColor = p.glassCardFill,
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                cursorColor = MaterialTheme.colorScheme.primary,
+                focusedContainerColor = if (kit.surfaces.isGlass) p.glassCardFill else p.inputBackground,
+                unfocusedContainerColor = if (kit.surfaces.isGlass) p.glassCardFill else p.inputBackground,
+                focusedBorderColor = if (kit.surfaces.isGlass) MaterialTheme.colorScheme.primary else p.accent,
+                unfocusedBorderColor = if (kit.surfaces.isGlass) MaterialTheme.colorScheme.onSurfaceVariant else p.inputBorder,
+                cursorColor = if (kit.surfaces.isGlass) MaterialTheme.colorScheme.primary else p.accent,
+                focusedTextColor = if (kit.surfaces.isGlass) MaterialTheme.colorScheme.onSurface else p.inputText,
+                unfocusedTextColor = if (kit.surfaces.isGlass) MaterialTheme.colorScheme.onSurface else p.inputText,
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -365,7 +387,7 @@ internal fun CreateAgentFormContent(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             androidx.compose.material3.Text(
                 text = "Agent 类型",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (kit.surfaces.isGlass) MaterialTheme.colorScheme.onSurfaceVariant else t.ink,
                 style = MaterialTheme.typography.labelMedium,
             )
             if (kit.surfaces.isGlass) {
@@ -388,8 +410,8 @@ internal fun CreateAgentFormContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(82.dp)
-                        .border(1.dp, p.inputBorder)
+                        .height(84.dp)
+                        .border(2.dp, t.ink, RectangleShape)
                         .testTag("create-agent-launcher-row"),
                 ) {
                     launchers.forEachIndexed { index, option ->
@@ -406,7 +428,7 @@ internal fun CreateAgentFormContent(
                                         .align(Alignment.CenterStart)
                                         .fillMaxHeight()
                                         .width(1.dp)
-                                        .background(Color(0xFF4A4747)),
+                                        .background(t.divider),
                                 )
                             }
                         }
@@ -463,19 +485,26 @@ internal fun AgentIconCard(
 ) {
     val p = LocalAppPalette.current
     val kit = LocalThemeSuite.current
+    val t = if (kit.isDark) ModernistDarkTokens else ModernistLightTokens
     val interaction = remember { MutableInteractionSource() }
     val press = rememberPressProgress(interaction)
     val contentTint = if (kit.surfaces.isGlass) {
         if (isSelected) p.accent else p.rowTitleText
     } else if (isSelected) {
-        Color(0xFF1A1817)
+        t.canvas
     } else {
-        Color.White
+        t.ink
     }
 
     Box(
         modifier = modifier
-            .then(if (kit.surfaces.isGlass) Modifier.width(78.dp).height(82.dp) else Modifier.fillMaxSize())
+            .then(
+                if (kit.surfaces.isGlass) {
+                    Modifier.width(78.dp).height(82.dp)
+                } else {
+                    Modifier.height(84.dp).defaultMinSize(minWidth = 78.dp)
+                },
+            )
             .semantics { selected = isSelected }
             .testTag("agent-card-${launcher.provider}")
             .then(
@@ -494,13 +523,14 @@ internal fun AgentIconCard(
                     )
                 } else {
                     Modifier.background(
-                        Brush.verticalGradient(
-                            if (isSelected) {
-                                listOf(Color(0xFFFFFFFF), Color(0xFFF2F2F4), Color(0xFFE5E5E8))
-                            } else {
-                                listOf(Color(0xFF2B2929), Color(0xFF1F1D1D))
-                            },
-                        ),
+                        if (isSelected) {
+                            SolidColor(t.ink)
+                        } else {
+                            Brush.verticalGradient(
+                                colors = listOf(t.surface, t.diffuseEnd),
+                            )
+                        },
+                        shape = RectangleShape,
                     )
                 },
             )
@@ -563,35 +593,37 @@ internal fun AgentIconCard(
                 )
             }
         } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.Start,
+            ) {
+                AgentBrandIcon(
+                    canonicalId = launcher.provider,
+                    tint = contentTint,
+                    modifier = Modifier.size(26.dp),
+                )
+                AppText(
+                    text = CanonicalProviderMarks.of(launcher.provider)?.displayName ?: launcher.displayName,
+                    color = contentTint,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                    lineHeightMultiplier = 1f,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             if (isSelected) {
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)
-                        .size(9.dp)
-                        .background(Color(0xFFEC3013))
+                        .size(10.dp)
+                        .background(t.accent, RectangleShape)
                         .testTag("agent-card-selection-marker-${launcher.provider}"),
                 )
             }
-            AgentBrandIcon(
-                canonicalId = launcher.provider,
-                tint = contentTint,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 14.dp, top = 12.dp)
-                    .size(28.dp),
-            )
-            AppText(
-                text = CanonicalProviderMarks.of(launcher.provider)?.displayName ?: launcher.displayName,
-                color = contentTint,
-                fontSize = 11.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                lineHeightMultiplier = 1f,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 10.dp),
-            )
         }
     }
 }

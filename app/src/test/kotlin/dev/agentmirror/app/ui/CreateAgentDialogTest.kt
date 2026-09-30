@@ -25,6 +25,11 @@ import dev.agentmirror.app.ui.model.SessionStatus
 import dev.agentmirror.app.ui.screens.SessionListScreen
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.workspace.AgentLauncherUi
+import dev.agentmirror.app.ui.theme.Appearance
+import dev.agentmirror.app.ui.theme.ModernistDarkTokens
+import dev.agentmirror.app.ui.theme.ModernistLightTokens
+import dev.agentmirror.app.ui.theme.ThemeId
+import androidx.compose.ui.graphics.Color
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -238,5 +243,105 @@ class CreateAgentDialogTest {
             }
         }
         compose.onNodeWithText("+ Agent").assertExists().assertIsNotEnabled()
+    }
+
+    @Test
+    fun modernistTokensMatchIOSModernistSpec() {
+        // 浅色现代主义规范：冷白底色、RGB 234->242 漫反射渐变、深炭黑 ink、纯红 accent
+        assertEquals(Color(0xFFF3F2F2), ModernistLightTokens.canvas)
+        assertEquals(Color(0xFFEAE9E9), ModernistLightTokens.surface)
+        assertEquals(Color(0xFFF2F2F2), ModernistLightTokens.diffuseEnd)
+        assertEquals(Color(0xFF201E1D), ModernistLightTokens.ink)
+        assertEquals(Color(0xFFEC3013), ModernistLightTokens.accent)
+        assertEquals(Color(0xFFF3F2F2), ModernistLightTokens.onAccent)
+        assertEquals(Color(0x66201E1D), ModernistLightTokens.divider)
+
+        // 深色现代主义规范：深底色、浅反相 ink、纯红 accent
+        assertEquals(Color(0xFF201E1D), ModernistDarkTokens.canvas)
+        assertEquals(Color(0xFF2D2B2B), ModernistDarkTokens.surface)
+        assertEquals(Color(0xFF353332), ModernistDarkTokens.diffuseEnd)
+        assertEquals(Color(0xFFF3F2F2), ModernistDarkTokens.ink)
+        assertEquals(Color(0xFFEC3013), ModernistDarkTokens.accent)
+    }
+
+    @Test
+    fun modernistLightFormRendersConnectedRowWithRedMarkerAndSwitchesSelection() {
+        var selectedProvider by mutableStateOf("pi")
+        var bypass by mutableStateOf(false)
+
+        compose.setContent {
+            AppTheme(appearance = Appearance.Light, themeId = ThemeId.Modernist) {
+                CreateAgentFormContent(
+                    name = "ModernistAgent",
+                    onNameChange = {},
+                    launchers = listOf(
+                        AgentLauncherUi("pi", "Pi", supportsBypass = true, naming = "cli"),
+                        AgentLauncherUi("codex", "Codex", supportsBypass = false, naming = "cli"),
+                        AgentLauncherUi("cursor", "Cursor", supportsBypass = true, naming = "cli"),
+                        AgentLauncherUi("grok", "Grok", supportsBypass = true, naming = "cli"),
+                    ),
+                    selectedProvider = selectedProvider,
+                    onSelectProvider = { selectedProvider = it },
+                    bypass = bypass,
+                    onBypassChange = { bypass = it },
+                    supportsBypass = true,
+                    inFlight = false,
+                    error = null,
+                )
+            }
+        }
+
+        // 验证初始状态：Pi 选中，且带有 10dp 纯红 selection-marker
+        compose.onNodeWithTag("agent-card-pi").assertIsSelected()
+        compose.onNodeWithTag("agent-card-selection-marker-pi", useUnmergedTree = true).assertExists()
+
+        // 验证其余未选中节点：无 marker，未选中
+        compose.onNodeWithTag("agent-card-codex").assertIsNotSelected()
+        compose.onNodeWithTag("agent-card-selection-marker-codex", useUnmergedTree = true).assertDoesNotExist()
+
+        compose.onNodeWithTag("agent-card-cursor").assertIsNotSelected()
+        compose.onNodeWithTag("agent-card-selection-marker-cursor", useUnmergedTree = true).assertDoesNotExist()
+
+        compose.onNodeWithTag("agent-card-grok").assertIsNotSelected()
+        compose.onNodeWithTag("agent-card-selection-marker-grok", useUnmergedTree = true).assertDoesNotExist()
+
+        // 点击切换到 Grok
+        compose.onNodeWithTag("agent-card-grok").performClick()
+        assertEquals("grok", selectedProvider)
+        compose.onNodeWithTag("agent-card-grok").assertIsSelected()
+        compose.onNodeWithTag("agent-card-selection-marker-grok", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("agent-card-pi").assertIsNotSelected()
+        compose.onNodeWithTag("agent-card-selection-marker-pi", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun modernistDarkFormRendersSelectionMarkerAndSwitches() {
+        var selectedProvider by mutableStateOf("cursor")
+        var bypass by mutableStateOf(false)
+
+        compose.setContent {
+            AppTheme(appearance = Appearance.Dark, themeId = ThemeId.Modernist) {
+                CreateAgentFormContent(
+                    name = "ModernistDarkAgent",
+                    onNameChange = {},
+                    launchers = listOf(
+                        AgentLauncherUi("pi", "Pi", supportsBypass = true, naming = "cli"),
+                        AgentLauncherUi("cursor", "Cursor", supportsBypass = true, naming = "cli"),
+                    ),
+                    selectedProvider = selectedProvider,
+                    onSelectProvider = { selectedProvider = it },
+                    bypass = bypass,
+                    onBypassChange = { bypass = it },
+                    supportsBypass = true,
+                    inFlight = false,
+                    error = null,
+                )
+            }
+        }
+
+        compose.onNodeWithTag("agent-card-cursor").assertIsSelected()
+        compose.onNodeWithTag("agent-card-selection-marker-cursor", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("agent-card-pi").assertIsNotSelected()
+        compose.onNodeWithTag("agent-card-selection-marker-pi", useUnmergedTree = true).assertDoesNotExist()
     }
 }
