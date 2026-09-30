@@ -15,10 +15,12 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -55,6 +57,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -505,8 +508,12 @@ private fun ShortcutCommandEditorSheet(
                 Spacer(Modifier.height(16.dp))
                 EditorLabel("按 Provider 填写")
                 ShortcutProvider.entries.forEach { provider ->
+                    val text = texts[provider.id].orEmpty()
                     Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.height(IntrinsicSize.Min),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         ProviderMark(canonicalId = provider.id, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(6.dp))
                         AppText(
@@ -518,12 +525,22 @@ private fun ShortcutCommandEditorSheet(
                             modifier = Modifier.width(48.dp),
                         )
                         EditorField(
-                            value = texts[provider.id].orEmpty(),
+                            value = text,
                             onValueChange = { texts[provider.id] = it },
                             placeholder = "未配置",
                             tag = "shortcut-command-${provider.id}",
                             monospace = true,
                             modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        // 本行指令原样（不 trim）写入其余 Provider 的草稿；保存才落盘，取消即丢弃。
+                        // 空行禁用防一键清空；各行已一致时也禁用，点完即变灰作为完成反馈。
+                        SyncToAllButton(
+                            enabled = text.isNotEmpty() && ShortcutProvider.entries.any { texts[it.id] != text },
+                            onClick = { ShortcutProvider.entries.forEach { texts[it.id] = text } },
+                            description = "把 ${provider.label} 的指令同步到全部 Provider",
+                            tag = "shortcut-command-sync-${provider.id}",
+                            modifier = Modifier.fillMaxHeight(),
                         )
                     }
                 }
@@ -599,6 +616,59 @@ private fun EditorLabel(text: String) {
         letterSpacing = 0.4.sp,
         lineHeightMultiplier = 1.2f,
     )
+}
+
+/**
+ * 输入行尾的紧凑「同步全部」：与输入框同高同角（主题几何收口，现代主义为直角），主色调性
+ * 底 + 描边（同 [CardTonalButton] 配方）；禁用时退为输入框同款中性描边与占位色。
+ */
+@Composable
+private fun SyncToAllButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    description: String,
+    tag: String,
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalAppPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val fill by animateColorAsState(
+        targetValue = when {
+            !enabled -> Color.Transparent
+            pressed -> p.accent.copy(alpha = 0.22f)
+            else -> p.accentContainer.copy(alpha = 0.35f)
+        },
+        animationSpec = tween(Motion.pressFeedback),
+        label = "shortcutSyncFill",
+    )
+    val shape = LocalThemeSuite.current.geometry.shape(RoundedCornerShape(Radii.input))
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(fill)
+            .border(1.dp, if (enabled) p.accent.copy(alpha = 0.45f) else p.inputBorder, shape)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .semantics { contentDescription = description }
+            .testTag(tag)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppText(
+            text = "同步全部",
+            color = if (enabled) p.accent else p.inputPlaceholder,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            lineHeightMultiplier = 1f,
+            maxLines = 1,
+        )
+    }
 }
 
 /** 面板内输入框：半透底 + 发丝边，聚焦时边线过渡到主色；空值显示占位。 */

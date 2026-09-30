@@ -130,16 +130,26 @@ class OkHttpWebSocketTransport(
         }
     }
 
-    private companion object {
-        /** 默认客户端：短读写超时 + 不自动重连（重连归 conn 层状态机，传输逐拨号）。 */
+    internal companion object {
+        /**
+         * 默认客户端：短读写超时 + 不自动重连（重连归 conn 层状态机，传输逐拨号）。
+         *
+         * WebSocket 升级后 OkHttp 把 socket 读超时清零，readTimeout 管不到已建立的长连接；
+         * 半开连接（NAT 静默丢映射、不发 FIN/RST）只能靠 RFC 6455 Ping 发现：每 [PING_INTERVAL_S]
+         * 秒一帧 2 字节 Ping 顺带保活 NAT 映射，上一拍 Pong 未回即 onFailure → conn 层重连。
+         * 服务端（coder/websocket 读循环）自动回 Pong。
+         */
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(3, TimeUnit.SECONDS)
             .readTimeout(3, TimeUnit.SECONDS)
             .writeTimeout(3, TimeUnit.SECONDS)
+            .pingInterval(PING_INTERVAL_S, TimeUnit.SECONDS)
             .followRedirects(false)
             .followSslRedirects(false)
             .retryOnConnectionFailure(false)
             .build()
+
+        private const val PING_INTERVAL_S = 15L
     }
 }
 
@@ -154,14 +164,7 @@ class OkHttpWebSocketTransport(
  * 首拨时，conn 层退避重连的下一次 create 自然拿到 SOCKS 通路，无需额外通知。
  */
 object OkHttpTransportFactory : TransportFactory {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(3, TimeUnit.SECONDS)
-        .writeTimeout(3, TimeUnit.SECONDS)
-        .followRedirects(false)
-        .followSslRedirects(false)
-        .retryOnConnectionFailure(false)
-        .build()
+    private val client = OkHttpWebSocketTransport.defaultClient()
 
     override fun create(url: String): WebSocketTransport = create(url, recordConnectionPath = true)
 

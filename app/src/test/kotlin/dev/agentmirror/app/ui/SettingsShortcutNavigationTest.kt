@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
@@ -213,6 +215,60 @@ class SettingsShortcutNavigationTest {
         compose.waitForIdle()
         assertEquals(listOf("review"), deleted)
         compose.onNodeWithTag("shortcut-command-row-review").assertDoesNotExist()
+    }
+
+    private fun fieldText(tag: String): String =
+        compose.onNodeWithTag(tag).fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+
+    @Test
+    fun syncActionCopiesExactRowTextToEveryProviderOnSave() {
+        val saved = mutableListOf<ShortcutCommand>()
+        compose.setContent {
+            AppTheme(appearance = Appearance.Light) {
+                ShortcutCommandsScreen(commands = emptyList(), onSave = { saved += it }, onDelete = {}, onBack = {})
+            }
+        }
+        compose.onNodeWithTag("shortcut-command-add").performClick()
+        compose.waitForIdle()
+        // 空行不可同步（防一键清空其他 Provider）
+        compose.onNodeWithTag("shortcut-command-sync-pi").assertIsNotEnabled()
+        compose.onNodeWithTag("shortcut-command-name").performTextInput("交接")
+        compose.onNodeWithTag("shortcut-command-codex").performTextInput("/handoff 收尾 ")
+        compose.onNodeWithTag("shortcut-command-sync-pi").assertIsNotEnabled()
+        compose.onNodeWithTag("shortcut-command-sync-codex").assertIsEnabled().performClick()
+        compose.waitForIdle()
+        // 三行一致后同步钮全部变灰（完成反馈）
+        listOf("pi", "codex", "grok").forEach {
+            compose.onNodeWithTag("shortcut-command-sync-$it").assertIsNotEnabled()
+        }
+        compose.onNodeWithTag("shortcut-command-save").performClick()
+        compose.waitForIdle()
+
+        val text = "/handoff 收尾 " // 尾随空格原样保留
+        assertEquals(mapOf("pi" to text, "codex" to text, "grok" to text), saved.single().providerCommands)
+    }
+
+    @Test
+    fun syncActionIsDraftOnlyAndCancelDiscardsIt() {
+        val saved = mutableListOf<ShortcutCommand>()
+        compose.setContent {
+            AppTheme(appearance = Appearance.Dark) {
+                ShortcutCommandsScreen(commands = listOf(review), onSave = { saved += it }, onDelete = {}, onBack = {})
+            }
+        }
+        compose.onNodeWithTag("shortcut-command-row-review").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("shortcut-command-sync-pi").performClick()
+        compose.waitForIdle()
+        assertEquals("/skill:code-review", fieldText("shortcut-command-grok"))
+        compose.onNodeWithTag("shortcut-command-cancel").performClick()
+        compose.waitForIdle()
+        assertTrue("取消不得保存同步草稿", saved.isEmpty())
+
+        compose.onNodeWithTag("shortcut-command-row-review").performClick()
+        compose.waitForIdle()
+        assertEquals("", fieldText("shortcut-command-grok"))
+        compose.onNodeWithTag("shortcut-command-sync-pi").assertIsEnabled()
     }
 
     @Test

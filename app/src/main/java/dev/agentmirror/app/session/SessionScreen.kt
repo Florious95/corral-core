@@ -400,8 +400,9 @@ fun SessionScreen(
                                         .testTag("session-terminal-placeholder"),
                                     contentAlignment = Alignment.Center,
                                 ) {
+                                    // 未 READY 时说清在等连接（连接中/重连中），READY 后才是等首帧。
                                     Text(
-                                        text = "正在加载终端…",
+                                        text = viewModel.connectionBanner ?: "正在加载终端…",
                                         color = LocalAppPalette.current.metaText,
                                         fontFamily = MonoFontFamily,
                                         fontSize = 12.sp,

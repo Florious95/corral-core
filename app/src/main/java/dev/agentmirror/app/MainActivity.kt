@@ -146,7 +146,23 @@ class MainActivity : ComponentActivity() {
         val resumeEdge = stoppedForResume
         stoppedForResume = false
         DiagLog.record("lifecycle", "ON_START resume_edge=$resumeEdge")
-        if (resumeEdge) ServiceWire.onForegroundResume()
+        if (resumeEdge) resumeConnection()
+    }
+
+    /**
+     * Foreground edge: a service stopped while hidden (e.g. the Android 15 dataSync timeout)
+     * has released the manager, so rebuild it from the stored pairing; otherwise let the live
+     * manager refresh and skip any pending backoff. Re-pairing in progress is left alone.
+     */
+    private fun resumeConnection() {
+        if (ServiceWire.managerOrNull() == null && !navState.showPairing) {
+            SharedPreferencesPairingConfigStore(this).load()?.let {
+                DiagLog.record("lifecycle", "resume_restore_connection")
+                startPersistentConnection(it, this)
+                return
+            }
+        }
+        ServiceWire.onForegroundResume()
     }
 
     /** 缺陷⑤观测点：切后台（系统可能冻结进程/挂起连接，回前台时状态错位的起点）。 */

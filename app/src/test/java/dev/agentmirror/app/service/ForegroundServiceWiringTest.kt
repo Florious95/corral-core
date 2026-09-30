@@ -299,4 +299,75 @@ class ForegroundServiceWiringTest {
 
         controller.destroy()
     }
+
+    // ---- 回前台即时重连 / 断线进会话不等退避 ----
+
+    /** 首拨失败进入 RECONNECTING（退避 1s+，不推时钟就不会自行重拨），第二拨成功。 */
+    private fun failFirstDial(): ScriptedTransportFactory = ScriptedTransportFactory().also {
+        it.dialScripts.addLast(false)
+        it.dialScripts.addLast(true)
+        ServiceWire.transportFactory = it
+    }
+
+    @Test
+    fun sessionEntry_whileReconnecting_dialsWithoutWaitingForBackoff() {
+        val scripted = failFirstDial()
+        ServiceWire.setConfig(ConnectionConfig("ws://10.0.2.2:9900/ws", "tok-entry"))
+        ServiceWire.manager(NoopListener).start()
+        assertEquals(ConnectionState.RECONNECTING, ServiceWire.managerOrNull()!!.state())
+        assertEquals(1, scripted.created.size)
+
+        val vm = createSessionViewModel("s1")
+
+        assertNotNull(vm)
+        assertEquals("断线点进会话必须立即重拨，不等退避", 2, scripted.created.size)
+        assertEquals(ConnectionState.AUTHENTICATING, ServiceWire.managerOrNull()!!.state())
+        assertEquals("占位层须说明正在认证而非空白", "认证中…", vm!!.connectionBanner)
+        vm.dispose()
+    }
+
+    @Test
+    fun foregroundResume_whileReconnecting_dialsOnceImmediately() {
+        seedConfig("ws://10.0.2.2:9900/ws", "tok-resume-1")
+        val scripted = failFirstDial()
+        val controller = Robolectric.buildActivity(MainActivity::class.java)
+        createdActivities.add(controller)
+        controller.create().start()
+        assertEquals(ConnectionState.RECONNECTING, ServiceWire.managerOrNull()!!.state())
+
+        controller.stop()
+        controller.restart()
+
+        assertEquals("回前台必须立即重拨且只拨一次", 2, scripted.created.size)
+        assertEquals(ConnectionState.AUTHENTICATING, ServiceWire.managerOrNull()!!.state())
+    }
+
+    @Test
+    fun foregroundResume_afterServiceReleasedManager_restoresFromStoredPairing() {
+        seedConfig("ws://10.0.2.2:9900/ws", "tok-resume-2")
+        val controller = Robolectric.buildActivity(MainActivity::class.java)
+        createdActivities.add(controller)
+        controller.create().start()
+        assertEquals(1, factory.created.size)
+
+        controller.stop()
+        // 后台期间服务被停（如 Android 15 dataSync 超时 → onDestroy 释放共享连接）。
+        ServiceWire.releaseManager()
+        controller.restart()
+
+        assertNotNull("回前台必须从已存配对重建连接", ServiceWire.managerOrNull())
+        assertEquals(2, factory.created.size)
+    }
+
+    @Test
+    fun serviceTimeout_stopsSelfInsteadOfCrashing() {
+        ServiceWire.setConfig(ConnectionConfig("ws://10.0.2.2:9900/ws", "tok-timeout"))
+        val controller = Robolectric.buildService(MirrorForegroundService::class.java)
+        val svc = controller.create().startCommand(0, 1).get()
+
+        svc.onTimeout(1, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+
+        assertTrue("dataSync 超时必须 stopSelf", shadowOf(svc).isStoppedBySelf)
+        controller.destroy()
+    }
 }
