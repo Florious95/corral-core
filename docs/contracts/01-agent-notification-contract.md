@@ -347,7 +347,7 @@ printf '第一项已完成\n第二项仍需用户确认\n' | corral-notify --std
 - OS提醒是平台副作用，数据库与OS不能原子提交。推荐耐久记录一次提醒claim后执行，保证最多一次尝试；崩溃/权限/DND/系统策略可能使提醒未显示，历史仍可读。不得宣称OS exactly-once或显示回执。
 - 已读仅本设备本地状态；V1没有跨设备mark-read广播、服务器已读账本、删除/编辑通知或推送receipt。
 - 收到消息本身不得强制跳转或打断当前终端；只有用户点击才导航。
-- 客户端最多缓存该host当前保留窗口；本地缓存/正文应在系统私有、不备份区域。offline仍能读已缓存正文；源身份不匹配时不得跨主机打开相同ref。
+- 客户端正文缓存总量也应限制为最多1000条/16MiB，按source保留当前窗口和有限旧来源条目；当前单主机产品不要求永久保存多个主机的无限归档。游标/read元数据按source隔离。本地缓存/正文应在系统私有、不备份区域。offline仍能读已缓存正文；源身份不匹配时不得跨主机打开相同ref。
 - Android实现需求：独立HIGH channel，POST_NOTIFICATIONS运行时授权，普通VIBRATE权限，BigTextStyle，唯一PendingIntent身份，冷/热启动都能消费；细则见架构文档。
 - iOS实现需求：相同记录/游标/去重、本地UNNotification和授权、userInfo只含稳定source/id。无APNs不承诺后台/杀进程送达。Desktop同样只有在线进程可实时接收。
 - 平台声音、振动、Heads-up受用户权限、channel设置、DND、锁屏、通知冷却策略制约，不能用最高优先级或full-screen intent绕过。
