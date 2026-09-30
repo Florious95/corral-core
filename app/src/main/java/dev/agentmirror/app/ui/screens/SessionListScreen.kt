@@ -136,6 +136,7 @@ fun SessionListScreen(
     createAgentState: CreateAgentUiState = CreateAgentUiState(),
     onCreateAgent: (anchorRef: String, provider: String, name: String, bypass: Boolean) -> Unit = { _, _, _, _ -> },
     onCreateAgentErrorCleared: () -> Unit = {},
+    headerAction: (@Composable () -> Unit)? = null,
 ) {
     val p = LocalAppPalette.current
     val kit = LocalThemeSuite.current
@@ -150,6 +151,10 @@ fun SessionListScreen(
         ) {
             GlassCircleBackButton(onBack = onBack)
             Box(Modifier.weight(1f))
+            if (headerAction != null) {
+                headerAction()
+                Spacer(Modifier.width(6.dp))
+            }
             var showCreateDialog by remember { mutableStateOf(false) }
             // 录制树内：emptyBackdrop，与弹窗「创建」同款 tint，⛔ 不采样 LocalGlassBackdrop
             GlassButton(

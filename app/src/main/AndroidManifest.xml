@@ -38,6 +38,8 @@ limitations under the License.
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Agent 任务消息渠道（agent_tasks_v1）默认振动：普通权限，安装时授予。 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- 配对扫码：CameraX 相机采集（首次使用请求；不授权回退手填连接兜底）。 -->
     <uses-permission android:name="android.permission.CAMERA" />

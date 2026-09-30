@@ -55,6 +55,8 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlin.math.abs
 import dev.agentmirror.app.diag.DiagLog
+import dev.agentmirror.app.notify.NotificationCenter
+import dev.agentmirror.app.ui.screens.MessageBellButton
 import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.pairing.HostRouter
 import dev.agentmirror.app.tsnet.ConnectionPath
@@ -107,6 +109,17 @@ internal fun ThreePaneHome(
     onThemeChange: (ThemeId) -> Unit = {},
 ) {
     val kit = LocalThemeSuite.current
+    // 消息中心入口（Issue #42）：通知库未安装（单测 / 预览）时不显示铃铛。
+    val notificationHub = remember { NotificationCenter.hubOrNull() }
+    val unreadMessages = notificationHub?.repository?.unreadCount?.collectAsState()
+    val messageBell: (@Composable () -> Unit)? = notificationHub?.let {
+        {
+            MessageBellButton(
+                unreadCount = unreadMessages?.value ?: 0,
+                onClick = { navState.showMessageCenter = true },
+            )
+        }
+    }
     val pagerState = rememberPagerState(
         initialPage = navState.homePane.ordinal,
         pageCount = { ThreePane.entries.size },
@@ -239,6 +252,7 @@ internal fun ThreePaneHome(
                             navState.homePane = ThreePane.Settings
                         },
                         onOpenSession = { ref, name -> navState.openSession(ref, name) },
+                        messageBell = messageBell,
                     )
                     ThreePane.Settings -> SettingsScreen(
                         onBack = {

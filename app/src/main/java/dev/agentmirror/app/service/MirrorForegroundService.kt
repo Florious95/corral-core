@@ -76,6 +76,8 @@ class MirrorForegroundService : Service() {
         super.onCreate()
         notifications = NotificationHelper(this)
         notifications.createChannels()
+        // START_STICKY 重建时 Activity 可能不在：通知中心同样在这里幂等安装，后台连接照样收件。
+        dev.agentmirror.app.notify.NotificationCenter.install(this)
 
         // 本服务监听挂到 ServiceWire.serviceListener：连接事件（状态→通知文案）
         // 与 UI 的 uiConnector 并行扇出。manager 不在 onCreate 建——连接归属 ServiceWire 单例，

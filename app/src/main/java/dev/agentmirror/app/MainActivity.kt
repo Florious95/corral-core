@@ -24,6 +24,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import dev.agentmirror.app.diag.DiagLog
 import androidx.activity.enableEdgeToEdge
+import dev.agentmirror.app.notify.NotificationCenter
+import dev.agentmirror.app.notify.NotificationTarget
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.pairing.startPersistentConnection
 import dev.agentmirror.app.service.NetworkConnectivityWatcher
@@ -40,10 +42,11 @@ import dev.agentmirror.app.workspace.WorkspaceViewModel
  * 依需求 004「客户端无状态」，本 Activity 不持有业务状态，仅挂载 Compose 根 [AgentMirrorApp]，
  * 导航壳状态（[navState]）经 onSaveInstanceState 随生命周期保存恢复。
  *
- * 深链（D-2 修复）：通知 PendingIntent（NotificationHelper）携带 ACTION_OPEN_SESSION +
- * EXTRA_SESSION_REF，本 Activity 在 [onCreate]（冷启动直达）与 [onNewIntent]（singleTop
- * 在屏切换）两处消费，直达对应会话页。launchMode=singleTop（manifest）：通知点按在屏时走
- * onNewIntent 而非重建，不闪白、不丢当前屏。
+ * 深链（Issue #42）：Agent 任务通知的 PendingIntent（NotificationHelper）携带
+ * ACTION_OPEN_NOTIFICATION + 唯一 data URI + host/id/session_ref，本 Activity 在 [onCreate]
+ * （冷启动直达）与 [onNewIntent]（singleTop 在屏切换）两处消费成 [MainNavState.pendingNotification]，
+ * 由根组合在本地通知库加载后解析并直达对应会话页。launchMode=singleTop（manifest）：通知点按
+ * 在屏时走 onNewIntent 而非重建，不闪白、不丢当前屏。
  *
  * @consumes dev.agentmirror.app.diag
  */
@@ -86,6 +89,8 @@ class MainActivity : ComponentActivity() {
         // 锁屏 WiFi 休眠断连后，网络恢复必须打断退避立即重拨（否则退避爬到长间隔无人打断，
         // 无限「重连中」空转，真机实证）。进程级幂等，旋转重建不重复注册；onDestroy 注销。
         NetworkConnectivityWatcher.register(this)
+        // 通知中心先于持久连接安装：首条连接即声明 notifications_v1 并补拉历史。
+        NotificationCenter.install(this)
         // 冷启动重连（fix-cold-start-reconnect P0）：首启判定读取配对配置，有配置即启动
         // 常驻连接——force-stop/重开后自动重连回列表，顶栏不再永远「连接中…」（004 核心承诺
         // 「被杀即无所谓，重开自动恢复」）。序列与 PairingRoute.onPaired 同构（幂等，防双连接）；
@@ -94,6 +99,12 @@ class MainActivity : ComponentActivity() {
         val storedConfig = SharedPreferencesPairingConfigStore(this).load()
         navState = MainNavState(initialShowPairing = storedConfig == null)
         navState.restoreFrom(savedInstanceState) // D-3：旋转/进程回收重建后恢复导航态
+        // 重建（旋转 / 进程回收）与从最近任务重启都会带回原启动 Intent：只有首次投递才算点按。
+        if (savedInstanceState == null &&
+            intent?.flags?.and(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
+        ) {
+            consumeNotificationIntent(intent)
+        }
         // D-23/D-32：根系统返回统一走导航壳逐级裁决；配对页为根，放行 Activity 默认退出。
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -127,10 +138,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** D-2：singleTop 在屏时通知点按经此投递（不重建 Activity）。 */
+    /** D-2：singleTop 在屏时通知点按经此投递（不重建 Activity）；同一条可再次点按。 */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        consumeNotificationIntent(intent)
+    }
+
+    private fun consumeNotificationIntent(intent: Intent?) {
+        val target = NotificationTarget.fromIntent(intent) ?: return
+        DiagLog.record("notify", "open_intent id=${target.id}")
+        navState.pendingNotification = target
     }
 
     /** D-3：Activity 重建（旋转/进程回收）前保存导航态。 */

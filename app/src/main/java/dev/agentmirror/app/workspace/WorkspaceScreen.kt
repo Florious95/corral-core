@@ -104,6 +104,7 @@ fun WorkspaceScreen(
     @Suppress("UNUSED_PARAMETER") onOpenSettings: () -> Unit,
     onOpenSession: (ref: String, name: String) -> Unit = { _, _ -> },
     isActive: Boolean = true,
+    messageBell: (@Composable () -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
@@ -155,6 +156,7 @@ fun WorkspaceScreen(
                 // 拨号工厂记录的是本次尝试路径；只有 READY 后才可称为当前已连接路径。
                 connectionPath = connectionPath.takeIf { state.connection == ConnectionUi.READY },
                 onBack = onBackToList,
+                messageBell = messageBell,
             )
         }
         if (!showingDesignList) {
@@ -238,6 +240,7 @@ fun WorkspaceScreen(
                                     viewModel.createAgent(anchorRef, provider, name, bypass)
                                 },
                                 onCreateAgentErrorCleared = viewModel::clearCreateAgentError,
+                                headerAction = messageBell,
                             )
                         }
                     }
@@ -270,6 +273,7 @@ fun WorkspaceScreen(
                                         .statusBarsPadding(),
                                     connectionPath = readyPath,
                                     connectionBanner = reconnectBanner,
+                                    headerAction = messageBell,
                                 )
                             }
                         }
@@ -302,6 +306,7 @@ private fun TopBar(
     selectedCwd: String?,
     connectionPath: ConnectionPath?,
     onBack: () -> Unit,
+    messageBell: (@Composable () -> Unit)? = null,
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Row(
@@ -346,6 +351,7 @@ private fun TopBar(
                     modifier = Modifier.padding(horizontal = Spacing.sm),
                 )
             }
+            messageBell?.invoke()
         }
     }
 }

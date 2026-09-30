@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -76,6 +77,7 @@ fun WorkspaceListScreen(
     connectionPath: ConnectionPath? = null,
     connectionBanner: String? = null,
     bottomBar: @Composable () -> Unit = {},
+    headerAction: (@Composable () -> Unit)? = null,
 ) {
     val p = LocalAppPalette.current
     val rowGap = LocalThemeSuite.current.geometry.listRowGap
@@ -85,7 +87,17 @@ fun WorkspaceListScreen(
         ScreenHeader(
             title = "工作区",
             meta = "${workspaces.size} WORKSPACES · $totalSessions SESSIONS",
-            trailing = if (connectionPath != null) ({ LanPill(connectionPath) }) else null,
+            trailing = if (connectionPath != null || headerAction != null) {
+                {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        connectionPath?.let { LanPill(it) }
+                        if (connectionPath != null && headerAction != null) Spacer(Modifier.width(6.dp))
+                        headerAction?.invoke()
+                    }
+                }
+            } else {
+                null
+            },
         )
         HeaderRule()
         Box(

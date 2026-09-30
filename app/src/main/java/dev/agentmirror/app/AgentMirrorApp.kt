@@ -20,6 +20,14 @@ import android.graphics.Color as AndroidColor
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -27,14 +35,20 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
+import dev.agentmirror.app.notify.NotificationCenter
+import dev.agentmirror.app.notify.NotificationHub
+import dev.agentmirror.app.notify.consumePendingNotification
+import dev.agentmirror.app.notify.sessionDisplayName
 import dev.agentmirror.app.pairing.PairingRoute
 import dev.agentmirror.app.pairing.SharedPreferencesPairingConfigStore
 import dev.agentmirror.app.service.OnScreenFallbackPump
@@ -42,9 +56,11 @@ import dev.agentmirror.app.service.ServiceWire
 import dev.agentmirror.app.session.SessionRoute
 import dev.agentmirror.app.ui.components.NavDirection
 import dev.agentmirror.app.ui.components.navTransition
+import dev.agentmirror.app.ui.screens.MessageCenterScreen
 import dev.agentmirror.app.ui.theme.AgentMirrorTheme
 import dev.agentmirror.app.ui.theme.AppTheme
 import dev.agentmirror.app.ui.theme.Appearance
+import dev.agentmirror.app.ui.theme.Motion
 import dev.agentmirror.app.ui.theme.SharedPreferencesAppearanceStore
 import dev.agentmirror.app.ui.theme.SharedPreferencesThemeSuiteStore
 import dev.agentmirror.app.workspace.WorkspaceViewModel
@@ -136,10 +152,22 @@ fun AgentMirrorApp(
          * @inv 返回只经导航壳逐级裁决；本层不直接跳过会话选择/工作区列表层级
          */
         BackHandler(
-            enabled = session != null || navState.selectedWorkspaceCwd != null ||
+            enabled = session != null || navState.showMessageCenter || navState.selectedWorkspaceCwd != null ||
                 navState.showSettings || !navState.showPairing,
         ) {
             navState.onSystemBack()
+        }
+
+        // 系统通知点按（Issue #42）：等本地通知库加载完，再按本地可信记录解析目标并导航。
+        // 正在（重新）配对时先挂起，不把用户从配对页拽走；配对结束后再按新来源校验。
+        val notificationHub = remember { NotificationCenter.hubOrNull() }
+        if (notificationHub != null) {
+            val notificationsLoaded by notificationHub.repository.loaded.collectAsState()
+            val pendingNotification = navState.pendingNotification
+            val pairing = navState.showPairing
+            LaunchedEffect(pendingNotification, notificationsLoaded, pairing) {
+                navState.consumePendingNotification(notificationHub.repository)
+            }
         }
 
         // 路由描述值（AnimatedContent 的转场键）：四分支互斥，与原 when 语义一一对应。
@@ -181,7 +209,7 @@ fun AgentMirrorApp(
                     DisposableEffect(r.ref, overlayFavorites, overlayLiveGen) {
                         workspaceViewModel.enterSessionLive(
                             sessionRef = r.ref,
-                            workspaceHint = navState.selectedWorkspaceCwd,
+                            workspaceHint = navState.sessionWorkspaceHint ?: navState.selectedWorkspaceCwd,
                         )
                         onDispose { }
                     }
@@ -230,25 +258,65 @@ fun AgentMirrorApp(
                             }
                         }
                     }
-                    ThreePaneHome(
-                        navState = navState,
-                        workspaceViewModel = workspaceViewModel,
-                        appearance = appearance,
-                        onAppearanceChange = {
-                            appearance = it
-                            appearanceStore.save(it)
-                        },
-                        themeId = themeId,
-                        onThemeChange = {
-                            themeId = it
-                            themeStore.save(it)
-                        },
-                    )
+                    Box(Modifier.fillMaxSize()) {
+                        ThreePaneHome(
+                            navState = navState,
+                            workspaceViewModel = workspaceViewModel,
+                            appearance = appearance,
+                            onAppearanceChange = {
+                                appearance = it
+                                appearanceStore.save(it)
+                            },
+                            themeId = themeId,
+                            onThemeChange = {
+                                themeId = it
+                                themeStore.save(it)
+                            },
+                        )
+                        // 消息中心盖在三栏之上：三栏组合保活（滚动位置 / 二级订阅不因看消息而重建）。
+                        if (notificationHub != null) {
+                            AnimatedVisibility(
+                                visible = navState.showMessageCenter,
+                                enter = slideInHorizontally(
+                                    animationSpec = tween(Motion.pushEnter, easing = Motion.emphasized),
+                                    initialOffsetX = { (it * Motion.pushOffsetFraction).toInt() },
+                                ) + fadeIn(tween(Motion.pushEnter, easing = Motion.emphasized)),
+                                exit = slideOutHorizontally(
+                                    animationSpec = tween(Motion.popEnter, easing = Motion.emphasized),
+                                    targetOffsetX = { (it * 0.2f).toInt() },
+                                ) + fadeOut(tween(Motion.popEnter / 2, easing = Motion.emphasized)),
+                            ) {
+                                MessageCenterRoute(hub = notificationHub, navState = navState)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
     }
+}
+
+/** 消息中心接线：列表 / 已读 / 来源都来自进程级通知库；进入终端返回时回到这里。 */
+@Composable
+private fun MessageCenterRoute(hub: NotificationHub, navState: MainNavState) {
+    val repository = hub.repository
+    val items by repository.items.collectAsState()
+    val sourceHostId by repository.sourceHostId.collectAsState()
+    val support by hub.support.collectAsState()
+    MessageCenterScreen(
+        items = items,
+        sourceHostId = sourceHostId,
+        support = support,
+        onBack = { navState.showMessageCenter = false },
+        onOpenSession = { item ->
+            val ref = item.record.sessionRef ?: return@MessageCenterScreen
+            repository.markRead(item.key)
+            navState.openSessionFromMessages(ref, item.record.sessionDisplayName(), item.record.workspace)
+        },
+        onMarkRead = repository::markRead,
+        onMarkAllRead = repository::markAllRead,
+    )
 }
 
 /** 根路由四分支的状态；会话间切换由 AnimatedContent.contentKey 复用同一 UI composition。 */

@@ -20,6 +20,8 @@ import android.os.Bundle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.agentmirror.app.notify.NotificationRoute
+import dev.agentmirror.app.notify.NotificationTarget
 import dev.agentmirror.app.perf.PerfTrace
 
 /**
@@ -70,25 +72,61 @@ class MainNavState(initialShowPairing: Boolean) {
         if (PerfTrace.isEnabled()) {
             PerfTrace.onUserOpen(ref) // tap
         }
+        sessionWorkspaceHint = null
         activeSession = ref to name
+    }
+
+    /**
+     * 消息中心开关：盖在三栏主页之上。会话优先级更高，所以从消息中心直达的终端返回时
+     * 自然落回消息中心。重建后恢复。
+     */
+    var showMessageCenter by mutableStateOf(false)
+
+    /** 系统通知点按后待路由的目标（等本地库加载完再解析）；重建前未消费的会保存恢复。 */
+    var pendingNotification by mutableStateOf<NotificationTarget?>(null)
+
+    /** 通知直达的会话所在 cwd（发布时快照），供会话页二级订阅兜底定位工作区。 */
+    var sessionWorkspaceHint: String? = null
+        private set
+
+    /** 从消息中心 / 系统通知直达终端：返回时回到消息中心。 */
+    fun openSessionFromMessages(ref: String, name: String, workspace: String?) {
+        showMessageCenter = true
+        openSession(ref, name)
+        sessionWorkspaceHint = workspace
+    }
+
+    /** 应用通知点按的路由结论（用户明确操作，可以切走当前会话）。 */
+    fun applyNotificationRoute(route: NotificationRoute) {
+        when (route) {
+            is NotificationRoute.Session -> openSessionFromMessages(route.ref, route.name, route.workspace)
+            is NotificationRoute.MessageCenter -> {
+                activeSession = null
+                showMessageCenter = true
+            }
+        }
     }
 
     /** 当前选中的工作区 cwd；非空 = 工作区二级会话选择页。重建后恢复（D-32）。 */
     var selectedWorkspaceCwd by mutableStateOf<String?>(null)
 
     /**
-     * 系统返回逐级裁决（D-23/D-32）：会话 → 会话选择 → 工作区列表 → 配对根。
+     * 系统返回逐级裁决（D-23/D-32）：会话 → 消息中心 → 会话选择 → 工作区列表 → 配对根。
      *
      * @contract
      * @pre none
      * @post 有上一级时仅清当前最高优先级导航态并返回 true；配对根不改状态并返回 false
      * @err none
-     * @inv 每次调用至多迁移一级，优先级恒为 activeSession → selectedWorkspaceCwd →
-     *      showSettings → showPairing；低优先级导航态不抢先消费返回事件
+     * @inv 每次调用至多迁移一级，优先级恒为 activeSession → showMessageCenter →
+     *      selectedWorkspaceCwd → showSettings → showPairing；低优先级导航态不抢先消费返回事件
      */
     fun onSystemBack(): Boolean {
         if (activeSession != null) {
             activeSession = null
+            return true
+        }
+        if (showMessageCenter) {
+            showMessageCenter = false
             return true
         }
         if (selectedWorkspaceCwd != null) {
@@ -112,6 +150,10 @@ class MainNavState(initialShowPairing: Boolean) {
         outState.putBoolean(KEY_SHOW_PAIRING, showPairing)
         outState.putBoolean(KEY_SHOW_SETTINGS, showSettings)
         outState.putInt(KEY_HOME_PANE, homePane.ordinal)
+        outState.putBoolean(KEY_SHOW_MESSAGES, showMessageCenter)
+        pendingNotification?.let {
+            outState.putStringArray(KEY_PENDING_NOTIFICATION, arrayOf(it.hostId, it.id, it.sessionRef))
+        }
         selectedWorkspaceCwd?.let { outState.putString(KEY_WORKSPACE_CWD, it) }
         activeSession?.let { (ref, name) ->
             outState.putString(KEY_SESSION_REF, ref)
@@ -126,6 +168,10 @@ class MainNavState(initialShowPairing: Boolean) {
         showSettings = savedInstanceState.getBoolean(KEY_SHOW_SETTINGS)
         val paneOrd = savedInstanceState.getInt(KEY_HOME_PANE, ThreePane.Sessions.ordinal)
         homePane = ThreePane.entries.getOrElse(paneOrd) { ThreePane.Sessions }
+        showMessageCenter = savedInstanceState.getBoolean(KEY_SHOW_MESSAGES)
+        pendingNotification = savedInstanceState.getStringArray(KEY_PENDING_NOTIFICATION)
+            ?.takeIf { it.size == 3 && it[0] != null && it[1] != null }
+            ?.let { NotificationTarget(it[0]!!, it[1]!!, it[2]) }
         selectedWorkspaceCwd = savedInstanceState.getString(KEY_WORKSPACE_CWD)
         val ref = savedInstanceState.getString(KEY_SESSION_REF)
         val name = savedInstanceState.getString(KEY_SESSION_NAME)
@@ -139,5 +185,7 @@ class MainNavState(initialShowPairing: Boolean) {
         const val KEY_WORKSPACE_CWD = "nav_workspace_cwd"
         const val KEY_SESSION_REF = "nav_session_ref"
         const val KEY_SESSION_NAME = "nav_session_name"
+        const val KEY_SHOW_MESSAGES = "nav_show_messages"
+        const val KEY_PENDING_NOTIFICATION = "nav_pending_notification"
     }
 }

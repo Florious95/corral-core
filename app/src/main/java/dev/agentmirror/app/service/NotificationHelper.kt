@@ -16,24 +16,32 @@
 
 package dev.agentmirror.app.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import dev.agentmirror.app.MainActivity
 import dev.agentmirror.app.R
+import dev.agentmirror.app.notify.NotificationRecord
 
 /**
- * 通知助手：一条常驻通知渠道（fg-service 知识基底 §1）。
+ * 通知助手：常驻通知渠道 + Agent 任务消息渠道（fg-service 知识基底 §1、契约 §9）。
  *
  * - [CHANNEL_PERSISTENT] 常驻通知渠道（IMPORTANCE_LOW，无声）：前台服务必须在通知栏常驻，
  *   随连接状态更新内容（已连接/重连中…），不可滑走（setOngoing）。
- *
- * 060 uproot（2026-08-15）：状态通知（blocked 唤醒 + 会话深链）随状态判定整体拔除——
- * 二级会话列表改为实时流，状态通知链路不再存在。
+ * - [CHANNEL_AGENT_TASKS] Agent 主动任务消息（IMPORTANCE_HIGH，默认声音 + 振动）：只由
+ *   notifications_v1 实时帧触发，历史补拉绝不走这里。点按经 [ACTION_OPEN_NOTIFICATION]
+ *   深链回 [MainActivity]，每条通知的 data URI 唯一，PendingIntent 互不覆盖。
  *
  * 静默失效猎杀：发送/取消一律 try-catch，失败落 Log.w 可判定，绝不静默吞。
  * 线程安全：NotificationManager.notify/cancel 线程安全，可在 conn 收件线程直接调用。
@@ -53,7 +61,70 @@ class NotificationHelper(context: Context) {
                 NotificationManager.IMPORTANCE_LOW,
             ).apply { description = "前台服务常驻状态" },
         )
+        nm.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_AGENT_TASKS,
+                "Agent 任务消息",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Agent 主动推送的任务完成与提醒"
+                enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+            },
+        )
     }
+
+    /**
+     * 发布一条 Agent 任务系统通知（正文 BigTextStyle 可展开全文）。
+     * 权限被拒 / 渠道被关时静默让位：消息仍在消息中心完整可读。
+     */
+    fun postTaskNotification(record: NotificationRecord) {
+        val compat = NotificationManagerCompat.from(appContext)
+        if (!compat.areNotificationsEnabled()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val title = record.title.ifBlank { "Agent 任务完成" }
+        val public = NotificationCompat.Builder(appContext, CHANNEL_AGENT_TASKS)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(appContext.getString(R.string.app_name))
+            .setContentText("有新的 Agent 任务消息")
+            .build()
+        val notification = NotificationCompat.Builder(appContext, CHANNEL_AGENT_TASKS)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(record.body)
+            .setSubText(record.agentName)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(record.body))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(public)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openNotificationPendingIntent(record))
+            .build()
+        try {
+            compat.notify(taskTag(record), ID_AGENT_TASK, notification)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "task notification denied: ${e.message}")
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "task notification failed: ${e.message}", e)
+        }
+    }
+
+    /** 通知点按：显式 MainActivity + 唯一 data URI（requestCode 固定，不靠 extras 区分）。 */
+    private fun openNotificationPendingIntent(record: NotificationRecord): PendingIntent =
+        PendingIntent.getActivity(
+            appContext,
+            0,
+            openNotificationIntent(appContext, record),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     /**
      * 构建常驻通知（不发布）：前台服务 startForeground 需要通知对象本身。
@@ -98,6 +169,29 @@ class NotificationHelper(context: Context) {
 
         /** 常驻通知 id（固定）。 */
         const val ID_PERSISTENT = 1
+
+        /** Agent 任务消息渠道（HIGH，默认声音 + 振动）。 */
+        const val CHANNEL_AGENT_TASKS = "agent_tasks_v1"
+
+        /** 任务通知 id；每条靠 tag `task:<host_id>:<id>` 区分，不与常驻 id=1 冲突。 */
+        const val ID_AGENT_TASK = 2
+
+        const val ACTION_OPEN_NOTIFICATION = "dev.agentmirror.app.action.OPEN_NOTIFICATION"
+        const val EXTRA_HOST_ID = "dev.agentmirror.app.extra.NOTIFICATION_HOST_ID"
+        const val EXTRA_NOTIFICATION_ID = "dev.agentmirror.app.extra.NOTIFICATION_ID"
+        const val EXTRA_SESSION_REF = "session_ref"
+
+        fun taskTag(record: NotificationRecord): String = "task:${record.hostId}:${record.id}"
+
+        fun openNotificationIntent(context: Context, record: NotificationRecord): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                action = ACTION_OPEN_NOTIFICATION
+                data = Uri.parse("corral://notification/${Uri.encode(record.hostId)}/${Uri.encode(record.id)}")
+                putExtra(EXTRA_HOST_ID, record.hostId)
+                putExtra(EXTRA_NOTIFICATION_ID, record.id)
+                record.sessionRef?.let { putExtra(EXTRA_SESSION_REF, it) }
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
 
         private const val TAG = "NotificationHelper"
     }

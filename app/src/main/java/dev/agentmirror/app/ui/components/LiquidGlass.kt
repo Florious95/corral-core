@@ -33,6 +33,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -43,6 +44,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -456,9 +458,10 @@ fun GlassButton(
     minWidth: Dp = 64.dp,
     height: Dp = 44.dp,
     backdrop: Backdrop = LocalGlassBackdrop.current,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     if (!LocalThemeSuite.current.surfaces.isGlass) {
-        RuledButton(text, onClick, modifier, enabled, tint, textColor, minWidth, height)
+        RuledButton(text, onClick, modifier, enabled, tint, textColor, minWidth, height, trailingIcon)
         return
     }
     val p = LocalAppPalette.current
@@ -486,13 +489,23 @@ fun GlassButton(
             .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
-        AppText(
-            text = text,
-            color = textColor,
-            fontSize = TypeSizes.actionButton,
-            fontWeight = FontWeight.SemiBold,
-            lineHeightMultiplier = 1f,
-        )
+        ButtonLabel(text, textColor, FontWeight.SemiBold, trailingIcon)
+    }
+}
+
+/** 按钮文字 + 可选尾部图标（图标与文字同色，间距 6dp）。 */
+@Composable
+private fun ButtonLabel(text: String, color: Color, weight: FontWeight, trailingIcon: (@Composable () -> Unit)?) {
+    val label = @Composable {
+        AppText(text = text, color = color, fontSize = TypeSizes.actionButton, fontWeight = weight, lineHeightMultiplier = 1f)
+    }
+    if (trailingIcon == null) {
+        label()
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        label()
+        trailingIcon()
     }
 }
 
@@ -507,6 +520,7 @@ private fun RuledButton(
     textColor: Color,
     minWidth: Dp,
     height: Dp,
+    trailingIcon: (@Composable () -> Unit)?,
 ) {
     val p = LocalAppPalette.current
     val kit = LocalThemeSuite.current
@@ -533,13 +547,7 @@ private fun RuledButton(
             .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
-        AppText(
-            text = text,
-            color = textColor,
-            fontSize = TypeSizes.actionButton,
-            fontWeight = FontWeight.Bold,
-            lineHeightMultiplier = 1f,
-        )
+        ButtonLabel(text, textColor, FontWeight.Bold, trailingIcon)
     }
 }
 
